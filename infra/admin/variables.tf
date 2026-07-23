@@ -1,0 +1,61 @@
+variable "admin_project_id" {
+  description = "Long-running admin project that owns the control plane and state."
+  type        = string
+}
+
+variable "region" {
+  description = "Region for Cloud SQL, Cloud Run, Artifact Registry, GCS."
+  type        = string
+  default     = "us-central1"
+}
+
+variable "workshops_folder_id" {
+  description = "Numeric ID of the folder under which ephemeral workshop projects are created (runner-sa is scoped here)."
+  type        = string
+}
+
+variable "billing_account_id" {
+  description = "Billing account new workshop projects are linked to (format XXXXXX-XXXXXX-XXXXXX)."
+  type        = string
+}
+
+variable "tfstate_bucket" {
+  description = "GCS bucket (in the admin project) that holds per-run Terraform state for workshops."
+  type        = string
+}
+
+variable "db_tier" {
+  description = "Cloud SQL machine tier. db-f1-micro is fine for testing."
+  type        = string
+  default     = "db-f1-micro"
+}
+
+variable "app_image" {
+  description = "Container image for the Next.js app. Defaults to a placeholder so the first apply succeeds; replace once you push the real image."
+  type        = string
+  default     = "us-docker.pkg.dev/cloudrun/container/hello"
+}
+
+variable "runner_image" {
+  description = "Container image for tf-runner/tf-reaper. Placeholder until step #3 builds the real image."
+  type        = string
+  default     = "us-docker.pkg.dev/cloudrun/container/hello"
+}
+
+variable "reaper_schedule" {
+  description = "Cron schedule for the reaper that destroys expired workshop runs."
+  type        = string
+  default     = "*/5 * * * *"
+}
+
+variable "google_oauth_client_id" {
+  description = "Google OAuth 2.0 client ID for sign-in (stored in Secret Manager)."
+  type        = string
+  sensitive   = true
+}
+
+variable "google_oauth_client_secret" {
+  description = "Google OAuth 2.0 client secret for sign-in (stored in Secret Manager)."
+  type        = string
+  sensitive   = true
+}

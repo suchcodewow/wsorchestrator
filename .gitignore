@@ -33,3 +33,14 @@ yarn-error.log*
 
 # vercel
 .vercel
+
+# terraform / opentofu
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+# never commit real var files (they hold secrets); keep the example
+*.tfvars
+*.tfvars.json
+!*.tfvars.example

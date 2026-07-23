@@ -1,0 +1,19 @@
+# Copy to terraform.tfvars and fill in. Do NOT commit the real file.
+
+admin_project_id    = "my-admin-project"
+region              = "us-central1"
+workshops_folder_id = "123456789012"          # numeric folder ID
+billing_account_id  = "XXXXXX-XXXXXX-XXXXXX"
+tfstate_bucket      = "my-admin-project-ws-tfstate"
+
+# db_tier         = "db-f1-micro"
+# reaper_schedule = "*/5 * * * *"
+
+# Google OAuth 2.0 client (APIs & Services -> Credentials in the admin project).
+# Authorized redirect URI: <app_url>/api/auth/callback/google
+google_oauth_client_id     = "xxxx.apps.googleusercontent.com"
+google_oauth_client_secret = "xxxx"
+
+# After you build+push real images (step #3), set these and re-apply:
+# app_image    = "us-central1-docker.pkg.dev/my-admin-project/workshop-orchestrator/app:latest"
+# runner_image = "us-central1-docker.pkg.dev/my-admin-project/workshop-orchestrator/runner:latest"
