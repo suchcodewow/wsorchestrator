@@ -9,7 +9,7 @@ const SAMPLES = [
     description:
       "Provisions a fresh project with a small GKE Autopilot cluster and an Artifact Registry repo.",
     icon: "boxes",
-    tfSource: "modules/gke-starter",
+    tfSource: "workshops/gke-starter",
     ttlSeconds: 3600,
   },
   {
@@ -18,7 +18,7 @@ const SAMPLES = [
     description:
       "A lightweight project with a Docker Artifact Registry repository and IAM wired for pushes.",
     icon: "package",
-    tfSource: "modules/artifact-registry",
+    tfSource: "workshops/artifact-registry",
     ttlSeconds: 3600,
   },
   {
@@ -27,7 +27,7 @@ const SAMPLES = [
     description:
       "Deploys a sample container to Cloud Run behind a public URL in a throwaway project.",
     icon: "cloud",
-    tfSource: "modules/cloud-run-demo",
+    tfSource: "workshops/cloud-run-demo",
     ttlSeconds: 3600,
   },
 ];

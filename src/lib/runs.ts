@@ -36,17 +36,53 @@ export async function createRun(workshopId: string, userId: string) {
     message: `Run requested for "${workshop.title}". Queued for provisioning.`,
   });
 
-  // TODO(runner): trigger the `tf-runner` Cloud Run Job execution with
-  // { runId, workshopId, tfSource, variables, statePrefix, ttlSeconds }.
-  // The job assumes runner-sa via Workload Identity and drives the run.
+  // Kick off the tf-runner Cloud Run Job for this run. The job assumes
+  // runner-sa and drives provisioning; failures here are non-fatal (the run
+  // stays `requested` and can be retried).
   await triggerRunnerJob(run.id);
 
   return { run };
 }
 
-/** Placeholder for kicking off the Cloud Run Job. Wired up in step #3. */
+/**
+ * Execute the `tf-runner` Cloud Run Job with a RUN_ID override, using the
+ * app-sa's ambient credentials (Workload Identity on Cloud Run). No-ops with a
+ * warning when the runner isn't configured (e.g. local dev).
+ */
 async function triggerRunnerJob(runId: string): Promise<void> {
-  void runId;
+  const job = process.env.TF_RUNNER_JOB;
+  const project = process.env.GCP_ADMIN_PROJECT_ID;
+  const region = process.env.GCP_REGION ?? "us-central1";
+
+  if (!job || !project) {
+    console.warn(
+      `runner job not configured (TF_RUNNER_JOB/GCP_ADMIN_PROJECT_ID); ` +
+        `run ${runId} left in 'requested'`,
+    );
+    return;
+  }
+
+  try {
+    const { GoogleAuth } = await import("google-auth-library");
+    const auth = new GoogleAuth({
+      scopes: ["https://www.googleapis.com/auth/cloud-platform"],
+    });
+    const client = await auth.getClient();
+    const url = `https://${region}-run.googleapis.com/v2/projects/${project}/locations/${region}/jobs/${job}:run`;
+    await client.request({
+      url,
+      method: "POST",
+      data: {
+        overrides: {
+          containerOverrides: [
+            { env: [{ name: "RUN_ID", value: runId }] },
+          ],
+        },
+      },
+    });
+  } catch (err) {
+    console.error(`failed to trigger runner job for run ${runId}:`, err);
+  }
 }
 
 export async function listRunsForUser(userId: string) {
