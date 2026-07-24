@@ -1,0 +1,13 @@
+# Source uploaded to Cloud Build — keep it lean.
+.git
+node_modules
+**/node_modules
+.next
+infra
+**/.terraform
+**/terraform.tfstate*
+**/terraform.tfvars
+**/terraform.tfvars.json
+*.log
+.env
+.env*.local

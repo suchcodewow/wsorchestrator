@@ -1,0 +1,42 @@
+# Builds and pushes both images to Artifact Registry.
+# Invoked by `make images` (which fills _REPO/_TAG from Terraform outputs):
+#   gcloud builds submit --config cloudbuild.yaml \
+#     --substitutions=_REPO=<region>-docker.pkg.dev/<proj>/workshop-orchestrator,_TAG=<sha>
+substitutions:
+  _REPO: "REPLACE_ME"
+  _TAG: "latest"
+
+options:
+  machineType: E2_HIGHCPU_8
+  logging: CLOUD_LOGGING_ONLY
+
+steps:
+  - id: build-app
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -t
+      - ${_REPO}/app:${_TAG}
+      - -t
+      - ${_REPO}/app:latest
+      - -f
+      - Dockerfile
+      - .
+
+  - id: build-runner
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -t
+      - ${_REPO}/runner:${_TAG}
+      - -t
+      - ${_REPO}/runner:latest
+      - -f
+      - runner/Dockerfile
+      - runner
+
+images:
+  - ${_REPO}/app:${_TAG}
+  - ${_REPO}/app:latest
+  - ${_REPO}/runner:${_TAG}
+  - ${_REPO}/runner:latest

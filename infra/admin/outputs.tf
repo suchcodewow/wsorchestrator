@@ -3,6 +3,14 @@ output "app_url" {
   value       = google_cloud_run_v2_service.app.uri
 }
 
+output "admin_project_id" {
+  value = var.admin_project_id
+}
+
+output "region" {
+  value = var.region
+}
+
 output "app_service_account" {
   value = google_service_account.app.email
 }
