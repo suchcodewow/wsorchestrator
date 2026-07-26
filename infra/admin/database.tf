@@ -14,6 +14,7 @@ resource "google_sql_database_instance" "main" {
 
   settings {
     tier              = var.db_tier
+    edition           = "ENTERPRISE"
     availability_type = "ZONAL"
 
     ip_configuration {
