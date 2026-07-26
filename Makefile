@@ -46,6 +46,7 @@ infra: ## Apply admin control plane (uses placeholder images on first run)
 images: ## Build + push app and runner images via Cloud Build
 	@test -n "$(REPO)" || { echo "No REPO — run 'make infra' first"; exit 1; }
 	gcloud builds submit --project $(PROJECT) --config cloudbuild.yaml \
+	  --service-account=projects/$(PROJECT)/serviceAccounts/build-sa@$(PROJECT).iam.gserviceaccount.com \
 	  --substitutions=_REPO=$(REPO),_TAG=$(TAG) .
 
 deploy: ## Point Cloud Run at the freshly built images and apply
