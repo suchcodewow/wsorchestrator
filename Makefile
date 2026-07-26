@@ -35,7 +35,7 @@ help: ## Show this help
 
 bootstrap: ## One-time: create admin state bucket + init backend (needs ADMIN_PROJECT, STATE_BUCKET)
 	cd infra/admin && ADMIN_PROJECT=$(ADMIN_PROJECT) REGION=$(REGION) \
-	  STATE_BUCKET=$(STATE_BUCKET) ./scripts/bootstrap.sh
+	  STATE_BUCKET=$(STATE_BUCKET) TF_BIN=$(TF_BIN) ./scripts/bootstrap.sh
 
 plan: ## Terraform plan for the admin control plane
 	$(TF) plan -var-file=terraform.tfvars

@@ -13,6 +13,9 @@ set -euo pipefail
 : "${STATE_BUCKET:?set STATE_BUCKET}"
 REGION="${REGION:-us-central1}"
 
+# Use terraform if present, else OpenTofu (matches the Makefile).
+TF_BIN="${TF_BIN:-$(command -v terraform >/dev/null 2>&1 && echo terraform || echo tofu)}"
+
 echo ">> Enabling foundational APIs on ${ADMIN_PROJECT}"
 gcloud services enable \
   cloudresourcemanager.googleapis.com \
@@ -31,9 +34,9 @@ else
   gcloud storage buckets update "gs://${STATE_BUCKET}" --versioning
 fi
 
-echo ">> terraform init"
-terraform init \
+echo ">> ${TF_BIN} init"
+"${TF_BIN}" init \
   -backend-config="bucket=${STATE_BUCKET}" \
   -backend-config="prefix=admin"
 
-echo ">> Done. Next: terraform plan -var-file=terraform.tfvars"
+echo ">> Done. Next: ${TF_BIN} plan -var-file=terraform.tfvars"
