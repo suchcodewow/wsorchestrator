@@ -25,9 +25,9 @@ variable "tfstate_bucket" {
 }
 
 variable "db_tier" {
-  description = "Cloud SQL machine tier. db-f1-micro is fine for testing."
+  description = "Cloud SQL machine tier. Postgres needs a custom/dedicated type (shared-core db-f1-micro/db-g1-small are MySQL-only). db-custom-1-3840 = 1 vCPU / 3.75 GB, the smallest valid Postgres tier."
   type        = string
-  default     = "db-f1-micro"
+  default     = "db-custom-1-3840"
 }
 
 variable "app_image" {
