@@ -44,3 +44,8 @@ crash.*.log
 *.tfvars
 *.tfvars.json
 !*.tfvars.example
+
+# stray local cloud-sql-proxy binary (use the brew/PATH one instead)
+/cloud-sql-proxy
+# admin infra lock (tofu-generated, not tracked)
+/infra/admin/.terraform.lock.hcl

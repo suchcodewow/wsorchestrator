@@ -173,25 +173,44 @@ auto-destroys ~1 hour later (the reaper runs every 5 minutes).
 
 ## Local development
 
-You can run the UI locally against a local Postgres (the launch flow needs the
-deployed runner to actually provision, but sign-in, the library, and the run
-views all work):
+Local dev runs fully **isolated** from the Google deployment: its own Postgres
+(a local container, never prod Cloud SQL), its own `.env`, and localhost OAuth.
+The two coexist — nothing you do locally touches the deployed app or its data.
 
 ```bash
 npm install
-cp .env.example .env        # fill DATABASE_URL + Google OAuth (localhost client)
-npx auth secret             # writes AUTH_SECRET
+cp .env.example .env         # then edit (see below)
+npx auth secret              # writes AUTH_SECRET into .env
 
-# start a local Postgres however you like, e.g.
-# docker run -d -p 5432:5432 -e POSTGRES_PASSWORD=postgres postgres:16
-
-npm run db:push             # apply schema
-npm run db:seed             # load sample workshops
-npm run dev                 # http://localhost:3000
+npm run dev:setup            # docker compose up + db:push + db:seed
+npm run dev                  # http://localhost:3000
 ```
 
-Make sure your OAuth client lists
-`http://localhost:3000/api/auth/callback/google` as a redirect URI.
+`dev:setup` starts the local Postgres from [docker-compose.yml](docker-compose.yml)
+(`npm run db:up` / `db:down` to control it on its own) and applies the schema +
+seed. On later runs, just `npm run dev`.
+
+**Edit `.env`** — the defaults already point `DATABASE_URL` at the local
+container. You just need:
+
+- `AUTH_URL="http://localhost:3000"` (already set)
+- `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` — reuse the deployed OAuth client, and
+  add a redirect URI to it:
+  `http://localhost:3000/api/auth/callback/google`
+  (a client can hold both the prod and localhost callbacks at once).
+
+### What works locally vs. not
+
+Sign-in, the workshop library, run history, and the live run views all work
+against the local DB. **The launch button won't actually provision**, though:
+`triggerRunnerJob` no-ops unless the `tf-runner` Cloud Run Job is configured, so
+a launched run stays in `requested`. That's intended — real provisioning creates
+GCP projects and belongs in the deployed environment. To watch a real workshop
+build, use the deployed app.
+
+> Advanced: to exercise the runner locally, run the `runner/` container against
+> your local `DATABASE_URL` with `gcloud` ADC + `terraform` installed. Note the
+> same VPN/TLS caveat as `cloud-sql-proxy` applies to its GCS state access.
 
 ## Adding a workshop
 

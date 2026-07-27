@@ -1,0 +1,24 @@
+# Local development database — isolated from the prod Cloud SQL instance.
+# Matches the default DATABASE_URL in .env.example.
+#   docker compose up -d      # start
+#   docker compose down       # stop (keeps data)
+#   docker compose down -v     # stop and wipe data
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: workshops
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d workshops"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:
