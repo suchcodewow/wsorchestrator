@@ -42,6 +42,12 @@ variable "runner_image" {
   default     = "us-docker.pkg.dev/cloudrun/container/hello"
 }
 
+variable "custom_domain" {
+  description = "Optional custom domain to map to the app service (e.g. orchestrator.harnessevents.io). Empty disables the mapping."
+  type        = string
+  default     = ""
+}
+
 variable "app_url" {
   description = "Public URL of the deployed app (from the app_url output after the first apply). Set this so Auth.js pins AUTH_URL instead of guessing the host."
   type        = string

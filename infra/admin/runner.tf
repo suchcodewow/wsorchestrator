@@ -131,11 +131,13 @@ resource "google_cloud_run_v2_job" "reaper" {
   depends_on = [google_project_service.admin]
 }
 
-# The app service triggers workshop runs by executing the tf-runner job.
+# The app service triggers workshop runs by executing the tf-runner job WITH a
+# RUN_ID container override, which needs run.jobs.runWithOverrides. Plain
+# roles/run.invoker lacks it; roles/run.developer (scoped to this job) has it.
 resource "google_cloud_run_v2_job_iam_member" "app_runs_runner" {
   name     = google_cloud_run_v2_job.runner.name
   location = var.region
   project  = var.admin_project_id
-  role     = "roles/run.invoker"
+  role     = "roles/run.developer"
   member   = "serviceAccount:${google_service_account.app.email}"
 }
