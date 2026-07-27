@@ -18,3 +18,11 @@ resource "google_project_service" "apis" {
   disable_on_destroy         = false
   disable_dependent_services = true
 }
+
+# Newly enabled APIs report "enabled" before they're usable. Wait for them to
+# propagate so resource creation (e.g. the first Cloud Run service) doesn't race
+# a "has not been used in project" error. Dependents use depends_on = [module.project].
+resource "time_sleep" "api_propagation" {
+  depends_on      = [google_project_service.apis]
+  create_duration = "60s"
+}
