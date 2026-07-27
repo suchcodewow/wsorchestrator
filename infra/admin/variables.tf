@@ -60,6 +60,12 @@ variable "reaper_schedule" {
   default     = "*/5 * * * *"
 }
 
+variable "scheduler_schedule" {
+  description = "Cron schedule for the provisioner that starts scheduled workshops."
+  type        = string
+  default     = "*/5 * * * *"
+}
+
 variable "google_oauth_client_id" {
   description = "Google OAuth 2.0 client ID for sign-in (stored in Secret Manager)."
   type        = string

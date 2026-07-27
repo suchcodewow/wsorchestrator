@@ -79,6 +79,7 @@ export const runStatus = pgEnum("run_status", [
   "destroying", // reaper running terraform destroy + project delete
   "destroyed",
   "failed",
+  "scheduled", // created on the calendar, awaiting its start time
 ]);
 
 /** The library of workshops a user can pick from. */
@@ -111,7 +112,11 @@ export const workshopRuns = pgTable(
     userId: text("user_id")
       .notNull()
       .references(() => users.id),
-    status: runStatus("status").notNull().default("requested"),
+    /** User-given name for this scheduled workshop instance. */
+    name: text("name"),
+    status: runStatus("status").notNull().default("scheduled"),
+    /** When the workshop should auto-provision (set from the calendar). */
+    scheduledStart: timestamp("scheduled_start", { withTimezone: true }),
     /** ws-<slug>-<short>; set during provisioning. */
     gcpProjectId: text("gcp_project_id"),
     /** GCS state prefix: workshops/<workshop-id>/<run-id>. */
@@ -129,6 +134,8 @@ export const workshopRuns = pgTable(
   (t) => [
     index("workshop_runs_reaper_idx").on(t.status, t.expiresAt),
     index("workshop_runs_user_idx").on(t.userId, t.createdAt),
+    // scheduler: find scheduled runs whose start time has arrived
+    index("workshop_runs_scheduler_idx").on(t.status, t.scheduledStart),
   ],
 );
 

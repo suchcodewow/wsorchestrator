@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/auth";
-import { createRun, listRunsForUser } from "@/lib/runs";
+import { createScheduledRun, listRunsForUser } from "@/lib/runs";
 
 export async function GET() {
   const session = await auth();
@@ -12,7 +12,11 @@ export async function GET() {
   return NextResponse.json({ runs });
 }
 
-const createSchema = z.object({ workshopId: z.string().uuid() });
+const createSchema = z.object({
+  name: z.string().trim().min(1).max(200),
+  workshopId: z.string().uuid(),
+  scheduledStart: z.string().datetime(),
+});
 
 export async function POST(req: Request) {
   const session = await auth();
@@ -25,7 +29,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "invalid_body" }, { status: 400 });
   }
 
-  const result = await createRun(parsed.data.workshopId, session.user.id);
+  const result = await createScheduledRun({
+    name: parsed.data.name,
+    workshopId: parsed.data.workshopId,
+    userId: session.user.id,
+    scheduledStart: new Date(parsed.data.scheduledStart),
+  });
   if ("error" in result) {
     return NextResponse.json({ error: result.error }, { status: 404 });
   }

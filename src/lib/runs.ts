@@ -3,29 +3,34 @@ import { db } from "@/db";
 import { runLogs, workshopRuns, workshops } from "@/db/schema";
 
 /**
- * Create a workshop run for a user and hand it off to the Terraform runner.
- *
- * The row is created in `requested`; the runner (Cloud Run Job) advances it
- * through provisioning -> applying -> ready and writes logs/outputs back.
+ * Schedule a workshop for a user. The run is created in `scheduled` with a
+ * start time; the `tf-scheduler` job auto-provisions it once that time arrives.
  */
-export async function createRun(workshopId: string, userId: string) {
+export async function createScheduledRun(input: {
+  name: string;
+  workshopId: string;
+  userId: string;
+  scheduledStart: Date;
+}) {
   const workshop = await db.query.workshops.findFirst({
-    where: eq(workshops.id, workshopId),
+    where: eq(workshops.id, input.workshopId),
   });
   if (!workshop || !workshop.enabled) {
     return { error: "workshop_not_found" as const };
   }
 
   const runId = crypto.randomUUID();
-  const statePrefix = `workshops/${workshopId}/${runId}`;
+  const statePrefix = `workshops/${input.workshopId}/${runId}`;
 
   const [run] = await db
     .insert(workshopRuns)
     .values({
       id: runId,
-      workshopId,
-      userId,
-      status: "requested",
+      workshopId: input.workshopId,
+      userId: input.userId,
+      name: input.name,
+      status: "scheduled",
+      scheduledStart: input.scheduledStart,
       statePrefix,
     })
     .returning();
@@ -33,56 +38,10 @@ export async function createRun(workshopId: string, userId: string) {
   await db.insert(runLogs).values({
     runId,
     stream: "system",
-    message: `Run requested for "${workshop.title}". Queued for provisioning.`,
+    message: `Scheduled "${input.name}" (${workshop.title}) for ${input.scheduledStart.toISOString()}.`,
   });
 
-  // Kick off the tf-runner Cloud Run Job for this run. The job assumes
-  // runner-sa and drives provisioning; failures here are non-fatal (the run
-  // stays `requested` and can be retried).
-  await triggerRunnerJob(run.id);
-
   return { run };
-}
-
-/**
- * Execute the `tf-runner` Cloud Run Job with a RUN_ID override, using the
- * app-sa's ambient credentials (Workload Identity on Cloud Run). No-ops with a
- * warning when the runner isn't configured (e.g. local dev).
- */
-async function triggerRunnerJob(runId: string): Promise<void> {
-  const job = process.env.TF_RUNNER_JOB;
-  const project = process.env.GCP_ADMIN_PROJECT_ID;
-  const region = process.env.GCP_REGION ?? "us-central1";
-
-  if (!job || !project) {
-    console.warn(
-      `runner job not configured (TF_RUNNER_JOB/GCP_ADMIN_PROJECT_ID); ` +
-        `run ${runId} left in 'requested'`,
-    );
-    return;
-  }
-
-  try {
-    const { GoogleAuth } = await import("google-auth-library");
-    const auth = new GoogleAuth({
-      scopes: ["https://www.googleapis.com/auth/cloud-platform"],
-    });
-    const client = await auth.getClient();
-    const url = `https://${region}-run.googleapis.com/v2/projects/${project}/locations/${region}/jobs/${job}:run`;
-    await client.request({
-      url,
-      method: "POST",
-      data: {
-        overrides: {
-          containerOverrides: [
-            { env: [{ name: "RUN_ID", value: runId }] },
-          ],
-        },
-      },
-    });
-  } catch (err) {
-    console.error(`failed to trigger runner job for run ${runId}:`, err);
-  }
 }
 
 export async function listRunsForUser(userId: string) {
@@ -90,6 +49,22 @@ export async function listRunsForUser(userId: string) {
     where: eq(workshopRuns.userId, userId),
     orderBy: desc(workshopRuns.createdAt),
   });
+}
+
+/** Runs for a user joined with their workshop title, for the calendar. */
+export async function listCalendarRuns(userId: string) {
+  return db
+    .select({
+      id: workshopRuns.id,
+      name: workshopRuns.name,
+      status: workshopRuns.status,
+      scheduledStart: workshopRuns.scheduledStart,
+      workshopTitle: workshops.title,
+    })
+    .from(workshopRuns)
+    .innerJoin(workshops, eq(workshopRuns.workshopId, workshops.id))
+    .where(eq(workshopRuns.userId, userId))
+    .orderBy(desc(workshopRuns.scheduledStart));
 }
 
 export async function getRunForUser(runId: string, userId: string) {

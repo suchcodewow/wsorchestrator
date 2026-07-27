@@ -141,3 +141,75 @@ resource "google_cloud_run_v2_job_iam_member" "app_runs_runner" {
   role     = "roles/run.developer"
   member   = "serviceAccount:${google_service_account.app.email}"
 }
+
+# tf-scheduler: on a cron, finds scheduled runs whose start time has arrived and
+# triggers a tf-runner execution for each.
+resource "google_cloud_run_v2_job" "scheduler" {
+  name                = "tf-scheduler"
+  location            = var.region
+  project             = var.admin_project_id
+  deletion_protection = false
+
+  template {
+    template {
+      service_account = google_service_account.runner.email
+      timeout         = "600s"
+      max_retries     = 0
+
+      volumes {
+        name = "cloudsql"
+        cloud_sql_instance {
+          instances = [local.cloudsql_connection]
+        }
+      }
+
+      containers {
+        image = var.runner_image
+        args  = ["provision-due"]
+
+        volume_mounts {
+          name       = "cloudsql"
+          mount_path = "/cloudsql"
+        }
+
+        dynamic "env" {
+          for_each = merge(local.runner_env, {
+            TF_RUNNER_JOB = google_cloud_run_v2_job.runner.name
+          })
+          content {
+            name  = env.key
+            value = env.value
+          }
+        }
+
+        env {
+          name = "DATABASE_URL"
+          value_source {
+            secret_key_ref {
+              secret  = google_secret_manager_secret.s["database-url"].secret_id
+              version = "latest"
+            }
+          }
+        }
+
+        resources {
+          limits = {
+            cpu    = "1"
+            memory = "512Mi"
+          }
+        }
+      }
+    }
+  }
+
+  depends_on = [google_project_service.admin]
+}
+
+# The scheduler (runner-sa) triggers tf-runner with a RUN_ID override.
+resource "google_cloud_run_v2_job_iam_member" "runner_runs_runner" {
+  name     = google_cloud_run_v2_job.runner.name
+  location = var.region
+  project  = var.admin_project_id
+  role     = "roles/run.developer"
+  member   = "serviceAccount:${google_service_account.runner.email}"
+}

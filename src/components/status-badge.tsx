@@ -3,6 +3,7 @@ import type { RunStatus } from "@/db/schema";
 import { cn } from "@/lib/utils";
 
 const LABELS: Record<RunStatus, string> = {
+  scheduled: "Scheduled",
   requested: "Requested",
   provisioning: "Provisioning",
   applying: "Applying",
@@ -13,6 +14,7 @@ const LABELS: Record<RunStatus, string> = {
 };
 
 const STYLES: Record<RunStatus, string> = {
+  scheduled: "bg-violet-100 text-violet-700",
   requested: "bg-slate-100 text-slate-700",
   provisioning: "bg-blue-100 text-blue-700",
   applying: "bg-amber-100 text-amber-800",

@@ -105,6 +105,31 @@ export async function setDestroyed(runId: string) {
   );
 }
 
+/**
+ * Atomically claim scheduled runs whose start time has arrived. The
+ * status='scheduled' guard means two concurrent scheduler executions can't
+ * claim the same run twice.
+ */
+export async function claimDueScheduledRuns(): Promise<{ id: string }[]> {
+  const { rows } = await pool.query<{ id: string }>(
+    `update workshop_runs
+        set status = 'requested'
+      where status = 'scheduled'
+        and scheduled_start is not null
+        and scheduled_start <= now()
+      returning id`,
+  );
+  return rows;
+}
+
+/** Put a run back to scheduled so the next tick retries triggering it. */
+export async function setScheduledBack(runId: string) {
+  await pool.query(
+    `update workshop_runs set status = 'scheduled' where id = $1`,
+    [runId],
+  );
+}
+
 export async function endPool() {
   await pool.end();
 }

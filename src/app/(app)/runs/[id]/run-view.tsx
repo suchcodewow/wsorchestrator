@@ -10,6 +10,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 type RunPayload = { run: WorkshopRun; logs: RunLog[] };
 
 const TERMINAL = new Set(["ready", "destroyed", "failed"]);
+// Poll only while the run is actively moving; scheduled/terminal runs are static.
+const ACTIVE = new Set(["requested", "provisioning", "applying", "destroying"]);
 
 export function RunView({
   initial,
@@ -22,7 +24,7 @@ export function RunView({
   const logEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (TERMINAL.has(data.run.status)) return;
+    if (!ACTIVE.has(data.run.status)) return;
     const timer = setInterval(async () => {
       const res = await fetch(`/api/runs/${runId}`, { cache: "no-store" });
       if (res.ok) setData(await res.json());
@@ -48,9 +50,19 @@ export function RunView({
         </Link>
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="font-mono text-xl font-semibold">
-              {run.gcpProjectId ?? `run ${run.id.slice(0, 8)}`}
+            <h1 className="text-xl font-semibold">
+              {run.name ?? run.gcpProjectId ?? `run ${run.id.slice(0, 8)}`}
             </h1>
+            {run.status === "scheduled" && run.scheduledStart && (
+              <p className="text-sm text-muted-foreground">
+                Scheduled for {new Date(run.scheduledStart).toLocaleString()}
+              </p>
+            )}
+            {run.gcpProjectId && run.name && (
+              <p className="font-mono text-sm text-muted-foreground">
+                {run.gcpProjectId}
+              </p>
+            )}
             {run.expiresAt && !TERMINAL.has(run.status) && (
               <p className="text-sm text-muted-foreground">
                 Expires {new Date(run.expiresAt).toLocaleTimeString()}

@@ -1,5 +1,6 @@
 import { runWorkshop } from "./run.js";
 import { reap } from "./reap.js";
+import { provisionDue } from "./schedule.js";
 import { endPool } from "./db.js";
 
 async function main() {
@@ -15,8 +16,13 @@ async function main() {
     case "reap":
       await reap();
       break;
+    case "provision-due":
+      await provisionDue();
+      break;
     default:
-      throw new Error(`unknown command "${command}" (expected "run" or "reap")`);
+      throw new Error(
+        `unknown command "${command}" (expected "run", "reap", or "provision-due")`,
+      );
   }
 }
 
