@@ -7,14 +7,14 @@ TTL expires (1 hour by default).
 
 ## Stack
 
-| Concern | Choice |
-| --- | --- |
-| Web UI | Next.js 15 (App Router) + React 19, Tailwind v4, shadcn/ui |
-| Auth | Auth.js (NextAuth v5), Google provider, database sessions |
-| Database | Postgres (Cloud SQL) via Drizzle ORM |
-| Terraform runner | Cloud Run Job (`tf-runner`) |
-| Reaper | Cloud Run Job (`tf-reaper`) on Cloud Scheduler |
-| State | GCS bucket in the admin project, one prefix per run |
+| Concern          | Choice                                                     |
+| ---------------- | ---------------------------------------------------------- |
+| Web UI           | Next.js 15 (App Router) + React 19, Tailwind v4, shadcn/ui |
+| Auth             | Auth.js (NextAuth v5), Google provider, database sessions  |
+| Database         | Postgres (Cloud SQL) via Drizzle ORM                       |
+| Terraform runner | Cloud Run Job (`tf-runner`)                                |
+| Reaper           | Cloud Run Job (`tf-reaper`) on Cloud Scheduler             |
+| State            | GCS bucket in the admin project, one prefix per run        |
 
 ## Architecture
 
@@ -30,12 +30,12 @@ lifecycle in [`src/lib/runs.ts`](src/lib/runs.ts).
 
 ## Repository layout
 
-| Path | What |
-| --- | --- |
-| [`src/`](src) | Next.js app (UI, auth, runs API) |
-| [`infra/admin/`](infra/admin) | Terraform for the admin control plane |
-| [`runner/`](runner) | `tf-runner`/`tf-reaper` container + workshop Terraform |
-| [`Makefile`](Makefile), [`DEPLOY.md`](DEPLOY.md) | Deploy orchestration + runbook |
+| Path                                             | What                                                   |
+| ------------------------------------------------ | ------------------------------------------------------ |
+| [`src/`](src)                                    | Next.js app (UI, auth, runs API)                       |
+| [`infra/admin/`](infra/admin)                    | Terraform for the admin control plane                  |
+| [`runner/`](runner)                              | `tf-runner`/`tf-reaper` container + workshop Terraform |
+| [`Makefile`](Makefile), [`DEPLOY.md`](DEPLOY.md) | Deploy orchestration + runbook                         |
 
 ---
 
@@ -79,11 +79,11 @@ This walks you from an empty Google Cloud org to a running, deployed app. Budget
 **IAM the operator (you) needs** — the identity running `terraform apply` must be
 able to grant folder- and billing-level roles, not just build resources:
 
-| Scope | Role | Why |
-| --- | --- | --- |
-| Admin project | `roles/owner` | Create bucket, Cloud SQL, secrets, Cloud Run, jobs |
-| Workshops folder | `roles/resourcemanager.folderAdmin` | Grant `runner-sa` its folder roles |
-| Billing account | `roles/billing.admin` | Grant `runner-sa` `billing.user` |
+| Scope            | Role                                | Why                                                |
+| ---------------- | ----------------------------------- | -------------------------------------------------- |
+| Admin project    | `roles/owner`                       | Create bucket, Cloud SQL, secrets, Cloud Run, jobs |
+| Workshops folder | `roles/resourcemanager.folderAdmin` | Grant `runner-sa` its folder roles                 |
+| Billing account  | `roles/billing.admin`               | Grant `runner-sa` `billing.user`                   |
 
 ## 1. Create the Google OAuth client
 
@@ -123,7 +123,7 @@ From the repo root:
 
 ```bash
 # Creates the bucket that stores THIS config's own state, then inits the backend.
-make bootstrap ADMIN_PROJECT=my-admin-project STATE_BUCKET=my-admin-project-infra-tfstate
+make bootstrap ADMIN_PROJECT=administration-459416 STATE_BUCKET=events-tfstate
 
 # Creates the bucket, Cloud SQL, service accounts + IAM, secrets, Artifact
 # Registry, the app service, and the runner/reaper jobs.
@@ -145,6 +145,11 @@ redirect URI:
 ```
 <APP_URL>/api/auth/callback/google
 ```
+
+Also set `app_url = "<APP_URL>"` in `infra/admin/terraform.tfvars` and re-apply
+(`make infra`) so Auth.js pins `AUTH_URL`. Without it, host-guessing behind
+Cloud Run can produce a `0.0.0.0:8080` redirect that Google rejects with a
+"doesn't comply with OAuth 2.0 policy" error.
 
 ## 5. Build images, deploy, migrate, seed
 

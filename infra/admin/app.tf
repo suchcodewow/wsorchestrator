@@ -28,16 +28,20 @@ resource "google_cloud_run_v2_service" "app" {
         mount_path = "/cloudsql"
       }
 
-      # Auth.js v5 behind Cloud Run: infer the origin from forwarded headers.
+      # Auth.js v5 behind Cloud Run: trust forwarded headers, and — once the
+      # service URL is known — pin AUTH_URL so redirect_uri is never guessed
+      # (host-guessing can yield 0.0.0.0:8080, which Google rejects).
       env {
         name  = "AUTH_TRUST_HOST"
         value = "true"
       }
 
       dynamic "env" {
-        for_each = merge(local.runner_env, {
-          TF_RUNNER_JOB = google_cloud_run_v2_job.runner.name
-        })
+        for_each = merge(
+          local.runner_env,
+          { TF_RUNNER_JOB = google_cloud_run_v2_job.runner.name },
+          var.app_url != "" ? { AUTH_URL = var.app_url } : {},
+        )
         content {
           name  = env.key
           value = env.value

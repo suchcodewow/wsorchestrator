@@ -42,6 +42,12 @@ variable "runner_image" {
   default     = "us-docker.pkg.dev/cloudrun/container/hello"
 }
 
+variable "app_url" {
+  description = "Public URL of the deployed app (from the app_url output after the first apply). Set this so Auth.js pins AUTH_URL instead of guessing the host."
+  type        = string
+  default     = ""
+}
+
 variable "reaper_schedule" {
   description = "Cron schedule for the reaper that destroys expired workshop runs."
   type        = string

@@ -14,6 +14,10 @@ tfstate_bucket      = "my-admin-project-ws-tfstate"
 google_oauth_client_id     = "xxxx.apps.googleusercontent.com"
 google_oauth_client_secret = "xxxx"
 
+# After the first apply, set this to the app_url output and re-apply so
+# Auth.js pins AUTH_URL (Google rejects a guessed 0.0.0.0 redirect_uri):
+# app_url = "https://workshop-orchestrator-xxxxx-uc.a.run.app"
+
 # After you build+push real images (step #3), set these and re-apply:
 # app_image    = "us-central1-docker.pkg.dev/my-admin-project/workshop-orchestrator/app:latest"
 # runner_image = "us-central1-docker.pkg.dev/my-admin-project/workshop-orchestrator/runner:latest"
