@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
-import type { RunLog, WorkshopRun } from "@/db/schema";
 import { StatusBadge } from "@/components/status-badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import type { RunLog, WorkshopRun } from "@/db/schema";
+import { ArrowLeft } from "lucide-react";
+import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
 
 type RunPayload = { run: WorkshopRun; logs: RunLog[] };
 
@@ -13,13 +13,7 @@ const TERMINAL = new Set(["ready", "destroyed", "failed"]);
 // Poll only while the run is actively moving; scheduled/terminal runs are static.
 const ACTIVE = new Set(["requested", "provisioning", "applying", "destroying"]);
 
-export function RunView({
-  initial,
-  runId,
-}: {
-  initial: RunPayload;
-  runId: string;
-}) {
+export function RunView({ initial, runId }: { initial: RunPayload; runId: string }) {
   const [data, setData] = useState<RunPayload>(initial);
   const logEndRef = useRef<HTMLDivElement>(null);
 
@@ -50,23 +44,13 @@ export function RunView({
         </Link>
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-xl font-semibold">
-              {run.name ?? run.gcpProjectId ?? `run ${run.id.slice(0, 8)}`}
-            </h1>
+            <h1 className="text-xl font-semibold">{run.name ?? run.gcpProjectId ?? `run ${run.id.slice(0, 8)}`}</h1>
             {run.status === "scheduled" && run.scheduledStart && (
-              <p className="text-sm text-muted-foreground">
-                Scheduled for {new Date(run.scheduledStart).toLocaleString()}
-              </p>
+              <p className="text-sm text-muted-foreground">Scheduled for {new Date(run.scheduledStart).toLocaleString()}</p>
             )}
-            {run.gcpProjectId && run.name && (
-              <p className="font-mono text-sm text-muted-foreground">
-                {run.gcpProjectId}
-              </p>
-            )}
+            {run.gcpProjectId && run.name && <p className="font-mono text-sm text-muted-foreground">{run.gcpProjectId}</p>}
             {run.expiresAt && !TERMINAL.has(run.status) && (
-              <p className="text-sm text-muted-foreground">
-                Expires {new Date(run.expiresAt).toLocaleTimeString()}
-              </p>
+              <p className="text-sm text-muted-foreground">Expires {new Date(run.expiresAt).toLocaleTimeString()}</p>
             )}
           </div>
           <StatusBadge status={run.status} />
@@ -103,24 +87,11 @@ export function RunView({
           <CardTitle>Build log</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="max-h-[28rem] overflow-auto rounded-md bg-slate-950 p-4 font-mono text-xs leading-relaxed text-slate-200">
-            {logs.length === 0 && (
-              <span className="text-slate-500">Waiting for output…</span>
-            )}
+          <div className="max-h-112 overflow-auto rounded-md bg-slate-950 p-4 font-mono text-xs leading-relaxed text-slate-200">
+            {logs.length === 0 && <span className="text-slate-500">Waiting for output…</span>}
             {logs.map((l) => (
-              <div
-                key={l.id}
-                className={
-                  l.stream === "stderr"
-                    ? "text-red-400"
-                    : l.stream === "system"
-                      ? "text-sky-400"
-                      : ""
-                }
-              >
-                <span className="mr-2 text-slate-600">
-                  {new Date(l.ts).toLocaleTimeString()}
-                </span>
+              <div key={l.id} className={l.stream === "stderr" ? "text-red-400" : l.stream === "system" ? "text-sky-400" : ""}>
+                <span className="mr-2 text-slate-600">{new Date(l.ts).toLocaleTimeString()}</span>
                 {l.message}
               </div>
             ))}
