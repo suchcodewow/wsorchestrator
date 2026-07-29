@@ -1,6 +1,23 @@
+# Trims the build context uploaded to Cloud Build. The Dockerfile copies only
+# package*.json, src/, and terraform/, so nothing here can reach the image —
+# this is about upload size and cache churn.
+#
+# Do NOT ignore package-lock.json: `npm ci` needs it, and without it the build
+# silently falls back to re-resolving the dependency ranges.
 node_modules
 npm-debug.log
 .git
+
+# Terraform working state: provider plugins are hundreds of MB, and tfstate or
+# generated tfvars could carry real infrastructure details into the context.
+# `.terraform.lock.hcl` is deliberately NOT ignored — it is committed to pin
+# provider versions, and the runner's `terraform init` needs it in the image.
 **/.terraform
 **/terraform.tfstate*
 **/terraform.tfvars.json
+
+# Never copied into the image.
+Dockerfile
+.dockerignore
+README.md
+tsconfig.json

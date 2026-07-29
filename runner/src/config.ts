@@ -7,10 +7,11 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 export const TF_ROOT = process.env.TF_ROOT ?? path.resolve(here, "../terraform");
 
 /**
- * Terraform binary. Kept configurable because some machines have OpenTofu
- * (`tofu`) rather than `terraform`.
+ * OpenTofu binary. The runner image ships `tofu`, which is what the committed
+ * `.terraform.lock.hcl` files pin providers for. Kept configurable for
+ * machines that only have `terraform`.
  */
-export const TF_BIN = process.env.TF_BIN ?? "terraform";
+export const TF_BIN = process.env.TF_BIN ?? "tofu";
 
 function required(name: string): string {
   const v = process.env[name];
@@ -46,6 +47,36 @@ export function workspaceCfg() {
     customerId: process.env.GOOGLE_WORKSPACE_CUSTOMER_ID ?? "my_customer",
     /** OU the per-workshop org units are created under. */
     parentOrgUnitPath: process.env.GOOGLE_WORKSPACE_PARENT_OU ?? "/",
+  };
+}
+
+/**
+ * Harness config. Every workshop gets an organization and one project per
+ * attendee, so this is read for all runs rather than gated on a cloud.
+ *
+ * The role and resource-group identifiers are Harness's built-in ("managed")
+ * ones. They are overridable because the identifiers are not published in
+ * Harness's docs — if an account uses different ones, that is a config change
+ * rather than a code change.
+ */
+export function harnessCfg() {
+  return {
+    accountId: required("HARNESS_ACCOUNT_ID"),
+    apiKey: required("HARNESS_API_KEY"),
+    baseUrl: (process.env.HARNESS_BASE_URL ?? "https://app.harness.io").replace(
+      /\/+$/,
+      "",
+    ),
+    /** Makes each attendee an administrator of their own project. */
+    projectAdminRole: process.env.HARNESS_PROJECT_ADMIN_ROLE ?? "_project_admin",
+    projectAdminResourceGroup:
+      process.env.HARNESS_PROJECT_ADMIN_RESOURCE_GROUP ??
+      "_all_project_level_resources",
+    /** Gives every attendee view/use access across the workshop org. */
+    orgViewerRole: process.env.HARNESS_ORG_VIEWER_ROLE ?? "_organization_viewer",
+    orgViewerResourceGroup:
+      process.env.HARNESS_ORG_VIEWER_RESOURCE_GROUP ??
+      "_all_organization_level_resources",
   };
 }
 

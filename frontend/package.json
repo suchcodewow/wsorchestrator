@@ -13,9 +13,9 @@
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
-    "db:up": "docker compose up -d",
-    "db:down": "docker compose down",
-    "dev:setup": "docker compose up -d --wait && drizzle-kit push --force"
+    "db:up": "docker compose -f ../docker-compose.yml up -d",
+    "db:down": "docker compose -f ../docker-compose.yml down",
+    "dev:setup": "docker compose -f ../docker-compose.yml up -d --wait && drizzle-kit push --force"
   },
   "dependencies": {
     "@auth/drizzle-adapter": "^1.7.4",

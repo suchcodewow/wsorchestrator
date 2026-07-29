@@ -19,7 +19,12 @@ locals {
     "auth-secret"                = random_password.auth_secret.result
     "google-oauth-client-id"     = var.google_oauth_client_id
     "google-oauth-client-secret" = var.google_oauth_client_secret
+    "harness-api-key"            = var.harness_api_key
   }
+
+  # Secrets the runner/reaper/scheduler jobs read. The app doesn't talk to
+  # Harness, and the runner has no use for the OAuth or auth secrets.
+  runner_secrets = ["database-url", "harness-api-key"]
 }
 
 resource "google_secret_manager_secret" "s" {
@@ -52,8 +57,17 @@ resource "google_secret_manager_secret_iam_member" "app" {
   member    = "serviceAccount:${google_service_account.app.email}"
 }
 
-resource "google_secret_manager_secret_iam_member" "runner_db" {
-  secret_id = google_secret_manager_secret.s["database-url"].secret_id
+# This grant used to be a single resource for the DB URL alone. Without this,
+# Terraform would destroy and recreate it, briefly dropping the runner's access.
+moved {
+  from = google_secret_manager_secret_iam_member.runner_db
+  to   = google_secret_manager_secret_iam_member.runner["database-url"]
+}
+
+resource "google_secret_manager_secret_iam_member" "runner" {
+  for_each = toset(local.runner_secrets)
+
+  secret_id = google_secret_manager_secret.s[each.key].secret_id
   project   = var.admin_project_id
   role      = "roles/secretmanager.secretAccessor"
   member    = "serviceAccount:${google_service_account.runner.email}"

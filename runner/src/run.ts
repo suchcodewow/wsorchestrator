@@ -3,6 +3,16 @@ import { gcpCfg, TF_ROOT, makeProjectId } from "./config.js";
 import { writeTfvars } from "./workspace.js";
 import { tfApply, tfInit, tfOutput } from "./terraform.js";
 import { allocateEmails, createAccount, createOrgUnit } from "./directory.js";
+import { displayName } from "./usernames.js";
+import {
+  createOrg,
+  createProject,
+  grantOrgViewer,
+  grantProjectAdmin,
+  orgIdentifier,
+  orgUrl,
+  projectIdentifier,
+} from "./harness.js";
 import {
   accountsFor,
   addAccount,
@@ -32,6 +42,10 @@ export async function runWorkshop(runId: string): Promise<void> {
       org_unit_path: orgUnitPath,
       user_count: run.user_count,
     };
+
+    // Harness is provisioned for every workshop, not gated on a cloud, and
+    // after the accounts exist because each attendee is invited by address.
+    Object.assign(outputs, await provisionHarness(run));
 
     for (const cloud of run.clouds) {
       if (cloud === "gcp") {
@@ -96,6 +110,44 @@ async function provisionAccounts(run: RunRow): Promise<string> {
   }
 
   return orgUnitPath;
+}
+
+/**
+ * Create the workshop's Harness organization and one project per attendee.
+ *
+ * Each attendee administers their own project and gets view/use access across
+ * the org, so they can see everyone else's work without being able to change
+ * it. Every call is idempotent, so a grown or retried workshop only adds what
+ * is missing.
+ */
+async function provisionHarness(run: RunRow): Promise<Record<string, unknown>> {
+  const orgId = orgIdentifier(run.name, run.id);
+
+  await log(run.id, "system", `Creating Harness organization ${orgId}`);
+  const existed = await createOrg(orgId, run.name);
+  if (existed) {
+    await log(run.id, "stdout", `organization ${orgId} already existed — reusing`);
+  }
+
+  const accounts = await accountsFor(run.id);
+  await log(
+    run.id,
+    "system",
+    `Creating ${accounts.length} Harness project(s), one per attendee`,
+  );
+
+  for (const { email } of accounts) {
+    const projectId = projectIdentifier(email);
+    const { givenName, familyName } = displayName(email.split("@")[0] ?? email);
+
+    await createProject(orgId, projectId, `${givenName} ${familyName}`);
+    await grantProjectAdmin(orgId, projectId, email);
+    await grantOrgViewer(orgId, email);
+
+    await log(run.id, "stdout", `${email} -> admin of project ${projectId}`);
+  }
+
+  return { harness_org: orgId, harness_org_url: orgUrl(orgId) };
 }
 
 /** Terraform the workshop's GCP project. */

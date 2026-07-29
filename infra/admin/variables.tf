@@ -40,6 +40,23 @@ variable "workspace_parent_ou" {
   default     = "/"
 }
 
+variable "harness_account_id" {
+  description = "Harness account identifier. Every workshop gets an organization here, with one project per attendee."
+  type        = string
+}
+
+variable "harness_api_key" {
+  description = "Harness API key (PAT or SAT) with rights to create organizations, projects, and invite users. Stored in Secret Manager."
+  type        = string
+  sensitive   = true
+}
+
+variable "harness_base_url" {
+  description = "Harness base URL. Change for a non-SaaS or non-prod cluster (e.g. https://app.harness.io/gratis)."
+  type        = string
+  default     = "https://app.harness.io"
+}
+
 variable "db_tier" {
   description = "Cloud SQL machine tier. Postgres needs a custom/dedicated type (shared-core db-f1-micro/db-g1-small are MySQL-only). db-custom-1-3840 = 1 vCPU / 3.75 GB, the smallest valid Postgres tier."
   type        = string

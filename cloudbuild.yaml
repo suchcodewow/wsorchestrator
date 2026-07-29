@@ -20,8 +20,8 @@ steps:
       - -t
       - ${_REPO}/app:latest
       - -f
-      - Dockerfile
-      - .
+      - frontend/Dockerfile
+      - frontend
 
   - id: build-runner
     name: gcr.io/cloud-builders/docker

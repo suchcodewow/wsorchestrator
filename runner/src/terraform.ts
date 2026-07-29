@@ -4,7 +4,7 @@ import { TF_BIN } from "./config.js";
 export type TfLine = { stream: "stdout" | "stderr"; text: string };
 type OnLine = (line: TfLine) => void | Promise<void>;
 
-/** Spawn terraform in `cwd`, streaming each output line to `onLine`. */
+/** Spawn OpenTofu/Terraform in `cwd`, streaming each output line to `onLine`. */
 function exec(args: string[], cwd: string, onLine?: OnLine): Promise<void> {
   return new Promise((resolve, reject) => {
     const child = spawn(TF_BIN, args, { cwd, env: process.env });
@@ -21,7 +21,7 @@ function exec(args: string[], cwd: string, onLine?: OnLine): Promise<void> {
     child.on("close", (code) =>
       code === 0
         ? resolve()
-        : reject(new Error(`terraform ${args[0]} exited with code ${code}`)),
+        : reject(new Error(`${TF_BIN} ${args[0]} exited with code ${code}`)),
     );
   });
 }

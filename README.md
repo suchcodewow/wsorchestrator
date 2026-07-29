@@ -30,16 +30,20 @@ Terraform); AWS and Azure can be selected but are not yet provisioned.
 - **`runner-sa`** is scoped at the **folder** level (broad inside workshops,
   sealed outside) plus `billing.user` on the billing account.
 
-See the data model in [`src/db/schema.ts`](src/db/schema.ts) and the run
-lifecycle in [`src/lib/runs.ts`](src/lib/runs.ts).
+See the data model in [`frontend/src/db/schema.ts`](frontend/src/db/schema.ts)
+and the run lifecycle in [`frontend/src/lib/runs.ts`](frontend/src/lib/runs.ts).
 
 ## Repository layout
 
+Each deployable lives in its own folder with its own `package.json`, Dockerfile,
+and dependencies; the root holds only what ties them together.
+
 | Path                                             | What                                                   |
 | ------------------------------------------------ | ------------------------------------------------------ |
-| [`src/`](src)                                    | Next.js app (UI, auth, runs API)                       |
-| [`infra/admin/`](infra/admin)                    | Terraform for the admin control plane                  |
+| [`frontend/`](frontend)                          | Next.js app — UI, auth, runs API, DB schema + migrations |
 | [`runner/`](runner)                              | `tf-runner`/`tf-reaper` container + workshop Terraform |
+| [`infra/admin/`](infra/admin)                    | Terraform for the admin control plane                  |
+| [`scripts/`](scripts)                            | Deploy helpers (Cloud SQL proxy wrapper)               |
 | [`Makefile`](Makefile), [`DEPLOY.md`](DEPLOY.md) | Deploy orchestration + runbook                         |
 
 ---
@@ -201,6 +205,7 @@ Local dev runs fully **isolated** from the Google deployment: its own Postgres
 The two coexist — nothing you do locally touches the deployed app or its data.
 
 ```bash
+cd frontend
 npm install
 cp .env.example .env         # then edit (see below)
 npx auth secret              # writes AUTH_SECRET into .env
@@ -212,6 +217,9 @@ npm run dev                  # http://localhost:3000
 `dev:setup` starts the local Postgres from [docker-compose.yml](docker-compose.yml)
 (`npm run db:up` / `db:down` to control it on its own) and applies the schema.
 On later runs, just `npm run dev`.
+
+All of the `npm` commands above run from `frontend/` — that's where the app's
+`package.json`, `.env`, and Drizzle config live.
 
 **Edit `.env`** — the defaults already point `DATABASE_URL` at the local
 container. You just need:

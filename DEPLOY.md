@@ -39,7 +39,7 @@ on the OAuth client.
 make ship          # rebuild + redeploy current commit, run migrations
 make deploy        # just roll Cloud Run to the current commit's images
 make db-backup     # on-demand Cloud SQL backup (take one before schema changes)
-make db-migrate    # apply the SQL migrations in drizzle/ (data backfills)
+make db-migrate    # apply the SQL migrations in frontend/drizzle (data backfills)
 make db-push       # apply schema changes only
 make info          # show the resolved config (project, repo, db, tag, url)
 make help          # list targets
@@ -52,13 +52,14 @@ repeatable roll-forward (and roll-back: `make deploy TAG=<older-sha>`).
 
 Two mechanisms, and the order matters:
 
-- **`db-push`** (Drizzle) diffs [src/db/schema.ts](src/db/schema.ts) onto the
+- **`db-push`** (Drizzle) diffs [frontend/src/db/schema.ts](frontend/src/db/schema.ts) onto the
   database. It handles additive and cosmetic changes, but it only knows about
   *shape* — it will happily drop a column or table whose data is still needed,
   and it cannot add a `NOT NULL` column to a table that already has rows.
-- **`db-migrate`** applies the ordered `.sql` files in [drizzle/](drizzle/) via
-  [scripts/apply-sql.mjs](scripts/apply-sql.mjs). This is where anything that
-  has to *move data* lives.
+- **`db-migrate`** applies the ordered `.sql` files in
+  [frontend/drizzle/](frontend/drizzle/) via
+  [frontend/scripts/apply-sql.mjs](frontend/scripts/apply-sql.mjs). This is
+  where anything that has to *move data* lives.
 
 `ship` runs `db-migrate` first so the data is reshaped before `db-push` diffs
 the result. Each migration wraps itself in a transaction and is written to be

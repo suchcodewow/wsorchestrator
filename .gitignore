@@ -3,13 +3,13 @@ node_modules/
 /.pnp
 .pnp.*
 
-# next.js
-/.next/
-/out/
+# next.js (the app lives in frontend/)
+/frontend/.next/
+/frontend/out/
 next-env.d.ts
 
 # production
-/build
+/frontend/build
 
 # misc
 .DS_Store
@@ -29,7 +29,7 @@ yarn-error.log*
 *.tsbuildinfo
 
 # drizzle
-/drizzle/meta
+/frontend/drizzle/meta
 
 # vercel
 .vercel

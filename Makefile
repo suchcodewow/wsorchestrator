@@ -26,6 +26,9 @@ TAG ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo latest)
 # State bucket for the admin config itself (bootstrap only).
 STATE_BUCKET ?= $(ADMIN_PROJECT)-infra-tfstate
 
+# The Next.js app, including the Drizzle schema and its SQL migrations.
+FRONTEND ?= frontend
+
 .PHONY: help bootstrap plan infra images deploy db-backup db-migrate db-push ship info
 
 help: ## Show this help
@@ -61,11 +64,13 @@ db-backup: ## On-demand Cloud SQL backup — take one before any schema change
 	@test -n "$(DB_INSTANCE)" || { echo "No DB_INSTANCE — run 'make infra' first"; exit 1; }
 	gcloud sql backups create --instance=$(DB_INSTANCE) --project=$(PROJECT)
 
-db-migrate: ## Apply hand-written SQL migrations in drizzle/ (data backfills)
-	DB_CONN=$(DB_CONN) PROJECT=$(PROJECT) ./scripts/with-db.sh "node scripts/apply-sql.mjs"
+db-migrate: ## Apply hand-written SQL migrations in frontend/drizzle (data backfills)
+	DB_CONN=$(DB_CONN) PROJECT=$(PROJECT) ./scripts/with-db.sh \
+	  "node $(FRONTEND)/scripts/apply-sql.mjs"
 
 db-push: ## Apply the Drizzle schema to Cloud SQL (via proxy)
-	DB_CONN=$(DB_CONN) PROJECT=$(PROJECT) ./scripts/with-db.sh "npm run db:push"
+	DB_CONN=$(DB_CONN) PROJECT=$(PROJECT) ./scripts/with-db.sh \
+	  "npm --prefix $(FRONTEND) run db:push"
 
 # db-migrate runs first: it backfills and reshapes data that db-push would
 # otherwise destroy (push diffs schema only and cannot preserve data).

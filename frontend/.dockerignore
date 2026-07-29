@@ -1,10 +1,8 @@
+# The build context is this directory, so infra/ and runner/ are already
+# outside it and no longer need excluding.
 node_modules
 .next
 .git
 npm-debug.log
 .env
 .env*.local
-infra
-runner
-**/.terraform
-**/terraform.tfstate*

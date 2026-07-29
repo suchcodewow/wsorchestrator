@@ -10,6 +10,14 @@ locals {
     GOOGLE_WORKSPACE_DOMAIN      = var.workspace_domain
     GOOGLE_WORKSPACE_ADMIN_EMAIL = var.workspace_admin_email
     GOOGLE_WORKSPACE_PARENT_OU   = var.workspace_parent_ou
+    HARNESS_ACCOUNT_ID           = var.harness_account_id
+    HARNESS_BASE_URL             = var.harness_base_url
+  }
+
+  # Every job reads the DB URL and the Harness key the same way.
+  runner_secret_env = {
+    DATABASE_URL    = "database-url"
+    HARNESS_API_KEY = "harness-api-key"
   }
 
   cloudsql_connection = google_sql_database_instance.main.connection_name
@@ -52,12 +60,15 @@ resource "google_cloud_run_v2_job" "runner" {
           }
         }
 
-        env {
-          name = "DATABASE_URL"
-          value_source {
-            secret_key_ref {
-              secret  = google_secret_manager_secret.s["database-url"].secret_id
-              version = "latest"
+        dynamic "env" {
+          for_each = local.runner_secret_env
+          content {
+            name = env.key
+            value_source {
+              secret_key_ref {
+                secret  = google_secret_manager_secret.s[env.value].secret_id
+                version = "latest"
+              }
             }
           }
         }
@@ -112,12 +123,15 @@ resource "google_cloud_run_v2_job" "reaper" {
           }
         }
 
-        env {
-          name = "DATABASE_URL"
-          value_source {
-            secret_key_ref {
-              secret  = google_secret_manager_secret.s["database-url"].secret_id
-              version = "latest"
+        dynamic "env" {
+          for_each = local.runner_secret_env
+          content {
+            name = env.key
+            value_source {
+              secret_key_ref {
+                secret  = google_secret_manager_secret.s[env.value].secret_id
+                version = "latest"
+              }
             }
           }
         }
@@ -186,12 +200,15 @@ resource "google_cloud_run_v2_job" "scheduler" {
           }
         }
 
-        env {
-          name = "DATABASE_URL"
-          value_source {
-            secret_key_ref {
-              secret  = google_secret_manager_secret.s["database-url"].secret_id
-              version = "latest"
+        dynamic "env" {
+          for_each = local.runner_secret_env
+          content {
+            name = env.key
+            value_source {
+              secret_key_ref {
+                secret  = google_secret_manager_secret.s[env.value].secret_id
+                version = "latest"
+              }
             }
           }
         }

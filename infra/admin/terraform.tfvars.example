@@ -13,6 +13,12 @@ workspace_domain      = "example.com"
 workspace_admin_email = "admin@example.com"
 # workspace_parent_ou = "/Workshops"
 
+# Harness — each workshop becomes an org here, with a project per attendee.
+# The API key needs org/project create and user invite rights.
+harness_account_id = "replace-me"
+harness_api_key    = "pat.xxxxx"
+# harness_base_url = "https://app.harness.io"
+
 # db_tier         = "db-custom-1-3840"   # smallest valid Postgres tier
 # reaper_schedule = "*/5 * * * *"
 

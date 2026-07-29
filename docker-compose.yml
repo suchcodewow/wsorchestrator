@@ -1,5 +1,5 @@
 # Local development database — isolated from the prod Cloud SQL instance.
-# Matches the default DATABASE_URL in .env.example.
+# Matches the default DATABASE_URL in frontend/.env.example.
 #   docker compose up -d      # start
 #   docker compose down       # stop (keeps data)
 #   docker compose down -v     # stop and wipe data

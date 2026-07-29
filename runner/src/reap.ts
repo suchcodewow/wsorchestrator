@@ -4,6 +4,12 @@ import { writeTfvars } from "./workspace.js";
 import { tfDestroy, tfInit } from "./terraform.js";
 import { deleteAccount, deleteOrgUnit } from "./directory.js";
 import {
+  deleteOrg,
+  deleteProject,
+  orgIdentifier,
+  projectIdentifier,
+} from "./harness.js";
+import {
   accountsFor,
   deleteAccounts,
   expiredRuns,
@@ -39,6 +45,8 @@ async function destroyRun(run: RunRow): Promise<void> {
       await destroyGcp(run);
     }
 
+    await destroyHarness(run);
+
     const accounts = await accountsFor(run.id);
     if (accounts.length > 0) {
       await log(run.id, "system", `Deleting ${accounts.length} attendee account(s)`);
@@ -62,6 +70,25 @@ async function destroyRun(run: RunRow): Promise<void> {
     await log(run.id, "stderr", `destroy failed, will retry: ${message}`);
     console.error(`reaper: failed to destroy ${run.id}:`, message);
   }
+}
+
+/**
+ * Delete the workshop's Harness projects, then its organization. Projects go
+ * first because Harness refuses to delete an organization that still has any.
+ * Both the identifiers are derived the same way they were on the way in, so
+ * nothing extra needs to be stored to find them again.
+ */
+async function destroyHarness(run: RunRow): Promise<void> {
+  const orgId = orgIdentifier(run.name, run.id);
+  const accounts = await accountsFor(run.id);
+
+  await log(run.id, "system", `Deleting Harness organization ${orgId}`);
+  for (const { email } of accounts) {
+    const projectId = projectIdentifier(email);
+    await deleteProject(orgId, projectId);
+    await log(run.id, "stdout", `deleted project ${projectId}`);
+  }
+  await deleteOrg(orgId);
 }
 
 async function destroyGcp(run: RunRow): Promise<void> {

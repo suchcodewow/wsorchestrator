@@ -1,29 +1,50 @@
-// Apply hand-written SQL migrations from drizzle/ against DATABASE_URL.
+// Apply hand-written SQL migrations against DATABASE_URL.
 //
 // Drizzle's `push` diffs a schema onto a database; it cannot express a data
-// backfill, so changes that have to move data before dropping it live here as
-// ordered .sql files and run first. Each file is expected to be idempotent and
-// to wrap itself in a transaction.
+// backfill, so changes that have to move data before dropping it live as
+// ordered .sql files alongside the schema and run first. Each file is expected
+// to be idempotent and to wrap itself in a transaction.
 //
-//   node scripts/apply-sql.mjs                 # every drizzle/*.sql, in order
-//   node scripts/apply-sql.mjs path/to/one.sql # just this one
+//   node frontend/scripts/apply-sql.mjs           # every .sql in ../drizzle
+//   node frontend/scripts/apply-sql.mjs some/dir  # every .sql in that dir
+//   node frontend/scripts/apply-sql.mjs one.sql   # just this one
 //
-// Normally invoked through scripts/with-db.sh so DATABASE_URL points at Cloud
+// Lives inside frontend/ so `pg` resolves from the app's node_modules, and
+// normally invoked through scripts/with-db.sh so DATABASE_URL points at Cloud
 // SQL via the proxy.
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import pg from "pg";
 
-const MIGRATIONS_DIR = "drizzle";
+const here = path.dirname(fileURLToPath(import.meta.url));
 
-function filesToApply(args) {
-  if (args.length > 0) return args;
-  if (!fs.existsSync(MIGRATIONS_DIR)) return [];
+/**
+ * Migrations live beside the Drizzle schema that generates them. Resolved
+ * against this file rather than the working directory, so the Makefile can
+ * invoke it from the repo root.
+ */
+const DEFAULT_MIGRATIONS_DIR = path.resolve(here, "../drizzle");
+
+function sqlFilesIn(dir) {
   return fs
-    .readdirSync(MIGRATIONS_DIR)
+    .readdirSync(dir)
     .filter((f) => f.endsWith(".sql"))
     .sort()
-    .map((f) => path.join(MIGRATIONS_DIR, f));
+    .map((f) => path.join(dir, f));
+}
+
+function filesToApply(args) {
+  if (args.length === 0) {
+    return fs.existsSync(DEFAULT_MIGRATIONS_DIR)
+      ? sqlFilesIn(DEFAULT_MIGRATIONS_DIR)
+      : [];
+  }
+  // Accept directories as well as individual files, so the Makefile can pass
+  // the migrations directory explicitly.
+  return args.flatMap((arg) =>
+    fs.existsSync(arg) && fs.statSync(arg).isDirectory() ? sqlFilesIn(arg) : [arg],
+  );
 }
 
 const files = filesToApply(process.argv.slice(2));
