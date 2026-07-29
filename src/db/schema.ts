@@ -4,7 +4,6 @@ import {
   timestamp,
   jsonb,
   integer,
-  boolean,
   uuid,
   bigserial,
   primaryKey,
@@ -68,62 +67,81 @@ export const verificationTokens = pgTable(
 );
 
 /* ------------------------------------------------------------------ *
- * Domain tables — workshop library, runs, streamed logs
+ * Domain tables — workshops, their attendee accounts, streamed logs
  * ------------------------------------------------------------------ */
 
 export const runStatus = pgEnum("run_status", [
   "requested",
-  "provisioning", // create project, link billing, enable APIs
-  "applying", // terraform apply of workshop resources
+  "provisioning", // create the Workspace OU and its attendee accounts
+  "applying", // terraform apply of the per-cloud resources
   "ready", // outputs available; expires_at set
-  "destroying", // reaper running terraform destroy + project delete
+  "destroying", // reaper tearing down clouds, accounts, and the OU
   "destroyed",
   "failed",
   "scheduled", // created on the calendar, awaiting its start time
 ]);
 
-/** The library of workshops a user can pick from. */
-export const workshops = pgTable("workshops", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  slug: text("slug").notNull().unique(),
-  title: text("title").notNull(),
-  description: text("description"),
-  icon: text("icon"), // lucide icon name or asset ref
-  /** Where the Terraform lives: git repo/ref or a module path in the runner image. */
-  tfSource: text("tf_source").notNull(),
-  /** Variable schema/defaults passed to Terraform for this workshop. */
-  variables: jsonb("variables").notNull().default({}),
-  /** Time-to-live before auto-destroy. Defaults to 1 hour for testing. */
-  ttlSeconds: integer("ttl_seconds").notNull().default(3600),
-  enabled: boolean("enabled").notNull().default(true),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-});
+/** Clouds a workshop can ask for. Only `gcp` is wired up so far. */
+export const CLOUDS = ["aws", "azure", "gcp"] as const;
+export type Cloud = (typeof CLOUDS)[number];
 
-/** A single provisioning run of a workshop for a user. */
+export const CLOUD_LABELS: Record<Cloud, string> = {
+  aws: "Amazon Web Services",
+  azure: "Azure",
+  gcp: "Google Cloud Platform",
+};
+
+/** Maximum attendees a single workshop may provision. */
+export const MAX_USERS = 50;
+
+/**
+ * Whether a run's configuration can still be changed. Pure, so both the API
+ * and the client form can agree on it.
+ *
+ * `scheduled` — nothing exists yet, so anything goes.
+ * `ready` — accounts and cloud environments are live, so the config may only
+ *   grow; shrinking would mean deleting accounts that are already in use.
+ * Anything else is mid-flight or finished, and is left alone.
+ */
+export function editabilityOf(status: RunStatus): "full" | "grow" | "locked" {
+  if (status === "scheduled") return "full";
+  if (status === "ready") return "grow";
+  return "locked";
+}
+
+/**
+ * A scheduled workshop. Self-describing — the attendee count and the set of
+ * clouds are captured here, so there is no separate template to select.
+ */
 export const workshopRuns = pgTable(
   "workshop_runs",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    workshopId: uuid("workshop_id")
-      .notNull()
-      .references(() => workshops.id),
     userId: text("user_id")
       .notNull()
       .references(() => users.id),
-    /** User-given name for this scheduled workshop instance. */
-    name: text("name"),
+    /** User-given name; the OU, account, and project names derive from it. */
+    name: text("name").notNull(),
+    /** Slugified `name`, used to build account and project identifiers. */
+    slug: text("slug").notNull(),
+    /** How many attendee accounts to create (1..MAX_USERS). */
+    userCount: integer("user_count").notNull(),
+    /** Which clouds to provision; subset of CLOUDS. */
+    clouds: text("clouds").array().$type<Cloud[]>().notNull().default([]),
     status: runStatus("status").notNull().default("scheduled"),
     /** When the workshop should auto-provision (set from the calendar). */
     scheduledStart: timestamp("scheduled_start", { withTimezone: true }),
-    /** ws-<slug>-<short>; set during provisioning. */
+    /** Google Workspace OU created for this workshop, e.g. /Workshops/Foo. */
+    orgUnitPath: text("org_unit_path"),
+    /** ws-<slug>-<short>; set while provisioning GCP. */
     gcpProjectId: text("gcp_project_id"),
-    /** GCS state prefix: workshops/<workshop-id>/<run-id>. */
+    /** GCS state prefix: workshops/<run-id>. */
     statePrefix: text("state_prefix").notNull(),
-    /** Terraform outputs surfaced in the UI (URLs, cluster name, ...). */
+    /** Terraform outputs surfaced in the UI (project id, URLs, ...). */
     outputs: jsonb("outputs"),
     error: text("error"),
+    /** Time-to-live before auto-destroy. Defaults to 1 hour for testing. */
+    ttlSeconds: integer("ttl_seconds").notNull().default(3600),
     /** Set when status -> ready; the reaper destroys runs past this. */
     expiresAt: timestamp("expires_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
@@ -137,6 +155,28 @@ export const workshopRuns = pgTable(
     // scheduler: find scheduled runs whose start time has arrived
     index("workshop_runs_scheduler_idx").on(t.status, t.scheduledStart),
   ],
+);
+
+/**
+ * One Google Workspace account created for a workshop attendee. The temporary
+ * password is stored so the organizer can hand it out; it is force-rotated at
+ * first sign-in and the account is deleted when the workshop is reaped.
+ */
+export const workshopAccounts = pgTable(
+  "workshop_accounts",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    runId: uuid("run_id")
+      .notNull()
+      .references(() => workshopRuns.id, { onDelete: "cascade" }),
+    email: text("email").notNull(),
+    /** Temporary password; `changePasswordAtNextLogin` is set on the account. */
+    tempPassword: text("temp_password").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [index("workshop_accounts_run_idx").on(t.runId, t.id)],
 );
 
 /** Streamed build output rendered live in the run detail view. */
@@ -154,7 +194,7 @@ export const runLogs = pgTable(
   (t) => [index("run_logs_run_idx").on(t.runId, t.id)],
 );
 
-export type Workshop = typeof workshops.$inferSelect;
 export type WorkshopRun = typeof workshopRuns.$inferSelect;
+export type WorkshopAccount = typeof workshopAccounts.$inferSelect;
 export type RunLog = typeof runLogs.$inferSelect;
 export type RunStatus = (typeof runStatus.enumValues)[number];

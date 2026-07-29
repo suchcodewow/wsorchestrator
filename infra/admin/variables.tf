@@ -24,6 +24,22 @@ variable "tfstate_bucket" {
   type        = string
 }
 
+variable "workspace_domain" {
+  description = "Google Workspace domain attendee accounts are created in (e.g. example.com)."
+  type        = string
+}
+
+variable "workspace_admin_email" {
+  description = "Super-admin the runner impersonates via domain-wide delegation to call the Admin SDK."
+  type        = string
+}
+
+variable "workspace_parent_ou" {
+  description = "Parent org unit path the per-workshop OUs are created under."
+  type        = string
+  default     = "/"
+}
+
 variable "db_tier" {
   description = "Cloud SQL machine tier. Postgres needs a custom/dedicated type (shared-core db-f1-micro/db-g1-small are MySQL-only). db-custom-1-3840 = 1 vCPU / 3.75 GB, the smallest valid Postgres tier."
   type        = string

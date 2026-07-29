@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { TF_BIN } from "./config.js";
 
 export type TfLine = { stream: "stdout" | "stderr"; text: string };
 type OnLine = (line: TfLine) => void | Promise<void>;
@@ -6,7 +7,7 @@ type OnLine = (line: TfLine) => void | Promise<void>;
 /** Spawn terraform in `cwd`, streaming each output line to `onLine`. */
 function exec(args: string[], cwd: string, onLine?: OnLine): Promise<void> {
   return new Promise((resolve, reject) => {
-    const child = spawn("terraform", args, { cwd, env: process.env });
+    const child = spawn(TF_BIN, args, { cwd, env: process.env });
 
     const pump = (stream: "stdout" | "stderr") => (buf: Buffer) => {
       for (const text of buf.toString().split("\n")) {

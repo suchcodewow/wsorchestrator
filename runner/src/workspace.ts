@@ -1,12 +1,13 @@
 import fs from "node:fs";
 import path from "node:path";
-import { cfg } from "./config.js";
+import { gcpCfg } from "./config.js";
 
 /**
  * Write the per-run terraform.tfvars.json into a workshop root dir.
  * Each job execution owns its container, so mutating the dir in place is safe.
  */
 export function writeTfvars(workDir: string, projectId: string, runId: string) {
+  const cfg = gcpCfg();
   const vars = {
     project_id: projectId,
     folder_id: cfg.folderId,

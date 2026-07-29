@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2 } from "lucide-react";
+import { Loader2, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { CLOUDS, CLOUD_LABELS, MAX_USERS, type Cloud } from "@/db/schema";
 import {
   Dialog,
   DialogContent,
@@ -13,8 +14,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-
-type Workshop = { id: string; title: string };
 
 /** Format a Date as the value a datetime-local input expects (local time). */
 function toLocalInput(d: Date): string {
@@ -27,19 +26,18 @@ function toLocalInput(d: Date): string {
 export function CreateWorkshopDialog({
   open,
   onOpenChange,
-  library,
   initialDate,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  library: Workshop[];
   initialDate: Date | null;
 }) {
   const router = useRouter();
   const [name, setName] = useState("");
-  const [workshopId, setWorkshopId] = useState(library[0]?.id ?? "");
+  const [userCount, setUserCount] = useState("10");
+  const [clouds, setClouds] = useState<Cloud[]>([]);
   const [start, setStart] = useState("");
-  const [pending, setPending] = useState(false);
+  const [pending, setPending] = useState<"now" | "schedule" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // Reset the form each time the dialog opens, defaulting the start time.
@@ -50,13 +48,33 @@ export function CreateWorkshopDialog({
     else base.setHours(9, 0, 0, 0);
     setStart(toLocalInput(base));
     setName("");
-    setWorkshopId(library[0]?.id ?? "");
+    setUserCount("10");
+    setClouds([]);
     setError(null);
-  }, [open, initialDate, library]);
+  }, [open, initialDate]);
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    setPending(true);
+  function toggleCloud(cloud: Cloud) {
+    setClouds((prev) =>
+      prev.includes(cloud) ? prev.filter((c) => c !== cloud) : [...prev, cloud],
+    );
+  }
+
+  async function createRun(startNow: boolean) {
+    if (name.trim().length === 0) {
+      setError("Give the workshop a name.");
+      return;
+    }
+    const count = Number(userCount);
+    if (!Number.isInteger(count) || count < 1 || count > MAX_USERS) {
+      setError(`Enter a number of users between 1 and ${MAX_USERS}.`);
+      return;
+    }
+    if (clouds.length === 0) {
+      setError("Pick at least one cloud.");
+      return;
+    }
+
+    setPending(startNow ? "now" : "schedule");
     setError(null);
     try {
       const res = await fetch("/api/runs", {
@@ -64,17 +82,23 @@ export function CreateWorkshopDialog({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name,
-          workshopId,
-          scheduledStart: new Date(start).toISOString(),
+          userCount: count,
+          clouds,
+          ...(startNow
+            ? { startNow: true }
+            : { scheduledStart: new Date(start).toISOString() }),
         }),
       });
-      if (!res.ok) throw new Error(`Could not schedule (${res.status})`);
+      if (!res.ok) throw new Error(`Could not create workshop (${res.status})`);
+      const { run } = await res.json();
       onOpenChange(false);
-      router.refresh();
+      // Jump straight to the run so the build streams in view.
+      if (startNow) router.push(`/runs/${run.id}`);
+      else router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not schedule");
+      setError(err instanceof Error ? err.message : "Could not create workshop");
     } finally {
-      setPending(false);
+      setPending(null);
     }
   }
 
@@ -84,12 +108,18 @@ export function CreateWorkshopDialog({
         <DialogHeader>
           <DialogTitle>Schedule a workshop</DialogTitle>
           <DialogDescription>
-            Pick a workshop and a start time. It provisions automatically when
-            the time arrives.
+            Attendee accounts and cloud environments are created automatically
+            when the start time arrives.
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={submit} className="grid gap-4">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            void createRun(false);
+          }}
+          className="grid gap-4"
+        >
           <div className="grid gap-1.5">
             <label htmlFor="ws-name" className="text-sm font-medium">
               Workshop name
@@ -105,22 +135,70 @@ export function CreateWorkshopDialog({
           </div>
 
           <div className="grid gap-1.5">
-            <label htmlFor="ws-template" className="text-sm font-medium">
-              Workshop
+            <label htmlFor="ws-users" className="text-sm font-medium">
+              How many users?
             </label>
-            <select
-              id="ws-template"
-              value={workshopId}
-              onChange={(e) => setWorkshopId(e.target.value)}
+            <Input
+              id="ws-users"
+              type="number"
+              inputMode="numeric"
+              min={1}
+              max={MAX_USERS}
+              step={1}
+              value={userCount}
+              onChange={(e) => setUserCount(e.target.value)}
               required
-              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-            >
-              {library.map((w) => (
-                <option key={w.id} value={w.id}>
-                  {w.title}
-                </option>
+            />
+            <p className="text-xs text-muted-foreground">
+              1–{MAX_USERS} accounts are created in a dedicated organizational
+              unit named after the workshop.
+            </p>
+          </div>
+
+          <fieldset className="grid gap-1.5">
+            <legend className="text-sm font-medium">Clouds needed</legend>
+            <div className="grid gap-2 pt-1">
+              {CLOUDS.map((cloud) => (
+                <label
+                  key={cloud}
+                  htmlFor={`ws-cloud-${cloud}`}
+                  className="flex items-center gap-2 text-sm"
+                >
+                  <input
+                    id={`ws-cloud-${cloud}`}
+                    type="checkbox"
+                    checked={clouds.includes(cloud)}
+                    onChange={() => toggleCloud(cloud)}
+                    className="size-4 rounded border-input accent-primary"
+                  />
+                  {CLOUD_LABELS[cloud]}
+                  {cloud !== "gcp" && (
+                    <span className="text-xs text-muted-foreground">
+                      (not yet provisioned)
+                    </span>
+                  )}
+                </label>
               ))}
-            </select>
+            </div>
+          </fieldset>
+
+          <div className="grid gap-1.5">
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={pending !== null}
+              onClick={() => createRun(true)}
+            >
+              {pending === "now" ? (
+                <Loader2 className="animate-spin" />
+              ) : (
+                <Zap />
+              )}
+              {pending === "now" ? "Starting…" : "Start now"}
+            </Button>
+            <p className="text-xs text-muted-foreground">
+              Creates the workshop immediately, ignoring the start time below.
+            </p>
           </div>
 
           <div className="grid gap-1.5">
@@ -142,13 +220,14 @@ export function CreateWorkshopDialog({
             <Button
               type="button"
               variant="outline"
+              disabled={pending !== null}
               onClick={() => onOpenChange(false)}
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={pending || !workshopId}>
-              {pending && <Loader2 className="animate-spin" />}
-              {pending ? "Scheduling…" : "Schedule"}
+            <Button type="submit" disabled={pending !== null}>
+              {pending === "schedule" && <Loader2 className="animate-spin" />}
+              {pending === "schedule" ? "Scheduling…" : "Schedule"}
             </Button>
           </DialogFooter>
         </form>

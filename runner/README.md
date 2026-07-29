@@ -4,32 +4,54 @@ One container image, two entrypoints, run as **Cloud Run Jobs** under
 `runner-sa` (no key files — Terraform uses the job's ADC).
 
 - **`run`** — reads `RUN_ID`, provisions one workshop:
-  `provisioning` → create project + link billing + enable APIs →
-  `applying` (`terraform apply`) → `ready` (outputs + `expires_at`).
+  `provisioning` (Workspace OU + attendee accounts) → `applying`
+  (`terraform apply` per requested cloud) → `ready` (outputs + `expires_at`).
   Streams every Terraform line into `run_logs`.
 - **`reap`** — finds runs past `expires_at` (or failed) and destroys them:
-  `terraform destroy` → project delete → `destroyed`. Cloud Scheduler fires
-  this every few minutes.
+  `terraform destroy` → project delete → accounts deleted → OU deleted →
+  `destroyed`. Cloud Scheduler fires this every few minutes.
+- **`provision-due`** — cron entrypoint that claims `scheduled` runs whose start
+  time has arrived and triggers a `run` execution for each.
 
-## How a run maps to Terraform
+## What a run creates
 
-`workshops.tf_source` (e.g. `workshops/gke-starter`) selects a root config under
-[`terraform/workshops/`](terraform/workshops). The runner:
+A run is self-describing: a name, an attendee count, and a set of clouds.
 
-1. writes `terraform.tfvars.json` (project id, folder, billing, region, labels),
-2. `terraform init` with the GCS backend `-backend-config=prefix=<state_prefix>`
-   (per-run state in the admin bucket),
-3. `terraform apply` / `destroy`.
+1. **Google Workspace OU** named after the workshop, under
+   `GOOGLE_WORKSPACE_PARENT_OU`.
+2. **`user_count` accounts** in that OU, addressed `<slug>-NN@<domain>`, each
+   with a generated temporary password and `changePasswordAtNextLogin`. The
+   credentials are stored in `workshop_accounts` for the organizer to hand out.
+3. **Per cloud** — `gcp` applies [`terraform/workshops/gcp-base`](terraform/workshops/gcp-base),
+   which wires [`modules/project`](terraform/modules/project) to create the
+   ephemeral project, link billing, and enable APIs. `aws` and `azure` are
+   accepted by the form and logged as not yet wired up.
 
-Each root wires the shared [`modules/project`](terraform/modules/project)
-(project + billing + APIs) to a workshop content module. Adding a workshop =
-add a module + a root config + a `workshops` DB row.
+Terraform state is per-run in the admin bucket
+(`-backend-config=prefix=<state_prefix>`).
 
 ## Env
 
 `DATABASE_URL`, `GCP_TFSTATE_BUCKET`, `GCP_WORKSHOPS_FOLDER_ID`,
-`GCP_BILLING_ACCOUNT_ID`, `GCP_ADMIN_PROJECT_ID`, `GCP_REGION` — all supplied by
-the Cloud Run Job definitions in `infra/admin/runner.tf`.
+`GCP_BILLING_ACCOUNT_ID`, `GCP_ADMIN_PROJECT_ID`, `GCP_REGION`,
+`GOOGLE_WORKSPACE_DOMAIN`, `GOOGLE_WORKSPACE_ADMIN_EMAIL`,
+`GOOGLE_WORKSPACE_PARENT_OU` — all supplied by the Cloud Run Job definitions in
+`infra/admin/runner.tf`. `TF_BIN` overrides the Terraform binary (e.g. `tofu`).
+
+The GCP vars are read lazily, so a workshop that requests no GCP environment
+provisions its accounts without them.
+
+### Workspace access
+
+The Directory API rejects service accounts acting as themselves, so `runner-sa`
+needs **domain-wide delegation** in the Workspace admin console for:
+
+```
+https://www.googleapis.com/auth/admin.directory.orgunit
+https://www.googleapis.com/auth/admin.directory.user
+```
+
+and impersonates `GOOGLE_WORKSPACE_ADMIN_EMAIL` (a super-admin).
 
 ## Build & push
 

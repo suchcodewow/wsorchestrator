@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/auth";
+import { CLOUDS, MAX_USERS } from "@/db/schema";
 import { createScheduledRun, listRunsForUser } from "@/lib/runs";
+import { startRunNow } from "@/lib/trigger";
 
 export async function GET() {
   const session = await auth();
@@ -14,8 +16,11 @@ export async function GET() {
 
 const createSchema = z.object({
   name: z.string().trim().min(1).max(200),
-  workshopId: z.string().uuid(),
-  scheduledStart: z.string().datetime(),
+  userCount: z.number().int().min(1).max(MAX_USERS),
+  clouds: z.array(z.enum(CLOUDS)).min(1).max(CLOUDS.length),
+  // Omitted when startNow is set — the run begins immediately instead.
+  scheduledStart: z.string().datetime().optional(),
+  startNow: z.boolean().optional(),
 });
 
 export async function POST(req: Request) {
@@ -29,14 +34,22 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "invalid_body" }, { status: 400 });
   }
 
+  const { startNow, scheduledStart } = parsed.data;
+  if (!startNow && !scheduledStart) {
+    return NextResponse.json({ error: "invalid_body" }, { status: 400 });
+  }
+
   const result = await createScheduledRun({
     name: parsed.data.name,
-    workshopId: parsed.data.workshopId,
+    userCount: parsed.data.userCount,
+    clouds: [...new Set(parsed.data.clouds)],
     userId: session.user.id,
-    scheduledStart: new Date(parsed.data.scheduledStart),
+    // A start-now run is backdated so the scheduler still claims it if the
+    // direct trigger below fails.
+    scheduledStart: startNow ? new Date() : new Date(scheduledStart!),
+    startNow,
   });
-  if ("error" in result) {
-    return NextResponse.json({ error: result.error }, { status: 404 });
-  }
-  return NextResponse.json({ run: result.run }, { status: 201 });
+
+  const started = startNow ? await startRunNow(result.run.id) : false;
+  return NextResponse.json({ run: result.run, started }, { status: 201 });
 }

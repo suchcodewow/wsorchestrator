@@ -13,10 +13,9 @@
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
-    "db:seed": "tsx src/db/seed.ts",
     "db:up": "docker compose up -d",
     "db:down": "docker compose down",
-    "dev:setup": "docker compose up -d --wait && drizzle-kit push --force && npm run db:seed"
+    "dev:setup": "docker compose up -d --wait && drizzle-kit push --force"
   },
   "dependencies": {
     "@auth/drizzle-adapter": "^1.7.4",

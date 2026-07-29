@@ -3,18 +3,18 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
-import type { RunStatus } from "@/db/schema";
+import type { Cloud, RunStatus } from "@/db/schema";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { CreateWorkshopDialog } from "./create-workshop-dialog";
 
-type Workshop = { id: string; title: string };
 type CalendarEvent = {
   id: string;
-  name: string | null;
+  name: string;
   status: RunStatus;
   scheduledStart: string | null;
-  workshopTitle: string;
+  userCount: number;
+  clouds: Cloud[];
 };
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -36,13 +36,7 @@ const DOT: Record<RunStatus, string> = {
 
 const dayKey = (y: number, m: number, d: number) => `${y}-${m}-${d}`;
 
-export function WorkshopCalendar({
-  library,
-  events,
-}: {
-  library: Workshop[];
-  events: CalendarEvent[];
-}) {
+export function WorkshopCalendar({ events }: { events: CalendarEvent[] }) {
   const router = useRouter();
   const today = new Date();
   const [view, setView] = useState(
@@ -190,8 +184,9 @@ export function WorkshopCalendar({
                               DOT[e.status],
                             )}
                           />
-                          <span className="truncate">
-                            {e.name ?? e.workshopTitle}
+                          <span className="truncate">{e.name}</span>
+                          <span className="ml-auto shrink-0 text-muted-foreground">
+                            {e.userCount}
                           </span>
                         </button>
                       ))}
@@ -207,7 +202,6 @@ export function WorkshopCalendar({
       <CreateWorkshopDialog
         open={dialogOpen}
         onOpenChange={setDialogOpen}
-        library={library}
         initialDate={initialDate}
       />
     </div>

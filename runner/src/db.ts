@@ -5,27 +5,30 @@ const pool = new pg.Pool({
   max: 3,
 });
 
+export type Cloud = "aws" | "azure" | "gcp";
+
 export type RunRow = {
   id: string;
-  workshop_id: string;
   user_id: string;
+  name: string;
+  slug: string;
+  user_count: number;
+  clouds: Cloud[];
   status: string;
+  org_unit_path: string | null;
   gcp_project_id: string | null;
   state_prefix: string;
   ttl_seconds: number;
-  slug: string;
-  tf_source: string;
-  title: string;
+  expires_at: Date | null;
 };
 
-/** Load a run joined with its workshop definition. */
+const RUN_COLUMNS = `id, user_id, name, slug, user_count, clouds, status,
+                     org_unit_path, gcp_project_id, state_prefix, ttl_seconds,
+                     expires_at`;
+
 export async function getRun(runId: string): Promise<RunRow | undefined> {
   const { rows } = await pool.query<RunRow>(
-    `select r.id, r.workshop_id, r.user_id, r.status, r.gcp_project_id,
-            r.state_prefix, w.ttl_seconds, w.slug, w.tf_source, w.title
-       from workshop_runs r
-       join workshops w on w.id = r.workshop_id
-      where r.id = $1`,
+    `select ${RUN_COLUMNS} from workshop_runs where id = $1`,
     [runId],
   );
   return rows[0];
@@ -34,13 +37,11 @@ export async function getRun(runId: string): Promise<RunRow | undefined> {
 /** Runs whose TTL has elapsed (or that failed) and need teardown. */
 export async function expiredRuns(): Promise<RunRow[]> {
   const { rows } = await pool.query<RunRow>(
-    `select r.id, r.workshop_id, r.user_id, r.status, r.gcp_project_id,
-            r.state_prefix, w.ttl_seconds, w.slug, w.tf_source, w.title
-       from workshop_runs r
-       join workshops w on w.id = r.workshop_id
-      where r.status in ('ready', 'failed')
-        and r.expires_at is not null
-        and r.expires_at < now()`,
+    `select ${RUN_COLUMNS}
+       from workshop_runs
+      where status in ('ready', 'failed')
+        and expires_at is not null
+        and expires_at < now()`,
   );
   return rows;
 }
@@ -56,17 +57,25 @@ export async function log(
   );
 }
 
-export async function setProvisioning(runId: string, projectId: string) {
+export async function setProvisioning(runId: string) {
   await pool.query(
-    `update workshop_runs set status = 'provisioning', gcp_project_id = $2 where id = $1`,
-    [runId, projectId],
+    `update workshop_runs set status = 'provisioning' where id = $1`,
+    [runId],
   );
 }
 
-export async function setApplying(runId: string) {
-  await pool.query(`update workshop_runs set status = 'applying' where id = $1`, [
+export async function setOrgUnitPath(runId: string, orgUnitPath: string) {
+  await pool.query(`update workshop_runs set org_unit_path = $2 where id = $1`, [
     runId,
+    orgUnitPath,
   ]);
+}
+
+export async function setApplying(runId: string, projectId: string | null) {
+  await pool.query(
+    `update workshop_runs set status = 'applying', gcp_project_id = $2 where id = $1`,
+    [runId, projectId],
+  );
 }
 
 export async function setReady(
@@ -103,6 +112,31 @@ export async function setDestroyed(runId: string) {
     `update workshop_runs set status = 'destroyed', destroyed_at = now() where id = $1`,
     [runId],
   );
+}
+
+/** Record an attendee account so the organizer can hand out its credentials. */
+export async function addAccount(
+  runId: string,
+  email: string,
+  tempPassword: string,
+) {
+  await pool.query(
+    `insert into workshop_accounts (run_id, email, temp_password)
+     values ($1, $2, $3)`,
+    [runId, email, tempPassword],
+  );
+}
+
+export async function accountsFor(runId: string): Promise<{ email: string }[]> {
+  const { rows } = await pool.query<{ email: string }>(
+    `select email from workshop_accounts where run_id = $1 order by id`,
+    [runId],
+  );
+  return rows;
+}
+
+export async function deleteAccounts(runId: string) {
+  await pool.query(`delete from workshop_accounts where run_id = $1`, [runId]);
 }
 
 /**

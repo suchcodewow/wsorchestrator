@@ -20,6 +20,12 @@ variable "labels" {
   default = {}
 }
 
+variable "activate_apis" {
+  description = "APIs to enable in the workshop project."
+  type        = list(string)
+  default     = ["compute.googleapis.com"]
+}
+
 # Passed by the runner but not consumed directly; declared to avoid warnings.
 variable "admin_project_id" {
   type    = string

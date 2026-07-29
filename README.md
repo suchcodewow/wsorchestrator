@@ -1,9 +1,14 @@
 # Workshop Orchestrator
 
-Authenticated users pick a workshop from a library; the app provisions a
-dedicated, **ephemeral Google Cloud environment** with Terraform and streams the
-build results back. Each run gets its own GCP project and auto-destroys when its
-TTL expires (1 hour by default).
+Authenticated users schedule a workshop on a calendar — a name, how many
+attendees, and which clouds are needed. At its start time the app provisions a
+**Google Workspace organizational unit** named after the workshop, an account
+per attendee inside it, and a dedicated **ephemeral cloud environment**, then
+streams the build results back. Everything auto-destroys when the TTL expires
+(1 hour by default).
+
+Google Cloud is wired up today (an ephemeral project per workshop, via
+Terraform); AWS and Azure can be selected but are not yet provisioned.
 
 ## Stack
 
@@ -58,7 +63,7 @@ This walks you from an empty Google Cloud org to a running, deployed app. Budget
   [`tofu`](https://opentofu.org/docs/intro/install/) (the Makefile auto-detects
   which you have)
 - [`cloud-sql-proxy`](https://cloud.google.com/sql/docs/postgres/sql-proxy) v2
-  (for running migrations/seed)
+  (for running migrations)
 - `node` 20+ and `git`
 
 **Google Cloud, before you start you need:**
@@ -75,6 +80,23 @@ This walks you from an empty Google Cloud org to a running, deployed app. Budget
    ```bash
    gcloud billing accounts list
    ```
+
+**Google Workspace, before you start you need:**
+
+1. A **Workspace domain** attendee accounts will be created in, with enough
+   licences for your largest workshop.
+2. A **super-admin** account for the runner to impersonate — the Admin SDK
+   Directory API refuses service accounts acting as themselves.
+3. **Domain-wide delegation** for `runner-sa`. After `make infra` creates it,
+   note its **client ID** (numeric, from the service account details) and in the
+   Workspace admin console under **Security → API controls → Domain-wide
+   delegation** authorize it for:
+   ```
+   https://www.googleapis.com/auth/admin.directory.orgunit
+   https://www.googleapis.com/auth/admin.directory.user
+   ```
+   Then set `workspace_domain` and `workspace_admin_email` in
+   `infra/admin/terraform.tfvars` and re-apply.
 
 **IAM the operator (you) needs** — the identity running `terraform apply` must be
 able to grant folder- and billing-level roles, not just build resources:
@@ -151,21 +173,22 @@ Also set `app_url = "<APP_URL>"` in `infra/admin/terraform.tfvars` and re-apply
 Cloud Run can produce a `0.0.0.0:8080` redirect that Google rejects with a
 "doesn't comply with OAuth 2.0 policy" error.
 
-## 5. Build images, deploy, migrate, seed
+## 5. Build images, deploy, migrate
 
 ```bash
 make ship
 ```
 
 This builds the real app + runner images (Cloud Build), rolls Cloud Run onto
-them, applies the database schema, and loads the sample workshops. It prints the
-app URL when done.
+them, and applies the database schema. It prints the app URL when done.
 
 ## 6. Verify
 
-Open `APP_URL`, sign in with Google, pick a workshop, and hit **Launch**. Watch
-the run view stream Terraform output as it creates a project and resources; it
-auto-destroys ~1 hour later (the reaper runs every 5 minutes).
+Open `APP_URL`, sign in with Google, and schedule a workshop — give it a name,
+an attendee count, and tick **Google Cloud Platform**. Set the start time a few
+minutes out; the scheduler picks it up within 5 minutes. Watch the run view
+stream the OU and account creation, then the Terraform output as it creates the
+project. It auto-destroys ~1 hour later (the reaper runs every 5 minutes).
 
 **Done.** For day-to-day redeploys and rollbacks see [DEPLOY.md](DEPLOY.md).
 
@@ -182,13 +205,13 @@ npm install
 cp .env.example .env         # then edit (see below)
 npx auth secret              # writes AUTH_SECRET into .env
 
-npm run dev:setup            # docker compose up + db:push + db:seed
+npm run dev:setup            # docker compose up + db:push
 npm run dev                  # http://localhost:3000
 ```
 
 `dev:setup` starts the local Postgres from [docker-compose.yml](docker-compose.yml)
-(`npm run db:up` / `db:down` to control it on its own) and applies the schema +
-seed. On later runs, just `npm run dev`.
+(`npm run db:up` / `db:down` to control it on its own) and applies the schema.
+On later runs, just `npm run dev`.
 
 **Edit `.env`** — the defaults already point `DATABASE_URL` at the local
 container. You just need:
@@ -201,26 +224,27 @@ container. You just need:
 
 ### What works locally vs. not
 
-Sign-in, the workshop library, run history, and the live run views all work
-against the local DB. **The launch button won't actually provision**, though:
-`triggerRunnerJob` no-ops unless the `tf-runner` Cloud Run Job is configured, so
-a launched run stays in `requested`. That's intended — real provisioning creates
-GCP projects and belongs in the deployed environment. To watch a real workshop
-build, use the deployed app.
+Sign-in, the calendar, scheduling a workshop, run history, and the live run
+views all work against the local DB. **Scheduled workshops never provision
+locally**, though: nothing on your laptop plays the part of the `tf-scheduler`
+cron, so a run stays in `scheduled`. That's intended — real provisioning creates
+Workspace accounts and GCP projects and belongs in the deployed environment.
 
-> Advanced: to exercise the runner locally, run the `runner/` container against
-> your local `DATABASE_URL` with `gcloud` ADC + `terraform` installed. Note the
-> same VPN/TLS caveat as `cloud-sql-proxy` applies to its GCS state access.
+> Advanced: to exercise the runner locally, run it against your local
+> `DATABASE_URL` with `gcloud` ADC, `terraform` (or `TF_BIN=tofu`), and the
+> `GOOGLE_WORKSPACE_*` vars set:
+> `RUN_ID=<uuid> npm start --prefix runner run`. Note the same VPN/TLS caveat as
+> `cloud-sql-proxy` applies to its GCS state access.
 
-## Adding a workshop
+## Adding a cloud
 
-1. Add a content module under
-   [`runner/terraform/modules/`](runner/terraform/modules).
-2. Add a root config under
-   [`runner/terraform/workshops/<slug>/`](runner/terraform/workshops) wiring
-   `modules/project` → your module.
-3. Add a row to the `workshops` table (see [`src/db/seed.ts`](src/db/seed.ts))
-   with `tf_source = "workshops/<slug>"`.
+`aws` and `azure` are already accepted by the form and stored on the run; they
+are logged as unimplemented at provisioning time. To wire one up:
+
+1. Add a root config under
+   [`runner/terraform/workshops/<cloud>-base/`](runner/terraform/workshops).
+2. Handle the cloud in the loop in [`runner/src/run.ts`](runner/src/run.ts) and
+   its teardown in [`runner/src/reap.ts`](runner/src/reap.ts).
 
 ## Notes
 

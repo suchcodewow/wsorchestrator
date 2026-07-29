@@ -1,6 +1,31 @@
 import { and, desc, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { runLogs, workshopRuns, workshops } from "@/db/schema";
+import {
+  CLOUD_LABELS,
+  editabilityOf,
+  runLogs,
+  workshopAccounts,
+  workshopRuns,
+  type Cloud,
+  type WorkshopRun,
+} from "@/db/schema";
+
+/**
+ * Slugify a workshop name for use in account addresses and project ids:
+ * lowercase, non-alphanumerics collapsed to single dashes.
+ */
+export function slugify(name: string): string {
+  const slug = name
+    .toLowerCase()
+    .normalize("NFKD")
+    // Drop the combining marks NFKD split off, so "é" becomes "e" not "e-".
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40)
+    .replace(/-+$/, "");
+  return slug.length > 0 ? slug : "workshop";
+}
 
 /**
  * Schedule a workshop for a user. The run is created in `scheduled` with a
@@ -8,40 +33,121 @@ import { runLogs, workshopRuns, workshops } from "@/db/schema";
  */
 export async function createScheduledRun(input: {
   name: string;
-  workshopId: string;
+  userCount: number;
+  clouds: Cloud[];
   userId: string;
   scheduledStart: Date;
+  /** Started from "Start now" rather than booked for a future time. */
+  startNow?: boolean;
 }) {
-  const workshop = await db.query.workshops.findFirst({
-    where: eq(workshops.id, input.workshopId),
-  });
-  if (!workshop || !workshop.enabled) {
-    return { error: "workshop_not_found" as const };
-  }
-
   const runId = crypto.randomUUID();
-  const statePrefix = `workshops/${input.workshopId}/${runId}`;
 
   const [run] = await db
     .insert(workshopRuns)
     .values({
       id: runId,
-      workshopId: input.workshopId,
       userId: input.userId,
       name: input.name,
+      slug: slugify(input.name),
+      userCount: input.userCount,
+      clouds: input.clouds,
       status: "scheduled",
       scheduledStart: input.scheduledStart,
-      statePrefix,
+      statePrefix: `workshops/${runId}`,
     })
     .returning();
+
+  const clouds =
+    input.clouds.length > 0
+      ? input.clouds.map((c) => CLOUD_LABELS[c]).join(", ")
+      : "no clouds";
+
+  const when = input.startNow
+    ? "to start now"
+    : `for ${input.scheduledStart.toISOString()}`;
 
   await db.insert(runLogs).values({
     runId,
     stream: "system",
-    message: `Scheduled "${input.name}" (${workshop.title}) for ${input.scheduledStart.toISOString()}.`,
+    message:
+      `Scheduled "${input.name}" ${when} — ` +
+      `${input.userCount} user(s), ${clouds}.`,
   });
 
   return { run };
+}
+
+export type UpdateRunError =
+  | "not_found"
+  | "locked"
+  | "shrink_not_allowed"
+  | "cloud_removal_not_allowed";
+
+/**
+ * Change a run's attendee count and clouds. Returns whether the change needs
+ * the runner to converge the live environment (only true for a `ready` run).
+ */
+export async function updateRunConfig(
+  runId: string,
+  userId: string,
+  input: { userCount: number; clouds: Cloud[] },
+): Promise<
+  | { ok: true; run: WorkshopRun; needsReprovision: boolean }
+  | { ok: false; error: UpdateRunError }
+> {
+  const run = await db.query.workshopRuns.findFirst({
+    where: and(eq(workshopRuns.id, runId), eq(workshopRuns.userId, userId)),
+  });
+  if (!run) return { ok: false, error: "not_found" };
+
+  const editability = editabilityOf(run.status);
+  if (editability === "locked") return { ok: false, error: "locked" };
+
+  const clouds = [...new Set(input.clouds)];
+
+  if (editability === "grow") {
+    if (input.userCount < run.userCount) {
+      return { ok: false, error: "shrink_not_allowed" };
+    }
+    const removed = run.clouds.filter((c) => !clouds.includes(c));
+    if (removed.length > 0) {
+      return { ok: false, error: "cloud_removal_not_allowed" };
+    }
+  }
+
+  const addedUsers = input.userCount - run.userCount;
+  const addedClouds = clouds.filter((c) => !run.clouds.includes(c));
+  const removedClouds = run.clouds.filter((c) => !clouds.includes(c));
+  const changed =
+    addedUsers !== 0 || addedClouds.length > 0 || removedClouds.length > 0;
+
+  if (!changed) return { ok: true, run, needsReprovision: false };
+
+  const [updated] = await db
+    .update(workshopRuns)
+    .set({ userCount: input.userCount, clouds })
+    .where(eq(workshopRuns.id, runId))
+    .returning();
+
+  const parts: string[] = [];
+  if (addedUsers > 0) parts.push(`+${addedUsers} user(s)`);
+  if (addedUsers < 0) parts.push(`${addedUsers} user(s)`);
+  if (addedClouds.length > 0) {
+    parts.push(`added ${addedClouds.map((c) => CLOUD_LABELS[c]).join(", ")}`);
+  }
+  if (removedClouds.length > 0) {
+    parts.push(`removed ${removedClouds.map((c) => CLOUD_LABELS[c]).join(", ")}`);
+  }
+
+  await db.insert(runLogs).values({
+    runId,
+    stream: "system",
+    message: `Configuration updated: ${parts.join("; ")}. Now ${input.userCount} user(s), ${clouds
+      .map((c) => CLOUD_LABELS[c])
+      .join(", ")}.`,
+  });
+
+  return { ok: true, run: updated, needsReprovision: editability === "grow" };
 }
 
 export async function listRunsForUser(userId: string) {
@@ -51,7 +157,7 @@ export async function listRunsForUser(userId: string) {
   });
 }
 
-/** Runs for a user joined with their workshop title, for the calendar. */
+/** Runs for a user, for the calendar. */
 export async function listCalendarRuns(userId: string) {
   return db
     .select({
@@ -59,10 +165,10 @@ export async function listCalendarRuns(userId: string) {
       name: workshopRuns.name,
       status: workshopRuns.status,
       scheduledStart: workshopRuns.scheduledStart,
-      workshopTitle: workshops.title,
+      userCount: workshopRuns.userCount,
+      clouds: workshopRuns.clouds,
     })
     .from(workshopRuns)
-    .innerJoin(workshops, eq(workshopRuns.workshopId, workshops.id))
     .where(eq(workshopRuns.userId, userId))
     .orderBy(desc(workshopRuns.scheduledStart));
 }
@@ -73,9 +179,15 @@ export async function getRunForUser(runId: string, userId: string) {
   });
   if (!run) return null;
 
-  const logs = await db.query.runLogs.findMany({
-    where: eq(runLogs.runId, runId),
-    orderBy: runLogs.id,
-  });
-  return { run, logs };
+  const [logs, accounts] = await Promise.all([
+    db.query.runLogs.findMany({
+      where: eq(runLogs.runId, runId),
+      orderBy: runLogs.id,
+    }),
+    db.query.workshopAccounts.findMany({
+      where: eq(workshopAccounts.runId, runId),
+      orderBy: workshopAccounts.id,
+    }),
+  ]);
+  return { run, logs, accounts };
 }

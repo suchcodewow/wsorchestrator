@@ -1,3 +1,6 @@
+# The GCP environment for a workshop: one ephemeral project, linked to billing,
+# under the workshops folder. Attendee accounts are created in Google Workspace
+# by the runner (Admin SDK), not here.
 provider "google" {
   region = var.region
 }
@@ -9,13 +12,5 @@ module "project" {
   billing_account = var.billing_account
   region          = var.region
   labels          = var.labels
-  activate_apis   = ["run.googleapis.com"]
-}
-
-module "demo" {
-  source     = "../../modules/cloud-run-demo"
-  project_id = module.project.project_id
-  region     = var.region
-
-  depends_on = [module.project]
+  activate_apis   = var.activate_apis
 }

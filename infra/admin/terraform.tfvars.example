@@ -6,6 +6,13 @@ workshops_folder_id = "123456789012"          # numeric folder ID
 billing_account_id  = "XXXXXX-XXXXXX-XXXXXX"
 tfstate_bucket      = "my-admin-project-ws-tfstate"
 
+# Google Workspace — attendee accounts are created here. runner-sa needs
+# domain-wide delegation for admin.directory.orgunit + admin.directory.user,
+# and impersonates workspace_admin_email (a super-admin).
+workspace_domain      = "example.com"
+workspace_admin_email = "admin@example.com"
+# workspace_parent_ou = "/Workshops"
+
 # db_tier         = "db-custom-1-3840"   # smallest valid Postgres tier
 # reaper_schedule = "*/5 * * * *"
 
