@@ -19,9 +19,13 @@ A run is self-describing: a name, an attendee count, and a set of clouds.
 
 1. **Google Workspace OU** named after the workshop, under
    `GOOGLE_WORKSPACE_PARENT_OU`.
-2. **`user_count` accounts** in that OU, addressed `<slug>-NN@<domain>`, each
-   with a generated temporary password and `changePasswordAtNextLogin`. The
-   credentials are stored in `workshop_accounts` for the organizer to hand out.
+2. **`user_count` accounts** in that OU, named from the adjective/noun lists in
+   [`src/usernames.ts`](src/usernames.ts) — `bouncy-penguin@<domain>`, shown in
+   Workspace as "Bouncy Penguin". Each address is checked against the Directory
+   API before it is claimed, so an account that already exists is never reused;
+   if the plain combinations keep colliding a numeric suffix is added. Each gets
+   a generated temporary password and `changePasswordAtNextLogin`, stored in
+   `workshop_accounts` for the organizer to hand out.
 3. **Per cloud** — `gcp` applies [`terraform/workshops/gcp-base`](terraform/workshops/gcp-base),
    which wires [`modules/project`](terraform/modules/project) to create the
    ephemeral project, link billing, and enable APIs. `aws` and `azure` are

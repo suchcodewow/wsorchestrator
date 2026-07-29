@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import { google, type admin_directory_v1 } from "googleapis";
 import { workspaceCfg } from "./config.js";
+import { COMBINATIONS, displayName, randomUsername } from "./usernames.js";
 
 const SCOPES = [
   "https://www.googleapis.com/auth/admin.directory.orgunit",
@@ -81,13 +82,12 @@ function generatePassword(): string {
 export type CreatedAccount = { email: string; tempPassword: string };
 
 /**
- * Create one attendee account inside the workshop's OU. Idempotent: if the
- * address already exists it is reused, with a freshly set password.
+ * Create one attendee account inside the workshop's OU. The display name is
+ * derived from the generated username, so `bouncy-penguin@…` shows up as
+ * "Bouncy Penguin".
  */
 export async function createAccount(input: {
   email: string;
-  givenName: string;
-  familyName: string;
   orgUnitPath: string;
 }): Promise<CreatedAccount> {
   const svc = await directory();
@@ -95,7 +95,7 @@ export async function createAccount(input: {
 
   const body: admin_directory_v1.Schema$User = {
     primaryEmail: input.email,
-    name: { givenName: input.givenName, familyName: input.familyName },
+    name: displayName(localPartOf(input.email)),
     password: tempPassword,
     changePasswordAtNextLogin: true,
     orgUnitPath: input.orgUnitPath,
@@ -105,7 +105,16 @@ export async function createAccount(input: {
     await svc.users.insert({ requestBody: body });
   } catch (err) {
     if (statusOf(err) !== 409) throw err;
-    // Already exists — move it into this OU and reset the password.
+    // Someone got this address between the availability check and here. If it
+    // sits in this workshop's OU it is ours — an earlier attempt that crashed
+    // before recording it — so adopt it. Anywhere else it belongs to a real
+    // person, and resetting their password would lock them out.
+    const existing = await svc.users.get({ userKey: input.email });
+    if (existing.data.orgUnitPath !== input.orgUnitPath) {
+      throw new Error(
+        `address ${input.email} is already in use outside ${input.orgUnitPath}`,
+      );
+    }
     await svc.users.update({ userKey: input.email, requestBody: body });
   }
   return { email: input.email, tempPassword };
@@ -120,8 +129,80 @@ export async function deleteAccount(email: string): Promise<void> {
   }
 }
 
-/** Attendee address for user `n` (1-based) of a workshop. */
-export function accountEmail(slug: string, n: number): string {
-  const local = `${slug}-${String(n).padStart(2, "0")}`.slice(0, 64);
-  return `${local}@${workspaceCfg().domain}`;
+function localPartOf(email: string): string {
+  return email.split("@")[0] ?? email;
+}
+
+/** Address for a generated username, e.g. `bouncy-penguin@example.com`. */
+export function usernameEmail(username: string): string {
+  return `${username}@${workspaceCfg().domain}`;
+}
+
+/** Whether an address is already taken anywhere in the domain. */
+export async function accountExists(email: string): Promise<boolean> {
+  const svc = await directory();
+  try {
+    await svc.users.get({ userKey: email });
+    return true;
+  } catch (err) {
+    if (statusOf(err) === 404) return false;
+    throw err;
+  }
+}
+
+/**
+ * How many names to try before widening the search with a numeric suffix. The
+ * namespace is large, so needing this many means the domain is crowded rather
+ * than that we were unlucky.
+ */
+const PLAIN_ATTEMPTS = 12;
+const MAX_ATTEMPTS = 40;
+
+/**
+ * Reserve `count` addresses that nothing in the domain is using.
+ *
+ * Every candidate is checked against the Directory API before it is handed
+ * back, so a name that belongs to a real person — or to an earlier workshop
+ * that is still running — is never handed to an attendee. `taken` seeds the
+ * search with addresses this run already owns, so growing a workshop cannot
+ * hand out a duplicate.
+ */
+export async function allocateEmails(
+  count: number,
+  taken: Iterable<string> = [],
+  /** Injectable so the allocation loop can be tested without the API. */
+  exists: (email: string) => Promise<boolean> = accountExists,
+): Promise<string[]> {
+  const seen = new Set(taken);
+  const allocated: string[] = [];
+
+  for (let i = 0; i < count; i++) {
+    let chosen: string | undefined;
+
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+      // `bouncy-penguin` first; once the plain combinations keep colliding,
+      // fall back to `bouncy-penguin-479` to open up the space again.
+      const suffix =
+        attempt < PLAIN_ATTEMPTS ? "" : `-${crypto.randomInt(2, 1000)}`;
+      const candidate = usernameEmail(randomUsername() + suffix);
+
+      if (seen.has(candidate)) continue;
+      seen.add(candidate);
+      if (await exists(candidate)) continue;
+
+      chosen = candidate;
+      break;
+    }
+
+    if (!chosen) {
+      throw new Error(
+        `could not find an unused username after ${MAX_ATTEMPTS} attempts ` +
+          `(${COMBINATIONS} base combinations) — is the domain full of stale ` +
+          `workshop accounts?`,
+      );
+    }
+    allocated.push(chosen);
+  }
+
+  return allocated;
 }

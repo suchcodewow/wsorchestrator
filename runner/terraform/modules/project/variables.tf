@@ -25,3 +25,9 @@ variable "activate_apis" {
   type        = list(string)
   default     = []
 }
+
+variable "attendee_emails" {
+  description = "Workshop attendee accounts to grant roles/editor on the project."
+  type        = list(string)
+  default     = []
+}

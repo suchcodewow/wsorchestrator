@@ -2,7 +2,7 @@ import path from "node:path";
 import { gcpCfg, TF_ROOT, makeProjectId } from "./config.js";
 import { writeTfvars } from "./workspace.js";
 import { tfApply, tfInit, tfOutput } from "./terraform.js";
-import { accountEmail, createAccount, createOrgUnit } from "./directory.js";
+import { allocateEmails, createAccount, createOrgUnit } from "./directory.js";
 import {
   accountsFor,
   addAccount,
@@ -84,16 +84,13 @@ async function provisionAccounts(run: RunRow): Promise<string> {
       : `Creating ${todo} attendee account(s)`,
   );
 
-  for (let n = 1; n <= run.user_count; n++) {
-    const email = accountEmail(run.slug, n);
-    if (existing.has(email)) continue;
+  // Names are random, so they are reserved up front against the directory
+  // rather than derived from the index. `existing` is passed in so a workshop
+  // that grew cannot be handed a name it already owns.
+  const emails = await allocateEmails(todo, existing);
 
-    const account = await createAccount({
-      email,
-      givenName: run.name.slice(0, 60),
-      familyName: `User ${n}`,
-      orgUnitPath,
-    });
+  for (const email of emails) {
+    const account = await createAccount({ email, orgUnitPath });
     await addAccount(run.id, account.email, account.tempPassword);
     await log(run.id, "stdout", `created ${account.email}`);
   }
@@ -110,14 +107,22 @@ async function provisionGcp(run: RunRow): Promise<Record<string, unknown>> {
   await setApplying(run.id, projectId);
   await log(run.id, "system", `Provisioning GCP project ${projectId}`);
 
-  writeTfvars(workDir, projectId, run.id);
+  // Read the accounts back rather than tracking which were just created, so a
+  // workshop that grew re-grants the whole roster and Terraform converges.
+  const attendees = (await accountsFor(run.id)).map((a) => a.email);
+  writeTfvars(workDir, projectId, run.id, attendees);
 
   await log(run.id, "system", "terraform init");
   await tfInit(workDir, cfg.stateBucket, run.state_prefix, (l) =>
     log(run.id, l.stream, l.text),
   );
 
-  await log(run.id, "system", "terraform apply — creating project, billing, APIs");
+  await log(
+    run.id,
+    "system",
+    `terraform apply — creating project, billing, APIs, and granting ` +
+      `editor to ${attendees.length} attendee(s)`,
+  );
   await tfApply(workDir, (l) => log(run.id, l.stream, l.text));
 
   return tfOutput(workDir);

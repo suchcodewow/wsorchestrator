@@ -26,6 +26,12 @@ variable "activate_apis" {
   default     = ["compute.googleapis.com"]
 }
 
+variable "attendee_emails" {
+  description = "Attendee accounts, written by the runner after it creates them in Workspace."
+  type        = list(string)
+  default     = []
+}
+
 # Passed by the runner but not consumed directly; declared to avoid warnings.
 variable "admin_project_id" {
   type    = string

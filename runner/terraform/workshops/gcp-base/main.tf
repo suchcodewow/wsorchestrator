@@ -13,4 +13,5 @@ module "project" {
   region          = var.region
   labels          = var.labels
   activate_apis   = var.activate_apis
+  attendee_emails = var.attendee_emails
 }

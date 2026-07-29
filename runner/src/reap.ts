@@ -70,7 +70,10 @@ async function destroyGcp(run: RunRow): Promise<void> {
   const projectId = run.gcp_project_id ?? makeProjectId(run.slug, run.id);
 
   await log(run.id, "system", `Destroying GCP project ${projectId}`);
-  writeTfvars(workDir, projectId, run.id);
+  // Accounts are still on record here — destroyGcp runs before they are
+  // deleted — so the tfvars match the state Terraform is tearing down.
+  const attendees = (await accountsFor(run.id)).map((a) => a.email);
+  writeTfvars(workDir, projectId, run.id, attendees);
   await tfInit(workDir, cfg.stateBucket, run.state_prefix, (l) =>
     log(run.id, l.stream, l.text),
   );
