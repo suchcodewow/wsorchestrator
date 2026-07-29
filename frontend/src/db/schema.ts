@@ -16,6 +16,16 @@ import type { AdapterAccountType } from "next-auth/adapters";
  * Auth.js (NextAuth) tables — shape required by @auth/drizzle-adapter
  * ------------------------------------------------------------------ */
 
+/**
+ * Colour scheme the user picked. `system` follows the OS setting and can only
+ * be resolved in the browser, so it is stored as-is rather than as a resolved
+ * light/dark. New users get it by default.
+ */
+export const THEME_PREFERENCES = ["light", "dark", "system"] as const;
+export type ThemePreference = (typeof THEME_PREFERENCES)[number];
+
+export const themePreference = pgEnum("theme_preference", THEME_PREFERENCES);
+
 export const users = pgTable("users", {
   id: text("id")
     .primaryKey()
@@ -24,6 +34,9 @@ export const users = pgTable("users", {
   email: text("email").unique(),
   emailVerified: timestamp("emailVerified", { mode: "date" }),
   image: text("image"),
+  themePreference: themePreference("theme_preference")
+    .notNull()
+    .default("system"),
 });
 
 export const accounts = pgTable(
@@ -91,8 +104,35 @@ export const CLOUD_LABELS: Record<Cloud, string> = {
   gcp: "Google Cloud Platform",
 };
 
+/**
+ * What kind of event a run is. Both provision Workspace accounts and a Harness
+ * org the same way; they differ in how many users are allowed, whether more
+ * than one cloud may be picked, and how GCP is laid out (see `EVENT_LIMITS`).
+ */
+export const EVENT_MODES = ["workshop", "challenge"] as const;
+export type EventMode = (typeof EVENT_MODES)[number];
+
+export const eventMode = pgEnum("event_mode", EVENT_MODES);
+
 /** Maximum attendees a single workshop may provision. */
 export const MAX_USERS = 50;
+
+/**
+ * Per-mode configuration rules, shared by the create form, the edit form, and
+ * both API routes so they cannot drift apart.
+ *
+ * A challenge is a small head-to-head event: few competitors, a single cloud,
+ * and — on GCP — a project each rather than one shared project.
+ */
+export const EVENT_LIMITS: Record<
+  EventMode,
+  { maxUsers: number; defaultUsers: number; maxClouds: number }
+> = {
+  workshop: { maxUsers: MAX_USERS, defaultUsers: 10, maxClouds: CLOUDS.length },
+  challenge: { maxUsers: 5, defaultUsers: 1, maxClouds: 1 },
+};
+
+export const limitsFor = (mode: EventMode) => EVENT_LIMITS[mode];
 
 /**
  * Whether a run's configuration can still be changed. Pure, so both the API
@@ -122,6 +162,8 @@ export const workshopRuns = pgTable(
       .references(() => users.id),
     /** User-given name; the OU, account, and project names derive from it. */
     name: text("name").notNull(),
+    /** Workshop (shared project) or challenge (a project per competitor). */
+    mode: eventMode("mode").notNull().default("workshop"),
     /** Slugified `name`, used to build account and project identifiers. */
     slug: text("slug").notNull(),
     /** How many attendee accounts to create (1..MAX_USERS). */
@@ -133,7 +175,10 @@ export const workshopRuns = pgTable(
     scheduledStart: timestamp("scheduled_start", { withTimezone: true }),
     /** Google Workspace OU created for this workshop, e.g. /Workshops/Foo. */
     orgUnitPath: text("org_unit_path"),
-    /** ws-<slug>-<short>; set while provisioning GCP. */
+    /**
+     * ws-<slug>-<short>; set while provisioning GCP. Only meaningful for a
+     * workshop — a challenge's per-competitor project ids live in `outputs`.
+     */
     gcpProjectId: text("gcp_project_id"),
     /** GCS state prefix: workshops/<run-id>. */
     statePrefix: text("state_prefix").notNull(),

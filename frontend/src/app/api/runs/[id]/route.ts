@@ -32,6 +32,9 @@ const STATUS_FOR: Record<UpdateRunError, number> = {
   locked: 409,
   shrink_not_allowed: 409,
   cloud_removal_not_allowed: 409,
+  // The body is well-formed; it just breaks the run's own mode caps, which
+  // only `updateRunConfig` can see.
+  exceeds_mode_limits: 400,
 };
 
 export async function PATCH(

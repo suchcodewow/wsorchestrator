@@ -27,7 +27,17 @@ variable "activate_apis" {
 }
 
 variable "attendee_emails" {
-  description = "Workshop attendee accounts to grant roles/editor on the project."
+  description = "Accounts to grant `attendee_role` on the project."
   type        = list(string)
   default     = []
+}
+
+variable "attendee_role" {
+  description = <<-EOT
+    Role granted to each address in `attendee_emails`. Workshops share one
+    project, so attendees get editor and cannot alter its IAM. A challenge
+    competitor owns their own project, so they get owner (administrator).
+  EOT
+  type        = string
+  default     = "roles/editor"
 }

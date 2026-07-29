@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -89,4 +90,41 @@ export function makeProjectId(slug: string, runId: string): string {
     .slice(0, 30)
     .replace(/-+$/, "");
   return id;
+}
+
+/**
+ * Derive a challenge competitor's own project id. Unlike a workshop, there is
+ * one project per account, so the run's suffix alone would collide.
+ *
+ * Derived from the address rather than the roster position, because a
+ * challenge that grows must not renumber — and so recompute the id of — a
+ * project that already exists. Project ids are capped at 30 characters, so the
+ * slug is truncated to fit whatever the suffixes need.
+ */
+export function makeChallengeProjectId(
+  slug: string,
+  runId: string,
+  email: string,
+): string {
+  const short = runId.replace(/-/g, "").slice(0, 4);
+  const who = createHash("sha1").update(email).digest("hex").slice(0, 6);
+  const suffix = `-${short}-${who}`;
+
+  const base = `ch-${slug}`.toLowerCase().replace(/[^a-z0-9-]/g, "-");
+  return base.slice(0, 30 - suffix.length).replace(/-+$/, "") + suffix;
+}
+
+/**
+ * The address -> project id map a challenge's Terraform root takes. Built the
+ * same way on the way in and on the way out, so the reaper tears down exactly
+ * the projects the provisioner created without anything extra being stored.
+ */
+export function challengeProjectMap(
+  slug: string,
+  runId: string,
+  emails: string[],
+): Record<string, string> {
+  return Object.fromEntries(
+    emails.map((email) => [email, makeChallengeProjectId(slug, runId, email)]),
+  );
 }

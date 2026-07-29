@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/auth";
-import { CLOUDS, MAX_USERS } from "@/db/schema";
+import { CLOUDS, EVENT_MODES, MAX_USERS, limitsFor } from "@/db/schema";
 import { createScheduledRun, listRunsForUser } from "@/lib/runs";
 import { startRunNow } from "@/lib/trigger";
 
@@ -14,14 +14,37 @@ export async function GET() {
   return NextResponse.json({ runs });
 }
 
-const createSchema = z.object({
-  name: z.string().trim().min(1).max(200),
-  userCount: z.number().int().min(1).max(MAX_USERS),
-  clouds: z.array(z.enum(CLOUDS)).min(1).max(CLOUDS.length),
-  // Omitted when startNow is set — the run begins immediately instead.
-  scheduledStart: z.string().datetime().optional(),
-  startNow: z.boolean().optional(),
-});
+const createSchema = z
+  .object({
+    name: z.string().trim().min(1).max(200),
+    // Absent on requests written before challenges existed.
+    mode: z.enum(EVENT_MODES).default("workshop"),
+    userCount: z.number().int().min(1).max(MAX_USERS),
+    clouds: z.array(z.enum(CLOUDS)).min(1).max(CLOUDS.length),
+    // Omitted when startNow is set — the run begins immediately instead.
+    scheduledStart: z.string().datetime().optional(),
+    startNow: z.boolean().optional(),
+  })
+  // The caps above are the loosest any mode allows; narrow them to the mode
+  // actually asked for, so a challenge can't be posted with 50 users and
+  // three clouds by skipping the form.
+  .superRefine((v, ctx) => {
+    const limits = limitsFor(v.mode);
+    if (v.userCount > limits.maxUsers) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["userCount"],
+        message: `a ${v.mode} allows at most ${limits.maxUsers} user(s)`,
+      });
+    }
+    if (new Set(v.clouds).size > limits.maxClouds) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["clouds"],
+        message: `a ${v.mode} allows at most ${limits.maxClouds} cloud(s)`,
+      });
+    }
+  });
 
 export async function POST(req: Request) {
   const session = await auth();
@@ -41,6 +64,7 @@ export async function POST(req: Request) {
 
   const result = await createScheduledRun({
     name: parsed.data.name,
+    mode: parsed.data.mode,
     userCount: parsed.data.userCount,
     clouds: [...new Set(parsed.data.clouds)],
     userId: session.user.id,

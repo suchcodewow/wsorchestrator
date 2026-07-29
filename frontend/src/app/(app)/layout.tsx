@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Boxes } from "lucide-react";
 import { auth, signOut } from "@/auth";
 import { Button } from "@/components/ui/button";
+import { BrandMark } from "@/components/brand-mark";
+import { UserMenu } from "@/components/user-menu";
+import { getThemePreference } from "@/lib/theme-preference";
 
 export default async function AppLayout({
   children,
@@ -12,32 +14,44 @@ export default async function AppLayout({
   const session = await auth();
   if (!session?.user) redirect("/signin");
 
+  const theme = await getThemePreference();
+
   return (
-    <div className="min-h-screen">
-      <header className="sticky top-0 z-10 border-b bg-background/80 backdrop-blur">
+    <div className="relative min-h-screen">
+      {/* Page texture, fading out below the fold so content sits on plain ground. */}
+      <div className="pointer-events-none fixed inset-0 bg-grid mask-fade" />
+
+      <header className="sticky top-0 z-40 border-b border-border/70 bg-background/70 backdrop-blur-xl">
         <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-6">
-          <Link href="/workshops" className="flex items-center gap-2 font-semibold">
-            <Boxes className="size-5" />
-            Workshop Orchestrator
+          <Link
+            href="/events"
+            className="group flex items-center gap-2.5 rounded-md text-sm font-medium tracking-tight outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          >
+            <BrandMark className="transition-transform duration-200 group-hover:scale-105" />
+            Event Orchestrator
           </Link>
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-muted-foreground">
-              {session.user.email}
-            </span>
+
+          <div className="flex items-center gap-1.5">
+            <UserMenu
+              name={session.user.name ?? null}
+              email={session.user.email ?? ""}
+              initialTheme={theme}
+            />
             <form
               action={async () => {
                 "use server";
                 await signOut({ redirectTo: "/signin" });
               }}
             >
-              <Button variant="outline" size="sm" type="submit">
+              <Button variant="ghost" size="sm" type="submit">
                 Sign out
               </Button>
             </form>
           </div>
         </div>
       </header>
-      <main className="mx-auto max-w-6xl px-6 py-8">{children}</main>
+
+      <main className="relative mx-auto max-w-6xl px-6 py-10">{children}</main>
     </div>
   );
 }

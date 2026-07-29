@@ -1,16 +1,21 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
-import type { Cloud, RunStatus } from "@/db/schema";
+import { AnimatePresence, motion } from "framer-motion";
+import gsap from "gsap";
+import { ChevronLeft, ChevronRight, Plus, Swords } from "lucide-react";
+import type { Cloud, EventMode, RunStatus } from "@/db/schema";
 import { Button } from "@/components/ui/button";
+import { statusDot, isActiveStatus } from "@/components/status-badge";
 import { cn } from "@/lib/utils";
-import { CreateWorkshopDialog } from "./create-workshop-dialog";
+import { EASE, SPRING_SNAPPY } from "@/lib/motion";
+import { CreateEventDialog } from "./create-event-dialog";
 
 type CalendarEvent = {
   id: string;
   name: string;
+  mode: EventMode;
   status: RunStatus;
   scheduledStart: string | null;
   userCount: number;
@@ -23,20 +28,9 @@ const MONTHS = [
   "July", "August", "September", "October", "November", "December",
 ];
 
-const DOT: Record<RunStatus, string> = {
-  scheduled: "bg-violet-500",
-  requested: "bg-slate-400",
-  provisioning: "bg-blue-500",
-  applying: "bg-amber-500",
-  ready: "bg-emerald-500",
-  destroying: "bg-orange-500",
-  destroyed: "bg-slate-300",
-  failed: "bg-red-500",
-};
-
 const dayKey = (y: number, m: number, d: number) => `${y}-${m}-${d}`;
 
-export function WorkshopCalendar({ events }: { events: CalendarEvent[] }) {
+export function EventCalendar({ events }: { events: CalendarEvent[] }) {
   const router = useRouter();
   const today = new Date();
   const [view, setView] = useState(
@@ -44,9 +38,14 @@ export function WorkshopCalendar({ events }: { events: CalendarEvent[] }) {
   );
   const [dialogOpen, setDialogOpen] = useState(false);
   const [initialDate, setInitialDate] = useState<Date | null>(null);
+  const [mode, setMode] = useState<EventMode>("workshop");
 
   const year = view.getFullYear();
   const month = view.getMonth();
+  const gridRef = useRef<HTMLDivElement>(null);
+  // Skips the entrance animation on first paint, so arriving at the page is
+  // not the same event as deliberately changing month.
+  const mounted = useRef(false);
 
   // Group events by the local day they start on.
   const byDay = useMemo(() => {
@@ -71,6 +70,37 @@ export function WorkshopCalendar({ events }: { events: CalendarEvent[] }) {
     return arr;
   }, [year, month]);
 
+  /*
+   * Changing month sweeps the day cells in on a short stagger. GSAP owns this
+   * rather than Framer because it is one gesture across ~35 siblings that are
+   * replaced wholesale — a per-cell variant would re-run on every unrelated
+   * state change and needs the whole grid kept mounted to sequence properly.
+   */
+  useLayoutEffect(() => {
+    if (!mounted.current) {
+      mounted.current = true;
+      return;
+    }
+    const grid = gridRef.current;
+    if (!grid) return;
+
+    const ctx = gsap.context(() => {
+      const mm = gsap.matchMedia();
+      mm.add("(prefers-reduced-motion: no-preference)", () => {
+        gsap.from(grid.querySelectorAll("[data-cell]"), {
+          opacity: 0,
+          y: 6,
+          duration: 0.34,
+          ease: "power2.out",
+          stagger: { each: 0.008, from: "start" },
+        });
+      });
+      return () => mm.revert();
+    }, grid);
+
+    return () => ctx.revert();
+  }, [year, month]);
+
   const isToday = (d: number) =>
     d === today.getDate() &&
     month === today.getMonth() &&
@@ -78,31 +108,67 @@ export function WorkshopCalendar({ events }: { events: CalendarEvent[] }) {
 
   function openCreate(date: Date | null) {
     setInitialDate(date);
+    setMode("workshop");
+    setDialogOpen(true);
+  }
+
+  function openChallenge() {
+    setInitialDate(null);
+    setMode("challenge");
     setDialogOpen(true);
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Workshops</h1>
+    <div className="space-y-8">
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.45, ease: EASE }}
+        className="flex flex-wrap items-end justify-between gap-4"
+      >
+        <div className="space-y-1.5">
+          <h1 className="text-3xl font-medium tracking-tight">Events</h1>
           <p className="text-muted-foreground">
-            Schedule workshops — each provisions automatically at its start time.
+            Schedule events — each provisions automatically at its start time.
           </p>
         </div>
-        <Button onClick={() => openCreate(null)}>
-          <Plus /> Create workshop
-        </Button>
-      </div>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={openChallenge}>
+            <Swords /> Challenge Mode
+          </Button>
+          <Button variant="brand" onClick={() => openCreate(null)}>
+            <Plus /> Create workshop
+          </Button>
+        </div>
+      </motion.div>
 
-      <div className="rounded-xl border">
-        <div className="flex items-center justify-between border-b px-4 py-3">
-          <h2 className="text-lg font-semibold">
-            {MONTHS[month]} {year}
-          </h2>
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, ease: EASE, delay: 0.06 }}
+        className="overflow-hidden rounded-2xl border bg-card/60 shadow-sm backdrop-blur-sm"
+      >
+        <div className="flex items-center justify-between border-b px-5 py-4">
+          {/* Keyed so the month name cross-fades instead of snapping. */}
+          <div className="relative h-7 overflow-hidden">
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.h2
+                key={`${year}-${month}`}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.22, ease: EASE }}
+                className="text-lg font-medium tracking-tight tnum"
+              >
+                {MONTHS[month]}{" "}
+                <span className="text-muted-foreground">{year}</span>
+              </motion.h2>
+            </AnimatePresence>
+          </div>
+
           <div className="flex items-center gap-1">
             <Button
-              variant="outline"
+              variant="ghost"
               size="sm"
               onClick={() =>
                 setView(new Date(today.getFullYear(), today.getMonth(), 1))
@@ -111,7 +177,7 @@ export function WorkshopCalendar({ events }: { events: CalendarEvent[] }) {
               Today
             </Button>
             <Button
-              variant="outline"
+              variant="ghost"
               size="icon"
               aria-label="Previous month"
               onClick={() => setView(new Date(year, month - 1, 1))}
@@ -119,7 +185,7 @@ export function WorkshopCalendar({ events }: { events: CalendarEvent[] }) {
               <ChevronLeft />
             </Button>
             <Button
-              variant="outline"
+              variant="ghost"
               size="icon"
               aria-label="Next month"
               onClick={() => setView(new Date(year, month + 1, 1))}
@@ -129,25 +195,30 @@ export function WorkshopCalendar({ events }: { events: CalendarEvent[] }) {
           </div>
         </div>
 
-        <div className="grid grid-cols-7 border-b bg-muted/40 text-center text-xs font-medium text-muted-foreground">
+        <div className="grid grid-cols-7 border-b bg-muted/30 text-center text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
           {WEEKDAYS.map((w) => (
-            <div key={w} className="py-2">
+            <div key={w} className="py-2.5">
               {w}
             </div>
           ))}
         </div>
 
-        <div className="grid grid-cols-7">
+        <div ref={gridRef} className="grid grid-cols-7">
           {cells.map((d, i) => {
             const dayEvents = d
               ? (byDay.get(dayKey(year, month, d)) ?? [])
               : [];
+            const today_ = d ? isToday(d) : false;
+
             return (
               <div
-                key={i}
+                key={`${year}-${month}-${i}`}
+                data-cell
                 className={cn(
-                  "min-h-28 border-b border-r p-1.5 last:border-r-0 [&:nth-child(7n)]:border-r-0",
-                  d ? "group cursor-pointer hover:bg-muted/40" : "bg-muted/20",
+                  "group relative min-h-30 border-b border-r p-2 transition-colors nth-[7n]:border-r-0",
+                  d
+                    ? "cursor-pointer hover:bg-brand/4.5"
+                    : "bg-muted/20",
                 )}
                 onClick={
                   d ? () => openCreate(new Date(year, month, d)) : undefined
@@ -158,37 +229,60 @@ export function WorkshopCalendar({ events }: { events: CalendarEvent[] }) {
                     <div className="flex items-center justify-between">
                       <span
                         className={cn(
-                          "inline-flex h-6 w-6 items-center justify-center rounded-full text-sm",
-                          isToday(d)
-                            ? "bg-primary font-semibold text-primary-foreground"
-                            : "text-muted-foreground",
+                          "inline-flex size-6.5 items-center justify-center rounded-full text-[13px] tnum transition-colors",
+                          today_
+                            ? "bg-brand font-medium text-brand-foreground"
+                            : "text-muted-foreground group-hover:text-foreground",
                         )}
                       >
                         {d}
                       </span>
-                      <Plus className="size-3.5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+                      {/* Affordance for the click-to-create on an empty day. */}
+                      <span className="flex size-5 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100">
+                        <Plus className="size-3.5" />
+                      </span>
                     </div>
-                    <div className="mt-1 space-y-1">
+
+                    <div className="mt-1.5 space-y-1">
                       {dayEvents.map((e) => (
-                        <button
+                        <motion.button
                           key={e.id}
                           onClick={(ev) => {
                             ev.stopPropagation();
                             router.push(`/runs/${e.id}`);
                           }}
-                          className="flex w-full items-center gap-1.5 rounded bg-card px-1.5 py-1 text-left text-xs shadow-sm ring-1 ring-border hover:bg-accent"
+                          whileHover={{ y: -1, scale: 1.02 }}
+                          whileTap={{ scale: 0.98 }}
+                          transition={SPRING_SNAPPY}
+                          className="flex w-full items-center gap-1.5 rounded-lg border bg-card px-1.5 py-1 text-left text-xs shadow-xs hover:border-brand-border hover:shadow-sm"
                         >
-                          <span
-                            className={cn(
-                              "size-1.5 shrink-0 rounded-full",
-                              DOT[e.status],
+                          <span className="relative flex size-1.5 shrink-0">
+                            {isActiveStatus(e.status) && (
+                              <span
+                                className={cn(
+                                  "absolute inline-flex size-full animate-ping rounded-full opacity-75",
+                                  statusDot(e.status),
+                                )}
+                              />
                             )}
-                          />
-                          <span className="truncate">{e.name}</span>
-                          <span className="ml-auto shrink-0 text-muted-foreground">
+                            <span
+                              className={cn(
+                                "relative inline-flex size-1.5 rounded-full",
+                                statusDot(e.status),
+                              )}
+                            />
+                          </span>
+                          {e.mode === "challenge" && (
+                            <Swords
+                              className="size-3 shrink-0 text-brand"
+                              aria-label="Challenge"
+                            />
+                          )}
+                          <span className="truncate font-medium">{e.name}</span>
+                          <span className="ml-auto shrink-0 text-muted-foreground tnum">
                             {e.userCount}
                           </span>
-                        </button>
+                        </motion.button>
                       ))}
                     </div>
                   </>
@@ -197,12 +291,13 @@ export function WorkshopCalendar({ events }: { events: CalendarEvent[] }) {
             );
           })}
         </div>
-      </div>
+      </motion.div>
 
-      <CreateWorkshopDialog
+      <CreateEventDialog
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         initialDate={initialDate}
+        mode={mode}
       />
     </div>
   );

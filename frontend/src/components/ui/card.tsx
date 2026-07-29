@@ -1,15 +1,35 @@
-import * as React from "react";
-import { cn } from "@/lib/utils";
+"use client";
 
-function Card({ className, ...props }: React.ComponentProps<"div">) {
+import * as React from "react";
+import { motion } from "framer-motion";
+import { cn } from "@/lib/utils";
+import { LIFT } from "@/lib/motion";
+
+function Card({
+  className,
+  interactive = false,
+  ...props
+}: React.ComponentProps<"div"> & {
+  /** Adds the hover lift. Only for cards that are themselves clickable. */
+  interactive?: boolean;
+}) {
+  const classes = cn(
+    "bg-card text-card-foreground flex flex-col gap-6 rounded-xl border py-6 shadow-sm",
+    interactive &&
+      "cursor-pointer transition-shadow hover:shadow-md hover:border-brand-border",
+    className,
+  );
+
+  if (!interactive) {
+    return <div data-slot="card" className={classes} {...props} />;
+  }
+
   return (
-    <div
+    <motion.div
       data-slot="card"
-      className={cn(
-        "bg-card text-card-foreground flex flex-col gap-6 rounded-xl border py-6 shadow-sm",
-        className,
-      )}
-      {...props}
+      className={classes}
+      {...LIFT}
+      {...(props as React.ComponentProps<typeof motion.div>)}
     />
   );
 }
@@ -28,7 +48,7 @@ function CardTitle({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="card-title"
-      className={cn("font-semibold leading-none", className)}
+      className={cn("font-medium tracking-tight leading-none", className)}
       {...props}
     />
   );

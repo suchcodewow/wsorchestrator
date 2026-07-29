@@ -7,10 +7,14 @@ const pool = new pg.Pool({
 
 export type Cloud = "aws" | "azure" | "gcp";
 
+/** Mirrors the `event_mode` enum in the frontend's Drizzle schema. */
+export type EventMode = "workshop" | "challenge";
+
 export type RunRow = {
   id: string;
   user_id: string;
   name: string;
+  mode: EventMode;
   slug: string;
   user_count: number;
   clouds: Cloud[];
@@ -22,7 +26,7 @@ export type RunRow = {
   expires_at: Date | null;
 };
 
-const RUN_COLUMNS = `id, user_id, name, slug, user_count, clouds, status,
+const RUN_COLUMNS = `id, user_id, name, mode, slug, user_count, clouds, status,
                      org_unit_path, gcp_project_id, state_prefix, ttl_seconds,
                      expires_at`;
 

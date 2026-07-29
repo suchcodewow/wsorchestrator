@@ -13,6 +13,17 @@
   --popover-foreground: oklch(0.129 0.042 264.695);
   --primary: oklch(0.208 0.042 265.755);
   --primary-foreground: oklch(0.984 0.003 247.858);
+
+  /*
+   * Brand accent — a deep mint, the one warm-blooded colour in an otherwise
+   * neutral slate palette. Reserved for the things that matter: the active
+   * day, the primary action, focus, the logo mark. Spending it anywhere else
+   * is what makes an accent stop reading as one.
+   */
+  --brand: oklch(0.58 0.107 170.5);
+  --brand-foreground: oklch(0.985 0.002 247);
+  --brand-subtle: oklch(0.958 0.028 172);
+  --brand-border: oklch(0.87 0.055 171);
   --secondary: oklch(0.968 0.007 247.896);
   --secondary-foreground: oklch(0.208 0.042 265.755);
   --muted: oklch(0.968 0.007 247.896);
@@ -28,6 +39,12 @@
 .dark {
   --background: oklch(0.129 0.042 264.695);
   --foreground: oklch(0.984 0.003 247.858);
+
+  /* Lifted and desaturated — the light-mode mint would vibrate on near-black. */
+  --brand: oklch(0.72 0.115 172);
+  --brand-foreground: oklch(0.16 0.03 200);
+  --brand-subtle: oklch(0.28 0.045 175);
+  --brand-border: oklch(0.42 0.07 173);
   --card: oklch(0.208 0.042 265.755);
   --card-foreground: oklch(0.984 0.003 247.858);
   --popover: oklch(0.208 0.042 265.755);
@@ -65,6 +82,10 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-brand-subtle: var(--brand-subtle);
+  --color-brand-border: var(--brand-border);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -79,5 +100,112 @@
   body {
     background-color: var(--background);
     color: var(--foreground);
+  }
+
+  /*
+   * Headings sit at medium weight with negative tracking rather than semibold.
+   * At display sizes the lighter weight reads as more considered, and pulling
+   * the letters together is what stops a large line from looking like body
+   * text that was simply scaled up.
+   */
+  h1,
+  h2,
+  h3 {
+    letter-spacing: -0.021em;
+  }
+
+  /* Tabular figures keep calendar dates and counts from shifting column. */
+  .tnum {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@layer components {
+  /*
+   * A faint engineering grid, used behind the app shell and the sign-in page.
+   * It is deliberately near-invisible: the job is to give large empty areas
+   * some texture so they read as a surface rather than a void, not to be
+   * noticed as a pattern.
+   */
+  .bg-grid {
+    background-image:
+      linear-gradient(to right, var(--grid-line) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--grid-line) 1px, transparent 1px);
+    background-size: 56px 56px;
+    --grid-line: color-mix(in oklab, var(--foreground) 5%, transparent);
+  }
+
+  .dark .bg-grid {
+    --grid-line: color-mix(in oklab, var(--foreground) 7%, transparent);
+  }
+
+  /*
+   * Fades a decorative layer out toward the edges so the grid never collides
+   * with the viewport border, which is what makes a background pattern look
+   * like a texture rather than wallpaper.
+   */
+  .mask-fade {
+    -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 40%, transparent 100%);
+    mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 40%, transparent 100%);
+  }
+
+  /* A soft brand-tinted bloom, sized by the element it is placed in. */
+  .brand-glow {
+    background: radial-gradient(
+      ellipse at center,
+      color-mix(in oklab, var(--brand) 22%, transparent) 0%,
+      transparent 70%
+    );
+  }
+}
+
+@layer components {
+  /*
+   * A native datetime-local input, restyled to sit in a form without the
+   * doubled-up look of a bordered box wrapped around browser chrome. The
+   * browser's picker indicator is dressed as a secondary button so it reads as
+   * the one thing here that is clickable.
+   *
+   * Only what has no utility equivalent lives here. Stripping the Input
+   * component's own border/shadow/padding is done with `border-0 shadow-none
+   * pr-1` at the call site instead: those are utilities, and Tailwind orders
+   * the utilities layer after this one, so a plain `border: 0` here would lose
+   * to the `border` class the component already carries.
+   *
+   * The field is deliberately left unfilled. `--secondary` and `--muted` are
+   * the same value in this palette, so giving the field a muted fill would
+   * hide the indicator inside it.
+   *
+   * The indicator pseudo-element is Chromium/WebKit only. Firefox draws its
+   * own control and ignores these rules, falling back to the borderless
+   * field — which still reads as deliberate.
+   */
+
+  /*
+   * Hands the browser the palette to draw its own parts with — the picker
+   * popup, the segment highlight, and the indicator glyph, which is a fixed
+   * bitmap that would otherwise stay near-black against a dark background.
+   */
+  .dark .datetime-field {
+    color-scheme: dark;
+  }
+
+  .datetime-field::-webkit-calendar-picker-indicator {
+    margin-inline-start: 0.25rem;
+    padding: 0.3rem;
+    border-radius: var(--radius-sm);
+    background-color: var(--secondary);
+    cursor: pointer;
+    transition: background-color 150ms ease;
+  }
+
+  .datetime-field::-webkit-calendar-picker-indicator:hover {
+    background-color: color-mix(in oklab, var(--secondary) 85%, var(--foreground));
+  }
+
+  /* Matches the focus ring the Button component uses for keyboard users. */
+  .datetime-field::-webkit-calendar-picker-indicator:focus-visible {
+    outline: 3px solid color-mix(in oklab, var(--ring) 50%, transparent);
+    outline-offset: 1px;
   }
 }

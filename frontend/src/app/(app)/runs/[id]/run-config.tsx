@@ -8,19 +8,21 @@ import { Input } from "@/components/ui/input";
 import {
   CLOUDS,
   CLOUD_LABELS,
-  MAX_USERS,
+  limitsFor,
   type Cloud,
   type WorkshopRun,
 } from "@/db/schema";
 
 const ERRORS: Record<string, string> = {
-  locked: "This workshop can no longer be changed.",
+  locked: "This event can no longer be changed.",
   shrink_not_allowed:
-    "A running workshop can only grow — attendee accounts are already in use.",
+    "A running event can only grow — attendee accounts are already in use.",
   cloud_removal_not_allowed:
-    "A cloud already provisioned for a running workshop can't be removed.",
+    "A cloud already provisioned for a running event can't be removed.",
   invalid_body: "Check the attendee count and cloud selection.",
-  not_found: "This workshop no longer exists.",
+  exceeds_mode_limits:
+    "That user count or cloud selection is outside what this event kind allows.",
+  not_found: "This event no longer exists.",
 };
 
 export function RunConfig({
@@ -47,6 +49,8 @@ export function RunConfig({
 
   const locked = editability === "locked";
   const growOnly = editability === "grow";
+  const limits = limitsFor(run.mode);
+  const singleCloud = limits.maxClouds === 1;
 
   const count = Number(userCount);
   const dirty =
@@ -55,20 +59,25 @@ export function RunConfig({
     clouds.some((c) => !run.clouds.includes(c));
 
   function toggleCloud(cloud: Cloud) {
-    // A provisioned cloud can't be taken away from a live workshop.
+    // A provisioned cloud can't be taken away from a live event.
     if (growOnly && run.clouds.includes(cloud)) return;
+    // A single-cloud event swaps its choice instead of accumulating them.
+    if (singleCloud) {
+      setClouds([cloud]);
+      return;
+    }
     setClouds((prev) =>
       prev.includes(cloud) ? prev.filter((c) => c !== cloud) : [...prev, cloud],
     );
   }
 
   async function save() {
-    if (!Number.isInteger(count) || count < 1 || count > MAX_USERS) {
-      setError(`Enter a number of users between 1 and ${MAX_USERS}.`);
+    if (!Number.isInteger(count) || count < 1 || count > limits.maxUsers) {
+      setError(`Enter a number of users between 1 and ${limits.maxUsers}.`);
       return;
     }
     if (clouds.length === 0) {
-      setError("Pick at least one cloud.");
+      setError(singleCloud ? "Pick a cloud." : "Pick at least one cloud.");
       return;
     }
 
@@ -103,14 +112,16 @@ export function RunConfig({
         {locked ? (
           <p className="text-sm text-muted-foreground">
             {run.status === "destroyed" || run.status === "failed"
-              ? "This workshop has finished — its configuration is fixed."
+              ? `This ${run.mode} has finished — its configuration is fixed.`
               : "Provisioning is in progress. Configuration can be changed once it is ready."}
           </p>
         ) : (
           <p className="text-sm text-muted-foreground">
             {growOnly
-              ? "This workshop is live. You can add attendees and clouds; existing ones can't be removed."
-              : "This workshop hasn't been provisioned yet, so anything can change."}
+              ? `This ${run.mode} is live. You can add users${
+                  singleCloud ? "" : " and clouds"
+                }; existing ones can't be removed.`
+              : `This ${run.mode} hasn't been provisioned yet, so anything can change.`}
           </p>
         )}
 
@@ -123,7 +134,7 @@ export function RunConfig({
             type="number"
             inputMode="numeric"
             min={growOnly ? run.userCount : 1}
-            max={MAX_USERS}
+            max={limits.maxUsers}
             step={1}
             value={userCount}
             disabled={locked || pending}
@@ -133,7 +144,9 @@ export function RunConfig({
         </div>
 
         <fieldset className="grid gap-1.5">
-          <legend className="text-sm font-medium">Clouds</legend>
+          <legend className="text-sm font-medium">
+            {singleCloud ? "Cloud" : "Clouds"}
+          </legend>
           <div className="grid gap-2 pt-1">
             {CLOUDS.map((cloud) => {
               const provisioned = growOnly && run.clouds.includes(cloud);
@@ -145,11 +158,16 @@ export function RunConfig({
                 >
                   <input
                     id={`cfg-cloud-${cloud}`}
-                    type="checkbox"
+                    type={singleCloud ? "radio" : "checkbox"}
+                    name={singleCloud ? "cfg-cloud" : undefined}
                     checked={clouds.includes(cloud)}
                     disabled={locked || pending || provisioned}
                     onChange={() => toggleCloud(cloud)}
-                    className="size-4 rounded border-input accent-primary"
+                    className={
+                      singleCloud
+                        ? "size-4 border-input accent-primary"
+                        : "size-4 rounded border-input accent-primary"
+                    }
                   />
                   {CLOUD_LABELS[cloud]}
                   {provisioned && (

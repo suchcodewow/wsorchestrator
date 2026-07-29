@@ -1,6 +1,11 @@
 import path from "node:path";
-import { gcpCfg, TF_ROOT, makeProjectId } from "./config.js";
-import { writeTfvars } from "./workspace.js";
+import {
+  gcpCfg,
+  TF_ROOT,
+  challengeProjectMap,
+  makeProjectId,
+} from "./config.js";
+import { writeChallengeTfvars, writeTfvars } from "./workspace.js";
 import { tfApply, tfInit, tfOutput } from "./terraform.js";
 import { allocateEmails, createAccount, createOrgUnit } from "./directory.js";
 import { displayName } from "./usernames.js";
@@ -26,8 +31,11 @@ import {
   type RunRow,
 } from "./db.js";
 
-/** Root config that creates the workshop's GCP project. */
+/** Root config that creates the workshop's single shared GCP project. */
 const GCP_TF_SOURCE = "workshops/gcp-base";
+
+/** Root config that creates one GCP project per challenge competitor. */
+const GCP_CHALLENGE_TF_SOURCE = "challenges/gcp-per-user";
 
 /** Provision one workshop end to end: Workspace OU, accounts, then clouds. */
 export async function runWorkshop(runId: string): Promise<void> {
@@ -49,7 +57,12 @@ export async function runWorkshop(runId: string): Promise<void> {
 
     for (const cloud of run.clouds) {
       if (cloud === "gcp") {
-        Object.assign(outputs, await provisionGcp(run));
+        Object.assign(
+          outputs,
+          run.mode === "challenge"
+            ? await provisionGcpPerUser(run)
+            : await provisionGcp(run),
+        );
       } else {
         await log(
           runId,
@@ -174,6 +187,56 @@ async function provisionGcp(run: RunRow): Promise<Record<string, unknown>> {
     "system",
     `terraform apply — creating project, billing, APIs, and granting ` +
       `editor to ${attendees.length} attendee(s)`,
+  );
+  await tfApply(workDir, (l) => log(run.id, l.stream, l.text));
+
+  return tfOutput(workDir);
+}
+
+/**
+ * Terraform a challenge's GCP environment: one project per competitor, each
+ * owned (administered) by the competitor it belongs to.
+ *
+ * `gcp_project_id` on the run stays null here — there is no single project to
+ * put in it. The full address -> project id mapping lands in the run's
+ * outputs, and the ids are recomputed rather than stored because
+ * `makeChallengeProjectId` is deterministic in the address.
+ */
+async function provisionGcpPerUser(
+  run: RunRow,
+): Promise<Record<string, unknown>> {
+  const cfg = gcpCfg();
+  const workDir = path.join(TF_ROOT, GCP_CHALLENGE_TF_SOURCE);
+
+  await setApplying(run.id, null);
+
+  // Read the accounts back rather than tracking which were just created, so a
+  // challenge that grew re-declares the whole roster and Terraform converges.
+  const projects = challengeProjectMap(
+    run.slug,
+    run.id,
+    (await accountsFor(run.id)).map((a) => a.email),
+  );
+  const count = Object.keys(projects).length;
+
+  await log(
+    run.id,
+    "system",
+    `Provisioning ${count} GCP project(s), one per competitor`,
+  );
+
+  writeChallengeTfvars(workDir, run.id, projects);
+
+  await log(run.id, "system", "terraform init");
+  await tfInit(workDir, cfg.stateBucket, run.state_prefix, (l) =>
+    log(run.id, l.stream, l.text),
+  );
+
+  await log(
+    run.id,
+    "system",
+    `terraform apply — creating ${count} project(s), billing, and APIs, ` +
+      `granting each competitor owner on their own`,
   );
   await tfApply(workDir, (l) => log(run.id, l.stream, l.text));
 

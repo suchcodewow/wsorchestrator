@@ -3,10 +3,12 @@ import { db } from "@/db";
 import {
   CLOUD_LABELS,
   editabilityOf,
+  limitsFor,
   runLogs,
   workshopAccounts,
   workshopRuns,
   type Cloud,
+  type EventMode,
   type WorkshopRun,
 } from "@/db/schema";
 
@@ -33,6 +35,7 @@ export function slugify(name: string): string {
  */
 export async function createScheduledRun(input: {
   name: string;
+  mode: EventMode;
   userCount: number;
   clouds: Cloud[];
   userId: string;
@@ -48,6 +51,7 @@ export async function createScheduledRun(input: {
       id: runId,
       userId: input.userId,
       name: input.name,
+      mode: input.mode,
       slug: slugify(input.name),
       userCount: input.userCount,
       clouds: input.clouds,
@@ -70,7 +74,7 @@ export async function createScheduledRun(input: {
     runId,
     stream: "system",
     message:
-      `Scheduled "${input.name}" ${when} — ` +
+      `Scheduled ${input.mode} "${input.name}" ${when} — ` +
       `${input.userCount} user(s), ${clouds}.`,
   });
 
@@ -81,7 +85,8 @@ export type UpdateRunError =
   | "not_found"
   | "locked"
   | "shrink_not_allowed"
-  | "cloud_removal_not_allowed";
+  | "cloud_removal_not_allowed"
+  | "exceeds_mode_limits";
 
 /**
  * Change a run's attendee count and clouds. Returns whether the change needs
@@ -104,6 +109,19 @@ export async function updateRunConfig(
   if (editability === "locked") return { ok: false, error: "locked" };
 
   const clouds = [...new Set(input.clouds)];
+
+  // The mode's caps are re-checked here rather than in the route schema: the
+  // request says nothing about the mode, so only the stored run can decide
+  // whether five users and one cloud is the ceiling or fifty and three.
+  const limits = limitsFor(run.mode);
+  if (
+    input.userCount < 1 ||
+    input.userCount > limits.maxUsers ||
+    clouds.length < 1 ||
+    clouds.length > limits.maxClouds
+  ) {
+    return { ok: false, error: "exceeds_mode_limits" };
+  }
 
   if (editability === "grow") {
     if (input.userCount < run.userCount) {
@@ -163,6 +181,7 @@ export async function listCalendarRuns(userId: string) {
     .select({
       id: workshopRuns.id,
       name: workshopRuns.name,
+      mode: workshopRuns.mode,
       status: workshopRuns.status,
       scheduledStart: workshopRuns.scheduledStart,
       userCount: workshopRuns.userCount,

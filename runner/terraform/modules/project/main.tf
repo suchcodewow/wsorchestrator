@@ -27,9 +27,10 @@ resource "time_sleep" "api_propagation" {
   create_duration = "60s"
 }
 
-# Attendees get editor on their workshop's project. These are additive
-# (non-authoritative) bindings, so each attendee is granted independently and
-# the project's own IAM is left alone.
+# Each address gets `attendee_role` on the project — editor for a shared
+# workshop project, owner for a challenge competitor's own project. These are
+# additive (non-authoritative) bindings, so each account is granted
+# independently and the project's own IAM is left alone.
 #
 # The accounts are created via the Admin SDK moments before this runs, and IAM
 # rejects a member it cannot resolve yet, so this waits on the same propagation
@@ -38,7 +39,7 @@ resource "google_project_iam_member" "attendees" {
   for_each = toset(var.attendee_emails)
 
   project = google_project.this.project_id
-  role    = "roles/editor"
+  role    = var.attendee_role
   member  = "user:${each.value}"
 
   depends_on = [time_sleep.api_propagation]

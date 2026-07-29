@@ -1,6 +1,11 @@
 import path from "node:path";
-import { gcpCfg, TF_ROOT, makeProjectId } from "./config.js";
-import { writeTfvars } from "./workspace.js";
+import {
+  gcpCfg,
+  TF_ROOT,
+  challengeProjectMap,
+  makeProjectId,
+} from "./config.js";
+import { writeChallengeTfvars, writeTfvars } from "./workspace.js";
 import { tfDestroy, tfInit } from "./terraform.js";
 import { deleteAccount, deleteOrgUnit } from "./directory.js";
 import {
@@ -19,8 +24,11 @@ import {
   type RunRow,
 } from "./db.js";
 
-/** Root config that creates the workshop's GCP project. */
+/** Root config that creates the workshop's single shared GCP project. */
 const GCP_TF_SOURCE = "workshops/gcp-base";
+
+/** Root config that creates one GCP project per challenge competitor. */
+const GCP_CHALLENGE_TF_SOURCE = "challenges/gcp-per-user";
 
 /** Destroy every run past its TTL. Runs sequentially within this container. */
 export async function reap(): Promise<void> {
@@ -42,7 +50,11 @@ async function destroyRun(run: RunRow): Promise<void> {
 
     // Clouds first — the accounts may hold access to them.
     if (run.clouds.includes("gcp")) {
-      await destroyGcp(run);
+      if (run.mode === "challenge") {
+        await destroyGcpPerUser(run);
+      } else {
+        await destroyGcp(run);
+      }
     }
 
     await destroyHarness(run);
@@ -101,6 +113,31 @@ async function destroyGcp(run: RunRow): Promise<void> {
   // deleted — so the tfvars match the state Terraform is tearing down.
   const attendees = (await accountsFor(run.id)).map((a) => a.email);
   writeTfvars(workDir, projectId, run.id, attendees);
+  await tfInit(workDir, cfg.stateBucket, run.state_prefix, (l) =>
+    log(run.id, l.stream, l.text),
+  );
+  await tfDestroy(workDir, (l) => log(run.id, l.stream, l.text));
+}
+
+/** Tear down a challenge's per-competitor projects. */
+async function destroyGcpPerUser(run: RunRow): Promise<void> {
+  const cfg = gcpCfg();
+  const workDir = path.join(TF_ROOT, GCP_CHALLENGE_TF_SOURCE);
+
+  // Accounts are still on record here — this runs before they are deleted —
+  // so the map matches the state Terraform is tearing down.
+  const projects = challengeProjectMap(
+    run.slug,
+    run.id,
+    (await accountsFor(run.id)).map((a) => a.email),
+  );
+
+  await log(
+    run.id,
+    "system",
+    `Destroying ${Object.keys(projects).length} competitor GCP project(s)`,
+  );
+  writeChallengeTfvars(workDir, run.id, projects);
   await tfInit(workDir, cfg.stateBucket, run.state_prefix, (l) =>
     log(run.id, l.stream, l.text),
   );
