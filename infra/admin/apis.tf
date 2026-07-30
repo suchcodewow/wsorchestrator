@@ -5,6 +5,10 @@ locals {
     "serviceusage.googleapis.com",
     "iam.googleapis.com",
     "iamcredentials.googleapis.com",
+    # Admin SDK Directory API — attendee accounts and per-workshop org units.
+    # Billed against this project even though the call acts as a Workspace
+    # super-admin, so it has to be on here.
+    "admin.googleapis.com",
     "sqladmin.googleapis.com",
     "run.googleapis.com",
     "cloudscheduler.googleapis.com",

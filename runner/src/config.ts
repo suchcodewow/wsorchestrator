@@ -48,6 +48,14 @@ export function workspaceCfg() {
     customerId: process.env.GOOGLE_WORKSPACE_CUSTOMER_ID ?? "my_customer",
     /** OU the per-workshop org units are created under. */
     parentOrgUnitPath: process.env.GOOGLE_WORKSPACE_PARENT_OU ?? "/",
+    /**
+     * Service account whose Google-managed key signs the delegation assertion
+     * (see `directory.ts`). On Cloud Run this is inferred from the job's own
+     * identity; set it only when ADC is a human — `gcloud auth
+     * application-default login` leaves no service account to infer, and that
+     * user then needs serviceAccountTokenCreator on the address given here.
+     */
+    delegateServiceAccount: process.env.GOOGLE_WORKSPACE_DELEGATE_SA,
   };
 }
 

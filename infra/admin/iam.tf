@@ -64,6 +64,23 @@ resource "google_storage_bucket_iam_member" "runner_state" {
   member = "serviceAccount:${google_service_account.runner.email}"
 }
 
+# Workspace domain-wide delegation without a key file: runner-sa signs its own
+# delegation assertion through IAM Credentials signJwt (see
+# runner/src/directory.ts), which means it is both the caller and the signed-for
+# principal — so it needs tokenCreator ON ITSELF. Without this the Admin SDK is
+# called as runner-sa rather than as the super-admin, and a bare service account
+# has no Workspace customer: every Directory call fails "Invalid Customer Id".
+#
+# This is the GCP half only. The other half is in the Workspace Admin console
+# (Security -> API controls -> Domain-wide delegation), where runner-sa's
+# numeric client ID must be authorized for the admin.directory.orgunit and
+# admin.directory.user scopes. Terraform cannot reach that.
+resource "google_service_account_iam_member" "runner_self_sign" {
+  service_account_id = google_service_account.runner.name
+  role               = "roles/iam.serviceAccountTokenCreator"
+  member             = "serviceAccount:${google_service_account.runner.email}"
+}
+
 # runner-sa needs to reach the DB and emit logs from the job.
 resource "google_project_iam_member" "runner_admin" {
   for_each = toset([
