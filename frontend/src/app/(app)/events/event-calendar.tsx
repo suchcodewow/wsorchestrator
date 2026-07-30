@@ -146,7 +146,9 @@ export function EventCalendar({ events }: { events: CalendarEvent[] }) {
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, ease: EASE, delay: 0.06 }}
-        className="overflow-hidden rounded-2xl border bg-card/60 shadow-sm backdrop-blur-sm"
+        // Opaque: a translucent card let the backdrop show through the grid
+        // lines and muddied every cell.
+        className="overflow-hidden rounded-2xl border bg-card shadow-sm"
       >
         <div className="flex items-center justify-between border-b px-5 py-4">
           {/* Keyed so the month name cross-fades instead of snapping. */}

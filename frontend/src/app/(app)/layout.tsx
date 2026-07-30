@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth, signOut } from "@/auth";
 import { Button } from "@/components/ui/button";
+import { AmbientBackdrop } from "@/components/ambient-backdrop";
 import { BrandMark } from "@/components/brand-mark";
 import { UserMenu } from "@/components/user-menu";
 import { getThemePreference } from "@/lib/theme-preference";
@@ -18,8 +19,8 @@ export default async function AppLayout({
 
   return (
     <div className="relative min-h-screen">
-      {/* Page texture, fading out below the fold so content sits on plain ground. */}
-      <div className="pointer-events-none fixed inset-0 bg-grid mask-fade" />
+      {/* Ambient colour under the whole app; never scrolls, never interactive. */}
+      <AmbientBackdrop className="fixed inset-0 -z-10" />
 
       <header className="sticky top-0 z-40 border-b border-border/70 bg-background/70 backdrop-blur-xl">
         <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-6">

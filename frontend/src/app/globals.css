@@ -122,39 +122,74 @@
 
 @layer components {
   /*
-   * A faint engineering grid, used behind the app shell and the sign-in page.
-   * It is deliberately near-invisible: the job is to give large empty areas
-   * some texture so they read as a surface rather than a void, not to be
-   * noticed as a pattern.
+   * The page backdrop: three overlapping radial blooms over the base colour.
+   *
+   * Pure CSS and pure gradient — no pattern, no image, nothing to load. An
+   * earlier version used a fine grid, which was a mistake: hard 1px lines have
+   * an edge where they stop, and that edge read as a rendering artifact rather
+   * than as texture. Gradients have no edge, so they can be laid under content
+   * without ever competing with it.
+   *
+   * Intensity is a variable rather than a duplicated rule, because dark mode
+   * needs a stronger mix to register at all against a near-black base.
    */
-  .bg-grid {
-    background-image:
-      linear-gradient(to right, var(--grid-line) 1px, transparent 1px),
-      linear-gradient(to bottom, var(--grid-line) 1px, transparent 1px);
-    background-size: 56px 56px;
-    --grid-line: color-mix(in oklab, var(--foreground) 5%, transparent);
-  }
-
-  .dark .bg-grid {
-    --grid-line: color-mix(in oklab, var(--foreground) 7%, transparent);
-  }
-
   /*
-   * Fades a decorative layer out toward the edges so the grid never collides
-   * with the viewport border, which is what makes a background pattern look
-   * like a texture rather than wallpaper.
+   * The page backdrop: individual soft blooms drifting over the base colour.
+   *
+   * They are separate elements rather than three gradients stacked in one
+   * `background-image` specifically so they can be animated. Animating the
+   * gradient definition would repaint a full-viewport layer every frame;
+   * animating `transform`, `opacity` and `filter` on discrete elements stays
+   * on the compositor, which is what makes a permanently-running ambient
+   * effect affordable.
+   *
+   * Intensity is a variable rather than a duplicated rule — dark mode needs a
+   * different mix to register against a near-black base. Values are tuned
+   * against screenshots: at 13% the light-mode wash was invisible on white.
    */
-  .mask-fade {
-    -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 40%, transparent 100%);
-    mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 40%, transparent 100%);
+  .app-backdrop {
+    --bloom-brand: 26%;
+    --bloom-cool: 22%;
+    --bloom-foot: 15%;
+
+    background-color: var(--background);
   }
 
-  /* A soft brand-tinted bloom, sized by the element it is placed in. */
-  .brand-glow {
+  .dark .app-backdrop {
+    --bloom-brand: 22%;
+    --bloom-cool: 19%;
+    --bloom-foot: 13%;
+  }
+
+  .bloom {
+    position: absolute;
+    border-radius: 50%;
+    /* Promoted up front: these three animate continuously, and leaving the
+       browser to discover that causes it to re-layerise mid-tween. */
+    will-change: transform, opacity, filter;
+  }
+
+  .bloom-a {
     background: radial-gradient(
-      ellipse at center,
-      color-mix(in oklab, var(--brand) 22%, transparent) 0%,
-      transparent 70%
+      closest-side,
+      color-mix(in oklab, var(--brand) var(--bloom-brand), transparent),
+      transparent 100%
+    );
+  }
+
+  .bloom-b {
+    background: radial-gradient(
+      closest-side,
+      color-mix(in oklab, var(--ring) var(--bloom-cool), transparent),
+      transparent 100%
+    );
+  }
+
+  .bloom-c {
+    background: radial-gradient(
+      closest-side,
+      color-mix(in oklab, var(--brand) var(--bloom-foot), transparent),
+      transparent 100%
     );
   }
 }

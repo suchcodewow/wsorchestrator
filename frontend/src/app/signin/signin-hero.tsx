@@ -33,7 +33,7 @@ export function SignInHero({ children }: { children: React.ReactNode }) {
           const q = self.selector!;
 
           if (!full) {
-            gsap.set([q("[data-anim]"), q("[data-anim-glow]")], {
+            gsap.set(q("[data-anim]"), {
               opacity: 1,
               clearProps: "transform",
             });
@@ -53,17 +53,6 @@ export function SignInHero({ children }: { children: React.ReactNode }) {
               { opacity: 0, y: 10, duration: 0.55, stagger: 0.07 },
               "-=0.42",
             );
-
-          // A slow, offset pulse on the glow. Long enough that it reads as
-          // ambient light rather than as something demanding attention.
-          gsap.to(q("[data-anim-glow]"), {
-            opacity: 0.85,
-            scale: 1.08,
-            duration: 4.5,
-            ease: "sine.inOut",
-            repeat: -1,
-            yoyo: true,
-          });
         },
       );
 

@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { ArrowRight, CalendarClock, Cloud, Users } from "lucide-react";
 import { auth, signIn } from "@/auth";
 import { Button } from "@/components/ui/button";
+import { AmbientBackdrop } from "@/components/ambient-backdrop";
 import { BrandMark } from "@/components/brand-mark";
 import { SignInHero } from "./signin-hero";
 
@@ -18,17 +19,14 @@ export default async function SignInPage() {
 
   return (
     <main className="relative grid min-h-screen place-items-center overflow-hidden p-6">
-      {/* Decorative layers, behind everything and inert to the pointer. */}
-      <div className="pointer-events-none absolute inset-0 bg-grid mask-fade" />
-      <div
-        data-anim-glow
-        className="brand-glow pointer-events-none absolute left-1/2 top-0 size-184 -translate-x-1/2 -translate-y-1/3 opacity-60"
-      />
+      {/* The drifting blooms replace the single static glow this page used to
+          carry — one ambient system rather than two overlapping ones. */}
+      <AmbientBackdrop className="absolute inset-0" />
 
       <SignInHero>
         <div
           data-anim-card
-          className="relative w-full max-w-sm rounded-2xl border bg-card/80 p-8 shadow-xl backdrop-blur-xl"
+          className="relative w-full max-w-sm rounded-2xl border bg-card/90 p-8 shadow-xl backdrop-blur-xl"
         >
           <div data-anim className="flex items-center gap-2.5">
             <BrandMark />

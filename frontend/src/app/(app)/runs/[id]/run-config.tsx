@@ -1,10 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2, Save } from "lucide-react";
+import { motion } from "framer-motion";
+import { Check, Loader2, Lock, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
+import { SPRING_SNAPPY } from "@/lib/motion";
 import {
   CLOUDS,
   CLOUD_LABELS,
@@ -139,48 +142,66 @@ export function RunConfig({
             value={userCount}
             disabled={locked || pending}
             onChange={(e) => setUserCount(e.target.value)}
-            className="max-w-32"
+            className="max-w-32 tnum"
           />
         </div>
 
-        <fieldset className="grid gap-1.5">
-          <legend className="text-sm font-medium">
+        <fieldset className="grid gap-2">
+          <legend className="mb-2 text-sm font-medium">
             {singleCloud ? "Cloud" : "Clouds"}
           </legend>
-          <div className="grid gap-2 pt-1">
+          {/* Same selectable cards as the create dialog, so the two forms that
+              choose clouds do not look like they came from different apps. */}
+          <div className="grid gap-2">
             {CLOUDS.map((cloud) => {
               const provisioned = growOnly && run.clouds.includes(cloud);
+              const selected = clouds.includes(cloud);
+              const disabled = locked || pending || provisioned;
+
               return (
-                <label
+                <motion.button
                   key={cloud}
-                  htmlFor={`cfg-cloud-${cloud}`}
-                  className="flex items-center gap-2 text-sm"
+                  type="button"
+                  role={singleCloud ? "radio" : "checkbox"}
+                  aria-checked={selected}
+                  disabled={disabled}
+                  onClick={() => toggleCloud(cloud)}
+                  whileTap={disabled ? undefined : { scale: 0.99 }}
+                  transition={SPRING_SNAPPY}
+                  className={cn(
+                    "flex items-center gap-3 rounded-lg border p-3 text-left text-sm transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
+                    selected ? "border-brand-border bg-brand/8" : "",
+                    disabled
+                      ? "cursor-not-allowed opacity-70"
+                      : cn(
+                          "cursor-pointer",
+                          !selected && "hover:border-brand-border/60 hover:bg-accent/40",
+                        ),
+                  )}
                 >
-                  <input
-                    id={`cfg-cloud-${cloud}`}
-                    type={singleCloud ? "radio" : "checkbox"}
-                    name={singleCloud ? "cfg-cloud" : undefined}
-                    checked={clouds.includes(cloud)}
-                    disabled={locked || pending || provisioned}
-                    onChange={() => toggleCloud(cloud)}
-                    className={
-                      singleCloud
-                        ? "size-4 border-input accent-primary"
-                        : "size-4 rounded border-input accent-primary"
-                    }
-                  />
-                  {CLOUD_LABELS[cloud]}
+                  <span
+                    className={cn(
+                      "flex size-4.5 shrink-0 items-center justify-center border transition-colors",
+                      singleCloud ? "rounded-full" : "rounded-[5px]",
+                      selected
+                        ? "border-brand bg-brand text-brand-foreground"
+                        : "border-input",
+                    )}
+                  >
+                    {selected && <Check className="size-3" strokeWidth={3} />}
+                  </span>
+                  <span className="font-medium">{CLOUD_LABELS[cloud]}</span>
                   {provisioned && (
-                    <span className="text-xs text-muted-foreground">
-                      (provisioned)
+                    <span className="ml-auto inline-flex items-center gap-1 text-xs text-muted-foreground">
+                      <Lock className="size-3" /> provisioned
                     </span>
                   )}
                   {cloud !== "gcp" && !provisioned && (
-                    <span className="text-xs text-muted-foreground">
-                      (not yet provisioned)
+                    <span className="ml-auto text-xs text-muted-foreground">
+                      not yet provisioned
                     </span>
                   )}
-                </label>
+                </motion.button>
               );
             })}
           </div>
@@ -193,7 +214,7 @@ export function RunConfig({
 
         {!locked && (
           <div>
-            <Button onClick={save} disabled={!dirty || pending}>
+            <Button variant="brand" onClick={save} disabled={!dirty || pending}>
               {pending ? <Loader2 className="animate-spin" /> : <Save />}
               {pending ? "Saving…" : "Save changes"}
             </Button>
