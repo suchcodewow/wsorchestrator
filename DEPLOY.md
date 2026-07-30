@@ -48,6 +48,88 @@ make help          # list targets
 Images are tagged with the git short SHA, so `make deploy` is a precise,
 repeatable roll-forward (and roll-back: `make deploy TAG=<older-sha>`).
 
+`make deploy` calls `gcloud run services update` rather than `terraform apply`.
+The Cloud Run resources declare `ignore_changes` on their image, so Terraform
+no longer moves the running tag — otherwise any unrelated `apply` would reset
+production to whatever `app_image` happened to be passed. This also means a
+manual roll-back and an automated deploy take the same code path.
+
+## Continuous deployment
+
+A push to `main` builds both images, applies the SQL migrations, and rolls
+Cloud Run — via the `deploy-on-push-main` Cloud Build trigger in
+[infra/admin/cicd.tf](infra/admin/cicd.tf).
+
+```
+push to main
+  └─ Cloud Build (runs as build-sa)
+       ├─ build app + runner images
+       ├─ push both to Artifact Registry
+       ├─ db-migrate   ← before the new image is live
+       └─ gcloud run services/jobs update
+```
+
+**Migrations run before the deploy, on purpose.** The `.sql` files only add
+columns with defaults, so the currently-running revision keeps working against
+the migrated schema. The reverse order would put a new image in front of a
+schema missing the columns it reads on every request — the app calls
+`getThemePreference()` in the root layout, so a missing column is a 500 on
+every route, including `/signin`.
+
+**CI runs `db-migrate` only, never `db-push`.** `db-push` diffs shape and will
+drop a column whose data is still needed; unattended on every push that is a
+data-loss risk. The consequence is a rule worth internalising:
+
+> A change to `frontend/src/db/schema.ts` **must** be paired with a migration
+> in `frontend/drizzle/`, or it will not reach production.
+
+`make images` still only builds. The migrate and deploy steps in
+`cloudbuild.yaml` are gated on the `_DEPLOY` substitution, which only the
+trigger sets.
+
+### One-time setup
+
+Terraform cannot create a GitHub App installation or a PAT, so three steps are
+manual. Until they are done, leave `enable_cicd = false` and nothing in
+`cicd.tf` is created.
+
+```bash
+# 1. Install the Cloud Build GitHub App on the repo, and note the installation
+#    id from the URL it redirects to (.../installations/<ID>):
+#      https://github.com/apps/google-cloud-build
+
+# 2. Store a classic PAT (scopes: repo, read:user) in Secret Manager
+printf '%s' <TOKEN> | gcloud secrets create github-pat \
+  --data-file=- --project <ADMIN_PROJECT>
+
+# 3. In infra/admin/terraform.tfvars:
+#      enable_cicd                = true
+#      github_owner               = "suchcodewow"
+#      github_repo                = "wsorchestrator"
+#      github_app_installation_id = "<ID from step 1>"
+
+make infra
+```
+
+The apply also grants `build-sa` what it now needs beyond building: `run.admin`
+to roll the service and jobs, `cloudsql.client` for the migration proxy,
+`secretAccessor` on `database-url`, and `serviceAccountUser` scoped to just
+`app-sa` and `runner-sa` — not project-wide, so it cannot impersonate anything
+else.
+
+### Watching and rolling back
+
+```bash
+gcloud builds list --region us-central1 --limit 5 --project <ADMIN_PROJECT>
+gcloud builds log <BUILD_ID> --region us-central1 --project <ADMIN_PROJECT>
+
+make deploy TAG=<older-sha>   # roll back; migrations are not reverted
+```
+
+Rolling back the image does **not** roll back the schema. That is safe in the
+one direction the migrations are written for — they are additive, so an older
+image simply ignores the newer columns.
+
 ## Schema changes
 
 Two mechanisms, and the order matters:

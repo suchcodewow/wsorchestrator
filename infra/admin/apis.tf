@@ -11,6 +11,10 @@ locals {
     "artifactregistry.googleapis.com",
     "secretmanager.googleapis.com",
     "compute.googleapis.com",
+    # Was previously enabled out of band (whatever `gcloud builds submit` did
+    # on first use). Declared now because the CD connection and trigger in
+    # cicd.tf are created by Terraform and fail if the API is off.
+    "cloudbuild.googleapis.com",
   ]
 }
 

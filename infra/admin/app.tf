@@ -5,6 +5,19 @@ resource "google_cloud_run_v2_service" "app" {
   deletion_protection = false
   ingress             = "INGRESS_TRAFFIC_ALL"
 
+  # The running image tag is owned by whoever deployed last, not by Terraform.
+  # Without this, any `terraform apply` — even one changing something unrelated
+  # — would reset the service to var.app_image and silently roll production
+  # backwards to whatever tag the operator happened to pass.
+  #
+  # Consequently `make deploy` no longer goes through Terraform; it calls
+  # `gcloud run services update`, the same command the CD trigger uses. Rolling
+  # back with `make deploy TAG=<older-sha>` still works, via that path.
+  # var.app_image is now only the image this service is *created* with.
+  lifecycle {
+    ignore_changes = [template[0].containers[0].image]
+  }
+
   template {
     service_account = google_service_account.app.email
 
@@ -41,6 +54,11 @@ resource "google_cloud_run_v2_service" "app" {
           local.runner_env,
           { TF_RUNNER_JOB = google_cloud_run_v2_job.runner.name },
           var.app_url != "" ? { AUTH_URL = var.app_url } : {},
+          # Host part of app_url. The middleware redirects any other host here,
+          # so www and the run.app URL converge on the one origin Auth.js and
+          # the OAuth client agree on. Derived rather than configured
+          # separately, so the canonical host can never disagree with AUTH_URL.
+          var.app_url != "" ? { CANONICAL_HOST = local.canonical_host } : {},
         )
         content {
           name  = env.key

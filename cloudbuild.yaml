@@ -1,14 +1,36 @@
-# Builds and pushes both images to Artifact Registry.
-# Invoked by `make images` (which fills _REPO/_TAG from Terraform outputs):
-#   gcloud builds submit --config cloudbuild.yaml \
-#     --substitutions=_REPO=<region>-docker.pkg.dev/<proj>/workshop-orchestrator,_TAG=<sha>
+# Builds both images, applies the SQL migrations, and rolls Cloud Run.
+#
+# Two callers, one file:
+#
+#   make images   — builds and pushes only. `_DEPLOY` stays "false", so the
+#                   migrate and deploy steps exit immediately.
+#   push to main  — the `deploy-on-push-main` trigger (infra/admin/cicd.tf)
+#                   sets _DEPLOY=true and fills the rest of the substitutions
+#                   from Terraform outputs.
+#
+# Ordering is deliberate: migrations run BEFORE the new image goes live. They
+# only ever add columns with defaults, so the currently-running revision keeps
+# working against the migrated schema. The reverse order would serve a new
+# image against a schema missing the columns it reads on every request — which
+# is exactly the 500-on-every-route failure this is meant to avoid.
 substitutions:
   _REPO: "REPLACE_ME"
   _TAG: "latest"
+  # Everything below is only read when _DEPLOY is "true".
+  _DEPLOY: "false"
+  _REGION: "us-central1"
+  _DB_CONN: ""
+  _APP_SERVICE: ""
+  _RUNNER_JOBS: ""
 
 options:
   machineType: E2_HIGHCPU_8
   logging: CLOUD_LOGGING_ONLY
+
+availableSecrets:
+  secretManager:
+    - versionName: projects/$PROJECT_ID/secrets/database-url/versions/latest
+      env: DATABASE_URL_SOCKET
 
 steps:
   - id: build-app
@@ -35,8 +57,78 @@ steps:
       - runner/Dockerfile
       - runner
 
-images:
-  - ${_REPO}/app:${_TAG}
-  - ${_REPO}/app:latest
-  - ${_REPO}/runner:${_TAG}
-  - ${_REPO}/runner:latest
+  # Pushed here rather than via the top-level `images:` block, which only runs
+  # after every step — the deploy step below needs these tags to already exist
+  # in the registry.
+  - id: push
+    name: gcr.io/cloud-builders/docker
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        for img in app runner; do
+          docker push "${_REPO}/$$img:${_TAG}"
+          docker push "${_REPO}/$$img:latest"
+        done
+
+  - id: migrate
+    name: node:22-slim
+    entrypoint: bash
+    secretEnv: [DATABASE_URL_SOCKET]
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        if [ "${_DEPLOY}" != "true" ]; then
+          echo "_DEPLOY is not true — skipping migrations."
+          exit 0
+        fi
+
+        apt-get update -qq && apt-get install -y -qq curl >/dev/null
+
+        curl -sSL -o /usr/local/bin/cloud-sql-proxy \
+          https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.14.1/cloud-sql-proxy.linux.amd64
+        chmod +x /usr/local/bin/cloud-sql-proxy
+
+        # The stored URL points at the Cloud Run connector socket. Swap in the
+        # proxy's TCP endpoint, exactly as scripts/with-db.sh does locally, so
+        # the credentials keep a single source of truth.
+        CREDS="$$(printf '%s' "$$DATABASE_URL_SOCKET" | sed -E 's#^postgresql://([^@]+)@.*#\1#')"
+        DBNAME="$$(printf '%s' "$$DATABASE_URL_SOCKET" | sed -E 's#.*/([^/?]+)\?.*#\1#')"
+        export DATABASE_URL="postgresql://$${CREDS}@127.0.0.1:5432/$${DBNAME}"
+
+        cloud-sql-proxy --port 5432 "${_DB_CONN}" &
+        for _ in $$(seq 1 30); do
+          (exec 3<>/dev/tcp/127.0.0.1/5432) 2>/dev/null && break
+          sleep 1
+        done
+
+        # apply-sql.mjs needs only `pg`; a full `npm ci` of the frontend would
+        # cost minutes to install one dependency.
+        cd frontend
+        npm install pg --no-save --no-audit --no-fund --silent
+        node scripts/apply-sql.mjs
+
+  - id: deploy
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        if [ "${_DEPLOY}" != "true" ]; then
+          echo "_DEPLOY is not true — skipping deploy."
+          exit 0
+        fi
+
+        gcloud run services update "${_APP_SERVICE}" \
+          --project "$PROJECT_ID" --region "${_REGION}" \
+          --image "${_REPO}/app:${_TAG}"
+
+        # All three jobs run the same runner image.
+        for job in ${_RUNNER_JOBS}; do
+          gcloud run jobs update "$$job" \
+            --project "$PROJECT_ID" --region "${_REGION}" \
+            --image "${_REPO}/runner:${_TAG}"
+        done

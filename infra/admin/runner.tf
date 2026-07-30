@@ -30,6 +30,12 @@ resource "google_cloud_run_v2_job" "runner" {
   project             = var.admin_project_id
   deletion_protection = false
 
+  # See the matching note in app.tf: the running tag is owned by the deployer
+  # (CD trigger or `make deploy`), not by Terraform.
+  lifecycle {
+    ignore_changes = [template[0].template[0].containers[0].image]
+  }
+
   template {
     template {
       service_account = google_service_account.runner.email
@@ -92,6 +98,12 @@ resource "google_cloud_run_v2_job" "reaper" {
   location            = var.region
   project             = var.admin_project_id
   deletion_protection = false
+
+  # See the matching note in app.tf: the running tag is owned by the deployer
+  # (CD trigger or `make deploy`), not by Terraform.
+  lifecycle {
+    ignore_changes = [template[0].template[0].containers[0].image]
+  }
 
   template {
     template {
@@ -167,6 +179,12 @@ resource "google_cloud_run_v2_job" "scheduler" {
   location            = var.region
   project             = var.admin_project_id
   deletion_protection = false
+
+  # See the matching note in app.tf: the running tag is owned by the deployer
+  # (CD trigger or `make deploy`), not by Terraform.
+  lifecycle {
+    ignore_changes = [template[0].template[0].containers[0].image]
+  }
 
   template {
     template {

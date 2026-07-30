@@ -34,7 +34,7 @@ output "tfstate_bucket" {
 
 output "artifact_registry" {
   description = "Docker repo path to push images to."
-  value       = "${var.region}-docker.pkg.dev/${var.admin_project_id}/${google_artifact_registry_repository.images.repository_id}"
+  value       = local.artifact_registry
 }
 
 output "runner_job" {
@@ -43,4 +43,18 @@ output "runner_job" {
 
 output "reaper_job" {
   value = google_cloud_run_v2_job.reaper.name
+}
+
+output "app_service" {
+  description = "Cloud Run service name (what `make deploy` and the CD trigger update)."
+  value       = google_cloud_run_v2_service.app.name
+}
+
+output "runner_jobs" {
+  description = "Space-separated Cloud Run jobs that all run the runner image."
+  value = join(" ", [
+    google_cloud_run_v2_job.runner.name,
+    google_cloud_run_v2_job.reaper.name,
+    google_cloud_run_v2_job.scheduler.name,
+  ])
 }

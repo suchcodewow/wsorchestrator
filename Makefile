@@ -19,6 +19,9 @@ DB_CONN = $(shell $(TF) output -raw db_connection_name 2>/dev/null)
 # DB_CONN is project:region:instance; backups need the bare instance name.
 DB_INSTANCE = $(lastword $(subst :, ,$(DB_CONN)))
 APP_URL = $(shell $(TF) output -raw app_url 2>/dev/null)
+# Cloud Run resources `make deploy` rolls onto a new image tag.
+APP_SERVICE = $(shell $(TF) output -raw app_service 2>/dev/null)
+RUNNER_JOBS = $(shell $(TF) output -raw runner_jobs 2>/dev/null)
 
 # Image tag = current commit (fallback: latest).
 TAG ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo latest)
@@ -54,11 +57,20 @@ images: ## Build + push app and runner images via Cloud Build
 	  --service-account=projects/$(PROJECT)/serviceAccounts/build-sa@$(PROJECT).iam.gserviceaccount.com \
 	  --substitutions=_REPO=$(REPO),_TAG=$(TAG) .
 
-deploy: ## Point Cloud Run at the freshly built images and apply
+deploy: ## Roll Cloud Run onto $(TAG)'s images (same path the CD trigger uses)
 	@test -n "$(REPO)" || { echo "No REPO — run 'make infra' first"; exit 1; }
-	$(TF) apply -var-file=terraform.tfvars \
-	  -var app_image=$(REPO)/app:$(TAG) \
-	  -var runner_image=$(REPO)/runner:$(TAG)
+	@# Not `terraform apply`: the Cloud Run resources ignore_changes on their
+	@# image (see infra/admin/app.tf), so Terraform can no longer move the tag.
+	@# This is the same gcloud call the push trigger makes, which means a manual
+	@# roll-back and an automated deploy exercise one code path, not two.
+	gcloud run services update $(APP_SERVICE) \
+	  --project $(PROJECT) --region $(REGION) \
+	  --image $(REPO)/app:$(TAG)
+	@for job in $(RUNNER_JOBS); do \
+	  gcloud run jobs update $$job \
+	    --project $(PROJECT) --region $(REGION) \
+	    --image $(REPO)/runner:$(TAG); \
+	done
 
 db-backup: ## On-demand Cloud SQL backup — take one before any schema change
 	@test -n "$(DB_INSTANCE)" || { echo "No DB_INSTANCE — run 'make infra' first"; exit 1; }

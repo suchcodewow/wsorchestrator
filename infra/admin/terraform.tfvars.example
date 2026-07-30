@@ -19,8 +19,18 @@ harness_account_id = "replace-me"
 harness_api_key    = "pat.xxxxx"
 # harness_base_url = "https://app.harness.io"
 
-# db_tier         = "db-custom-1-3840"   # smallest valid Postgres tier
-# reaper_schedule = "*/5 * * * *"
+# db_tier            = "db-custom-1-3840"   # smallest valid Postgres tier
+# reaper_schedule    = "*/5 * * * *"        # destroys runs past their TTL
+# scheduler_schedule = "*/5 * * * *"        # starts runs whose start time arrived
+
+# Domains to serve the app on. Empty (the default) skips domain mapping.
+# Each gets its own Cloud Run mapping and managed TLS cert; after applying, add
+# the records from the `domain_dns_records` output at your registrar.
+#
+# Whichever one app_url points at is canonical — the rest 308-redirect to it.
+# That is not cosmetic: Auth.js pins one AUTH_URL and Google matches the OAuth
+# redirect_uri exactly, so sign-in only works on a single origin.
+# custom_domains = ["example.com", "www.example.com"]
 
 # Google OAuth 2.0 client (APIs & Services -> Credentials in the admin project).
 # Authorized redirect URI: <app_url>/api/auth/callback/google
@@ -31,6 +41,29 @@ google_oauth_client_secret = "xxxx"
 # Auth.js pins AUTH_URL (Google rejects a guessed 0.0.0.0 redirect_uri):
 # app_url = "https://workshop-orchestrator-xxxxx-uc.a.run.app"
 
-# After you build+push real images (step #3), set these and re-apply:
+# Images the Cloud Run resources are CREATED with. After that they are ignored
+# — the running tag is owned by `make deploy` / the CD trigger, not Terraform
+# (see the lifecycle blocks in app.tf and runner.tf), so changing these on an
+# existing deployment does nothing. Roll with `make deploy TAG=<sha>` instead.
 # app_image    = "us-central1-docker.pkg.dev/my-admin-project/workshop-orchestrator/app:latest"
 # runner_image = "us-central1-docker.pkg.dev/my-admin-project/workshop-orchestrator/runner:latest"
+
+# --------------------------------------------------------------------------
+# Continuous deployment — push to main builds, migrates, and rolls Cloud Run.
+#
+# Leave enable_cicd = false (the default) until the two manual steps below are
+# done; nothing in cicd.tf is created while it is off.
+#
+#   1. Install the Cloud Build GitHub App on the repo, then take the
+#      installation id from the URL it redirects to (.../installations/<ID>):
+#        https://github.com/apps/google-cloud-build
+#
+#   2. Store a classic PAT (scopes: repo, read:user) in Secret Manager:
+#        printf '%s' <TOKEN> | gcloud secrets create github-pat \
+#          --data-file=- --project my-admin-project
+# --------------------------------------------------------------------------
+# enable_cicd                = true
+# github_owner               = "my-github-user"
+# github_repo                = "wsorchestrator"      # repo name only, no owner
+# github_app_installation_id = "12345678"            # from step 1
+# github_pat_secret_id       = ""          # default; secret you made in step 2
