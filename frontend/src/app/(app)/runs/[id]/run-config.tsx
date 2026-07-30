@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { motion } from "framer-motion";
 import { Check, Loader2, Lock, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -43,12 +43,21 @@ export function RunConfig({
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
-  // Re-sync when the poll brings back a newer version of the run.
-  useEffect(() => {
-    if (pending) return;
+  // Re-sync when a save or a poll brings back a newer version of the run.
+  //
+  // Keyed on the values rather than on `run` itself: the parent replaces the
+  // whole payload every few seconds while a run is active, so `run.clouds` is a
+  // fresh array on each poll even when nothing about it changed. Adjusting
+  // during render rather than in an effect also means the form never paints the
+  // superseded values for a frame on the way to the new ones.
+  const serverState = `${run.userCount}:${run.clouds.join(",")}`;
+  const [syncedFrom, setSyncedFrom] = useState(serverState);
+  // An in-flight save is the one case where the server is behind the form.
+  if (serverState !== syncedFrom && !pending) {
+    setSyncedFrom(serverState);
     setUserCount(String(run.userCount));
     setClouds(run.clouds);
-  }, [run.userCount, run.clouds, pending]);
+  }
 
   const locked = editability === "locked";
   const growOnly = editability === "grow";

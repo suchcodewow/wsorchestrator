@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Check, Loader2, Zap } from "lucide-react";
@@ -23,6 +23,20 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { riseChild, staggerParent, SPRING_SNAPPY } from "@/lib/motion";
+
+/**
+ * The start time the form opens on: 9am on a day picked from the calendar,
+ * otherwise the top of the next hour. Either way the minutes are zeroed, so
+ * the exact moment this is called does not show up in the value.
+ */
+function defaultStart(initialDate: Date | null): Date {
+  // Copied, not adjusted in place: `initialDate` is the caller's state, and
+  // this runs during render.
+  const base = initialDate ? new Date(initialDate) : new Date();
+  if (initialDate) base.setHours(9, 0, 0, 0);
+  else base.setHours(base.getHours() + 1, 0, 0, 0);
+  return base;
+}
 
 /** Format a Date as the value a datetime-local input expects (local time). */
 function toLocalInput(d: Date): string {
@@ -76,18 +90,24 @@ export function CreateEventDialog({
   const [pending, setPending] = useState<"now" | "schedule" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Reset the form each time the dialog opens, defaulting the start time.
-  useEffect(() => {
-    if (!open) return;
-    const base = initialDate ?? new Date();
-    if (!initialDate) base.setHours(base.getHours() + 1, 0, 0, 0);
-    else base.setHours(9, 0, 0, 0);
-    setStart(toLocalInput(base));
-    setName("");
-    setUserCount(String(limits.defaultUsers));
-    setClouds([]);
-    setError(null);
-  }, [open, initialDate, limits.defaultUsers]);
+  // Reset the form on the closed -> open transition, so each event is composed
+  // from scratch rather than inheriting whatever the last one was left on.
+  //
+  // Done during render rather than in an effect: an effect runs after the paint,
+  // which flashes the previous event's name and clouds for a frame as the dialog
+  // animates in. The dialog stays mounted while closed — that is what drives its
+  // exit animation — so a `key` remount is not available to do this instead.
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
+    if (open) {
+      setStart(toLocalInput(defaultStart(initialDate)));
+      setName("");
+      setUserCount(String(limits.defaultUsers));
+      setClouds([]);
+      setError(null);
+    }
+  }
 
   function toggleCloud(cloud: Cloud) {
     // Picking a cloud in single-cloud mode replaces the selection rather than

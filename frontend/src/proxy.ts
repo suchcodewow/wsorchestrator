@@ -14,7 +14,7 @@ import { NextResponse, type NextRequest } from "next/server";
  * from `AUTH_URL`. Unset (local dev, or before a custom domain exists) makes
  * this a no-op.
  */
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const canonical = process.env.CANONICAL_HOST;
   if (!canonical) return NextResponse.next();
 

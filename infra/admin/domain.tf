@@ -4,7 +4,7 @@
 #
 # Every domain listed here is *served*; only one of them is canonical. The
 # canonical one is whichever `app_url` points at — see CANONICAL_HOST in app.tf
-# and the middleware that acts on it. Serving the same app on two hosts without
+# and the proxy that acts on it. Serving the same app on two hosts without
 # a redirect would break sign-in, because Auth.js pins a single AUTH_URL and
 # Google matches the OAuth redirect_uri exactly.
 locals {

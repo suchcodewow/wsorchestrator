@@ -54,7 +54,7 @@ resource "google_cloud_run_v2_service" "app" {
           local.runner_env,
           { TF_RUNNER_JOB = google_cloud_run_v2_job.runner.name },
           var.app_url != "" ? { AUTH_URL = var.app_url } : {},
-          # Host part of app_url. The middleware redirects any other host here,
+          # Host part of app_url. The proxy redirects any other host here,
           # so www and the run.app URL converge on the one origin Auth.js and
           # the OAuth client agree on. Derived rather than configured
           # separately, so the canonical host can never disagree with AUTH_URL.
