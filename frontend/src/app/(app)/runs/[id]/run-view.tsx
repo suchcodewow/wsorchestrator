@@ -9,10 +9,11 @@ import {
   type WorkshopAccount,
   type WorkshopRun,
 } from "@/db/schema";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Check, Copy, ExternalLink } from "lucide-react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { riseChild, staggerParent } from "@/lib/motion";
 import { RunConfig } from "./run-config";
@@ -154,6 +155,12 @@ export function RunView({ initial, runId }: { initial: RunPayload; runId: string
 
       {accounts.length > 0 && (
         <motion.div variants={riseChild}>
+          <AttendeeLink runId={run.id} mode={run.mode} />
+        </motion.div>
+      )}
+
+      {accounts.length > 0 && (
+        <motion.div variants={riseChild}>
         <Card>
           <CardHeader>
             <CardTitle>
@@ -168,6 +175,7 @@ export function RunView({ initial, runId }: { initial: RunPayload; runId: string
                   <tr className="text-left text-[11px] uppercase tracking-wider text-muted-foreground">
                     <th className="pb-2 font-medium">Email</th>
                     <th className="pb-2 font-medium">Temporary password</th>
+                    <th className="pb-2 font-medium">Claimed by</th>
                   </tr>
                 </thead>
                 <tbody className="font-mono">
@@ -177,7 +185,15 @@ export function RunView({ initial, runId }: { initial: RunPayload; runId: string
                       className="border-t transition-colors hover:bg-muted/40"
                     >
                       <td className="py-2 pr-4 break-all">{a.email}</td>
-                      <td className="py-2">{a.tempPassword}</td>
+                      <td className="py-2 pr-4">{a.tempPassword}</td>
+                      {/* Filled in by the attendee on the shared page below. */}
+                      <td className="py-2 font-sans">
+                        {a.claimedName ?? (
+                          <span className="text-muted-foreground">
+                            unclaimed
+                          </span>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -231,6 +247,63 @@ export function RunView({ initial, runId }: { initial: RunPayload; runId: string
       </Card>
       </motion.div>
     </motion.div>
+  );
+}
+
+/**
+ * The shareable page the room uses to pick up their credentials.
+ *
+ * The path is rendered rather than the full URL because the origin is only
+ * knowable in the browser, and reading it during render would not match what
+ * the server sent. Copy resolves it against the current origin instead, so the
+ * clipboard still gets something an attendee can paste into a phone.
+ */
+function AttendeeLink({ runId, mode }: { runId: string; mode: string }) {
+  const [copied, setCopied] = useState(false);
+  const path = `/attend/${runId}`;
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(new URL(path, location.origin).href);
+    } catch {
+      return;
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Attendee page</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <p className="text-sm text-muted-foreground">
+          Share this link with the room. Everyone who opens it sees the accounts
+          below and claims one by putting their name on it.
+        </p>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <code className="min-w-0 flex-1 truncate rounded-md bg-muted px-2.5 py-1.5 font-mono text-xs">
+            {path}
+          </code>
+          <Button variant="outline" size="sm" onClick={copy}>
+            {copied ? <Check className="text-emerald-600" /> : <Copy />}
+            {copied ? "Copied" : "Copy link"}
+          </Button>
+          <Button variant="outline" size="sm" asChild>
+            <Link href={path} target="_blank" rel="noreferrer">
+              Open
+              <ExternalLink />
+            </Link>
+          </Button>
+        </div>
+        <p className="mt-3 text-xs text-muted-foreground">
+          Anyone with the link can see these credentials — it is not behind a
+          sign-in, because attendees have no account here yet. The link stops
+          working when the {mode} is torn down.
+        </p>
+      </CardContent>
+    </Card>
   );
 }
 

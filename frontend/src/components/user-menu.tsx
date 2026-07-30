@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { ChevronDown, Laptop, Moon, Sun } from "lucide-react";
+import Link from "next/link";
+import { ChevronDown, Laptop, LogOut, Moon, Settings, Sun } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
@@ -29,10 +31,13 @@ export function UserMenu({
   name,
   email,
   initialTheme,
+  signOutAction,
 }: {
   name: string | null;
   email: string;
   initialTheme: ThemePreference;
+  /** Server action; it redirects, so it never resolves on the happy path. */
+  signOutAction: () => Promise<void>;
 }) {
   const [theme, setTheme] = useState<ThemePreference>(initialTheme);
   const [, startTransition] = useTransition();
@@ -80,6 +85,15 @@ export function UserMenu({
 
         <DropdownMenuSeparator />
 
+        <DropdownMenuItem asChild>
+          <Link href="/events">
+            <Settings />
+            Open orchestrator
+          </Link>
+        </DropdownMenuItem>
+
+        <DropdownMenuSeparator />
+
         <DropdownMenuLabel className="text-xs text-muted-foreground">
           Appearance
         </DropdownMenuLabel>
@@ -91,6 +105,20 @@ export function UserMenu({
             </DropdownMenuRadioItem>
           ))}
         </DropdownMenuRadioGroup>
+
+        <DropdownMenuSeparator />
+
+        {/*
+          Fired from `onSelect` rather than from a form inside the item: Radix
+          closes the menu on select, which would unmount a form before it could
+          submit.
+        */}
+        <DropdownMenuItem
+          onSelect={() => startTransition(() => void signOutAction())}
+        >
+          <LogOut />
+          Sign out
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );

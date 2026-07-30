@@ -13,9 +13,29 @@ const CAPABILITIES = [
   { Icon: Cloud, text: "Cloud environments torn down on a timer" },
 ];
 
-export default async function SignInPage() {
+/**
+ * Where to land after signing in.
+ *
+ * Only a path on this site is ever accepted. A value beginning `//` is
+ * protocol-relative and a `/\` is read as scheme-relative by some parsers —
+ * both would send the visitor to another origin, so anything that is not a
+ * plain single-slash path falls back to the app.
+ */
+function safeCallback(value: string | undefined): string {
+  if (!value || !value.startsWith("/")) return "/events";
+  if (value.startsWith("//") || value.startsWith("/\\")) return "/events";
+  return value;
+}
+
+export default async function SignInPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ callbackUrl?: string }>;
+}) {
+  const target = safeCallback((await searchParams).callbackUrl);
+
   const session = await auth();
-  if (session) redirect("/events");
+  if (session) redirect(target);
 
   return (
     <main className="relative grid min-h-screen place-items-center overflow-hidden p-6">
@@ -61,7 +81,7 @@ export default async function SignInPage() {
             className="mt-8"
             action={async () => {
               "use server";
-              await signIn("google", { redirectTo: "/events" });
+              await signIn("google", { redirectTo: target });
             }}
           >
             <Button type="submit" variant="brand" size="lg" className="group w-full">

@@ -202,10 +202,18 @@ export const workshopRuns = pgTable(
   ],
 );
 
+/** Longest a claim answer may be, per field. Shared by the form and the API. */
+export const CLAIM_LIMITS = { name: 80, from: 80, vacation: 120 } as const;
+
 /**
  * One Google Workspace account created for a workshop attendee. The temporary
  * password is stored so the organizer can hand it out; it is force-rotated at
  * first sign-in and the account is deleted when the workshop is reaped.
+ *
+ * The `claimed*` columns are filled in by the attendee themselves on the shared
+ * event page — they are how the room decides who is using which account, and
+ * double as an icebreaker. Nobody is signed in when they are written, so they
+ * are free text and are never used to authorize anything.
  */
 export const workshopAccounts = pgTable(
   "workshop_accounts",
@@ -217,6 +225,14 @@ export const workshopAccounts = pgTable(
     email: text("email").notNull(),
     /** Temporary password; `changePasswordAtNextLogin` is set on the account. */
     tempPassword: text("temp_password").notNull(),
+    /** Who took this account. Null means the row is still up for grabs. */
+    claimedName: text("claimed_name"),
+    /** Where they are from. */
+    claimedFrom: text("claimed_from"),
+    /** Favourite vacation. */
+    claimedVacation: text("claimed_vacation"),
+    /** Set atomically with the answers; the marker that a row is taken. */
+    claimedAt: timestamp("claimed_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
