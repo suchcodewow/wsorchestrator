@@ -27,11 +27,17 @@ import { cn } from "@/lib/utils";
 const solid = (token: string, pct: number) =>
   `color-mix(in oklab, var(${token}) ${pct}%, var(--background))`;
 
-/** Where each foreground silhouette sits, how big, and how it leans. */
+/**
+ * Where each foreground silhouette sits, how big, and how it leans.
+ *
+ * `y` varies as well as `scale`: three people cropped at exactly the same line
+ * read as one figure stamped three times, and differing seat heights break that
+ * faster than differing sizes do.
+ */
 const AUDIENCE = [
-  { x: 305, scale: 0.97, tilt: 4, mix: 86 },
-  { x: 640, scale: 1.05, tilt: -3, mix: 100 },
-  { x: 975, scale: 0.93, tilt: 6, mix: 80 },
+  { x: 302, y: 626, scale: 0.96, tilt: 4, mix: 86 },
+  { x: 640, y: 614, scale: 1.05, tilt: -3, mix: 100 },
+  { x: 978, y: 630, scale: 0.92, tilt: 6, mix: 80 },
 ] as const;
 
 /**
@@ -50,51 +56,70 @@ const ROWS = [
 /**
  * Head and shoulders from behind, origin on the crop line at the frame foot.
  *
- * The slope from shoulder to neck is concave, not convex — that trapezius line
- * is the whole difference between a silhouette that reads as a person and one
- * that reads as a chess pawn.
+ * Three things carry the read, and dropping any one of them lands back on a
+ * chess pawn. The deltoid caps the shoulder in a curve instead of a corner. The
+ * slope from there to the neck is concave — that trapezius line is what says
+ * "person" more than the head does. And there is an actual neck: a head set
+ * straight onto the shoulders is a bowling pin no matter how it is shaped.
+ *
+ * Shoulders are just under three head-widths across, which is roughly where a
+ * real body sits; wider than that and the figure reads as a slab.
  */
-const SHOULDERS =
-  "C -108 -108 -94 -134 -62 -146 C -46 -152 -32 -157 -20 -168 L 20 -168 C 32 -157 46 -152 62 -146 C 94 -134 108 -108 108 -70";
-const BUST = `M -108 0 L -108 -70 ${SHOULDERS} L 108 0 Z`;
-/** The lit edge only — closing the path would draw a line along the crop. */
-const BUST_RIM = `M -108 -70 ${SHOULDERS}`;
+/**
+ * Left outline, shoulder upward: deltoid cap, then trapezius, then neck. The
+ * neck is reached by a second curve rather than a straight line — a line leaves
+ * a corner exactly where the eye looks for the trapezius, and a corner there
+ * reads as armour.
+ */
+const SIDE_LEFT =
+  "C -96 -92 -86 -112 -64 -124 C -46 -132 -30 -139 -21 -152 C -18 -160 -17 -167 -17 -176";
+/** The same edge mirrored, read downward. */
+const SIDE_RIGHT =
+  "C 17 -167 18 -160 21 -152 C 30 -139 46 -132 64 -124 C 86 -112 96 -92 96 -52";
+
+const BUST = `M -98 0 L -96 -52 ${SIDE_LEFT} L 17 -176 ${SIDE_RIGHT} L 98 0 Z`;
+/** Lit edges only — closing either would draw a line along the crop. */
+const RIM_LEFT = `M -96 -52 ${SIDE_LEFT}`;
+const RIM_RIGHT = `M 17 -176 ${SIDE_RIGHT}`;
 
 function Bust({
   x,
+  y,
   scale,
   tilt,
   mix,
 }: {
   x: number;
+  y: number;
   scale: number;
   tilt: number;
   mix: number;
 }) {
   const fill = solid("--muted-foreground", mix);
+  const rim = { stroke: "var(--brand)", strokeOpacity: 0.4, strokeWidth: 2 };
   return (
-    <g transform={`translate(${x} 620) scale(${scale})`}>
+    <g transform={`translate(${x} ${y}) scale(${scale})`}>
       <path d={BUST} fill={fill} />
-      <g transform={`rotate(${tilt} 0 -168)`}>
-        {/* Set low enough that the jaw meets the shoulders — a gap between the
-            two is what turns a silhouette into a chess pawn. */}
-        <circle cy="-196" r="34" fill={fill} />
-        {/* Top arc only: a full circle would stroke a line across the chest. */}
+      {/*
+       * Each shoulder is rimmed on its own, and both are drawn before the head.
+       * A single stroke following the whole outline would run across the neck
+       * opening and land a bright line over the back of the head.
+       */}
+      <path d={RIM_LEFT} fill="none" {...rim} />
+      <path d={RIM_RIGHT} fill="none" {...rim} />
+      <g transform={`rotate(${tilt} 0 -176)`}>
+        {/* Slightly taller than wide, like a head. Set low enough to overlap
+            the neck, so the two merge into one mass. */}
+        <ellipse cy="-206" rx="33" ry="36" fill={fill} />
+        {/* Top arc only: a full ellipse would stroke a line across the jaw. */}
         <path
-          d="M -34 -196 A 34 34 0 0 1 34 -196"
+          d="M -33 -206 A 33 36 0 0 1 33 -206"
           fill="none"
           stroke="var(--brand)"
           strokeOpacity="0.5"
           strokeWidth="2"
         />
       </g>
-      <path
-        d={BUST_RIM}
-        fill="none"
-        stroke="var(--brand)"
-        strokeOpacity="0.4"
-        strokeWidth="2"
-      />
     </g>
   );
 }
@@ -170,16 +195,27 @@ export function LearningScene({ className }: { className?: string }) {
       </g>
 
       <g data-scene="room">
-        {/* Presenter: furthest back, so mixed closest to the background. */}
+        {/*
+         * Presenter: furthest back, so mixed closest to the background. Turned
+         * a little toward the display, which is why the head sits off centre
+         * over the shoulders rather than squarely on them.
+         *
+         * The raised arm bends at an elbow instead of running straight from
+         * shoulder to fingertip. One rigid diagonal is the difference between
+         * someone gesturing at a screen and a signpost.
+         */}
         <g transform="translate(158 424)" fill={far}>
-          <path d="M -26 0 L -26 -58 C -26 -74 -20 -84 -10 -90 C -7 -93 -6 -98 -6 -103 L 6 -103 C 6 -98 7 -93 10 -90 C 20 -84 26 -74 26 -58 L 26 0 Z" />
+          <path d="M -25 0 L -26 -62 C -27 -84 -21 -95 -12 -100 C -8 -103 -7 -107 -7 -112 L 7 -112 C 7 -107 8 -103 12 -100 C 21 -95 27 -84 26 -62 L 25 0 Z" />
+          {/* Starts inside the torso so the shoulder joint has no seam. */}
           <path
-            d="M 17 -78 L 66 -108"
+            d="M 14 -90 L 44 -97 L 62 -116"
+            fill="none"
             stroke={far}
-            strokeWidth="11"
+            strokeWidth="10"
             strokeLinecap="round"
+            strokeLinejoin="round"
           />
-          <circle cy="-122" r="17" />
+          <ellipse cx="2" cy="-126" rx="16" ry="17.5" />
         </g>
 
         {/* Full-bleed: a table with two visible ends reads as a prop, not a room. */}
