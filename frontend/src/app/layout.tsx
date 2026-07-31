@@ -1,20 +1,18 @@
-import type { Metadata } from "next";
-import { Inter } from "next/font/google";
 import { MotionProvider } from "@/components/motion-provider";
 import { themeScript } from "@/lib/theme";
 import { getThemePreference } from "@/lib/theme-preference";
+import type { Metadata } from "next";
+import { Inter } from "next/font/google";
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 
 export const metadata: Metadata = {
-  title: "Event Orchestrator",
-  description: "Provision ephemeral cloud workshops on demand.",
+  title: "Harness Events",
+  description: "Event Orchestration for Harness.",
 };
 
-export default async function RootLayout({
-  children,
-}: Readonly<{ children: React.ReactNode }>) {
+export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const theme = await getThemePreference();
 
   return (

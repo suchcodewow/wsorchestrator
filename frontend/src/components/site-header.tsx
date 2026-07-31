@@ -1,10 +1,10 @@
-import type { Session } from "next-auth";
-import Link from "next/link";
 import { signOut } from "@/auth";
 import { BrandMark } from "@/components/brand-mark";
 import { SignInLink } from "@/components/sign-in-link";
 import { UserMenu } from "@/components/user-menu";
 import { getThemePreference } from "@/lib/theme-preference";
+import type { Session } from "next-auth";
+import Link from "next/link";
 
 /**
  * The one header, on every page.
@@ -29,7 +29,7 @@ export async function SiteHeader({ session }: { session: Session | null }) {
           className="group flex items-center gap-2.5 rounded-md text-sm font-medium tracking-tight outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
         >
           <BrandMark className="transition-transform duration-200 group-hover:scale-105" />
-          Event Orchestrator
+          Harness Events
         </Link>
 
         {session?.user ? (

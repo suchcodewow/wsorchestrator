@@ -1,11 +1,11 @@
-import type { Metadata } from "next";
-import Link from "next/link";
-import { ArrowRight, CalendarClock, Cloud, Users } from "lucide-react";
 import { auth } from "@/auth";
-import { Button } from "@/components/ui/button";
 import { AmbientBackdrop } from "@/components/ambient-backdrop";
 import { LearningScene } from "@/components/learning-scene";
 import { SiteHeader } from "@/components/site-header";
+import { Button } from "@/components/ui/button";
+import { ArrowRight, CalendarClock, Cloud, Users } from "lucide-react";
+import type { Metadata } from "next";
+import Link from "next/link";
 import { LandingHero } from "./landing-hero";
 
 export const metadata: Metadata = {
@@ -59,26 +59,16 @@ export default async function Home() {
               Workshops and challenges, provisioned on demand
             </span>
 
-            <h1
-              data-anim
-              className="mx-auto mt-6 max-w-3xl text-4xl font-medium tracking-tight text-balance sm:text-5xl"
-            >
+            <h1 data-anim className="mx-auto mt-6 max-w-3xl text-4xl font-medium tracking-tight text-balance sm:text-5xl">
               Cloud environments for teaching, gone by morning.
             </h1>
 
-            <p
-              data-anim
-              className="mx-auto mt-5 max-w-xl text-base leading-relaxed text-pretty text-muted-foreground"
-            >
-              Book a workshop or a challenge. Attendee accounts and cloud
-              projects build themselves at the start time, and clean themselves
-              up when it ends.
+            <p data-anim className="mx-auto mt-5 max-w-xl text-base leading-relaxed text-pretty text-muted-foreground">
+              Book a workshop or a challenge. Attendee accounts and cloud projects build themselves at the start time, and clean
+              themselves up when it ends.
             </p>
 
-            <div
-              data-anim
-              className="mt-9 flex flex-wrap items-center justify-center gap-3"
-            >
+            <div data-anim className="mt-9 flex flex-wrap items-center justify-center gap-3">
               <Button asChild variant="brand" size="lg" className="group">
                 <Link href={appHref}>
                   {signedIn ? "Open orchestrator" : "Get started"}
@@ -101,23 +91,15 @@ export default async function Home() {
           </div>
         </LandingHero>
 
-        <section
-          id="how"
-          className="mx-auto max-w-6xl scroll-mt-20 px-6 pt-14 pb-24"
-        >
+        <section id="how" className="mx-auto max-w-6xl scroll-mt-20 px-6 pt-14 pb-24">
           <div className="grid gap-6 sm:grid-cols-3">
             {CAPABILITIES.map(({ Icon, title, body }) => (
-              <div
-                key={title}
-                className="rounded-2xl border bg-card/60 p-6 backdrop-blur-sm"
-              >
+              <div key={title} className="rounded-2xl border bg-card/60 p-6 backdrop-blur-sm">
                 <span className="flex size-9 items-center justify-center rounded-lg bg-brand/10 text-brand ring-1 ring-brand/15">
                   <Icon className="size-4.5" />
                 </span>
                 <h2 className="mt-4 text-sm font-medium">{title}</h2>
-                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                  {body}
-                </p>
+                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{body}</p>
               </div>
             ))}
           </div>
@@ -126,7 +108,7 @@ export default async function Home() {
 
       <footer className="border-t border-border/70">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-6 py-6 text-xs text-muted-foreground">
-          <span>Event Orchestrator</span>
+          <span>Harness Events</span>
           <Link
             href={appHref}
             className="rounded-md underline-offset-4 outline-none hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50"
