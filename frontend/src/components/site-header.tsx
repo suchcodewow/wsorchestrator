@@ -2,7 +2,7 @@ import { signOut } from "@/auth";
 import { BrandMark } from "@/components/brand-mark";
 import { SignInLink } from "@/components/sign-in-link";
 import { UserMenu } from "@/components/user-menu";
-import { getThemePreference } from "@/lib/theme-preference";
+import { getUserPreferences } from "@/lib/user-preferences";
 import type { Session } from "next-auth";
 import Link from "next/link";
 
@@ -19,7 +19,7 @@ import Link from "next/link";
  * awaited it, and asking again would be a second lookup per render.
  */
 export async function SiteHeader({ session }: { session: Session | null }) {
-  const theme = await getThemePreference();
+  const { themePreference, calendarScope } = await getUserPreferences();
 
   return (
     <header className="sticky top-0 z-40 border-b border-border/70 bg-background/70 backdrop-blur-xl">
@@ -36,7 +36,9 @@ export async function SiteHeader({ session }: { session: Session | null }) {
           <UserMenu
             name={session.user.name ?? null}
             email={session.user.email ?? ""}
-            initialTheme={theme}
+            role={session.user.siteRole}
+            initialTheme={themePreference}
+            initialScope={calendarScope}
             signOutAction={async () => {
               "use server";
               // Out to the public landing page, not back to the sign-in form:

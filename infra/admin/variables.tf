@@ -70,13 +70,13 @@ variable "app_image" {
 }
 
 variable "runner_image" {
-  description = "Container image for tf-runner/tf-reaper. Placeholder until step #3 builds the real image."
+  description = "Container image for tf-runner/tf-scheduler/tf-reaper. Defaults to a placeholder so the first apply succeeds; `make images` builds the real one."
   type        = string
   default     = "us-docker.pkg.dev/cloudrun/container/hello"
 }
 
 variable "custom_domains" {
-  description = "Domains to serve the app on, e.g. [\"harnessevents.io\", \"www.harnessevents.io\"]. Each gets a Cloud Run domain mapping and a managed cert. Which one is canonical is decided by app_url, not by the order here — the others 301 to it. Empty disables custom domains."
+  description = "Domains to serve the app on, e.g. [\"harnessevents.io\", \"www.harnessevents.io\"]. Each gets a Cloud Run domain mapping and a managed cert. Which one is canonical is decided by app_url, not by the order here — the others 308 to it. Empty disables custom domains."
   type        = list(string)
   default     = []
 
@@ -90,6 +90,17 @@ variable "app_url" {
   description = "Public URL of the deployed app (from the app_url output after the first apply). Set this so Auth.js pins AUTH_URL instead of guessing the host."
   type        = string
   default     = ""
+}
+
+variable "site_admin_emails" {
+  description = "Emails made site administrators when they sign in. Roles are otherwise granted from inside the app, so this is the bootstrap for the first administrator; it can be emptied once one exists."
+  type        = list(string)
+  default     = []
+
+  validation {
+    condition     = alltrue([for e in var.site_admin_emails : can(regex("^[^@\\s]+@[^@\\s]+\\.[a-z]{2,}$", e))])
+    error_message = "site_admin_emails must be plain email addresses."
+  }
 }
 
 variable "reaper_schedule" {

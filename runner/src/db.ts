@@ -111,7 +111,25 @@ export async function setDestroying(runId: string) {
   );
 }
 
+/**
+ * Finish a teardown.
+ *
+ * A run somebody deleted is removed outright — its accounts and logs go with
+ * it through the cascade. The row had to survive this long because it is the
+ * only record of what there was to tear down; now that nothing is left, the
+ * delete they asked for can actually happen. Everything else is marked
+ * destroyed and stays on the calendar.
+ *
+ * Callers must log *before* calling this: run_logs references the run, so a
+ * line written after the delete would have nothing to hang off.
+ */
 export async function setDestroyed(runId: string) {
+  const { rowCount } = await pool.query(
+    `delete from workshop_runs where id = $1 and delete_requested`,
+    [runId],
+  );
+  if (rowCount && rowCount > 0) return;
+
   await pool.query(
     `update workshop_runs set status = 'destroyed', destroyed_at = now() where id = $1`,
     [runId],

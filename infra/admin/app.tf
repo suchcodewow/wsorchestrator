@@ -59,6 +59,11 @@ resource "google_cloud_run_v2_service" "app" {
           # the OAuth client agree on. Derived rather than configured
           # separately, so the canonical host can never disagree with AUTH_URL.
           var.app_url != "" ? { CANONICAL_HOST = local.canonical_host } : {},
+          # Bootstrap for the first site administrator — everyone else's role
+          # is granted from the app's users page.
+          length(var.site_admin_emails) > 0
+          ? { SITE_ADMIN_EMAILS = join(",", var.site_admin_emails) }
+          : {},
         )
         content {
           name  = env.key

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import gsap from "gsap";
 import { ChevronLeft, ChevronRight, Plus, Swords } from "lucide-react";
-import type { Cloud, EventMode, RunStatus } from "@/db/schema";
+import type { CalendarScope, Cloud, EventMode, RunStatus } from "@/db/schema";
 import { Button } from "@/components/ui/button";
 import { statusDot, isActiveStatus } from "@/components/status-badge";
 import { cn } from "@/lib/utils";
@@ -20,6 +20,8 @@ type CalendarEvent = {
   scheduledStart: string | null;
   userCount: number;
   clouds: Cloud[];
+  /** Who booked it, when that is somebody other than the viewer. */
+  owner: string | null;
 };
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -30,7 +32,14 @@ const MONTHS = [
 
 const dayKey = (y: number, m: number, d: number) => `${y}-${m}-${d}`;
 
-export function EventCalendar({ events }: { events: CalendarEvent[] }) {
+export function EventCalendar({
+  events,
+  scope,
+}: {
+  events: CalendarEvent[];
+  /** `all` only reaches here for a manager and above; set from the menu. */
+  scope: CalendarScope;
+}) {
   const router = useRouter();
   const today = new Date();
   const [view, setView] = useState(
@@ -129,7 +138,9 @@ export function EventCalendar({ events }: { events: CalendarEvent[] }) {
         <div className="space-y-1.5">
           <h1 className="text-3xl font-medium tracking-tight">Events</h1>
           <p className="text-muted-foreground">
-            Schedule events — each provisions automatically at its start time.
+            {scope === "all"
+              ? "Every user's events. Anything you create here is still your own."
+              : "Schedule events — each provisions automatically at its start time."}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -280,8 +291,18 @@ export function EventCalendar({ events }: { events: CalendarEvent[] }) {
                               aria-label="Challenge"
                             />
                           )}
-                          <span className="truncate font-medium">{e.name}</span>
-                          <span className="ml-auto shrink-0 text-muted-foreground tnum">
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate font-medium">
+                              {e.name}
+                            </span>
+                            {/* Whose it is, on the all-users view only. */}
+                            {e.owner && (
+                              <span className="block truncate text-[10px] leading-tight text-muted-foreground">
+                                {e.owner}
+                              </span>
+                            )}
+                          </span>
+                          <span className="shrink-0 text-muted-foreground tnum">
                             {e.userCount}
                           </span>
                         </motion.button>

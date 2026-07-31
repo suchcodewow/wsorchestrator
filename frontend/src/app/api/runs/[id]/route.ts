@@ -2,20 +2,37 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/auth";
 import { CLOUDS, MAX_USERS } from "@/db/schema";
-import { getRunForUser, updateRunConfig, type UpdateRunError } from "@/lib/runs";
+import {
+  deleteRun,
+  getRunForViewer,
+  updateRunConfig,
+  type DeleteRunError,
+  type UpdateRunError,
+  type Viewer,
+} from "@/lib/runs";
 import { reprovisionRun } from "@/lib/trigger";
+
+/** The signed-in viewer, or null — every handler starts the same way. */
+async function viewer(): Promise<Viewer | null> {
+  const session = await auth();
+  if (!session?.user) return null;
+  return { id: session.user.id, role: session.user.siteRole };
+}
+
+const UNAUTHORIZED = NextResponse.json(
+  { error: "unauthorized" },
+  { status: 401 },
+);
 
 export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const session = await auth();
-  if (!session?.user) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  }
+  const who = await viewer();
+  if (!who) return UNAUTHORIZED;
 
   const { id } = await params;
-  const result = await getRunForUser(id, session.user.id);
+  const result = await getRunForViewer(id, who);
   if (!result) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
@@ -41,10 +58,8 @@ export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const session = await auth();
-  if (!session?.user) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  }
+  const who = await viewer();
+  if (!who) return UNAUTHORIZED;
 
   const parsed = patchSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
@@ -52,7 +67,7 @@ export async function PATCH(
   }
 
   const { id } = await params;
-  const result = await updateRunConfig(id, session.user.id, parsed.data);
+  const result = await updateRunConfig(id, who, parsed.data);
   if (!result.ok) {
     return NextResponse.json(
       { error: result.error },
@@ -63,4 +78,29 @@ export async function PATCH(
   // A live workshop needs the runner to create the added accounts / clouds.
   const applying = result.needsReprovision ? await reprovisionRun(id) : false;
   return NextResponse.json({ run: result.run, applying });
+}
+
+const DELETE_STATUS_FOR: Record<DeleteRunError, number> = {
+  not_found: 404,
+  // Provisioning is part-way through; the run is deletable again as soon as it
+  // settles into ready or failed.
+  in_flight: 409,
+};
+
+export async function DELETE(
+  _req: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const who = await viewer();
+  if (!who) return UNAUTHORIZED;
+
+  const { id } = await params;
+  const result = await deleteRun(id, who);
+  if (!result.ok) {
+    return NextResponse.json(
+      { error: result.error },
+      { status: DELETE_STATUS_FOR[result.error] },
+    );
+  }
+  return NextResponse.json({ outcome: result.outcome });
 }

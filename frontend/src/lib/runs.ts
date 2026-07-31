@@ -1,16 +1,38 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   CLOUD_LABELS,
   editabilityOf,
   limitsFor,
   runLogs,
+  users,
   workshopAccounts,
   workshopRuns,
+  type CalendarScope,
   type Cloud,
   type EventMode,
+  type SiteRole,
   type WorkshopRun,
 } from "@/db/schema";
+import { canManageAnyEvent, canSeeAllEvents } from "@/lib/roles";
+
+/**
+ * Who is asking. Every read and write below takes one instead of a bare user
+ * id, so "is this mine?" and "am I allowed to reach past mine?" are answered
+ * in the same place rather than at each call site.
+ */
+export type Viewer = { id: string; role: SiteRole };
+
+/**
+ * The rows a viewer may act on: their own, or everyone's for a manager and
+ * above. Composed into a `where` alongside the run id, so an operator asking
+ * for somebody else's run gets the same "not found" as one asking for a run
+ * that never existed.
+ */
+const ownedBy = (viewer: Viewer) =>
+  canManageAnyEvent(viewer.role)
+    ? undefined
+    : eq(workshopRuns.userId, viewer.id);
 
 /**
  * Slugify a workshop name for use in account addresses and project ids:
@@ -94,14 +116,14 @@ export type UpdateRunError =
  */
 export async function updateRunConfig(
   runId: string,
-  userId: string,
+  viewer: Viewer,
   input: { userCount: number; clouds: Cloud[] },
 ): Promise<
   | { ok: true; run: WorkshopRun; needsReprovision: boolean }
   | { ok: false; error: UpdateRunError }
 > {
   const run = await db.query.workshopRuns.findFirst({
-    where: and(eq(workshopRuns.id, runId), eq(workshopRuns.userId, userId)),
+    where: and(eq(workshopRuns.id, runId), ownedBy(viewer)),
   });
   if (!run) return { ok: false, error: "not_found" };
 
@@ -175,8 +197,21 @@ export async function listRunsForUser(userId: string) {
   });
 }
 
-/** Runs for a user, for the calendar. */
-export async function listCalendarRuns(userId: string) {
+/**
+ * Runs for the calendar. `scope: "all"` widens it to every user's events —
+ * honoured only for a manager and above, so a stale preference on a demoted
+ * account quietly falls back to their own.
+ *
+ * The owner is joined in either way: at `own` scope the caller already knows
+ * whose events these are and ignores it, and one query shape is cheaper to
+ * keep honest than two.
+ */
+export async function listCalendarRuns(
+  viewer: Viewer,
+  scope: CalendarScope = "own",
+) {
+  const showAll = scope === "all" && canSeeAllEvents(viewer.role);
+
   return db
     .select({
       id: workshopRuns.id,
@@ -186,19 +221,27 @@ export async function listCalendarRuns(userId: string) {
       scheduledStart: workshopRuns.scheduledStart,
       userCount: workshopRuns.userCount,
       clouds: workshopRuns.clouds,
+      ownerId: workshopRuns.userId,
+      ownerName: users.name,
+      ownerEmail: users.email,
     })
     .from(workshopRuns)
-    .where(eq(workshopRuns.userId, userId))
+    .innerJoin(users, eq(users.id, workshopRuns.userId))
+    .where(showAll ? undefined : eq(workshopRuns.userId, viewer.id))
     .orderBy(desc(workshopRuns.scheduledStart));
 }
 
-export async function getRunForUser(runId: string, userId: string) {
+/**
+ * One run with its logs and accounts, or null if the viewer may not see it.
+ * A manager and above may open anyone's; everyone else only their own.
+ */
+export async function getRunForViewer(runId: string, viewer: Viewer) {
   const run = await db.query.workshopRuns.findFirst({
-    where: and(eq(workshopRuns.id, runId), eq(workshopRuns.userId, userId)),
+    where: and(eq(workshopRuns.id, runId), ownedBy(viewer)),
   });
   if (!run) return null;
 
-  const [logs, accounts] = await Promise.all([
+  const [logs, accounts, owner] = await Promise.all([
     db.query.runLogs.findMany({
       where: eq(runLogs.runId, runId),
       orderBy: runLogs.id,
@@ -207,6 +250,88 @@ export async function getRunForUser(runId: string, userId: string) {
       where: eq(workshopAccounts.runId, runId),
       orderBy: workshopAccounts.id,
     }),
+    db.query.users.findFirst({
+      where: eq(users.id, run.userId),
+      columns: { id: true, name: true, email: true },
+    }),
   ]);
-  return { run, logs, accounts };
+  return { run, logs, accounts, owner: owner ?? null };
+}
+
+export type DeleteRunError = "not_found" | "in_flight";
+
+/**
+ * What deleting a run actually did.
+ *
+ * `deleted` — the row and everything hanging off it are gone.
+ * `teardown_requested` — the run still owns Workspace accounts and cloud
+ *   projects, so it can't simply be dropped: deleting the row would strand
+ *   them with nothing left to say they exist. It is instead expired on the
+ *   spot and flagged, and the reaper removes it once teardown finishes.
+ */
+export type DeleteRunOutcome = "deleted" | "teardown_requested";
+
+/** Statuses where the runner is mid-flight and teardown would race it. */
+const IN_FLIGHT = new Set(["requested", "provisioning", "applying"]);
+
+/** Statuses where nothing was ever built, or it has already been torn down. */
+const NOTHING_TO_TEAR_DOWN = new Set(["scheduled", "destroyed"]);
+
+/**
+ * Delete a run. The owner may delete their own; a manager and above may delete
+ * anyone's. See `DeleteRunOutcome` for why this isn't always a `delete`.
+ */
+export async function deleteRun(
+  runId: string,
+  viewer: Viewer,
+): Promise<
+  { ok: true; outcome: DeleteRunOutcome } | { ok: false; error: DeleteRunError }
+> {
+  const run = await db.query.workshopRuns.findFirst({
+    where: and(eq(workshopRuns.id, runId), ownedBy(viewer)),
+  });
+  if (!run) return { ok: false, error: "not_found" };
+
+  if (IN_FLIGHT.has(run.status)) return { ok: false, error: "in_flight" };
+
+  if (NOTHING_TO_TEAR_DOWN.has(run.status)) {
+    // Accounts and logs go with it — both cascade on the run id.
+    await db.delete(workshopRuns).where(eq(workshopRuns.id, runId));
+    return { ok: true, outcome: "deleted" };
+  }
+
+  // `ready`, `failed`, or already `destroying`. Expiring it now puts it in
+  // front of the next reaper tick; the flag is what turns that teardown into a
+  // deletion. A run already destroying keeps its expiry — the pass tearing it
+  // down reads the flag at the end and removes the row then.
+  await db
+    .update(workshopRuns)
+    .set({
+      deleteRequested: true,
+      ...(run.status === "destroying" ? {} : { expiresAt: new Date() }),
+    })
+    .where(eq(workshopRuns.id, runId));
+
+  await db.insert(runLogs).values({
+    runId,
+    stream: "system",
+    message:
+      "Deletion requested — tearing down accounts, org unit, and cloud " +
+      "resources first. This event disappears once that finishes.",
+  });
+
+  return { ok: true, outcome: "teardown_requested" };
+}
+
+/** Runs a user still owns; used to warn before their role is taken away. */
+export async function countRunsForUsers(): Promise<Map<string, number>> {
+  const rows = await db
+    .select({
+      userId: workshopRuns.userId,
+      count: sql<number>`count(*)::int`,
+    })
+    .from(workshopRuns)
+    .groupBy(workshopRuns.userId);
+
+  return new Map(rows.map((r) => [r.userId, r.count]));
 }

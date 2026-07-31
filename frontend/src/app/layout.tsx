@@ -1,6 +1,6 @@
 import { MotionProvider } from "@/components/motion-provider";
 import { themeScript } from "@/lib/theme";
-import { getThemePreference } from "@/lib/theme-preference";
+import { getThemePreference } from "@/lib/user-preferences";
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";

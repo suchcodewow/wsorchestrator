@@ -74,8 +74,11 @@ async function destroyRun(run: RunRow): Promise<void> {
       await deleteOrgUnit(run.org_unit_path);
     }
 
-    await setDestroyed(run.id);
+    // Logged first: `setDestroyed` may remove the run outright — it does when
+    // somebody deleted it — and a log line for a run that is gone has nothing
+    // to reference.
     await log(run.id, "system", "Destroyed.");
+    await setDestroyed(run.id);
   } catch (err) {
     // Leave the run for the next reaper tick to retry.
     const message = err instanceof Error ? err.message : String(err);

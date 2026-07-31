@@ -3,6 +3,7 @@ import {
   text,
   timestamp,
   jsonb,
+  boolean,
   integer,
   uuid,
   bigserial,
@@ -26,6 +27,29 @@ export type ThemePreference = (typeof THEME_PREFERENCES)[number];
 
 export const themePreference = pgEnum("theme_preference", THEME_PREFERENCES);
 
+/**
+ * What a signed-in user may do across the site, least privileged first.
+ *
+ * The order is the hierarchy — `roleAtLeast` in `@/lib/roles` compares by
+ * index — so roles must only ever be appended in ascending power. Everyone
+ * starts an `operator`; the rest are granted by an administrator (or, for the
+ * first one, by `SITE_ADMIN_EMAILS`; see `@/auth`).
+ */
+export const SITE_ROLES = ["operator", "manager", "administrator"] as const;
+export type SiteRole = (typeof SITE_ROLES)[number];
+
+export const siteRole = pgEnum("site_role", SITE_ROLES);
+
+/**
+ * Whose events the calendar shows. Only meaningful for a manager or above —
+ * an operator's calendar is always their own — but it is stored for everyone
+ * so that a demotion and a later re-promotion don't lose the choice.
+ */
+export const CALENDAR_SCOPES = ["own", "all"] as const;
+export type CalendarScope = (typeof CALENDAR_SCOPES)[number];
+
+export const calendarScope = pgEnum("calendar_scope", CALENDAR_SCOPES);
+
 export const users = pgTable("users", {
   id: text("id")
     .primaryKey()
@@ -37,6 +61,8 @@ export const users = pgTable("users", {
   themePreference: themePreference("theme_preference")
     .notNull()
     .default("system"),
+  siteRole: siteRole("site_role").notNull().default("operator"),
+  calendarScope: calendarScope("calendar_scope").notNull().default("own"),
 });
 
 export const accounts = pgTable(
@@ -187,6 +213,13 @@ export const workshopRuns = pgTable(
     error: text("error"),
     /** Time-to-live before auto-destroy. Defaults to 1 hour for testing. */
     ttlSeconds: integer("ttl_seconds").notNull().default(3600),
+    /**
+     * Somebody asked for this run to be deleted while it still held live
+     * resources. The row has to outlive the request — the reaper needs it to
+     * find what to tear down — so the delete is recorded here and carried out
+     * by the reaper once teardown finishes. See `deleteRun` in `@/lib/runs`.
+     */
+    deleteRequested: boolean("delete_requested").notNull().default(false),
     /** Set when status -> ready; the reaper destroys runs past this. */
     expiresAt: timestamp("expires_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })

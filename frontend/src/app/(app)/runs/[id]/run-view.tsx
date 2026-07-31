@@ -9,19 +9,23 @@ import {
   type WorkshopAccount,
   type WorkshopRun,
 } from "@/db/schema";
-import { ArrowLeft, Check, Copy, ExternalLink } from "lucide-react";
+import { ArrowLeft, Check, Copy, ExternalLink, User } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { riseChild, staggerParent } from "@/lib/motion";
+import { DeleteEventButton } from "./delete-event-button";
 import { RunConfig } from "./run-config";
 
 type RunPayload = {
   run: WorkshopRun;
   logs: RunLog[];
   accounts: WorkshopAccount[];
+  /** Who booked it. Null only if the account has since been removed. */
+  owner: { id: string; name: string | null; email: string | null } | null;
 };
 
 const TERMINAL = new Set(["ready", "destroyed", "failed"]);
@@ -48,27 +52,47 @@ function OutputValue({ value }: { value: unknown }) {
   return <span className="font-mono break-all">{String(value)}</span>;
 }
 
-export function RunView({ initial, runId }: { initial: RunPayload; runId: string }) {
+export function RunView({
+  initial,
+  runId,
+  viewerId,
+}: {
+  initial: RunPayload;
+  runId: string;
+  /** Whose session this is — decides whether the event reads as theirs. */
+  viewerId: string;
+}) {
+  const router = useRouter();
   const [data, setData] = useState<RunPayload>(initial);
   const logEndRef = useRef<HTMLDivElement>(null);
 
   const refresh = useCallback(async () => {
     const res = await fetch(`/api/runs/${runId}`, { cache: "no-store" });
-    if (res.ok) setData(await res.json());
-  }, [runId]);
+    if (res.ok) {
+      setData(await res.json());
+      return;
+    }
+    // Gone — its teardown finished, or a manager deleted it out from under
+    // this tab. Either way there is nothing left here to poll.
+    if (res.status === 404) router.replace("/events");
+  }, [runId, router]);
 
+  // A run awaiting deletion is polled too though it may sit in `ready` for a
+  // few minutes: the reaper is what finishes the job, and the page should
+  // notice the moment it has.
   useEffect(() => {
-    if (!ACTIVE.has(data.run.status)) return;
+    if (!ACTIVE.has(data.run.status) && !data.run.deleteRequested) return;
     const timer = setInterval(refresh, 2500);
     return () => clearInterval(timer);
-  }, [data.run.status, refresh]);
+  }, [data.run.status, data.run.deleteRequested, refresh]);
 
   useEffect(() => {
     logEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [data.logs.length]);
 
-  const { run, logs, accounts } = data;
+  const { run, logs, accounts, owner } = data;
   const outputs = run.outputs as Record<string, unknown> | null;
+  const owned = run.userId === viewerId;
 
   return (
     <motion.div
@@ -101,6 +125,14 @@ export function RunView({ initial, runId }: { initial: RunPayload; runId: string
               </p>
             )}
             <div className="mt-2 flex flex-wrap items-center gap-2">
+              {/* Whose event this is, but only when that isn't the obvious
+                  answer — a manager arrives here from the all-users view. */}
+              {!owned && owner && (
+                <span className="inline-flex items-center gap-1.5 rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground">
+                  <User className="size-3" />
+                  {owner.name ?? owner.email}
+                </span>
+              )}
               {run.orgUnitPath && <MetaChip>{run.orgUnitPath}</MetaChip>}
               {run.gcpProjectId && <MetaChip>{run.gcpProjectId}</MetaChip>}
               {run.expiresAt && !TERMINAL.has(run.status) && (
@@ -110,9 +142,23 @@ export function RunView({ initial, runId }: { initial: RunPayload; runId: string
               )}
             </div>
           </div>
-          <StatusBadge status={run.status} />
+          <div className="flex shrink-0 items-center gap-2">
+            <StatusBadge status={run.status} />
+            <DeleteEventButton run={run} owned={owned} onRequested={refresh} />
+          </div>
         </div>
       </motion.div>
+
+      {run.deleteRequested && (
+        <motion.div variants={riseChild}>
+          <Card className="border-amber-500/40 bg-amber-500/5">
+            <CardContent className="py-4 text-sm">
+              Deletion requested. This event is being torn down and disappears
+              once that finishes — the reaper picks it up within a few minutes.
+            </CardContent>
+          </Card>
+        </motion.div>
+      )}
 
       {run.error && (
         <motion.div variants={riseChild}>

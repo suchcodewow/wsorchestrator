@@ -19,6 +19,12 @@ harness_account_id = "replace-me"
 harness_api_key    = "pat.xxxxx"
 # harness_base_url = "https://app.harness.io"
 
+# Site roles. Everyone who signs in is an operator; managers see and can delete
+# every user's events, administrators also hand out roles. Since roles are
+# granted from inside the app, the first administrator comes from here — anyone
+# listed becomes one when they sign in. Can be emptied once one exists.
+# site_admin_emails = ["you@example.com"]
+
 # db_tier            = "db-custom-1-3840"   # smallest valid Postgres tier
 # reaper_schedule    = "*/5 * * * *"        # destroys runs past their TTL
 # scheduler_schedule = "*/5 * * * *"        # starts runs whose start time arrived
