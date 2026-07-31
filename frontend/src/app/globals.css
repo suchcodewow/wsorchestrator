@@ -90,6 +90,20 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+
+  /*
+   * The logo gear. One turn a quarter-minute — slow enough that it reads as
+   * ambient rather than as a loading spinner, which is the thing a rotating
+   * gear in a header is most at risk of being mistaken for. Linear, because
+   * any easing would give it a pulse, and a pulse implies progress.
+   */
+  --animate-gear-turn: gear-turn 15s linear infinite;
+}
+
+@keyframes gear-turn {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 @layer base {
