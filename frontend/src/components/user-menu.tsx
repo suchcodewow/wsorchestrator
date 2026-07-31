@@ -31,6 +31,7 @@ import {
   type SiteRole,
   type ThemePreference,
 } from "@/db/schema";
+import type { BuildInfo } from "@/lib/build-info";
 import { SITE_ROLE_LABELS, canManageUsers, canSeeAllEvents } from "@/lib/roles";
 import { setCalendarScope, setThemePreference } from "@/lib/user-settings";
 import { DARK_QUERY, applyTheme } from "@/lib/theme";
@@ -51,6 +52,7 @@ export function UserMenu({
   role,
   initialTheme,
   initialScope,
+  build,
   signOutAction,
 }: {
   name: string | null;
@@ -58,6 +60,8 @@ export function UserMenu({
   role: SiteRole;
   initialTheme: ThemePreference;
   initialScope: CalendarScope;
+  /** Which build is serving this page; stamped into the image at build time. */
+  build: BuildInfo;
   /** Server action; it redirects, so it never resolves on the happy path. */
   signOutAction: () => Promise<void>;
 }) {
@@ -186,6 +190,27 @@ export function UserMenu({
           <LogOut />
           Sign out
         </DropdownMenuItem>
+
+        <DropdownMenuSeparator />
+
+        {/*
+          A plain div, not a menu item: it is a fact to read, not something to
+          select, and making it focusable would put a dead stop at the end of
+          keyboard navigation through the menu.
+        */}
+        <div
+          className="px-2 py-1 text-[11px] leading-tight text-muted-foreground"
+          title={
+            build.builtAt
+              ? `Built ${build.builtAt} from ${build.tag}`
+              : "Not a released build"
+          }
+        >
+          <span className="font-mono">{build.tag}</span>
+          {build.builtAtLabel && (
+            <span className="mt-0.5 block">built {build.builtAtLabel}</span>
+          )}
+        </div>
       </DropdownMenuContent>
     </DropdownMenu>
   );

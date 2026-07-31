@@ -48,6 +48,14 @@ make help          # list targets
 Images are tagged with the git short SHA, so `make deploy` is a precise,
 repeatable roll-forward (and roll-back: `make deploy TAG=<older-sha>`).
 
+**To confirm what is actually live, open the app's user menu** — the bottom line
+shows the short SHA the running image was built from and when it was built
+(hover for the exact instant). That is stamped into the image at build time by
+[`cloudbuild.yaml`](cloudbuild.yaml), so it describes the image serving the
+page, not the last deploy that happened to run: after a rollback it correctly
+reads the older SHA. A menu showing `dev` means the container is running an
+image built outside the pipeline.
+
 `make deploy` calls `gcloud run services update` rather than `terraform apply`.
 The Cloud Run resources declare `ignore_changes` on their image, so Terraform
 no longer moves the running tag — otherwise any unrelated `apply` would reset

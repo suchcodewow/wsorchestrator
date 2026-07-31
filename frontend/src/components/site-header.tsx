@@ -2,6 +2,7 @@ import { signOut } from "@/auth";
 import { BrandMark } from "@/components/brand-mark";
 import { SignInLink } from "@/components/sign-in-link";
 import { UserMenu } from "@/components/user-menu";
+import { buildInfo } from "@/lib/build-info";
 import { getUserPreferences } from "@/lib/user-preferences";
 import type { Session } from "next-auth";
 import Link from "next/link";
@@ -39,6 +40,7 @@ export async function SiteHeader({ session }: { session: Session | null }) {
             role={session.user.siteRole}
             initialTheme={themePreference}
             initialScope={calendarScope}
+            build={buildInfo()}
             signOutAction={async () => {
               "use server";
               // Out to the public landing page, not back to the sign-in form:

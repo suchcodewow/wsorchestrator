@@ -33,17 +33,24 @@ availableSecrets:
       env: DATABASE_URL_SOCKET
 
 steps:
+  # A bash step rather than exec-form args, so the build timestamp can be taken
+  # here — Cloud Build has no built-in substitution for it. `_TAG` is the short
+  # commit SHA from both callers, so the pair identifies the build exactly; the
+  # app shows them in its user menu.
   - id: build-app
     name: gcr.io/cloud-builders/docker
+    entrypoint: bash
     args:
-      - build
-      - -t
-      - ${_REPO}/app:${_TAG}
-      - -t
-      - ${_REPO}/app:latest
-      - -f
-      - frontend/Dockerfile
-      - frontend
+      - -c
+      - |
+        set -euo pipefail
+        docker build \
+          --build-arg BUILD_TAG="${_TAG}" \
+          --build-arg BUILD_TIME="$$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+          -t "${_REPO}/app:${_TAG}" \
+          -t "${_REPO}/app:latest" \
+          -f frontend/Dockerfile \
+          frontend
 
   - id: build-runner
     name: gcr.io/cloud-builders/docker
