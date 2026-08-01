@@ -52,6 +52,16 @@ export const canManageLabGuides = (role: SiteRole) =>
 export const canManageUsers = (role: SiteRole) =>
   roleAtLeast(role, "administrator");
 
+/**
+ * Review the database's backup history, take one, and restore from one.
+ *
+ * The most consequential thing anybody can do here — a restore rolls the whole
+ * instance back, this account's own session included — so it sits at the top
+ * role and nowhere lower.
+ */
+export const canManageBackups = (role: SiteRole) =>
+  roleAtLeast(role, "administrator");
+
 /** Narrow an untrusted string — a form value, a JSON body — to a role. */
 export function asSiteRole(value: unknown): SiteRole | null {
   return SITE_ROLES.includes(value as SiteRole) ? (value as SiteRole) : null;

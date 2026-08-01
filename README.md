@@ -404,7 +404,7 @@ everything the one before it does:
 | ----------------- | --------------------------------------------------------------- |
 | **operator**      | Schedules and runs their own events. What everyone starts as.   |
 | **manager**       | A **Show all events** switch in the user menu that flips the calendar to every user's events, and can open and delete any of them. Also writes the [workshops and lab guides](#workshops-and-lab-guides). |
-| **administrator** | A **Manage users** page listing everyone, where roles are set.   |
+| **administrator** | A **Manage users** page listing everyone, where roles are set, and the [**Backups**](#backups) page — including restoring the database. |
 
 Roles are granted by an administrator, so the first one has to come from
 outside the app: any address in `SITE_ADMIN_EMAILS` (`site_admin_emails` in
@@ -425,6 +425,48 @@ what exists.
 The rules live in [`frontend/src/lib/roles.ts`](frontend/src/lib/roles.ts) and
 are enforced server-side on every read and write; the menu only decides what is
 worth showing.
+
+## Backups
+
+Cloud SQL takes a **daily automated backup** of the instance and keeps seven,
+alongside **point-in-time recovery** over the same window. Both are configured
+in [`infra/admin/database.tf`](infra/admin/database.tf) and tuned by
+`db_backup_start_time` (UTC, default 03:00) and `db_backup_retention_days`
+(default 7). They were off until this was added — apply the Terraform before
+relying on them.
+
+PITR is the more useful half and is not in the UI: an automated backup only
+takes you back to 03:00, while PITR replays the write-ahead log, so a table
+dropped at 14:32 can be recovered to 14:31. That is a `gcloud sql instances
+clone --point-in-time` operation.
+
+`/backups` is an **administrator-only** page listing the history, with how old
+the last good backup is — the question it is usually opened to answer — plus a
+**Back up now** button and a restore.
+
+**Restoring is destructive and in place.** It replaces the entire instance, not
+the lab tables you probably opened the page for, so the confirmation dialog
+spells out what that means and requires the instance name typed by hand:
+
+- The app is offline for the length of the restore.
+- Every session is rolled back, so whoever pressed the button is signed out.
+- Site roles revert to what they were at that moment.
+- **Events provisioned since the backup are stranded.** Their rows vanish while
+  their GCP projects, Workspace accounts, and Harness organizations keep
+  running, and the reaper only tears down what it has a row for. The dialog
+  lists those events by name and id before you confirm, and the same list is
+  written to Cloud Logging — not to a table, which the restore would erase.
+
+Press **Back up now** first. Rolling back to 03:00 discards everything since,
+and an on-demand backup taken a minute earlier is the only way back from that.
+
+The app's service account holds `roles/cloudsql.editor` for this — enough to
+restore an instance, not to delete one. The queries are in
+[`frontend/src/lib/backups.ts`](frontend/src/lib/backups.ts).
+
+> **Not covered:** `deletion_protection` on the instance is still `false`, so a
+> `terraform destroy` would take the database with it. Flip it on in
+> `database.tf` for anything you cannot retype.
 
 ## Workshops and lab guides
 

@@ -53,6 +53,10 @@ resource "google_cloud_run_v2_service" "app" {
         for_each = merge(
           local.runner_env,
           { TF_RUNNER_JOB = google_cloud_run_v2_job.runner.name },
+          # The instance the backups page lists and restores. Derived from the
+          # resource rather than configured, so the page can never be pointed
+          # at an instance this deployment does not own.
+          { CLOUD_SQL_INSTANCE = google_sql_database_instance.main.name },
           var.app_url != "" ? { AUTH_URL = var.app_url } : {},
           # Host part of app_url. The proxy redirects any other host here,
           # so www and the run.app URL converge on the one origin Auth.js and

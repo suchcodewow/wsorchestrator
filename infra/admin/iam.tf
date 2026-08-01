@@ -101,6 +101,20 @@ resource "google_project_iam_member" "app_admin" {
   for_each = toset([
     "roles/cloudsql.client",
     "roles/logging.logWriter",
+    /*
+     * Read the backup history, and restore from it, on the backups page.
+     *
+     * `editor`, not `admin`, and the gap matters: editor can restore an
+     * existing instance but cannot delete one or rewrite its users. This is a
+     * public-facing web app, so the difference between "a bug here can roll
+     * the database back" and "a bug here can delete the database" is worth the
+     * one role level.
+     *
+     * It is still the broadest thing app-sa holds. The restore endpoint is
+     * administrator-only and demands the instance name typed back; see
+     * `frontend/src/lib/backups.ts`.
+     */
+    "roles/cloudsql.editor",
   ])
 
   project = var.admin_project_id

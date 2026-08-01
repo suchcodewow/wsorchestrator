@@ -63,6 +63,29 @@ variable "db_tier" {
   default     = "db-custom-1-3840"
 }
 
+variable "db_backup_start_time" {
+  description = "UTC HH:MM the daily Cloud SQL backup begins. Pick a quiet hour — a backup snapshots the instance, and the window least likely to overlap a workshop provisioning is the middle of the night."
+  type        = string
+  default     = "03:00"
+
+  validation {
+    condition     = can(regex("^([01][0-9]|2[0-3]):[0-5][0-9]$", var.db_backup_start_time))
+    error_message = "db_backup_start_time must be 24-hour UTC HH:MM, e.g. \"03:00\"."
+  }
+}
+
+variable "db_backup_retention_days" {
+  description = "How many daily backups to keep, and how many days of write-ahead log to retain for point-in-time recovery. Seven covers the usual 'nobody noticed until Monday' case."
+  type        = number
+  default     = 7
+
+  validation {
+    # Cloud SQL caps transaction log retention at 35 days for PITR.
+    condition     = var.db_backup_retention_days >= 1 && var.db_backup_retention_days <= 35
+    error_message = "db_backup_retention_days must be between 1 and 35."
+  }
+}
+
 variable "app_image" {
   description = "Container image for the Next.js app. Defaults to a placeholder so the first apply succeeds; replace once you push the real image."
   type        = string
