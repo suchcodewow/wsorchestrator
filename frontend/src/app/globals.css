@@ -258,3 +258,423 @@
     outline-offset: 1px;
   }
 }
+
+@layer components {
+  /*
+   * Lab guide typography.
+   *
+   * Written out rather than pulled from a typography plugin: the guides are the
+   * one place on this site with long-form prose, and everything they need to
+   * match — the type scale, the accent, the border colour — is already defined
+   * above as tokens. A plugin would arrive with its own palette to override.
+   *
+   * The vertical rhythm is a single `* + *` rule plus the exceptions. Spacing
+   * that is stated once cannot drift between element types, which is what makes
+   * a document read as evenly set.
+   */
+  .lab-prose {
+    font-size: 0.9375rem;
+    line-height: 1.75;
+    min-width: 0;
+  }
+
+  .lab-prose > * + * {
+    margin-top: 1.1em;
+  }
+
+  /* A guide that opens on a heading should not open on a gap. */
+  .lab-prose > :first-child {
+    margin-top: 0;
+  }
+
+  .lab-prose h2,
+  .lab-prose h3,
+  .lab-prose h4 {
+    font-weight: 500;
+    letter-spacing: -0.021em;
+    /* Clears the sticky header when an anchor is followed. */
+    scroll-margin-top: 5rem;
+  }
+
+  .lab-prose h2 {
+    margin-top: 2.25em;
+    padding-bottom: 0.35em;
+    border-bottom: 1px solid var(--border);
+    font-size: 1.35rem;
+    line-height: 1.35;
+  }
+
+  .lab-prose h3 {
+    margin-top: 1.9em;
+    font-size: 1.0625rem;
+    line-height: 1.4;
+  }
+
+  .lab-prose h4 {
+    margin-top: 1.6em;
+    font-size: 0.9375rem;
+  }
+
+  /* The whole heading is the link. Restrained until hovered — a permanent
+     accent on every heading would read as a page full of links. */
+  .lab-prose .heading-anchor {
+    color: inherit;
+    text-decoration: none;
+    outline: none;
+  }
+
+  .lab-prose .heading-anchor:hover {
+    color: var(--brand);
+  }
+
+  .lab-prose .heading-anchor:hover::after {
+    content: "#";
+    margin-left: 0.35em;
+    opacity: 0.5;
+    font-weight: 400;
+  }
+
+  .lab-prose .heading-anchor:focus-visible {
+    border-radius: var(--radius-sm);
+    outline: 3px solid color-mix(in oklab, var(--ring) 50%, transparent);
+    outline-offset: 4px;
+  }
+
+  .lab-prose a:not(.heading-anchor) {
+    color: var(--brand);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    text-decoration-thickness: 1px;
+    text-decoration-color: color-mix(in oklab, var(--brand) 40%, transparent);
+  }
+
+  .lab-prose a:not(.heading-anchor):hover {
+    text-decoration-color: var(--brand);
+  }
+
+  .lab-prose ul,
+  .lab-prose ol {
+    padding-left: 1.5em;
+  }
+
+  .lab-prose ul {
+    list-style: disc;
+  }
+
+  .lab-prose ol {
+    list-style: decimal;
+  }
+
+  .lab-prose li::marker {
+    color: var(--muted-foreground);
+  }
+
+  .lab-prose li + li,
+  .lab-prose li > ul,
+  .lab-prose li > ol {
+    margin-top: 0.4em;
+  }
+
+  /* GFM task lists: the checkbox replaces the bullet. */
+  .lab-prose li:has(> input[type="checkbox"]) {
+    list-style: none;
+    margin-left: -1.5em;
+  }
+
+  .lab-prose input[type="checkbox"] {
+    margin-right: 0.5em;
+    accent-color: var(--brand);
+  }
+
+  .lab-prose blockquote {
+    border-left: 3px solid var(--brand-border);
+    padding: 0.1em 0 0.1em 1.1em;
+    color: var(--muted-foreground);
+  }
+
+  .lab-prose hr {
+    margin-block: 2.5em;
+    border: 0;
+    border-top: 1px solid var(--border);
+  }
+
+  .lab-prose img {
+    max-width: 100%;
+    height: auto;
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border);
+  }
+
+  /* Tables scroll inside their own box rather than widening the page. */
+  .lab-prose table {
+    display: block;
+    overflow-x: auto;
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+  }
+
+  .lab-prose th,
+  .lab-prose td {
+    border: 1px solid var(--border);
+    padding: 0.5rem 0.75rem;
+    text-align: left;
+    vertical-align: top;
+  }
+
+  .lab-prose thead th {
+    background-color: color-mix(in oklab, var(--muted) 60%, transparent);
+    font-weight: 500;
+  }
+
+  /* Inline code — not the fenced kind, which is dressed as a block below. */
+  .lab-prose :not(pre) > code {
+    border-radius: var(--radius-sm);
+    background-color: color-mix(in oklab, var(--muted) 70%, transparent);
+    padding: 0.15em 0.35em;
+    font-size: 0.875em;
+    font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  }
+
+  .lab-prose .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+@layer components {
+  /*
+   * Fenced code blocks.
+   *
+   * Shiki is asked for both themes at once and emits each token's colour as a
+   * pair of custom properties rather than a resolved colour — the server cannot
+   * know which scheme the reader is in, since the theme is applied by a class
+   * on <html> after the page arrives. The rules below are the only place the
+   * choice is made.
+   *
+   * Backgrounds are deliberately *not* taken from the Shiki theme. A syntax
+   * theme ships its own surface colour, and dropping that into this palette is
+   * what makes an embedded code block look pasted in from another site.
+   */
+  .lab-code {
+    --code-surface: color-mix(in oklab, var(--muted) 55%, var(--background));
+    /* Shared with the line gutter, which must be exactly one line tall. */
+    --code-line-height: 1.65;
+
+    margin-block: 1.5em;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background-color: var(--code-surface);
+    overflow: hidden;
+  }
+
+  .lab-code-head {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    border-bottom: 1px solid var(--border);
+    padding: 0.4rem 0.5rem 0.4rem 0.875rem;
+    font-size: 0.75rem;
+    color: var(--muted-foreground);
+  }
+
+  .lab-code-title {
+    font-weight: 500;
+    color: color-mix(in oklab, var(--foreground) 75%, transparent);
+  }
+
+  /* Present only when the fence carried a filename; then it is the subtitle. */
+  .lab-code-lang {
+    font-size: 0.6875rem;
+    opacity: 0.75;
+  }
+
+  .lab-code .shiki {
+    margin: 0;
+    padding: 0.75rem 0;
+    overflow-x: auto;
+    background-color: transparent !important;
+    font-size: 0.8125rem;
+    line-height: var(--code-line-height);
+    tab-size: 2;
+  }
+
+  /*
+   * `max-content` is load-bearing, not cosmetic: it makes each line's box span
+   * the full scrollable width, which is what gives the sticky line gutter a
+   * containing block wide enough to stay pinned while the code scrolls under
+   * it. Without it the gutter scrolls away with the text.
+   */
+  .lab-code .shiki code {
+    display: block;
+    min-width: max-content;
+  }
+
+  .lab-code .line {
+    display: block;
+    padding-right: 1rem;
+  }
+
+  /* Without a gutter there is nothing holding the code off the left edge. */
+  .lab-code .shiki:not(.has-line-numbers) .line {
+    padding-left: 0.875rem;
+  }
+
+  .lab-code .shiki,
+  .lab-code .shiki span {
+    color: var(--shiki-light);
+  }
+
+  .dark .lab-code .shiki,
+  .dark .lab-code .shiki span {
+    color: var(--shiki-dark);
+  }
+
+  /* Chrome colours itself; it must not inherit a syntax token's colour. */
+  .lab-code .code-copy,
+  .lab-code .code-line-copy,
+  .lab-code .code-copy span,
+  .lab-code .code-line-copy span {
+    color: var(--muted-foreground);
+  }
+
+  /* --- the block's own copy button ------------------------------------- */
+
+  .lab-code .code-copy {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    margin-left: auto;
+    border-radius: var(--radius-sm);
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 150ms ease, color 150ms ease;
+  }
+
+  .lab-code .code-copy:hover {
+    background-color: var(--secondary);
+    color: var(--foreground) !important;
+  }
+
+  .lab-code .code-copy:focus-visible {
+    outline: 3px solid color-mix(in oklab, var(--ring) 50%, transparent);
+  }
+
+  /* --- the per-line gutter --------------------------------------------- */
+
+  /*
+   * A line number that becomes a copy button on hover.
+   *
+   * It lives inside the line, as its first child, so it tracks that line's
+   * position for free — no second column to keep in sync, and no line-height
+   * arithmetic to get wrong. `user-select: none` is what keeps the numbers off
+   * the clipboard when somebody selects the code by hand; the buttons are
+   * stripped from a programmatic copy separately, by `data-nocopy`.
+   */
+  .lab-code .code-line-copy {
+    position: sticky;
+    left: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    /*
+     * Pinned to the top of the line box at exactly one line's height. An
+     * inline-flex box aligned on its baseline would sit lower than the text
+     * beside it and grow the line box to fit — which, repeated down a listing,
+     * reads as code that has been double-spaced.
+     */
+    vertical-align: top;
+    height: calc(1em * var(--code-line-height));
+    width: 2.75rem;
+    padding-right: 0.75rem;
+    background-color: var(--code-surface);
+    font-size: 0.8125rem;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    user-select: none;
+    -webkit-user-select: none;
+    cursor: pointer;
+    transition: color 150ms ease;
+  }
+
+  .lab-code .code-line-copy.is-blank {
+    cursor: default;
+  }
+
+  .lab-code .code-line-copy .code-icon {
+    display: none;
+    width: 0.875rem;
+    height: 0.875rem;
+  }
+
+  .lab-code .line:hover .code-line-copy:not(.is-blank),
+  .lab-code .code-line-copy:focus-visible {
+    color: var(--brand) !important;
+  }
+
+  /* Swap the number for the clipboard once the pointer is on that line. */
+  .lab-code .line:hover .code-line-copy:not(.is-blank) .code-line-no,
+  .lab-code .code-line-copy:focus-visible .code-line-no {
+    display: none;
+  }
+
+  .lab-code .line:hover .code-line-copy:not(.is-blank) .code-icon-clipboard,
+  .lab-code .code-line-copy:focus-visible .code-icon-clipboard {
+    display: inline-block;
+  }
+
+  .lab-code .code-line-copy:focus-visible {
+    outline: 3px solid color-mix(in oklab, var(--ring) 50%, transparent);
+    outline-offset: -3px;
+  }
+
+  /* --- copied, on either button ---------------------------------------- */
+
+  /*
+   * Set by the copy handler for ~1.5s. Every rule here outranks the hover
+   * state above it, so a button that has just been used keeps saying so even
+   * while the pointer is still on it.
+   */
+  .lab-code [data-copied] {
+    color: var(--brand) !important;
+  }
+
+  .lab-code .code-copy .code-icon-check,
+  .lab-code .code-copy-done {
+    display: none;
+  }
+
+  .lab-code .code-copy[data-copied] .code-icon-clipboard,
+  .lab-code .code-copy[data-copied] .code-copy-label {
+    display: none;
+  }
+
+  .lab-code .code-copy[data-copied] .code-icon-check {
+    display: inline-block;
+  }
+
+  .lab-code .code-copy[data-copied] .code-copy-done {
+    display: inline;
+  }
+
+  .lab-code .code-line-copy[data-copied] .code-line-no,
+  .lab-code .code-line-copy[data-copied] .code-icon-clipboard {
+    display: none !important;
+  }
+
+  .lab-code .code-line-copy[data-copied] .code-icon-check {
+    display: inline-block !important;
+  }
+
+  .lab-code .code-icon {
+    width: 0.875rem;
+    height: 0.875rem;
+    flex-shrink: 0;
+  }
+}

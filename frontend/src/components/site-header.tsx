@@ -33,6 +33,20 @@ export async function SiteHeader({ session }: { session: Session | null }) {
           Harness Events
         </Link>
 
+        {/*
+          The only nav item, and it is here rather than in the user menu because
+          it is the one destination that means something to a visitor with no
+          account — the room reads the guides signed out.
+        */}
+        <nav className="ml-auto mr-4 flex items-center">
+          <Link
+            href="/labs"
+            className="rounded-md px-2.5 py-1.5 text-sm text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          >
+            Workshops
+          </Link>
+        </nav>
+
         {session?.user ? (
           <UserMenu
             name={session.user.name ?? null}

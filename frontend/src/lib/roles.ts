@@ -18,7 +18,8 @@ export const SITE_ROLE_LABELS: Record<SiteRole, string> = {
 
 export const SITE_ROLE_DESCRIPTIONS: Record<SiteRole, string> = {
   operator: "Schedules and runs their own events.",
-  manager: "Also sees every user's events, and can delete any of them.",
+  manager:
+    "Also sees every user's events, can delete any of them, and writes the lab guides.",
   administrator: "Also manages the site's users and their roles.",
 };
 
@@ -35,6 +36,16 @@ export const canSeeAllEvents = (role: SiteRole) => roleAtLeast(role, "manager");
 
 /** Open, reconfigure, and delete an event belonging to somebody else. */
 export const canManageAnyEvent = (role: SiteRole) =>
+  roleAtLeast(role, "manager");
+
+/**
+ * Write, edit, publish, and delete the lab guides.
+ *
+ * The guides themselves are world-readable, so this gates writing only — and
+ * it is the one permission here whose effect is visible to people who have no
+ * account at all, which is reason enough not to hand it to every operator.
+ */
+export const canManageLabGuides = (role: SiteRole) =>
   roleAtLeast(role, "manager");
 
 /** List the site's users and set their roles. */

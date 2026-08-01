@@ -288,7 +288,136 @@ export const runLogs = pgTable(
   (t) => [index("run_logs_run_idx").on(t.runId, t.id)],
 );
 
+/* ------------------------------------------------------------------ *
+ * Lab guides — the public, standalone teaching material
+ * ------------------------------------------------------------------ */
+
+/**
+ * A lab guide: the written instructions an attendee follows during a session.
+ *
+ * Deliberately *not* attached to `workshopRuns`. A run is one Tuesday afternoon
+ * and is reaped an hour later; a guide is the material itself, written once and
+ * followed by every room that ever takes that lab. Tying the two together would
+ * mean the guide disappeared with the environment it described.
+ *
+ * Guides are world-readable by design — the room follows them without signing
+ * in, the same way `/attend` works — so nothing sensitive belongs in `body`.
+ * Writing them takes a manager (see `canManageLabGuides` in `@/lib/roles`).
+ */
+export const labGuides = pgTable(
+  "lab_guides",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** URL identity: /labs/<slug>. Stable across title edits once published. */
+    slug: text("slug").notNull().unique(),
+    title: text("title").notNull(),
+    /** One-line description; the only body text the index page shows. */
+    summary: text("summary").notNull().default(""),
+    /** The guide itself, as GitHub-flavoured Markdown. */
+    body: text("body").notNull().default(""),
+    /**
+     * Draft guides are visible only to the managers who can edit them, so a
+     * half-written lab isn't served to a room that wandered in early.
+     */
+    published: boolean("published").notNull().default(false),
+    /** Who wrote it. Kept when they are deleted — the guide outlives the account. */
+    authorId: text("author_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  // The index page's query: published guides, most recently updated first.
+  (t) => [index("lab_guides_published_idx").on(t.published, t.updatedAt)],
+);
+
+/** Longest a guide's fields may be. Shared by the form and the API. */
+export const LAB_GUIDE_LIMITS = {
+  title: 200,
+  summary: 300,
+  /** Generous — a full lab with code blocks, but not an upload channel. */
+  body: 200_000,
+} as const;
+
+/**
+ * An ordered collection of lab guides — the curriculum a room works through.
+ *
+ * Named `lab_workshops`, not `workshops`, and the distance from `workshopRuns`
+ * above is the whole reason. A run is one afternoon of provisioned accounts and
+ * cloud projects that the reaper deletes an hour later; this is the teaching
+ * material, which outlives every room that follows it. The two are not related
+ * rows and there is no foreign key between them, so they should not read like
+ * two halves of one thing.
+ */
+export const labWorkshops = pgTable(
+  "lab_workshops",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** URL identity: /labs/<slug>. Stable across title edits once published. */
+    slug: text("slug").notNull().unique(),
+    title: text("title").notNull(),
+    /** One-line description, shown on the list of workshops. */
+    summary: text("summary").notNull().default(""),
+    published: boolean("published").notNull().default(false),
+    authorId: text("author_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [index("lab_workshops_published_idx").on(t.published, t.updatedAt)],
+);
+
+/**
+ * Which guides a workshop is made of, and in what order.
+ *
+ * Many-to-many on purpose: "Authenticate to Google Cloud" is the same lab
+ * whether it opens the onboarding workshop or the security one, and writing it
+ * twice means fixing it twice. The composite primary key also settles a
+ * question the UI would otherwise have to: a guide appears in a workshop at
+ * most once.
+ *
+ * `position` is rewritten wholesale on every save rather than patched, so the
+ * stored order is always a clean 0..n-1 with no gaps to reason about.
+ */
+export const labWorkshopGuides = pgTable(
+  "lab_workshop_guides",
+  {
+    workshopId: uuid("workshop_id")
+      .notNull()
+      .references(() => labWorkshops.id, { onDelete: "cascade" }),
+    guideId: uuid("guide_id")
+      .notNull()
+      .references(() => labGuides.id, { onDelete: "cascade" }),
+    position: integer("position").notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.workshopId, t.guideId] }),
+    index("lab_workshop_guides_order_idx").on(t.workshopId, t.position),
+    // "which workshops use this guide?" — asked when one is about to be deleted
+    index("lab_workshop_guides_guide_idx").on(t.guideId),
+  ],
+);
+
+/** Longest a workshop's fields may be. Shared by the form and the API. */
+export const LAB_WORKSHOP_LIMITS = {
+  title: 200,
+  summary: 300,
+  /** More than a room can work through in a day; a guard, not a target. */
+  guides: 50,
+} as const;
+
 export type WorkshopRun = typeof workshopRuns.$inferSelect;
+export type LabGuide = typeof labGuides.$inferSelect;
+export type LabWorkshop = typeof labWorkshops.$inferSelect;
 export type WorkshopAccount = typeof workshopAccounts.$inferSelect;
 export type RunLog = typeof runLogs.$inferSelect;
 export type RunStatus = (typeof runStatus.enumValues)[number];

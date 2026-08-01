@@ -16,13 +16,13 @@ import {
 } from "lucide-react";
 import {
   DropdownMenu,
-  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
+  DropdownMenuRadioIconItem,
   DropdownMenuSeparator,
+  DropdownMenuSwitchItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -142,7 +142,7 @@ export function UserMenu({
         </DropdownMenuItem>
 
         {canSeeAllEvents(role) && (
-          <DropdownMenuCheckboxItem
+          <DropdownMenuSwitchItem
             checked={scope === "all"}
             onCheckedChange={chooseScope}
             // Keeps the menu open, so the calendar visibly swaps underneath it
@@ -150,32 +150,54 @@ export function UserMenu({
             onSelect={(e) => e.preventDefault()}
           >
             <CalendarRange />
-            All users&rsquo; events
-          </DropdownMenuCheckboxItem>
+            Show all events
+          </DropdownMenuSwitchItem>
         )}
 
+        {/*
+          The rule is separated from the item rather than placed after the
+          switch above: administrators are the only ones who see this block, and
+          a rule left standing on its own for a manager would double up with the
+          one below it.
+        */}
         {canManageUsers(role) && (
-          <DropdownMenuItem asChild>
-            <Link href="/users">
-              <UsersRound />
-              Manage users
-            </Link>
-          </DropdownMenuItem>
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem asChild>
+              <Link href="/users">
+                <UsersRound />
+                Manage users
+              </Link>
+            </DropdownMenuItem>
+          </>
         )}
 
         <DropdownMenuSeparator />
 
-        <DropdownMenuLabel className="text-xs text-muted-foreground">
-          Appearance
-        </DropdownMenuLabel>
-        <DropdownMenuRadioGroup value={theme} onValueChange={choose}>
-          {THEME_OPTIONS.map(({ value, label, Icon }) => (
-            <DropdownMenuRadioItem key={value} value={value}>
-              <Icon />
-              {label}
-            </DropdownMenuRadioItem>
-          ))}
-        </DropdownMenuRadioGroup>
+        {/*
+          Label and control on one line: three glyphs say as much as three
+          labelled rows, and the setting is one people change rarely and
+          recognise instantly.
+        */}
+        <div className="flex items-center justify-between gap-2 px-2 py-1.5">
+          <span className="text-xs text-muted-foreground">Appearance</span>
+          <DropdownMenuRadioGroup
+            value={theme}
+            onValueChange={choose}
+            className="flex items-center gap-0.5 rounded-lg bg-muted p-0.5"
+          >
+            {THEME_OPTIONS.map(({ value, label, Icon }) => (
+              <DropdownMenuRadioIconItem
+                key={value}
+                value={value}
+                aria-label={label}
+                title={label}
+              >
+                <Icon />
+              </DropdownMenuRadioIconItem>
+            ))}
+          </DropdownMenuRadioGroup>
+        </div>
 
         <DropdownMenuSeparator />
 

@@ -287,7 +287,7 @@ them, and applies the database schema. It prints the app URL when done.
 
 Open `APP_URL` and sign in with Google. If your address is in
 `site_admin_emails`, that first sign-in is what makes you an administrator —
-the user menu should show the role badge, an **All users' events** toggle, and
+the user menu should show the role badge, a **Show all events** switch, and
 **Manage users** (see [Site roles](#site-roles)).
 
 Then schedule a workshop — give it a name, an attendee count, and tick **Google
@@ -403,7 +403,7 @@ everything the one before it does:
 | Role              | Adds                                                            |
 | ----------------- | --------------------------------------------------------------- |
 | **operator**      | Schedules and runs their own events. What everyone starts as.   |
-| **manager**       | A menu toggle for **all users' events** on the calendar, and can open and delete any of them. |
+| **manager**       | A **Show all events** switch in the user menu that flips the calendar to every user's events, and can open and delete any of them. Also writes the [workshops and lab guides](#workshops-and-lab-guides). |
 | **administrator** | A **Manage users** page listing everyone, where roles are set.   |
 
 Roles are granted by an administrator, so the first one has to come from
@@ -425,6 +425,88 @@ what exists.
 The rules live in [`frontend/src/lib/roles.ts`](frontend/src/lib/roles.ts) and
 are enforced server-side on every read and write; the menu only decides what is
 worth showing.
+
+## Workshops and lab guides
+
+`/labs` holds the teaching material: the written instructions an attendee
+follows during a session. It is **public** — the room reads it signed out, the
+same way `/attend` works — and a **manager** or above writes it.
+
+Two things, deliberately separate:
+
+- A **lab guide** is one document — one Markdown body, one URL, one thing to
+  edit. "Authenticate to Google Cloud" is a lab guide.
+- A **workshop** is an ordered list of guides. It owns the sequence and nothing
+  else; the guides in it are references, not copies.
+
+The split is what makes the material reusable. The same authentication lab opens
+the onboarding workshop and the security one, in different positions, and fixing
+a typo in it fixes both. Neither is attached to a scheduled event: a
+`workshop_run` lives for an hour and is reaped, while this outlives every room
+that works through it.
+
+| | |
+| --- | --- |
+| Workshops | `/labs`, `/labs/<workshop>` — anyone, no account |
+| Reading a lab | `/labs/<workshop>/<guide>` — with step number, contents rail, and prev/next |
+| A lab on its own | `/labs/guides/<guide>` — its canonical home, and how a guide in no workshop is reached |
+| Workshop editor | `/labs/new`, `/labs/<workshop>/edit` — manager and above |
+| Guide editor | `/labs/guides/new`, `/labs/guides/<guide>/edit` — manager and above |
+| Drafts | Visible only to those who could edit them; a 404 for everyone else |
+| Storage | `lab_workshops`, `lab_workshop_guides` (the ordering), `lab_guides` (the Markdown) |
+
+**Composing a workshop.** The editor holds the contents as an ordered list —
+add from a searchable picker, nudge up or down, remove — and sends the whole
+order in one save rather than a request per gesture. Removing a guide from a
+workshop does not delete it; deleting a *workshop* leaves every guide it used
+intact. Deleting a *guide* takes it out of every workshop that used it, which is
+why the guide editor says which ones those are before you do.
+
+**Reading before choosing.** Every guide in the contents list and in the picker
+carries an eye icon that opens it in a modal, rendered exactly as the room will
+see it — Shiki highlighting, copy buttons and all. The body is fetched on the
+click that needs it (`GET /api/lab-guides/<id>/preview`) rather than shipped
+with the page: a workshop can hold fifty guides of up to 200 KB of Markdown
+each. Close it with the button, the overlay, or Escape.
+
+**Writing a guide you are missing.** The picker's *Write a new guide* action
+saves the workshop first — including an order you have been rearranging and have
+not saved yet — then opens the guide editor with that workshop in tow. Saving
+the guide appends it to the workshop and returns you to it; leaving without
+saving costs only the guide. This is the one write that adds to a workshop
+without being handed its whole order, and it has its own endpoint
+(`POST /api/lab-workshops/<id>/guides`) because the guide editor knows what it
+just created and nothing about what else is in the workshop.
+
+**Draft guides inside a published workshop** are hidden from anyone who could
+not edit them, and skipped when computing "next" — so a reader is never counted
+into a step they cannot open, and never offered a link to one.
+
+**Authoring.** GitHub-flavoured Markdown — tables, task lists, footnotes.
+Raw HTML in the source is dropped rather than rendered, and the author's tree is
+sanitised, so a guide cannot inject script into a public page. Fence code with
+its language for highlighting, and optionally name the file:
+
+````markdown
+```hcl title="main.tf"
+resource "google_container_cluster" "lab" { … }
+```
+````
+
+Blocks are rendered with [Shiki](https://shiki.style) against both colour
+schemes at once, and carry a copy button for the whole block plus a line gutter
+where each number copies its own line. All of it is rendered on the server —
+neither the Markdown parser nor any syntax grammar reaches the browser.
+
+**The URL.** Slugs — for both a workshop and a guide — are derived from the
+title and freeze the moment the thing is published: the address is by then on a
+projector and in browser histories, and renaming to fix a typo would break every
+link handed out. Retitling a published workshop or guide is fine; only a draft's
+slug follows its title.
+
+The pipeline is [`frontend/src/lib/markdown.ts`](frontend/src/lib/markdown.ts);
+the queries are in [`frontend/src/lib/lab-guides.ts`](frontend/src/lib/lab-guides.ts)
+and [`frontend/src/lib/lab-workshops.ts`](frontend/src/lib/lab-workshops.ts).
 
 ## Adding a cloud
 

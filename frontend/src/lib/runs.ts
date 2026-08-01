@@ -37,8 +37,12 @@ const ownedBy = (viewer: Viewer) =>
 /**
  * Slugify a workshop name for use in account addresses and project ids:
  * lowercase, non-alphanumerics collapsed to single dashes.
+ *
+ * `fallback` is what a name made entirely of punctuation collapses to — the
+ * result is an identifier, so it can never be empty. Lab guide slugs are built
+ * with the same rules and only differ in that word.
  */
-export function slugify(name: string): string {
+export function slugify(name: string, fallback = "workshop"): string {
   const slug = name
     .toLowerCase()
     .normalize("NFKD")
@@ -48,7 +52,7 @@ export function slugify(name: string): string {
     .replace(/^-+|-+$/g, "")
     .slice(0, 40)
     .replace(/-+$/, "");
-  return slug.length > 0 ? slug : "workshop";
+  return slug.length > 0 ? slug : fallback;
 }
 
 /**
