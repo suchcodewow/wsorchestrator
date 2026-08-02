@@ -71,12 +71,30 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     // `user` is the whole row the adapter joined to the session, so the role
     // is already in hand and reflects the database on every request — a role
     // change takes effect on the user's next page load, with no re-sign-in.
-    session({ session, user }) {
-      if (session.user) {
-        session.user.id = user.id;
-        session.user.siteRole =
-          (user as { siteRole?: SiteRole }).siteRole ?? "operator";
+    async session({ session, user }) {
+      if (!session.user) return session;
+      session.user.id = user.id;
+      let role = (user as { siteRole?: SiteRole }).siteRole ?? "operator";
+
+      // Self-heal the bootstrap here as well as on sign-in: the sign-in event
+      // fires once, so an administrator listed in SITE_ADMIN_EMAILS *after*
+      // they were already signed in — or before the env var reached this
+      // deployment — would otherwise never be promoted. Costs only an in-memory
+      // check per request; the write happens at most once, since the guard is
+      // false the moment the role already matches.
+      if (
+        role !== "administrator" &&
+        session.user.email &&
+        bootstrapAdmins().includes(session.user.email.toLowerCase())
+      ) {
+        await db
+          .update(users)
+          .set({ siteRole: "administrator" })
+          .where(eq(users.id, user.id));
+        role = "administrator";
       }
+
+      session.user.siteRole = role;
       return session;
     },
   },
