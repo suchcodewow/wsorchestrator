@@ -202,7 +202,14 @@ export async function deleteOrgUnit(orgUnitPath: string): Promise<void> {
   }
 }
 
-/** A password that satisfies Workspace complexity rules. */
+/**
+ * A random temporary password valid in every cloud directory an attendee might
+ * be created in — Google Workspace, Microsoft Entra ID, and AWS IAM — so the
+ * one credential works across all clouds a workshop selects. base64url emits
+ * only [A-Za-z0-9-_], all of which each cloud accepts, and the appended `aA1!`
+ * guarantees the upper/lower/digit/symbol mix Entra and AWS can require. The
+ * 20-char result is within every cloud's length cap (AWS's is the lowest, 128).
+ */
 function generatePassword(): string {
   return crypto.randomBytes(12).toString("base64url").slice(0, 16) + "aA1!";
 }
@@ -225,7 +232,12 @@ export async function createAccount(input: {
     primaryEmail: input.email,
     name: displayName(localPartOf(input.email)),
     password: tempPassword,
-    changePasswordAtNextLogin: true,
+    // Do not force a change at first login. The same credential is meant to
+    // work across every cloud a workshop selects (GCP, Azure, AWS); if each
+    // cloud forced its own reset the passwords would diverge the moment the
+    // attendee signed into any one of them. It stays the issued temp password
+    // for the workshop's short, time-boxed life.
+    changePasswordAtNextLogin: false,
     orgUnitPath: input.orgUnitPath,
   };
 
