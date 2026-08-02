@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 
 /**
- * Word lists for attendee account names: an attendee gets `bouncy-penguin`
+ * Word lists for attendee account names: an attendee gets `bouncypenguin`
  * rather than `workshop-07`, which is friendlier to read out in a room and
  * easier to type than a slug plus digits.
  *
@@ -60,15 +60,17 @@ function pick<T>(list: readonly T[]): T {
   return list[crypto.randomInt(list.length)];
 }
 
-/** A username like `bouncy-penguin`. */
+/** A username like `bouncypenguin`. */
 export function randomUsername(): string {
-  return `${pick(ADJECTIVES)}-${pick(NOUNS)}`;
+  return `${pick(ADJECTIVES)}${pick(NOUNS)}`;
 }
 
 /**
- * Split a generated local part back into display names:
- * `bouncy-penguin` -> `Bouncy Penguin`, `bouncy-penguin-42` -> `Bouncy
- * Penguin 42`. Used for the account's given/family name in Workspace.
+ * Split a generated local part back into display names: `bouncypenguin` ->
+ * `Bouncypenguin` (family `Attendee`), `bouncypenguin-42` -> `Bouncypenguin`
+ * / `42`. Still handles the older hyphenated `bouncy-penguin` form so display
+ * names for accounts created before the hyphen was dropped keep working. Used
+ * for the account's given/family name in Workspace.
  */
 export function displayName(localPart: string): {
   givenName: string;

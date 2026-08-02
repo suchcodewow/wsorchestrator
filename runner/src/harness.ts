@@ -15,7 +15,7 @@ import { harnessCfg } from "./config.js";
 /**
  * Harness entity identifiers must match `^[a-zA-Z_][0-9a-zA-Z_$]{0,127}$` —
  * notably no hyphens (those are allowed only in secret identifiers), so a
- * workshop slug or `bouncy-penguin` username cannot be used as-is.
+ * workshop slug like `k8s-intro` cannot be used as-is.
  */
 const MAX_IDENTIFIER = 128;
 

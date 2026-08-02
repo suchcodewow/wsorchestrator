@@ -211,8 +211,8 @@ export type CreatedAccount = { email: string; tempPassword: string };
 
 /**
  * Create one attendee account inside the workshop's OU. The display name is
- * derived from the generated username, so `bouncy-penguin@…` shows up as
- * "Bouncy Penguin".
+ * derived from the generated username, so `bouncypenguin@…` shows up as
+ * "Bouncypenguin".
  */
 export async function createAccount(input: {
   email: string;
@@ -261,7 +261,7 @@ function localPartOf(email: string): string {
   return email.split("@")[0] ?? email;
 }
 
-/** Address for a generated username, e.g. `bouncy-penguin@example.com`. */
+/** Address for a generated username, e.g. `bouncypenguin@example.com`. */
 export function usernameEmail(username: string): string {
   return `${username}@${workspaceCfg().domain}`;
 }
@@ -308,8 +308,8 @@ export async function allocateEmails(
     let chosen: string | undefined;
 
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-      // `bouncy-penguin` first; once the plain combinations keep colliding,
-      // fall back to `bouncy-penguin-479` to open up the space again.
+      // `bouncypenguin` first; once the plain combinations keep colliding,
+      // fall back to `bouncypenguin-479` to open up the space again.
       const suffix =
         attempt < PLAIN_ATTEMPTS ? "" : `-${crypto.randomInt(2, 1000)}`;
       const candidate = usernameEmail(randomUsername() + suffix);
