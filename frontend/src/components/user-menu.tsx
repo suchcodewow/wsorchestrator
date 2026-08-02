@@ -13,6 +13,7 @@ import {
   Settings,
   ShieldCheck,
   Sun,
+  Terminal,
   UsersRound,
 } from "lucide-react";
 import {
@@ -174,6 +175,12 @@ export function UserMenu({
               <Link href="/backups">
                 <DatabaseBackup />
                 Backups
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link href="/database">
+                <Terminal />
+                Database
               </Link>
             </DropdownMenuItem>
           </>

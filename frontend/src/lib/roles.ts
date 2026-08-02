@@ -53,6 +53,17 @@ export const canManageUsers = (role: SiteRole) =>
   roleAtLeast(role, "administrator");
 
 /**
+ * Run read-only SQL against the database from the in-app console.
+ *
+ * Administrators only, and even for them the server runs every query inside a
+ * READ ONLY transaction so it cannot write. It still reads whatever it is
+ * pointed at — session tokens, OAuth tokens, attendee passwords — so it sits at
+ * the top role, the same as users and backups.
+ */
+export const canRunSql = (role: SiteRole) =>
+  roleAtLeast(role, "administrator");
+
+/**
  * Review the database's backup history, take one, and restore from one.
  *
  * The most consequential thing anybody can do here — a restore rolls the whole
