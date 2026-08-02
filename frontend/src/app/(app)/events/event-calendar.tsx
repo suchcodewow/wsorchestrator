@@ -55,6 +55,11 @@ function dayNum(d: Date): number {
   return Math.round(midnight.getTime() / DAY_MS);
 }
 
+/** Where in its day a moment sits, 0 (midnight) → 1 (the next midnight). */
+function dayFraction(d: Date): number {
+  return (d.getHours() + d.getMinutes() / 60) / 24;
+}
+
 /**
  * How many whole days an event occupies on the calendar. Once it is live the
  * real span is `expiresAt − start`; before that it is the lifetime picked on
@@ -72,13 +77,16 @@ const DATE_ROW = 34; // room for the date number before bars begin
 const LANE = 26; // height of one bar row, including its gap
 const BASE_CELL = 120; // a week with no events is still this tall
 
-/** Human summary for a bar's tooltip: how long it runs and when it ends. */
+/** Human summary for a bar's tooltip: when it starts, how long, when it ends. */
 function eventTitle(e: CalendarEvent, days: number): string {
   const span = `${days} day${days === 1 ? "" : "s"}`;
+  const starts = e.scheduledStart
+    ? `starts ${new Date(e.scheduledStart).toLocaleString()} · `
+    : "";
   const ends = e.expiresAt
     ? `, ends ${new Date(e.expiresAt).toLocaleString()}`
     : "";
-  return `${e.name} · runs ${span}${ends}`;
+  return `${e.name} · ${starts}runs ${span}${ends}`;
 }
 
 export function EventCalendar({
@@ -116,7 +124,35 @@ export function EventCalendar({
         const start = new Date(e.scheduledStart!);
         const startNum = dayNum(start);
         const days = durationDays(e, start);
-        return { e, startNum, endNum: startNum + days - 1, days };
+        // The real teardown moment drives the right edge, mirroring the start:
+        // `expiresAt` once known, otherwise start + the chosen lifetime.
+        const end = e.expiresAt
+          ? new Date(e.expiresAt)
+          : new Date(start.getTime() + e.ttlSeconds * 1000);
+        let endNum = dayNum(end);
+        let endFraction = dayFraction(end);
+        // An end at midnight fills the previous day to its edge rather than
+        // opening a zero-width sliver at the start of the next one.
+        if (endFraction === 0) {
+          endNum -= 1;
+          endFraction = 1;
+        }
+        // Guard odd data: never end before it starts.
+        if (endNum < startNum) {
+          endNum = startNum;
+          endFraction = Math.max(endFraction, dayFraction(start));
+        }
+        // Start/end fractions inset the bar into their day cells (0 = flush
+        // left edge / midnight, 1 = flush right edge / next midnight), so a
+        // noon start sits halfway across its cell and a 9am end 3/8 across its.
+        return {
+          e,
+          startNum,
+          endNum,
+          days,
+          startFraction: dayFraction(start),
+          endFraction,
+        };
       })
       .sort(
         (a, b) => a.startNum - b.startNum || b.days - a.days,
@@ -164,6 +200,11 @@ export function EventCalendar({
         roundLeft: boolean;
         roundRight: boolean;
         days: number;
+        // Fractions of one day-cell to inset the left and right edges by, so
+        // the bar begins at the start hour and ends at the end hour. Only the
+        // true-start / true-end segments carry a non-zero inset.
+        offset: number;
+        endInset: number;
       }[];
       minHeight: number;
     }[] = [];
@@ -181,16 +222,22 @@ export function EventCalendar({
         if (clipStart > clipEnd) continue;
 
         const colStart = startWeekday + (clipStart - monthFirstNum + 1) - 1 - w * 7;
+        // Cap the left only where the event truly begins (and is on-month);
+        // the right only where it truly ends.
+        const roundLeft = clipStart === s.startNum && s.startNum >= monthFirstNum;
+        const roundRight = clipEnd === s.endNum && s.endNum <= lastNum;
         segments.push({
           e: s.e,
           lane: placed.lane.get(s.e.id)!,
           colStart,
           span: clipEnd - clipStart + 1,
-          // Cap the left only where the event truly begins (and is on-month);
-          // the right only where it truly ends.
-          roundLeft: clipStart === s.startNum && s.startNum >= monthFirstNum,
-          roundRight: clipEnd === s.endNum && s.endNum <= lastNum,
+          roundLeft,
+          roundRight,
           days: s.days,
+          // The hour-of-day insets only apply on the segments that carry the
+          // real start / end; continuations across weeks run edge to edge.
+          offset: roundLeft ? s.startFraction : 0,
+          endInset: roundRight ? 1 - s.endFraction : 0,
         });
       }
 
@@ -399,6 +446,20 @@ export function EventCalendar({
                         style={{
                           gridColumn: `${s.colStart + 1} / span ${s.span}`,
                           gridRow: s.lane + 1,
+                          // Slide the start-day edge in by the start hour. On a
+                          // stretched grid item this eats into the left, so the
+                          // right edge stays pinned to the day boundary. A grid
+                          // item's % margin is relative to its own area (span
+                          // columns), so dividing by the span gives exactly one
+                          // column times the fraction, whatever the span.
+                          marginLeft: s.offset
+                            ? `calc(100% / ${s.span} * ${s.offset} + 2px)`
+                            : undefined,
+                          // …and pull the end-day edge in by the end hour, so
+                          // the right edge lands at the teardown time.
+                          marginRight: s.endInset
+                            ? `calc(100% / ${s.span} * ${s.endInset} + 2px)`
+                            : undefined,
                         }}
                         onClick={(ev) => {
                           ev.stopPropagation();
@@ -408,10 +469,15 @@ export function EventCalendar({
                         whileTap={{ scale: 0.99 }}
                         transition={SPRING_SNAPPY}
                         className={cn(
-                          "pointer-events-auto flex min-w-0 items-center gap-1.5 border px-1.5 text-left text-xs shadow-xs transition-shadow hover:shadow-sm",
+                          // A floor on width keeps a very short (sub-day) run
+                          // from collapsing to an unclickable sliver; it simply
+                          // overruns its end hour a little when that happens.
+                          "pointer-events-auto flex min-w-9 items-center gap-1.5 border px-1.5 text-left text-xs shadow-xs transition-shadow hover:shadow-sm",
                           statusChip(s.e.status),
                           // Round and inset only the true ends; a continuation
-                          // runs flush to the edge so it reads as one bar.
+                          // runs flush to the edge so it reads as one bar. When
+                          // the start is hour-offset, its inline margin above
+                          // supersedes the class inset.
                           s.roundLeft ? "ml-0.5 rounded-l-md" : "rounded-l-none",
                           s.roundRight ? "mr-0.5 rounded-r-md" : "rounded-r-none",
                         )}
