@@ -41,6 +41,9 @@ const GCP_TF_SOURCE = "workshops/gcp-base";
 /** Root config that creates one GCP project per challenge competitor. */
 const GCP_CHALLENGE_TF_SOURCE = "challenges/gcp-per-user";
 
+/** Grant-only config: attendees get access to the shared long-lived project. */
+const GCP_SANDBOX_TF_SOURCE = "workshops/gcp-sandbox";
+
 /** Provision one workshop end to end: Workspace OU, accounts, then clouds. */
 export async function runWorkshop(runId: string): Promise<void> {
   const run = await getRun(runId);
@@ -59,20 +62,26 @@ export async function runWorkshop(runId: string): Promise<void> {
     // after the accounts exist because each attendee is invited by address.
     Object.assign(outputs, await provisionHarness(run));
 
-    for (const cloud of run.clouds) {
-      if (cloud === "gcp") {
-        Object.assign(
-          outputs,
-          run.mode === "challenge"
-            ? await provisionGcpPerUser(run)
-            : await provisionGcp(run),
-        );
-      } else {
-        await log(
-          runId,
-          "system",
-          `${cloud.toUpperCase()} was requested but is not wired up yet — skipping.`,
-        );
+    if (run.clouds.length === 0) {
+      // No cloud selected — hand attendees the shared long-lived testing
+      // project instead of building (and later destroying) a throwaway one.
+      Object.assign(outputs, await provisionSandbox(run));
+    } else {
+      for (const cloud of run.clouds) {
+        if (cloud === "gcp") {
+          Object.assign(
+            outputs,
+            run.mode === "challenge"
+              ? await provisionGcpPerUser(run)
+              : await provisionGcp(run),
+          );
+        } else {
+          await log(
+            runId,
+            "system",
+            `${cloud.toUpperCase()} was requested but is not wired up yet — skipping.`,
+          );
+        }
       }
     }
 
@@ -218,6 +227,53 @@ async function provisionGcp(run: RunRow): Promise<Record<string, unknown>> {
     "system",
     `terraform apply — creating project, billing, APIs, and granting ` +
       `editor to ${attendees.length} attendee(s)`,
+  );
+  await tfApply(workDir, (l) => log(run.id, l.stream, l.text));
+
+  return tfOutput(workDir);
+}
+
+/**
+ * Grant the run's attendees editor on the shared long-lived project. Used when
+ * a run has no cloud selected — a fast path for testing that skips creating and
+ * later destroying a per-run project. The Terraform here only manages the
+ * attendees' IAM bindings; it never touches the project, so teardown just
+ * revokes the grants (see `destroySandbox`).
+ */
+async function provisionSandbox(run: RunRow): Promise<Record<string, unknown>> {
+  const cfg = gcpCfg();
+  if (!cfg.sandboxProjectId) {
+    throw new Error(
+      "no cloud was selected, which grants attendees the shared testing " +
+        "project, but GCP_SANDBOX_PROJECT_ID is not configured",
+    );
+  }
+  const workDir = path.join(TF_ROOT, GCP_SANDBOX_TF_SOURCE);
+
+  // No project id is stored on the run: the shared project is not this run's to
+  // own, and keeping it out of `gcp_project_id` ensures no teardown path could
+  // ever mistake it for a per-run project to delete.
+  await setApplying(run.id, null);
+  await log(
+    run.id,
+    "system",
+    `No cloud selected — granting attendees access to the shared testing project ${cfg.sandboxProjectId}`,
+  );
+
+  // Read the accounts back rather than tracking which were just created, so a
+  // workshop that grew re-grants the whole roster and Terraform converges.
+  const attendees = (await accountsFor(run.id)).map((a) => a.email);
+  writeTfvars(workDir, cfg.sandboxProjectId, run.id, attendees);
+
+  await log(run.id, "system", "terraform init");
+  await tfInit(workDir, cfg.stateBucket, run.state_prefix, (l) =>
+    log(run.id, l.stream, l.text),
+  );
+
+  await log(
+    run.id,
+    "system",
+    `terraform apply — granting editor to ${attendees.length} attendee(s) on ${cfg.sandboxProjectId}`,
   );
   await tfApply(workDir, (l) => log(run.id, l.stream, l.text));
 

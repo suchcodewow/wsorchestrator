@@ -88,7 +88,7 @@ export function RunConfig({
       setError(`Enter a number of users between 1 and ${limits.maxUsers}.`);
       return;
     }
-    if (clouds.length === 0) {
+    if (clouds.length < limits.minClouds) {
       setError(singleCloud ? "Pick a cloud." : "Pick at least one cloud.");
       return;
     }

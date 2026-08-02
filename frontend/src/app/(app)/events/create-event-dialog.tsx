@@ -140,7 +140,7 @@ export function CreateEventDialog({
       setError(`Enter a number of days between 1 and ${MAX_TTL_DAYS}.`);
       return;
     }
-    if (clouds.length === 0) {
+    if (clouds.length < limits.minClouds) {
       setError(singleCloud ? "Pick a cloud." : "Pick at least one cloud.");
       return;
     }
@@ -295,10 +295,18 @@ export function CreateEventDialog({
                 );
               })}
             </div>
-            {singleCloud && (
+            {singleCloud ? (
               <p className="text-xs text-muted-foreground">
                 A challenge runs on a single cloud.
               </p>
+            ) : (
+              limits.minClouds === 0 && (
+                <p className="text-xs leading-relaxed text-muted-foreground">
+                  {clouds.length === 0
+                    ? "No cloud selected — attendees will share the long-lived testing project. Nothing is provisioned or torn down for them."
+                    : "Leave all unselected to grant attendees the shared testing project instead of a fresh one."}
+                </p>
+              )
             )}
           </motion.fieldset>
 

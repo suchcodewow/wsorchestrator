@@ -30,6 +30,9 @@ const GCP_TF_SOURCE = "workshops/gcp-base";
 /** Root config that creates one GCP project per challenge competitor. */
 const GCP_CHALLENGE_TF_SOURCE = "challenges/gcp-per-user";
 
+/** Grant-only config: revoking here removes attendee access, not the project. */
+const GCP_SANDBOX_TF_SOURCE = "workshops/gcp-sandbox";
+
 /**
  * Destroy every run that is due: past its end time, or explicitly deleted in
  * the UI (see `reapableRuns`). Runs sequentially within this container.
@@ -52,7 +55,10 @@ async function destroyRun(run: RunRow): Promise<void> {
     await setDestroying(run.id);
 
     // Clouds first — the accounts may hold access to them.
-    if (run.clouds.includes("gcp")) {
+    if (run.clouds.length === 0) {
+      // No-cloud run: only attendee grants on the shared project to revoke.
+      await destroySandbox(run);
+    } else if (run.clouds.includes("gcp")) {
       if (run.mode === "challenge") {
         await destroyGcpPerUser(run);
       } else {
@@ -119,6 +125,36 @@ async function destroyGcp(run: RunRow): Promise<void> {
   // deleted — so the tfvars match the state Terraform is tearing down.
   const attendees = (await accountsFor(run.id)).map((a) => a.email);
   writeTfvars(workDir, projectId, run.id, attendees);
+  await tfInit(workDir, cfg.stateBucket, run.state_prefix, (l) =>
+    log(run.id, l.stream, l.text),
+  );
+  await tfDestroy(workDir, (l) => log(run.id, l.stream, l.text));
+}
+
+/**
+ * Revoke a no-cloud run's attendee grants on the shared long-lived project.
+ * `terraform destroy` here removes only the `google_project_iam_member`
+ * bindings this run added — the project is not managed by this config, so it
+ * (and every other run's grants) is left running. Nothing here can delete it.
+ */
+async function destroySandbox(run: RunRow): Promise<void> {
+  const cfg = gcpCfg();
+  if (!cfg.sandboxProjectId) {
+    // Never configured, so nothing was granted — nothing to revoke.
+    return;
+  }
+  const workDir = path.join(TF_ROOT, GCP_SANDBOX_TF_SOURCE);
+
+  // Accounts are still on record here — this runs before they are deleted — so
+  // the roster matches the grants Terraform is revoking.
+  const attendees = (await accountsFor(run.id)).map((a) => a.email);
+
+  await log(
+    run.id,
+    "system",
+    `Revoking ${attendees.length} attendee grant(s) on the shared testing project ${cfg.sandboxProjectId} (the project itself stays running)`,
+  );
+  writeTfvars(workDir, cfg.sandboxProjectId, run.id, attendees);
   await tfInit(workDir, cfg.stateBucket, run.state_prefix, (l) =>
     log(run.id, l.stream, l.text),
   );

@@ -2,11 +2,13 @@ locals {
   # Config the runner/reaper need to create projects, Workspace accounts, and
   # write state.
   runner_env = {
-    GCP_ADMIN_PROJECT_ID         = var.admin_project_id
-    GCP_WORKSHOPS_FOLDER_ID      = var.workshops_folder_id
-    GCP_BILLING_ACCOUNT_ID       = var.billing_account_id
-    GCP_TFSTATE_BUCKET           = google_storage_bucket.tfstate.name
-    GCP_REGION                   = var.region
+    GCP_ADMIN_PROJECT_ID    = var.admin_project_id
+    GCP_WORKSHOPS_FOLDER_ID = var.workshops_folder_id
+    GCP_BILLING_ACCOUNT_ID  = var.billing_account_id
+    GCP_TFSTATE_BUCKET      = google_storage_bucket.tfstate.name
+    GCP_REGION              = var.region
+    # The shared long-lived project no-cloud runs grant attendees access to.
+    GCP_SANDBOX_PROJECT_ID       = google_project.sandbox.project_id
     GOOGLE_WORKSPACE_DOMAIN      = var.workspace_domain
     GOOGLE_WORKSPACE_ADMIN_EMAIL = var.workspace_admin_email
     GOOGLE_WORKSPACE_PARENT_OU   = var.workspace_parent_ou

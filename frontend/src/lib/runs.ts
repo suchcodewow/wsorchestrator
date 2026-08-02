@@ -158,7 +158,7 @@ export async function updateRunConfig(
   if (
     input.userCount < 1 ||
     input.userCount > limits.maxUsers ||
-    clouds.length < 1 ||
+    clouds.length < limits.minClouds ||
     clouds.length > limits.maxClouds
   ) {
     return { ok: false, error: "exceeds_mode_limits" };

@@ -41,7 +41,9 @@ export async function GET(
 
 const patchSchema = z.object({
   userCount: z.number().int().min(1).max(MAX_USERS),
-  clouds: z.array(z.enum(CLOUDS)).min(1).max(CLOUDS.length),
+  // May be empty (a no-cloud workshop uses the shared testing project). The
+  // per-mode floor is enforced in updateRunConfig, which knows the run's mode.
+  clouds: z.array(z.enum(CLOUDS)).max(CLOUDS.length),
 });
 
 const STATUS_FOR: Record<UpdateRunError, number> = {

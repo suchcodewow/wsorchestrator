@@ -152,10 +152,18 @@ export const MAX_USERS = 50;
  */
 export const EVENT_LIMITS: Record<
   EventMode,
-  { maxUsers: number; defaultUsers: number; maxClouds: number }
+  { maxUsers: number; defaultUsers: number; minClouds: number; maxClouds: number }
 > = {
-  workshop: { maxUsers: MAX_USERS, defaultUsers: 10, maxClouds: CLOUDS.length },
-  challenge: { maxUsers: 5, defaultUsers: 1, maxClouds: 1 },
+  // A workshop may pick no cloud at all — that grants attendees the shared
+  // long-lived testing project instead of provisioning a throwaway one. A
+  // challenge is head-to-head on exactly one cloud, so it still requires one.
+  workshop: {
+    maxUsers: MAX_USERS,
+    defaultUsers: 10,
+    minClouds: 0,
+    maxClouds: CLOUDS.length,
+  },
+  challenge: { maxUsers: 5, defaultUsers: 1, minClouds: 1, maxClouds: 1 },
 };
 
 export const limitsFor = (mode: EventMode) => EVENT_LIMITS[mode];

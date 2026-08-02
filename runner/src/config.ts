@@ -32,6 +32,13 @@ export function gcpCfg() {
     folderId: required("GCP_WORKSHOPS_FOLDER_ID"),
     billingAccount: required("GCP_BILLING_ACCOUNT_ID"),
     adminProjectId: required("GCP_ADMIN_PROJECT_ID"),
+    /**
+     * A single long-lived project that no-cloud runs grant their attendees
+     * access to instead of provisioning a throwaway one. Optional — only the
+     * no-cloud path needs it, so it stays empty unless configured, and that
+     * path fails with a clear message rather than a missing-var throw.
+     */
+    sandboxProjectId: process.env.GCP_SANDBOX_PROJECT_ID ?? "",
     region,
   };
 }

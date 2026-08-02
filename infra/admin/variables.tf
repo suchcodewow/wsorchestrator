@@ -19,6 +19,18 @@ variable "billing_account_id" {
   type        = string
 }
 
+variable "sandbox_project_id" {
+  description = "Project id for the long-lived shared testing project no-cloud runs use. Leave empty to derive sbx-<admin_project_id>; set explicitly if that id is already taken (project ids are global and max 30 chars)."
+  type        = string
+  default     = ""
+}
+
+variable "sandbox_apis" {
+  description = "APIs enabled on the shared testing project so attendees can use them."
+  type        = list(string)
+  default     = ["compute.googleapis.com"]
+}
+
 variable "tfstate_bucket" {
   description = "GCS bucket (in the admin project) that holds per-run Terraform state for workshops."
   type        = string

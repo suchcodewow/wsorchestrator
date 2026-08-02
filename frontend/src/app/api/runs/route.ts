@@ -31,7 +31,9 @@ const createSchema = z
     // How many days the event runs before teardown. Absent on requests
     // written before the field existed, which fall back to the default.
     ttlDays: z.number().int().min(1).max(MAX_TTL_DAYS).default(DEFAULT_TTL_DAYS),
-    clouds: z.array(z.enum(CLOUDS)).min(1).max(CLOUDS.length),
+    // May be empty (a no-cloud workshop uses the shared testing project); the
+    // per-mode floor is enforced in the refinement below.
+    clouds: z.array(z.enum(CLOUDS)).max(CLOUDS.length),
     // Omitted when startNow is set — the run begins immediately instead.
     scheduledStart: z.string().datetime().optional(),
     startNow: z.boolean().optional(),
@@ -48,11 +50,19 @@ const createSchema = z
         message: `a ${v.mode} allows at most ${limits.maxUsers} user(s)`,
       });
     }
-    if (new Set(v.clouds).size > limits.maxClouds) {
+    const cloudCount = new Set(v.clouds).size;
+    if (cloudCount > limits.maxClouds) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["clouds"],
         message: `a ${v.mode} allows at most ${limits.maxClouds} cloud(s)`,
+      });
+    }
+    if (cloudCount < limits.minClouds) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["clouds"],
+        message: `a ${v.mode} needs at least ${limits.minClouds} cloud(s)`,
       });
     }
   });
