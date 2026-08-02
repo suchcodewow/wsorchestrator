@@ -15,7 +15,11 @@ export async function provisionDue(): Promise<void> {
 
   for (const { id } of due) {
     try {
-      await log(id, "system", "Start time reached — provisioning.");
+      await log(
+        id,
+        "system",
+        "Start time reached — the scheduler picked this up; provisioning is starting.",
+      );
       await triggerRunnerJob(id);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

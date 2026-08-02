@@ -166,6 +166,7 @@ export async function createOrgUnit(name: string): Promise<string> {
   const svc = await directory();
   const { customerId, parentOrgUnitPath } = workspaceCfg();
   const path = joinOrgUnitPath(parentOrgUnitPath, name);
+  const key = path.replace(/^\//, "");
 
   try {
     const res = await svc.orgunits.insert({
@@ -174,13 +175,18 @@ export async function createOrgUnit(name: string): Promise<string> {
     });
     return res.data.orgUnitPath ?? path;
   } catch (err) {
-    if (statusOf(err) !== 409) throw err;
-    // Already exists — adopt it.
-    const res = await svc.orgunits.get({
-      customerId,
-      orgUnitPath: path.replace(/^\//, ""),
-    });
-    return res.data.orgUnitPath ?? path;
+    // The OU may already exist — a grown or retried workshop re-runs this. The
+    // Directory API is not consistent about how it reports that: a 409 on some
+    // paths, a 400 "Invalid Ou Id" on others (which is what breaks a grow of a
+    // ready workshop). So don't trust the status — look. If the OU is there,
+    // adopt it; only if it genuinely is not do we surface the insert error.
+    try {
+      const existing = await svc.orgunits.get({ customerId, orgUnitPath: key });
+      if (existing.data.orgUnitPath) return existing.data.orgUnitPath;
+    } catch (getErr) {
+      if (statusOf(getErr) !== 404) throw getErr;
+    }
+    throw err;
   }
 }
 

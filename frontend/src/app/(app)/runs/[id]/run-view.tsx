@@ -118,14 +118,37 @@ export function RunView({
     if (res.status === 404) router.replace("/events");
   }, [runId, router]);
 
-  // A run awaiting deletion is polled too though it may sit in `ready` for a
-  // few minutes: the reaper is what finishes the job, and the page should
-  // notice the moment it has.
+  // Poll while the run is moving, or awaiting deletion (which may sit in
+  // `ready` for a few minutes while the reaper finishes). A scheduled run is
+  // also polled once its start time is at hand, so the scheduler's "picked up"
+  // line and the first build output appear live rather than only on a reload —
+  // the page would otherwise sit still through the whole hand-off.
+  const { status, scheduledStart, deleteRequested } = data.run;
   useEffect(() => {
-    if (!ACTIVE.has(data.run.status) && !data.run.deleteRequested) return;
-    const timer = setInterval(refresh, 2500);
-    return () => clearInterval(timer);
-  }, [data.run.status, data.run.deleteRequested, refresh]);
+    if (ACTIVE.has(status) || deleteRequested) {
+      const timer = setInterval(refresh, 2500);
+      return () => clearInterval(timer);
+    }
+
+    if (status === "scheduled" && scheduledStart) {
+      const lead = new Date(scheduledStart).getTime() - Date.now();
+      // Leave runs scheduled far out alone — a reload will pick them up; only
+      // watch ones starting within the next 12 hours.
+      if (lead > 12 * 60 * 60 * 1000) return;
+      let interval: ReturnType<typeof setInterval>;
+      // Start polling at the start time (or now, if it has already passed) and
+      // keep going until the scheduler flips it to `requested`, at which point
+      // this effect re-runs into the ACTIVE branch above.
+      const start = setTimeout(() => {
+        void refresh();
+        interval = setInterval(refresh, 3000);
+      }, Math.max(0, lead));
+      return () => {
+        clearTimeout(start);
+        clearInterval(interval);
+      };
+    }
+  }, [status, scheduledStart, deleteRequested, refresh]);
 
   useEffect(() => {
     logEndRef.current?.scrollIntoView({ behavior: "smooth" });

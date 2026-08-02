@@ -38,14 +38,25 @@ export async function getRun(runId: string): Promise<RunRow | undefined> {
   return rows[0];
 }
 
-/** Runs whose TTL has elapsed (or that failed) and need teardown. */
-export async function expiredRuns(): Promise<RunRow[]> {
+/**
+ * Runs the reaper should tear down. Destruction happens for exactly two
+ * reasons, and nothing else — a failure never triggers it:
+ *
+ *   1. Someone asked to delete the workshop in the UI (`delete_requested`).
+ *   2. A live (`ready`) workshop has passed its real end time (`expires_at`,
+ *      set only when it went ready and only ever pushed later, never to "now").
+ *
+ * `destroying` is included so a teardown that failed part-way (e.g. Workspace
+ * lagging behind an account deletion) is retried rather than stranded — it was
+ * already triggered by one of the two reasons above.
+ */
+export async function reapableRuns(): Promise<RunRow[]> {
   const { rows } = await pool.query<RunRow>(
     `select ${RUN_COLUMNS}
        from workshop_runs
-      where status in ('ready', 'failed')
-        and expires_at is not null
-        and expires_at < now()`,
+      where delete_requested
+         or status = 'destroying'
+         or (status = 'ready' and expires_at is not null and expires_at < now())`,
   );
   return rows;
 }
@@ -95,12 +106,31 @@ export async function setReady(
   );
 }
 
-export async function setFailed(runId: string, error: string, expiresAt: Date) {
+/**
+ * Mark a first provision as failed. Deliberately does NOT set `expires_at`: a
+ * failure must never make the reaper destroy anything on its own. A failed run
+ * sits on the calendar with its error until someone deletes it in the UI, which
+ * is what then triggers cleanup of whatever partial resources it created.
+ */
+export async function setFailed(runId: string, error: string) {
   await pool.query(
-    `update workshop_runs
-        set status = 'failed', error = $2, expires_at = $3
-      where id = $1`,
-    [runId, error, expiresAt.toISOString()],
+    `update workshop_runs set status = 'failed', error = $2 where id = $1`,
+    [runId, error],
+  );
+}
+
+/**
+ * Record a failure on a workshop that was already live (a grow or retry) while
+ * leaving it intact: status back to `ready`, the error surfaced, and — crucially
+ * — the original `expires_at` untouched. Overwriting that with "now" (as
+ * `setFailed` does for a first provision) would hand a healthy workshop to the
+ * reaper over a transient hiccup, tearing down accounts and clouds that were
+ * fine. The attempted change simply did not take; what already existed stays.
+ */
+export async function setLiveError(runId: string, error: string) {
+  await pool.query(
+    `update workshop_runs set status = 'ready', error = $2 where id = $1`,
+    [runId, error],
   );
 }
 

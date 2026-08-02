@@ -17,7 +17,7 @@ import {
 import {
   accountsFor,
   deleteAccounts,
-  expiredRuns,
+  reapableRuns,
   log,
   setDestroyed,
   setDestroying,
@@ -30,9 +30,12 @@ const GCP_TF_SOURCE = "workshops/gcp-base";
 /** Root config that creates one GCP project per challenge competitor. */
 const GCP_CHALLENGE_TF_SOURCE = "challenges/gcp-per-user";
 
-/** Destroy every run past its TTL. Runs sequentially within this container. */
+/**
+ * Destroy every run that is due: past its end time, or explicitly deleted in
+ * the UI (see `reapableRuns`). Runs sequentially within this container.
+ */
 export async function reap(): Promise<void> {
-  const runs = await expiredRuns();
+  const runs = await reapableRuns();
   if (runs.length === 0) {
     console.log("reaper: nothing to destroy");
     return;

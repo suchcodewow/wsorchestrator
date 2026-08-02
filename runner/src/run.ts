@@ -28,6 +28,7 @@ import {
   runCreatorEmail,
   setApplying,
   setFailed,
+  setLiveError,
   setOrgUnitPath,
   setProvisioning,
   setReady,
@@ -84,8 +85,20 @@ export async function runWorkshop(runId: string): Promise<void> {
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     await log(runId, "stderr", message);
-    // Expire immediately so the reaper cleans up any partial resources.
-    await setFailed(runId, message, new Date());
+    if (run.expires_at) {
+      // This workshop was already live — a grow or a retry (a first provision
+      // has no expiry until it goes ready). A failure here must not tear down
+      // the accounts and clouds it already has, so leave it ready with its
+      // original expiry and just surface what went wrong. The change did not
+      // apply; what was there stays.
+      await setLiveError(runId, message);
+    } else {
+      // First provision: record the failure but do not expire it. Nothing here
+      // destroys resources on a failure — the run stays failed on the calendar
+      // until someone deletes it in the UI, which is what cleans up any partial
+      // resources it left behind.
+      await setFailed(runId, message);
+    }
     throw err;
   }
 }

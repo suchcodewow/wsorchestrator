@@ -382,16 +382,14 @@ export async function deleteRun(
     return { ok: true, outcome: "deleted" };
   }
 
-  // `ready`, `failed`, or already `destroying`. Expiring it now puts it in
-  // front of the next reaper tick; the flag is what turns that teardown into a
-  // deletion. A run already destroying keeps its expiry — the pass tearing it
-  // down reads the flag at the end and removes the row then.
+  // `ready`, `failed`, or already `destroying`. The flag alone is what the
+  // reaper keys on for a delete — it does not depend on `expires_at`, so we
+  // leave the real end time untouched rather than shoving it to "now" (which
+  // used to conflate "deleted" with "expired"). The reaper tears it down on its
+  // next tick and removes the row once teardown finishes.
   await db
     .update(workshopRuns)
-    .set({
-      deleteRequested: true,
-      ...(run.status === "destroying" ? {} : { expiresAt: new Date() }),
-    })
+    .set({ deleteRequested: true })
     .where(eq(workshopRuns.id, runId));
 
   await db.insert(runLogs).values({
