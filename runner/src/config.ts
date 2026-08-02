@@ -66,6 +66,34 @@ export function cloudStatePrefix(base: string, cloud: Cloud): string {
 }
 
 /**
+ * AWS config, read lazily like `gcpCfg`. The aws provider reads its management-
+ * account credentials from the standard AWS_* env vars itself; the runner only
+ * needs the region, where to create accounts, the role to assume into them, and
+ * the root-email domain new accounts are registered under.
+ */
+export function awsCfg() {
+  return {
+    region: process.env.AWS_REGION ?? "us-east-1",
+    /** OU new accounts are created under. Empty means the organization root. */
+    parentOuId: process.env.AWS_PARENT_OU_ID ?? "",
+    /**
+     * Role the management account assumes into each member account to build
+     * inside it. AWS creates OrganizationAccountAccessRole in every account it
+     * provisions, so that is the default.
+     */
+    accountAccessRole:
+      process.env.AWS_ACCOUNT_ACCESS_ROLE ?? "OrganizationAccountAccessRole",
+    /**
+     * Every AWS account needs a globally-unique root email, so the runner uses
+     * plus-addressing: aws+<account-name>@<domain>. Defaults to the Workspace
+     * domain.
+     */
+    accountEmailDomain:
+      process.env.AWS_ACCOUNT_EMAIL_DOMAIN ?? required("GOOGLE_WORKSPACE_DOMAIN"),
+  };
+}
+
+/**
  * Azure config, read lazily like `gcpCfg`. The azurerm/azuread providers read
  * the service-principal credentials from the ARM_ / AZURE_ env vars
  * themselves, so the runner only needs to know which subscription and tenant to
@@ -273,6 +301,38 @@ export function makeChallengeResourceGroup(
   const suffix = `-${short}-${who}`;
   const base = `ch-${slug}`.toLowerCase().replace(/[^a-z0-9-]/g, "-");
   return base.slice(0, 90 - suffix.length).replace(/-+$/, "") + suffix;
+}
+
+/**
+ * AWS account name/alias for a workshop's per-run account — the isolation
+ * boundary, analog of the GCP project. Lowercase, hyphenated, within AWS's
+ * alias rules; same `ws-` shape as `makeProjectId`.
+ */
+export function makeAwsAccountName(slug: string, runId: string): string {
+  const short = runId.replace(/-/g, "").slice(0, 6);
+  return `ws-${slug}-${short}`
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, "-")
+    .slice(0, 50)
+    .replace(/-+$/, "");
+}
+
+/** A challenge competitor's own AWS account name, derived from their address. */
+export function makeChallengeAwsAccountName(
+  slug: string,
+  runId: string,
+  email: string,
+): string {
+  const short = runId.replace(/-/g, "").slice(0, 4);
+  const who = createHash("sha1").update(email).digest("hex").slice(0, 6);
+  const suffix = `-${short}-${who}`;
+  const base = `ch-${slug}`.toLowerCase().replace(/[^a-z0-9-]/g, "-");
+  return base.slice(0, 50 - suffix.length).replace(/-+$/, "") + suffix;
+}
+
+/** The unique root email an AWS account is registered under (plus-addressed). */
+export function awsAccountEmail(accountName: string, domain: string): string {
+  return `aws+${accountName}@${domain}`;
 }
 
 /**

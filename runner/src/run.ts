@@ -1,16 +1,20 @@
 import path from "node:path";
 import {
+  awsAccountEmail,
+  awsCfg,
   cloudStatePrefix,
   gcpCfg,
   stateBucket,
   TF_ROOT,
   challengeProjectMap,
   challengeResourceGroupMap,
+  makeAwsAccountName,
   makeClusterName,
   makeProjectId,
   makeResourceGroupName,
 } from "./config.js";
 import {
+  writeAwsTfvars,
   writeAzureChallengeTfvars,
   writeAzureTfvars,
   writeChallengeTfvars,
@@ -61,6 +65,9 @@ const AZURE_TF_SOURCE = "workshops/azure-base";
 /** Root config that creates one Azure resource group per challenge competitor. */
 const AZURE_CHALLENGE_TF_SOURCE = "challenges/azure-per-user";
 
+/** Root config that creates the workshop's single AWS member account. */
+const AWS_TF_SOURCE = "workshops/aws-base";
+
 /** Provision one workshop end to end: Workspace OU, accounts, then clouds. */
 export async function runWorkshop(runId: string): Promise<void> {
   const run = await getRun(runId);
@@ -99,12 +106,17 @@ export async function runWorkshop(runId: string): Promise<void> {
               ? await provisionAzurePerUser(run)
               : await provisionAzure(run),
           );
-        } else {
-          await log(
-            runId,
-            "system",
-            `${cloud.toUpperCase()} was requested but is not wired up yet — skipping.`,
-          );
+        } else if (cloud === "aws") {
+          if (run.mode === "challenge") {
+            // Per-competitor account orchestration is the next sub-slice.
+            await log(
+              runId,
+              "system",
+              "AWS challenge mode is not wired up yet — skipping.",
+            );
+          } else {
+            Object.assign(outputs, await provisionAws(run));
+          }
         }
       }
     }
@@ -440,6 +452,51 @@ async function provisionAzurePerUser(
     "system",
     `terraform apply — creating ${count} resource group(s) and Entra user(s), ` +
       `granting each competitor Owner on their own`,
+  );
+  await tfApply(workDir, (l) => log(run.id, l.stream, l.text));
+
+  return tfOutput(workDir);
+}
+
+/**
+ * Terraform the workshop's AWS environment: one new member account (the
+ * isolation boundary), an IAM user per attendee with PowerUserAccess, and a
+ * small EKS cluster. The AWS mirror of `provisionGcp`. Passwords are
+ * AWS-generated and come back in the outputs (`aws_attendee_passwords`) — AWS
+ * is the one cloud whose password is not the shared Google one.
+ */
+async function provisionAws(run: RunRow): Promise<Record<string, unknown>> {
+  const cfg = awsCfg();
+  const workDir = path.join(TF_ROOT, AWS_TF_SOURCE);
+  const accountName = makeAwsAccountName(run.slug, run.id);
+  const accountEmail = awsAccountEmail(accountName, cfg.accountEmailDomain);
+  const clusterName = makeClusterName(run.slug, run.id);
+
+  await log(run.id, "system", `Provisioning AWS account ${accountName}`);
+
+  const attendees = (await accountsFor(run.id)).map((a) => a.email);
+  writeAwsTfvars(
+    workDir,
+    run.id,
+    accountName,
+    accountEmail,
+    clusterName,
+    attendees,
+  );
+
+  await log(run.id, "system", "terraform init");
+  await tfInit(
+    workDir,
+    stateBucket(),
+    cloudStatePrefix(run.state_prefix, "aws"),
+    (l) => log(run.id, l.stream, l.text),
+  );
+
+  await log(
+    run.id,
+    "system",
+    `terraform apply — creating account, ${attendees.length} IAM user(s), the ` +
+      `EKS cluster ${clusterName}, and PowerUser grants`,
   );
   await tfApply(workDir, (l) => log(run.id, l.stream, l.text));
 

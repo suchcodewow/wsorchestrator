@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { azureCfg, gcpCfg } from "./config.js";
+import { awsCfg, azureCfg, gcpCfg } from "./config.js";
 
 /** Labels/tags stamped on every managed resource, in every cloud. */
 function labels(runId: string) {
@@ -30,6 +30,18 @@ function azureCommonVars(runId: string) {
     subscription_id: cfg.subscriptionId,
     tenant_id: cfg.tenantId,
     location: cfg.location,
+    run_id: runId,
+    labels: labels(runId),
+  };
+}
+
+/** Settings both AWS root configs take. */
+function awsCommonVars(runId: string) {
+  const cfg = awsCfg();
+  return {
+    region: cfg.region,
+    parent_ou_id: cfg.parentOuId,
+    account_access_role: cfg.accountAccessRole,
     run_id: runId,
     labels: labels(runId),
   };
@@ -128,5 +140,27 @@ export function writeAzureChallengeTfvars(
     ...azureCommonVars(runId),
     attendee_resource_groups: attendeeResourceGroups,
     attendee_passwords: attendees,
+  });
+}
+
+/**
+ * Write terraform.tfvars.json for a workshop's AWS environment: the per-run
+ * account, the EKS cluster, and the attendee addresses Terraform turns into IAM
+ * users. No passwords in — AWS generates its own and returns them in outputs.
+ */
+export function writeAwsTfvars(
+  workDir: string,
+  runId: string,
+  accountName: string,
+  accountEmail: string,
+  clusterName: string,
+  attendeeEmails: string[],
+) {
+  write(workDir, {
+    ...awsCommonVars(runId),
+    account_name: accountName,
+    account_email: accountEmail,
+    cluster_name: clusterName,
+    attendee_emails: attendeeEmails,
   });
 }

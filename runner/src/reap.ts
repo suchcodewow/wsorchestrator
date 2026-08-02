@@ -1,16 +1,20 @@
 import path from "node:path";
 import {
+  awsAccountEmail,
+  awsCfg,
   cloudStatePrefix,
   gcpCfg,
   stateBucket,
   TF_ROOT,
   challengeProjectMap,
   challengeResourceGroupMap,
+  makeAwsAccountName,
   makeClusterName,
   makeProjectId,
   makeResourceGroupName,
 } from "./config.js";
 import {
+  writeAwsTfvars,
   writeAzureChallengeTfvars,
   writeAzureTfvars,
   writeChallengeTfvars,
@@ -50,6 +54,9 @@ const AZURE_TF_SOURCE = "workshops/azure-base";
 /** Root config that creates one Azure resource group per challenge competitor. */
 const AZURE_CHALLENGE_TF_SOURCE = "challenges/azure-per-user";
 
+/** Root config that creates the workshop's single AWS member account. */
+const AWS_TF_SOURCE = "workshops/aws-base";
+
 /**
  * Destroy every run that is due: past its end time, or explicitly deleted in
  * the UI (see `reapableRuns`). Runs sequentially within this container.
@@ -83,6 +90,10 @@ async function destroyRun(run: RunRow): Promise<void> {
         } else if (cloud === "azure") {
           if (run.mode === "challenge") await destroyAzurePerUser(run);
           else await destroyAzure(run);
+        } else if (cloud === "aws") {
+          // AWS challenge mode is not provisioned yet, so only workshop mode
+          // has anything to tear down.
+          if (run.mode !== "challenge") await destroyAws(run);
         }
         // An unrecognized cloud never got provisioned, so there is nothing to
         // tear down for it.
@@ -275,6 +286,41 @@ async function destroyAzurePerUser(run: RunRow): Promise<void> {
     workDir,
     stateBucket(),
     cloudStatePrefix(run.state_prefix, "azure"),
+    (l) => log(run.id, l.stream, l.text),
+  );
+  await tfDestroy(workDir, (l) => log(run.id, l.stream, l.text));
+}
+
+/**
+ * Destroy a workshop's AWS environment. `terraform destroy` deletes the EKS
+ * cluster and IAM users, then closes the member account
+ * (close_on_deletion = true). The account then sits suspended ~90 days before
+ * AWS frees it — the reaper's part is done once destroy returns.
+ */
+async function destroyAws(run: RunRow): Promise<void> {
+  const cfg = awsCfg();
+  const workDir = path.join(TF_ROOT, AWS_TF_SOURCE);
+  const accountName = makeAwsAccountName(run.slug, run.id);
+  const accountEmail = awsAccountEmail(accountName, cfg.accountEmailDomain);
+
+  await log(
+    run.id,
+    "system",
+    `Destroying AWS account ${accountName} (closes the account)`,
+  );
+  const attendees = (await accountsFor(run.id)).map((a) => a.email);
+  writeAwsTfvars(
+    workDir,
+    run.id,
+    accountName,
+    accountEmail,
+    makeClusterName(run.slug, run.id),
+    attendees,
+  );
+  await tfInit(
+    workDir,
+    stateBucket(),
+    cloudStatePrefix(run.state_prefix, "aws"),
     (l) => log(run.id, l.stream, l.text),
   );
   await tfDestroy(workDir, (l) => log(run.id, l.stream, l.text));
