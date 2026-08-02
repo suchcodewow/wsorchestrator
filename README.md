@@ -5,8 +5,9 @@ attendees, and which clouds are needed. At its start time the app provisions a
 **Google Workspace organizational unit** named after the workshop, an account
 per attendee inside it, a **Harness organization** holding a project per
 attendee, and a dedicated **ephemeral cloud environment**, then streams the
-build results back. Everything auto-destroys when the TTL expires (1 hour by
-default).
+build results back. Everything auto-destroys when the TTL expires (1 day by
+default, 3 at most, chosen when the event is created and extendable a day at a
+time from the event's page).
 
 Google Cloud is wired up today (an ephemeral project per workshop, via
 Terraform); AWS and Azure can be selected but are not yet provisioned.
@@ -293,8 +294,8 @@ the user menu should show the role badge, a **Show all events** switch, and
 Then schedule a workshop — give it a name, an attendee count, and tick **Google
 Cloud Platform**. Set the start time a few minutes out; the scheduler picks it
 up within 5 minutes. Watch the run view stream the OU and account creation, then
-the Terraform output as it creates the project. It auto-destroys ~1 hour later
-(the reaper runs every 5 minutes).
+the Terraform output as it creates the project. It auto-destroys a day later by
+default (the reaper runs every 5 minutes and tears down whatever is past its TTL).
 
 **Done.** For day-to-day redeploys and rollbacks see [DEPLOY.md](DEPLOY.md).
 

@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { riseChild, staggerParent } from "@/lib/motion";
 import { DeleteEventButton } from "./delete-event-button";
+import { ExtendEventButton } from "./extend-event-button";
 import { RunConfig } from "./run-config";
 
 type RunPayload = {
@@ -28,9 +29,49 @@ type RunPayload = {
   owner: { id: string; name: string | null; email: string | null } | null;
 };
 
-const TERMINAL = new Set(["ready", "destroyed", "failed"]);
 // Poll only while the run is actively moving; scheduled/terminal runs are static.
 const ACTIVE = new Set(["requested", "provisioning", "applying", "destroying"]);
+
+/**
+ * When the event's cloud resources go away, in the words the page should use.
+ *
+ * `projected` — it hasn't started yet, so the moment is start + lifetime and
+ *   only an estimate; it firms up to `expiresAt` once the build goes ready.
+ * A failed run was expired on the spot purely so the reaper cleans up its
+ * half-built resources — that isn't a teardown worth advertising, so it's left
+ * out.
+ */
+/** A lifetime in seconds as the largest whole unit it divides into evenly. */
+function humanDuration(seconds: number): string {
+  const plural = (n: number, unit: string) => `${n} ${unit}${n === 1 ? "" : "s"}`;
+  if (seconds % 86400 === 0) return plural(seconds / 86400, "day");
+  if (seconds % 3600 === 0) return plural(seconds / 3600, "hour");
+  return plural(Math.round(seconds / 60), "minute");
+}
+
+function destroyMoment(
+  run: WorkshopRun,
+): { label: string; when: Date; projected: boolean } | null {
+  if (run.status === "failed") return null;
+  if (run.status === "destroyed") {
+    return run.destroyedAt
+      ? { label: "Destroyed", when: new Date(run.destroyedAt), projected: false }
+      : null;
+  }
+  if (run.expiresAt) {
+    return { label: "Destroys", when: new Date(run.expiresAt), projected: false };
+  }
+  if (run.scheduledStart) {
+    return {
+      label: "Destroys",
+      when: new Date(
+        new Date(run.scheduledStart).getTime() + run.ttlSeconds * 1000,
+      ),
+      projected: true,
+    };
+  }
+  return null;
+}
 
 /**
  * Render one Terraform output. A challenge's per-competitor outputs are maps
@@ -93,6 +134,7 @@ export function RunView({
   const { run, logs, accounts, owner } = data;
   const outputs = run.outputs as Record<string, unknown> | null;
   const owned = run.userId === viewerId;
+  const destroy = destroyMoment(run);
 
   return (
     <motion.div
@@ -124,6 +166,20 @@ export function RunView({
                 Scheduled for {new Date(run.scheduledStart).toLocaleString()}
               </p>
             )}
+            {destroy && (
+              <p className="text-sm text-muted-foreground">
+                {destroy.projected ? "Destroys around " : `${destroy.label} `}
+                <span className="font-medium text-foreground">
+                  {destroy.when.toLocaleString()}
+                </span>
+                {destroy.projected && (
+                  <span className="text-muted-foreground">
+                    {" "}
+                    — {humanDuration(run.ttlSeconds)} after it starts
+                  </span>
+                )}
+              </p>
+            )}
             <div className="mt-2 flex flex-wrap items-center gap-2">
               {/* Whose event this is, but only when that isn't the obvious
                   answer — a manager arrives here from the all-users view. */}
@@ -135,15 +191,11 @@ export function RunView({
               )}
               {run.orgUnitPath && <MetaChip>{run.orgUnitPath}</MetaChip>}
               {run.gcpProjectId && <MetaChip>{run.gcpProjectId}</MetaChip>}
-              {run.expiresAt && !TERMINAL.has(run.status) && (
-                <MetaChip>
-                  Expires {new Date(run.expiresAt).toLocaleTimeString()}
-                </MetaChip>
-              )}
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-2">
             <StatusBadge status={run.status} />
+            <ExtendEventButton run={run} onExtended={refresh} />
             <DeleteEventButton run={run} owned={owned} onRequested={refresh} />
           </div>
         </div>

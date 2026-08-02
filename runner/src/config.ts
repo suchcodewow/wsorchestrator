@@ -76,16 +76,57 @@ export function harnessCfg() {
       /\/+$/,
       "",
     ),
+    /*
+     * Role and resource-group bindings for the three grants a workshop hands
+     * out, mirroring the proven `harnessevents.ps1` reference. Each binding
+     * carries a display name alongside its identifier: the identifier is what
+     * grants the access, the name is what the role-assignment payload's
+     * notification is composed from, and a null name there is dereferenced
+     * server-side into a 500 rather than a 400.
+     *
+     * The account-admin and project-admin roles are Harness built-ins; the
+     * org-level attendee role is custom (see `createAttendeeRole`). The
+     * reference sends `managedRole: false` for all of them and it works, so the
+     * client does the same rather than distinguishing built-in from custom.
+     */
+
+    /** Makes the run's creator an administrator of the whole account. */
+    accountAdminRole:
+      process.env.HARNESS_ACCOUNT_ADMIN_ROLE ?? "_account_admin",
+    accountAdminRoleName:
+      process.env.HARNESS_ACCOUNT_ADMIN_ROLE_NAME ?? "Account Admin",
+    accountAdminResourceGroup:
+      process.env.HARNESS_ACCOUNT_ADMIN_RESOURCE_GROUP ??
+      "_all_resources_including_child_scopes",
+    accountAdminResourceGroupName:
+      process.env.HARNESS_ACCOUNT_ADMIN_RESOURCE_GROUP_NAME ??
+      "All Resources Including Child Scopes",
+
     /** Makes each attendee an administrator of their own project. */
     projectAdminRole: process.env.HARNESS_PROJECT_ADMIN_ROLE ?? "_project_admin",
+    projectAdminRoleName:
+      process.env.HARNESS_PROJECT_ADMIN_ROLE_NAME ?? "Project Admin",
     projectAdminResourceGroup:
       process.env.HARNESS_PROJECT_ADMIN_RESOURCE_GROUP ??
       "_all_project_level_resources",
-    /** Gives every attendee view/use access across the workshop org. */
-    orgViewerRole: process.env.HARNESS_ORG_VIEWER_ROLE ?? "_organization_viewer",
-    orgViewerResourceGroup:
-      process.env.HARNESS_ORG_VIEWER_RESOURCE_GROUP ??
+    projectAdminResourceGroupName:
+      process.env.HARNESS_PROJECT_ADMIN_RESOURCE_GROUP_NAME ??
+      "All Project Level Resources",
+
+    /**
+     * Custom org-level role every attendee is bound to, giving the IDP and
+     * core view/access permissions the reference's `attendeeRole` grants. The
+     * identifier and name are what `createAttendeeRole` creates and what the
+     * org binding then references, so they must agree.
+     */
+    attendeeRole: process.env.HARNESS_ATTENDEE_ROLE ?? "attendeeRole",
+    attendeeRoleName: process.env.HARNESS_ATTENDEE_ROLE_NAME ?? "attendeeRole",
+    orgResourceGroup:
+      process.env.HARNESS_ORG_RESOURCE_GROUP ??
       "_all_organization_level_resources",
+    orgResourceGroupName:
+      process.env.HARNESS_ORG_RESOURCE_GROUP_NAME ??
+      "All Organization Level Resources",
   };
 }
 

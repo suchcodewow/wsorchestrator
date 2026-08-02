@@ -160,6 +160,21 @@ export const EVENT_LIMITS: Record<
 
 export const limitsFor = (mode: EventMode) => EVENT_LIMITS[mode];
 
+/** Seconds in a day. TTLs are stored in seconds but chosen in whole days. */
+export const DAY_SECONDS = 24 * 60 * 60;
+
+/**
+ * How long an event lives before the reaper tears it down, chosen in days on
+ * the create form. The default is one day; three is the ceiling. An event that
+ * needs longer is extended one day at a time from its own page — see
+ * `EXTENSION_SECONDS` and `extendRun`.
+ */
+export const DEFAULT_TTL_DAYS = 1;
+export const MAX_TTL_DAYS = 3;
+
+/** One click of "Extend" on an event's page buys it this much more time. */
+export const EXTENSION_SECONDS = DAY_SECONDS;
+
 /**
  * Whether a run's configuration can still be changed. Pure, so both the API
  * and the client form can agree on it.
@@ -211,8 +226,14 @@ export const workshopRuns = pgTable(
     /** Terraform outputs surfaced in the UI (project id, URLs, ...). */
     outputs: jsonb("outputs"),
     error: text("error"),
-    /** Time-to-live before auto-destroy. Defaults to 1 hour for testing. */
-    ttlSeconds: integer("ttl_seconds").notNull().default(3600),
+    /**
+     * Time-to-live before auto-destroy, in seconds. Chosen in whole days on
+     * the create form (1–{@link MAX_TTL_DAYS}); the default is one day. An
+     * event can buy more time a day at a time via "Extend" on its page.
+     */
+    ttlSeconds: integer("ttl_seconds")
+      .notNull()
+      .default(DEFAULT_TTL_DAYS * DAY_SECONDS),
     /**
      * Somebody asked for this run to be deleted while it still held live
      * resources. The row has to outlive the request — the reaper needs it to

@@ -10,9 +10,11 @@ import { tfApply, tfInit, tfOutput } from "./terraform.js";
 import { allocateEmails, createAccount, createOrgUnit } from "./directory.js";
 import { displayName } from "./usernames.js";
 import {
+  createAttendeeRole,
   createOrg,
   createProject,
-  grantOrgViewer,
+  grantAccountAdmin,
+  grantOrgAttendee,
   grantProjectAdmin,
   orgIdentifier,
   orgUrl,
@@ -23,6 +25,7 @@ import {
   addAccount,
   getRun,
   log,
+  runCreatorEmail,
   setApplying,
   setFailed,
   setOrgUnitPath,
@@ -142,6 +145,21 @@ async function provisionHarness(run: RunRow): Promise<Record<string, unknown>> {
     await log(run.id, "stdout", `organization ${orgId} already existed — reusing`);
   }
 
+  // The org-scope binding every attendee gets references this role, so it has
+  // to exist before anyone is bound to it.
+  await createAttendeeRole(orgId);
+
+  // Grant the run's creator account admin — the instructor role the reference
+  // gives an event's owner. A creator without a recorded email is skipped
+  // rather than failing the run.
+  const creator = await runCreatorEmail(run.id);
+  if (creator) {
+    await grantAccountAdmin(creator);
+    await log(run.id, "stdout", `${creator} -> account admin (instructor)`);
+  } else {
+    await log(run.id, "system", "no creator email on file — skipping account admin");
+  }
+
   const accounts = await accountsFor(run.id);
   await log(
     run.id,
@@ -155,7 +173,7 @@ async function provisionHarness(run: RunRow): Promise<Record<string, unknown>> {
 
     await createProject(orgId, projectId, `${givenName} ${familyName}`);
     await grantProjectAdmin(orgId, projectId, email);
-    await grantOrgViewer(orgId, email);
+    await grantOrgAttendee(orgId, email);
 
     await log(run.id, "stdout", `${email} -> admin of project ${projectId}`);
   }

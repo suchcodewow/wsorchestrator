@@ -5,9 +5,20 @@ import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import gsap from "gsap";
 import { ChevronLeft, ChevronRight, Plus, Swords } from "lucide-react";
+import { DAY_SECONDS } from "@/db/schema";
 import type { CalendarScope, Cloud, EventMode, RunStatus } from "@/db/schema";
 import { Button } from "@/components/ui/button";
-import { statusDot, isActiveStatus } from "@/components/status-badge";
+import {
+  statusChip,
+  statusDot,
+  isActiveStatus,
+} from "@/components/status-badge";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { EASE, SPRING_SNAPPY } from "@/lib/motion";
 import { CreateEventDialog } from "./create-event-dialog";
@@ -18,6 +29,10 @@ type CalendarEvent = {
   mode: EventMode;
   status: RunStatus;
   scheduledStart: string | null;
+  /** Lifetime chosen on the form, in seconds — used before it goes live. */
+  ttlSeconds: number;
+  /** The real teardown moment, once known; overrides `ttlSeconds`. */
+  expiresAt: string | null;
   userCount: number;
   clouds: Cloud[];
   /** Who booked it, when that is somebody other than the viewer. */
@@ -29,8 +44,42 @@ const MONTHS = [
   "January", "February", "March", "April", "May", "June",
   "July", "August", "September", "October", "November", "December",
 ];
+const DAY_MS = 86_400_000;
 
-const dayKey = (y: number, m: number, d: number) => `${y}-${m}-${d}`;
+/**
+ * A calendar-day index — days since the epoch in local time, so subtracting two
+ * gives whole days between dates regardless of the time of day within them.
+ */
+function dayNum(d: Date): number {
+  const midnight = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  return Math.round(midnight.getTime() / DAY_MS);
+}
+
+/**
+ * How many whole days an event occupies on the calendar. Once it is live the
+ * real span is `expiresAt − start`; before that it is the lifetime picked on
+ * the form. At least one day, so a same-day event still gets a cell.
+ */
+function durationDays(e: CalendarEvent, start: Date): number {
+  const seconds = e.expiresAt
+    ? (new Date(e.expiresAt).getTime() - start.getTime()) / 1000
+    : e.ttlSeconds;
+  return Math.max(1, Math.round(seconds / DAY_SECONDS));
+}
+
+/** Layout metrics for the day cells and the bars laid over them (px). */
+const DATE_ROW = 34; // room for the date number before bars begin
+const LANE = 26; // height of one bar row, including its gap
+const BASE_CELL = 120; // a week with no events is still this tall
+
+/** Human summary for a bar's tooltip: how long it runs and when it ends. */
+function eventTitle(e: CalendarEvent, days: number): string {
+  const span = `${days} day${days === 1 ? "" : "s"}`;
+  const ends = e.expiresAt
+    ? `, ends ${new Date(e.expiresAt).toLocaleString()}`
+    : "";
+  return `${e.name} · runs ${span}${ends}`;
+}
 
 export function EventCalendar({
   events,
@@ -56,16 +105,32 @@ export function EventCalendar({
   // not the same event as deliberately changing month.
   const mounted = useRef(false);
 
-  // Group events by the local day they start on.
-  const byDay = useMemo(() => {
-    const map = new Map<string, CalendarEvent[]>();
-    for (const e of events) {
-      if (!e.scheduledStart) continue;
-      const d = new Date(e.scheduledStart);
-      const key = dayKey(d.getFullYear(), d.getMonth(), d.getDate());
-      (map.get(key) ?? map.set(key, []).get(key)!).push(e);
+  // Place every event on a horizontal lane, so an event keeps the same row as
+  // its bar crosses days and weeks and never collides with another. Longer,
+  // earlier events claim the top lanes; a later one drops to the first lane
+  // free on its start day (interval packing).
+  const placed = useMemo(() => {
+    const spans = events
+      .filter((e) => e.scheduledStart)
+      .map((e) => {
+        const start = new Date(e.scheduledStart!);
+        const startNum = dayNum(start);
+        const days = durationDays(e, start);
+        return { e, startNum, endNum: startNum + days - 1, days };
+      })
+      .sort(
+        (a, b) => a.startNum - b.startNum || b.days - a.days,
+      );
+
+    const laneEnds: number[] = []; // last day occupied, per lane
+    const lane = new Map<string, number>();
+    for (const s of spans) {
+      let l = laneEnds.findIndex((end) => end < s.startNum);
+      if (l === -1) l = laneEnds.length;
+      laneEnds[l] = s.endNum;
+      lane.set(s.e.id, l);
     }
-    return map;
+    return { spans, lane };
   }, [events]);
 
   // Build the grid: leading blanks + days, padded to full weeks.
@@ -78,6 +143,66 @@ export function EventCalendar({
     while (arr.length % 7 !== 0) arr.push(null);
     return arr;
   }, [year, month]);
+
+  // Slice the month into weeks and, for each, the bar segments that fall in it.
+  // An event spanning several weeks contributes one segment per week; each is
+  // capped (rounded) only on the end that is the event's true start or finish,
+  // so continuations read as a single run flowing across the rows.
+  const weeks = useMemo(() => {
+    const startWeekday = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const monthFirstNum = dayNum(new Date(year, month, 1));
+    const lastNum = monthFirstNum + daysInMonth - 1;
+
+    const out: {
+      days: (number | null)[];
+      segments: {
+        e: CalendarEvent;
+        lane: number;
+        colStart: number; // 0-based column within the week
+        span: number;
+        roundLeft: boolean;
+        roundRight: boolean;
+        days: number;
+      }[];
+      minHeight: number;
+    }[] = [];
+
+    for (let w = 0; w * 7 < cells.length; w++) {
+      const days = cells.slice(w * 7, w * 7 + 7);
+      const weekLoNum = monthFirstNum + Math.max(1, w * 7 - startWeekday + 1) - 1;
+      const weekHiNum =
+        monthFirstNum + Math.min(daysInMonth, w * 7 + 6 - startWeekday + 1) - 1;
+
+      const segments = [];
+      for (const s of placed.spans) {
+        const clipStart = Math.max(s.startNum, weekLoNum);
+        const clipEnd = Math.min(s.endNum, weekHiNum);
+        if (clipStart > clipEnd) continue;
+
+        const colStart = startWeekday + (clipStart - monthFirstNum + 1) - 1 - w * 7;
+        segments.push({
+          e: s.e,
+          lane: placed.lane.get(s.e.id)!,
+          colStart,
+          span: clipEnd - clipStart + 1,
+          // Cap the left only where the event truly begins (and is on-month);
+          // the right only where it truly ends.
+          roundLeft: clipStart === s.startNum && s.startNum >= monthFirstNum,
+          roundRight: clipEnd === s.endNum && s.endNum <= lastNum,
+          days: s.days,
+        });
+      }
+
+      const laneCount = segments.reduce((m, s) => Math.max(m, s.lane + 1), 0);
+      out.push({
+        days,
+        segments,
+        minHeight: Math.max(BASE_CELL, DATE_ROW + laneCount * LANE + 8),
+      });
+    }
+    return out;
+  }, [cells, placed, year, month]);
 
   /*
    * Changing month sweeps the day cells in on a short stagger. GSAP owns this
@@ -128,6 +253,7 @@ export function EventCalendar({
   }
 
   return (
+    <TooltipProvider>
     <div className="space-y-8">
       <motion.div
         initial={{ opacity: 0, y: 8 }}
@@ -216,103 +342,127 @@ export function EventCalendar({
           ))}
         </div>
 
-        <div ref={gridRef} className="grid grid-cols-7">
-          {cells.map((d, i) => {
-            const dayEvents = d
-              ? (byDay.get(dayKey(year, month, d)) ?? [])
-              : [];
-            const today_ = d ? isToday(d) : false;
+        <div ref={gridRef}>
+          {weeks.map((week, w) => (
+            <div key={`${year}-${month}-w${w}`} className="relative">
+              {/* Day cells: the calendar's clickable base and its borders. */}
+              <div className="grid grid-cols-7">
+                {week.days.map((d, c) => {
+                  const today_ = d ? isToday(d) : false;
+                  return (
+                    <div
+                      key={c}
+                      data-cell
+                      style={{ minHeight: week.minHeight }}
+                      className={cn(
+                        "group relative border-b border-r p-2 transition-colors nth-[7n]:border-r-0",
+                        d ? "cursor-pointer hover:bg-brand/4.5" : "bg-muted/20",
+                      )}
+                      onClick={
+                        d ? () => openCreate(new Date(year, month, d)) : undefined
+                      }
+                    >
+                      {d && (
+                        <div className="flex items-center justify-between">
+                          <span
+                            className={cn(
+                              "inline-flex size-6.5 items-center justify-center rounded-full text-[13px] tnum transition-colors",
+                              today_
+                                ? "bg-brand font-medium text-brand-foreground"
+                                : "text-muted-foreground group-hover:text-foreground",
+                            )}
+                          >
+                            {d}
+                          </span>
+                          {/* Affordance for click-to-create on an empty day. */}
+                          <span className="flex size-5 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100">
+                            <Plus className="size-3.5" />
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
 
-            return (
+              {/* Event bars, laid over the cells so a run can stretch across
+                  the days it covers. The layer ignores pointer events; each
+                  bar re-enables them for itself. */}
               <div
-                key={`${year}-${month}-${i}`}
-                data-cell
-                className={cn(
-                  "group relative min-h-30 border-b border-r p-2 transition-colors nth-[7n]:border-r-0",
-                  d
-                    ? "cursor-pointer hover:bg-brand/4.5"
-                    : "bg-muted/20",
-                )}
-                onClick={
-                  d ? () => openCreate(new Date(year, month, d)) : undefined
-                }
+                className="pointer-events-none absolute inset-x-0 grid grid-cols-7 gap-y-1"
+                style={{ top: DATE_ROW, gridAutoRows: `${LANE - 4}px` }}
               >
-                {d && (
-                  <>
-                    <div className="flex items-center justify-between">
-                      <span
+                {week.segments.map((s) => (
+                  <Tooltip key={s.e.id}>
+                    <TooltipTrigger asChild>
+                      <motion.button
+                        style={{
+                          gridColumn: `${s.colStart + 1} / span ${s.span}`,
+                          gridRow: s.lane + 1,
+                        }}
+                        onClick={(ev) => {
+                          ev.stopPropagation();
+                          router.push(`/runs/${s.e.id}`);
+                        }}
+                        whileHover={{ y: -1 }}
+                        whileTap={{ scale: 0.99 }}
+                        transition={SPRING_SNAPPY}
                         className={cn(
-                          "inline-flex size-6.5 items-center justify-center rounded-full text-[13px] tnum transition-colors",
-                          today_
-                            ? "bg-brand font-medium text-brand-foreground"
-                            : "text-muted-foreground group-hover:text-foreground",
+                          "pointer-events-auto flex min-w-0 items-center gap-1.5 border px-1.5 text-left text-xs shadow-xs transition-shadow hover:shadow-sm",
+                          statusChip(s.e.status),
+                          // Round and inset only the true ends; a continuation
+                          // runs flush to the edge so it reads as one bar.
+                          s.roundLeft ? "ml-0.5 rounded-l-md" : "rounded-l-none",
+                          s.roundRight ? "mr-0.5 rounded-r-md" : "rounded-r-none",
                         )}
                       >
-                        {d}
-                      </span>
-                      {/* Affordance for the click-to-create on an empty day. */}
-                      <span className="flex size-5 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100">
-                        <Plus className="size-3.5" />
-                      </span>
-                    </div>
-
-                    <div className="mt-1.5 space-y-1">
-                      {dayEvents.map((e) => (
-                        <motion.button
-                          key={e.id}
-                          onClick={(ev) => {
-                            ev.stopPropagation();
-                            router.push(`/runs/${e.id}`);
-                          }}
-                          whileHover={{ y: -1, scale: 1.02 }}
-                          whileTap={{ scale: 0.98 }}
-                          transition={SPRING_SNAPPY}
-                          className="flex w-full items-center gap-1.5 rounded-lg border bg-card px-1.5 py-1 text-left text-xs shadow-xs hover:border-brand-border hover:shadow-sm"
-                        >
-                          <span className="relative flex size-1.5 shrink-0">
-                            {isActiveStatus(e.status) && (
-                              <span
-                                className={cn(
-                                  "absolute inline-flex size-full animate-ping rounded-full opacity-75",
-                                  statusDot(e.status),
-                                )}
-                              />
-                            )}
+                        <span className="relative flex size-1.5 shrink-0">
+                          {isActiveStatus(s.e.status) && (
                             <span
                               className={cn(
-                                "relative inline-flex size-1.5 rounded-full",
-                                statusDot(e.status),
+                                "absolute inline-flex size-full animate-ping rounded-full opacity-75",
+                                statusDot(s.e.status),
                               )}
                             />
-                          </span>
-                          {e.mode === "challenge" && (
-                            <Swords
-                              className="size-3 shrink-0 text-brand"
-                              aria-label="Challenge"
-                            />
                           )}
-                          <span className="min-w-0 flex-1">
-                            <span className="block truncate font-medium">
-                              {e.name}
-                            </span>
-                            {/* Whose it is, on the all-users view only. */}
-                            {e.owner && (
-                              <span className="block truncate text-[10px] leading-tight text-muted-foreground">
-                                {e.owner}
-                              </span>
+                          <span
+                            className={cn(
+                              "relative inline-flex size-1.5 rounded-full",
+                              statusDot(s.e.status),
                             )}
+                          />
+                        </span>
+                        {s.e.mode === "challenge" && (
+                          <Swords
+                            className="size-3 shrink-0"
+                            aria-label="Challenge"
+                          />
+                        )}
+                        <span className="min-w-0 flex-1 truncate font-medium">
+                          {s.e.name}
+                          {/* Whose it is, on the all-users view only. */}
+                          {s.e.owner && (
+                            <span className="font-normal opacity-70">
+                              {" "}
+                              · {s.e.owner}
+                            </span>
+                          )}
+                        </span>
+                        {/* On the closing segment, spell out the run's length
+                            so "how long" is answerable without opening it. */}
+                        {s.roundRight && (
+                          <span className="shrink-0 tabular-nums opacity-80">
+                            {s.days}d
                           </span>
-                          <span className="shrink-0 text-muted-foreground tnum">
-                            {e.userCount}
-                          </span>
-                        </motion.button>
-                      ))}
-                    </div>
-                  </>
-                )}
+                        )}
+                      </motion.button>
+                    </TooltipTrigger>
+                    <TooltipContent>{eventTitle(s.e, s.days)}</TooltipContent>
+                  </Tooltip>
+                ))}
               </div>
-            );
-          })}
+            </div>
+          ))}
         </div>
       </motion.div>
 
@@ -323,5 +473,6 @@ export function EventCalendar({
         mode={mode}
       />
     </div>
+    </TooltipProvider>
   );
 }

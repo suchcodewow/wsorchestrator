@@ -70,6 +70,12 @@ export function statusDot(status: RunStatus): string {
   return STYLES[status].dot;
 }
 
+/** The tinted chip background/text for a status — used by the calendar's
+ * multi-day bars so a run's colour there matches its badge everywhere else. */
+export function statusChip(status: RunStatus): string {
+  return STYLES[status].chip;
+}
+
 export function isActiveStatus(status: RunStatus): boolean {
   return ACTIVE.includes(status);
 }

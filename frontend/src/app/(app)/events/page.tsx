@@ -22,6 +22,8 @@ export default async function EventsPage() {
     mode: r.mode,
     status: r.status,
     scheduledStart: r.scheduledStart ? r.scheduledStart.toISOString() : null,
+    ttlSeconds: r.ttlSeconds,
+    expiresAt: r.expiresAt ? r.expiresAt.toISOString() : null,
     userCount: r.userCount,
     clouds: r.clouds,
     // Only shown at `all` scope, where the room the event belongs to is the

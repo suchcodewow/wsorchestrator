@@ -149,6 +149,26 @@ export async function addAccount(
   );
 }
 
+/**
+ * Email of the user who created a run, so they can be granted account admin —
+ * the instructor role the reference script gives an event's owner.
+ *
+ * The `users.email` column is nullable, so a creator without a recorded address
+ * comes back undefined and the caller skips the grant rather than failing.
+ */
+export async function runCreatorEmail(
+  runId: string,
+): Promise<string | undefined> {
+  const { rows } = await pool.query<{ email: string | null }>(
+    `select u.email
+       from workshop_runs r
+       join users u on u.id = r.user_id
+      where r.id = $1`,
+    [runId],
+  );
+  return rows[0]?.email ?? undefined;
+}
+
 export async function accountsFor(runId: string): Promise<{ email: string }[]> {
   const { rows } = await pool.query<{ email: string }>(
     `select email from workshop_accounts where run_id = $1 order by id`,

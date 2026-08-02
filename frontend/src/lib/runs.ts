@@ -2,6 +2,8 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   CLOUD_LABELS,
+  DAY_SECONDS,
+  EXTENSION_SECONDS,
   editabilityOf,
   limitsFor,
   runLogs,
@@ -55,6 +57,14 @@ export function slugify(name: string, fallback = "workshop"): string {
   return slug.length > 0 ? slug : fallback;
 }
 
+/** A lifetime in seconds as the largest whole unit it divides into evenly. */
+function humanDuration(seconds: number): string {
+  const plural = (n: number, unit: string) => `${n} ${unit}${n === 1 ? "" : "s"}`;
+  if (seconds % 86400 === 0) return plural(seconds / 86400, "day");
+  if (seconds % 3600 === 0) return plural(seconds / 3600, "hour");
+  return plural(Math.round(seconds / 60), "minute");
+}
+
 /**
  * Schedule a workshop for a user. The run is created in `scheduled` with a
  * start time; the `tf-scheduler` job auto-provisions it once that time arrives.
@@ -66,6 +76,8 @@ export async function createScheduledRun(input: {
   clouds: Cloud[];
   userId: string;
   scheduledStart: Date;
+  /** How long the event lives before teardown, in seconds. */
+  ttlSeconds: number;
   /** Started from "Start now" rather than booked for a future time. */
   startNow?: boolean;
 }) {
@@ -83,6 +95,7 @@ export async function createScheduledRun(input: {
       clouds: input.clouds,
       status: "scheduled",
       scheduledStart: input.scheduledStart,
+      ttlSeconds: input.ttlSeconds,
       statePrefix: `workshops/${runId}`,
     })
     .returning();
@@ -96,12 +109,14 @@ export async function createScheduledRun(input: {
     ? "to start now"
     : `for ${input.scheduledStart.toISOString()}`;
 
+  const lifetime = `runs ${humanDuration(input.ttlSeconds)} before teardown`;
+
   await db.insert(runLogs).values({
     runId,
     stream: "system",
     message:
       `Scheduled ${input.mode} "${input.name}" ${when} — ` +
-      `${input.userCount} user(s), ${clouds}.`,
+      `${input.userCount} user(s), ${clouds}, ${lifetime}.`,
   });
 
   return { run };
@@ -194,6 +209,64 @@ export async function updateRunConfig(
   return { ok: true, run: updated, needsReprovision: editability === "grow" };
 }
 
+export type ExtendRunError = "not_found" | "not_extendable";
+
+/**
+ * Grant an event one more day before teardown.
+ *
+ * Where the extra day lands depends on how far along the run is:
+ *   * `ready`/`failed` already have an `expiresAt` the reaper watches, so the
+ *     day is added there.
+ *   * A `scheduled` or in-flight run has no expiry yet — `runWorkshop` computes
+ *     it from `ttlSeconds` when it goes ready — so the day is added to that
+ *     instead, and carries through when the expiry is finally set.
+ *
+ * A run that is tearing down, gone, or failed can't be extended: its resources
+ * are on their way out (a failed run is expired on the spot so the reaper
+ * cleans up whatever it half-built) and there is nothing left to keep alive.
+ */
+export async function extendRun(
+  runId: string,
+  viewer: Viewer,
+): Promise<
+  { ok: true; run: WorkshopRun } | { ok: false; error: ExtendRunError }
+> {
+  const run = await db.query.workshopRuns.findFirst({
+    where: and(eq(workshopRuns.id, runId), ownedBy(viewer)),
+  });
+  if (!run) return { ok: false, error: "not_found" };
+
+  const gone =
+    run.deleteRequested ||
+    run.status === "destroying" ||
+    run.status === "destroyed" ||
+    run.status === "failed";
+  if (gone) return { ok: false, error: "not_extendable" };
+
+  const [updated] = await db
+    .update(workshopRuns)
+    .set(
+      run.expiresAt
+        ? { expiresAt: new Date(run.expiresAt.getTime() + EXTENSION_SECONDS * 1000) }
+        : { ttlSeconds: run.ttlSeconds + EXTENSION_SECONDS },
+    )
+    .where(eq(workshopRuns.id, runId))
+    .returning();
+
+  const extraDays = EXTENSION_SECONDS / DAY_SECONDS;
+  await db.insert(runLogs).values({
+    runId,
+    stream: "system",
+    message: updated.expiresAt
+      ? `Extended by ${extraDays} day — now auto-destroys at ${updated.expiresAt.toISOString()}.`
+      : `Extended by ${extraDays} day — lifetime is now ${humanDuration(
+          updated.ttlSeconds,
+        )} once it starts.`,
+  });
+
+  return { ok: true, run: updated };
+}
+
 export async function listRunsForUser(userId: string) {
   return db.query.workshopRuns.findMany({
     where: eq(workshopRuns.userId, userId),
@@ -223,6 +296,11 @@ export async function listCalendarRuns(
       mode: workshopRuns.mode,
       status: workshopRuns.status,
       scheduledStart: workshopRuns.scheduledStart,
+      // Duration: how long it lives (from the form) and, once live, the moment
+      // it actually expires. The calendar draws an event across the days it
+      // covers from these.
+      ttlSeconds: workshopRuns.ttlSeconds,
+      expiresAt: workshopRuns.expiresAt,
       userCount: workshopRuns.userCount,
       clouds: workshopRuns.clouds,
       ownerId: workshopRuns.userId,

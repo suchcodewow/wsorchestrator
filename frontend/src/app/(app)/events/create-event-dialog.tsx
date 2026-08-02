@@ -9,6 +9,8 @@ import { Input } from "@/components/ui/input";
 import {
   CLOUDS,
   CLOUD_LABELS,
+  DEFAULT_TTL_DAYS,
+  MAX_TTL_DAYS,
   limitsFor,
   type Cloud,
   type EventMode,
@@ -85,6 +87,7 @@ export function CreateEventDialog({
   const router = useRouter();
   const [name, setName] = useState("");
   const [userCount, setUserCount] = useState(String(limits.defaultUsers));
+  const [ttlDays, setTtlDays] = useState(String(DEFAULT_TTL_DAYS));
   const [clouds, setClouds] = useState<Cloud[]>([]);
   const [start, setStart] = useState("");
   const [pending, setPending] = useState<"now" | "schedule" | null>(null);
@@ -104,6 +107,7 @@ export function CreateEventDialog({
       setStart(toLocalInput(defaultStart(initialDate)));
       setName("");
       setUserCount(String(limits.defaultUsers));
+      setTtlDays(String(DEFAULT_TTL_DAYS));
       setClouds([]);
       setError(null);
     }
@@ -131,6 +135,11 @@ export function CreateEventDialog({
       setError(`Enter a number of users between 1 and ${limits.maxUsers}.`);
       return;
     }
+    const days = Number(ttlDays);
+    if (!Number.isInteger(days) || days < 1 || days > MAX_TTL_DAYS) {
+      setError(`Enter a number of days between 1 and ${MAX_TTL_DAYS}.`);
+      return;
+    }
     if (clouds.length === 0) {
       setError(singleCloud ? "Pick a cloud." : "Pick at least one cloud.");
       return;
@@ -146,6 +155,7 @@ export function CreateEventDialog({
           name,
           mode,
           userCount: count,
+          ttlDays: days,
           clouds,
           ...(startNow
             ? { startNow: true }
@@ -293,20 +303,29 @@ export function CreateEventDialog({
           </motion.fieldset>
 
           <motion.div variants={riseChild} className="grid gap-1.5">
-            <label htmlFor="ws-start" className="text-sm font-medium">
-              Start date &amp; time
+            <label htmlFor="ws-days" className="text-sm font-medium">
+              How many days should it run?
             </label>
             <Input
-              id="ws-start"
-              type="datetime-local"
-              className="datetime-field border-0 shadow-none pr-1"
-              value={start}
-              onChange={(e) => setStart(e.target.value)}
+              id="ws-days"
+              type="number"
+              inputMode="numeric"
+              min={1}
+              max={MAX_TTL_DAYS}
+              step={1}
+              value={ttlDays}
+              onChange={(e) => setTtlDays(e.target.value)}
               required
+              className="tnum"
             />
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              The {copy.noun} and everything it provisions are torn down
+              automatically after this many days (1–{MAX_TTL_DAYS}). You can add
+              a day later from the {copy.noun}&rsquo;s page.
+            </p>
           </motion.div>
 
-          {/* Separated from Schedule: this one ignores the date above. */}
+          {/* Separated from Schedule: this one ignores the date below. */}
           <motion.div
             variants={riseChild}
             className="grid gap-1.5 rounded-lg border border-dashed p-3"
@@ -325,8 +344,22 @@ export function CreateEventDialog({
               {pending === "now" ? "Starting…" : "Start now"}
             </Button>
             <p className="text-xs text-muted-foreground">
-              Builds the {copy.noun} immediately, ignoring the start time above.
+              Builds the {copy.noun} immediately, ignoring the start time below.
             </p>
+          </motion.div>
+
+          <motion.div variants={riseChild} className="grid gap-1.5">
+            <label htmlFor="ws-start" className="text-sm font-medium">
+              Start date &amp; time
+            </label>
+            <Input
+              id="ws-start"
+              type="datetime-local"
+              className="datetime-field border-0 shadow-none pr-1"
+              value={start}
+              onChange={(e) => setStart(e.target.value)}
+              required
+            />
           </motion.div>
 
           {error && (

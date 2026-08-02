@@ -1,7 +1,15 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/auth";
-import { CLOUDS, EVENT_MODES, MAX_USERS, limitsFor } from "@/db/schema";
+import {
+  CLOUDS,
+  DAY_SECONDS,
+  DEFAULT_TTL_DAYS,
+  EVENT_MODES,
+  MAX_TTL_DAYS,
+  MAX_USERS,
+  limitsFor,
+} from "@/db/schema";
 import { createScheduledRun, listRunsForUser } from "@/lib/runs";
 import { startRunNow } from "@/lib/trigger";
 
@@ -20,6 +28,9 @@ const createSchema = z
     // Absent on requests written before challenges existed.
     mode: z.enum(EVENT_MODES).default("workshop"),
     userCount: z.number().int().min(1).max(MAX_USERS),
+    // How many days the event runs before teardown. Absent on requests
+    // written before the field existed, which fall back to the default.
+    ttlDays: z.number().int().min(1).max(MAX_TTL_DAYS).default(DEFAULT_TTL_DAYS),
     clouds: z.array(z.enum(CLOUDS)).min(1).max(CLOUDS.length),
     // Omitted when startNow is set — the run begins immediately instead.
     scheduledStart: z.string().datetime().optional(),
@@ -66,6 +77,7 @@ export async function POST(req: Request) {
     name: parsed.data.name,
     mode: parsed.data.mode,
     userCount: parsed.data.userCount,
+    ttlSeconds: parsed.data.ttlDays * DAY_SECONDS,
     clouds: [...new Set(parsed.data.clouds)],
     userId: session.user.id,
     // A start-now run is backdated so the scheduler still claims it if the
