@@ -3,6 +3,7 @@ import {
   gcpCfg,
   TF_ROOT,
   challengeProjectMap,
+  makeClusterName,
   makeProjectId,
 } from "./config.js";
 import { writeChallengeTfvars, writeTfvars } from "./workspace.js";
@@ -122,9 +123,11 @@ async function destroyGcp(run: RunRow): Promise<void> {
 
   await log(run.id, "system", `Destroying GCP project ${projectId}`);
   // Accounts are still on record here — destroyGcp runs before they are
-  // deleted — so the tfvars match the state Terraform is tearing down.
+  // deleted — so the tfvars match the state Terraform is tearing down. The
+  // cluster name is deterministic in (slug, runId), so it matches what
+  // provisioning wrote without anything being stored.
   const attendees = (await accountsFor(run.id)).map((a) => a.email);
-  writeTfvars(workDir, projectId, run.id, attendees);
+  writeTfvars(workDir, projectId, run.id, attendees, makeClusterName(run.slug, run.id));
   await tfInit(workDir, cfg.stateBucket, run.state_prefix, (l) =>
     log(run.id, l.stream, l.text),
   );
@@ -152,9 +155,15 @@ async function destroySandbox(run: RunRow): Promise<void> {
   await log(
     run.id,
     "system",
-    `Revoking ${attendees.length} attendee grant(s) on the shared testing project ${cfg.sandboxProjectId} (the project itself stays running)`,
+    `Revoking ${attendees.length} attendee grant(s) and destroying the GKE cluster on the shared testing project ${cfg.sandboxProjectId} (the project itself stays running)`,
   );
-  writeTfvars(workDir, cfg.sandboxProjectId, run.id, attendees);
+  writeTfvars(
+    workDir,
+    cfg.sandboxProjectId,
+    run.id,
+    attendees,
+    makeClusterName(run.slug, run.id),
+  );
   await tfInit(workDir, cfg.stateBucket, run.state_prefix, (l) =>
     log(run.id, l.stream, l.text),
   );

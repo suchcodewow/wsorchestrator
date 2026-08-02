@@ -15,6 +15,11 @@ variable "attendee_role" {
   default     = "roles/editor"
 }
 
+variable "cluster_name" {
+  description = "Name of this run's GKE cluster in the shared project. The runner passes k8s-<event>-<short>."
+  type        = string
+}
+
 variable "region" {
   type    = string
   default = "us-central1"

@@ -149,6 +149,20 @@ export function makeProjectId(slug: string, runId: string): string {
 }
 
 /**
+ * Derive the workshop's GKE cluster name: starts with `k8s-` and reflects the
+ * event, with the same short run suffix the project id uses. The suffix keeps
+ * two runs from colliding — it matters most for no-cloud runs, which build
+ * their clusters in the one shared sandbox project. GKE names must be
+ * lowercase, start with a letter, and be at most 40 characters.
+ */
+export function makeClusterName(slug: string, runId: string): string {
+  const short = runId.replace(/-/g, "").slice(0, 6);
+  const suffix = `-${short}`;
+  const base = `k8s-${slug}`.toLowerCase().replace(/[^a-z0-9-]/g, "-");
+  return base.slice(0, 40 - suffix.length).replace(/-+$/, "") + suffix;
+}
+
+/**
  * Derive a challenge competitor's own project id. Unlike a workshop, there is
  * one project per account, so the run's suffix alone would collide.
  *

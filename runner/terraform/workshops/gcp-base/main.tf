@@ -15,3 +15,15 @@ module "project" {
   activate_apis   = var.activate_apis
   attendee_emails = var.attendee_emails
 }
+
+# A small, cheap Kubernetes cluster for attendees to use. depends_on the whole
+# project module so the container API is enabled and propagated first.
+module "gke" {
+  source       = "../../modules/gke"
+  project_id   = module.project.project_id
+  cluster_name = var.cluster_name
+  region       = var.region
+  labels       = var.labels
+
+  depends_on = [module.project]
+}

@@ -21,9 +21,14 @@ variable "labels" {
 }
 
 variable "activate_apis" {
-  description = "APIs to enable in the workshop project."
+  description = "APIs to enable in the workshop project. container.googleapis.com is needed for the GKE cluster."
   type        = list(string)
-  default     = ["compute.googleapis.com"]
+  default     = ["compute.googleapis.com", "container.googleapis.com"]
+}
+
+variable "cluster_name" {
+  description = "Name of the workshop's GKE cluster. The runner passes k8s-<event>-<short>."
+  type        = string
 }
 
 variable "attendee_emails" {

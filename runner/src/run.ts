@@ -3,6 +3,7 @@ import {
   gcpCfg,
   TF_ROOT,
   challengeProjectMap,
+  makeClusterName,
   makeProjectId,
 } from "./config.js";
 import { writeChallengeTfvars, writeTfvars } from "./workspace.js";
@@ -208,6 +209,7 @@ async function provisionGcp(run: RunRow): Promise<Record<string, unknown>> {
   const cfg = gcpCfg();
   const workDir = path.join(TF_ROOT, GCP_TF_SOURCE);
   const projectId = run.gcp_project_id ?? makeProjectId(run.slug, run.id);
+  const clusterName = makeClusterName(run.slug, run.id);
 
   await setApplying(run.id, projectId);
   await log(run.id, "system", `Provisioning GCP project ${projectId}`);
@@ -215,7 +217,7 @@ async function provisionGcp(run: RunRow): Promise<Record<string, unknown>> {
   // Read the accounts back rather than tracking which were just created, so a
   // workshop that grew re-grants the whole roster and Terraform converges.
   const attendees = (await accountsFor(run.id)).map((a) => a.email);
-  writeTfvars(workDir, projectId, run.id, attendees);
+  writeTfvars(workDir, projectId, run.id, attendees, clusterName);
 
   await log(run.id, "system", "terraform init");
   await tfInit(workDir, cfg.stateBucket, run.state_prefix, (l) =>
@@ -225,8 +227,8 @@ async function provisionGcp(run: RunRow): Promise<Record<string, unknown>> {
   await log(
     run.id,
     "system",
-    `terraform apply — creating project, billing, APIs, and granting ` +
-      `editor to ${attendees.length} attendee(s)`,
+    `terraform apply — creating project, billing, APIs, the GKE cluster ` +
+      `${clusterName}, and granting editor to ${attendees.length} attendee(s)`,
   );
   await tfApply(workDir, (l) => log(run.id, l.stream, l.text));
 
@@ -249,6 +251,7 @@ async function provisionSandbox(run: RunRow): Promise<Record<string, unknown>> {
     );
   }
   const workDir = path.join(TF_ROOT, GCP_SANDBOX_TF_SOURCE);
+  const clusterName = makeClusterName(run.slug, run.id);
 
   // No project id is stored on the run: the shared project is not this run's to
   // own, and keeping it out of `gcp_project_id` ensures no teardown path could
@@ -257,13 +260,13 @@ async function provisionSandbox(run: RunRow): Promise<Record<string, unknown>> {
   await log(
     run.id,
     "system",
-    `No cloud selected — granting attendees access to the shared testing project ${cfg.sandboxProjectId}`,
+    `No cloud selected — granting attendees access to the shared testing project ${cfg.sandboxProjectId} and building the GKE cluster ${clusterName} in it`,
   );
 
   // Read the accounts back rather than tracking which were just created, so a
   // workshop that grew re-grants the whole roster and Terraform converges.
   const attendees = (await accountsFor(run.id)).map((a) => a.email);
-  writeTfvars(workDir, cfg.sandboxProjectId, run.id, attendees);
+  writeTfvars(workDir, cfg.sandboxProjectId, run.id, attendees, clusterName);
 
   await log(run.id, "system", "terraform init");
   await tfInit(workDir, cfg.stateBucket, run.state_prefix, (l) =>
@@ -273,7 +276,8 @@ async function provisionSandbox(run: RunRow): Promise<Record<string, unknown>> {
   await log(
     run.id,
     "system",
-    `terraform apply — granting editor to ${attendees.length} attendee(s) on ${cfg.sandboxProjectId}`,
+    `terraform apply — granting editor to ${attendees.length} attendee(s) and ` +
+      `building the GKE cluster ${clusterName} on ${cfg.sandboxProjectId}`,
   );
   await tfApply(workDir, (l) => log(run.id, l.stream, l.text));
 

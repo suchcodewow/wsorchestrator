@@ -39,11 +39,16 @@ export function writeTfvars(
   projectId: string,
   runId: string,
   attendeeEmails: string[] = [],
+  clusterName?: string,
 ) {
   write(workDir, {
     ...commonVars(runId),
     project_id: projectId,
     attendee_emails: attendeeEmails,
+    // gcp-base and gcp-sandbox both build a GKE cluster and require this;
+    // it is deterministic in (slug, runId), so provision and teardown pass the
+    // same name and Terraform tears down exactly what it created.
+    ...(clusterName ? { cluster_name: clusterName } : {}),
   });
 }
 
