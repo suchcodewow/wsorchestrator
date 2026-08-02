@@ -1,8 +1,16 @@
 import fs from "node:fs";
 import path from "node:path";
-import { gcpCfg } from "./config.js";
+import { azureCfg, gcpCfg } from "./config.js";
 
-/** Settings every root config takes, regardless of event mode. */
+/** Labels/tags stamped on every managed resource, in every cloud. */
+function labels(runId: string) {
+  return {
+    managed_by: "workshop-orchestrator",
+    run_id: runId.replace(/-/g, "").slice(0, 12),
+  };
+}
+
+/** Settings every GCP root config takes, regardless of event mode. */
 function commonVars(runId: string) {
   const cfg = gcpCfg();
   return {
@@ -11,10 +19,19 @@ function commonVars(runId: string) {
     region: cfg.region,
     admin_project_id: cfg.adminProjectId,
     run_id: runId,
-    labels: {
-      managed_by: "workshop-orchestrator",
-      run_id: runId.replace(/-/g, "").slice(0, 12),
-    },
+    labels: labels(runId),
+  };
+}
+
+/** Settings both Azure root configs take. */
+function azureCommonVars(runId: string) {
+  const cfg = azureCfg();
+  return {
+    subscription_id: cfg.subscriptionId,
+    tenant_id: cfg.tenantId,
+    location: cfg.location,
+    run_id: runId,
+    labels: labels(runId),
   };
 }
 
@@ -69,5 +86,47 @@ export function writeChallengeTfvars(
   write(workDir, {
     ...commonVars(runId),
     attendee_projects: attendeeProjects,
+  });
+}
+
+/**
+ * Write terraform.tfvars.json for a workshop's Azure environment: the shared
+ * resource group, the AKS cluster, and the attendee address -> temp-password
+ * map Terraform turns into native Entra users. The whole roster is passed every
+ * apply so a grown workshop converges, exactly like the GCP writers.
+ */
+export function writeAzureTfvars(
+  workDir: string,
+  runId: string,
+  resourceGroupName: string,
+  clusterName: string,
+  attendees: Record<string, string>,
+) {
+  write(workDir, {
+    ...azureCommonVars(runId),
+    resource_group_name: resourceGroupName,
+    cluster_name: clusterName,
+    // Emails drive Terraform's for_each; passwords are a separate sensitive map
+    // it only looks up (a sensitive value cannot be a for_each key).
+    attendee_emails: Object.keys(attendees),
+    attendee_passwords: attendees,
+  });
+}
+
+/**
+ * Write terraform.tfvars.json for a challenge's Azure environment: one resource
+ * group per competitor and the same address -> temp-password map. No cluster —
+ * the challenge root builds none.
+ */
+export function writeAzureChallengeTfvars(
+  workDir: string,
+  runId: string,
+  attendeeResourceGroups: Record<string, string>,
+  attendees: Record<string, string>,
+) {
+  write(workDir, {
+    ...azureCommonVars(runId),
+    attendee_resource_groups: attendeeResourceGroups,
+    attendee_passwords: attendees,
   });
 }

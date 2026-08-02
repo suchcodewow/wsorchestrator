@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import type { Cloud } from "./db.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -40,6 +41,50 @@ export function gcpCfg() {
      */
     sandboxProjectId: process.env.GCP_SANDBOX_PROJECT_ID ?? "",
     region,
+  };
+}
+
+/**
+ * The GCS bucket every run's Terraform state lives in, whatever cloud the run
+ * targets. It is the orchestrator's own state store (part of its admin infra),
+ * not the workshop's cloud — so an Azure- or AWS-only run still needs it, but
+ * needs none of the rest of `gcpCfg`.
+ */
+export function stateBucket(): string {
+  return required("GCP_TFSTATE_BUCKET");
+}
+
+/**
+ * Backend prefix for one cloud within a run's state namespace. GCP keeps the
+ * bare per-run prefix it has always used, so runs provisioned before other
+ * clouds existed still reap from the same state object; every other cloud gets
+ * a subpath, so the states of a run spanning multiple clouds never collide in
+ * one bucket object.
+ */
+export function cloudStatePrefix(base: string, cloud: Cloud): string {
+  return cloud === "gcp" ? base : `${base}/${cloud}`;
+}
+
+/**
+ * Azure config, read lazily like `gcpCfg`. The azurerm/azuread providers read
+ * the service-principal credentials from the ARM_ / AZURE_ env vars
+ * themselves, so the runner only needs to know which subscription and tenant to
+ * build in, where, and which verified domain attendee sign-ins use.
+ */
+export function azureCfg() {
+  return {
+    subscriptionId: required("AZURE_SUBSCRIPTION_ID"),
+    tenantId: required("AZURE_TENANT_ID"),
+    location: process.env.AZURE_LOCATION ?? "eastus",
+    /**
+     * Attendee UPNs are `<username>@<userDomain>`. Defaults to the Workspace
+     * domain so the Azure sign-in string matches the Google one exactly — which
+     * requires that domain to be verified in the Entra tenant (a DNS TXT
+     * record; it coexists with Google's MX). Override for a tenant that uses a
+     * different verified domain.
+     */
+    userDomain:
+      process.env.AZURE_USER_DOMAIN ?? required("GOOGLE_WORKSPACE_DOMAIN"),
   };
 }
 
@@ -196,5 +241,54 @@ export function challengeProjectMap(
 ): Record<string, string> {
   return Object.fromEntries(
     emails.map((email) => [email, makeChallengeProjectId(slug, runId, email)]),
+  );
+}
+
+/**
+ * Azure resource group for a workshop's shared environment — the RG is the
+ * per-run isolation boundary, the analog of the GCP project. Same `ws-` shape
+ * as `makeProjectId` for readability; RG names permit up to 90 characters.
+ */
+export function makeResourceGroupName(slug: string, runId: string): string {
+  const short = runId.replace(/-/g, "").slice(0, 6);
+  return `ws-${slug}-${short}`
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, "-")
+    .slice(0, 90)
+    .replace(/-+$/, "");
+}
+
+/**
+ * A challenge competitor's own resource group. Derived from the address the
+ * same way `makeChallengeProjectId` is, so a challenge that grows never
+ * renumbers — and so recomputes the name of — an RG that already exists.
+ */
+export function makeChallengeResourceGroup(
+  slug: string,
+  runId: string,
+  email: string,
+): string {
+  const short = runId.replace(/-/g, "").slice(0, 4);
+  const who = createHash("sha1").update(email).digest("hex").slice(0, 6);
+  const suffix = `-${short}-${who}`;
+  const base = `ch-${slug}`.toLowerCase().replace(/[^a-z0-9-]/g, "-");
+  return base.slice(0, 90 - suffix.length).replace(/-+$/, "") + suffix;
+}
+
+/**
+ * The address -> resource-group map a challenge's Azure root takes, built the
+ * same way on provision and teardown so the reaper destroys exactly the RGs the
+ * provisioner created — mirrors `challengeProjectMap`.
+ */
+export function challengeResourceGroupMap(
+  slug: string,
+  runId: string,
+  emails: string[],
+): Record<string, string> {
+  return Object.fromEntries(
+    emails.map((email) => [
+      email,
+      makeChallengeResourceGroup(slug, runId, email),
+    ]),
   );
 }

@@ -207,6 +207,22 @@ export async function accountsFor(runId: string): Promise<{ email: string }[]> {
   return rows;
 }
 
+/**
+ * Accounts with their temp passwords, for clouds that provision a native user
+ * of their own (Azure Entra, AWS IAM) using the same credential the Google
+ * account already has. GCP does not need this — its authorization binds the
+ * Google identity directly rather than minting a parallel account.
+ */
+export async function accountsWithPasswordsFor(
+  runId: string,
+): Promise<{ email: string; tempPassword: string }[]> {
+  const { rows } = await pool.query<{ email: string; temp_password: string }>(
+    `select email, temp_password from workshop_accounts where run_id = $1 order by id`,
+    [runId],
+  );
+  return rows.map((r) => ({ email: r.email, tempPassword: r.temp_password }));
+}
+
 export async function deleteAccounts(runId: string) {
   await pool.query(`delete from workshop_accounts where run_id = $1`, [runId]);
 }

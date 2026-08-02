@@ -1,12 +1,21 @@
 import path from "node:path";
 import {
+  cloudStatePrefix,
   gcpCfg,
+  stateBucket,
   TF_ROOT,
   challengeProjectMap,
+  challengeResourceGroupMap,
   makeClusterName,
   makeProjectId,
+  makeResourceGroupName,
 } from "./config.js";
-import { writeChallengeTfvars, writeTfvars } from "./workspace.js";
+import {
+  writeAzureChallengeTfvars,
+  writeAzureTfvars,
+  writeChallengeTfvars,
+  writeTfvars,
+} from "./workspace.js";
 import { tfDestroy, tfInit } from "./terraform.js";
 import { deleteAccount, deleteOrgUnit } from "./directory.js";
 import {
@@ -17,6 +26,7 @@ import {
 } from "./harness.js";
 import {
   accountsFor,
+  accountsWithPasswordsFor,
   deleteAccounts,
   reapableRuns,
   log,
@@ -33,6 +43,12 @@ const GCP_CHALLENGE_TF_SOURCE = "challenges/gcp-per-user";
 
 /** Grant-only config: revoking here removes attendee access, not the project. */
 const GCP_SANDBOX_TF_SOURCE = "workshops/gcp-sandbox";
+
+/** Root config that creates the workshop's shared Azure resource group. */
+const AZURE_TF_SOURCE = "workshops/azure-base";
+
+/** Root config that creates one Azure resource group per challenge competitor. */
+const AZURE_CHALLENGE_TF_SOURCE = "challenges/azure-per-user";
 
 /**
  * Destroy every run that is due: past its end time, or explicitly deleted in
@@ -59,11 +75,17 @@ async function destroyRun(run: RunRow): Promise<void> {
     if (run.clouds.length === 0) {
       // No-cloud run: only attendee grants on the shared project to revoke.
       await destroySandbox(run);
-    } else if (run.clouds.includes("gcp")) {
-      if (run.mode === "challenge") {
-        await destroyGcpPerUser(run);
-      } else {
-        await destroyGcp(run);
+    } else {
+      for (const cloud of run.clouds) {
+        if (cloud === "gcp") {
+          if (run.mode === "challenge") await destroyGcpPerUser(run);
+          else await destroyGcp(run);
+        } else if (cloud === "azure") {
+          if (run.mode === "challenge") await destroyAzurePerUser(run);
+          else await destroyAzure(run);
+        }
+        // An unrecognized cloud never got provisioned, so there is nothing to
+        // tear down for it.
       }
     }
 
@@ -191,6 +213,69 @@ async function destroyGcpPerUser(run: RunRow): Promise<void> {
   writeChallengeTfvars(workDir, run.id, projects);
   await tfInit(workDir, cfg.stateBucket, run.state_prefix, (l) =>
     log(run.id, l.stream, l.text),
+  );
+  await tfDestroy(workDir, (l) => log(run.id, l.stream, l.text));
+}
+
+/** Address -> temp-password map, matching the Azure tfvars provisioning wrote. */
+async function attendeePasswords(
+  runId: string,
+): Promise<Record<string, string>> {
+  const accounts = await accountsWithPasswordsFor(runId);
+  return Object.fromEntries(accounts.map((a) => [a.email, a.tempPassword]));
+}
+
+/**
+ * Destroy a workshop's Azure environment — the resource group (which takes the
+ * AKS cluster and everything in it with it) and the attendees' Entra users. The
+ * tfvars are rebuilt deterministically, so `terraform destroy` tears down
+ * exactly what `provisionAzure` created.
+ */
+async function destroyAzure(run: RunRow): Promise<void> {
+  const workDir = path.join(TF_ROOT, AZURE_TF_SOURCE);
+  const resourceGroup = makeResourceGroupName(run.slug, run.id);
+
+  await log(run.id, "system", `Destroying Azure resource group ${resourceGroup}`);
+  // Accounts are still on record here — this runs before they are deleted.
+  const attendees = await attendeePasswords(run.id);
+  writeAzureTfvars(
+    workDir,
+    run.id,
+    resourceGroup,
+    makeClusterName(run.slug, run.id),
+    attendees,
+  );
+  await tfInit(
+    workDir,
+    stateBucket(),
+    cloudStatePrefix(run.state_prefix, "azure"),
+    (l) => log(run.id, l.stream, l.text),
+  );
+  await tfDestroy(workDir, (l) => log(run.id, l.stream, l.text));
+}
+
+/** Tear down a challenge's per-competitor Azure resource groups and users. */
+async function destroyAzurePerUser(run: RunRow): Promise<void> {
+  const workDir = path.join(TF_ROOT, AZURE_CHALLENGE_TF_SOURCE);
+
+  const attendees = await attendeePasswords(run.id);
+  const groups = challengeResourceGroupMap(
+    run.slug,
+    run.id,
+    Object.keys(attendees),
+  );
+
+  await log(
+    run.id,
+    "system",
+    `Destroying ${Object.keys(groups).length} competitor Azure resource group(s)`,
+  );
+  writeAzureChallengeTfvars(workDir, run.id, groups, attendees);
+  await tfInit(
+    workDir,
+    stateBucket(),
+    cloudStatePrefix(run.state_prefix, "azure"),
+    (l) => log(run.id, l.stream, l.text),
   );
   await tfDestroy(workDir, (l) => log(run.id, l.stream, l.text));
 }

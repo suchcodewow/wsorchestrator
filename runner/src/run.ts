@@ -1,12 +1,21 @@
 import path from "node:path";
 import {
+  cloudStatePrefix,
   gcpCfg,
+  stateBucket,
   TF_ROOT,
   challengeProjectMap,
+  challengeResourceGroupMap,
   makeClusterName,
   makeProjectId,
+  makeResourceGroupName,
 } from "./config.js";
-import { writeChallengeTfvars, writeTfvars } from "./workspace.js";
+import {
+  writeAzureChallengeTfvars,
+  writeAzureTfvars,
+  writeChallengeTfvars,
+  writeTfvars,
+} from "./workspace.js";
 import { tfApply, tfInit, tfOutput } from "./terraform.js";
 import { allocateEmails, createAccount, createOrgUnit } from "./directory.js";
 import { displayName } from "./usernames.js";
@@ -23,6 +32,7 @@ import {
 } from "./harness.js";
 import {
   accountsFor,
+  accountsWithPasswordsFor,
   addAccount,
   getRun,
   log,
@@ -44,6 +54,12 @@ const GCP_CHALLENGE_TF_SOURCE = "challenges/gcp-per-user";
 
 /** Grant-only config: attendees get access to the shared long-lived project. */
 const GCP_SANDBOX_TF_SOURCE = "workshops/gcp-sandbox";
+
+/** Root config that creates the workshop's shared Azure resource group. */
+const AZURE_TF_SOURCE = "workshops/azure-base";
+
+/** Root config that creates one Azure resource group per challenge competitor. */
+const AZURE_CHALLENGE_TF_SOURCE = "challenges/azure-per-user";
 
 /** Provision one workshop end to end: Workspace OU, accounts, then clouds. */
 export async function runWorkshop(runId: string): Promise<void> {
@@ -75,6 +91,13 @@ export async function runWorkshop(runId: string): Promise<void> {
             run.mode === "challenge"
               ? await provisionGcpPerUser(run)
               : await provisionGcp(run),
+          );
+        } else if (cloud === "azure") {
+          Object.assign(
+            outputs,
+            run.mode === "challenge"
+              ? await provisionAzurePerUser(run)
+              : await provisionAzure(run),
           );
         } else {
           await log(
@@ -328,6 +351,95 @@ async function provisionGcpPerUser(
     "system",
     `terraform apply — creating ${count} project(s), billing, and APIs, ` +
       `granting each competitor owner on their own`,
+  );
+  await tfApply(workDir, (l) => log(run.id, l.stream, l.text));
+
+  return tfOutput(workDir);
+}
+
+/** Address -> temp-password map the Azure roots turn into native Entra users. */
+async function attendeePasswords(
+  runId: string,
+): Promise<Record<string, string>> {
+  const accounts = await accountsWithPasswordsFor(runId);
+  return Object.fromEntries(accounts.map((a) => [a.email, a.tempPassword]));
+}
+
+/**
+ * Terraform the workshop's Azure environment: one shared resource group, a
+ * native Entra user per attendee (same credential as their Google account),
+ * Contributor for each, and a small AKS cluster. The Azure mirror of
+ * `provisionGcp`; its state is namespaced under the run's prefix so it never
+ * collides with the run's GCP state.
+ */
+async function provisionAzure(run: RunRow): Promise<Record<string, unknown>> {
+  const workDir = path.join(TF_ROOT, AZURE_TF_SOURCE);
+  const resourceGroup = makeResourceGroupName(run.slug, run.id);
+  const clusterName = makeClusterName(run.slug, run.id);
+
+  await log(run.id, "system", `Provisioning Azure resource group ${resourceGroup}`);
+
+  const attendees = await attendeePasswords(run.id);
+  writeAzureTfvars(workDir, run.id, resourceGroup, clusterName, attendees);
+
+  await log(run.id, "system", "terraform init");
+  await tfInit(
+    workDir,
+    stateBucket(),
+    cloudStatePrefix(run.state_prefix, "azure"),
+    (l) => log(run.id, l.stream, l.text),
+  );
+
+  await log(
+    run.id,
+    "system",
+    `terraform apply — creating resource group, ${Object.keys(attendees).length} ` +
+      `Entra user(s), the AKS cluster ${clusterName}, and Contributor grants`,
+  );
+  await tfApply(workDir, (l) => log(run.id, l.stream, l.text));
+
+  return tfOutput(workDir);
+}
+
+/**
+ * Terraform a challenge's Azure environment: one resource group per competitor,
+ * each owned by the competitor, with no cluster (they build it). The Azure
+ * mirror of `provisionGcpPerUser`; the RG names are recomputed deterministically
+ * from the address, so nothing extra is stored to tear them down.
+ */
+async function provisionAzurePerUser(
+  run: RunRow,
+): Promise<Record<string, unknown>> {
+  const workDir = path.join(TF_ROOT, AZURE_CHALLENGE_TF_SOURCE);
+
+  const attendees = await attendeePasswords(run.id);
+  const groups = challengeResourceGroupMap(
+    run.slug,
+    run.id,
+    Object.keys(attendees),
+  );
+  const count = Object.keys(groups).length;
+
+  await log(
+    run.id,
+    "system",
+    `Provisioning ${count} Azure resource group(s), one per competitor`,
+  );
+  writeAzureChallengeTfvars(workDir, run.id, groups, attendees);
+
+  await log(run.id, "system", "terraform init");
+  await tfInit(
+    workDir,
+    stateBucket(),
+    cloudStatePrefix(run.state_prefix, "azure"),
+    (l) => log(run.id, l.stream, l.text),
+  );
+
+  await log(
+    run.id,
+    "system",
+    `terraform apply — creating ${count} resource group(s) and Entra user(s), ` +
+      `granting each competitor Owner on their own`,
   );
   await tfApply(workDir, (l) => log(run.id, l.stream, l.text));
 
