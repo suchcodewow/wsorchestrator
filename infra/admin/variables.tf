@@ -69,6 +69,44 @@ variable "harness_base_url" {
   default     = "https://app.harness.io"
 }
 
+# --- Azure (optional; only needed if workshops select Azure) ---
+# All empty by default so a GCP-only deployment applies unchanged. Provisioning
+# an Azure run needs a service principal with rights to create resource groups,
+# assign RBAC, and create Entra users (e.g. Contributor on the subscription plus
+# Graph app roles like User.ReadWrite.All / Directory.ReadWrite.All), and
+# harnessevents.io verified in the tenant so attendee UPNs match their Google
+# address.
+variable "azure_subscription_id" {
+  description = "Subscription workshop resource groups are created in. Empty disables Azure."
+  type        = string
+  default     = ""
+}
+
+variable "azure_tenant_id" {
+  description = "Entra tenant attendee users are created in."
+  type        = string
+  default     = ""
+}
+
+variable "azure_client_id" {
+  description = "Service-principal (app) client id the azurerm/azuread providers authenticate with. Not a secret."
+  type        = string
+  default     = ""
+}
+
+variable "azure_client_secret" {
+  description = "Service-principal client secret. Stored in Secret Manager; only created there when set."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "azure_location" {
+  description = "Default Azure region for workshop resource groups and AKS clusters."
+  type        = string
+  default     = "eastus"
+}
+
 variable "db_tier" {
   description = "Cloud SQL machine tier. Postgres needs a custom/dedicated type (shared-core db-f1-micro/db-g1-small are MySQL-only). db-custom-1-3840 = 1 vCPU / 3.75 GB, the smallest valid Postgres tier."
   type        = string

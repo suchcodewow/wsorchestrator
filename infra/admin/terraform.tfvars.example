@@ -19,6 +19,19 @@ harness_account_id = "replace-me"
 harness_api_key    = "pat.xxxxx"
 # harness_base_url = "https://app.harness.io"
 
+# Azure — only needed if workshops select Azure; leave commented for GCP-only.
+# All four come from one service principal (az ad sp create-for-rbac ...). It
+# needs rights to create resource groups + assign RBAC (e.g. Contributor on the
+# subscription) and to create Entra users (Graph: User.ReadWrite.All,
+# Directory.ReadWrite.All). Also verify harnessevents.io in the tenant (DNS TXT)
+# so attendee UPNs match their Google address. azure_client_secret is stored in
+# Secret Manager; the rest are plaintext env on the runner.
+# azure_subscription_id = "00000000-0000-0000-0000-000000000000"
+# azure_tenant_id       = "00000000-0000-0000-0000-000000000000"
+# azure_client_id       = "00000000-0000-0000-0000-000000000000"
+# azure_client_secret   = "replace-me"
+# azure_location        = "eastus"
+
 # Site roles. Everyone who signs in is an operator; managers see and can delete
 # every user's events, administrators also hand out roles. Since roles are
 # granted from inside the app, the first administrator comes from here — anyone

@@ -14,17 +14,27 @@ locals {
     google_sql_database_instance.main.connection_name,
   )
 
-  secret_values = {
-    "database-url"               = local.database_url
-    "auth-secret"                = random_password.auth_secret.result
-    "google-oauth-client-id"     = var.google_oauth_client_id
-    "google-oauth-client-secret" = var.google_oauth_client_secret
-    "harness-api-key"            = var.harness_api_key
-  }
+  secret_values = merge(
+    {
+      "database-url"               = local.database_url
+      "auth-secret"                = random_password.auth_secret.result
+      "google-oauth-client-id"     = var.google_oauth_client_id
+      "google-oauth-client-secret" = var.google_oauth_client_secret
+      "harness-api-key"            = var.harness_api_key
+    },
+    # Only created when Azure is configured — Secret Manager rejects an empty
+    # version, and a GCP-only deployment has no SP secret to store.
+    var.azure_client_secret != ""
+    ? { "azure-client-secret" = var.azure_client_secret }
+    : {},
+  )
 
   # Secrets the runner/reaper/scheduler jobs read. The app doesn't talk to
-  # Harness, and the runner has no use for the OAuth or auth secrets.
-  runner_secrets = ["database-url", "harness-api-key"]
+  # Harness or Azure, and the runner has no use for the OAuth or auth secrets.
+  runner_secrets = concat(
+    ["database-url", "harness-api-key"],
+    var.azure_client_secret != "" ? ["azure-client-secret"] : [],
+  )
 }
 
 resource "google_secret_manager_secret" "s" {

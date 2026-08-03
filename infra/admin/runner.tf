@@ -14,13 +14,28 @@ locals {
     GOOGLE_WORKSPACE_PARENT_OU   = var.workspace_parent_ou
     HARNESS_ACCOUNT_ID           = var.harness_account_id
     HARNESS_BASE_URL             = var.harness_base_url
+    # Azure (optional; empty when unused). AZURE_* are read by the runner's
+    # azureCfg; ARM_* authenticate the azurerm/azuread providers. Tenant and
+    # subscription appear under both prefixes because those two consumers look
+    # for different names.
+    AZURE_SUBSCRIPTION_ID = var.azure_subscription_id
+    AZURE_TENANT_ID       = var.azure_tenant_id
+    AZURE_LOCATION        = var.azure_location
+    ARM_SUBSCRIPTION_ID   = var.azure_subscription_id
+    ARM_TENANT_ID         = var.azure_tenant_id
+    ARM_CLIENT_ID         = var.azure_client_id
   }
 
-  # Every job reads the DB URL and the Harness key the same way.
-  runner_secret_env = {
-    DATABASE_URL    = "database-url"
-    HARNESS_API_KEY = "harness-api-key"
-  }
+  # Every job reads the DB URL and the Harness key the same way. The Azure SP
+  # secret is added only when configured, so a GCP-only deployment creates no
+  # empty Azure secret.
+  runner_secret_env = merge(
+    {
+      DATABASE_URL    = "database-url"
+      HARNESS_API_KEY = "harness-api-key"
+    },
+    var.azure_client_secret != "" ? { ARM_CLIENT_SECRET = "azure-client-secret" } : {},
+  )
 
   cloudsql_connection = google_sql_database_instance.main.connection_name
 }
