@@ -2,9 +2,9 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { CLAIM_LIMITS } from "@/db/schema";
 import {
-  claimAccount,
   getAttendeeView,
-  type ClaimError,
+  saveAttendeeFields,
+  type SaveFieldsError,
 } from "@/lib/attendees";
 
 /**
@@ -26,36 +26,37 @@ export async function GET(
   return NextResponse.json(view);
 }
 
-const claimSchema = z.object({
+// A row is a shared scratchpad the room fills in live, so every field is
+// optional — an empty name just means nobody has put theirs on this row yet.
+const saveSchema = z.object({
   accountId: z.number().int().positive(),
-  name: z.string().min(1).max(CLAIM_LIMITS.name),
+  name: z.string().max(CLAIM_LIMITS.name),
   from: z.string().max(CLAIM_LIMITS.from),
   vacation: z.string().max(CLAIM_LIMITS.vacation),
 });
 
-const STATUS_FOR: Record<ClaimError, number> = {
+const STATUS_FOR: Record<SaveFieldsError, number> = {
   not_found: 404,
-  already_claimed: 409,
   invalid: 400,
 };
 
-export async function POST(
+export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const parsed = claimSchema.safeParse(await req.json().catch(() => null));
+  const parsed = saveSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json({ error: "invalid" }, { status: 400 });
   }
 
   const { id } = await params;
   const { accountId, ...input } = parsed.data;
-  const result = await claimAccount(id, accountId, input);
+  const result = await saveAttendeeFields(id, accountId, input);
   if (!result.ok) {
     return NextResponse.json(
       { error: result.error },
       { status: STATUS_FOR[result.error] },
     );
   }
-  return NextResponse.json({ account: result.account });
+  return NextResponse.json({ ok: true });
 }

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { Check, Copy, Loader2, UserCheck } from "lucide-react";
+import { Check, Copy, ExternalLink, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -15,30 +15,43 @@ import type { AttendeeView } from "@/lib/attendees";
 
 /**
  * `claimedAt` is a Date on the server-rendered pass and a string once it has
- * been through JSON on a poll. It is only ever read as "is this row taken", so
- * the union is the honest type rather than a lie in one direction.
+ * been through JSON on a poll. It is only ever read as "does this row have a
+ * name yet", so the union is the honest type rather than a lie in one direction.
  */
 type Row = Omit<AttendeeView["accounts"][number], "claimedAt"> & {
   claimedAt: string | Date | null;
 };
 type View = Omit<AttendeeView, "accounts"> & { accounts: Row[] };
 
-type Draft = { name: string; from: string; vacation: string };
-const EMPTY_DRAFT: Draft = { name: "", from: "", vacation: "" };
+type Fields = { name: string; from: string; vacation: string };
+type FieldName = keyof Fields;
+const EMPTY: Fields = { name: "", from: "", vacation: "" };
 
-/** Statuses where accounts are still on their way. */
-const PENDING = new Set<RunStatus>([
-  "scheduled",
-  "requested",
-  "provisioning",
-  "applying",
-]);
+/** Statuses where the room's answers can still change and are worth polling. */
+const TERMINAL = new Set<RunStatus>(["destroyed", "failed"]);
 
-const CLAIM_ERRORS: Record<string, string> = {
-  already_claimed: "Someone just took this one — pick another row.",
-  not_found: "That account is no longer part of this event.",
-  invalid: "Check your answers and try again.",
-};
+/** The current values for a row, from its persisted answers. */
+function fieldsOf(a: Row): Fields {
+  return {
+    name: a.claimedName ?? "",
+    from: a.claimedFrom ?? "",
+    vacation: a.claimedVacation ?? "",
+  };
+}
+
+function seed(accounts: Row[]): Record<number, Fields> {
+  return Object.fromEntries(accounts.map((a) => [a.id, fieldsOf(a)]));
+}
+
+/** The IAM page for a project — where an attendee checks their own access. */
+function iamUrl(projectId: string): string {
+  return `https://console.cloud.google.com/iam-admin/iam?project=${encodeURIComponent(
+    projectId,
+  )}`;
+}
+
+/** How long after the last keystroke a row's answers are saved. */
+const SAVE_DEBOUNCE_MS = 500;
 
 /**
  * One shared column template. The header and every row read from the same
@@ -59,95 +72,106 @@ export function AttendeeGrid({
   runId: string;
 }) {
   const [data, setData] = useState<View>(initial);
-  const [drafts, setDrafts] = useState<Record<number, Draft>>({});
-  const [pendingId, setPendingId] = useState<number | null>(null);
-  const [failure, setFailure] = useState<{ id: number; message: string } | null>(
-    null,
+  const [values, setValues] = useState<Record<number, Fields>>(() =>
+    seed(initial.accounts),
   );
-  /** The row claimed from this browser, highlighted for the rest of the visit. */
-  const [mine, setMine] = useState<number | null>(null);
-  const claiming = useRef(false);
+
+  // The latest values, for the debounced save to read without re-closing.
+  const valuesRef = useRef(values);
+  useEffect(() => {
+    valuesRef.current = values;
+  }, [values]);
+
+  // A poll must not yank a field out from under someone. A row is held to its
+  // local values while it is focused or has an edit that has not been confirmed
+  // saved; every other row takes the server's values, which is how one person's
+  // typing reaches everyone else.
+  const focusedRef = useRef<{ id: number; field: FieldName } | null>(null);
+  const dirtyRef = useRef<Set<number>>(new Set());
+  // Per-row edit counter, so a save only clears "dirty" if nothing was typed
+  // while it was in flight (otherwise the newer local edit would be clobbered).
+  const genRef = useRef<Record<number, number>>({});
+  const timersRef = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
 
   const refresh = useCallback(async () => {
-    // A poll landing mid-claim would roll the row back to unclaimed for a
-    // frame; the claim response is the newer truth, so let it win.
-    if (claiming.current) return;
     const res = await fetch(`/api/attend/${runId}`, { cache: "no-store" });
     if (!res.ok) return;
-    setData(await res.json());
+    const view: View = await res.json();
+    setData(view);
+    setValues((prev) => {
+      const next: Record<number, Fields> = {};
+      for (const a of view.accounts) {
+        const held =
+          focusedRef.current?.id === a.id || dirtyRef.current.has(a.id);
+        next[a.id] = held && prev[a.id] ? prev[a.id] : fieldsOf(a);
+      }
+      return next;
+    });
   }, [runId]);
 
-  const unclaimed = data.accounts.some((a) => !a.claimedAt);
-  // Keep the page live while the room is still filling in, then stop: a
-  // finished event has nothing left to poll for.
-  const live = PENDING.has(data.status) || unclaimed;
-
+  // Keep the page live for the whole event: answers keep flowing in, and other
+  // people's edits only appear via these polls. A finished event is static.
+  const live = !TERMINAL.has(data.status);
   useEffect(() => {
     if (!live) return;
     const timer = setInterval(() => {
       if (document.visibilityState === "visible") void refresh();
-    }, 5000);
+    }, 3000);
     return () => clearInterval(timer);
   }, [live, refresh]);
 
-  function edit(id: number, patch: Partial<Draft>) {
-    setDrafts((prev) => ({ ...prev, [id]: { ...EMPTY_DRAFT, ...prev[id], ...patch } }));
-  }
+  // Flush any pending debounce timers when the page goes away.
+  useEffect(() => {
+    const timers = timersRef.current;
+    return () => {
+      for (const t of Object.values(timers)) clearTimeout(t);
+    };
+  }, []);
 
-  async function claim(id: number) {
-    const draft = drafts[id] ?? EMPTY_DRAFT;
-    if (draft.name.trim().length === 0) {
-      setFailure({ id, message: "Add your name to claim this account." });
-      return;
-    }
-
-    setPendingId(id);
-    claiming.current = true;
-    setFailure(null);
-    try {
-      const res = await fetch(`/api/attend/${runId}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          accountId: id,
-          name: draft.name.trim(),
-          from: draft.from.trim(),
-          vacation: draft.vacation.trim(),
-        }),
-      });
-      const body = await res.json().catch(() => null);
-      if (!res.ok) {
-        throw new Error(
-          CLAIM_ERRORS[body?.error] ?? `Could not claim this account (${res.status})`,
-        );
+  const save = useCallback(
+    async (id: number) => {
+      const gen = genRef.current[id] ?? 0;
+      const fields = valuesRef.current[id] ?? EMPTY;
+      try {
+        const res = await fetch(`/api/attend/${runId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ accountId: id, ...fields }),
+        });
+        if (!res.ok) return; // keep the row dirty so a poll won't overwrite it
+        // Nothing typed since this save started — safe to let polls take over.
+        if ((genRef.current[id] ?? 0) === gen) dirtyRef.current.delete(id);
+      } catch {
+        // Offline or a blip; the row stays dirty and the next edit re-saves.
       }
+    },
+    [runId],
+  );
 
-      setData((prev) => ({
+  const edit = useCallback(
+    (id: number, field: FieldName, value: string) => {
+      setValues((prev) => ({
         ...prev,
-        accounts: prev.accounts.map((a) => (a.id === id ? body.account : a)),
+        [id]: { ...(prev[id] ?? EMPTY), [field]: value },
       }));
-      setDrafts((prev) => {
-        const next = { ...prev };
-        delete next[id];
-        return next;
-      });
-      setMine(id);
-    } catch (err) {
-      setFailure({
-        id,
-        message: err instanceof Error ? err.message : "Could not claim this account",
-      });
-      // Someone else's name may have landed on this row; show the room's
-      // current state rather than leaving a stale form open.
-      claiming.current = false;
-      void refresh();
-    } finally {
-      claiming.current = false;
-      setPendingId(null);
-    }
-  }
+      dirtyRef.current.add(id);
+      genRef.current[id] = (genRef.current[id] ?? 0) + 1;
+      clearTimeout(timersRef.current[id]);
+      timersRef.current[id] = setTimeout(() => void save(id), SAVE_DEBOUNCE_MS);
+    },
+    [save],
+  );
 
-  const claimedCount = data.accounts.filter((a) => a.claimedAt).length;
+  const focus = useCallback((id: number, field: FieldName) => {
+    focusedRef.current = { id, field };
+  }, []);
+  const blur = useCallback((id: number, field: FieldName) => {
+    if (focusedRef.current?.id === id && focusedRef.current.field === field) {
+      focusedRef.current = null;
+    }
+  }, []);
+
+  const filledCount = data.accounts.filter((a) => a.claimedAt).length;
   const noun = data.mode === "challenge" ? "competitor" : "attendee";
 
   return (
@@ -163,9 +187,25 @@ export function AttendeeGrid({
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
           {data.accounts.length > 0
-            ? `Find a free row, put your name on it, and sign in with those credentials. ${claimedCount} of ${data.accounts.length} claimed.`
+            ? `Grab a row, sign in with those credentials, and put your name on it. Type anywhere — it saves for the whole room as you go. ${filledCount} of ${data.accounts.length} filled in.`
             : `Accounts for this ${data.mode} will appear here.`}
         </p>
+        {/* A workshop shares one project, so its IAM link lives up here rather
+            than repeated on every row (challenges link per competitor below). */}
+        {data.gcpProjectId && (
+          <div className="mt-3">
+            <Button variant="outline" size="sm" asChild>
+              <a
+                href={iamUrl(data.gcpProjectId)}
+                target="_blank"
+                rel="noreferrer"
+              >
+                <ExternalLink />
+                Open Google Cloud IAM
+              </a>
+            </Button>
+          </div>
+        )}
       </motion.div>
 
       {data.accounts.length === 0 ? (
@@ -189,7 +229,9 @@ export function AttendeeGrid({
                   <span>Your name</span>
                   <span>Where you&rsquo;re from</span>
                   <span>Favourite vacation</span>
-                  <span className="sr-only">Claim</span>
+                  <span className={data.mode === "challenge" ? "" : "sr-only"}>
+                    {data.mode === "challenge" ? "Cloud" : "Cloud link"}
+                  </span>
                 </div>
 
                 <ul className="divide-y">
@@ -197,13 +239,10 @@ export function AttendeeGrid({
                     <AccountRow
                       key={account.id}
                       account={account}
-                      draft={drafts[account.id] ?? EMPTY_DRAFT}
-                      pending={pendingId === account.id}
-                      disabled={pendingId !== null && pendingId !== account.id}
-                      isMine={mine === account.id}
-                      error={failure?.id === account.id ? failure.message : null}
-                      onEdit={(patch) => edit(account.id, patch)}
-                      onClaim={() => void claim(account.id)}
+                      values={values[account.id] ?? EMPTY}
+                      onEdit={(field, value) => edit(account.id, field, value)}
+                      onFocus={(field) => focus(account.id, field)}
+                      onBlur={(field) => blur(account.id, field)}
                     />
                   ))}
                 </ul>
@@ -227,33 +266,25 @@ export function AttendeeGrid({
 
 function AccountRow({
   account,
-  draft,
-  pending,
-  disabled,
-  isMine,
-  error,
+  values,
   onEdit,
-  onClaim,
+  onFocus,
+  onBlur,
 }: {
   account: Row;
-  draft: Draft;
-  pending: boolean;
-  /** Another row is mid-claim; hold this one still until that settles. */
-  disabled: boolean;
-  isMine: boolean;
-  error: string | null;
-  onEdit: (patch: Partial<Draft>) => void;
-  onClaim: () => void;
+  values: Fields;
+  onEdit: (field: FieldName, value: string) => void;
+  onFocus: (field: FieldName) => void;
+  onBlur: (field: FieldName) => void;
 }) {
-  const claimed = Boolean(account.claimedAt);
+  const filled = Boolean(account.claimedAt);
 
   return (
     <li
       className={cn(
         "gap-4 px-6 py-4 transition-colors md:grid md:items-center",
         COLUMNS,
-        claimed ? "bg-muted/30" : "hover:bg-accent/20",
-        isMine && "bg-brand/8 hover:bg-brand/8",
+        filled ? "bg-muted/20" : "hover:bg-accent/20",
       )}
     >
       <div className="min-w-0">
@@ -261,67 +292,50 @@ function AccountRow({
         <Credential value={account.tempPassword} label="password" muted />
       </div>
 
-      {claimed ? (
-        <>
-          <Answer label="Name" className="mt-3 md:mt-0">
-            <span className="inline-flex items-center gap-1.5 font-medium">
-              <UserCheck className="size-3.5 shrink-0 text-brand" />
-              {account.claimedName}
-            </span>
-          </Answer>
-          <Answer label="Where you're from">{account.claimedFrom}</Answer>
-          <Answer label="Favourite vacation">{account.claimedVacation}</Answer>
-          <span className="mt-2 block text-xs text-muted-foreground md:mt-0 md:text-right">
-            {isMine ? "You" : "Claimed"}
-          </span>
-        </>
-      ) : (
-        <>
-          <Field
-            label="Your name"
-            value={draft.name}
-            maxLength={CLAIM_LIMITS.name}
-            placeholder="Your name"
-            disabled={disabled || pending}
-            onChange={(v) => onEdit({ name: v })}
-            onEnter={onClaim}
-            className="mt-3 md:mt-0"
-          />
-          <Field
-            label="Where you're from"
-            value={draft.from}
-            maxLength={CLAIM_LIMITS.from}
-            placeholder="Chicago"
-            disabled={disabled || pending}
-            onChange={(v) => onEdit({ from: v })}
-            onEnter={onClaim}
-          />
-          <Field
-            label="Favourite vacation"
-            value={draft.vacation}
-            maxLength={CLAIM_LIMITS.vacation}
-            placeholder="Two weeks in Lisbon"
-            disabled={disabled || pending}
-            onChange={(v) => onEdit({ vacation: v })}
-            onEnter={onClaim}
-          />
-          <div className="mt-3 md:mt-0">
-            <Button
-              variant="brand"
-              size="sm"
-              className="w-full md:w-auto"
-              disabled={disabled || pending}
-              onClick={onClaim}
-            >
-              {pending ? <Loader2 className="animate-spin" /> : null}
-              {pending ? "Claiming…" : "Claim"}
-            </Button>
-          </div>
-        </>
-      )}
+      <Field
+        label="Your name"
+        value={values.name}
+        maxLength={CLAIM_LIMITS.name}
+        placeholder="Your name"
+        onChange={(v) => onEdit("name", v)}
+        onFocus={() => onFocus("name")}
+        onBlur={() => onBlur("name")}
+        className="mt-3 md:mt-0"
+      />
+      <Field
+        label="Where you're from"
+        value={values.from}
+        maxLength={CLAIM_LIMITS.from}
+        placeholder="Chicago"
+        onChange={(v) => onEdit("from", v)}
+        onFocus={() => onFocus("from")}
+        onBlur={() => onBlur("from")}
+      />
+      <Field
+        label="Favourite vacation"
+        value={values.vacation}
+        maxLength={CLAIM_LIMITS.vacation}
+        placeholder="Two weeks in Lisbon"
+        onChange={(v) => onEdit("vacation", v)}
+        onFocus={() => onFocus("vacation")}
+        onBlur={() => onBlur("vacation")}
+      />
 
-      {error && (
-        <p className="mt-2 text-sm text-destructive md:col-span-5">{error}</p>
+      {/* Per-competitor IAM link on a GCP challenge; workshops link once above,
+          so their rows leave this cell out entirely (no empty gap on mobile). */}
+      {account.gcpProjectId && (
+        <div className="mt-3 md:mt-0 md:text-right">
+          <Button variant="outline" size="sm" className="w-full md:w-auto" asChild>
+            <a
+              href={iamUrl(account.gcpProjectId)}
+              target="_blank"
+              rel="noreferrer"
+            >
+              <ExternalLink />
+              IAM
+            </a>
+          </Button>
+        </div>
       )}
     </li>
   );
@@ -393,24 +407,24 @@ function CopyButton({ value, label }: { value: string; label: string }) {
   );
 }
 
-/** One claim input, with the label that only shows on the stacked layout. */
+/** One shared answer input, with the label that only shows when stacked. */
 function Field({
   label,
   value,
   maxLength,
   placeholder,
-  disabled,
   onChange,
-  onEnter,
+  onFocus,
+  onBlur,
   className,
 }: {
   label: string;
   value: string;
   maxLength: number;
   placeholder: string;
-  disabled: boolean;
   onChange: (value: string) => void;
-  onEnter: () => void;
+  onFocus: () => void;
+  onBlur: () => void;
   className?: string;
 }) {
   return (
@@ -422,48 +436,26 @@ function Field({
         value={value}
         maxLength={maxLength}
         placeholder={placeholder}
-        disabled={disabled}
         aria-label={label}
         onChange={(e) => onChange(e.target.value)}
-        // The row is a set of sibling inputs rather than a form, so Enter has
-        // to be wired up by hand — attendees will press it.
-        onKeyDown={(e) => {
-          if (e.key === "Enter") onEnter();
-        }}
+        onFocus={onFocus}
+        onBlur={onBlur}
       />
     </label>
   );
 }
 
-/** A submitted answer, with the same stacked-layout label as `Field`. */
-function Answer({
-  label,
-  children,
-  className,
-}: {
-  label: string;
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <div className={cn("min-w-0 text-sm", className)}>
-      <span className="mb-0.5 block text-xs text-muted-foreground md:hidden">
-        {label}
-      </span>
-      {/* Wrapped, not clipped — a long answer is the interesting one. */}
-      <span className="block wrap-break-word">
-        {children || <span className="text-muted-foreground">—</span>}
-      </span>
-    </div>
-  );
-}
-
 /** Shown when the event has no accounts yet — or no longer has any. */
 function EmptyState({ status, noun }: { status: RunStatus; noun: string }) {
+  const pending =
+    status === "scheduled" ||
+    status === "requested" ||
+    status === "provisioning" ||
+    status === "applying";
   const message =
     status === "scheduled"
       ? "This event hasn't started yet. Accounts appear here automatically once it's provisioned."
-      : PENDING.has(status)
+      : pending
         ? `Accounts are being created right now. This page updates itself — no need to reload.`
         : status === "failed"
           ? "This event didn't finish setting up. Check with your organizer."
@@ -472,7 +464,7 @@ function EmptyState({ status, noun }: { status: RunStatus; noun: string }) {
   return (
     <Card>
       <CardContent className="flex items-center gap-3 text-sm text-muted-foreground">
-        {PENDING.has(status) && status !== "scheduled" && (
+        {pending && status !== "scheduled" && (
           <Loader2 className="size-4 shrink-0 animate-spin" />
         )}
         {message}
