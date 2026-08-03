@@ -20,12 +20,18 @@ harness_api_key    = "pat.xxxxx"
 # harness_base_url = "https://app.harness.io"
 
 # Azure — only needed if workshops select Azure; leave commented for GCP-only.
-# All four come from one service principal (az ad sp create-for-rbac ...). It
-# needs rights to create resource groups + assign RBAC (e.g. Contributor on the
-# subscription) and to create Entra users (Graph: User.ReadWrite.All,
-# Directory.ReadWrite.All). Also verify harnessevents.io in the tenant (DNS TXT)
-# so attendee UPNs match their Google address. azure_client_secret is stored in
-# Secret Manager; the rest are plaintext env on the runner.
+# All four come from one service principal, which needs permissions on two planes:
+#   - Azure RBAC (subscription scope): Owner is simplest. Contributor is NOT
+#     enough — it can't create the role assignments this provisions, and can't
+#     grant the Owner that challenge mode gives competitors. Least-privilege
+#     alternative: Contributor + User Access Administrator.
+#   - Microsoft Graph (application permission, admin-consented): User.ReadWrite.All
+#     to create attendee Entra users.
+#   e.g. az ad sp create-for-rbac --role Owner --scopes /subscriptions/<SUB_ID>
+#        then add the Graph permission and `az ad app permission admin-consent`.
+# Also verify harnessevents.io in the tenant (DNS TXT) so attendee UPNs match
+# their Google address. azure_client_secret is stored in Secret Manager; the
+# rest are plaintext env on the runner.
 # azure_subscription_id = "00000000-0000-0000-0000-000000000000"
 # azure_tenant_id       = "00000000-0000-0000-0000-000000000000"
 # azure_client_id       = "00000000-0000-0000-0000-000000000000"

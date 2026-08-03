@@ -71,10 +71,15 @@ variable "harness_base_url" {
 
 # --- Azure (optional; only needed if workshops select Azure) ---
 # All empty by default so a GCP-only deployment applies unchanged. Provisioning
-# an Azure run needs a service principal with rights to create resource groups,
-# assign RBAC, and create Entra users (e.g. Contributor on the subscription plus
-# Graph app roles like User.ReadWrite.All / Directory.ReadWrite.All), and
-# harnessevents.io verified in the tenant so attendee UPNs match their Google
+# an Azure run needs a service principal with permissions on two planes:
+#   * Azure RBAC, subscription scope: create resource groups + AKS AND create
+#     role assignments. Contributor CANNOT create role assignments, so use
+#     Owner (simplest), or Contributor + User Access Administrator. It must be
+#     able to grant Owner, since challenge mode assigns competitors Owner.
+#   * Microsoft Graph, application permission (admin-consented): User.ReadWrite.All
+#     to create/delete attendee Entra users. (Directory.ReadWrite.All is a
+#     broader superset, not required.)
+# Also verify harnessevents.io in the tenant so attendee UPNs match their Google
 # address.
 variable "azure_subscription_id" {
   description = "Subscription workshop resource groups are created in. Empty disables Azure."
