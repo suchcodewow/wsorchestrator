@@ -24,17 +24,28 @@ locals {
     ARM_SUBSCRIPTION_ID   = var.azure_subscription_id
     ARM_TENANT_ID         = var.azure_tenant_id
     ARM_CLIENT_ID         = var.azure_client_id
+    # AWS (optional; empty when unused). The aws provider also reads the access
+    # key from the secret env below. The email domain is coalesced to the
+    # Workspace domain because an empty AWS_ACCOUNT_EMAIL_DOMAIN would suppress
+    # the runner's fallback (an empty string is "set", not unset).
+    AWS_REGION               = var.aws_region
+    AWS_PARENT_OU_ID         = var.aws_parent_ou_id
+    AWS_ACCOUNT_EMAIL_DOMAIN = var.aws_account_email_domain != "" ? var.aws_account_email_domain : var.workspace_domain
   }
 
-  # Every job reads the DB URL and the Harness key the same way. The Azure SP
-  # secret is added only when configured, so a GCP-only deployment creates no
-  # empty Azure secret.
+  # Every job reads the DB URL and the Harness key the same way. The Azure and
+  # AWS credentials are added only when configured, so a deployment not using a
+  # given cloud creates no empty secret for it.
   runner_secret_env = merge(
     {
       DATABASE_URL    = "database-url"
       HARNESS_API_KEY = "harness-api-key"
     },
     var.azure_client_secret != "" ? { ARM_CLIENT_SECRET = "azure-client-secret" } : {},
+    var.aws_access_key_id != "" ? {
+      AWS_ACCESS_KEY_ID     = "aws-access-key-id"
+      AWS_SECRET_ACCESS_KEY = "aws-secret-access-key"
+    } : {},
   )
 
   cloudsql_connection = google_sql_database_instance.main.connection_name

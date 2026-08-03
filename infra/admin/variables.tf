@@ -107,6 +107,44 @@ variable "azure_location" {
   default     = "eastus"
 }
 
+# --- AWS (optional; only needed if workshops select AWS) ---
+# All empty by default so a deployment not using AWS applies unchanged.
+# Provisioning an AWS run needs credentials in the Organizations MANAGEMENT
+# account with rights to create member accounts and assume
+# OrganizationAccountAccessRole into them. The access key id + secret are stored
+# in Secret Manager; region and OU are plaintext env on the runner.
+variable "aws_access_key_id" {
+  description = "Access key id for the Organizations management account. Empty disables AWS. Stored in Secret Manager."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "aws_secret_access_key" {
+  description = "Secret access key paired with aws_access_key_id. Stored in Secret Manager."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "aws_region" {
+  description = "Default AWS region for accounts and EKS clusters."
+  type        = string
+  default     = "us-east-1"
+}
+
+variable "aws_parent_ou_id" {
+  description = "OU new member accounts are created under. Empty means the organization root."
+  type        = string
+  default     = ""
+}
+
+variable "aws_account_email_domain" {
+  description = "Domain for new accounts' unique root emails (plus-addressed). Defaults to the Workspace domain when empty."
+  type        = string
+  default     = ""
+}
+
 variable "db_tier" {
   description = "Cloud SQL machine tier. Postgres needs a custom/dedicated type (shared-core db-f1-micro/db-g1-small are MySQL-only). db-custom-1-3840 = 1 vCPU / 3.75 GB, the smallest valid Postgres tier."
   type        = string

@@ -22,18 +22,24 @@ locals {
       "google-oauth-client-secret" = var.google_oauth_client_secret
       "harness-api-key"            = var.harness_api_key
     },
-    # Only created when Azure is configured — Secret Manager rejects an empty
-    # version, and a GCP-only deployment has no SP secret to store.
+    # Only created when the cloud is configured — Secret Manager rejects an
+    # empty version, and a deployment not using a cloud has no secret to store.
     var.azure_client_secret != ""
     ? { "azure-client-secret" = var.azure_client_secret }
     : {},
+    var.aws_access_key_id != "" ? {
+      "aws-access-key-id"     = var.aws_access_key_id
+      "aws-secret-access-key" = var.aws_secret_access_key
+    } : {},
   )
 
   # Secrets the runner/reaper/scheduler jobs read. The app doesn't talk to
-  # Harness or Azure, and the runner has no use for the OAuth or auth secrets.
+  # Harness, Azure, or AWS, and the runner has no use for the OAuth or auth
+  # secrets.
   runner_secrets = concat(
     ["database-url", "harness-api-key"],
     var.azure_client_secret != "" ? ["azure-client-secret"] : [],
+    var.aws_access_key_id != "" ? ["aws-access-key-id", "aws-secret-access-key"] : [],
   )
 }
 

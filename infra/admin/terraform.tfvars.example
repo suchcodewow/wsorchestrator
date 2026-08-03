@@ -32,6 +32,18 @@ harness_api_key    = "pat.xxxxx"
 # azure_client_secret   = "replace-me"
 # azure_location        = "eastus"
 
+# AWS — only needed if workshops select AWS; leave commented for no-AWS.
+# Credentials belong to the Organizations MANAGEMENT account and need rights to
+# create member accounts and assume OrganizationAccountAccessRole into them. The
+# access key id + secret are stored in Secret Manager; region/OU are plaintext.
+# Note EKS is ~$0.10/hr per cluster (no free tier), and closing a member account
+# suspends it ~90 days — AWS is the pricier, slower-to-reap cloud.
+# aws_access_key_id        = "AKIAxxxxxxxxxxxxxxxx"
+# aws_secret_access_key    = "replace-me"
+# aws_region               = "us-east-1"
+# aws_parent_ou_id         = ""                       # empty = org root
+# aws_account_email_domain = ""                       # empty = workspace_domain
+
 # Site roles. Everyone who signs in is an operator; managers see and can delete
 # every user's events, administrators also hand out roles. Since roles are
 # granted from inside the app, the first administrator comes from here — anyone
