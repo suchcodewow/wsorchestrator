@@ -9,11 +9,13 @@ import {
   challengeProjectMap,
   challengeResourceGroupMap,
   makeAwsAccountName,
+  makeChallengeAwsAccountName,
   makeClusterName,
   makeProjectId,
   makeResourceGroupName,
 } from "./config.js";
 import {
+  writeAwsChallengeTfvars,
   writeAwsTfvars,
   writeAzureChallengeTfvars,
   writeAzureTfvars,
@@ -68,6 +70,9 @@ const AZURE_CHALLENGE_TF_SOURCE = "challenges/azure-per-user";
 /** Root config that creates the workshop's single AWS member account. */
 const AWS_TF_SOURCE = "workshops/aws-base";
 
+/** Single-account root the runner applies once per AWS challenge competitor. */
+const AWS_CHALLENGE_TF_SOURCE = "challenges/aws-per-user";
+
 /** Provision one workshop end to end: Workspace OU, accounts, then clouds. */
 export async function runWorkshop(runId: string): Promise<void> {
   const run = await getRun(runId);
@@ -107,16 +112,12 @@ export async function runWorkshop(runId: string): Promise<void> {
               : await provisionAzure(run),
           );
         } else if (cloud === "aws") {
-          if (run.mode === "challenge") {
-            // Per-competitor account orchestration is the next sub-slice.
-            await log(
-              runId,
-              "system",
-              "AWS challenge mode is not wired up yet — skipping.",
-            );
-          } else {
-            Object.assign(outputs, await provisionAws(run));
-          }
+          Object.assign(
+            outputs,
+            run.mode === "challenge"
+              ? await provisionAwsPerUser(run)
+              : await provisionAws(run),
+          );
         }
       }
     }
@@ -501,4 +502,55 @@ async function provisionAws(run: RunRow): Promise<Record<string, unknown>> {
   await tfApply(workDir, (l) => log(run.id, l.stream, l.text));
 
   return tfOutput(workDir);
+}
+
+/**
+ * Terraform a challenge's AWS environment: one member account per competitor,
+ * each solely administered by the competitor, with no cluster. Unlike the GCP
+ * and Azure challenge paths — a single apply with for_each — this applies the
+ * single-account root once per competitor, because Terraform can't create a
+ * dynamic number of cross-account providers in one apply. Each competitor's
+ * account has its own state under the run's aws prefix, keyed by account name,
+ * so a challenge that grows only adds the new competitor's account.
+ */
+async function provisionAwsPerUser(
+  run: RunRow,
+): Promise<Record<string, unknown>> {
+  const cfg = awsCfg();
+  const workDir = path.join(TF_ROOT, AWS_CHALLENGE_TF_SOURCE);
+  const emails = (await accountsFor(run.id)).map((a) => a.email);
+
+  await log(
+    run.id,
+    "system",
+    `Provisioning ${emails.length} AWS account(s), one per competitor ` +
+      `(applied sequentially — account creation is slow and rate-limited)`,
+  );
+
+  const accountIds: Record<string, string> = {};
+  const passwords: Record<string, string> = {};
+
+  for (const email of emails) {
+    const accountName = makeChallengeAwsAccountName(run.slug, run.id, email);
+    const accountEmail = awsAccountEmail(accountName, cfg.accountEmailDomain);
+    // Each competitor's account owns its own state object, keyed by the (unique)
+    // account name, so the applies never clobber one another.
+    const prefix = `${cloudStatePrefix(run.state_prefix, "aws")}/${accountName}`;
+
+    await log(run.id, "system", `AWS account ${accountName} for ${email}`);
+    writeAwsChallengeTfvars(workDir, run.id, accountName, accountEmail, email);
+
+    await tfInit(workDir, stateBucket(), prefix, (l) =>
+      log(run.id, l.stream, l.text),
+    );
+    await tfApply(workDir, (l) => log(run.id, l.stream, l.text));
+
+    const out = await tfOutput(workDir);
+    if (typeof out.account_id === "string") accountIds[email] = out.account_id;
+    if (typeof out.attendee_password === "string") {
+      passwords[email] = out.attendee_password;
+    }
+  }
+
+  return { aws_accounts: accountIds, aws_attendee_passwords: passwords };
 }

@@ -9,11 +9,13 @@ import {
   challengeProjectMap,
   challengeResourceGroupMap,
   makeAwsAccountName,
+  makeChallengeAwsAccountName,
   makeClusterName,
   makeProjectId,
   makeResourceGroupName,
 } from "./config.js";
 import {
+  writeAwsChallengeTfvars,
   writeAwsTfvars,
   writeAzureChallengeTfvars,
   writeAzureTfvars,
@@ -57,6 +59,9 @@ const AZURE_CHALLENGE_TF_SOURCE = "challenges/azure-per-user";
 /** Root config that creates the workshop's single AWS member account. */
 const AWS_TF_SOURCE = "workshops/aws-base";
 
+/** Single-account root, destroyed once per AWS challenge competitor. */
+const AWS_CHALLENGE_TF_SOURCE = "challenges/aws-per-user";
+
 /**
  * Destroy every run that is due: past its end time, or explicitly deleted in
  * the UI (see `reapableRuns`). Runs sequentially within this container.
@@ -91,9 +96,8 @@ async function destroyRun(run: RunRow): Promise<void> {
           if (run.mode === "challenge") await destroyAzurePerUser(run);
           else await destroyAzure(run);
         } else if (cloud === "aws") {
-          // AWS challenge mode is not provisioned yet, so only workshop mode
-          // has anything to tear down.
-          if (run.mode !== "challenge") await destroyAws(run);
+          if (run.mode === "challenge") await destroyAwsPerUser(run);
+          else await destroyAws(run);
         }
         // An unrecognized cloud never got provisioned, so there is nothing to
         // tear down for it.
@@ -324,4 +328,35 @@ async function destroyAws(run: RunRow): Promise<void> {
     (l) => log(run.id, l.stream, l.text),
   );
   await tfDestroy(workDir, (l) => log(run.id, l.stream, l.text));
+}
+
+/**
+ * Tear down a challenge's per-competitor AWS accounts — one destroy per
+ * competitor, mirroring how `provisionAwsPerUser` applied them, each against
+ * its own account-name-keyed state prefix. Closing each account starts its
+ * ~90-day suspension; the reaper's part is done when destroy returns.
+ */
+async function destroyAwsPerUser(run: RunRow): Promise<void> {
+  const cfg = awsCfg();
+  const workDir = path.join(TF_ROOT, AWS_CHALLENGE_TF_SOURCE);
+  const emails = (await accountsFor(run.id)).map((a) => a.email);
+
+  await log(
+    run.id,
+    "system",
+    `Destroying ${emails.length} competitor AWS account(s)`,
+  );
+
+  for (const email of emails) {
+    const accountName = makeChallengeAwsAccountName(run.slug, run.id, email);
+    const accountEmail = awsAccountEmail(accountName, cfg.accountEmailDomain);
+    const prefix = `${cloudStatePrefix(run.state_prefix, "aws")}/${accountName}`;
+
+    await log(run.id, "system", `Closing AWS account ${accountName} (${email})`);
+    writeAwsChallengeTfvars(workDir, run.id, accountName, accountEmail, email);
+    await tfInit(workDir, stateBucket(), prefix, (l) =>
+      log(run.id, l.stream, l.text),
+    );
+    await tfDestroy(workDir, (l) => log(run.id, l.stream, l.text));
+  }
 }

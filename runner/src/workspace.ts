@@ -164,3 +164,24 @@ export function writeAwsTfvars(
     attendee_emails: attendeeEmails,
   });
 }
+
+/**
+ * Write terraform.tfvars.json for one competitor's AWS account in a challenge.
+ * The runner calls this once per competitor and applies the single-account root
+ * with a per-competitor state prefix — Terraform can't create a dynamic number
+ * of cross-account providers in one apply.
+ */
+export function writeAwsChallengeTfvars(
+  workDir: string,
+  runId: string,
+  accountName: string,
+  accountEmail: string,
+  attendeeEmail: string,
+) {
+  write(workDir, {
+    ...awsCommonVars(runId),
+    account_name: accountName,
+    account_email: accountEmail,
+    attendee_email: attendeeEmail,
+  });
+}
