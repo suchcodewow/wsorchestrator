@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -36,7 +36,7 @@ import {
 import type { BuildInfo } from "@/lib/build-info";
 import { SITE_ROLE_LABELS, canManageUsers, canSeeAllEvents } from "@/lib/roles";
 import { setCalendarScope, setThemePreference } from "@/lib/user-settings";
-import { DARK_QUERY, applyTheme } from "@/lib/theme";
+import { applyTheme } from "@/lib/theme";
 
 const THEME_OPTIONS: {
   value: ThemePreference;
@@ -72,15 +72,8 @@ export function UserMenu({
   const [scope, setScope] = useState<CalendarScope>(initialScope);
   const [, startTransition] = useTransition();
 
-  // On `system`, the OS setting can change while the page is open — following
-  // it is the whole point of the option, so the change is picked up live.
-  useEffect(() => {
-    if (theme !== "system") return;
-    const media = window.matchMedia(DARK_QUERY);
-    const onChange = () => applyTheme("system");
-    media.addEventListener("change", onChange);
-    return () => media.removeEventListener("change", onChange);
-  }, [theme]);
+  // Live OS-change following for `system` lives in ThemeSync (root layout), so
+  // it works on every page rather than only where this menu is mounted.
 
   function choose(value: string) {
     // Radix hands back a plain string; narrow it before it goes any further.
