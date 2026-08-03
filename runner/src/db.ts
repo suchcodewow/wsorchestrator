@@ -1,4 +1,5 @@
 import pg from "pg";
+import { PROVISION_LEAD_HOURS } from "./config.js";
 
 const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
@@ -228,9 +229,10 @@ export async function deleteAccounts(runId: string) {
 }
 
 /**
- * Atomically claim scheduled runs whose start time has arrived. The
- * status='scheduled' guard means two concurrent scheduler executions can't
- * claim the same run twice.
+ * Atomically claim scheduled runs due to provision: those whose start time is
+ * within `PROVISION_LEAD_HOURS` from now, so everything is built and ready by
+ * the time the workshop actually starts. The status='scheduled' guard means
+ * two concurrent scheduler executions can't claim the same run twice.
  */
 export async function claimDueScheduledRuns(): Promise<{ id: string }[]> {
   const { rows } = await pool.query<{ id: string }>(
@@ -238,8 +240,9 @@ export async function claimDueScheduledRuns(): Promise<{ id: string }[]> {
         set status = 'requested'
       where status = 'scheduled'
         and scheduled_start is not null
-        and scheduled_start <= now()
+        and scheduled_start <= now() + $1::interval
       returning id`,
+    [`${PROVISION_LEAD_HOURS} hours`],
   );
   return rows;
 }

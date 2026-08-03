@@ -24,6 +24,17 @@ function required(name: string): string {
 export const region = process.env.GCP_REGION ?? "us-central1";
 
 /**
+ * How far ahead of a workshop's scheduled start the scheduler begins
+ * provisioning, so attendee accounts and cloud environments are up and running
+ * by the time the room opens rather than only starting to build then. Two hours
+ * by default; override with `PROVISION_LEAD_HOURS` (fractional hours are fine).
+ */
+export const PROVISION_LEAD_HOURS = (() => {
+  const raw = Number(process.env.PROVISION_LEAD_HOURS);
+  return Number.isFinite(raw) && raw >= 0 ? raw : 2;
+})();
+
+/**
  * GCP config, read lazily — a workshop that asks for no GCP environment must
  * still be able to provision its Workspace accounts without these set.
  */

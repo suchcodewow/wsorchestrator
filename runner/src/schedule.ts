@@ -18,7 +18,7 @@ export async function provisionDue(): Promise<void> {
       await log(
         id,
         "system",
-        "Start time reached — the scheduler picked this up; provisioning is starting.",
+        "Start time is near — the scheduler picked this up early; provisioning is starting so it's ready by the scheduled start.",
       );
       await triggerRunnerJob(id);
     } catch (err) {

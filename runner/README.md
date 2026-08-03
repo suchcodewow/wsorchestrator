@@ -11,7 +11,8 @@ One container image, two entrypoints, run as **Cloud Run Jobs** under
   `terraform destroy` → project delete → accounts deleted → OU deleted →
   `destroyed`. Cloud Scheduler fires this every few minutes.
 - **`provision-due`** — cron entrypoint that claims `scheduled` runs whose start
-  time has arrived and triggers a `run` execution for each.
+  time is within the lead window (`PROVISION_LEAD_HOURS`, 2h by default) and
+  triggers a `run` execution for each, so environments are ready by the start.
 
 ## What a run creates
 

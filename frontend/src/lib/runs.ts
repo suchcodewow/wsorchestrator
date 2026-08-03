@@ -67,7 +67,8 @@ function humanDuration(seconds: number): string {
 
 /**
  * Schedule a workshop for a user. The run is created in `scheduled` with a
- * start time; the `tf-scheduler` job auto-provisions it once that time arrives.
+ * start time; the `tf-scheduler` job auto-provisions it ahead of that time (see
+ * the runner's `PROVISION_LEAD_HOURS`, 2h by default) so it is ready at start.
  */
 export async function createScheduledRun(input: {
   name: string;
