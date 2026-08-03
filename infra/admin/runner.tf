@@ -36,12 +36,14 @@ locals {
   # Every job reads the DB URL and the Harness key the same way. The Azure and
   # AWS credentials are added only when configured, so a deployment not using a
   # given cloud creates no empty secret for it.
+  # Gated on non-sensitive vars (subscription id / access key id) so this map
+  # stays non-sensitive and can drive the dynamic env block's for_each.
   runner_secret_env = merge(
     {
       DATABASE_URL    = "database-url"
       HARNESS_API_KEY = "harness-api-key"
     },
-    var.azure_client_secret != "" ? { ARM_CLIENT_SECRET = "azure-client-secret" } : {},
+    var.azure_subscription_id != "" ? { ARM_CLIENT_SECRET = "azure-client-secret" } : {},
     var.aws_access_key_id != "" ? {
       AWS_ACCESS_KEY_ID     = "aws-access-key-id"
       AWS_SECRET_ACCESS_KEY = "aws-secret-access-key"

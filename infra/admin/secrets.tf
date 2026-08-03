@@ -14,39 +14,47 @@ locals {
     google_sql_database_instance.main.connection_name,
   )
 
-  secret_values = merge(
-    {
-      "database-url"               = local.database_url
-      "auth-secret"                = random_password.auth_secret.result
-      "google-oauth-client-id"     = var.google_oauth_client_id
-      "google-oauth-client-secret" = var.google_oauth_client_secret
-      "harness-api-key"            = var.harness_api_key
-    },
-    # Only created when the cloud is configured — Secret Manager rejects an
-    # empty version, and a deployment not using a cloud has no secret to store.
-    var.azure_client_secret != ""
-    ? { "azure-client-secret" = var.azure_client_secret }
-    : {},
-    var.aws_access_key_id != "" ? {
-      "aws-access-key-id"     = var.aws_access_key_id
-      "aws-secret-access-key" = var.aws_secret_access_key
-    } : {},
+  # Which secrets exist. This drives for_each, so it MUST stay non-sensitive:
+  # the conditions gate on non-sensitive vars only (a subscription id, an access
+  # key id — the access key id is an identifier, not the secret half). Gating on
+  # a sensitive value, or building the map with merge() of a sensitive value,
+  # taints the whole collection and Terraform then refuses it as a for_each
+  # argument. The optional cloud secrets appear only when that cloud is
+  # configured, so no empty Secret Manager version is created.
+  secret_ids = concat(
+    ["database-url", "auth-secret", "google-oauth-client-id", "google-oauth-client-secret", "harness-api-key"],
+    var.azure_subscription_id != "" ? ["azure-client-secret"] : [],
+    var.aws_access_key_id != "" ? ["aws-access-key-id", "aws-secret-access-key"] : [],
   )
+
+  # id -> value, holding the (mostly sensitive) payloads. Only ever looked up by
+  # key for a secret's data — never used as a for_each argument — so its
+  # sensitivity is fine here. Keys for clouds that are off go unreferenced.
+  secret_data = {
+    "database-url"               = local.database_url
+    "auth-secret"                = random_password.auth_secret.result
+    "google-oauth-client-id"     = var.google_oauth_client_id
+    "google-oauth-client-secret" = var.google_oauth_client_secret
+    "harness-api-key"            = var.harness_api_key
+    "azure-client-secret"        = var.azure_client_secret
+    "aws-access-key-id"          = var.aws_access_key_id
+    "aws-secret-access-key"      = var.aws_secret_access_key
+  }
 
   # Secrets the runner/reaper/scheduler jobs read. The app doesn't talk to
   # Harness, Azure, or AWS, and the runner has no use for the OAuth or auth
-  # secrets.
+  # secrets. Same non-sensitive gating as secret_ids.
   runner_secrets = concat(
     ["database-url", "harness-api-key"],
-    var.azure_client_secret != "" ? ["azure-client-secret"] : [],
+    var.azure_subscription_id != "" ? ["azure-client-secret"] : [],
     var.aws_access_key_id != "" ? ["aws-access-key-id", "aws-secret-access-key"] : [],
   )
 }
 
 resource "google_secret_manager_secret" "s" {
-  for_each = local.secret_values
+  for_each = toset(local.secret_ids)
 
-  secret_id = each.key
+  secret_id = each.value
   project   = var.admin_project_id
 
   replication {
@@ -57,10 +65,10 @@ resource "google_secret_manager_secret" "s" {
 }
 
 resource "google_secret_manager_secret_version" "v" {
-  for_each = local.secret_values
+  for_each = toset(local.secret_ids)
 
   secret      = google_secret_manager_secret.s[each.key].id
-  secret_data = each.value
+  secret_data = local.secret_data[each.key]
 }
 
 # app-sa reads all four secrets; runner-sa only needs the DB URL.

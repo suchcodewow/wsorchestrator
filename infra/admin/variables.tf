@@ -119,10 +119,9 @@ variable "azure_location" {
 # OrganizationAccountAccessRole into them. The access key id + secret are stored
 # in Secret Manager; region and OU are plaintext env on the runner.
 variable "aws_access_key_id" {
-  description = "Access key id for the Organizations management account. Empty disables AWS. Stored in Secret Manager."
+  description = "Access key id for the Organizations management account. Empty disables AWS. Not marked sensitive — it is the identifier half of the key pair (not the secret), so it can gate for_each; the secret access key is what's sensitive."
   type        = string
   default     = ""
-  sensitive   = true
 }
 
 variable "aws_secret_access_key" {
