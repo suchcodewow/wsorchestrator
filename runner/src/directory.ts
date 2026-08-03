@@ -2,6 +2,37 @@ import crypto from "node:crypto";
 import { google, type admin_directory_v1 } from "googleapis";
 import { workspaceCfg } from "./config.js";
 import { COMBINATIONS, displayName, randomUsername } from "./usernames.js";
+import { withRetry } from "./retry.js";
+
+/**
+ * Optional progress sink for retry notices. `run.ts` passes one so a room
+ * watching the live log sees "Google … retrying" instead of a silent stall;
+ * callers without a run to log to (the reaper, allocation pre-checks) leave it
+ * out and the notice goes to the container log only.
+ */
+export type RetryNotify = (message: string) => void | Promise<void>;
+
+/**
+ * Call the Google Admin SDK with backoff on its transient 5xx/rate-limit
+ * blips. A non-transient error (a 409 we adopt, a 404 we treat as gone) is
+ * re-thrown unchanged so the idempotency checks below still see its status.
+ */
+function directoryCall<T>(
+  label: string,
+  notify: RetryNotify | undefined,
+  fn: () => Promise<T>,
+): Promise<T> {
+  return withRetry(fn, {
+    label: `Google Workspace Directory (${label})`,
+    onRetry: async ({ attempt, attempts, delayMs, summary }) => {
+      const line =
+        `Google Workspace Directory (${label}): ${summary}; retrying ` +
+        `in ${Math.round(delayMs / 1000)}s (attempt ${attempt} of ${attempts - 1})`;
+      console.warn(line);
+      await notify?.(line);
+    },
+  });
+}
 
 const SCOPES = [
   "https://www.googleapis.com/auth/admin.directory.orgunit",
@@ -54,47 +85,64 @@ async function delegatedToken(adminEmail: string): Promise<string> {
   };
 
   const iam = google.iamcredentials({ version: "v1", auth });
-  const signed = await iam.projects.serviceAccounts.signJwt({
-    // `-` lets IAM find the owning project from the address.
-    name: `projects/-/serviceAccounts/${signer}`,
-    requestBody: { payload: JSON.stringify(claims) },
-  });
-  const assertion = signed.data.signedJwt;
-  if (!assertion) throw new Error("signJwt returned no assertion");
 
-  const res = await fetch(TOKEN_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
-      assertion,
-    }),
-  });
-  const body = (await res.json().catch(() => ({}))) as {
-    access_token?: string;
-    expires_in?: number;
-    error?: string;
-    error_description?: string;
-  };
-  if (!res.ok || !body.access_token) {
-    // `unauthorized_client` means the Workspace Admin console has not granted
-    // this service account's client ID the scopes above. That is the half of
-    // the setup that lives outside GCP, and no amount of IAM substitutes for
-    // it — so name it rather than letting a bare 401 stand.
-    throw new Error(
-      `Workspace delegation to ${adminEmail} was refused ` +
-        `(${body.error ?? res.status}${
-          body.error_description ? `: ${body.error_description}` : ""
-        }). Check that ${signer}'s client ID is authorized for ` +
-        `${SCOPES.join(", ")} in Admin console -> Security -> API controls -> ` +
-        `Domain-wide delegation.`,
-    );
-  }
+  // Both the IAM sign and the token exchange can hit a transient Google 5xx;
+  // retry the pair. A refused delegation is a 4xx and non-transient, so it is
+  // surfaced on the first try rather than retried three more times.
+  delegated = await withRetry(
+    async () => {
+      const signed = await iam.projects.serviceAccounts.signJwt({
+        // `-` lets IAM find the owning project from the address.
+        name: `projects/-/serviceAccounts/${signer}`,
+        requestBody: { payload: JSON.stringify(claims) },
+      });
+      const assertion = signed.data.signedJwt;
+      if (!assertion) throw new Error("signJwt returned no assertion");
 
-  delegated = {
-    token: body.access_token,
-    expiresAt: Date.now() + (body.expires_in ?? 3600) * 1000,
-  };
+      const res = await fetch(TOKEN_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+          assertion,
+        }),
+      });
+      const body = (await res.json().catch(() => ({}))) as {
+        access_token?: string;
+        expires_in?: number;
+        error?: string;
+        error_description?: string;
+      };
+      if (!res.ok || !body.access_token) {
+        if (res.status >= 500 || res.status === 429) {
+          // Transient — let withRetry back off. The status rides on the error
+          // so `isTransient` recognises it (a bare fetch throws nothing here).
+          throw Object.assign(
+            new Error(`token endpoint returned HTTP ${res.status}`),
+            { status: res.status },
+          );
+        }
+        // `unauthorized_client` means the Workspace Admin console has not
+        // granted this service account's client ID the scopes above. That is
+        // the half of the setup that lives outside GCP, and no amount of IAM
+        // substitutes for it — so name it rather than letting a bare 401 stand.
+        throw new Error(
+          `Workspace delegation to ${adminEmail} was refused ` +
+            `(${body.error ?? res.status}${
+              body.error_description ? `: ${body.error_description}` : ""
+            }). Check that ${signer}'s client ID is authorized for ` +
+            `${SCOPES.join(", ")} in Admin console -> Security -> API controls -> ` +
+            `Domain-wide delegation.`,
+        );
+      }
+
+      return {
+        token: body.access_token,
+        expiresAt: Date.now() + (body.expires_in ?? 3600) * 1000,
+      };
+    },
+    { label: "Google Workspace delegation" },
+  );
   return delegated.token;
 }
 
@@ -162,17 +210,22 @@ function joinOrgUnitPath(parent: string, name: string): string {
  * Idempotent: an existing OU at the same path is reused so a retried run does
  * not fail. Returns the full org unit path.
  */
-export async function createOrgUnit(name: string): Promise<string> {
+export async function createOrgUnit(
+  name: string,
+  notify?: RetryNotify,
+): Promise<string> {
   const svc = await directory();
   const { customerId, parentOrgUnitPath } = workspaceCfg();
   const path = joinOrgUnitPath(parentOrgUnitPath, name);
   const key = path.replace(/^\//, "");
 
   try {
-    const res = await svc.orgunits.insert({
-      customerId,
-      requestBody: { name, parentOrgUnitPath },
-    });
+    const res = await directoryCall("create OU", notify, () =>
+      svc.orgunits.insert({
+        customerId,
+        requestBody: { name, parentOrgUnitPath },
+      }),
+    );
     return res.data.orgUnitPath ?? path;
   } catch (err) {
     // The OU may already exist — a grown or retried workshop re-runs this. The
@@ -181,7 +234,9 @@ export async function createOrgUnit(name: string): Promise<string> {
     // ready workshop). So don't trust the status — look. If the OU is there,
     // adopt it; only if it genuinely is not do we surface the insert error.
     try {
-      const existing = await svc.orgunits.get({ customerId, orgUnitPath: key });
+      const existing = await directoryCall("look up OU", notify, () =>
+        svc.orgunits.get({ customerId, orgUnitPath: key }),
+      );
       if (existing.data.orgUnitPath) return existing.data.orgUnitPath;
     } catch (getErr) {
       if (statusOf(getErr) !== 404) throw getErr;
@@ -193,10 +248,12 @@ export async function createOrgUnit(name: string): Promise<string> {
 export async function deleteOrgUnit(orgUnitPath: string): Promise<void> {
   const svc = await directory();
   try {
-    await svc.orgunits.delete({
-      customerId: workspaceCfg().customerId,
-      orgUnitPath: orgUnitPath.replace(/^\//, ""),
-    });
+    await directoryCall("delete OU", undefined, () =>
+      svc.orgunits.delete({
+        customerId: workspaceCfg().customerId,
+        orgUnitPath: orgUnitPath.replace(/^\//, ""),
+      }),
+    );
   } catch (err) {
     if (statusOf(err) !== 404) throw err;
   }
@@ -221,10 +278,13 @@ export type CreatedAccount = { email: string; tempPassword: string };
  * derived from the generated username, so `bouncypenguin@…` shows up as
  * "Bouncypenguin".
  */
-export async function createAccount(input: {
-  email: string;
-  orgUnitPath: string;
-}): Promise<CreatedAccount> {
+export async function createAccount(
+  input: {
+    email: string;
+    orgUnitPath: string;
+  },
+  notify?: RetryNotify,
+): Promise<CreatedAccount> {
   const svc = await directory();
   const tempPassword = generatePassword();
 
@@ -242,20 +302,26 @@ export async function createAccount(input: {
   };
 
   try {
-    await svc.users.insert({ requestBody: body });
+    await directoryCall("create user", notify, () =>
+      svc.users.insert({ requestBody: body }),
+    );
   } catch (err) {
     if (statusOf(err) !== 409) throw err;
     // Someone got this address between the availability check and here. If it
     // sits in this workshop's OU it is ours — an earlier attempt that crashed
     // before recording it — so adopt it. Anywhere else it belongs to a real
     // person, and resetting their password would lock them out.
-    const existing = await svc.users.get({ userKey: input.email });
+    const existing = await directoryCall("look up user", notify, () =>
+      svc.users.get({ userKey: input.email }),
+    );
     if (existing.data.orgUnitPath !== input.orgUnitPath) {
       throw new Error(
         `address ${input.email} is already in use outside ${input.orgUnitPath}`,
       );
     }
-    await svc.users.update({ userKey: input.email, requestBody: body });
+    await directoryCall("update user", notify, () =>
+      svc.users.update({ userKey: input.email, requestBody: body }),
+    );
   }
   return { email: input.email, tempPassword };
 }
@@ -263,7 +329,9 @@ export async function createAccount(input: {
 export async function deleteAccount(email: string): Promise<void> {
   const svc = await directory();
   try {
-    await svc.users.delete({ userKey: email });
+    await directoryCall("delete user", undefined, () =>
+      svc.users.delete({ userKey: email }),
+    );
   } catch (err) {
     if (statusOf(err) !== 404) throw err;
   }
@@ -282,7 +350,9 @@ export function usernameEmail(username: string): string {
 export async function accountExists(email: string): Promise<boolean> {
   const svc = await directory();
   try {
-    await svc.users.get({ userKey: email });
+    await directoryCall("check address", undefined, () =>
+      svc.users.get({ userKey: email }),
+    );
     return true;
   } catch (err) {
     if (statusOf(err) === 404) return false;

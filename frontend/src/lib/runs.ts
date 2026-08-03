@@ -31,7 +31,7 @@ export type Viewer = { id: string; role: SiteRole };
  * for somebody else's run gets the same "not found" as one asking for a run
  * that never existed.
  */
-const ownedBy = (viewer: Viewer) =>
+export const ownedBy = (viewer: Viewer) =>
   canManageAnyEvent(viewer.role)
     ? undefined
     : eq(workshopRuns.userId, viewer.id);

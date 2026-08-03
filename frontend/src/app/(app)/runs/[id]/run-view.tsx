@@ -19,6 +19,7 @@ import { cn } from "@/lib/utils";
 import { riseChild, staggerParent } from "@/lib/motion";
 import { DeleteEventButton } from "./delete-event-button";
 import { ExtendEventButton } from "./extend-event-button";
+import { RetryEventButton } from "./retry-event-button";
 import { RunConfig } from "./run-config";
 
 type RunPayload = {
@@ -218,6 +219,7 @@ export function RunView({
           </div>
           <div className="flex shrink-0 items-center gap-2">
             <StatusBadge status={run.status} />
+            <RetryEventButton run={run} onRetried={refresh} />
             <ExtendEventButton run={run} onExtended={refresh} />
             <DeleteEventButton run={run} owned={owned} onRequested={refresh} />
           </div>

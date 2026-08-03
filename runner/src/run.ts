@@ -24,6 +24,7 @@ import {
 } from "./workspace.js";
 import { tfApply, tfInit, tfOutput } from "./terraform.js";
 import { allocateEmails, createAccount, createOrgUnit } from "./directory.js";
+import { summarize } from "./retry.js";
 import { displayName } from "./usernames.js";
 import {
   createAttendeeRole,
@@ -129,7 +130,10 @@ export async function runWorkshop(runId: string): Promise<void> {
     await setReady(runId, outputs, expiresAt);
     await log(runId, "system", `Ready. Auto-destroys at ${expiresAt.toISOString()}`);
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
+    // `summarize` keeps a transient-provider blob (e.g. a Google HTML "Error
+    // 502" page) from being stored as the whole error — a short, attributed
+    // one-liner lands in the log and the `error` column instead.
+    const message = summarize(err);
     await log(runId, "stderr", message);
     if (run.expires_at) {
       // This workshop was already live — a grow or a retry (a first provision
@@ -151,8 +155,12 @@ export async function runWorkshop(runId: string): Promise<void> {
 
 /** Create the workshop's org unit and its attendee accounts. */
 async function provisionAccounts(run: RunRow): Promise<string> {
+  // Surface Directory API retry notices in the run's live log, so a room sees
+  // "Google … retrying" rather than a silent stall on a transient Google blip.
+  const notify = (message: string) => log(run.id, "system", message);
+
   await log(run.id, "system", `Creating organizational unit "${run.name}"`);
-  const orgUnitPath = await createOrgUnit(run.name);
+  const orgUnitPath = await createOrgUnit(run.name, notify);
   await setOrgUnitPath(run.id, orgUnitPath);
   await log(run.id, "system", `Org unit ready at ${orgUnitPath}`);
 
@@ -179,7 +187,7 @@ async function provisionAccounts(run: RunRow): Promise<string> {
   const emails = await allocateEmails(todo, existing);
 
   for (const email of emails) {
-    const account = await createAccount({ email, orgUnitPath });
+    const account = await createAccount({ email, orgUnitPath }, notify);
     await addAccount(run.id, account.email, account.tempPassword);
     await log(run.id, "stdout", `created ${account.email}`);
   }
