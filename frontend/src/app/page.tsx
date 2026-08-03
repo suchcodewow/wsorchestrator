@@ -76,7 +76,7 @@ export default async function Home() {
                 </Link>
               </Button>
               <Button asChild variant="outline" size="lg">
-                <a href="#how">See how it works</a>
+                <Link href="/how-it-works">See how it works</Link>
               </Button>
             </div>
           </section>
