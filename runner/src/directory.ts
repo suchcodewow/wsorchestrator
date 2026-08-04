@@ -200,6 +200,17 @@ function statusOf(err: unknown): number | undefined {
     : undefined;
 }
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Deleting an OU's users is eventually consistent: for a short while after the
+ * last user is deleted, the OU can still report members and refuse to delete.
+ * So sweep-and-delete is tried a few times with a pause between, converging
+ * within one reaper tick rather than waiting for the next one.
+ */
+const OU_DELETE_ATTEMPTS = 4;
+const OU_DELETE_BACKOFF_MS = 5000;
+
 function joinOrgUnitPath(parent: string, name: string): string {
   const base = parent.endsWith("/") ? parent.slice(0, -1) : parent;
   return `${base}/${name}`;
@@ -245,17 +256,71 @@ export async function createOrgUnit(
   }
 }
 
-export async function deleteOrgUnit(orgUnitPath: string): Promise<void> {
-  const svc = await directory();
-  try {
-    await directoryCall("delete OU", undefined, () =>
-      svc.orgunits.delete({
-        customerId: workspaceCfg().customerId,
-        orgUnitPath: orgUnitPath.replace(/^\//, ""),
+/** Every user currently in an OU (and its sub-OUs), by primary email. */
+async function listOrgUnitUsers(
+  svc: admin_directory_v1.Admin,
+  orgUnitPath: string,
+): Promise<string[]> {
+  const { customerId } = workspaceCfg();
+  const emails: string[] = [];
+  let pageToken: string | undefined;
+  do {
+    const res = await directoryCall("list OU users", undefined, () =>
+      svc.users.list({
+        customer: customerId,
+        query: `orgUnitPath='${orgUnitPath}'`,
+        maxResults: 200,
+        pageToken,
       }),
     );
-  } catch (err) {
-    if (statusOf(err) !== 404) throw err;
+    for (const u of res.data.users ?? []) {
+      if (u.primaryEmail) emails.push(u.primaryEmail);
+    }
+    pageToken = res.data.nextPageToken ?? undefined;
+  } while (pageToken);
+  return emails;
+}
+
+/**
+ * Empty and delete a workshop's OU.
+ *
+ * Deletes whoever is *actually* in the OU, not just the accounts on record —
+ * a create that failed after Google had already made the account (a gateway
+ * 502 on `users.insert`, say) leaves an untracked user here, and Google will
+ * not delete an OU that still has members. Reading the OU's real membership is
+ * what lets teardown clear that orphan; the run's own roster never knew about
+ * it. Idempotent: a 404 (already gone) at any step is success.
+ */
+export async function deleteOrgUnit(orgUnitPath: string): Promise<void> {
+  const svc = await directory();
+  const key = orgUnitPath.replace(/^\//, "");
+
+  for (let attempt = 1; attempt <= OU_DELETE_ATTEMPTS; attempt++) {
+    const users = await listOrgUnitUsers(svc, orgUnitPath);
+    for (const email of users) {
+      try {
+        await directoryCall("delete OU user", undefined, () =>
+          svc.users.delete({ userKey: email }),
+        );
+      } catch (err) {
+        if (statusOf(err) !== 404) throw err;
+      }
+    }
+
+    try {
+      await directoryCall("delete OU", undefined, () =>
+        svc.orgunits.delete({ customerId: workspaceCfg().customerId, orgUnitPath: key }),
+      );
+      return;
+    } catch (err) {
+      if (statusOf(err) === 404) return; // already gone
+      // Only the "still has members" case is worth another sweep — the just-
+      // deleted users may not have propagated yet. Anything else is a real
+      // failure and should surface for the reaper to retry the whole run.
+      const message = err instanceof Error ? err.message : String(err);
+      if (attempt >= OU_DELETE_ATTEMPTS || !/member/i.test(message)) throw err;
+      await sleep(OU_DELETE_BACKOFF_MS);
+    }
   }
 }
 

@@ -27,8 +27,10 @@ import { deleteAccount, deleteOrgUnit } from "./directory.js";
 import {
   deleteOrg,
   deleteProject,
+  listOrgProjects,
   orgIdentifier,
   projectIdentifier,
+  revokeOrgDelegateToken,
 } from "./harness.js";
 import {
   accountsFor,
@@ -113,13 +115,22 @@ async function destroyRun(run: RunRow): Promise<void> {
         await deleteAccount(email);
         await log(run.id, "stdout", `deleted ${email}`);
       }
-      await deleteAccounts(run.id);
     }
 
     if (run.org_unit_path) {
+      // `deleteOrgUnit` sweeps whoever is actually in the OU, so this also
+      // clears any user the roster above never knew about — e.g. an orphan a
+      // gateway 502 left behind when a create failed after Google made the
+      // account. It must run before dropping the roster below.
       await log(run.id, "system", `Deleting org unit ${run.org_unit_path}`);
       await deleteOrgUnit(run.org_unit_path);
     }
+
+    // Only now that the accounts and their OU are gone is it safe to forget the
+    // roster. If any step above threw, the run is retried next tick with the
+    // roster intact — so teardown never strands itself without a record of what
+    // it still has to delete.
+    if (accounts.length > 0) await deleteAccounts(run.id);
 
     // Logged first: `setDestroyed` may remove the run outright — it does when
     // somebody deleted it — and a log line for a run that is gone has nothing
@@ -137,19 +148,48 @@ async function destroyRun(run: RunRow): Promise<void> {
 /**
  * Delete the workshop's Harness projects, then its organization. Projects go
  * first because Harness refuses to delete an organization that still has any.
- * Both the identifiers are derived the same way they were on the way in, so
- * nothing extra needs to be stored to find them again.
+ *
+ * The projects are read from the org itself, not recomputed from the attendee
+ * roster — a project created for an attendee whose DB row was later lost would
+ * otherwise linger and block the org delete, the same orphan-wedge that stalled
+ * OU deletion. If the org can't be listed, fall back to the roster-derived ids
+ * (which are deterministic in the address) rather than skipping the delete.
  */
 async function destroyHarness(run: RunRow): Promise<void> {
   const orgId = orgIdentifier(run.name, run.id);
-  const accounts = await accountsFor(run.id);
 
   await log(run.id, "system", `Deleting Harness organization ${orgId}`);
-  for (const { email } of accounts) {
-    const projectId = projectIdentifier(email);
+
+  let projectIds: string[];
+  try {
+    projectIds = await listOrgProjects(orgId);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    await log(
+      run.id,
+      "stdout",
+      `could not list org projects (${message}); falling back to the roster`,
+    );
+    projectIds = (await accountsFor(run.id)).map((a) =>
+      projectIdentifier(a.email),
+    );
+  }
+  for (const projectId of projectIds) {
     await deleteProject(orgId, projectId);
     await log(run.id, "stdout", `deleted project ${projectId}`);
   }
+
+  // Revoke the org's delegate token before deleting the org — a live token
+  // can keep the org from being removed. Best-effort: nothing was necessarily
+  // created (delegates are opt-in and best-effort), so a failure here must not
+  // block teardown.
+  try {
+    await revokeOrgDelegateToken(orgId);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    await log(run.id, "stdout", `delegate token revoke skipped: ${message}`);
+  }
+
   await deleteOrg(orgId);
 }
 

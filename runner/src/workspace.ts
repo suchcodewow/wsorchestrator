@@ -55,6 +55,19 @@ function write(workDir: string, vars: Record<string, unknown>) {
 }
 
 /**
+ * Write the tfvars for a delegate root (delegates/gke|aks|eks). These take a
+ * flat, cloud-specific set of values assembled by the runner rather than the
+ * shared cloud config, so — unlike the workshop roots — this is a thin pass-
+ * through with no `commonVars`.
+ */
+export function writeDelegateTfvars(
+  workDir: string,
+  vars: Record<string, unknown>,
+) {
+  write(workDir, vars);
+}
+
+/**
  * Write the per-run terraform.tfvars.json into a workshop root dir.
  * Each job execution owns its container, so mutating the dir in place is safe.
  *

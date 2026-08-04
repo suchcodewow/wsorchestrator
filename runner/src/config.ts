@@ -218,6 +218,27 @@ export function harnessCfg() {
     orgResourceGroupName:
       process.env.HARNESS_ORG_RESOURCE_GROUP_NAME ??
       "All Organization Level Resources",
+
+    /**
+     * Harness delegates. Each workshop cluster gets one delegate registered at
+     * the ORG level (org scope comes from the delegate token). The install is
+     * best-effort in the runner, so this whole block is soft: a bad value or a
+     * Harness-side blip is logged and the workshop still goes ready.
+     */
+
+    /** Off switch — set HARNESS_DELEGATES_ENABLED=false to skip delegates. */
+    delegatesEnabled: (process.env.HARNESS_DELEGATES_ENABLED ?? "true") !== "false",
+    /**
+     * Name of the org-scoped delegate token the runner creates/reuses. One per
+     * org, shared by every cluster in the event.
+     */
+    delegateTokenName:
+      process.env.HARNESS_DELEGATE_TOKEN_NAME ?? "workshop-delegate",
+    /**
+     * Override the delegate container image. Empty keeps the Helm chart's own
+     * default, which is the right image for a short-lived workshop cluster.
+     */
+    delegateImage: process.env.HARNESS_DELEGATE_IMAGE ?? "",
   };
 }
 

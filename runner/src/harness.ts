@@ -139,16 +139,20 @@ const isRetryable = (status: number) => status >= 500 || status === 429;
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-async function api(
-  method: "POST" | "DELETE",
+type Method = "GET" | "POST" | "PUT" | "DELETE";
+
+/**
+ * One Harness request, retrying its own 5xx / rate-limit, returning the final
+ * status and body verbatim. The interpreting is left to callers: `api` maps it
+ * to ok/duplicate, `ensureOrgDelegateToken` parses the JSON it needs.
+ */
+async function rawRequest(
+  method: Method,
   path: string,
   query: Record<string, string | undefined>,
   body?: Json,
-  // The `/ng/api/*` endpoints take the account in the query string; the `/v1`
-  // roles endpoint infers it from the api key and rejects the extra param, so
-  // it opts out here.
   opts: { omitAccount?: boolean } = {},
-): Promise<{ ok: boolean; duplicate: boolean }> {
+): Promise<{ status: number; text: string }> {
   const cfg = harnessCfg();
   const params = new URLSearchParams();
   if (!opts.omitAccount) params.set("accountIdentifier", cfg.accountId);
@@ -156,8 +160,8 @@ async function api(
     if (v) params.set(k, v);
   }
 
-  let last = "";
-
+  let status = 0;
+  let text = "";
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     const res = await fetch(`${cfg.baseUrl}${path}?${params}`, {
       method,
@@ -168,16 +172,9 @@ async function api(
       body: body ? JSON.stringify(body) : undefined,
     });
 
-    if (res.ok) return { ok: true, duplicate: false };
-
-    const text = await res.text();
-    if (isDuplicate(res.status, text)) return { ok: true, duplicate: true };
-    // A delete of something already gone is not an error.
-    if (method === "DELETE" && res.status === 404) {
-      return { ok: true, duplicate: false };
-    }
-
-    last = `Harness ${method} ${path} failed (${res.status}): ${messageOf(text)}`;
+    status = res.status;
+    text = await res.text();
+    if (res.ok) break;
 
     // A 4xx is our request being wrong; sending it again will not fix it.
     if (!isRetryable(res.status) || attempt === MAX_ATTEMPTS) break;
@@ -187,7 +184,32 @@ async function api(
     await wait(1000 * 2 ** (attempt - 1));
   }
 
-  throw new Error(`${last} (after ${MAX_ATTEMPTS} attempts)`);
+  return { status, text };
+}
+
+async function api(
+  method: "POST" | "PUT" | "DELETE",
+  path: string,
+  query: Record<string, string | undefined>,
+  body?: Json,
+  // The `/ng/api/*` endpoints take the account in the query string; the `/v1`
+  // roles endpoint infers it from the api key and rejects the extra param, so
+  // it opts out here.
+  opts: { omitAccount?: boolean } = {},
+): Promise<{ ok: boolean; duplicate: boolean }> {
+  const { status, text } = await rawRequest(method, path, query, body, opts);
+
+  if (status >= 200 && status < 300) return { ok: true, duplicate: false };
+  if (isDuplicate(status, text)) return { ok: true, duplicate: true };
+  // A delete of something already gone is not an error.
+  if (method === "DELETE" && status === 404) {
+    return { ok: true, duplicate: false };
+  }
+
+  throw new Error(
+    `Harness ${method} ${path} failed (${status}): ${messageOf(text)} ` +
+      `(after up to ${MAX_ATTEMPTS} attempts)`,
+  );
 }
 
 /** Create the workshop's organization. Returns whether it already existed. */
@@ -304,6 +326,45 @@ export async function deleteProject(
   });
 }
 
+/**
+ * Every project that actually exists in the org, by identifier.
+ *
+ * Teardown deletes projects by listing what is really there rather than
+ * recomputing them from the attendee roster: a project created for an attendee
+ * whose DB row was later lost would otherwise linger and block the org delete
+ * (Harness refuses to delete a non-empty org). Throws if the org cannot be
+ * listed, so the caller can fall back to the roster.
+ */
+export async function listOrgProjects(orgId: string): Promise<string[]> {
+  const ids: string[] = [];
+  const pageSize = 100;
+  for (let pageIndex = 0; ; pageIndex++) {
+    const { status, text } = await rawRequest("GET", "/ng/api/projects", {
+      orgIdentifier: orgId,
+      pageIndex: String(pageIndex),
+      pageSize: String(pageSize),
+    });
+    if (status < 200 || status >= 300) {
+      throw new Error(
+        `could not list projects in org ${orgId} (${status}): ${messageOf(text)}`,
+      );
+    }
+    const body = JSON.parse(text) as {
+      data?: {
+        content?: Array<{ project?: { identifier?: string } }>;
+        totalPages?: number;
+      };
+    };
+    const content = body.data?.content ?? [];
+    for (const c of content) {
+      if (c.project?.identifier) ids.push(c.project.identifier);
+    }
+    const totalPages = body.data?.totalPages ?? 1;
+    if (content.length === 0 || pageIndex + 1 >= totalPages) break;
+  }
+  return ids;
+}
+
 /** The scope a role binding applies at, matching Harness's `roleScopeLevel`. */
 type Scope = "account" | "organization" | "project";
 
@@ -397,5 +458,73 @@ export async function grantOrgAttendee(
       identifier: cfg.orgResourceGroup,
       name: cfg.orgResourceGroupName,
     },
+  );
+}
+
+/* ------------------------------------------------------------------ *
+ * Delegate tokens — an org-scoped token per event, for the delegates
+ * the runner installs into each workshop cluster.
+ * ------------------------------------------------------------------ */
+
+const DELEGATE_TOKEN_PATH = "/ng/api/delegate-token-ng";
+
+/**
+ * Get (creating if needed) an ORG-scoped delegate token for the event's org,
+ * returning its secret value. It is the token's org scope that makes every
+ * delegate registered with it an organization-level delegate.
+ *
+ * Idempotent for grows and retries: the NG list endpoint returns token values,
+ * so an existing token by our name is reused rather than duplicated. The whole
+ * delegate feature is best-effort in the runner, so if the value genuinely
+ * cannot be obtained this throws and the caller logs it and moves on.
+ */
+export async function ensureOrgDelegateToken(orgId: string): Promise<string> {
+  const name = harnessCfg().delegateTokenName;
+
+  // Reuse an existing token if one is already there (idempotent grow/retry).
+  const list = await rawRequest("GET", DELEGATE_TOKEN_PATH, {
+    orgIdentifier: orgId,
+    status: "ACTIVE",
+  });
+  if (list.status >= 200 && list.status < 300) {
+    const tokens =
+      (JSON.parse(list.text) as {
+        resource?: Array<{ name?: string; value?: string }>;
+      }).resource ?? [];
+    const found = tokens.find((t) => t.name === name && t.value);
+    if (found?.value) return found.value;
+  }
+
+  // Otherwise create it. The value is only returned here, on creation.
+  const created = await rawRequest("POST", DELEGATE_TOKEN_PATH, {
+    orgIdentifier: orgId,
+    tokenName: name,
+  });
+  if (created.status < 200 || created.status >= 300) {
+    throw new Error(
+      `could not create org delegate token for ${orgId} ` +
+        `(${created.status}): ${messageOf(created.text)}`,
+    );
+  }
+  const value = (
+    JSON.parse(created.text) as { resource?: { value?: string } }
+  ).resource?.value;
+  if (!value) {
+    throw new Error(`delegate token created for ${orgId} but no value returned`);
+  }
+  return value;
+}
+
+/**
+ * Revoke the event's org delegate token at teardown, before the org is deleted.
+ * Best-effort: a missing token (nothing was ever created) or an unsupported
+ * shape must not block org deletion, so callers wrap this and ignore failures.
+ */
+export async function revokeOrgDelegateToken(orgId: string): Promise<void> {
+  await api(
+    "PUT",
+    DELEGATE_TOKEN_PATH,
+    { orgIdentifier: orgId, tokenName: harnessCfg().delegateTokenName },
+    { status: "REVOKED" },
   );
 }

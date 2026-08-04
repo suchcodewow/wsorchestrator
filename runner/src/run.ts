@@ -2,8 +2,10 @@ import path from "node:path";
 import {
   awsAccountEmail,
   awsCfg,
+  azureCfg,
   cloudStatePrefix,
   gcpCfg,
+  harnessCfg,
   stateBucket,
   TF_ROOT,
   challengeProjectMap,
@@ -20,6 +22,7 @@ import {
   writeAzureChallengeTfvars,
   writeAzureTfvars,
   writeChallengeTfvars,
+  writeDelegateTfvars,
   writeTfvars,
 } from "./workspace.js";
 import { tfApply, tfInit, tfOutput } from "./terraform.js";
@@ -30,6 +33,7 @@ import {
   createAttendeeRole,
   createOrg,
   createProject,
+  ensureOrgDelegateToken,
   grantAccountAdmin,
   grantOrgAttendee,
   grantProjectAdmin,
@@ -50,6 +54,7 @@ import {
   setOrgUnitPath,
   setProvisioning,
   setReady,
+  type Cloud,
   type RunRow,
 } from "./db.js";
 
@@ -73,6 +78,11 @@ const AWS_TF_SOURCE = "workshops/aws-base";
 
 /** Single-account root the runner applies once per AWS challenge competitor. */
 const AWS_CHALLENGE_TF_SOURCE = "challenges/aws-per-user";
+
+/** Delegate roots — install an org delegate into a cluster of the given cloud. */
+const DELEGATE_GKE_TF_SOURCE = "delegates/gke";
+const DELEGATE_AKS_TF_SOURCE = "delegates/aks";
+const DELEGATE_EKS_TF_SOURCE = "delegates/eks";
 
 /** Provision one workshop end to end: Workspace OU, accounts, then clouds. */
 export async function runWorkshop(runId: string): Promise<void> {
@@ -123,6 +133,11 @@ export async function runWorkshop(runId: string): Promise<void> {
       }
     }
 
+    // Put an org-scoped Harness delegate in each cluster that was built. This
+    // is best-effort and never throws — a delegate that will not install must
+    // not fail an otherwise-good workshop (see installDelegates).
+    await installDelegates(run, outputs);
+
     // Keep the original expiry when re-provisioning a workshop that grew —
     // editing its config must not silently extend how long it lives.
     const expiresAt =
@@ -151,6 +166,158 @@ export async function runWorkshop(runId: string): Promise<void> {
     }
     throw err;
   }
+}
+
+/**
+ * Install an organization-level Harness delegate into every cluster the run
+ * just built.
+ *
+ * Deliberately best-effort: this never throws, so a delegate that will not
+ * install — a Harness-side blip, a new cluster still stabilising, missing
+ * egress — is logged and the workshop still goes ready. One org-scoped token
+ * (its scope is what makes the delegates org-level) is shared by every cluster
+ * in the event; each cloud installs independently, so one failing does not stop
+ * the rest. Only a workshop reaches here with clusters — a challenge builds bare
+ * per-competitor environments with none.
+ *
+ * Teardown is implicit: the reaper's cluster destroy takes the delegate with
+ * it, so there is no separate delegate teardown to run.
+ */
+async function installDelegates(
+  run: RunRow,
+  outputs: Record<string, unknown>,
+): Promise<void> {
+  const cfg = harnessCfg();
+  if (!cfg.delegatesEnabled || run.mode !== "workshop") return;
+
+  const str = (k: string): string | undefined =>
+    typeof outputs[k] === "string" ? (outputs[k] as string) : undefined;
+
+  type Target = { cloud: Cloud; source: string; vars: Record<string, unknown> };
+  const targets: Target[] = [];
+
+  // GKE — a GCP workshop (gcp_project_id) or the no-cloud sandbox cluster
+  // (sandbox_project_id / the configured shared project).
+  const gkeName = str("gke_cluster_name");
+  const gkeLoc = str("gke_cluster_location");
+  const gkeProject =
+    str("gcp_project_id") ?? str("sandbox_project_id") ?? gcpCfg().sandboxProjectId;
+  if (gkeName && gkeLoc && gkeProject) {
+    targets.push({
+      cloud: "gcp",
+      source: DELEGATE_GKE_TF_SOURCE,
+      vars: {
+        region: gcpCfg().region,
+        project_id: gkeProject,
+        cluster_name: gkeName,
+        location: gkeLoc,
+      },
+    });
+  }
+
+  // AKS.
+  const aksName = str("aks_cluster_name");
+  const resourceGroup = str("azure_resource_group");
+  if (aksName && resourceGroup) {
+    targets.push({
+      cloud: "azure",
+      source: DELEGATE_AKS_TF_SOURCE,
+      vars: {
+        subscription_id: azureCfg().subscriptionId,
+        resource_group_name: resourceGroup,
+        cluster_name: aksName,
+      },
+    });
+  }
+
+  // EKS.
+  const eksName = str("eks_cluster_name");
+  const awsAccountId = str("aws_account_id");
+  if (eksName && awsAccountId) {
+    targets.push({
+      cloud: "aws",
+      source: DELEGATE_EKS_TF_SOURCE,
+      vars: {
+        region: awsCfg().region,
+        aws_account_id: awsAccountId,
+        account_access_role: awsCfg().accountAccessRole,
+        cluster_name: eksName,
+      },
+    });
+  }
+
+  if (targets.length === 0) return;
+
+  const orgId = orgIdentifier(run.name, run.id);
+  let token: string;
+  try {
+    token = await ensureOrgDelegateToken(orgId);
+  } catch (err) {
+    await log(
+      run.id,
+      "stderr",
+      `Skipping Harness delegates — could not get an org delegate token: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    );
+    return;
+  }
+
+  const common = {
+    account_id: cfg.accountId,
+    delegate_token: token,
+    manager_endpoint: cfg.baseUrl,
+    delegate_image: cfg.delegateImage,
+  };
+  const clusterName = makeClusterName(run.slug, run.id);
+
+  for (const target of targets) {
+    const delegateName = delegateNameFor(clusterName, target.cloud);
+    try {
+      await log(
+        run.id,
+        "system",
+        `Installing org Harness delegate "${delegateName}" into the ` +
+          `${target.cloud.toUpperCase()} cluster ${target.vars.cluster_name}`,
+      );
+      const workDir = path.join(TF_ROOT, target.source);
+      writeDelegateTfvars(workDir, {
+        ...target.vars,
+        ...common,
+        delegate_name: delegateName,
+      });
+      await tfInit(
+        workDir,
+        stateBucket(),
+        `${run.state_prefix}/delegate/${target.cloud}`,
+        (l) => log(run.id, l.stream, l.text),
+      );
+      await tfApply(workDir, (l) => log(run.id, l.stream, l.text));
+      await log(run.id, "stdout", `delegate ${delegateName} installed`);
+    } catch (err) {
+      // Best-effort: log and keep going. The workshop is otherwise ready, and
+      // the run can be retried to attempt the delegate again.
+      await log(
+        run.id,
+        "stderr",
+        `Harness delegate for the ${target.cloud.toUpperCase()} cluster did ` +
+          `not install (${summarize(err)}). The workshop is otherwise ready.`,
+      );
+    }
+  }
+}
+
+/**
+ * A delegate/Helm-release name for a cluster: DNS-1123, and suffixed with the
+ * cloud so a multi-cloud event's clusters (which share a base cluster name)
+ * don't collide within the one org.
+ */
+function delegateNameFor(clusterName: string, cloud: Cloud): string {
+  return `${clusterName}-${cloud}`
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, "-")
+    .slice(0, 60)
+    .replace(/^-+|-+$/g, "");
 }
 
 /** Create the workshop's org unit and its attendee accounts. */
