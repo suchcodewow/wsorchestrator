@@ -32,7 +32,7 @@ variable "namespace" {
 }
 
 variable "timeout_seconds" {
-  description = "How long to wait for the delegate rollout before failing the release. A fresh cluster's nodes may take a moment to become schedulable."
+  description = "How long to wait for the delegate rollout before failing the release. A fresh node has to pull the ~1 GB delegate image and the JVM has to register with Harness, so this allows generous margin on top of scheduling."
   type        = number
-  default     = 600
+  default     = 900
 }

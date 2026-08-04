@@ -19,9 +19,9 @@ variable "node_count" {
 }
 
 variable "vm_size" {
-  description = "Node VM size. Standard_B2s (2 vCPU / 4 GB, burstable) is the AKS analog of GKE's e2-medium — small but able to run the system pods plus a little workshop workload."
+  description = "Node VM size. Standard_B2ms (2 vCPU / 8 GB, burstable) is the AKS analog of GKE's e2-standard-2 — sized so the org Harness delegate (~1 CPU / 2 GB) fits alongside the system pods and workshop workload."
   type        = string
-  default     = "Standard_B2s"
+  default     = "Standard_B2ms"
 }
 
 variable "disk_size_gb" {

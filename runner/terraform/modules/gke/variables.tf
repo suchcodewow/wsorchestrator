@@ -26,9 +26,9 @@ variable "node_count" {
 }
 
 variable "machine_type" {
-  description = "Node machine type. e2-medium (2 vCPU / 4 GB) is the smallest that comfortably runs GKE's system pods plus a little workshop workload."
+  description = "Node machine type. e2-standard-2 (2 vCPU / 8 GB, ~1.9 CPU allocatable) leaves room for the org Harness delegate (~1 CPU / 2 GB) alongside GKE's system pods and workshop workload — e2-medium's ~0.9 CPU allocatable cannot fit the delegate."
   type        = string
-  default     = "e2-medium"
+  default     = "e2-standard-2"
 }
 
 variable "disk_size_gb" {
