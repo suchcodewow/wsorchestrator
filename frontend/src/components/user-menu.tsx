@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   CalendarRange,
   ChevronDown,
+  Cloud,
   DatabaseBackup,
   Laptop,
   LogOut,
@@ -174,6 +175,12 @@ export function UserMenu({
               <Link href="/database">
                 <Terminal />
                 Database
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link href="/cloud-status">
+                <Cloud />
+                Cloud Status
               </Link>
             </DropdownMenuItem>
           </>

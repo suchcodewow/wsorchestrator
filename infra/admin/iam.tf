@@ -57,6 +57,28 @@ resource "google_billing_account_iam_member" "runner_billing" {
   member             = "serviceAccount:${google_service_account.runner.email}"
 }
 
+# Read-only view of the billing account's projects, for the admin "Cloud
+# Status" page — it lists every project billed to this account and flags ones
+# with no matching run in the database (orphans / extraneous projects). Viewer
+# grants only list/get; app-sa still cannot change billing or move projects.
+resource "google_billing_account_iam_member" "app_billing_viewer" {
+  billing_account_id = var.billing_account_id
+  role               = "roles/billing.viewer"
+  member             = "serviceAccount:${google_service_account.app.email}"
+}
+
+# Read project display names for the Cloud Status page. roles/browser is
+# metadata-only (project name / id / lifecycle — no data access), scoped to the
+# workshops folder to match runner-sa's containment. Projects billed but outside
+# this folder (the admin project, the sandbox, or one someone stood up elsewhere
+# in the org) simply show without a name — grant this at the org level instead
+# if naming those matters.
+resource "google_folder_iam_member" "app_browser" {
+  folder = "folders/${var.workshops_folder_id}"
+  role   = "roles/browser"
+  member = "serviceAccount:${google_service_account.app.email}"
+}
+
 # Read/write Terraform state in the admin bucket (cross-project actor).
 resource "google_storage_bucket_iam_member" "runner_state" {
   bucket = google_storage_bucket.tfstate.name

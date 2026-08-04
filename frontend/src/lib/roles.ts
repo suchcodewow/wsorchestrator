@@ -73,6 +73,17 @@ export const canRunSql = (role: SiteRole) =>
 export const canManageBackups = (role: SiteRole) =>
   roleAtLeast(role, "administrator");
 
+/**
+ * Review every Google project billed to the workshop account and spot the
+ * orphaned or extraneous ones (billed, but with no run in the database).
+ *
+ * Reads the billing account's project list and the runs table — nothing it
+ * touches is destructive — but it exposes the whole billing footprint, so it
+ * sits at the top role alongside users, backups, and the SQL console.
+ */
+export const canAuditProjects = (role: SiteRole) =>
+  roleAtLeast(role, "administrator");
+
 /** Narrow an untrusted string — a form value, a JSON body — to a role. */
 export function asSiteRole(value: unknown): SiteRole | null {
   return SITE_ROLES.includes(value as SiteRole) ? (value as SiteRole) : null;
