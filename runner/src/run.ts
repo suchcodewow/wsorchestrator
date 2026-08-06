@@ -416,15 +416,23 @@ async function provisionHarness(run: RunRow): Promise<Record<string, unknown>> {
 }
 
 /**
- * Substrings GCE uses when a zone has no room for the requested machine type.
- * A cluster create that fails with one of these is a capacity stockout, not a
- * config error, so the runner should try another zone rather than give up.
+ * Substrings that mark a GKE apply failure as "this zone can't give us the
+ * cluster right now" rather than a real config error, so the runner should try
+ * another zone rather than give up. Two shapes:
+ *   - an explicit GCE stockout (the zone immediately reports no room), and
+ *   - a create that ran past `create_timeout` (a capacity-starved zone where
+ *     GKE keeps retrying the initial node internally instead of erroring —
+ *     Terraform surfaces this as a "timeout while waiting for state" / context
+ *     deadline). Bounding the timeout in the module is what turns that silent
+ *     hang into a prompt, catchable failure.
  */
 const GKE_CAPACITY_SIGNATURES = [
   "does not have enough resources available",
   "zone_resource_pool_exhausted",
   "resource pool exhausted",
   "try a different location",
+  "timeout while waiting for state to become",
+  "context deadline exceeded",
 ];
 
 function isGkeCapacityError(text: string): boolean {

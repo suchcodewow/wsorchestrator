@@ -51,6 +51,14 @@ resource "google_container_cluster" "this" {
   deletion_protection = false
 
   resource_labels = var.labels
+
+  # Bound the wait so a capacity-starved zone (where GKE silently keeps retrying
+  # the initial node rather than erroring) is abandoned in minutes, letting the
+  # runner fail the apply over to another zone. See var.create_timeout.
+  timeouts {
+    create = var.create_timeout
+    delete = var.delete_timeout
+  }
 }
 
 resource "google_container_node_pool" "primary" {
@@ -72,5 +80,12 @@ resource "google_container_node_pool" "primary" {
     metadata = {
       disable-legacy-endpoints = "true"
     }
+  }
+
+  # Same bounded wait as the cluster — the node pool is where the workshop's
+  # actual node capacity is requested, so it hits the same zonal stockout.
+  timeouts {
+    create = var.create_timeout
+    delete = var.delete_timeout
   }
 }

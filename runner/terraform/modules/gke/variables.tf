@@ -37,6 +37,18 @@ variable "disk_size_gb" {
   default     = 30
 }
 
+variable "create_timeout" {
+  description = "How long to wait for the cluster/node pool to create before erroring. Bounded well below the provider's 40-minute default so a zone that has silently run out of capacity (GKE keeps retrying node provisioning internally rather than failing) is abandoned quickly — the runner then fails the apply over to another zone instead of hanging. A healthy zonal create finishes in a few minutes, so 10m is comfortable headroom."
+  type        = string
+  default     = "10m"
+}
+
+variable "delete_timeout" {
+  description = "How long to wait for the cluster/node pool to delete. Kept modest so re-placing a cluster onto another zone (which destroys the stuck one first) and the reaper's teardown can't hang indefinitely on a wedged zone."
+  type        = string
+  default     = "15m"
+}
+
 variable "use_spot" {
   description = "Spot nodes are ~60-90% cheaper but can be preempted mid-workshop, so they default off — a workshop cluster must not disappear under attendees. Enable only for throwaway testing."
   type        = bool
