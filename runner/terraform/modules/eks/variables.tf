@@ -15,9 +15,9 @@ variable "node_count" {
 }
 
 variable "instance_type" {
-  description = "Node instance type. t3.large (2 vCPU / 8 GB) is the EKS analog of GKE's e2-standard-2 — sized so the org Harness delegate (~1 CPU / 2 GB) fits alongside the system pods and workshop workload."
+  description = "Node instance type. t3.xlarge (4 vCPU / 16 GB) is the EKS analog of GKE's e2-standard-4 — sized so the org Harness delegate at its default 1-CPU request fits alongside the system pods and workshop workload. A 2-vCPU node (t3.large) left too little headroom to schedule it reliably."
   type        = string
-  default     = "t3.large"
+  default     = "t3.xlarge"
 }
 
 variable "disk_size_gb" {
