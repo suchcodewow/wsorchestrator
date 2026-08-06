@@ -52,6 +52,18 @@ export function gcpCfg() {
      */
     sandboxProjectId: process.env.GCP_SANDBOX_PROJECT_ID ?? "",
     region,
+    /**
+     * Ordered zone letters to try for the (zonal) GKE cluster, within
+     * {@link region}. GCE capacity stockouts are almost always zone-specific,
+     * so on a stockout the runner walks this list until one zone has room
+     * rather than failing the workshop (see `applyGkeWithZoneFailover`). The
+     * first entry is the default zone every run starts in. Override with
+     * `GCP_GKE_ZONES` (comma-separated letters, e.g. `b,c,f,a`).
+     */
+    gkeZones: (process.env.GCP_GKE_ZONES ?? "a,b,c,f")
+      .split(",")
+      .map((z) => z.trim())
+      .filter(Boolean),
   };
 }
 

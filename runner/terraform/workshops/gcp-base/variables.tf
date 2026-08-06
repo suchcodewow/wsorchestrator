@@ -15,6 +15,12 @@ variable "region" {
   default = "us-central1"
 }
 
+variable "zone_letter" {
+  description = "Which zone of the region hosts the zonal GKE cluster. The runner walks a,b,c,f here to dodge GCE capacity stockouts; defaults to a so teardown (which omits it) still targets a valid location."
+  type        = string
+  default     = "a"
+}
+
 variable "labels" {
   type    = map(string)
   default = {}

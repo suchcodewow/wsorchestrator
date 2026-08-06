@@ -25,11 +25,12 @@ export type RunRow = {
   state_prefix: string;
   ttl_seconds: number;
   expires_at: Date | null;
+  outputs: Record<string, unknown> | null;
 };
 
 const RUN_COLUMNS = `id, user_id, name, mode, slug, user_count, clouds, status,
                      org_unit_path, gcp_project_id, state_prefix, ttl_seconds,
-                     expires_at`;
+                     expires_at, outputs`;
 
 export async function getRun(runId: string): Promise<RunRow | undefined> {
   const { rows } = await pool.query<RunRow>(

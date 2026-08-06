@@ -82,6 +82,7 @@ export function writeTfvars(
   runId: string,
   attendeeEmails: string[] = [],
   clusterName?: string,
+  zoneLetter?: string,
 ) {
   write(workDir, {
     ...commonVars(runId),
@@ -91,6 +92,11 @@ export function writeTfvars(
     // it is deterministic in (slug, runId), so provision and teardown pass the
     // same name and Terraform tears down exactly what it created.
     ...(clusterName ? { cluster_name: clusterName } : {}),
+    // Which zone of the region hosts the zonal GKE cluster. Omitted on teardown
+    // (destroy works off state, so the zone the cluster was built in is already
+    // recorded) and on the first apply the runner sets it as it walks zones to
+    // dodge capacity stockouts (see `applyGkeWithZoneFailover`).
+    ...(zoneLetter ? { zone_letter: zoneLetter } : {}),
   });
 }
 

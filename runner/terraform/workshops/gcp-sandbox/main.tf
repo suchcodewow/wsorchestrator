@@ -64,6 +64,7 @@ module "gke" {
   project_id   = var.project_id
   cluster_name = var.cluster_name
   region       = var.region
+  zone_letter  = var.zone_letter
   labels       = var.labels
 
   depends_on = [time_sleep.api_propagation]

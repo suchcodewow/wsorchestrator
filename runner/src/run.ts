@@ -415,6 +415,94 @@ async function provisionHarness(run: RunRow): Promise<Record<string, unknown>> {
   return { harness_org: orgId, harness_org_url: orgUrl(orgId) };
 }
 
+/**
+ * Substrings GCE uses when a zone has no room for the requested machine type.
+ * A cluster create that fails with one of these is a capacity stockout, not a
+ * config error, so the runner should try another zone rather than give up.
+ */
+const GKE_CAPACITY_SIGNATURES = [
+  "does not have enough resources available",
+  "zone_resource_pool_exhausted",
+  "resource pool exhausted",
+  "try a different location",
+];
+
+function isGkeCapacityError(text: string): boolean {
+  const t = text.toLowerCase();
+  return GKE_CAPACITY_SIGNATURES.some((s) => t.includes(s));
+}
+
+/** Zone letter from a location like "us-central1-c" (region "us-central1"). */
+function zoneLetterFromLocation(
+  location: unknown,
+  region: string,
+): string | undefined {
+  const prefix = `${region}-`;
+  return typeof location === "string" && location.startsWith(prefix)
+    ? location.slice(prefix.length)
+    : undefined;
+}
+
+/**
+ * Apply a GKE-building workshop root, walking `gcpCfg().gkeZones` when a zone
+ * is out of GCE capacity so a busy default zone doesn't fail the whole
+ * workshop. A zonal GKE cluster lives in exactly one zone and GCE stockouts are
+ * almost always zone-specific, so the next zone usually has room; the regional
+ * VPC/subnet the root also builds is zone-independent, so switching zones only
+ * re-places the (not-yet-created) cluster with no rework.
+ *
+ * `writeVarsForZone(zone)` rewrites the root's tfvars for the given zone letter
+ * — apply re-reads the file each time, so the new zone takes effect. Only
+ * capacity failures trigger a retry; any other apply error is a real failure
+ * and rethrown unchanged.
+ *
+ * A workshop that is only *growing* already has its cluster in some zone;
+ * moving it would tear the live cluster down and rebuild it, so when the run
+ * already recorded a cluster location we pin to that zone and skip the walk.
+ */
+async function applyGkeWithZoneFailover(
+  run: RunRow,
+  workDir: string,
+  writeVarsForZone: (zone: string) => void,
+): Promise<void> {
+  const cfg = gcpCfg();
+  const pinned = zoneLetterFromLocation(
+    run.outputs?.gke_cluster_location,
+    cfg.region,
+  );
+  const zones = pinned ? [pinned] : cfg.gkeZones;
+
+  for (let i = 0; i < zones.length; i++) {
+    const zone = zones[i];
+    const last = i === zones.length - 1;
+    writeVarsForZone(zone);
+
+    let captured = "";
+    try {
+      await tfApply(workDir, (l) => {
+        if (l.stream === "stderr") captured += l.text + "\n";
+        return log(run.id, l.stream, l.text);
+      });
+      if (i > 0) {
+        await log(
+          run.id,
+          "system",
+          `GKE cluster created in ${cfg.region}-${zone}.`,
+        );
+      }
+      return;
+    } catch (err) {
+      if (last || !isGkeCapacityError(captured)) throw err;
+      await log(
+        run.id,
+        "system",
+        `Zone ${cfg.region}-${zone} is out of capacity for the GKE cluster; ` +
+          `retrying in ${cfg.region}-${zones[i + 1]}.`,
+      );
+    }
+  }
+}
+
 /** Terraform the workshop's GCP project. */
 async function provisionGcp(run: RunRow): Promise<Record<string, unknown>> {
   const cfg = gcpCfg();
@@ -428,7 +516,6 @@ async function provisionGcp(run: RunRow): Promise<Record<string, unknown>> {
   // Read the accounts back rather than tracking which were just created, so a
   // workshop that grew re-grants the whole roster and Terraform converges.
   const attendees = (await accountsFor(run.id)).map((a) => a.email);
-  writeTfvars(workDir, projectId, run.id, attendees, clusterName);
 
   await log(run.id, "system", "terraform init");
   await tfInit(workDir, cfg.stateBucket, run.state_prefix, (l) =>
@@ -441,7 +528,9 @@ async function provisionGcp(run: RunRow): Promise<Record<string, unknown>> {
     `terraform apply — creating project, billing, APIs, the GKE cluster ` +
       `${clusterName}, and granting editor to ${attendees.length} attendee(s)`,
   );
-  await tfApply(workDir, (l) => log(run.id, l.stream, l.text));
+  await applyGkeWithZoneFailover(run, workDir, (zone) =>
+    writeTfvars(workDir, projectId, run.id, attendees, clusterName, zone),
+  );
 
   return tfOutput(workDir);
 }
@@ -477,7 +566,6 @@ async function provisionSandbox(run: RunRow): Promise<Record<string, unknown>> {
   // Read the accounts back rather than tracking which were just created, so a
   // workshop that grew re-grants the whole roster and Terraform converges.
   const attendees = (await accountsFor(run.id)).map((a) => a.email);
-  writeTfvars(workDir, cfg.sandboxProjectId, run.id, attendees, clusterName);
 
   await log(run.id, "system", "terraform init");
   await tfInit(workDir, cfg.stateBucket, run.state_prefix, (l) =>
@@ -490,7 +578,9 @@ async function provisionSandbox(run: RunRow): Promise<Record<string, unknown>> {
     `terraform apply — granting editor to ${attendees.length} attendee(s) and ` +
       `building the GKE cluster ${clusterName} on ${cfg.sandboxProjectId}`,
   );
-  await tfApply(workDir, (l) => log(run.id, l.stream, l.text));
+  await applyGkeWithZoneFailover(run, workDir, (zone) =>
+    writeTfvars(workDir, cfg.sandboxProjectId, run.id, attendees, clusterName, zone),
+  );
 
   return tfOutput(workDir);
 }
