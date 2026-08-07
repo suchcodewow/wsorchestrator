@@ -274,7 +274,7 @@ export default async function HowItWorks() {
             {/* the spine */}
             <span
               aria-hidden
-              className="absolute top-3 bottom-3 left-[21px] w-px bg-gradient-to-b from-brand/50 via-border to-border"
+              className="absolute top-3 bottom-3 left-5.25 w-px bg-linear-to-b from-brand/50 via-border to-border"
             />
 
             {LIFECYCLE.map((node) => (

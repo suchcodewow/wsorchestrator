@@ -1,30 +1,15 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { CLOUDS, CLOUD_LABELS, DEFAULT_TTL_DAYS, MAX_TTL_DAYS, limitsFor, type Cloud, type EventMode } from "@/db/schema";
+import { SPRING_SNAPPY, riseChild, staggerParent } from "@/lib/motion";
+import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 import { Check, Loader2, Zap } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-  CLOUDS,
-  CLOUD_LABELS,
-  DEFAULT_TTL_DAYS,
-  MAX_TTL_DAYS,
-  limitsFor,
-  type Cloud,
-  type EventMode,
-} from "@/db/schema";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { cn } from "@/lib/utils";
-import { riseChild, staggerParent, SPRING_SNAPPY } from "@/lib/motion";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 
 /**
  * The start time the form opens on: 9am on a day picked from the calendar,
@@ -43,19 +28,13 @@ function defaultStart(initialDate: Date | null): Date {
 /** Format a Date as the value a datetime-local input expects (local time). */
 function toLocalInput(d: Date): string {
   const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(
-    d.getHours(),
-  )}:${pad(d.getMinutes())}`;
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-const COPY: Record<
-  EventMode,
-  { title: string; description: string; noun: string; who: string }
-> = {
+const COPY: Record<EventMode, { title: string; description: string; noun: string; who: string }> = {
   workshop: {
     title: "Schedule a workshop",
-    description:
-      "Attendee accounts and one shared cloud environment are created automatically when the start time arrives.",
+    description: "Attendee accounts and one shared cloud environment are created automatically when the start time arrives.",
     noun: "workshop",
     who: "attendee",
   },
@@ -120,9 +99,7 @@ export function CreateEventDialog({
       setClouds([cloud]);
       return;
     }
-    setClouds((prev) =>
-      prev.includes(cloud) ? prev.filter((c) => c !== cloud) : [...prev, cloud],
-    );
+    setClouds((prev) => (prev.includes(cloud) ? prev.filter((c) => c !== cloud) : [...prev, cloud]));
   }
 
   async function createRun(startNow: boolean) {
@@ -157,22 +134,17 @@ export function CreateEventDialog({
           userCount: count,
           ttlDays: days,
           clouds,
-          ...(startNow
-            ? { startNow: true }
-            : { scheduledStart: new Date(start).toISOString() }),
+          ...(startNow ? { startNow: true } : { scheduledStart: new Date(start).toISOString() }),
         }),
       });
-      if (!res.ok)
-        throw new Error(`Could not create ${copy.noun} (${res.status})`);
+      if (!res.ok) throw new Error(`Could not create ${copy.noun} (${res.status})`);
       const { run } = await res.json();
       onOpenChange(false);
       // Jump straight to the run so the build streams in view.
       if (startNow) router.push(`/runs/${run.id}`);
       else router.refresh();
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : `Could not create ${copy.noun}`,
-      );
+      setError(err instanceof Error ? err.message : `Could not create ${copy.noun}`);
     } finally {
       setPending(null);
     }
@@ -183,9 +155,7 @@ export function CreateEventDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{copy.title}</DialogTitle>
-          <DialogDescription className="leading-relaxed">
-            {copy.description}
-          </DialogDescription>
+          <DialogDescription className="leading-relaxed">{copy.description}</DialogDescription>
         </DialogHeader>
 
         <motion.form
@@ -208,7 +178,7 @@ export function CreateEventDialog({
               id="ws-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Team onboarding — East"
+              placeholder="platform team workshop"
               required
               autoFocus
             />
@@ -231,17 +201,13 @@ export function CreateEventDialog({
               className="tnum"
             />
             <p className="text-xs leading-relaxed text-muted-foreground">
-              1–{limits.maxUsers} accounts are created in a dedicated
-              organizational unit named after the {copy.noun}.
-              {mode === "challenge" &&
-                " On Google Cloud, each competitor also gets their own project."}
+              1–{limits.maxUsers} accounts are created in a dedicated organizational unit named after the {copy.noun}.
+              {mode === "challenge" && " On Google Cloud, each competitor also gets their own project."}
             </p>
           </motion.div>
 
           <motion.fieldset variants={riseChild} className="grid gap-2">
-            <legend className="mb-2 text-sm font-medium">
-              {singleCloud ? "Cloud" : "Clouds needed"}
-            </legend>
+            <legend className="mb-2 text-sm font-medium">{singleCloud ? "Cloud" : "Clouds needed"}</legend>
             {/*
              * Selectable cards rather than bare checkboxes: the whole row is a
              * target, the selected state is legible at a glance, and the
@@ -261,44 +227,30 @@ export function CreateEventDialog({
                     transition={SPRING_SNAPPY}
                     className={cn(
                       "flex cursor-pointer items-center gap-3 rounded-lg border p-3 text-left text-sm transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
-                      selected
-                        ? "border-brand-border bg-brand/8"
-                        : "hover:border-brand-border/60 hover:bg-accent/40",
+                      selected ? "border-brand-border bg-brand/8" : "hover:border-brand-border/60 hover:bg-accent/40",
                     )}
                   >
                     <span
                       className={cn(
                         "flex size-4.5 shrink-0 items-center justify-center border transition-colors",
                         singleCloud ? "rounded-full" : "rounded-[5px]",
-                        selected
-                          ? "border-brand bg-brand text-brand-foreground"
-                          : "border-input",
+                        selected ? "border-brand bg-brand text-brand-foreground" : "border-input",
                       )}
                     >
                       {selected && (
-                        <motion.span
-                          initial={{ scale: 0 }}
-                          animate={{ scale: 1 }}
-                          transition={SPRING_SNAPPY}
-                        >
+                        <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} transition={SPRING_SNAPPY}>
                           <Check className="size-3" strokeWidth={3} />
                         </motion.span>
                       )}
                     </span>
                     <span className="font-medium">{CLOUD_LABELS[cloud]}</span>
-                    {cloud !== "gcp" && (
-                      <span className="ml-auto text-xs text-muted-foreground">
-                        not yet provisioned
-                      </span>
-                    )}
+                    {cloud !== "gcp" && <span className="ml-auto text-xs text-muted-foreground">not yet provisioned</span>}
                   </motion.button>
                 );
               })}
             </div>
             {singleCloud ? (
-              <p className="text-xs text-muted-foreground">
-                A challenge runs on a single cloud.
-              </p>
+              <p className="text-xs text-muted-foreground">A challenge runs on a single cloud.</p>
             ) : (
               limits.minClouds === 0 && (
                 <p className="text-xs leading-relaxed text-muted-foreground">
@@ -327,33 +279,18 @@ export function CreateEventDialog({
               className="tnum"
             />
             <p className="text-xs leading-relaxed text-muted-foreground">
-              The {copy.noun} and everything it provisions are torn down
-              automatically after this many days (1–{MAX_TTL_DAYS}). You can add
-              a day later from the {copy.noun}&rsquo;s page.
+              The {copy.noun} and everything it provisions are torn down automatically after this many days (1–{MAX_TTL_DAYS}).
+              You can add a day later from the {copy.noun}&rsquo;s page.
             </p>
           </motion.div>
 
           {/* Separated from Schedule: this one ignores the date below. */}
-          <motion.div
-            variants={riseChild}
-            className="grid gap-1.5 rounded-lg border border-dashed p-3"
-          >
-            <Button
-              type="button"
-              variant="secondary"
-              disabled={pending !== null}
-              onClick={() => createRun(true)}
-            >
-              {pending === "now" ? (
-                <Loader2 className="animate-spin" />
-              ) : (
-                <Zap />
-              )}
+          <motion.div variants={riseChild} className="grid gap-1.5 rounded-lg border border-dashed p-3">
+            <Button type="button" variant="secondary" disabled={pending !== null} onClick={() => createRun(true)}>
+              {pending === "now" ? <Loader2 className="animate-spin" /> : <Zap />}
               {pending === "now" ? "Starting…" : "Start now"}
             </Button>
-            <p className="text-xs text-muted-foreground">
-              Builds the {copy.noun} immediately, ignoring the start time below.
-            </p>
+            <p className="text-xs text-muted-foreground">Builds the {copy.noun} immediately, ignoring the start time below.</p>
           </motion.div>
 
           <motion.div variants={riseChild} className="grid gap-1.5">
@@ -371,22 +308,13 @@ export function CreateEventDialog({
           </motion.div>
 
           {error && (
-            <motion.p
-              initial={{ opacity: 0, y: -4 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="text-sm text-destructive"
-            >
+            <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="text-sm text-destructive">
               {error}
             </motion.p>
           )}
 
           <DialogFooter>
-            <Button
-              type="button"
-              variant="ghost"
-              disabled={pending !== null}
-              onClick={() => onOpenChange(false)}
-            >
+            <Button type="button" variant="ghost" disabled={pending !== null} onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
             <Button type="submit" variant="brand" disabled={pending !== null}>

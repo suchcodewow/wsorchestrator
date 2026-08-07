@@ -1,16 +1,15 @@
-import type { Metadata } from "next";
-import Link from "next/link";
-import { BookOpen, Layers, Plus } from "lucide-react";
 import { auth } from "@/auth";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { listLabWorkshops } from "@/lib/lab-workshops";
 import { canManageLabGuides } from "@/lib/roles";
+import { Layers, Plus } from "lucide-react";
+import type { Metadata } from "next";
+import Link from "next/link";
 
 export const metadata: Metadata = {
   title: "Workshops",
-  description:
-    "Step-by-step workshops for the sessions run on this site. No account needed.",
+  description: "Step-by-step workshops for the sessions run on this site. No account needed.",
 };
 
 const updated = new Intl.DateTimeFormat("en", {
@@ -27,9 +26,7 @@ const updated = new Intl.DateTimeFormat("en", {
  */
 export default async function LabsPage() {
   const session = await auth();
-  const canEdit = session?.user
-    ? canManageLabGuides(session.user.siteRole)
-    : false;
+  const canEdit = session?.user ? canManageLabGuides(session.user.siteRole) : false;
 
   const workshops = await listLabWorkshops(canEdit);
 
@@ -39,8 +36,7 @@ export default async function LabsPage() {
         <div>
           <h1 className="text-2xl font-medium tracking-tight">Workshops</h1>
           <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-            Each one is a run of lab guides, in order. Open a workshop and work
-            through it — no account needed.
+            Each one is a run of lab guides, in order. Open a workshop and work through it — no account needed.
           </p>
         </div>
 
@@ -75,9 +71,7 @@ export default async function LabsPage() {
                 className="group block rounded-2xl border bg-card/60 p-5 backdrop-blur-sm transition-colors outline-none hover:border-brand-border/70 hover:bg-accent/40 focus-visible:ring-[3px] focus-visible:ring-ring/50"
               >
                 <div className="flex items-center gap-2.5">
-                  <h2 className="text-base font-medium tracking-tight group-hover:text-brand">
-                    {workshop.title}
-                  </h2>
+                  <h2 className="text-base font-medium tracking-tight group-hover:text-brand">{workshop.title}</h2>
                   {!workshop.published && (
                     <Badge variant="outline" className="border-dashed">
                       Draft
@@ -85,16 +79,10 @@ export default async function LabsPage() {
                   )}
                 </div>
 
-                {workshop.summary && (
-                  <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-                    {workshop.summary}
-                  </p>
-                )}
+                {workshop.summary && <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{workshop.summary}</p>}
 
                 <p className="mt-3 text-xs text-muted-foreground">
-                  {workshop.guideCount === 1
-                    ? "1 guide"
-                    : `${workshop.guideCount} guides`}
+                  {workshop.guideCount === 1 ? "1 guide" : `${workshop.guideCount} guides`}
                   {" · Updated "}
                   {updated.format(workshop.updatedAt)}
                   {workshop.authorName ? ` · ${workshop.authorName}` : ""}
@@ -110,7 +98,7 @@ export default async function LabsPage() {
         destination, so it is not what this page leads with — but a guide in no
         workshop has to be reachable, and an author needs somewhere to write one
         before there is a workshop to put it in.
-      */}
+
       <div className="mt-10 flex items-center justify-between gap-4 rounded-xl border border-dashed p-4">
         <p className="flex items-center gap-2.5 text-sm text-muted-foreground">
           <BookOpen className="size-4 shrink-0" />
@@ -120,6 +108,7 @@ export default async function LabsPage() {
           <Link href="/labs/guides">Browse guides</Link>
         </Button>
       </div>
+            */}
     </div>
   );
 }
