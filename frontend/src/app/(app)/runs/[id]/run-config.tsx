@@ -205,11 +205,6 @@ export function RunConfig({
                       <Lock className="size-3" /> provisioned
                     </span>
                   )}
-                  {cloud !== "gcp" && !provisioned && (
-                    <span className="ml-auto text-xs text-muted-foreground">
-                      not yet provisioned
-                    </span>
-                  )}
                 </motion.button>
               );
             })}

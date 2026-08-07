@@ -210,8 +210,7 @@ export function CreateEventDialog({
             <legend className="mb-2 text-sm font-medium">{singleCloud ? "Cloud" : "Clouds needed"}</legend>
             {/*
              * Selectable cards rather than bare checkboxes: the whole row is a
-             * target, the selected state is legible at a glance, and the
-             * unimplemented clouds can carry their caveat without crowding.
+             * target and the selected state is legible at a glance.
              */}
             <div className="grid gap-2">
               {CLOUDS.map((cloud) => {
@@ -244,7 +243,6 @@ export function CreateEventDialog({
                       )}
                     </span>
                     <span className="font-medium">{CLOUD_LABELS[cloud]}</span>
-                    {cloud !== "gcp" && <span className="ml-auto text-xs text-muted-foreground">not yet provisioned</span>}
                   </motion.button>
                 );
               })}

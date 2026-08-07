@@ -25,18 +25,43 @@ A run is self-describing: a name, an attendee count, and a set of clouds.
    Workspace as "Bouncy Penguin". Each address is checked against the Directory
    API before it is claimed, so an account that already exists is never reused;
    if the plain combinations keep colliding a numeric suffix is added. Each gets
-   a generated temporary password and `changePasswordAtNextLogin`, stored in
-   `workshop_accounts` for the organizer to hand out.
+   a generated temporary password, stored in `workshop_accounts` for the
+   organizer to hand out. No forced reset at first sign-in: the same password is
+   copied into the other clouds' accounts, and a reset in one would diverge from
+   the rest.
 3. **Harness organization** named after the workshop, with **one project per
    attendee** ([`src/harness.ts`](src/harness.ts)). Each attendee is invited as
    an administrator of their own project and as a viewer at the org level, so
    they can see everyone's work but only change their own. This happens for
    every workshop — it is not one of the `clouds`.
-4. **Per cloud** — `gcp` applies [`terraform/workshops/gcp-base`](terraform/workshops/gcp-base),
-   which wires [`modules/project`](terraform/modules/project) to create the
-   ephemeral project, link billing, enable APIs, and grant every attendee
-   `roles/editor` on it. `aws` and `azure` are accepted by the form and logged
-   as not yet wired up.
+4. **Per cloud** — each selected cloud applies its own root, and each builds a
+   small Kubernetes cluster for attendees to use:
+   - `gcp` → [`terraform/workshops/gcp-base`](terraform/workshops/gcp-base),
+     which wires [`modules/project`](terraform/modules/project) to create the
+     ephemeral project, link billing, enable APIs, and grant every attendee
+     `roles/editor` on it, plus a GKE cluster.
+   - `azure` → [`terraform/workshops/azure-base`](terraform/workshops/azure-base):
+     one resource group (the isolation boundary), a native Entra user per
+     attendee whose UPN and password match their Google account, Contributor on
+     the group, and an AKS cluster.
+   - `aws` → [`terraform/workshops/aws-base`](terraform/workshops/aws-base): a
+     new member account, an IAM user per attendee with PowerUserAccess, and an
+     EKS cluster. AWS is the one cloud whose console password is not the shared
+     Google one — it generates its own, returned in the run's outputs.
+
+   In `challenge` mode the roots under
+   [`terraform/challenges/`](terraform/challenges) build a separate environment
+   per competitor instead — a project, resource group, or account each, owned
+   solely by that competitor, and no cluster (building one is the challenge).
+
+   GCP keeps the bare per-run state prefix it has always used; every other cloud
+   gets a subpath (`cloudStatePrefix`), so a multi-cloud run's states never
+   collide in one bucket object.
+
+5. **Harness delegate per cluster** — after the clusters are up, an org-scoped
+   delegate is Helm-installed into each ([`delegates/`](terraform/delegates)).
+   Best-effort: a delegate that will not install is logged and the workshop
+   still goes ready. Teardown is implicit — destroying the cluster takes it.
 
 Harness identifiers can't contain hyphens and must not collide with reserved
 words, so names are put through `harnessIdentifier()` rather than reusing the
@@ -73,8 +98,18 @@ identifiers default to `_project_admin` / `_all_project_level_resources` and
 `HARNESS_ORG_VIEWER_ROLE`, and `HARNESS_ORG_VIEWER_RESOURCE_GROUP` if the
 account uses different ones.
 
-The GCP vars are read lazily, so a workshop that requests no GCP environment
-provisions its accounts without them.
+Azure adds `AZURE_SUBSCRIPTION_ID`, `AZURE_TENANT_ID`, `AZURE_LOCATION`, and
+optionally `AZURE_USER_DOMAIN` (the verified domain attendee UPNs use, defaulting
+to the Workspace domain so the Azure sign-in string matches the Google one). The
+`azurerm`/`azuread` providers authenticate themselves from `ARM_SUBSCRIPTION_ID`,
+`ARM_TENANT_ID`, `ARM_CLIENT_ID`, and `ARM_CLIENT_SECRET` (the last from Secret
+Manager). AWS adds `AWS_REGION`, `AWS_PARENT_OU_ID`, `AWS_ACCOUNT_ACCESS_ROLE`,
+and `AWS_ACCOUNT_EMAIL_DOMAIN`, with the provider reading `AWS_ACCESS_KEY_ID` /
+`AWS_SECRET_ACCESS_KEY`.
+
+Every cloud's vars are read lazily, so a workshop provisions its accounts — and
+the clouds it did select — without the ones it does not use. A deployment that
+never selects Azure or AWS can leave both sets empty entirely.
 
 ### Workspace access
 

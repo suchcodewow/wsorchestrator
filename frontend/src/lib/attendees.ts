@@ -10,12 +10,13 @@ import type { RunStatus } from "@/db/schema";
  *
  * This is the one place in the app that serves data to people who are not
  * signed in, so it is deliberately narrow: the event's name and kind, the
- * account rows, and — the one deliberate exception — the id of the Google
- * Cloud project(s) attendees were granted, so the page can link them straight
- * to its console. A project id is not a secret: everyone here is an editor on
- * that project and sees the id the moment they open the console. Nothing about
- * the organizer, the org unit, the Terraform outputs, or the build log crosses
- * this boundary.
+ * account rows, and — the one deliberate exception — where the cloud
+ * environment(s) attendees were granted live, so the page can link them
+ * straight there: the Google Cloud project id and the Azure portal link (which
+ * carries the tenant, subscription, and resource group in its path). Neither is
+ * a secret: everyone here has editor/Contributor on those environments and sees
+ * all of it the moment they sign in. Nothing about the organizer, the org unit,
+ * the rest of the Terraform outputs, or the build log crosses this boundary.
  */
 export type AttendeeAccount = {
   id: number;
@@ -30,6 +31,12 @@ export type AttendeeAccount = {
    * workshop shares one project, carried on the view instead of per row.
    */
   gcpProjectId: string | null;
+  /**
+   * Portal link to this competitor's own resource group, on an Azure challenge.
+   * Null otherwise, and on any challenge provisioned before the root emitted
+   * per-competitor links — the page just drops the button rather than guessing.
+   */
+  azurePortalUrl: string | null;
 };
 
 export type AttendeeView = {
@@ -38,6 +45,8 @@ export type AttendeeView = {
   status: RunStatus;
   /** The workshop's shared GCP project, if it requested GCP. Null otherwise. */
   gcpProjectId: string | null;
+  /** Portal link to the workshop's shared resource group, if it requested Azure. */
+  azurePortalUrl: string | null;
   accounts: AttendeeAccount[];
 };
 
@@ -82,17 +91,24 @@ export async function getAttendeeView(
     },
   });
 
-  // On a GCP challenge the per-competitor project ids are in the run outputs,
-  // keyed by the address the project was granted to (see the `gcp_projects`
-  // output on `challenges/gcp-per-user`). A workshop leaves this empty and
-  // carries its one shared project on the view instead.
-  const perUserProjects =
-    (run.outputs as { gcp_projects?: Record<string, string> } | null)
-      ?.gcp_projects ?? {};
+  const outputs = run.outputs as {
+    gcp_projects?: Record<string, string>;
+    azure_portal_url?: string;
+    azure_portal_urls?: Record<string, string>;
+  } | null;
+
+  // On a challenge the per-competitor environments are in the run outputs, keyed
+  // by the address each was granted to (the `gcp_projects` output on
+  // `challenges/gcp-per-user`, `azure_portal_urls` on `challenges/azure-per-user`).
+  // A workshop leaves both empty and carries its one shared environment per
+  // cloud on the view instead.
+  const perUserProjects = outputs?.gcp_projects ?? {};
+  const perUserPortals = outputs?.azure_portal_urls ?? {};
 
   const accounts: AttendeeAccount[] = rows.map((a) => ({
     ...a,
     gcpProjectId: perUserProjects[a.email] ?? null,
+    azurePortalUrl: perUserPortals[a.email] ?? null,
   }));
 
   return {
@@ -100,6 +116,7 @@ export async function getAttendeeView(
     mode: run.mode,
     status: run.status,
     gcpProjectId: run.gcpProjectId,
+    azurePortalUrl: outputs?.azure_portal_url ?? null,
     accounts,
   };
 }

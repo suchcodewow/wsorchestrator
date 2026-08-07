@@ -9,8 +9,13 @@ build results back. Everything auto-destroys when the TTL expires (1 day by
 default, 3 at most, chosen when the event is created and extendable a day at a
 time from the event's page).
 
-Google Cloud is wired up today (an ephemeral project per workshop, via
-Terraform); AWS and Azure can be selected but are not yet provisioned.
+All three clouds are provisioned via Terraform: Google Cloud gets an ephemeral
+project per workshop, AWS a member account, and Azure a resource group — each
+with a small Kubernetes cluster (GKE/EKS/AKS) and every attendee granted on it.
+A workshop can select more than one; a challenge runs on exactly one and builds
+a separate environment per competitor. Azure and AWS are optional at deploy time
+and stay dormant until their credentials are configured (see
+[infra/admin/variables.tf](infra/admin/variables.tf)).
 
 ## Stack
 
@@ -553,13 +558,27 @@ and [`frontend/src/lib/lab-workshops.ts`](frontend/src/lib/lab-workshops.ts).
 
 ## Adding a cloud
 
-`aws` and `azure` are already accepted by the form and stored on the run; they
-are logged as unimplemented at provisioning time. To wire one up:
+`gcp`, `aws`, and `azure` are all wired up. A fourth would follow the same
+shape:
 
-1. Add a root config under
-   [`runner/terraform/workshops/<cloud>-base/`](runner/terraform/workshops).
-2. Handle the cloud in the loop in [`runner/src/run.ts`](runner/src/run.ts) and
-   its teardown in [`runner/src/reap.ts`](runner/src/reap.ts).
+1. Add it to `CLOUDS` in [`frontend/src/db/schema.ts`](frontend/src/db/schema.ts),
+   which is what the pickers and the run's `clouds` column read.
+2. Add root configs under
+   [`runner/terraform/workshops/<cloud>-base/`](runner/terraform/workshops) and
+   [`runner/terraform/challenges/<cloud>-per-user/`](runner/terraform/challenges),
+   plus a cluster module under
+   [`runner/terraform/modules/`](runner/terraform/modules) if the workshop root
+   builds one.
+3. Add a tfvars writer in
+   [`runner/src/workspace.ts`](runner/src/workspace.ts) and the cloud's config
+   accessor in [`runner/src/config.ts`](runner/src/config.ts).
+4. Handle the cloud in the loop in [`runner/src/run.ts`](runner/src/run.ts) and
+   its teardown in [`runner/src/reap.ts`](runner/src/reap.ts). Non-GCP clouds
+   namespace their state with `cloudStatePrefix`, so a multi-cloud run's states
+   never collide.
+5. Pass its credentials through
+   [`infra/admin/runner.tf`](infra/admin/runner.tf), gated on a variable so a
+   deployment that does not use it applies unchanged.
 
 ## Notes
 

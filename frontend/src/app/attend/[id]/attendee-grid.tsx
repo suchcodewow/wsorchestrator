@@ -190,20 +190,31 @@ export function AttendeeGrid({
             ? `Grab a row, sign in with those credentials, and put your name on it. Type anywhere — it saves for the whole room as you go. ${filledCount} of ${data.accounts.length} filled in.`
             : `Accounts for this ${data.mode} will appear here.`}
         </p>
-        {/* A workshop shares one project, so its IAM link lives up here rather
-            than repeated on every row (challenges link per competitor below). */}
-        {data.gcpProjectId && (
-          <div className="mt-3">
-            <Button variant="outline" size="sm" asChild>
-              <a
-                href={iamUrl(data.gcpProjectId)}
-                target="_blank"
-                rel="noreferrer"
-              >
-                <ExternalLink />
-                Open Google Cloud IAM
-              </a>
-            </Button>
+        {/* A workshop shares one environment per cloud, so its links live up
+            here rather than repeated on every row (challenges link per
+            competitor below). A multi-cloud workshop shows one button each. */}
+        {(data.gcpProjectId || data.azurePortalUrl) && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {data.gcpProjectId && (
+              <Button variant="outline" size="sm" asChild>
+                <a
+                  href={iamUrl(data.gcpProjectId)}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  <ExternalLink />
+                  Open Google Cloud IAM
+                </a>
+              </Button>
+            )}
+            {data.azurePortalUrl && (
+              <Button variant="outline" size="sm" asChild>
+                <a href={data.azurePortalUrl} target="_blank" rel="noreferrer">
+                  <ExternalLink />
+                  Open Azure portal
+                </a>
+              </Button>
+            )}
           </div>
         )}
       </motion.div>
@@ -321,8 +332,10 @@ function AccountRow({
         onBlur={() => onBlur("vacation")}
       />
 
-      {/* Per-competitor IAM link on a GCP challenge; workshops link once above,
-          so their rows leave this cell out entirely (no empty gap on mobile). */}
+      {/* Per-competitor link on a challenge — IAM on GCP, the portal on Azure.
+          A challenge runs on a single cloud, so only one of these is ever set.
+          Workshops link once above, so their rows leave this cell out entirely
+          (no empty gap on mobile). */}
       {account.gcpProjectId && (
         <div className="mt-3 md:mt-0 md:text-right">
           <Button variant="outline" size="sm" className="w-full md:w-auto" asChild>
@@ -333,6 +346,16 @@ function AccountRow({
             >
               <ExternalLink />
               IAM
+            </a>
+          </Button>
+        </div>
+      )}
+      {account.azurePortalUrl && (
+        <div className="mt-3 md:mt-0 md:text-right">
+          <Button variant="outline" size="sm" className="w-full md:w-auto" asChild>
+            <a href={account.azurePortalUrl} target="_blank" rel="noreferrer">
+              <ExternalLink />
+              Portal
             </a>
           </Button>
         </div>
