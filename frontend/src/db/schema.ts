@@ -10,8 +10,18 @@ import {
   primaryKey,
   pgEnum,
   index,
+  customType,
 } from "drizzle-orm/pg-core";
 import type { AdapterAccountType } from "next-auth/adapters";
+
+/**
+ * Postgres `bytea`, which Drizzle has no built-in column for. `pg` hands these
+ * back as a Node `Buffer` and takes one on the way in, so the mapping is the
+ * identity in both directions.
+ */
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({
+  dataType: () => "bytea",
+});
 
 /* ------------------------------------------------------------------ *
  * Auth.js (NextAuth) tables — shape required by @auth/drizzle-adapter
@@ -332,23 +342,23 @@ export const runLogs = pgTable(
  * Guides are world-readable by design — the room follows them without signing
  * in, the same way `/attend` works — so nothing sensitive belongs in `body`.
  * Writing them takes a manager (see `canManageLabGuides` in `@/lib/roles`).
+ *
+ * There is no `published` here on purpose. Publishing is a decision about a
+ * *workshop* — the thing a room is pointed at — and a guide carrying its own
+ * copy of that flag only ever meant a lab could vanish out of the middle of a
+ * workshop that had itself been published. See `labWorkshops.published`.
  */
 export const labGuides = pgTable(
   "lab_guides",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    /** URL identity: /labs/<slug>. Stable across title edits once published. */
+    /** URL identity: /labs/guides/<slug>. Follows the title when it changes. */
     slug: text("slug").notNull().unique(),
     title: text("title").notNull(),
     /** One-line description; the only body text the index page shows. */
     summary: text("summary").notNull().default(""),
     /** The guide itself, as GitHub-flavoured Markdown. */
     body: text("body").notNull().default(""),
-    /**
-     * Draft guides are visible only to the managers who can edit them, so a
-     * half-written lab isn't served to a room that wandered in early.
-     */
-    published: boolean("published").notNull().default(false),
     /** Who wrote it. Kept when they are deleted — the guide outlives the account. */
     authorId: text("author_id").references(() => users.id, {
       onDelete: "set null",
@@ -360,8 +370,8 @@ export const labGuides = pgTable(
       .notNull()
       .defaultNow(),
   },
-  // The index page's query: published guides, most recently updated first.
-  (t) => [index("lab_guides_published_idx").on(t.published, t.updatedAt)],
+  // The library's query: every guide, most recently updated first.
+  (t) => [index("lab_guides_updated_at_idx").on(t.updatedAt)],
 );
 
 /** Longest a guide's fields may be. Shared by the form and the API. */
@@ -391,6 +401,11 @@ export const labWorkshops = pgTable(
     title: text("title").notNull(),
     /** One-line description, shown on the list of workshops. */
     summary: text("summary").notNull().default(""),
+    /**
+     * The one publishing decision there is. A draft workshop, and everything
+     * reachable *through* it, is visible only to the managers who can edit it,
+     * so a half-built curriculum isn't served to a room that wandered in early.
+     */
     published: boolean("published").notNull().default(false),
     authorId: text("author_id").references(() => users.id, {
       onDelete: "set null",
@@ -444,9 +459,75 @@ export const LAB_WORKSHOP_LIMITS = {
   guides: 50,
 } as const;
 
+/**
+ * An image a lab guide can show — a screenshot of a console, a diagram.
+ *
+ * The bytes live in the database rather than on disk or in a bucket, and the
+ * reason is the deployment: the app runs on Cloud Run, where the filesystem is
+ * per-instance and thrown away on the next revision. Postgres is the only
+ * durable store already wired up, which also means images are covered by the
+ * same backups as the guides that reference them — an image and the guide
+ * pointing at it are restored together or not at all.
+ *
+ * The trade is that image bytes sit in the database and in every backup, so
+ * `LAB_IMAGE_LIMITS.bytes` is the thing keeping this honest.
+ *
+ * Not joined to `labGuides`. An image is referenced by URL from inside Markdown
+ * that any number of guides may hold, and there is no way to know from the
+ * bytes which guides mention them — so this is a library, like the guides
+ * themselves are a library to the workshops.
+ */
+export const labImages = pgTable(
+  "lab_images",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** What an author searches for. Not unique — two "console" is their call. */
+    name: text("name").notNull(),
+    /** Default alt text, offered when the image is inserted. */
+    alt: text("alt").notNull().default(""),
+    /** Validated against `LAB_IMAGE_MIME_TYPES` before the row is written. */
+    mimeType: text("mime_type").notNull(),
+    /** Length of `data`, kept alongside so the picker needn't read the bytes. */
+    bytes: integer("bytes").notNull(),
+    data: bytea("data").notNull(),
+    /** Who uploaded it. Kept when they are deleted — the image outlives them. */
+    authorId: text("author_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  // The picker's query: newest first, and a name search on top of it.
+  (t) => [index("lab_images_created_at_idx").on(t.createdAt)],
+);
+
+/**
+ * What may be uploaded.
+ *
+ * SVG is absent deliberately. It is a document, not a bitmap — it can carry
+ * script and external references — and these are served from the app's own
+ * origin onto a public page, so an SVG upload would be a stored-XSS hole with
+ * an upload form attached to it.
+ */
+export const LAB_IMAGE_MIME_TYPES = [
+  "image/png",
+  "image/jpeg",
+  "image/gif",
+  "image/webp",
+] as const;
+
+export const LAB_IMAGE_LIMITS = {
+  name: 200,
+  alt: 300,
+  /** Per image. Generous for a screenshot, small enough to keep out of trouble. */
+  bytes: 5 * 1024 * 1024,
+} as const;
+
 export type WorkshopRun = typeof workshopRuns.$inferSelect;
 export type LabGuide = typeof labGuides.$inferSelect;
 export type LabWorkshop = typeof labWorkshops.$inferSelect;
+export type LabImage = typeof labImages.$inferSelect;
 export type WorkshopAccount = typeof workshopAccounts.$inferSelect;
 export type RunLog = typeof runLogs.$inferSelect;
 export type RunStatus = (typeof runStatus.enumValues)[number];

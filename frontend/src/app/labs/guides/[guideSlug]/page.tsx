@@ -16,17 +16,10 @@ export async function generateMetadata({
   params: Promise<{ guideSlug: string }>;
 }): Promise<Metadata> {
   const { guideSlug } = await params;
-  const guide = await getLabGuideBySlug(guideSlug, await viewerCanEdit());
+  const guide = await getLabGuideBySlug(guideSlug);
   if (!guide) return { title: "Lab guide" };
 
-  return {
-    title: guide.title,
-    description: guide.summary || undefined,
-    // A draft is only reachable by a manager, but saying so out loud costs
-    // nothing and keeps an unfinished lab out of a search index if the guide
-    // is later unpublished while a crawler still holds the URL.
-    ...(guide.published ? {} : { robots: { index: false, follow: false } }),
-  };
+  return { title: guide.title, description: guide.summary || undefined };
 }
 
 /**
@@ -34,6 +27,8 @@ export async function generateMetadata({
  *
  * This is the guide's canonical home: it is what the library links to, what
  * the editor returns to, and where a guide belonging to no workshop lives.
+ * Readable by anyone; the session is read only to decide whether the Edit
+ * button is shown.
  */
 export default async function GuidePage({
   params,
@@ -41,12 +36,9 @@ export default async function GuidePage({
   params: Promise<{ guideSlug: string }>;
 }) {
   const { guideSlug } = await params;
-  const canEdit = await viewerCanEdit();
 
-  const guide = await getLabGuideBySlug(guideSlug, canEdit);
-  // An unpublished guide is a 404 for everyone who could not edit it — the
-  // same answer as a slug that never existed, which is the point.
+  const guide = await getLabGuideBySlug(guideSlug);
   if (!guide) notFound();
 
-  return <GuideArticle guide={guide} canEdit={canEdit} />;
+  return <GuideArticle guide={guide} canEdit={await viewerCanEdit()} />;
 }

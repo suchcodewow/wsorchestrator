@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft, BookOpen, Plus } from "lucide-react";
 import { auth } from "@/auth";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { listLabGuides } from "@/lib/lab-guides";
 import { canManageLabGuides } from "@/lib/roles";
@@ -21,10 +20,13 @@ const updated = new Intl.DateTimeFormat("en", {
 /**
  * The library: every guide, whichever workshops it belongs to.
  *
- * Public, like the workshops that assemble them. A guide is reusable material
- * rather than a destination, so this is a level below `/labs` — but it is the
- * only way to reach a guide that no workshop has picked up yet, and the only
- * place to write one before there is a workshop to put it in.
+ * Public, like the workshops that assemble them, and public in full — a guide
+ * has no published state of its own, so this lists the lot. A guide is reusable
+ * material rather than a destination, so this is a level below `/labs` — but it
+ * is the only way to reach a guide that no workshop has picked up yet, and the
+ * only place to write one before there is a workshop to put it in.
+ *
+ * The session is read only to decide whether the write controls are shown.
  */
 export default async function GuideLibraryPage() {
   const session = await auth();
@@ -32,7 +34,7 @@ export default async function GuideLibraryPage() {
     ? canManageLabGuides(session.user.siteRole)
     : false;
 
-  const guides = await listLabGuides(canEdit);
+  const guides = await listLabGuides();
 
   return (
     <div className="mx-auto max-w-3xl">
@@ -72,7 +74,7 @@ export default async function GuideLibraryPage() {
           <p className="mx-auto mt-1 max-w-sm text-sm leading-relaxed text-muted-foreground">
             {canEdit
               ? "Write the first one, then put it in a workshop."
-              : "Nothing has been published yet. Check back before your session."}
+              : "Nothing has been written yet. Check back before your session."}
           </p>
         </div>
       ) : (
@@ -83,16 +85,9 @@ export default async function GuideLibraryPage() {
                 href={`/labs/guides/${guide.slug}`}
                 className="group block rounded-2xl border bg-card/60 p-5 backdrop-blur-sm transition-colors outline-none hover:border-brand-border/70 hover:bg-accent/40 focus-visible:ring-[3px] focus-visible:ring-ring/50"
               >
-                <div className="flex items-center gap-2.5">
-                  <h2 className="text-base font-medium tracking-tight group-hover:text-brand">
-                    {guide.title}
-                  </h2>
-                  {!guide.published && (
-                    <Badge variant="outline" className="border-dashed">
-                      Draft
-                    </Badge>
-                  )}
-                </div>
+                <h2 className="text-base font-medium tracking-tight group-hover:text-brand">
+                  {guide.title}
+                </h2>
 
                 {guide.summary && (
                   <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">

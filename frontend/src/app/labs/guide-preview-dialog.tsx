@@ -4,7 +4,6 @@ import { useState } from "react";
 import Link from "next/link";
 import { ExternalLink, Eye, Loader2 } from "lucide-react";
 import { LabGuideBody } from "@/components/lab-guide-body";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -33,7 +32,7 @@ import {
 export function GuidePreviewDialog({
   guide,
 }: {
-  guide: { id: string; slug: string; title: string; published: boolean };
+  guide: { id: string; slug: string; title: string };
 }) {
   const [open, setOpen] = useState(false);
   const [html, setHtml] = useState<string | null>(null);
@@ -76,14 +75,7 @@ export function GuidePreviewDialog({
 
       <DialogContent className="max-w-3xl">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2.5 pr-8">
-            {guide.title}
-            {!guide.published && (
-              <Badge variant="outline" className="border-dashed">
-                Draft
-              </Badge>
-            )}
-          </DialogTitle>
+          <DialogTitle className="pr-8">{guide.title}</DialogTitle>
           <DialogDescription>
             A preview of this guide as the room will read it.
           </DialogDescription>

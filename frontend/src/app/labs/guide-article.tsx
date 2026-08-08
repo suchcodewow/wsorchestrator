@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { ArrowLeft, ArrowRight, Pencil } from "lucide-react";
 import { LabGuideBody } from "@/components/lab-guide-body";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { LabGuideWithAuthor } from "@/lib/lab-guides";
 import type { WorkshopGuideEntry } from "@/lib/lab-workshops";
@@ -78,16 +77,9 @@ export async function GuideArticle({
             </p>
           )}
 
-          <div className="flex items-center gap-2.5">
-            <h1 className="text-3xl font-medium tracking-tight text-balance">
-              {guide.title}
-            </h1>
-            {!guide.published && (
-              <Badge variant="outline" className="border-dashed">
-                Draft
-              </Badge>
-            )}
-          </div>
+          <h1 className="text-3xl font-medium tracking-tight text-balance">
+            {guide.title}
+          </h1>
 
           {guide.summary && (
             <p className="mt-3 max-w-2xl text-base leading-relaxed text-pretty text-muted-foreground">

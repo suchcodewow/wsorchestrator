@@ -14,7 +14,6 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { LAB_WORKSHOP_LIMITS, type LabWorkshop } from "@/db/schema";
@@ -27,7 +26,6 @@ export type PickerGuide = {
   slug: string;
   title: string;
   summary: string;
-  published: boolean;
 };
 
 /**
@@ -46,7 +44,7 @@ export function WorkshopEditor({
 }: {
   workshop?: LabWorkshop;
   initialGuideIds?: string[];
-  /** Every guide that exists, drafts included. */
+  /** Every guide that exists. */
   guides: PickerGuide[];
 }) {
   const router = useRouter();
@@ -301,15 +299,8 @@ export function WorkshopEditor({
                 </span>
 
                 <span className="min-w-0 flex-1">
-                  <span className="flex items-center gap-2">
-                    <span className="truncate text-sm font-medium">
-                      {guide.title}
-                    </span>
-                    {!guide.published && (
-                      <Badge variant="outline" className="border-dashed">
-                        Draft
-                      </Badge>
-                    )}
+                  <span className="truncate text-sm font-medium">
+                    {guide.title}
                   </span>
                   {guide.summary && (
                     <span className="mt-0.5 block truncate text-xs text-muted-foreground">
@@ -408,14 +399,7 @@ export function WorkshopEditor({
                     >
                       <Plus className="size-3.5 shrink-0 text-muted-foreground" />
                       <span className="min-w-0 flex-1">
-                        <span className="flex items-center gap-2">
-                          <span className="truncate text-sm">{guide.title}</span>
-                          {!guide.published && (
-                            <Badge variant="outline" className="border-dashed">
-                              Draft
-                            </Badge>
-                          )}
-                        </span>
+                        <span className="truncate text-sm">{guide.title}</span>
                         {guide.summary && (
                           <span className="mt-0.5 block truncate text-xs text-muted-foreground">
                             {guide.summary}
@@ -469,8 +453,8 @@ export function WorkshopEditor({
           <span className="font-medium">Published</span>
           <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">
             A published workshop is readable by anyone with the link, signed in
-            or not. Guides still in draft stay hidden inside it until they are
-            published themselves.
+            or not — every guide in it, in the order above. A draft is visible
+            only to managers.
           </span>
         </span>
       </label>

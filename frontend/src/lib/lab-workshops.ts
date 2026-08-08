@@ -15,14 +15,15 @@ import { isUuid } from "@/lib/utils";
 /**
  * Reads and writes for workshops — the ordered collections of lab guides.
  *
- * Same access rule as `@/lib/lab-guides`, stated once here too: a *published*
- * workshop is readable by anybody, and everything else needs a manager. Callers
- * pass `canEdit` rather than a role.
+ * This is where publishing lives, and the only place it does: a *published*
+ * workshop is readable by anybody, a draft one needs a manager, and every write
+ * needs a manager. Callers pass `canEdit` rather than a role, so there is one
+ * place that decides and no route re-deriving it.
  *
- * Draft guides inside a published workshop are filtered out for readers who
- * could not edit them. A workshop being ready to teach does not make every lab
- * in it ready to read, and the alternative — a contents list with dead entries
- * in it — is worse than a shorter list.
+ * The decision covers the workshop, not its contents. Guides carry no flag of
+ * their own — a workshop that is ready to teach is ready in full, and a
+ * contents list that silently drops steps out of the middle is a worse thing to
+ * hand a room than one that is honest about what it holds.
  */
 
 /** A row of the workshop index. */
@@ -37,7 +38,6 @@ export type WorkshopGuideEntry = {
   slug: string;
   title: string;
   summary: string;
-  published: boolean;
 };
 
 export type LabWorkshopWithGuides = LabWorkshop & {
@@ -48,26 +48,14 @@ export type LabWorkshopWithGuides = LabWorkshop & {
 /**
  * Every workshop, with how many guides each holds.
  *
- * The count is of guides the *viewer* can see, so a reader is not promised
- * eight labs and shown five. It is a correlated subquery rather than a join and
- * a group-by: the outer row is already unique, and grouping it would only be a
- * way to undo the fan-out this avoids.
+ * The count is a correlated subquery rather than a join and a group-by: the
+ * outer row is already unique, and grouping it would only be a way to undo the
+ * fan-out this avoids. Every viewer gets the same number — a workshop holds
+ * what it holds.
  */
 export async function listLabWorkshops(
   canEdit: boolean,
 ): Promise<LabWorkshopSummary[]> {
-  const visibleGuides = canEdit
-    ? sql<number>`(
-        select count(*)::int from ${labWorkshopGuides}
-        where ${labWorkshopGuides.workshopId} = ${labWorkshops.id}
-      )`
-    : sql<number>`(
-        select count(*)::int from ${labWorkshopGuides}
-        join ${labGuides} on ${labGuides.id} = ${labWorkshopGuides.guideId}
-        where ${labWorkshopGuides.workshopId} = ${labWorkshops.id}
-          and ${labGuides.published}
-      )`;
-
   return db
     .select({
       id: labWorkshops.id,
@@ -77,7 +65,10 @@ export async function listLabWorkshops(
       published: labWorkshops.published,
       updatedAt: labWorkshops.updatedAt,
       authorName: sql<string | null>`coalesce(${users.name}, ${users.email})`,
-      guideCount: visibleGuides,
+      guideCount: sql<number>`(
+        select count(*)::int from ${labWorkshopGuides}
+        where ${labWorkshopGuides.workshopId} = ${labWorkshops.id}
+      )`,
     })
     .from(labWorkshops)
     .leftJoin(users, eq(users.id, labWorkshops.authorId))
@@ -86,28 +77,17 @@ export async function listLabWorkshops(
 }
 
 /** The guides in a workshop, in order. */
-async function guidesOf(
-  workshopId: string,
-  canEdit: boolean,
-): Promise<WorkshopGuideEntry[]> {
+async function guidesOf(workshopId: string): Promise<WorkshopGuideEntry[]> {
   return db
     .select({
       id: labGuides.id,
       slug: labGuides.slug,
       title: labGuides.title,
       summary: labGuides.summary,
-      published: labGuides.published,
     })
     .from(labWorkshopGuides)
     .innerJoin(labGuides, eq(labGuides.id, labWorkshopGuides.guideId))
-    .where(
-      canEdit
-        ? eq(labWorkshopGuides.workshopId, workshopId)
-        : and(
-            eq(labWorkshopGuides.workshopId, workshopId),
-            eq(labGuides.published, true),
-          ),
-    )
+    .where(eq(labWorkshopGuides.workshopId, workshopId))
     .orderBy(asc(labWorkshopGuides.position));
 }
 
@@ -157,15 +137,14 @@ export async function getLabWorkshopBySlug(
 
   if (!workshop) return null;
 
-  return { ...workshop, guides: await guidesOf(workshop.id, canEdit) };
+  return { ...workshop, guides: await guidesOf(workshop.id) };
 }
 
 /**
  * A guide read inside a workshop, with what comes before and after it.
  *
- * Neighbours come from the same filtered list the contents rail is built from,
- * so "next" is always somewhere the reader can actually go — a draft in the
- * middle of a published workshop is skipped over rather than linked to.
+ * Neighbours come from the same list the contents rail is built from, so "next"
+ * is always somewhere the reader can actually go.
  */
 export async function getWorkshopGuide(
   workshopSlug: string,
@@ -315,9 +294,11 @@ export async function createLabWorkshop(
 /**
  * Update a workshop and its contents.
  *
- * The slug follows the title only while the workshop is a draft — same rule as
- * a guide's, and for the same reason: a published address is already on a
- * projector somewhere.
+ * The slug follows the title only while the workshop is a draft. Once it is
+ * published the address is already on a projector somewhere, and silently
+ * moving it to fix a typo in the title would break every link handed out.
+ * Guides are the other way round — theirs always follows the title — because
+ * this is the URL a room is actually given.
  */
 export async function updateLabWorkshop(
   id: string,

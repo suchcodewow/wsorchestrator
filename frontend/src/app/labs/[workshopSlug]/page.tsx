@@ -113,7 +113,7 @@ export default async function WorkshopPage({
         <p className="mt-3 rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
           {canEdit
             ? "Nothing in this workshop yet — add some guides to it."
-            : "This workshop has no published guides yet."}
+            : "This workshop has no guides in it yet."}
         </p>
       ) : (
         <ol className="mt-3 grid gap-2">
@@ -127,15 +127,8 @@ export default async function WorkshopPage({
                   {i + 1}
                 </span>
                 <span className="min-w-0">
-                  <span className="flex items-center gap-2">
-                    <span className="text-sm font-medium group-hover:text-brand">
-                      {guide.title}
-                    </span>
-                    {!guide.published && (
-                      <Badge variant="outline" className="border-dashed">
-                        Draft
-                      </Badge>
-                    )}
+                  <span className="block text-sm font-medium group-hover:text-brand">
+                    {guide.title}
                   </span>
                   {guide.summary && (
                     <span className="mt-1 block text-sm leading-relaxed text-muted-foreground">

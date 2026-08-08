@@ -22,8 +22,7 @@ export default async function EditLabGuidePage({
   if (!canManageLabGuides(session.user.siteRole)) notFound();
 
   const { guideSlug } = await params;
-  // Drafts included — an editor is exactly who is allowed to see one.
-  const guide = await getLabGuideBySlug(guideSlug, true);
+  const guide = await getLabGuideBySlug(guideSlug);
   if (!guide) notFound();
 
   // Reuse is invisible otherwise: a guide that opens three workshops looks

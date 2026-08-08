@@ -392,6 +392,14 @@
     color: var(--muted-foreground);
   }
 
+  /* The rhythm rule above only reaches direct children of the prose, so a
+     quote with more than one paragraph in it — a callout with a bold label on
+     its own line, which is the shape the editor's Callout button inserts —
+     would otherwise set solid. */
+  .lab-prose blockquote > * + * {
+    margin-top: 0.55em;
+  }
+
   .lab-prose hr {
     margin-block: 2.5em;
     border: 0;

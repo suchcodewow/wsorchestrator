@@ -23,9 +23,7 @@ export default async function EditWorkshopPage({
   if (!canManageLabGuides(session.user.siteRole)) notFound();
 
   const { workshopSlug } = await params;
-  // Drafts included — an editor is exactly who is allowed to see one. The same
-  // flag keeps draft *guides* in the contents list, which is where an author
-  // needs to see them.
+  // Drafts included — an editor is exactly who is allowed to see one.
   const workshop = await getLabWorkshopBySlug(workshopSlug, true);
   if (!workshop) notFound();
 

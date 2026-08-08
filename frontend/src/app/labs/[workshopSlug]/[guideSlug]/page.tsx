@@ -21,14 +21,17 @@ export async function generateMetadata({
 
   const [found, guide] = await Promise.all([
     getWorkshopGuide(workshopSlug, guideSlug, canEdit),
-    getLabGuideBySlug(guideSlug, canEdit),
+    getLabGuideBySlug(guideSlug),
   ]);
   if (!found || !guide) return { title: "Lab guide" };
 
   return {
     title: `${guide.title} — ${found.workshop.title}`,
     description: guide.summary || undefined,
-    ...(guide.published && found.workshop.published
+    // A draft workshop is only reachable by a manager, but saying so out loud
+    // costs nothing and keeps an unfinished curriculum out of a search index if
+    // it is later unpublished while a crawler still holds the URL.
+    ...(found.workshop.published
       ? {}
       : { robots: { index: false, follow: false } }),
   };
@@ -56,7 +59,7 @@ export default async function WorkshopGuidePage({
   const found = await getWorkshopGuide(workshopSlug, guideSlug, canEdit);
   if (!found) notFound();
 
-  const guide = await getLabGuideBySlug(guideSlug, canEdit);
+  const guide = await getLabGuideBySlug(guideSlug);
   if (!guide) notFound();
 
   return (

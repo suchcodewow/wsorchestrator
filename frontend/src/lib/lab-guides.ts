@@ -15,17 +15,17 @@ import { isUuid } from "@/lib/utils";
 /**
  * Reads and writes for the lab guides.
  *
- * The access rule is simpler than the one in `@/lib/runs` and is stated once,
- * here: a *published* guide is readable by anybody, signed in or not, and
- * everything else — drafts, and every write — needs a manager. Callers pass
- * `canEdit` (from `canManageLabGuides`) rather than a role, so there is one
- * place that decides and no route re-deriving it.
+ * The access rule is simpler than the one in `@/lib/runs`, and simpler than it
+ * used to be here: a guide is readable by anybody, signed in or not, and every
+ * *write* needs a manager. Guides carry no published flag — that decision
+ * belongs to the workshop a room is pointed at, and lives in
+ * `@/lib/lab-workshops`.
  */
 
 /** A row of the index page. The body is left behind — it is never shown there. */
 export type LabGuideSummary = Pick<
   LabGuide,
-  "id" | "slug" | "title" | "summary" | "published" | "updatedAt"
+  "id" | "slug" | "title" | "summary" | "updatedAt"
 > & { authorName: string | null };
 
 /** A guide with its author, as the detail page and the editor need it. */
@@ -37,65 +37,47 @@ const withAuthor = {
   title: labGuides.title,
   summary: labGuides.summary,
   body: labGuides.body,
-  published: labGuides.published,
   authorId: labGuides.authorId,
   createdAt: labGuides.createdAt,
   updatedAt: labGuides.updatedAt,
   authorName: sql<string | null>`coalesce(${users.name}, ${users.email})`,
 };
 
-/**
- * The guides to list. Drafts are included only for someone who could edit
- * them — for everybody else an unpublished guide does not exist.
- */
-export async function listLabGuides(canEdit: boolean): Promise<LabGuideSummary[]> {
+/** Every guide, most recently updated first. */
+export async function listLabGuides(): Promise<LabGuideSummary[]> {
   const rows = await db
     .select({
       id: labGuides.id,
       slug: labGuides.slug,
       title: labGuides.title,
       summary: labGuides.summary,
-      published: labGuides.published,
       updatedAt: labGuides.updatedAt,
       authorName: withAuthor.authorName,
     })
     .from(labGuides)
     .leftJoin(users, eq(users.id, labGuides.authorId))
-    .where(canEdit ? undefined : eq(labGuides.published, true))
     .orderBy(desc(labGuides.updatedAt));
 
   return rows;
 }
 
-/** One guide by its URL slug, or null if the viewer may not see it. */
+/** One guide by its URL slug, or null if there is no such guide. */
 export async function getLabGuideBySlug(
   slug: string,
-  canEdit: boolean,
 ): Promise<LabGuideWithAuthor | null> {
   const [row] = await db
     .select(withAuthor)
     .from(labGuides)
     .leftJoin(users, eq(users.id, labGuides.authorId))
-    .where(
-      canEdit
-        ? eq(labGuides.slug, slug)
-        : and(eq(labGuides.slug, slug), eq(labGuides.published, true)),
-    )
+    .where(eq(labGuides.slug, slug))
     .limit(1);
 
   return row ?? null;
 }
 
-/**
- * Every guide, for the workshop editor's "add a guide" picker.
- *
- * Drafts included, and marked as such: composing a workshop out of labs that
- * are still being written is the normal way round, and the alternative is an
- * author who cannot add their own unfinished guide to the workshop it was
- * written for.
- */
+/** Every guide, for the workshop editor's "add a guide" picker. */
 export async function listGuidesForPicker(): Promise<
-  Pick<LabGuide, "id" | "slug" | "title" | "summary" | "published">[]
+  Pick<LabGuide, "id" | "slug" | "title" | "summary">[]
 > {
   return db
     .select({
@@ -103,7 +85,6 @@ export async function listGuidesForPicker(): Promise<
       slug: labGuides.slug,
       title: labGuides.title,
       summary: labGuides.summary,
-      published: labGuides.published,
     })
     .from(labGuides)
     .orderBy(labGuides.title);
@@ -194,7 +175,6 @@ export const labGuideSchema = z.object({
   title: z.string().trim().min(1).max(LAB_GUIDE_LIMITS.title),
   summary: z.string().trim().max(LAB_GUIDE_LIMITS.summary).default(""),
   body: z.string().max(LAB_GUIDE_LIMITS.body).default(""),
-  published: z.boolean().default(false),
 });
 
 export type LabGuideInput = z.infer<typeof labGuideSchema>;
@@ -216,11 +196,12 @@ export type UpdateLabGuideError = "not_found";
 /**
  * Update a guide.
  *
- * The slug follows the title only while the guide is a draft. Once it has been
- * published the URL is out in the world — in someone's browser history, on the
- * projector at the front of the room — and silently moving it to fix a typo in
- * the title would break every one of those. Editing a published guide's title
- * is allowed; its address is what stays put.
+ * The slug always follows the title. A guide's own URL is not the address that
+ * gets handed out — a room is pointed at `/labs/<workshop>`, and reads each lab
+ * at `/labs/<workshop>/<guide>`, which is built from the workshop's slug and
+ * the guide's current one. Keeping the address matching the title is worth more
+ * than freezing a URL nobody was given, so the workshop's slug is the one that
+ * stays put once published (see `@/lib/lab-workshops`).
  */
 export async function updateLabGuide(
   id: string,
@@ -235,8 +216,7 @@ export async function updateLabGuide(
   });
   if (!existing) return { ok: false, error: "not_found" };
 
-  const renameSlug =
-    !existing.published && input.title.trim() !== existing.title;
+  const renameSlug = input.title.trim() !== existing.title;
 
   const [guide] = await db
     .update(labGuides)

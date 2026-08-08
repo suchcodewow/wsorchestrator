@@ -40,7 +40,6 @@ export async function GET(
     slug: guide.slug,
     title: guide.title,
     summary: guide.summary,
-    published: guide.published,
     html,
   });
 }
