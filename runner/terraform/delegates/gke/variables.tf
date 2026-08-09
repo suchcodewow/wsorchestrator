@@ -14,7 +14,7 @@ variable "cluster_name" {
 }
 
 variable "location" {
-  description = "The cluster's zonal location, e.g. us-central1-a (from the cluster's gke_cluster_location output)."
+  description = "The cluster's zonal location, e.g. us-west1-a (from the cluster's gke_cluster_location output)."
   type        = string
 }
 

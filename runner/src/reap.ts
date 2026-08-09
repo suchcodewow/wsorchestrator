@@ -13,6 +13,7 @@ import {
   makeClusterName,
   makeProjectId,
   makeResourceGroupName,
+  regionFromLocation,
 } from "./config.js";
 import {
   writeAwsChallengeTfvars,
@@ -204,7 +205,13 @@ async function destroyGcp(run: RunRow): Promise<void> {
   // cluster name is deterministic in (slug, runId), so it matches what
   // provisioning wrote without anything being stored.
   const attendees = (await accountsFor(run.id)).map((a) => a.email);
-  writeTfvars(workDir, projectId, run.id, attendees, makeClusterName(run.slug, run.id));
+  writeTfvars(workDir, projectId, run.id, attendees, {
+    clusterName: makeClusterName(run.slug, run.id),
+    // Where it was built, which for a run older than the region default's move
+    // is not where a new one would go. Destroy works off state either way, but
+    // the config it evaluates on the way should describe the same place.
+    region: regionFromLocation(run.outputs?.gke_cluster_location),
+  });
   await tfInit(workDir, cfg.stateBucket, run.state_prefix, (l) =>
     log(run.id, l.stream, l.text),
   );
@@ -234,13 +241,10 @@ async function destroySandbox(run: RunRow): Promise<void> {
     "system",
     `Revoking ${attendees.length} attendee grant(s) and destroying the GKE cluster on the shared testing project ${cfg.sandboxProjectId} (the project itself stays running)`,
   );
-  writeTfvars(
-    workDir,
-    cfg.sandboxProjectId,
-    run.id,
-    attendees,
-    makeClusterName(run.slug, run.id),
-  );
+  writeTfvars(workDir, cfg.sandboxProjectId, run.id, attendees, {
+    clusterName: makeClusterName(run.slug, run.id),
+    region: regionFromLocation(run.outputs?.gke_cluster_location),
+  });
   await tfInit(workDir, cfg.stateBucket, run.state_prefix, (l) =>
     log(run.id, l.stream, l.text),
   );

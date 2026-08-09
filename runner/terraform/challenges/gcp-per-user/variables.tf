@@ -19,7 +19,7 @@ variable "billing_account" {
 
 variable "region" {
   type    = string
-  default = "us-central1"
+  default = "us-west1"
 }
 
 variable "labels" {

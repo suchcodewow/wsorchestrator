@@ -207,7 +207,9 @@ export function CreateEventDialog({
           </motion.div>
 
           <motion.fieldset variants={riseChild} className="grid gap-2">
-            <legend className="mb-2 text-sm font-medium">{singleCloud ? "Cloud" : "Clouds needed"}</legend>
+            <legend className="mb-2 text-sm font-medium">
+              {singleCloud ? "Cloud" : "(Optional) Cloud(s) to provision for attendee access"}
+            </legend>
             {/*
              * Selectable cards rather than bare checkboxes: the whole row is a
              * target and the selected state is legible at a glance.

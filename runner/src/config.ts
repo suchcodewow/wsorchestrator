@@ -21,7 +21,66 @@ function required(name: string): string {
   return v;
 }
 
-export const region = process.env.GCP_REGION ?? "us-central1";
+/**
+ * Where a workshop's own GCP resources are built — its VPC, and the zonal GKE
+ * cluster inside it.
+ *
+ * Deliberately *not* `GCP_REGION`, which is where the orchestrator's own admin
+ * infrastructure lives (the Cloud Run jobs, Cloud SQL) and is what `trigger.ts`
+ * addresses the runner job by. The two were one setting until us-central1's
+ * GKE node capacity made them need different answers: the admin project cannot
+ * move without rebuilding the database, and the workshops have no reason to
+ * stay. So the workshops moved to us-west1 — same cheap US pricing tier as
+ * us-central1, considerably less contended for the 4-vCPU nodes a workshop
+ * cluster wants.
+ */
+export const region = process.env.GCP_WORKSHOP_REGION ?? "us-west1";
+
+/**
+ * Zone letters that exist in each region, for the GKE failover walk.
+ *
+ * This cannot be one fixed list: the letters are not the same everywhere —
+ * us-central1 has an `f` and no `d` or `e`, us-east1 has no `a` at all — so a
+ * default of "a,b,c" would send the runner at zones that do not exist in some
+ * regions. Anything unlisted falls back to a/b/c, which is right for most
+ * regions but worth checking with
+ * `gcloud compute zones list --filter="region:<region>"` before pointing the
+ * runner somewhere new. `GCP_GKE_ZONES` overrides either way.
+ */
+const ZONE_LETTERS: Record<string, string[]> = {
+  "us-west1": ["a", "b", "c"],
+  "us-west2": ["a", "b", "c"],
+  "us-west3": ["a", "b", "c"],
+  "us-west4": ["a", "b", "c"],
+  "us-central1": ["a", "b", "c", "f"],
+  "us-east1": ["b", "c", "d"],
+  "us-east4": ["a", "b", "c"],
+  "us-east5": ["a", "b", "c"],
+  "europe-west1": ["b", "c", "d"],
+};
+
+/** The zone letters to try, in order: the override if it has any, else the region's. */
+function gkeZones(): string[] {
+  const override = (process.env.GCP_GKE_ZONES ?? "")
+    .split(",")
+    .map((z) => z.trim())
+    .filter(Boolean);
+  return override.length > 0
+    ? override
+    : (ZONE_LETTERS[region] ?? ["a", "b", "c"]);
+}
+
+/**
+ * The region part of a zonal location like `us-west1-b`.
+ *
+ * Used to read back the region a run was actually built in, which is not
+ * necessarily the configured one — see `gcpRegionFor` in `run.ts`.
+ */
+export function regionFromLocation(location: unknown): string | undefined {
+  const match =
+    typeof location === "string" ? location.match(/^(.+)-[a-z]$/) : null;
+  return match?.[1];
+}
 
 /**
  * How far ahead of a workshop's scheduled start the scheduler begins
@@ -57,13 +116,16 @@ export function gcpCfg() {
      * {@link region}. GCE capacity stockouts are almost always zone-specific,
      * so on a stockout the runner walks this list until one zone has room
      * rather than failing the workshop (see `applyGkeWithZoneFailover`). The
-     * first entry is the default zone every run starts in. Override with
-     * `GCP_GKE_ZONES` (comma-separated letters, e.g. `b,c,f,a`).
+     * first entry is the default zone every run starts in. Defaults to the
+     * zones {@link ZONE_LETTERS} says the region has; override with
+     * `GCP_GKE_ZONES` (comma-separated letters, e.g. `b,c,a`).
+     *
+     * An empty or blank override falls back to the default rather than being
+     * honoured: it arrives from Terraform as an unset-meaning empty string,
+     * and an empty zone list is not "try nothing", it is a cluster that never
+     * gets applied at all.
      */
-    gkeZones: (process.env.GCP_GKE_ZONES ?? "a,b,c,f")
-      .split(",")
-      .map((z) => z.trim())
-      .filter(Boolean),
+    gkeZones: gkeZones(),
   };
 }
 

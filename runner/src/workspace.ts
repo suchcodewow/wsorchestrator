@@ -10,13 +10,19 @@ function labels(runId: string) {
   };
 }
 
-/** Settings every GCP root config takes, regardless of event mode. */
-function commonVars(runId: string) {
+/**
+ * Settings every GCP root config takes, regardless of event mode.
+ *
+ * `region` defaults to the configured one but is overridable, because a run
+ * that is already built is pinned to the region it was built in — see
+ * `gcpRegionFor` in `run.ts`.
+ */
+function commonVars(runId: string, region?: string) {
   const cfg = gcpCfg();
   return {
     folder_id: cfg.folderId,
     billing_account: cfg.billingAccount,
-    region: cfg.region,
+    region: region ?? cfg.region,
     admin_project_id: cfg.adminProjectId,
     run_id: runId,
     labels: labels(runId),
@@ -81,21 +87,34 @@ export function writeTfvars(
   projectId: string,
   runId: string,
   attendeeEmails: string[] = [],
-  clusterName?: string,
-  zoneLetter?: string,
+  {
+    clusterName,
+    zoneLetter,
+    region,
+  }: {
+    /**
+     * gcp-base and gcp-sandbox both build a GKE cluster and require this; it
+     * is deterministic in (slug, runId), so provision and teardown pass the
+     * same name and Terraform tears down exactly what it created.
+     */
+    clusterName?: string;
+    /**
+     * Which zone of the region hosts the zonal GKE cluster. Omitted on
+     * teardown (destroy works off state, so the zone the cluster was built in
+     * is already recorded) and on the first apply the runner sets it as it
+     * walks zones to dodge capacity stockouts (see
+     * `applyGkeWithZoneFailover`).
+     */
+    zoneLetter?: string;
+    /** The region a built run is pinned to, when it is not the configured one. */
+    region?: string;
+  } = {},
 ) {
   write(workDir, {
-    ...commonVars(runId),
+    ...commonVars(runId, region),
     project_id: projectId,
     attendee_emails: attendeeEmails,
-    // gcp-base and gcp-sandbox both build a GKE cluster and require this;
-    // it is deterministic in (slug, runId), so provision and teardown pass the
-    // same name and Terraform tears down exactly what it created.
     ...(clusterName ? { cluster_name: clusterName } : {}),
-    // Which zone of the region hosts the zonal GKE cluster. Omitted on teardown
-    // (destroy works off state, so the zone the cluster was built in is already
-    // recorded) and on the first apply the runner sets it as it walks zones to
-    // dodge capacity stockouts (see `applyGkeWithZoneFailover`).
     ...(zoneLetter ? { zone_letter: zoneLetter } : {}),
   });
 }

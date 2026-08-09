@@ -15,6 +15,7 @@ import {
   makeClusterName,
   makeProjectId,
   makeResourceGroupName,
+  regionFromLocation,
 } from "./config.js";
 import {
   writeAwsChallengeTfvars,
@@ -207,7 +208,10 @@ async function installDelegates(
       cloud: "gcp",
       source: DELEGATE_GKE_TF_SOURCE,
       vars: {
-        region: gcpCfg().region,
+        // From the cluster's own location, not the configured region: the
+        // delegate has to reach the cluster that exists, which for a run built
+        // before the default region moved is not in the configured one.
+        region: regionFromLocation(gkeLoc) ?? gcpCfg().region,
         project_id: gkeProject,
         cluster_name: gkeName,
         location: gkeLoc,
@@ -440,7 +444,7 @@ function isGkeCapacityError(text: string): boolean {
   return GKE_CAPACITY_SIGNATURES.some((s) => t.includes(s));
 }
 
-/** Zone letter from a location like "us-central1-c" (region "us-central1"). */
+/** Zone letter from a location like "us-west1-c" (region "us-west1"). */
 function zoneLetterFromLocation(
   location: unknown,
   region: string,
@@ -449,6 +453,30 @@ function zoneLetterFromLocation(
   return typeof location === "string" && location.startsWith(prefix)
     ? location.slice(prefix.length)
     : undefined;
+}
+
+/**
+ * The region a run's GCP resources belong in: the one they are already in if
+ * the run has been built, and only otherwise the configured one.
+ *
+ * A built run is pinned because the region is not a free variable once
+ * anything exists — the VPC subnet and the GKE cluster are both regional
+ * placements, and Terraform's answer to a changed placement is to destroy and
+ * recreate. Re-applying a live workshop after the default region moved would
+ * therefore delete the cluster the room is working in, which is not something
+ * a config change should be able to do. New runs get the configured region;
+ * everything already standing stays where it was built, for the rest of its
+ * short life.
+ *
+ * Read from the recorded cluster location, which is the one output that
+ * carries a placement. Runs with no cluster (challenges, whose per-competitor
+ * projects have no regional resources at all) have nothing to pin and nothing
+ * that moving the region would disturb.
+ */
+function gcpRegionFor(run: RunRow): string {
+  return (
+    regionFromLocation(run.outputs?.gke_cluster_location) ?? gcpCfg().region
+  );
 }
 
 /**
@@ -467,6 +495,8 @@ function zoneLetterFromLocation(
  * A workshop that is only *growing* already has its cluster in some zone;
  * moving it would tear the live cluster down and rebuild it, so when the run
  * already recorded a cluster location we pin to that zone and skip the walk.
+ * The walk is over the zones of the run's own region (`gcpRegionFor`), which
+ * for a built run is where it stands rather than where new runs go.
  */
 async function applyGkeWithZoneFailover(
   run: RunRow,
@@ -474,9 +504,10 @@ async function applyGkeWithZoneFailover(
   writeVarsForZone: (zone: string) => void,
 ): Promise<void> {
   const cfg = gcpCfg();
+  const region = gcpRegionFor(run);
   const pinned = zoneLetterFromLocation(
     run.outputs?.gke_cluster_location,
-    cfg.region,
+    region,
   );
   const zones = pinned ? [pinned] : cfg.gkeZones;
 
@@ -495,7 +526,7 @@ async function applyGkeWithZoneFailover(
         await log(
           run.id,
           "system",
-          `GKE cluster created in ${cfg.region}-${zone}.`,
+          `GKE cluster created in ${region}-${zone}.`,
         );
       }
       return;
@@ -504,8 +535,8 @@ async function applyGkeWithZoneFailover(
       await log(
         run.id,
         "system",
-        `Zone ${cfg.region}-${zone} is out of capacity for the GKE cluster; ` +
-          `retrying in ${cfg.region}-${zones[i + 1]}.`,
+        `Zone ${region}-${zone} is out of capacity for the GKE cluster; ` +
+          `retrying in ${region}-${zones[i + 1]}.`,
       );
     }
   }
@@ -537,7 +568,11 @@ async function provisionGcp(run: RunRow): Promise<Record<string, unknown>> {
       `${clusterName}, and granting editor to ${attendees.length} attendee(s)`,
   );
   await applyGkeWithZoneFailover(run, workDir, (zone) =>
-    writeTfvars(workDir, projectId, run.id, attendees, clusterName, zone),
+    writeTfvars(workDir, projectId, run.id, attendees, {
+      clusterName,
+      zoneLetter: zone,
+      region: gcpRegionFor(run),
+    }),
   );
 
   return tfOutput(workDir);
@@ -587,7 +622,11 @@ async function provisionSandbox(run: RunRow): Promise<Record<string, unknown>> {
       `building the GKE cluster ${clusterName} on ${cfg.sandboxProjectId}`,
   );
   await applyGkeWithZoneFailover(run, workDir, (zone) =>
-    writeTfvars(workDir, cfg.sandboxProjectId, run.id, attendees, clusterName, zone),
+    writeTfvars(workDir, cfg.sandboxProjectId, run.id, attendees, {
+      clusterName,
+      zoneLetter: zone,
+      region: gcpRegionFor(run),
+    }),
   );
 
   return tfOutput(workDir);

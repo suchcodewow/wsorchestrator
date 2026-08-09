@@ -22,11 +22,11 @@ variable "cluster_name" {
 
 variable "region" {
   type    = string
-  default = "us-central1"
+  default = "us-west1"
 }
 
 variable "zone_letter" {
-  description = "Which zone of the region hosts the zonal GKE cluster. The runner walks a,b,c,f here to dodge GCE capacity stockouts; defaults to a so teardown (which omits it) still targets a valid location."
+  description = "Which zone of the region hosts the zonal GKE cluster. The runner walks the region's zones here to dodge GCE capacity stockouts; defaults to a so teardown (which omits it) still targets a valid location."
   type        = string
   default     = "a"
 }

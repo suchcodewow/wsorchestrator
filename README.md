@@ -191,6 +191,8 @@ google_oauth_client_secret = "...."
 Worth setting now, though both have defaults:
 
 ```hcl
+# Where the control plane runs. Workshops are built in `workshop_region`
+# (default us-west1) instead — see infra/admin/terraform.tfvars.example.
 region            = "us-central1"
 # You, so you land as a site administrator on first sign-in (see Site roles).
 site_admin_emails = ["you@example.com"]

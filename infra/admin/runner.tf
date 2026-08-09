@@ -7,6 +7,11 @@ locals {
     GCP_BILLING_ACCOUNT_ID  = var.billing_account_id
     GCP_TFSTATE_BUCKET      = google_storage_bucket.tfstate.name
     GCP_REGION              = var.region
+    # Where workshops themselves are built, which is not where this control
+    # plane runs — see var.workshop_region. An empty GCP_GKE_ZONES means "use
+    # the runner's list for that region"; it treats blank as unset.
+    GCP_WORKSHOP_REGION = var.workshop_region
+    GCP_GKE_ZONES       = var.gke_zones
     # The shared long-lived project no-cloud runs grant attendees access to.
     GCP_SANDBOX_PROJECT_ID       = google_project.sandbox.project_id
     GOOGLE_WORKSPACE_DOMAIN      = var.workspace_domain

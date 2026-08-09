@@ -1,7 +1,13 @@
 # Copy to terraform.tfvars and fill in. Do NOT commit the real file.
 
 admin_project_id    = "my-admin-project"
+# Where this control plane runs (Cloud Run, Cloud SQL, Artifact Registry, GCS).
 region              = "us-central1"
+# Where each workshop's own VPC and GKE cluster are built. Separate because the
+# control plane cannot move without rebuilding the database and the workshops
+# can — us-central1 runs out of GKE node capacity too often to build rooms in.
+# workshop_region     = "us-west1"
+# gke_zones           = ""                      # empty = the runner's list for that region
 workshops_folder_id = "123456789012"          # numeric folder ID
 billing_account_id  = "XXXXXX-XXXXXX-XXXXXX"
 tfstate_bucket      = "my-admin-project-ws-tfstate"
@@ -32,6 +38,11 @@ harness_api_key    = "pat.xxxxx"
 # Also verify harnessevents.io in the tenant (DNS TXT) so attendee UPNs match
 # their Google address. azure_client_secret is stored in Secret Manager; the
 # rest are plaintext env on the runner.
+# One more tenant-level step, or every attendee is made to enrol in Microsoft
+# Authenticator on their first sign-in: turn Entra's security defaults off.
+# `az login` as a Global Admin, then APPLY=1 ./scripts/azure-no-mfa.sh — which
+# also reports the Conditional Access policies and the one MFA prompt no tenant
+# setting can remove.
 # azure_subscription_id = "00000000-0000-0000-0000-000000000000"
 # azure_tenant_id       = "00000000-0000-0000-0000-000000000000"
 # azure_client_id       = "00000000-0000-0000-0000-000000000000"

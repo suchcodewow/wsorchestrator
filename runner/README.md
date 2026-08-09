@@ -85,6 +85,17 @@ Terraform state is per-run in the admin bucket
 Manager). `TF_BIN` overrides the OpenTofu binary (defaults to `tofu`; set to
 `terraform` on a machine that only has that).
 
+Two regions, deliberately. `GCP_REGION` is where the control plane itself runs
+— it addresses the Cloud Run job this process triggers, and it is where Cloud
+SQL and the state bucket live. `GCP_WORKSHOP_REGION` (default `us-west1`) is
+where a workshop's own VPC and GKE cluster are built; it moved off us-central1
+because that region runs out of GKE node capacity too often to hold a room up
+on. A run that is already built stays in the region it was built in — the
+subnet and cluster are regional placements, and Terraform's answer to a moved
+placement is destroy-and-recreate — so the change only takes effect for new
+runs. `GCP_GKE_ZONES` overrides the zone letters the capacity failover walks;
+blank means "use the runner's list for that region" (`config.ts`).
+
 The image ships **OpenTofu**, not Terraform, because the committed
 `.terraform.lock.hcl` files pin providers from `registry.opentofu.org`.
 Terraform resolves the same providers from `registry.terraform.io`, so running
@@ -122,6 +133,31 @@ https://www.googleapis.com/auth/admin.directory.user
 ```
 
 and impersonates `GOOGLE_WORKSPACE_ADMIN_EMAIL` (a super-admin).
+
+## No second factor, anywhere
+
+A workshop account exists for a few hours, is read off a slide, and is deleted
+with the run. Nothing here asks an attendee for a second factor or a password
+change: `changePasswordAtNextLogin` is off in `directory.ts` and
+`force_password_change` is off on the Entra users, both so the one issued
+password keeps working across every cloud the workshop selected.
+
+Entra is the exception, and not because of anything provisioned here. A tenant
+with **security defaults** on — the default since late 2019 — makes every new
+user enrol in Microsoft Authenticator, which lands a room of thirty people on a
+QR code before they have done anything. It is a tenant setting, invisible to
+the `azuread` provider (there is no resource for it), so it has to be turned
+off once, out of band:
+[`infra/admin/scripts/azure-no-mfa.sh`](../infra/admin/scripts/azure-no-mfa.sh)
+reports it, turns it off with `APPLY=1`, lists the Conditional Access policies
+that would keep prompting anyway, and explains the one prompt — Microsoft's
+mandatory MFA on Azure portal sign-ins — that no tenant setting removes.
+
+Google Workspace is worth checking at the same time if attendees hit a prompt
+there too: 2-Step Verification enrolment is off unless an admin turned it on
+(Admin console → Security → Authentication → 2-Step Verification), and because
+attendee Harness access is Google SSO, a Workspace prompt gates Harness as well
+as GCP.
 
 ## Build & push
 

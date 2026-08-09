@@ -9,6 +9,18 @@ variable "region" {
   default     = "us-central1"
 }
 
+variable "workshop_region" {
+  description = "Region the runner builds each workshop's own resources in — its VPC and its GKE cluster. Separate from var.region, which is where this control plane lives: the admin project cannot move without rebuilding the database, while the workshops move freely and are moved off us-central1 because its GKE node capacity runs out too often. A run already built stays in the region it was built in."
+  type        = string
+  default     = "us-west1"
+}
+
+variable "gke_zones" {
+  description = "Zone letters within workshop_region the runner tries in order when a zone is out of GKE node capacity. Empty uses the runner's own list for the region, which is the right answer for the regions it knows; set this when pointing workshop_region somewhere else (`gcloud compute zones list --filter=\"region:<region>\"`)."
+  type        = string
+  default     = ""
+}
+
 variable "workshops_folder_id" {
   description = "Numeric ID of the folder under which ephemeral workshop projects are created (runner-sa is scoped here)."
   type        = string
