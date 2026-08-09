@@ -106,7 +106,11 @@ export function RunView({
 }) {
   const router = useRouter();
   const [data, setData] = useState<RunPayload>(initial);
-  const logEndRef = useRef<HTMLDivElement>(null);
+  const logBoxRef = useRef<HTMLDivElement>(null);
+  // Following is opt-in: a build can run for minutes, and yanking the reader
+  // back to the bottom every 2.5s poll makes the log unreadable while it is
+  // still being written.
+  const [tail, setTail] = useState(false);
 
   const refresh = useCallback(async () => {
     const res = await fetch(`/api/runs/${runId}`, { cache: "no-store" });
@@ -151,9 +155,15 @@ export function RunView({
     }
   }, [status, scheduledStart, deleteRequested, refresh]);
 
+  // Scroll the log box itself rather than calling `scrollIntoView` on a
+  // sentinel — that walks every scrollable ancestor, so it dragged the whole
+  // page down too, not just the log. Also runs on the switch-on so enabling
+  // tail jumps to the end immediately instead of waiting for the next line.
   useEffect(() => {
-    logEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [data.logs.length]);
+    if (!tail) return;
+    const box = logBoxRef.current;
+    if (box) box.scrollTop = box.scrollHeight;
+  }, [tail, data.logs.length]);
 
   const { run, logs, accounts, owner } = data;
   // Azure issues one per attendee; nothing else does, so the column only earns
@@ -355,11 +365,36 @@ export function RunView({
 
       <motion.div variants={riseChild}>
       <Card>
-        <CardHeader>
+        <CardHeader className="flex-row items-center justify-between">
           <CardTitle>Build log</CardTitle>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={tail}
+            onClick={() => setTail((on) => !on)}
+            className="group inline-flex cursor-pointer items-center gap-2 text-xs text-muted-foreground transition-colors hover:text-foreground"
+          >
+            Follow
+            <span
+              className={cn(
+                "relative h-5 w-9 rounded-full transition-colors",
+                tail ? "bg-brand" : "bg-input",
+              )}
+            >
+              <span
+                className={cn(
+                  "absolute top-0.5 size-4 rounded-full bg-white shadow-xs transition-all",
+                  tail ? "left-4.5" : "left-0.5",
+                )}
+              />
+            </span>
+          </button>
         </CardHeader>
         <CardContent>
-          <div className="max-h-112 overflow-auto rounded-lg border border-slate-800 bg-slate-950 p-4 font-mono text-xs leading-relaxed text-slate-200">
+          <div
+            ref={logBoxRef}
+            className="max-h-112 overflow-auto rounded-lg border border-slate-800 bg-slate-950 p-4 font-mono text-xs leading-relaxed text-slate-200"
+          >
             {logs.length === 0 && (
               <span className="text-slate-500">Waiting for output…</span>
             )}
@@ -386,7 +421,6 @@ export function RunView({
                 <span className="break-all">{l.message}</span>
               </motion.div>
             ))}
-            <div ref={logEndRef} />
           </div>
         </CardContent>
       </Card>
