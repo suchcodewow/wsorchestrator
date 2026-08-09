@@ -22,6 +22,15 @@ export type AttendeeAccount = {
   id: number;
   email: string;
   tempPassword: string;
+  /**
+   * Entra Temporary Access Pass — what this attendee signs into the Azure
+   * portal with, since Microsoft enforces MFA there and a password alone is no
+   * longer accepted. Null when the run has no Azure environment, or when the
+   * tenant would not issue one.
+   */
+  azureAccessPass: string | null;
+  /** When that pass stops working, so the page can say if it already has. */
+  azureAccessPassExpiresAt: Date | null;
   claimedName: string | null;
   claimedFrom: string | null;
   claimedVacation: string | null;
@@ -84,6 +93,8 @@ export async function getAttendeeView(
       id: true,
       email: true,
       tempPassword: true,
+      azureAccessPass: true,
+      azureAccessPassExpiresAt: true,
       claimedName: true,
       claimedFrom: true,
       claimedVacation: true,

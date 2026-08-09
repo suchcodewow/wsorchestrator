@@ -303,11 +303,16 @@ portal.azure.com, that is why, and there is no setting for it.
 The way to keep an authenticator app out of a workshop under that enforcement
 is a Temporary Access Pass: a time-limited passcode issued per user that
 satisfies MFA with no app, no phone and no enrolment. The attendee signs in
-with the code instead of registering anything. It needs the TAP method enabled
-(Entra admin center -> Protection -> Authentication methods -> Temporary Access
-Pass) and one pass issued per attendee, which the runner does not do today —
-an attendee's Azure password is currently the same one as their Google account,
-and a TAP would replace it.
+with the code instead of registering anything, and the runner issues one per
+attendee automatically (runner/src/graph.ts).
 
-Verify against your own tenant before planning a room around either answer.
+Two things have to be true in the tenant for that to work:
+
+  * Temporary Access Pass enabled, with a maximum lifetime longer than a
+    workshop — Entra admin center -> Protection -> Authentication methods ->
+    Temporary Access Pass.
+  * UserAuthenticationMethod.ReadWrite.All granted and admin-consented on the
+    app registration the runner uses (the same one that creates the users).
+
+Verify against your own tenant before planning a room around it.
 NOTE

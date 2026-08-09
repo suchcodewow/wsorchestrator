@@ -31,18 +31,29 @@ harness_api_key    = "pat.xxxxx"
 #     enough — it can't create the role assignments this provisions, and can't
 #     grant the Owner that challenge mode gives competitors. Least-privilege
 #     alternative: Contributor + User Access Administrator.
-#   - Microsoft Graph (application permission, admin-consented): User.ReadWrite.All
-#     to create attendee Entra users.
+#   - Microsoft Graph (application permissions, admin-consented):
+#       User.ReadWrite.All                    to create attendee Entra users
+#       UserAuthenticationMethod.ReadWrite.All to issue each of them a
+#         Temporary Access Pass, which is what they sign into the portal with —
+#         Microsoft enforces MFA there and a password alone is refused. Without
+#         this permission the run still succeeds and says so in its log, but
+#         nobody can sign into Azure.
 #   e.g. az ad sp create-for-rbac --role Owner --scopes /subscriptions/<SUB_ID>
 #        then add the Graph permission and `az ad app permission admin-consent`.
 # Also verify harnessevents.io in the tenant (DNS TXT) so attendee UPNs match
 # their Google address. azure_client_secret is stored in Secret Manager; the
 # rest are plaintext env on the runner.
-# One more tenant-level step, or every attendee is made to enrol in Microsoft
-# Authenticator on their first sign-in: turn Entra's security defaults off.
-# `az login` as a Global Admin, then APPLY=1 ./scripts/azure-no-mfa.sh — which
-# also reports the Conditional Access policies and the one MFA prompt no tenant
-# setting can remove.
+# Two tenant-level steps, or attendees are made to enrol in Microsoft
+# Authenticator on their first sign-in:
+#   1. Turn Entra's security defaults off. `az login` as a Global Admin, then
+#      APPLY=1 ./scripts/azure-no-mfa.sh — which also reports the Conditional
+#      Access policies and the registration campaign.
+#   2. Enable Temporary Access Pass (Entra admin center -> Protection ->
+#      Authentication methods -> Temporary Access Pass), and raise its maximum
+#      lifetime past the length of a workshop. This is what answers Microsoft's
+#      mandatory MFA on portal sign-in, which no setting can switch off.
+# AZURE_TAP_ENABLED=false on the runner turns pass issuance off for a tenant
+# that does not need it.
 # azure_subscription_id = "00000000-0000-0000-0000-000000000000"
 # azure_tenant_id       = "00000000-0000-0000-0000-000000000000"
 # azure_client_id       = "00000000-0000-0000-0000-000000000000"

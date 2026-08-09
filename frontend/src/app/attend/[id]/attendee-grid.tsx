@@ -173,6 +173,10 @@ export function AttendeeGrid({
 
   const filledCount = data.accounts.filter((a) => a.claimedAt).length;
   const noun = data.mode === "challenge" ? "competitor" : "attendee";
+  // Azure sign-in takes a different credential, which is worth explaining once
+  // under the table rather than on every row — but only for an event that has
+  // one, since most do not.
+  const hasAccessPass = data.accounts.some((a) => a.azureAccessPass);
 
   return (
     <motion.div
@@ -265,8 +269,21 @@ export function AttendeeGrid({
             variants={riseChild}
             className="text-xs leading-relaxed text-muted-foreground"
           >
-            You&rsquo;ll be asked to choose a new password the first time you
-            sign in. These accounts and everything in them are deleted when the{" "}
+            {/* No "you'll be asked to change your password": the accounts are
+                created without a forced reset on purpose, so the one password
+                keeps working across every cloud this event uses. */}
+            The password above is the one to use everywhere &mdash; there is
+            nothing to change and nothing to enrol.
+            {hasAccessPass && (
+              <>
+                {" "}
+                Azure is the exception: it asks for the <em>Azure pass</em>{" "}
+                instead of the password, and you may need to choose
+                &ldquo;Use your Temporary Access Pass&rdquo; on the sign-in
+                screen to be asked for it.
+              </>
+            )}{" "}
+            These accounts and everything in them are deleted when the{" "}
             {data.mode} ends.
           </motion.p>
         </>
@@ -301,6 +318,18 @@ function AccountRow({
       <div className="min-w-0">
         <Credential value={account.email} label="email" />
         <Credential value={account.tempPassword} label="password" muted />
+        {/* Azure asks for this instead of the password — see the note under
+            the table. Labelled as expired rather than hidden once it lapses:
+            an attendee who cannot sign in needs to know which credential went
+            stale, not to find the row it used to be on. */}
+        {account.azureAccessPass && (
+          <Credential
+            value={account.azureAccessPass}
+            label={`Azure pass${accessPassExpired(account) ? " (expired)" : ""}`}
+            prefix={`Azure pass${accessPassExpired(account) ? " (expired)" : ""}`}
+            muted
+          />
+        )}
       </div>
 
       <Field
@@ -364,14 +393,27 @@ function AccountRow({
   );
 }
 
+/** Whether this account's Azure access pass has already lapsed. */
+function accessPassExpired(account: Row): boolean {
+  const at = account.azureAccessPassExpiresAt;
+  return at ? new Date(at).getTime() <= Date.now() : false;
+}
+
 /** An email or password, with the copy button attendees will actually need. */
 function Credential({
   value,
   label,
+  prefix,
   muted = false,
 }: {
   value: string;
   label: string;
+  /**
+   * Names the credential in front of it. Email and password are recognisable
+   * on sight and go without; a third value on the row is not, and an attendee
+   * looking at two opaque strings has to be told which one Azure wants.
+   */
+  prefix?: string;
   muted?: boolean;
 }) {
   return (
@@ -385,6 +427,11 @@ function Credential({
           muted && "text-muted-foreground",
         )}
       >
+        {prefix && (
+          <span className="mr-1.5 font-sans text-xs text-muted-foreground">
+            {prefix}
+          </span>
+        )}
         {value}
       </span>
       <CopyButton value={value} label={label} />

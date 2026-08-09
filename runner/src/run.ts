@@ -16,6 +16,7 @@ import {
   makeProjectId,
   makeResourceGroupName,
   regionFromLocation,
+  PROVISION_LEAD_HOURS,
 } from "./config.js";
 import {
   writeAwsChallengeTfvars,
@@ -27,6 +28,7 @@ import {
   writeTfvars,
 } from "./workspace.js";
 import { tfApply, tfInit, tfOutput } from "./terraform.js";
+import { issueAccessPass, tapPolicy } from "./graph.js";
 import { allocateEmails, createAccount, createOrgUnit } from "./directory.js";
 import { summarize } from "./retry.js";
 import { displayName } from "./usernames.js";
@@ -53,6 +55,7 @@ import {
   setFailed,
   setLiveError,
   setOrgUnitPath,
+  setAzureAccessPass,
   setProvisioning,
   setReady,
   type Cloud,
@@ -691,6 +694,117 @@ async function attendeePasswords(
 }
 
 /**
+ * Give every attendee a Temporary Access Pass for the Entra account Terraform
+ * just created.
+ *
+ * The password alone no longer gets anyone into the Azure portal: Microsoft
+ * enforces MFA there tenant-wide, above Conditional Access and independent of
+ * security defaults. A pass satisfies that with nothing to install and nothing
+ * to enrol, which is the only shape of answer a two-hour workshop can use.
+ *
+ * Best-effort, like the delegate install, and for the same reason: an attendee
+ * whose pass failed still has a working account, a password, and every other
+ * cloud in the workshop, and none of that should be thrown away over the one
+ * credential. What it must not do is fail quietly — a run whose passes did not
+ * issue is a room that cannot sign into Azure, so every failure is logged with
+ * the address it belongs to, and the tally goes in the run log where the
+ * organizer will see it before the event rather than during.
+ *
+ * The lifetime is the workshop's own, plus the provisioning lead — a pass that
+ * expired before the room opened would be worse than none — and is then clamped
+ * to whatever bounds the tenant's policy sets, since a request outside them is
+ * simply rejected.
+ */
+async function issueAzureAccessPasses(
+  run: RunRow,
+  emails: string[],
+): Promise<void> {
+  const cfg = azureCfg();
+  if (!cfg.tapEnabled || emails.length === 0) return;
+
+  let policy;
+  try {
+    policy = await tapPolicy();
+  } catch (err) {
+    await log(
+      run.id,
+      "stderr",
+      `Could not read the Temporary Access Pass policy, so no passes were ` +
+        `issued — attendees have a password, which Azure's mandatory MFA will ` +
+        `not accept on its own. The runner's app registration needs the Graph ` +
+        `permission UserAuthenticationMethod.ReadWrite.All (admin-consented). ` +
+        `${summarize(err)}`,
+    );
+    return;
+  }
+
+  if (!policy || policy.state !== "enabled") {
+    await log(
+      run.id,
+      "stderr",
+      `Temporary Access Pass is not enabled in this tenant, so no passes were ` +
+        `issued. Turn it on under Entra admin center -> Protection -> ` +
+        `Authentication methods -> Temporary Access Pass, or set ` +
+        `AZURE_TAP_ENABLED=false if this tenant does not enforce MFA on ` +
+        `portal sign-ins.`,
+    );
+    return;
+  }
+
+  // The workshop's life, plus the lead time it was built ahead of the start,
+  // held inside the tenant's bounds.
+  const wanted =
+    Math.ceil(run.ttl_seconds / 60) + Math.ceil(PROVISION_LEAD_HOURS * 60);
+  const lifetimeInMinutes = Math.min(
+    policy.maximumLifetimeInMinutes,
+    Math.max(policy.minimumLifetimeInMinutes, wanted),
+  );
+  // A tenant that mandates single-use passes wins over the runner's preference.
+  const oneTime = cfg.tapOneTime || policy.isUsableOnce;
+
+  await log(
+    run.id,
+    "system",
+    `Issuing ${emails.length} Temporary Access Pass(es), ${lifetimeInMinutes} ` +
+      `minutes, ${oneTime ? "single-use" : "reusable"} — this is what attendees ` +
+      `sign into the Azure portal with`,
+  );
+
+  let issued = 0;
+  const failed: string[] = [];
+  for (const email of emails) {
+    try {
+      const pass = await issueAccessPass(email, { lifetimeInMinutes, oneTime });
+      await setAzureAccessPass(run.id, email, pass.code, pass.expiresAt);
+      issued++;
+    } catch (err) {
+      failed.push(email);
+      await log(run.id, "stderr", `access pass for ${email}: ${summarize(err)}`);
+    }
+  }
+
+  if (failed.length > 0) {
+    await log(
+      run.id,
+      "stderr",
+      `${issued}/${emails.length} access passes issued. Without one, these ` +
+        `attendees cannot sign into the Azure portal: ${failed.join(", ")}`,
+    );
+  }
+
+  if (lifetimeInMinutes < wanted) {
+    await log(
+      run.id,
+      "system",
+      `The tenant caps passes at ${policy.maximumLifetimeInMinutes} minutes, ` +
+        `which is shorter than this workshop — they will need reissuing before ` +
+        `it ends. Raise the cap under Entra admin center -> Protection -> ` +
+        `Authentication methods -> Temporary Access Pass.`,
+    );
+  }
+}
+
+/**
  * Terraform the workshop's Azure environment: one shared resource group, a
  * native Entra user per attendee (same credential as their Google account),
  * Contributor for each, and a small AKS cluster. The Azure mirror of
@@ -722,6 +836,9 @@ async function provisionAzure(run: RunRow): Promise<Record<string, unknown>> {
       `Entra user(s), the AKS cluster ${clusterName}, and Contributor grants`,
   );
   await tfApply(workDir, (l) => log(run.id, l.stream, l.text));
+
+  // After the apply, because a pass is issued against a user that has to exist.
+  await issueAzureAccessPasses(run, Object.keys(attendees));
 
   return tfOutput(workDir);
 }
@@ -767,6 +884,9 @@ async function provisionAzurePerUser(
       `granting each competitor Owner on their own`,
   );
   await tfApply(workDir, (l) => log(run.id, l.stream, l.text));
+
+  // After the apply, because a pass is issued against a user that has to exist.
+  await issueAzureAccessPasses(run, Object.keys(attendees));
 
   return tfOutput(workDir);
 }

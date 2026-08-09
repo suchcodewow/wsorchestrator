@@ -159,6 +159,46 @@ there too: 2-Step Verification enrolment is off unless an admin turned it on
 attendee Harness access is Google SSO, a Workspace prompt gates Harness as well
 as GCP.
 
+### The Azure portal, which enforces MFA regardless
+
+None of the above reaches the one prompt that matters: Microsoft enforces MFA on
+sign-ins to the Azure portal tenant-wide, above Conditional Access and
+independent of security defaults, and there is no setting to switch it off. A
+password alone no longer gets an attendee in.
+
+So each attendee gets a **Temporary Access Pass** — an admin-issued,
+time-limited passcode that satisfies the MFA requirement with nothing to
+install and nothing to enrol. They type it where the password would go.
+[`src/graph.ts`](src/graph.ts) issues one per attendee immediately after the
+Azure apply (the pass needs a user that already exists), and it lands in
+`workshop_accounts.azure_access_pass`, shown on both the attendee page and the
+organizer's run view. Entra returns a pass exactly once, at creation, which is
+why it is stored rather than re-read.
+
+Three things this depends on, all outside the code:
+
+- **`UserAuthenticationMethod.ReadWrite.All`**, admin-consented, on the same app
+  registration the `azuread` provider already uses.
+- **The Temporary Access Pass method enabled** in the tenant (Entra admin
+  center → Protection → Authentication methods). If it is off, the run logs
+  that and issues nothing.
+- **A maximum lifetime longer than the workshop.** The runner asks for the
+  workshop's TTL plus the provisioning lead, then clamps to the tenant's
+  configured bounds — a request outside them is simply rejected — and logs when
+  the cap cut it short.
+
+Issuance is best-effort: a pass that fails to issue is logged against the
+address it belongs to and the run still goes ready, because the attendee still
+has a working account and every other cloud in the workshop. A run whose passes
+did not issue is a room that cannot sign into Azure, so the failures are loud.
+
+`AZURE_TAP_ENABLED=false` turns the whole thing off for a tenant that does not
+enforce this. `AZURE_TAP_ONE_TIME=true` makes each pass single-use; the default
+is reusable, so an attendee who gets signed out mid-workshop can get back in
+without an organizer. **Test one account before an event** — if a reusable pass
+is not accepted as MFA in your tenant, single-use is the fallback. The tenant's
+own policy overrides both (a tenant that mandates single-use passes wins).
+
 ## Build & push
 
 ```bash

@@ -225,6 +225,28 @@ export async function accountsWithPasswordsFor(
   return rows.map((r) => ({ email: r.email, tempPassword: r.temp_password }));
 }
 
+/**
+ * Record the Entra Temporary Access Pass issued to one attendee.
+ *
+ * Kept because Entra returns a pass exactly once, at creation — there is no
+ * reading it back — and it is the credential the attendee signs into the Azure
+ * portal with. Matched on address rather than id because the caller is working
+ * from the roster Terraform was given, which is a list of addresses.
+ */
+export async function setAzureAccessPass(
+  runId: string,
+  email: string,
+  pass: string,
+  expiresAt: Date,
+) {
+  await pool.query(
+    `update workshop_accounts
+        set azure_access_pass = $3, azure_access_pass_expires_at = $4
+      where run_id = $1 and email = $2`,
+    [runId, email, pass, expiresAt.toISOString()],
+  );
+}
+
 export async function deleteAccounts(runId: string) {
   await pool.query(`delete from workshop_accounts where run_id = $1`, [runId]);
 }

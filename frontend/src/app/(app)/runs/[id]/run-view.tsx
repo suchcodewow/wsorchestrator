@@ -156,6 +156,9 @@ export function RunView({
   }, [data.logs.length]);
 
   const { run, logs, accounts, owner } = data;
+  // Azure issues one per attendee; nothing else does, so the column only earns
+  // its width on an event that selected Azure.
+  const hasAccessPass = accounts.some((a) => a.azureAccessPass);
   const outputs = run.outputs as Record<string, unknown> | null;
   const owned = run.userId === viewerId;
   const destroy = destroyMoment(run);
@@ -298,6 +301,11 @@ export function RunView({
                   <tr className="text-left text-[11px] uppercase tracking-wider text-muted-foreground">
                     <th className="pb-2 font-medium">Email</th>
                     <th className="pb-2 font-medium">Temporary password</th>
+                    {/* Only for an event that provisioned Azure, which is the
+                        only thing that issues one. */}
+                    {hasAccessPass && (
+                      <th className="pb-2 font-medium">Azure access pass</th>
+                    )}
                     <th className="pb-2 font-medium">Claimed by</th>
                   </tr>
                 </thead>
@@ -309,6 +317,15 @@ export function RunView({
                     >
                       <td className="py-2 pr-4 break-all">{a.email}</td>
                       <td className="py-2 pr-4">{a.tempPassword}</td>
+                      {hasAccessPass && (
+                        <td className="py-2 pr-4">
+                          {a.azureAccessPass ?? (
+                            <span className="font-sans text-muted-foreground">
+                              none
+                            </span>
+                          )}
+                        </td>
+                      )}
                       {/* Filled in by the attendee on the shared page below. */}
                       <td className="py-2 font-sans">
                         {a.claimedName ?? (
@@ -323,7 +340,12 @@ export function RunView({
               </table>
             </div>
             <p className="mt-3 text-xs text-muted-foreground">
-              Each user is prompted to change their password at first sign-in.
+              {/* Not "prompted to change their password": accounts are created
+                  without a forced reset so the one password works across every
+                  cloud the event uses. */}
+              The password is the same one in every cloud this {run.mode} uses.
+              {hasAccessPass &&
+                " Azure asks for the access pass instead — Microsoft requires MFA on portal sign-in, and the pass satisfies it without an authenticator app."}{" "}
               Accounts are deleted when the {run.mode} expires.
             </p>
           </CardContent>

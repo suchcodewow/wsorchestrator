@@ -190,6 +190,37 @@ export function azureCfg() {
     tenantId: required("AZURE_TENANT_ID"),
     location: process.env.AZURE_LOCATION ?? "eastus",
     /**
+     * The app registration the runner signs into Microsoft Graph as, to issue
+     * Temporary Access Passes (`graph.ts`). Read from the same `ARM_*` pair the
+     * `azuread` provider authenticates with, because it is the same
+     * application — it just needs one more Graph permission
+     * (`UserAuthenticationMethod.ReadWrite.All`) than creating users took.
+     */
+    clientId: process.env.ARM_CLIENT_ID ?? "",
+    clientSecret: process.env.ARM_CLIENT_SECRET ?? "",
+    /**
+     * Issue each attendee a Temporary Access Pass alongside their password.
+     *
+     * On by default, because as of Microsoft's mandatory MFA enforcement a
+     * password alone no longer gets an attendee into the Azure portal, and a
+     * TAP is the one credential that satisfies it without an authenticator
+     * app, a phone, or an enrolment step. Set `AZURE_TAP_ENABLED=false` for a
+     * tenant where that enforcement does not apply and the password is enough.
+     */
+    tapEnabled: (process.env.AZURE_TAP_ENABLED ?? "true") !== "false",
+    /**
+     * Whether each pass is single-use.
+     *
+     * Multi-use by default: an attendee who gets signed out halfway through a
+     * workshop has to be able to get back in, and a one-time pass leaves them
+     * waiting on an organizer to issue another. A one-time pass is the more
+     * conservative choice if multi-use turns out not to satisfy the mandatory
+     * MFA check in your tenant — test one account before an event and set
+     * `AZURE_TAP_ONE_TIME=true` if it does not. The tenant's own TAP policy
+     * wins over this either way (see `graph.ts`).
+     */
+    tapOneTime: (process.env.AZURE_TAP_ONE_TIME ?? "false") === "true",
+    /**
      * Attendee UPNs are `<username>@<userDomain>`. Defaults to the Workspace
      * domain so the Azure sign-in string matches the Google one exactly — which
      * requires that domain to be verified in the Entra tenant (a DNS TXT

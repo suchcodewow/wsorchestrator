@@ -297,6 +297,19 @@ export const workshopAccounts = pgTable(
     email: text("email").notNull(),
     /** Temporary password; `changePasswordAtNextLogin` is set on the account. */
     tempPassword: text("temp_password").notNull(),
+    /**
+     * Entra Temporary Access Pass, for workshops that provisioned Azure.
+     *
+     * The credential an attendee actually signs into the Azure portal with:
+     * Microsoft enforces MFA there tenant-wide, and a pass satisfies it without
+     * an authenticator app. Null for a run with no Azure environment, and for
+     * one whose tenant has the pass method switched off.
+     */
+    azureAccessPass: text("azure_access_pass"),
+    /** When the pass stops working. Sized to outlast the workshop. */
+    azureAccessPassExpiresAt: timestamp("azure_access_pass_expires_at", {
+      withTimezone: true,
+    }),
     /** Who took this account. Null means the row is still up for grabs. */
     claimedName: text("claimed_name"),
     /** Where they are from. */
