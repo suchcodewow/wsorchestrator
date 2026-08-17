@@ -3,14 +3,16 @@ import "server-only";
 import GithubSlugger from "github-slugger";
 import type { Element, ElementContent, Root, RootContent } from "hast";
 import { toString } from "hast-util-to-string";
+import type { Paragraph, Root as MdastRoot } from "mdast";
 import rehypeSanitize from "rehype-sanitize";
 import rehypeStringify from "rehype-stringify";
+import remarkDirective from "remark-directive";
 import remarkGfm from "remark-gfm";
 import remarkParse from "remark-parse";
 import remarkRehype from "remark-rehype";
 import { createHighlighter, type Highlighter } from "shiki";
 import { unified } from "unified";
-import { visit } from "unist-util-visit";
+import { SKIP, visit } from "unist-util-visit";
 
 /**
  * Markdown → HTML for lab guides.
@@ -184,6 +186,228 @@ function parseInfo(code: Element): { lang: string; title: string | null } {
     }
   }
   return { lang: lang.toLowerCase() || "text", title };
+}
+
+/* ------------------------------------------------------------------ *
+ * List indentation
+ * ------------------------------------------------------------------ */
+
+/** A line that opens a list item: its indent, its marker, the gap after it. */
+const LIST_ITEM = /^([ \t]*)([-*+]|\d{1,9}[.)])([ \t]+)(?=\S)/;
+
+/** A fence, once the line's indent (and any list marker) is off the front. */
+const FENCE = /^(`{3,}|~{3,})(.*)$/;
+
+/** How far past a marker's own indent a line has to be to be inside the item. */
+const CONTINUATION = 2;
+
+/** Leading whitespace as a column, counting a tab to the next stop of four. */
+function indentWidth(line: string): number {
+  let width = 0;
+  for (const ch of line) {
+    if (ch === " ") width += 1;
+    else if (ch === "\t") width += 4 - (width % 4);
+    else break;
+  }
+  return width;
+}
+
+/** Move a line right, leaving blank lines blank. */
+const shiftLine = (line: string, by: number): string =>
+  by > 0 && line.trim().length > 0 ? " ".repeat(by) + line : line;
+
+/**
+ * Re-indent under-indented blocks so they stay in the list item they follow.
+ *
+ * Markdown keeps a block inside a list item only while it is indented to that
+ * item's *content column* — three for `1. `, four for `10. `, two for `- `. A
+ * fence or an image one space short of that closes the list instead, and the
+ * steps below it become a second list numbered from one. Nothing about the
+ * source shows it: two spaces looks indented, and the rule that two is enough
+ * under a bullet but not under a number is not one anybody should have to hold
+ * in their head while writing a lab.
+ *
+ * So the guides get one rule — two spaces means "still inside this step" — and
+ * this pass turns that into whatever column the parser actually wants, before
+ * the parser sees it. Indenting is all it does: a line is only ever moved
+ * right, and only ever to the content column of the item it is already inside,
+ * so a correctly indented guide passes through untouched.
+ *
+ * Line-for-line, deliberately. The editor's preview lines its scroll up against
+ * `data-line`, and every one of those numbers comes from parsing what this
+ * function returns — so it may change what a line starts with, but never how
+ * many there are.
+ *
+ * Fenced code is copied through with the shift its opening fence got and
+ * nothing else: a list marker is only a list marker in prose, and these guides
+ * are full of YAML, whose every sequence entry would otherwise open an item and
+ * drag the rest of the block in after it.
+ */
+function normaliseListIndents(markdown: string): string {
+  const lines = markdown.split("\n");
+  const out: string[] = [];
+
+  /** The list items currently open, outermost first. */
+  const open: { srcIndent: number; contentColumn: number }[] = [];
+  /** The fence being copied through, if the walk is inside one. */
+  let fence: { marker: string; by: number; floor: number } | null = null;
+
+  for (const line of lines) {
+    if (fence) {
+      // Code keeps its shape relative to its fence, but no line may sit left
+      // of the item's content column: a fence moved into a step takes its
+      // contents with it, and a line short of that column would end the step —
+      // closing the block early and spilling the rest of the code into the
+      // page as prose.
+      out.push(
+        shiftLine(line, Math.max(fence.by, fence.floor - indentWidth(line))),
+      );
+
+      // A closing fence is the same character, at least as long, and alone on
+      // its line — anything else is code that happens to start with backticks.
+      const close = line.trim().match(FENCE);
+      if (
+        close &&
+        close[1][0] === fence.marker[0] &&
+        close[1].length >= fence.marker.length &&
+        close[2].trim().length === 0
+      ) {
+        fence = null;
+      }
+      continue;
+    }
+
+    // A blank line separates blocks but does not end a list, so it neither
+    // closes an item nor needs moving.
+    if (line.trim().length === 0) {
+      out.push(line);
+      continue;
+    }
+
+    const width = indentWidth(line);
+
+    // Anything not far enough in has left the items it is not far enough for.
+    while (
+      open.length > 0 &&
+      width < open[open.length - 1].srcIndent + CONTINUATION
+    ) {
+      open.pop();
+    }
+
+    const item = open[open.length - 1];
+    const by = item ? Math.max(0, item.contentColumn - width) : 0;
+    out.push(shiftLine(line, by));
+
+    const opened = line.match(LIST_ITEM);
+    if (opened) {
+      // Where this item's own content starts, in the output.
+      const marker = opened[2].length + opened[3].length;
+      open.push({ srcIndent: width, contentColumn: width + by + marker });
+    }
+
+    // A fence opens on its own line, or directly after a marker on the line
+    // that opened the item.
+    const rest = opened ? line.slice(opened[0].length) : line.trimStart();
+    const start = rest.match(FENCE);
+    if (start) {
+      // A fence on a marker line belongs to the item that marker just opened.
+      const inner = opened ? open[open.length - 1] : item;
+      fence = { marker: start[1], by, floor: inner?.contentColumn ?? 0 };
+    }
+  }
+
+  return out.join("\n");
+}
+
+/* ------------------------------------------------------------------ *
+ * Collapsible sections
+ * ------------------------------------------------------------------ */
+
+/** The heading on a collapsible section that was opened without one. */
+const DEFAULT_SUMMARY = "Details";
+
+/**
+ * `:::details[Show the answer]` … `:::` → a `<details>` block.
+ *
+ * A directive rather than raw HTML, because raw HTML never reaches the output:
+ * `remark-rehype` runs without `allowDangerousHtml`, and that stays true — a
+ * guide body is not an HTML injection point. `remark-directive` adds one
+ * generic block syntax instead, and this plugin decides what it may mean.
+ *
+ * The `details` and `summary` elements are built *here*, before sanitisation,
+ * rather than afterwards like the code blocks: both tags are already in the
+ * default schema, so they survive it, and building them in mdast means the
+ * heading and the body are ordinary Markdown that gets sanitised along with
+ * everything else. Only the decoration — classes, the chevron, the body
+ * wrapper — is added on the trusted side, in `rehypeDetails`.
+ *
+ * `:::details[Title]{open}` starts expanded.
+ *
+ * Everything else the syntax can match is put back as the text that was typed.
+ * That is the whole reason this runs as one pass over every directive node:
+ * turning the extension on also makes `:name` a directive *mid-sentence*, so a
+ * guide that says `key:value` — and these guides are full of that — would
+ * otherwise lose the second half of the word. Directives are a feature of this
+ * one block form; anywhere else the punctuation means what it looks like.
+ */
+function remarkDetails() {
+  return (tree: MdastRoot, file: { value: unknown }) => {
+    const source = String(file.value);
+
+    visit(tree, (node, index, parent) => {
+      if (
+        node.type !== "containerDirective" &&
+        node.type !== "leafDirective" &&
+        node.type !== "textDirective"
+      ) {
+        return;
+      }
+
+      if (node.type !== "containerDirective" || node.name !== "details") {
+        const start = node.position?.start.offset;
+        const end = node.position?.end.offset;
+        if (!parent || index === undefined || start === undefined || end === undefined) {
+          return SKIP;
+        }
+
+        parent.children[index] = {
+          type: "text",
+          value: source.slice(start, end),
+          position: node.position,
+        };
+        // The node is detached; its children are not part of the document.
+        return SKIP;
+      }
+
+      // `:::details[Title]` puts the label in a leading paragraph, flagged as
+      // such. Without one there is nothing to click, so the section gets a
+      // generic heading rather than a summary that is a blank strip.
+      const [first] = node.children;
+      const labelled =
+        first?.type === "paragraph" &&
+        (first.data as { directiveLabel?: boolean } | undefined)
+          ?.directiveLabel === true;
+
+      const summary: Paragraph = labelled
+        ? first
+        : {
+            type: "paragraph",
+            children: [{ type: "text", value: DEFAULT_SUMMARY }],
+          };
+
+      summary.data = { ...summary.data, hName: "summary" };
+      node.children = [
+        summary,
+        ...(labelled ? node.children.slice(1) : node.children),
+      ];
+
+      node.data = {
+        ...node.data,
+        hName: "details",
+        hProperties: { open: node.attributes?.open !== undefined },
+      };
+    });
+  };
 }
 
 /* ------------------------------------------------------------------ *
@@ -377,7 +601,7 @@ function rehypeHighlight(highlighter: Highlighter) {
 
       const label = LANG_LABELS[language] ?? language;
 
-      parent.children[index] = el(
+      const figure = el(
         "figure",
         { className: ["lab-code"], "data-lang": language },
         [
@@ -398,6 +622,12 @@ function rehypeHighlight(highlighter: Highlighter) {
           pre,
         ],
       );
+
+      // The figure stands in for the fence, so it inherits where the fence was
+      // written. Nothing built here has a position of its own, and the editor's
+      // preview needs one on the outermost node to scroll a block into view.
+      figure.position = node.position;
+      parent.children[index] = figure;
 
       // Children were replaced wholesale; there is nothing inside to visit.
       return "skip";
@@ -433,6 +663,80 @@ function addClass(node: Element, name: string): void {
   // serialise to the same attribute.
   if (key === "className") node.properties.className = [...existing, name];
   else node.properties.class = [...existing, name].join(" ");
+}
+
+/* ------------------------------------------------------------------ *
+ * Collapsible sections, part two
+ * ------------------------------------------------------------------ */
+
+/**
+ * The disclosure arrow. Inline for the same reason the clipboard is: this is
+ * hast built on the server, where a React icon component is not available.
+ *
+ * It points right when closed and is rotated by CSS when open, so the open and
+ * closed states are one glyph rather than two that have to be kept in step.
+ */
+function chevron(): Element {
+  return el(
+    "svg",
+    {
+      "aria-hidden": "true",
+      viewBox: "0 0 24 24",
+      fill: "none",
+      stroke: "currentColor",
+      strokeWidth: "2",
+      strokeLinecap: "round",
+      strokeLinejoin: "round",
+      className: ["lab-details-chevron"],
+    },
+    [el("path", { d: "M9 6l6 6-6 6" })],
+  );
+}
+
+/**
+ * Dress the `<details>` blocks that `remarkDetails` built.
+ *
+ * Split from that plugin because classes are not in the sanitiser's schema for
+ * either tag — anything set before it runs is stripped back off. So the tags go
+ * through sanitisation bare, and the decoration is added here, on the trusted
+ * side, alongside the code blocks.
+ *
+ * Every `details` in the tree is one of ours: raw HTML never survives the
+ * parse, so the directive is the only thing that can produce the element. The
+ * summary is still looked up rather than assumed to be the first child.
+ *
+ * The body is wrapped because the section needs one padded box under the
+ * heading, and because `.lab-prose`'s spacing rule only reaches its own direct
+ * children — an unwrapped body would set solid.
+ */
+function rehypeDetails() {
+  return (tree: Root) => {
+    visit(tree, "element", (node: Element) => {
+      if (node.tagName !== "details") return;
+
+      const summary = node.children.find((c): c is Element =>
+        isElement(c, "summary"),
+      );
+      if (!summary) return;
+
+      addClass(node, "lab-details");
+      addClass(summary, "lab-details-summary");
+      summary.children = [
+        chevron(),
+        el("span", { className: ["lab-details-title"] }, summary.children),
+      ];
+
+      const body = node.children.filter((c) => c !== summary);
+      node.children = [
+        summary,
+        // An empty section is a heading and nothing else; a wrapper there would
+        // draw a rule under it with a padded void beneath.
+        ...(body.length > 0
+          ? [el("div", { className: ["lab-details-body"] }, body)]
+          : []),
+      ];
+    });
+  };
 }
 
 /* ------------------------------------------------------------------ *
@@ -494,45 +798,139 @@ function rehypeExternalLinks() {
 }
 
 /* ------------------------------------------------------------------ *
+ * Source positions
+ * ------------------------------------------------------------------ */
+
+/**
+ * The blocks worth pointing back at their source line.
+ *
+ * Block-level only: an anchor or a run of bold text starts somewhere in the
+ * middle of a line, and a mapping that fine buys nothing — the finest thing
+ * anyone can scroll to is the paragraph it sits in. `li` and `tr` are in the
+ * list on purpose, since a long list or table is otherwise a single landmark
+ * covering a screenful of source.
+ */
+const LINE_MARKED_TAGS = new Set([
+  "p",
+  "h1",
+  "h2",
+  "h3",
+  "h4",
+  "h5",
+  "h6",
+  "ul",
+  "ol",
+  "li",
+  "blockquote",
+  "pre",
+  "figure",
+  // A collapsible section marks both: the summary is what is on screen while
+  // it is shut, and the section itself is the landmark once it is open.
+  "details",
+  "summary",
+  "table",
+  "thead",
+  "tbody",
+  "tr",
+  "hr",
+  "dl",
+  "dt",
+  "dd",
+]);
+
+/**
+ * Record the source line each block came from, as `data-line`.
+ *
+ * Only the editor's preview asks for this: it is what lets the split view
+ * scroll the rendered side to the part of the guide being typed. A published
+ * page has no markdown to line up against, so it renders without the
+ * attributes rather than carrying a few hundred of them for nobody.
+ *
+ * Runs last, after the code blocks have been rebuilt — a fence's `figure` is
+ * generated markup that carries the fence's position forward by hand, and
+ * everything Shiki puts inside it has no position at all, so the block gets one
+ * mark on the outside instead of one per highlighted line.
+ */
+function rehypeSourceLines() {
+  return (tree: Root) => {
+    visit(tree, "element", (node: Element) => {
+      const line = node.position?.start.line;
+      if (line === undefined || !LINE_MARKED_TAGS.has(node.tagName)) return;
+      node.properties["data-line"] = String(line);
+    });
+  };
+}
+
+/* ------------------------------------------------------------------ *
  * The pipeline
  * ------------------------------------------------------------------ */
 
-const buildProcessor = (highlighter: Highlighter) =>
-  unified()
+const buildProcessor = (highlighter: Highlighter, sourceLines: boolean) => {
+  const processor = unified()
     .use(remarkParse)
     .use(remarkGfm)
+    .use(remarkDirective)
+    .use(remarkDetails)
     .use(remarkRehype)
     .use(rehypeCarryCodeTitle)
     // GitHub's default rules, which already keep `language-*` on a code
     // element — `language-hcl:main.tf` included, which is what lets the fence
-    // title survive this step.
+    // title survive this step — and which allow `details` and `summary`, which
+    // is what lets a collapsible section through with its contents sanitised.
     .use(rehypeSanitize)
     // Everything below this line generates trusted markup.
     .use(rehypeHighlight, highlighter)
+    .use(rehypeDetails)
     .use(rehypeHeadings)
-    .use(rehypeExternalLinks)
-    .use(rehypeStringify);
+    .use(rehypeExternalLinks);
+
+  if (sourceLines) processor.use(rehypeSourceLines);
+
+  return processor.use(rehypeStringify);
+};
 
 /**
- * The pipeline, built once. Plugins hold no per-document state — the one that
- * would, the heading slugger, creates its own inside the transform — so a
+ * The pipelines, built once each. Plugins hold no per-document state — the one
+ * that would, the heading slugger, creates its own inside the transform — so a
  * single processor is safe to share across concurrent requests.
+ *
+ * Two of them, keyed by whether the output carries source lines: the flag
+ * changes the plugin list, and the only alternative is rebuilding the pipeline
+ * (and with it the reference to the highlighter) per request.
  */
-let processorPromise: Promise<ReturnType<typeof buildProcessor>> | null = null;
+const processors = new Map<
+  boolean,
+  Promise<ReturnType<typeof buildProcessor>>
+>();
 
-function getProcessor() {
-  processorPromise ??= getHighlighter().then(buildProcessor);
-  return processorPromise;
+function getProcessor(sourceLines: boolean) {
+  let processor = processors.get(sourceLines);
+  if (!processor) {
+    processor = getHighlighter().then((h) => buildProcessor(h, sourceLines));
+    processors.set(sourceLines, processor);
+  }
+  return processor;
 }
 
 /** Render a guide body to HTML, with the headings it turned out to have. */
 export async function renderMarkdown(
   markdown: string,
+  {
+    /**
+     * Mark each block with the source line it came from, for an editor that
+     * wants to line the rendering up against the markdown it was typed from.
+     */
+    sourceLines = false,
+  }: { sourceLines?: boolean } = {},
 ): Promise<RenderedMarkdown> {
   if (markdown.trim().length === 0) return { html: "", toc: [] };
 
-  const processor = await getProcessor();
-  const file = await processor.process(markdown);
+  const processor = await getProcessor(sourceLines);
+  // Before anything parses it, so `remarkDetails` — which reads offsets back
+  // out of the source it was given — and `data-line` both describe the same
+  // text. The pass never adds or removes a line, so the numbers still point at
+  // the markdown the author is looking at.
+  const file = await processor.process(normaliseListIndents(markdown));
 
   return {
     html: String(file),

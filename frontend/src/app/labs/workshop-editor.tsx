@@ -360,7 +360,9 @@ export function WorkshopEditor({
 
         {picking && (
           <div className="mt-1 grid gap-2 rounded-lg border p-3">
-            <div className="flex items-center gap-2 rounded-md border px-2.5">
+            {/* Fill on the wrapper — the icon shares the box, so the box is
+                the field. */}
+            <div className="flex items-center gap-2 rounded-md border border-input bg-field px-2.5">
               <Search className="size-4 shrink-0 text-muted-foreground" />
               <input
                 value={query}

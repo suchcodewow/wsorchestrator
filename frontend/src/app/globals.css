@@ -32,8 +32,18 @@
   --accent-foreground: oklch(0.208 0.042 265.755);
   --destructive: oklch(0.577 0.245 27.325);
   --border: oklch(0.929 0.013 255.508);
-  --input: oklch(0.929 0.013 255.508);
+  --input: oklch(0.898 0.017 255.508);
   --ring: oklch(0.704 0.04 256.788);
+
+  /*
+   * The fill behind anything you can type into. Opaque on purpose: the page
+   * carries bloom gradients and cards sit on top of them, and a transparent
+   * field lets that wash straight through the one region where legibility
+   * matters most. One step of separation from whatever surface it sits on —
+   * a shade under white here, a shade over the card in the dark — so a field
+   * reads as a field before you find its border.
+   */
+  --field: oklch(0.976 0.005 247.9);
 }
 
 .dark {
@@ -59,8 +69,11 @@
   --accent-foreground: oklch(0.984 0.003 247.858);
   --destructive: oklch(0.704 0.191 22.216);
   --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
+  --input: oklch(1 0 0 / 24%);
   --ring: oklch(0.551 0.027 264.364);
+
+  /* Lifted above both the page (0.129) and the card (0.208) it sits on. */
+  --field: oklch(0.246 0.042 264.7);
 }
 
 @theme inline {
@@ -81,6 +94,7 @@
   --color-destructive: var(--destructive);
   --color-border: var(--border);
   --color-input: var(--input);
+  --color-field: var(--field);
   --color-ring: var(--ring);
   --color-brand: var(--brand);
   --color-brand-foreground: var(--brand-foreground);
@@ -221,9 +235,10 @@
    * the utilities layer after this one, so a plain `border: 0` here would lose
    * to the `border` class the component already carries.
    *
-   * The field is deliberately left unfilled. `--secondary` and `--muted` are
-   * the same value in this palette, so giving the field a muted fill would
-   * hide the indicator inside it.
+   * The field keeps the Input component's `--field` fill, so it is as findable
+   * as every other box on the form. That rules `--secondary` out for the
+   * indicator — it is close enough to `--field` to vanish inside it — so the
+   * indicator is drawn a border-step darker instead.
    *
    * The indicator pseudo-element is Chromium/WebKit only. Firefox draws its
    * own control and ignores these rules, falling back to the borderless
@@ -243,13 +258,13 @@
     margin-inline-start: 0.25rem;
     padding: 0.3rem;
     border-radius: var(--radius-sm);
-    background-color: var(--secondary);
+    background-color: color-mix(in oklab, var(--field) 88%, var(--foreground));
     cursor: pointer;
     transition: background-color 150ms ease;
   }
 
   .datetime-field::-webkit-calendar-picker-indicator:hover {
-    background-color: color-mix(in oklab, var(--secondary) 85%, var(--foreground));
+    background-color: color-mix(in oklab, var(--field) 76%, var(--foreground));
   }
 
   /* Matches the focus ring the Button component uses for keyboard users. */
@@ -375,6 +390,15 @@
     margin-top: 0.4em;
   }
 
+  /* The rhythm rule at the top only reaches direct children of the prose, so a
+     step built out of more than one block — the sentence and the screenshot
+     under it — would otherwise set solid. Nested lists are spaced by the rule
+     above, and a code block brings its own margin, so the gap above one stays
+     equal to the gap below it. */
+  .lab-prose li > * + *:not(ul, ol, .lab-code) {
+    margin-top: 0.75em;
+  }
+
   /* GFM task lists: the checkbox replaces the bullet. */
   .lab-prose li:has(> input[type="checkbox"]) {
     list-style: none;
@@ -451,6 +475,94 @@
     overflow: hidden;
     clip-path: inset(50%);
     white-space: nowrap;
+  }
+}
+
+@layer components {
+  /*
+   * Collapsible sections — what the editor's `:::details[…]` block renders as.
+   *
+   * A hint, a screen of console output, the answer to an exercise: things worth
+   * having in a guide and worth keeping out of the way of somebody working
+   * through it. Shut, the whole thing reads as a single line of chrome; open,
+   * the body is set as a small document of its own inside a padded box.
+   */
+  .lab-prose .lab-details {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background-color: color-mix(in oklab, var(--muted) 40%, var(--background));
+  }
+
+  .lab-prose .lab-details-summary {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    border-radius: inherit;
+    padding: 0.5rem 0.875rem;
+    cursor: pointer;
+    font-size: 0.875rem;
+    font-weight: 500;
+    /* The rendered chevron stands in for the browser's disclosure triangle,
+       which is a list marker everywhere except Safari — hence the second rule. */
+    list-style: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  .lab-prose .lab-details-summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .lab-prose .lab-details-summary:hover {
+    color: var(--brand);
+  }
+
+  /* Inset, so the ring sits inside the section's own border rather than
+     doubling it. */
+  .lab-prose .lab-details-summary:focus-visible {
+    outline: 3px solid color-mix(in oklab, var(--ring) 50%, transparent);
+    outline-offset: -1px;
+  }
+
+  .lab-prose .lab-details-chevron {
+    flex: none;
+    width: 1rem;
+    height: 1rem;
+    color: var(--muted-foreground);
+    transition: transform 150ms ease;
+  }
+
+  /* One glyph for both states: open rotates the closed one. Scoped to the
+     section's own summary so a nested block does not turn its parent's. */
+  .lab-prose .lab-details[open] > .lab-details-summary .lab-details-chevron {
+    transform: rotate(90deg);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .lab-prose .lab-details-chevron {
+      transition: none;
+    }
+  }
+
+  .lab-prose .lab-details-body {
+    border-top: 1px solid var(--border);
+    padding: 0.875rem;
+  }
+
+  /* The prose rhythm is a rule about direct children of `.lab-prose`, and the
+     body is a level down from it — without this it would set solid. */
+  .lab-prose .lab-details-body > * + * {
+    margin-top: 1.1em;
+  }
+
+  /* The box supplies the padding. Margins the contents brought with them — a
+     code block's, a heading's — would sit on top of it at the ends. */
+  .lab-prose .lab-details-body > :first-child {
+    margin-top: 0;
+  }
+
+  .lab-prose .lab-details-body > :last-child {
+    margin-bottom: 0;
   }
 }
 

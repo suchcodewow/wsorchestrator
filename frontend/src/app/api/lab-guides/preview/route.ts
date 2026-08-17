@@ -34,6 +34,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "invalid_body" }, { status: 400 });
   }
 
-  const { html } = await renderMarkdown(parsed.data.body);
+  // With source lines, so the split view can scroll the rendering to whatever
+  // is being typed. They cost a `data-line` per block and are ignored by an
+  // editor that does not want them.
+  const { html } = await renderMarkdown(parsed.data.body, {
+    sourceLines: true,
+  });
   return NextResponse.json({ html });
 }

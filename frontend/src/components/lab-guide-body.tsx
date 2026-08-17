@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 
 /**
  * The rendered guide, plus the one thing the server cannot do: put things on
@@ -18,6 +18,60 @@ import { useEffect, useRef } from "react";
  */
 export function LabGuideBody({ html }: { html: string }) {
   const ref = useRef<HTMLDivElement>(null);
+
+  /**
+   * Hold the scroll position across a re-render.
+   *
+   * New markup replaces the whole subtree, and the browser clamps a scroll
+   * offset that no longer fits what is left — so a document that is briefly
+   * shorter mid-edit (a fence opened but not yet closed, a section being
+   * retyped) drags the reader back up the page. That never comes up on a
+   * published guide, which renders once; it comes up constantly in the editor's
+   * split view, which re-renders every time the author stops typing.
+   *
+   * The position is tracked as it changes rather than measured when it is
+   * needed: by the time anything here can see new html, the swap has already
+   * happened and the old offset is gone. Scroll events are the one reading that
+   * arrives early enough, and they cost nothing — no layout is forced, on any
+   * render.
+   */
+  const scroller = useRef<Element | null>(null);
+  const scrollTop = useRef(0);
+
+  useEffect(() => {
+    const root = ref.current;
+    if (!root) return;
+
+    // Whichever ancestor scrolls this content: the split pane's own box in the
+    // editor, the page itself on a published guide.
+    let node: Element | null = root;
+    while (node && !/auto|scroll|overlay/.test(getComputedStyle(node).overflowY))
+      node = node.parentElement;
+
+    const target = node ?? document.scrollingElement;
+    if (!target) return;
+    scroller.current = target;
+    scrollTop.current = target.scrollTop;
+
+    // The document's scroll is reported on `document`, not on the element that
+    // carries the offset.
+    const on: EventTarget = node ?? document;
+    const track = () => {
+      scrollTop.current = target.scrollTop;
+    };
+    on.addEventListener("scroll", track, { passive: true });
+    return () => on.removeEventListener("scroll", track);
+  }, []);
+
+  // Before paint, so the position is put back in the same frame it was lost in
+  // and nothing is seen to move. Only when the swap left it *higher* than it
+  // was — anything else is a reader who scrolled, and is not ours to undo.
+  useLayoutEffect(() => {
+    const node = scroller.current;
+    if (node && node.scrollTop < scrollTop.current) {
+      node.scrollTop = scrollTop.current;
+    }
+  }, [html]);
 
   useEffect(() => {
     const root = ref.current;

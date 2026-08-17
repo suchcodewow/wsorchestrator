@@ -248,7 +248,10 @@ export function ImagePickerDialog({
         </DialogHeader>
 
         <div className="flex items-center gap-2">
-          <div className="flex flex-1 items-center gap-2 rounded-md border px-2.5">
+          {/* The fill lives on the wrapper, not the input: the search icon and
+              the clear button sit inside the same box, so the box is the
+              field. */}
+          <div className="flex flex-1 items-center gap-2 rounded-md border border-input bg-field px-2.5">
             <Search className="size-4 shrink-0 text-muted-foreground" />
             <input
               value={query}
@@ -404,10 +407,10 @@ export function ImagePickerDialog({
                           }
                         }}
                         onBlur={() => void saveName(image)}
-                        // Solid, not the Input default of `bg-transparent`:
-                        // this floats over the thumbnail, and a see-through
-                        // field puts the name on top of the picture it names.
-                        className="h-7 bg-background text-xs shadow-sm"
+                        // Floats over the thumbnail, so it leans on the Input
+                        // fill being opaque — a see-through field would put
+                        // the name on top of the picture it names.
+                        className="h-7 text-xs shadow-sm"
                       />
                     </div>
                   )}

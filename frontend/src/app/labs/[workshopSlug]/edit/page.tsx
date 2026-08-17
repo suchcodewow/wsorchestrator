@@ -30,7 +30,7 @@ export default async function EditWorkshopPage({
   const guides = await listGuidesForPicker();
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <div className="mx-auto max-w-4xl">
       <Link
         href={`/labs/${workshop.slug}`}
         className="inline-flex items-center gap-1.5 rounded-md text-sm text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
