@@ -81,9 +81,10 @@ variable "harness_base_url" {
   default     = "https://app.harness.io"
 }
 
-# --- Azure (optional; only needed if workshops select Azure) ---
-# All empty by default so a GCP-only deployment applies unchanged. Provisioning
-# an Azure run needs a service principal with permissions on two planes:
+# --- Azure (required; every deployment carries all three clouds) ---
+# Defaulted empty only so a partially-configured tree still plans; a run that
+# selects Azure without these fails its preflight. Provisioning an Azure run
+# needs a service principal with permissions on two planes:
 #   * Azure RBAC, subscription scope: create resource groups + AKS AND create
 #     role assignments. Contributor CANNOT create role assignments, so use
 #     Owner (simplest), or Contributor + User Access Administrator. It must be
@@ -94,7 +95,7 @@ variable "harness_base_url" {
 # Also verify harnessevents.io in the tenant so attendee UPNs match their Google
 # address.
 variable "azure_subscription_id" {
-  description = "Subscription workshop resource groups are created in. Empty disables Azure."
+  description = "Subscription workshop resource groups are created in. Empty leaves Azure off the runner and fails any Azure run at preflight."
   type        = string
   default     = ""
 }
@@ -124,14 +125,15 @@ variable "azure_location" {
   default     = "eastus"
 }
 
-# --- AWS (optional; only needed if workshops select AWS) ---
-# All empty by default so a deployment not using AWS applies unchanged.
+# --- AWS (required; every deployment carries all three clouds) ---
+# Defaulted empty only so a partially-configured tree still plans; a run that
+# selects AWS fails its preflight without these.
 # Provisioning an AWS run needs credentials in the Organizations MANAGEMENT
 # account with rights to create member accounts and assume
 # OrganizationAccountAccessRole into them. The access key id + secret are stored
 # in Secret Manager; region and OU are plaintext env on the runner.
 variable "aws_access_key_id" {
-  description = "Access key id for the Organizations management account. Empty disables AWS. Not marked sensitive — it is the identifier half of the key pair (not the secret), so it can gate for_each; the secret access key is what's sensitive."
+  description = "Access key id for the Organizations management account. Empty leaves AWS off the runner and fails any AWS run at preflight. Not marked sensitive — it is the identifier half of the key pair (not the secret), so it can gate for_each; the secret access key is what's sensitive."
   type        = string
   default     = ""
 }

@@ -118,9 +118,11 @@ Manager). AWS adds `AWS_REGION`, `AWS_PARENT_OU_ID`, `AWS_ACCOUNT_ACCESS_ROLE`,
 and `AWS_ACCOUNT_EMAIL_DOMAIN`, with the provider reading `AWS_ACCESS_KEY_ID` /
 `AWS_SECRET_ACCESS_KEY`.
 
-Every cloud's vars are read lazily, so a workshop provisions its accounts — and
-the clouds it did select — without the ones it does not use. A deployment that
-never selects Azure or AWS can leave both sets empty entirely.
+Every cloud's vars are read lazily, so a workshop only touches the credentials
+of the clouds it selected — a GCP-only run never reads the Azure or AWS ones.
+That is an isolation property, not a licence to skip them: all three sets belong
+in every deployment, and a run that selects a cloud whose vars are missing fails
+its preflight naming them.
 
 ### Workspace access
 

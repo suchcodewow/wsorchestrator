@@ -132,7 +132,16 @@ resource "google_cloud_run_v2_job" "runner" {
     }
   }
 
-  depends_on = [google_project_service.admin]
+  # Cloud Run revalidates every secret ref when the job is updated, and a
+  # reference to the secret container alone doesn't imply its version or the
+  # accessor grant. Turning on a cloud creates all three in one apply, so
+  # without this the job races ahead of them and the update fails with
+  # SecretsAccessCheckFailed.
+  depends_on = [
+    google_project_service.admin,
+    google_secret_manager_secret_version.v,
+    google_secret_manager_secret_iam_member.runner,
+  ]
 }
 
 # tf-reaper: destroys runs past their TTL (terraform destroy + project delete).
@@ -203,7 +212,16 @@ resource "google_cloud_run_v2_job" "reaper" {
     }
   }
 
-  depends_on = [google_project_service.admin]
+  # Cloud Run revalidates every secret ref when the job is updated, and a
+  # reference to the secret container alone doesn't imply its version or the
+  # accessor grant. Turning on a cloud creates all three in one apply, so
+  # without this the job races ahead of them and the update fails with
+  # SecretsAccessCheckFailed.
+  depends_on = [
+    google_project_service.admin,
+    google_secret_manager_secret_version.v,
+    google_secret_manager_secret_iam_member.runner,
+  ]
 }
 
 # The app service triggers workshop runs by executing the tf-runner job WITH a
@@ -286,7 +304,16 @@ resource "google_cloud_run_v2_job" "scheduler" {
     }
   }
 
-  depends_on = [google_project_service.admin]
+  # Cloud Run revalidates every secret ref when the job is updated, and a
+  # reference to the secret container alone doesn't imply its version or the
+  # accessor grant. Turning on a cloud creates all three in one apply, so
+  # without this the job races ahead of them and the update fails with
+  # SecretsAccessCheckFailed.
+  depends_on = [
+    google_project_service.admin,
+    google_secret_manager_secret_version.v,
+    google_secret_manager_secret_iam_member.runner,
+  ]
 }
 
 # The scheduler (runner-sa) triggers tf-runner with a RUN_ID override.

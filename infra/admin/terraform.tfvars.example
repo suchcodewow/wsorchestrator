@@ -1,8 +1,4 @@
 # Copy to terraform.tfvars and fill in. Do NOT commit the real file.
-#
-# Every group below is documented in README.md — what each credential needs,
-# which permissions it must carry, and the manual console steps that no
-# Terraform can do for you. This file is just the shape of the values.
 
 # Control plane — see README.md#control-plane
 admin_project_id    = "my-admin-project"
@@ -23,19 +19,19 @@ harness_account_id = "replace-me"
 harness_api_key    = "pat.xxxxx"
 # harness_base_url = "https://app.harness.io"
 
-# Azure — optional, see README.md#azure
-# azure_subscription_id = "00000000-0000-0000-0000-000000000000"
-# azure_tenant_id       = "00000000-0000-0000-0000-000000000000"
-# azure_client_id       = "00000000-0000-0000-0000-000000000000"
-# azure_client_secret   = "replace-me"
-# azure_location        = "eastus"
+# Azure — see README.md#azure
+azure_subscription_id = "00000000-0000-0000-0000-000000000000"
+azure_tenant_id       = "00000000-0000-0000-0000-000000000000"
+azure_client_id       = "00000000-0000-0000-0000-000000000000"
+azure_client_secret   = "replace-me"
+azure_location        = "eastus"
 
-# AWS — optional, see README.md#aws
-# aws_access_key_id        = "AKIAxxxxxxxxxxxxxxxx"
-# aws_secret_access_key    = "replace-me"
-# aws_region               = "us-east-1"
-# aws_parent_ou_id         = ""                       # empty = org root
-# aws_account_email_domain = ""                       # empty = workspace_domain
+# AWS — see README.md#aws
+aws_access_key_id        = "AKIAxxxxxxxxxxxxxxxx"
+aws_secret_access_key    = "replace-me"
+aws_region               = "us-east-1"
+aws_parent_ou_id         = ""                       # empty = org root
+aws_account_email_domain = ""                       # empty = workspace_domain
 
 # Google OAuth — see README.md#google-oauth
 google_oauth_client_id     = "xxxx.apps.googleusercontent.com"
@@ -43,7 +39,7 @@ google_oauth_client_secret = "xxxx"
 # app_url = "https://workshop-orchestrator-xxxxx-uc.a.run.app"
 
 # Site roles — see README.md#site-roles
-# site_admin_emails = ["you@example.com"]
+site_admin_emails = ["you@example.com"]
 
 # Custom domains — see README.md#custom-domains
 # custom_domains = ["example.com", "www.example.com"]

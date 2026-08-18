@@ -93,9 +93,8 @@ key needs org and project create rights plus user invite.
 
 ### Azure
 
-Only needed if workshops select Azure; leave the block commented for a
-GCP-only deployment. All four values come from one service principal, which
-needs permissions on **two planes**:
+Required, like every cloud here — fill the block in. All four values come from
+one service principal, which needs permissions on **two planes**:
 
 - **Azure RBAC** (subscription scope): `Owner` is simplest. `Contributor` is
   **not** enough — it cannot create the role assignments this provisions, and
@@ -135,10 +134,11 @@ that does not need it.
 
 ### AWS
 
-Only needed if workshops select AWS; leave the block commented otherwise.
-**An empty `aws_access_key_id` means "this deployment does not use AWS"** — the
-credentials are then left off the runner entirely, and a run that selects AWS
-fails its preflight with the missing variables named.
+Required, like every cloud here — fill the block in. `aws_access_key_id` is
+what the config gates on: leave it empty and the credentials are left off the
+runner entirely, and every run that selects AWS fails its preflight with the
+missing variables named. That path exists to make a half-configured deployment
+fail loudly, not as a supported way to deploy.
 
 The credentials belong to the Organizations **management account** and need
 rights to create member accounts and to assume `OrganizationAccountAccessRole`
@@ -147,12 +147,87 @@ into them: `organizations:CreateAccount`, `DescribeCreateAccountStatus`,
 on `arn:aws:iam::*:role/OrganizationAccountAccessRole`. Everything built inside
 a member account goes through that assumed role, which is already admin.
 
-The access key id and secret are stored in Secret Manager; region and OU are
-plaintext. `aws_parent_ou_id` empty creates accounts at the organization root.
+Create them in the management account, with the AWS CLI authenticated as
+someone who can administer the organization and IAM:
+
+```bash
+# 0) The organization has to exist, with all features (consolidated billing
+#    alone cannot create accounts).
+aws organizations describe-organization \
+  || aws organizations create-organization --feature-set ALL
+
+# 1) The policy: organization rights, plus the hop into each member account.
+cat > workshop-orchestrator.json <<'JSON'
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "organizations:CreateAccount",
+        "organizations:DescribeCreateAccountStatus",
+        "organizations:DescribeAccount",
+        "organizations:DescribeOrganization",
+        "organizations:ListAccounts",
+        "organizations:ListParents",
+        "organizations:ListRoots",
+        "organizations:ListTagsForResource",
+        "organizations:MoveAccount",
+        "organizations:TagResource",
+        "organizations:UntagResource",
+        "organizations:CloseAccount"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": "sts:AssumeRole",
+      "Resource": "arn:aws:iam::*:role/OrganizationAccountAccessRole"
+    }
+  ]
+}
+JSON
+
+aws iam create-policy --policy-name WorkshopOrchestrator \
+  --policy-document file://workshop-orchestrator.json
+
+# 2) A user to carry it. No console access — this identity is only ever the
+#    runner's static key pair.
+aws iam create-user --user-name workshop-orchestrator
+aws iam attach-user-policy --user-name workshop-orchestrator \
+  --policy-arn arn:aws:iam::<MGMT_ACCOUNT_ID>:policy/WorkshopOrchestrator
+
+# 3) The key pair itself. `SecretAccessKey` is shown once and never again.
+aws iam create-access-key --user-name workshop-orchestrator
+```
+
+`AccessKeyId` and `SecretAccessKey` from the last command are
+`aws_access_key_id` and `aws_secret_access_key`. For an OU to park workshop
+accounts in rather than the organization root:
+
+```bash
+ROOT=$(aws organizations list-roots --query 'Roots[0].Id' --output text)
+aws organizations create-organizational-unit --parent-id "$ROOT" --name Workshops
+```
+
+and put the resulting `ou-...` id in `aws_parent_ou_id`; empty creates accounts
+at the root. The access key id and secret are stored in Secret Manager; region
+and OU are plaintext.
+
+One mailbox has to exist before any of this works. Every AWS account needs a
+globally-unique root email, so the runner plus-addresses them as
+`aws+<account-name>@<domain>` — `aws_account_email_domain`, or the Workspace
+domain when that is empty. AWS mails account verification there, and it is the
+only route to a root password reset later, so `aws@<domain>` must be a real
+deliverable address; Gmail and Workspace fold every `+` variant into it, so one
+mailbox catches them all.
 
 Two costs worth knowing before choosing AWS: EKS is ~$0.10/hr per cluster with
 no free tier, and closing a member account suspends it for ~90 days before AWS
-frees it. It is the pricier, slower-to-reap cloud.
+frees it. It is the pricier, slower-to-reap cloud. That second one meets a quota
+— a young organization is allowed only a handful of member accounts, and
+suspended ones still count — so raise the account limit through Support well
+before a workshop needs the headroom.
 
 ### Google OAuth
 

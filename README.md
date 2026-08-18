@@ -13,9 +13,10 @@ All three clouds are provisioned via Terraform: Google Cloud gets an ephemeral
 project per workshop, AWS a member account, and Azure a resource group — each
 with a small Kubernetes cluster (GKE/EKS/AKS) and every attendee granted on it.
 A workshop can select more than one; a challenge runs on exactly one and builds
-a separate environment per competitor. Azure and AWS are optional at deploy time
-and stay dormant until their credentials are configured (see
-[infra/admin/variables.tf](infra/admin/variables.tf)).
+a separate environment per competitor. All three are part of every deployment:
+credentials for each are configured up front (see
+[infra/admin/variables.tf](infra/admin/variables.tf)), and a run that selects a
+cloud whose credentials are missing fails its preflight rather than starting.
 
 ## Stack
 

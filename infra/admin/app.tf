@@ -112,7 +112,13 @@ resource "google_cloud_run_v2_service" "app" {
     }
   }
 
-  depends_on = [google_project_service.admin]
+  # See the note on the jobs in runner.tf: the secret versions and the app's
+  # accessor grants must land before Cloud Run revalidates the secret refs.
+  depends_on = [
+    google_project_service.admin,
+    google_secret_manager_secret_version.v,
+    google_secret_manager_secret_iam_member.app,
+  ]
 }
 
 # Public web app — anyone can reach the sign-in page; auth is enforced in-app.

@@ -165,10 +165,11 @@ const CLOUD_CREDENTIAL_ENV: Record<Cloud, string[]> = {
  * Fail before building anything when a run targets a cloud this deployment has
  * no credentials for.
  *
- * Terraform treats empty AWS/Azure credentials as "this deployment does not use
- * that cloud" and simply omits the env vars, while the app goes on offering
- * every cloud in the UI. Nothing connects the two, so an unconfigured cloud
- * used to surface as a provider error minutes into the apply — after the
+ * Every deployment is meant to carry all three clouds, but Terraform simply
+ * omits the env vars when the AWS/Azure variables are left empty, while the app
+ * goes on offering every cloud in the UI. Nothing connects the two, so a
+ * half-configured deployment used to surface as a provider error minutes into
+ * the apply — after the
  * attendee accounts, the org unit and the Harness projects had all been
  * created, leaving a half-built run to clean up and an error ("No valid
  * credential sources found") that reads like a broken key rather than an

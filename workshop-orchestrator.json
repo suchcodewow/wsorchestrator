@@ -1,0 +1,28 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "organizations:CreateAccount",
+        "organizations:DescribeCreateAccountStatus",
+        "organizations:DescribeAccount",
+        "organizations:DescribeOrganization",
+        "organizations:ListAccounts",
+        "organizations:ListParents",
+        "organizations:ListRoots",
+        "organizations:ListTagsForResource",
+        "organizations:MoveAccount",
+        "organizations:TagResource",
+        "organizations:UntagResource",
+        "organizations:CloseAccount"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": "sts:AssumeRole",
+      "Resource": "arn:aws:iam::*:role/OrganizationAccountAccessRole"
+    }
+  ]
+}
