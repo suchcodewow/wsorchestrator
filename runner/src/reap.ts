@@ -38,6 +38,7 @@ import {
   accountsWithPasswordsFor,
   deleteAccounts,
   reapableRuns,
+  withRunLock,
   log,
   setDestroyed,
   setDestroying,
@@ -68,6 +69,12 @@ const AWS_CHALLENGE_TF_SOURCE = "challenges/aws-per-user";
 /**
  * Destroy every run that is due: past its end time, or explicitly deleted in
  * the UI (see `reapableRuns`). Runs sequentially within this container.
+ *
+ * Each run is taken under `withRunLock`, so several of these executions can be
+ * in flight at once — which they routinely are, since a teardown outlasts the
+ * scheduler's tick — without two of them tearing down the same run. Any run
+ * another execution is already working is skipped, and the ticks spread across
+ * the remaining ones instead of piling onto the first.
  */
 export async function reap(): Promise<void> {
   const runs = await reapableRuns();
@@ -78,7 +85,10 @@ export async function reap(): Promise<void> {
   console.log(`reaper: destroying ${runs.length} run(s)`);
 
   for (const run of runs) {
-    await destroyRun(run);
+    const ran = await withRunLock(run.id, () => destroyRun(run));
+    if (!ran) {
+      console.log(`reaper: ${run.id} already being destroyed elsewhere, skipping`);
+    }
   }
 }
 

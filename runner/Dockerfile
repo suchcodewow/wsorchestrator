@@ -60,6 +60,32 @@ RUN npm ci --omit=dev
 COPY src ./src
 COPY terraform ./terraform
 
+# Install every root's providers at build time into one shared cache, leaving
+# each root's .terraform/providers holding symlinks into it. Two reasons:
+#
+#  1. Cloud Run's container filesystem is in-memory, so whatever `tofu init`
+#     unpacks is charged against the job's memory limit. The AWS provider
+#     binary alone is 675 MiB, which OOM-killed the plugin process the instant
+#     apply launched it — surfacing as a bogus "failed to negotiate the plugin
+#     handshake" error, since tofu only sees a child that never spoke. Read
+#     from the image's read-only layer instead, the binaries cost no writable
+#     memory and each working directory is a few KB of symlinks.
+#  2. It takes the provider download off the provisioning path: every run used
+#     to pull ~150 MiB per cloud from the registry, which is both ~20s of
+#     latency and a live dependency on the registry being up while attendees
+#     are waiting.
+#
+# One cache shared across roots, so aws-base and aws-per-user hold a single
+# copy between them rather than one each. `-backend=false` keeps this offline:
+# the backend is configured per run, with the run's own state prefix.
+ENV TF_PLUGIN_CACHE_DIR=/opt/tofu-plugins
+RUN mkdir -p "$TF_PLUGIN_CACHE_DIR" \
+  && for root in terraform/workshops/*/ terraform/challenges/*/ terraform/delegates/*/; do \
+       echo "==> $root" \
+       && (cd "$root" && tofu init -backend=false -input=false -no-color); \
+     done \
+  && du -sh "$TF_PLUGIN_CACHE_DIR"
+
 # `run` (needs RUN_ID) or `reap`, chosen by the Cloud Run Job's args.
 ENTRYPOINT ["npx", "tsx", "src/index.ts"]
 CMD ["reap"]

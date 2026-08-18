@@ -114,10 +114,18 @@ resource "google_cloud_run_v2_job" "runner" {
           }
         }
 
+        # Cloud Run's container filesystem is in-memory, so everything
+        # `tofu init` unpacks is charged to this limit before a provider even
+        # starts: the AWS provider binary alone is 675 MiB, which OOM-killed
+        # the plugin at 1Gi (the failure reads as a bogus "plugin handshake"
+        # error). The image now ships a pre-populated provider cache, so the
+        # binaries are read from the read-only image layer rather than written
+        # into memory — this headroom covers the provider processes themselves,
+        # with room for the largest (AWS) plus tofu and node.
         resources {
           limits = {
-            cpu    = "1"
-            memory = "1Gi"
+            cpu    = "2"
+            memory = "4Gi"
           }
         }
       }
@@ -183,11 +191,14 @@ resource "google_cloud_run_v2_job" "reaper" {
           }
         }
 
+        # Same sizing as tf-runner above, and for the same reason: destroy
+        # loads the same providers apply did.
         resources {
           limits = {
-            cpu    = "1"
-            memory = "1Gi"
+            cpu    = "2"
+            memory = "4Gi"
           }
+        }
         }
       }
     }

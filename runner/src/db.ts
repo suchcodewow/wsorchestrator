@@ -278,6 +278,79 @@ export async function setScheduledBack(runId: string) {
   );
 }
 
+/**
+ * Namespace for the reaper's per-run advisory locks. Arbitrary — it only has
+ * to be distinct from any other advisory lock this database might grow, and
+ * pairing it with the run's hash keeps the two-key form from colliding with a
+ * bare single-key lock somebody adds later.
+ */
+const REAP_LOCK_NAMESPACE = 0x52454150; // "REAP"
+
+/** How often the lock-holding session is pinged so nothing reaps it as idle. */
+const LOCK_KEEPALIVE_MS = 60_000;
+
+/**
+ * Run `fn` holding an exclusive lock on `runId`, or skip it (returning false)
+ * if another execution already holds one.
+ *
+ * The reaper fires every few minutes but a teardown can run far longer than
+ * that — an AWS account close or a GKE delete is many minutes on its own — so
+ * ticks overlap routinely, and `reapableRuns` hands every one of them the same
+ * `destroying` row. Without this, two containers tear down one run in
+ * parallel: the tofu half collides on the state lock, and the half that has no
+ * lock at all (Harness projects, Workspace accounts) double-deletes, so each
+ * execution fails on the other's work and the run ping-pongs across ticks
+ * instead of finishing.
+ *
+ * The lock is session-scoped rather than a status column or a lease timestamp,
+ * because that makes the crash case correct for free: if the container is
+ * killed — the 30-minute job timeout, an OOM — the connection dies with it and
+ * Postgres drops the lock, so the next tick picks the run up immediately
+ * rather than waiting out a lease that nothing is left alive to renew.
+ *
+ * Skipping is the right outcome, not a failure: the execution that holds the
+ * lock is still working the run, and whatever it doesn't finish is retried on
+ * the next tick.
+ */
+export async function withRunLock(
+  runId: string,
+  fn: () => Promise<void>,
+): Promise<boolean> {
+  const client = await pool.connect();
+  let locked = false;
+  let keepalive: NodeJS.Timeout | undefined;
+
+  try {
+    const { rows } = await client.query<{ locked: boolean }>(
+      `select pg_try_advisory_lock($1::int, hashtext($2)) as locked`,
+      [REAP_LOCK_NAMESPACE, runId],
+    );
+    locked = rows[0]?.locked ?? false;
+    if (!locked) return false;
+
+    // The session sits idle for the whole teardown; a periodic ping keeps any
+    // connection-idle timeout between here and Postgres from cutting it and
+    // silently handing the lock to another execution mid-destroy.
+    keepalive = setInterval(() => {
+      void client.query("select 1").catch(() => {});
+    }, LOCK_KEEPALIVE_MS);
+
+    await fn();
+    return true;
+  } finally {
+    if (keepalive) clearInterval(keepalive);
+    if (locked) {
+      await client
+        .query(`select pg_advisory_unlock($1::int, hashtext($2))`, [
+          REAP_LOCK_NAMESPACE,
+          runId,
+        ])
+        .catch(() => {});
+    }
+    client.release();
+  }
+}
+
 export async function endPool() {
   await pool.end();
 }
