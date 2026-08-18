@@ -447,6 +447,79 @@ function isGkeCapacityError(text: string): boolean {
   return GKE_CAPACITY_SIGNATURES.some((s) => t.includes(s));
 }
 
+/**
+ * Signatures AWS Organizations returns when the organization is already busy
+ * with another account operation.
+ *
+ * The management account is shared by every AWS run, and Organizations
+ * processes account creation one at a time across the whole org — so two
+ * workshops starting together contend on it even though their state, their
+ * accounts, and everything else about them are separate. The AWS provider
+ * retries only `FinalizingOrganizationException` itself; a
+ * `ConcurrentModificationException` is modelled as a client fault and is not
+ * retried by the SDK either, so without this the second workshop of a pair
+ * just fails.
+ */
+const AWS_ORG_CONTENTION_SIGNATURES = [
+  "concurrentmodificationexception",
+  "finalizingorganizationexception",
+  "toomanyrequestsexception",
+  "throttlingexception",
+];
+
+function isAwsOrgContentionError(text: string): boolean {
+  const t = text.toLowerCase();
+  return AWS_ORG_CONTENTION_SIGNATURES.some((sig) => t.includes(sig));
+}
+
+/** Waits between apply attempts that lost the race for the organization. */
+const AWS_ORG_RETRY_DELAYS_MS = [60_000, 120_000, 240_000];
+
+const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Apply an AWS root, retrying when the failure is only that another run held
+ * the organization.
+ *
+ * Retrying the whole apply is safe and cheap here: Terraform is convergent and
+ * the state already records whatever the failed attempt built, so a retry
+ * re-plans (seconds) and resumes at the account rather than starting over. The
+ * waits are minutes rather than seconds because the thing being waited on is
+ * another account creation finishing, which is itself a minutes-long
+ * operation.
+ *
+ * Anything that is not organization contention is a real failure and is
+ * rethrown on the spot.
+ */
+async function applyAwsWithOrgRetry(
+  run: RunRow,
+  workDir: string,
+): Promise<void> {
+  for (let attempt = 0; ; attempt++) {
+    let captured = "";
+    try {
+      await tfApply(workDir, (l) => {
+        if (l.stream === "stderr") captured += l.text + "\n";
+        return log(run.id, l.stream, l.text);
+      });
+      return;
+    } catch (err) {
+      const last = attempt >= AWS_ORG_RETRY_DELAYS_MS.length;
+      if (last || !isAwsOrgContentionError(captured)) throw err;
+
+      const delay = AWS_ORG_RETRY_DELAYS_MS[attempt];
+      await log(
+        run.id,
+        "system",
+        `AWS Organizations is busy with another workshop's account ` +
+          `(only one account is created at a time across the organization); ` +
+          `retrying in ${delay / 1000}s.`,
+      );
+      await wait(delay);
+    }
+  }
+}
+
 /** Zone letter from a location like "us-west1-c" (region "us-west1"). */
 function zoneLetterFromLocation(
   location: unknown,
@@ -931,7 +1004,7 @@ async function provisionAws(run: RunRow): Promise<Record<string, unknown>> {
     `terraform apply — creating account, ${attendees.length} IAM user(s), the ` +
       `EKS cluster ${clusterName}, and PowerUser grants`,
   );
-  await tfApply(workDir, (l) => log(run.id, l.stream, l.text));
+  await applyAwsWithOrgRetry(run, workDir);
 
   return tfOutput(workDir);
 }
@@ -975,7 +1048,7 @@ async function provisionAwsPerUser(
     await tfInit(workDir, stateBucket(), prefix, (l) =>
       log(run.id, l.stream, l.text),
     );
-    await tfApply(workDir, (l) => log(run.id, l.stream, l.text));
+    await applyAwsWithOrgRetry(run, workDir);
 
     const out = await tfOutput(workDir);
     if (typeof out.account_id === "string") accountIds[email] = out.account_id;

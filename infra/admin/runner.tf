@@ -199,7 +199,6 @@ resource "google_cloud_run_v2_job" "reaper" {
             memory = "4Gi"
           }
         }
-        }
       }
     }
   }
