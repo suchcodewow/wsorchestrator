@@ -1,5 +1,6 @@
 import path from "node:path";
 import {
+  assertCloudsConfigured,
   awsAccountEmail,
   awsCfg,
   azureCfg,
@@ -95,6 +96,10 @@ export async function runWorkshop(runId: string): Promise<void> {
 
   try {
     await setProvisioning(runId);
+
+    // Before anything is created: a cloud this deployment has no credentials
+    // for fails here, not two minutes in with a roster already built.
+    assertCloudsConfigured(run.clouds);
 
     const orgUnitPath = await provisionAccounts(run);
     const outputs: Record<string, unknown> = {

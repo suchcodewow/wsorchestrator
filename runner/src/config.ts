@@ -151,6 +151,50 @@ export function cloudStatePrefix(base: string, cloud: Cloud): string {
 }
 
 /**
+ * Credentials each cloud's providers read straight out of the environment,
+ * bypassing this module entirely — which is why nothing else here notices when
+ * they are missing.
+ */
+const CLOUD_CREDENTIAL_ENV: Record<Cloud, string[]> = {
+  aws: ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"],
+  azure: ["ARM_CLIENT_ID", "ARM_CLIENT_SECRET", "ARM_TENANT_ID"],
+  gcp: [], // the runner's own service account, always present on Cloud Run.
+};
+
+/**
+ * Fail before building anything when a run targets a cloud this deployment has
+ * no credentials for.
+ *
+ * Terraform treats empty AWS/Azure credentials as "this deployment does not use
+ * that cloud" and simply omits the env vars, while the app goes on offering
+ * every cloud in the UI. Nothing connects the two, so an unconfigured cloud
+ * used to surface as a provider error minutes into the apply — after the
+ * attendee accounts, the org unit and the Harness projects had all been
+ * created, leaving a half-built run to clean up and an error ("No valid
+ * credential sources found") that reads like a broken key rather than an
+ * absent one.
+ *
+ * Checked for every selected cloud at once, so a run targeting two
+ * misconfigured clouds names both instead of failing twice.
+ */
+export function assertCloudsConfigured(clouds: Cloud[]): void {
+  const missing = clouds.flatMap((cloud) =>
+    (CLOUD_CREDENTIAL_ENV[cloud] ?? [])
+      .filter((name) => !process.env[name])
+      .map((name) => `${cloud}: ${name}`),
+  );
+
+  if (missing.length > 0) {
+    throw new Error(
+      `this deployment has no credentials for the cloud(s) this workshop ` +
+        `targets, so nothing was created. Missing ${missing.join(", ")}. ` +
+        `Set the matching variables in terraform.tfvars and run \`make infra\` ` +
+        `— credentials reach the runner only through a Terraform apply.`,
+    );
+  }
+}
+
+/**
  * AWS config, read lazily like `gcpCfg`. The aws provider reads its management-
  * account credentials from the standard AWS_* env vars itself; the runner only
  * needs the region, where to create accounts, the role to assume into them, and
