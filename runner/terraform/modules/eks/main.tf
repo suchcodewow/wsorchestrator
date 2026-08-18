@@ -130,8 +130,15 @@ resource "aws_eks_cluster" "this" {
   # nothing about Kubernetes RBAC. API_AND_CONFIG_MAP is what lets the access
   # entries below grant them in, and keeps the ConfigMap path working for the
   # node group.
+  #
+  # The bootstrap line is not decoration: it defaults to true but reads back as
+  # null if the block omits it, and it forces replacement — so leaving it out
+  # plans a brand-new cluster for an existing workshop. It also has to stay
+  # true, since the assumed role's admin is how the delegate install and any
+  # later apply reach the cluster at all.
   access_config {
-    authentication_mode = "API_AND_CONFIG_MAP"
+    authentication_mode                         = "API_AND_CONFIG_MAP"
+    bootstrap_cluster_creator_admin_permissions = true
   }
 
   # The control plane needs its policy attached before it will come up.
