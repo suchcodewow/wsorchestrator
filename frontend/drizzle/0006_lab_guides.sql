@@ -37,8 +37,21 @@ begin
   );
 
   -- The index page's query: published guides, most recently updated first.
-  create index if not exists lab_guides_published_idx
-    on lab_guides (published, updated_at);
+  --
+  -- Guarded on the column still being there. Every file in this directory is
+  -- replayed in order on every deploy, and 0009 drops `published` (and this
+  -- index) once workshops took over publishing — so on a database already past
+  -- 0009 the table exists, the column does not, and an unguarded `create
+  -- index` here fails the whole run before the deploy step is reached.
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'lab_guides'
+      and column_name = 'published'
+  ) then
+    create index if not exists lab_guides_published_idx
+      on lab_guides (published, updated_at);
+  end if;
 end $$;
 
 commit;
