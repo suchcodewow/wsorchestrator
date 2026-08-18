@@ -14,8 +14,17 @@ resource "google_cloud_run_v2_service" "app" {
   # `gcloud run services update`, the same command the CD trigger uses. Rolling
   # back with `make deploy TAG=<older-sha>` still works, via that path.
   # var.app_image is now only the image this service is *created* with.
+  #
+  # `scaling` is ignored for a different reason: the config never declares it,
+  # but the Cloud Run v2 API always answers with a service-level scaling block
+  # filled in with its defaults, which refresh reads back into state. Terraform
+  # then sees a block in state that is not in the config and plans to remove it
+  # — an update that means nothing to the API, so the block is back on the next
+  # read and the same diff returns forever. Nothing is actually drifting: zero
+  # min instances is the default, and manual_instance_count is inert outside
+  # MANUAL scaling mode.
   lifecycle {
-    ignore_changes = [template[0].containers[0].image]
+    ignore_changes = [template[0].containers[0].image, scaling]
   }
 
   template {
