@@ -1,128 +1,65 @@
 # Copy to terraform.tfvars and fill in. Do NOT commit the real file.
+#
+# Every group below is documented in README.md — what each credential needs,
+# which permissions it must carry, and the manual console steps that no
+# Terraform can do for you. This file is just the shape of the values.
 
+# Control plane — see README.md#control-plane
 admin_project_id    = "my-admin-project"
-# Where this control plane runs (Cloud Run, Cloud SQL, Artifact Registry, GCS).
 region              = "us-central1"
-# Where each workshop's own VPC and GKE cluster are built. Separate because the
-# control plane cannot move without rebuilding the database and the workshops
-# can — us-central1 runs out of GKE node capacity too often to build rooms in.
 # workshop_region     = "us-west1"
 # gke_zones           = ""                      # empty = the runner's list for that region
 workshops_folder_id = "123456789012"          # numeric folder ID
 billing_account_id  = "XXXXXX-XXXXXX-XXXXXX"
 tfstate_bucket      = "my-admin-project-ws-tfstate"
 
-# Google Workspace — attendee accounts are created here. runner-sa needs
-# domain-wide delegation for admin.directory.orgunit + admin.directory.user,
-# and impersonates workspace_admin_email (a super-admin).
+# Google Workspace — see README.md#google-workspace
 workspace_domain      = "example.com"
 workspace_admin_email = "admin@example.com"
 # workspace_parent_ou = "/Workshops"
 
-# Harness — each workshop becomes an org here, with a project per attendee.
-# The API key needs org/project create and user invite rights.
+# Harness — see README.md#harness
 harness_account_id = "replace-me"
 harness_api_key    = "pat.xxxxx"
 # harness_base_url = "https://app.harness.io"
 
-# Azure — only needed if workshops select Azure; leave commented for GCP-only.
-# All four come from one service principal, which needs permissions on two planes:
-#   - Azure RBAC (subscription scope): Owner is simplest. Contributor is NOT
-#     enough — it can't create the role assignments this provisions, and can't
-#     grant the Owner that challenge mode gives competitors. Least-privilege
-#     alternative: Contributor + User Access Administrator.
-#   - Microsoft Graph (application permissions, admin-consented):
-#       User.ReadWrite.All                    to create attendee Entra users
-#       UserAuthenticationMethod.ReadWrite.All to issue each of them a
-#         Temporary Access Pass, which is what they sign into the portal with —
-#         Microsoft enforces MFA there and a password alone is refused. Without
-#         this permission the run still succeeds and says so in its log, but
-#         nobody can sign into Azure.
-#   e.g. az ad sp create-for-rbac --role Owner --scopes /subscriptions/<SUB_ID>
-#        then add the Graph permission and `az ad app permission admin-consent`.
-# Also verify harnessevents.io in the tenant (DNS TXT) so attendee UPNs match
-# their Google address. azure_client_secret is stored in Secret Manager; the
-# rest are plaintext env on the runner.
-# Two tenant-level steps, or attendees are made to enrol in Microsoft
-# Authenticator on their first sign-in:
-#   1. Turn Entra's security defaults off. `az login` as a Global Admin, then
-#      APPLY=1 ./scripts/azure-no-mfa.sh — which also reports the Conditional
-#      Access policies and the registration campaign.
-#   2. Enable Temporary Access Pass (Entra admin center -> Protection ->
-#      Authentication methods -> Temporary Access Pass), and raise its maximum
-#      lifetime past the length of a workshop. This is what answers Microsoft's
-#      mandatory MFA on portal sign-in, which no setting can switch off.
-# AZURE_TAP_ENABLED=false on the runner turns pass issuance off for a tenant
-# that does not need it.
+# Azure — optional, see README.md#azure
 # azure_subscription_id = "00000000-0000-0000-0000-000000000000"
 # azure_tenant_id       = "00000000-0000-0000-0000-000000000000"
 # azure_client_id       = "00000000-0000-0000-0000-000000000000"
 # azure_client_secret   = "replace-me"
 # azure_location        = "eastus"
 
-# AWS — only needed if workshops select AWS; leave commented for no-AWS.
-# Credentials belong to the Organizations MANAGEMENT account and need rights to
-# create member accounts and assume OrganizationAccountAccessRole into them. The
-# access key id + secret are stored in Secret Manager; region/OU are plaintext.
-# Note EKS is ~$0.10/hr per cluster (no free tier), and closing a member account
-# suspends it ~90 days — AWS is the pricier, slower-to-reap cloud.
+# AWS — optional, see README.md#aws
 # aws_access_key_id        = "AKIAxxxxxxxxxxxxxxxx"
 # aws_secret_access_key    = "replace-me"
 # aws_region               = "us-east-1"
 # aws_parent_ou_id         = ""                       # empty = org root
 # aws_account_email_domain = ""                       # empty = workspace_domain
 
-# Site roles. Everyone who signs in is an operator; managers see and can delete
-# every user's events, administrators also hand out roles. Since roles are
-# granted from inside the app, the first administrator comes from here — anyone
-# listed becomes one when they sign in. Can be emptied once one exists.
-# site_admin_emails = ["you@example.com"]
-
-# db_tier            = "db-custom-1-3840"   # smallest valid Postgres tier
-# reaper_schedule    = "*/5 * * * *"        # destroys runs past their TTL
-# scheduler_schedule = "*/5 * * * *"        # starts runs whose start time arrived
-
-# Domains to serve the app on. Empty (the default) skips domain mapping.
-# Each gets its own Cloud Run mapping and managed TLS cert; after applying, add
-# the records from the `domain_dns_records` output at your registrar.
-#
-# Whichever one app_url points at is canonical — the rest 308-redirect to it.
-# That is not cosmetic: Auth.js pins one AUTH_URL and Google matches the OAuth
-# redirect_uri exactly, so sign-in only works on a single origin.
-# custom_domains = ["example.com", "www.example.com"]
-
-# Google OAuth 2.0 client (APIs & Services -> Credentials in the admin project).
-# Authorized redirect URI: <app_url>/api/auth/callback/google
+# Google OAuth — see README.md#google-oauth
 google_oauth_client_id     = "xxxx.apps.googleusercontent.com"
 google_oauth_client_secret = "xxxx"
-
-# After the first apply, set this to the app_url output and re-apply so
-# Auth.js pins AUTH_URL (Google rejects a guessed 0.0.0.0 redirect_uri):
 # app_url = "https://workshop-orchestrator-xxxxx-uc.a.run.app"
 
-# Images the Cloud Run resources are CREATED with. After that they are ignored
-# — the running tag is owned by `make deploy` / the CD trigger, not Terraform
-# (see the lifecycle blocks in app.tf and runner.tf), so changing these on an
-# existing deployment does nothing. Roll with `make deploy TAG=<sha>` instead.
+# Site roles — see README.md#site-roles
+# site_admin_emails = ["you@example.com"]
+
+# Custom domains — see README.md#custom-domains
+# custom_domains = ["example.com", "www.example.com"]
+
+# Tuning — see README.md#tuning
+# db_tier            = "db-custom-1-3840"
+# reaper_schedule    = "*/5 * * * *"
+# scheduler_schedule = "*/5 * * * *"
+
+# Container images — see README.md#container-images
 # app_image    = "us-central1-docker.pkg.dev/my-admin-project/workshop-orchestrator/app:latest"
 # runner_image = "us-central1-docker.pkg.dev/my-admin-project/workshop-orchestrator/runner:latest"
 
-# --------------------------------------------------------------------------
-# Continuous deployment — push to main builds, migrates, and rolls Cloud Run.
-#
-# Leave enable_cicd = false (the default) until the two manual steps below are
-# done; nothing in cicd.tf is created while it is off.
-#
-#   1. Install the Cloud Build GitHub App on the repo, then take the
-#      installation id from the URL it redirects to (.../installations/<ID>):
-#        https://github.com/apps/google-cloud-build
-#
-#   2. Store a classic PAT (scopes: repo, read:user) in Secret Manager:
-#        printf '%s' <TOKEN> | gcloud secrets create github-pat \
-#          --data-file=- --project my-admin-project
-# --------------------------------------------------------------------------
+# Continuous deployment — see README.md#continuous-deployment
 # enable_cicd                = true
 # github_owner               = "my-github-user"
 # github_repo                = "wsorchestrator"      # repo name only, no owner
-# github_app_installation_id = "12345678"            # from step 1
-# github_pat_secret_id       = ""          # default; secret you made in step 2
+# github_app_installation_id = "12345678"
+# github_pat_secret_id       = ""                    # default
