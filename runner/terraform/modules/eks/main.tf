@@ -7,13 +7,17 @@
 # Nodes are ON_DEMAND, not SPOT: a workshop cluster must not be reclaimed out
 # from under attendees mid-session — the same call the GKE/AKS modules make.
 
+# Read through whichever provider the caller passes, so the zone names come from
+# the account the cluster is built in. workshops/aws-base builds that account in
+# the same apply, so it depends_on the account and this read lands at apply time
+# rather than plan — which is why the subnet count below is var.az_count and not
+# length(local.azs): a plan-time-unknown count is a hard error.
 data "aws_availability_zones" "available" {
   state = "available"
 }
 
 locals {
-  # EKS requires subnets in at least two AZs.
-  azs = slice(data.aws_availability_zones.available.names, 0, 2)
+  azs = slice(data.aws_availability_zones.available.names, 0, var.az_count)
 }
 
 resource "aws_vpc" "this" {
@@ -29,7 +33,7 @@ resource "aws_internet_gateway" "this" {
 }
 
 resource "aws_subnet" "public" {
-  count = length(local.azs)
+  count = var.az_count
 
   vpc_id                  = aws_vpc.this.id
   availability_zone       = local.azs[count.index]

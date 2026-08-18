@@ -8,8 +8,10 @@
 #     the one cloud whose password differs.
 #   * The account is created by the management account, then an aliased provider
 #     assumes OrganizationAccountAccessRole into it to build everything inside.
-#     (Creating an account and using it in the same apply can need a two-phase
-#     apply the first time if the provider sees the account id as unknown.)
+#     Because that role's ARN is unknown until the account exists, the member
+#     provider is only truly assumed at apply time — at plan it falls back to the
+#     management credentials. Creates are unaffected, but any read through it has
+#     to be kept out of the plan (see the module's depends_on below).
 provider "aws" {
   region = var.region
 }
@@ -70,4 +72,10 @@ module "eks" {
   providers = {
     aws = aws.member
   }
+
+  # The module looks up availability zones. Without this, that read runs during
+  # plan — before the account exists, so aws.member is still the management user
+  # and the call comes back 403 from the wrong account. Depending on the account
+  # defers every read in the module to apply, once the role is really assumed.
+  depends_on = [aws_organizations_account.this]
 }

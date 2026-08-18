@@ -31,3 +31,9 @@ variable "labels" {
   type        = map(string)
   default     = {}
 }
+
+variable "az_count" {
+  description = "Availability zones the public subnets are spread over. EKS requires at least two. Fixed rather than derived from the zone lookup so the subnet count stays known at plan time even when that lookup is deferred to apply."
+  type        = number
+  default     = 2
+}
