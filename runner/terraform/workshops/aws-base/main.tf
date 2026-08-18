@@ -69,6 +69,10 @@ module "eks" {
   cluster_name = var.cluster_name
   labels       = var.labels
 
+  # Attendees need a Kubernetes access entry each; PowerUserAccess gets them to
+  # the EKS API but not past the cluster's RBAC.
+  attendee_principal_arns = [for u in aws_iam_user.attendees : u.arn]
+
   providers = {
     aws = aws.member
   }

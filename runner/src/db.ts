@@ -74,9 +74,14 @@ export async function log(
   );
 }
 
+/**
+ * Start (or restart) a provision. The previous attempt's `error` is cleared
+ * here rather than on success: a run that failed, was fixed, and re-provisioned
+ * would otherwise sit at `ready` still showing the error it no longer has.
+ */
 export async function setProvisioning(runId: string) {
   await pool.query(
-    `update workshop_runs set status = 'provisioning' where id = $1`,
+    `update workshop_runs set status = 'provisioning', error = null where id = $1`,
     [runId],
   );
 }

@@ -472,35 +472,72 @@ const AWS_ORG_CONTENTION_SIGNATURES = [
   "throttlingexception",
 ];
 
-function isAwsOrgContentionError(text: string): boolean {
+/**
+ * Signatures a member account returns while it is still being switched on.
+ *
+ * Organizations reports an account ACTIVE the moment CreateAccount finishes,
+ * but only IAM is usable that early: for the first few minutes every EC2 call
+ * comes back `OptInRequired` ("You are not subscribed to this service"). The
+ * apply that creates the account goes straight on to build the cluster inside
+ * it, so it walks into exactly that window — the attendee users and the
+ * cluster's IAM roles land, and everything touching EC2 fails. Waiting and
+ * re-applying resumes there.
+ */
+const AWS_ACCOUNT_WARMUP_SIGNATURES = [
+  "optinrequired",
+  "not subscribed to this service",
+];
+
+/** Why an AWS apply is worth another attempt rather than being a real failure. */
+type AwsRetryKind = "contention" | "warmup";
+
+function awsRetryKind(text: string): AwsRetryKind | null {
   const t = text.toLowerCase();
-  return AWS_ORG_CONTENTION_SIGNATURES.some((sig) => t.includes(sig));
+  if (AWS_ORG_CONTENTION_SIGNATURES.some((sig) => t.includes(sig))) {
+    return "contention";
+  }
+  if (AWS_ACCOUNT_WARMUP_SIGNATURES.some((sig) => t.includes(sig))) {
+    return "warmup";
+  }
+  return null;
 }
 
-/** Waits between apply attempts that lost the race for the organization. */
-const AWS_ORG_RETRY_DELAYS_MS = [60_000, 120_000, 240_000];
+/**
+ * Waits between attempts, counted per reason so a run that hits both still gets
+ * a full budget for each. Both are minutes rather than seconds: one waits on
+ * another account creation finishing, the other on AWS finishing this one.
+ */
+const AWS_RETRY_DELAYS_MS: Record<AwsRetryKind, number[]> = {
+  contention: [60_000, 120_000, 240_000],
+  warmup: [60_000, 120_000, 180_000, 300_000],
+};
+
+const AWS_RETRY_REASONS: Record<AwsRetryKind, string> = {
+  contention:
+    "AWS Organizations is busy with another workshop's account (only one " +
+    "account is created at a time across the organization)",
+  warmup:
+    "the new AWS account is still activating (a brand-new account answers " +
+    "OptInRequired on EC2 for its first few minutes)",
+};
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /**
- * Apply an AWS root, retrying when the failure is only that another run held
- * the organization.
+ * Apply an AWS root, retrying the failures that are only a matter of timing:
+ * another run holding the organization, or this run's own account not being
+ * switched on yet.
  *
  * Retrying the whole apply is safe and cheap here: Terraform is convergent and
  * the state already records whatever the failed attempt built, so a retry
- * re-plans (seconds) and resumes at the account rather than starting over. The
- * waits are minutes rather than seconds because the thing being waited on is
- * another account creation finishing, which is itself a minutes-long
- * operation.
+ * re-plans (seconds) and resumes where it stopped rather than starting over.
  *
- * Anything that is not organization contention is a real failure and is
- * rethrown on the spot.
+ * Anything else is a real failure and is rethrown on the spot.
  */
-async function applyAwsWithOrgRetry(
-  run: RunRow,
-  workDir: string,
-): Promise<void> {
-  for (let attempt = 0; ; attempt++) {
+async function applyAwsWithRetry(run: RunRow, workDir: string): Promise<void> {
+  const attempts: Record<AwsRetryKind, number> = { contention: 0, warmup: 0 };
+
+  for (;;) {
     let captured = "";
     try {
       await tfApply(workDir, (l) => {
@@ -509,15 +546,16 @@ async function applyAwsWithOrgRetry(
       });
       return;
     } catch (err) {
-      const last = attempt >= AWS_ORG_RETRY_DELAYS_MS.length;
-      if (last || !isAwsOrgContentionError(captured)) throw err;
+      const kind = awsRetryKind(captured);
+      if (!kind) throw err;
 
-      const delay = AWS_ORG_RETRY_DELAYS_MS[attempt];
+      const delay = AWS_RETRY_DELAYS_MS[kind][attempts[kind]++];
+      if (delay === undefined) throw err;
+
       await log(
         run.id,
         "system",
-        `AWS Organizations is busy with another workshop's account ` +
-          `(only one account is created at a time across the organization); ` +
+        `AWS apply stopped because ${AWS_RETRY_REASONS[kind]}; ` +
           `retrying in ${delay / 1000}s.`,
       );
       await wait(delay);
@@ -1009,7 +1047,7 @@ async function provisionAws(run: RunRow): Promise<Record<string, unknown>> {
     `terraform apply — creating account, ${attendees.length} IAM user(s), the ` +
       `EKS cluster ${clusterName}, and PowerUser grants`,
   );
-  await applyAwsWithOrgRetry(run, workDir);
+  await applyAwsWithRetry(run, workDir);
 
   return tfOutput(workDir);
 }
@@ -1053,7 +1091,7 @@ async function provisionAwsPerUser(
     await tfInit(workDir, stateBucket(), prefix, (l) =>
       log(run.id, l.stream, l.text),
     );
-    await applyAwsWithOrgRetry(run, workDir);
+    await applyAwsWithRetry(run, workDir);
 
     const out = await tfOutput(workDir);
     if (typeof out.account_id === "string") accountIds[email] = out.account_id;

@@ -37,3 +37,9 @@ variable "az_count" {
   type        = number
   default     = 2
 }
+
+variable "attendee_principal_arns" {
+  description = "IAM principals to grant Kubernetes access. Each gets a cluster-admin access entry — without one an attendee's kubectl is refused no matter what IAM allows."
+  type        = list(string)
+  default     = []
+}

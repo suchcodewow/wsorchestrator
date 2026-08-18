@@ -123,6 +123,17 @@ resource "aws_eks_cluster" "this" {
     endpoint_public_access = true
   }
 
+  # Access entries, not just the aws-auth ConfigMap. Left unset, EKS defaults a
+  # new cluster to CONFIG_MAP, where the only principal with Kubernetes access
+  # is the role that created it — attendees would see the cluster in the console
+  # and get "Unauthorized" from kubectl, because their IAM permissions say
+  # nothing about Kubernetes RBAC. API_AND_CONFIG_MAP is what lets the access
+  # entries below grant them in, and keeps the ConfigMap path working for the
+  # node group.
+  access_config {
+    authentication_mode = "API_AND_CONFIG_MAP"
+  }
+
   # The control plane needs its policy attached before it will come up.
   depends_on = [aws_iam_role_policy_attachment.cluster]
 
@@ -148,4 +159,33 @@ resource "aws_eks_node_group" "this" {
   depends_on = [aws_iam_role_policy_attachment.node]
 
   tags = var.labels
+}
+
+# --- Attendee access ---
+# The AWS analog of roles/editor carrying GKE access and Contributor carrying
+# AKS access: an IAM user is a stranger to the cluster's RBAC until it has an
+# access entry, however much IAM it holds. Cluster admin matches what the other
+# two clouds hand an attendee, and the account is theirs for the workshop
+# anyway. The creator role is deliberately not listed — it already has admin
+# from bootstrap_cluster_creator_admin_permissions, and an access entry for it
+# would collide with that.
+resource "aws_eks_access_entry" "attendees" {
+  for_each = toset(var.attendee_principal_arns)
+
+  cluster_name  = aws_eks_cluster.this.name
+  principal_arn = each.value
+  type          = "STANDARD"
+  tags          = var.labels
+}
+
+resource "aws_eks_access_policy_association" "attendees" {
+  for_each = aws_eks_access_entry.attendees
+
+  cluster_name  = aws_eks_cluster.this.name
+  principal_arn = each.value.principal_arn
+  policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+
+  access_scope {
+    type = "cluster"
+  }
 }
