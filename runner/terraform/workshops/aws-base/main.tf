@@ -71,7 +71,12 @@ module "eks" {
 
   # Attendees need a Kubernetes access entry each; PowerUserAccess gets them to
   # the EKS API but not past the cluster's RBAC.
-  attendee_principal_arns = [for u in aws_iam_user.attendees : u.arn]
+  #
+  # Keyed by email, not a bare list of ARNs: an ARN embeds the member account
+  # id, which is unknown until apply, and for_each keys have to be known at
+  # plan time. The emails are static input, so they key the map and the
+  # apply-time ARNs ride along as values.
+  attendee_principal_arns = { for email, u in aws_iam_user.attendees : email => u.arn }
 
   providers = {
     aws = aws.member

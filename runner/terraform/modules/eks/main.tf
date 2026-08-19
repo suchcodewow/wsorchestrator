@@ -177,7 +177,7 @@ resource "aws_eks_node_group" "this" {
 # from bootstrap_cluster_creator_admin_permissions, and an access entry for it
 # would collide with that.
 resource "aws_eks_access_entry" "attendees" {
-  for_each = toset(var.attendee_principal_arns)
+  for_each = var.attendee_principal_arns
 
   cluster_name  = aws_eks_cluster.this.name
   principal_arn = each.value

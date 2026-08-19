@@ -39,7 +39,7 @@ variable "az_count" {
 }
 
 variable "attendee_principal_arns" {
-  description = "IAM principals to grant Kubernetes access. Each gets a cluster-admin access entry — without one an attendee's kubectl is refused no matter what IAM allows."
-  type        = list(string)
-  default     = []
+  description = "IAM principals to grant Kubernetes access, keyed by attendee email. Each gets a cluster-admin access entry — without one an attendee's kubectl is refused no matter what IAM allows. Keyed rather than a list because an ARN is only known at apply time and for_each needs plan-time keys."
+  type        = map(string)
+  default     = {}
 }
