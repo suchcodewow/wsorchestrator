@@ -86,9 +86,14 @@ is created by `make bootstrap` and is likewise git-ignored — don't hand-write 
 - [`gcloud`](https://cloud.google.com/sdk/docs/install) — then authenticate for
   Terraform:
   ```bash
-  gcloud auth login
-  gcloud auth application-default login
+  gcloud auth login --update-adc   # one browser round-trip for both gcloud and ADC
   ```
+  These are **user** credentials, and Workspace's Google Cloud session control
+  reauth-challenges them (16h by default) — so a deploy started the day after a
+  login fails with `Reauthentication failed`. After step 2 fills in
+  `terraform.tfvars`, run `make tf-admin-sa` once to move deploys onto a
+  service account key, which no session policy expires. See
+  [infra/admin/README.md](infra/admin/README.md#operator-credentials).
 - [`terraform`](https://developer.hashicorp.com/terraform/install) **or**
   [`tofu`](https://opentofu.org/docs/intro/install/) (the Makefile auto-detects
   which you have)

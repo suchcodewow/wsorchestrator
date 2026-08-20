@@ -40,8 +40,46 @@ not managed here.
   `resourcemanager.folderIamAdmin` (to grant folder roles) and
   `billing.admin` on the billing account (to grant `billing.user`).
 - The `workshops` folder exists; you have its numeric ID.
-- `gcloud` authenticated (`gcloud auth application-default login`), `terraform`
+- `gcloud` authenticated (`gcloud auth login --update-adc`), `terraform`
   and `gcloud` on PATH.
+
+## Operator credentials
+
+`gcloud auth login` and `gcloud auth application-default login` mint **user**
+credentials, which Workspace's *Google Cloud session control* reauth-challenges
+on a fixed window (16h by default). That is why a `make infra` or `make ship`
+run the morning after a login dies with `Reauthentication failed` — the token
+has not expired so much as been challenged, and a non-interactive shell cannot
+answer the challenge.
+
+A service account key is not a user credential, so no session policy applies to
+it. `scripts/tf-admin-sa.sh` (`make tf-admin-sa` from the repo root) creates
+`tf-admin-sa` with exactly the roles listed under Prerequisites, writes a key to
+`~/.config/gcloud/workshop-tf-admin.json`, and parks it in a gcloud
+configuration named `workshop-orchestrator`:
+
+```bash
+make tf-admin-sa              # needs one fresh `gcloud auth login` first
+make tf-admin-sa ARGS=--force # rotate the key later
+```
+
+The root `Makefile` then exports `GOOGLE_APPLICATION_CREDENTIALS` (picked up by
+Terraform, `cloud-sql-proxy` and the runner's Node SDKs) and
+`CLOUDSDK_ACTIVE_CONFIG_NAME` (picked up by `gcloud`) whenever those two files
+exist — so `make info` shows which identity is in play, and nothing changes if
+you have not run the script. Both are skipped if you set them yourself.
+
+Two things worth knowing:
+
+- The separate configuration means the SA never becomes the default account for
+  unrelated `gcloud` work. Outside make, reach it with
+  `gcloud --configuration=workshop-orchestrator …`.
+- The key is a standing secret holding owner on the admin project plus folder
+  and billing admin. It lives outside the repo by design; treat it like the
+  cloud credentials in `terraform.tfvars`. If `iam.disableServiceAccountKeyCreation`
+  is enforced org-wide the script will fail and say so, and the alternative is
+  relaxing Google Cloud session control in the Admin console instead
+  (**Security → Access and data control → Google Cloud session control**).
 
 ## Deploy
 

@@ -45,6 +45,11 @@ crash.*.log
 *.tfvars.json
 !*.tfvars.example
 
+# service account keys — tf-admin-sa.sh writes its key to ~/.config/gcloud, so
+# this only catches a KEY_FILE override that pointed somewhere inside the repo
+*-tf-admin.json
+*-sa-key.json
+
 # stray local cloud-sql-proxy binary (use the brew/PATH one instead)
 /cloud-sql-proxy
 # admin infra lock (tofu-generated, not tracked)

@@ -62,12 +62,17 @@ export function CreateEventDialog({
   const limits = limitsFor(mode);
   // A challenge takes exactly one cloud, so the picker behaves as radios.
   const singleCloud = limits.maxClouds === 1;
+  // Picking nothing is itself a choice: attendees fall back to the shared
+  // internal project. Only offered where zero clouds is legal — a challenge
+  // always provisions one.
+  const fallbackAllowed = limits.minClouds === 0;
 
   const router = useRouter();
   const [name, setName] = useState("");
   const [userCount, setUserCount] = useState(String(limits.defaultUsers));
   const [ttlDays, setTtlDays] = useState(String(DEFAULT_TTL_DAYS));
   const [clouds, setClouds] = useState<Cloud[]>([]);
+  const noCloudSelected = clouds.length === 0;
   const [start, setStart] = useState("");
   const [pending, setPending] = useState<"now" | "schedule" | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -248,13 +253,47 @@ export function CreateEventDialog({
                   </motion.button>
                 );
               })}
+
+              {/*
+               * The implicit fourth option, rendered as a card so the fallback
+               * is visible in the picker rather than only described in the hint
+               * below — an empty selection otherwise reads as an unfinished
+               * form. Deliberately inert: it is the consequence of the three
+               * above, not a control of its own, so it greys out and checks
+               * itself whenever nothing else is checked.
+               */}
+              {fallbackAllowed && (
+                <div
+                  role="checkbox"
+                  aria-checked={noCloudSelected}
+                  aria-disabled="true"
+                  className={cn(
+                    "flex items-center gap-3 rounded-lg border p-3 text-left text-sm opacity-60",
+                    noCloudSelected ? "border-brand-border bg-brand/8" : "border-dashed",
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "flex size-4.5 shrink-0 items-center justify-center rounded-[5px] border transition-colors",
+                      noCloudSelected ? "border-brand bg-brand text-brand-foreground" : "border-input",
+                    )}
+                  >
+                    {noCloudSelected && (
+                      <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} transition={SPRING_SNAPPY}>
+                        <Check className="size-3" strokeWidth={3} />
+                      </motion.span>
+                    )}
+                  </span>
+                  <span className="font-medium">Internal Google project</span>
+                </div>
+              )}
             </div>
             {singleCloud ? (
               <p className="text-xs text-muted-foreground">A challenge runs on a single cloud.</p>
             ) : (
-              limits.minClouds === 0 && (
+              fallbackAllowed && (
                 <p className="text-xs leading-relaxed text-muted-foreground">
-                  {clouds.length === 0
+                  {noCloudSelected
                     ? "No cloud selected — attendees will share the long-lived testing project. Nothing is provisioned or torn down for them."
                     : "Leave all unselected to grant attendees the shared testing project instead of a fresh one."}
                 </p>

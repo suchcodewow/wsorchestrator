@@ -3,6 +3,8 @@
 #
 # Prereqs: gcloud (authenticated), terraform/tofu, cloud-sql-proxy.
 # One-time: fill infra/admin/terraform.tfvars, then `make bootstrap infra`.
+# Also one-time: `make tf-admin-sa`, so deploys run on a credential that does
+# not expire out from under you every day (see the TF_ADMIN_KEY block below).
 # Thereafter: `make ship` builds, deploys, and migrates.
 
 .DEFAULT_GOAL := help
@@ -10,6 +12,29 @@
 # Use terraform if present, else OpenTofu.
 TF_BIN ?= $(shell command -v terraform >/dev/null 2>&1 && echo terraform || echo tofu)
 TF      = $(TF_BIN) -chdir=infra/admin
+
+# Long-lived operator credential (see infra/admin/scripts/tf-admin-sa.sh).
+# `gcloud auth login` / `... application-default login` mint USER credentials,
+# which Workspace's Google Cloud session control reauth-challenges every ~16h —
+# so a deploy started the morning after a login dies on "Reauthentication
+# failed". A service account key is not a user credential and no session policy
+# applies to it. When the script has been run, point tofu / cloud-sql-proxy at
+# the key and gcloud at the SA's own configuration; when it hasn't, change
+# nothing and fall back to whatever the human is logged in as.
+TF_ADMIN_KEY    ?= $(HOME)/.config/gcloud/workshop-tf-admin.json
+TF_ADMIN_CONFIG ?= workshop-orchestrator
+
+ifeq ($(origin GOOGLE_APPLICATION_CREDENTIALS),undefined)
+ifneq ($(wildcard $(TF_ADMIN_KEY)),)
+export GOOGLE_APPLICATION_CREDENTIALS := $(TF_ADMIN_KEY)
+endif
+endif
+
+ifeq ($(origin CLOUDSDK_ACTIVE_CONFIG_NAME),undefined)
+ifneq ($(wildcard $(HOME)/.config/gcloud/configurations/config_$(TF_ADMIN_CONFIG)),)
+export CLOUDSDK_ACTIVE_CONFIG_NAME := $(TF_ADMIN_CONFIG)
+endif
+endif
 
 # Derived from Terraform outputs (empty until `make infra` has run).
 PROJECT = $(shell $(TF) output -raw admin_project_id 2>/dev/null)
@@ -32,7 +57,7 @@ STATE_BUCKET ?= $(ADMIN_PROJECT)-infra-tfstate
 # The Next.js app, including the Drizzle schema and its SQL migrations.
 FRONTEND ?= frontend
 
-.PHONY: help bootstrap plan infra images deploy db-backup db-migrate db-push ship info
+.PHONY: help bootstrap tf-admin-sa plan infra images deploy db-backup db-migrate db-push ship info
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -44,6 +69,10 @@ help: ## Show this help
 bootstrap: ## One-time: create admin state bucket + init backend (needs ADMIN_PROJECT, STATE_BUCKET)
 	cd infra/admin && ADMIN_PROJECT=$(ADMIN_PROJECT) REGION=$(REGION) \
 	  STATE_BUCKET=$(STATE_BUCKET) TF_BIN=$(TF_BIN) ./scripts/bootstrap.sh
+
+tf-admin-sa: ## One-time: mint the long-lived operator credential (stops the daily reauth)
+	@# Needs a fresh `gcloud auth login` — it is the last thing that does.
+	cd infra/admin && bash ./scripts/tf-admin-sa.sh $(ARGS)
 
 plan: ## Terraform plan for the admin control plane
 	$(TF) plan -var-file=terraform.tfvars
@@ -98,3 +127,5 @@ info: ## Print the resolved deploy config
 	@echo "DB_CONN  = $(DB_CONN)"
 	@echo "TAG      = $(TAG)"
 	@echo "APP_URL  = $(APP_URL)"
+	@echo "ADC      = $(or $(GOOGLE_APPLICATION_CREDENTIALS),<human login — run 'make tf-admin-sa'>)"
+	@echo "GCLOUD   = $(or $(CLOUDSDK_ACTIVE_CONFIG_NAME),default configuration)"
