@@ -1,6 +1,6 @@
 "use client";
 
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import gsap from "gsap";
@@ -72,6 +72,13 @@ function durationDays(e: CalendarEvent, start: Date): number {
   return Math.max(1, Math.round(seconds / DAY_SECONDS));
 }
 
+/**
+ * How often the "now" line is re-placed. A minute is the resolution the line
+ * is drawn at (`dayFraction` reads hours and minutes), so anything finer would
+ * re-render without moving it.
+ */
+const NOW_TICK_MS = 60_000;
+
 /** Layout metrics for the day cells and the bars laid over them (px). */
 const DATE_ROW = 34; // room for the date number before bars begin
 const LANE = 26; // height of one bar row, including its gap
@@ -105,6 +112,22 @@ export function EventCalendar({
   const [dialogOpen, setDialogOpen] = useState(false);
   const [initialDate, setInitialDate] = useState<Date | null>(null);
   const [mode, setMode] = useState<EventMode>("workshop");
+
+  /**
+   * The moment the "now" line marks, or null before it is known.
+   *
+   * Null until mount on purpose: this is rendered on the server too, and the
+   * server's clock is not the viewer's — a line placed during SSR would be
+   * drawn at the wrong minute and then jump, or trip a hydration mismatch. It
+   * appears on the first client tick instead, and moves once a minute after.
+   */
+  const [now, setNow] = useState<Date | null>(null);
+  useEffect(() => {
+    const tick = () => setNow(new Date());
+    tick();
+    const timer = setInterval(tick, NOW_TICK_MS);
+    return () => clearInterval(timer);
+  }, []);
 
   const year = view.getFullYear();
   const month = view.getMonth();
@@ -287,6 +310,18 @@ export function EventCalendar({
     month === today.getMonth() &&
     year === today.getFullYear();
 
+  /**
+   * Which column of a given week holds the current moment, or null if it is
+   * not in that week at all — including every week of a month the viewer has
+   * paged away from, where "now" is off the grid entirely.
+   */
+  function nowColumn(days: (number | null)[]): number | null {
+    if (!now) return null;
+    if (now.getFullYear() !== year || now.getMonth() !== month) return null;
+    const col = days.indexOf(now.getDate());
+    return col === -1 ? null : col;
+  }
+
   function openCreate(date: Date | null) {
     setInitialDate(date);
     setMode("workshop");
@@ -390,7 +425,9 @@ export function EventCalendar({
         </div>
 
         <div ref={gridRef}>
-          {weeks.map((week, w) => (
+          {weeks.map((week, w) => {
+            const nowCol = nowColumn(week.days);
+            return (
             <div key={`${year}-${month}-w${w}`} className="relative">
               {/* Day cells: the calendar's clickable base and its borders. */}
               <div className="grid grid-cols-7">
@@ -527,8 +564,26 @@ export function EventCalendar({
                   </Tooltip>
                 ))}
               </div>
+
+              {/* The current moment, drawn across today's cell at the same
+                  hour-of-day fraction the bars are inset by — so where it
+                  crosses a run is where that run stands right now. Last in the
+                  row so it paints over the bars, and inert, so the cell
+                  underneath is still click-to-create. */}
+              {nowCol !== null && now && (
+                <div
+                  aria-hidden
+                  className="pointer-events-none absolute inset-y-0 z-10 w-px bg-brand"
+                  style={{
+                    left: `calc((${nowCol} + ${dayFraction(now)}) / 7 * 100%)`,
+                  }}
+                >
+                  <span className="absolute -top-0.5 -left-[2.5px] size-1.5 rounded-full bg-brand" />
+                </div>
+              )}
             </div>
-          ))}
+            );
+          })}
         </div>
       </motion.div>
 
