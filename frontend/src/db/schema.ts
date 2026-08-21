@@ -10,6 +10,7 @@ import {
   primaryKey,
   pgEnum,
   index,
+  uniqueIndex,
   customType,
 } from "drizzle-orm/pg-core";
 import type { AdapterAccountType } from "next-auth/adapters";
@@ -340,6 +341,81 @@ export const runLogs = pgTable(
   (t) => [index("run_logs_run_idx").on(t.runId, t.id)],
 );
 
+/**
+ * Kinds of thing a run builds, in the order a build tends to confirm them.
+ *
+ * Stored as plain text rather than a Postgres enum: the runner is what writes
+ * these, and a new kind of resource should be shippable from there without a
+ * migration on this side. The UI keeps a label and an icon per known kind and
+ * falls back to the stored label for anything it does not recognise yet.
+ */
+export const RESOURCE_KINDS = [
+  "org_unit",
+  "accounts",
+  "harness_org",
+  "harness_projects",
+  "gcp_project",
+  "gke_cluster",
+  "azure_resource_group",
+  "aks_cluster",
+  "aws_account",
+  "eks_cluster",
+  "harness_delegate",
+] as const;
+export type ResourceKind = (typeof RESOURCE_KINDS)[number];
+
+/**
+ * One thing a run has actually built, written by the runner the moment the
+ * provider confirms it.
+ *
+ * This is the answer to "what exists so far?", which neither of the two things
+ * that used to be asked for it can give. The build log is a transcript — it
+ * says what was attempted, in provider-speak, and scrolls the answer away. The
+ * `outputs` blob only lands when the whole run goes ready, so it says nothing
+ * at all during the ten minutes an organizer actually wants to watch.
+ *
+ * Rows are upserted on (run_id, kind, key), so a run that is retried or grown
+ * updates what it already recorded rather than listing it twice — and the
+ * things that are created one at a time (accounts, Harness projects) carry
+ * `done`/`total` and count up in place instead of adding a row per attendee.
+ *
+ * Deleted by the reaper when the run is torn down: this table says what is
+ * standing right now, so it must not outlive the resources it describes.
+ */
+export const runResources = pgTable(
+  "run_resources",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    runId: uuid("run_id")
+      .notNull()
+      .references(() => workshopRuns.id, { onDelete: "cascade" }),
+    /** One of RESOURCE_KINDS; decides the icon and the fallback label. */
+    kind: text("kind").notNull(),
+    /** Identity within the run and kind — the cloud, the address, or "". */
+    key: text("key").notNull().default(""),
+    /** What to call it: "GKE cluster", "Attendee accounts". */
+    label: text("label").notNull(),
+    /** The identifier itself — a project id, an org unit path, a name. */
+    detail: text("detail"),
+    /** Where to go to see it, when the provider has a console page for it. */
+    url: text("url"),
+    /** For items built one at a time: how many exist, out of how many. */
+    done: integer("done"),
+    total: integer("total"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    // The page's query: everything this run has built, in the order it was.
+    index("run_resources_run_idx").on(t.runId, t.id),
+    uniqueIndex("run_resources_identity_idx").on(t.runId, t.kind, t.key),
+  ],
+);
+
 /* ------------------------------------------------------------------ *
  * Lab guides — the public, standalone teaching material
  * ------------------------------------------------------------------ */
@@ -543,4 +619,5 @@ export type LabWorkshop = typeof labWorkshops.$inferSelect;
 export type LabImage = typeof labImages.$inferSelect;
 export type WorkshopAccount = typeof workshopAccounts.$inferSelect;
 export type RunLog = typeof runLogs.$inferSelect;
+export type RunResource = typeof runResources.$inferSelect;
 export type RunStatus = (typeof runStatus.enumValues)[number];

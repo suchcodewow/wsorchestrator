@@ -173,6 +173,69 @@ export async function setDestroyed(runId: string) {
   );
 }
 
+/**
+ * One thing this run has built, as the UI should name it.
+ *
+ * `key` is the identity within the run and kind — the cloud for a delegate,
+ * the empty string for the one-per-run items — so re-recording updates the row
+ * rather than adding another. `done`/`total` are for the things created one at
+ * a time: they count up in place instead of writing a row per attendee, which
+ * is the pile-up this table exists to avoid.
+ */
+export type Resource = {
+  kind: string;
+  key?: string;
+  label: string;
+  detail?: string | null;
+  url?: string | null;
+  done?: number;
+  total?: number;
+};
+
+/**
+ * Record something the run has actually created, the moment the provider
+ * confirms it.
+ *
+ * Written as it happens rather than collected at the end: this is what the run
+ * page shows an organizer watching a ten-minute build, so a resource that is
+ * only reported once everything finishes is a resource they had no way to see.
+ *
+ * Upsert, because a retried or grown run re-walks ground it already covered
+ * and must not list the same cluster twice.
+ */
+export async function recordResource(runId: string, r: Resource) {
+  await pool.query(
+    `insert into run_resources (run_id, kind, key, label, detail, url, done, total)
+     values ($1, $2, $3, $4, $5, $6, $7, $8)
+     on conflict (run_id, kind, key) do update
+        set label = excluded.label,
+            detail = excluded.detail,
+            url = excluded.url,
+            done = excluded.done,
+            total = excluded.total,
+            updated_at = now()`,
+    [
+      runId,
+      r.kind,
+      r.key ?? "",
+      r.label,
+      r.detail ?? null,
+      r.url ?? null,
+      r.done ?? null,
+      r.total ?? null,
+    ],
+  );
+}
+
+/**
+ * Forget what a run built. Called at the end of a teardown: the table says
+ * what is standing right now, so rows that outlived their resources would have
+ * the page claim a cluster that is gone.
+ */
+export async function deleteResources(runId: string) {
+  await pool.query(`delete from run_resources where run_id = $1`, [runId]);
+}
+
 /** Record an attendee account so the organizer can hand out its credentials. */
 export async function addAccount(
   runId: string,

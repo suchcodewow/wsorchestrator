@@ -37,6 +37,7 @@ import {
   accountsFor,
   accountsWithPasswordsFor,
   deleteAccounts,
+  deleteResources,
   reapableRuns,
   withRunLock,
   log,
@@ -142,6 +143,11 @@ async function destroyRun(run: RunRow): Promise<void> {
     // roster intact — so teardown never strands itself without a record of what
     // it still has to delete.
     if (accounts.length > 0) await deleteAccounts(run.id);
+
+    // The list of what this run built described what was standing; nothing is
+    // now, so it goes with the resources rather than outliving them on a page
+    // that would then be advertising a cluster that is gone.
+    await deleteResources(run.id);
 
     // Logged first: `setDestroyed` may remove the run outright — it does when
     // somebody deleted it — and a log line for a run that is gone has nothing

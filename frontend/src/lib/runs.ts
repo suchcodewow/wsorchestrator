@@ -7,6 +7,7 @@ import {
   editabilityOf,
   limitsFor,
   runLogs,
+  runResources,
   users,
   workshopAccounts,
   workshopRuns,
@@ -315,8 +316,9 @@ export async function listCalendarRuns(
 }
 
 /**
- * One run with its logs and accounts, or null if the viewer may not see it.
- * A manager and above may open anyone's; everyone else only their own.
+ * One run with its logs, accounts, and the resources it has built so far, or
+ * null if the viewer may not see it. A manager and above may open anyone's;
+ * everyone else only their own.
  */
 export async function getRunForViewer(runId: string, viewer: Viewer) {
   const run = await db.query.workshopRuns.findFirst({
@@ -324,7 +326,7 @@ export async function getRunForViewer(runId: string, viewer: Viewer) {
   });
   if (!run) return null;
 
-  const [logs, accounts, owner] = await Promise.all([
+  const [logs, accounts, resources, owner] = await Promise.all([
     db.query.runLogs.findMany({
       where: eq(runLogs.runId, runId),
       orderBy: runLogs.id,
@@ -333,12 +335,18 @@ export async function getRunForViewer(runId: string, viewer: Viewer) {
       where: eq(workshopAccounts.runId, runId),
       orderBy: workshopAccounts.id,
     }),
+    // Insertion order, which is build order: the page reads top to bottom as
+    // the run happened.
+    db.query.runResources.findMany({
+      where: eq(runResources.runId, runId),
+      orderBy: runResources.id,
+    }),
     db.query.users.findFirst({
       where: eq(users.id, run.userId),
       columns: { id: true, name: true, email: true },
     }),
   ]);
-  return { run, logs, accounts, owner: owner ?? null };
+  return { run, logs, accounts, resources, owner: owner ?? null };
 }
 
 export type DeleteRunError = "not_found" | "in_flight";

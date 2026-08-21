@@ -1,18 +1,43 @@
 "use client";
 
 import { StatusBadge } from "@/components/status-badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import {
   CLOUD_LABELS,
   editabilityOf,
   type RunLog,
+  type RunResource,
   type WorkshopAccount,
   type WorkshopRun,
 } from "@/db/schema";
-import { ArrowLeft, Check, Copy, ExternalLink, User } from "lucide-react";
+import {
+  ArrowLeft,
+  Boxes,
+  Building2,
+  Check,
+  ChevronDown,
+  CircleCheck,
+  Cloud,
+  Copy,
+  ExternalLink,
+  FolderKanban,
+  Layers,
+  Loader2,
+  Network,
+  Server,
+  User,
+  Users,
+  type LucideIcon,
+} from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -26,6 +51,8 @@ type RunPayload = {
   run: WorkshopRun;
   logs: RunLog[];
   accounts: WorkshopAccount[];
+  /** What the run has actually built, in the order the runner confirmed it. */
+  resources: RunResource[];
   /** Who booked it. Null only if the account has since been removed. */
   owner: { id: string; name: string | null; email: string | null } | null;
 };
@@ -111,6 +138,10 @@ export function RunView({
   // back to the bottom every 2.5s poll makes the log unreadable while it is
   // still being written.
   const [tail, setTail] = useState(false);
+  // The roster is a total on the page and a table on request; see the accounts
+  // card below for why it is not open by default.
+  const [showCredentials, setShowCredentials] = useState(false);
+  const [showOutputs, setShowOutputs] = useState(false);
 
   const refresh = useCallback(async () => {
     const res = await fetch(`/api/runs/${runId}`, { cache: "no-store" });
@@ -165,10 +196,11 @@ export function RunView({
     if (box) box.scrollTop = box.scrollHeight;
   }, [tail, data.logs.length]);
 
-  const { run, logs, accounts, owner } = data;
+  const { run, logs, accounts, resources, owner } = data;
   // Azure issues one per attendee; nothing else does, so the column only earns
   // its width on an event that selected Azure.
   const hasAccessPass = accounts.some((a) => a.azureAccessPass);
+  const claimed = accounts.filter((a) => a.claimedAt).length;
   const outputs = run.outputs as Record<string, unknown> | null;
   const owned = run.userId === viewerId;
   const destroy = destroyMoment(run);
@@ -261,22 +293,52 @@ export function RunView({
         </motion.div>
       )}
 
+      {(resources.length > 0 || ACTIVE.has(run.status)) && (
+        <motion.div variants={riseChild}>
+          <BuiltPanel run={run} resources={resources} />
+        </motion.div>
+      )}
+
       {outputs && Object.keys(outputs).length > 0 && (
         <motion.div variants={riseChild}>
           <Card>
-            <CardHeader>
-              <CardTitle>Outputs</CardTitle>
+            <CardHeader className="flex-row items-start justify-between gap-4">
+              <div className="grid gap-1.5">
+                <CardTitle>Raw outputs</CardTitle>
+                <CardDescription>
+                  {/* The panel above is this, read out loud. What is left down
+                      here is the long tail — per-competitor maps, AWS's own
+                      generated passwords — so it starts closed. */}
+                  Every value Terraform returned, as it returned it.
+                </CardDescription>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowOutputs((on) => !on)}
+                aria-expanded={showOutputs}
+              >
+                {showOutputs ? "Hide" : "Show"} outputs
+                <ChevronDown
+                  className={cn(
+                    "transition-transform duration-200",
+                    showOutputs && "rotate-180",
+                  )}
+                />
+              </Button>
             </CardHeader>
-            <CardContent className="grid gap-2.5 text-sm">
-              {Object.entries(outputs).map(([k, v]) => (
-                <div key={k} className="flex gap-3">
-                  <span className="w-40 shrink-0 text-muted-foreground">
-                    {k}
-                  </span>
-                  <OutputValue value={v} />
-                </div>
-              ))}
-            </CardContent>
+            {showOutputs && (
+              <CardContent className="grid gap-2.5 text-sm">
+                {Object.entries(outputs).map(([k, v]) => (
+                  <div key={k} className="flex gap-3">
+                    <span className="w-40 shrink-0 text-muted-foreground">
+                      {k}
+                    </span>
+                    <OutputValue value={v} />
+                  </div>
+                ))}
+              </CardContent>
+            )}
           </Card>
         </motion.div>
       )}
@@ -298,12 +360,37 @@ export function RunView({
       {accounts.length > 0 && (
         <motion.div variants={riseChild}>
         <Card>
-          <CardHeader>
-            <CardTitle>
-              {run.mode === "challenge" ? "Competitor" : "Attendee"} accounts (
-              {accounts.length})
-            </CardTitle>
+          <CardHeader className="flex-row items-start justify-between gap-4">
+            <div className="grid gap-1.5">
+              <CardTitle>
+                {run.mode === "challenge" ? "Competitor" : "Attendee"} accounts
+              </CardTitle>
+              <CardDescription>
+                {accounts.length} of {run.userCount} created
+                {claimed > 0 && ` · ${claimed} claimed`}
+              </CardDescription>
+            </div>
+            {/* Collapsed by default. Fifty rows of addresses and passwords is
+                the page's whole height, and it is not what anyone comes here
+                for while a build is running — the counts and the resources
+                above are. It stays one click away for the organizer handing
+                credentials out. */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowCredentials((on) => !on)}
+              aria-expanded={showCredentials}
+            >
+              {showCredentials ? "Hide" : "Show"} credentials
+              <ChevronDown
+                className={cn(
+                  "transition-transform duration-200",
+                  showCredentials && "rotate-180",
+                )}
+              />
+            </Button>
           </CardHeader>
+          {showCredentials && (
           <CardContent>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -359,6 +446,7 @@ export function RunView({
               Accounts are deleted when the {run.mode} expires.
             </p>
           </CardContent>
+          )}
         </Card>
         </motion.div>
       )}
@@ -426,6 +514,144 @@ export function RunView({
       </Card>
       </motion.div>
     </motion.div>
+  );
+}
+
+/**
+ * What each kind of provisioned thing looks like. Kinds are stored as free
+ * text by the runner, so anything not listed here still renders — with the
+ * generic icon and whatever label the runner gave it — rather than vanishing
+ * from the list because this map has not caught up yet.
+ */
+const RESOURCE_ICONS: Record<string, LucideIcon> = {
+  org_unit: Building2,
+  accounts: Users,
+  harness_org: Layers,
+  harness_projects: FolderKanban,
+  gcp_project: Cloud,
+  azure_resource_group: Cloud,
+  aws_account: Cloud,
+  gke_cluster: Server,
+  aks_cluster: Server,
+  eks_cluster: Server,
+  harness_delegate: Network,
+};
+
+/**
+ * Everything the run has built, as it builds it.
+ *
+ * This is the answer to "is it working?" during the ten minutes a build takes,
+ * which nothing on the page could give before: the log says what was attempted
+ * in Terraform's words, and the outputs card is empty until the whole run goes
+ * ready. Each row appears the moment its provider confirmed the thing, so an
+ * organizer watching sees the org unit, then the accounts counting up, then
+ * each cloud environment as it lands.
+ */
+function BuiltPanel({
+  run,
+  resources,
+}: {
+  run: WorkshopRun;
+  resources: RunResource[];
+}) {
+  const building = ACTIVE.has(run.status) && run.status !== "destroying";
+  const tearingDown = run.status === "destroying" || run.deleteRequested;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{building ? "Building" : "Environment"}</CardTitle>
+        <CardDescription>
+          {tearingDown
+            ? "Being torn down — these disappear as the reaper removes them."
+            : building
+              ? "Each item appears here as soon as it exists."
+              : `Everything this ${run.mode} created.`}
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {resources.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            Nothing built yet — the first items appear within a minute.
+          </p>
+        ) : (
+          <ul className="grid gap-2">
+            <AnimatePresence initial={false}>
+              {resources.map((r) => (
+                <ResourceRow key={r.id} resource={r} />
+              ))}
+            </AnimatePresence>
+          </ul>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
+ * One built thing: what it is, what it is called, and — for the items created
+ * one at a time — how far along the count is.
+ *
+ * A counted row is the point of the whole panel on a fifty-attendee workshop:
+ * "Attendee accounts 31/50" in one line, in place, rather than thirty-one rows
+ * of addresses that push the rest of the page out of sight.
+ */
+function ResourceRow({ resource }: { resource: RunResource }) {
+  const Icon = RESOURCE_ICONS[resource.kind] ?? Boxes;
+  const { done, total } = resource;
+  const counted = done !== null && total !== null;
+  const pending = counted && done < total;
+
+  return (
+    <motion.li
+      layout
+      initial={{ opacity: 0, y: -4 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.2 }}
+      className="flex items-center gap-3 rounded-lg border bg-card px-3 py-2.5"
+    >
+      <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+        <Icon className="size-4" />
+      </span>
+
+      <div className="min-w-0 flex-1">
+        <div className="text-sm font-medium">{resource.label}</div>
+        {resource.detail && (
+          <div className="truncate font-mono text-xs text-muted-foreground">
+            {resource.detail}
+          </div>
+        )}
+      </div>
+
+      {counted && (
+        <span
+          className={cn(
+            "shrink-0 text-sm tnum",
+            pending ? "text-muted-foreground" : "text-foreground",
+          )}
+        >
+          {done}
+          <span className="text-muted-foreground">/{total}</span>
+        </span>
+      )}
+
+      {/* The console link, for the things that have one. */}
+      {resource.url && (
+        <Button variant="ghost" size="sm" asChild>
+          <Link href={resource.url} target="_blank" rel="noreferrer">
+            Open
+            <ExternalLink />
+          </Link>
+        </Button>
+      )}
+
+      {pending ? (
+        <Loader2 className="size-4 shrink-0 animate-spin text-muted-foreground" />
+      ) : (
+        <CircleCheck className="size-4 shrink-0 text-emerald-600" />
+      )}
+    </motion.li>
   );
 }
 

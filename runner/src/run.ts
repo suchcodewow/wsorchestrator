@@ -31,6 +31,7 @@ import {
 import { tfApply, tfInit, tfOutput } from "./terraform.js";
 import { issueAccessPass, tapPolicy } from "./graph.js";
 import { allocateEmails, createAccount, createOrgUnit } from "./directory.js";
+import { recordOutputResources } from "./resources.js";
 import { summarize } from "./retry.js";
 import { displayName } from "./usernames.js";
 import {
@@ -51,6 +52,7 @@ import {
   addAccount,
   getRun,
   log,
+  recordResource,
   runCreatorEmail,
   setApplying,
   setFailed,
@@ -107,6 +109,14 @@ export async function runWorkshop(runId: string): Promise<void> {
       user_count: run.user_count,
     };
 
+    // Fold one apply's outputs into the run's, and record what it built while
+    // the build is still going — `outputs` itself is only stored when the run
+    // goes ready, which is far too late to be watched.
+    const merge = async (partial: Record<string, unknown>) => {
+      Object.assign(outputs, partial);
+      await recordOutputResources(run.id, partial);
+    };
+
     // Harness is provisioned for every workshop, not gated on a cloud, and
     // after the accounts exist because each attendee is invited by address.
     Object.assign(outputs, await provisionHarness(run));
@@ -114,26 +124,23 @@ export async function runWorkshop(runId: string): Promise<void> {
     if (run.clouds.length === 0) {
       // No cloud selected — hand attendees the shared long-lived testing
       // project instead of building (and later destroying) a throwaway one.
-      Object.assign(outputs, await provisionSandbox(run));
+      await merge(await provisionSandbox(run));
     } else {
       for (const cloud of run.clouds) {
         if (cloud === "gcp") {
-          Object.assign(
-            outputs,
+          await merge(
             run.mode === "challenge"
               ? await provisionGcpPerUser(run)
               : await provisionGcp(run),
           );
         } else if (cloud === "azure") {
-          Object.assign(
-            outputs,
+          await merge(
             run.mode === "challenge"
               ? await provisionAzurePerUser(run)
               : await provisionAzure(run),
           );
         } else if (cloud === "aws") {
-          Object.assign(
-            outputs,
+          await merge(
             run.mode === "challenge"
               ? await provisionAwsPerUser(run)
               : await provisionAws(run),
@@ -306,6 +313,14 @@ async function installDelegates(
       );
       await tfApply(workDir, (l) => log(run.id, l.stream, l.text));
       await log(run.id, "stdout", `delegate ${delegateName} installed`);
+      // Keyed by cloud: a multi-cloud workshop installs one per cluster, and
+      // each is its own thing to see.
+      await recordResource(run.id, {
+        kind: "harness_delegate",
+        key: target.cloud,
+        label: `Harness delegate (${target.cloud.toUpperCase()})`,
+        detail: delegateName,
+      });
     } catch (err) {
       // Best-effort: log and keep going. The workshop is otherwise ready, and
       // the run can be retried to attempt the delegate again.
@@ -342,14 +357,33 @@ async function provisionAccounts(run: RunRow): Promise<string> {
   const orgUnitPath = await createOrgUnit(run.name, notify);
   await setOrgUnitPath(run.id, orgUnitPath);
   await log(run.id, "system", `Org unit ready at ${orgUnitPath}`);
+  await recordResource(run.id, {
+    kind: "org_unit",
+    label: "Google Workspace org unit",
+    detail: orgUnitPath,
+  });
 
   // Accounts already handed out must keep their credentials, so only the
   // missing ones are created. This is what makes growing a workshop safe.
   const existing = new Set((await accountsFor(run.id)).map((a) => a.email));
   const todo = run.user_count - existing.size;
 
+  // The roster as one counted item, updated after every account rather than at
+  // the end: creating fifty accounts takes minutes, and a count that only
+  // appears once they are all done is a count nobody can watch. The addresses
+  // themselves are deliberately not recorded here — they are on the run page
+  // already, behind their credentials.
+  const countAccounts = (done: number) =>
+    recordResource(run.id, {
+      kind: "accounts",
+      label: "Attendee accounts",
+      done,
+      total: run.user_count,
+    });
+
   if (todo <= 0) {
     await log(run.id, "system", `${existing.size} attendee account(s) already exist`);
+    await countAccounts(existing.size);
     return orgUnitPath;
   }
   await log(
@@ -365,10 +399,13 @@ async function provisionAccounts(run: RunRow): Promise<string> {
   // that grew cannot be handed a name it already owns.
   const emails = await allocateEmails(todo, existing);
 
+  let created = existing.size;
+  await countAccounts(created);
   for (const email of emails) {
     const account = await createAccount({ email, orgUnitPath }, notify);
     await addAccount(run.id, account.email, account.tempPassword);
     await log(run.id, "stdout", `created ${account.email}`);
+    await countAccounts(++created);
   }
 
   return orgUnitPath;
@@ -390,6 +427,12 @@ async function provisionHarness(run: RunRow): Promise<Record<string, unknown>> {
   if (existed) {
     await log(run.id, "stdout", `organization ${orgId} already existed — reusing`);
   }
+  await recordResource(run.id, {
+    kind: "harness_org",
+    label: "Harness organization",
+    detail: orgId,
+    url: orgUrl(orgId),
+  });
 
   // The org-scope binding every attendee gets references this role, so it has
   // to exist before anyone is bound to it.
@@ -413,6 +456,19 @@ async function provisionHarness(run: RunRow): Promise<Record<string, unknown>> {
     `Creating ${accounts.length} Harness project(s), one per attendee`,
   );
 
+  // Counted in place as they land, for the same reason the accounts are: one
+  // project per attendee is one row per attendee, which is the pile-up.
+  const countProjects = (done: number) =>
+    recordResource(run.id, {
+      kind: "harness_projects",
+      label: "Harness projects",
+      detail: "one per attendee",
+      done,
+      total: accounts.length,
+    });
+
+  let built = 0;
+  await countProjects(built);
   for (const { email } of accounts) {
     const projectId = projectIdentifier(email);
     const { givenName, familyName } = displayName(email.split("@")[0] ?? email);
@@ -422,6 +478,7 @@ async function provisionHarness(run: RunRow): Promise<Record<string, unknown>> {
     await grantOrgAttendee(orgId, email);
 
     await log(run.id, "stdout", `${email} -> admin of project ${projectId}`);
+    await countProjects(++built);
   }
 
   return { harness_org: orgId, harness_org_url: orgUrl(orgId) };
