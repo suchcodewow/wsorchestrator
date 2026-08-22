@@ -3,20 +3,34 @@ import "server-only";
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { CLAIM_LIMITS, workshopAccounts, workshopRuns } from "@/db/schema";
-import type { RunStatus } from "@/db/schema";
+import type { Cloud, RunStatus } from "@/db/schema";
+
+/**
+ * Where one cloud's environment lives, as something an attendee can open.
+ *
+ * One per cloud the event actually built — the Google Cloud project, the Azure
+ * resource group, the AWS account's console sign-in — so the page can offer the
+ * same "here is your environment" button whichever clouds were picked. The
+ * cloud is carried rather than a label: what the button should say is the
+ * page's business, and differs between the one shared link a workshop shows
+ * and the per-competitor link a challenge puts on each row.
+ */
+export type CloudLink = {
+  cloud: Cloud;
+  url: string;
+};
 
 /**
  * The attendee-facing view of an event.
  *
  * This is the one place in the app that serves data to people who are not
  * signed in, so it is deliberately narrow: the event's name and kind, the
- * account rows, and — the one deliberate exception — where the cloud
- * environment(s) attendees were granted live, so the page can link them
- * straight there: the Google Cloud project id and the Azure portal link (which
- * carries the tenant, subscription, and resource group in its path). Neither is
- * a secret: everyone here has editor/Contributor on those environments and sees
- * all of it the moment they sign in. Nothing about the organizer, the org unit,
- * the rest of the Terraform outputs, or the build log crosses this boundary.
+ * account rows, and — the one deliberate exception — a link per cloud into the
+ * environment(s) attendees were granted. Those links are not secrets: they
+ * carry a project id, a resource group path, an AWS account number, and
+ * everyone here has editor/Contributor on those environments and sees all of it
+ * the moment they sign in. Nothing about the organizer, the org unit, the rest
+ * of the Terraform outputs, or the build log crosses this boundary.
  */
 export type AttendeeAccount = {
   id: number;
@@ -36,31 +50,128 @@ export type AttendeeAccount = {
   claimedVacation: string | null;
   claimedAt: Date | null;
   /**
-   * This competitor's own GCP project, on a GCP challenge. Null otherwise — a
-   * workshop shares one project, carried on the view instead of per row.
+   * This competitor's own environments, on a challenge — their GCP project,
+   * their Azure resource group, their AWS account. Empty on a workshop, which
+   * shares one environment per cloud and carries the links on the view instead.
    */
-  gcpProjectId: string | null;
-  /**
-   * Portal link to this competitor's own resource group, on an Azure challenge.
-   * Null otherwise, and on any challenge provisioned before the root emitted
-   * per-competitor links — the page just drops the button rather than guessing.
-   */
-  azurePortalUrl: string | null;
+  links: CloudLink[];
 };
 
 export type AttendeeView = {
   name: string;
   mode: "workshop" | "challenge";
   status: RunStatus;
-  /** The workshop's shared GCP project, if it requested GCP. Null otherwise. */
-  gcpProjectId: string | null;
-  /** Portal link to the workshop's shared resource group, if it requested Azure. */
-  azurePortalUrl: string | null;
+  /**
+   * The workshop's shared environment, one link per cloud it provisioned (and
+   * the shared testing project, for an event that picked no cloud at all —
+   * that project is still where its attendees were given access). Empty on a
+   * challenge, where every competitor has their own and the links sit on the
+   * rows.
+   */
+  links: CloudLink[];
   accounts: AttendeeAccount[];
 };
 
 const UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * The Terraform outputs this view reads, across every root that can run.
+ *
+ * The singular keys are a workshop's one shared environment per cloud; the maps
+ * are a challenge's per-competitor ones, keyed by the address each was granted
+ * to. Both the identifier and a ready-made console URL are read where the root
+ * emits both, because older runs were provisioned before the URL outputs
+ * existed and the identifier is enough to rebuild the link from.
+ */
+type RunOutputs = {
+  gcp_project_id?: unknown;
+  gcp_console_url?: unknown;
+  /** The shared long-lived project, granted to a run that picked no cloud. */
+  sandbox_project_id?: unknown;
+  sandbox_console_url?: unknown;
+  azure_portal_url?: unknown;
+  aws_account_id?: unknown;
+  aws_console_url?: unknown;
+  gcp_projects?: unknown;
+  gcp_console_urls?: unknown;
+  azure_portal_urls?: unknown;
+  aws_accounts?: unknown;
+};
+
+/** An output value, if it is a non-empty string. */
+function str(value: unknown): string | null {
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+/** An output map of address -> value, if it is one. */
+function map(value: unknown): Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+/** A project's console home — what "the project" means to someone opening it. */
+function gcpConsoleUrl(projectId: string): string {
+  return `https://console.cloud.google.com/home/dashboard?project=${encodeURIComponent(
+    projectId,
+  )}`;
+}
+
+/** The member account's own sign-in page, which is where its console lives. */
+function awsConsoleUrl(accountId: string): string {
+  return `https://${encodeURIComponent(accountId)}.signin.aws.amazon.com/console`;
+}
+
+/** Drop the clouds this run did not build, keeping CLOUDS' order. */
+function linksOf(
+  parts: Array<{ cloud: Cloud; url: string | null }>,
+): CloudLink[] {
+  return parts.flatMap(({ cloud, url }) => (url ? [{ cloud, url }] : []));
+}
+
+/** The one environment per cloud a workshop shares with the whole room. */
+function sharedLinks(
+  outputs: RunOutputs,
+  gcpProjectId: string | null,
+): CloudLink[] {
+  const project = str(outputs.gcp_project_id) ?? gcpProjectId;
+  const sandbox = str(outputs.sandbox_project_id);
+  const awsAccount = str(outputs.aws_account_id);
+
+  return linksOf([
+    {
+      cloud: "aws",
+      url: str(outputs.aws_console_url) ?? (awsAccount && awsConsoleUrl(awsAccount)),
+    },
+    { cloud: "azure", url: str(outputs.azure_portal_url) },
+    {
+      cloud: "gcp",
+      url:
+        str(outputs.gcp_console_url) ??
+        (project && gcpConsoleUrl(project)) ??
+        str(outputs.sandbox_console_url) ??
+        (sandbox && gcpConsoleUrl(sandbox)),
+    },
+  ]);
+}
+
+/** The environments a single competitor owns on a challenge. */
+function competitorLinks(outputs: RunOutputs, email: string): CloudLink[] {
+  const project = str(map(outputs.gcp_projects)[email]);
+  const awsAccount = str(map(outputs.aws_accounts)[email]);
+
+  return linksOf([
+    { cloud: "aws", url: awsAccount && awsConsoleUrl(awsAccount) },
+    { cloud: "azure", url: str(map(outputs.azure_portal_urls)[email]) },
+    {
+      cloud: "gcp",
+      url:
+        str(map(outputs.gcp_console_urls)[email]) ??
+        (project && gcpConsoleUrl(project)),
+    },
+  ]);
+}
 
 /**
  * Load an event for its attendee page. Returns null for an unknown id, which
@@ -102,32 +213,24 @@ export async function getAttendeeView(
     },
   });
 
-  const outputs = run.outputs as {
-    gcp_projects?: Record<string, string>;
-    azure_portal_url?: string;
-    azure_portal_urls?: Record<string, string>;
-  } | null;
+  const outputs = (run.outputs ?? {}) as RunOutputs;
 
-  // On a challenge the per-competitor environments are in the run outputs, keyed
-  // by the address each was granted to (the `gcp_projects` output on
-  // `challenges/gcp-per-user`, `azure_portal_urls` on `challenges/azure-per-user`).
-  // A workshop leaves both empty and carries its one shared environment per
-  // cloud on the view instead.
-  const perUserProjects = outputs?.gcp_projects ?? {};
-  const perUserPortals = outputs?.azure_portal_urls ?? {};
+  // A challenge builds one environment per competitor and a workshop one for
+  // the room, so exactly one of these two ever has anything in it — the roots
+  // a challenge runs emit only the keyed maps, and the workshop roots only the
+  // single values.
+  const shared = sharedLinks(outputs, run.gcpProjectId);
 
   const accounts: AttendeeAccount[] = rows.map((a) => ({
     ...a,
-    gcpProjectId: perUserProjects[a.email] ?? null,
-    azurePortalUrl: perUserPortals[a.email] ?? null,
+    links: competitorLinks(outputs, a.email),
   }));
 
   return {
     name: run.name,
     mode: run.mode,
     status: run.status,
-    gcpProjectId: run.gcpProjectId,
-    azurePortalUrl: outputs?.azure_portal_url ?? null,
+    links: shared,
     accounts,
   };
 }

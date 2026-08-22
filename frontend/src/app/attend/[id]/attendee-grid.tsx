@@ -6,12 +6,12 @@ import { Check, Copy, ExternalLink, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { CLAIM_LIMITS, type RunStatus } from "@/db/schema";
+import { CLAIM_LIMITS, type Cloud, type RunStatus } from "@/db/schema";
 import { riseChild, staggerParent } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 // Type-only: erased at compile time, so the `server-only` module behind it is
 // never pulled into the client bundle.
-import type { AttendeeView } from "@/lib/attendees";
+import type { AttendeeView, CloudLink } from "@/lib/attendees";
 
 /**
  * `claimedAt` is a Date on the server-rendered pass and a string once it has
@@ -43,11 +43,39 @@ function seed(accounts: Row[]): Record<number, Fields> {
   return Object.fromEntries(accounts.map((a) => [a.id, fieldsOf(a)]));
 }
 
-/** The IAM page for a project — where an attendee checks their own access. */
-function iamUrl(projectId: string): string {
-  return `https://console.cloud.google.com/iam-admin/iam?project=${encodeURIComponent(
-    projectId,
-  )}`;
+/**
+ * What each cloud's environment is called, on the button that opens it.
+ *
+ * Two lengths because the same link is shown in two places: a workshop puts one
+ * button per cloud under the title, where the sentence has room to name the
+ * thing; a challenge puts a competitor's own environment in a table cell, where
+ * it does not. Both name the resource rather than the provider's console —
+ * "Resource group" is what an attendee is looking for once they are signed in.
+ */
+const CLOUD_RESOURCE: Record<Cloud, { long: string; short: string }> = {
+  gcp: { long: "Open Google Cloud project", short: "Project" },
+  azure: { long: "Open Azure resource group", short: "Resource group" },
+  aws: { long: "Open AWS console", short: "AWS console" },
+};
+
+/** The button that opens one cloud's environment. */
+function CloudButton({
+  link,
+  length,
+  className,
+}: {
+  link: CloudLink;
+  length: "long" | "short";
+  className?: string;
+}) {
+  return (
+    <Button variant="outline" size="sm" className={className} asChild>
+      <a href={link.url} target="_blank" rel="noreferrer">
+        <ExternalLink />
+        {CLOUD_RESOURCE[link.cloud][length]}
+      </a>
+    </Button>
+  );
 }
 
 /** How long after the last keystroke a row's answers are saved. */
@@ -197,28 +225,11 @@ export function AttendeeGrid({
         {/* A workshop shares one environment per cloud, so its links live up
             here rather than repeated on every row (challenges link per
             competitor below). A multi-cloud workshop shows one button each. */}
-        {(data.gcpProjectId || data.azurePortalUrl) && (
+        {data.links.length > 0 && (
           <div className="mt-3 flex flex-wrap gap-2">
-            {data.gcpProjectId && (
-              <Button variant="outline" size="sm" asChild>
-                <a
-                  href={iamUrl(data.gcpProjectId)}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  <ExternalLink />
-                  Open Google Cloud IAM
-                </a>
-              </Button>
-            )}
-            {data.azurePortalUrl && (
-              <Button variant="outline" size="sm" asChild>
-                <a href={data.azurePortalUrl} target="_blank" rel="noreferrer">
-                  <ExternalLink />
-                  Open Azure portal
-                </a>
-              </Button>
-            )}
+            {data.links.map((link) => (
+              <CloudButton key={link.cloud} link={link} length="long" />
+            ))}
           </div>
         )}
       </motion.div>
@@ -361,32 +372,21 @@ function AccountRow({
         onBlur={() => onBlur("vacation")}
       />
 
-      {/* Per-competitor link on a challenge — IAM on GCP, the portal on Azure.
-          A challenge runs on a single cloud, so only one of these is ever set.
-          Workshops link once above, so their rows leave this cell out entirely
-          (no empty gap on mobile). */}
-      {account.gcpProjectId && (
-        <div className="mt-3 md:mt-0 md:text-right">
-          <Button variant="outline" size="sm" className="w-full md:w-auto" asChild>
-            <a
-              href={iamUrl(account.gcpProjectId)}
-              target="_blank"
-              rel="noreferrer"
-            >
-              <ExternalLink />
-              IAM
-            </a>
-          </Button>
-        </div>
-      )}
-      {account.azurePortalUrl && (
-        <div className="mt-3 md:mt-0 md:text-right">
-          <Button variant="outline" size="sm" className="w-full md:w-auto" asChild>
-            <a href={account.azurePortalUrl} target="_blank" rel="noreferrer">
-              <ExternalLink />
-              Portal
-            </a>
-          </Button>
+      {/* This competitor's own environment, on a challenge — their project,
+          their resource group, their AWS account. A challenge runs on a single
+          cloud, so this is one button in practice; it maps anyway rather than
+          assuming. Workshops link once above, so their rows leave this cell out
+          entirely (no empty gap on mobile). */}
+      {account.links.length > 0 && (
+        <div className="mt-3 flex flex-wrap justify-end gap-2 md:mt-0">
+          {account.links.map((link) => (
+            <CloudButton
+              key={link.cloud}
+              link={link}
+              length="short"
+              className="w-full md:w-auto"
+            />
+          ))}
         </div>
       )}
     </li>
