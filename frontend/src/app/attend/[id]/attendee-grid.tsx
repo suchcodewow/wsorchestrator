@@ -1,14 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { motion } from "framer-motion";
-import { Check, Copy, ExternalLink, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { CLAIM_LIMITS, type Cloud, type RunStatus } from "@/db/schema";
 import { riseChild, staggerParent } from "@/lib/motion";
 import { cn } from "@/lib/utils";
+import { motion } from "framer-motion";
+import { Check, ChevronDown, Copy, ExternalLink, Loader2 } from "lucide-react";
+import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
 // Type-only: erased at compile time, so the `server-only` module behind it is
 // never pulled into the client bundle.
 import type { AttendeeView, CloudLink } from "@/lib/attendees";
@@ -44,35 +44,32 @@ function seed(accounts: Row[]): Record<number, Fields> {
 }
 
 /**
- * What each cloud's environment is called, on the button that opens it.
- *
- * Two lengths because the same link is shown in two places: a workshop puts one
- * button per cloud under the title, where the sentence has room to name the
- * thing; a challenge puts a competitor's own environment in a table cell, where
- * it does not. Both name the resource rather than the provider's console —
- * "Resource group" is what an attendee is looking for once they are signed in.
+ * What each cloud's environment is called, on the button that opens it. Names
+ * the resource rather than the provider's console — "resource group" is what
+ * an attendee is looking for once they are signed in.
  */
-const CLOUD_RESOURCE: Record<Cloud, { long: string; short: string }> = {
-  gcp: { long: "Open Google Cloud project", short: "Project" },
-  azure: { long: "Open Azure resource group", short: "Resource group" },
-  aws: { long: "Open AWS console", short: "AWS console" },
+const CLOUD_RESOURCE: Record<Cloud, string> = {
+  gcp: "Google",
+  azure: "Azure",
+  aws: "AWS",
 };
 
 /** The button that opens one cloud's environment. */
-function CloudButton({
-  link,
-  length,
-  className,
-}: {
-  link: CloudLink;
-  length: "long" | "short";
-  className?: string;
-}) {
+function CloudButton({ link, className }: { link: CloudLink; className?: string }) {
+  return (
+    <LinkButton href={link.url} className={className}>
+      {CLOUD_RESOURCE[link.cloud]}
+    </LinkButton>
+  );
+}
+
+/** One "open this somewhere else" button — a cloud environment, the Harness org. */
+function LinkButton({ href, className, children }: { href: string; className?: string; children: ReactNode }) {
   return (
     <Button variant="outline" size="sm" className={className} asChild>
-      <a href={link.url} target="_blank" rel="noreferrer">
+      <a href={href} target="_blank" rel="noreferrer">
         <ExternalLink />
-        {CLOUD_RESOURCE[link.cloud][length]}
+        {children}
       </a>
     </Button>
   );
@@ -88,21 +85,16 @@ const SAVE_DEBOUNCE_MS = 500;
  * Below `md` the template does not apply at all and each row stacks into a
  * labelled card — a five-column table is unusable on the phone most attendees
  * will actually open this link on.
+ *
+ * The last column is the row's Details toggle: everything that is not the
+ * address or one of the three answers — passwords, the Azure pass, the link
+ * into this competitor's environment — lives behind it.
  */
-const COLUMNS =
-  "md:grid-cols-[minmax(0,21rem)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.25fr)_auto]";
+const COLUMNS = "md:grid-cols-[minmax(0,20rem)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.25fr)_auto]";
 
-export function AttendeeGrid({
-  initial,
-  runId,
-}: {
-  initial: View;
-  runId: string;
-}) {
+export function AttendeeGrid({ initial, runId }: { initial: View; runId: string }) {
   const [data, setData] = useState<View>(initial);
-  const [values, setValues] = useState<Record<number, Fields>>(() =>
-    seed(initial.accounts),
-  );
+  const [values, setValues] = useState<Record<number, Fields>>(() => seed(initial.accounts));
 
   // The latest values, for the debounced save to read without re-closing.
   const valuesRef = useRef(values);
@@ -129,8 +121,7 @@ export function AttendeeGrid({
     setValues((prev) => {
       const next: Record<number, Fields> = {};
       for (const a of view.accounts) {
-        const held =
-          focusedRef.current?.id === a.id || dirtyRef.current.has(a.id);
+        const held = focusedRef.current?.id === a.id || dirtyRef.current.has(a.id);
         next[a.id] = held && prev[a.id] ? prev[a.id] : fieldsOf(a);
       }
       return next;
@@ -207,28 +198,22 @@ export function AttendeeGrid({
   const hasAccessPass = data.accounts.some((a) => a.azureAccessPass);
 
   return (
-    <motion.div
-      variants={staggerParent(0.05)}
-      initial="hidden"
-      animate="show"
-      className="space-y-6"
-    >
+    <motion.div variants={staggerParent(0.05)} initial="hidden" animate="show" className="space-y-6">
       <motion.div variants={riseChild}>
-        <h1 className="text-2xl font-medium tracking-tight text-balance">
-          {data.name}
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
+        <h1 className="text-2xl font-medium tracking-tight text-balance">{data.name}</h1>
+        <p className="mt-1.5 text-sm text-muted-foreground">
           {data.accounts.length > 0
-            ? `Grab a row, sign in with those credentials, and put your name on it. Type anywhere — it saves for the whole room as you go. ${filledCount} of ${data.accounts.length} filled in.`
+            ? `Take a row, put your name on it, and open Details for the password to sign in with. ${filledCount} of ${data.accounts.length} taken.`
             : `Accounts for this ${data.mode} will appear here.`}
         </p>
-        {/* A workshop shares one environment per cloud, so its links live up
-            here rather than repeated on every row (challenges link per
-            competitor below). A multi-cloud workshop shows one button each. */}
-        {data.links.length > 0 && (
-          <div className="mt-3 flex flex-wrap gap-2">
+        {/* Everywhere the room is expected to go, in one place: the Harness
+            org every event provisions, then a workshop's shared environment
+            per cloud (challenges link per competitor on their own row). */}
+        {(data.harnessOrgUrl || data.links.length > 0) && (
+          <div className="mt-4 flex flex-wrap gap-2">
+            {data.harnessOrgUrl && <LinkButton href={data.harnessOrgUrl}>Open Harness organization</LinkButton>}
             {data.links.map((link) => (
-              <CloudButton key={link.cloud} link={link} length="long" />
+              <CloudButton key={link.cloud} link={link} />
             ))}
           </div>
         )}
@@ -244,23 +229,33 @@ export function AttendeeGrid({
             <Card>
               <CardContent className="px-0">
                 {/* Column headings, wide screens only — each stacked card
-                    below `md` carries its own inline labels instead. */}
+                    below `md` carries its own inline labels instead.
+
+                    Every heading is indented to sit directly over the first
+                    character of what is under it: the three answer columns are
+                    text inputs, whose text starts one `px-3` in from the
+                    column edge, so their headings carry the same `px-3` while
+                    the address column's sits flush like the address does. */}
                 <div
                   className={cn(
-                    "hidden gap-4 border-b px-6 pb-3 text-[11px] font-medium tracking-wider text-muted-foreground uppercase md:grid",
+                    "hidden items-end gap-4 border-b px-6 pb-3 text-[11px] font-medium tracking-wider text-muted-foreground uppercase md:grid",
                     COLUMNS,
                   )}
                 >
                   <span>Account</span>
-                  <span>Your name</span>
-                  <span>Where you&rsquo;re from</span>
-                  <span>Favourite vacation</span>
-                  <span className={data.mode === "challenge" ? "" : "sr-only"}>
-                    {data.mode === "challenge" ? "Cloud" : "Cloud link"}
-                  </span>
+                  <span className="px-3">Your name</span>
+                  <span className="px-3">Where you&rsquo;re from</span>
+                  <span className="px-3">Favourite vacation (hot or cold?)</span>
+                  <span className="sr-only">Account details</span>
                 </div>
 
-                <ul className="divide-y">
+                {/* No dividers: forty rows of rules is most of what made this
+                    page feel loud. A row is bounded by its own spacing, and
+                    the tint on a taken row is what the eye follows instead —
+                    which is why the rows are spaced apart rather than merely
+                    stacked: a run of taken rows with no gap fuses into one
+                    block, and the room can no longer count them. */}
+                <ul className="space-y-1 p-3">
                   {data.accounts.map((account) => (
                     <AccountRow
                       key={account.id}
@@ -276,26 +271,19 @@ export function AttendeeGrid({
             </Card>
           </motion.div>
 
-          <motion.p
-            variants={riseChild}
-            className="text-xs leading-relaxed text-muted-foreground"
-          >
+          <motion.p variants={riseChild} className="text-xs leading-relaxed text-muted-foreground">
             {/* No "you'll be asked to change your password": the accounts are
                 created without a forced reset on purpose, so the one password
                 keeps working across every cloud this event uses. */}
-            The password above is the one to use everywhere &mdash; there is
-            nothing to change and nothing to enrol.
+            The Google Workspace password works as-is &mdash; there is nothing to change and nothing to enrol.
             {hasAccessPass && (
               <>
                 {" "}
-                Azure is the exception: it asks for the <em>Azure pass</em>{" "}
-                instead of the password, and you may need to choose
-                &ldquo;Use your Temporary Access Pass&rdquo; on the sign-in
-                screen to be asked for it.
+                On the Azure sign-in screen you may need to choose &ldquo;Use your Temporary Access Pass&rdquo; before it asks for
+                the pass.
               </>
             )}{" "}
-            These accounts and everything in them are deleted when the{" "}
-            {data.mode} ends.
+            These accounts and everything in them are deleted when the {data.mode} ends.
           </motion.p>
         </>
       )}
@@ -303,6 +291,16 @@ export function AttendeeGrid({
   );
 }
 
+/**
+ * One account: the address and the three answers, with everything else a click
+ * away.
+ *
+ * The row is what the room reads across — who is on which account, and where
+ * they are from — so it carries only that. Passwords are the opposite: needed
+ * once, at sign-in, by one person, and a wall of them across every row is what
+ * made this table hard to scan. They live in the details panel below, open one
+ * row at a time.
+ */
 function AccountRow({
   account,
   values,
@@ -317,79 +315,138 @@ function AccountRow({
   onBlur: (field: FieldName) => void;
 }) {
   const filled = Boolean(account.claimedAt);
+  const [open, setOpen] = useState(false);
+  const detailsId = useId();
 
   return (
-    <li
-      className={cn(
-        "gap-4 px-6 py-4 transition-colors md:grid md:items-center",
-        COLUMNS,
-        filled ? "bg-muted/20" : "hover:bg-accent/20",
-      )}
-    >
-      <div className="min-w-0">
+    // The tint is inset and rounded rather than full-bleed: with the dividers
+    // gone it is the only thing marking one row off from the next, and a band
+    // running wall to wall reads as another rule.
+    <li className={cn("rounded-lg px-3 py-3 transition-colors", filled ? "bg-muted/40" : "hover:bg-accent/25")}>
+      <div className={cn("gap-4 md:grid md:items-center", COLUMNS)}>
         <Credential value={account.email} label="email" />
-        <Credential value={account.tempPassword} label="password" muted />
-        {/* Azure asks for this instead of the password — see the note under
-            the table. Labelled as expired rather than hidden once it lapses:
-            an attendee who cannot sign in needs to know which credential went
-            stale, not to find the row it used to be on. */}
-        {account.azureAccessPass && (
-          <Credential
-            value={account.azureAccessPass}
-            label={`Azure pass${accessPassExpired(account) ? " (expired)" : ""}`}
-            prefix={`Azure pass${accessPassExpired(account) ? " (expired)" : ""}`}
-            muted
-          />
-        )}
+
+        <Field
+          label="Your name"
+          value={values.name}
+          maxLength={CLAIM_LIMITS.name}
+          onChange={(v) => onEdit("name", v)}
+          onFocus={() => onFocus("name")}
+          onBlur={() => onBlur("name")}
+          className="mt-3 md:mt-0"
+        />
+        <Field
+          label="Where you're from"
+          value={values.from}
+          maxLength={CLAIM_LIMITS.from}
+          onChange={(v) => onEdit("from", v)}
+          onFocus={() => onFocus("from")}
+          onBlur={() => onBlur("from")}
+        />
+        <Field
+          label="Favourite vacation"
+          value={values.vacation}
+          maxLength={CLAIM_LIMITS.vacation}
+          onChange={(v) => onEdit("vacation", v)}
+          onFocus={() => onFocus("vacation")}
+          onBlur={() => onBlur("vacation")}
+        />
+
+        <div className="mt-3 md:mt-0 md:text-right">
+          {/* Ghost, not outline: one outlined button per row is forty outlines
+              down the page, competing with the inputs that are the point. */}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full text-muted-foreground md:w-auto"
+            onClick={() => setOpen((on) => !on)}
+            aria-expanded={open}
+            aria-controls={detailsId}
+          >
+            Details
+            <ChevronDown className={cn("transition-transform duration-200", open && "rotate-180")} />
+          </Button>
+        </div>
       </div>
 
-      <Field
-        label="Your name"
-        value={values.name}
-        maxLength={CLAIM_LIMITS.name}
-        placeholder="Your name"
-        onChange={(v) => onEdit("name", v)}
-        onFocus={() => onFocus("name")}
-        onBlur={() => onBlur("name")}
-        className="mt-3 md:mt-0"
-      />
-      <Field
-        label="Where you're from"
-        value={values.from}
-        maxLength={CLAIM_LIMITS.from}
-        placeholder="Chicago"
-        onChange={(v) => onEdit("from", v)}
-        onFocus={() => onFocus("from")}
-        onBlur={() => onBlur("from")}
-      />
-      <Field
-        label="Favourite vacation"
-        value={values.vacation}
-        maxLength={CLAIM_LIMITS.vacation}
-        placeholder="Two weeks in Lisbon"
-        onChange={(v) => onEdit("vacation", v)}
-        onFocus={() => onFocus("vacation")}
-        onBlur={() => onBlur("vacation")}
-      />
-
-      {/* This competitor's own environment, on a challenge — their project,
-          their resource group, their AWS account. A challenge runs on a single
-          cloud, so this is one button in practice; it maps anyway rather than
-          assuming. Workshops link once above, so their rows leave this cell out
-          entirely (no empty gap on mobile). */}
-      {account.links.length > 0 && (
-        <div className="mt-3 flex flex-wrap justify-end gap-2 md:mt-0">
-          {account.links.map((link) => (
-            <CloudButton
-              key={link.cloud}
-              link={link}
-              length="short"
-              className="w-full md:w-auto"
-            />
-          ))}
-        </div>
-      )}
+      {/* Kept in the DOM while closed so the copy buttons and the link are
+          there for anyone searching the page, and so opening a row costs
+          nothing. */}
+      <div id={detailsId} hidden={!open} className="mt-4">
+        <AccountDetails account={account} />
+      </div>
     </li>
+  );
+}
+
+/**
+ * Everything about an account that is not on its row: what to sign in with,
+ * and — on a challenge — where this competitor's own environment is. The
+ * address is not repeated here; it is on the row, with its own copy button.
+ */
+function AccountDetails({ account }: { account: Row }) {
+  // Labelled as expired rather than hidden once it lapses: an attendee who
+  // cannot sign in needs to know which credential went stale, not to find the
+  // row it used to be on.
+  const expired = accessPassExpired(account);
+
+  return (
+    <div className="grid gap-4 rounded-lg bg-muted/50 p-4 sm:grid-cols-2">
+      {/* Named for the directory it belongs to, not just "password". An event
+          hands out two secrets that look alike, and an attendee staring at a
+          sign-in box needs to know which box this one is for — Harness has no
+          password of its own, it is entered through Sign in with Google. */}
+      <Detail label="Google Password">
+        <Credential value={account.tempPassword} label="Google password" />
+      </Detail>
+      {/* Azure asks for this instead of the password — see the note under the
+          table. Only an event that provisioned Azure has one. */}
+      {account.azureAccessPass && (
+        <Detail label={`Azure Password${expired ? " (expired)" : ""}`}>
+          <Credential value={account.azureAccessPass} label="Azure pass" />
+        </Detail>
+      )}
+      {/* One per attendee on every event, whatever clouds it picked — this is
+          where the actual work happens, so it sits with the credentials rather
+          than with the org link at the top of the page. */}
+      {account.harnessProjectUrl && (
+        <Detail label="Your Harness project">
+          <LinkButton href={account.harnessProjectUrl}>Open project</LinkButton>
+        </Detail>
+      )}
+      {/* This competitor's own environment, on a challenge — their project,
+          their resource group, their AWS account. A workshop shares one per
+          cloud and links to it once above the table, so its rows have none. */}
+      {account.links.length > 0 && (
+        <Detail label="Your environment">
+          <div className="flex flex-wrap gap-2">
+            {account.links.map((link) => (
+              <CloudButton key={link.cloud} link={link} />
+            ))}
+          </div>
+        </Detail>
+      )}
+    </div>
+  );
+}
+
+/** One labelled thing inside a row's details panel. */
+function Detail({
+  label,
+  hint,
+  children,
+}: {
+  label: string;
+  /** What this credential is actually for, when the label alone won't say. */
+  hint?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="min-w-0">
+      <span className="block text-xs font-medium text-foreground">{label}</span>
+      {hint && <span className="mt-0.5 mb-1.5 block text-xs text-muted-foreground">{hint}</span>}
+      <div className={cn(!hint && "mt-1.5")}>{children}</div>
+    </div>
   );
 }
 
@@ -399,41 +456,14 @@ function accessPassExpired(account: Row): boolean {
   return at ? new Date(at).getTime() <= Date.now() : false;
 }
 
-/** An email or password, with the copy button attendees will actually need. */
-function Credential({
-  value,
-  label,
-  prefix,
-  muted = false,
-}: {
-  value: string;
-  label: string;
-  /**
-   * Names the credential in front of it. Email and password are recognisable
-   * on sight and go without; a third value on the row is not, and an attendee
-   * looking at two opaque strings has to be told which one Azure wants.
-   */
-  prefix?: string;
-  muted?: boolean;
-}) {
+/** One credential, with the copy button attendees will actually need. */
+function Credential({ value, label }: { value: string; label: string }) {
   return (
     <div className="flex items-start gap-1.5">
       {/* Wrapped rather than truncated: an attendee has to be able to read the
-          whole address to type it into a sign-in box, and generated addresses
+          whole value to type it into a sign-in box, and generated addresses
           run longer than any column width worth giving them. */}
-      <span
-        className={cn(
-          "min-w-0 font-mono text-sm break-all",
-          muted && "text-muted-foreground",
-        )}
-      >
-        {prefix && (
-          <span className="mr-1.5 font-sans text-xs text-muted-foreground">
-            {prefix}
-          </span>
-        )}
-        {value}
-      </span>
+      <span className="min-w-0 font-mono text-sm break-all">{value}</span>
       <CopyButton value={value} label={label} />
     </div>
   );
@@ -468,21 +498,22 @@ function CopyButton({ value, label }: { value: string; label: string }) {
       }}
       className="shrink-0 cursor-pointer rounded p-1 text-muted-foreground opacity-60 transition-opacity outline-none hover:opacity-100 focus-visible:ring-[3px] focus-visible:ring-ring/50"
     >
-      {copied ? (
-        <Check className="size-3.5 text-emerald-600" />
-      ) : (
-        <Copy className="size-3.5" />
-      )}
+      {copied ? <Check className="size-3.5 text-emerald-600" /> : <Copy className="size-3.5" />}
     </button>
   );
 }
 
-/** One shared answer input, with the label that only shows when stacked. */
+/**
+ * One shared answer input, with the label that only shows when stacked.
+ *
+ * No placeholder: the column heading above it (or the inline label, stacked)
+ * already says what goes in, and a grid of grey example answers reads as a
+ * grid of already-filled rows at a glance.
+ */
 function Field({
   label,
   value,
   maxLength,
-  placeholder,
   onChange,
   onFocus,
   onBlur,
@@ -491,7 +522,6 @@ function Field({
   label: string;
   value: string;
   maxLength: number;
-  placeholder: string;
   onChange: (value: string) => void;
   onFocus: () => void;
   onBlur: () => void;
@@ -499,13 +529,16 @@ function Field({
 }) {
   return (
     <label className={cn("block", className)}>
-      <span className="mb-1 block text-xs text-muted-foreground md:hidden">
-        {label}
-      </span>
+      <span className="mb-1 block text-xs text-muted-foreground md:hidden">{label}</span>
+      {/* Borderless at rest, outlined on hover and while being typed in. Ten
+          rows of three outlined boxes is thirty rectangles down the page; the
+          field's own background is enough to say "you can type here", and the
+          border earns its place only on the one field being used. It is made
+          transparent rather than removed so nothing shifts when it appears. */}
       <Input
+        className="border-transparent shadow-none hover:border-input focus:border-input"
         value={value}
         maxLength={maxLength}
-        placeholder={placeholder}
         aria-label={label}
         onChange={(e) => onChange(e.target.value)}
         onFocus={onFocus}
@@ -517,11 +550,7 @@ function Field({
 
 /** Shown when the event has no accounts yet — or no longer has any. */
 function EmptyState({ status, noun }: { status: RunStatus; noun: string }) {
-  const pending =
-    status === "scheduled" ||
-    status === "requested" ||
-    status === "provisioning" ||
-    status === "applying";
+  const pending = status === "scheduled" || status === "requested" || status === "provisioning" || status === "applying";
   const message =
     status === "scheduled"
       ? "This event hasn't started yet. Accounts appear here automatically once it's provisioned."
@@ -534,9 +563,7 @@ function EmptyState({ status, noun }: { status: RunStatus; noun: string }) {
   return (
     <Card>
       <CardContent className="flex items-center gap-3 text-sm text-muted-foreground">
-        {pending && status !== "scheduled" && (
-          <Loader2 className="size-4 shrink-0 animate-spin" />
-        )}
+        {pending && status !== "scheduled" && <Loader2 className="size-4 shrink-0 animate-spin" />}
         {message}
       </CardContent>
     </Card>

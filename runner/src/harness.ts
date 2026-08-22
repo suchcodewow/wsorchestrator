@@ -81,6 +81,17 @@ export function orgUrl(orgId: string): string {
   return `${cfg.baseUrl}/ng/account/${cfg.accountId}/settings/organizations/${orgId}/details`;
 }
 
+/**
+ * Console link to one attendee's project — where they actually do the work,
+ * so it lands on the project's overview rather than its settings the way
+ * `orgUrl` does (an organizer opens an org to administer it; an attendee opens
+ * a project to build in it).
+ */
+export function projectUrl(orgId: string, projectId: string): string {
+  const cfg = harnessCfg();
+  return `${cfg.baseUrl}/ng/account/${cfg.accountId}/home/orgs/${orgId}/projects/${projectId}/details`;
+}
+
 type Json = Record<string, unknown>;
 
 /**

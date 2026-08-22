@@ -293,6 +293,15 @@ export function RunView({
         </motion.div>
       )}
 
+      {/* First card on the page: handing the room its link is what an
+          organizer opens this page to do, so it sits above the build detail
+          rather than below the config. */}
+      {accounts.length > 0 && (
+        <motion.div variants={riseChild}>
+          <AttendeeLink runId={run.id} mode={run.mode} />
+        </motion.div>
+      )}
+
       {(resources.length > 0 || ACTIVE.has(run.status)) && (
         <motion.div variants={riseChild}>
           <BuiltPanel run={run} resources={resources} />
@@ -350,12 +359,6 @@ export function RunView({
           onSaved={refresh}
         />
       </motion.div>
-
-      {accounts.length > 0 && (
-        <motion.div variants={riseChild}>
-          <AttendeeLink runId={run.id} mode={run.mode} />
-        </motion.div>
-      )}
 
       {accounts.length > 0 && (
         <motion.div variants={riseChild}>

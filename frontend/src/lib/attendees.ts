@@ -55,6 +55,12 @@ export type AttendeeAccount = {
    * shares one environment per cloud and carries the links on the view instead.
    */
   links: CloudLink[];
+  /**
+   * This attendee's own Harness project, which every event creates one of per
+   * attendee regardless of cloud. Null on a run provisioned before the runner
+   * emitted the per-attendee URLs, which has the projects but not their links.
+   */
+  harnessProjectUrl: string | null;
 };
 
 export type AttendeeView = {
@@ -69,6 +75,14 @@ export type AttendeeView = {
    * rows.
    */
   links: CloudLink[];
+  /**
+   * The event's Harness organization, for the room to open. Null for a run
+   * that has not provisioned Harness yet, or one from before the runner
+   * emitted the URL. Like the cloud links it is not a secret: it carries the
+   * account and org identifiers that every attendee sees the moment they sign
+   * in with the account this page hands them.
+   */
+  harnessOrgUrl: string | null;
   accounts: AttendeeAccount[];
 };
 
@@ -97,6 +111,10 @@ type RunOutputs = {
   gcp_console_urls?: unknown;
   azure_portal_urls?: unknown;
   aws_accounts?: unknown;
+  /** The event's Harness org, which every event provisions regardless of cloud. */
+  harness_org_url?: unknown;
+  /** One project per attendee, keyed by the address it was created for. */
+  harness_project_urls?: unknown;
 };
 
 /** An output value, if it is a non-empty string. */
@@ -221,9 +239,12 @@ export async function getAttendeeView(
   // single values.
   const shared = sharedLinks(outputs, run.gcpProjectId);
 
+  const harnessProjects = map(outputs.harness_project_urls);
+
   const accounts: AttendeeAccount[] = rows.map((a) => ({
     ...a,
     links: competitorLinks(outputs, a.email),
+    harnessProjectUrl: str(harnessProjects[a.email]),
   }));
 
   return {
@@ -231,6 +252,7 @@ export async function getAttendeeView(
     mode: run.mode,
     status: run.status,
     links: shared,
+    harnessOrgUrl: str(outputs.harness_org_url),
     accounts,
   };
 }

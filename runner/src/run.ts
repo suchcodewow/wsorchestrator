@@ -45,6 +45,7 @@ import {
   orgIdentifier,
   orgUrl,
   projectIdentifier,
+  projectUrl,
 } from "./harness.js";
 import {
   accountsFor,
@@ -467,6 +468,13 @@ async function provisionHarness(run: RunRow): Promise<Record<string, unknown>> {
       total: accounts.length,
     });
 
+  // Keyed by address, the same shape the per-competitor cloud outputs use, so
+  // the attendee page can hand each row its own project link. The identifier
+  // is derived rather than stored, but deriving it a second time in the
+  // frontend would be a second copy of `harnessIdentifier`'s rules to keep in
+  // step — emitting the finished URL keeps those rules in one place.
+  const projectUrls: Record<string, string> = {};
+
   let built = 0;
   await countProjects(built);
   for (const { email } of accounts) {
@@ -476,12 +484,17 @@ async function provisionHarness(run: RunRow): Promise<Record<string, unknown>> {
     await createProject(orgId, projectId, `${givenName} ${familyName}`);
     await grantProjectAdmin(orgId, projectId, email);
     await grantOrgAttendee(orgId, email);
+    projectUrls[email] = projectUrl(orgId, projectId);
 
     await log(run.id, "stdout", `${email} -> admin of project ${projectId}`);
     await countProjects(++built);
   }
 
-  return { harness_org: orgId, harness_org_url: orgUrl(orgId) };
+  return {
+    harness_org: orgId,
+    harness_org_url: orgUrl(orgId),
+    harness_project_urls: projectUrls,
+  };
 }
 
 /**
