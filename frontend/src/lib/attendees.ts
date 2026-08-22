@@ -45,6 +45,17 @@ export type AttendeeAccount = {
   azureAccessPass: string | null;
   /** When that pass stops working, so the page can say if it already has. */
   azureAccessPassExpiresAt: Date | null;
+  /**
+   * This attendee's AWS console password. AWS is the one cloud whose password
+   * is not the shared Google one — the IAM user is created with an
+   * AWS-generated password that comes back in the run's outputs, keyed by the
+   * address the user was created for. Null when the run built no AWS
+   * environment, or was provisioned before this output existed.
+   *
+   * The IAM user name is the attendee's email address, so this is the only
+   * extra thing they need: the sign-in name matches every other cloud.
+   */
+  awsPassword: string | null;
   claimedName: string | null;
   claimedFrom: string | null;
   claimedVacation: string | null;
@@ -107,6 +118,11 @@ type RunOutputs = {
   azure_portal_url?: unknown;
   aws_account_id?: unknown;
   aws_console_url?: unknown;
+  /**
+   * AWS console passwords, address -> password. The one per-attendee secret
+   * that is not the shared Google password, because AWS generates it itself.
+   */
+  aws_attendee_passwords?: unknown;
   gcp_projects?: unknown;
   gcp_console_urls?: unknown;
   azure_portal_urls?: unknown;
@@ -240,11 +256,15 @@ export async function getAttendeeView(
   const shared = sharedLinks(outputs, run.gcpProjectId);
 
   const harnessProjects = map(outputs.harness_project_urls);
+  // Keyed by address on both the workshop and the challenge roots, since either
+  // one creates an IAM user per attendee.
+  const awsPasswords = map(outputs.aws_attendee_passwords);
 
   const accounts: AttendeeAccount[] = rows.map((a) => ({
     ...a,
     links: competitorLinks(outputs, a.email),
     harnessProjectUrl: str(harnessProjects[a.email]),
+    awsPassword: str(awsPasswords[a.email]),
   }));
 
   return {

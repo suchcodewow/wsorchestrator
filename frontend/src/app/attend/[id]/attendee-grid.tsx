@@ -196,6 +196,9 @@ export function AttendeeGrid({ initial, runId }: { initial: View; runId: string 
   // under the table rather than on every row — but only for an event that has
   // one, since most do not.
   const hasAccessPass = data.accounts.some((a) => a.azureAccessPass);
+  // AWS is the one cloud the Google password does not open, so say so once
+  // under the table — but only for an event that actually built one.
+  const hasAwsPassword = data.accounts.some((a) => a.awsPassword);
 
   return (
     <motion.div variants={staggerParent(0.05)} initial="hidden" animate="show" className="space-y-6">
@@ -281,6 +284,13 @@ export function AttendeeGrid({ initial, runId }: { initial: View; runId: string 
                 {" "}
                 On the Azure sign-in screen you may need to choose &ldquo;Use your Temporary Access Pass&rdquo; before it asks for
                 the pass.
+              </>
+            )}
+            {hasAwsPassword && (
+              <>
+                {" "}
+                AWS is the exception: it has its own password in your row&rsquo;s details, and your email address is the IAM
+                user name.
               </>
             )}{" "}
             These accounts and everything in them are deleted when the {data.mode} ends.
@@ -404,6 +414,14 @@ function AccountDetails({ account }: { account: Row }) {
       {account.azureAccessPass && (
         <Detail label={`Azure Password${expired ? " (expired)" : ""}`}>
           <Credential value={account.azureAccessPass} label="Azure pass" />
+        </Detail>
+      )}
+      {/* AWS is the one cloud that does not take the Google password: its IAM
+          user carries an AWS-generated one. The sign-in name is the same email
+          as everywhere else, so the password is all that needs saying. */}
+      {account.awsPassword && (
+        <Detail label="AWS Password" hint="Sign in with your email address as the IAM user name.">
+          <Credential value={account.awsPassword} label="AWS password" />
         </Detail>
       )}
       {/* One per attendee on every event, whatever clouds it picked — this is

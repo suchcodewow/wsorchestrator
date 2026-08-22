@@ -443,7 +443,8 @@ export function RunView({
               {/* Not "prompted to change their password": accounts are created
                   without a forced reset so the one password works across every
                   cloud the event uses. */}
-              The password is the same one in every cloud this {run.mode} uses.
+              The password is the same one in every cloud this {run.mode} uses, except AWS — AWS generates its own per
+              attendee, and it is on the attendee page with their row.
               {hasAccessPass &&
                 " Azure asks for the access pass instead — Microsoft requires MFA on portal sign-in, and the pass satisfies it without an authenticator app."}{" "}
               Accounts are deleted when the {run.mode} expires.

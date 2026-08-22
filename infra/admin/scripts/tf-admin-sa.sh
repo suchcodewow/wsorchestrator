@@ -81,12 +81,15 @@ gcloud projects add-iam-policy-binding "${ADMIN_PROJECT}" \
 
 # On the workshops folder: folderAdmin to write runner-sa's and app-sa's folder
 # bindings (iam.tf), plus project create/delete for the sandbox project
-# (sandbox.tf). Scoped to the folder, not the org, matching runner-sa's own
-# containment.
+# (sandbox.tf). serviceUsageAdmin because Terraform also enables the sandbox
+# project's APIs (google_project_service.sandbox_apis) — folderAdmin does not
+# carry serviceusage.services.list, so without this a plan 403s on refresh.
+# Scoped to the folder, not the org, matching runner-sa's own containment.
 for role in \
   roles/resourcemanager.folderAdmin \
   roles/resourcemanager.projectCreator \
-  roles/resourcemanager.projectDeleter
+  roles/resourcemanager.projectDeleter \
+  roles/serviceusage.serviceUsageAdmin
 do
   echo ">> Granting ${role} on folders/${WORKSHOPS_FOLDER_ID}"
   gcloud resource-manager folders add-iam-policy-binding "${WORKSHOPS_FOLDER_ID}" \

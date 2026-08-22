@@ -917,9 +917,11 @@ async function issueAzureAccessPasses(
       "stderr",
       `Could not read the Temporary Access Pass policy, so no passes were ` +
         `issued — attendees have a password, which Azure's mandatory MFA will ` +
-        `not accept on its own. The runner's app registration needs the Graph ` +
-        `permission UserAuthenticationMethod.ReadWrite.All (admin-consented). ` +
-        `${summarize(err)}`,
+        `not accept on its own. Reading the policy needs the Graph application ` +
+        `permission Policy.Read.AuthenticationMethod; issuing the passes then ` +
+        `needs UserAuthenticationMethod.ReadWrite.All. Grant both on the ` +
+        `runner's app registration, admin-consented — a 403 here usually means ` +
+        `the first one is missing. ${summarize(err)}`,
     );
     return;
   }
