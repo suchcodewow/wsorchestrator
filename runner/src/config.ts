@@ -385,8 +385,11 @@ export function harnessCfg() {
     delegateTokenName:
       process.env.HARNESS_DELEGATE_TOKEN_NAME ?? "workshop-delegate",
     /**
-     * Override the delegate container image. Empty keeps the Helm chart's own
-     * default, which is the right image for a short-lived workshop cluster.
+     * Pin the delegate container image. Empty — the normal case — means the
+     * runner asks Harness for the version it currently supports, since the
+     * Helm chart's default image can be old enough that Harness marks the
+     * delegate expired the moment it registers. Set this only to hold a
+     * specific image.
      */
     delegateImage: process.env.HARNESS_DELEGATE_IMAGE ?? "",
   };

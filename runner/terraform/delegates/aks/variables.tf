@@ -35,7 +35,7 @@ variable "delegate_name" {
 }
 
 variable "delegate_image" {
-  description = "Optional delegate image override; empty uses the chart default."
+  description = "Delegate container image, resolved from Harness by the runner; empty falls back to the chart default."
   type        = string
   default     = ""
 }

@@ -42,6 +42,7 @@ import {
   grantAccountAdmin,
   grantOrgAttendee,
   grantProjectAdmin,
+  latestDelegateImage,
   orgIdentifier,
   orgUrl,
   projectIdentifier,
@@ -283,11 +284,30 @@ async function installDelegates(
     return;
   }
 
+  // An explicit HARNESS_DELEGATE_IMAGE wins; otherwise ask Harness which
+  // delegate it currently supports, because the chart's default image is only
+  // as fresh as the chart and Harness expires a delegate six months after its
+  // release. Resolved once per run and shared by every cloud, so an event's
+  // clusters all get the same delegate.
+  let image = cfg.delegateImage;
+  if (!image) {
+    image = await latestDelegateImage();
+    await log(
+      run.id,
+      image ? "stdout" : "stderr",
+      image
+        ? `Harness delegate image: ${image}`
+        : "Could not determine the current Harness delegate version; " +
+          "falling back to the Helm chart's default image, which may be old " +
+          "enough for Harness to mark the delegate expired.",
+    );
+  }
+
   const common = {
     account_id: cfg.accountId,
     delegate_token: token,
     manager_endpoint: cfg.baseUrl,
-    delegate_image: cfg.delegateImage,
+    delegate_image: image,
   };
   const clusterName = makeClusterName(run.slug, run.id);
 

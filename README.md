@@ -418,7 +418,7 @@ everything the one before it does:
 | ----------------- | --------------------------------------------------------------- |
 | **operator**      | Schedules and runs their own events. What everyone starts as.   |
 | **manager**       | A **Show all events** switch in the user menu that flips the calendar to every user's events, and can open and delete any of them. Also writes the [workshops and lab guides](#workshops-and-lab-guides). |
-| **administrator** | A **Manage users** page listing everyone, where roles are set, and the [**Backups**](#backups) page — including restoring the database. |
+| **administrator** | A **Manage users** page listing everyone, where roles are set; **Admin settings**, which decides [who may sign in at all](#restricting-sign-in); and the [**Backups**](#backups) page — including restoring the database. |
 
 Roles are granted by an administrator, so the first one has to come from
 outside the app: any address in `SITE_ADMIN_EMAILS` (`site_admin_emails` in
@@ -439,6 +439,70 @@ what exists.
 The rules live in [`frontend/src/lib/roles.ts`](frontend/src/lib/roles.ts) and
 are enforced server-side on every read and write; the menu only decides what is
 worth showing.
+
+## Restricting sign-in
+
+By default anyone with a Google account can sign in, arriving as an
+`operator` — enough to schedule events that create real cloud accounts. To
+limit that to your own organization, an administrator adds the domains you
+allow under **Admin settings** in the user menu.
+
+The list lives in the database (`allowed_email_domains`), so changing it is a
+page and not a redeploy. Domains can be added, edited, and removed there, each
+with an optional note saying why it is on the list. An address whose domain
+isn't listed is refused at the Google callback, before any user row or session
+is written — it doesn't become a signed-out account waiting for approval, it
+simply isn't created. The visitor lands back on the sign-in page with a reason.
+
+**An empty list means no restriction.** That is the state a fresh deployment is
+in, and deleting the last domain returns it there rather than shutting everyone
+out.
+
+### The bootstrap, and not locking yourself out
+
+Three things keep the page from being a foot-gun:
+
+- **You can't save a change that would shut you out.** Adding the first domain
+  is the dangerous one — until then everyone is allowed, and the moment a list
+  exists everyone outside it is not. A change leaving the administrator making
+  it unable to sign in is refused, whether it's an add, an edit, or a delete.
+- **`SITE_ADMIN_EMAILS` addresses are always allowed**, whatever their domain.
+  The same list that bootstraps the first administrator is the way back in.
+- **`AUTH_ALLOWED_EMAIL_DOMAINS` still works and is always in force**, unioned
+  with the table. Set it from Terraform:
+
+  ```hcl
+  # infra/admin/terraform.tfvars
+  allowed_email_domains = ["example.com"]
+  ```
+
+  or in `frontend/.env` locally. These appear on the settings page as locked
+  rows: in force, but changed in the deployment's configuration rather than in
+  the app. Nothing is copied from it into the table — two editable copies of
+  one rule would only drift apart.
+
+If the table is ever wrong and nobody can get in, set `site_admin_emails` (or
+`allowed_email_domains`) in `terraform.tfvars` and redeploy. That is what the
+environment is for.
+
+**With exactly one domain in force**, the sign-in page asks Google for it (the
+`hd` parameter), so the account chooser offers Workspace accounts on that
+domain rather than letting someone pick a personal account and be turned away
+after. That's a hint in a URL the visitor controls, not the check — the check
+is server-side in [`frontend/src/auth.ts`](frontend/src/auth.ts) either way,
+against the value Google signs and returns.
+
+**Existing users are not affected retroactively.** The check runs at sign-in,
+so someone from a now-disallowed domain can't get back in once their session
+expires, but a live session keeps working and their user row stays. To cut
+them off now, delete the row — sessions cascade with it:
+
+```sql
+DELETE FROM users WHERE email NOT LIKE '%@example.com';
+```
+
+Attendee pages (`/attend/...`) are public and unaffected by any of this:
+attendees open a link and never sign in to this app.
 
 ## Backups
 

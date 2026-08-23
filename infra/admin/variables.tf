@@ -232,6 +232,17 @@ variable "site_admin_emails" {
   }
 }
 
+variable "allowed_email_domains" {
+  description = "Email domains allowed to sign in, unioned with the list administrators manage on the app's Admin settings page and always in force. Normally left empty and set from the app; this is the bootstrap, and the way back in if that list is ever wrong. Empty here and an empty table lets any Google account in. Addresses in site_admin_emails are always allowed regardless. Attendee pages are public and unaffected."
+  type        = list(string)
+  default     = []
+
+  validation {
+    condition     = alltrue([for d in var.allowed_email_domains : can(regex("^[^@\\s]+\\.[a-z]{2,}$", d))])
+    error_message = "allowed_email_domains must be bare domains, without an @ or a local part."
+  }
+}
+
 variable "reaper_schedule" {
   description = "Cron schedule for the reaper that destroys expired workshop runs."
   type        = string

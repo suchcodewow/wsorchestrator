@@ -62,6 +62,11 @@ A run is self-describing: a name, an attendee count, and a set of clouds.
    delegate is Helm-installed into each ([`delegates/`](terraform/delegates)).
    Best-effort: a delegate that will not install is logged and the workshop
    still goes ready. Teardown is implicit — destroying the cluster takes it.
+   The image is the version Harness reports as current, looked up per run
+   (`latestDelegateImage`), because the chart's default image trails the
+   delegate release by months and Harness expires a delegate six months out —
+   long enough that the chart default can register already-expired. Set
+   `HARNESS_DELEGATE_IMAGE` to pin a specific image instead.
 
 Harness identifiers can't contain hyphens and must not collide with reserved
 words, so names are put through `harnessIdentifier()` rather than reusing the

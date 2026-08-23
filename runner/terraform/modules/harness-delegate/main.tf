@@ -56,8 +56,11 @@ resource "helm_release" "delegate" {
     value = "false"
   }
 
-  # Only pin the image when explicitly overridden; otherwise the chart's own
-  # default (kept current by Harness) is the right image for the chart version.
+  # Normally set: the runner resolves the currently supported delegate version
+  # from Harness and passes it in. Left empty only when that lookup fails, in
+  # which case the chart's own default applies — which is a delegate Harness
+  # may already consider expired, since the chart ships far less often than the
+  # delegate does.
   dynamic "set" {
     for_each = var.delegate_image != "" ? [var.delegate_image] : []
     content {

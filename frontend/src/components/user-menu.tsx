@@ -13,6 +13,7 @@ import {
   Moon,
   Settings,
   ShieldCheck,
+  SlidersHorizontal,
   Sun,
   Terminal,
   UsersRound,
@@ -35,7 +36,12 @@ import {
   type ThemePreference,
 } from "@/db/schema";
 import type { BuildInfo } from "@/lib/build-info";
-import { SITE_ROLE_LABELS, canManageUsers, canSeeAllEvents } from "@/lib/roles";
+import {
+  SITE_ROLE_LABELS,
+  canManageSettings,
+  canManageUsers,
+  canSeeAllEvents,
+} from "@/lib/roles";
 import { setCalendarScope, setThemePreference } from "@/lib/user-settings";
 import { applyTheme } from "@/lib/theme";
 
@@ -183,6 +189,17 @@ export function UserMenu({
                 Cloud Status
               </Link>
             </DropdownMenuItem>
+            {canManageSettings(role) && (
+              // "Admin" in the label because the theme and calendar controls
+              // below are settings too, and the two are not the same thing:
+              // one is this account's, this one is the whole site's.
+              <DropdownMenuItem asChild>
+                <Link href="/settings">
+                  <SlidersHorizontal />
+                  Admin settings
+                </Link>
+              </DropdownMenuItem>
+            )}
           </>
         )}
 

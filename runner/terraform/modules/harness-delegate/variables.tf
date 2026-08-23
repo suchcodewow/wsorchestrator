@@ -20,7 +20,7 @@ variable "manager_endpoint" {
 }
 
 variable "delegate_image" {
-  description = "Override the delegate container image. Empty keeps the chart's own default, which is the right choice for a short-lived workshop cluster."
+  description = "The delegate container image, normally the currently supported version the runner resolves from Harness. Empty falls back to the chart's default, which Harness may already treat as expired."
   type        = string
   default     = ""
 }

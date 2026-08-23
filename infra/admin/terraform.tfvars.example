@@ -41,6 +41,11 @@ google_oauth_client_secret = "xxxx"
 # Site roles — see README.md#site-roles
 site_admin_emails = ["you@example.com"]
 
+# Who may sign in — see README.md#restricting-sign-in
+# Normally managed in the app (Admin settings). Set here only to bootstrap it,
+# or to get back in if that list is ever wrong; these are always in force.
+# allowed_email_domains = ["example.com"]
+
 # Custom domains — see README.md#custom-domains
 # custom_domains = ["example.com", "www.example.com"]
 

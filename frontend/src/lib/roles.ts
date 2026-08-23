@@ -53,6 +53,17 @@ export const canManageUsers = (role: SiteRole) =>
   roleAtLeast(role, "administrator");
 
 /**
+ * Change site-wide settings — today, which email domains may sign in.
+ *
+ * Administrators only, and for the plainest reason: this decides who can have
+ * an account at all, which is the setting every other permission sits on top
+ * of. It is also the one that can be got wrong in a way that shuts people out,
+ * so it belongs with users and backups rather than a rung lower.
+ */
+export const canManageSettings = (role: SiteRole) =>
+  roleAtLeast(role, "administrator");
+
+/**
  * Run read-only SQL against the database from the in-app console.
  *
  * Administrators only, and even for them the server runs every query inside a

@@ -77,6 +77,12 @@ resource "google_cloud_run_v2_service" "app" {
           length(var.site_admin_emails) > 0
           ? { SITE_ADMIN_EMAILS = join(",", var.site_admin_emails) }
           : {},
+          # Bootstrap for the sign-in domains — the rest are managed on the
+          # app's Admin settings page, and the two lists are unioned. Unset,
+          # with an empty table, means any Google account.
+          length(var.allowed_email_domains) > 0
+          ? { AUTH_ALLOWED_EMAIL_DOMAINS = join(",", var.allowed_email_domains) }
+          : {},
         )
         content {
           name  = env.key

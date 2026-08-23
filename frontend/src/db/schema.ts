@@ -613,6 +613,46 @@ export const LAB_IMAGE_LIMITS = {
   bytes: 5 * 1024 * 1024,
 } as const;
 
+/* ------------------------------------------------------------------ *
+ * Site settings — configuration an administrator changes from the app
+ * ------------------------------------------------------------------ */
+
+/**
+ * Email domains allowed to sign in, managed from the admin settings page.
+ *
+ * An empty table means no restriction: anyone with a Google account signs in
+ * as an operator, which is what the site does before anybody configures it.
+ * `AUTH_ALLOWED_EMAIL_DOMAINS` is unioned with these rows and cannot be edited
+ * from the app — it is the same bootstrap-from-outside idea as
+ * `SITE_ADMIN_EMAILS`, and the way back in if these rows are ever wrong.
+ *
+ * `domain` is stored bare and lowercased (`example.com`) — normalized on the
+ * way in by `normalizeDomain`, so the unique index actually means one row per
+ * domain rather than one per spelling of it.
+ */
+export const allowedEmailDomains = pgTable(
+  "allowed_email_domains",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    domain: text("domain").notNull(),
+    /** Why it is on the list — "the partner running the March workshops". */
+    note: text("note").notNull().default(""),
+    /** Who added it. Kept when they are deleted — the rule outlives them. */
+    createdBy: text("created_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [uniqueIndex("allowed_email_domains_domain_idx").on(t.domain)],
+);
+
+/** Longest domain the form accepts. The DNS limit on a whole name. */
+export const ALLOWED_DOMAIN_LIMITS = { domain: 253, note: 200 } as const;
+
+export type AllowedEmailDomain = typeof allowedEmailDomains.$inferSelect;
+
 export type WorkshopRun = typeof workshopRuns.$inferSelect;
 export type LabGuide = typeof labGuides.$inferSelect;
 export type LabWorkshop = typeof labWorkshops.$inferSelect;

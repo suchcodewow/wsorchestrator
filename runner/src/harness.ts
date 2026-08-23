@@ -526,6 +526,72 @@ export async function ensureOrgDelegateToken(orgId: string): Promise<string> {
   return value;
 }
 
+const DELEGATE_VERSION_PATH = "/ng/api/delegate-setup/latest-supported-version";
+
+/**
+ * The repository the delegate chart pulls its image from. The version endpoint
+ * answers with a bare version ("26.08.89802") rather than an image reference,
+ * so the repository has to come from somewhere — and it has to be the one the
+ * chart itself uses, since that is the registry Harness publishes every
+ * delegate tag to.
+ */
+const DELEGATE_IMAGE_REPO =
+  "us-docker.pkg.dev/gar-prod-setup/harness-public/harness/delegate";
+
+/** Delegate versions are `yy.mm.build`, e.g. 26.08.89802. */
+const DELEGATE_VERSION_RE = /^\d{2}\.\d{2}\.\d+$/;
+
+/**
+ * The delegate image Harness currently supports, as a full image reference,
+ * or "" if it cannot be determined.
+ *
+ * Worth a call per run because the Helm chart's own default image goes stale.
+ * Harness releases the delegate every week or two but the chart only every few
+ * months, so even the newest chart pins whichever delegate happened to be
+ * current when that chart shipped. A delegate expires six months after its
+ * release, so a chart that has gone that long between releases installs a
+ * delegate that registers and is immediately marked expired — which is exactly
+ * what the workshop delegates were doing.
+ *
+ * Never throws: the whole delegate step is best-effort, and "" leaves the
+ * chart's default image in place, which is the previous behaviour rather than
+ * a failure.
+ */
+export async function latestDelegateImage(): Promise<string> {
+  let res: { status: number; text: string };
+  try {
+    res = await rawRequest("GET", DELEGATE_VERSION_PATH, {});
+  } catch {
+    return "";
+  }
+  if (res.status < 200 || res.status >= 300) return "";
+
+  // Harness is not consistent about which envelope key an NG endpoint returns
+  // its payload under, so both spellings are accepted rather than betting on
+  // one and silently falling back forever if it is the other.
+  let version: unknown;
+  try {
+    const parsed = JSON.parse(res.text) as {
+      resource?: { latestSupportedVersion?: unknown };
+      data?: { latestSupportedVersion?: unknown };
+    };
+    version =
+      parsed.resource?.latestSupportedVersion ??
+      parsed.data?.latestSupportedVersion;
+  } catch {
+    return "";
+  }
+  if (typeof version !== "string") return "";
+
+  // Guard against a shape change handing back something that is not a version:
+  // a bogus tag would fail the image pull on every workshop cluster, which is
+  // worse than the stale-but-working chart default.
+  const tag = version.trim();
+  if (!DELEGATE_VERSION_RE.test(tag)) return "";
+
+  return `${DELEGATE_IMAGE_REPO}:${tag}`;
+}
+
 /**
  * Revoke the event's org delegate token at teardown, before the org is deleted.
  * Best-effort: a missing token (nothing was ever created) or an unsupported

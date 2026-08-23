@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
-import { ArrowRight, CalendarClock, Cloud, Users } from "lucide-react";
-import { auth, signIn } from "@/auth";
+import { AlertTriangle, ArrowRight, CalendarClock, Cloud, Users } from "lucide-react";
+import { auth, googleHostedDomain, signIn } from "@/auth";
 import { Button } from "@/components/ui/button";
 import { AmbientBackdrop } from "@/components/ambient-backdrop";
 import { BrandMark } from "@/components/brand-mark";
@@ -27,12 +27,34 @@ function safeCallback(value: string | undefined): string {
   return value;
 }
 
+/**
+ * Why a sign-in attempt came back here. Auth.js sends its errors to the page
+ * named by `pages.error` — this one — as `?error=<type>`. Only the types that
+ * a visitor can actually cause are worded for them; anything else is a
+ * deployment problem they can do nothing about, so it says so plainly.
+ */
+function errorMessage(error: string | undefined): string | null {
+  if (!error) return null;
+  switch (error) {
+    case "AccessDenied":
+      return "That account isn't allowed to sign in. Use your organization's account, or ask an administrator to have your domain added.";
+    case "OAuthAccountNotLinked":
+      return "That address already signed in with a different provider. Use the one you used the first time.";
+    case "Verification":
+      return "That sign-in link has expired or was already used. Try again.";
+    default:
+      return "Sign-in isn't working right now. If this keeps happening, tell an administrator.";
+  }
+}
+
 export default async function SignInPage({
   searchParams,
 }: {
-  searchParams: Promise<{ callbackUrl?: string }>;
+  searchParams: Promise<{ callbackUrl?: string; error?: string }>;
 }) {
-  const target = safeCallback((await searchParams).callbackUrl);
+  const params = await searchParams;
+  const target = safeCallback(params.callbackUrl);
+  const problem = errorMessage(params.error);
 
   const session = await auth();
   if (session) redirect(target);
@@ -76,12 +98,31 @@ export default async function SignInPage({
             ))}
           </ul>
 
+          {problem && (
+            <div
+              data-anim
+              role="alert"
+              className="mt-7 flex gap-2.5 rounded-lg border border-destructive/25 bg-destructive/10 p-3 text-sm leading-relaxed text-foreground"
+            >
+              <AlertTriangle className="mt-0.5 size-4 shrink-0 text-destructive" />
+              <span>{problem}</span>
+            </div>
+          )}
+
           <form
             data-anim
-            className="mt-8"
+            className={problem ? "mt-5" : "mt-8"}
             action={async () => {
               "use server";
-              await signIn("google", { redirectTo: target });
+              // Read inside the action, not at render: this is what is in force
+              // when the button is pressed, and the settings page can have
+              // changed the list since the page was served.
+              const hd = await googleHostedDomain();
+              await signIn(
+                "google",
+                { redirectTo: target },
+                hd ? { hd } : undefined,
+              );
             }}
           >
             <Button type="submit" variant="brand" size="lg" className="group w-full">
