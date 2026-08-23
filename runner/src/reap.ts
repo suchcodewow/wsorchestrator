@@ -228,6 +228,15 @@ async function destroyHarness(run: RunRow): Promise<void> {
     await log(run.id, "stdout", `component teardown skipped: ${message}`);
   }
   for (const component of catalog) {
+    // Templates are left to the org delete below rather than removed one at a
+    // time. A template is identified by version as well as identifier, so
+    // deleting one properly means enumerating its versions and removing each —
+    // several requests per template to tidy an organization that is about to
+    // stop existing. Ordering still matters and still holds: templates come
+    // first in the reversed order, so a connector is never deleted while a
+    // template above it is still being considered.
+    if (component.kind === "template") continue;
+
     const remove =
       component.kind === "connector"
         ? () => deleteConnector(orgId, component.identifier)

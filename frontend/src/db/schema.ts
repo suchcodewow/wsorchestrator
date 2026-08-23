@@ -466,6 +466,7 @@ export const COMPONENT_KINDS = [
   "secret_text",
   "secret_file",
   "connector",
+  "template",
 ] as const;
 export type ComponentKind = (typeof COMPONENT_KINDS)[number];
 
@@ -588,6 +589,13 @@ export const harnessComponents = pgTable(
     requires: jsonb("requires").notNull().default([]),
     /** Identifiers this must be created after, beyond what `spec` implies. */
     dependsOn: jsonb("depends_on").notNull().default([]),
+    /**
+     * Templates only: which version this is. A template's identity in Harness
+     * is its identifier *and* its version label, so a change ships as a new
+     * label rather than an edit — a workshop mid-lab keeps resolving the
+     * version its pipelines were written against. Ignored by other kinds.
+     */
+    versionLabel: text("version_label").notNull().default("1"),
     /**
      * Seeded from the repo rather than contributed. Editable, but not
      * deletable: a workshop with no cloud connector is not a workshop.

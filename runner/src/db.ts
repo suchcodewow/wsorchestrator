@@ -182,7 +182,11 @@ export async function setDestroyed(runId: string) {
  * ------------------------------------------------------------------ */
 
 /** Mirrors `COMPONENT_KINDS` in the frontend's Drizzle schema. */
-export type ComponentKind = "secret_text" | "secret_file" | "connector";
+export type ComponentKind =
+  | "secret_text"
+  | "secret_file"
+  | "connector"
+  | "template";
 
 /**
  * One secret, connector, or template the runner creates in a workshop's org.
@@ -198,6 +202,8 @@ export type Component = {
   spec: unknown;
   requires: string[];
   dependsOn: string[];
+  /** Templates only: the version label this component creates. */
+  versionLabel: string;
   builtin: boolean;
 };
 
@@ -226,10 +232,12 @@ export async function loadCatalog(setId?: string): Promise<Component[]> {
     spec: unknown;
     requires: unknown;
     depends_on: unknown;
+    version_label: string;
     builtin: boolean;
   }>(
     `select distinct on (identifier)
-            identifier, kind, scope, name, spec, requires, depends_on, builtin
+            identifier, kind, scope, name, spec, requires, depends_on,
+            version_label, builtin
        from harness_components
       where set_id is null or set_id = $1::uuid
       -- A candidate row wins over the baseline row with the same identifier.
@@ -245,6 +253,7 @@ export async function loadCatalog(setId?: string): Promise<Component[]> {
     spec: r.spec,
     requires: stringArray(r.requires),
     dependsOn: stringArray(r.depends_on),
+    versionLabel: r.version_label,
     builtin: r.builtin,
   }));
 }

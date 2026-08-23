@@ -1,6 +1,7 @@
 import { loadCatalog, log, recordResource, type Component, type RunRow } from "./db.js";
 import {
   createConnector,
+  createTemplate,
   upsertSecretFile,
   upsertSecretText,
 } from "./harness.js";
@@ -227,6 +228,7 @@ const RESOURCE_KIND: Record<Component["kind"], string> = {
   secret_text: "harness_secret",
   secret_file: "harness_secret",
   connector: "harness_connector",
+  template: "harness_template",
 };
 
 /** Create one component in the workshop's org. */
@@ -255,6 +257,14 @@ async function applyComponent(
         c.name,
         String(spec.type ?? ""),
         (spec.spec ?? {}) as Record<string, unknown>,
+      );
+    case "template":
+      return createTemplate(
+        orgId,
+        c.identifier,
+        c.name,
+        c.versionLabel,
+        String(spec.yaml ?? ""),
       );
     default: {
       // Exhaustive today; the guard is what turns a future kind added to the

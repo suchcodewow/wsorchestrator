@@ -161,12 +161,16 @@ type Method = "GET" | "POST" | "PUT" | "DELETE";
  * only the secret-file endpoints take one, and the boundary has to come from
  * fetch. It survives the retry loop: the parts are held in memory, so the body
  * is re-readable on a second attempt.
+ *
+ * A `string` body is sent verbatim. That is for the template endpoint, which
+ * takes raw YAML — under a Content-Type of `application/json`, which is not a
+ * mistake here but what Harness actually accepts (see `createTemplate`).
  */
 async function rawRequest(
   method: Method,
   path: string,
   query: Record<string, string | undefined>,
-  body?: Json | FormData,
+  body?: Json | FormData | string,
   opts: { omitAccount?: boolean } = {},
 ): Promise<{ status: number; text: string }> {
   const cfg = harnessCfg();
@@ -177,6 +181,7 @@ async function rawRequest(
   }
 
   const multipart = body instanceof FormData;
+  const raw = typeof body === "string";
 
   let status = 0;
   let text = "";
@@ -189,9 +194,11 @@ async function rawRequest(
       },
       body: multipart
         ? (body as FormData)
-        : body
-          ? JSON.stringify(body)
-          : undefined,
+        : raw
+          ? (body as string)
+          : body
+            ? JSON.stringify(body)
+            : undefined,
     });
 
     status = res.status;
@@ -213,7 +220,8 @@ async function api(
   method: "POST" | "PUT" | "DELETE",
   path: string,
   query: Record<string, string | undefined>,
-  body?: Json,
+  // A `string` is sent verbatim — the template endpoint takes raw YAML.
+  body?: Json | string,
   // The `/ng/api/*` endpoints take the account in the query string; the `/v1`
   // roles endpoint infers it from the api key and rejects the extra param, so
   // it opts out here.
@@ -672,6 +680,110 @@ export async function createConnector(
         spec: { ...spec, executeOnDelegate: false },
       },
     },
+  );
+  return duplicate;
+}
+
+/* ------------------------------------------------------------------ *
+ * Templates — the reusable pipeline, stage, and step definitions the
+ * labs are built out of
+ * ------------------------------------------------------------------ */
+
+/**
+ * Top-level keys under `template:` that identify it, which this client owns
+ * rather than the author.
+ *
+ * A contributor writing a template should be describing what it *does*; which
+ * organization it lands in and what it is called are facts about the
+ * deployment, and a workshop org is not known when the template is written. So
+ * any of these in the submitted YAML are dropped and replaced — the same thing
+ * the reference `Add-OrgYaml` does, and for the same reason.
+ *
+ * `projectIdentifier` is stripped though nothing here sets it: a template
+ * carrying one would be created into a project rather than the org, which is
+ * not what an org-scoped component means.
+ */
+const TEMPLATE_OWNED_KEYS = [
+  "name",
+  "identifier",
+  "versionLabel",
+  "orgIdentifier",
+  "projectIdentifier",
+];
+
+/**
+ * The YAML to send: the author's, with the identifying keys replaced by ours.
+ *
+ * Deliberately textual rather than parsed. A template body is arbitrary Harness
+ * YAML full of `<+expressions>` and deep pipeline structure, and round-tripping
+ * it through a parser risks changing something the author meant — quoting, key
+ * order, a block scalar. The keys being replaced are all at a known two-space
+ * indent directly under `template:`, so the edit is exact without understanding
+ * the rest, which is why no YAML library is needed here at all.
+ */
+export function templateYaml(
+  orgId: string,
+  identifier: string,
+  name: string,
+  versionLabel: string,
+  yaml: string,
+): string {
+  const lines = yaml.replace(/\r\n/g, "\n").split("\n");
+  const first = lines[0]?.trim();
+  if (first !== "template:") {
+    throw new Error(
+      `template "${identifier}" must start with "template:" (found ${
+        first ? `"${first}"` : "an empty first line"
+      })`,
+    );
+  }
+
+  const owned = new RegExp(`^ {2}(${TEMPLATE_OWNED_KEYS.join("|")}):`);
+  const body = lines.slice(1).filter((line) => !owned.test(line));
+
+  return [
+    "template:",
+    `  name: ${name}`,
+    `  identifier: ${identifier}`,
+    // Quoted: a version label of `1` is a number to YAML and a string to
+    // Harness, and the reference quotes it.
+    `  versionLabel: "${versionLabel}"`,
+    `  orgIdentifier: ${orgId}`,
+    ...body,
+  ].join("\n");
+}
+
+/**
+ * Create one org-scoped template. Returns whether it already existed.
+ *
+ * Two things about this endpoint are worth writing down, because both look like
+ * bugs and neither is:
+ *
+ *   * the body is raw YAML sent under `Content-Type: application/json`. That is
+ *     what the proven reference sends and what Harness accepts; a correct
+ *     `application/yaml` is rejected.
+ *   * `storeType=INLINE` says the template lives in Harness rather than in a
+ *     connected Git repository. Without it the create is read as the start of a
+ *     GitX flow and asks for repository details a workshop has none of.
+ *
+ * A template's identity is its identifier *and* its version label, so this
+ * creates a version rather than overwriting one. An existing version is left
+ * alone — which is right for a versioned entity, and is why this is `create`
+ * where the secrets are `upsert`: editing a published template in place would
+ * change what a running workshop's pipelines resolve to mid-lab.
+ */
+export async function createTemplate(
+  orgId: string,
+  identifier: string,
+  name: string,
+  versionLabel: string,
+  yaml: string,
+): Promise<boolean> {
+  const { duplicate } = await api(
+    "POST",
+    "/template/api/templates",
+    { orgIdentifier: orgId, storeType: "INLINE" },
+    templateYaml(orgId, identifier, name, versionLabel, yaml),
   );
   return duplicate;
 }
