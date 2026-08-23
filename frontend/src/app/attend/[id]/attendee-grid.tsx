@@ -516,7 +516,10 @@ function Credential({ value, label }: { value: string; label: string }) {
       // the layout: the block is 8px easier to hit on every side than it looks,
       // while the value still starts flush with the column edge and the rows
       // above and below stay as tight as if it had no padding at all.
-      className="group -mx-2 -my-1.5 flex w-full cursor-pointer items-start gap-1.5 rounded-md px-2 py-1.5 text-left transition-colors outline-none hover:bg-foreground/5 focus-visible:ring-[3px] focus-visible:ring-ring/50"
+      // `w-fit`, not `w-full`: on a wide screen the value column is far wider
+      // than any password in it, and a tint band running the whole way across
+      // reads as a row of its own — and makes a stray click copy something.
+      className="group -mx-2 -my-1.5 flex w-fit max-w-full cursor-pointer items-start gap-1.5 rounded-md px-2 py-1.5 text-left transition-colors outline-none hover:bg-foreground/5 focus-visible:ring-[3px] focus-visible:ring-ring/50"
       onClick={async () => {
         // Blocked outside a secure context and in some embedded browsers;
         // the text is on screen either way, so a failure is not worth a error.

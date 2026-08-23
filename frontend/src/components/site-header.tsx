@@ -4,6 +4,7 @@ import { SignInLink } from "@/components/sign-in-link";
 import { UserMenu } from "@/components/user-menu";
 import { buildInfo } from "@/lib/build-info";
 import { getUserPreferences } from "@/lib/user-preferences";
+import { cn } from "@/lib/utils";
 import type { Session } from "next-auth";
 import Link from "next/link";
 
@@ -19,12 +20,24 @@ import Link from "next/link";
  * `session` is passed in rather than read here — every caller has already
  * awaited it, and asking again would be a second lookup per render.
  */
-export async function SiteHeader({ session }: { session: Session | null }) {
+export async function SiteHeader({
+  session,
+  width = "max-w-6xl",
+}: {
+  session: Session | null;
+  /**
+   * The bar's inner width, to match the `main` underneath it. Every page in the
+   * app is `max-w-6xl` and takes the default; the attendee page is wider, and
+   * a bar that stayed at 6xl there would sit its brand and menu visibly inboard
+   * of the table's own edges.
+   */
+  width?: string;
+}) {
   const { themePreference, calendarScope } = await getUserPreferences();
 
   return (
     <header className="sticky top-0 z-40 border-b border-border/70 bg-background/70 backdrop-blur-xl">
-      <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-6">
+      <div className={cn("mx-auto flex h-14 items-center justify-between px-6", width)}>
         <Link
           href="/"
           className="group flex items-center gap-2.5 rounded-md text-sm font-medium tracking-tight outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"

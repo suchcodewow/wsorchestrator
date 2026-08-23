@@ -15,6 +15,9 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
+/** How wide this page runs — the header and the main read it from here. */
+const SHELL = "max-w-7xl";
+
 /**
  * The room's page. Public on purpose: attendees have no account on this app —
  * the account they are here to collect *is* their credential. Access control
@@ -37,9 +40,16 @@ export default async function AttendPage({
     <div className="relative min-h-screen">
       <AmbientBackdrop className="fixed inset-0 -z-10" />
 
-      <SiteHeader session={session} />
+      <SiteHeader session={session} width={SHELL} />
 
-      <main className="relative mx-auto max-w-6xl px-6 py-10">
+      {/*
+        Wider than the `max-w-6xl` every other page uses. This is the one screen
+        that is a table rather than a form — five columns of it, read across by
+        a room of people at once — and the width all goes to the three answer
+        columns, which are what actually run out of room. The header takes the
+        same cap so the brand and the menu stay flush with the table's edges.
+      */}
+      <main className={`relative mx-auto ${SHELL} px-6 py-10`}>
         <AttendeeGrid initial={view} runId={id} />
       </main>
     </div>
