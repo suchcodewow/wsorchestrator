@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { auth } from "@/auth";
+import { sessionOrToken } from "@/lib/api-auth";
 import { harnessComponentSets } from "@/db/schema";
 import { canContributeComponents, canPublishComponents } from "@/lib/roles";
 import {
@@ -25,16 +25,16 @@ async function readable(setId: string, userId: string, role: string) {
 
 /** One candidate set and the components it proposes. */
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const session = await auth();
-  if (!session?.user) {
+  const viewer = await sessionOrToken(req);
+  if (!viewer) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
   const { id } = await params;
-  const set = await readable(id, session.user.id, session.user.siteRole);
+  const set = await readable(id, viewer.id, viewer.siteRole);
   // A set somebody else owns answers the same "not found" as one that never
   // existed, so the endpoint does not confirm which ids are real.
   if (!set) return NextResponse.json({ error: "not_found" }, { status: 404 });
@@ -54,16 +54,16 @@ export async function PUT(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const session = await auth();
-  if (!session?.user) {
+  const viewer = await sessionOrToken(req);
+  if (!viewer) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
-  if (!canContributeComponents(session.user.siteRole)) {
+  if (!canContributeComponents(viewer.siteRole)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
   const { id } = await params;
-  const set = await readable(id, session.user.id, session.user.siteRole);
+  const set = await readable(id, viewer.id, viewer.siteRole);
   if (!set) return NextResponse.json({ error: "not_found" }, { status: 404 });
 
   const body = (await req.json().catch(() => null)) as {
@@ -100,16 +100,16 @@ export async function PUT(
  * components out from under a run still standing.
  */
 export async function DELETE(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const session = await auth();
-  if (!session?.user) {
+  const viewer = await sessionOrToken(req);
+  if (!viewer) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
   const { id } = await params;
-  const set = await readable(id, session.user.id, session.user.siteRole);
+  const set = await readable(id, viewer.id, viewer.siteRole);
   if (!set) return NextResponse.json({ error: "not_found" }, { status: 404 });
 
   const moved = await setStatus(id, "submitted", "testing");

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/auth";
+import { sessionOrToken } from "@/lib/api-auth";
 import { canContributeComponents, canPublishComponents } from "@/lib/roles";
 import { createComponentSet, listComponentSets } from "@/lib/components/catalog";
 import { validateSet } from "@/lib/components/validate";
@@ -20,11 +20,11 @@ const SANDBOX_TTL_SECONDS = 2 * 60 * 60;
 
 /** Review queue. Managers see every set; a contributor sees their own. */
 export async function GET(req: Request) {
-  const session = await auth();
-  if (!session?.user) {
+  const viewer = await sessionOrToken(req);
+  if (!viewer) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
-  if (!canContributeComponents(session.user.siteRole)) {
+  if (!canContributeComponents(viewer.siteRole)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
@@ -33,9 +33,9 @@ export async function GET(req: Request) {
     (status as ComponentSetStatus | null) ?? undefined,
   );
 
-  const mine = canPublishComponents(session.user.siteRole)
+  const mine = canPublishComponents(viewer.siteRole)
     ? sets
-    : sets.filter((s) => s.authorId === session.user.id);
+    : sets.filter((s) => s.authorId === viewer.id);
 
   return NextResponse.json({ sets: mine });
 }
@@ -55,11 +55,11 @@ export async function GET(req: Request) {
  * simply created with no run against it, which the review queue shows.
  */
 export async function POST(req: Request) {
-  const session = await auth();
-  if (!session?.user) {
+  const viewer = await sessionOrToken(req);
+  if (!viewer) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
-  if (!canContributeComponents(session.user.siteRole)) {
+  if (!canContributeComponents(viewer.siteRole)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
@@ -88,7 +88,7 @@ export async function POST(req: Request) {
   const name = body.name.trim().slice(0, 200);
   const { id: setId } = await createComponentSet({
     name,
-    authorId: session.user.id,
+    authorId: viewer.id,
     components: valid,
   });
 
@@ -106,7 +106,7 @@ export async function POST(req: Request) {
     // Harness-only run; this is what the run page counts.
     userCount: 1,
     clouds: [],
-    userId: session.user.id,
+    userId: viewer.id,
     scheduledStart: new Date(),
     ttlSeconds: SANDBOX_TTL_SECONDS,
     startNow: true,

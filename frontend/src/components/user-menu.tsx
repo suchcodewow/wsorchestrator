@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
+  Blocks,
   CalendarRange,
   ChevronDown,
   Cloud,
@@ -167,6 +168,19 @@ export function UserMenu({
           <Link href="/events">
             <Settings />
             Open orchestrator
+          </Link>
+        </DropdownMenuItem>
+
+        {/*
+          Unheaded and ungated, alongside the orchestrator: contributing
+          components is the floor permission, not a privilege. What a
+          contribution can reach is decided at review, so there is nothing to
+          gate here.
+        */}
+        <DropdownMenuItem asChild>
+          <Link href="/contribute">
+            <Blocks />
+            Contribute
           </Link>
         </DropdownMenuItem>
 

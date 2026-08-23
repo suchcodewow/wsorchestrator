@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { auth } from "@/auth";
+import { sessionOrToken } from "@/lib/api-auth";
 import { harnessComponentSets, workshopRuns } from "@/db/schema";
 import { canContributeComponents } from "@/lib/roles";
 import { setStatus } from "@/lib/components/catalog";
@@ -23,11 +23,11 @@ export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const session = await auth();
-  if (!session?.user) {
+  const viewer = await sessionOrToken(req);
+  if (!viewer) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
-  if (!canContributeComponents(session.user.siteRole)) {
+  if (!canContributeComponents(viewer.siteRole)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
@@ -37,7 +37,7 @@ export async function POST(
     .from(harnessComponentSets)
     .where(eq(harnessComponentSets.id, id));
 
-  if (!set || set.authorId !== session.user.id) {
+  if (!set || set.authorId !== viewer.id) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 

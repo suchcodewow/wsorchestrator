@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/auth";
+import { sessionOrToken } from "@/lib/api-auth";
 import { canContributeComponents } from "@/lib/roles";
 import { validateSet } from "@/lib/components/validate";
 
@@ -17,11 +17,11 @@ import { validateSet } from "@/lib/components/validate";
  * a cycle should have been told what this did and did not look at.
  */
 export async function POST(req: Request) {
-  const session = await auth();
-  if (!session?.user) {
+  const viewer = await sessionOrToken(req);
+  if (!viewer) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
-  if (!canContributeComponents(session.user.siteRole)) {
+  if (!canContributeComponents(viewer.siteRole)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 

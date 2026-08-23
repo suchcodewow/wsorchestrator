@@ -1,4 +1,4 @@
-import { auth } from "@/auth";
+import { sessionOrToken } from "@/lib/api-auth";
 import { NextResponse } from "next/server";
 import { canContributeComponents } from "@/lib/roles";
 import { buildBundle } from "@/lib/components/bundle";
@@ -13,12 +13,12 @@ import { buildBundle } from "@/lib/components/bundle";
  * at that moment, so Claude references the connector that is really there
  * instead of inventing a plausible identifier for it.
  */
-export async function GET() {
-  const session = await auth();
-  if (!session?.user) {
+export async function GET(req: Request) {
+  const viewer = await sessionOrToken(req);
+  if (!viewer) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
-  if (!canContributeComponents(session.user.siteRole)) {
+  if (!canContributeComponents(viewer.siteRole)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 

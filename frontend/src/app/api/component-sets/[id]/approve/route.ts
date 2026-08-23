@@ -16,6 +16,11 @@ export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  // Session-only, unlike every other component endpoint. Publishing is the one
+  // step that deploys a contribution into every workshop, and the comment above
+  // says it cannot be reached from the downloaded bundle — accepting a bearer
+  // token here would quietly make that untrue. A manager approves from a
+  // browser, having read what they are approving.
   const session = await auth();
   if (!session?.user) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });

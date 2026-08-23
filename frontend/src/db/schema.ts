@@ -455,6 +455,76 @@ export const runResources = pgTable(
 );
 
 /* ------------------------------------------------------------------ *
+ * API tokens — how the contributor bundle's scripts authenticate
+ * ------------------------------------------------------------------ */
+
+/**
+ * A personal access token, for the scripts in the downloadable contributor
+ * bundle.
+ *
+ * Every other way into this app is a browser session, which a command-line
+ * script cannot hold. The bundle exists to be run from a terminal by somebody
+ * iterating with Claude, so it needs a credential that can be pasted into an
+ * environment variable — and one that can be handed out and taken back without
+ * touching the account behind it.
+ *
+ * Only the hash is stored. The token is shown once, when it is created, and is
+ * unrecoverable afterwards: a token this app could print back is a token a
+ * database read hands over.
+ *
+ * These are *not* general-purpose session equivalents. `sessionOrToken` accepts
+ * them on the component endpoints and nowhere else, so a token that leaks
+ * cannot schedule a workshop, read the attendee roster, or reach anything an
+ * administrator can — see `@/lib/api-auth`.
+ */
+export const apiTokens = pgTable(
+  "api_tokens",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** What it is for, so a list of four tokens is not four identical rows. */
+    name: text("name").notNull(),
+    /**
+     * The token's public half: what it is looked up by, and the only part ever
+     * displayed again. Unique so a lookup is one indexed row rather than a scan
+     * comparing hashes.
+     */
+    prefix: text("prefix").notNull().unique(),
+    /** SHA-256 of the whole token. High-entropy random, so a fast hash is right. */
+    tokenHash: text("token_hash").notNull(),
+    /**
+     * When it stops working. Not nullable: a credential handed to somebody
+     * outside the team should expire on its own, because the moment nobody
+     * remembers issuing it is the moment nobody remembers to revoke it.
+     */
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    /**
+     * Set when revoked, rather than deleting the row. "This token was revoked"
+     * and "this token never existed" are different answers to give someone
+     * debugging a script, and only one of them is true.
+     */
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    /** Updated on use, so an unused token is visibly safe to revoke. */
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [index("api_tokens_user_idx").on(t.userId, t.createdAt)],
+);
+
+/** How long a new token lasts. Renewed by issuing another. */
+export const TOKEN_TTL_DAYS = 30;
+
+/** Longest a token's name may be. Shared by the form and the API. */
+export const TOKEN_NAME_MAX = 80;
+
+/** How many live tokens one account may hold at once. */
+export const MAX_TOKENS_PER_USER = 5;
+
+/* ------------------------------------------------------------------ *
  * Harness components — the catalog deployed into every workshop org
  * ------------------------------------------------------------------ */
 
