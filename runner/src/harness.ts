@@ -156,12 +156,17 @@ type Method = "GET" | "POST" | "PUT" | "DELETE";
  * One Harness request, retrying its own 5xx / rate-limit, returning the final
  * status and body verbatim. The interpreting is left to callers: `api` maps it
  * to ok/duplicate, `ensureOrgDelegateToken` parses the JSON it needs.
+ *
+ * A `FormData` body is sent as multipart with no Content-Type of our own —
+ * only the secret-file endpoints take one, and the boundary has to come from
+ * fetch. It survives the retry loop: the parts are held in memory, so the body
+ * is re-readable on a second attempt.
  */
 async function rawRequest(
   method: Method,
   path: string,
   query: Record<string, string | undefined>,
-  body?: Json,
+  body?: Json | FormData,
   opts: { omitAccount?: boolean } = {},
 ): Promise<{ status: number; text: string }> {
   const cfg = harnessCfg();
@@ -171,6 +176,8 @@ async function rawRequest(
     if (v) params.set(k, v);
   }
 
+  const multipart = body instanceof FormData;
+
   let status = 0;
   let text = "";
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
@@ -178,9 +185,13 @@ async function rawRequest(
       method,
       headers: {
         "x-api-key": cfg.apiKey,
-        "Content-Type": "application/json",
+        ...(multipart ? {} : { "Content-Type": "application/json" }),
       },
-      body: body ? JSON.stringify(body) : undefined,
+      body: multipart
+        ? (body as FormData)
+        : body
+          ? JSON.stringify(body)
+          : undefined,
     });
 
     status = res.status;
@@ -470,6 +481,272 @@ export async function grantOrgAttendee(
       name: cfg.orgResourceGroupName,
     },
   );
+}
+
+/* ------------------------------------------------------------------ *
+ * Cloud credentials — the event's Google service account key, stored as
+ * an org secret and wired to an org Google Cloud connector.
+ * ------------------------------------------------------------------ */
+
+const SECRET_PATH = "/ng/api/v2/secrets";
+const SECRET_FILE_PATH = "/ng/api/v2/secrets/files";
+
+/**
+ * Create a secret, or replace the value behind an existing one. Returns whether
+ * it was already there.
+ *
+ * Unlike the other creates, a duplicate is not simply success: a secret is a
+ * credential the runner may be re-uploading because it changed (a run whose
+ * environment was rebuilt has a new key), and a stale secret behind a live
+ * connector is worse than an error — so an existing secret is updated rather
+ * than left alone.
+ *
+ * `make` is called per request rather than once because the multipart form the
+ * file endpoint takes is consumed by the request that sends it.
+ */
+async function upsertSecret(
+  path: string,
+  orgId: string,
+  identifier: string,
+  make: () => Json | FormData,
+): Promise<boolean> {
+  const created = await rawRequest(
+    "POST",
+    path,
+    { orgIdentifier: orgId },
+    make(),
+  );
+  if (created.status >= 200 && created.status < 300) return false;
+  if (!isDuplicate(created.status, created.text)) {
+    throw new Error(
+      `Harness POST ${path} failed (${created.status}): ` +
+        `${messageOf(created.text)}`,
+    );
+  }
+
+  const updated = await rawRequest(
+    "PUT",
+    `${path}/${identifier}`,
+    { orgIdentifier: orgId },
+    make(),
+  );
+  if (updated.status < 200 || updated.status >= 300) {
+    throw new Error(
+      `Harness PUT ${path}/${identifier} failed (${updated.status}): ` +
+        `${messageOf(updated.text)}`,
+    );
+  }
+  return true;
+}
+
+/**
+ * Store `value` as an org-scoped inline text secret — the shape the Azure
+ * client secret and the AWS secret access key take. See `upsertSecret` for why
+ * an existing secret is overwritten.
+ */
+export async function upsertSecretText(
+  orgId: string,
+  identifier: string,
+  name: string,
+  value: string,
+): Promise<boolean> {
+  return upsertSecret(SECRET_PATH, orgId, identifier, () => ({
+    secret: {
+      type: "SecretText",
+      name,
+      identifier,
+      orgIdentifier: orgId,
+      description: "Created by Workshop Orchestrator.",
+      tags: { managed_by: "workshop-orchestrator" },
+      spec: {
+        secretManagerIdentifier: "org.harnessSecretManager",
+        valueType: "Inline",
+        value,
+      },
+    },
+  }));
+}
+
+/**
+ * The multipart body a secret file takes: a JSON `spec` part describing the
+ * secret, and the content itself as `file`.
+ *
+ * `org.harnessSecretManager` is the built-in Harness secret manager as seen
+ * from an organization, which is what the reference `Add-SecretJson` uses.
+ * Rebuilt per request rather than shared, so the create and the update that may
+ * follow it each send their own.
+ */
+function secretFileForm(
+  orgId: string,
+  identifier: string,
+  name: string,
+  content: string,
+): FormData {
+  const form = new FormData();
+  form.append(
+    "spec",
+    JSON.stringify({
+      secret: {
+        type: "SecretFile",
+        name,
+        identifier,
+        orgIdentifier: orgId,
+        description: "Created by Workshop Orchestrator.",
+        tags: { managed_by: "workshop-orchestrator" },
+        spec: { secretManagerIdentifier: "org.harnessSecretManager" },
+      },
+    }),
+  );
+  form.append("file", new Blob([content], { type: "text/plain" }), `${identifier}.json`);
+  return form;
+}
+
+/**
+ * Store `content` as an org-scoped secret file — the shape a GCP service
+ * account key takes, since a Google Cloud connector reads its credential from a
+ * file secret. Multipart, which is why the secret endpoints are the one place
+ * this client does not go through `api`.
+ */
+export async function upsertSecretFile(
+  orgId: string,
+  identifier: string,
+  name: string,
+  content: string,
+): Promise<boolean> {
+  return upsertSecret(SECRET_FILE_PATH, orgId, identifier, () =>
+    secretFileForm(orgId, identifier, name, content),
+  );
+}
+
+/**
+ * Remove an org secret at teardown. One already gone is not an error. Both
+ * kinds are deleted through the same path — the file endpoint only exists for
+ * writing the content.
+ */
+export async function deleteSecret(
+  orgId: string,
+  identifier: string,
+): Promise<void> {
+  await api("DELETE", `${SECRET_PATH}/${identifier}`, {
+    orgIdentifier: orgId,
+  });
+}
+
+/**
+ * Create one org-scoped connector. Returns whether it already existed.
+ *
+ * Every secret reference below is a bare identifier because the secrets live at
+ * org scope alongside the connector — a connector reaching up a scope would
+ * have to say `account.`.
+ *
+ * `executeOnDelegate: false` runs the connector's cloud calls on the Harness
+ * platform rather than through a delegate. Manual credentials are self-
+ * contained, so nothing here needs one — and the event's delegates are
+ * best-effort and may not exist at all, which would otherwise leave the
+ * connector permanently failing its test.
+ */
+async function createConnector(
+  orgId: string,
+  identifier: string,
+  name: string,
+  type: string,
+  spec: Json,
+): Promise<boolean> {
+  const { duplicate } = await api(
+    "POST",
+    "/ng/api/connectors",
+    { orgIdentifier: orgId },
+    {
+      connector: {
+        identifier,
+        name,
+        orgIdentifier: orgId,
+        description: "Created by Workshop Orchestrator.",
+        tags: { managed_by: "workshop-orchestrator" },
+        type,
+        spec: { ...spec, executeOnDelegate: false },
+      },
+    },
+  );
+  return duplicate;
+}
+
+/**
+ * The org's Google Cloud connector, authenticating with the service account key
+ * held in the org secret file `secretIdentifier`.
+ */
+export async function createGcpConnector(
+  orgId: string,
+  identifier: string,
+  name: string,
+  secretIdentifier: string,
+): Promise<boolean> {
+  return createConnector(orgId, identifier, name, "Gcp", {
+    credential: {
+      type: "ManualConfig",
+      spec: { secretKeyRef: secretIdentifier },
+    },
+  });
+}
+
+/**
+ * The org's Azure connector, authenticating as the run's app registration with
+ * the client secret held in the org secret `secretIdentifier`.
+ *
+ * `AZURE` is the public cloud — the alternative environment is the US
+ * government one, which nothing here builds in.
+ */
+export async function createAzureConnector(
+  orgId: string,
+  identifier: string,
+  name: string,
+  clientId: string,
+  tenantId: string,
+  secretIdentifier: string,
+): Promise<boolean> {
+  return createConnector(orgId, identifier, name, "Azure", {
+    credential: {
+      type: "ManualConfig",
+      spec: {
+        applicationId: clientId,
+        tenantId,
+        auth: { type: "Secret", spec: { secretRef: secretIdentifier } },
+      },
+    },
+    azureEnvironmentType: "AZURE",
+  });
+}
+
+/**
+ * The org's AWS connector, authenticating as the member account's IAM user.
+ *
+ * The access key id is sent inline and only the secret is a reference, which is
+ * how Harness models a manual AWS credential: the id is an identity, the secret
+ * is the credential.
+ */
+export async function createAwsConnector(
+  orgId: string,
+  identifier: string,
+  name: string,
+  accessKeyId: string,
+  secretIdentifier: string,
+): Promise<boolean> {
+  return createConnector(orgId, identifier, name, "Aws", {
+    credential: {
+      type: "ManualConfig",
+      spec: { accessKey: accessKeyId, secretKeyRef: secretIdentifier },
+    },
+  });
+}
+
+/** Remove an org connector at teardown. One already gone is not an error. */
+export async function deleteConnector(
+  orgId: string,
+  identifier: string,
+): Promise<void> {
+  await api("DELETE", `/ng/api/connectors/${identifier}`, {
+    orgIdentifier: orgId,
+  });
 }
 
 /* ------------------------------------------------------------------ *

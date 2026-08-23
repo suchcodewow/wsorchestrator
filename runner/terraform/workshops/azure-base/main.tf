@@ -39,6 +39,20 @@ resource "azurerm_role_assignment" "attendees" {
   principal_id         = each.value.object_id
 }
 
+# The identity the event's Harness Azure connector authenticates as. Its client
+# secret leaves here in a sensitive output, which the runner uploads to Harness
+# and then drops (see `linkAzureToHarness`). count, so a tenant whose
+# orchestrator principal may not create app registrations can turn the whole
+# thing off by passing an empty service_principal_name.
+module "harness_sp" {
+  source = "../../modules/harness-azure-sp"
+  count  = var.service_principal_name == "" ? 0 : 1
+
+  name  = var.service_principal_name
+  scope = azurerm_resource_group.this.id
+  role  = var.service_principal_role
+}
+
 module "aks" {
   source              = "../../modules/aks"
   cluster_name        = var.cluster_name

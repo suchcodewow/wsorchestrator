@@ -48,6 +48,18 @@ variable "labels" {
   default     = {}
 }
 
+variable "harness_user_name" {
+  description = "IAM user in the member account that the event's Harness AWS connector authenticates as. Empty creates no user and no access key."
+  type        = string
+  default     = ""
+}
+
+variable "harness_user_policy_arn" {
+  description = "Managed policy that user gets. AdministratorAccess — the connector administers the run's own member account, which is closed at teardown."
+  type        = string
+  default     = "arn:aws:iam::aws:policy/AdministratorAccess"
+}
+
 variable "run_id" {
   type    = string
   default = ""

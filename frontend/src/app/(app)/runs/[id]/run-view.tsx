@@ -30,6 +30,7 @@ import {
   Layers,
   Loader2,
   Network,
+  Plug,
   Server,
   User,
   Users,
@@ -539,6 +540,7 @@ const RESOURCE_ICONS: Record<string, LucideIcon> = {
   aks_cluster: Server,
   eks_cluster: Server,
   harness_delegate: Network,
+  harness_connector: Plug,
 };
 
 /**

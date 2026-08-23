@@ -58,7 +58,47 @@ A run is self-describing: a name, an attendee count, and a set of clouds.
    gets a subpath (`cloudStatePrefix`), so a multi-cloud run's states never
    collide in one bucket object.
 
-5. **Harness delegate per cluster** — after the clusters are up, an org-scoped
+5. **A Harness connector per cloud** — each cloud's apply also creates an
+   identity that administers what it just built, and the runner hands that
+   identity's credential to Harness as an org-scoped secret with an org-scoped
+   connector on top of it (`linkCloudToHarness`). An attendee's pipelines then
+   reach the workshop environment without anyone handling credentials, and
+   `org.gcp` / `org.azure` / `org.aws` mean the same thing in every event.
+
+   | Cloud | Identity | Secret | Connector |
+   | --- | --- | --- | --- |
+   | `gcp` | service account, `roles/owner` on the project ([`modules/harness-sa`](terraform/modules/harness-sa)) | file `gcp_service_account` | `gcp` |
+   | `azure` | app registration, Owner on the resource group ([`modules/harness-azure-sp`](terraform/modules/harness-azure-sp)) | text `azure_client_secret` | `azure` |
+   | `aws` | IAM user in the member account, AdministratorAccess ([`modules/harness-aws-user`](terraform/modules/harness-aws-user)) | text `aws_secret_access_key` | `aws` |
+
+   All three identities carry the same name (`makeHarnessIdentity`), so an
+   event's credentials are recognisably one event's. A no-cloud run gets the GCP
+   one in the shared sandbox project. The credentials **never land in the run's
+   outputs** — each is stripped after the upload, so none is stored on the run or
+   shown in the run page's raw outputs (the GCP service account address, the
+   Azure client/tenant id and the AWS access key id do stay: identities, not
+   credentials). Teardown deletes all three connectors and secrets, and
+   `terraform destroy` deletes the identities — which revokes the credentials
+   even where the environment outlives the run, as the sandbox project does.
+
+   Each cloud has an off switch: `GCP_HARNESS_CONNECTOR_ENABLED=false`,
+   `AZURE_HARNESS_CONNECTOR_ENABLED=false`, `AWS_HARNESS_CONNECTOR_ENABLED=false`
+   — off, that cloud's Terraform creates no identity at all. Two are worth
+   knowing about in advance, because in both cases the failure lands *inside the
+   apply that builds the environment* rather than merely skipping the connector:
+   an organization enforcing `iam.disableServiceAccountKeyCreation` refuses the
+   GCP key, and a tenant that has not granted the orchestrator principal
+   `Application.ReadWrite.OwnedBy` (or Application Developer) refuses the Azure
+   app registration. `GCP_HARNESS_SA_ROLE`, `AZURE_HARNESS_SP_ROLE`, and
+   `AWS_HARNESS_USER_POLICY_ARN` change how much each identity is granted;
+   `HARNESS_<CLOUD>_SECRET_ID` / `HARNESS_<CLOUD>_CONNECTOR_ID` (and their
+   `_NAME` counterparts) change what the pair is called — the identifiers are
+   what lab content references, so changing them after content exists breaks it.
+
+   Challenge mode is not covered: its competitors each own a separate
+   environment, and one org connector cannot stand for all of them.
+
+6. **Harness delegate per cluster** — after the clusters are up, an org-scoped
    delegate is Helm-installed into each ([`delegates/`](terraform/delegates)).
    Best-effort: a delegate that will not install is logged and the workshop
    still goes ready. Teardown is implicit — destroying the cluster takes it.

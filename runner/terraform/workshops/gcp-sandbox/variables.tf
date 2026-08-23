@@ -15,6 +15,18 @@ variable "attendee_role" {
   default     = "roles/editor"
 }
 
+variable "service_account_id" {
+  description = "Id of the service account the event's Harness Google Cloud connector authenticates as. Named after the run, so several no-cloud runs can hold their own in the one shared project. Empty creates no account and no key."
+  type        = string
+  default     = ""
+}
+
+variable "service_account_role" {
+  description = "Project role that service account is granted. Owner, so Harness pipelines can administer the project."
+  type        = string
+  default     = "roles/owner"
+}
+
 variable "cluster_name" {
   description = "Name of this run's GKE cluster in the shared project. The runner passes k8s-<event>-<short>."
   type        = string

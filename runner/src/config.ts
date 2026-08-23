@@ -110,6 +110,25 @@ export function gcpCfg() {
      * path fails with a clear message rather than a missing-var throw.
      */
     sandboxProjectId: process.env.GCP_SANDBOX_PROJECT_ID ?? "",
+    /**
+     * Whether each GCP-building run also creates a service account, keys it,
+     * and hands the key to Harness as an org secret behind a Google Cloud
+     * connector (see `linkGcpToHarness`). Azure and AWS have the same switch.
+     *
+     * On by default. The off switch exists for an organization that enforces
+     * `iam.disableServiceAccountKeyCreation`: there the key create is refused
+     * by policy, which would fail the apply that builds the project rather
+     * than just skipping the connector. Off, the Terraform creates no account
+     * at all and the runner has nothing to upload.
+     */
+    harnessConnectorEnabled:
+      (process.env.GCP_HARNESS_CONNECTOR_ENABLED ?? "true") !== "false",
+    /**
+     * Project role that service account gets. Owner — the connector is what
+     * the workshop's pipelines build through, so it administers the project
+     * rather than just reading it.
+     */
+    harnessSaRole: process.env.GCP_HARNESS_SA_ROLE ?? "roles/owner",
     region,
     /**
      * Ordered zone letters to try for the (zonal) GKE cluster, within
@@ -220,6 +239,23 @@ export function awsCfg() {
      */
     accountEmailDomain:
       process.env.AWS_ACCOUNT_EMAIL_DOMAIN ?? required("GOOGLE_WORKSPACE_DOMAIN"),
+    /**
+     * Whether each AWS-building run also creates an IAM user in its member
+     * account, keys it, and hands the key to Harness behind an AWS connector
+     * (see `linkAwsToHarness`). On by default; off, the Terraform creates no
+     * user at all.
+     */
+    harnessConnectorEnabled:
+      (process.env.AWS_HARNESS_CONNECTOR_ENABLED ?? "true") !== "false",
+    /**
+     * Policy that user gets. AdministratorAccess — unlike the other two
+     * clouds, the boundary here is a whole member account that is closed at
+     * teardown, so administrator inside it reaches nothing that outlives the
+     * workshop.
+     */
+    harnessUserPolicyArn:
+      process.env.AWS_HARNESS_USER_POLICY_ARN ??
+      "arn:aws:iam::aws:policy/AdministratorAccess",
   };
 }
 
@@ -274,6 +310,26 @@ export function azureCfg() {
      */
     userDomain:
       process.env.AZURE_USER_DOMAIN ?? required("GOOGLE_WORKSPACE_DOMAIN"),
+    /**
+     * Whether each Azure-building run also registers an app of its own, gives
+     * it a client secret, and hands that to Harness behind an Azure connector
+     * (see `linkAzureToHarness`).
+     *
+     * On by default. The off switch matters more here than for the other two
+     * clouds: registering an application needs a Graph permission
+     * (`Application.ReadWrite.OwnedBy`, or the Application Developer role) that
+     * creating users did not, so a tenant that has not granted it fails the
+     * apply. Off, the Terraform registers nothing.
+     */
+    harnessConnectorEnabled:
+      (process.env.AZURE_HARNESS_CONNECTOR_ENABLED ?? "true") !== "false",
+    /**
+     * Role that principal is granted on the run's resource group. Owner — the
+     * connector is what the workshop's pipelines build through, and the
+     * resource group is the per-run boundary, so this grants nothing elsewhere
+     * in the subscription.
+     */
+    harnessSpRole: process.env.AZURE_HARNESS_SP_ROLE ?? "Owner",
   };
 }
 
@@ -370,6 +426,36 @@ export function harnessCfg() {
       "All Organization Level Resources",
 
     /**
+     * The event's cloud credentials in Harness: one org-scoped secret per
+     * cloud holding what that cloud's connector authenticates with (a service
+     * account key file for GCP, a client secret for Azure, a secret access key
+     * for AWS), and the org-scoped connector built on it.
+     *
+     * Every identifier is org-local, so every event gets the same names and a
+     * pipeline written against `org.gcp` works in any workshop. The name is
+     * what an attendee sees in the connector/secret list; the identifier is
+     * what YAML and pipelines reference, so changing it after lab content
+     * exists would break that content — hence the settings.
+     */
+    gcpSecretId: process.env.HARNESS_GCP_SECRET_ID ?? "gcp_service_account",
+    gcpSecretName:
+      process.env.HARNESS_GCP_SECRET_NAME ?? "GCP Service Account",
+    gcpConnectorId: process.env.HARNESS_GCP_CONNECTOR_ID ?? "gcp",
+    gcpConnectorName: process.env.HARNESS_GCP_CONNECTOR_NAME ?? "GCP",
+
+    azureSecretId: process.env.HARNESS_AZURE_SECRET_ID ?? "azure_client_secret",
+    azureSecretName:
+      process.env.HARNESS_AZURE_SECRET_NAME ?? "Azure Client Secret",
+    azureConnectorId: process.env.HARNESS_AZURE_CONNECTOR_ID ?? "azure",
+    azureConnectorName: process.env.HARNESS_AZURE_CONNECTOR_NAME ?? "Azure",
+
+    awsSecretId: process.env.HARNESS_AWS_SECRET_ID ?? "aws_secret_access_key",
+    awsSecretName:
+      process.env.HARNESS_AWS_SECRET_NAME ?? "AWS Secret Access Key",
+    awsConnectorId: process.env.HARNESS_AWS_CONNECTOR_ID ?? "aws",
+    awsConnectorName: process.env.HARNESS_AWS_CONNECTOR_NAME ?? "AWS",
+
+    /**
      * Harness delegates. Each workshop cluster gets one delegate registered at
      * the ORG level (org scope comes from the delegate token). The install is
      * best-effort in the runner, so this whole block is soft: a bad value or a
@@ -404,6 +490,26 @@ export function makeProjectId(slug: string, runId: string): string {
     .slice(0, 30)
     .replace(/-+$/, "");
   return id;
+}
+
+/**
+ * Derive the name of the identity the event's Harness connectors authenticate
+ * as: the GCP service account id, the Azure app registration's display name,
+ * and the AWS IAM user name are all this one string, so an event's three
+ * credentials are recognisably the same event's.
+ *
+ * Carries the run's short suffix like the cluster name does, and for the same
+ * reason: a no-cloud run's service account is created in the one shared sandbox
+ * project, where several runs' accounts coexist. Shaped to GCP's rules, which
+ * are the tightest of the three — 6-30 characters, starting with a letter and
+ * ending with a letter or digit, which the `ws-` prefix and the hex suffix
+ * cover at both ends.
+ */
+export function makeHarnessIdentity(slug: string, runId: string): string {
+  const short = runId.replace(/-/g, "").slice(0, 6);
+  const suffix = `-${short}`;
+  const base = `ws-${slug}`.toLowerCase().replace(/[^a-z0-9-]/g, "-");
+  return base.slice(0, 30 - suffix.length).replace(/-+$/, "") + suffix;
 }
 
 /**

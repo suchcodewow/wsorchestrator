@@ -91,6 +91,7 @@ export function writeTfvars(
     clusterName,
     zoneLetter,
     region,
+    serviceAccountId,
   }: {
     /**
      * gcp-base and gcp-sandbox both build a GKE cluster and require this; it
@@ -108,12 +109,22 @@ export function writeTfvars(
     zoneLetter?: string;
     /** The region a built run is pinned to, when it is not the configured one. */
     region?: string;
+    /**
+     * The service account the event's Harness Google Cloud connector
+     * authenticates as. Deterministic in (slug, runId), so provision and
+     * teardown name the same account. Omitted — or empty, when the connector
+     * is switched off — creates none, which is also what every run built
+     * before this existed has in its state.
+     */
+    serviceAccountId?: string;
   } = {},
 ) {
   write(workDir, {
     ...commonVars(runId, region),
     project_id: projectId,
     attendee_emails: attendeeEmails,
+    service_account_id: serviceAccountId ?? "",
+    service_account_role: gcpCfg().harnessSaRole,
     ...(clusterName ? { cluster_name: clusterName } : {}),
     ...(zoneLetter ? { zone_letter: zoneLetter } : {}),
   });
@@ -151,11 +162,19 @@ export function writeAzureTfvars(
   resourceGroupName: string,
   clusterName: string,
   attendees: Record<string, string>,
+  /**
+   * App registration the event's Harness Azure connector authenticates as.
+   * Deterministic in (slug, runId), so provision and teardown name the same
+   * one; empty — when the connector is switched off — registers none.
+   */
+  harnessIdentity = "",
 ) {
   write(workDir, {
     ...azureCommonVars(runId),
     resource_group_name: resourceGroupName,
     cluster_name: clusterName,
+    service_principal_name: harnessIdentity,
+    service_principal_role: azureCfg().harnessSpRole,
     // Emails drive Terraform's for_each; passwords are a separate sensitive map
     // it only looks up (a sensitive value cannot be a for_each key).
     attendee_emails: Object.keys(attendees),
@@ -193,6 +212,13 @@ export function writeAwsTfvars(
   accountEmail: string,
   clusterName: string,
   attendeeEmails: string[],
+  /**
+   * IAM user in the member account that the event's Harness AWS connector
+   * authenticates as. Deterministic in (slug, runId), so provision and teardown
+   * name the same one; empty — when the connector is switched off — creates
+   * none.
+   */
+  harnessIdentity = "",
 ) {
   write(workDir, {
     ...awsCommonVars(runId),
@@ -200,6 +226,8 @@ export function writeAwsTfvars(
     account_email: accountEmail,
     cluster_name: clusterName,
     attendee_emails: attendeeEmails,
+    harness_user_name: harnessIdentity,
+    harness_user_policy_arn: awsCfg().harnessUserPolicyArn,
   });
 }
 

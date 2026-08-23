@@ -14,6 +14,7 @@ import {
   makeAwsAccountName,
   makeChallengeAwsAccountName,
   makeClusterName,
+  makeHarnessIdentity,
   makeProjectId,
   makeResourceGroupName,
   regionFromLocation,
@@ -36,6 +37,9 @@ import { summarize } from "./retry.js";
 import { displayName } from "./usernames.js";
 import {
   createAttendeeRole,
+  createAwsConnector,
+  createAzureConnector,
+  createGcpConnector,
   createOrg,
   createProject,
   ensureOrgDelegateToken,
@@ -47,6 +51,8 @@ import {
   orgUrl,
   projectIdentifier,
   projectUrl,
+  upsertSecretFile,
+  upsertSecretText,
 } from "./harness.js";
 import {
   accountsFor,
@@ -751,6 +757,233 @@ async function applyGkeWithZoneFailover(
   }
 }
 
+/**
+ * Outputs the cloud roots return their Harness connector's credential in. Each
+ * is consumed by the matching `link*ToHarness` and never reaches the run's
+ * stored outputs — see `linkCloudToHarness`.
+ */
+const GCP_KEY_OUTPUT = "harness_gcp_key_json";
+const AZURE_SECRET_OUTPUT = "harness_azure_client_secret";
+const AWS_SECRET_OUTPUT = "harness_aws_secret_access_key";
+
+/** An output as a string, or undefined if it is absent or of another shape. */
+function outputString(
+  outputs: Record<string, unknown>,
+  key: string,
+): string | undefined {
+  const v = outputs[key];
+  return typeof v === "string" && v.length > 0 ? v : undefined;
+}
+
+/**
+ * Store one cloud's credential as an org-scoped secret and build the connector
+ * that authenticates with it.
+ *
+ * This is the last step of a cloud's apply rather than part of
+ * `provisionHarness`, because the credential does not exist until Terraform has
+ * built the environment and the identity inside it. By the time it runs the org
+ * is already there — Harness is provisioned before any cloud — so the secret
+ * and connector have a scope to land in.
+ *
+ * Not best-effort, unlike the delegates: the connector is how an attendee's
+ * pipelines reach the cloud at all, so a workshop that quietly went ready
+ * without one is a workshop whose labs do not run.
+ */
+async function linkCloudToHarness(
+  run: RunRow,
+  spec: {
+    cloud: Cloud;
+    /** What the connector authenticates as, named in the run log. */
+    identity: string;
+    secretId: string;
+    secretName: string;
+    connectorId: string;
+    connectorName: string;
+    /** Writes the credential; answers whether the secret already existed. */
+    storeSecret: (orgId: string) => Promise<boolean>;
+    createConnector: (orgId: string) => Promise<boolean>;
+  },
+): Promise<void> {
+  const orgId = orgIdentifier(run.name, run.id);
+  const cloud = spec.cloud.toUpperCase();
+
+  await log(
+    run.id,
+    "system",
+    `Adding ${spec.identity} to Harness org ${orgId} as the secret ` +
+      `"${spec.secretName}" and the ${cloud} connector "${spec.connectorName}"`,
+  );
+
+  const existed = await spec.storeSecret(orgId);
+  await log(
+    run.id,
+    "stdout",
+    existed
+      ? `secret ${spec.secretId} updated with the current credential`
+      : `secret ${spec.secretId} created`,
+  );
+
+  const connectorExisted = await spec.createConnector(orgId);
+  await log(
+    run.id,
+    "stdout",
+    `connector ${spec.connectorId} -> secret ${spec.secretId}` +
+      (connectorExisted ? " (already existed)" : ""),
+  );
+
+  await recordResource(run.id, {
+    kind: "harness_connector",
+    key: spec.cloud,
+    label: `Harness ${cloud} connector`,
+    detail: `${spec.connectorId} (org ${orgId})`,
+  });
+}
+
+/**
+ * Every `link*ToHarness` returns the outputs with the credential removed, and
+ * it is the returned set the caller merges. These are live administrator
+ * credentials; `run.outputs` is stored in the database and rendered verbatim in
+ * the run page's "Raw outputs" card, and neither is a place for them. Harness
+ * holds the only copy that outlives the apply (Terraform state aside, which is
+ * where the attendee passwords already live).
+ *
+ * A missing credential means nothing was created — the connector is switched
+ * off for this deployment, or the run was built before it existed and its state
+ * has no identity in it — so there is simply nothing to link.
+ */
+async function linkGcpToHarness(
+  run: RunRow,
+  outputs: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  const { [GCP_KEY_OUTPUT]: key, ...rest } = outputs;
+  if (typeof key !== "string" || key.length === 0) return rest;
+
+  const cfg = harnessCfg();
+  await linkCloudToHarness(run, {
+    cloud: "gcp",
+    identity:
+      outputString(rest, "harness_gcp_service_account") ??
+      "the workshop service account",
+    secretId: cfg.gcpSecretId,
+    secretName: cfg.gcpSecretName,
+    connectorId: cfg.gcpConnectorId,
+    connectorName: cfg.gcpConnectorName,
+    // A file secret, not a text one: a Google Cloud connector reads its
+    // credential from a key file.
+    storeSecret: (orgId) =>
+      upsertSecretFile(orgId, cfg.gcpSecretId, cfg.gcpSecretName, key),
+    createConnector: (orgId) =>
+      createGcpConnector(
+        orgId,
+        cfg.gcpConnectorId,
+        cfg.gcpConnectorName,
+        cfg.gcpSecretId,
+      ),
+  });
+
+  return rest;
+}
+
+/** The Azure half of `linkGcpToHarness`: app registration, secret, connector. */
+async function linkAzureToHarness(
+  run: RunRow,
+  outputs: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  const { [AZURE_SECRET_OUTPUT]: secret, ...rest } = outputs;
+  if (typeof secret !== "string" || secret.length === 0) return rest;
+
+  // The connector needs all three: which application, in which tenant, with
+  // which secret. A credential without its ids would build a connector that
+  // cannot authenticate, which is worse than saying so here.
+  const clientId = outputString(rest, "harness_azure_client_id");
+  const tenantId = outputString(rest, "harness_azure_tenant_id");
+  if (!clientId || !tenantId) {
+    throw new Error(
+      "the Azure apply returned a client secret but no client/tenant id, so " +
+        "the Harness Azure connector cannot be created",
+    );
+  }
+
+  const cfg = harnessCfg();
+  await linkCloudToHarness(run, {
+    cloud: "azure",
+    identity:
+      outputString(rest, "harness_azure_application") ??
+      "the workshop app registration",
+    secretId: cfg.azureSecretId,
+    secretName: cfg.azureSecretName,
+    connectorId: cfg.azureConnectorId,
+    connectorName: cfg.azureConnectorName,
+    storeSecret: (orgId) =>
+      upsertSecretText(orgId, cfg.azureSecretId, cfg.azureSecretName, secret),
+    createConnector: (orgId) =>
+      createAzureConnector(
+        orgId,
+        cfg.azureConnectorId,
+        cfg.azureConnectorName,
+        clientId,
+        tenantId,
+        cfg.azureSecretId,
+      ),
+  });
+
+  return rest;
+}
+
+/** The AWS half of `linkGcpToHarness`: IAM user, access key, connector. */
+async function linkAwsToHarness(
+  run: RunRow,
+  outputs: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  const { [AWS_SECRET_OUTPUT]: secret, ...rest } = outputs;
+  if (typeof secret !== "string" || secret.length === 0) return rest;
+
+  const accessKeyId = outputString(rest, "harness_aws_access_key_id");
+  if (!accessKeyId) {
+    throw new Error(
+      "the AWS apply returned a secret access key but no access key id, so " +
+        "the Harness AWS connector cannot be created",
+    );
+  }
+
+  const cfg = harnessCfg();
+  await linkCloudToHarness(run, {
+    cloud: "aws",
+    identity: outputString(rest, "harness_aws_user") ?? "the workshop IAM user",
+    secretId: cfg.awsSecretId,
+    secretName: cfg.awsSecretName,
+    connectorId: cfg.awsConnectorId,
+    connectorName: cfg.awsConnectorName,
+    storeSecret: (orgId) =>
+      upsertSecretText(orgId, cfg.awsSecretId, cfg.awsSecretName, secret),
+    createConnector: (orgId) =>
+      createAwsConnector(
+        orgId,
+        cfg.awsConnectorId,
+        cfg.awsConnectorName,
+        accessKeyId,
+        cfg.awsSecretId,
+      ),
+  });
+
+  return rest;
+}
+
+/**
+ * The name of the identity this run's connector for `cloud` authenticates as,
+ * or "" when that cloud's connector is switched off — which is what makes the
+ * Terraform create none. One name across all three clouds, so an event's
+ * credentials are recognisably one event's.
+ */
+function harnessIdentityFor(run: RunRow, cloud: Cloud): string {
+  const enabled = {
+    gcp: () => gcpCfg().harnessConnectorEnabled,
+    azure: () => azureCfg().harnessConnectorEnabled,
+    aws: () => awsCfg().harnessConnectorEnabled,
+  }[cloud];
+  return enabled() ? makeHarnessIdentity(run.slug, run.id) : "";
+}
+
 /** Terraform the workshop's GCP project. */
 async function provisionGcp(run: RunRow): Promise<Record<string, unknown>> {
   const cfg = gcpCfg();
@@ -774,17 +1007,19 @@ async function provisionGcp(run: RunRow): Promise<Record<string, unknown>> {
     run.id,
     "system",
     `terraform apply — creating project, billing, APIs, the GKE cluster ` +
-      `${clusterName}, and granting editor to ${attendees.length} attendee(s)`,
+      `${clusterName}, the Harness service account, and granting editor to ` +
+      `${attendees.length} attendee(s)`,
   );
   await applyGkeWithZoneFailover(run, workDir, (zone) =>
     writeTfvars(workDir, projectId, run.id, attendees, {
       clusterName,
       zoneLetter: zone,
       region: gcpRegionFor(run),
+      serviceAccountId: harnessIdentityFor(run, "gcp"),
     }),
   );
 
-  return tfOutput(workDir);
+  return linkGcpToHarness(run, await tfOutput(workDir));
 }
 
 /**
@@ -835,10 +1070,11 @@ async function provisionSandbox(run: RunRow): Promise<Record<string, unknown>> {
       clusterName,
       zoneLetter: zone,
       region: gcpRegionFor(run),
+      serviceAccountId: harnessIdentityFor(run, "gcp"),
     }),
   );
 
-  return tfOutput(workDir);
+  return linkGcpToHarness(run, await tfOutput(workDir));
 }
 
 /**
@@ -1027,7 +1263,14 @@ async function provisionAzure(run: RunRow): Promise<Record<string, unknown>> {
   await log(run.id, "system", `Provisioning Azure resource group ${resourceGroup}`);
 
   const attendees = await attendeePasswords(run.id);
-  writeAzureTfvars(workDir, run.id, resourceGroup, clusterName, attendees);
+  writeAzureTfvars(
+    workDir,
+    run.id,
+    resourceGroup,
+    clusterName,
+    attendees,
+    harnessIdentityFor(run, "azure"),
+  );
 
   await log(run.id, "system", "terraform init");
   await tfInit(
@@ -1041,14 +1284,15 @@ async function provisionAzure(run: RunRow): Promise<Record<string, unknown>> {
     run.id,
     "system",
     `terraform apply — creating resource group, ${Object.keys(attendees).length} ` +
-      `Entra user(s), the AKS cluster ${clusterName}, and Contributor grants`,
+      `Entra user(s), the AKS cluster ${clusterName}, the Harness app ` +
+      `registration, and Contributor grants`,
   );
   await tfApply(workDir, (l) => log(run.id, l.stream, l.text));
 
   // After the apply, because a pass is issued against a user that has to exist.
   await issueAzureAccessPasses(run, Object.keys(attendees));
 
-  return tfOutput(workDir);
+  return linkAzureToHarness(run, await tfOutput(workDir));
 }
 
 /**
@@ -1123,6 +1367,7 @@ async function provisionAws(run: RunRow): Promise<Record<string, unknown>> {
     accountEmail,
     clusterName,
     attendees,
+    harnessIdentityFor(run, "aws"),
   );
 
   await log(run.id, "system", "terraform init");
@@ -1137,11 +1382,11 @@ async function provisionAws(run: RunRow): Promise<Record<string, unknown>> {
     run.id,
     "system",
     `terraform apply — creating account, ${attendees.length} IAM user(s), the ` +
-      `EKS cluster ${clusterName}, and PowerUser grants`,
+      `EKS cluster ${clusterName}, the Harness IAM user, and PowerUser grants`,
   );
   await applyAwsWithRetry(run, workDir);
 
-  return tfOutput(workDir);
+  return linkAwsToHarness(run, await tfOutput(workDir));
 }
 
 /**

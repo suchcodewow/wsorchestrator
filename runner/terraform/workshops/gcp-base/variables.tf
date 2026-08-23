@@ -27,9 +27,13 @@ variable "labels" {
 }
 
 variable "activate_apis" {
-  description = "APIs to enable in the workshop project. container.googleapis.com is needed for the GKE cluster."
+  description = "APIs to enable in the workshop project. container.googleapis.com is needed for the GKE cluster, iam.googleapis.com for the Harness connector's service account and its key."
   type        = list(string)
-  default     = ["compute.googleapis.com", "container.googleapis.com"]
+  default = [
+    "compute.googleapis.com",
+    "container.googleapis.com",
+    "iam.googleapis.com",
+  ]
 }
 
 variable "cluster_name" {
@@ -41,6 +45,18 @@ variable "attendee_emails" {
   description = "Attendee accounts, written by the runner after it creates them in Workspace."
   type        = list(string)
   default     = []
+}
+
+variable "service_account_id" {
+  description = "Id of the service account the event's Harness Google Cloud connector authenticates as. Empty creates no account and no key — the escape hatch for an org that forbids service account keys."
+  type        = string
+  default     = ""
+}
+
+variable "service_account_role" {
+  description = "Project role that service account is granted. Owner, so Harness pipelines can administer the workshop project."
+  type        = string
+  default     = "roles/owner"
 }
 
 # Passed by the runner but not consumed directly; declared to avoid warnings.

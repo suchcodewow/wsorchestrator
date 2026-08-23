@@ -49,6 +49,18 @@ variable "labels" {
   default = {}
 }
 
+variable "service_principal_name" {
+  description = "Display name of the app registration the event's Harness Azure connector authenticates as. Empty creates no principal and no secret — the escape hatch for a tenant whose orchestrator principal cannot register applications."
+  type        = string
+  default     = ""
+}
+
+variable "service_principal_role" {
+  description = "Role that principal is granted on the resource group. Owner, so Harness pipelines can administer the workshop's environment."
+  type        = string
+  default     = "Owner"
+}
+
 # Passed by the runner's tfvars but not consumed directly; declared to avoid
 # "value for undeclared variable" warnings.
 variable "run_id" {

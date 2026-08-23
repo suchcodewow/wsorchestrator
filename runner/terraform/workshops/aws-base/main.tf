@@ -64,6 +64,29 @@ resource "aws_iam_user_policy_attachment" "attendees" {
   policy_arn = var.attendee_policy_arn
 }
 
+# The identity the event's Harness AWS connector authenticates as, inside the
+# run's own member account. Its secret access key leaves here in a sensitive
+# output, which the runner uploads to Harness and then drops (see
+# `linkAwsToHarness`). count, so a deployment that would rather not hand out a
+# long-lived key can turn the whole thing off by passing an empty
+# harness_user_name.
+module "harness_user" {
+  source = "../../modules/harness-aws-user"
+  count  = var.harness_user_name == "" ? 0 : 1
+
+  name       = var.harness_user_name
+  policy_arn = var.harness_user_policy_arn
+  labels     = var.labels
+
+  providers = {
+    aws = aws.member
+  }
+
+  # Same reason as the EKS module below: nothing in here may be read before the
+  # account exists, or the aliased provider is still the management user.
+  depends_on = [aws_organizations_account.this]
+}
+
 module "eks" {
   source       = "../../modules/eks"
   cluster_name = var.cluster_name

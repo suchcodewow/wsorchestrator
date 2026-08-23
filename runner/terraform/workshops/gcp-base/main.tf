@@ -16,6 +16,23 @@ module "project" {
   attendee_emails = var.attendee_emails
 }
 
+# The identity the event's Harness Google Cloud connector authenticates as. Its
+# key leaves here in a sensitive output, which the runner uploads to Harness and
+# then drops (see `linkGcpToHarness`). count, so a deployment whose org policy
+# forbids service account keys can turn the whole thing off by passing an empty
+# service_account_id.
+module "harness_sa" {
+  source = "../../modules/harness-sa"
+  count  = var.service_account_id == "" ? 0 : 1
+
+  project_id   = module.project.project_id
+  account_id   = var.service_account_id
+  display_name = "Harness connector (${var.project_id})"
+  role         = var.service_account_role
+
+  depends_on = [module.project]
+}
+
 # A small, cheap Kubernetes cluster for attendees to use. depends_on the whole
 # project module so the container API is enabled and propagated first.
 module "gke" {

@@ -4,6 +4,7 @@ import {
   awsCfg,
   cloudStatePrefix,
   gcpCfg,
+  harnessCfg,
   stateBucket,
   TF_ROOT,
   challengeProjectMap,
@@ -13,6 +14,7 @@ import {
   makeClusterName,
   makeProjectId,
   makeResourceGroupName,
+  makeHarnessIdentity,
   regionFromLocation,
 } from "./config.js";
 import {
@@ -26,8 +28,10 @@ import {
 import { tfDestroy, tfInit } from "./terraform.js";
 import { deleteAccount, deleteOrgUnit } from "./directory.js";
 import {
+  deleteConnector,
   deleteOrg,
   deleteProject,
+  deleteSecret,
   listOrgProjects,
   orgIdentifier,
   projectIdentifier,
@@ -196,6 +200,33 @@ async function destroyHarness(run: RunRow): Promise<void> {
     await log(run.id, "stdout", `deleted project ${projectId}`);
   }
 
+  // Each cloud's connector and the secret holding its credential. The
+  // credentials themselves die with the identities `terraform destroy` already
+  // removed, so this is about not leaving the org's contents behind it —
+  // deleting a connector before the secret it references keeps Harness from
+  // refusing the secret as still in use. Best-effort and in that order, and
+  // attempted for every cloud whatever this run selected: a delete of something
+  // absent answers 404, which the client already treats as done.
+  const harness = harnessCfg();
+  const credentials: Array<[string, string, string]> = [
+    ["GCP", harness.gcpConnectorId, harness.gcpSecretId],
+    ["Azure", harness.azureConnectorId, harness.azureSecretId],
+    ["AWS", harness.awsConnectorId, harness.awsSecretId],
+  ];
+  for (const [cloud, connectorId, secretId] of credentials) {
+    for (const [what, remove] of [
+      ["connector", () => deleteConnector(orgId, connectorId)],
+      ["secret", () => deleteSecret(orgId, secretId)],
+    ] as const) {
+      try {
+        await remove();
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        await log(run.id, "stdout", `${cloud} ${what} delete skipped: ${message}`);
+      }
+    }
+  }
+
   // Revoke the org's delegate token before deleting the org — a live token
   // can keep the org from being removed. Best-effort: nothing was necessarily
   // created (delegates are opt-in and best-effort), so a failure here must not
@@ -227,6 +258,9 @@ async function destroyGcp(run: RunRow): Promise<void> {
     // is not where a new one would go. Destroy works off state either way, but
     // the config it evaluates on the way should describe the same place.
     region: regionFromLocation(run.outputs?.gke_cluster_location),
+    // Deterministic in (slug, runId), so this names the account provisioning
+    // created — for the same reason the cluster name is recomputed here.
+    serviceAccountId: makeHarnessIdentity(run.slug, run.id),
   });
   await tfInit(workDir, cfg.stateBucket, run.state_prefix, (l) =>
     log(run.id, l.stream, l.text),
@@ -260,6 +294,10 @@ async function destroySandbox(run: RunRow): Promise<void> {
   writeTfvars(workDir, cfg.sandboxProjectId, run.id, attendees, {
     clusterName: makeClusterName(run.slug, run.id),
     region: regionFromLocation(run.outputs?.gke_cluster_location),
+    // The shared project outlives the run, so this is the one teardown that
+    // has to name the account explicitly for it to be removed with everything
+    // else — and deleting it is what revokes the key Harness was given.
+    serviceAccountId: makeHarnessIdentity(run.slug, run.id),
   });
   await tfInit(workDir, cfg.stateBucket, run.state_prefix, (l) =>
     log(run.id, l.stream, l.text),
@@ -319,6 +357,11 @@ async function destroyAzure(run: RunRow): Promise<void> {
     resourceGroup,
     makeClusterName(run.slug, run.id),
     attendees,
+    // Deterministic in (slug, runId), so this names the app registration
+    // provisioning created — for the same reason the cluster name is
+    // recomputed here. Deleting it is what revokes the client secret Harness
+    // was given.
+    makeHarnessIdentity(run.slug, run.id),
   );
   await tfInit(
     workDir,
@@ -380,6 +423,10 @@ async function destroyAws(run: RunRow): Promise<void> {
     accountEmail,
     makeClusterName(run.slug, run.id),
     attendees,
+    // The IAM user provisioning created, named the same way. Closing the
+    // account would take it regardless; naming it keeps the config being
+    // destroyed a description of what was built.
+    makeHarnessIdentity(run.slug, run.id),
   );
   await tfInit(
     workDir,
