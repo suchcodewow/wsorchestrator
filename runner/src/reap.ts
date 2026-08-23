@@ -4,7 +4,6 @@ import {
   awsCfg,
   cloudStatePrefix,
   gcpCfg,
-  harnessCfg,
   stateBucket,
   TF_ROOT,
   challengeProjectMap,
@@ -27,6 +26,7 @@ import {
 } from "./workspace.js";
 import { tfDestroy, tfInit } from "./terraform.js";
 import { deleteAccount, deleteOrgUnit } from "./directory.js";
+import { teardownOrder } from "./components.js";
 import {
   deleteConnector,
   deleteOrg,
@@ -47,6 +47,7 @@ import {
   log,
   setDestroyed,
   setDestroying,
+  type Component,
   type RunRow,
 } from "./db.js";
 
@@ -200,30 +201,43 @@ async function destroyHarness(run: RunRow): Promise<void> {
     await log(run.id, "stdout", `deleted project ${projectId}`);
   }
 
-  // Each cloud's connector and the secret holding its credential. The
-  // credentials themselves die with the identities `terraform destroy` already
-  // removed, so this is about not leaving the org's contents behind it —
-  // deleting a connector before the secret it references keeps Harness from
-  // refusing the secret as still in use. Best-effort and in that order, and
-  // attempted for every cloud whatever this run selected: a delete of something
-  // absent answers 404, which the client already treats as done.
-  const harness = harnessCfg();
-  const credentials: Array<[string, string, string]> = [
-    ["GCP", harness.gcpConnectorId, harness.gcpSecretId],
-    ["Azure", harness.azureConnectorId, harness.azureSecretId],
-    ["AWS", harness.awsConnectorId, harness.awsSecretId],
-  ];
-  for (const [cloud, connectorId, secretId] of credentials) {
-    for (const [what, remove] of [
-      ["connector", () => deleteConnector(orgId, connectorId)],
-      ["secret", () => deleteSecret(orgId, secretId)],
-    ] as const) {
-      try {
-        await remove();
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        await log(run.id, "stdout", `${cloud} ${what} delete skipped: ${message}`);
-      }
+  // Everything the component catalog put in the org, dependents first.
+  //
+  // The credentials themselves die with the identities `terraform destroy` has
+  // already removed, so this is about not leaving the org's contents behind it
+  // — and Harness refuses to delete a secret a connector still references, so
+  // the order is not merely tidy. `teardownOrder` is the apply order reversed,
+  // derived from the same dependency graph, which is what keeps this correct as
+  // the catalog grows: it used to be a hand-written list of three cloud
+  // triples, and a contributed template above a contributed connector would
+  // have been left standing by it.
+  //
+  // Best-effort, and attempted for every component whatever this run applied: a
+  // delete of something absent answers 404, which the client already treats as
+  // done.
+  let catalog: Component[] = [];
+  try {
+    catalog = await teardownOrder();
+  } catch (err) {
+    // A catalog that will not resolve must not strand the org. Nothing below
+    // runs, the org delete still does, and Harness removes the contents with it.
+    const message = err instanceof Error ? err.message : String(err);
+    await log(run.id, "stdout", `component teardown skipped: ${message}`);
+  }
+  for (const component of catalog) {
+    const remove =
+      component.kind === "connector"
+        ? () => deleteConnector(orgId, component.identifier)
+        : () => deleteSecret(orgId, component.identifier);
+    try {
+      await remove();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      await log(
+        run.id,
+        "stdout",
+        `${component.kind} ${component.identifier} delete skipped: ${message}`,
+      );
     }
   }
 

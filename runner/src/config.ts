@@ -425,35 +425,15 @@ export function harnessCfg() {
       process.env.HARNESS_ORG_RESOURCE_GROUP_NAME ??
       "All Organization Level Resources",
 
-    /**
-     * The event's cloud credentials in Harness: one org-scoped secret per
-     * cloud holding what that cloud's connector authenticates with (a service
-     * account key file for GCP, a client secret for Azure, a secret access key
-     * for AWS), and the org-scoped connector built on it.
-     *
-     * Every identifier is org-local, so every event gets the same names and a
-     * pipeline written against `org.gcp` works in any workshop. The name is
-     * what an attendee sees in the connector/secret list; the identifier is
-     * what YAML and pipelines reference, so changing it after lab content
-     * exists would break that content — hence the settings.
+    /*
+     * The event's cloud credentials in Harness — one org-scoped secret per
+     * cloud and the connector built on it — used to be configured here, as
+     * twelve identifier and display-name variables. They are catalog rows now
+     * (`harness_components`), because an identifier that lab content references
+     * belongs with the component it names rather than in the environment of the
+     * process that happens to create it, and because nothing in an environment
+     * variable can say that the connector depends on the secret.
      */
-    gcpSecretId: process.env.HARNESS_GCP_SECRET_ID ?? "gcp_service_account",
-    gcpSecretName:
-      process.env.HARNESS_GCP_SECRET_NAME ?? "GCP Service Account",
-    gcpConnectorId: process.env.HARNESS_GCP_CONNECTOR_ID ?? "gcp",
-    gcpConnectorName: process.env.HARNESS_GCP_CONNECTOR_NAME ?? "GCP",
-
-    azureSecretId: process.env.HARNESS_AZURE_SECRET_ID ?? "azure_client_secret",
-    azureSecretName:
-      process.env.HARNESS_AZURE_SECRET_NAME ?? "Azure Client Secret",
-    azureConnectorId: process.env.HARNESS_AZURE_CONNECTOR_ID ?? "azure",
-    azureConnectorName: process.env.HARNESS_AZURE_CONNECTOR_NAME ?? "Azure",
-
-    awsSecretId: process.env.HARNESS_AWS_SECRET_ID ?? "aws_secret_access_key",
-    awsSecretName:
-      process.env.HARNESS_AWS_SECRET_NAME ?? "AWS Secret Access Key",
-    awsConnectorId: process.env.HARNESS_AWS_CONNECTOR_ID ?? "aws",
-    awsConnectorName: process.env.HARNESS_AWS_CONNECTOR_NAME ?? "AWS",
 
     /**
      * Harness delegates. Each workshop cluster gets one delegate registered at

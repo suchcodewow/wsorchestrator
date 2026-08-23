@@ -173,6 +173,78 @@ export async function setDestroyed(runId: string) {
   );
 }
 
+/* ------------------------------------------------------------------ *
+ * The Harness component catalog
+ * ------------------------------------------------------------------ */
+
+/** Mirrors `COMPONENT_KINDS` in the frontend's Drizzle schema. */
+export type ComponentKind = "secret_text" | "secret_file" | "connector";
+
+/**
+ * One secret, connector, or template the runner creates in a workshop's org.
+ *
+ * The row as the runner needs it: `spec`, `requires`, and `dependsOn` come back
+ * from `jsonb` already parsed, so nothing here re-parses them.
+ */
+export type Component = {
+  identifier: string;
+  kind: ComponentKind;
+  scope: string;
+  name: string;
+  spec: unknown;
+  requires: string[];
+  dependsOn: string[];
+  builtin: boolean;
+};
+
+/** A `jsonb` column that should hold an array of strings, defensively read. */
+const stringArray = (v: unknown): string[] =>
+  Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
+
+/**
+ * The component catalog to deploy: the published baseline, optionally overlaid
+ * by one candidate set.
+ *
+ * The overlay is by identifier, which is what lets a candidate propose
+ * *replacing* a baseline component rather than only adding beside it — a
+ * contributor fixing the GCP connector proposes a row with that identifier, and
+ * the sandbox run applies theirs instead of the baseline's.
+ *
+ * Ordering here is only for determinism; the real order comes from the
+ * dependency graph in `components.ts`.
+ */
+export async function loadCatalog(setId?: string): Promise<Component[]> {
+  const { rows } = await pool.query<{
+    identifier: string;
+    kind: ComponentKind;
+    scope: string;
+    name: string;
+    spec: unknown;
+    requires: unknown;
+    depends_on: unknown;
+    builtin: boolean;
+  }>(
+    `select distinct on (identifier)
+            identifier, kind, scope, name, spec, requires, depends_on, builtin
+       from harness_components
+      where set_id is null or set_id = $1::uuid
+      -- A candidate row wins over the baseline row with the same identifier.
+      order by identifier, (set_id is null)`,
+    [setId ?? null],
+  );
+
+  return rows.map((r) => ({
+    identifier: r.identifier,
+    kind: r.kind,
+    scope: r.scope,
+    name: r.name,
+    spec: r.spec,
+    requires: stringArray(r.requires),
+    dependsOn: stringArray(r.depends_on),
+    builtin: r.builtin,
+  }));
+}
+
 /**
  * One thing this run has built, as the UI should name it.
  *

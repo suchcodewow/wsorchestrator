@@ -13,6 +13,7 @@ import {
   uniqueIndex,
   customType,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import type { AdapterAccountType } from "next-auth/adapters";
 
 /**
@@ -361,6 +362,9 @@ export const RESOURCE_KINDS = [
   "aws_account",
   "eks_cluster",
   "harness_delegate",
+  "harness_secret",
+  "harness_connector",
+  "harness_template",
 ] as const;
 export type ResourceKind = (typeof RESOURCE_KINDS)[number];
 
@@ -413,6 +417,167 @@ export const runResources = pgTable(
     // The page's query: everything this run has built, in the order it was.
     index("run_resources_run_idx").on(t.runId, t.id),
     uniqueIndex("run_resources_identity_idx").on(t.runId, t.kind, t.key),
+  ],
+);
+
+/* ------------------------------------------------------------------ *
+ * Harness components — the catalog deployed into every workshop org
+ * ------------------------------------------------------------------ */
+
+/**
+ * What a component builds in Harness. Each maps to one create in the runner's
+ * Harness client; the kind decides which, and what shape `spec` takes.
+ */
+export const COMPONENT_KINDS = [
+  "secret_text",
+  "secret_file",
+  "connector",
+] as const;
+export type ComponentKind = (typeof COMPONENT_KINDS)[number];
+
+/**
+ * Where a component is created. `org` is once per workshop; `project` is once
+ * per attendee, in the project they administer — the difference between "every
+ * room shares this connector" and "everyone gets their own copy to edit".
+ */
+export const COMPONENT_SCOPES = ["org", "project"] as const;
+export type ComponentScope = (typeof COMPONENT_SCOPES)[number];
+
+/**
+ * How far a candidate set has got. A set is created by a sandbox test, so it
+ * exists as `testing` before anyone decides to offer it; `submitted` is the
+ * contributor saying it is ready, and approval folds its components into the
+ * baseline rather than leaving them addressable here.
+ */
+export const COMPONENT_SET_STATUSES = [
+  "testing",
+  "submitted",
+  "approved",
+  "rejected",
+] as const;
+export type ComponentSetStatus = (typeof COMPONENT_SET_STATUSES)[number];
+
+/**
+ * A candidate set: one contributor's proposed additions, overlaid on the
+ * published baseline for a sandbox run.
+ *
+ * A set exists from the moment someone tests, not from the moment they submit,
+ * and that is the point — testing is what puts the work in the database, so
+ * submitting is a change of status rather than an upload. There is nothing to
+ * import and no way for what was reviewed to differ from what was tested.
+ *
+ * The baseline itself is not a set. Baseline components are the rows with a
+ * null `setId`, which keeps "what every workshop gets" a single unambiguous
+ * query instead of a lookup for the blessed set's id.
+ */
+export const harnessComponentSets = pgTable(
+  "harness_component_sets",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** What the contributor called it: "Add GKE deploy template". */
+    name: text("name").notNull(),
+    status: text("status").notNull().default("testing"),
+    authorId: text("author_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    /** Reviewer's notes, and the reason on a rejection. */
+    notes: text("notes").notNull().default(""),
+    /**
+     * The sandbox run that exercised this set, if one has. What makes a review
+     * more than reading YAML: the reviewer can open the run and see which
+     * components actually applied and which stayed pending.
+     */
+    runId: uuid("run_id").references(() => workshopRuns.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [index("harness_component_sets_status_idx").on(t.status, t.updatedAt)],
+);
+
+/**
+ * One secret, connector, or template the runner creates in a workshop's org.
+ *
+ * These used to be TypeScript: a function per connector in the runner's Harness
+ * client, their identifiers in environment variables, and their order given by
+ * where the calls happened to sit in the provisioning routine. That works for
+ * three hand-written pairs and for nobody outside the repo. As data they can be
+ * ordered by their real dependencies, contributed by people without commit
+ * access, and reviewed before they run.
+ *
+ * `spec` is the Harness payload for the kind, with `${...}` bindings for the
+ * parts only a run knows — the org it landed in, an attendee's address, a
+ * credential Terraform just minted. See `resolveBindings` in the runner.
+ *
+ * Dependencies are declared in `dependsOn` *and* inferred from `org.<id>`
+ * references inside `spec`, because a contributor who writes the reference has
+ * already said what they depend on and should not have to say it twice.
+ */
+export const harnessComponents = pgTable(
+  "harness_components",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /**
+     * The candidate set this belongs to, or null for the published baseline —
+     * the components every workshop gets.
+     */
+    setId: uuid("set_id").references(() => harnessComponentSets.id, {
+      onDelete: "cascade",
+    }),
+    /**
+     * The Harness identifier, and this catalog's primary key by any other name:
+     * it is what `org.<identifier>` references resolve against, so it is how
+     * dependencies are expressed and how a candidate overlays a baseline row.
+     * Must satisfy Harness's identifier rules — see `harnessIdentifier`.
+     */
+    identifier: text("identifier").notNull(),
+    /** One of COMPONENT_KINDS. */
+    kind: text("kind").notNull(),
+    /** One of COMPONENT_SCOPES. */
+    scope: text("scope").notNull().default("org"),
+    /** Display name in the Harness console. */
+    name: text("name").notNull(),
+    /** What it is for, shown to contributors and reviewers. */
+    description: text("description").notNull().default(""),
+    /** The Harness payload for `kind`, with `${...}` bindings unresolved. */
+    spec: jsonb("spec").notNull(),
+    /**
+     * Binding paths that must resolve before this can be created, e.g.
+     * `outputs.harness_gcp_key_json`. An unsatisfied requirement is not always
+     * an error: see `applyCatalog` for when it means "not applicable to this
+     * run" and when it means the run is broken.
+     */
+    requires: jsonb("requires").notNull().default([]),
+    /** Identifiers this must be created after, beyond what `spec` implies. */
+    dependsOn: jsonb("depends_on").notNull().default([]),
+    /**
+     * Seeded from the repo rather than contributed. Editable, but not
+     * deletable: a workshop with no cloud connector is not a workshop.
+     */
+    builtin: boolean("builtin").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    // An identifier names exactly one thing in the baseline, and exactly one
+    // thing within a candidate set — but a candidate may reuse a baseline
+    // identifier, which is how it proposes replacing it.
+    uniqueIndex("harness_components_baseline_idx")
+      .on(t.identifier)
+      .where(sql`set_id is null`),
+    uniqueIndex("harness_components_set_idx")
+      .on(t.setId, t.identifier)
+      .where(sql`set_id is not null`),
+    index("harness_components_set_list_idx").on(t.setId, t.identifier),
   ],
 );
 

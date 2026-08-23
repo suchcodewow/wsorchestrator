@@ -633,18 +633,16 @@ export async function deleteSecret(
 }
 
 /**
- * A secret reference for a connector, naming the org scope the secret lives in.
- *
- * The prefix is not optional here even though the connector is in that same
- * org: Harness reads an unqualified reference as a *project* secret, so a bare
- * identifier on an org connector is rejected with "The project level secret
- * cannot be used at a org level". `org.` is what our secrets are, and it is the
- * same form `secretManagerIdentifier` already uses.
- */
-const orgSecretRef = (identifier: string) => `org.${identifier}`;
-
-/**
  * Create one org-scoped connector. Returns whether it already existed.
+ *
+ * `type` and `spec` come from a catalog component rather than from a typed
+ * wrapper per cloud — see `components.ts`. What each cloud's spec has to
+ * contain is Harness's business, and the one thing worth knowing here is how it
+ * names a secret: an unqualified reference is read as a *project* secret and
+ * rejected with "The project level secret cannot be used at a org level", so a
+ * spec referencing an org secret must say `org.<identifier>` even though the
+ * connector is in that same org. That prefix is also what `components.ts` reads
+ * dependencies out of.
  *
  * `executeOnDelegate: false` runs the connector's cloud calls on the Harness
  * platform rather than through a delegate. Manual credentials are self-
@@ -652,7 +650,7 @@ const orgSecretRef = (identifier: string) => `org.${identifier}`;
  * best-effort and may not exist at all, which would otherwise leave the
  * connector permanently failing its test.
  */
-async function createConnector(
+export async function createConnector(
   orgId: string,
   identifier: string,
   name: string,
@@ -676,80 +674,6 @@ async function createConnector(
     },
   );
   return duplicate;
-}
-
-/**
- * The org's Google Cloud connector, authenticating with the service account key
- * held in the org secret file `secretIdentifier`.
- */
-export async function createGcpConnector(
-  orgId: string,
-  identifier: string,
-  name: string,
-  secretIdentifier: string,
-): Promise<boolean> {
-  return createConnector(orgId, identifier, name, "Gcp", {
-    credential: {
-      type: "ManualConfig",
-      spec: { secretKeyRef: orgSecretRef(secretIdentifier) },
-    },
-  });
-}
-
-/**
- * The org's Azure connector, authenticating as the run's app registration with
- * the client secret held in the org secret `secretIdentifier`.
- *
- * `AZURE` is the public cloud — the alternative environment is the US
- * government one, which nothing here builds in.
- */
-export async function createAzureConnector(
-  orgId: string,
-  identifier: string,
-  name: string,
-  clientId: string,
-  tenantId: string,
-  secretIdentifier: string,
-): Promise<boolean> {
-  return createConnector(orgId, identifier, name, "Azure", {
-    credential: {
-      type: "ManualConfig",
-      spec: {
-        applicationId: clientId,
-        tenantId,
-        auth: {
-        type: "Secret",
-        spec: { secretRef: orgSecretRef(secretIdentifier) },
-      },
-      },
-    },
-    azureEnvironmentType: "AZURE",
-  });
-}
-
-/**
- * The org's AWS connector, authenticating as the member account's IAM user.
- *
- * The access key id is sent inline and only the secret is a reference, which is
- * how Harness models a manual AWS credential: the id is an identity, the secret
- * is the credential.
- */
-export async function createAwsConnector(
-  orgId: string,
-  identifier: string,
-  name: string,
-  accessKeyId: string,
-  secretIdentifier: string,
-): Promise<boolean> {
-  return createConnector(orgId, identifier, name, "Aws", {
-    credential: {
-      type: "ManualConfig",
-      spec: {
-        accessKey: accessKeyId,
-        secretKeyRef: orgSecretRef(secretIdentifier),
-      },
-    },
-  });
 }
 
 /** Remove an org connector at teardown. One already gone is not an error. */
