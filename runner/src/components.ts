@@ -297,7 +297,9 @@ export async function applyCatalog(
   orgId: string,
   outputs: Record<string, unknown>,
 ): Promise<ApplyResult> {
-  const components = await loadCatalog();
+  // A sandbox run overlays the contributor's candidate set on the baseline;
+  // every other run deploys the baseline alone.
+  const components = await loadCatalog(run.component_set_id ?? undefined);
   if (components.length === 0) return { applied: [], pending: [] };
 
   const { order, deps } = buildGraph(components);
@@ -364,8 +366,8 @@ export async function applyCatalog(
  * Deriving it from the same graph is what keeps teardown correct as the catalog
  * grows, which a hand-written list of cloud triples could never do.
  */
-export async function teardownOrder(): Promise<Component[]> {
-  const components = await loadCatalog();
+export async function teardownOrder(setId?: string): Promise<Component[]> {
+  const components = await loadCatalog(setId);
   if (components.length === 0) return [];
   return buildGraph(components).order.reverse();
 }

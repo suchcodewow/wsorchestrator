@@ -103,7 +103,10 @@ async function destroyRun(run: RunRow): Promise<void> {
     await setDestroying(run.id);
 
     // Clouds first — the accounts may hold access to them.
-    if (run.clouds.length === 0) {
+    if (run.harness_only) {
+      // A sandbox run never ran Terraform, so there is no state to destroy and
+      // no cloud to reach into. Its Harness org still goes, below.
+    } else if (run.clouds.length === 0) {
       // No-cloud run: only attendee grants on the shared project to revoke.
       await destroySandbox(run);
     } else {
@@ -217,7 +220,7 @@ async function destroyHarness(run: RunRow): Promise<void> {
   // done.
   let catalog: Component[] = [];
   try {
-    catalog = await teardownOrder();
+    catalog = await teardownOrder(run.component_set_id ?? undefined);
   } catch (err) {
     // A catalog that will not resolve must not strand the org. Nothing below
     // runs, the org delete still does, and Harness removes the contents with it.

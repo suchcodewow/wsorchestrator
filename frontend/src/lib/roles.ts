@@ -11,12 +11,15 @@ import { SITE_ROLES, type SiteRole } from "@/db/schema";
 
 /** Roles above an operator, for the "who can see this" copy in the UI. */
 export const SITE_ROLE_LABELS: Record<SiteRole, string> = {
+  contributor: "Contributor",
   operator: "Operator",
   manager: "Manager",
   administrator: "Administrator",
 };
 
 export const SITE_ROLE_DESCRIPTIONS: Record<SiteRole, string> = {
+  contributor:
+    "Writes Harness components and tests them in a sandbox. Cannot run events.",
   operator: "Schedules and runs their own events.",
   manager:
     "Also sees every user's events, can delete any of them, and writes the lab guides.",
@@ -30,6 +33,32 @@ export const SITE_ROLE_DESCRIPTIONS: Record<SiteRole, string> = {
 export function roleAtLeast(role: SiteRole, minimum: SiteRole): boolean {
   return SITE_ROLES.indexOf(role) >= SITE_ROLES.indexOf(minimum);
 }
+
+/**
+ * Schedule and run an event — the thing an operator account exists to do.
+ *
+ * Explicit because it is no longer implied by having signed in. A contributor
+ * has an account so they can test components against a sandbox org, and a
+ * sandbox run is the *only* run they may start: a full one builds cloud
+ * projects and clusters in accounts they have no other business in.
+ */
+export const canCreateEvents = (role: SiteRole) => roleAtLeast(role, "operator");
+
+/**
+ * Propose Harness components and test them in a Harness-only sandbox run.
+ *
+ * Everyone with an account can, contributors included — it is the floor rather
+ * than a privilege. What it does not include is publishing: a set is reviewed
+ * by a manager before any workshop deploys it, which is the real gate, because
+ * a contributed pipeline template runs on a delegate inside a workshop's cloud
+ * project.
+ */
+export const canContributeComponents = (role: SiteRole) =>
+  roleAtLeast(role, "contributor");
+
+/** Review a contributed component set and publish it into the baseline. */
+export const canPublishComponents = (role: SiteRole) =>
+  roleAtLeast(role, "manager");
 
 /** Flip the calendar to every user's events rather than only their own. */
 export const canSeeAllEvents = (role: SiteRole) => roleAtLeast(role, "manager");

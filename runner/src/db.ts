@@ -23,14 +23,18 @@ export type RunRow = {
   org_unit_path: string | null;
   gcp_project_id: string | null;
   state_prefix: string;
+  /** Build the Harness org and the catalog only — no Terraform. */
+  harness_only: boolean;
+  /** Candidate component set to overlay on the baseline, if any. */
+  component_set_id: string | null;
   ttl_seconds: number;
   expires_at: Date | null;
   outputs: Record<string, unknown> | null;
 };
 
 const RUN_COLUMNS = `id, user_id, name, mode, slug, user_count, clouds, status,
-                     org_unit_path, gcp_project_id, state_prefix, ttl_seconds,
-                     expires_at, outputs`;
+                     org_unit_path, gcp_project_id, state_prefix, harness_only,
+                     component_set_id, ttl_seconds, expires_at, outputs`;
 
 export async function getRun(runId: string): Promise<RunRow | undefined> {
   const { rows } = await pool.query<RunRow>(

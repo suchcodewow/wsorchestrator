@@ -10,6 +10,7 @@ import {
   MAX_USERS,
   limitsFor,
 } from "@/db/schema";
+import { canCreateEvents } from "@/lib/roles";
 import { createScheduledRun, listRunsForUser } from "@/lib/runs";
 import { startRunNow } from "@/lib/trigger";
 
@@ -71,6 +72,13 @@ export async function POST(req: Request) {
   const session = await auth();
   if (!session?.user) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+
+  // Creating an event is no longer implied by having signed in: a contributor
+  // has an account so they can test Harness components in a sandbox org, and a
+  // full run builds cloud projects and clusters they have no business in.
+  if (!canCreateEvents(session.user.siteRole)) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
   const parsed = createSchema.safeParse(await req.json().catch(() => null));

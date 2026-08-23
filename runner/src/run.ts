@@ -150,9 +150,27 @@ export async function runWorkshop(runId: string): Promise<void> {
     // A first pass before any cloud exists: components that need nothing from
     // Terraform land now rather than waiting on an apply they do not depend on.
     // Everything else stays pending until the apply that provides its inputs.
-    await applyCatalog(run, orgId, { ...outputs, ...credentials });
+    //
+    // For a sandbox run this is also the *only* pass, since nothing below it
+    // runs — which is why the result is kept rather than discarded.
+    const first = await applyCatalog(run, orgId, { ...outputs, ...credentials });
 
-    if (run.clouds.length === 0) {
+    if (run.harness_only) {
+      // A sandbox run: the org and the catalog, and nothing else. A component
+      // needing a cloud credential stays pending, and saying so is the point —
+      // "this one needs a GCP run to exercise" is a truthful result, where a
+      // silent pass would let a contributor believe it had been tested.
+      // Delegates are skipped along with the clusters they install into.
+      await log(
+        run.id,
+        "system",
+        `Harness-only run: ${first.applied.length} component(s) applied` +
+          (first.pending.length
+            ? `; ${first.pending.length} not exercised for want of a cloud ` +
+              `credential (${first.pending.join(", ")})`
+            : ""),
+      );
+    } else if (run.clouds.length === 0) {
       // No cloud selected — hand attendees the shared long-lived testing
       // project instead of building (and later destroying) a throwaway one.
       await merge(await provisionSandbox(run));

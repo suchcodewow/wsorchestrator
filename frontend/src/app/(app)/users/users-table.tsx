@@ -37,8 +37,13 @@ const ERRORS: Record<string, string> = {
   forbidden: "Your own role changed. Reload the page.",
 };
 
-/** Tint for the role chip. Operator stays neutral: it is the default. */
+/**
+ * Tint for the role chip. Operator stays neutral: it is the default. A
+ * contributor is dimmer still — it is the one role below that default, and it
+ * grants less than signing in used to.
+ */
 const ROLE_CHIP: Record<SiteRole, string> = {
+  contributor: "text-muted-foreground/70",
   operator: "text-muted-foreground",
   manager: "text-brand",
   administrator: "text-brand",

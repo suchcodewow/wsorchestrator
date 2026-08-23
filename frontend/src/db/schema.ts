@@ -12,6 +12,7 @@ import {
   index,
   uniqueIndex,
   customType,
+  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import type { AdapterAccountType } from "next-auth/adapters";
@@ -43,11 +44,22 @@ export const themePreference = pgEnum("theme_preference", THEME_PREFERENCES);
  * What a signed-in user may do across the site, least privileged first.
  *
  * The order is the hierarchy — `roleAtLeast` in `@/lib/roles` compares by
- * index — so roles must only ever be appended in ascending power. Everyone
- * starts an `operator`; the rest are granted by an administrator (or, for the
- * first one, by `SITE_ADMIN_EMAILS`; see `@/auth`).
+ * index — so the list must stay sorted from least to most privileged. Nothing
+ * compares against a literal index, so a role may be inserted as well as
+ * appended, which is how `contributor` arrived beneath `operator`.
+ *
+ * Everyone starts an `operator`; the rest are granted by an administrator (or,
+ * for the first one, by `SITE_ADMIN_EMAILS`; see `@/auth`). `contributor` is
+ * the one role below that default, and it is deliberately not something anyone
+ * becomes by signing in: it is for people outside the team who write Harness
+ * components and test them in a sandbox, and it grants nothing else.
  */
-export const SITE_ROLES = ["operator", "manager", "administrator"] as const;
+export const SITE_ROLES = [
+  "contributor",
+  "operator",
+  "manager",
+  "administrator",
+] as const;
 export type SiteRole = (typeof SITE_ROLES)[number];
 
 export const siteRole = pgEnum("site_role", SITE_ROLES);
@@ -243,6 +255,28 @@ export const workshopRuns = pgTable(
     gcpProjectId: text("gcp_project_id"),
     /** GCS state prefix: workshops/<run-id>. */
     statePrefix: text("state_prefix").notNull(),
+    /**
+     * Build the Harness organization and the component catalog, and stop —
+     * no Terraform, no cloud project, no cluster.
+     *
+     * This is what makes contributing components affordable. Testing a new
+     * connector or template means applying it to a real org and exercising it,
+     * and a full run builds a GCP project and a GKE cluster to get there, which
+     * is minutes and real money for something that never touches either. A
+     * component that genuinely needs a cloud credential simply stays pending —
+     * `applyCatalog` reports it, which is a truthful answer rather than a
+     * silent pass, and the reviewer can run the full thing.
+     */
+    harnessOnly: boolean("harness_only").notNull().default(false),
+    /**
+     * The candidate set this run deploys on top of the published baseline, if
+     * any. Its presence is what makes a run a test of somebody's proposed
+     * components rather than a deployment of the current ones.
+     */
+    componentSetId: uuid("component_set_id").references(
+      (): AnyPgColumn => harnessComponentSets.id,
+      { onDelete: "set null" },
+    ),
     /** Terraform outputs surfaced in the UI (project id, URLs, ...). */
     outputs: jsonb("outputs"),
     error: text("error"),
@@ -482,14 +516,13 @@ export const harnessComponentSets = pgTable(
     }),
     /** Reviewer's notes, and the reason on a rejection. */
     notes: text("notes").notNull().default(""),
-    /**
-     * The sandbox run that exercised this set, if one has. What makes a review
-     * more than reading YAML: the reviewer can open the run and see which
-     * components actually applied and which stayed pending.
+    /*
+     * There is deliberately no `runId` here. The sandbox runs that exercised a
+     * set are the rows in `workshopRuns` whose `componentSetId` is this one —
+     * which is the same fact, cannot disagree with itself, and keeps the two
+     * tables from referencing each other in a cycle that `db:push` would then
+     * have to find an order for.
      */
-    runId: uuid("run_id").references(() => workshopRuns.id, {
-      onDelete: "set null",
-    }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
