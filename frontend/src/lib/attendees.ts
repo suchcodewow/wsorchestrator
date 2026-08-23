@@ -117,7 +117,15 @@ type RunOutputs = {
   sandbox_console_url?: unknown;
   azure_portal_url?: unknown;
   aws_account_id?: unknown;
+  /** The account's sign-in alias — the host the console link is keyed by. */
+  aws_account_alias?: unknown;
   aws_console_url?: unknown;
+  /**
+   * The region this run's AWS environment — and so its EKS cluster — was built
+   * in. Absent on runs provisioned before it was recorded, which were all built
+   * in {@link DEFAULT_AWS_REGION}.
+   */
+  aws_region?: unknown;
   /**
    * AWS console passwords, address -> password. The one per-attendee secret
    * that is not the shared Google password, because AWS generates it itself.
@@ -127,6 +135,8 @@ type RunOutputs = {
   gcp_console_urls?: unknown;
   azure_portal_urls?: unknown;
   aws_accounts?: unknown;
+  /** Per-competitor sign-in aliases, address -> alias. */
+  aws_account_aliases?: unknown;
   /** The event's Harness org, which every event provisions regardless of cloud. */
   harness_org_url?: unknown;
   /** One project per attendee, keyed by the address it was created for. */
@@ -152,9 +162,47 @@ function gcpConsoleUrl(projectId: string): string {
   )}`;
 }
 
-/** The member account's own sign-in page, which is where its console lives. */
-function awsConsoleUrl(accountId: string): string {
-  return `https://${encodeURIComponent(accountId)}.signin.aws.amazon.com/console`;
+/**
+ * Where a run with no recorded region opens. Every AWS run built before the
+ * region became an output was built under the runner's `AWS_REGION` default, so
+ * this is the region those runs are actually in, not a guess.
+ */
+const DEFAULT_AWS_REGION = "us-east-1";
+
+/**
+ * Region names are a closed vocabulary AWS adds to, so this checks the shape
+ * rather than a list: the value is interpolated into a hostname, where
+ * percent-encoding would not make a bad value safe.
+ */
+const AWS_REGION = /^[a-z0-9-]+$/;
+
+/** The region a run's AWS environment is in, or the region it must have been. */
+function awsRegion(outputs: RunOutputs): string {
+  const region = str(outputs.aws_region);
+  return region && AWS_REGION.test(region) ? region : DEFAULT_AWS_REGION;
+}
+
+/**
+ * The member account's own sign-in page, which is where its console lives,
+ * pointed at the region the account's cluster is in.
+ *
+ * Keyed by the account's sign-in *alias*, not its id: AWS answers the
+ * `<account-id>.signin.aws.amazon.com` form with a 404, and only the alias host
+ * resolves. Either way the subdomain prefills the account, so nobody types the
+ * 12-digit number.
+ *
+ * An AWS account is global but the console is not: signing in without saying
+ * where lands on whatever region the browser last used, where the workshop's
+ * EKS cluster does not appear. `region` is the parameter signin acts on — it
+ * answers with a redirect to the region's own console home. (`redirect_uri`
+ * looks like the parameter for this and is not: signin forwards it to the
+ * region-less console home as a literal query param and ignores it.)
+ */
+function awsConsoleUrl(alias: string, region: string): string {
+  return (
+    `https://${encodeURIComponent(alias)}.signin.aws.amazon.com/console` +
+    `?region=${region}`
+  );
 }
 
 /** Drop the clouds this run did not build, keeping CLOUDS' order. */
@@ -171,12 +219,19 @@ function sharedLinks(
 ): CloudLink[] {
   const project = str(outputs.gcp_project_id) ?? gcpProjectId;
   const sandbox = str(outputs.sandbox_project_id);
-  const awsAccount = str(outputs.aws_account_id);
+  const awsAlias = str(outputs.aws_account_alias);
 
   return linksOf([
     {
       cloud: "aws",
-      url: str(outputs.aws_console_url) ?? (awsAccount && awsConsoleUrl(awsAccount)),
+      // Built here in preference to the stored `aws_console_url` so a change to
+      // the link — the region, or the move to the alias host — reaches runs
+      // that were applied before it without re-applying them. A run with no
+      // alias predates that resource and has nothing to build from, so it keeps
+      // whatever URL it was provisioned with.
+      url:
+        (awsAlias && awsConsoleUrl(awsAlias, awsRegion(outputs))) ??
+        str(outputs.aws_console_url),
     },
     { cloud: "azure", url: str(outputs.azure_portal_url) },
     {
@@ -193,10 +248,13 @@ function sharedLinks(
 /** The environments a single competitor owns on a challenge. */
 function competitorLinks(outputs: RunOutputs, email: string): CloudLink[] {
   const project = str(map(outputs.gcp_projects)[email]);
-  const awsAccount = str(map(outputs.aws_accounts)[email]);
+  const awsAlias = str(map(outputs.aws_account_aliases)[email]);
 
   return linksOf([
-    { cloud: "aws", url: awsAccount && awsConsoleUrl(awsAccount) },
+    {
+      cloud: "aws",
+      url: awsAlias && awsConsoleUrl(awsAlias, awsRegion(outputs)),
+    },
     { cloud: "azure", url: str(map(outputs.azure_portal_urls)[email]) },
     {
       cloud: "gcp",

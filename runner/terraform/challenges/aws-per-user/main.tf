@@ -29,6 +29,15 @@ provider "aws" {
   }
 }
 
+# The account's sign-in alias — see workshops/aws-base for why the link needs
+# one. Same reuse of the account name, which here already carries a per-
+# competitor hash and so is unique per account rather than per run.
+resource "aws_iam_account_alias" "this" {
+  provider = aws.member
+
+  account_alias = var.account_name
+}
+
 resource "aws_iam_user" "attendee" {
   provider = aws.member
 

@@ -1413,6 +1413,7 @@ async function provisionAwsPerUser(
   );
 
   const accountIds: Record<string, string> = {};
+  const aliases: Record<string, string> = {};
   const passwords: Record<string, string> = {};
 
   for (const email of emails) {
@@ -1432,10 +1433,20 @@ async function provisionAwsPerUser(
 
     const out = await tfOutput(workDir);
     if (typeof out.account_id === "string") accountIds[email] = out.account_id;
+    if (typeof out.account_alias === "string") aliases[email] = out.account_alias;
     if (typeof out.attendee_password === "string") {
       passwords[email] = out.attendee_password;
     }
   }
 
-  return { aws_accounts: accountIds, aws_attendee_passwords: passwords };
+  // `cfg.region`, not a Terraform output: this root's outputs are assembled by
+  // hand rather than passed through, and every account in the loop was applied
+  // from the same tfvars region. Recorded so the attendee page opens each
+  // competitor's console in the region their environment was built in.
+  return {
+    aws_accounts: accountIds,
+    aws_account_aliases: aliases,
+    aws_attendee_passwords: passwords,
+    aws_region: cfg.region,
+  };
 }

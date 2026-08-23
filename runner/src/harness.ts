@@ -633,11 +633,18 @@ export async function deleteSecret(
 }
 
 /**
- * Create one org-scoped connector. Returns whether it already existed.
+ * A secret reference for a connector, naming the org scope the secret lives in.
  *
- * Every secret reference below is a bare identifier because the secrets live at
- * org scope alongside the connector — a connector reaching up a scope would
- * have to say `account.`.
+ * The prefix is not optional here even though the connector is in that same
+ * org: Harness reads an unqualified reference as a *project* secret, so a bare
+ * identifier on an org connector is rejected with "The project level secret
+ * cannot be used at a org level". `org.` is what our secrets are, and it is the
+ * same form `secretManagerIdentifier` already uses.
+ */
+const orgSecretRef = (identifier: string) => `org.${identifier}`;
+
+/**
+ * Create one org-scoped connector. Returns whether it already existed.
  *
  * `executeOnDelegate: false` runs the connector's cloud calls on the Harness
  * platform rather than through a delegate. Manual credentials are self-
@@ -684,7 +691,7 @@ export async function createGcpConnector(
   return createConnector(orgId, identifier, name, "Gcp", {
     credential: {
       type: "ManualConfig",
-      spec: { secretKeyRef: secretIdentifier },
+      spec: { secretKeyRef: orgSecretRef(secretIdentifier) },
     },
   });
 }
@@ -710,7 +717,10 @@ export async function createAzureConnector(
       spec: {
         applicationId: clientId,
         tenantId,
-        auth: { type: "Secret", spec: { secretRef: secretIdentifier } },
+        auth: {
+        type: "Secret",
+        spec: { secretRef: orgSecretRef(secretIdentifier) },
+      },
       },
     },
     azureEnvironmentType: "AZURE",
@@ -734,7 +744,10 @@ export async function createAwsConnector(
   return createConnector(orgId, identifier, name, "Aws", {
     credential: {
       type: "ManualConfig",
-      spec: { accessKey: accessKeyId, secretKeyRef: secretIdentifier },
+      spec: {
+        accessKey: accessKeyId,
+        secretKeyRef: orgSecretRef(secretIdentifier),
+      },
     },
   });
 }

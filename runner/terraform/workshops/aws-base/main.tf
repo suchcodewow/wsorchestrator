@@ -37,6 +37,21 @@ provider "aws" {
   }
 }
 
+# The account's sign-in alias, which is what makes the attendee link work at
+# all: https://<account-id>.signin.aws.amazon.com/console — the form this used
+# to emit — is answered by AWS with a 404, while the alias form is the one that
+# resolves. Reuses the account name so the URL an attendee sees names the run.
+#
+# The alias is unique across all of AWS, not just this org, so a collision with
+# an unrelated customer fails the apply with EntityAlreadyExists. The run id
+# suffix in `account_name` is what makes that unlikely; if it ever happens, the
+# fix is a longer suffix in `makeAwsAccountName`, not a retry.
+resource "aws_iam_account_alias" "this" {
+  provider = aws.member
+
+  account_alias = var.account_name
+}
+
 resource "aws_iam_user" "attendees" {
   provider = aws.member
   for_each = toset(var.attendee_emails)
