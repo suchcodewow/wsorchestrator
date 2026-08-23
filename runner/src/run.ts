@@ -107,9 +107,13 @@ export async function runWorkshop(runId: string): Promise<void> {
     // for fails here, not two minutes in with a roster already built.
     assertCloudsConfigured(run.clouds);
 
-    const orgUnitPath = await provisionAccounts(run);
+    // A sandbox run creates no Google Workspace accounts. It exists to apply a
+    // handful of Harness entities and let their author try them, and throwaway
+    // Workspace identities are neither needed for that nor free — the
+    // contributor uses the address they signed in with.
+    const orgUnitPath = run.harness_only ? null : await provisionAccounts(run);
     const outputs: Record<string, unknown> = {
-      org_unit_path: orgUnitPath,
+      ...(orgUnitPath ? { org_unit_path: orgUnitPath } : {}),
       user_count: run.user_count,
     };
 
@@ -509,19 +513,45 @@ async function provisionHarness(run: RunRow): Promise<Record<string, unknown>> {
   // Grant the run's creator account admin — the instructor role the reference
   // gives an event's owner. A creator without a recorded email is skipped
   // rather than failing the run.
+  //
+  // Never on a sandbox run. Its creator is whoever is testing components, which
+  // is the one role that may be held by somebody outside the team, and account
+  // admin is the whole Harness account — every organization, every other
+  // workshop running at the time, the account's own settings. A contributor
+  // gets a project inside their sandbox org and nothing above it, which is all
+  // that exercising a component needs.
   const creator = await runCreatorEmail(run.id);
-  if (creator) {
+  if (run.harness_only) {
+    await log(
+      run.id,
+      "system",
+      "sandbox run — the creator gets a project in this org, not account admin",
+    );
+  } else if (creator) {
     await grantAccountAdmin(creator);
     await log(run.id, "stdout", `${creator} -> account admin (instructor)`);
   } else {
     await log(run.id, "system", "no creator email on file — skipping account admin");
   }
 
-  const accounts = await accountsFor(run.id);
+  // Who gets a project. Normally the attendee roster; on a sandbox run the
+  // contributor themselves, under the address they signed in with, because no
+  // Workspace accounts were created for a run that exists to exercise a
+  // handful of Harness entities. They need somewhere to build a pipeline out
+  // of the components being tested, and their own project is it.
+  const accounts =
+    run.harness_only
+      ? creator
+        ? [{ email: creator }]
+        : []
+      : await accountsFor(run.id);
+
   await log(
     run.id,
     "system",
-    `Creating ${accounts.length} Harness project(s), one per attendee`,
+    run.harness_only
+      ? `Creating a Harness project for ${creator ?? "nobody — no creator email on file"}`
+      : `Creating ${accounts.length} Harness project(s), one per attendee`,
   );
 
   // Counted in place as they land, for the same reason the accounts are: one

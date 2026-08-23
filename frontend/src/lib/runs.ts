@@ -82,6 +82,13 @@ export async function createScheduledRun(input: {
   ttlSeconds: number;
   /** Started from "Start now" rather than booked for a future time. */
   startNow?: boolean;
+  /**
+   * Build the Harness org and the component catalog only — no Terraform. See
+   * `workshopRuns.harnessOnly`.
+   */
+  harnessOnly?: boolean;
+  /** Candidate component set to deploy over the baseline, if any. */
+  componentSetId?: string;
 }) {
   const runId = crypto.randomUUID();
 
@@ -99,11 +106,14 @@ export async function createScheduledRun(input: {
       scheduledStart: input.scheduledStart,
       ttlSeconds: input.ttlSeconds,
       statePrefix: `workshops/${runId}`,
+      harnessOnly: input.harnessOnly ?? false,
+      componentSetId: input.componentSetId ?? null,
     })
     .returning();
 
-  const clouds =
-    input.clouds.length > 0
+  const clouds = input.harnessOnly
+    ? "Harness only"
+    : input.clouds.length > 0
       ? input.clouds.map((c) => CLOUD_LABELS[c]).join(", ")
       : "no clouds";
 
