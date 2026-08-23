@@ -201,7 +201,7 @@ export function AttendeeGrid({ initial, runId }: { initial: View; runId: string 
   const hasAwsPassword = data.accounts.some((a) => a.awsPassword);
 
   return (
-    <motion.div variants={staggerParent(0.05)} initial="hidden" animate="show" className="space-y-6">
+    <motion.div variants={staggerParent(0.05)} initial="hidden" animate="show" className="space-y-5">
       <motion.div variants={riseChild}>
         <h1 className="text-2xl font-medium tracking-tight text-balance">{data.name}</h1>
         <p className="mt-1.5 text-sm text-muted-foreground">
@@ -213,7 +213,7 @@ export function AttendeeGrid({ initial, runId }: { initial: View; runId: string 
             org every event provisions, then a workshop's shared environment
             per cloud (challenges link per competitor on their own row). */}
         {(data.harnessOrgUrl || data.links.length > 0) && (
-          <div className="mt-4 flex flex-wrap gap-2">
+          <div className="mt-3 flex flex-wrap gap-2">
             {data.harnessOrgUrl && <LinkButton href={data.harnessOrgUrl}>Open Harness organization</LinkButton>}
             {data.links.map((link) => (
               <CloudButton key={link.cloud} link={link} />
@@ -258,7 +258,7 @@ export function AttendeeGrid({ initial, runId }: { initial: View; runId: string 
                     which is why the rows are spaced apart rather than merely
                     stacked: a run of taken rows with no gap fuses into one
                     block, and the room can no longer count them. */}
-                <ul className="space-y-1 p-3">
+                <ul className="space-y-1 px-3 py-2">
                   {data.accounts.map((account) => (
                     <AccountRow
                       key={account.id}
@@ -332,7 +332,7 @@ function AccountRow({
     // The tint is inset and rounded rather than full-bleed: with the dividers
     // gone it is the only thing marking one row off from the next, and a band
     // running wall to wall reads as another rule.
-    <li className={cn("rounded-lg px-3 py-3 transition-colors", filled ? "bg-muted/40" : "hover:bg-accent/25")}>
+    <li className={cn("rounded-lg px-3 py-2 transition-colors", filled ? "bg-muted/40" : "hover:bg-accent/25")}>
       <div className={cn("gap-4 md:grid md:items-center", COLUMNS)}>
         <Credential value={account.email} label="email" />
 
@@ -382,7 +382,7 @@ function AccountRow({
       {/* Kept in the DOM while closed so the copy buttons and the link are
           there for anyone searching the page, and so opening a row costs
           nothing. */}
-      <div id={detailsId} hidden={!open} className="mt-4">
+      <div id={detailsId} hidden={!open} className="mt-2.5">
         <AccountDetails account={account} />
       </div>
     </li>
@@ -401,7 +401,15 @@ function AccountDetails({ account }: { account: Row }) {
   const expired = accessPassExpired(account);
 
   return (
-    <div className="grid gap-4 rounded-lg bg-muted/50 p-4 sm:grid-cols-2">
+    // Label on the left, value on the right, one pair per line. A two-column
+    // grid rather than stacked blocks so every value starts at the same x — the
+    // passwords read as one list to work down, and the eye has one edge to find
+    // instead of one per card.
+    //
+    // Tight on purpose: each value carries its own invisible padding as a copy
+    // target, so the panel's own gaps only have to separate the lines, not make
+    // room to click in.
+    <dl className="grid grid-cols-[minmax(0,auto)_minmax(0,1fr)] items-baseline gap-x-3 gap-y-2.5 rounded-lg bg-muted/50 px-3 py-2.5">
       {/* Named for the directory it belongs to, not just "password". An event
           hands out two secrets that look alike, and an attendee staring at a
           sign-in box needs to know which box this one is for — Harness has no
@@ -426,10 +434,11 @@ function AccountDetails({ account }: { account: Row }) {
       )}
       {/* One per attendee on every event, whatever clouds it picked — this is
           where the actual work happens, so it sits with the credentials rather
-          than with the org link at the top of the page. */}
+          than with the org link at the top of the page. The button names the
+          thing itself, so it takes the value column with no label beside it. */}
       {account.harnessProjectUrl && (
-        <Detail label="Your Harness project">
-          <LinkButton href={account.harnessProjectUrl}>Open project</LinkButton>
+        <Detail>
+          <LinkButton href={account.harnessProjectUrl}>Your Harness Project</LinkButton>
         </Detail>
       )}
       {/* This competitor's own environment, on a challenge — their project,
@@ -444,27 +453,36 @@ function AccountDetails({ account }: { account: Row }) {
           </div>
         </Detail>
       )}
-    </div>
+    </dl>
   );
 }
 
-/** One labelled thing inside a row's details panel. */
+/**
+ * One row of the details panel: its label in the left column, its value in the
+ * right. A row with nothing to label — a button that names itself — still takes
+ * the value column, so it lines up under the values above it.
+ */
 function Detail({
   label,
   hint,
   children,
 }: {
-  label: string;
+  label?: string;
   /** What this credential is actually for, when the label alone won't say. */
   hint?: string;
   children: ReactNode;
 }) {
   return (
-    <div className="min-w-0">
-      <span className="block text-xs font-medium text-foreground">{label}</span>
-      {hint && <span className="mt-0.5 mb-1.5 block text-xs text-muted-foreground">{hint}</span>}
-      <div className={cn(!hint && "mt-1.5")}>{children}</div>
-    </div>
+    <>
+      {/* The label column is sized to its longest label, so the hint hangs
+          under the value instead — a sentence in the left column would push
+          every value halfway across the panel. */}
+      <dt className="text-xs font-medium whitespace-nowrap text-foreground">{label}</dt>
+      <dd className="min-w-0">
+        {children}
+        {hint && <span className="mt-1 block text-xs text-muted-foreground">{hint}</span>}
+      </dd>
+    </>
   );
 }
 
@@ -474,20 +492,13 @@ function accessPassExpired(account: Row): boolean {
   return at ? new Date(at).getTime() <= Date.now() : false;
 }
 
-/** One credential, with the copy button attendees will actually need. */
+/**
+ * One credential. The value itself is the copy target — someone reaching for a
+ * password aims at the password, not at a 14px icon beside it — so the whole
+ * block is the button. The icon stays on as the affordance that says so, faded
+ * in on hover, and always shown where there is no hover to be had.
+ */
 function Credential({ value, label }: { value: string; label: string }) {
-  return (
-    <div className="flex items-start gap-1.5">
-      {/* Wrapped rather than truncated: an attendee has to be able to read the
-          whole value to type it into a sign-in box, and generated addresses
-          run longer than any column width worth giving them. */}
-      <span className="min-w-0 font-mono text-sm break-all">{value}</span>
-      <CopyButton value={value} label={label} />
-    </div>
-  );
-}
-
-function CopyButton({ value, label }: { value: string; label: string }) {
   const [copied, setCopied] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -501,7 +512,11 @@ function CopyButton({ value, label }: { value: string; label: string }) {
   return (
     <button
       type="button"
-      aria-label={`Copy ${label}`}
+      // The padding is the target, and the negative margin cancels it out of
+      // the layout: the block is 8px easier to hit on every side than it looks,
+      // while the value still starts flush with the column edge and the rows
+      // above and below stay as tight as if it had no padding at all.
+      className="group -mx-2 -my-1.5 flex w-full cursor-pointer items-start gap-1.5 rounded-md px-2 py-1.5 text-left transition-colors outline-none hover:bg-foreground/5 focus-visible:ring-[3px] focus-visible:ring-ring/50"
       onClick={async () => {
         // Blocked outside a secure context and in some embedded browsers;
         // the text is on screen either way, so a failure is not worth a error.
@@ -514,9 +529,30 @@ function CopyButton({ value, label }: { value: string; label: string }) {
         if (timer.current) clearTimeout(timer.current);
         timer.current = setTimeout(() => setCopied(false), 1500);
       }}
-      className="shrink-0 cursor-pointer rounded p-1 text-muted-foreground opacity-60 transition-opacity outline-none hover:opacity-100 focus-visible:ring-[3px] focus-visible:ring-ring/50"
     >
-      {copied ? <Check className="size-3.5 text-emerald-600" /> : <Copy className="size-3.5" />}
+      {/* Wrapped rather than truncated: an attendee has to be able to read the
+          whole value to type it into a sign-in box, and generated addresses
+          run longer than any column width worth giving them. */}
+      <span className="min-w-0 font-mono text-sm break-all">{value}</span>
+      {/* The button's accessible name is the value plus what clicking it does,
+          rather than an aria-label that would hide the value itself. */}
+      <span role="status" className="sr-only">
+        {copied ? "Copied" : `, click to copy ${label}`}
+      </span>
+      <span
+        aria-hidden
+        className={cn(
+          "shrink-0 py-0.5 text-muted-foreground transition-opacity",
+          copied
+            ? "opacity-100"
+            : // Hidden at rest so a details panel reads as a list of values
+              // rather than a column of icons — but not on touch, where the
+              // hover that would reveal it never comes.
+              "opacity-0 group-hover:opacity-70 group-focus-visible:opacity-70 [@media(hover:none)]:opacity-70",
+        )}
+      >
+        {copied ? <Check className="size-3.5 text-emerald-600" /> : <Copy className="size-3.5" />}
+      </span>
     </button>
   );
 }

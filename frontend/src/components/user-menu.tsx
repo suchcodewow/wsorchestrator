@@ -38,8 +38,11 @@ import {
 import type { BuildInfo } from "@/lib/build-info";
 import {
   SITE_ROLE_LABELS,
+  canAuditProjects,
+  canManageBackups,
   canManageSettings,
   canManageUsers,
+  canRunSql,
   canSeeAllEvents,
 } from "@/lib/roles";
 import { setCalendarScope, setThemePreference } from "@/lib/user-settings";
@@ -54,6 +57,13 @@ const THEME_OPTIONS: {
   { value: "dark", label: "Dark", Icon: Moon },
   { value: "system", label: "System default", Icon: Laptop },
 ];
+
+/**
+ * Group headings sit a size below the items they head and in the muted colour,
+ * so they read as signposts rather than as rows that can be selected.
+ */
+const SECTION_HEADING =
+  "px-2 py-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground";
 
 export function UserMenu({
   name,
@@ -109,6 +119,18 @@ export function UserMenu({
 
   const elevated = role !== "operator";
 
+  // Each group is drawn only when the role unlocks something inside it, so a
+  // heading never stands over an empty section. The items are still gated one
+  // by one below: the checks agree today, but the group flag is about the
+  // heading, not about who may open any particular page.
+  const showManagement = canSeeAllEvents(role);
+  const showAdministration =
+    canManageUsers(role) ||
+    canManageBackups(role) ||
+    canRunSql(role) ||
+    canAuditProjects(role) ||
+    canManageSettings(role);
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger className="flex cursor-pointer items-center gap-1 rounded-md px-2 py-1 text-sm text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50">
@@ -136,6 +158,11 @@ export function UserMenu({
 
         <DropdownMenuSeparator />
 
+        {/*
+          Everything every account can do comes first and unheaded: an operator
+          sees a plain list, and the headed groups below read as additions to it
+          rather than as one category among three.
+        */}
         <DropdownMenuItem asChild>
           <Link href="/events">
             <Settings />
@@ -143,52 +170,65 @@ export function UserMenu({
           </Link>
         </DropdownMenuItem>
 
-        {canSeeAllEvents(role) && (
-          <DropdownMenuSwitchItem
-            checked={scope === "all"}
-            onCheckedChange={chooseScope}
-            // Keeps the menu open, so the calendar visibly swaps underneath it
-            // and a mis-toggle can be undone without reopening.
-            onSelect={(e) => e.preventDefault()}
-          >
-            <CalendarRange />
-            Show all events
-          </DropdownMenuSwitchItem>
-        )}
-
-        {/*
-          The rule is separated from the item rather than placed after the
-          switch above: administrators are the only ones who see this block, and
-          a rule left standing on its own for a manager would double up with the
-          one below it.
-        */}
-        {canManageUsers(role) && (
+        {showManagement && (
           <>
             <DropdownMenuSeparator />
-            <DropdownMenuItem asChild>
-              <Link href="/users">
-                <UsersRound />
-                Manage users
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <Link href="/backups">
-                <DatabaseBackup />
-                Backups
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <Link href="/database">
-                <Terminal />
-                Database
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <Link href="/cloud-status">
-                <Cloud />
-                Cloud Status
-              </Link>
-            </DropdownMenuItem>
+            <DropdownMenuLabel className={SECTION_HEADING}>
+              Management
+            </DropdownMenuLabel>
+            {canSeeAllEvents(role) && (
+              <DropdownMenuSwitchItem
+                checked={scope === "all"}
+                onCheckedChange={chooseScope}
+                // Keeps the menu open, so the calendar visibly swaps underneath
+                // it and a mis-toggle can be undone without reopening.
+                onSelect={(e) => e.preventDefault()}
+              >
+                <CalendarRange />
+                Show all events
+              </DropdownMenuSwitchItem>
+            )}
+          </>
+        )}
+
+        {showAdministration && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel className={SECTION_HEADING}>
+              Administration
+            </DropdownMenuLabel>
+            {canManageUsers(role) && (
+              <DropdownMenuItem asChild>
+                <Link href="/users">
+                  <UsersRound />
+                  Manage users
+                </Link>
+              </DropdownMenuItem>
+            )}
+            {canManageBackups(role) && (
+              <DropdownMenuItem asChild>
+                <Link href="/backups">
+                  <DatabaseBackup />
+                  Backups
+                </Link>
+              </DropdownMenuItem>
+            )}
+            {canRunSql(role) && (
+              <DropdownMenuItem asChild>
+                <Link href="/database">
+                  <Terminal />
+                  Database
+                </Link>
+              </DropdownMenuItem>
+            )}
+            {canAuditProjects(role) && (
+              <DropdownMenuItem asChild>
+                <Link href="/cloud-status">
+                  <Cloud />
+                  Cloud Status
+                </Link>
+              </DropdownMenuItem>
+            )}
             {canManageSettings(role) && (
               // "Admin" in the label because the theme and calendar controls
               // below are settings too, and the two are not the same thing:

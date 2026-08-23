@@ -128,6 +128,38 @@
   body {
     background-color: var(--background);
     color: var(--foreground);
+
+    /*
+     * `cv05` gives lowercase l a tail and `cv08` gives uppercase I serifs.
+     * Both exist to solve one problem: this app writes a lot of domains,
+     * emails and identifiers into ordinary sans-set prose, and Inter's
+     * default l / I / 1 are close enough to be genuinely misread. The
+     * monospace faces below handle the same job for the mono call sites.
+     *
+     * `zero` is deliberately not in this list. It would slash every zero in
+     * the calendar and the run tables too, where the digits are dates and
+     * counts rather than identifiers and a slashed zero just reads as noise.
+     */
+    font-feature-settings:
+      "cv05" 1,
+      "cv08" 1;
+
+    /* InterVariable carries an opsz axis (14–32); let headings take it. */
+    font-optical-sizing: auto;
+  }
+
+  /*
+   * `pre`, `code`, `kbd` and `samp` are monospace by user-agent default, which
+   * means without this they resolve to whatever the browser picked rather than
+   * to the face the app actually loaded. Mostly this catches the Shiki output
+   * in lab guides, which arrives as bare `<pre class="shiki"><code>` with no
+   * utility class on it.
+   */
+  code,
+  kbd,
+  samp,
+  pre {
+    font-family: var(--font-mono);
   }
 
   /*
@@ -465,7 +497,7 @@
     background-color: color-mix(in oklab, var(--muted) 70%, transparent);
     padding: 0.15em 0.35em;
     font-size: 0.875em;
-    font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+    /* Face comes from the base `code` rule — one source of truth for mono. */
   }
 
   .lab-prose .sr-only {
