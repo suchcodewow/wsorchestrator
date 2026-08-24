@@ -487,6 +487,17 @@ export const apiTokens = pgTable(
     /** What it is for, so a list of four tokens is not four identical rows. */
     name: text("name").notNull(),
     /**
+     * Where it came from: `bundle` if it was minted into a bundle download,
+     * `manual` if somebody asked for one on the Contribute page.
+     *
+     * Worth a column rather than a naming convention, because the two are
+     * governed differently. A download always replaces the previous bundle
+     * token, so there is at most one live at a time and it does not count
+     * against the per-account cap; a manual token is for a second machine or
+     * for CI, is never replaced by anything, and does count.
+     */
+    source: text("source").notNull().default("manual"),
+    /**
      * The token's public half: what it is looked up by, and the only part ever
      * displayed again. Unique so a lookup is one indexed row rather than a scan
      * comparing hashes.

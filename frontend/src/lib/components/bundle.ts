@@ -135,6 +135,10 @@ node scripts/validate.mjs      # seconds; no Harness call, nothing created
 node scripts/sandbox.mjs "Add GKE deploy template"
 \`\`\`
 
+The scripts authenticate with the \`.env\` this bundle was downloaded with —
+there is nothing to set up. If they report a missing token, the bundle has been
+superseded by a newer download; get a fresh one from the Contribute page.
+
 \`validate\` checks each component on its own — identifiers, kinds, spec shape.
 It does **not** check dependency cycles or references to components that do not
 exist; those need the whole catalog and are checked when the sandbox run
@@ -174,24 +178,36 @@ At most ${MAX_SET_COMPONENTS} components in one set.
 `;
 }
 
-function readmeMd(): string {
+function readmeMd(expiresAt: Date): string {
   return `# Harness components — contributor bundle
 
 Unzip into a project so Claude Code finds the skill:
 
     .claude/skills/${SKILL_DIR}/
 
-Then set the two variables the scripts need:
+That is the whole setup. Then tell Claude what you want to add — it reads
+\`catalog/\` for what already exists, writes into \`candidate/\`, and runs the
+scripts to validate and test.
 
-    export WORKSHOP_PORTAL_URL="..."   # the portal's base URL
-    export WORKSHOP_API_TOKEN="..."    # your token, from the Contribute page
+## About the token
 
-Then just tell Claude what you want to add. It will read \`catalog/\` for what
-already exists, write into \`candidate/\`, and use the scripts to validate and
-test.
+This bundle contains its own credential, in \`.env\`. Nothing to create, nothing
+to export.
 
-You never need a Harness API key. The scripts talk to the portal; the portal
-talks to Harness.
+- It expires on **${expiresAt.toISOString().slice(0, 10)}**.
+- Downloading the bundle again issues a new one and **revokes this one**, so the
+  copy you are reading now will stop working. Use the most recent download.
+- It reaches the component endpoints and nothing else: it cannot schedule
+  events, read attendee details, or change site settings.
+- You never need a Harness API key. The scripts talk to the portal; the portal
+  talks to Harness.
+
+Treat \`.env\` as a secret — a \`.gitignore\` beside it keeps it out of commits,
+but it is still a live credential sitting in a file. If it leaks, revoke it on
+the Contribute page.
+
+To point the scripts at a different portal, set \`WORKSHOP_PORTAL_URL\` in the
+environment; a real environment variable overrides the file.
 `;
 }
 
@@ -222,15 +238,47 @@ function componentFile(c: CatalogComponent): ZipEntry {
 
 /** Shared preamble for the scripts: config, fetch, and error reporting. */
 const SCRIPT_LIB = `import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const BASE = process.env.WORKSHOP_PORTAL_URL?.replace(/\\/+$/, "");
-const TOKEN = process.env.WORKSHOP_API_TOKEN;
+/**
+ * Config comes from the .env this bundle was downloaded with, so nothing has to
+ * be exported before the scripts run. A real environment variable still wins,
+ * which is what makes pointing at a different portal a one-liner rather than a
+ * file edit.
+ *
+ * Parsed by hand rather than with a dependency: the file is two lines this
+ * bundle wrote itself, and \`node --env-file\` is not on every version anyone
+ * might be running.
+ */
+function loadEnv() {
+  const path = join(dirname(fileURLToPath(import.meta.url)), "..", ".env");
+  const values = {};
+  let text;
+  try {
+    text = readFileSync(path, "utf8");
+  } catch {
+    return values;
+  }
+  for (const line of text.split("\\n")) {
+    const match = /^\\s*([A-Z_][A-Z0-9_]*)\\s*=\\s*(.*)$/.exec(line);
+    if (!match) continue;
+    values[match[1]] = match[2].trim().replace(/^["']|["']$/g, "");
+  }
+  return values;
+}
+
+const env = loadEnv();
+const BASE = (process.env.WORKSHOP_PORTAL_URL ?? env.WORKSHOP_PORTAL_URL ?? "").replace(
+  /\\/+$/,
+  "",
+);
+const TOKEN = process.env.WORKSHOP_API_TOKEN ?? env.WORKSHOP_API_TOKEN ?? "";
 
 if (!BASE || !TOKEN) {
   console.error(
-    "Set WORKSHOP_PORTAL_URL and WORKSHOP_API_TOKEN first — both are on the " +
-      "portal's Contribute page.",
+    "No portal URL or token. These normally come from the .env in this bundle —\\n" +
+      "if it is missing, download the bundle again from the Contribute page.",
   );
   process.exit(2);
 }
@@ -259,15 +307,26 @@ export function loadCandidates(dir = "candidate") {
   });
 }
 
+export { BASE };
+
 export async function api(path, init = {}) {
-  const res = await fetch(\`\${BASE}\${path}\`, {
-    ...init,
-    headers: {
-      "content-type": "application/json",
-      authorization: \`Bearer \${TOKEN}\`,
-      ...(init.headers ?? {}),
-    },
-  });
+  let res;
+  try {
+    res = await fetch(\`\${BASE}\${path}\`, {
+      ...init,
+      headers: {
+        "content-type": "application/json",
+        authorization: \`Bearer \${TOKEN}\`,
+        ...(init.headers ?? {}),
+      },
+    });
+  } catch (err) {
+    // Unreachable portal: wrong URL, no network, VPN off. A stack trace helps
+    // nobody here — the cause is almost always outside this machine.
+    console.error(\`Could not reach \${BASE} — \${err.message}\`);
+    console.error("Check you are on the network the portal is behind.");
+    process.exit(1);
+  }
   const text = await res.text();
   let body;
   try {
@@ -329,7 +388,7 @@ const SANDBOX_SCRIPT = `#!/usr/bin/env node
 //
 //   node scripts/sandbox.mjs "Add GKE deploy template"
 //   node scripts/sandbox.mjs --update <setId>
-import { loadCandidates, api, printIssues } from "./lib.mjs";
+import { loadCandidates, api, printIssues, BASE } from "./lib.mjs";
 
 const args = process.argv.slice(2);
 const update = args[0] === "--update" ? args[1] : null;
@@ -372,7 +431,7 @@ if (status !== 201) {
 
 console.log(\`Set:  \${body.setId}\`);
 if (body.run) {
-  console.log(\`Run:  \${process.env.WORKSHOP_PORTAL_URL.replace(/\\/+$/, "")}/runs/\${body.run.id}\`);
+  console.log(\`Run:  \${BASE}/runs/\${body.run.id}\`);
   console.log(
     body.started
       ? "\\nStarted. Watch the run page — it lists each component as it lands, and\\n" +
@@ -484,15 +543,32 @@ arrived without its access key id" fails the run.
  * Returns the archive and a filename carrying the component count, so a
  * contributor with two downloads can tell which is which.
  */
-export async function buildBundle(): Promise<{
-  filename: string;
-  archive: Buffer;
-}> {
+export async function buildBundle(credential: {
+  portalUrl: string;
+  token: string;
+  expiresAt: Date;
+}): Promise<{ filename: string; archive: Buffer }> {
   const components = await listBaseline();
 
   const entries: ZipEntry[] = [
     { path: `${SKILL_DIR}/SKILL.md`, content: skillMd(components) },
-    { path: `${SKILL_DIR}/README.md`, content: readmeMd() },
+    { path: `${SKILL_DIR}/README.md`, content: readmeMd(credential.expiresAt) },
+    // The credential, and the one file in here that must not be committed.
+    // Written as .env rather than baked into lib.mjs because that is the file
+    // people already expect to hold a secret and already expect to ignore.
+    {
+      path: `${SKILL_DIR}/.env`,
+      content:
+        `# Written when this bundle was downloaded. Do not commit.\n` +
+        `# Expires ${credential.expiresAt.toISOString().slice(0, 10)}; ` +
+        `downloading again replaces it.\n` +
+        `WORKSHOP_PORTAL_URL="${credential.portalUrl}"\n` +
+        `WORKSHOP_API_TOKEN="${credential.token}"\n`,
+    },
+    {
+      path: `${SKILL_DIR}/.gitignore`,
+      content: `# A live credential, written at download time.\n.env\n`,
+    },
     {
       path: `${SKILL_DIR}/reference/bindings.md`,
       content: BINDINGS_REFERENCE,

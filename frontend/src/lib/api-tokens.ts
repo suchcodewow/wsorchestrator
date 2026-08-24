@@ -31,6 +31,9 @@ const SECRET_BYTES = 32;
 const sha256 = (value: string) =>
   createHash("sha256").update(value, "utf8").digest("hex");
 
+/** Where a token came from. See the `source` column in the schema. */
+export type TokenSource = "manual" | "bundle";
+
 /** A newly minted token: the only time the secret half exists outside a shell. */
 export type MintedToken = {
   id: string;
@@ -46,20 +49,29 @@ export type TokenError = "too_many" | "invalid_name";
 /**
  * Issue a token for a user.
  *
- * Capped per account, and the cap counts only live ones — an expired or revoked
- * token is a record, not a credential, and holding five stale rows should not
- * stop somebody replacing the one they lost.
+ * The cap counts only live *manual* tokens. An expired or revoked one is a
+ * record rather than a credential, and holding five stale rows should not stop
+ * somebody replacing the one they lost — and a bundle token is already limited
+ * to one by `mintBundleToken` replacing it on every download, so counting it
+ * here would just mean a download could lock somebody out of making a manual
+ * one.
  */
 export async function mintToken(
   userId: string,
   name: string,
+  source: TokenSource = "manual",
 ): Promise<{ ok: true; token: MintedToken } | { ok: false; error: TokenError }> {
   const trimmed = name.trim();
   if (trimmed.length === 0) return { ok: false, error: "invalid_name" };
 
-  const live = await listTokens(userId);
-  if (live.filter((t) => t.status === "active").length >= MAX_TOKENS_PER_USER) {
-    return { ok: false, error: "too_many" };
+  if (source === "manual") {
+    const live = await listTokens(userId);
+    const manual = live.filter(
+      (t) => t.status === "active" && t.source === "manual",
+    );
+    if (manual.length >= MAX_TOKENS_PER_USER) {
+      return { ok: false, error: "too_many" };
+    }
   }
 
   const prefix = randomBytes(PREFIX_BYTES).toString("hex");
@@ -75,6 +87,7 @@ export async function mintToken(
       prefix,
       tokenHash: sha256(token),
       expiresAt,
+      source,
     })
     .returning({ id: apiTokens.id });
 
@@ -88,6 +101,7 @@ export async function mintToken(
 export type TokenSummary = {
   id: string;
   name: string;
+  source: TokenSource;
   prefix: string;
   status: "active" | "expired" | "revoked";
   createdAt: string;
@@ -106,6 +120,7 @@ export async function listTokens(userId: string): Promise<TokenSummary[]> {
   return rows.map((r) => ({
     id: r.id,
     name: r.name,
+    source: r.source as TokenSource,
     prefix: r.prefix,
     status: r.revokedAt
       ? ("revoked" as const)
@@ -140,6 +155,42 @@ export async function revokeToken(
     .returning({ id: apiTokens.id });
 
   return revoked.length > 0;
+}
+
+/**
+ * Mint the token that goes inside a bundle download, revoking whatever the
+ * previous download issued.
+ *
+ * One live bundle token per account, always the one in the most recent
+ * download. That is what lets the bundle carry its own credential without
+ * accumulating one per download, and it means a bundle left on a laptop stops
+ * working the next time somebody downloads a fresh one — the right default for
+ * a secret that ships inside a file and ends up in a Downloads folder.
+ *
+ * Manual tokens are untouched: somebody running these from CI or a second
+ * machine should not have it taken away because they re-downloaded.
+ */
+export async function mintBundleToken(
+  userId: string,
+): Promise<MintedToken | null> {
+  await db
+    .update(apiTokens)
+    .set({ revokedAt: new Date() })
+    .where(
+      and(
+        eq(apiTokens.userId, userId),
+        eq(apiTokens.source, "bundle"),
+        isNull(apiTokens.revokedAt),
+      ),
+    );
+
+  const issued = new Date().toISOString().slice(0, 10);
+  const result = await mintToken(userId, `Bundle download ${issued}`, "bundle");
+  // The only failure `mintToken` reports is the cap and a blank name, and a
+  // bundle token is exempt from one and given the other — so this is
+  // unreachable rather than merely unlikely. Returning null keeps the download
+  // route honest about it instead of asserting.
+  return result.ok ? result.token : null;
 }
 
 /** Who a valid token belongs to, in the shape the routes already expect. */

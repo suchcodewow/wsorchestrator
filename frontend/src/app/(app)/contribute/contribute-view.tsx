@@ -75,7 +75,14 @@ export function ContributeView({
   const [minted, setMinted] = useState<Minted | null>(null);
   const [copied, setCopied] = useState(false);
 
-  const active = tokens.filter((t) => t.status === "active");
+  // The cap is on hand-made tokens only; the bundle's is replaced on every
+  // download, so it can never accumulate. Mirrors `mintToken`.
+  const activeManual = tokens.filter(
+    (t) => t.status === "active" && t.source === "manual",
+  );
+  const hasBundleToken = tokens.some(
+    (t) => t.status === "active" && t.source === "bundle",
+  );
 
   async function call(
     key: string,
@@ -184,7 +191,8 @@ export function ContributeView({
               <p>
                 A Claude Code skill, built from the catalog as it stands right
                 now — all {baselineCount} published component
-                {baselineCount === 1 ? "" : "s"} are in it.
+                {baselineCount === 1 ? "" : "s"} are in it, along with a token
+                of your own. Nothing to set up.
               </p>
               <p className="text-muted-foreground">
                 Unzip into{" "}
@@ -193,6 +201,14 @@ export function ContributeView({
                 </code>{" "}
                 and tell Claude what you want to add.
               </p>
+              {hasBundleToken && (
+                // Worth saying before they click, not after: the copy on their
+                // machine stops working, and that is surprising if unannounced.
+                <p className="text-muted-foreground">
+                  Downloading again issues a new token and revokes the one in
+                  your last download.
+                </p>
+              )}
             </div>
             <Button asChild>
               <a href="/api/components/bundle">
@@ -204,16 +220,16 @@ export function ContributeView({
         </Card>
       </motion.div>
 
-      {/* 2 — a token for the scripts */}
+      {/* 2 — the tokens themselves, which most people never need to touch */}
       <motion.div variants={riseChild} className="space-y-3">
-        <h2 className="text-sm font-medium">2. Create a token</h2>
+        <h2 className="text-sm font-medium">2. Tokens</h2>
         <Card>
           <CardContent className="space-y-4 py-5">
             <p className="text-sm text-muted-foreground">
-              The bundle&apos;s scripts sign in with this. It lasts{" "}
-              {TOKEN_TTL_DAYS} days and can only reach the component endpoints —
-              it cannot schedule events or read attendee details. You never need
-              a Harness API key.
+              The download already includes one, so this is only for a second
+              machine or for CI. Tokens last {TOKEN_TTL_DAYS} days and reach the
+              component endpoints and nothing else — they cannot schedule events
+              or read attendee details. You never need a Harness API key.
             </p>
 
             {minted && (
@@ -254,14 +270,14 @@ export function ContributeView({
                 onKeyDown={(e) => e.key === "Enter" && createToken()}
                 placeholder="What is it for? e.g. laptop"
                 className="max-w-64"
-                disabled={active.length >= MAX_TOKENS_PER_USER}
+                disabled={activeManual.length >= MAX_TOKENS_PER_USER}
               />
               <Button
                 onClick={createToken}
                 disabled={
                   busy === "mint" ||
                   name.trim().length === 0 ||
-                  active.length >= MAX_TOKENS_PER_USER
+                  activeManual.length >= MAX_TOKENS_PER_USER
                 }
               >
                 {busy === "mint" ? (
@@ -271,7 +287,7 @@ export function ContributeView({
                 )}
                 Create
               </Button>
-              {active.length >= MAX_TOKENS_PER_USER && (
+              {activeManual.length >= MAX_TOKENS_PER_USER && (
                 <span className="text-sm text-muted-foreground">
                   {MAX_TOKENS_PER_USER} active tokens is the limit — revoke one
                   first.
@@ -287,6 +303,11 @@ export function ContributeView({
                     className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2.5"
                   >
                     <span className="font-medium">{t.name}</span>
+                    {t.source === "bundle" && (
+                      <span className="rounded-full bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
+                        in a download
+                      </span>
+                    )}
                     <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs text-muted-foreground">
                       {t.prefix}…
                     </code>
