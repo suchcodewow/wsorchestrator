@@ -26,7 +26,9 @@ import {
   Cloud,
   Copy,
   ExternalLink,
+  FileCode,
   FolderKanban,
+  KeyRound,
   Layers,
   Loader2,
   Network,
@@ -541,6 +543,9 @@ const RESOURCE_ICONS: Record<string, LucideIcon> = {
   eks_cluster: Server,
   harness_delegate: Network,
   harness_connector: Plug,
+  harness_secret: KeyRound,
+  harness_template: FileCode,
+  harness_components: Boxes,
 };
 
 /**

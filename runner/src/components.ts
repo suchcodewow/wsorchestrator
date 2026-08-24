@@ -221,6 +221,22 @@ export type ApplyResult = {
 };
 
 /**
+ * Why a component was left alone, in the words the run log uses.
+ *
+ * A pending component used to be silent: it was recorded nowhere and logged
+ * nothing, so "the AWS connector is missing because this workshop has no AWS"
+ * and "the AWS connector is missing because something went wrong" looked
+ * identical from the outside — which is the wrong place for a system to be
+ * quiet, since the whole point of the pending state is that it is *expected*.
+ */
+function pendingReason(unmet: string[], waitingOn: string[]): string {
+  if (unmet.length > 0) {
+    return `this run has no ${unmet.join(", ")}`;
+  }
+  return `waiting on ${waitingOn.join(", ")}`;
+}
+
+/**
  * The resource row kind for each component kind, so the run page groups them
  * the way an organizer thinks about them.
  */
@@ -322,6 +338,8 @@ export async function applyCatalog(
   const state = new Map<string, State>();
   const applied: string[] = [];
   const pending: string[] = [];
+  /** Why each pending component was left, for the log and the summary row. */
+  const skipped = new Map<string, string>();
 
   for (const c of order) {
     const unmet = c.requires.filter((p) => lookupBinding(p, bindings) === undefined);
@@ -338,12 +356,15 @@ export async function applyCatalog(
       }
       state.set(c.identifier, "pending");
       pending.push(c.identifier);
+      skipped.set(c.identifier, pendingReason(unmet, []));
       continue;
     }
 
     if (!allDepsApplied) {
+      const waitingOn = dependencies.filter((d) => state.get(d) !== "applied");
       state.set(c.identifier, "pending");
       pending.push(c.identifier);
+      skipped.set(c.identifier, pendingReason([], waitingOn));
       continue;
     }
 
@@ -364,6 +385,29 @@ export async function applyCatalog(
       detail: `${c.identifier} (org ${orgId})`,
     });
   }
+
+  // Each pass says what it left and why. Logged once per pass rather than once
+  // per run: applying is re-entrant, so a component pending before GCP applied
+  // and created after it should show both, in order — that sequence is the
+  // clearest account of a build there is.
+  for (const [identifier, reason] of skipped) {
+    await log(run.id, "stdout", `${identifier} not applied — ${reason}`);
+  }
+
+  // One counted row for the catalog as a whole, the same shape the attendee
+  // projects use. The per-component rows above say what exists; this says
+  // whether that is all of it, which no number of rows for things that *do*
+  // exist can answer.
+  await recordResource(run.id, {
+    kind: "harness_components",
+    label: "Harness components",
+    detail:
+      pending.length === 0
+        ? "all applied"
+        : `${pending.join(", ")} not applicable to this workshop`,
+    done: applied.length,
+    total: applied.length + pending.length,
+  });
 
   return { applied, pending };
 }

@@ -8,7 +8,10 @@ import {
   Check,
   Copy,
   Download,
+  FileCode,
+  KeyRound,
   Loader2,
+  Plug,
   Plus,
   Trash2,
   TriangleAlert,
@@ -55,17 +58,47 @@ const shortDate = (iso: string) =>
     day: "numeric",
   });
 
+/** One published component, with what it references worked out server-side. */
+type CatalogEntry = {
+  identifier: string;
+  kind: string;
+  name: string;
+  description: string;
+  versionLabel: string;
+  builtin: boolean;
+  requires: string[];
+  dependsOn: string[];
+  usedBy: string[];
+};
+
+/** Reading order: what a thing is built from comes before what is built on it. */
+const KIND_ORDER = ["secret_text", "secret_file", "connector", "template"];
+
+const KIND_LABEL: Record<string, string> = {
+  secret_text: "Secrets",
+  secret_file: "Secrets",
+  connector: "Connectors",
+  template: "Templates",
+};
+
+const KIND_ICON: Record<string, typeof KeyRound> = {
+  secret_text: KeyRound,
+  secret_file: KeyRound,
+  connector: Plug,
+  template: FileCode,
+};
+
 export function ContributeView({
   tokens,
+  catalog,
   sets,
   canReview,
-  baselineCount,
   mine,
 }: {
   tokens: TokenSummary[];
+  catalog: CatalogEntry[];
   sets: SetSummary[];
   canReview: boolean;
-  baselineCount: number;
   mine: string;
 }) {
   const router = useRouter();
@@ -156,6 +189,18 @@ export function ContributeView({
 
   const submitted = sets.filter((s) => s.status === "submitted");
 
+  // Grouped by what they are, in dependency order, so the list reads the way
+  // the runner builds: secrets, then the connectors on them, then templates.
+  const grouped = KIND_ORDER.reduce<Array<[string, CatalogEntry[]]>>((acc, kind) => {
+    const entries = catalog.filter((c) => c.kind === kind);
+    if (entries.length === 0) return acc;
+    const label = KIND_LABEL[kind]!;
+    const existing = acc.find(([l]) => l === label);
+    if (existing) existing[1].push(...entries);
+    else acc.push([label, entries]);
+    return acc;
+  }, []);
+
   return (
     <motion.div
       variants={staggerParent(0.05)}
@@ -190,8 +235,8 @@ export function ContributeView({
             <div className="space-y-1 text-sm">
               <p>
                 A Claude Code skill, built from the catalog as it stands right
-                now — all {baselineCount} published component
-                {baselineCount === 1 ? "" : "s"} are in it, along with a token
+                now — all {catalog.length} published component
+                {catalog.length === 1 ? "" : "s"} are in it, along with a token
                 of your own. Nothing to set up.
               </p>
               <p className="text-muted-foreground">
@@ -347,10 +392,98 @@ export function ContributeView({
         </Card>
       </motion.div>
 
-      {/* 3 — what they have proposed */}
+      {/* 3 — what is deployed today */}
+      <motion.div variants={riseChild} className="space-y-3">
+        <h2 className="text-sm font-medium">3. What every workshop gets</h2>
+        <Card>
+          <CardContent className="space-y-5 py-5 text-sm">
+            {catalog.length === 0 ? (
+              <p className="text-muted-foreground">
+                The catalog is empty — no components are deployed into
+                workshops yet.
+              </p>
+            ) : (
+              <>
+                <p className="text-muted-foreground">
+                  Built in this order: a connector is created after the secret it
+                  references, a template after the connector it uses.{" "}
+                  <strong className="font-medium text-foreground">
+                    Nothing declares that
+                  </strong>{" "}
+                  — it is read out of the{" "}
+                  <code className="rounded bg-muted px-1 py-0.5 text-xs">
+                    org.&lt;name&gt;
+                  </code>{" "}
+                  references inside each one.
+                </p>
+
+                {grouped.map(([label, entries]) => {
+                  const Icon = KIND_ICON[entries[0]!.kind]!;
+                  return (
+                    <div key={label} className="space-y-2">
+                      <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                        <Icon className="size-3.5" />
+                        {label}
+                      </div>
+                      <div className="divide-y divide-border/70 border-t border-border/70">
+                        {entries.map((c) => (
+                          <div key={c.identifier} className="space-y-1 py-2.5">
+                            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                              <code className="font-mono text-xs">
+                                {c.identifier}
+                              </code>
+                              <span className="text-muted-foreground">
+                                {c.name}
+                              </span>
+                              {c.kind === "template" && (
+                                <span className="text-xs text-muted-foreground">
+                                  v{c.versionLabel}
+                                </span>
+                              )}
+                              {!c.builtin && (
+                                // The answer to "what has been contributed?"
+                                // once a set is approved and folded in — at
+                                // that point its rows are indistinguishable
+                                // from the seeded ones except for this.
+                                <span className="rounded-full bg-brand/10 px-1.5 py-0.5 text-[11px] font-medium text-brand">
+                                  contributed
+                                </span>
+                              )}
+                            </div>
+                            {c.description && (
+                              <p className="text-xs text-muted-foreground">
+                                {c.description}
+                              </p>
+                            )}
+                            <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
+                              {c.dependsOn.length > 0 && (
+                                <span>after {c.dependsOn.join(", ")}</span>
+                              )}
+                              {c.usedBy.length > 0 && (
+                                <span>used by {c.usedBy.join(", ")}</span>
+                              )}
+                              {c.requires.length > 0 && (
+                                // Why a component can be absent from a
+                                // workshop without anything being wrong.
+                                <span>needs {c.requires.join(", ")}</span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </>
+            )}
+          </CardContent>
+        </Card>
+      </motion.div>
+
+      {/* 4 — what they have proposed */}
       <motion.div variants={riseChild} className="space-y-3">
         <h2 className="text-sm font-medium">
-          {canReview ? "3. Proposals" : "3. Your proposals"}
+          {canReview ? "4. Proposals" : "4. Your proposals"}
         </h2>
         <Card>
           <CardContent className="py-5 text-sm">

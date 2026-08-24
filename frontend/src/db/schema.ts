@@ -399,6 +399,8 @@ export const RESOURCE_KINDS = [
   "harness_secret",
   "harness_connector",
   "harness_template",
+  /** The catalog as a whole: how many components applied, out of how many. */
+  "harness_components",
 ] as const;
 export type ResourceKind = (typeof RESOURCE_KINDS)[number];
 
