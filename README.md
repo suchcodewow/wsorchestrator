@@ -618,6 +618,33 @@ schemes at once, and carry a copy button for the whole block plus a line gutter
 where each number copies its own line. All of it is rendered on the server —
 neither the Markdown parser nor any syntax grammar reaches the browser.
 
+**Callouts** are triple-colon blocks, with an optional title on the opening line:
+
+```markdown
+:::tip stop and smell the code!
+Everything on this page is generated from the pipeline you just ran.
+:::
+```
+
+The kinds are `note`, `tip`, `success`, `warning` and `danger`, each with its own
+icon and accent; `info`/`important`, `warn`, `check` and `caution`/`error` are
+aliases of those. Without a title the kind's name is used. `:::details Show the
+answer` folds its body away until it is wanted — add `{open}` to start it
+unfolded — and anything else after the colons is left as the literal text you
+typed, so a stray `:::foo` reads as a mistake instead of vanishing. Callouts nest
+inside a numbered step if you indent them under it.
+
+**Where you are in a guide.** The rail beside the prose follows the reading
+position: a bar slides to whichever heading you last read past, and that heading
+is the one lit. It is measured against a line just under the sticky header, not
+against visibility — on a screenful of short sections several headings are
+visible at once, and inside a long one none are. The last section is usually
+shorter than a screen, so once the page runs out of scroll the rail marks it even
+though its heading never reached the line. This is the one part of a guide that
+has to run in the browser
+([`guide-contents.tsx`](frontend/src/app/labs/guide-contents.tsx)); the list
+itself comes from the server with the page.
+
 **The URL.** Slugs — for both a workshop and a guide — are derived from the
 title and freeze the moment the thing is published: the address is by then on a
 projector and in browser histories, and renaming to fix a typo would break every

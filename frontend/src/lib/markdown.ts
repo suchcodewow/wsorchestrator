@@ -3,8 +3,13 @@ import "server-only";
 import GithubSlugger from "github-slugger";
 import type { Element, ElementContent, Root, RootContent } from "hast";
 import { toString } from "hast-util-to-string";
-import type { Paragraph, Root as MdastRoot } from "mdast";
-import rehypeSanitize from "rehype-sanitize";
+import type {
+  BlockContent,
+  DefinitionContent,
+  Paragraph,
+  Root as MdastRoot,
+} from "mdast";
+import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
 import rehypeStringify from "rehype-stringify";
 import remarkDirective from "remark-directive";
 import remarkGfm from "remark-gfm";
@@ -320,28 +325,188 @@ function normaliseListIndents(markdown: string): string {
 }
 
 /* ------------------------------------------------------------------ *
+ * Callouts
+ * ------------------------------------------------------------------ */
+
+/**
+ * The kinds of callout a guide can write, and the heading each falls back to
+ * when it is opened without one.
+ *
+ * Five, deliberately. A palette of callouts only means anything while a reader
+ * can tell them apart at a glance, and a guide with eight shades of tinted box
+ * in it has none — every one of these has its own hue *and* its own glyph.
+ *
+ * `note` is the quiet one, in the palette's own slate: an aside that is worth
+ * setting apart from the prose but is not a hazard. The other four are coloured
+ * by what they cost the reader if ignored, which is why `danger` borrows
+ * `--destructive` rather than introducing a second red.
+ */
+const CALLOUTS = {
+  note: "Note",
+  tip: "Tip",
+  success: "Success",
+  warning: "Warning",
+  danger: "Caution",
+} as const;
+
+type CalloutKind = keyof typeof CALLOUTS;
+
+/**
+ * Other names for the same box.
+ *
+ * GitHub's alert syntax and Docusaurus's admonitions between them have taught
+ * everybody a slightly different vocabulary, and a guide that says `:::caution`
+ * meant a callout — not a paragraph beginning with three colons. Mapped rather
+ * than added as kinds of their own so the rendering stays the five above.
+ */
+const CALLOUT_ALIASES: Record<string, CalloutKind> = {
+  info: "note",
+  important: "note",
+  caution: "danger",
+  error: "danger",
+  warn: "warning",
+  check: "success",
+};
+
+/** The callout kind a directive name asks for, if it asks for one. */
+const calloutKind = (name: string): CalloutKind | null =>
+  name in CALLOUTS
+    ? (name as CalloutKind)
+    : (CALLOUT_ALIASES[name] ?? null);
+
+/* ------------------------------------------------------------------ *
+ * Directive titles
+ * ------------------------------------------------------------------ */
+
+/** A block directive that takes a title: the callouts, plus `details`. */
+const hasTitle = (name: string): boolean =>
+  name === "details" || calloutKind(name) !== null;
+
+/**
+ * A directive opening with something other than a label after its name:
+ * the indent, the name, and the rest of the line.
+ */
+const DIRECTIVE_OPEN = /^([ \t]*):{3,}([A-Za-z][A-Za-z\d-]*)[ \t]+(\S.*?)[ \t]*$/;
+
+/**
+ * Let a callout's title be written as plain text after its name.
+ *
+ * `remark-directive`'s own spelling puts the title in brackets —
+ * `:::tip[Stop and smell the code]` — and a container directive whose opening
+ * line has anything *else* on it is not a directive at all: the extension
+ * declines it, and the whole block, closing `:::` included, lands in the page as
+ * a paragraph of literal punctuation. That is a silent failure of exactly the
+ * kind an author cannot debug, over a pair of brackets that carry no meaning of
+ * their own.
+ *
+ * So both spellings are accepted, and this pass turns the loose one into the
+ * strict one before anything parses it. Line-for-line, like
+ * `normaliseListIndents` — `data-line` and the editor's preview scrolling both
+ * depend on the line numbers surviving every pass.
+ *
+ * Only the names this renderer knows are rewritten. An unrecognised directive is
+ * put back into the page as the text that was typed (see
+ * `remarkBlockDirectives`), and it should read as what the author wrote rather
+ * than as something this pass did to it on the way past.
+ */
+function normaliseDirectiveTitles(markdown: string): string {
+  let fence: string | null = null;
+
+  return markdown
+    .split("\n")
+    .map((line) => {
+      // Three colons in a shell heredoc or a YAML block are not a directive.
+      const marker = line.trim().match(FENCE);
+      if (fence) {
+        if (
+          marker &&
+          marker[1][0] === fence[0] &&
+          marker[1].length >= fence.length &&
+          marker[2].trim().length === 0
+        ) {
+          fence = null;
+        }
+        return line;
+      }
+      if (marker) {
+        fence = marker[1];
+        return line;
+      }
+
+      const open = line.match(DIRECTIVE_OPEN);
+      if (!open || !hasTitle(open[2].toLowerCase())) return line;
+
+      // Already in the strict form, give or take a space — `:::tip [a]` or
+      // `:::details[x] {open}`. Nothing to do, and guessing would break it.
+      const rest = open[3];
+      if (rest.startsWith("[") || rest.startsWith("{")) return line;
+
+      // The title becomes the contents of a bracketed label, so its own
+      // brackets have to stop being label syntax.
+      const label = rest.replace(/[[\]\\]/g, "\\$&");
+      return `${open[1]}:::${open[2]}[${label}]`;
+    })
+    .join("\n");
+}
+
+/* ------------------------------------------------------------------ *
  * Collapsible sections
  * ------------------------------------------------------------------ */
 
 /** The heading on a collapsible section that was opened without one. */
 const DEFAULT_SUMMARY = "Details";
 
+/** What a container directive may hold, which is anything a document may. */
+type DirectiveContent = BlockContent | DefinitionContent;
+
 /**
- * `:::details[Show the answer]` … `:::` → a `<details>` block.
+ * The title a directive was opened with, taken off the front of its body.
  *
- * A directive rather than raw HTML, because raw HTML never reaches the output:
+ * `:::details[Show the answer]` puts the label in a leading paragraph, flagged
+ * as such. Without one the block still needs a heading — a collapsible section
+ * with a blank summary is an unlabelled strip you have to click to identify —
+ * so the caller's fallback stands in.
+ */
+function directiveTitle(
+  children: DirectiveContent[],
+  fallback: string,
+): { title: Paragraph; body: DirectiveContent[] } {
+  const [first] = children;
+  const labelled =
+    first?.type === "paragraph" &&
+    (first.data as { directiveLabel?: boolean } | undefined)
+      ?.directiveLabel === true;
+
+  return labelled
+    ? { title: first, body: children.slice(1) }
+    : {
+        title: {
+          type: "paragraph",
+          children: [{ type: "text", value: fallback }],
+        },
+        body: children,
+      };
+}
+
+/**
+ * `:::` blocks → the two structures a guide is allowed to build with them.
+ *
+ * Directives rather than raw HTML, because raw HTML never reaches the output:
  * `remark-rehype` runs without `allowDangerousHtml`, and that stays true — a
- * guide body is not an HTML injection point. `remark-directive` adds one
- * generic block syntax instead, and this plugin decides what it may mean.
+ * guide body is not an HTML injection point. `remark-directive` adds one generic
+ * block syntax instead, and this plugin decides what it may mean:
  *
- * The `details` and `summary` elements are built *here*, before sanitisation,
- * rather than afterwards like the code blocks: both tags are already in the
- * default schema, so they survive it, and building them in mdast means the
- * heading and the body are ordinary Markdown that gets sanitised along with
- * everything else. Only the decoration — classes, the chevron, the body
- * wrapper — is added on the trusted side, in `rehypeDetails`.
+ *  - `:::details[Show the answer]` … `:::` → a `<details>` block, expanded from
+ *    the start if it was opened `:::details[Title]{open}`;
+ *  - `:::tip[Stop and smell the code]` … `:::` → a callout, in any of the kinds
+ *    in `CALLOUTS`.
  *
- * `:::details[Title]{open}` starts expanded.
+ * Both are built *here*, before sanitisation, rather than afterwards like the
+ * code blocks. The tags they need — `details`, `summary`, `div`, `p` — are ones
+ * the schema already allows, and building them in mdast means the title and the
+ * body are ordinary Markdown that gets sanitised along with everything else. Only
+ * the decoration — classes, the chevron, the icon, the body wrapper — is added on
+ * the trusted side, in `rehypeDetails` and `rehypeCallouts`.
  *
  * Everything else the syntax can match is put back as the text that was typed.
  * That is the whole reason this runs as one pass over every directive node:
@@ -350,7 +515,7 @@ const DEFAULT_SUMMARY = "Details";
  * otherwise lose the second half of the word. Directives are a feature of this
  * one block form; anywhere else the punctuation means what it looks like.
  */
-function remarkDetails() {
+function remarkBlockDirectives() {
   return (tree: MdastRoot, file: { value: unknown }) => {
     const source = String(file.value);
 
@@ -363,7 +528,13 @@ function remarkDetails() {
         return;
       }
 
-      if (node.type !== "containerDirective" || node.name !== "details") {
+      const kind =
+        node.type === "containerDirective" ? calloutKind(node.name) : null;
+
+      if (
+        node.type !== "containerDirective" ||
+        (node.name !== "details" && kind === null)
+      ) {
         const start = node.position?.start.offset;
         const end = node.position?.end.offset;
         if (!parent || index === undefined || start === undefined || end === undefined) {
@@ -379,28 +550,30 @@ function remarkDetails() {
         return SKIP;
       }
 
-      // `:::details[Title]` puts the label in a leading paragraph, flagged as
-      // such. Without one there is nothing to click, so the section gets a
-      // generic heading rather than a summary that is a blank strip.
-      const [first] = node.children;
-      const labelled =
-        first?.type === "paragraph" &&
-        (first.data as { directiveLabel?: boolean } | undefined)
-          ?.directiveLabel === true;
+      if (kind !== null) {
+        // The heading is always present, so what survives sanitisation is a
+        // shape `rehypeCallouts` can read without guessing: the first paragraph
+        // in the box is its title, and everything after it is the body.
+        const { title, body } = directiveTitle(node.children, CALLOUTS[kind]);
 
-      const summary: Paragraph = labelled
-        ? first
-        : {
-            type: "paragraph",
-            children: [{ type: "text", value: DEFAULT_SUMMARY }],
-          };
+        node.children = [title, ...body];
+        node.data = {
+          ...node.data,
+          hName: "div",
+          // The kind has to reach the far side of the sanitiser to be styled,
+          // and a class would not: see `SANITIZE_SCHEMA`.
+          hProperties: { "data-callout": kind },
+        };
+        return;
+      }
 
+      const { title: summary, body } = directiveTitle(
+        node.children,
+        DEFAULT_SUMMARY,
+      );
       summary.data = { ...summary.data, hName: "summary" };
-      node.children = [
-        summary,
-        ...(labelled ? node.children.slice(1) : node.children),
-      ];
 
+      node.children = [summary, ...body];
       node.data = {
         ...node.data,
         hName: "details",
@@ -694,7 +867,7 @@ function chevron(): Element {
 }
 
 /**
- * Dress the `<details>` blocks that `remarkDetails` built.
+ * Dress the `<details>` blocks that `remarkBlockDirectives` built.
  *
  * Split from that plugin because classes are not in the sanitiser's schema for
  * either tag — anything set before it runs is stripped back off. So the tags go
@@ -733,6 +906,119 @@ function rehypeDetails() {
         // draw a rule under it with a padded void beneath.
         ...(body.length > 0
           ? [el("div", { className: ["lab-details-body"] }, body)]
+          : []),
+      ];
+    });
+  };
+}
+
+/* ------------------------------------------------------------------ *
+ * Callouts, part two
+ * ------------------------------------------------------------------ */
+
+/**
+ * The glyph each kind of callout is marked with, as hast.
+ *
+ * Lucide's own path data, so a callout is drawn from the same set as every other
+ * icon in the app, but written out here because this markup is generated on the
+ * server where a React component is not one of the options — the same reason the
+ * clipboard and the chevron above are inline.
+ *
+ * Factories rather than shared nodes: a hast node is a mutable object, and two
+ * documents rendering at once must not be handed the same one.
+ *
+ * `tip` takes the ⓘ rather than the lightbulb it has elsewhere, because that is
+ * the glyph on the callout these were specified from.
+ */
+const CALLOUT_ICONS: Record<CalloutKind, () => ElementContent[]> = {
+  note: () => [
+    el("path", {
+      d: "M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z",
+    }),
+    el("path", { d: "m15 5 4 4" }),
+  ],
+  tip: () => [
+    el("circle", { cx: "12", cy: "12", r: "10" }),
+    el("path", { d: "M12 16v-4" }),
+    el("path", { d: "M12 8h.01" }),
+  ],
+  success: () => [
+    el("circle", { cx: "12", cy: "12", r: "10" }),
+    el("path", { d: "m9 12 2 2 4-4" }),
+  ],
+  warning: () => [
+    el("path", {
+      d: "m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3",
+    }),
+    el("path", { d: "M12 9v4" }),
+    el("path", { d: "M12 17h.01" }),
+  ],
+  danger: () => [
+    el("path", {
+      d: "M15.312 2a2 2 0 0 1 1.414.586l4.688 4.688A2 2 0 0 1 22 8.688v6.624a2 2 0 0 1-.586 1.414l-4.688 4.688a2 2 0 0 1-1.414.586H8.688a2 2 0 0 1-1.414-.586l-4.688-4.688A2 2 0 0 1 2 15.312V8.688a2 2 0 0 1 .586-1.414l4.688-4.688A2 2 0 0 1 8.688 2z",
+    }),
+    el("path", { d: "M12 8v4" }),
+    el("path", { d: "M12 16h.01" }),
+  ],
+};
+
+function calloutIcon(kind: CalloutKind): Element {
+  return el(
+    "svg",
+    {
+      "aria-hidden": "true",
+      viewBox: "0 0 24 24",
+      fill: "none",
+      stroke: "currentColor",
+      strokeWidth: "2",
+      strokeLinecap: "round",
+      strokeLinejoin: "round",
+      className: ["lab-callout-icon"],
+    },
+    CALLOUT_ICONS[kind](),
+  );
+}
+
+/**
+ * Dress the callouts that `remarkBlockDirectives` built.
+ *
+ * Here rather than in that plugin for the same reason `<details>` is dressed
+ * here: a class on a `div` is not in the sanitiser's schema, so anything set
+ * before it runs is stripped straight back off. The one thing that *does* come
+ * through is `data-callout`, which is what this pass reads the kind from — and
+ * the kind was chosen from a closed set on the way in, so what arrives here is
+ * one of five words rather than anything an author typed.
+ *
+ * The heading is the box's first paragraph, always present by construction. The
+ * body is wrapped so it can be spaced as a document of its own: `.lab-prose`'s
+ * rhythm rule only reaches its own direct children, and a callout two paragraphs
+ * long would otherwise set solid.
+ */
+function rehypeCallouts() {
+  return (tree: Root) => {
+    visit(tree, "element", (node: Element) => {
+      if (node.tagName !== "div") return;
+
+      const kind = node.properties["data-callout"];
+      if (typeof kind !== "string" || !(kind in CALLOUTS)) return;
+
+      const head = node.children.find((c): c is Element => isElement(c, "p"));
+      if (!head) return;
+
+      addClass(node, "lab-callout");
+      addClass(head, "lab-callout-head");
+      head.children = [
+        calloutIcon(kind as CalloutKind),
+        el("span", { className: ["lab-callout-title"] }, head.children),
+      ];
+
+      const body = node.children.filter((c) => c !== head);
+      node.children = [
+        head,
+        // A callout can be a heading and nothing else — a one-line aside whose
+        // title says all of it — and a wrapper there would pad out a void.
+        ...(body.some((c) => c.type !== "text" || c.value.trim().length > 0)
+          ? [el("div", { className: ["lab-callout-body"] }, body)]
           : []),
       ];
     });
@@ -828,6 +1114,10 @@ const LINE_MARKED_TAGS = new Set([
   // it is shut, and the section itself is the landmark once it is open.
   "details",
   "summary",
+  // The only `div` with a position of its own is a callout: nothing else in the
+  // pipeline emits one from the source, and the wrappers built afterwards have
+  // no position to mark.
+  "div",
   "table",
   "thead",
   "tbody",
@@ -865,22 +1155,48 @@ function rehypeSourceLines() {
  * The pipeline
  * ------------------------------------------------------------------ */
 
+/**
+ * GitHub's rules, plus the one attribute this renderer needs to survive them.
+ *
+ * `data-callout` is how a callout's kind reaches the far side of the sanitiser,
+ * where the box is dressed (`rehypeCallouts`). A class would not get there —
+ * `div` has none in the schema — and the trick the fence titles use, folding the
+ * value into a `language-*` class, has no equivalent on a `div`.
+ *
+ * Widening the schema is safe here in a way it would not usually be: the only
+ * `div` in the tree at this point is one `remarkBlockDirectives` built, since raw
+ * HTML never survives the parse, and the value is one of five words that plugin
+ * chose from a closed set. The list is spelled out anyway, so an attribute that
+ * somehow arrives holding anything else is dropped rather than trusted.
+ */
+const SANITIZE_SCHEMA = {
+  ...defaultSchema,
+  attributes: {
+    ...defaultSchema.attributes,
+    div: [
+      ...(defaultSchema.attributes?.div ?? []),
+      ["data-callout", ...Object.keys(CALLOUTS)] as [string, ...string[]],
+    ],
+  },
+};
+
 const buildProcessor = (highlighter: Highlighter, sourceLines: boolean) => {
   const processor = unified()
     .use(remarkParse)
     .use(remarkGfm)
     .use(remarkDirective)
-    .use(remarkDetails)
+    .use(remarkBlockDirectives)
     .use(remarkRehype)
     .use(rehypeCarryCodeTitle)
     // GitHub's default rules, which already keep `language-*` on a code
     // element — `language-hcl:main.tf` included, which is what lets the fence
     // title survive this step — and which allow `details` and `summary`, which
     // is what lets a collapsible section through with its contents sanitised.
-    .use(rehypeSanitize)
+    .use(rehypeSanitize, SANITIZE_SCHEMA)
     // Everything below this line generates trusted markup.
     .use(rehypeHighlight, highlighter)
     .use(rehypeDetails)
+    .use(rehypeCallouts)
     .use(rehypeHeadings)
     .use(rehypeExternalLinks);
 
@@ -926,11 +1242,13 @@ export async function renderMarkdown(
   if (markdown.trim().length === 0) return { html: "", toc: [] };
 
   const processor = await getProcessor(sourceLines);
-  // Before anything parses it, so `remarkDetails` — which reads offsets back
-  // out of the source it was given — and `data-line` both describe the same
-  // text. The pass never adds or removes a line, so the numbers still point at
-  // the markdown the author is looking at.
-  const file = await processor.process(normaliseListIndents(markdown));
+  // Both passes run before anything parses the text, so `remarkBlockDirectives`
+  // — which reads offsets back out of the source it was given — and `data-line`
+  // describe the same string. Neither adds or removes a line, so the numbers
+  // still point at the markdown the author is looking at.
+  const file = await processor.process(
+    normaliseListIndents(normaliseDirectiveTitles(markdown)),
+  );
 
   return {
     html: String(file),

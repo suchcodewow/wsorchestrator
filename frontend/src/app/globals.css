@@ -44,6 +44,27 @@
    * reads as a field before you find its border.
    */
   --field: oklch(0.976 0.005 247.9);
+
+  /*
+   * Callout accents — one hue per kind of `:::` block in a lab guide, used for
+   * the bar, the icon and the title, with the box tinted from the same colour.
+   *
+   * Deliberately not the brand mint: a guide can carry half a dozen of these on
+   * one page, and spending the accent on them would leave nothing to mark the
+   * step you are actually on. `note` is the palette's own slate — an aside, not
+   * a hazard — and the rest climb in urgency to `danger`, which reuses
+   * `--destructive` rather than introducing a second red.
+   *
+   * Each one is dark enough to set body-weight text on the tint it produces.
+   */
+  --callout-note: oklch(0.5 0.045 257.4);
+  --callout-tip: oklch(0.5 0.185 285);
+  --callout-success: oklch(0.5 0.115 158);
+  --callout-warning: oklch(0.53 0.13 66);
+  --callout-danger: var(--destructive);
+
+  /* How much of the accent the box is tinted with. */
+  --callout-tint: 7%;
 }
 
 .dark {
@@ -74,6 +95,17 @@
 
   /* Lifted above both the page (0.129) and the card (0.208) it sits on. */
   --field: oklch(0.246 0.042 264.7);
+
+  /* Lifted for text on a near-black page, the way the brand is. `danger`
+     follows `--destructive`, which is already lifted above. A heavier tint,
+     because the same mix that reads as a tinted panel on white disappears
+     into the background here. */
+  --callout-note: oklch(0.72 0.04 256.8);
+  --callout-tip: oklch(0.75 0.145 287);
+  --callout-success: oklch(0.76 0.13 160);
+  --callout-warning: oklch(0.81 0.125 74);
+
+  --callout-tint: 13%;
 }
 
 @theme inline {
@@ -594,6 +626,91 @@
   }
 
   .lab-prose .lab-details-body > :last-child {
+    margin-bottom: 0;
+  }
+}
+
+@layer components {
+  /*
+   * Callouts — what the editor's `:::tip Worth knowing` block renders as.
+   *
+   * The one thing a lab guide needs that plain Markdown has no shape for: a
+   * sentence that has to be read *now*, because skipping it is what leaves an
+   * attendee wedged three steps later. A blockquote was doing this job before,
+   * which meant every aside looked like every other aside and none of them
+   * looked urgent.
+   *
+   * The whole treatment hangs off one variable per kind. The bar, the icon and
+   * the title are the accent itself; the fill is the same colour mixed into the
+   * page. So a new kind is a hue and a glyph, and nothing else.
+   *
+   * Square on the left, rounded away from it: the bar reads as a marker in the
+   * margin rather than as a border that has been left half-drawn.
+   */
+  .lab-prose .lab-callout {
+    --callout-accent: var(--callout-note);
+
+    border-left: 3px solid var(--callout-accent);
+    border-radius: 0 var(--radius-md) var(--radius-md) 0;
+    background-color: color-mix(
+      in oklab,
+      var(--callout-accent) var(--callout-tint),
+      var(--background)
+    );
+    padding: 0.75rem 1rem;
+  }
+
+  .lab-prose .lab-callout[data-callout="tip"] {
+    --callout-accent: var(--callout-tip);
+  }
+
+  .lab-prose .lab-callout[data-callout="success"] {
+    --callout-accent: var(--callout-success);
+  }
+
+  .lab-prose .lab-callout[data-callout="warning"] {
+    --callout-accent: var(--callout-warning);
+  }
+
+  .lab-prose .lab-callout[data-callout="danger"] {
+    --callout-accent: var(--callout-danger);
+  }
+
+  .lab-prose .lab-callout-head {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    color: var(--callout-accent);
+    font-weight: 500;
+    line-height: 1.6;
+  }
+
+  /* Optically centred on the first line of the title rather than on the whole
+     block, so a title that wraps keeps its glyph beside its first word. */
+  .lab-prose .lab-callout-icon {
+    flex: none;
+    margin-top: 0.22em;
+    width: 1.0625rem;
+    height: 1.0625rem;
+  }
+
+  .lab-prose .lab-callout-body {
+    margin-top: 0.35rem;
+  }
+
+  /* The prose rhythm is a rule about direct children of `.lab-prose`, and the
+     body is two levels down from it — without this it would set solid. */
+  .lab-prose .lab-callout-body > * + * {
+    margin-top: 0.75em;
+  }
+
+  /* The box supplies the padding; margins the contents brought with them — a
+     code block's, a heading's — would sit on top of it at the ends. */
+  .lab-prose .lab-callout-body > :first-child {
+    margin-top: 0;
+  }
+
+  .lab-prose .lab-callout-body > :last-child {
     margin-bottom: 0;
   }
 }

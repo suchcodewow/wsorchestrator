@@ -755,12 +755,19 @@ export function GuideEditor({
             for highlighting — <code className="text-foreground">```bash</code> —
             and add{" "}
             <code className="text-foreground">title=&quot;main.tf&quot;</code> to
-            label the block with a filename. Fold a hint or an answer away with{" "}
-            <code className="text-foreground">:::details[Show the answer]</code>{" "}
-            on its own line and{" "}
-            <code className="text-foreground">:::</code> to close it — add{" "}
-            <code className="text-foreground">{"{open}"}</code> after the title
-            to have it start expanded. The toolbar drops a worked example in at
+            label the block with a filename. Set something apart with{" "}
+            <code className="text-foreground">:::tip Worth knowing</code> on its
+            own line and <code className="text-foreground">:::</code> to close
+            it — the title is optional, and{" "}
+            <code className="text-foreground">note</code>,{" "}
+            <code className="text-foreground">success</code>,{" "}
+            <code className="text-foreground">warning</code> and{" "}
+            <code className="text-foreground">danger</code> are the same block in
+            rising order of “do not skip this”. Fold a hint or an answer away the
+            same way with{" "}
+            <code className="text-foreground">:::details Show the answer</code> —
+            add <code className="text-foreground">{"{open}"}</code> after the
+            title to have it start expanded. The toolbar drops a worked example in at
             the cursor — table, list, callout — with the placeholder text
             selected to type over. Paste or drop an image straight in, or pick an
             existing one from the same toolbar. Indent anything two spaces —
@@ -896,14 +903,13 @@ const VIEWS: { value: View; label: string; icon: LucideIcon }[] = [
  * places. `select` is the part left highlighted after the insertion, so the
  * example text is gone the moment the author starts typing over it.
  *
- * The callout is a blockquote with a bold label, because that is what this
- * renderer has: the pipeline is GFM without an admonition plugin, so a
- * `> [!NOTE]` written here would render the marker as literal text.
- *
- * The collapsible section is the one entry that is not Markdown. Raw HTML is
- * dropped from a guide body, so `<details>` cannot be written by hand; the
- * renderer takes a `:::details[…]` directive instead (`@/lib/markdown`), and
- * this button is the only place most authors will meet that syntax.
+ * The last two entries are the ones that are not Markdown. Raw HTML is dropped
+ * from a guide body, so neither a callout nor a `<details>` can be written by
+ * hand; the renderer takes `:::` directives instead (`@/lib/markdown`), and
+ * these buttons are the only place most authors will meet that syntax. The
+ * callout is inserted as a `tip` because that is the one an author reaches for
+ * most; `warning`, `danger`, `success` and `note` are the same block with a
+ * different word, which is what the help text under the editor says.
  */
 const SNIPPETS: {
   label: string;
@@ -960,10 +966,10 @@ gcloud auth login
   {
     label: "Callout",
     icon: Info,
-    snippet: `> **Note**
->
-> What to know before carrying on — a prerequisite or a gotcha.`,
-    select: "What to know before carrying on — a prerequisite or a gotcha.",
+    snippet: `:::tip Worth knowing
+What to know before carrying on — a prerequisite or a gotcha.
+:::`,
+    select: "Worth knowing",
   },
   {
     label: "Collapsible section",

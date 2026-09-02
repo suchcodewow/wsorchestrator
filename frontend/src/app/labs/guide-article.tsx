@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import type { LabGuideWithAuthor } from "@/lib/lab-guides";
 import type { WorkshopGuideEntry } from "@/lib/lab-workshops";
 import { renderMarkdown } from "@/lib/markdown";
-import { cn } from "@/lib/utils";
+import { GuideContents } from "./guide-contents";
 
 const updated = new Intl.DateTimeFormat("en", {
   day: "numeric",
@@ -160,76 +160,26 @@ export async function GuideArticle({
         </div>
 
         {showRail && (
-          // Second in the DOM so the guide itself is what a screen reader and a
-          // narrow viewport reach first.
-          <nav
-            aria-label={context ? "Workshop contents" : "On this page"}
-            className="hidden text-sm lg:sticky lg:top-20 lg:block"
-          >
-            {context ? (
-              <>
-                <p className="font-medium">Contents</p>
-                <ol className="mt-3 grid gap-1 border-l">
-                  {context.guides.map((entry, i) => {
-                    const current = i === context.index;
-                    return (
-                      <li key={entry.id}>
-                        <Link
-                          href={`/labs/${context.slug}/${entry.slug}`}
-                          aria-current={current ? "page" : undefined}
-                          className={cn(
-                            "-ml-px flex gap-2 border-l py-1 pl-4 leading-snug outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50",
-                            current
-                              ? "border-brand font-medium text-brand"
-                              : "border-transparent text-muted-foreground hover:text-foreground",
-                          )}
-                        >
-                          <span className="tnum opacity-60">{i + 1}.</span>
-                          <span>{entry.title}</span>
-                        </Link>
-
-                        {/* The current step's own headings, nested under it —
-                            one rail for both scales of navigation. */}
-                        {current && toc.length >= 2 && (
-                          <ul className="mt-1 mb-1 grid gap-1">
-                            {toc.map((heading) => (
-                              <li key={heading.id}>
-                                <a
-                                  href={`#${heading.id}`}
-                                  className={cn(
-                                    "block rounded-md py-0.5 text-[13px] leading-snug text-muted-foreground outline-none transition-colors hover:text-brand focus-visible:ring-[3px] focus-visible:ring-ring/50",
-                                    heading.depth === 3 ? "pl-11" : "pl-8",
-                                  )}
-                                >
-                                  {heading.text}
-                                </a>
-                              </li>
-                            ))}
-                          </ul>
-                        )}
-                      </li>
-                    );
-                  })}
-                </ol>
-              </>
-            ) : (
-              <>
-                <p className="font-medium">On this page</p>
-                <ul className="mt-3 grid gap-2 border-l pl-4">
-                  {toc.map((entry) => (
-                    <li key={entry.id} className={entry.depth === 3 ? "pl-3" : ""}>
-                      <a
-                        href={`#${entry.id}`}
-                        className="block rounded-md leading-snug text-muted-foreground outline-none transition-colors hover:text-brand focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                      >
-                        {entry.text}
-                      </a>
-                    </li>
-                  ))}
-                </ul>
-              </>
-            )}
-          </nav>
+          // The rail is a client component because it tracks the reading
+          // position; it is handed the three fields it draws with rather than
+          // the workshop rows, so nothing else about the curriculum is
+          // serialised into the page.
+          <GuideContents
+            toc={toc}
+            workshop={
+              context
+                ? {
+                    slug: context.slug,
+                    steps: context.guides.map(({ id, slug, title }) => ({
+                      id,
+                      slug,
+                      title,
+                    })),
+                    index: context.index,
+                  }
+                : undefined
+            }
+          />
         )}
       </div>
     </div>
