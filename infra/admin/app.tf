@@ -23,8 +23,18 @@ resource "google_cloud_run_v2_service" "app" {
   # read and the same diff returns forever. Nothing is actually drifting: zero
   # min instances is the default, and manual_instance_count is inert outside
   # MANUAL scaling mode.
+  # `client` / `client_version` are stamped by whatever last called the API —
+  # `gcloud run services update` writes "gcloud"/"583.0.0". The deploy stage of
+  # the Harness pipeline makes exactly that call, so without ignoring these the
+  # very next `tofu plan` reports a change, and the pipeline's "apply only when
+  # the plan reports changes" gate would fire on every single run.
   lifecycle {
-    ignore_changes = [template[0].containers[0].image, scaling]
+    ignore_changes = [
+      template[0].containers[0].image,
+      scaling,
+      client,
+      client_version,
+    ]
   }
 
   template {

@@ -67,8 +67,15 @@ resource "google_cloud_run_v2_job" "runner" {
 
   # See the matching note in app.tf: the running tag is owned by the deployer
   # (CD trigger or `make deploy`), not by Terraform.
+  # `client` / `client_version` are stamped by the last caller — the pipeline's
+  # `gcloud run jobs update` writes "gcloud". Ignored so a code-only commit
+  # leaves the plan a true no-op; see the same note in app.tf.
   lifecycle {
-    ignore_changes = [template[0].template[0].containers[0].image]
+    ignore_changes = [
+      template[0].template[0].containers[0].image,
+      client,
+      client_version,
+    ]
   }
 
   template {
@@ -153,8 +160,15 @@ resource "google_cloud_run_v2_job" "reaper" {
 
   # See the matching note in app.tf: the running tag is owned by the deployer
   # (CD trigger or `make deploy`), not by Terraform.
+  # `client` / `client_version` are stamped by the last caller — the pipeline's
+  # `gcloud run jobs update` writes "gcloud". Ignored so a code-only commit
+  # leaves the plan a true no-op; see the same note in app.tf.
   lifecycle {
-    ignore_changes = [template[0].template[0].containers[0].image]
+    ignore_changes = [
+      template[0].template[0].containers[0].image,
+      client,
+      client_version,
+    ]
   }
 
   template {
@@ -245,8 +259,15 @@ resource "google_cloud_run_v2_job" "scheduler" {
 
   # See the matching note in app.tf: the running tag is owned by the deployer
   # (CD trigger or `make deploy`), not by Terraform.
+  # `client` / `client_version` are stamped by the last caller — the pipeline's
+  # `gcloud run jobs update` writes "gcloud". Ignored so a code-only commit
+  # leaves the plan a true no-op; see the same note in app.tf.
   lifecycle {
-    ignore_changes = [template[0].template[0].containers[0].image]
+    ignore_changes = [
+      template[0].template[0].containers[0].image,
+      client,
+      client_version,
+    ]
   }
 
   template {
