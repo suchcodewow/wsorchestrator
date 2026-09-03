@@ -224,7 +224,7 @@ export function BackupsTable({
                 <motion.li
                   key={backup.id}
                   variants={riseChild}
-                  className="flex items-center gap-4 rounded-xl border bg-card/60 p-4"
+                  className="flex items-center gap-4 rounded-xl border bg-card/60 dark:bg-card p-4"
                 >
                   <span className="min-w-0 flex-1">
                     <span className="flex items-center gap-2.5">

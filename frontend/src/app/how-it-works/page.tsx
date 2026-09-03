@@ -234,7 +234,7 @@ export default async function HowItWorks() {
           {STAGES.map(({ n, Icon, tag, auto, title, body }) => (
             <div
               key={n}
-              className="relative overflow-hidden rounded-2xl border bg-card/60 p-6 backdrop-blur-sm"
+              className="relative overflow-hidden rounded-2xl border bg-card/60 dark:bg-card p-6 backdrop-blur-sm"
             >
               <span
                 aria-hidden
@@ -368,7 +368,7 @@ export default async function HowItWorks() {
 
         {/* CTA */}
         <section className="mt-24">
-          <div className="mx-auto max-w-3xl rounded-3xl border bg-card/60 px-8 py-12 text-center backdrop-blur-sm">
+          <div className="mx-auto max-w-3xl rounded-3xl border bg-card/60 dark:bg-card px-8 py-12 text-center backdrop-blur-sm">
             <h2 className="text-2xl font-medium tracking-tight text-balance">
               Ready to run one?
             </h2>

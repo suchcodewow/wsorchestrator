@@ -538,6 +538,115 @@ export const TOKEN_NAME_MAX = 80;
 export const MAX_TOKENS_PER_USER = 5;
 
 /* ------------------------------------------------------------------ *
+ * Harness platform tokens — a user's own credentials, saved by them
+ * ------------------------------------------------------------------ */
+
+/**
+ * A Harness platform token (`pat.…` or `sat.…`) that a user pasted into their
+ * own settings.
+ *
+ * The opposite direction from `apiTokens`: those are credentials this app issues
+ * for reaching *itself*, and only their hashes are kept. These are credentials
+ * somebody else issued, in Harness, for reaching Harness — saved so that work
+ * can later be done against their account with their own permissions rather than
+ * with the deployment's shared `HARNESS_API_KEY`.
+ *
+ * That means the secret has to be recoverable, so it is encrypted rather than
+ * hashed (see `@/lib/secret-box`). Nothing here ever displays it again: the row
+ * keeps the last four characters so a list of three tokens can be told apart,
+ * and the whole token only leaves the database on its way to Harness.
+ *
+ * The account, the principal, and the permission probe are all *findings* — what
+ * Harness said when the token was checked, cached so the list can be drawn
+ * without a round trip per row. They go stale, which is what `verifiedAt` is
+ * for, and re-checking is a button rather than something that happens on render.
+ */
+export const harnessTokens = pgTable(
+  "harness_tokens",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /**
+     * `pat` for a personal access token, `sat` for a service account's. Taken
+     * from the token's own prefix, not asked for — and worth keeping, because a
+     * `sat` belongs to a service account that outlives whoever pasted it.
+     */
+    kind: text("kind").notNull(),
+    /**
+     * The Harness account the token is for, read out of the token itself: the
+     * format is `<kind>.<accountId>.<tokenId>.<secret>`, so this needs no API
+     * call and is known even when the check that follows fails.
+     */
+    accountId: text("account_id").notNull(),
+    /**
+     * What Harness calls that account, discovered during the check rather than
+     * typed — it is also how the row is named in the list, which is why nothing
+     * asks for a label. Null only if the token cannot read its own account, and
+     * then the account id stands in.
+     */
+    accountName: text("account_name"),
+    /** Who Harness says the token acts as — an email, or a service account id. */
+    principal: text("principal"),
+    /**
+     * `USER` or `SERVICE_ACCOUNT`, as Harness reported it. Stored rather than
+     * inferred from `kind`: the two agree today, and a row that says what the
+     * platform actually answered is the one worth keeping if they ever don't.
+     */
+    principalType: text("principal_type"),
+    /** Last four characters, so the list can distinguish rows. Never more. */
+    tail: text("tail").notNull(),
+    /**
+     * SHA-256 of the whole token. Not for verification — nothing presents these
+     * back to us — but as the uniqueness key: it is what makes "you already
+     * saved this token" answerable without decrypting every row the user has.
+     */
+    fingerprint: text("fingerprint").notNull(),
+    /** AES-256-GCM sealed token. The only copy, and unreadable without the key. */
+    secret: bytea("secret").notNull(),
+    /**
+     * What the token was permitted to do at the last check: an array of
+     * `{ permission, resourceType, permitted }`. Cached rather than derived,
+     * because the answer costs a Harness round trip and changes rarely.
+     *
+     * Empty when the probe itself could not run — a token can be perfectly valid
+     * and still not be allowed to ask what it may do.
+     */
+    permissions: jsonb("permissions")
+      .$type<HarnessPermissionCheck[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    /** When Harness last confirmed the token worked. */
+    verifiedAt: timestamp("verified_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("harness_tokens_user_idx").on(t.userId, t.createdAt),
+    // Scoped to the user, not global: two people may legitimately hold the same
+    // service account token, and refusing the second one would leak the fact
+    // that the first exists.
+    uniqueIndex("harness_tokens_fingerprint_idx").on(t.userId, t.fingerprint),
+  ],
+);
+
+/** One answer from the permission probe. Stored in `harnessTokens.permissions`. */
+export type HarnessPermissionCheck = {
+  /** Harness permission identifier, e.g. `core_organization_create`. */
+  permission: string;
+  /** Harness resource type the permission applies to, e.g. `ORGANIZATION`. */
+  resourceType: string;
+  permitted: boolean;
+};
+
+/** How many saved Harness tokens one account may hold. */
+export const MAX_HARNESS_TOKENS_PER_USER = 10;
+
+export type HarnessToken = typeof harnessTokens.$inferSelect;
+
+/* ------------------------------------------------------------------ *
  * Harness components — the catalog deployed into every workshop org
  * ------------------------------------------------------------------ */
 

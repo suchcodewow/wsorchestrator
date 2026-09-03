@@ -94,7 +94,7 @@ export default async function Home() {
         <section id="how" className="mx-auto max-w-6xl scroll-mt-20 px-6 pt-14 pb-24">
           <div className="grid gap-6 sm:grid-cols-3">
             {CAPABILITIES.map(({ Icon, title, body }) => (
-              <div key={title} className="rounded-2xl border bg-card/60 p-6 backdrop-blur-sm">
+              <div key={title} className="rounded-2xl border bg-card/60 dark:bg-card p-6 backdrop-blur-sm">
                 <span className="flex size-9 items-center justify-center rounded-lg bg-brand/10 text-brand ring-1 ring-brand/15">
                   <Icon className="size-4.5" />
                 </span>

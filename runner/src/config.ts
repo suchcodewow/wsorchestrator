@@ -461,15 +461,51 @@ export function harnessCfg() {
   };
 }
 
-/** Derive a valid, globally-unique GCP project id from a run. */
+/**
+ * Substrings GCP refuses inside a project id or a service account id. `google`
+ * and `ssl` are the documented ones; the API also rejects obvious misspellings
+ * of google. It reports only `field [project_id] has issue [project_id contains
+ * prohibited words]` without naming the word, so a workshop slug like
+ * `google-platform` fails project creation with nothing to act on.
+ */
+const PROHIBITED_ID_WORDS = [
+  "google",
+  "gooogle",
+  "googel",
+  "gogle",
+  "goggle",
+  "g00gle",
+  "ssl",
+];
+
+/**
+ * Fold `<prefix>-<slug>` into the character set GCP ids allow, dropping the
+ * words it prohibits. Deterministic in the slug: every id built on this is
+ * recomputed rather than stored on at least one teardown path, so the same slug
+ * must always fold to the same string.
+ *
+ * A slug that is nothing but prohibited words collapses to just the prefix,
+ * which is fine — the callers' run suffix carries the uniqueness, and their
+ * prefix keeps the id starting with a letter.
+ */
+function idBase(prefix: string, slug: string): string {
+  let base = `${prefix}-${slug}`.toLowerCase().replace(/[^a-z0-9-]/g, "-");
+  for (const word of PROHIBITED_ID_WORDS) base = base.split(word).join("-");
+  return base.replace(/-{2,}/g, "-").replace(/^-+/, "");
+}
+
+/**
+ * Derive a valid, globally-unique GCP project id from a run. Ids are capped at
+ * 30 characters, and the run's short suffix — the part that makes the id unique
+ * — is kept whole, so the slug is what gets truncated to fit.
+ */
 export function makeProjectId(slug: string, runId: string): string {
-  const short = runId.replace(/-/g, "").slice(0, 6);
-  const id = `ws-${slug}-${short}`
-    .toLowerCase()
-    .replace(/[^a-z0-9-]/g, "-")
-    .slice(0, 30)
-    .replace(/-+$/, "");
-  return id;
+  const suffix = `-${runId.replace(/-/g, "").slice(0, 6)}`;
+  return (
+    idBase("ws", slug)
+      .slice(0, 30 - suffix.length)
+      .replace(/-+$/, "") + suffix
+  );
 }
 
 /**
@@ -483,13 +519,18 @@ export function makeProjectId(slug: string, runId: string): string {
  * project, where several runs' accounts coexist. Shaped to GCP's rules, which
  * are the tightest of the three — 6-30 characters, starting with a letter and
  * ending with a letter or digit, which the `ws-` prefix and the hex suffix
- * cover at both ends.
+ * cover at both ends. GCP also bars the same prohibited words from a service
+ * account id that it bars from a project id, so this folds the slug the way
+ * `makeProjectId` does — one name across all three clouds still.
  */
 export function makeHarnessIdentity(slug: string, runId: string): string {
   const short = runId.replace(/-/g, "").slice(0, 6);
   const suffix = `-${short}`;
-  const base = `ws-${slug}`.toLowerCase().replace(/[^a-z0-9-]/g, "-");
-  return base.slice(0, 30 - suffix.length).replace(/-+$/, "") + suffix;
+  return (
+    idBase("ws", slug)
+      .slice(0, 30 - suffix.length)
+      .replace(/-+$/, "") + suffix
+  );
 }
 
 /**
@@ -524,8 +565,11 @@ export function makeChallengeProjectId(
   const who = createHash("sha1").update(email).digest("hex").slice(0, 6);
   const suffix = `-${short}-${who}`;
 
-  const base = `ch-${slug}`.toLowerCase().replace(/[^a-z0-9-]/g, "-");
-  return base.slice(0, 30 - suffix.length).replace(/-+$/, "") + suffix;
+  return (
+    idBase("ch", slug)
+      .slice(0, 30 - suffix.length)
+      .replace(/-+$/, "") + suffix
+  );
 }
 
 /**

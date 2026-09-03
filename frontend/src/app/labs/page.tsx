@@ -68,7 +68,7 @@ export default async function LabsPage() {
             <li key={workshop.id}>
               <Link
                 href={`/labs/${workshop.slug}`}
-                className="group block rounded-2xl border bg-card/60 p-5 backdrop-blur-sm transition-colors outline-none hover:border-brand-border/70 hover:bg-accent/40 focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                className="group block rounded-2xl border bg-card/60 dark:bg-card p-5 backdrop-blur-sm transition-colors outline-none hover:border-brand-border/70 hover:bg-accent/40 dark:hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50"
               >
                 <div className="flex items-center gap-2.5">
                   <h2 className="text-base font-medium tracking-tight group-hover:text-brand">{workshop.title}</h2>

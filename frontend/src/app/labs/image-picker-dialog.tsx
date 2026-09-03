@@ -355,8 +355,8 @@ export function ImagePickerDialog({
                     onClick={() => choose(image)}
                     title={`Insert ${image.name}`}
                     className={cn(
-                      "block w-full cursor-pointer overflow-hidden rounded-lg border bg-card/60 text-left outline-none transition-colors",
-                      "hover:border-brand-border/70 hover:bg-accent/40 focus-visible:ring-[3px] focus-visible:ring-ring/50",
+                      "block w-full cursor-pointer overflow-hidden rounded-lg border bg-card/60 dark:bg-card text-left outline-none transition-colors",
+                      "hover:border-brand-border/70 hover:bg-accent/40 dark:hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50",
                     )}
                   >
                     {/*

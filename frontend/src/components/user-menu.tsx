@@ -17,6 +17,7 @@ import {
   SlidersHorizontal,
   Sun,
   Terminal,
+  UserCog,
   UsersRound,
 } from "lucide-react";
 import {
@@ -181,6 +182,19 @@ export function UserMenu({
           <Link href="/contribute">
             <Blocks />
             Contribute
+          </Link>
+        </DropdownMenuItem>
+
+        {/*
+          Also unheaded and ungated: this account's own configuration — the
+          Harness tokens it has saved — which is not a privilege and not the
+          site's. The "Admin settings" item below is the site's, and the labels
+          are what keep the two apart.
+        */}
+        <DropdownMenuItem asChild>
+          <Link href="/me">
+            <UserCog />
+            My settings
           </Link>
         </DropdownMenuItem>
 

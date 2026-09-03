@@ -76,25 +76,50 @@
   --brand-foreground: oklch(0.16 0.03 200);
   --brand-subtle: oklch(0.28 0.045 175);
   --brand-border: oklch(0.42 0.07 173);
-  --card: oklch(0.208 0.042 265.755);
+
+  /*
+   * The dark surface ramp — a near-neutral grey, deliberately not the slate the
+   * light mode uses.
+   *
+   * Two things are going on here. The chroma is pulled to a whisper (0.008,
+   * against 0.042 before) because the page carries brand-mint and cool blooms
+   * behind these surfaces, and a pane that is itself tinted the same family of
+   * blue reads as more of the wash rather than as a lid over it. Grey is what
+   * makes the pane look like a *surface*. And the lightness is pulled down
+   * rather than up: everything set on these panes is near-white, so a darker
+   * fill is a straight gain in text contrast.
+   *
+   * The three steps — pane, field, raised — keep the spacing they had (~0.07
+   * and ~0.045 apart), so a chip inside a card inside the page still resolves
+   * into three planes. See `--field` below for the middle one.
+   *
+   * The other half of this lives at the call sites: a pane written as
+   * `bg-card/60` in light mode carries `dark:bg-card` so it is fully opaque
+   * here. Sixty per cent of a fill is enough to sit a card on a white page
+   * without hiding the wash under it; on near-black the same value lets the
+   * bloom straight through the one region where body text lands. Anything with
+   * a translucent hover fill needs `dark:hover:bg-accent` for the same reason,
+   * or hovering it undoes the opacity.
+   */
+  --card: oklch(0.19 0.008 265);
   --card-foreground: oklch(0.984 0.003 247.858);
-  --popover: oklch(0.208 0.042 265.755);
+  --popover: oklch(0.19 0.008 265);
   --popover-foreground: oklch(0.984 0.003 247.858);
   --primary: oklch(0.929 0.013 255.508);
   --primary-foreground: oklch(0.208 0.042 265.755);
-  --secondary: oklch(0.279 0.041 260.031);
+  --secondary: oklch(0.26 0.008 265);
   --secondary-foreground: oklch(0.984 0.003 247.858);
-  --muted: oklch(0.279 0.041 260.031);
+  --muted: oklch(0.26 0.008 265);
   --muted-foreground: oklch(0.704 0.04 256.788);
-  --accent: oklch(0.279 0.041 260.031);
+  --accent: oklch(0.26 0.008 265);
   --accent-foreground: oklch(0.984 0.003 247.858);
   --destructive: oklch(0.704 0.191 22.216);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 24%);
   --ring: oklch(0.551 0.027 264.364);
 
-  /* Lifted above both the page (0.129) and the card (0.208) it sits on. */
-  --field: oklch(0.246 0.042 264.7);
+  /* Lifted above both the page (0.129) and the card (0.19) it sits on. */
+  --field: oklch(0.235 0.008 265);
 
   /* Lifted for text on a near-black page, the way the brand is. `danger`
      follows `--destructive`, which is already lifted above. A heavier tint,

@@ -292,7 +292,7 @@ export function WorkshopEditor({
             {chosen.map((guide, i) => (
               <li
                 key={guide.id}
-                className="flex items-center gap-3 rounded-lg border bg-card/60 p-3"
+                className="flex items-center gap-3 rounded-lg border bg-card/60 dark:bg-card p-3"
               >
                 <span className="tnum w-5 shrink-0 text-center text-sm text-muted-foreground">
                   {i + 1}

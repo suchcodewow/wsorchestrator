@@ -121,7 +121,7 @@ export default async function WorkshopPage({
             <li key={guide.id}>
               <Link
                 href={`/labs/${workshop.slug}/${guide.slug}`}
-                className="group flex items-baseline gap-3 rounded-xl border bg-card/60 p-4 transition-colors outline-none hover:border-brand-border/70 hover:bg-accent/40 focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                className="group flex items-baseline gap-3 rounded-xl border bg-card/60 dark:bg-card p-4 transition-colors outline-none hover:border-brand-border/70 hover:bg-accent/40 dark:hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50"
               >
                 <span className="tnum text-sm text-muted-foreground">
                   {i + 1}
