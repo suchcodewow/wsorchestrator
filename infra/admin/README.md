@@ -314,19 +314,20 @@ changing them on an existing deployment does nothing. Roll with
 
 ### Continuous deployment
 
-Push to main builds, migrates, and rolls Cloud Run. Leave `enable_cicd = false`
-(the default) until both manual steps are done; nothing in `cicd.tf` is created
-while it is off.
+Push to main applies infrastructure, builds, migrates, and rolls Cloud Run — in
+Harness, pipeline `deploy_workshop_orchestrator` (org `default`, project
+`default_project`). Nothing about that pipeline is declared here; Harness holds
+its own repo connector and, in the `admin_control_plane` IaCM workspace, this
+module's state and variables.
 
-1. Install the [Cloud Build GitHub App](https://github.com/apps/google-cloud-build)
-   on the repo, then take the installation id from the URL it redirects to
-   (`.../installations/<ID>`).
-2. Store a classic PAT (scopes: `repo`, `read:user`) in Secret Manager:
+What is declared here is the IAM build-sa needs beyond building. `enable_cicd =
+true` grants `run.admin` + `cloudsql.client`, `actAs` on app-sa and runner-sa,
+and accessor on the `database-url` secret. Left `false` (the default) build-sa
+can only build and push, which disables the pipeline's deploy and migrate steps
+by removing their permissions rather than by configuration.
 
-   ```bash
-   printf '%s' <TOKEN> | gcloud secrets create github-pat \
-     --data-file=- --project my-admin-project
-   ```
+The four `github_*` variables are vestigial — they configured the Cloud Build
+GitHub connection that was deleted at the cutover, and nothing reads them now.
 
 ## Outputs
 

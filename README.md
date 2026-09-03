@@ -342,24 +342,40 @@ registrar, and add `<domain>/api/auth/callback/google` to the OAuth client.
 
 ## Continuous deployment
 
-With `enable_cicd = true`, a push to `main` builds both images, applies the SQL
-migrations, and rolls Cloud Run — the same [`cloudbuild.yaml`](cloudbuild.yaml)
-`make images` uses, with `_DEPLOY=true`. Two things must be done by hand first,
-because Terraform cannot do either:
+A push to `main` applies any infrastructure change, builds both images, applies
+the SQL migrations, and rolls Cloud Run. It runs in **Harness** — org `default`,
+project `default_project`, pipeline `deploy_workshop_orchestrator` — on Harness
+Cloud runners, in two stages:
 
-1. Install the [Cloud Build GitHub App](https://github.com/apps/google-cloud-build)
-   on the repo, and take the installation ID from the URL it redirects to
-   (`.../installations/<ID>`).
-2. Store a classic PAT (scopes: `repo`, `read:user`) in Secret Manager:
-   ```bash
-   printf '%s' <TOKEN> | gcloud secrets create github-pat \
-     --data-file=- --project <ADMIN_PROJECT>
-   ```
+1. **Infrastructure**, an IaCM stage against the `admin_control_plane` workspace.
+   The workspace owns this module's state, its OpenTofu version, its 29 variable
+   values, and the GCP credential it plans as, so nothing has to be
+   reconstructed per run. The apply step only runs when the plan reported
+   changes, which for a code-only commit it will not.
+2. **Build/migrate/deploy**, a CI stage: both images to Artifact Registry, then
+   the migrations, then `gcloud run services update`. Migrations run *before*
+   the new image goes live — they only add columns with defaults, so the
+   currently-running revision keeps working against the migrated schema, where
+   the reverse order would serve a new image against a schema missing columns it
+   reads on every request.
 
-Then set `enable_cicd`, `github_owner`, `github_repo`,
-`github_app_installation_id`, and `github_pat_secret_id` (the secret's **name**,
-`github-pat` — not the token) and re-apply. Details in
-[`cicd.tf`](infra/admin/cicd.tf) and [DEPLOY.md](DEPLOY.md).
+Three pipeline variables narrow a manual run: `run_infra=false` skips the
+infrastructure stage, `apply_infra=false` plans without applying, `deploy=false`
+builds and pushes without touching Cloud Run or the database.
+
+This config's only remaining part in that is IAM: `enable_cicd = true` grants
+build-sa what it needs beyond building (`run.admin`, `cloudsql.client`, `actAs`
+on app-sa/runner-sa, accessor on `database-url`). Setting it false disables the
+pipeline's deploy and migrate steps by removing their permissions. There is no
+GitHub wiring to do here — Harness holds its own repo connector, and the
+`github_*` variables are vestigial. See [`cicd.tf`](infra/admin/cicd.tf) and
+[DEPLOY.md](DEPLOY.md).
+
+> Cloud Build used to run this, from [`cloudbuild.yaml`](cloudbuild.yaml) with
+> `_DEPLOY=true`. Its trigger, GitHub App connection, repository link and PAT
+> grant were deleted at the cutover, because leaving them would have meant two
+> systems racing to deploy the same commit. The file stays at the repo root
+> because `make images` still submits it for a manual build-and-push.
 
 ---
 

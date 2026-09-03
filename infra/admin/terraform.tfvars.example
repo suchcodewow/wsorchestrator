@@ -59,8 +59,7 @@ site_admin_emails = ["you@example.com"]
 # runner_image = "us-central1-docker.pkg.dev/my-admin-project/workshop-orchestrator/runner:latest"
 
 # Continuous deployment — see README.md#continuous-deployment
-# enable_cicd                = true
-# github_owner               = "my-github-user"
-# github_repo                = "wsorchestrator"      # repo name only, no owner
-# github_app_installation_id = "12345678"
-# github_pat_secret_id       = ""                    # default
+# Grants build-sa the IAM the Harness pipeline's deploy and migrate steps need.
+# The pipeline itself is configured in Harness, not here; the github_* variables
+# belonged to the Cloud Build connection that replaced it and read as nothing.
+# enable_cicd = true
