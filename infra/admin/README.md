@@ -87,11 +87,16 @@ Two things worth knowing:
 cd infra/admin
 cp terraform.tfvars.example terraform.tfvars   # fill in values (see Configuration)
 
-# 1) Bootstrap this config's own state bucket + backend init
-ADMIN_PROJECT=<admin> REGION=us-central1 \
-  STATE_BUCKET=<admin>-infra-tfstate ./scripts/bootstrap.sh
+# 1) Enable the APIs this config needs before it can read anything
+ADMIN_PROJECT=<admin> REGION=us-central1 ./scripts/bootstrap.sh
 
-# 2) Review + apply (uses placeholder images the first time)
+# 2) Point the CLI at the state the Harness IaCM workspace holds. There is no
+#    backend block in versions.tf on purpose — see the note there.
+export TF_HTTP_PASSWORD=<harness PAT with Workspace Access State>
+./scripts/backend-local.sh
+terraform init
+
+# 3) Review + apply (uses placeholder images the first time)
 terraform plan  -var-file=terraform.tfvars
 terraform apply -var-file=terraform.tfvars
 ```

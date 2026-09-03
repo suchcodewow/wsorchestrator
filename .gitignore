@@ -54,3 +54,7 @@ crash.*.log
 /cloud-sql-proxy
 # admin infra lock (tofu-generated, not tracked)
 /infra/admin/.terraform.lock.hcl
+# local-only backend block written by scripts/backend-local.sh. Committing it
+# would override the backend the Harness IaCM workspace injects during pipeline
+# runs, splitting the state — see the note in infra/admin/versions.tf.
+/infra/admin/backend_local.tf

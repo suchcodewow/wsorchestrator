@@ -216,8 +216,12 @@ set, including custom domains and CI/CD.
 From the repo root:
 
 ```bash
-# Creates the bucket that stores THIS config's own state, then inits the backend.
-make bootstrap ADMIN_PROJECT=my-admin-project STATE_BUCKET=my-admin-infra-tfstate
+# Enables the APIs this config needs before it can read anything.
+make bootstrap ADMIN_PROJECT=my-admin-project
+
+# Point the local CLI at the state the Harness IaCM workspace holds.
+export TF_HTTP_PASSWORD=<harness PAT with Workspace Access State>
+make backend-local
 
 # Creates the workshop state bucket, Cloud SQL, service accounts + IAM, secrets,
 # Artifact Registry, the app service, and the runner/scheduler/reaper jobs.
@@ -225,18 +229,20 @@ make bootstrap ADMIN_PROJECT=my-admin-project STATE_BUCKET=my-admin-infra-tfstat
 make infra
 ```
 
-> **Two different buckets, and they are easy to confuse.**
-> `STATE_BUCKET` above holds the state of *this Terraform config itself* — it
-> must exist before the first apply, which is the whole reason `bootstrap`
-> exists. `tfstate_bucket` in `terraform.tfvars` is created *by* the apply and
-> holds per-run workshop state, one prefix per run. Give them clearly different
-> names.
+> **Where this config's own state lives.** In the Harness IaCM workspace
+> `admin_control_plane` (org `default`, project `default_project`), not in GCS.
+> That is why [`versions.tf`](infra/admin/versions.tf) has no backend block: the
+> workspace injects one at init time, and a committed block would override it
+> during pipeline runs and split the state in two. For hand-run plans,
+> `make backend-local` writes the git-ignored `infra/admin/backend_local.tf`
+> pointing at the same state.
 >
-> `STATE_BUCKET` is not recorded in any file: the backend block in
-> [`versions.tf`](infra/admin/versions.tf) is bare, and the value is passed to
-> `terraform init` by [`bootstrap.sh`](infra/admin/scripts/bootstrap.sh). If you
-> ever re-clone this repo, bootstrap with the **same** bucket name or Terraform
-> will start from empty state and try to build a second copy of everything.
+> Don't confuse that with `tfstate_bucket` in `terraform.tfvars`: that bucket is
+> created *by* the apply and holds per-run workshop state, one prefix per run.
+>
+> There used to be a third thing here, a GCS bucket holding this config's state
+> that `bootstrap` created ahead of the first apply. Its contents were migrated
+> into the workspace at serial 51 and the object was left behind, stale.
 
 ## 4. Authorize the runner in Google Workspace
 

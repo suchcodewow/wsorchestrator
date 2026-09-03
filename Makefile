@@ -51,13 +51,14 @@ RUNNER_JOBS = $(shell $(TF) output -raw runner_jobs 2>/dev/null)
 # Image tag = current commit (fallback: latest).
 TAG ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo latest)
 
-# State bucket for the admin config itself (bootstrap only).
-STATE_BUCKET ?= $(ADMIN_PROJECT)-infra-tfstate
+# This config's own state lives in the Harness IaCM workspace `admin_control_plane`,
+# not in GCS. `plan` and `infra` therefore need a backend block the repo does not
+# carry — see the backend-local target below.
 
 # The Next.js app, including the Drizzle schema and its SQL migrations.
 FRONTEND ?= frontend
 
-.PHONY: help bootstrap tf-admin-sa plan infra images deploy db-backup db-migrate db-push ship info
+.PHONY: help bootstrap tf-admin-sa backend-local plan infra images deploy db-backup db-migrate db-push ship info
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -66,15 +67,20 @@ help: ## Show this help
 	@echo "Typical first run:  make bootstrap infra images deploy db-push"
 	@echo "Typical redeploy:   make ship"
 
-bootstrap: ## One-time: create admin state bucket + init backend (needs ADMIN_PROJECT, STATE_BUCKET)
+bootstrap: ## One-time: enable the APIs this config needs before it can read anything
 	cd infra/admin && ADMIN_PROJECT=$(ADMIN_PROJECT) REGION=$(REGION) \
-	  STATE_BUCKET=$(STATE_BUCKET) TF_BIN=$(TF_BIN) ./scripts/bootstrap.sh
+	  TF_BIN=$(TF_BIN) ./scripts/bootstrap.sh
 
 tf-admin-sa: ## One-time: mint the long-lived operator credential (stops the daily reauth)
 	@# Needs a fresh `gcloud auth login` — it is the last thing that does.
 	cd infra/admin && bash ./scripts/tf-admin-sa.sh $(ARGS)
 
-plan: ## Terraform plan for the admin control plane
+backend-local: ## Point the local CLI at the Harness-held state (needs TF_HTTP_PASSWORD)
+	@# Writes the git-ignored infra/admin/backend_local.tf, then inits against it.
+	cd infra/admin && ./scripts/backend-local.sh
+	$(TF) init
+
+plan: ## Terraform plan for the admin control plane (run 'make backend-local' first)
 	$(TF) plan -var-file=terraform.tfvars
 
 infra: ## Apply admin control plane (uses placeholder images on first run)

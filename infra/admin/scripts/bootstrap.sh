@@ -1,16 +1,20 @@
 #!/usr/bin/env bash
-# One-time bootstrap: create the GCS bucket that holds THIS Terraform's own
-# state, then init the backend against it. Solves the chicken-and-egg where
-# the config that manages infra can't store its state in infra it hasn't
-# created yet.
+# One-time bootstrap: enable the handful of APIs this config needs before it can
+# read or create anything, then hand off to the Harness IaCM workspace that holds
+# the state.
+#
+# There is no state bucket to create any more. This module's state used to live
+# in a GCS bucket made here, ahead of the first apply, to solve the chicken-and-
+# egg where the config that manages infra can't store its state in infra it
+# hasn't created yet. The IaCM workspace solves the same problem by living
+# outside GCP entirely, so the bucket step is gone and `init` no longer takes a
+# -backend-config.
 #
 # Usage:
-#   ADMIN_PROJECT=my-admin-project REGION=us-central1 \
-#   STATE_BUCKET=my-admin-project-infra-tfstate ./scripts/bootstrap.sh
+#   ADMIN_PROJECT=my-admin-project REGION=us-central1 ./scripts/bootstrap.sh
 set -euo pipefail
 
 : "${ADMIN_PROJECT:?set ADMIN_PROJECT}"
-: "${STATE_BUCKET:?set STATE_BUCKET}"
 REGION="${REGION:-us-central1}"
 
 # Use terraform if present, else OpenTofu (matches the Makefile).
@@ -23,20 +27,15 @@ gcloud services enable \
   storage.googleapis.com \
   --project "${ADMIN_PROJECT}"
 
-if gcloud storage buckets describe "gs://${STATE_BUCKET}" --project "${ADMIN_PROJECT}" >/dev/null 2>&1; then
-  echo ">> Bucket gs://${STATE_BUCKET} already exists"
-else
-  echo ">> Creating state bucket gs://${STATE_BUCKET}"
-  gcloud storage buckets create "gs://${STATE_BUCKET}" \
-    --project "${ADMIN_PROJECT}" \
-    --location "${REGION}" \
-    --uniform-bucket-level-access
-  gcloud storage buckets update "gs://${STATE_BUCKET}" --versioning
-fi
+cat <<'EOF'
+>> APIs enabled.
 
-echo ">> ${TF_BIN} init"
-"${TF_BIN}" init \
-  -backend-config="bucket=${STATE_BUCKET}" \
-  -backend-config="prefix=admin"
+State for this module belongs to the Harness IaCM workspace
+`admin_control_plane` (org default, project default_project). The pipeline
+initializes against it automatically; nothing to create here.
 
-echo ">> Done. Next: ${TF_BIN} plan -var-file=terraform.tfvars"
+To run tofu by hand:
+  export TF_HTTP_PASSWORD=<harness PAT with Workspace Access State>
+  ./scripts/backend-local.sh
+  tofu init && tofu plan -var-file=terraform.tfvars
+EOF
