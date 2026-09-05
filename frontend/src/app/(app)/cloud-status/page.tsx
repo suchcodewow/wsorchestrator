@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { canAuditProjects } from "@/lib/roles";
-import { auditBillingProjects } from "@/lib/projects-audit";
+import { auditClouds, firstConcern } from "@/lib/cloud-audit";
 import { CloudStatus } from "./cloud-status-view";
 
 export const metadata: Metadata = {
@@ -11,10 +11,10 @@ export const metadata: Metadata = {
 };
 
 /**
- * Cloud Status — the state of the clouds the workshops run on. Today that is
- * Google Cloud: every project billed to the workshop account, matched against
- * the runs table so orphaned and extraneous projects stand out. AWS and Azure
- * will get their own sections here as those clouds go to production.
+ * Cloud Status — the state of the clouds the workshops run on, one section each
+ * for Google Cloud, AWS and Azure. Every isolation boundary the deployment is
+ * charged for (a billed project, a member account, a resource group) matched
+ * against the runs table, so orphaned and extraneous ones stand out.
  *
  * Administrators only; a 404 for anyone below, the same as the other admin
  * pages. Fetched fresh on every load (no cache): a stale answer to "is anything
@@ -27,12 +27,7 @@ export default async function CloudStatusPage() {
   if (!session?.user) redirect("/signin");
   if (!canAuditProjects(session.user.siteRole)) notFound();
 
-  const result = await auditBillingProjects();
+  const report = await auditClouds();
 
-  return (
-    <CloudStatus
-      initial={result.ok ? result.audit : null}
-      error={result.ok ? null : result.error}
-    />
-  );
+  return <CloudStatus initial={report} opening={firstConcern(report)} />;
 }

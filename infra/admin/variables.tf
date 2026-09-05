@@ -128,6 +128,12 @@ variable "azure_location" {
   default     = "eastus"
 }
 
+variable "azure_infra_resource_groups" {
+  description = "Resource groups in the subscription that are permanent fixtures, not workshop runs. Read only by the app's Cloud Status page, which would otherwise have to guess. Groups this orchestrator never tagged are already reported as unmanaged rather than orphaned, so this is only needed for a group it did create and means to keep."
+  type        = list(string)
+  default     = []
+}
+
 # --- AWS (required; every deployment carries all three clouds) ---
 # Defaulted empty only so a partially-configured tree still plans; a run that
 # selects AWS fails its preflight without these.
@@ -164,6 +170,12 @@ variable "aws_account_email_domain" {
   description = "Domain for new accounts' unique root emails (plus-addressed). Defaults to the Workspace domain when empty."
   type        = string
   default     = ""
+}
+
+variable "aws_infra_account_ids" {
+  description = "Accounts in the organization that are permanent fixtures, not workshop runs. Read only by the app's Cloud Status page: every account in the org bills to the management account, and the management account itself is recognised automatically, so anything else long-lived belongs here or it is reported as an orphan forever."
+  type        = list(string)
+  default     = []
 }
 
 variable "db_tier" {

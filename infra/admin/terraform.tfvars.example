@@ -25,6 +25,10 @@ azure_tenant_id       = "00000000-0000-0000-0000-000000000000"
 azure_client_id       = "00000000-0000-0000-0000-000000000000"
 azure_client_secret   = "replace-me"
 azure_location        = "eastus"
+# Resource groups the Cloud Status page should treat as permanent fixtures.
+# Rarely needed: a group the orchestrator never tagged is already reported as
+# unmanaged rather than orphaned.
+# azure_infra_resource_groups = ["my-permanent-rg"]
 
 # AWS — see README.md#aws
 aws_access_key_id        = "AKIAxxxxxxxxxxxxxxxx"
@@ -32,6 +36,10 @@ aws_secret_access_key    = "replace-me"
 aws_region               = "us-east-1"
 aws_parent_ou_id         = ""                       # empty = org root
 aws_account_email_domain = ""                       # empty = workspace_domain
+# Accounts in the organization that are permanent fixtures rather than workshop
+# runs, so the Cloud Status page stops reporting them as orphans. The management
+# account is recognised without being listed.
+# aws_infra_account_ids = ["123456789012"]
 
 # Google OAuth — see README.md#google-oauth
 google_oauth_client_id     = "xxxx.apps.googleusercontent.com"
