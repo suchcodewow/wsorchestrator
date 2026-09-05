@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowRight, CalendarClock, Cloud, Users } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { LandingHero } from "./landing-hero";
 
 export const metadata: Metadata = {
@@ -33,20 +34,22 @@ const CAPABILITIES = [
 ] as const;
 
 /**
- * The public front door. Unlike everything under `(app)`, this renders for
- * signed-out visitors — the session is read only to decide where the primary
- * action points, never to gate the page.
+ * The public front door — and only that. It is the pitch for someone who has
+ * no account yet, so anyone who already has one is sent straight to the
+ * orchestrator rather than being sold a product they are already using. The
+ * header's brand link points here, which makes this the way back to Workshops
+ * from anywhere; signing out clears the session first, so a visitor who just
+ * left still lands on the page rather than bouncing off it.
  */
 export default async function Home() {
-  const session = await auth();
-  const signedIn = Boolean(session?.user);
-  const appHref = signedIn ? "/events" : "/signin";
+  if (await auth()) redirect("/events");
 
   return (
     <div className="relative min-h-screen">
       <AmbientBackdrop className="fixed inset-0 -z-10" />
 
-      <SiteHeader session={session} />
+      {/* Always the signed-out bar: a session would have redirected above. */}
+      <SiteHeader session={null} />
 
       <main>
         <LandingHero>
@@ -70,8 +73,8 @@ export default async function Home() {
 
             <div data-anim className="mt-9 flex flex-wrap items-center justify-center gap-3">
               <Button asChild variant="brand" size="lg" className="group">
-                <Link href={appHref}>
-                  {signedIn ? "Open orchestrator" : "Get started"}
+                <Link href="/signin">
+                  Get started
                   <ArrowRight className="transition-transform duration-200 group-hover:translate-x-0.5" />
                 </Link>
               </Button>
@@ -110,10 +113,10 @@ export default async function Home() {
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-6 py-6 text-xs text-muted-foreground">
           <span>Harness Events</span>
           <Link
-            href={appHref}
+            href="/signin"
             className="rounded-md underline-offset-4 outline-none hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50"
           >
-            {signedIn ? "Open orchestrator" : "Organizer sign in"}
+            Organizer sign in
           </Link>
         </div>
       </footer>
