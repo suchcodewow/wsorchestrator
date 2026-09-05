@@ -1,25 +1,11 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { Fragment, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import {
-  Blocks,
-  CalendarRange,
-  ChevronDown,
-  Cloud,
-  DatabaseBackup,
-  Laptop,
-  LogOut,
-  Moon,
-  Settings,
-  ShieldCheck,
-  SlidersHorizontal,
-  Sun,
-  Terminal,
-  UserCog,
-  UsersRound,
-} from "lucide-react";
+import { CalendarRange, ChevronDown, LogOut, ShieldCheck } from "lucide-react";
+import { Avatar } from "@/components/avatar";
+import { THEME_OPTIONS, useThemeChoice } from "@/components/theme-toggle";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -31,34 +17,11 @@ import {
   DropdownMenuSwitchItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  THEME_PREFERENCES,
-  type CalendarScope,
-  type SiteRole,
-  type ThemePreference,
-} from "@/db/schema";
+import type { CalendarScope, SiteRole, ThemePreference } from "@/db/schema";
 import type { BuildInfo } from "@/lib/build-info";
-import {
-  SITE_ROLE_LABELS,
-  canAuditProjects,
-  canManageBackups,
-  canManageSettings,
-  canManageUsers,
-  canRunSql,
-  canSeeAllEvents,
-} from "@/lib/roles";
-import { setCalendarScope, setThemePreference } from "@/lib/user-settings";
-import { applyTheme } from "@/lib/theme";
-
-const THEME_OPTIONS: {
-  value: ThemePreference;
-  label: string;
-  Icon: typeof Sun;
-}[] = [
-  { value: "light", label: "Light", Icon: Sun },
-  { value: "dark", label: "Dark", Icon: Moon },
-  { value: "system", label: "System default", Icon: Laptop },
-];
+import { visibleSections } from "@/lib/nav";
+import { SITE_ROLE_LABELS } from "@/lib/roles";
+import { setCalendarScope } from "@/lib/user-settings";
 
 /**
  * Group headings sit a size below the items they head and in the muted colour,
@@ -67,6 +30,18 @@ const THEME_OPTIONS: {
 const SECTION_HEADING =
   "px-2 py-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground";
 
+/**
+ * The account menu, in the two places a menu is still the right shape.
+ *
+ * Below `lg` it is the whole of the app's navigation, because there is no
+ * sidebar down there — every link, the calendar scope, appearance and signing
+ * out. From `lg` up the sidebar has all of that, and this drops to
+ * `accountOnly` mode as the trigger on the collapsed rail, where a 4rem column
+ * has no room to show any of it inline.
+ *
+ * The links come from [[NAV_SECTIONS]] rather than being listed here, so a page
+ * added to the sidebar cannot go missing on mobile.
+ */
 export function UserMenu({
   name,
   email,
@@ -75,6 +50,8 @@ export function UserMenu({
   initialScope,
   build,
   signOutAction,
+  accountOnly = false,
+  variant = "header",
 }: {
   name: string | null;
   email: string;
@@ -85,28 +62,18 @@ export function UserMenu({
   build: BuildInfo;
   /** Server action; it redirects, so it never resolves on the happy path. */
   signOutAction: () => Promise<void>;
+  /**
+   * Leave out the page links and the calendar scope, for when a sidebar beside
+   * this menu is already showing them.
+   */
+  accountOnly?: boolean;
+  /** `header`: the username and a chevron. `rail`: a square avatar button. */
+  variant?: "header" | "rail";
 }) {
   const router = useRouter();
-  const [theme, setTheme] = useState<ThemePreference>(initialTheme);
+  const { theme, choose } = useThemeChoice(initialTheme);
   const [scope, setScope] = useState<CalendarScope>(initialScope);
   const [, startTransition] = useTransition();
-
-  // Live OS-change following for `system` lives in ThemeSync (root layout), so
-  // it works on every page rather than only where this menu is mounted.
-
-  function choose(value: string) {
-    // Radix hands back a plain string; narrow it before it goes any further.
-    if (!THEME_PREFERENCES.includes(value as ThemePreference)) return;
-    const preference = value as ThemePreference;
-
-    setTheme(preference);
-    // Repaint immediately rather than waiting on the round trip — the write is
-    // only about surviving a reload, and the menu should never feel laggy.
-    applyTheme(preference);
-    startTransition(() => {
-      void setThemePreference(preference);
-    });
-  }
 
   function chooseScope(all: boolean) {
     const next: CalendarScope = all ? "all" : "own";
@@ -120,33 +87,46 @@ export function UserMenu({
   }
 
   const elevated = role !== "operator";
-
-  // Each group is drawn only when the role unlocks something inside it, so a
-  // heading never stands over an empty section. The items are still gated one
-  // by one below: the checks agree today, but the group flag is about the
-  // heading, not about who may open any particular page.
-  const showManagement = canSeeAllEvents(role);
-  const showAdministration =
-    canManageUsers(role) ||
-    canManageBackups(role) ||
-    canRunSql(role) ||
-    canAuditProjects(role) ||
-    canManageSettings(role);
+  const sections = accountOnly ? [] : visibleSections(role);
+  const rail = variant === "rail";
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger className="flex cursor-pointer items-center gap-1 rounded-md px-2 py-1 text-sm text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50">
-        <span className="max-w-48 truncate">{name ?? email}</span>
-        <ChevronDown className="size-4 shrink-0" />
+      <DropdownMenuTrigger
+        aria-label={rail ? (name ?? email) : undefined}
+        className={
+          rail
+            ? "flex size-10 cursor-pointer items-center justify-center rounded-lg outline-none transition-colors hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50"
+            : "flex cursor-pointer items-center gap-1 rounded-md px-2 py-1 text-sm text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+        }
+      >
+        {rail ? (
+          <Avatar name={name} email={email} />
+        ) : (
+          <>
+            {/* Tighter below `sm`, where this shares a 390px bar with the brand
+                and the Workshops link and a long name pushed the bar wider than
+                the screen. */}
+            <span className="max-w-28 truncate sm:max-w-48">{name ?? email}</span>
+            <ChevronDown className="size-4 shrink-0" />
+          </>
+        )}
       </DropdownMenuTrigger>
 
-      <DropdownMenuContent align="end" className="min-w-56">
+      {/*
+        On the rail the menu opens sideways out of a 4rem column; in the header
+        it hangs under a trigger near the right edge. `align="end"` keeps it
+        inside the viewport in both cases.
+      */}
+      <DropdownMenuContent
+        side={rail ? "right" : "bottom"}
+        align="end"
+        className="min-w-56"
+      >
         <DropdownMenuLabel className="font-normal">
           <span className="block truncate font-medium">{name ?? email}</span>
           {name && (
-            <span className="block truncate text-xs text-muted-foreground">
-              {email}
-            </span>
+            <span className="block truncate text-xs text-muted-foreground">{email}</span>
           )}
           {/* Only worth saying when it grants something — everyone is at
               least an operator, and a badge on every account is just noise. */}
@@ -158,53 +138,31 @@ export function UserMenu({
           )}
         </DropdownMenuLabel>
 
-        <DropdownMenuSeparator />
-
         {/*
-          Everything every account can do comes first and unheaded: an operator
-          sees a plain list, and the headed groups below read as additions to it
-          rather than as one category among three.
+          A fragment rather than a wrapping element per section: the separators
+          and headings belong to the menu's own flat sequence of rows, and
+          boxing each group would put a div between the content and its items.
         */}
-        <DropdownMenuItem asChild>
-          <Link href="/events">
-            <Settings />
-            Open orchestrator
-          </Link>
-        </DropdownMenuItem>
-
-        {/*
-          Unheaded and ungated, alongside the orchestrator: contributing
-          components is the floor permission, not a privilege. What a
-          contribution can reach is decided at review, so there is nothing to
-          gate here.
-        */}
-        <DropdownMenuItem asChild>
-          <Link href="/contribute">
-            <Blocks />
-            Contribute
-          </Link>
-        </DropdownMenuItem>
-
-        {/*
-          Also unheaded and ungated: this account's own configuration — the
-          Harness tokens it has saved — which is not a privilege and not the
-          site's. The "Admin settings" item below is the site's, and the labels
-          are what keep the two apart.
-        */}
-        <DropdownMenuItem asChild>
-          <Link href="/me">
-            <UserCog />
-            My settings
-          </Link>
-        </DropdownMenuItem>
-
-        {showManagement && (
-          <>
+        {sections.map((section) => (
+          <Fragment key={section.heading ?? "main"}>
             <DropdownMenuSeparator />
-            <DropdownMenuLabel className={SECTION_HEADING}>
-              Management
-            </DropdownMenuLabel>
-            {canSeeAllEvents(role) && (
+            {/* The first group is unheaded on purpose: an operator sees a plain
+                list, and the headed group below reads as an addition to it. */}
+            {section.heading && (
+              <DropdownMenuLabel className={SECTION_HEADING}>
+                {section.heading}
+              </DropdownMenuLabel>
+            )}
+            {section.items.map((item) => (
+              <DropdownMenuItem key={item.href} asChild>
+                <Link href={item.href}>
+                  <item.Icon />
+                  {item.label}
+                </Link>
+              </DropdownMenuItem>
+            ))}
+
+            {section.control === "calendar-scope" && (
               <DropdownMenuSwitchItem
                 checked={scope === "all"}
                 onCheckedChange={chooseScope}
@@ -216,60 +174,8 @@ export function UserMenu({
                 Show all events
               </DropdownMenuSwitchItem>
             )}
-          </>
-        )}
-
-        {showAdministration && (
-          <>
-            <DropdownMenuSeparator />
-            <DropdownMenuLabel className={SECTION_HEADING}>
-              Administration
-            </DropdownMenuLabel>
-            {canManageUsers(role) && (
-              <DropdownMenuItem asChild>
-                <Link href="/users">
-                  <UsersRound />
-                  Manage users
-                </Link>
-              </DropdownMenuItem>
-            )}
-            {canManageBackups(role) && (
-              <DropdownMenuItem asChild>
-                <Link href="/backups">
-                  <DatabaseBackup />
-                  Backups
-                </Link>
-              </DropdownMenuItem>
-            )}
-            {canRunSql(role) && (
-              <DropdownMenuItem asChild>
-                <Link href="/database">
-                  <Terminal />
-                  Database
-                </Link>
-              </DropdownMenuItem>
-            )}
-            {canAuditProjects(role) && (
-              <DropdownMenuItem asChild>
-                <Link href="/cloud-status">
-                  <Cloud />
-                  Cloud Status
-                </Link>
-              </DropdownMenuItem>
-            )}
-            {canManageSettings(role) && (
-              // "Admin" in the label because the theme and calendar controls
-              // below are settings too, and the two are not the same thing:
-              // one is this account's, this one is the whole site's.
-              <DropdownMenuItem asChild>
-                <Link href="/settings">
-                  <SlidersHorizontal />
-                  Admin settings
-                </Link>
-              </DropdownMenuItem>
-            )}
-          </>
-        )}
+          </Fragment>
+        ))}
 
         <DropdownMenuSeparator />
 
@@ -286,12 +192,7 @@ export function UserMenu({
             className="flex items-center gap-0.5 rounded-lg bg-muted p-0.5"
           >
             {THEME_OPTIONS.map(({ value, label, Icon }) => (
-              <DropdownMenuRadioIconItem
-                key={value}
-                value={value}
-                aria-label={label}
-                title={label}
-              >
+              <DropdownMenuRadioIconItem key={value} value={value} aria-label={label} title={label}>
                 <Icon />
               </DropdownMenuRadioIconItem>
             ))}
@@ -305,9 +206,7 @@ export function UserMenu({
           closes the menu on select, which would unmount a form before it could
           submit.
         */}
-        <DropdownMenuItem
-          onSelect={() => startTransition(() => void signOutAction())}
-        >
+        <DropdownMenuItem onSelect={() => startTransition(() => void signOutAction())}>
           <LogOut />
           Sign out
         </DropdownMenuItem>
@@ -322,15 +221,11 @@ export function UserMenu({
         <div
           className="px-2 py-1 text-[11px] leading-tight text-muted-foreground"
           title={
-            build.builtAt
-              ? `Built ${build.builtAt} from ${build.tag}`
-              : "Not a released build"
+            build.builtAt ? `Built ${build.builtAt} from ${build.tag}` : "Not a released build"
           }
         >
           <span className="font-mono">{build.tag}</span>
-          {build.builtAtLabel && (
-            <span className="mt-0.5 block">built {build.builtAtLabel}</span>
-          )}
+          {build.builtAtLabel && <span className="mt-0.5 block">built {build.builtAtLabel}</span>}
         </div>
       </DropdownMenuContent>
     </DropdownMenu>

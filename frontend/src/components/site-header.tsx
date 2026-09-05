@@ -23,27 +23,52 @@ import Link from "next/link";
 export async function SiteHeader({
   session,
   width = "max-w-6xl",
+  sidebar = false,
 }: {
   session: Session | null;
   /**
-   * The bar's inner width, to match the `main` underneath it. Every page in the
-   * app is `max-w-6xl` and takes the default; the attendee page is wider, and
-   * a bar that stayed at 6xl there would sit its brand and menu visibly inboard
-   * of the table's own edges.
+   * The bar's inner width, to match the `main` underneath it. Most pages are
+   * `max-w-6xl` and take the default; the attendee page is wider, and a bar
+   * that stayed at 6xl there would sit its brand and menu visibly inboard of
+   * the table's own edges. The app shell passes `max-w-none` — with a sidebar
+   * under the bar there is no single column left to line up with, so the brand
+   * sits over the sidebar's own left edge instead.
    */
   width?: string;
+  /**
+   * Whether a sidebar is showing the navigation from `lg` up. When it is, the
+   * user menu is hidden at those widths — the sidebar footer is the account
+   * surface there, and two ways to reach the same menu on one screen is the
+   * kind of duplication that drifts.
+   */
+  sidebar?: boolean;
 }) {
   const { themePreference, calendarScope } = await getUserPreferences();
 
   return (
     <header className="sticky top-0 z-40 border-b border-border/70 bg-background/70 backdrop-blur-xl">
-      <div className={cn("mx-auto flex h-14 items-center justify-between px-6", width)}>
+      {/*
+        `gap-4` and `ml-auto` rather than `justify-between` and a margin on the
+        nav: when the user menu is hidden at `lg`, a hidden element contributes
+        no gap, so the nav lands flush against the bar's own padding instead of
+        16px short of it.
+      */}
+      <div className={cn("mx-auto flex h-14 items-center gap-4 px-6", width)}>
         <Link
           href="/"
-          className="group flex items-center gap-2.5 rounded-md text-sm font-medium tracking-tight outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          aria-label="Harness Events"
+          className="group flex shrink-0 items-center gap-2.5 rounded-md text-sm font-medium tracking-tight outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
         >
           <BrandMark className="transition-transform duration-200 group-hover:scale-105" />
-          Harness Events
+          {/*
+            The wordmark goes below `sm` and the mark alone carries the link home.
+            At 390px the bar is the mark, "Workshops" and an account name, which
+            together overrun the viewport and were widening the whole document —
+            every page then scrolled sideways by 90px with nothing out there.
+            `aria-label` on the link keeps the destination named once the text
+            is gone.
+          */}
+          <span className="hidden sm:inline">Harness Events</span>
         </Link>
 
         {/*
@@ -51,7 +76,7 @@ export async function SiteHeader({
           it is the one destination that means something to a visitor with no
           account — the room reads the guides signed out.
         */}
-        <nav className="ml-auto mr-4 flex items-center">
+        <nav className="ml-auto flex shrink-0 items-center">
           <Link
             href="/labs"
             className="rounded-md px-2.5 py-1.5 text-sm text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
@@ -60,26 +85,28 @@ export async function SiteHeader({
           </Link>
         </nav>
 
-        {session?.user ? (
-          <UserMenu
-            name={session.user.name ?? null}
-            email={session.user.email ?? ""}
-            role={session.user.siteRole}
-            initialTheme={themePreference}
-            initialScope={calendarScope}
-            build={buildInfo()}
-            signOutAction={async () => {
-              "use server";
-              // Out to the public landing page, not back to the sign-in form:
-              // someone who just signed out is leaving, and being dropped on a
-              // "Continue with Google" button reads as the sign-out having
-              // failed.
-              await signOut({ redirectTo: "/" });
-            }}
-          />
-        ) : (
-          <SignInLink />
-        )}
+        <div className={cn("min-w-0", sidebar && "lg:hidden")}>
+          {session?.user ? (
+            <UserMenu
+              name={session.user.name ?? null}
+              email={session.user.email ?? ""}
+              role={session.user.siteRole}
+              initialTheme={themePreference}
+              initialScope={calendarScope}
+              build={buildInfo()}
+              signOutAction={async () => {
+                "use server";
+                // Out to the public landing page, not back to the sign-in form:
+                // someone who just signed out is leaving, and being dropped on a
+                // "Continue with Google" button reads as the sign-out having
+                // failed.
+                await signOut({ redirectTo: "/" });
+              }}
+            />
+          ) : (
+            <SignInLink />
+          )}
+        </div>
       </div>
     </header>
   );

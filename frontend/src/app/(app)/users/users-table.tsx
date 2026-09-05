@@ -152,97 +152,106 @@ export function UsersTable({
         variants={riseChild}
         className="overflow-hidden rounded-2xl border bg-card shadow-sm"
       >
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b bg-muted/30 text-left text-[11px] uppercase tracking-wider text-muted-foreground">
-              <th className="px-5 py-2.5 font-medium">User</th>
-              <th className="px-5 py-2.5 font-medium">Events</th>
-              <th className="px-5 py-2.5 font-medium">Role</th>
-            </tr>
-          </thead>
-          <tbody>
-            {users.map((u) => {
-              const role = roleOf(u);
-              const isSelf = u.id === viewerId;
+        {/*
+          The card keeps `overflow-hidden` for its rounded corners; the scroller
+          is this inner box. Without it a narrow viewport had the card clip the
+          table's right-hand columns with no way to reach them — and the pane is
+          now 16rem narrower whenever the sidebar is expanded, so "narrow" starts
+          on a laptop rather than only on a phone.
+        */}
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-136 text-sm">
+            <thead>
+              <tr className="border-b bg-muted/30 text-left text-[11px] uppercase tracking-wider text-muted-foreground">
+                <th className="px-5 py-2.5 font-medium">User</th>
+                <th className="px-5 py-2.5 font-medium">Events</th>
+                <th className="px-5 py-2.5 font-medium">Role</th>
+              </tr>
+            </thead>
+            <tbody>
+              {users.map((u) => {
+                const role = roleOf(u);
+                const isSelf = u.id === viewerId;
 
-              return (
-                <tr
-                  key={u.id}
-                  className="border-b transition-colors last:border-b-0 hover:bg-muted/30"
-                >
-                  <td className="px-5 py-3">
-                    <span className="block font-medium">
-                      {u.name ?? u.email}
-                      {isSelf && (
-                        <span className="ml-2 text-xs font-normal text-muted-foreground">
-                          you
+                return (
+                  <tr
+                    key={u.id}
+                    className="border-b transition-colors last:border-b-0 hover:bg-muted/30"
+                  >
+                    <td className="px-5 py-3">
+                      <span className="block font-medium">
+                        {u.name ?? u.email}
+                        {isSelf && (
+                          <span className="ml-2 text-xs font-normal text-muted-foreground">
+                            you
+                          </span>
+                        )}
+                      </span>
+                      {u.name && (
+                        <span className="block truncate text-xs text-muted-foreground">
+                          {u.email}
                         </span>
                       )}
-                    </span>
-                    {u.name && (
-                      <span className="block truncate text-xs text-muted-foreground">
-                        {u.email}
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-5 py-3 text-muted-foreground tnum">
-                    {u.eventCount}
-                  </td>
-                  <td className="px-5 py-3">
-                    {isSelf ? (
-                      // An administrator demoting themselves could leave the
-                      // site with nobody able to grant the role back.
-                      <span
-                        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground"
-                        title="Another administrator has to change your role"
-                      >
-                        <ShieldCheck className="size-3.5" />
-                        {SITE_ROLE_LABELS[role]}
-                      </span>
-                    ) : (
-                      <DropdownMenu>
-                        <DropdownMenuTrigger
-                          disabled={saving === u.id}
-                          className="flex cursor-pointer items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-sm outline-none transition-colors hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-60"
+                    </td>
+                    <td className="px-5 py-3 text-muted-foreground tnum">
+                      {u.eventCount}
+                    </td>
+                    <td className="px-5 py-3">
+                      {isSelf ? (
+                        // An administrator demoting themselves could leave the
+                        // site with nobody able to grant the role back.
+                        <span
+                          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground"
+                          title="Another administrator has to change your role"
                         >
-                          <span className={cn("font-medium", ROLE_CHIP[role])}>
-                            {SITE_ROLE_LABELS[role]}
-                          </span>
-                          {saving === u.id ? (
-                            <Loader2 className="size-3.5 animate-spin" />
-                          ) : (
-                            <ChevronDown className="size-3.5 text-muted-foreground" />
-                          )}
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="min-w-56">
-                          <DropdownMenuLabel className="text-xs text-muted-foreground">
-                            Role
-                          </DropdownMenuLabel>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuRadioGroup
-                            value={role}
-                            onValueChange={(v) => change(u, v)}
+                          <ShieldCheck className="size-3.5" />
+                          {SITE_ROLE_LABELS[role]}
+                        </span>
+                      ) : (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger
+                            disabled={saving === u.id}
+                            className="flex cursor-pointer items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-sm outline-none transition-colors hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-60"
                           >
-                            {SITE_ROLES.map((r) => (
-                              <DropdownMenuRadioItem key={r} value={r}>
-                                <span className="grid gap-0.5">
-                                  <span>{SITE_ROLE_LABELS[r]}</span>
-                                  <span className="text-xs text-muted-foreground">
-                                    {SITE_ROLE_DESCRIPTIONS[r]}
+                            <span className={cn("font-medium", ROLE_CHIP[role])}>
+                              {SITE_ROLE_LABELS[role]}
+                            </span>
+                            {saving === u.id ? (
+                              <Loader2 className="size-3.5 animate-spin" />
+                            ) : (
+                              <ChevronDown className="size-3.5 text-muted-foreground" />
+                            )}
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="min-w-56">
+                            <DropdownMenuLabel className="text-xs text-muted-foreground">
+                              Role
+                            </DropdownMenuLabel>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuRadioGroup
+                              value={role}
+                              onValueChange={(v) => change(u, v)}
+                            >
+                              {SITE_ROLES.map((r) => (
+                                <DropdownMenuRadioItem key={r} value={r}>
+                                  <span className="grid gap-0.5">
+                                    <span>{SITE_ROLE_LABELS[r]}</span>
+                                    <span className="text-xs text-muted-foreground">
+                                      {SITE_ROLE_DESCRIPTIONS[r]}
+                                    </span>
                                   </span>
-                                </span>
-                              </DropdownMenuRadioItem>
-                            ))}
-                          </DropdownMenuRadioGroup>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                                </DropdownMenuRadioItem>
+                              ))}
+                            </DropdownMenuRadioGroup>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </motion.div>
     </motion.div>
   );

@@ -131,124 +131,129 @@ export function SettingsView({
         variants={riseChild}
         className="overflow-hidden rounded-2xl border bg-card shadow-sm"
       >
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b bg-muted/30 text-left text-[11px] uppercase tracking-wider text-muted-foreground">
-              <th className="px-5 py-2.5 font-medium">Domain</th>
-              <th className="px-5 py-2.5 font-medium">Note</th>
-              <th className="px-5 py-2.5 font-medium">Added by</th>
-              <th className="w-24 px-5 py-2.5" />
-            </tr>
-          </thead>
-          <tbody>
-            {envDomains.map((domain) => (
-              <EnvRow key={domain} domain={domain} />
-            ))}
+        {/* Scrolls inside the card rather than being clipped by it — see the
+            same wrapper on the users table. Four columns need more floor than
+            three, and the note column is free text. */}
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-160 text-sm">
+            <thead>
+              <tr className="border-b bg-muted/30 text-left text-[11px] uppercase tracking-wider text-muted-foreground">
+                <th className="px-5 py-2.5 font-medium">Domain</th>
+                <th className="px-5 py-2.5 font-medium">Note</th>
+                <th className="px-5 py-2.5 font-medium">Added by</th>
+                <th className="w-24 px-5 py-2.5" />
+              </tr>
+            </thead>
+            <tbody>
+              {envDomains.map((domain) => (
+                <EnvRow key={domain} domain={domain} />
+              ))}
 
-            {domains.map((row) =>
-              editing === row.id ? (
+              {domains.map((row) =>
+                editing === row.id ? (
+                  <EditRow
+                    key={row.id}
+                    row={row}
+                    busy={busy === row.id}
+                    onCancel={() => setEditing(null)}
+                    onSave={async (values) => {
+                      const ok = await send(row.id, `/api/settings/domains/${row.id}`, {
+                        method: "PATCH",
+                        body: JSON.stringify(values),
+                      });
+                      if (ok) setEditing(null);
+                    }}
+                  />
+                ) : (
+                  <tr
+                    key={row.id}
+                    className="border-b transition-colors last:border-b-0 hover:bg-muted/30"
+                  >
+                    <td className="px-5 py-3 font-mono font-medium">
+                      {row.domain}
+                      {viewerEmail.endsWith(`@${row.domain}`) && (
+                        <span className="ml-2 font-sans text-xs font-normal text-muted-foreground">
+                          yours
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-5 py-3 text-muted-foreground">
+                      {row.note || "—"}
+                    </td>
+                    <td className="px-5 py-3 text-muted-foreground">
+                      {row.addedBy ?? "—"}
+                    </td>
+                    <td className="px-5 py-3">
+                      <div className="flex justify-end gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label={`Edit ${row.domain}`}
+                          disabled={busy === row.id}
+                          onClick={() => {
+                            setError(null);
+                            setEditing(row.id);
+                          }}
+                        >
+                          <Pencil className="size-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label={`Remove ${row.domain}`}
+                          disabled={busy === row.id}
+                          className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                          onClick={() =>
+                            send(row.id, `/api/settings/domains/${row.id}`, {
+                              method: "DELETE",
+                            })
+                          }
+                        >
+                          {busy === row.id ? (
+                            <Loader2 className="size-3.5 animate-spin" />
+                          ) : (
+                            <Trash2 className="size-3.5" />
+                          )}
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ),
+              )}
+
+              {adding ? (
                 <EditRow
-                  key={row.id}
-                  row={row}
-                  busy={busy === row.id}
-                  onCancel={() => setEditing(null)}
+                  busy={busy === "new"}
+                  onCancel={() => setAdding(false)}
                   onSave={async (values) => {
-                    const ok = await send(row.id, `/api/settings/domains/${row.id}`, {
-                      method: "PATCH",
+                    const ok = await send("new", "/api/settings/domains", {
+                      method: "POST",
                       body: JSON.stringify(values),
                     });
-                    if (ok) setEditing(null);
+                    if (ok) setAdding(false);
                   }}
                 />
               ) : (
-                <tr
-                  key={row.id}
-                  className="border-b transition-colors last:border-b-0 hover:bg-muted/30"
-                >
-                  <td className="px-5 py-3 font-mono font-medium">
-                    {row.domain}
-                    {viewerEmail.endsWith(`@${row.domain}`) && (
-                      <span className="ml-2 font-sans text-xs font-normal text-muted-foreground">
-                        yours
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-5 py-3 text-muted-foreground">
-                    {row.note || "—"}
-                  </td>
-                  <td className="px-5 py-3 text-muted-foreground">
-                    {row.addedBy ?? "—"}
-                  </td>
-                  <td className="px-5 py-3">
-                    <div className="flex justify-end gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        aria-label={`Edit ${row.domain}`}
-                        disabled={busy === row.id}
-                        onClick={() => {
-                          setError(null);
-                          setEditing(row.id);
-                        }}
-                      >
-                        <Pencil className="size-3.5" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        aria-label={`Remove ${row.domain}`}
-                        disabled={busy === row.id}
-                        className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                        onClick={() =>
-                          send(row.id, `/api/settings/domains/${row.id}`, {
-                            method: "DELETE",
-                          })
-                        }
-                      >
-                        {busy === row.id ? (
-                          <Loader2 className="size-3.5 animate-spin" />
-                        ) : (
-                          <Trash2 className="size-3.5" />
-                        )}
-                      </Button>
-                    </div>
+                <tr>
+                  <td colSpan={4} className="px-5 py-3">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-muted-foreground"
+                      onClick={() => {
+                        setError(null);
+                        setAdding(true);
+                      }}
+                    >
+                      <Plus className="size-3.5" />
+                      Add domain
+                    </Button>
                   </td>
                 </tr>
-              ),
-            )}
-
-            {adding ? (
-              <EditRow
-                busy={busy === "new"}
-                onCancel={() => setAdding(false)}
-                onSave={async (values) => {
-                  const ok = await send("new", "/api/settings/domains", {
-                    method: "POST",
-                    body: JSON.stringify(values),
-                  });
-                  if (ok) setAdding(false);
-                }}
-              />
-            ) : (
-              <tr>
-                <td colSpan={4} className="px-5 py-3">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-muted-foreground"
-                    onClick={() => {
-                      setError(null);
-                      setAdding(true);
-                    }}
-                  >
-                    <Plus className="size-3.5" />
-                    Add domain
-                  </Button>
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+              )}
+            </tbody>
+          </table>
+        </div>
       </motion.div>
 
       <motion.div variants={riseChild}>

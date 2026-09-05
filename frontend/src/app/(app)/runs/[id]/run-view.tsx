@@ -223,8 +223,14 @@ export function RunView({
           <ArrowLeft className="size-4 transition-transform duration-200 group-hover:-translate-x-0.5" />
           Back to events
         </Link>
-        <div className="flex items-center justify-between gap-4">
-          <div>
+        {/*
+          Wrapping, because the actions are `shrink-0` and the title is not: on
+          a phone they held their full width and squeezed the heading into a
+          three-line column, then still pushed Delete off the right edge. Given
+          room to wrap they drop to their own line and the title gets the width.
+        */}
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+          <div className="min-w-0">
             <h1 className="text-2xl font-medium tracking-tight">{run.name}</h1>
             <p className="text-sm text-muted-foreground">
               <span className="capitalize">{run.mode}</span>
@@ -265,7 +271,7 @@ export function RunView({
               {run.gcpProjectId && <MetaChip>{run.gcpProjectId}</MetaChip>}
             </div>
           </div>
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
             <StatusBadge status={run.status} />
             <RetryEventButton run={run} onRetried={refresh} />
             <ExtendEventButton run={run} onExtended={refresh} />

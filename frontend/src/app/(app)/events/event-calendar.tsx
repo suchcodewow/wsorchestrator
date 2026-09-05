@@ -416,174 +416,191 @@ export function EventCalendar({
           </div>
         </div>
 
-        <div className="grid grid-cols-7 border-b bg-muted/30 text-center text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-          {WEEKDAYS.map((w) => (
-            <div key={w} className="py-2.5">
-              {w}
-            </div>
-          ))}
-        </div>
+        {/*
+          A month is seven columns or it is not a month, so this scrolls sideways
+          rather than reflowing: below about 700px the alternative is 45px cells,
+          which hold neither a date nor an event bar. The floor is on a wrapper
+          around *both* the weekday strip and the grid so the two scroll as one
+          and stay in column.
 
-        <div ref={gridRef}>
-          {weeks.map((week, w) => {
-            const nowCol = nowColumn(week.days);
-            return (
-            <div key={`${year}-${month}-w${w}`} className="relative">
-              {/* Day cells: the calendar's clickable base and its borders. */}
-              <div className="grid grid-cols-7">
-                {week.days.map((d, c) => {
-                  const today_ = d ? isToday(d) : false;
-                  return (
-                    <div
-                      key={c}
-                      data-cell
-                      style={{ minHeight: week.minHeight }}
-                      className={cn(
-                        "group relative border-b border-r p-2 transition-colors nth-[7n]:border-r-0",
-                        d ? "cursor-pointer hover:bg-brand/4.5" : "bg-muted/20",
-                      )}
-                      onClick={
-                        d ? () => openCreate(new Date(year, month, d)) : undefined
-                      }
-                    >
-                      {d && (
-                        <div className="flex items-center justify-between">
-                          <span
+          It also has to be a width and not a column count. Every event bar is
+          positioned with percentages of the seven-column track — `calc(100% /
+          span * offset)` for the start hour, `(col + fraction) / 7 * 100%` for
+          the now-line — and all of that stays correct under a min-width while
+          none of it survives a different number of columns.
+        */}
+        <div className="overflow-x-auto">
+          <div className="min-w-176">
+            <div className="grid grid-cols-7 border-b bg-muted/30 text-center text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+              {WEEKDAYS.map((w) => (
+                <div key={w} className="py-2.5">
+                  {w}
+                </div>
+              ))}
+            </div>
+
+            <div ref={gridRef}>
+              {weeks.map((week, w) => {
+                const nowCol = nowColumn(week.days);
+                return (
+                <div key={`${year}-${month}-w${w}`} className="relative">
+                  {/* Day cells: the calendar's clickable base and its borders. */}
+                  <div className="grid grid-cols-7">
+                    {week.days.map((d, c) => {
+                      const today_ = d ? isToday(d) : false;
+                      return (
+                        <div
+                          key={c}
+                          data-cell
+                          style={{ minHeight: week.minHeight }}
+                          className={cn(
+                            "group relative border-b border-r p-2 transition-colors nth-[7n]:border-r-0",
+                            d ? "cursor-pointer hover:bg-brand/4.5" : "bg-muted/20",
+                          )}
+                          onClick={
+                            d ? () => openCreate(new Date(year, month, d)) : undefined
+                          }
+                        >
+                          {d && (
+                            <div className="flex items-center justify-between">
+                              <span
+                                className={cn(
+                                  "inline-flex size-6.5 items-center justify-center rounded-full text-[13px] tnum transition-colors",
+                                  today_
+                                    ? "bg-brand font-medium text-brand-foreground"
+                                    : "text-muted-foreground group-hover:text-foreground",
+                                )}
+                              >
+                                {d}
+                              </span>
+                              {/* Affordance for click-to-create on an empty day. */}
+                              <span className="flex size-5 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100">
+                                <Plus className="size-3.5" />
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Event bars, laid over the cells so a run can stretch across
+                      the days it covers. The layer ignores pointer events; each
+                      bar re-enables them for itself. */}
+                  <div
+                    className="pointer-events-none absolute inset-x-0 grid grid-cols-7 gap-y-1"
+                    style={{ top: DATE_ROW, gridAutoRows: `${LANE - 4}px` }}
+                  >
+                    {week.segments.map((s) => (
+                      <Tooltip key={s.e.id}>
+                        <TooltipTrigger asChild>
+                          <motion.button
+                            style={{
+                              gridColumn: `${s.colStart + 1} / span ${s.span}`,
+                              gridRow: s.lane + 1,
+                              // Slide the start-day edge in by the start hour. On a
+                              // stretched grid item this eats into the left, so the
+                              // right edge stays pinned to the day boundary. A grid
+                              // item's % margin is relative to its own area (span
+                              // columns), so dividing by the span gives exactly one
+                              // column times the fraction, whatever the span.
+                              marginLeft: s.offset
+                                ? `calc(100% / ${s.span} * ${s.offset} + 2px)`
+                                : undefined,
+                              // …and pull the end-day edge in by the end hour, so
+                              // the right edge lands at the teardown time.
+                              marginRight: s.endInset
+                                ? `calc(100% / ${s.span} * ${s.endInset} + 2px)`
+                                : undefined,
+                            }}
+                            onClick={(ev) => {
+                              ev.stopPropagation();
+                              router.push(`/runs/${s.e.id}`);
+                            }}
+                            whileHover={{ y: -1 }}
+                            whileTap={{ scale: 0.99 }}
+                            transition={SPRING_SNAPPY}
                             className={cn(
-                              "inline-flex size-6.5 items-center justify-center rounded-full text-[13px] tnum transition-colors",
-                              today_
-                                ? "bg-brand font-medium text-brand-foreground"
-                                : "text-muted-foreground group-hover:text-foreground",
+                              // A floor on width keeps a very short (sub-day) run
+                              // from collapsing to an unclickable sliver; it simply
+                              // overruns its end hour a little when that happens.
+                              "pointer-events-auto flex min-w-9 items-center gap-1.5 border px-1.5 text-left text-xs shadow-xs transition-shadow hover:shadow-sm",
+                              statusChip(s.e.status),
+                              // Round and inset only the true ends; a continuation
+                              // runs flush to the edge so it reads as one bar. When
+                              // the start is hour-offset, its inline margin above
+                              // supersedes the class inset.
+                              s.roundLeft ? "ml-0.5 rounded-l-md" : "rounded-l-none",
+                              s.roundRight ? "mr-0.5 rounded-r-md" : "rounded-r-none",
                             )}
                           >
-                            {d}
-                          </span>
-                          {/* Affordance for click-to-create on an empty day. */}
-                          <span className="flex size-5 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100">
-                            <Plus className="size-3.5" />
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Event bars, laid over the cells so a run can stretch across
-                  the days it covers. The layer ignores pointer events; each
-                  bar re-enables them for itself. */}
-              <div
-                className="pointer-events-none absolute inset-x-0 grid grid-cols-7 gap-y-1"
-                style={{ top: DATE_ROW, gridAutoRows: `${LANE - 4}px` }}
-              >
-                {week.segments.map((s) => (
-                  <Tooltip key={s.e.id}>
-                    <TooltipTrigger asChild>
-                      <motion.button
-                        style={{
-                          gridColumn: `${s.colStart + 1} / span ${s.span}`,
-                          gridRow: s.lane + 1,
-                          // Slide the start-day edge in by the start hour. On a
-                          // stretched grid item this eats into the left, so the
-                          // right edge stays pinned to the day boundary. A grid
-                          // item's % margin is relative to its own area (span
-                          // columns), so dividing by the span gives exactly one
-                          // column times the fraction, whatever the span.
-                          marginLeft: s.offset
-                            ? `calc(100% / ${s.span} * ${s.offset} + 2px)`
-                            : undefined,
-                          // …and pull the end-day edge in by the end hour, so
-                          // the right edge lands at the teardown time.
-                          marginRight: s.endInset
-                            ? `calc(100% / ${s.span} * ${s.endInset} + 2px)`
-                            : undefined,
-                        }}
-                        onClick={(ev) => {
-                          ev.stopPropagation();
-                          router.push(`/runs/${s.e.id}`);
-                        }}
-                        whileHover={{ y: -1 }}
-                        whileTap={{ scale: 0.99 }}
-                        transition={SPRING_SNAPPY}
-                        className={cn(
-                          // A floor on width keeps a very short (sub-day) run
-                          // from collapsing to an unclickable sliver; it simply
-                          // overruns its end hour a little when that happens.
-                          "pointer-events-auto flex min-w-9 items-center gap-1.5 border px-1.5 text-left text-xs shadow-xs transition-shadow hover:shadow-sm",
-                          statusChip(s.e.status),
-                          // Round and inset only the true ends; a continuation
-                          // runs flush to the edge so it reads as one bar. When
-                          // the start is hour-offset, its inline margin above
-                          // supersedes the class inset.
-                          s.roundLeft ? "ml-0.5 rounded-l-md" : "rounded-l-none",
-                          s.roundRight ? "mr-0.5 rounded-r-md" : "rounded-r-none",
-                        )}
-                      >
-                        <span className="relative flex size-1.5 shrink-0">
-                          {isActiveStatus(s.e.status) && (
-                            <span
-                              className={cn(
-                                "absolute inline-flex size-full animate-ping rounded-full opacity-75",
-                                statusDot(s.e.status),
+                            <span className="relative flex size-1.5 shrink-0">
+                              {isActiveStatus(s.e.status) && (
+                                <span
+                                  className={cn(
+                                    "absolute inline-flex size-full animate-ping rounded-full opacity-75",
+                                    statusDot(s.e.status),
+                                  )}
+                                />
                               )}
-                            />
-                          )}
-                          <span
-                            className={cn(
-                              "relative inline-flex size-1.5 rounded-full",
-                              statusDot(s.e.status),
-                            )}
-                          />
-                        </span>
-                        {s.e.mode === "challenge" && (
-                          <Swords
-                            className="size-3 shrink-0"
-                            aria-label="Challenge"
-                          />
-                        )}
-                        <span className="min-w-0 flex-1 truncate font-medium">
-                          {s.e.name}
-                          {/* Whose it is, on the all-users view only. */}
-                          {s.e.owner && (
-                            <span className="font-normal opacity-70">
-                              {" "}
-                              · {s.e.owner}
+                              <span
+                                className={cn(
+                                  "relative inline-flex size-1.5 rounded-full",
+                                  statusDot(s.e.status),
+                                )}
+                              />
                             </span>
-                          )}
-                        </span>
-                        {/* On the closing segment, spell out the run's length
-                            so "how long" is answerable without opening it. */}
-                        {s.roundRight && (
-                          <span className="shrink-0 tabular-nums opacity-80">
-                            {s.days}d
-                          </span>
-                        )}
-                      </motion.button>
-                    </TooltipTrigger>
-                    <TooltipContent>{eventTitle(s.e, s.days)}</TooltipContent>
-                  </Tooltip>
-                ))}
-              </div>
+                            {s.e.mode === "challenge" && (
+                              <Swords
+                                className="size-3 shrink-0"
+                                aria-label="Challenge"
+                              />
+                            )}
+                            <span className="min-w-0 flex-1 truncate font-medium">
+                              {s.e.name}
+                              {/* Whose it is, on the all-users view only. */}
+                              {s.e.owner && (
+                                <span className="font-normal opacity-70">
+                                  {" "}
+                                  · {s.e.owner}
+                                </span>
+                              )}
+                            </span>
+                            {/* On the closing segment, spell out the run's length
+                                so "how long" is answerable without opening it. */}
+                            {s.roundRight && (
+                              <span className="shrink-0 tabular-nums opacity-80">
+                                {s.days}d
+                              </span>
+                            )}
+                          </motion.button>
+                        </TooltipTrigger>
+                        <TooltipContent>{eventTitle(s.e, s.days)}</TooltipContent>
+                      </Tooltip>
+                    ))}
+                  </div>
 
-              {/* The current moment, drawn across today's cell at the same
-                  hour-of-day fraction the bars are inset by — so where it
-                  crosses a run is where that run stands right now. Last in the
-                  row so it paints over the bars, and inert, so the cell
-                  underneath is still click-to-create. */}
-              {nowCol !== null && now && (
-                <div
-                  aria-hidden
-                  className="pointer-events-none absolute inset-y-0 z-10 w-px bg-brand"
-                  style={{
-                    left: `calc((${nowCol} + ${dayFraction(now)}) / 7 * 100%)`,
-                  }}
-                >
-                  <span className="absolute -top-0.5 -left-[2.5px] size-1.5 rounded-full bg-brand" />
+                  {/* The current moment, drawn across today's cell at the same
+                      hour-of-day fraction the bars are inset by — so where it
+                      crosses a run is where that run stands right now. Last in the
+                      row so it paints over the bars, and inert, so the cell
+                      underneath is still click-to-create. */}
+                  {nowCol !== null && now && (
+                    <div
+                      aria-hidden
+                      className="pointer-events-none absolute inset-y-0 z-10 w-px bg-brand"
+                      style={{
+                        left: `calc((${nowCol} + ${dayFraction(now)}) / 7 * 100%)`,
+                      }}
+                    >
+                      <span className="absolute -top-0.5 -left-[2.5px] size-1.5 rounded-full bg-brand" />
+                    </div>
+                  )}
                 </div>
-              )}
+                );
+              })}
             </div>
-            );
-          })}
+          </div>
         </div>
       </motion.div>
 
