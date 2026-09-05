@@ -48,10 +48,12 @@ export async function SiteHeader({
   return (
     <header className="sticky top-0 z-40 border-b border-border/70 bg-background/70 backdrop-blur-xl">
       {/*
-        `gap-4` and `ml-auto` rather than `justify-between` and a margin on the
-        nav: when the user menu is hidden at `lg`, a hidden element contributes
-        no gap, so the nav lands flush against the bar's own padding instead of
-        16px short of it.
+        Everything after the brand is in one `ml-auto` group rather than each
+        item carrying its own auto margin: two of them would split the free
+        space and push the group apart. Both of its children can be absent —
+        signed in there is no nav, and at `lg` with a sidebar there is no menu
+        either — and an empty group is a zero-width flex item, which is exactly
+        the nothing it should be.
       */}
       <div className={cn("mx-auto flex h-14 items-center gap-4 px-6", width)}>
         <Link
@@ -71,41 +73,47 @@ export async function SiteHeader({
           <span className="hidden sm:inline">Harness Events</span>
         </Link>
 
-        {/*
-          The only nav item, and it is here rather than in the user menu because
-          it is the one destination that means something to a visitor with no
-          account — the room reads the guides signed out.
-        */}
-        <nav className="ml-auto flex shrink-0 items-center">
-          <Link
-            href="/labs"
-            className="rounded-md px-2.5 py-1.5 text-sm text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
-          >
-            Workshops
-          </Link>
-        </nav>
-
-        <div className={cn("min-w-0", sidebar && "lg:hidden")}>
-          {session?.user ? (
-            <UserMenu
-              name={session.user.name ?? null}
-              email={session.user.email ?? ""}
-              role={session.user.siteRole}
-              initialTheme={themePreference}
-              initialScope={calendarScope}
-              build={buildInfo()}
-              signOutAction={async () => {
-                "use server";
-                // Out to the public landing page, not back to the sign-in form:
-                // someone who just signed out is leaving, and being dropped on a
-                // "Continue with Google" button reads as the sign-out having
-                // failed.
-                await signOut({ redirectTo: "/" });
-              }}
-            />
-          ) : (
-            <SignInLink />
+        <div className="ml-auto flex items-center gap-4">
+          {/*
+            Only for visitors with no account. Signed in, Workshops is the first
+            item in the sidebar and in the user menu, and a third copy up here
+            would be the same link in two places on one screen. Signed out there
+            is no sidebar and no menu, and the room reads the guides signed out,
+            so it cannot simply go.
+          */}
+          {!session?.user && (
+            <nav className="flex shrink-0 items-center">
+              <Link
+                href="/labs"
+                className="rounded-md px-2.5 py-1.5 text-sm text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              >
+                Workshops
+              </Link>
+            </nav>
           )}
+
+          <div className={cn("min-w-0", sidebar && "lg:hidden")}>
+            {session?.user ? (
+              <UserMenu
+                name={session.user.name ?? null}
+                email={session.user.email ?? ""}
+                role={session.user.siteRole}
+                initialTheme={themePreference}
+                initialScope={calendarScope}
+                build={buildInfo()}
+                signOutAction={async () => {
+                  "use server";
+                  // Out to the public landing page, not back to the sign-in
+                  // form: someone who just signed out is leaving, and being
+                  // dropped on a "Continue with Google" button reads as the
+                  // sign-out having failed.
+                  await signOut({ redirectTo: "/" });
+                }}
+              />
+            ) : (
+              <SignInLink />
+            )}
+          </div>
         </div>
       </div>
     </header>

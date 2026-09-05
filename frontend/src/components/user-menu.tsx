@@ -3,9 +3,18 @@
 import { Fragment, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { CalendarRange, ChevronDown, LogOut, ShieldCheck } from "lucide-react";
+import {
+  CalendarRange,
+  ChevronDown,
+  ChevronsUpDown,
+  Laptop,
+  LogOut,
+  Moon,
+  ShieldCheck,
+  Sun,
+  type LucideIcon,
+} from "lucide-react";
 import { Avatar } from "@/components/avatar";
-import { THEME_OPTIONS, useThemeChoice } from "@/components/theme-toggle";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,11 +26,12 @@ import {
   DropdownMenuSwitchItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import type { CalendarScope, SiteRole, ThemePreference } from "@/db/schema";
+import { THEME_PREFERENCES, type CalendarScope, type SiteRole, type ThemePreference } from "@/db/schema";
 import type { BuildInfo } from "@/lib/build-info";
 import { visibleSections } from "@/lib/nav";
 import { SITE_ROLE_LABELS } from "@/lib/roles";
-import { setCalendarScope } from "@/lib/user-settings";
+import { applyTheme } from "@/lib/theme";
+import { setCalendarScope, setThemePreference } from "@/lib/user-settings";
 
 /**
  * Group headings sit a size below the items they head and in the muted colour,
@@ -30,14 +40,38 @@ import { setCalendarScope } from "@/lib/user-settings";
 const SECTION_HEADING =
   "px-2 py-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground";
 
+const THEME_OPTIONS: { value: ThemePreference; label: string; Icon: LucideIcon }[] = [
+  { value: "light", label: "Light", Icon: Sun },
+  { value: "dark", label: "Dark", Icon: Moon },
+  { value: "system", label: "System default", Icon: Laptop },
+];
+
 /**
- * The account menu, in the two places a menu is still the right shape.
+ * Where this menu can be opened from, and what its trigger looks like there.
+ *
+ * `header`: the username and a chevron, in the bar — below `lg`, or on the
+ * pages that have no sidebar. `sidebar`: the account row in the sidebar footer.
+ * `rail`: the same row with only room for an avatar, once the sidebar is
+ * collapsed.
+ */
+export type MenuVariant = "header" | "sidebar" | "rail";
+
+const TRIGGER_CLASS: Record<MenuVariant, string> = {
+  header:
+    "flex cursor-pointer items-center gap-1 rounded-md px-2 py-1 text-sm text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50",
+  sidebar:
+    "flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2 text-left outline-none transition-colors hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50",
+  rail: "flex size-10 cursor-pointer items-center justify-center rounded-lg outline-none transition-colors hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50",
+};
+
+/**
+ * The account menu, everywhere one is opened.
  *
  * Below `lg` it is the whole of the app's navigation, because there is no
  * sidebar down there — every link, the calendar scope, appearance and signing
- * out. From `lg` up the sidebar has all of that, and this drops to
- * `accountOnly` mode as the trigger on the collapsed rail, where a 4rem column
- * has no room to show any of it inline.
+ * out. From `lg` up the sidebar lists the links itself, and this drops to
+ * `accountOnly`: what is left is what belongs to the person rather than to a
+ * page, opened from their name in the sidebar footer.
  *
  * The links come from [[NAV_SECTIONS]] rather than being listed here, so a page
  * added to the sidebar cannot go missing on mobile.
@@ -67,13 +101,29 @@ export function UserMenu({
    * this menu is already showing them.
    */
   accountOnly?: boolean;
-  /** `header`: the username and a chevron. `rail`: a square avatar button. */
-  variant?: "header" | "rail";
+  /** Where this is being opened from; see [[MenuVariant]]. */
+  variant?: MenuVariant;
 }) {
   const router = useRouter();
-  const { theme, choose } = useThemeChoice(initialTheme);
+  const [theme, setTheme] = useState<ThemePreference>(initialTheme);
   const [scope, setScope] = useState<CalendarScope>(initialScope);
   const [, startTransition] = useTransition();
+
+  function chooseTheme(value: string) {
+    // Radix hands back a plain string; narrow it before it goes any further.
+    if (!THEME_PREFERENCES.includes(value as ThemePreference)) return;
+    const preference = value as ThemePreference;
+
+    setTheme(preference);
+    // Repaint immediately rather than waiting on the round trip — the write is
+    // only about surviving a reload, and the control should never feel laggy.
+    // Following a later OS change for `system` is ThemeSync's job in the root
+    // layout, so it works on every page and not only where a control is open.
+    applyTheme(preference);
+    startTransition(() => {
+      void setThemePreference(preference);
+    });
+  }
 
   function chooseScope(all: boolean) {
     const next: CalendarScope = all ? "all" : "own";
@@ -88,38 +138,52 @@ export function UserMenu({
 
   const elevated = role !== "operator";
   const sections = accountOnly ? [] : visibleSections(role);
-  const rail = variant === "rail";
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
-        aria-label={rail ? (name ?? email) : undefined}
-        className={
-          rail
-            ? "flex size-10 cursor-pointer items-center justify-center rounded-lg outline-none transition-colors hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50"
-            : "flex cursor-pointer items-center gap-1 rounded-md px-2 py-1 text-sm text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
-        }
+        // Nothing but a picture of an initial names the rail's trigger.
+        aria-label={variant === "rail" ? (name ?? email) : undefined}
+        className={TRIGGER_CLASS[variant]}
       >
-        {rail ? (
-          <Avatar name={name} email={email} />
-        ) : (
+        {variant === "header" && (
           <>
-            {/* Tighter below `sm`, where this shares a 390px bar with the brand
-                and the Workshops link and a long name pushed the bar wider than
-                the screen. */}
+            {/* Tighter below `sm`, where a long name in a 390px bar pushed the
+                bar — and with it the whole document — wider than the screen. */}
             <span className="max-w-28 truncate sm:max-w-48">{name ?? email}</span>
             <ChevronDown className="size-4 shrink-0" />
+          </>
+        )}
+
+        {variant === "rail" && <Avatar name={name} email={email} />}
+
+        {/*
+          Spans rather than divs: the trigger is a `button`, whose content model
+          is phrasing content only.
+        */}
+        {variant === "sidebar" && (
+          <>
+            <Avatar name={name} email={email} />
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-medium">{name ?? email}</span>
+              {name && (
+                <span className="block truncate text-xs text-muted-foreground">{email}</span>
+              )}
+            </span>
+            {/* Not a direction: this opens to the right, or upward if that is
+                where the room is, and Radix decides which at open time. */}
+            <ChevronsUpDown className="size-4 shrink-0 text-muted-foreground" />
           </>
         )}
       </DropdownMenuTrigger>
 
       {/*
-        On the rail the menu opens sideways out of a 4rem column; in the header
-        it hangs under a trigger near the right edge. `align="end"` keeps it
-        inside the viewport in both cases.
+        Out of the sidebar it opens sideways so it never covers the nav it was
+        opened from; in the header it hangs under a trigger near the right edge.
+        `align="end"` keeps it inside the viewport in both cases.
       */}
       <DropdownMenuContent
-        side={rail ? "right" : "bottom"}
+        side={variant === "header" ? "bottom" : "right"}
         align="end"
         className="min-w-56"
       >
@@ -188,7 +252,7 @@ export function UserMenu({
           <span className="text-xs text-muted-foreground">Appearance</span>
           <DropdownMenuRadioGroup
             value={theme}
-            onValueChange={choose}
+            onValueChange={chooseTheme}
             className="flex items-center gap-0.5 rounded-lg bg-muted p-0.5"
           >
             {THEME_OPTIONS.map(({ value, label, Icon }) => (

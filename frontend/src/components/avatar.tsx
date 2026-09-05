@@ -5,9 +5,8 @@
  * in text beside it or in the label of the menu it opens. Left readable it
  * would announce a stray letter before the name that follows it.
  *
- * Its own file rather than living in the sidebar, which is where both callers
- * are: [[AppSidebar]] renders one in its footer and [[UserMenu]] uses one as
- * its trigger on the collapsed rail, and the sidebar already imports the menu.
+ * [[UserMenu]] draws it on both of the triggers that show an account rather
+ * than a page: the sidebar footer row, and that row's collapsed rail form.
  */
 export function Avatar({
   name,

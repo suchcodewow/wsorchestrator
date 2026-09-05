@@ -3,15 +3,7 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import {
-  CalendarRange,
-  LogOut,
-  PanelLeftClose,
-  PanelLeftOpen,
-  ShieldCheck,
-} from "lucide-react";
-import { Avatar } from "@/components/avatar";
-import { ThemeToggle, useThemeChoice } from "@/components/theme-toggle";
+import { CalendarRange, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { UserMenu } from "@/components/user-menu";
 import {
   Tooltip,
@@ -22,7 +14,6 @@ import {
 import type { CalendarScope, SiteRole, ThemePreference } from "@/db/schema";
 import type { BuildInfo } from "@/lib/build-info";
 import { isNavItemActive, visibleSections, type NavItem } from "@/lib/nav";
-import { SITE_ROLE_LABELS } from "@/lib/roles";
 import { writeSidebarCookie } from "@/lib/sidebar";
 import { setCalendarScope } from "@/lib/user-settings";
 import { cn } from "@/lib/utils";
@@ -123,16 +114,32 @@ export function AppSidebar({
           ))}
         </nav>
 
-        <AccountFooter
-          name={name}
-          email={email}
-          role={role}
-          initialTheme={initialTheme}
-          initialScope={initialScope}
-          build={build}
-          collapsed={collapsed}
-          signOutAction={signOutAction}
-        />
+        {/*
+          Who is signed in, as a button rather than a panel.
+          Appearance and signing out are behind it: both are rare, a row each
+          spent permanent space on them, and the collapsed rail had to put them
+          in a menu regardless — so this is one surface at both widths instead
+          of two that can drift. Same [[UserMenu]] the mobile header opens, in
+          `accountOnly` mode because the nav above already lists every link.
+        */}
+        <div
+          className={cn(
+            "shrink-0 border-t border-border/70 p-2",
+            collapsed && "flex justify-center",
+          )}
+        >
+          <UserMenu
+            name={name}
+            email={email}
+            role={role}
+            initialTheme={initialTheme}
+            initialScope={initialScope}
+            build={build}
+            signOutAction={signOutAction}
+            accountOnly
+            variant={collapsed ? "rail" : "sidebar"}
+          />
+        </div>
 
         <button
           type="button"
@@ -279,109 +286,5 @@ function ScopeSwitch({
         {on ? "Showing all events" : "Show all events"}
       </TooltipContent>
     </Tooltip>
-  );
-}
-
-/**
- * Who is signed in, and the two things that belong to them rather than to a
- * page: appearance and signing out.
- *
- * Expanded it is inline — the controls are worth a row each at 16rem, and a
- * dropdown to reach a three-glyph toggle is a click spent on nothing.
- * Collapsed there is no room for any of it, so it becomes the same
- * [[UserMenu]] the mobile header uses, in `accountOnly` mode because the rail
- * above is already showing every link that menu would otherwise list.
- */
-function AccountFooter({
-  name,
-  email,
-  role,
-  initialTheme,
-  initialScope,
-  build,
-  collapsed,
-  signOutAction,
-}: {
-  name: string | null;
-  email: string;
-  role: SiteRole;
-  initialTheme: ThemePreference;
-  initialScope: CalendarScope;
-  build: BuildInfo;
-  collapsed: boolean;
-  signOutAction: () => Promise<void>;
-}) {
-  const { theme, choose } = useThemeChoice(initialTheme);
-  const [, startTransition] = useTransition();
-
-  // Only worth saying when it grants something — everyone is at least an
-  // operator, and a badge on every account is just noise.
-  const elevated = role !== "operator";
-
-  if (collapsed) {
-    return (
-      <div className="flex shrink-0 justify-center border-t border-border/70 px-3 py-3">
-        <UserMenu
-          name={name}
-          email={email}
-          role={role}
-          initialTheme={initialTheme}
-          initialScope={initialScope}
-          build={build}
-          signOutAction={signOutAction}
-          accountOnly
-          variant="rail"
-        />
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex shrink-0 flex-col gap-3 border-t border-border/70 px-3 py-3">
-      <div className="flex items-center gap-2.5 px-1">
-        <Avatar name={name} email={email} />
-        <div className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-medium">{name ?? email}</span>
-          {name && (
-            <span className="block truncate text-xs text-muted-foreground">{email}</span>
-          )}
-        </div>
-      </div>
-
-      {elevated && (
-        <span className="inline-flex w-fit items-center gap-1 rounded-full bg-brand/10 px-2 py-0.5 text-[11px] font-medium text-brand">
-          <ShieldCheck className="size-3" />
-          {SITE_ROLE_LABELS[role]}
-        </span>
-      )}
-
-      {/* Label and control on one line: three glyphs say as much as three
-          labelled rows, and the setting is one people change rarely and
-          recognise instantly. */}
-      <div className="flex items-center justify-between gap-2 px-1">
-        <span className="text-xs text-muted-foreground">Appearance</span>
-        <ThemeToggle value={theme} onChange={choose} />
-      </div>
-
-      <button
-        type="button"
-        onClick={() => startTransition(() => void signOutAction())}
-        className="flex h-9 cursor-pointer items-center gap-3 rounded-lg px-3 text-sm text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
-      >
-        <LogOut className="size-4 shrink-0" />
-        Sign out
-      </button>
-
-      {/* A fact to read, not something to select. */}
-      <div
-        className="px-1 text-[11px] leading-tight text-muted-foreground"
-        title={
-          build.builtAt ? `Built ${build.builtAt} from ${build.tag}` : "Not a released build"
-        }
-      >
-        <span className="font-mono">{build.tag}</span>
-        {build.builtAtLabel && <span className="mt-0.5 block">built {build.builtAtLabel}</span>}
-      </div>
-    </div>
   );
 }
