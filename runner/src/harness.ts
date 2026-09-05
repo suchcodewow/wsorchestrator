@@ -492,6 +492,72 @@ export async function grantOrgAttendee(
 }
 
 /* ------------------------------------------------------------------ *
+ * Account users — the attendees themselves, who outlive the workshop org
+ * ------------------------------------------------------------------ */
+
+const USER_PATH = "/ng/api/user";
+
+/** Where account users are searched. A POST despite reading nothing. */
+const USER_SEARCH_PATH = "/ng/api/user/batch";
+
+/**
+ * The Harness user id behind an email address, or null if the account has no
+ * user for it.
+ *
+ * Needed because the delete below takes a uuid and an attendee is only ever
+ * known here by their address. `searchTerm` is a substring match, so the result
+ * is filtered for the address itself rather than trusting the first hit —
+ * searching for `amy@example.com` also returns `not-amy@example.com`, and
+ * deleting the wrong person's Harness account is not a mistake that can be
+ * undone from here.
+ */
+async function accountUserId(email: string): Promise<string | null> {
+  const { status, text } = await rawRequest(
+    "POST",
+    USER_SEARCH_PATH,
+    { pageIndex: "0", pageSize: "100" },
+    { searchTerm: email },
+  );
+  if (status < 200 || status >= 300) {
+    throw new Error(
+      `could not look up Harness user ${email} (${status}): ${messageOf(text)}`,
+    );
+  }
+
+  const content =
+    (
+      JSON.parse(text) as {
+        data?: { content?: Array<{ email?: string; uuid?: string }> };
+      }
+    ).data?.content ?? [];
+  const wanted = email.trim().toLowerCase();
+  const found = content.find((u) => u.email?.trim().toLowerCase() === wanted);
+  return found?.uuid ?? null;
+}
+
+/**
+ * Remove an attendee from the Harness account at teardown. Returns whether
+ * there was a user to remove.
+ *
+ * Deleting the workshop's org takes their role bindings with it but not the user
+ * — a Harness user belongs to the account, not to the org they were working in —
+ * so without this every workshop permanently adds its roster to the account's
+ * user list.
+ *
+ * A user who is already gone is reported as `false` rather than as an error: the
+ * lookup finding nothing is the same state a successful delete leaves behind.
+ * That is also why the delete is not attempted blind — a uuid Harness does not
+ * recognise comes back as a 400 (`Invalid request: Token is not valid`), not the
+ * 404 that `api` reads as already-done.
+ */
+export async function deleteAccountUser(email: string): Promise<boolean> {
+  const userId = await accountUserId(email);
+  if (!userId) return false;
+  await api("DELETE", `${USER_PATH}/${userId}`, {});
+  return true;
+}
+
+/* ------------------------------------------------------------------ *
  * Cloud credentials — the event's Google service account key, stored as
  * an org secret and wired to an org Google Cloud connector.
  * ------------------------------------------------------------------ */

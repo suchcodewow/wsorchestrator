@@ -95,14 +95,18 @@ resource "google_cloud_run_v2_service" "app" {
           : {},
           # Permanent fixtures the Cloud Status page must not call orphans. GCP's
           # equivalents are derived (the admin and sandbox projects), but an AWS
-          # organization or an Azure subscription can hold long-lived accounts and
-          # groups this deployment never created and can't infer, so they are
-          # listed by hand. App-only: the runner has no use for them.
+          # organization, an Azure subscription or a Harness account can hold
+          # long-lived accounts, groups and organizations this deployment never
+          # created and can't infer, so they are listed by hand. App-only: the
+          # runner has no use for them.
           length(var.aws_infra_account_ids) > 0
           ? { AWS_INFRA_ACCOUNT_IDS = join(",", var.aws_infra_account_ids) }
           : {},
           length(var.azure_infra_resource_groups) > 0
           ? { AZURE_INFRA_RESOURCE_GROUPS = join(",", var.azure_infra_resource_groups) }
+          : {},
+          length(var.harness_infra_orgs) > 0
+          ? { HARNESS_INFRA_ORGS = join(",", var.harness_infra_orgs) }
           : {},
         )
         content {
@@ -113,21 +117,26 @@ resource "google_cloud_run_v2_service" "app" {
 
       # Secret-backed env vars.
       #
-      # The AWS and Azure credentials are here for the Cloud Status page, which
-      # audits all three clouds: Google Cloud answers to the app's own service
-      # account (roles/billing.viewer, see iam.tf), but AWS Organizations and
-      # Azure Resource Manager have no such per-service identity in this
-      # deployment, so the audit uses the same principals the runner provisions
-      # with. Worth being clear-eyed about: these are the AWS management
-      # account's key pair and the Azure service principal's secret, and putting
-      # them on the public-facing service means a compromise of the app reaches
-      # as far as a compromise of the runner already would. The audit itself only
-      # ever calls ListAccounts / DescribeOrganization and lists resource groups.
-      # To narrow it, point these at a read-only IAM user and an Azure principal
-      # with Reader — the code reads the same variable names either way.
+      # The AWS, Azure and Harness credentials are here for the Cloud Status
+      # page, which audits all three clouds and the Harness account: Google Cloud
+      # answers to the app's own service account (roles/billing.viewer, see
+      # iam.tf), but AWS Organizations, Azure Resource Manager and Harness have
+      # no such per-service identity in this deployment, so the audit uses the
+      # same principals the runner provisions with. Worth being clear-eyed about:
+      # these are the AWS management account's key pair, the Azure service
+      # principal's secret, and a Harness key that can create and delete
+      # organizations — putting them on the public-facing service means a
+      # compromise of the app reaches as far as a compromise of the runner
+      # already would. The audit itself only ever calls ListAccounts /
+      # DescribeOrganization, lists resource groups, and lists Harness
+      # organizations. To narrow it, point these at a read-only IAM user, an
+      # Azure principal with Reader, and a Harness service account that only
+      # views organizations — the code reads the same variable names either way.
       #
-      # Added only when that cloud is configured, matching runner_secret_env, so
-      # a deployment not using a cloud has no secret to reference.
+      # The cloud ones are added only when that cloud is configured, matching
+      # runner_secret_env, so a deployment not using a cloud has no secret to
+      # reference. The Harness key is unconditional: every run needs it, so the
+      # secret always exists.
       dynamic "env" {
         for_each = merge(
           {
@@ -135,6 +144,7 @@ resource "google_cloud_run_v2_service" "app" {
             AUTH_SECRET        = "auth-secret"
             AUTH_GOOGLE_ID     = "google-oauth-client-id"
             AUTH_GOOGLE_SECRET = "google-oauth-client-secret"
+            HARNESS_API_KEY    = "harness-api-key"
           },
           var.azure_subscription_id != "" ? { ARM_CLIENT_SECRET = "azure-client-secret" } : {},
           var.aws_access_key_id != "" ? {

@@ -1,32 +1,35 @@
 import "server-only";
 
 import { db } from "@/db";
-import type { Cloud } from "@/db/schema";
-import type { ResourceOwner } from "./types";
+import type { AuditTarget, ResourceOwner } from "./types";
 
 /**
- * The database half of the audit: for each cloud, resource id -> the run that
- * created it.
+ * The database half of the audit: for each audited platform, resource id -> the
+ * run that created it.
  *
- * One pass over `workshop_runs` builds all three maps, because every audit needs
- * one and the rows are the same rows. A run records its boundaries in two
- * shapes, and both are read here:
+ * One pass over `workshop_runs` builds every map, because every audit needs one
+ * and the rows are the same rows. A run records its boundaries in two shapes, and
+ * both are read here:
  *
  *   * a single id, for a workshop's one shared environment — the `gcp_project_id`
- *     column, or `azure_resource_group` / `aws_account_id` in `outputs`;
+ *     column, or `azure_resource_group` / `aws_account_id` / `harness_org` in
+ *     `outputs`;
  *   * an address -> id map, for a challenge's per-competitor environments —
- *     `gcp_projects`, `azure_resource_groups`, `aws_accounts`.
+ *     `gcp_projects`, `azure_resource_groups`, `aws_accounts`. Harness has no
+ *     such shape: a challenge still gets one organization, with a project per
+ *     competitor inside it, and a project is not an isolation boundary this page
+ *     audits.
  *
  * Destroyed runs are deliberately kept. Teardown leaves the row and its outputs
  * in place, so a closed AWS account or a deleted project stays attributed to the
  * run that made it rather than resurfacing as an orphan; that is also what makes
- * the "referenced by a run, but the cloud no longer lists it" reconciliation on
- * each audit meaningful.
+ * the "referenced by a run, but the platform no longer lists it" reconciliation
+ * on each audit meaningful.
  */
 
 export type OwnerMaps = {
-  /** Keys are normalized per cloud by `normalizeId` — always look up through it. */
-  byResource: Record<Cloud, Map<string, ResourceOwner>>;
+  /** Keys are normalized per target by `normalizeId` — always look up through it. */
+  byResource: Record<AuditTarget, Map<string, ResourceOwner>>;
   /**
    * The `run_id` tag value -> the run, for resources the orchestrator created
    * without recording their id.
@@ -46,13 +49,13 @@ export type OwnerMaps = {
 const runTag = (runId: string) => runId.replace(/-/g, "").slice(0, 12);
 
 /**
- * Match ids the way the cloud does. Azure treats resource-group names
+ * Match ids the way the platform does. Azure treats resource-group names
  * case-insensitively and echoes back whatever case created them, so an RG the
  * runner named in lowercase must still match if the API answers differently.
- * GCP project ids and AWS account ids are exact.
+ * GCP project ids, AWS account ids and Harness identifiers are exact.
  */
-export function normalizeId(cloud: Cloud, id: string): string {
-  return cloud === "azure" ? id.toLowerCase() : id;
+export function normalizeId(target: AuditTarget, id: string): string {
+  return target === "azure" ? id.toLowerCase() : id;
 }
 
 const str = (v: unknown): string | null =>
@@ -74,6 +77,7 @@ type RunOutputs = {
   azure_resource_groups?: unknown;
   aws_account_id?: unknown;
   aws_accounts?: unknown;
+  harness_org?: unknown;
 };
 
 export async function resourceOwners(): Promise<OwnerMaps> {
@@ -89,12 +93,17 @@ export async function resourceOwners(): Promise<OwnerMaps> {
   });
 
   const maps: OwnerMaps = {
-    byResource: { gcp: new Map(), aws: new Map(), azure: new Map() },
+    byResource: {
+      gcp: new Map(),
+      aws: new Map(),
+      azure: new Map(),
+      harness: new Map(),
+    },
     byRunTag: new Map(),
   };
 
-  const set = (cloud: Cloud, id: string | null, owner: ResourceOwner) => {
-    if (id) maps.byResource[cloud].set(normalizeId(cloud, id), owner);
+  const set = (target: AuditTarget, id: string | null, owner: ResourceOwner) => {
+    if (id) maps.byResource[target].set(normalizeId(target, id), owner);
   };
 
   for (const r of rows) {
@@ -113,16 +122,19 @@ export async function resourceOwners(): Promise<OwnerMaps> {
     set("gcp", r.gcpProjectId, base);
     set("azure", str(out.azure_resource_group), base);
     set("aws", str(out.aws_account_id), base);
+    // Every run gets one, whatever clouds it selected — including a sandbox run,
+    // which is Harness and nothing else.
+    set("harness", str(out.harness_org), base);
 
     // Challenges: one boundary per competitor, keyed by their address.
-    const perUser: Array<[Cloud, unknown]> = [
+    const perUser: Array<[AuditTarget, unknown]> = [
       ["gcp", out.gcp_projects],
       ["azure", out.azure_resource_groups],
       ["aws", out.aws_accounts],
     ];
-    for (const [cloud, value] of perUser) {
+    for (const [target, value] of perUser) {
       for (const [attendee, id] of entries(value)) {
-        set(cloud, id, { ...base, attendee });
+        set(target, id, { ...base, attendee });
       }
     }
   }
@@ -131,9 +143,9 @@ export async function resourceOwners(): Promise<OwnerMaps> {
 }
 
 /**
- * Ids a run still claims that the cloud didn't list — usually a boundary already
- * deleted. Not billed any more, so not the page's headline concern, but surfaced
- * so the two views can be reconciled.
+ * Ids a run still claims that the platform didn't list — usually a boundary
+ * already deleted. Nothing is being charged for it any more, so not the page's
+ * headline concern, but surfaced so the two views can be reconciled.
  */
 export function missingFromCloud(
   owners: Map<string, ResourceOwner>,

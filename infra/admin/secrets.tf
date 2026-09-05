@@ -41,9 +41,10 @@ locals {
     "aws-secret-access-key"      = var.aws_secret_access_key
   }
 
-  # Secrets the runner/reaper/scheduler jobs read. The app doesn't talk to
-  # Harness, Azure, or AWS, and the runner has no use for the OAuth or auth
-  # secrets. Same non-sensitive gating as secret_ids.
+  # Secrets the runner/reaper/scheduler jobs read. The runner has no use for the
+  # OAuth or auth secrets; the rest it now shares with the app, which reads the
+  # same Harness and cloud credentials for the Cloud Status audit (see app.tf).
+  # Same non-sensitive gating as secret_ids.
   runner_secrets = concat(
     ["database-url", "harness-api-key"],
     var.azure_subscription_id != "" ? ["azure-client-secret"] : [],

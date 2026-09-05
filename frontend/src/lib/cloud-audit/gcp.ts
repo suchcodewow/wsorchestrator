@@ -19,6 +19,11 @@ import {
  * table. Anything billed but unmatched — and not a known piece of control-plane
  * infra — is flagged as an orphan or an extraneous project someone stood up.
  *
+ * Projects whose billing is disabled are left out. They stay associated with the
+ * billing account but cannot be charged against it, and the page's job is spend
+ * nobody has claimed — so listing them only crowds out the projects that cost
+ * something. That makes the totals here smaller than the billing console's.
+ *
  * Read-only throughout: `billing.viewer` cannot change billing or move projects,
  * and nothing here writes to the database.
  */
@@ -152,31 +157,37 @@ export async function auditGcp(owners: OwnerMaps): Promise<CloudAuditResult> {
   const known = owners.byResource.gcp;
   const infra = infraProjectIds();
 
-  const resources: AuditedResource[] = billing.map((p) => {
+  const resources: AuditedResource[] = billing.flatMap((p) => {
+    // A project with billing disabled cannot be charged for anything, so it is
+    // not this page's business — the same cut `auditAws` makes on closed
+    // accounts. It differs in being reversible: the project still exists and
+    // still holds whatever was in it, so re-enabling billing brings it back
+    // here rather than this being a permanent exclusion.
+    if (!p.billingEnabled) return [];
+
     const owner = known.get(p.projectId) ?? null;
-    return {
-      id: p.projectId,
-      name: names.get(p.projectId) ?? null,
-      url: consoleUrl(p.projectId),
-      state: {
-        label: p.billingEnabled ? "enabled" : "disabled",
-        ok: p.billingEnabled,
-      },
-      // Every project here is billed to an account this deployment owns, so
-      // there is no `unmanaged` case: it is ours whether we meant it or not.
-      classification: owner
-        ? "tracked"
-        : infra.has(p.projectId)
-          ? "infra"
-          : "untracked",
-      owner,
-    };
+    return [
+      {
+        id: p.projectId,
+        name: names.get(p.projectId) ?? null,
+        url: consoleUrl(p.projectId),
+        state: { label: "enabled", ok: true },
+        // Every project here is billed to an account this deployment owns, so
+        // there is no `unmanaged` case: it is ours whether we meant it or not.
+        classification: owner
+          ? "tracked"
+          : infra.has(p.projectId)
+            ? "infra"
+            : "untracked",
+        owner,
+      } satisfies AuditedResource,
+    ];
   });
 
   return {
     ok: true,
     audit: {
-      cloud: "gcp",
+      target: "gcp",
       scope: {
         label: "Billing account",
         value: accountId,
@@ -186,6 +197,10 @@ export async function auditGcp(owners: OwnerMaps): Promise<CloudAuditResult> {
       columns: { id: "Project", name: "Project name", state: "Billing" },
       missing: missingFromCloud(
         known,
+        // Every project the billing account listed, billing-disabled ones
+        // included — those are filtered out of the table above, but a run whose
+        // project merely had billing turned off must not then read as a project
+        // the billing account has never heard of.
         billing.map((p) => p.projectId),
         infra,
       ),

@@ -81,6 +81,12 @@ variable "harness_base_url" {
   default     = "https://app.harness.io"
 }
 
+variable "harness_infra_orgs" {
+  description = "Organizations in the Harness account that are permanent fixtures, not events. Read only by the app's Cloud Status page. Organizations this orchestrator never tagged are already reported as unmanaged rather than orphaned, so this is only needed for one it did create and means to keep."
+  type        = list(string)
+  default     = []
+}
+
 # --- Azure (required; every deployment carries all three clouds) ---
 # Defaulted empty only so a partially-configured tree still plans; a run that
 # selects Azure without these fails its preflight. Provisioning an Azure run

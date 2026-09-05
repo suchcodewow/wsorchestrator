@@ -18,6 +18,11 @@ import {
  * account" — the org is also the billing boundary, since a member account's
  * charges roll up to the management account's bill.
  *
+ * Closed (`SUSPENDED`) accounts are left out. The page's job is to surface spend
+ * nobody has claimed, and a closed account cannot be charged for anything during
+ * the ~90 days AWS keeps it listed, so showing it only crowds out the accounts
+ * that can. That makes the totals here smaller than the organization console's.
+ *
  * Signed by hand rather than with `@aws-sdk/client-organizations`: two read-only
  * calls do not justify pulling the AWS SDK into the web app's bundle, and SigV4
  * over `node:crypto` is a page of code. The requests are `ListAccounts` and
@@ -207,9 +212,21 @@ const orgConsoleUrl = (accountId: string) =>
   `https://${SIGNING_REGION}.console.aws.amazon.com/organizations/v2/home/accounts/${encodeURIComponent(accountId)}`;
 
 /**
- * `SUSPENDED` is a closed account: AWS keeps it listed for 90 days after
- * closure, costing nothing. Shown as not-ok so a closed account that a run still
- * claims is visible, but it is never the reason a row is flagged.
+ * A closed account. AWS keeps it listed for ~90 days after closure and it can
+ * accrue nothing in that window, so it is dropped from the audit entirely —
+ * this page exists to find spend, and a challenge that ran 60 competitors would
+ * otherwise bury its live accounts under closed ones for three months.
+ *
+ * `PENDING_CLOSURE` is deliberately not treated this way: closure has been
+ * requested but resources may still be running and billing, so such an account
+ * stays visible until AWS moves it to `SUSPENDED`.
+ */
+const CLOSED = "SUSPENDED";
+
+/**
+ * The statuses that read as healthy. Only `ACTIVE` does — closed accounts never
+ * reach the table, so what is left to distinguish is an account mid-closure,
+ * which is worth showing as a warning.
  */
 const ACCOUNT_OK = new Set(["ACTIVE"]);
 
@@ -249,6 +266,9 @@ export async function auditAws(owners: OwnerMaps): Promise<CloudAuditResult> {
 
   const resources: AuditedResource[] = accounts.flatMap((a) => {
     if (!a.Id) return [];
+    // A closed account cannot be charged for anything, so it is not this page's
+    // business — whether a run claims it or not.
+    if (a.Status === CLOSED) return [];
     const owner = known.get(a.Id) ?? null;
     const status = a.Status ?? "UNKNOWN";
     return [
@@ -268,7 +288,7 @@ export async function auditAws(owners: OwnerMaps): Promise<CloudAuditResult> {
   return {
     ok: true,
     audit: {
-      cloud: "aws",
+      target: "aws",
       scope: {
         label: "Organization",
         value: org?.Id ?? "unknown",
@@ -278,6 +298,9 @@ export async function auditAws(owners: OwnerMaps): Promise<CloudAuditResult> {
       columns: { id: "Account", name: "Account name", state: "Status" },
       missing: missingFromCloud(
         known,
+        // Every id the organization listed, closed ones included — those are
+        // filtered out of the table above, but a run whose account is merely
+        // closed must not then surface here as one AWS has dropped.
         accounts.flatMap((a) => (a.Id ? [a.Id] : [])),
         infra,
       ),

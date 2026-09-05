@@ -11,10 +11,11 @@ export const metadata: Metadata = {
 };
 
 /**
- * Cloud Status — the state of the clouds the workshops run on, one section each
- * for Google Cloud, AWS and Azure. Every isolation boundary the deployment is
- * charged for (a billed project, a member account, a resource group) matched
- * against the runs table, so orphaned and extraneous ones stand out.
+ * Cloud Status — the state of the platforms the workshops run on, one section
+ * each for Google Cloud, AWS, Azure and Harness. Every isolation boundary the
+ * deployment creates (a billed project, a member account, a resource group, a
+ * Harness organization) matched against the runs table, so orphaned and
+ * extraneous ones stand out.
  *
  * Administrators only; a 404 for anyone below, the same as the other admin
  * pages. Fetched fresh on every load (no cache): a stale answer to "is anything

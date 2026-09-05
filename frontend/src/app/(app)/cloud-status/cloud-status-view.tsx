@@ -14,35 +14,37 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { CLOUDS, type Cloud } from "@/db/schema";
 import { cn } from "@/lib/utils";
-// Type-only: erased at compile time, so the `server-only` modules behind these
-// are never pulled into the client bundle.
-import type {
-  AuditUnavailable,
-  AuditedResource,
-  Classification,
-  CloudAudit,
-  CloudStatusReport,
+// `AUDIT_TARGETS` is a plain array and the rest are types, erased at compile
+// time — so the `server-only` modules behind the audits are never pulled into
+// the client bundle.
+import {
+  AUDIT_TARGETS,
+  type AuditTarget,
+  type AuditUnavailable,
+  type AuditedResource,
+  type Classification,
+  type CloudAudit,
+  type CloudStatusReport,
 } from "@/lib/cloud-audit/types";
 
 /**
- * All the per-cloud wording in one place. The audits themselves carry only the
+ * All the per-target wording in one place. The audits themselves carry only the
  * column and scope labels they can't be written without; everything explanatory
  * lives here, next to what renders it.
  */
 const COPY: Record<
-  Cloud,
+  AuditTarget,
   {
-    /** Tab label — short, because three of them share a row. */
+    /** Tab label — short, because four of them share a row. */
     tab: string;
     /** What the table is a list of, in the header sentence and the total tile. */
     plural: string;
-    /** One line under the title explaining what "untracked" means for this cloud. */
+    /** One line under the title explaining what "untracked" means here. */
     blurb: string;
     /** What `infra` means here. */
     infra: string;
-    /** What `unmanaged` means here. Null when the cloud can't produce any. */
+    /** What `unmanaged` means here. Null when the target can't produce any. */
     unmanaged: string | null;
     missing: { title: string; note: string };
     errors: Record<AuditUnavailable, string>;
@@ -52,7 +54,7 @@ const COPY: Record<
     tab: "Google Cloud",
     plural: "projects",
     blurb:
-      "Every project billed to the workshop account, matched against the runs database. A project with no matching run — and that isn’t the control plane or sandbox — is flagged.",
+      "Every project actively billed to the workshop account, matched against the runs database. A project with no matching run — and that isn’t the control plane or sandbox — is flagged. Projects with billing disabled are left out; they stay attached to the account but can’t be charged to it.",
     infra: "Control plane / sandbox",
     unmanaged: null,
     missing: {
@@ -72,7 +74,7 @@ const COPY: Record<
     tab: "AWS",
     plural: "accounts",
     blurb:
-      "Every account in the workshop organization, matched against the runs database. Member accounts bill to the management account, so an account with no matching run is a cost nobody has claimed.",
+      "Every account in the workshop organization that can still be charged, matched against the runs database. Member accounts bill to the management account, so an account with no matching run is a cost nobody has claimed. Closed accounts are left out — AWS lists them for about 90 days after closure but they accrue nothing.",
     infra: "Management / permanent",
     unmanaged: null,
     missing: {
@@ -108,9 +110,29 @@ const COPY: Record<
         "Couldn’t reach Azure Resource Manager just now. Try refreshing in a moment.",
     },
   },
+  harness: {
+    tab: "Harness",
+    plural: "organizations",
+    blurb:
+      "Every organization in the Harness account. One is created per event and deleted with it — so an organization this orchestrator made that no event claims is one a teardown didn’t finish, since Harness won’t delete an org that still has projects, connectors or delegates in it. The account is shared, so organizations created outside this app are listed as unmanaged. Nothing here costs money; it is the tidiness of the account that is at stake.",
+    infra: "Permanent (configured)",
+    unmanaged: "Not created here",
+    missing: {
+      title: "Referenced by a run, not in the account",
+      note: "A run still records these organization identifiers, but the account doesn’t list them — the usual case, and what a finished teardown looks like.",
+    },
+    errors: {
+      not_configured:
+        "Harness isn’t configured for this deployment (HARNESS_ACCOUNT_ID and HARNESS_API_KEY are unset).",
+      permission_denied:
+        "Harness refused the deployment’s API key — it has expired, been revoked, or can’t view organizations. It is the same key the runner builds events with, stored as the harness-api-key secret.",
+      unavailable:
+        "Couldn’t reach Harness just now. Try refreshing in a moment.",
+    },
+  },
 };
 
-/** Which subset of one cloud's resources the table is showing. */
+/** Which subset of one target's resources the table is showing. */
 type Filter = "all" | Classification;
 /** Which column the table is sorted by, and in which direction. */
 type SortColumn = "id" | "name";
@@ -121,21 +143,21 @@ export function CloudStatus({
   opening,
 }: {
   initial: CloudStatusReport;
-  opening: Cloud;
+  opening: AuditTarget;
 }) {
   const [report, setReport] = useState(initial);
-  const [cloud, setCloud] = useState<Cloud>(opening);
+  const [target, setTarget] = useState<AuditTarget>(opening);
   const [message, setMessage] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
-  // Per cloud, so switching tabs doesn't carry a filter that means something
-  // different — "Unmanaged" exists on Azure and nowhere else.
-  const [filters, setFilters] = useState<Partial<Record<Cloud, Filter>>>({});
-  const [sorts, setSorts] = useState<Partial<Record<Cloud, Sort>>>({});
+  // Per target, so switching tabs doesn't carry a filter that means something
+  // different — "Unmanaged" exists on Azure and Harness, not on the other two.
+  const [filters, setFilters] = useState<Partial<Record<AuditTarget, Filter>>>({});
+  const [sorts, setSorts] = useState<Partial<Record<AuditTarget, Sort>>>({});
 
-  const filter = filters[cloud] ?? "all";
-  const sort = sorts[cloud] ?? null;
-  const result = report[cloud];
+  const filter = filters[target] ?? "all";
+  const sort = sorts[target] ?? null;
+  const result = report[target];
 
   const refresh = useCallback(async () => {
     setPending(true);
@@ -143,13 +165,13 @@ export function CloudStatus({
       const res = await fetch("/api/cloud-status", { cache: "no-store" });
       const body = await res.json().catch(() => null);
       if (!res.ok || !body?.report) {
-        throw new Error(`Couldn’t refresh the cloud audit (${res.status})`);
+        throw new Error(`Couldn’t refresh the audit (${res.status})`);
       }
       setReport(body.report as CloudStatusReport);
       setMessage(null);
     } catch (err) {
       setMessage(
-        err instanceof Error ? err.message : "Couldn’t refresh the cloud audit",
+        err instanceof Error ? err.message : "Couldn’t refresh the audit",
       );
     } finally {
       setPending(false);
@@ -160,17 +182,17 @@ export function CloudStatus({
   const toggleSort = useCallback(
     (column: SortColumn) => {
       setSorts((prev) => {
-        const current = prev[cloud] ?? null;
+        const current = prev[target] ?? null;
         const next: Sort =
           !current || current.column !== column
             ? { column, dir: "asc" }
             : current.dir === "asc"
               ? { column, dir: "desc" }
               : null;
-        return { ...prev, [cloud]: next };
+        return { ...prev, [target]: next };
       });
     },
-    [cloud],
+    [target],
   );
 
   // Filter, then sort. With no sort the server order (untracked-first) stands.
@@ -189,7 +211,7 @@ export function CloudStatus({
     });
   }, [result, filter, sort]);
 
-  const copy = COPY[cloud];
+  const copy = COPY[target];
 
   return (
     <div className="space-y-6">
@@ -197,8 +219,9 @@ export function CloudStatus({
         <div className="max-w-2xl">
           <h1 className="text-2xl font-medium tracking-tight">Cloud Status</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            What each cloud is actually carrying, matched against the runs
-            database. Anything billed that no run claims is flagged here.
+            What each cloud — and the Harness account — is actually carrying,
+            matched against the runs database. Anything no run claims is flagged
+            here.
           </p>
         </div>
         <Button variant="outline" size="sm" onClick={refresh} disabled={pending}>
@@ -209,21 +232,21 @@ export function CloudStatus({
 
       {message && <Problem>{message}</Problem>}
 
-      {/* One tab per cloud, each showing its own headline so a problem in a
-          cloud the admin isn't looking at is still visible from here. */}
+      {/* One tab per target, each showing its own headline so a problem in one
+          the admin isn't looking at is still visible from here. */}
       <div
         role="tablist"
-        aria-label="Cloud"
+        aria-label="Platform"
         className="flex flex-wrap items-stretch gap-2"
       >
-        {CLOUDS.map((c) => (
-          <CloudTab
-            key={c}
-            label={COPY[c].tab}
-            plural={COPY[c].plural}
-            result={report[c]}
-            active={c === cloud}
-            onClick={() => setCloud(c)}
+        {AUDIT_TARGETS.map((t) => (
+          <TargetTab
+            key={t}
+            label={COPY[t].tab}
+            plural={COPY[t].plural}
+            result={report[t]}
+            active={t === target}
+            onClick={() => setTarget(t)}
           />
         ))}
       </div>
@@ -258,7 +281,7 @@ export function CloudStatus({
             audit={result.audit}
             copy={copy}
             filter={filter}
-            onFilter={(f) => setFilters((prev) => ({ ...prev, [cloud]: f }))}
+            onFilter={(f) => setFilters((prev) => ({ ...prev, [target]: f }))}
           />
 
           <Card>
@@ -346,11 +369,11 @@ function Problem({ children }: { children: React.ReactNode }) {
 }
 
 /**
- * A cloud's tab: its name, and the one number that matters for it. An
- * unconfigured cloud stays selectable — the panel then explains which env vars
+ * One target's tab: its name, and the one number that matters for it. An
+ * unconfigured target stays selectable — the panel then explains which env vars
  * are missing, which is more useful than a tab that does nothing.
  */
-function CloudTab({
+function TargetTab({
   label,
   plural,
   result,
@@ -359,7 +382,7 @@ function CloudTab({
 }: {
   label: string;
   plural: string;
-  result: CloudStatusReport[Cloud];
+  result: CloudStatusReport[AuditTarget];
   active: boolean;
   onClick: () => void;
 }) {
@@ -411,7 +434,7 @@ function Counts({
   onFilter,
 }: {
   audit: CloudAudit;
-  copy: (typeof COPY)[Cloud];
+  copy: (typeof COPY)[AuditTarget];
   filter: Filter;
   onFilter: (filter: Filter) => void;
 }) {
@@ -490,7 +513,7 @@ function ResourceRow({
   copy,
 }: {
   resource: AuditedResource;
-  copy: (typeof COPY)[Cloud];
+  copy: (typeof COPY)[AuditTarget];
 }) {
   const flagged = resource.classification === "untracked";
   return (

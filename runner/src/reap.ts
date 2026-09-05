@@ -28,6 +28,7 @@ import { tfDestroy, tfInit } from "./terraform.js";
 import { deleteAccount, deleteOrgUnit } from "./directory.js";
 import { teardownOrder } from "./components.js";
 import {
+  deleteAccountUser,
   deleteConnector,
   deleteOrg,
   deleteProject,
@@ -129,6 +130,13 @@ async function destroyRun(run: RunRow): Promise<void> {
     await destroyHarness(run);
 
     const accounts = await accountsFor(run.id);
+
+    // The attendees' Harness account membership, which outlives the org they
+    // worked in — see `deleteAccountUser`. Runs before the roster is dropped
+    // below, for the same reason the Google deletes do: it is the only record of
+    // who has to be removed.
+    await removeHarnessUsers(run, accounts.map((a) => a.email));
+
     if (accounts.length > 0) {
       await log(run.id, "system", `Deleting ${accounts.length} attendee account(s)`);
       for (const { email } of accounts) {
@@ -265,6 +273,54 @@ async function destroyHarness(run: RunRow): Promise<void> {
   }
 
   await deleteOrg(orgId);
+}
+
+/**
+ * Remove the run's attendees from the Harness account, so a torn-down workshop
+ * leaves nobody behind in the account's user list.
+ *
+ * Driven by the run's roster rather than by who Harness reports in the org. An
+ * org's user list also shows whoever holds an inherited account-level binding —
+ * the instructor among them — and these addresses are the accounts this run
+ * created, which makes them the only ones it has any business deleting. A
+ * sandbox run has no roster at all: its projects belong to the contributor's own
+ * address, and that is a real person's Harness login, not a workshop account.
+ *
+ * Best-effort per attendee. `rawRequest` already retries Harness's own 5xx and
+ * rate limiting, so what reaches here is a refusal a retry would repeat — and a
+ * run must not sit in `destroying` forever, with its clouds already gone, over
+ * one user Harness will not remove.
+ */
+async function removeHarnessUsers(
+  run: RunRow,
+  emails: string[],
+): Promise<void> {
+  if (emails.length === 0) return;
+
+  await log(
+    run.id,
+    "system",
+    `Removing ${emails.length} attendee(s) from the Harness account`,
+  );
+  for (const email of emails) {
+    try {
+      const removed = await deleteAccountUser(email);
+      await log(
+        run.id,
+        "stdout",
+        removed
+          ? `removed Harness user ${email}`
+          : `no Harness user for ${email} — nothing to remove`,
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      await log(
+        run.id,
+        "stdout",
+        `Harness user ${email} removal skipped: ${message}`,
+      );
+    }
+  }
 }
 
 async function destroyGcp(run: RunRow): Promise<void> {

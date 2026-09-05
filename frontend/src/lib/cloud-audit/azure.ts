@@ -242,7 +242,7 @@ export async function auditAzure(owners: OwnerMaps): Promise<CloudAuditResult> {
   return {
     ok: true,
     audit: {
-      cloud: "azure",
+      target: "azure",
       scope: {
         label: "Subscription",
         value: cfg.subscriptionId,

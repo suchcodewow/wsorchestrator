@@ -18,6 +18,10 @@ workspace_admin_email = "admin@example.com"
 harness_account_id = "replace-me"
 harness_api_key    = "pat.xxxxx"
 # harness_base_url = "https://app.harness.io"
+# Organizations the Cloud Status page should treat as permanent fixtures. Rarely
+# needed: an organization the orchestrator never tagged is already reported as
+# unmanaged rather than orphaned.
+# harness_infra_orgs = ["my_permanent_org"]
 
 # Azure — see README.md#azure
 azure_subscription_id = "00000000-0000-0000-0000-000000000000"
