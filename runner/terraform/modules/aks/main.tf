@@ -1,6 +1,6 @@
 # A deliberately small, cheap AKS cluster for a workshop — the Azure analog of
 # modules/gke. sku_tier = "Free" means no charge for the managed control plane
-# (like GKE's free zonal tier), and a single small burstable node keeps the rest
+# (like GKE's free zonal tier), and a single small node keeps the rest
 # inexpensive.
 #
 # The default node pool is on-demand, not Spot: AKS Spot requires a separate
