@@ -10,12 +10,20 @@ data "azuread_client_config" "current" {}
 resource "azuread_application" "this" {
   display_name = var.name
   description  = "Workshop Orchestrator: credentials for the event's Harness Azure connector."
+
+  # The orchestrator principal itself, and it is not optional. The tenant grants
+  # it Application.ReadWrite.OwnedBy — rights over the apps it owns, nothing
+  # else — and Graph does not leave the creator as an owner: without this, the
+  # app is created fine and then nothing can ever delete it, so teardown wedges
+  # on a 403 (Authorization_RequestDenied) and retries forever.
+  owners = [data.azuread_client_config.current.object_id]
 }
 
 resource "azuread_service_principal" "this" {
   client_id = azuread_application.this.client_id
   # Nothing signs in interactively as this; it is a machine credential.
   description = "Workshop Orchestrator: Harness Azure connector."
+  owners      = [data.azuread_client_config.current.object_id]
 }
 
 # The client secret. Held in state (like the attendee passwords), which is how a

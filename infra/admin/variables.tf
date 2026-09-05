@@ -89,9 +89,12 @@ variable "harness_base_url" {
 #     role assignments. Contributor CANNOT create role assignments, so use
 #     Owner (simplest), or Contributor + User Access Administrator. It must be
 #     able to grant Owner, since challenge mode assigns competitors Owner.
-#   * Microsoft Graph, application permission (admin-consented): User.ReadWrite.All
-#     to create/delete attendee Entra users. (Directory.ReadWrite.All is a
-#     broader superset, not required.)
+#   * Microsoft Graph, application permissions (admin-consented): User.ReadWrite.All
+#     to create/delete attendee Entra users (Directory.ReadWrite.All is a
+#     broader superset, not required), plus Application.ReadWrite.OwnedBy for the
+#     event's Harness connector app registration. OwnedBy means exactly what it
+#     says, so modules/harness-azure-sp names this principal in `owners` — an app
+#     it does not own is one it cannot delete, and teardown wedges on the delete.
 # Also verify harnessevents.io in the tenant so attendee UPNs match their Google
 # address.
 variable "azure_subscription_id" {
