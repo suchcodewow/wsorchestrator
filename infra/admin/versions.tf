@@ -13,7 +13,7 @@ terraform {
   }
 
   # No backend block on purpose. This module's state is held by the Harness
-  # IaCM workspace `admin_control_plane` (org default, project default_project),
+  # IaCM workspace `admin_control_plane` (org operations, project orchestrator),
   # which supplies its own http backend at init time. A backend block committed
   # here would override that during pipeline execution and split the state in
   # two.

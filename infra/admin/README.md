@@ -315,8 +315,8 @@ changing them on an existing deployment does nothing. Roll with
 ### Continuous deployment
 
 Push to main applies infrastructure, builds, migrates, and rolls Cloud Run — in
-Harness, pipeline `deploy_workshop_orchestrator` (org `default`, project
-`default_project`). Nothing about that pipeline is declared here; Harness holds
+Harness, pipeline `deploy_workshop_orchestrator` (org `operations`, project
+`orchestrator`). Nothing about that pipeline is declared here; Harness holds
 its own repo connector and, in the `admin_control_plane` IaCM workspace, this
 module's state and variables.
 

@@ -1,8 +1,8 @@
 # Continuous deployment: a push to main builds both images, applies the SQL
 # migrations, and rolls Cloud Run onto the new tag.
 #
-# The pipeline itself lives in Harness — org `default`, project
-# `default_project`, pipeline `deploy_workshop_orchestrator`. It clones this
+# The pipeline itself lives in Harness — org `operations`, project
+# `orchestrator`, pipeline `deploy_workshop_orchestrator`. It clones this
 # repo, builds and pushes both images to Artifact Registry, applies the SQL
 # migrations, and updates Cloud Run, authenticating as build-sa via a JSON key
 # held in Harness's own secret manager.

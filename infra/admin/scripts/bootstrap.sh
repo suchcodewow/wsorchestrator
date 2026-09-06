@@ -31,7 +31,7 @@ cat <<'EOF'
 >> APIs enabled.
 
 State for this module belongs to the Harness IaCM workspace
-`admin_control_plane` (org default, project default_project). The pipeline
+`admin_control_plane` (org operations, project orchestrator). The pipeline
 initializes against it automatically; nothing to create here.
 
 To run tofu by hand:

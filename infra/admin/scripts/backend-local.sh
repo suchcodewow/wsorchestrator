@@ -17,8 +17,8 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 ACCOUNT="${HARNESS_ACCOUNT_ID:-8mh-FIIHQUapLuB6K0Cd-w}"
-ORG="${HARNESS_ORG_ID:-default}"
-PROJECT="${HARNESS_PROJECT_ID:-default_project}"
+ORG="${HARNESS_ORG_ID:-operations}"
+PROJECT="${HARNESS_PROJECT_ID:-orchestrator}"
 WORKSPACE="${HARNESS_WORKSPACE_ID:-admin_control_plane}"
 
 if [[ "${1:-}" == "--remove" ]]; then

@@ -230,7 +230,7 @@ make infra
 ```
 
 > **Where this config's own state lives.** In the Harness IaCM workspace
-> `admin_control_plane` (org `default`, project `default_project`), not in GCS.
+> `admin_control_plane` (org `operations`, project `orchestrator`), not in GCS.
 > That is why [`versions.tf`](infra/admin/versions.tf) has no backend block: the
 > workspace injects one at init time, and a committed block would override it
 > during pipeline runs and split the state in two. For hand-run plans,
@@ -343,9 +343,9 @@ registrar, and add `<domain>/api/auth/callback/google` to the OAuth client.
 ## Continuous deployment
 
 A push to `main` applies any infrastructure change, builds both images, applies
-the SQL migrations, and rolls Cloud Run. It runs in **Harness** — org `default`,
-project `default_project`, pipeline `deploy_workshop_orchestrator` — on Harness
-Cloud runners, in two stages:
+the SQL migrations, and rolls Cloud Run. It runs in **Harness** — org
+`operations`, project `orchestrator`, pipeline `deploy_workshop_orchestrator` —
+on Harness Cloud runners, in two stages:
 
 1. **Infrastructure**, an IaCM stage against the `admin_control_plane` workspace.
    The workspace owns this module's state, its OpenTofu version, its 29 variable
