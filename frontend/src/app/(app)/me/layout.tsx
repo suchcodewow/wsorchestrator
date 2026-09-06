@@ -1,4 +1,4 @@
-import { SettingsTabs } from "./settings-tabs";
+import { MySettingsTabs } from "./settings-tabs";
 
 /**
  * My settings — this account's own configuration, as opposed to `/settings`,
@@ -26,7 +26,7 @@ export default function MySettingsLayout({
         </p>
       </div>
 
-      <SettingsTabs />
+      <MySettingsTabs />
 
       {children}
     </div>

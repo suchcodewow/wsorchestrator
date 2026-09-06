@@ -1,32 +1,14 @@
-import { notFound, redirect } from "next/navigation";
-import { auth } from "@/auth";
-import { envAllowedDomains, listAllowedDomains } from "@/lib/allowed-domains";
-import { canManageSettings } from "@/lib/roles";
-import { isBootstrapAdmin } from "@/lib/site-admins";
-import { SettingsView } from "./settings-view";
+import { redirect } from "next/navigation";
+import { SITE_SETTINGS_TABS } from "./tabs";
 
-export default async function SettingsPage() {
-  const session = await auth();
-  if (!session?.user) redirect("/signin");
-  // Not a redirect: for anyone below administrator this page simply isn't
-  // there, and saying "forbidden" would only advertise it.
-  if (!canManageSettings(session.user.siteRole)) notFound();
-
-  const domains = await listAllowedDomains();
-
-  return (
-    <SettingsView
-      domains={domains.map((d) => ({
-        ...d,
-        // Serialized for the client component; the table only ever formats it.
-        createdAt: d.createdAt.toISOString(),
-      }))}
-      envDomains={envAllowedDomains()}
-      viewerEmail={session.user.email ?? ""}
-      // Whether this administrator is exempt from the list they are editing.
-      // The page says so rather than letting the "you'd lock yourself out"
-      // guard look inconsistent when it declines to fire for them.
-      viewerExempt={isBootstrapAdmin(session.user.email)}
-    />
-  );
+/**
+ * `/settings` is the address the sidebar links to, but there is no page at the
+ * top of a tab set — so it lands on the first tab. Taken from the tab list
+ * rather than hard-coded, so reordering the tabs moves the default with them.
+ *
+ * The layout has already required an administrator, so there is nothing to check
+ * here.
+ */
+export default function SiteSettingsPage() {
+  redirect(SITE_SETTINGS_TABS[0]!.href);
 }

@@ -42,11 +42,16 @@ locals {
   }
 
   # Secrets the runner/reaper/scheduler jobs read. The runner has no use for the
-  # OAuth or auth secrets; the rest it now shares with the app, which reads the
-  # same Harness and cloud credentials for the Cloud Status audit (see app.tf).
+  # OAuth secrets; the rest it now shares with the app, which reads the same
+  # Harness and cloud credentials for the Cloud Status audit (see app.tf).
   # Same non-sensitive gating as secret_ids.
+  #
+  # auth-secret is here for one reason: it is the key material the app seals
+  # administrator-entered org secrets with, and the runner has to open them to
+  # write them into each workshop's Harness org. It is not used for sessions in
+  # the runner — nothing there authenticates anybody.
   runner_secrets = concat(
-    ["database-url", "harness-api-key"],
+    ["database-url", "auth-secret", "harness-api-key"],
     var.azure_subscription_id != "" ? ["azure-client-secret"] : [],
     var.aws_access_key_id != "" ? ["aws-access-key-id", "aws-secret-access-key"] : [],
   )

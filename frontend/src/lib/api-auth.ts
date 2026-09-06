@@ -1,6 +1,8 @@
 import "server-only";
+import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { resolveToken, type TokenBearer } from "@/lib/api-tokens";
+import { canManageSettings } from "@/lib/roles";
 
 /**
  * Authenticate a request from either a browser session or a bundle token.
@@ -37,4 +39,39 @@ export async function sessionOrToken(
   if (!match) return null;
 
   return resolveToken(match[1]!);
+}
+
+/**
+ * The gate every site-settings route shares: signed in, and an administrator.
+ *
+ * Session only, and pointedly not `sessionOrToken` — see above. These routes
+ * change what every workshop is built with and store credentials for another
+ * system, which is the last thing a leaked bundle token should reach.
+ *
+ * Returns either the response to send or the user to act as, so a caller is one
+ * `if` away from the work instead of restating the two checks and their two
+ * different statuses.
+ */
+export async function requireAdministrator(): Promise<
+  | { error: NextResponse; user: null }
+  | { error: null; user: { id: string; email: string | null } }
+> {
+  const session = await auth();
+  if (!session?.user) {
+    return {
+      error: NextResponse.json({ error: "unauthorized" }, { status: 401 }),
+      user: null,
+    };
+  }
+  // Not 401: they are signed in, they just aren't allowed here.
+  if (!canManageSettings(session.user.siteRole)) {
+    return {
+      error: NextResponse.json({ error: "forbidden" }, { status: 403 }),
+      user: null,
+    };
+  }
+  return {
+    error: null,
+    user: { id: session.user.id, email: session.user.email ?? null },
+  };
 }

@@ -233,3 +233,268 @@ export async function checkHarnessToken(raw: string): Promise<CheckResult> {
     permissions,
   };
 }
+
+/* ------------------------------------------------------------------ *
+ * Scopes — the organizations and projects a token can see
+ * ------------------------------------------------------------------ */
+
+/**
+ * One organization or project, as something to pick from a list. Both endpoints
+ * answer with far more than this; the identifier is what gets stored and the
+ * name is what a person recognises, and nothing here needs the rest.
+ */
+export type HarnessScope = {
+  identifier: string;
+  /** What Harness calls it, falling back to the identifier if it has no name. */
+  name: string;
+};
+
+export type ScopeListResult =
+  | { ok: true; scopes: HarnessScope[] }
+  | { ok: false; error: CheckError; detail?: string };
+
+/** Harness caps a page at 100 for these list endpoints. */
+const PAGE_SIZE = 100;
+
+/**
+ * Enough for any real account, and a stop so a paging bug cannot spin here.
+ * An account with more organizations than this has a bigger problem than a
+ * truncated dropdown.
+ */
+const MAX_PAGES = 20;
+
+/** How a refusal on a list endpoint is classified. Same rules as the token check. */
+function listError(status: number, message: string): ScopeListResult {
+  if (status === 401 || status === 403) {
+    return { ok: false, error: "invalid_token", detail: message };
+  }
+  return { ok: false, error: "harness_error", detail: message };
+}
+
+/**
+ * Walk a paged Harness list endpoint, pulling one field out of each entry.
+ *
+ * The two endpoints wrap their payload differently — an organization arrives as
+ * `{ organization: {...} }` and a project as `{ project: {...} }` — so the
+ * unwrapping is the caller's, and everything else about paging is shared.
+ */
+async function listScopes(
+  token: string,
+  path: string,
+  unwrap: (entry: Record<string, unknown>) => Record<string, unknown> | undefined,
+): Promise<ScopeListResult> {
+  const scopes: HarnessScope[] = [];
+
+  for (let page = 0; page < MAX_PAGES; page++) {
+    let res: HarnessResponse<{ content?: Record<string, unknown>[] }>;
+    try {
+      res = await request<{ content?: Record<string, unknown>[] }>(
+        `${path}${path.includes("?") ? "&" : "?"}pageIndex=${page}&pageSize=${PAGE_SIZE}`,
+        token,
+      );
+    } catch (err) {
+      return {
+        ok: false,
+        error: "unreachable",
+        detail: err instanceof Error ? err.message : undefined,
+      };
+    }
+    if (!res.ok) return listError(res.status, res.message);
+
+    const content = res.data.content ?? [];
+    for (const entry of content) {
+      const inner = unwrap(entry);
+      const identifier = inner?.identifier;
+      if (typeof identifier !== "string" || identifier.length === 0) continue;
+      const name = inner?.name;
+      scopes.push({
+        identifier,
+        name: typeof name === "string" && name.length > 0 ? name : identifier,
+      });
+    }
+
+    // A short page is the last page. Cheaper to trust than `totalPages`, which
+    // is only present on some of these responses.
+    if (content.length < PAGE_SIZE) break;
+  }
+
+  // Sorted here rather than in the picker: this is the order somebody scans,
+  // and Harness returns creation order, which is nobody's mental model of a
+  // list of thirty organizations.
+  return {
+    ok: true,
+    scopes: scopes.sort((a, b) => a.name.localeCompare(b.name)),
+  };
+}
+
+/**
+ * Every organization the token can see. The account comes from the token
+ * itself, so this takes nothing but the token — which is what lets the form be
+ * one field and a button.
+ */
+export async function listHarnessOrgs(raw: string): Promise<ScopeListResult> {
+  const parsed = parseHarnessToken(raw.trim());
+  if (!parsed) return { ok: false, error: "malformed" };
+
+  return listScopes(
+    raw.trim(),
+    `/ng/api/organizations?accountIdentifier=${encodeURIComponent(parsed.accountId)}`,
+    (entry) => entry.organization as Record<string, unknown> | undefined,
+  );
+}
+
+/** Every project in one organization that the token can see. */
+export async function listHarnessProjects(
+  raw: string,
+  orgIdentifier: string,
+): Promise<ScopeListResult> {
+  const parsed = parseHarnessToken(raw.trim());
+  if (!parsed) return { ok: false, error: "malformed" };
+
+  return listScopes(
+    raw.trim(),
+    `/ng/api/projects?accountIdentifier=${encodeURIComponent(parsed.accountId)}` +
+      `&orgIdentifier=${encodeURIComponent(orgIdentifier)}`,
+    (entry) => entry.project as Record<string, unknown> | undefined,
+  );
+}
+
+/**
+ * Whether a token still works and the org (and project) it names are still
+ * there — the check behind the tick or the cross on each template source.
+ *
+ * Three findings rather than one boolean, because they fail for different
+ * reasons and want different fixes: a revoked token is pasted again, a deleted
+ * org means the row should go, and a project that has moved is a row to edit.
+ * The distinction is drawn from the status Harness answers with — 401 is the
+ * credential, 404 is the thing it asked for.
+ *
+ * A 403 counts against the *scope*, not the token: a valid token that may not
+ * view an org cannot read templates from it either, so "this source does not
+ * work" is the truthful reading and the token is not the part to replace.
+ */
+export type SourceCheck = {
+  tokenOk: boolean;
+  orgOk: boolean;
+  /** Null when the source names no project — there is nothing to check. */
+  projectOk: boolean | null;
+  /**
+   * What Harness currently calls them, when the lookup succeeded. Saving reads
+   * the names from here rather than taking the picker's word for them, and a
+   * re-check is also how a renamed org gets noticed.
+   */
+  orgName?: string | null;
+  projectName?: string | null;
+  /** What Harness said, when it said anything worth passing on. */
+  detail?: string;
+};
+
+/** `{ organization: { name } }` and `{ project: { name } }`, defensively read. */
+function nameIn(data: unknown, key: "organization" | "project"): string | null {
+  const inner = (data as Record<string, unknown> | null)?.[key];
+  const name = (inner as Record<string, unknown> | undefined)?.name;
+  return typeof name === "string" && name.length > 0 ? name : null;
+}
+
+export async function checkTemplateSource(
+  raw: string,
+  orgIdentifier: string,
+  projectIdentifier?: string | null,
+): Promise<SourceCheck> {
+  const token = raw.trim();
+  const parsed = parseHarnessToken(token);
+  const wantsProject = Boolean(projectIdentifier);
+  if (!parsed) {
+    return {
+      tokenOk: false,
+      orgOk: false,
+      projectOk: wantsProject ? false : null,
+      detail: "The stored token is not in a shape Harness accepts.",
+    };
+  }
+
+  const account = `accountIdentifier=${encodeURIComponent(parsed.accountId)}`;
+  const org = `orgIdentifier=${encodeURIComponent(orgIdentifier)}`;
+
+  let orgRes: HarnessResponse<unknown>;
+  try {
+    orgRes = await request(
+      `/ng/api/organizations/${encodeURIComponent(orgIdentifier)}?${account}`,
+      token,
+    );
+  } catch (err) {
+    // Nothing was decided — Harness was not reached. Reported as everything
+    // failing, with the reason, rather than as a revoked token.
+    return {
+      tokenOk: false,
+      orgOk: false,
+      projectOk: wantsProject ? false : null,
+      detail: err instanceof Error ? err.message : "Could not reach Harness.",
+    };
+  }
+
+  if (!orgRes.ok && orgRes.status === 401) {
+    return {
+      tokenOk: false,
+      orgOk: false,
+      projectOk: wantsProject ? false : null,
+      detail: orgRes.message,
+    };
+  }
+  if (!orgRes.ok) {
+    return {
+      tokenOk: true,
+      orgOk: false,
+      projectOk: wantsProject ? false : null,
+      detail: orgRes.message,
+    };
+  }
+  const orgName = nameIn(orgRes.data, "organization");
+  if (!wantsProject) {
+    return { tokenOk: true, orgOk: true, projectOk: null, orgName };
+  }
+
+  let projectRes: HarnessResponse<unknown>;
+  try {
+    projectRes = await request(
+      `/ng/api/projects/${encodeURIComponent(projectIdentifier!)}?${account}&${org}`,
+      token,
+    );
+  } catch (err) {
+    return {
+      tokenOk: true,
+      orgOk: true,
+      projectOk: false,
+      orgName,
+      detail: err instanceof Error ? err.message : "Could not reach Harness.",
+    };
+  }
+
+  return {
+    tokenOk: true,
+    orgOk: true,
+    projectOk: projectRes.ok,
+    orgName,
+    projectName: projectRes.ok ? nameIn(projectRes.data, "project") : null,
+    detail: projectRes.ok ? undefined : projectRes.message,
+  };
+}
+
+/**
+ * What Harness calls an account, for naming a row. Null when the token cannot
+ * read it — which a token perfectly able to read an org's templates may not be,
+ * so this is enrichment and never a reason to refuse anything.
+ */
+export async function harnessAccountName(raw: string): Promise<string | null> {
+  const parsed = parseHarnessToken(raw.trim());
+  if (!parsed) return null;
+  try {
+    const res = await request<{ name?: string }>(
+      `/ng/api/accounts/${parsed.accountId}`,
+      raw.trim(),
+    );
+    return res.ok ? (res.data.name ?? null) : null;
+  } catch {
+    return null;
+  }
+}

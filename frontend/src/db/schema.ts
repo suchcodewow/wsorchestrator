@@ -1051,6 +1051,147 @@ export const ALLOWED_DOMAIN_LIMITS = { domain: 253, note: 200 } as const;
 
 export type AllowedEmailDomain = typeof allowedEmailDomains.$inferSelect;
 
+/**
+ * Whether an org secret's value is inline text or a file's contents. The two
+ * take different Harness endpoints — `SecretText` is JSON, `SecretFile` is
+ * multipart — which is the only reason the distinction is stored.
+ */
+export const ORG_SECRET_KINDS = ["text", "file"] as const;
+export type OrgSecretKind = (typeof ORG_SECRET_KINDS)[number];
+
+/**
+ * Secrets an administrator wants in every workshop's Harness organization.
+ *
+ * The catalog in `harness_components` already creates org secrets, and this is
+ * deliberately not that. A component's value is a `${...}` binding filled in by
+ * a run — a Terraform-minted cloud credential — so it is part of the recipe
+ * every workshop follows. These are the opposite: a constant the deployment
+ * happens to hold (a licence key, a shared registry password, a partner's
+ * service account JSON), typed in once, with no run-time input at all. Putting
+ * them in the catalog would mean editing a spec's literal value to rotate a
+ * credential and re-reviewing the diff, and would offer contributors a form
+ * with a dependency graph in it for something that has no dependencies.
+ *
+ * The runner reads these straight from this table — see `applyOrgSecrets` — and
+ * upserts them into the org right after it is created, so they are in place
+ * before the catalog is applied and a catalog connector may reference one as
+ * `org.<identifier>`.
+ *
+ * `identifier` is the Harness identifier *and* the name, because a secret is
+ * the one entity where those may be the same string (hyphens are legal in
+ * secret identifiers) and asking for a display name as well would be asking
+ * twice for the same answer.
+ */
+export const harnessOrgSecrets = pgTable(
+  "harness_org_secrets",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** Harness identifier, unique across the table — one value per name. */
+    identifier: text("identifier").notNull(),
+    /** `text` or `file`, from `ORG_SECRET_KINDS`. */
+    kind: text("kind").notNull(),
+    /** What the upload was called, for files. Null for an inline value. */
+    fileName: text("file_name"),
+    /**
+     * Length of the plaintext, so the list can say how big a value is without
+     * decrypting every row to find out.
+     */
+    bytes: integer("bytes").notNull(),
+    /**
+     * AES-256-GCM sealed value, and the only copy — the same treatment a saved
+     * Harness token gets, and for the same reason: the runner has to hand the
+     * real value to Harness later, so it cannot be hashed.
+     */
+    secret: bytea("secret").notNull(),
+    /** Who last set the value. Kept when they are deleted; the secret outlives them. */
+    updatedBy: text("updated_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [uniqueIndex("harness_org_secrets_identifier_idx").on(t.identifier)],
+);
+
+export const ORG_SECRET_LIMITS = {
+  /** Harness's own ceiling on an identifier. */
+  identifier: 128,
+  fileName: 255,
+  /**
+   * Per value. A service account key is a couple of kilobytes and a PEM chain
+   * rather less; anything approaching this is not a secret, it is a file that
+   * wants a bucket.
+   */
+  bytes: 256 * 1024,
+} as const;
+
+export type HarnessOrgSecret = typeof harnessOrgSecrets.$inferSelect;
+
+/**
+ * A Harness org — optionally narrowed to one project — that this deployment may
+ * read templates from, and the token that reads it.
+ *
+ * Distinct from `harness_tokens` in both scope and purpose. Those are personal:
+ * one user's credential, listed only to them, and never usable by anybody else.
+ * These are the site's, added by an administrator, and name a *place* as well
+ * as a credential — the org (and project) whose templates are on offer. So the
+ * row is the triple, not the token: the same token pointed at two orgs is two
+ * legitimate rows.
+ *
+ * Nothing consumes these yet. This is the list a template import reads, and it
+ * exists first because an administrator has to be able to say where templates
+ * come from before anything can go and get them.
+ */
+export const harnessTemplateSources = pgTable(
+  "harness_template_sources",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** Read out of the token itself — `<kind>.<accountId>.<tokenId>.<secret>`. */
+    accountId: text("account_id").notNull(),
+    /** What Harness calls that account, discovered when the token was saved. */
+    accountName: text("account_name"),
+    orgIdentifier: text("org_identifier").notNull(),
+    orgName: text("org_name"),
+    /**
+     * The project, or the empty string for "the whole org". Empty rather than
+     * null so the unique index below actually rejects a duplicate: Postgres
+     * treats nulls as distinct, so two org-wide rows for the same token would
+     * both be allowed.
+     */
+    projectIdentifier: text("project_identifier").notNull().default(""),
+    projectName: text("project_name"),
+    /** Last four characters of the token, so two rows can be told apart. */
+    tail: text("tail").notNull(),
+    /** SHA-256 of the whole token — the uniqueness key, never shown. */
+    fingerprint: text("fingerprint").notNull(),
+    /** AES-256-GCM sealed token. The only copy. */
+    secret: bytea("secret").notNull(),
+    /** Who added it. Kept when they are deleted — the source outlives them. */
+    addedBy: text("added_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("harness_template_sources_idx").on(
+      t.fingerprint,
+      t.orgIdentifier,
+      t.projectIdentifier,
+    ),
+  ],
+);
+
+/** How many template sources the site may hold. A list, not a database. */
+export const MAX_TEMPLATE_SOURCES = 25;
+
+export type HarnessTemplateSource = typeof harnessTemplateSources.$inferSelect;
+
 export type WorkshopRun = typeof workshopRuns.$inferSelect;
 export type LabGuide = typeof labGuides.$inferSelect;
 export type LabWorkshop = typeof labWorkshops.$inferSelect;

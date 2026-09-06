@@ -43,9 +43,15 @@ locals {
   # given cloud creates no empty secret for it.
   # Gated on non-sensitive vars (subscription id / access key id) so this map
   # stays non-sensitive and can drive the dynamic env block's for_each.
+  #
+  # AUTH_SECRET is the app's sealing key, shared with the runner so it can open
+  # the org secrets an administrator entered in Settings and write them into each
+  # workshop's Harness org — see `runner/src/secret-box.ts`. Without it those
+  # secrets are skipped with a line in the run log rather than failing the run.
   runner_secret_env = merge(
     {
       DATABASE_URL    = "database-url"
+      AUTH_SECRET     = "auth-secret"
       HARNESS_API_KEY = "harness-api-key"
     },
     var.azure_subscription_id != "" ? { ARM_CLIENT_SECRET = "azure-client-secret" } : {},

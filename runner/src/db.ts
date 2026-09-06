@@ -258,6 +258,60 @@ export async function loadCatalog(setId?: string): Promise<Component[]> {
   }));
 }
 
+/* ------------------------------------------------------------------ *
+ * Administrator-managed org secrets
+ * ------------------------------------------------------------------ */
+
+/** Mirrors `ORG_SECRET_KINDS` in the frontend's Drizzle schema. */
+export type OrgSecretKind = "text" | "file";
+
+/**
+ * One secret an administrator typed into the settings page, still sealed.
+ *
+ * Not a catalog `Component`, even though both end up as an org secret. A
+ * component carries `${...}` bindings resolved against the run and a place in a
+ * dependency graph, because its value is something this run *produced* — an AWS
+ * key the apply just minted. These are constants somebody entered once: a
+ * licence key, a shared service account, a webhook URL. Nothing about them
+ * depends on the run, so they need none of that machinery, and putting them
+ * through it would mean a graph node whose only edge is to nothing.
+ */
+export type OrgSecret = {
+  identifier: string;
+  kind: OrgSecretKind;
+  /** What the file was called when it was uploaded. Null for a text secret. */
+  fileName: string | null;
+  /** The sealed value — see `secret-box.ts`. */
+  secret: Buffer;
+};
+
+/**
+ * Every org secret the site has, in a stable order.
+ *
+ * Site-wide, so nothing here is scoped by run: these are applied to every
+ * workshop's organization, which is the point of them living in settings rather
+ * than on a run.
+ */
+export async function loadOrgSecrets(): Promise<OrgSecret[]> {
+  const { rows } = await pool.query<{
+    identifier: string;
+    kind: OrgSecretKind;
+    file_name: string | null;
+    secret: Buffer;
+  }>(
+    `select identifier, kind, file_name, secret
+       from harness_org_secrets
+      order by identifier`,
+  );
+
+  return rows.map((r) => ({
+    identifier: r.identifier,
+    kind: r.kind,
+    fileName: r.file_name,
+    secret: r.secret,
+  }));
+}
+
 /**
  * One thing this run has built, as the UI should name it.
  *

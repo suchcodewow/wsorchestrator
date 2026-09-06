@@ -36,6 +36,7 @@ import { recordOutputResources } from "./resources.js";
 import { summarize } from "./retry.js";
 import { displayName } from "./usernames.js";
 import { applyCatalog } from "./components.js";
+import { applyOrgSecrets } from "./org-secrets.js";
 import {
   createAttendeeRole,
   createOrg,
@@ -505,6 +506,11 @@ async function provisionHarness(run: RunRow): Promise<Record<string, unknown>> {
     detail: orgId,
     url: orgUrl(orgId),
   });
+
+  // The site's own secrets, before anything that might reference one. A catalog
+  // connector naming `org.<identifier>` is refused if the secret is not there
+  // yet, and the catalog's graph only orders components against each other.
+  await applyOrgSecrets(run, orgId);
 
   // The org-scope binding every attendee gets references this role, so it has
   // to exist before anyone is bound to it.

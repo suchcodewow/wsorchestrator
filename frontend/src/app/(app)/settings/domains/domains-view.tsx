@@ -33,7 +33,7 @@ function message(error: string | undefined, status: number) {
   return ERRORS[error ?? ""] ?? `Could not save (${status})`;
 }
 
-export function SettingsView({
+export function DomainsView({
   domains,
   envDomains,
   viewerEmail,
@@ -87,15 +87,8 @@ export function SettingsView({
       variants={staggerParent(0.05)}
       initial="hidden"
       animate="show"
-      className="space-y-8"
+      className="space-y-6"
     >
-      <motion.div variants={riseChild} className="space-y-1.5">
-        <h1 className="text-3xl font-medium tracking-tight">Settings</h1>
-        <p className="text-muted-foreground">
-          Site-wide configuration. Only administrators see this page.
-        </p>
-      </motion.div>
-
       <motion.div variants={riseChild} className="space-y-1.5">
         <h2 className="text-xl font-medium tracking-tight">Sign-in domains</h2>
         <p className="text-sm leading-relaxed text-muted-foreground">
