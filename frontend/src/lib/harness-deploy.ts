@@ -27,7 +27,9 @@ import { openSecret } from "@/lib/secret-box";
  *   * Settings → Org Secrets supplies the secret values, because a secret's
  *     value cannot be read back out of Harness — copying one from another
  *     organization is not a thing the platform permits, and this tab exists
- *     precisely so there is somewhere to keep the plaintext;
+ *     precisely so there is somewhere to keep the plaintext. Anything the content
+ *     references and that tab does not hold gets a placeholder rather than
+ *     stopping the entity that needed it — see `createFillingGaps`;
  *   * Settings → Templates supplies the *content*: each row names an
  *     organization (or one project in it) and carries its own token, and this
  *     reads connectors, templates, environments, and infrastructure definitions
@@ -389,6 +391,191 @@ const DESCRIPTION = "Deployed by Workshop Orchestrator.";
  */
 type Record_ = (step: DeployStep) => void;
 
+/* ------------------------------------------------------------------ *
+ * Placeholder secrets
+ * ------------------------------------------------------------------ */
+
+/**
+ * Standing in for a secret the source referenced and this site has no value for.
+ *
+ * The common failure copying content between accounts: a connector names
+ * `org.some_token`, that token was a value somebody typed into the *source*
+ * account, and Harness will not hand it back — so the connector is refused and
+ * everything downstream of it goes with it. A placeholder gets the shape of the
+ * organization built, and leaves exactly one thing to do by hand: put the real
+ * value in.
+ *
+ * `123` is deliberately obviously wrong. Anything that looks like a credential
+ * risks being left in place; a three-digit number fails at the first use and the
+ * secret says in its own description what it is.
+ */
+const PLACEHOLDER_VALUE = "123";
+
+const PLACEHOLDER_DESCRIPTION =
+  "Placeholder created by Workshop Orchestrator. The content deployed here " +
+  "references this secret and the real value was not available — replace it " +
+  "before anything uses it.";
+
+/**
+ * Rounds of "create what it named and try again" per entity. One entity can
+ * reference several missing secrets and Harness only reports the first, so this
+ * has to loop; the cap is what stops it looping forever on a refusal that keeps
+ * naming something new.
+ */
+const MAX_PLACEHOLDERS = 5;
+
+/**
+ * Harness's own words for it, and they carry the scope it looked in:
+ *
+ *   * `...with the id foo` — an `account.foo` reference, so account level;
+ *   * `...with the id foo  in organization myorg` — org level;
+ *   * `...with the id foo  in organization myorg in project myproj` — project.
+ *
+ * Which is why this is parsed rather than the reference being read out of the
+ * body being sent: the message says where Harness *looked*, and that is where the
+ * secret has to be for the retry to work. The double space is Harness's.
+ *
+ * Matched against the extracted `message` and not the raw response, and on
+ * identifier characters rather than non-whitespace, for the same reason: in the
+ * JSON body the message is followed immediately by `","correlationId":"…"`, and a
+ * greedy `\S+` reads all of that as the organization's name. Which it did, and
+ * every placeholder was then addressed to an organization called
+ * `MyOrg","correlationId":"4d8de80c…`, which of course does not exist — so each
+ * one failed, and so did the retry it was supposed to rescue.
+ */
+const MISSING_SECRET =
+  /No secret exists with the id\s+([\w.$-]+)(?:\s+in organization\s+([\w.$-]+))?(?:\s+in project\s+([\w.$-]+))?/;
+
+type MissingSecret = {
+  identifier: string;
+  /** Null for an account-level reference. */
+  org: string | null;
+  project: string | null;
+};
+
+function missingSecret(body: string): MissingSecret | null {
+  const match = MISSING_SECRET.exec(messageOf(body));
+  if (!match) return null;
+  return {
+    identifier: match[1]!,
+    org: match[2] ?? null,
+    project: match[3] ?? null,
+  };
+}
+
+/**
+ * Where a placeholder landed, as the report reads it. An account-level one is
+ * called out as such because it is the one thing here written *outside* the new
+ * organization — shared with everything else in the account, and worth seeing.
+ */
+const missingLabel = (missing: MissingSecret) =>
+  missing.project
+    ? `${missing.org} / ${missing.project}`
+    : (missing.org ?? "the account");
+
+async function createPlaceholder(
+  to: Scope,
+  missing: MissingSecret,
+): Promise<Reply> {
+  const scope = {
+    orgIdentifier: missing.org ?? undefined,
+    projectIdentifier: missing.project ?? undefined,
+  };
+  return harnessRequest(
+    to.token,
+    "POST",
+    "/ng/api/v2/secrets",
+    { accountIdentifier: to.accountId, ...scope },
+    {
+      secret: {
+        // The identifier doubles as the name, as everywhere else here: the
+        // reference is by identifier, and inventing a prettier name would put a
+        // string in Harness that nothing in the content refers to.
+        name: missing.identifier,
+        identifier: missing.identifier,
+        ...scope,
+        description: PLACEHOLDER_DESCRIPTION,
+        // Tagged twice over, so "which of these are fake" is a filter in Harness
+        // rather than a memory of what the report said.
+        tags: { ...TAGS, placeholder: "true" },
+        type: "SecretText",
+        spec: {
+          // Unprefixed, so it means the secret manager belonging to whichever
+          // scope this is going into — every scope Harness creates gets its own.
+          secretManagerIdentifier: "harnessSecretManager",
+          valueType: "Inline",
+          value: PLACEHOLDER_VALUE,
+        },
+      },
+    },
+  );
+}
+
+/**
+ * Create something, and if Harness refuses it for want of a secret, make a
+ * placeholder for that secret and try again.
+ *
+ * Every create goes through here, because any of them can reference a secret and
+ * only Harness knows which. The retry is driven entirely by what it says: no
+ * attempt is made to find secret references in the body being sent, since a
+ * reference can be nested anywhere in arbitrary YAML and Harness has already done
+ * that work by the time it refuses.
+ *
+ * A placeholder is only ever created for a secret Harness has just said is *not
+ * there*, so this cannot overwrite a real value — including the org secrets from
+ * Settings, which went in first and are found rather than reported missing.
+ *
+ * Each identifier is attempted once. If the retry fails naming the same secret
+ * again — the placeholder is a text secret and the field wanted a file, say —
+ * that is Harness's answer and it goes in the report as the entity's failure.
+ */
+async function createFillingGaps(
+  to: Scope,
+  send: () => Promise<Reply>,
+  record: Record_,
+): Promise<{ outcome: DeployOutcome; detail?: string }> {
+  let reply = await send();
+  const made: string[] = [];
+  const attempted = new Set<string>();
+
+  for (let round = 0; round < MAX_PLACEHOLDERS; round++) {
+    if (ok(reply) || isDuplicate(reply.status, reply.text)) break;
+
+    const missing = missingSecret(reply.text);
+    if (!missing || attempted.has(missing.identifier)) break;
+    attempted.add(missing.identifier);
+
+    const placeholder = await createPlaceholder(to, missing);
+    const result = outcomeOf(placeholder);
+    record({
+      scope: missingLabel(missing),
+      kind: "secret",
+      // Marked in the identifier rather than only in the detail: this is a
+      // secret with a wrong value in it, and that has to be legible in a list
+      // of forty lines somebody skims.
+      identifier: `${missing.identifier} (placeholder)`,
+      outcome: result.outcome,
+      detail:
+        result.detail ??
+        `Value ${PLACEHOLDER_VALUE} — referenced by the content being deployed, ` +
+          `and no real value for it was available.`,
+    });
+
+    // Nothing to retry against if the placeholder itself was refused.
+    if (result.outcome === "failed") break;
+    made.push(missing.identifier);
+    reply = await send();
+  }
+
+  const result = outcomeOf(reply);
+  return result.outcome === "created" && made.length > 0
+    ? {
+        outcome: "created",
+        detail: `Needed placeholder secrets: ${made.join(", ")}.`,
+      }
+    : result;
+}
+
 /**
  * Connectors, as they are: whatever type and spec the source has, re-addressed
  * to the target scope.
@@ -400,10 +587,9 @@ type Record_ = (step: DeployStep) => void;
  *
  * A connector referencing a secret says so as `org.<identifier>`, and those
  * references keep working here because the org secrets went in first under the
- * same identifiers. One referencing `account.<identifier>` will not: nothing in
- * this site's settings describes account-level content, so Harness refuses it
- * and the report says which reference it could not resolve. That is a real limit
- * of copying between accounts, and worth reporting rather than papering over.
+ * same identifiers. Anything else it names — an `account.` reference, or an
+ * `org.` one this site holds no value for — gets a placeholder instead of
+ * refusing the connector; see `createFillingGaps`.
  */
 async function copyConnectors(
   from: Scope,
@@ -440,26 +626,25 @@ async function copyConnectors(
     const rest = { ...connector };
     delete rest.accountIdentifier;
 
-    const reply = await harnessRequest(
-      to.token,
-      "POST",
-      "/ng/api/connectors",
-      scopeQuery(to),
-      {
-        connector: {
-          ...rest,
-          orgIdentifier: to.org,
-          projectIdentifier: to.project ?? undefined,
-          tags: { ...((connector.tags as Json | undefined) ?? {}), ...TAGS },
-        },
-      },
+    const outcome = await createFillingGaps(
+      to,
+      () =>
+        harnessRequest(to.token, "POST", "/ng/api/connectors", scopeQuery(to), {
+          connector: {
+            ...rest,
+            orgIdentifier: to.org,
+            projectIdentifier: to.project ?? undefined,
+            tags: { ...((connector.tags as Json | undefined) ?? {}), ...TAGS },
+          },
+        }),
+      record,
     );
 
     record({
       scope: scopeLabel(to),
       kind: "connector",
       identifier,
-      ...outcomeOf(reply),
+      ...outcome,
     });
   }
 }
@@ -560,19 +745,24 @@ async function copyTemplates(
     // `storeType=INLINE` says the template lives in Harness. Without it the
     // create is read as the start of a GitX flow and asks for repository
     // details that nothing here has.
-    const reply = await harnessRequest(
-      to.token,
-      "POST",
-      "/template/api/templates",
-      { ...scopeQuery(to), storeType: "INLINE" },
-      body,
+    const outcome = await createFillingGaps(
+      to,
+      () =>
+        harnessRequest(
+          to.token,
+          "POST",
+          "/template/api/templates",
+          { ...scopeQuery(to), storeType: "INLINE" },
+          body,
+        ),
+      record,
     );
 
     record({
       scope: scopeLabel(to),
       kind: "template",
       identifier: label,
-      ...outcomeOf(reply),
+      ...outcome,
     });
   }
 }
@@ -638,41 +828,51 @@ async function copyEnvironments(
       }
     }
 
-    const reply = await harnessRequest(
-      to.token,
-      "POST",
-      "/ng/api/environmentsV2",
-      { accountIdentifier: to.accountId },
-      {
-        identifier,
-        name,
-        orgIdentifier: to.org,
-        projectIdentifier: to.project ?? undefined,
-        description: DESCRIPTION,
-        tags: { ...((environment.tags as Json | undefined) ?? {}), ...TAGS },
-        // Harness rejects an environment with no type; `PreProduction` is the
-        // safer default of the two if the source somehow had none.
-        type: typeof environment.type === "string" ? environment.type : "PreProduction",
-        // The YAML is what carries everything else — variables, overrides — so
-        // it is sent when there is one, and the fields above stand alone when
-        // there is not.
-        ...(body === null ? {} : { yaml: body }),
-      },
+    const outcome = await createFillingGaps(
+      to,
+      () =>
+        harnessRequest(
+          to.token,
+          "POST",
+          "/ng/api/environmentsV2",
+          { accountIdentifier: to.accountId },
+          {
+            identifier,
+            name,
+            orgIdentifier: to.org,
+            projectIdentifier: to.project ?? undefined,
+            description: DESCRIPTION,
+            tags: {
+              ...((environment.tags as Json | undefined) ?? {}),
+              ...TAGS,
+            },
+            // Harness rejects an environment with no type; `PreProduction` is
+            // the safer default of the two if the source somehow had none.
+            type:
+              typeof environment.type === "string"
+                ? environment.type
+                : "PreProduction",
+            // The YAML is what carries everything else — variables, overrides —
+            // so it is sent when there is one, and the fields above stand alone
+            // when there is not.
+            ...(body === null ? {} : { yaml: body }),
+          },
+        ),
+      record,
     );
 
-    const result = outcomeOf(reply);
     record({
       scope: scopeLabel(to),
       kind: "environment",
       identifier,
-      ...result,
+      ...outcome,
     });
 
     await copyInfrastructures(
       from,
       to,
       identifier,
-      result.outcome === "failed" ? result.detail : null,
+      outcome.outcome === "failed" ? outcome.detail : null,
       record,
     );
   }
@@ -768,30 +968,38 @@ async function copyInfrastructures(
       continue;
     }
 
-    const reply = await harnessRequest(
-      to.token,
-      "POST",
-      "/ng/api/infrastructures",
-      { accountIdentifier: to.accountId },
-      {
-        identifier,
-        name,
-        orgIdentifier: to.org,
-        projectIdentifier: to.project ?? undefined,
-        environmentRef: environment,
-        description: DESCRIPTION,
-        tags: { ...((infrastructure.tags as Json | undefined) ?? {}), ...TAGS },
-        type: infrastructure.type,
-        deploymentType: infrastructure.deploymentType,
-        yaml: body,
-      },
+    const outcome = await createFillingGaps(
+      to,
+      () =>
+        harnessRequest(
+          to.token,
+          "POST",
+          "/ng/api/infrastructures",
+          { accountIdentifier: to.accountId },
+          {
+            identifier,
+            name,
+            orgIdentifier: to.org,
+            projectIdentifier: to.project ?? undefined,
+            environmentRef: environment,
+            description: DESCRIPTION,
+            tags: {
+              ...((infrastructure.tags as Json | undefined) ?? {}),
+              ...TAGS,
+            },
+            type: infrastructure.type,
+            deploymentType: infrastructure.deploymentType,
+            yaml: body,
+          },
+        ),
+      record,
     );
 
     record({
       scope: scopeLabel(to),
       kind: "infrastructure",
       identifier: label,
-      ...outcomeOf(reply),
+      ...outcome,
     });
   }
 }
