@@ -257,8 +257,14 @@ export function WorkshopEditor({
         />
       </div>
 
-      <div className="grid gap-2">
-        <div className="flex items-end justify-between gap-4">
+      {/*
+        Contents is one bordered card — heading, list and picker on the same
+        surface. The picker used to be a box of its own floating under the list,
+        which left it reading as a third thing on the page rather than as the
+        way to fill the list directly above it.
+      */}
+      <section className="overflow-hidden rounded-xl border bg-card/40 dark:bg-card/50">
+        <div className="flex flex-col items-start gap-3 border-b bg-muted/30 px-4 py-3 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
           <div>
             <h2 className="text-sm font-medium">Contents</h2>
             <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
@@ -269,7 +275,7 @@ export function WorkshopEditor({
 
           <Button
             type="button"
-            variant="outline"
+            variant={picking ? "secondary" : "outline"}
             size="sm"
             disabled={full}
             onClick={() => setPicking((p) => !p)}
@@ -279,87 +285,101 @@ export function WorkshopEditor({
           </Button>
         </div>
 
-        {chosen.length === 0 ? (
-          <div className="rounded-lg border border-dashed p-6 text-center">
-            <p className="text-sm font-medium">No guides yet</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              A workshop with no contents can be saved, but there is nothing to
-              read until you add one.
-            </p>
-          </div>
-        ) : (
-          <ol className="grid gap-2">
-            {chosen.map((guide, i) => (
-              <li
-                key={guide.id}
-                className="flex items-center gap-3 rounded-lg border bg-card/60 dark:bg-card p-3"
-              >
-                <span className="tnum w-5 shrink-0 text-center text-sm text-muted-foreground">
-                  {i + 1}
-                </span>
-
-                <span className="min-w-0 flex-1">
-                  <span className="truncate text-sm font-medium">
-                    {guide.title}
+        <div className="grid gap-2 p-4">
+          {chosen.length === 0 ? (
+            <div className="rounded-lg border border-dashed p-6 text-center">
+              <p className="text-sm font-medium">No guides yet</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                A workshop with no contents can be saved, but there is
+                nothing to read until you add one.
+              </p>
+            </div>
+          ) : (
+            // A grid item's automatic minimum size is its min-content width,
+            // which the nowrap titles below made wider than the card on a
+            // narrow screen — the truncation never got a width to truncate
+            // against. `min-w-0` lets this list shrink inside the card, and the
+            // explicit `minmax(0, 1fr)` column lets each row shrink inside it.
+            <ol className="grid min-w-0 grid-cols-1 gap-2">
+              {chosen.map((guide, i) => (
+                <li
+                  key={guide.id}
+                  className="flex items-center gap-3 rounded-lg border bg-card/60 dark:bg-card p-3"
+                >
+                  <span className="tnum w-5 shrink-0 text-center text-sm text-muted-foreground">
+                    {i + 1}
                   </span>
-                  {guide.summary && (
-                    <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-                      {guide.summary}
+
+                  {/* `truncate` needs a block box to clip in — as an inline
+                      span it only stops the text wrapping, which pushed these
+                      rows wider than the card on a phone. */}
+                  <span className="block min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium">
+                      {guide.title}
                     </span>
-                  )}
-                </span>
+                    {guide.summary && (
+                      <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                        {guide.summary}
+                      </span>
+                    )}
+                  </span>
 
-                <span className="flex shrink-0 items-center gap-0.5">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    animate={false}
-                    disabled={i === 0}
-                    aria-label={`Move ${guide.title} up`}
-                    onClick={() => move(i, -1)}
-                  >
-                    <ChevronUp />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    animate={false}
-                    disabled={i === chosen.length - 1}
-                    aria-label={`Move ${guide.title} down`}
-                    onClick={() => move(i, 1)}
-                  >
-                    <ChevronDown />
-                  </Button>
-                  {/* Reading it beats guessing from the title; the dialog
-                      itself offers the full page for anything longer. */}
-                  <GuidePreviewDialog guide={guide} />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    animate={false}
-                    aria-label={`Remove ${guide.title}`}
-                    onClick={() => remove(guide.id)}
-                    className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                  >
-                    <X />
-                  </Button>
-                </span>
-              </li>
-            ))}
-          </ol>
-        )}
+                  <span className="flex shrink-0 items-center gap-0.5">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      animate={false}
+                      disabled={i === 0}
+                      aria-label={`Move ${guide.title} up`}
+                      onClick={() => move(i, -1)}
+                    >
+                      <ChevronUp />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      animate={false}
+                      disabled={i === chosen.length - 1}
+                      aria-label={`Move ${guide.title} down`}
+                      onClick={() => move(i, 1)}
+                    >
+                      <ChevronDown />
+                    </Button>
+                    {/* Reading it beats guessing from the title; the dialog
+                        itself offers the full page for anything longer. */}
+                    <GuidePreviewDialog guide={guide} />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      animate={false}
+                      aria-label={`Remove ${guide.title}`}
+                      onClick={() => remove(guide.id)}
+                      className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                    >
+                      <X />
+                    </Button>
+                  </span>
+                </li>
+              ))}
+            </ol>
+          )}
 
-        {full && (
-          <p className="text-xs text-muted-foreground">
-            A workshop holds at most {LAB_WORKSHOP_LIMITS.guides} guides.
-          </p>
-        )}
+          {full && (
+            <p className="text-xs text-muted-foreground">
+              A workshop holds at most {LAB_WORKSHOP_LIMITS.guides} guides.
+            </p>
+          )}
+        </div>
 
         {picking && (
-          <div className="mt-1 grid gap-2 rounded-lg border p-3">
+          <div className="grid gap-3 border-t bg-muted/60 p-4">
+            <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+              Add to these contents
+            </p>
+
             {/* Fill on the wrapper — the icon shares the box, so the box is
                 the field. */}
             <div className="flex items-center gap-2 rounded-md border border-input bg-field px-2.5">
@@ -369,7 +389,7 @@ export function WorkshopEditor({
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search guides…"
                 autoFocus
-                className="h-8 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                className="h-9 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
               />
             </div>
 
@@ -380,7 +400,7 @@ export function WorkshopEditor({
                   : "No guide matches that."}
               </p>
             ) : (
-              <ul className="max-h-72 overflow-y-auto">
+              <ul className="max-h-72 min-w-0 overflow-y-auto">
                 {/*
                   Two controls side by side rather than one nested in the other:
                   "add this" and "let me read it first" are different
@@ -400,8 +420,10 @@ export function WorkshopEditor({
                       )}
                     >
                       <Plus className="size-3.5 shrink-0 text-muted-foreground" />
-                      <span className="min-w-0 flex-1">
-                        <span className="truncate text-sm">{guide.title}</span>
+                      <span className="block min-w-0 flex-1">
+                        <span className="block truncate text-sm">
+                          {guide.title}
+                        </span>
                         {guide.summary && (
                           <span className="mt-0.5 block truncate text-xs text-muted-foreground">
                             {guide.summary}
@@ -417,32 +439,42 @@ export function WorkshopEditor({
             )}
 
             {/*
+              The second way in, given equal weight to the search above it: a
+              filled, full-width button rather than the ghost row this was,
+              which sat quietly under the results and read as a caption.
+
               Always here, whether or not the search found anything. This used
               to live inside the empty state, which meant the way to write a new
               guide vanished the moment there was an existing one to list —
               exactly backwards, since a workshop with guides in it is when an
               author is most likely to notice the one that is missing.
             */}
-            <div className="border-t pt-2">
+            <div className="grid gap-2">
+              <div className="flex items-center gap-3">
+                <span className="h-px flex-1 bg-border" />
+                <span className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                  or
+                </span>
+                <span className="h-px flex-1 bg-border" />
+              </div>
+
               <Button
                 type="button"
-                variant="ghost"
-                size="sm"
                 disabled={busy}
                 onClick={() => void saveThenWriteGuide()}
-                className="w-full justify-start"
+                className="w-full"
               >
                 {saving ? <Loader2 className="animate-spin" /> : <PenLine />}
                 Write a new guide
               </Button>
-              <p className="px-3 pb-1 text-xs leading-relaxed text-muted-foreground">
+              <p className="text-xs leading-relaxed text-muted-foreground">
                 This workshop is saved first, so nothing here is lost — you come
                 back to it with the new guide already at the end.
               </p>
             </div>
           </div>
         )}
-      </div>
+      </section>
 
       <label className="flex cursor-pointer items-start gap-3 rounded-lg border p-3 text-sm">
         <input
