@@ -40,6 +40,26 @@ resource "google_cloud_run_v2_service" "app" {
   template {
     service_account = google_service_account.app.email
 
+    # Revision-level scaling — distinct from the service-level `scaling` block
+    # ignored above, and safe to declare here.
+    #
+    # One warm instance, because scaling from zero is not the cost this service
+    # actually pays for being idle. The container starts in about a second, but
+    # its Postgres pool starts empty, so the first request after an idle period
+    # dials Cloud SQL through the connector — and when that dial stalls it
+    # stalls for a full 10s. Paired with the pool's idle timeout in
+    # `frontend/src/db/index.ts`: that keeps a connection alive across pauses in
+    # authoring, and this keeps the container that holds it alive at all.
+    #
+    # max is 20 rather than the provider default of 100 — it was already set on
+    # the service out-of-band, and declaring the block without it would have
+    # quietly raised the ceiling. A room of attendees is tens of readers, not
+    # hundreds, and a runaway loop against a 1-vCPU database is worth capping.
+    scaling {
+      min_instance_count = 1
+      max_instance_count = 20
+    }
+
     volumes {
       name = "cloudsql"
       cloud_sql_instance {
