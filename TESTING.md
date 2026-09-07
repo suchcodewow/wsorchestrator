@@ -93,6 +93,15 @@ appears twice means the fix never landed. Both of those are visible now.
   and not the source, which is a weakness; converting the pipeline to a
   git-backed (REMOTE) definition would remove the class of drift entirely and is
   the right next move on this file.
+
+  **The gate was checked against a failing commit, not just a passing one.** A
+  green stage that cannot go red is worth nothing, so a throwaway branch with one
+  deliberately false assertion was run through the pipeline (run 14,
+  2026-09-07): Verify failed, and `infra` and `build_migrate_deploy` both
+  reported `Skipped`. Nothing was applied, built, pushed, or deployed. Worth
+  repeating that check if the pipeline's stage conditions are ever edited — it is
+  a minute of work and it is the only thing that distinguishes a gate from a
+  decoration.
 - `runner/Dockerfile` now runs `tofu validate` on all ten Terraform roots
   alongside the `tofu init` it already did. Free, and fails the image instead of
   a workshop. This one runs inside the image build, so it gates both paths
