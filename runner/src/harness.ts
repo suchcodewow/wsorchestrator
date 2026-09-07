@@ -119,13 +119,44 @@ function messageOf(body: string): string {
 }
 
 /**
- * Harness reports "already exists" inconsistently — sometimes 409, sometimes
- * 400 with a DUPLICATE_FIELD code — so both shapes are treated as success.
+ * Refusals that mean "what you asked for is already true", phrased in a way the
+ * generic duplicate check above does not catch.
+ *
+ * `already part of User Group` is the one that matters: adding an attendee to a
+ * scope with `POST /ng/api/user/users` is not atomic on Harness's side. The
+ * membership and the role binding both land, and *then* the response comes back
+ * 400 — wrapped twice over, as
+ *
+ *   Invalid request: Invalid format of YAML payload: HTTP Error Status
+ *   (400 - Invalid Format) received. Invalid request: User <uuid> is already
+ *   part of User Group _project_all_users
+ *
+ * which says nothing about a duplicate and reads like a malformed payload. It
+ * has killed two runs mid-roster (2026-08-21 at `_organization_all_users`,
+ * 2026-09-07 at `_project_all_users`), and both times the binding it claimed to
+ * have refused was there afterwards — verified against the account: the
+ * attendee held `_project_admin` on `_all_project_level_resources` in the very
+ * project the run gave up on. Both group names appear, hence the scope-agnostic
+ * match.
+ *
+ * Every entry here has been observed in production. Adding a signature on a
+ * hunch is how a real refusal gets swallowed, so each one belongs to a run that
+ * failed on it, and `harness-errors.test.ts` pins the verbatim string.
  */
-function isDuplicate(status: number, body: string): boolean {
+const ALREADY_SATISFIED = [
+  /already part of user group/i,
+];
+
+/**
+ * Harness reports "already exists" inconsistently — sometimes 409, sometimes
+ * 400 with a DUPLICATE_FIELD code — so both shapes are treated as success, as
+ * are the `ALREADY_SATISFIED` refusals that mean the same thing in other words.
+ */
+export function isDuplicate(status: number, body: string): boolean {
   return (
     status === 409 ||
-    /DUPLICATE_FIELD|already exists|duplicate/i.test(body)
+    /DUPLICATE_FIELD|already exists|duplicate/i.test(body) ||
+    ALREADY_SATISFIED.some((sig) => sig.test(body))
   );
 }
 
@@ -406,6 +437,12 @@ type Scope = "account" | "organization" | "project";
  * the query carries: neither is account, org alone is organization, both is
  * project. Assigning a role a user already has is treated as a duplicate, so
  * re-running is safe.
+ *
+ * Returns whether Harness answered "already a member" (see `ALREADY_SATISFIED`).
+ * That answer is reported rather than swallowed because it is the one case where
+ * the call succeeds without us having watched it do anything: every run that has
+ * hit it did end up with the binding, but if that ever stops being true the log
+ * line is what says which attendee to look at.
  */
 async function assignRole(
   email: string,
@@ -413,8 +450,8 @@ async function assignRole(
   scopeLevel: Scope,
   role: { identifier: string; name: string },
   resourceGroup: { identifier: string; name: string },
-): Promise<void> {
-  await api("POST", "/ng/api/user/users", query, {
+): Promise<boolean> {
+  const { duplicate } = await api("POST", "/ng/api/user/users", query, {
     emails: [email],
     roleBindings: [
       {
@@ -433,12 +470,13 @@ async function assignRole(
       },
     ],
   });
+  return duplicate;
 }
 
 /** Make the run's creator an administrator of the whole Harness account. */
-export async function grantAccountAdmin(email: string): Promise<void> {
+export async function grantAccountAdmin(email: string): Promise<boolean> {
   const cfg = harnessCfg();
-  await assignRole(
+  return assignRole(
     email,
     {},
     "account",
@@ -455,9 +493,9 @@ export async function grantProjectAdmin(
   orgId: string,
   projectId: string,
   email: string,
-): Promise<void> {
+): Promise<boolean> {
   const cfg = harnessCfg();
-  await assignRole(
+  return assignRole(
     email,
     { orgIdentifier: orgId, projectIdentifier: projectId },
     "project",
@@ -477,9 +515,9 @@ export async function grantProjectAdmin(
 export async function grantOrgAttendee(
   orgId: string,
   email: string,
-): Promise<void> {
+): Promise<boolean> {
   const cfg = harnessCfg();
-  await assignRole(
+  return assignRole(
     email,
     { orgIdentifier: orgId },
     "organization",

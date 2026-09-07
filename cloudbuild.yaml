@@ -33,6 +33,29 @@ availableSecrets:
       env: DATABASE_URL_SOCKET
 
 steps:
+  # Runs before anything is built, and fails the build if it fails.
+  #
+  # The runner ships as raw TypeScript executed by tsx — there is no compile step
+  # anywhere between a commit and a Cloud Run Job provisioning a live workshop,
+  # so until this step existed a type error or a broken error-classifier reached
+  # production unexamined and surfaced as a failed run in front of a room.
+  #
+  # `npm run verify` is typecheck plus the unit suite, which is ~90ms of actual
+  # work; the install dominates. The tests are pure — no cloud, no database, no
+  # credentials — so this step is safe to run on every build, including the
+  # `make images` path where _DEPLOY is false. The frontend is not checked here
+  # because `next build` in build-app already typechecks it and would fail.
+  - id: verify
+    name: node:22-slim
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        cd runner
+        npm ci --no-audit --no-fund --silent
+        npm run verify
+
   # A bash step rather than exec-form args, so the build timestamp can be taken
   # here — Cloud Build has no built-in substitution for it. `_TAG` is the short
   # commit SHA from both callers, so the pair identifies the build exactly; the

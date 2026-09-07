@@ -78,11 +78,22 @@ COPY terraform ./terraform
 # One cache shared across roots, so aws-base and aws-per-user hold a single
 # copy between them rather than one each. `-backend=false` keeps this offline:
 # the backend is configured per run, with the run's own state prefix.
+#
+# Each root is also validated here, which costs nothing once it is initialised
+# and fails the image build rather than a workshop. Terraform faults are the
+# other half of this project's failed runs and they are almost all static: an
+# undefined variable, a bad reference, a wrong type. `validate` needs no
+# credentials and no state, so there is no reason for one to first be discovered
+# by a room full of attendees. It does not catch everything — an `Invalid
+# for_each argument` over apply-time values is a plan-time error and needs a real
+# plan — but it catches the cheap half for free.
 ENV TF_PLUGIN_CACHE_DIR=/opt/tofu-plugins
 RUN mkdir -p "$TF_PLUGIN_CACHE_DIR" \
   && for root in terraform/workshops/*/ terraform/challenges/*/ terraform/delegates/*/; do \
        echo "==> $root" \
-       && (cd "$root" && tofu init -backend=false -input=false -no-color); \
+       && (cd "$root" \
+           && tofu init -backend=false -input=false -no-color \
+           && tofu validate -no-color); \
      done \
   && du -sh "$TF_PLUGIN_CACHE_DIR"
 

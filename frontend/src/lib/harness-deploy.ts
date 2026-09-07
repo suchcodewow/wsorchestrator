@@ -6,6 +6,7 @@ import type { DeployError } from "@/lib/harness-deploy-errors";
 import { harnessIdentifier } from "@/lib/harness-identifier";
 import { orgSecretValues } from "@/lib/harness-org-secrets";
 import { ACCOUNT_ADMIN } from "@/lib/harness-permissions";
+import { isDuplicate, isRetryable } from "@/lib/harness-retry";
 import {
   harnessBaseUrl,
   harnessOrgUrl,
@@ -117,20 +118,6 @@ const TIMEOUT_MS = 30_000;
 const MAX_ATTEMPTS = 3;
 
 type Reply = { status: number; text: string };
-
-/**
- * Worth trying again: Harness's own 5xx and the rate limiter.
- *
- * A 500 straight after creating a scope is not the fatal condition it looks
- * like — Harness propagates a new organization asynchronously, and the first
- * write into it can land before the RBAC machinery has caught up. The runner
- * learned this the same way; see `runner/src/harness.ts`.
- */
-const isRetryable = (status: number) => status === 429 || status >= 500;
-
-/** Harness reports "already exists" as a 409 sometimes and a 400 others. */
-const isDuplicate = (status: number, body: string) =>
-  status === 409 || /DUPLICATE_FIELD|already exists|duplicate/i.test(body);
 
 /** Harness puts the reason in `message`, and on a 5xx a traceable id beside it. */
 function messageOf(body: string): string {

@@ -30,6 +30,11 @@ import {
   writeTfvars,
 } from "./workspace.js";
 import { tfApply, tfInit, tfOutput } from "./terraform.js";
+import {
+  awsRetryKind,
+  isGkeCapacityError,
+  type AwsRetryKind,
+} from "./classify.js";
 import { issueAccessPass, tapPolicy } from "./graph.js";
 import { allocateEmails, createAccount, createOrgUnit } from "./directory.js";
 import { recordOutputResources } from "./resources.js";
@@ -585,8 +590,25 @@ async function provisionHarness(run: RunRow): Promise<Record<string, unknown>> {
     const { givenName, familyName } = displayName(email.split("@")[0] ?? email);
 
     await createProject(orgId, projectId, `${givenName} ${familyName}`);
-    await grantProjectAdmin(orgId, projectId, email);
-    await grantOrgAttendee(orgId, email);
+    // A `true` here is Harness answering "already a member" — the response it
+    // sends *after* having applied the binding anyway (see `ALREADY_SATISFIED`
+    // in harness.ts). Noted rather than ignored: the run rightly carries on, but
+    // this is the one grant nobody watched land, so the log says whose it was.
+    const alreadyProject = await grantProjectAdmin(orgId, projectId, email);
+    const alreadyOrg = await grantOrgAttendee(orgId, email);
+    if (alreadyProject || alreadyOrg) {
+      await log(
+        run.id,
+        "stdout",
+        `${email} was already a member of ${
+          alreadyProject && alreadyOrg
+            ? `project ${projectId} and org ${orgId}`
+            : alreadyProject
+              ? `project ${projectId}`
+              : `org ${orgId}`
+        } — Harness reported the binding as already applied`,
+      );
+    }
     projectUrls[email] = projectUrl(orgId, projectId);
 
     await log(run.id, "stdout", `${email} -> admin of project ${projectId}`);
@@ -598,81 +620,6 @@ async function provisionHarness(run: RunRow): Promise<Record<string, unknown>> {
     harness_org_url: orgUrl(orgId),
     harness_project_urls: projectUrls,
   };
-}
-
-/**
- * Substrings that mark a GKE apply failure as "this zone can't give us the
- * cluster right now" rather than a real config error, so the runner should try
- * another zone rather than give up. Two shapes:
- *   - an explicit GCE stockout (the zone immediately reports no room), and
- *   - a create that ran past `create_timeout` (a capacity-starved zone where
- *     GKE keeps retrying the initial node internally instead of erroring —
- *     Terraform surfaces this as a "timeout while waiting for state" / context
- *     deadline). Bounding the timeout in the module is what turns that silent
- *     hang into a prompt, catchable failure.
- */
-const GKE_CAPACITY_SIGNATURES = [
-  "does not have enough resources available",
-  "zone_resource_pool_exhausted",
-  "resource pool exhausted",
-  "try a different location",
-  "timeout while waiting for state to become",
-  "context deadline exceeded",
-];
-
-function isGkeCapacityError(text: string): boolean {
-  const t = text.toLowerCase();
-  return GKE_CAPACITY_SIGNATURES.some((s) => t.includes(s));
-}
-
-/**
- * Signatures AWS Organizations returns when the organization is already busy
- * with another account operation.
- *
- * The management account is shared by every AWS run, and Organizations
- * processes account creation one at a time across the whole org — so two
- * workshops starting together contend on it even though their state, their
- * accounts, and everything else about them are separate. The AWS provider
- * retries only `FinalizingOrganizationException` itself; a
- * `ConcurrentModificationException` is modelled as a client fault and is not
- * retried by the SDK either, so without this the second workshop of a pair
- * just fails.
- */
-const AWS_ORG_CONTENTION_SIGNATURES = [
-  "concurrentmodificationexception",
-  "finalizingorganizationexception",
-  "toomanyrequestsexception",
-  "throttlingexception",
-];
-
-/**
- * Signatures a member account returns while it is still being switched on.
- *
- * Organizations reports an account ACTIVE the moment CreateAccount finishes,
- * but only IAM is usable that early: for the first few minutes every EC2 call
- * comes back `OptInRequired` ("You are not subscribed to this service"). The
- * apply that creates the account goes straight on to build the cluster inside
- * it, so it walks into exactly that window — the attendee users and the
- * cluster's IAM roles land, and everything touching EC2 fails. Waiting and
- * re-applying resumes there.
- */
-const AWS_ACCOUNT_WARMUP_SIGNATURES = [
-  "optinrequired",
-  "not subscribed to this service",
-];
-
-/** Why an AWS apply is worth another attempt rather than being a real failure. */
-type AwsRetryKind = "contention" | "warmup";
-
-function awsRetryKind(text: string): AwsRetryKind | null {
-  const t = text.toLowerCase();
-  if (AWS_ORG_CONTENTION_SIGNATURES.some((sig) => t.includes(sig))) {
-    return "contention";
-  }
-  if (AWS_ACCOUNT_WARMUP_SIGNATURES.some((sig) => t.includes(sig))) {
-    return "warmup";
-  }
-  return null;
 }
 
 /**

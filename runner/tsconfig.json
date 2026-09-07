@@ -9,7 +9,14 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "noEmit": true,
-    "forceConsistentCasingInFileNames": true
+    "forceConsistentCasingInFileNames": true,
+    // The tests import the frontend's mirrored copies of `isDuplicate` and
+    // `harnessIdentifier` directly, to assert the two implementations agree.
+    // Those live outside this package and have no build output to point at, so
+    // the import names the `.ts` file — legal only under `noEmit`, which is set.
+    "allowImportingTsExtensions": true
   },
-  "include": ["src/**/*.ts"]
+  // Tests are typechecked too. They reach into `../frontend`, so a change to a
+  // shared signature there fails here rather than at runtime in a workshop.
+  "include": ["src/**/*.ts", "test/**/*.ts"]
 }

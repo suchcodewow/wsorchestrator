@@ -5,7 +5,10 @@
   "type": "module",
   "scripts": {
     "start": "tsx src/index.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test test/*.test.ts",
+    "test:watch": "tsx --test --watch test/*.test.ts",
+    "verify": "npm run typecheck && npm run test"
   },
   "dependencies": {
     "google-auth-library": "^9.15.0",

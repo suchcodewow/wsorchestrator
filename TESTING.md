@@ -1,0 +1,145 @@
+# Testing the orchestrator
+
+Written after `aws-cardinal` (2026-09-07) failed halfway through its roster on a
+Harness reply that meant "already done". The same reply had failed
+`aws-platform-team` on 2026-08-21. Nothing in between changed, because nothing
+in this repository could notice.
+
+That is the actual reliability problem. Not that the clouds are flaky — they are,
+and always will be — but that **every lesson learned from a failed run has been
+stored in a comment**. Comments do not fail a build. So each fix held only for as
+long as someone remembered it, and the same string came back seventeen days
+later and cost another workshop.
+
+## What the failures actually are
+
+Every provisioning failure in `workshop_runs` to date, by cause:
+
+| Cause | Runs hit | Where it is decided | Testable without a cloud? |
+| --- | --- | --- | --- |
+| A partner API refuses something it already did | 3 | `isDuplicate` | **Yes** |
+| A new cloud identity is not usable yet | 4 | `awsRetryKind` | **Yes** |
+| A zone has no capacity | — | `isGkeCapacityError` | **Yes** |
+| Static Terraform error | 1 | `tofu validate` / `plan` | **Yes** |
+| Stale state lock from a killed run | 2 | nothing yet | Partly |
+| Teardown retried forever on an impossible destroy | 2 | `reap.ts` | **Yes** |
+| An API not yet enabled in a fresh project | 1 | Terraform | No |
+
+The shape of that table is the finding. Nearly every failure is **a pure function
+reading a string and reaching the wrong conclusion** — and until now not one of
+those functions had a single test. Not one. `npm run typecheck` existed in
+`runner/package.json` and nothing ever ran it; the runner ships raw TypeScript
+executed by `tsx`, so there was no compile step of any kind between a commit and
+a live workshop.
+
+## Layer 1 — the classifiers (in place)
+
+`runner/test/` runs on every build. 82 tests, ~90ms, no cloud, no database, no
+credentials.
+
+The centre of it is `test/fixtures/production-failures.ts`: **the verbatim text of
+every message a real run has died on**, each tagged with the run and date it came
+from and the verdict the runner should reach. The tests are a loop over that
+corpus. Its value is not cleverness, it is that an August failure cannot recur in
+October without going red first.
+
+Also covered, because they are equally pure and equally consequential:
+
+- `harnessIdentifier` / `orgIdentifier` / `projectIdentifier` — asserted against
+  Harness's own identifier regex over real workshop names and adversarial ones
+  (reserved words, leading digits, combining marks, 200 characters, emoji).
+  Teardown recomputes these from the name, so instability here orphans an org.
+- `retry.ts` — that a refusal comes back **unchanged and immediately** (the
+  409-means-already-exists path in `directory.ts` depends on it), and that
+  Google's HTML error page is recognised as the 5xx it is.
+
+Two rules are deliberately duplicated between the runner and the frontend, and
+both files say they are meant to agree. `harness-errors.test.ts` and
+`identifier.test.ts` now run one corpus through **both copies** and fail if they
+drift. That is what makes the duplication safe rather than a slow leak.
+
+### The workflow this is for
+
+When a run fails on a provider message, **add the fixture before the fix**:
+
+1. Paste the verbatim message into `production-failures.ts` with its run, date,
+   expected verdict, and why.
+2. Run `npm test` in `runner/`. It must fail, and for the right reason.
+3. Fix the classifier. It must pass.
+
+The order matters. It proves the test exercises the real defect, and it puts the
+knowledge somewhere executable instead of in a commit message nobody re-reads. A
+fixture dated *after* a fix that was meant to handle it is a regression; one that
+appears twice means the fix never landed. Both of those are visible now.
+
+## Layer 2 — static checks (in place)
+
+- `cloudbuild.yaml` gains a `verify` step that runs **before anything is built**:
+  `npm run verify` in `runner/` (typecheck + tests). This is the gate that was
+  missing entirely.
+- `runner/Dockerfile` now runs `tofu validate` on all ten Terraform roots
+  alongside the `tofu init` it already did. Free, and fails the image instead of
+  a workshop.
+
+`tofu validate` does not catch everything. The `Invalid for_each argument` that
+killed `aws-platform-team` on 2026-08-20 is a *plan*-time error over apply-time
+values, and needs a real plan against real credentials — see layer 3.
+
+## Layer 3 — a nightly run against the real APIs (recommended next)
+
+Layers 1 and 2 cannot catch a partner API changing its behaviour, which is what
+both Harness failures were. Only talking to it can.
+
+The mechanism already exists: **`harness_only` sandbox mode**. It creates an org,
+the attendee role, one project, and the role bindings — the exact sequence that
+failed on 2026-09-07 — and touches no cloud account, so it costs a few seconds
+and nothing per night.
+
+Recommended: a Cloud Scheduler job that starts a `harness_only` run against a
+throwaway workshop name, asserts it reaches `ready`, and tears it down. Today's
+bug would have surfaced within 24 hours, on a name nobody was presenting to.
+
+Worth adding beside it, in rough order of value per unit of effort:
+
+1. **A `tofu plan` of each root against real credentials**, nightly. Catches the
+   `for_each` class and any provider-version drift, without creating anything.
+2. **A full one-attendee workshop per cloud**, weekly. The only thing that
+   exercises account creation, the warm-up windows, and teardown end to end.
+   Time-box it and alert on the failure, not the duration.
+3. **Assert on the run's outputs, not just its status.** `ready` currently means
+   "no step threw". It should mean the attendee has a project, a role binding,
+   and a working credential — which is what an attendee will find out for us
+   otherwise. The check against the Harness account that confirmed today's
+   diagnosis (`_project_admin` on `_all_project_level_resources`) is exactly the
+   assertion worth automating.
+
+## Two open defects this investigation surfaced
+
+Neither is fixed here; both are worth knowing about.
+
+**Teardown retries forever.** `reap.ts` catches any destroy failure and leaves the
+run for the next tick, with no attempt cap and no backoff. A closed AWS account
+leaves its organization on AWS's schedule, not within the provider's 10-minute
+wait, so `aws_organizations_account` destroy can never succeed — and the reaper
+keeps trying. Run `aws-platform` has logged **572 destroy attempts over two
+days** and is still going; `zone-b-dfae0a` has been `destroying` since
+2026-08-06. This needs an attempt cap and a terminal `destroy_failed` state that
+asks for a human, rather than a silent infinite loop.
+
+**Teardown reads IAM with the wrong credentials.** During `aws-platform`'s
+destroy, `iam:GetUser` on the attendee users was refused as
+`arn:aws:iam::654129064688:user/workshop-orchestrator is not authorized` — that
+is the *management* account's user reaching for resources that live in the member
+account, rather than assuming a role into it. Pinned as a fixture
+(`aws-iam-access-denied-orchestrator`) with `expect: "fail"`, because the
+tempting fix — adding `accessdenied` to the warm-up signatures — would convert a
+missing IAM policy into an eleven-minute wait that then reports the wrong cause.
+
+## Running it
+
+```sh
+cd runner
+npm test          # the suite, ~90ms
+npm run test:watch
+npm run verify    # typecheck + tests, what CI runs
+```
