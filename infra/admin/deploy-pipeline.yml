@@ -1,0 +1,347 @@
+pipeline:
+  name: Deploy Workshop Orchestrator
+  identifier: deploy_workshop_orchestrator
+  projectIdentifier: orchestrator
+  orgIdentifier: operations
+  description: |
+    Verifies the commit, applies infrastructure, builds both images, applies the
+    SQL migrations, and rolls Cloud Run. A port of cloudbuild.yaml plus the
+    `make infra` step that used to be manual, running on Harness Cloud.
+
+    Stage order is deliberate:
+      1. Verify — typecheck and unit-test the runner before anything is applied,
+         built, or deployed. The runner ships as raw TypeScript executed by tsx,
+         so this is the only compile step between a commit and a Cloud Run Job
+         provisioning a live workshop. Its unit suite is the corpus of every
+         provider message a real run has died on (see TESTING.md); most of this
+         project's failed workshops were a pure function reading one of those
+         strings and reaching the wrong conclusion. Cheap, and it fails here
+         rather than in front of a room.
+      2. Infrastructure — an IACM stage against the `admin_control_plane`
+         workspace. Runs before the build so a commit that changes an env var or
+         a Cloud Run setting takes effect in the same run that ships the code.
+         The Cloud Run resources ignore_changes on their image, so this never
+         fights stage 3.
+      3. Build/migrate/deploy — migrations run BEFORE the new image goes live.
+         They only ever add columns with defaults, so the currently-running
+         revision keeps working against the migrated schema. The reverse order
+         would serve a new image against a schema missing the columns it reads
+         on every request.
+
+    Variables:
+      verify      "false" skips the verify stage. Present as an escape hatch for
+                  an emergency roll-forward, not as a normal setting.
+      run_infra   "false" skips the infrastructure stage entirely.
+      apply_infra "false" plans but never applies — drift detection only. With
+                  "true" the apply still only runs if the plan reported changes.
+      deploy      "false" builds and pushes only, the old _DEPLOY=false mode.
+
+    Everything the OpenTofu module needs — the 29 variables that used to live in
+    the git-ignored infra/admin/terraform.tfvars, the GCP credential, and the
+    provisioner version — belongs to the workspace, not to this pipeline. So
+    does the state. That is the point of the IACM stage: the workspace owns the
+    state and the inputs, so nothing has to be reconstructed in the runner
+    container on every run.
+
+    A copy of this YAML is committed at infra/admin/deploy-pipeline.yml so the
+    deploy path is reviewable and diffable in the repo. The pipeline is stored
+    INLINE in Harness, so that copy is a mirror, not the source — update both.
+  properties:
+    ci:
+      codebase:
+        connectorRef: github_wsorchestrator
+        build: <+input>
+  variables:
+    - name: verify
+      type: String
+      description: "\"true\" typechecks and unit-tests the runner before anything else runs; \"false\" skips the gate."
+      required: false
+      value: <+input>.default(true).allowedValues(true,false)
+    - name: run_infra
+      type: String
+      description: "\"true\" runs the infrastructure stage; \"false\" skips it."
+      required: false
+      value: <+input>.default(true).allowedValues(true,false)
+    - name: apply_infra
+      type: String
+      description: "\"true\" applies the plan; \"false\" plans only, leaving the workspace's drift visible without changing anything."
+      required: false
+      value: <+input>.default(true).allowedValues(true,false)
+    - name: deploy
+      type: String
+      description: "\"true\" applies migrations and rolls Cloud Run; \"false\" builds and pushes only."
+      required: false
+      value: <+input>.default(true).allowedValues(true,false)
+    - name: gcp_project
+      type: String
+      description: GCP admin project that owns the registry, Cloud Run, and Cloud SQL.
+      required: false
+      value: administration-459416
+    - name: region
+      type: String
+      description: Cloud Run / Artifact Registry region.
+      required: false
+      value: us-central1
+    - name: repo
+      type: String
+      description: Artifact Registry path every image tag is built from.
+      required: false
+      value: us-central1-docker.pkg.dev/administration-459416/workshop-orchestrator
+    - name: db_conn
+      type: String
+      description: Cloud SQL instance connection name for cloud-sql-proxy.
+      required: false
+      value: administration-459416:us-central1:workshops-db
+    - name: app_service
+      type: String
+      description: Cloud Run service running the app image.
+      required: false
+      value: workshop-orchestrator
+    - name: runner_jobs
+      type: String
+      description: Space-separated Cloud Run jobs that all run the runner image.
+      required: false
+      value: tf-runner tf-reaper tf-scheduler
+  stages:
+    - stage:
+        name: Verify
+        identifier: verify
+        type: CI
+        spec:
+          cloneCodebase: true
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec: {}
+          execution:
+            steps:
+              - step:
+                  type: Run
+                  name: Typecheck and Test Runner
+                  identifier: verify_runner
+                  timeout: 10m
+                  spec:
+                    shell: Sh
+                    image: node:22-slim
+                    command: |
+                      set -eu
+                      cd runner
+                      # `npm ci` rather than `npm install` so the versions match
+                      # the lockfile the image is built from — a test that passes
+                      # against re-resolved caret ranges has verified something
+                      # other than what ships.
+                      npm ci --no-audit --no-fund --silent
+                      # typecheck + the unit suite. ~90ms of actual work; the
+                      # install dominates. Pure — no cloud, no database, no
+                      # credentials — so it is safe on every commit.
+                      npm run verify
+        when:
+          pipelineStatus: Success
+          condition: <+pipeline.variables.verify> == "true"
+    - stage:
+        name: Infrastructure
+        identifier: infra
+        type: IACM
+        spec:
+          workspace: admin_control_plane
+          cloneCodebase: false
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec: {}
+          execution:
+            steps:
+              - step:
+                  type: IACMTerraformPlugin
+                  name: Init
+                  identifier: init
+                  timeout: 20m
+                  spec:
+                    command: init
+              - step:
+                  type: IACMTerraformPlugin
+                  name: Plan
+                  identifier: plan
+                  timeout: 30m
+                  spec:
+                    command: plan
+              - step:
+                  type: IACMTerraformPlugin
+                  name: Apply
+                  identifier: apply
+                  timeout: 60m
+                  spec:
+                    command: apply
+                  when:
+                    stageStatus: Success
+                    condition: <+pipeline.variables.apply_infra> == "true" && (<+steps.plan.output.outputVariables['plannedChanges.added']> != "0" || <+steps.plan.output.outputVariables['plannedChanges.changed']> != "0" || <+steps.plan.output.outputVariables['plannedChanges.deleted']> != "0")
+        when:
+          pipelineStatus: Success
+          condition: <+pipeline.variables.run_infra> == "true"
+    - stage:
+        name: Build Migrate Deploy
+        identifier: build_migrate_deploy
+        type: CI
+        spec:
+          cloneCodebase: true
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec:
+              size: large
+          execution:
+            steps:
+              - step:
+                  type: Run
+                  name: Resolve Build Time
+                  identifier: resolve_build_time
+                  spec:
+                    shell: Sh
+                    image: alpine:3.20
+                    command: |
+                      set -eu
+                      export BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+                      echo "BUILD_TIME=$BUILD_TIME"
+                    outputVariables:
+                      - name: BUILD_TIME
+              - step:
+                  type: BuildAndPushGAR
+                  name: Build and Push App
+                  identifier: build_push_app
+                  spec:
+                    connectorRef: gcp_build_sa
+                    host: us-central1-docker.pkg.dev
+                    projectID: administration-459416
+                    imageName: workshop-orchestrator/app
+                    tags:
+                      - <+codebase.shortCommitSha>
+                      - latest
+                    dockerfile: frontend/Dockerfile
+                    context: frontend
+                    buildArgs:
+                      BUILD_TAG: <+codebase.shortCommitSha>
+                      BUILD_TIME: <+steps.resolve_build_time.output.outputVariables.BUILD_TIME>
+              - step:
+                  type: BuildAndPushGAR
+                  name: Build and Push Runner
+                  identifier: build_push_runner
+                  spec:
+                    connectorRef: gcp_build_sa
+                    host: us-central1-docker.pkg.dev
+                    projectID: administration-459416
+                    imageName: workshop-orchestrator/runner
+                    tags:
+                      - <+codebase.shortCommitSha>
+                      - latest
+                    dockerfile: runner/Dockerfile
+                    context: runner
+              - step:
+                  type: Run
+                  name: Fetch Database URL
+                  identifier: fetch_db_url
+                  spec:
+                    shell: Bash
+                    image: google/cloud-sdk:slim
+                    envVariables:
+                      GCP_KEY_B64: <+secrets.getValue("gcp_build_sa_key_b64")>
+                      GCP_PROJECT: <+pipeline.variables.gcp_project>
+                    command: |
+                      set -euo pipefail
+                      umask 077
+                      printf '%s' "$GCP_KEY_B64" | base64 -d > /tmp/sa.json
+                      gcloud auth activate-service-account --key-file /tmp/sa.json --quiet
+                      gcloud secrets versions access latest --secret=database-url \
+                        --project "$GCP_PROJECT" > /harness/.db_url
+                      rm -f /tmp/sa.json
+                      echo "fetched database-url ($(wc -c < /harness/.db_url) bytes)"
+                  when:
+                    stageStatus: Success
+                    condition: <+pipeline.variables.deploy> == "true"
+              - step:
+                  type: Run
+                  name: Migrate Database
+                  identifier: migrate
+                  spec:
+                    shell: Bash
+                    image: node:22-slim
+                    envVariables:
+                      GCP_KEY_B64: <+secrets.getValue("gcp_build_sa_key_b64")>
+                      DB_CONN: <+pipeline.variables.db_conn>
+                    command: |
+                      set -euo pipefail
+                      umask 077
+                      apt-get update -qq && apt-get install -y -qq curl ca-certificates >/dev/null
+
+                      curl -sSL -o /usr/local/bin/cloud-sql-proxy \
+                        https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.14.1/cloud-sql-proxy.linux.amd64
+                      chmod +x /usr/local/bin/cloud-sql-proxy
+
+                      printf '%s' "$GCP_KEY_B64" | base64 -d > /tmp/sa.json
+
+                      # The stored URL points at the Cloud Run connector socket.
+                      # Swap in the proxy's TCP endpoint, exactly as
+                      # scripts/with-db.sh does locally, so the credentials keep
+                      # a single source of truth.
+                      DATABASE_URL_SOCKET="$(cat /harness/.db_url)"
+                      CREDS="$(printf '%s' "$DATABASE_URL_SOCKET" | sed -E 's#^postgresql://([^@]+)@.*#\1#')"
+                      DBNAME="$(printf '%s' "$DATABASE_URL_SOCKET" | sed -E 's#.*/([^/?]+)\?.*#\1#')"
+                      export DATABASE_URL="postgresql://${CREDS}@127.0.0.1:5432/${DBNAME}"
+
+                      cloud-sql-proxy --credentials-file /tmp/sa.json --port 5432 "$DB_CONN" &
+                      for _ in $(seq 1 30); do
+                        (exec 3<>/dev/tcp/127.0.0.1/5432) 2>/dev/null && break
+                        sleep 1
+                      done
+
+                      # apply-sql.mjs needs only `pg`; a full `npm ci` of the
+                      # frontend would cost minutes to install one dependency.
+                      cd frontend
+                      npm install pg --no-save --no-audit --no-fund --silent
+                      node scripts/apply-sql.mjs
+
+                      rm -f /tmp/sa.json /harness/.db_url
+                  when:
+                    stageStatus: Success
+                    condition: <+pipeline.variables.deploy> == "true"
+              - step:
+                  type: Run
+                  name: Deploy Cloud Run
+                  identifier: deploy
+                  spec:
+                    shell: Bash
+                    image: google/cloud-sdk:slim
+                    envVariables:
+                      GCP_KEY_B64: <+secrets.getValue("gcp_build_sa_key_b64")>
+                      GCP_PROJECT: <+pipeline.variables.gcp_project>
+                      REGION: <+pipeline.variables.region>
+                      REPO: <+pipeline.variables.repo>
+                      APP_SERVICE: <+pipeline.variables.app_service>
+                      RUNNER_JOBS: <+pipeline.variables.runner_jobs>
+                      TAG: <+codebase.shortCommitSha>
+                    command: |
+                      set -euo pipefail
+                      umask 077
+                      printf '%s' "$GCP_KEY_B64" | base64 -d > /tmp/sa.json
+                      gcloud auth activate-service-account --key-file /tmp/sa.json --quiet
+                      rm -f /tmp/sa.json
+
+                      gcloud run services update "$APP_SERVICE" \
+                        --project "$GCP_PROJECT" --region "$REGION" \
+                        --image "$REPO/app:$TAG"
+
+                      # All three jobs run the same runner image.
+                      for job in $RUNNER_JOBS; do
+                        gcloud run jobs update "$job" \
+                          --project "$GCP_PROJECT" --region "$REGION" \
+                          --image "$REPO/runner:$TAG"
+                      done
+                  when:
+                    stageStatus: Success
+                    condition: <+pipeline.variables.deploy> == "true"
+        description: ""

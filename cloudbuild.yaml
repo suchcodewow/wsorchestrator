@@ -1,12 +1,17 @@
 # Builds both images, applies the SQL migrations, and rolls Cloud Run.
 #
-# Two callers, one file:
+# NOT the deploy path. A push to main runs the Harness pipeline
+# `deploy_workshop_orchestrator` (org `operations`, project `orchestrator`,
+# mirrored at infra/admin/deploy-pipeline.yml) — the Cloud Build trigger was
+# removed at that cutover. This file survives for one caller:
 #
 #   make images   — builds and pushes only. `_DEPLOY` stays "false", so the
 #                   migrate and deploy steps exit immediately.
-#   push to main  — the `deploy-on-push-main` trigger (infra/admin/cicd.tf)
-#                   sets _DEPLOY=true and fills the rest of the substitutions
-#                   from Terraform outputs.
+#
+# The `_DEPLOY=true` path below therefore only runs if someone invokes it by
+# hand. It is kept working as a break-glass route for when Harness is the thing
+# that is down, which is not hypothetical for a tool that deploys Harness
+# workshops.
 #
 # Ordering is deliberate: migrations run BEFORE the new image goes live. They
 # only ever add columns with defaults, so the currently-running revision keeps
@@ -33,7 +38,9 @@ availableSecrets:
       env: DATABASE_URL_SOCKET
 
 steps:
-  # Runs before anything is built, and fails the build if it fails.
+  # Runs before anything is built, and fails the build if it fails. Mirrors the
+  # Verify stage that gates the real deploy path, so the break-glass route and
+  # the normal one apply the same standard.
   #
   # The runner ships as raw TypeScript executed by tsx — there is no compile step
   # anywhere between a commit and a Cloud Run Job provisioning a live workshop,

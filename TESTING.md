@@ -74,12 +74,29 @@ appears twice means the fix never landed. Both of those are visible now.
 
 ## Layer 2 — static checks (in place)
 
-- `cloudbuild.yaml` gains a `verify` step that runs **before anything is built**:
-  `npm run verify` in `runner/` (typecheck + tests). This is the gate that was
-  missing entirely.
+- The Harness pipeline `deploy_workshop_orchestrator` gains a **Verify stage**,
+  first, ahead of the infrastructure apply and both image builds: `npm ci &&
+  npm run verify` in `runner/`. This is the gate that was missing entirely, and
+  it is on the path a push to main actually takes.
+
+  Worth being explicit about why it took two tries to put it in the right place:
+  a `verify` step was first added to `cloudbuild.yaml`, which reads like the
+  deploy path and no longer is. The Cloud Build trigger was removed when CD moved
+  to Harness, so that step gates only `make images`. **A test that cannot fail a
+  deploy is a comment.** That is the same failure mode this whole document is
+  about, one level up. The step is kept there anyway — `make images` is the
+  break-glass route for when Harness is down — but the pipeline is the gate.
+
+  The pipeline is stored INLINE in Harness and so was not in the repository at
+  all: unreviewable, undiffable, and no record of who changed the deploy path or
+  when. It is now mirrored at `infra/admin/deploy-pipeline.yml`. That is a mirror
+  and not the source, which is a weakness; converting the pipeline to a
+  git-backed (REMOTE) definition would remove the class of drift entirely and is
+  the right next move on this file.
 - `runner/Dockerfile` now runs `tofu validate` on all ten Terraform roots
   alongside the `tofu init` it already did. Free, and fails the image instead of
-  a workshop.
+  a workshop. This one runs inside the image build, so it gates both paths
+  already.
 
 `tofu validate` does not catch everything. The `Invalid for_each argument` that
 killed `aws-platform-team` on 2026-08-20 is a *plan*-time error over apply-time

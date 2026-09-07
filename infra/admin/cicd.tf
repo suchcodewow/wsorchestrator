@@ -2,16 +2,20 @@
 # migrations, and rolls Cloud Run onto the new tag.
 #
 # The pipeline itself lives in Harness — org `operations`, project
-# `orchestrator`, pipeline `deploy_workshop_orchestrator`. It clones this
-# repo, builds and pushes both images to Artifact Registry, applies the SQL
-# migrations, and updates Cloud Run, authenticating as build-sa via a JSON key
-# held in Harness's own secret manager.
+# `orchestrator`, pipeline `deploy_workshop_orchestrator`. It verifies the
+# commit, applies this workspace, builds and pushes both images to Artifact
+# Registry, applies the SQL migrations, and updates Cloud Run, authenticating as
+# build-sa via a JSON key held in Harness's own secret manager.
 #
-# Nothing about that pipeline is expressed here. Cloud Build's trigger, its
-# GitHub App connection, and the repository link used to live in this file and
-# were removed at the cutover — leaving them would have meant two systems
-# racing to deploy the same commit. `cloudbuild.yaml` is kept at the repo root
-# because `make images` still uses it for a manual build-and-push.
+# Nothing about that pipeline is expressed here — it is stored INLINE in Harness
+# and mirrored, for review and diffing only, at `deploy-pipeline.yml` beside this
+# file. Editing that copy deploys nothing; the pipeline has to be updated in
+# Harness too. Cloud Build's trigger, its GitHub App connection, and the
+# repository link used to live in this file and were removed at the cutover —
+# leaving them would have meant two systems racing to deploy the same commit.
+# `cloudbuild.yaml` is kept at the repo root because `make images` still uses it
+# for a manual build-and-push, so a step added there gates that route and not
+# the deploy.
 #
 # What remains is only the IAM build-sa needs beyond building: `enable_cicd`
 # gates these grants, so setting it false strips build-sa back to
