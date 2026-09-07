@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { harnessBaseUrl } from "@/lib/harness-platform";
+import { scrubWindowDays } from "@/lib/harness-scrub";
 import { listHarnessTokens } from "@/lib/harness-tokens";
 import { canManageSettings } from "@/lib/roles";
 import { secretsConfigured } from "@/lib/secret-box";
@@ -27,6 +28,11 @@ export default async function MyTokensPage() {
       // already administers those pages — the Harness permission on the token
       // is the second half of the gate, not the whole of it.
       canDeploy={canManageSettings(session.user.siteRole)}
+      // How long a deploy's real credentials live in the other account. Env
+      // configured, so the prompt has to be told rather than assume a week —
+      // and it says it up front, because the whole arrangement only works if
+      // whoever deploys knows the values are temporary.
+      scrubDays={scrubWindowDays()}
     />
   );
 }

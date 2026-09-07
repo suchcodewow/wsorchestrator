@@ -8,13 +8,16 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
+  Eraser,
   Eye,
   EyeOff,
   ExternalLink,
+  KeyRound,
   Loader2,
   Plus,
   RefreshCw,
   Rocket,
+  ShieldCheck,
   Trash2,
   X,
 } from "lucide-react";
@@ -27,6 +30,7 @@ import { messageFor as deployMessageFor } from "@/lib/harness-deploy-errors";
 import { harnessIdentifier } from "@/lib/harness-identifier";
 import { messageFor } from "@/lib/harness-token-errors";
 import { administersAccount, permissionLabel } from "@/lib/harness-permissions";
+import type { ScrubRun, ScrubSummary } from "@/lib/harness-scrub";
 import type { HarnessTokenSummary } from "@/lib/harness-tokens";
 import { riseChild, staggerParent } from "@/lib/motion";
 import { cn } from "@/lib/utils";
@@ -52,6 +56,27 @@ const stamp = (iso: string) =>
     minute: "2-digit",
   });
 
+/**
+ * How long until a deadline, in the largest unit that still says something.
+ *
+ * Days for the normal case — the window is a week — hours on the last day, and
+ * "any moment now" once it is past, which is the truth: the sweep runs on a
+ * timer, so a deadline in the past means the next tick, not that nothing
+ * happened.
+ */
+function until(iso: string): string {
+  const ms = new Date(iso).getTime() - Date.now();
+  if (ms <= 0) return "any moment now";
+  const hours = Math.round(ms / 3_600_000);
+  if (hours < 24) return `in ${hours} hour${hours === 1 ? "" : "s"}`;
+  const days = Math.round(hours / 24);
+  return `in ${days} day${days === 1 ? "" : "s"}`;
+}
+
+/** Whether a token has any deployed credentials on record at all. */
+const hasScrubRecord = (s: ScrubSummary) =>
+  s.pending + s.scrubbed + s.skipped + s.failed > 0;
+
 /** What Harness calls the principal, in words somebody would recognise. */
 const PRINCIPAL_LABEL: Record<string, string> = {
   USER: "Personal token",
@@ -70,11 +95,14 @@ export function HarnessTokensView({
   baseUrl,
   configured,
   canDeploy,
+  scrubDays,
 }: {
   tokens: HarnessTokenSummary[];
   baseUrl: string;
   /** Whether an encryption key exists. Without one nothing can be saved. */
   configured: boolean;
+  /** Days a deploy's real secret values live before being scrubbed to `123`. */
+  scrubDays: number;
   /**
    * Whether this user may administer site settings. Half the deploy gate — the
    * other half is the token administering its Harness account — because a deploy
@@ -159,9 +187,47 @@ export function HarnessTokensView({
   }
 
   async function remove(id: string) {
-    if (await call(id, `/api/me/harness-tokens/${id}`, { method: "DELETE" })) {
-      router.refresh();
+    const body = await call(id, `/api/me/harness-tokens/${id}`, {
+      method: "DELETE",
+    });
+    if (!body) return;
+
+    // Removing a token scrubs what it deployed first, because afterwards nothing
+    // can — so anything left behind has to be said here. This is the last moment
+    // somebody is looking at a row that is about to stop existing.
+    const scrub = body.scrub as ScrubRun | null;
+    if (scrub && scrub.problems.length > 0) {
+      setError(
+        `Token removed, but ${scrub.problems.length} of this site's secrets could ` +
+          `not be scrubbed from Harness: ${scrub.problems
+            .map((p) => p.secretIdentifier)
+            .join(", ")}. Nothing here can reach them now — remove them in ` +
+          `Harness by hand.`,
+      );
+    } else if (scrub && scrub.scrubbed > 0) {
+      setSaved(
+        `Token removed, and ${scrub.scrubbed} deployed secret${
+          scrub.scrubbed === 1 ? "" : "s"
+        } scrubbed from Harness on the way out.`,
+      );
     }
+    router.refresh();
+  }
+
+  /**
+   * Take the site's credentials back out of what a token deployed, now.
+   *
+   * Its own function rather than a `call`, because a partial result is the normal
+   * one — secrets somebody else has since edited are left alone on purpose — so
+   * the answer is a count and a list rather than success or failure.
+   */
+  async function scrub(id: string): Promise<ScrubRun | null> {
+    const body = await call(`scrub:${id}`, `/api/me/harness-tokens/${id}/scrub`, {
+      method: "POST",
+    });
+    if (!body) return null;
+    router.refresh();
+    return body.run as ScrubRun;
   }
 
   /**
@@ -343,6 +409,7 @@ export function HarnessTokensView({
                 // minutes, and the row has to keep saying which of the two it is
                 // waiting on.
                 deploying={busy === `deploy:${t.id}`}
+                scrubbing={busy === `scrub:${t.id}`}
                 // Both halves of the gate. The site role is the same for every
                 // row; the permission is this token's.
                 canDeploy={canDeploy && administersAccount(t.permissions)}
@@ -352,7 +419,9 @@ export function HarnessTokensView({
                 }
                 onRecheck={() => recheck(t.id)}
                 onRemove={() => remove(t.id)}
+                scrubDays={scrubDays}
                 onDeploy={(org) => deploy(t.id, org)}
+                onScrub={() => scrub(t.id)}
               />
             ))}
           </div>
@@ -366,24 +435,32 @@ function TokenRow({
   token,
   busy,
   deploying,
+  scrubbing,
   canDeploy,
+  scrubDays,
   expanded,
   onToggle,
   onRecheck,
   onRemove,
   onDeploy,
+  onScrub,
 }: {
   token: HarnessTokenSummary;
   busy: boolean;
   /** A deploy is in flight for this row. Minutes, not the moment a re-check is. */
   deploying: boolean;
+  /** A scrub is in flight: a couple of Harness calls per deployed secret. */
+  scrubbing: boolean;
   /** Whether to offer a deploy at all — both halves of the gate, already ANDed. */
   canDeploy: boolean;
+  /** Days the deployed secret values stay real. Said in the prompt, before the act. */
+  scrubDays: number;
   expanded: boolean;
   onToggle: () => void;
   onRecheck: () => void;
   onRemove: () => void;
   onDeploy: (org: string) => Promise<DeployReport | null>;
+  onScrub: () => Promise<ScrubRun | null>;
 }) {
   const granted = token.permissions.filter((p) => p.permitted).length;
   // A row saved before the probe list changed has answers for a different set of
@@ -417,6 +494,9 @@ function TokenRow({
     identifier !== null &&
     identifier.toLowerCase() ===
       token.lastDeploy?.orgIdentifier.toLowerCase();
+
+  /** What a just-pressed "Scrub now" did, until the row is next re-rendered. */
+  const [scrubbed, setScrubbed] = useState<ScrubRun | null>(null);
 
   async function submit() {
     if (identifier === null || deploying) return;
@@ -551,6 +631,15 @@ function TokenRow({
         </div>
       )}
 
+      <DeployedCredentials
+        scrub={token.scrub}
+        scrubbing={scrubbing}
+        disabled={busy || deploying || !token.usable}
+        run={scrubbed}
+        onScrub={async () => setScrubbed(await onScrub())}
+        onDismiss={() => setScrubbed(null)}
+      />
+
       {prompting && (
         <div className="space-y-2 rounded-lg border bg-muted/30 p-3">
           <p className="text-xs leading-relaxed text-muted-foreground">
@@ -575,6 +664,23 @@ function TokenRow({
                 get a project of the same name.
               </>
             )}
+          </p>
+          {/* Before the button, not after it. The secrets that go in are real
+              credentials of this site's, landing in an account somebody else
+              owns — that they come back out again is the thing that makes this
+              safe to do, so it is said while there is still a choice. */}
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            The org secrets go in with their real values so the content works
+            immediately, and{" "}
+            <span className="font-medium text-foreground">
+              {scrubDays === 0
+                ? "are scrubbed to 123 at the next sweep"
+                : `are scrubbed to 123 after ${scrubDays} day${
+                    scrubDays === 1 ? "" : "s"
+                  }`}
+            </span>
+            , so this deployment&apos;s credentials do not stay in another
+            account. This row counts down to it, and can do it early.
           </p>
           <div className="flex flex-wrap items-center gap-2">
             <Input
@@ -680,6 +786,162 @@ function TokenRow({
             </li>
           )}
         </ul>
+      )}
+    </div>
+  );
+}
+
+/**
+ * What has become of the site's credentials this token deployed.
+ *
+ * The visible half of the scrub design, and the reason it is on the row rather
+ * than somewhere in settings: the credentials went out with *this* token, and
+ * whoever deployed them is the person who should see a week's countdown running
+ * down every time they open the page. A scheduled job that silently stops is the
+ * failure this is against — the counting-down line and the button next to it are
+ * what make that noticeable and fixable.
+ *
+ * Absent entirely for a token that never deployed a secret, so a row that has
+ * nothing to say says nothing.
+ */
+function DeployedCredentials({
+  scrub,
+  scrubbing,
+  disabled,
+  run,
+  onScrub,
+  onDismiss,
+}: {
+  scrub: ScrubSummary;
+  scrubbing: boolean;
+  disabled: boolean;
+  /** The result of a scrub just pressed here, if there was one. */
+  run: ScrubRun | null;
+  onScrub: () => Promise<void>;
+  onDismiss: () => void;
+}) {
+  if (!hasScrubRecord(scrub)) return null;
+
+  const where =
+    scrub.orgs.length === 1 ? (
+      <code className="rounded bg-muted px-1 py-0.5 font-mono">{scrub.orgs[0]}</code>
+    ) : (
+      <>{scrub.orgs.length} organizations</>
+    );
+
+  // Offered while anything could still be taken out. A scrub that failed is
+  // worth retrying; one that was skipped is not ours to retry.
+  const canScrub = scrub.pending > 0 || scrub.failed > 0;
+
+  return (
+    <div className="space-y-1">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+        {scrub.pending > 0 ? (
+          <>
+            <KeyRound className="size-3.5 shrink-0" />
+            <span>
+              <span className="font-medium text-foreground">{scrub.pending}</span>{" "}
+              of this site&apos;s secret{scrub.pending === 1 ? "" : "s"}{" "}
+              {scrub.pending === 1 ? "is" : "are"} live in {where} — scrubbed to{" "}
+              <code className="rounded bg-muted px-1 py-0.5 font-mono">123</code>{" "}
+              {scrub.dueAt ? until(scrub.dueAt) : "at the next sweep"}
+            </span>
+          </>
+        ) : scrub.problems.length === 0 ? (
+          <>
+            <ShieldCheck className="size-3.5 shrink-0 text-brand" />
+            <span>
+              Deployed credentials scrubbed
+              {scrub.scrubbedAt && (
+                <>
+                  {" "}
+                  <time dateTime={scrub.scrubbedAt}>{stamp(scrub.scrubbedAt)}</time>
+                </>
+              )}
+              {" — "}
+              {scrub.scrubbed} value{scrub.scrubbed === 1 ? "" : "s"} in {where}{" "}
+              now hold{scrub.scrubbed === 1 ? "s" : ""} a placeholder
+            </span>
+          </>
+        ) : (
+          <>
+            <AlertTriangle className="size-3.5 shrink-0 text-amber-600 dark:text-amber-500" />
+            <span>
+              {scrub.problems.length} of this site&apos;s secrets in {where} could
+              not be scrubbed
+            </span>
+          </>
+        )}
+
+        {canScrub && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="ml-auto h-6 px-2 text-xs text-muted-foreground"
+            disabled={disabled || scrubbing}
+            onClick={onScrub}
+            title="Overwrite this site's deployed secrets with a placeholder now"
+          >
+            {scrubbing ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : (
+              <Eraser className="size-3.5" />
+            )}
+            Scrub now
+          </Button>
+        )}
+      </div>
+
+      {/* Named, with Harness's reason. "Two failed" is not something anybody can
+          act on; "this secret, because somebody edited it" is. */}
+      {scrub.problems.length > 0 && (
+        <ul className="space-y-0.5 text-xs text-muted-foreground">
+          {scrub.problems.map((problem) => (
+            <li
+              key={`${problem.orgIdentifier}:${problem.secretIdentifier}`}
+              className="flex flex-wrap items-baseline gap-x-1.5"
+            >
+              <code className="font-mono text-foreground">
+                {problem.secretIdentifier}
+              </code>
+              <span
+                className={
+                  problem.status === "failed"
+                    ? "text-destructive"
+                    : "text-amber-600 dark:text-amber-500"
+                }
+              >
+                {problem.status === "failed" ? "failed" : "left alone"}
+              </span>
+              {problem.note && <span className="w-full">{problem.note}</span>}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {/* Only what the button just did. The counts above are the durable record
+          and come back from the server; this is the acknowledgement. */}
+      {run && (
+        <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
+          <span>
+            {run.scrubbed} scrubbed
+            {run.skipped > 0 && <>, {run.skipped} left alone</>}
+            {run.failed > 0 && (
+              <span className="text-destructive">, {run.failed} failed</span>
+            )}
+            {run.scrubbed + run.skipped + run.failed === 0 && (
+              <>Nothing left to scrub.</>
+            )}
+          </span>
+          <button
+            type="button"
+            onClick={onDismiss}
+            aria-label="Dismiss"
+            className="transition-colors hover:text-foreground"
+          >
+            <X className="size-3" />
+          </button>
+        </p>
       )}
     </div>
   );

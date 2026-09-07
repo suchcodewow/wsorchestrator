@@ -11,6 +11,10 @@ import {
   harnessOrgUrl,
   parseHarnessToken,
 } from "@/lib/harness-platform";
+import {
+  harnessTimestamp,
+  recordDeployedSecret,
+} from "@/lib/harness-scrub";
 import { listTemplateSources, templateSourceToken } from "@/lib/harness-templates";
 import { recordHarnessDeploy } from "@/lib/harness-tokens";
 import { openSecret } from "@/lib/secret-box";
@@ -1034,8 +1038,18 @@ async function copyScope(from: Scope, to: Scope, record: Record_): Promise<void>
  * The identifier doubles as the display name. Harness wants both and an
  * administrator supplied one string; inventing a prettier name would mean the
  * organization shows something nobody typed. Same choice the runner makes.
+ *
+ * Each one that lands is written to the ledger, because this is the step that
+ * puts *our* real credentials into an account we do not own. Nothing else here
+ * needs that: a connector or a template is content, and copying it gives nothing
+ * away. See `@/lib/harness-scrub` for what becomes of them.
  */
-async function deploySecrets(to: Scope, record: Record_): Promise<void> {
+async function deploySecrets(
+  to: Scope,
+  /** The saved token being deployed with — what a scrub will need to come back. */
+  tokenId: string,
+  record: Record_,
+): Promise<void> {
   for (const secret of await orgSecretValues()) {
     if (secret.value === null) {
       record({
@@ -1105,12 +1119,50 @@ async function deploySecrets(to: Scope, record: Record_): Promise<void> {
       );
     }
 
+    const outcome = outcomeOf(reply);
     record({
       scope: scopeLabel(to),
       kind: "secret",
       identifier: secret.identifier,
-      ...outcomeOf(reply),
+      ...outcome,
     });
+
+    // Only what Harness accepted. A refused secret is not in that account, and
+    // scheduling a scrub for it would mean a week of the sweep reporting a
+    // failure about something that was never there. "Already existed" does not
+    // count either: this deploy did not put the value there, so it does not know
+    // what the value is or whose it is.
+    if (outcome.outcome !== "created") continue;
+
+    try {
+      await recordDeployedSecret({
+        tokenId,
+        accountId: to.accountId,
+        orgIdentifier: to.org,
+        secretIdentifier: secret.identifier,
+        kind: secret.kind,
+        // Harness's own timestamp for the write it just did, which is what the
+        // scrub compares against to tell our value from one somebody has since
+        // replaced. Absent is survivable — see `modifiedSince`.
+        harnessUpdatedAt: harnessTimestamp(
+          dataOf<{ updatedAt?: unknown }>(reply)?.updatedAt,
+        ),
+      });
+    } catch (err) {
+      // A secret that landed but was not written down is the one case this
+      // feature cannot recover from on its own: nothing will ever come back for
+      // it. So it is said out loud in the report rather than logged and lost.
+      record({
+        scope: scopeLabel(to),
+        kind: "secret",
+        identifier: secret.identifier,
+        outcome: "failed",
+        detail:
+          "The value is in Harness but this site could not record that it is, " +
+          "so it will not be scrubbed automatically — remove it by hand when " +
+          `the demo is over. (${err instanceof Error ? err.message : "unknown error"})`,
+      });
+    }
   }
 }
 
@@ -1301,7 +1353,7 @@ export async function deployContent(
   });
 
   /* 2. The site's secrets, before anything that could reference one. */
-  await deploySecrets(target, record);
+  await deploySecrets(target, tokenId, record);
 
   /* 3 and 4. The template sources: whole organizations first, then projects. */
   const sources = await listTemplateSources();

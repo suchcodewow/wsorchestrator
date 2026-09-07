@@ -1206,6 +1206,120 @@ export const MAX_TEMPLATE_SOURCES = 25;
 
 export type HarnessTemplateSource = typeof harnessTemplateSources.$inferSelect;
 
+/**
+ * One of this site's org secrets, as written into somebody else's Harness
+ * account by a content deploy — and what has become of it since.
+ *
+ * The reason this table exists: a deploy copies real credentials of ours into an
+ * account we do not own, and nothing takes them out again. A workshop's org is
+ * different — `deleteOrg` removes it at teardown, secrets and all — but a
+ * deployed org is permanent by design, so the values have to be scrubbed in
+ * place instead. That needs a durable record of exactly which secret went into
+ * which org and when, which the three `deployedOrg*` columns on `harness_tokens`
+ * cannot be: they are one slot, overwritten by the next deploy, and they name no
+ * secrets. Deploy into two prospects' accounts and the first one's credentials
+ * would be unaccounted for.
+ *
+ * A row is written per secret per place, and re-written by a later deploy into
+ * the same place — so a re-deploy puts the real values back and restarts the
+ * clock, which is what somebody re-running a demo means by it.
+ *
+ * See `@/lib/harness-scrub`, which is the thing that acts on these, and
+ * `runner/src/scrub.ts`, which is the scheduled sweep.
+ */
+export const harnessDeployedSecrets = pgTable(
+  "harness_deployed_secrets",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /**
+     * The saved token that wrote it, and the only credential known to reach that
+     * account again.
+     *
+     * Nulled rather than cascaded when the token is removed, because the secret
+     * does not disappear with the credential that delivered it: the row survives
+     * as a record of a value still sitting in somebody's account, and the sweep
+     * reports it as needing a hand rather than losing it silently.
+     */
+    tokenId: uuid("token_id").references(() => harnessTokens.id, {
+      onDelete: "set null",
+    }),
+    /** Which Harness account it went into. Not ours. */
+    accountId: text("account_id").notNull(),
+    orgIdentifier: text("org_identifier").notNull(),
+    /** The secret's identifier there, which is also its name — see `deploySecrets`. */
+    secretIdentifier: text("secret_identifier").notNull(),
+    /**
+     * `text` or `file`, from `ORG_SECRET_KINDS`. Needed to scrub it: a text
+     * secret takes a JSON `PUT`, a file secret a multipart one to a different
+     * path, and sending either to the other's endpoint fails.
+     */
+    kind: text("kind").notNull(),
+    /**
+     * What Harness reported as the secret's `updatedAt` when we wrote it.
+     *
+     * The guard against scrubbing a value somebody else has since replaced with
+     * a real one of their own. Harness will not hand a secret's value back, so
+     * there is no way to look and see whether what is there is still ours — but
+     * any edit moves this timestamp, so a mismatch at scrub time means the value
+     * belongs to them now and must be left alone. The tag cannot do this job: an
+     * edit in the Harness UI keeps the tags and changes only the value.
+     *
+     * Null if the reply did not carry one, which falls back to a tolerance
+     * against `writtenAt` — see `modifiedSince` in `@/lib/harness-scrub`.
+     */
+    harnessUpdatedAt: timestamp("harness_updated_at", { withTimezone: true }),
+    writtenAt: timestamp("written_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    /**
+     * When it becomes due for scrubbing. Fixed at write time from the configured
+     * window rather than computed as `writtenAt + window` on every sweep, so
+     * shortening the window later cannot make a pile of live demos due at once,
+     * and so the deadline the UI counts down to is the one that will be acted on.
+     */
+    scrubAfter: timestamp("scrub_after", { withTimezone: true }).notNull(),
+    /** One of `SCRUB_STATUSES`. */
+    status: text("status").notNull().default("pending"),
+    /** When the sweep last looked at this row, whatever it decided. */
+    checkedAt: timestamp("checked_at", { withTimezone: true }),
+    /**
+     * Why it is `skipped` or `failed`, in Harness's own words where there are
+     * any. Read by a person deciding what to do by hand, so it is a sentence
+     * rather than a code.
+     */
+    note: text("note"),
+  },
+  (t) => [
+    // One row per place a secret can be. A re-deploy updates it rather than
+    // adding a second row that would be scrubbed twice.
+    uniqueIndex("harness_deployed_secrets_idx").on(
+      t.accountId,
+      t.orgIdentifier,
+      t.secretIdentifier,
+    ),
+    // The sweep's query: everything pending and past its deadline.
+    index("harness_deployed_secrets_due_idx").on(t.status, t.scrubAfter),
+  ],
+);
+
+/**
+ * What a deployed secret can be.
+ *
+ * `skipped` and `failed` are both terminal for the sweep but mean opposite
+ * things: `skipped` is "not ours to touch any more", `failed` is "we could not
+ * reach it", and only the second is worth retrying. Both are shown, because a
+ * credential of ours that did not get scrubbed is the whole thing this is for.
+ */
+export const SCRUB_STATUSES = [
+  "pending",
+  "scrubbed",
+  "skipped",
+  "failed",
+] as const;
+export type ScrubStatus = (typeof SCRUB_STATUSES)[number];
+
+export type HarnessDeployedSecret = typeof harnessDeployedSecrets.$inferSelect;
+
 export type WorkshopRun = typeof workshopRuns.$inferSelect;
 export type LabGuide = typeof labGuides.$inferSelect;
 export type LabWorkshop = typeof labWorkshops.$inferSelect;

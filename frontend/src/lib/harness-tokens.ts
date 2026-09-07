@@ -13,6 +13,13 @@ import {
   harnessOrgUrl,
   type CheckError,
 } from "@/lib/harness-platform";
+import {
+  EMPTY_SCRUB,
+  scrubSummaries,
+  scrubWithToken,
+  type ScrubRun,
+  type ScrubSummary,
+} from "@/lib/harness-scrub";
 import { openSecret, sealSecret } from "@/lib/secret-box";
 
 /**
@@ -68,6 +75,12 @@ export type HarnessTokenSummary = {
   usable: boolean;
   /** Where this token last deployed content, or null if it never has. */
   lastDeploy: HarnessDeploy | null;
+  /**
+   * What has become of the site's credentials this token deployed: how many are
+   * still live in that account, when the first is due to be scrubbed, and
+   * anything that needs a person. All zeroes for a token that never deployed.
+   */
+  scrub: ScrubSummary;
 };
 
 /**
@@ -89,7 +102,16 @@ const lastDeployOf = (row: HarnessToken): HarnessDeploy | null =>
       }
     : null;
 
-const summarize = (row: HarnessToken): HarnessTokenSummary => ({
+/**
+ * `scrub` is passed in rather than read here, because it is a second query and
+ * only the list needs it: saving or re-checking a token answers with the row it
+ * just changed, and the page it answers to re-reads the list anyway. So those
+ * two get the empty summary rather than a round trip whose result is discarded.
+ */
+const summarize = (
+  row: HarnessToken,
+  scrub: ScrubSummary = EMPTY_SCRUB,
+): HarnessTokenSummary => ({
   id: row.id,
   kind: row.kind,
   accountId: row.accountId,
@@ -104,6 +126,7 @@ const summarize = (row: HarnessToken): HarnessTokenSummary => ({
   // looks healthy right up until somebody tries to use one of them.
   usable: openSecret(row.secret) !== null,
   lastDeploy: lastDeployOf(row),
+  scrub,
 });
 
 export async function listHarnessTokens(
@@ -114,7 +137,9 @@ export async function listHarnessTokens(
     .from(harnessTokens)
     .where(eq(harnessTokens.userId, userId))
     .orderBy(asc(harnessTokens.createdAt));
-  return rows.map(summarize);
+
+  const scrub = await scrubSummaries(rows.map((row) => row.id));
+  return rows.map((row) => summarize(row, scrub.get(row.id)));
 }
 
 export type SaveError =
@@ -254,16 +279,53 @@ export async function recheckHarnessToken(
   return { ok: true, token: summarize(updated!) };
 }
 
-/** Forget a token. Deleted outright — there is nothing to keep a record of. */
+export type DeleteResult = {
+  deleted: boolean;
+  /**
+   * What the scrub on the way out managed, when there was anything to scrub.
+   * Null when the token had deployed nothing, or when its secret could not be
+   * opened so nothing could be attempted.
+   */
+  scrub: ScrubRun | null;
+};
+
+/**
+ * Forget a token — after taking back whatever it left in somebody else's Harness
+ * account.
+ *
+ * The scrub happens here because this is the last moment it can: the ledger row
+ * keeps its record either way, but the credential that could reach those secrets
+ * is about to be deleted, and afterwards nothing on this site can scrub them.
+ * Deleting a token is also a fair statement of intent — somebody is done with
+ * that account — so doing it silently later would be the wrong shape anyway.
+ *
+ * The token still goes if the scrub fails. Refusing to remove a credential
+ * because a *third party's* API would not answer traps somebody's own token in
+ * their list with no way out; the caller is told what did not get scrubbed
+ * instead, which is the only thing that helps at that point.
+ */
 export async function deleteHarnessToken(
   userId: string,
   id: string,
-): Promise<boolean> {
+): Promise<DeleteResult> {
+  const [row] = await db
+    .select({ id: harnessTokens.id, secret: harnessTokens.secret })
+    .from(harnessTokens)
+    .where(and(eq(harnessTokens.id, id), eq(harnessTokens.userId, userId)));
+  if (!row) return { deleted: false, scrub: null };
+
+  const raw = openSecret(row.secret);
+  let scrub: ScrubRun | null = null;
+  if (raw !== null) {
+    // Never allowed to stop the delete — see above.
+    scrub = await scrubWithToken(id, raw).catch(() => null);
+  }
+
   const deleted = await db
     .delete(harnessTokens)
     .where(and(eq(harnessTokens.id, id), eq(harnessTokens.userId, userId)))
     .returning({ id: harnessTokens.id });
-  return deleted.length > 0;
+  return { deleted: deleted.length > 0, scrub };
 }
 
 /**

@@ -485,6 +485,91 @@ export async function setScheduledBack(runId: string) {
   );
 }
 
+/* ------------------------------------------------------------------ *
+ * Deployed content's credentials, and taking them back out
+ * ------------------------------------------------------------------ */
+
+/**
+ * One org secret this site's content deploy left in an account we do not own,
+ * with the token that can reach it.
+ *
+ * The ledger is written by the app (`frontend/src/lib/harness-scrub.ts`) when a
+ * deploy puts a real value into somebody else's organization; this is the read
+ * the sweep does a week later. `token_secret` is the sealed PAT out of
+ * `harness_tokens` — sealed, because opening it is `secret-box.ts`'s job and it
+ * should be held in plaintext for as few lines as possible. Null when the token
+ * has since been forgotten, which the sweep has to report rather than retry.
+ */
+export type DueScrub = {
+  id: string;
+  account_id: string;
+  org_identifier: string;
+  secret_identifier: string;
+  /** `text` or `file` — which Harness endpoint the overwrite has to use. */
+  kind: string;
+  /** Harness's own `updatedAt` when we wrote it, for the modified-since guard. */
+  harness_updated_at: Date | null;
+  written_at: Date;
+  token_secret: Buffer | null;
+};
+
+/**
+ * Every deployed secret whose week is up.
+ *
+ * `pending` rows past their deadline are the normal case. `failed` ones are
+ * retried, but no more than hourly: a scrub fails for reasons that pass — a
+ * cluster that was unreachable for a minute — and for reasons that never will,
+ * like a revoked token, and retrying the second kind every tick would put a
+ * doomed request per row into every reaper run for the rest of the deployment's
+ * life. An hour is often enough that a transient failure clears on its own and
+ * rare enough to be free.
+ *
+ * A row whose token is gone gets exactly one verdict written and then drops out
+ * — `checked_at is null` is the "never reported on" test. Nothing can scrub it,
+ * so the useful outcome is the note on the row telling a person to do it by
+ * hand, and repeating that note hourly would not make it truer.
+ *
+ * `scrubbed` and `skipped` are terminal and never selected: the first is done,
+ * and the second means the value in Harness belongs to the account's owner now.
+ */
+export async function dueScrubs(): Promise<DueScrub[]> {
+  const { rows } = await pool.query<DueScrub>(
+    `select s.id,
+            s.account_id,
+            s.org_identifier,
+            s.secret_identifier,
+            s.kind,
+            s.harness_updated_at,
+            s.written_at,
+            t.secret as token_secret
+       from harness_deployed_secrets s
+       left join harness_tokens t on t.id = s.token_id
+      where s.scrub_after < now()
+        and (
+              s.status = 'pending'
+              or (s.status = 'failed'
+                  and (s.checked_at is null or s.checked_at < now() - interval '1 hour'))
+            )
+        and (t.secret is not null or s.checked_at is null)
+      order by s.scrub_after`,
+  );
+  return rows;
+}
+
+/** Write down what became of one deployed secret. */
+export async function recordScrub(
+  id: string,
+  status: "scrubbed" | "skipped" | "failed",
+  note: string | null,
+): Promise<void> {
+  await pool.query(
+    `update harness_deployed_secrets
+        set status = $2, note = $3, checked_at = now()
+      where id = $1`,
+    [id, status, note],
+  );
+}
+
 /**
  * Namespace for the reaper's per-run advisory locks. Arbitrary — it only has
  * to be distinct from any other advisory lock this database might grow, and
@@ -492,6 +577,9 @@ export async function setScheduledBack(runId: string) {
  * bare single-key lock somebody adds later.
  */
 const REAP_LOCK_NAMESPACE = 0x52454150; // "REAP"
+
+/** The scrub sweep's single lock. One key, because there is one sweep. */
+const SCRUB_LOCK_NAMESPACE = 0x53435242; // "SCRB"
 
 /** How often the lock-holding session is pinged so nothing reaps it as idle. */
 const LOCK_KEEPALIVE_MS = 60_000;
@@ -551,6 +639,60 @@ export async function withRunLock(
         .query(`select pg_advisory_unlock($1::int, hashtext($2))`, [
           REAP_LOCK_NAMESPACE,
           runId,
+        ])
+        .catch(() => {});
+    }
+    client.release();
+  }
+}
+
+/**
+ * Run `fn` as the only scrub sweep in flight, or skip it (returning false).
+ *
+ * Overlapping ticks matter more here than they look. Two sweeps that read the
+ * same due row both scrub it, and the second one's read shows an `updatedAt` the
+ * first one's write moved — which is precisely the signal `modifiedSince` treats
+ * as "the account's owner has replaced this", so the row ends up `skipped` with
+ * a note blaming a customer for an edit we made ourselves. One lock for the
+ * whole sweep rather than one per row: the sweep is short, sequential, and there
+ * is nothing to gain from two containers sharing it.
+ *
+ * Session-scoped for the same reason `withRunLock` is — a killed container drops
+ * the lock with its connection instead of leaving a lease nothing will renew.
+ *
+ * The manual "Scrub now" button in the app does not take this lock, and cannot:
+ * it runs in another service, against a pooled connection it does not own. The
+ * exposure is a click landing in the same few seconds as a sweep processing that
+ * exact row, and the cost is one misleading note on a secret whose value is
+ * nonetheless `123` — worth knowing about, not worth a second locking scheme.
+ */
+export async function withScrubLock(
+  fn: () => Promise<void>,
+): Promise<boolean> {
+  const client = await pool.connect();
+  let locked = false;
+  let keepalive: NodeJS.Timeout | undefined;
+
+  try {
+    const { rows } = await client.query<{ locked: boolean }>(
+      `select pg_try_advisory_lock($1::int, hashtext('scrub')) as locked`,
+      [SCRUB_LOCK_NAMESPACE],
+    );
+    locked = rows[0]?.locked ?? false;
+    if (!locked) return false;
+
+    keepalive = setInterval(() => {
+      void client.query("select 1").catch(() => {});
+    }, LOCK_KEEPALIVE_MS);
+
+    await fn();
+    return true;
+  } finally {
+    if (keepalive) clearInterval(keepalive);
+    if (locked) {
+      await client
+        .query(`select pg_advisory_unlock($1::int, hashtext('scrub'))`, [
+          SCRUB_LOCK_NAMESPACE,
         ])
         .catch(() => {});
     }

@@ -48,6 +48,9 @@ locals {
   # the org secrets an administrator entered in Settings and write them into each
   # workshop's Harness org — see `runner/src/secret-box.ts`. Without it those
   # secrets are skipped with a line in the run log rather than failing the run.
+  # The reaper opens one more thing with it: the saved Harness tokens whose
+  # content deploys it has to scrub a week later (`runner/src/scrub.ts`), which
+  # without the key are reported as unscrubbable on the tokens page.
   runner_secret_env = merge(
     {
       DATABASE_URL    = "database-url"
