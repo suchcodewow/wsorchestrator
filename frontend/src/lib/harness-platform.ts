@@ -22,6 +22,16 @@ export function harnessBaseUrl(): string {
 }
 
 /**
+ * The Harness console page for an organization.
+ *
+ * Here rather than beside either caller, because both the deploy report and a
+ * token row that remembers where it deployed link to the same place, and a URL
+ * shape written out twice is a URL shape that drifts.
+ */
+export const harnessOrgUrl = (accountId: string, org: string) =>
+  `${harnessBaseUrl()}/ng/account/${accountId}/settings/organizations/${org}/details`;
+
+/**
  * A token's own structure. Harness tokens are
  * `<kind>.<accountId>.<tokenId>.<secret>`, which is why the account never has to
  * be asked for on the form — and why it is known even when the checks below all

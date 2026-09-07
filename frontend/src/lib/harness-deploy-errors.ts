@@ -22,7 +22,11 @@ export type DeployError =
   | "not_permitted"
   /** The organization name is empty, or has no legal identifier in it. */
   | "invalid_name"
-  /** An organization with that identifier is already there. */
+  /**
+   * An organization with that identifier is already there, and it is not one
+   * this token deployed into before — so it belongs to somebody else and is left
+   * alone. A repeat of the token's own last deploy is a re-run, not this.
+   */
   | "org_exists"
   /** Harness refused to create the organization, so nothing else was tried. */
   | "org_failed"
@@ -55,7 +59,7 @@ export const MESSAGES: Record<DeployError, string> = {
   invalid_name:
     "That name has no letters, digits, or underscores in it, so there is no identifier Harness would accept. Try another.",
   org_exists:
-    "An organization with that identifier already exists in the account. Pick a different name, or delete the existing one first.",
+    "An organization with that identifier already exists in the account, and this token did not deploy it — so nothing was written to it. Pick a different name, or delete the existing one first.",
   org_failed:
     "Harness would not create the organization, so nothing else was deployed.",
   harness_error: "Harness couldn't answer just now. Try again in a moment.",

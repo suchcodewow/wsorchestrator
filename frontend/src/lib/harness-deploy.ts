@@ -6,8 +6,13 @@ import type { DeployError } from "@/lib/harness-deploy-errors";
 import { harnessIdentifier } from "@/lib/harness-identifier";
 import { orgSecretValues } from "@/lib/harness-org-secrets";
 import { ACCOUNT_ADMIN } from "@/lib/harness-permissions";
-import { harnessBaseUrl, parseHarnessToken } from "@/lib/harness-platform";
+import {
+  harnessBaseUrl,
+  harnessOrgUrl,
+  parseHarnessToken,
+} from "@/lib/harness-platform";
 import { listTemplateSources, templateSourceToken } from "@/lib/harness-templates";
+import { recordHarnessDeploy } from "@/lib/harness-tokens";
 import { openSecret } from "@/lib/secret-box";
 
 /**
@@ -905,10 +910,6 @@ async function deploySecrets(to: Scope, record: Record_): Promise<void> {
  * The deploy
  * ------------------------------------------------------------------ */
 
-/** Console link to what was built, so the report ends somewhere useful. */
-const orgUrl = (accountId: string, org: string) =>
-  `${harnessBaseUrl()}/ng/account/${accountId}/settings/organizations/${org}/details`;
-
 /**
  * Ask Harness, right now, whether this token still administers the account.
  *
@@ -971,15 +972,21 @@ async function administersAccountNow(
  * Org-scoped content before project-scoped content matters for the same reason
  * secrets come before connectors: a project's pipeline may reference an
  * `org.` template, and one that lands first resolves.
+ *
+ * Naming the organization this token last deployed into re-runs that deploy
+ * instead of being refused: everything already there is found rather than made,
+ * and whatever failed the first time is tried again. Where it went is recorded on
+ * the token row afterwards, which is what makes that distinguishable from a
+ * collision with an organization somebody else made.
  */
 export async function deployContent(
   userId: string,
   tokenId: string,
   orgName: string,
 ): Promise<DeployResult> {
-  const name = orgName.trim();
-  const identifier = harnessIdentifier(name);
-  if (name.length === 0 || identifier === null) {
+  const typed = orgName.trim();
+  const derived = harnessIdentifier(typed);
+  if (typed.length === 0 || derived === null) {
     return { ok: false, error: "invalid_name" };
   }
 
@@ -988,6 +995,24 @@ export async function deployContent(
     .from(harnessTokens)
     .where(and(eq(harnessTokens.id, tokenId), eq(harnessTokens.userId, userId)));
   if (!row) return { ok: false, error: "not_found" };
+
+  // Whether this names the organization the token last deployed into, and so is
+  // a re-run rather than a new one.
+  //
+  // Compared case-insensitively because that is how Harness compares: creating
+  // `wo_probe` when `WO_Probe` exists is refused as a duplicate. Matching
+  // case-sensitively here would read somebody's own organization, retyped with
+  // different capitals, as a collision with a stranger's.
+  //
+  // The recorded identifier is then the one used, not the freshly derived one:
+  // it is the string Harness actually has, so every write below addresses the
+  // organization that exists rather than a spelling of it. Same for the name — on
+  // a re-run the organization keeps the name it was created with, and the record
+  // should say what Harness shows.
+  const rerun =
+    row.deployedOrgIdentifier !== null &&
+    row.deployedOrgIdentifier.toLowerCase() === derived.toLowerCase();
+  const identifier = rerun ? row.deployedOrgIdentifier! : derived;
 
   const secret = openSecret(row.secret);
   if (secret === null) return { ok: false, error: "unreadable" };
@@ -1015,39 +1040,56 @@ export async function deployContent(
   const record: Record_ = (step) => steps.push(step);
 
   /* 1. The organization. The one failure that stops everything: there is
-        nowhere to put the rest of it. */
+        nowhere to put the rest of it.
+        Attempted even on a re-run, because the organization may have been
+        deleted in Harness since — and then re-creating it is exactly right. */
   const created = await harnessRequest(
     secret,
     "POST",
     "/ng/api/organizations",
     { accountIdentifier: parsed.accountId },
     {
-      organization: { identifier, name, description: DESCRIPTION, tags: TAGS },
+      organization: {
+        identifier,
+        name: typed,
+        description: DESCRIPTION,
+        tags: TAGS,
+      },
     },
   );
   if (!ok(created)) {
-    if (isDuplicate(created.status, created.text)) {
-      // Refused rather than treated as success, unlike every entity below. An
-      // existing organization is somebody's — filling it with this site's
-      // secrets and connectors is not a thing to do by accident on a name
-      // collision.
+    // An organization that is already there is only safe to fill if it is one
+    // *this token* built: the row remembers where it last deployed, so a repeat
+    // of that name converges — the way to finish a deploy that had failures in
+    // it — and every entity below is created or found, never duplicated. Any
+    // other collision is somebody else's organization, and pouring this site's
+    // secrets and connectors into it is not a thing to do on a name clash.
+    if (!isDuplicate(created.status, created.text)) {
       return {
         ok: false,
-        error: "org_exists",
-        detail: messageOf(created.text),
+        error: created.status === 0 ? "unreachable" : "org_failed",
+        detail: created.status === 0 ? created.text : messageOf(created.text),
       };
     }
-    return {
-      ok: false,
-      error: created.status === 0 ? "unreachable" : "org_failed",
-      detail: created.status === 0 ? created.text : messageOf(created.text),
-    };
+    if (!rerun) {
+      return { ok: false, error: "org_exists", detail: messageOf(created.text) };
+    }
   }
+
+  // The organization was found rather than made, so its name is whatever it was
+  // created with — not what was typed just now.
+  const reused = !ok(created);
+  const name = reused ? (row.deployedOrgName ?? typed) : typed;
+
   record({
     scope: identifier,
     kind: "organization",
     identifier,
-    outcome: "created",
+    outcome: reused ? "existed" : "created",
+    detail: reused
+      ? "Deployed into before, so this is a re-run — anything already there is " +
+        "left as it is."
+      : undefined,
   });
 
   /* 2. The site's secrets, before anything that could reference one. */
@@ -1140,12 +1182,20 @@ export async function deployContent(
   };
   for (const step of steps) counts[step.outcome] += 1;
 
+  // Last, so the row records a deploy that actually ran. Not awaited for its
+  // result and deliberately not allowed to fail the call: the organization is in
+  // Harness whatever this note does, and the report is the more important half of
+  // the answer.
+  await recordHarnessDeploy(userId, tokenId, { name, identifier }).catch(
+    () => {},
+  );
+
   return {
     ok: true,
     report: {
       orgIdentifier: identifier,
       orgName: name,
-      orgUrl: orgUrl(parsed.accountId, identifier),
+      orgUrl: harnessOrgUrl(parsed.accountId, identifier),
       steps,
       counts,
       sources: ordered.length,

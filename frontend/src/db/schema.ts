@@ -619,6 +619,20 @@ export const harnessTokens = pgTable(
       .default(sql`'[]'::jsonb`),
     /** When Harness last confirmed the token worked. */
     verifiedAt: timestamp("verified_at", { withTimezone: true }),
+    /**
+     * The organization this token last deployed content into — the name as it
+     * was typed, and the identifier Harness derived from it.
+     *
+     * One slot, not a history: the question it answers is "where did this go,
+     * and when", asked while looking at the row. Also what the deploy prompt
+     * prefills, and what tells a repeat deploy of the same name apart from a
+     * collision with somebody else's organization — the first is a retry, the
+     * second is refused.
+     */
+    deployedOrgName: text("deployed_org_name"),
+    deployedOrgIdentifier: text("deployed_org_identifier"),
+    /** When that deploy finished, whether or not every entity in it landed. */
+    deployedAt: timestamp("deployed_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

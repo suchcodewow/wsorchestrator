@@ -38,6 +38,20 @@ const shortDate = (iso: string) =>
     day: "numeric",
   });
 
+/**
+ * A date *and* a time, for the one thing on this page where the time of day is
+ * part of the answer: two deploys into the same account on the same afternoon are
+ * told apart by nothing else.
+ */
+const stamp = (iso: string) =>
+  new Date(iso).toLocaleString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+
 /** What Harness calls the principal, in words somebody would recognise. */
 const PRINCIPAL_LABEL: Record<string, string> = {
   USER: "Personal token",
@@ -182,6 +196,10 @@ export function HarnessTokensView({
         setError(deployMessageFor(body?.error, res.status, body?.detail));
         return null;
       }
+      // The row now has a deploy on it — where it went and when — and that is
+      // server state, so it comes back from a refresh rather than being mirrored
+      // into local state here.
+      router.refresh();
       return body.report;
     } catch {
       // A deploy runs long enough to outlive a laptop lid. Worth saying that the
@@ -375,7 +393,11 @@ function TokenRow({
 
   /** Whether the org prompt is open. Closed until the button is pressed. */
   const [prompting, setPrompting] = useState(false);
-  const [org, setOrg] = useState("");
+  // Prefilled with wherever this token last deployed. Deploying twice into the
+  // same organization is the normal case — it is how a deploy with a couple of
+  // failures in it gets finished — so the name that worked is the default, and
+  // deploying somewhere new means editing it.
+  const [org, setOrg] = useState(token.lastDeploy?.orgName ?? "");
   const [report, setReport] = useState<DeployReport | null>(null);
 
   // Derived rather than validated on submit, and shown, because a name with a
@@ -383,13 +405,26 @@ function TokenRow({
   // should have to discover that from the result.
   const identifier = harnessIdentifier(org);
 
+  /**
+   * Whether submitting would deploy into the organization this token already
+   * built, rather than make a new one.
+   *
+   * Compared on the identifier, and case-insensitively, because that is how
+   * Harness compares: "My Org", "my-org" and "MY_ORG" are all one organization
+   * there. Same rule as the server's — see `deployContent`.
+   */
+  const rerun =
+    identifier !== null &&
+    identifier.toLowerCase() ===
+      token.lastDeploy?.orgIdentifier.toLowerCase();
+
   async function submit() {
     if (identifier === null || deploying) return;
     const result = await onDeploy(org);
     if (!result) return;
-    // Only cleared on success. A failed deploy leaves the name in the field,
-    // which is what lets somebody fix a collision rather than retype it.
-    setOrg("");
+    // The name is left in the field either way: on success it is the new default
+    // for a re-run, and on failure it is what lets somebody fix a collision or a
+    // typo rather than retype the whole thing.
     setPrompting(false);
     setReport(result);
   }
@@ -487,15 +522,59 @@ function TokenRow({
           ))}
       </div>
 
+      {/* Its own line rather than another item in the list above: it names a
+          place in another system and links to it, which is a different kind of
+          fact from when the token was last verified. */}
+      {token.lastDeploy && (
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+          <Rocket className="size-3.5 shrink-0" />
+          <span>
+            Deployed to{" "}
+            <a
+              href={token.lastDeploy.orgUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-medium text-foreground hover:underline"
+            >
+              {token.lastDeploy.orgName}
+            </a>
+          </span>
+          {/* The identifier only when it says something the name did not — a
+              name Harness could use verbatim would just be printed twice. */}
+          {token.lastDeploy.orgIdentifier !== token.lastDeploy.orgName && (
+            <code className="rounded bg-muted px-1 py-0.5 font-mono">
+              {token.lastDeploy.orgIdentifier}
+            </code>
+          )}
+          <span>·</span>
+          <time dateTime={token.lastDeploy.at}>{stamp(token.lastDeploy.at)}</time>
+        </div>
+      )}
+
       {prompting && (
         <div className="space-y-2 rounded-lg border bg-muted/30 p-3">
           <p className="text-xs leading-relaxed text-muted-foreground">
-            A new organization in{" "}
-            <span className="font-medium text-foreground">{name}</span>, filled
-            with every secret from Settings → Org Secrets and everything each
-            template source holds — connectors, templates, environments, and
-            infrastructure definitions. Sources naming a whole organization land
-            at org level; sources naming a project get a project of the same name.
+            {rerun ? (
+              <>
+                Into{" "}
+                <span className="font-medium text-foreground">
+                  {token.lastDeploy?.orgName}
+                </span>{" "}
+                again, which this token already built. Anything already there is
+                left as it is, so this is how a deploy with failures in it gets
+                finished — change the name to build somewhere new instead.
+              </>
+            ) : (
+              <>
+                A new organization in{" "}
+                <span className="font-medium text-foreground">{name}</span>,
+                filled with every secret from Settings → Org Secrets and
+                everything each template source holds — connectors, templates,
+                environments, and infrastructure definitions. Sources naming a
+                whole organization land at org level; sources naming a project
+                get a project of the same name.
+              </>
+            )}
           </p>
           <div className="flex flex-wrap items-center gap-2">
             <Input
@@ -519,7 +598,7 @@ function TokenRow({
               onClick={submit}
             >
               {deploying && <Loader2 className="size-4 animate-spin" />}
-              Deploy
+              {rerun ? "Deploy again" : "Deploy"}
             </Button>
             <Button
               variant="ghost"
@@ -543,7 +622,10 @@ function TokenRow({
               <>
                 Harness identifier:{" "}
                 <code className="rounded bg-muted px-1 py-0.5 font-mono">
-                  {identifier}
+                  {/* On a re-run, the identifier Harness already has rather than
+                      the one this spelling would derive — they differ only in
+                      case, and the existing one is what gets written to. */}
+                  {rerun ? token.lastDeploy?.orgIdentifier : identifier}
                 </code>
                 {deploying && (
                   <> — this runs one call per entity, so give it a minute.</>

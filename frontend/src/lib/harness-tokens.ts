@@ -10,6 +10,7 @@ import {
 import {
   checkHarnessToken,
   fingerprint,
+  harnessOrgUrl,
   type CheckError,
 } from "@/lib/harness-platform";
 import { openSecret, sealSecret } from "@/lib/secret-box";
@@ -22,6 +23,23 @@ import { openSecret, sealSecret } from "@/lib/secret-box";
  * These are other people's credentials for another system; the narrowest
  * possible access path is worth the small repetition.
  */
+
+/**
+ * The last deploy made with a token: which organization it built, and when.
+ *
+ * Null until there has been one. Not a history — one deploy per token is
+ * remembered, because what the row needs to say is where its content is now.
+ */
+export type HarnessDeploy = {
+  /** The name as it was typed. What the prompt prefills next time. */
+  orgName: string;
+  /** What Harness derived from that name, and addresses the org by. */
+  orgIdentifier: string;
+  /** Harness console link to it. */
+  orgUrl: string;
+  /** ISO, when the deploy finished. */
+  at: string;
+};
 
 /** A saved token as its owner sees it — everything except the secret. */
 export type HarnessTokenSummary = {
@@ -48,7 +66,28 @@ export type HarnessTokenSummary = {
    * nobody can use, and the only fix is pasting it again.
    */
   usable: boolean;
+  /** Where this token last deployed content, or null if it never has. */
+  lastDeploy: HarnessDeploy | null;
 };
+
+/**
+ * The three deploy columns as one value, or null.
+ *
+ * All three or none: a row with a name but no timestamp would render as a deploy
+ * that happened at no particular time, so the incomplete case is treated as the
+ * absent one.
+ */
+const lastDeployOf = (row: HarnessToken): HarnessDeploy | null =>
+  row.deployedOrgName !== null &&
+  row.deployedOrgIdentifier !== null &&
+  row.deployedAt !== null
+    ? {
+        orgName: row.deployedOrgName,
+        orgIdentifier: row.deployedOrgIdentifier,
+        orgUrl: harnessOrgUrl(row.accountId, row.deployedOrgIdentifier),
+        at: row.deployedAt.toISOString(),
+      }
+    : null;
 
 const summarize = (row: HarnessToken): HarnessTokenSummary => ({
   id: row.id,
@@ -64,6 +103,7 @@ const summarize = (row: HarnessToken): HarnessTokenSummary => ({
   // Cheap — a few bytes of AES per row — and the alternative is a list that
   // looks healthy right up until somebody tries to use one of them.
   usable: openSecret(row.secret) !== null,
+  lastDeploy: lastDeployOf(row),
 });
 
 export async function listHarnessTokens(
@@ -224,6 +264,34 @@ export async function deleteHarnessToken(
     .where(and(eq(harnessTokens.id, id), eq(harnessTokens.userId, userId)))
     .returning({ id: harnessTokens.id });
   return deleted.length > 0;
+}
+
+/**
+ * Note that a deploy happened, so the row can say where its content went.
+ *
+ * Written when the deploy finishes rather than when the organization is created,
+ * and written even if some entities inside it failed: the organization exists
+ * either way, and the point of the record is that a re-run knows the name is one
+ * this token already built. Overwrites any previous deploy — see
+ * `deployedOrgName` in the schema for why this is one slot and not a history.
+ *
+ * Best-effort by design: `deployContent` calls it after every write it was asked
+ * to make, so a failure here loses a note about work that did happen and must not
+ * turn a finished deploy into an error.
+ */
+export async function recordHarnessDeploy(
+  userId: string,
+  id: string,
+  org: { name: string; identifier: string },
+): Promise<void> {
+  await db
+    .update(harnessTokens)
+    .set({
+      deployedOrgName: org.name,
+      deployedOrgIdentifier: org.identifier,
+      deployedAt: new Date(),
+    })
+    .where(and(eq(harnessTokens.id, id), eq(harnessTokens.userId, userId)));
 }
 
 /**
