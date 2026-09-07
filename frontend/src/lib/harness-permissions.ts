@@ -84,6 +84,28 @@ export const PERMISSION_PROBES: PermissionProbe[] = [
   },
 ];
 
+/**
+ * "Administer the account" — the one probe answer anything acts on rather than
+ * merely displays.
+ *
+ * Named here so the three places that care cannot drift apart: the tab decides
+ * whether to offer a deploy on it, the route re-checks it live with Harness
+ * before writing anything, and the probe list above is where it is asked in the
+ * first place.
+ */
+export const ACCOUNT_ADMIN = "core_account_edit";
+
+/**
+ * Whether a recorded permission check says the token administers the account.
+ *
+ * A snapshot, and treated as one: this is what decides whether the button is
+ * worth offering, never whether a write may go ahead. The grant may have been
+ * taken away since, which is why the deploy asks Harness again.
+ */
+export const administersAccount = (
+  permissions: { permission: string; permitted: boolean }[],
+) => permissions.some((p) => p.permission === ACCOUNT_ADMIN && p.permitted);
+
 const LABELS = new Map(PERMISSION_PROBES.map((p) => [p.permission, p.label]));
 
 /**

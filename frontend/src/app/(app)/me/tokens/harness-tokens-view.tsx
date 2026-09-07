@@ -10,9 +10,11 @@ import {
   ChevronRight,
   Eye,
   EyeOff,
+  ExternalLink,
   Loader2,
   Plus,
   RefreshCw,
+  Rocket,
   Trash2,
   X,
 } from "lucide-react";
@@ -20,8 +22,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { MAX_HARNESS_TOKENS_PER_USER } from "@/db/schema";
+import type { DeployOutcome, DeployReport } from "@/lib/harness-deploy";
+import { messageFor as deployMessageFor } from "@/lib/harness-deploy-errors";
+import { harnessIdentifier } from "@/lib/harness-identifier";
 import { messageFor } from "@/lib/harness-token-errors";
-import { permissionLabel } from "@/lib/harness-permissions";
+import { administersAccount, permissionLabel } from "@/lib/harness-permissions";
 import type { HarnessTokenSummary } from "@/lib/harness-tokens";
 import { riseChild, staggerParent } from "@/lib/motion";
 import { cn } from "@/lib/utils";
@@ -50,11 +55,18 @@ export function HarnessTokensView({
   tokens,
   baseUrl,
   configured,
+  canDeploy,
 }: {
   tokens: HarnessTokenSummary[];
   baseUrl: string;
   /** Whether an encryption key exists. Without one nothing can be saved. */
   configured: boolean;
+  /**
+   * Whether this user may administer site settings. Half the deploy gate — the
+   * other half is the token administering its Harness account — because a deploy
+   * reads every org secret and every template source the site holds.
+   */
+  canDeploy: boolean;
 }) {
   const router = useRouter();
   const [token, setToken] = useState("");
@@ -135,6 +147,51 @@ export function HarnessTokensView({
   async function remove(id: string) {
     if (await call(id, `/api/me/harness-tokens/${id}`, { method: "DELETE" })) {
       router.refresh();
+    }
+  }
+
+  /**
+   * Build a Harness organization from the site's settings with this token.
+   *
+   * Not routed through `call`: this one has its own error vocabulary — an
+   * organization that already exists, a token that no longer administers the
+   * account — and `deployMessageFor` is the module that knows those sentences.
+   * The row is left to render the report, because a report is a page of detail
+   * and belongs next to the token it was deployed with rather than in the banner
+   * every other message shares.
+   */
+  async function deploy(
+    id: string,
+    org: string,
+  ): Promise<DeployReport | null> {
+    setBusy(`deploy:${id}`);
+    setError(null);
+    setSaved(null);
+    try {
+      const res = await fetch(`/api/me/harness-tokens/${id}/deploy`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ org }),
+      });
+      const body = (await res.json().catch(() => null)) as {
+        error?: unknown;
+        detail?: unknown;
+        report?: DeployReport;
+      } | null;
+      if (!res.ok || !body?.report) {
+        setError(deployMessageFor(body?.error, res.status, body?.detail));
+        return null;
+      }
+      return body.report;
+    } catch {
+      // A deploy runs long enough to outlive a laptop lid. Worth saying that the
+      // organization may exist regardless, because it very likely does.
+      setError(
+        "Lost contact with the server while deploying. Check the organization in Harness before trying again.",
+      );
+      return null;
+    } finally {
+      setBusy(null);
     }
   }
 
@@ -264,12 +321,20 @@ export function HarnessTokensView({
                 key={t.id}
                 token={t}
                 busy={busy === t.id}
+                // Its own flag rather than folded into `busy`: a deploy takes
+                // minutes, and the row has to keep saying which of the two it is
+                // waiting on.
+                deploying={busy === `deploy:${t.id}`}
+                // Both halves of the gate. The site role is the same for every
+                // row; the permission is this token's.
+                canDeploy={canDeploy && administersAccount(t.permissions)}
                 expanded={expanded === t.id}
                 onToggle={() =>
                   setExpanded((current) => (current === t.id ? null : t.id))
                 }
                 onRecheck={() => recheck(t.id)}
                 onRemove={() => remove(t.id)}
+                onDeploy={(org) => deploy(t.id, org)}
               />
             ))}
           </div>
@@ -282,23 +347,52 @@ export function HarnessTokensView({
 function TokenRow({
   token,
   busy,
+  deploying,
+  canDeploy,
   expanded,
   onToggle,
   onRecheck,
   onRemove,
+  onDeploy,
 }: {
   token: HarnessTokenSummary;
   busy: boolean;
+  /** A deploy is in flight for this row. Minutes, not the moment a re-check is. */
+  deploying: boolean;
+  /** Whether to offer a deploy at all — both halves of the gate, already ANDed. */
+  canDeploy: boolean;
   expanded: boolean;
   onToggle: () => void;
   onRecheck: () => void;
   onRemove: () => void;
+  onDeploy: (org: string) => Promise<DeployReport | null>;
 }) {
   const granted = token.permissions.filter((p) => p.permitted).length;
   // A row saved before the probe list changed has answers for a different set of
   // permissions, so its own count is the denominator rather than today's list.
   const checked = token.permissions.length;
   const name = tokenName(token);
+
+  /** Whether the org prompt is open. Closed until the button is pressed. */
+  const [prompting, setPrompting] = useState(false);
+  const [org, setOrg] = useState("");
+  const [report, setReport] = useState<DeployReport | null>(null);
+
+  // Derived rather than validated on submit, and shown, because a name with a
+  // space or a hyphen in it becomes a different string in Harness and nobody
+  // should have to discover that from the result.
+  const identifier = harnessIdentifier(org);
+
+  async function submit() {
+    if (identifier === null || deploying) return;
+    const result = await onDeploy(org);
+    if (!result) return;
+    // Only cleared on success. A failed deploy leaves the name in the field,
+    // which is what lets somebody fix a collision rather than retype it.
+    setOrg("");
+    setPrompting(false);
+    setReport(result);
+  }
 
   return (
     <div className="space-y-2 px-5 py-4">
@@ -322,11 +416,31 @@ function TokenRow({
         )}
 
         <div className="ml-auto flex items-center gap-1">
+          {canDeploy && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-muted-foreground"
+              disabled={busy || deploying || !token.usable}
+              // Toggles the prompt rather than deploying: this creates an
+              // organization and fills it with the site's credentials, so it is
+              // not something a stray click should be able to do.
+              onClick={() => setPrompting((open) => !open)}
+              title="Create a Harness org and fill it from this site's settings"
+            >
+              {deploying ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Rocket className="size-4" />
+              )}
+              Deploy content
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="sm"
             className="text-muted-foreground"
-            disabled={busy || !token.usable}
+            disabled={busy || deploying || !token.usable}
             onClick={onRecheck}
             title="Ask Harness about this token again"
           >
@@ -342,7 +456,7 @@ function TokenRow({
             size="icon"
             aria-label={`Remove the token for ${name}`}
             className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-            disabled={busy}
+            disabled={busy || deploying}
             onClick={onRemove}
           >
             <Trash2 className="size-3.5" />
@@ -372,6 +486,75 @@ function TokenRow({
             </Fragment>
           ))}
       </div>
+
+      {prompting && (
+        <div className="space-y-2 rounded-lg border bg-muted/30 p-3">
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            A new organization in{" "}
+            <span className="font-medium text-foreground">{name}</span>, filled
+            with every secret from Settings → Org Secrets and everything each
+            template source holds — connectors, templates, environments, and
+            infrastructure definitions. Sources naming a whole organization land
+            at org level; sources naming a project get a project of the same name.
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <Input
+              value={org}
+              autoFocus
+              autoComplete="off"
+              spellCheck={false}
+              placeholder="Organization name"
+              aria-label="Name for the new Harness organization"
+              disabled={deploying}
+              className="min-w-56 flex-1"
+              onChange={(e) => setOrg(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") submit();
+                if (e.key === "Escape") setPrompting(false);
+              }}
+            />
+            <Button
+              variant="brand"
+              disabled={identifier === null || deploying}
+              onClick={submit}
+            >
+              {deploying && <Loader2 className="size-4 animate-spin" />}
+              Deploy
+            </Button>
+            <Button
+              variant="ghost"
+              disabled={deploying}
+              onClick={() => setPrompting(false)}
+            >
+              Cancel
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {identifier === null ? (
+              org.trim().length === 0 ? (
+                <>Harness needs a name to create the organization under.</>
+              ) : (
+                <>
+                  Nothing in that name is legal in a Harness identifier — it needs
+                  a letter, digit, or underscore somewhere.
+                </>
+              )
+            ) : (
+              <>
+                Harness identifier:{" "}
+                <code className="rounded bg-muted px-1 py-0.5 font-mono">
+                  {identifier}
+                </code>
+                {deploying && (
+                  <> — this runs one call per entity, so give it a minute.</>
+                )}
+              </>
+            )}
+          </p>
+        </div>
+      )}
+
+      {report && <DeployReportPanel report={report} onClose={() => setReport(null)} />}
 
       <button
         type="button"
@@ -416,6 +599,115 @@ function TokenRow({
           )}
         </ul>
       )}
+    </div>
+  );
+}
+
+/** How each outcome reads, and how it is coloured. */
+const OUTCOME: Record<DeployOutcome, { label: string; className: string }> = {
+  created: { label: "created", className: "text-brand" },
+  existed: { label: "already there", className: "text-muted-foreground" },
+  failed: { label: "failed", className: "text-destructive" },
+  skipped: { label: "skipped", className: "text-amber-600 dark:text-amber-500" },
+};
+
+/**
+ * What the deploy did, entity by entity.
+ *
+ * Every line is shown rather than only the failures, and in the order the deploy
+ * went in. A deploy is somebody's first look at an organization they cannot see
+ * yet, and "forty created, two failed" with the two named is a different thing
+ * from a list of two errors: the first says what is now in Harness, and that is
+ * the question being asked.
+ *
+ * Scrolls rather than paginates. It is a log, it is read top to bottom once, and
+ * it is thrown away by the close button.
+ */
+function DeployReportPanel({
+  report,
+  onClose,
+}: {
+  report: DeployReport;
+  onClose: () => void;
+}) {
+  const { counts } = report;
+
+  return (
+    <div className="space-y-2 rounded-lg border bg-muted/30 p-3">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+        <span className="font-medium text-foreground">
+          {report.orgName}
+        </span>
+        <code className="rounded bg-muted px-1 py-0.5 font-mono text-muted-foreground">
+          {report.orgIdentifier}
+        </code>
+        <a
+          href={report.orgUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 text-brand hover:underline"
+        >
+          Open in Harness
+          <ExternalLink className="size-3" />
+        </a>
+
+        {/* Only the counts that happened. A row of three zeroes reads as three
+            problems somebody has to check. */}
+        <span className="ml-auto flex items-center gap-2 text-muted-foreground">
+          {(Object.keys(OUTCOME) as DeployOutcome[])
+            .filter((outcome) => counts[outcome] > 0)
+            .map((outcome) => (
+              <span key={outcome} className={OUTCOME[outcome].className}>
+                {counts[outcome]} {OUTCOME[outcome].label}
+              </span>
+            ))}
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Dismiss this report"
+            className="transition-colors hover:text-foreground"
+          >
+            <X className="size-3.5" />
+          </button>
+        </span>
+      </div>
+
+      <p className="text-xs text-muted-foreground">
+        Read from {report.sources} template source
+        {report.sources === 1 ? "" : "s"}.
+        {counts.failed > 0 && (
+          <>
+            {" "}
+            Nothing was rolled back — the organization is there with everything
+            that did land, so the fix is usually to correct the cause and deploy
+            into a new one, or finish it by hand in Harness.
+          </>
+        )}
+      </p>
+
+      <ul className="max-h-72 space-y-0.5 overflow-y-auto text-xs">
+        {report.steps.map((step, i) => (
+          <li
+            key={i}
+            className="flex flex-wrap items-baseline gap-x-2 border-b border-border/40 py-1 last:border-b-0"
+          >
+            <span className="w-24 shrink-0 text-muted-foreground">
+              {step.kind}
+            </span>
+            <code className="font-mono text-foreground">{step.identifier}</code>
+            <span className="text-muted-foreground">in {step.scope}</span>
+            <span className={cn("ml-auto shrink-0", OUTCOME[step.outcome].className)}>
+              {OUTCOME[step.outcome].label}
+            </span>
+            {step.detail && (
+              // Full width beneath the line rather than truncated into it: this
+              // is Harness's own sentence about why, and it is the only thing on
+              // the page that can tell somebody what to change.
+              <span className="w-full text-muted-foreground">{step.detail}</span>
+            )}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

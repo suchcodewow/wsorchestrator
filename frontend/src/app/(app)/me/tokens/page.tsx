@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { harnessBaseUrl } from "@/lib/harness-platform";
 import { listHarnessTokens } from "@/lib/harness-tokens";
+import { canManageSettings } from "@/lib/roles";
 import { secretsConfigured } from "@/lib/secret-box";
 import { HarnessTokensView } from "./harness-tokens-view";
 
@@ -21,6 +22,11 @@ export default async function MyTokensPage() {
       // A deployment with no key can't store a token at all. Better to say so
       // above an inert form than to let a paste earn a 503.
       configured={secretsConfigured()}
+      // Whether to offer "Deploy content" at all. A deploy reads every org
+      // secret and every template source, so it belongs to the role that
+      // already administers those pages — the Harness permission on the token
+      // is the second half of the gate, not the whole of it.
+      canDeploy={canManageSettings(session.user.siteRole)}
     />
   );
 }

@@ -114,6 +114,41 @@ export async function listOrgSecrets(): Promise<OrgSecretRow[]> {
   return rows.map((r) => summarize(r.secret, r.byName ?? r.byEmail ?? null));
 }
 
+/**
+ * One saved secret with its plaintext, for code that has to hand the real thing
+ * to Harness. `value` is null when the row was sealed with a different key than
+ * this deployment now holds — a caller reports that per row rather than failing
+ * the whole batch, because the fix is re-entering that one value.
+ */
+export type OrgSecretValue = {
+  identifier: string;
+  kind: OrgSecretKind;
+  fileName: string | null;
+  value: string | null;
+};
+
+/**
+ * Every org secret, opened.
+ *
+ * The counterpart to `listOrgSecrets`, which deliberately never returns a value:
+ * this is the only function here that does, and it exists because the values have
+ * to reach Harness. Not reachable from any page — the deploy is its one caller —
+ * and that separation is why the settings tab can be sure it cannot leak one.
+ */
+export async function orgSecretValues(): Promise<OrgSecretValue[]> {
+  const rows = await db
+    .select()
+    .from(harnessOrgSecrets)
+    .orderBy(asc(harnessOrgSecrets.identifier));
+
+  return rows.map((row) => ({
+    identifier: row.identifier,
+    kind: row.kind as OrgSecretKind,
+    fileName: row.fileName,
+    value: openSecret(row.secret),
+  }));
+}
+
 /** What a caller supplies for either a new secret or a new value. */
 export type OrgSecretInput = {
   kind: OrgSecretKind;
