@@ -74,10 +74,11 @@ export const NAV_SECTIONS: NavSection[] = [
    */
   {
     items: [
-      // First, and the one destination outside this group: following it leaves
-      // the app shell, so the sidebar goes away and /labs' own table of
-      // contents takes over. It stays in the header for visitors with no
-      // account, who have neither a sidebar nor a menu to find it in.
+      // First, and the one destination outside the `(app)` route group — the
+      // guides are public, so they cannot sit behind its redirect. The shell is
+      // the same one either way, so following this keeps the sidebar. It also
+      // stays in the header for visitors with no account, who have neither a
+      // sidebar nor a menu to find it in.
       { href: "/labs", label: "Workshops", Icon: Layers },
       { href: "/events", label: "Orchestrator", Icon: CalendarDays, also: ["/runs"] },
       // Ungated alongside the orchestrator: contributing components is the floor

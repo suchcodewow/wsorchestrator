@@ -31,6 +31,12 @@ variable "billing_account_id" {
   type        = string
 }
 
+variable "instructor_groups" {
+  description = "Google group addresses granted owner on the workshops folder, so their members administer every project a run creates — workshop, challenge, or sandbox — without a per-run grant. Members outside the Workspace domain (a @harness.io instructor, say) are included, which is the point; a group whose membership is stale hands owner to whoever is still in it."
+  type        = list(string)
+  default     = []
+}
+
 variable "sandbox_project_id" {
   description = "Project id for the long-lived shared testing project no-cloud runs use. Leave empty to derive sbx-<admin_project_id>; set explicitly if that id is already taken (project ids are global and max 30 chars)."
   type        = string

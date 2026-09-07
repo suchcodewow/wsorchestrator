@@ -50,6 +50,25 @@ resource "google_folder_iam_member" "runner_folder" {
   member = "serviceAccount:${google_service_account.runner.email}"
 }
 
+# ------------------------------------------------------------------ #
+# Instructors: owner on the folder, inherited by every workshop project
+# ------------------------------------------------------------------ #
+
+# Granted at the FOLDER rather than per project, deliberately. A run's own
+# Terraform grants each attendee on the project it just made (see
+# runner/terraform/modules/project), and a fixed member threaded through that
+# path would be managed by every run's state at once — on the shared sandbox
+# project, tearing one run down would revoke the grant another still needs.
+# Bound here instead, it is one binding, held outside any run's lifecycle, and
+# it reaches projects that already exist as well as the ones not created yet.
+resource "google_folder_iam_member" "instructor_groups" {
+  for_each = toset(var.instructor_groups)
+
+  folder = "folders/${var.workshops_folder_id}"
+  role   = "roles/owner"
+  member = "group:${each.value}"
+}
+
 # Link newly created workshop projects to the billing account.
 resource "google_billing_account_iam_member" "runner_billing" {
   billing_account_id = var.billing_account_id

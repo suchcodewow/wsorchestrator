@@ -41,6 +41,7 @@ export function AppSidebar({
   initialScope,
   build,
   defaultCollapsed,
+  sticky = false,
   signOutAction,
 }: {
   name: string | null;
@@ -52,6 +53,14 @@ export function AppSidebar({
   build: BuildInfo;
   /** From the sidebar cookie, so the server and the first client paint agree. */
   defaultCollapsed: boolean;
+  /**
+   * Hold still by sticking to the viewport instead of relying on the shell to
+   * have pinned the page. For the shells that keep the ordinary document scroll
+   * — see [[AppShell]]'s `scroll` prop. The height is the viewport less the
+   * header it sits under, so the nav inside still does its own scrolling and the
+   * account footer stays on the bottom edge rather than off it.
+   */
+  sticky?: boolean;
   /** Server action; it redirects, so it never resolves on the happy path. */
   signOutAction: () => Promise<void>;
 }) {
@@ -81,6 +90,9 @@ export function AppSidebar({
         className={cn(
           "hidden shrink-0 flex-col overflow-hidden border-r border-border/70 bg-background/50 backdrop-blur-xl transition-[width] duration-200 ease-out lg:flex",
           collapsed ? "w-16" : "w-64",
+          // `self-start` so the flex row does not stretch it to the page's
+          // height, which would leave nothing for `sticky` to do.
+          sticky && "lg:sticky lg:top-14 lg:h-[calc(100vh-3.5rem)] lg:self-start",
         )}
       >
         <nav className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-3 py-5">
