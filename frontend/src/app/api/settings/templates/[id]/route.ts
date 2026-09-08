@@ -1,8 +1,9 @@
+/** Forgets a template source. */
+
 import { NextResponse } from "next/server";
 import { requireAdministrator } from "@/lib/api-auth";
 import { deleteTemplateSource } from "@/lib/harness-templates";
 
-/** Forget a template source. The token goes with the row — there is one copy. */
 export async function DELETE(
   _req: Request,
   { params }: { params: Promise<{ id: string }> },

@@ -1,3 +1,5 @@
+/** The AWS half of the Cloud Status page. */
+
 import "server-only";
 
 import { createHash, createHmac } from "node:crypto";
@@ -9,32 +11,6 @@ import {
   type CloudAuditResult,
 } from "./types";
 
-/**
- * The AWS half of the Cloud Status page.
- *
- * The scope is the organization: every workshop run creates a member account
- * (`aws_organizations_account`, see `runner/terraform/workshops/aws-base`), so
- * "every account in the org" is the AWS analog of "every project on the billing
- * account" — the org is also the billing boundary, since a member account's
- * charges roll up to the management account's bill.
- *
- * Closed (`SUSPENDED`) accounts are left out. The page's job is to surface spend
- * nobody has claimed, and a closed account cannot be charged for anything during
- * the ~90 days AWS keeps it listed, so showing it only crowds out the accounts
- * that can. That makes the totals here smaller than the organization console's.
- *
- * Signed by hand rather than with `@aws-sdk/client-organizations`: two read-only
- * calls do not justify pulling the AWS SDK into the web app's bundle, and SigV4
- * over `node:crypto` is a page of code. The requests are `ListAccounts` and
- * `DescribeOrganization`, both read-only — the credentials are the management
- * account's, so nothing here is allowed to be more than that.
- */
-
-/**
- * Organizations is a global service reached through one regional endpoint, and
- * it is signed for that region no matter what `AWS_REGION` says — signing for
- * (say) eu-west-1 is refused with a credential-scope error.
- */
 const HOST = "organizations.us-east-1.amazonaws.com";
 const SIGNING_REGION = "us-east-1";
 const SERVICE = "organizations";
@@ -46,11 +22,6 @@ type AwsCredentials = {
   sessionToken?: string;
 };
 
-/**
- * The management-account credentials, the same pair the runner provisions with
- * (see `infra/admin/app.tf`). Absent — an AWS-less deployment — the audit
- * reports itself unconfigured rather than failing.
- */
 function credentials(): AwsCredentials | null {
   const accessKeyId = process.env.AWS_ACCESS_KEY_ID;
   const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
@@ -62,7 +33,6 @@ function credentials(): AwsCredentials | null {
   };
 }
 
-/** Extra accounts that are permanent fixtures rather than runs. Comma-separated. */
 function infraAccountIds(): Set<string> {
   return new Set(
     (process.env.AWS_INFRA_ACCOUNT_IDS ?? "")
@@ -77,15 +47,12 @@ const sha256 = (data: string) =>
 const hmac = (key: Buffer | string, data: string) =>
   createHmac("sha256", key).update(data, "utf8").digest();
 
-/** `20260905T123456Z` — SigV4 wants basic-format ISO 8601, no separators. */
 const amzDate = (now: Date) =>
   now.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
 
-/** Anything the API answers that isn't a 2xx, so the caller can classify it. */
 class AwsError extends Error {
   constructor(
     readonly status: number,
-    /** The `__type` field AWS puts the exception name in, when there is one. */
     readonly code: string,
     message: string,
   ) {
@@ -93,13 +60,6 @@ class AwsError extends Error {
   }
 }
 
-/**
- * One signed JSON-1.1 call against Organizations.
- *
- * The signature covers the four headers below plus a SHA-256 of the body. `host`
- * has to be among them and has to match what actually goes on the wire, which is
- * why it's set from the same constant the URL is built from.
- */
 async function organizations<T>(action: string, body: object): Promise<T> {
   const creds = credentials();
   if (!creds) throw new AwsError(0, "NotConfigured", "No AWS credentials");
@@ -135,8 +95,6 @@ async function organizations<T>(action: string, body: object): Promise<T> {
     sha256(canonicalRequest),
   ].join("\n");
 
-  // The signing key is the secret walked through date -> region -> service ->
-  // terminator, so a leaked signature is only good for that one combination.
   const kDate = hmac(`AWS4${creds.secretAccessKey}`, dateStamp);
   const kRegion = hmac(kDate, SIGNING_REGION);
   const kService = hmac(kRegion, SERVICE);
@@ -166,7 +124,6 @@ async function organizations<T>(action: string, body: object): Promise<T> {
         return {};
       }
     })();
-    // `__type` is `com.amazonaws...#AccessDeniedException`; only the tail matters.
     const code = (parsed.__type ?? "").split("#").pop() || `Http${res.status}`;
     throw new AwsError(res.status, code, parsed.message ?? text.slice(0, 200));
   }
@@ -186,7 +143,6 @@ type Account = {
 
 type ListAccounts = { Accounts?: Account[]; NextToken?: string };
 
-/** Every account in the organization, following pagination. */
 async function listAccounts(): Promise<Account[]> {
   const accounts: Account[] = [];
   let next: string | undefined;
@@ -201,33 +157,11 @@ async function listAccounts(): Promise<Account[]> {
   return accounts;
 }
 
-/**
- * An AWS account's console is reached through its sign-in alias, which
- * `ListAccounts` doesn't return — reading it means assuming a role into each
- * account, which is far more than an audit should do. So this links to the
- * account's page in the organization console instead, which is where an admin
- * looking at this table wants to end up anyway.
- */
 const orgConsoleUrl = (accountId: string) =>
   `https://${SIGNING_REGION}.console.aws.amazon.com/organizations/v2/home/accounts/${encodeURIComponent(accountId)}`;
 
-/**
- * A closed account. AWS keeps it listed for ~90 days after closure and it can
- * accrue nothing in that window, so it is dropped from the audit entirely —
- * this page exists to find spend, and a challenge that ran 60 competitors would
- * otherwise bury its live accounts under closed ones for three months.
- *
- * `PENDING_CLOSURE` is deliberately not treated this way: closure has been
- * requested but resources may still be running and billing, so such an account
- * stays visible until AWS moves it to `SUSPENDED`.
- */
 const CLOSED = "SUSPENDED";
 
-/**
- * The statuses that read as healthy. Only `ACTIVE` does — closed accounts never
- * reach the table, so what is left to distinguish is an account mid-closure,
- * which is worth showing as a warning.
- */
 const ACCOUNT_OK = new Set(["ACTIVE"]);
 
 function classify(err: unknown): AuditUnavailable {
@@ -247,9 +181,6 @@ export async function auditAws(owners: OwnerMaps): Promise<CloudAuditResult> {
   let accounts: Account[];
   let org: Organization["Organization"];
   try {
-    // The org description names the management account, which is the one account
-    // guaranteed not to be a run — so it has to land before anything is
-    // classified, not alongside.
     [org, accounts] = await Promise.all([
       organizations<Organization>("DescribeOrganization", {}).then(
         (d) => d.Organization,
@@ -266,8 +197,6 @@ export async function auditAws(owners: OwnerMaps): Promise<CloudAuditResult> {
 
   const resources: AuditedResource[] = accounts.flatMap((a) => {
     if (!a.Id) return [];
-    // A closed account cannot be charged for anything, so it is not this page's
-    // business — whether a run claims it or not.
     if (a.Status === CLOSED) return [];
     const owner = known.get(a.Id) ?? null;
     const status = a.Status ?? "UNKNOWN";
@@ -277,8 +206,6 @@ export async function auditAws(owners: OwnerMaps): Promise<CloudAuditResult> {
         name: a.Name ?? null,
         url: orgConsoleUrl(a.Id),
         state: { label: status.toLowerCase(), ok: ACCOUNT_OK.has(status) },
-        // Like GCP, the whole scope is this deployment's: an account in the org
-        // bills to our management account whether a run made it or not.
         classification: owner ? "tracked" : infra.has(a.Id) ? "infra" : "untracked",
         owner,
       } satisfies AuditedResource,
@@ -298,9 +225,6 @@ export async function auditAws(owners: OwnerMaps): Promise<CloudAuditResult> {
       columns: { id: "Account", name: "Account name", state: "Status" },
       missing: missingFromCloud(
         known,
-        // Every id the organization listed, closed ones included — those are
-        // filtered out of the table above, but a run whose account is merely
-        // closed must not then surface here as one AWS has dropped.
         accounts.flatMap((a) => (a.Id ? [a.Id] : [])),
         infra,
       ),

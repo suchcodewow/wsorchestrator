@@ -1,3 +1,5 @@
+/** Edits or removes a sign-in domain. */
+
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import {
@@ -8,18 +10,15 @@ import {
 } from "@/lib/allowed-domains";
 import { canManageSettings } from "@/lib/roles";
 
-/** Administrators only, for both handlers below. */
 async function actor() {
   const session = await auth();
   if (!session?.user) return { error: "unauthorized" as const, status: 401 };
-  // Not 401: they are signed in, they just aren't allowed here.
   if (!canManageSettings(session.user.siteRole)) {
     return { error: "forbidden" as const, status: 403 };
   }
   return { actor: { id: session.user.id, email: session.user.email } };
 }
 
-/** Edit a sign-in domain or its note. */
 export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -47,7 +46,6 @@ export async function PATCH(
   return NextResponse.json({ ok: true });
 }
 
-/** Remove a sign-in domain. */
 export async function DELETE(
   _req: Request,
   { params }: { params: Promise<{ id: string }> },

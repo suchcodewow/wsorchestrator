@@ -1,5 +1,7 @@
 "use client";
 
+/** The Harness organizations this site may read templates from. */
+
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
@@ -29,7 +31,6 @@ const shortDate = (iso: string) =>
     day: "numeric",
   });
 
-/** How a scope reads in a picker and in the table: name, then its identifier. */
 const scopeLabel = (name: string | null, identifier: string) =>
   name && name !== identifier ? `${name} (${identifier})` : identifier;
 
@@ -40,16 +41,13 @@ export function TemplatesView({
   configured,
 }: {
   sources: TemplateSourceRow[];
-  /** The live check for each row, by id — see the page. */
   status: Record<string, SourceStatus>;
   baseUrl: string;
-  /** Whether an encryption key exists. Without one nothing can be saved. */
   configured: boolean;
 }) {
   const router = useRouter();
   const [token, setToken] = useState("");
   const [reveal, setReveal] = useState(false);
-  /** Null until the token has been loaded — which is what gates the pickers. */
   const [orgs, setOrgs] = useState<HarnessScope[] | null>(null);
   const [org, setOrg] = useState("");
   const [projects, setProjects] = useState<HarnessScope[] | null>(null);
@@ -60,11 +58,6 @@ export function TemplatesView({
 
   const full = sources.length >= MAX_TEMPLATE_SOURCES;
 
-  /**
-   * One place for the fetch and the error shape. Every route here answers with
-   * `{ error, detail }`, and `messageFor` is what turns that into the sentence —
-   * shared with the server so the two agree on what each error means.
-   */
   async function call(
     key: string,
     path: string,
@@ -95,12 +88,6 @@ export function TemplatesView({
     }
   }
 
-  /**
-   * Everything downstream of the token, cleared. Called when the token is
-   * edited: organizations loaded for the old paste say nothing about the new
-   * one, and leaving them on screen would let somebody save a scope that was
-   * never checked against the token they are saving it with.
-   */
   function resetScopes() {
     setOrgs(null);
     setOrg("");
@@ -108,7 +95,6 @@ export function TemplatesView({
     setProject("");
   }
 
-  /** Step one: what can this token see? */
   async function load() {
     if (token.trim().length === 0) return;
     resetScopes();
@@ -124,15 +110,11 @@ export function TemplatesView({
       setError("That token works, but it can't see any organizations.");
       return;
     }
-    // Not auto-selected even when there is only one: the point of this step is
-    // that an administrator chooses the org, and a pre-filled single option is
-    // a choice nobody made.
     setSaved(
       `${scopes.length} organization${scopes.length === 1 ? "" : "s"} visible to this token.`,
     );
   }
 
-  /** Step two, on choosing an org: what projects are in it? */
   async function pickOrg(identifier: string) {
     setOrg(identifier);
     setProjects(null);
@@ -143,9 +125,6 @@ export function TemplatesView({
       method: "POST",
       body: JSON.stringify({ token: token.trim(), org: identifier }),
     });
-    // A failure leaves `projects` null, which reads as "not loaded" — the org is
-    // still chosen and can still be saved on its own, which is a legitimate
-    // source and the right thing to fall back to.
     if (body) setProjects(body.scopes as HarnessScope[]);
   }
 
@@ -223,19 +202,12 @@ export function TemplatesView({
         </motion.p>
       )}
 
-      {/* Add a source: token, then org, then optionally project. Each step only
-          appears once the one before it has an answer, so the form reads as the
-          sequence it is rather than as four controls waiting on each other. */}
       <motion.div variants={riseChild}>
         <Card>
           <CardContent className="space-y-3 py-5">
             <div className="flex flex-wrap items-center gap-2">
               <div className="relative min-w-64 flex-1">
                 <Input
-                  // A password field by default: this is a live credential, and
-                  // it is pasted more often than typed. The reveal is there for
-                  // the one case that matters — checking a paste Harness just
-                  // rejected.
                   type={reveal ? "text" : "password"}
                   value={token}
                   autoComplete="off"
@@ -417,15 +389,6 @@ export function TemplatesView({
   );
 }
 
-/**
- * One scope picker. A native `<select>` because that is what a list of thirty
- * organizations wants on a phone as much as on a desktop, and this app has no
- * combobox to reach for.
- *
- * The empty option is meaningful in both uses: for the organization it is "not
- * chosen yet", and for the project it is "the whole organization" — which is why
- * the placeholder is the caller's to word.
- */
 function ScopePicker({
   label,
   value,
@@ -451,7 +414,6 @@ function ScopePicker({
         value={value}
         disabled={scopes.length === 0}
         onChange={(e) => onChange(e.target.value)}
-        // Matches the Input primitive's shell so the row reads as one form.
         className={cn(
           "h-9 w-full rounded-md border border-input bg-field px-2 text-sm text-foreground shadow-xs transition-colors",
           "focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
@@ -469,14 +431,6 @@ function ScopePicker({
   );
 }
 
-/**
- * The tick or the cross, and what it means on hover.
- *
- * The three findings are reported separately because they fail for different
- * reasons and want different fixes — a revoked token is pasted again, a deleted
- * org means the row should go, a moved project means it should be re-added. One
- * boolean would send somebody to the wrong one.
- */
 function StatusMark({
   row,
   status,
@@ -499,8 +453,6 @@ function StatusMark({
 
   return (
     <span
-      // The reasons are the title rather than a column of their own: the table
-      // is already six columns wide, and this is a sentence, not a field.
       title={status.ok ? "Checked when this page loaded — all of it works." : reasons.join(" ")}
       className={cn(
         "inline-flex size-6 items-center justify-center rounded-full",

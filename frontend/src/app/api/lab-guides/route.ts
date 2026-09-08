@@ -1,15 +1,15 @@
+/** Writes a new lab guide. */
+
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { createLabGuide, labGuideSchema } from "@/lib/lab-guides";
 import { canManageLabGuides } from "@/lib/roles";
 
-/** Write a new lab guide. Managers and above. */
 export async function POST(req: Request) {
   const session = await auth();
   if (!session?.user) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
-  // Not 401: they are signed in, they just aren't allowed to write guides.
   if (!canManageLabGuides(session.user.siteRole)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }

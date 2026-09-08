@@ -1,5 +1,7 @@
 "use client";
 
+/** The saved Harness tokens, and the deploy and scrub actions on each. */
+
 import { Fragment, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
@@ -42,11 +44,6 @@ const shortDate = (iso: string) =>
     day: "numeric",
   });
 
-/**
- * A date *and* a time, for the one thing on this page where the time of day is
- * part of the answer: two deploys into the same account on the same afternoon are
- * told apart by nothing else.
- */
 const stamp = (iso: string) =>
   new Date(iso).toLocaleString(undefined, {
     year: "numeric",
@@ -56,14 +53,6 @@ const stamp = (iso: string) =>
     minute: "2-digit",
   });
 
-/**
- * How long until a deadline, in the largest unit that still says something.
- *
- * Days for the normal case — the window is a week — hours on the last day, and
- * "any moment now" once it is past, which is the truth: the sweep runs on a
- * timer, so a deadline in the past means the next tick, not that nothing
- * happened.
- */
 function until(iso: string): string {
   const ms = new Date(iso).getTime() - Date.now();
   if (ms <= 0) return "any moment now";
@@ -73,21 +62,14 @@ function until(iso: string): string {
   return `in ${days} day${days === 1 ? "" : "s"}`;
 }
 
-/** Whether a token has any deployed credentials on record at all. */
 const hasScrubRecord = (s: ScrubSummary) =>
   s.pending + s.scrubbed + s.skipped + s.failed > 0;
 
-/** What Harness calls the principal, in words somebody would recognise. */
 const PRINCIPAL_LABEL: Record<string, string> = {
   USER: "Personal token",
   SERVICE_ACCOUNT: "Service account",
 };
 
-/**
- * What to call a saved token. The account name comes from Harness during the
- * check, so there is no label to fall back to — only the account id, for a token
- * that is valid but not allowed to read its own account.
- */
 const tokenName = (t: HarnessTokenSummary) => t.accountName ?? t.accountId;
 
 export function HarnessTokensView({
@@ -99,15 +81,8 @@ export function HarnessTokensView({
 }: {
   tokens: HarnessTokenSummary[];
   baseUrl: string;
-  /** Whether an encryption key exists. Without one nothing can be saved. */
   configured: boolean;
-  /** Days a deploy's real secret values live before being scrubbed to `123`. */
   scrubDays: number;
-  /**
-   * Whether this user may administer site settings. Half the deploy gate — the
-   * other half is the token administering its Harness account — because a deploy
-   * reads every org secret and every template source the site holds.
-   */
   canDeploy: boolean;
 }) {
   const router = useRouter();
@@ -120,11 +95,6 @@ export function HarnessTokensView({
 
   const full = tokens.length >= MAX_HARNESS_TOKENS_PER_USER;
 
-  /**
-   * One place for the fetch and the error shape. Every route here answers with
-   * `{ error, detail }`, and `messageFor` is what turns that into the sentence —
-   * shared with the server so the two agree on what each error means.
-   */
   async function call(
     key: string,
     path: string,
@@ -164,13 +134,8 @@ export function HarnessTokensView({
     if (!body) return;
 
     const added = body.token as HarnessTokenSummary;
-    // Cleared on success and not before: a token Harness rejected is still in
-    // the field, which is what lets somebody fix a truncated paste rather than
-    // fetch it again.
     setToken("");
     setReveal(false);
-    // Names the account Harness reported, which is the confirmation that matters:
-    // it is how somebody sees they pasted the token they meant to.
     setSaved(
       `Saved for ${tokenName(added)} — ${
         added.permissions.filter((p) => p.permitted).length
@@ -192,9 +157,6 @@ export function HarnessTokensView({
     });
     if (!body) return;
 
-    // Removing a token scrubs what it deployed first, because afterwards nothing
-    // can — so anything left behind has to be said here. This is the last moment
-    // somebody is looking at a row that is about to stop existing.
     const scrub = body.scrub as ScrubRun | null;
     if (scrub && scrub.problems.length > 0) {
       setError(
@@ -213,13 +175,6 @@ export function HarnessTokensView({
     router.refresh();
   }
 
-  /**
-   * Take the site's credentials back out of what a token deployed, now.
-   *
-   * Its own function rather than a `call`, because a partial result is the normal
-   * one — secrets somebody else has since edited are left alone on purpose — so
-   * the answer is a count and a list rather than success or failure.
-   */
   async function scrub(id: string): Promise<ScrubRun | null> {
     const body = await call(`scrub:${id}`, `/api/me/harness-tokens/${id}/scrub`, {
       method: "POST",
@@ -229,16 +184,6 @@ export function HarnessTokensView({
     return body.run as ScrubRun;
   }
 
-  /**
-   * Build a Harness organization from the site's settings with this token.
-   *
-   * Not routed through `call`: this one has its own error vocabulary — an
-   * organization that already exists, a token that no longer administers the
-   * account — and `deployMessageFor` is the module that knows those sentences.
-   * The row is left to render the report, because a report is a page of detail
-   * and belongs next to the token it was deployed with rather than in the banner
-   * every other message shares.
-   */
   async function deploy(
     id: string,
     org: string,
@@ -261,14 +206,9 @@ export function HarnessTokensView({
         setError(deployMessageFor(body?.error, res.status, body?.detail));
         return null;
       }
-      // The row now has a deploy on it — where it went and when — and that is
-      // server state, so it comes back from a refresh rather than being mirrored
-      // into local state here.
       router.refresh();
       return body.report;
     } catch {
-      // A deploy runs long enough to outlive a laptop lid. Worth saying that the
-      // organization may exist regardless, because it very likely does.
       setError(
         "Lost contact with the server while deploying — check the organization in Harness first.",
       );
@@ -320,17 +260,12 @@ export function HarnessTokensView({
         </motion.p>
       )}
 
-      {/* New token */}
       <motion.div variants={riseChild}>
         <Card>
           <CardContent className="space-y-3 py-5">
             <div className="flex flex-wrap items-center gap-2">
               <div className="relative min-w-64 flex-1">
                 <Input
-                  // A password field by default: this is a live credential, and
-                  // it is pasted more often than typed. The reveal is there for
-                  // the one case that matters — checking a paste that Harness
-                  // just rejected.
                   type={reveal ? "text" : "password"}
                   value={token}
                   autoComplete="off"
@@ -385,7 +320,6 @@ export function HarnessTokensView({
         </Card>
       </motion.div>
 
-      {/* Saved tokens */}
       <motion.div variants={riseChild}>
         {tokens.length === 0 ? (
           <p className="rounded-2xl border border-dashed px-5 py-8 text-center text-sm text-muted-foreground">
@@ -398,13 +332,8 @@ export function HarnessTokensView({
                 key={t.id}
                 token={t}
                 busy={busy === t.id}
-                // Its own flag rather than folded into `busy`: a deploy takes
-                // minutes, and the row has to keep saying which of the two it is
-                // waiting on.
                 deploying={busy === `deploy:${t.id}`}
                 scrubbing={busy === `scrub:${t.id}`}
-                // Both halves of the gate. The site role is the same for every
-                // row; the permission is this token's.
                 canDeploy={canDeploy && administersAccount(t.permissions)}
                 expanded={expanded === t.id}
                 onToggle={() =>
@@ -440,13 +369,9 @@ function TokenRow({
 }: {
   token: HarnessTokenSummary;
   busy: boolean;
-  /** A deploy is in flight for this row. Minutes, not the moment a re-check is. */
   deploying: boolean;
-  /** A scrub is in flight: a couple of Harness calls per deployed secret. */
   scrubbing: boolean;
-  /** Whether to offer a deploy at all — both halves of the gate, already ANDed. */
   canDeploy: boolean;
-  /** Days the deployed secret values stay real. Said in the prompt, before the act. */
   scrubDays: number;
   expanded: boolean;
   onToggle: () => void;
@@ -456,48 +381,26 @@ function TokenRow({
   onScrub: () => Promise<ScrubRun | null>;
 }) {
   const granted = token.permissions.filter((p) => p.permitted).length;
-  // A row saved before the probe list changed has answers for a different set of
-  // permissions, so its own count is the denominator rather than today's list.
   const checked = token.permissions.length;
   const name = tokenName(token);
 
-  /** Whether the org prompt is open. Closed until the button is pressed. */
   const [prompting, setPrompting] = useState(false);
-  // Prefilled with wherever this token last deployed. Deploying twice into the
-  // same organization is the normal case — it is how a deploy with a couple of
-  // failures in it gets finished — so the name that worked is the default, and
-  // deploying somewhere new means editing it.
   const [org, setOrg] = useState(token.lastDeploy?.orgName ?? "");
   const [report, setReport] = useState<DeployReport | null>(null);
 
-  // Derived rather than validated on submit, and shown, because a name with a
-  // space or a hyphen in it becomes a different string in Harness and nobody
-  // should have to discover that from the result.
   const identifier = harnessIdentifier(org);
 
-  /**
-   * Whether submitting would deploy into the organization this token already
-   * built, rather than make a new one.
-   *
-   * Compared on the identifier, and case-insensitively, because that is how
-   * Harness compares: "My Org", "my-org" and "MY_ORG" are all one organization
-   * there. Same rule as the server's — see `deployContent`.
-   */
   const rerun =
     identifier !== null &&
     identifier.toLowerCase() ===
       token.lastDeploy?.orgIdentifier.toLowerCase();
 
-  /** What a just-pressed "Scrub now" did, until the row is next re-rendered. */
   const [scrubbed, setScrubbed] = useState<ScrubRun | null>(null);
 
   async function submit() {
     if (identifier === null || deploying) return;
     const result = await onDeploy(org);
     if (!result) return;
-    // The name is left in the field either way: on success it is the new default
-    // for a re-run, and on failure it is what lets somebody fix a collision or a
-    // typo rather than retype the whole thing.
     setPrompting(false);
     setReport(result);
   }
@@ -530,9 +433,6 @@ function TokenRow({
               size="sm"
               className="text-muted-foreground"
               disabled={busy || deploying || !token.usable}
-              // Toggles the prompt rather than deploying: this creates an
-              // organization and fills it with the site's credentials, so it is
-              // not something a stray click should be able to do.
               onClick={() => setPrompting((open) => !open)}
               title="Create a Harness org and fill it from this site's settings"
             >
@@ -572,12 +472,8 @@ function TokenRow({
         </div>
       </div>
 
-      {/* Interleaved rather than written out, because any of these can be absent
-          and a hard-coded separator between two of them leaves a stray dot. */}
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
         {[
-          // The heading is the account name, so the id only earns its own place
-          // here when it is not already standing in for that name.
           token.accountName !== null ? (
             <code className="font-mono">{token.accountId}</code>
           ) : null,
@@ -595,9 +491,6 @@ function TokenRow({
           ))}
       </div>
 
-      {/* Its own line rather than another item in the list above: it names a
-          place in another system and links to it, which is a different kind of
-          fact from when the token was last verified. */}
       {token.lastDeploy && (
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
           <Rocket className="size-3.5 shrink-0" />
@@ -612,8 +505,6 @@ function TokenRow({
               {token.lastDeploy.orgName}
             </a>
           </span>
-          {/* The identifier only when it says something the name did not — a
-              name Harness could use verbatim would just be printed twice. */}
           {token.lastDeploy.orgIdentifier !== token.lastDeploy.orgName && (
             <code className="rounded bg-muted px-1 py-0.5 font-mono">
               {token.lastDeploy.orgIdentifier}
@@ -653,10 +544,6 @@ function TokenRow({
               </>
             )}
           </p>
-          {/* Before the button, not after it. The secrets that go in are real
-              credentials of this site's, landing in an account somebody else
-              owns — that they come back out again is the thing that makes this
-              safe to do, so it is said while there is still a choice. */}
           <p className="text-xs leading-relaxed text-muted-foreground">
             The org secrets go in with their real values so the content works
             immediately, and{" "}
@@ -712,9 +599,6 @@ function TokenRow({
               <>
                 Harness identifier:{" "}
                 <code className="rounded bg-muted px-1 py-0.5 font-mono">
-                  {/* On a re-run, the identifier Harness already has rather than
-                      the one this spelling would derive — they differ only in
-                      case, and the existing one is what gets written to. */}
                   {rerun ? token.lastDeploy?.orgIdentifier : identifier}
                 </code>
                 {deploying && (
@@ -739,8 +623,6 @@ function TokenRow({
         ) : (
           <ChevronRight className="size-3.5" />
         )}
-        {/* "0 of 0" would read as a token that may do nothing, which is a
-            different claim from never having been asked. */}
         {checked === 0
           ? "No permission check recorded"
           : `${granted} of ${checked} checked permissions granted`}
@@ -775,19 +657,6 @@ function TokenRow({
   );
 }
 
-/**
- * What has become of the site's credentials this token deployed.
- *
- * The visible half of the scrub design, and the reason it is on the row rather
- * than somewhere in settings: the credentials went out with *this* token, and
- * whoever deployed them is the person who should see a week's countdown running
- * down every time they open the page. A scheduled job that silently stops is the
- * failure this is against — the counting-down line and the button next to it are
- * what make that noticeable and fixable.
- *
- * Absent entirely for a token that never deployed a secret, so a row that has
- * nothing to say says nothing.
- */
 function DeployedCredentials({
   scrub,
   scrubbing,
@@ -799,7 +668,6 @@ function DeployedCredentials({
   scrub: ScrubSummary;
   scrubbing: boolean;
   disabled: boolean;
-  /** The result of a scrub just pressed here, if there was one. */
   run: ScrubRun | null;
   onScrub: () => Promise<void>;
   onDismiss: () => void;
@@ -813,8 +681,6 @@ function DeployedCredentials({
       <>{scrub.orgs.length} organizations</>
     );
 
-  // Offered while anything could still be taken out. A scrub that failed is
-  // worth retrying; one that was skipped is not ours to retry.
   const canScrub = scrub.pending > 0 || scrub.failed > 0;
 
   return (
@@ -876,8 +742,6 @@ function DeployedCredentials({
         )}
       </div>
 
-      {/* Named, with Harness's reason. "Two failed" is not something anybody can
-          act on; "this secret, because somebody edited it" is. */}
       {scrub.problems.length > 0 && (
         <ul className="space-y-0.5 text-xs text-muted-foreground">
           {scrub.problems.map((problem) => (
@@ -903,8 +767,6 @@ function DeployedCredentials({
         </ul>
       )}
 
-      {/* Only what the button just did. The counts above are the durable record
-          and come back from the server; this is the acknowledgement. */}
       {run && (
         <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
           <span>
@@ -931,7 +793,6 @@ function DeployedCredentials({
   );
 }
 
-/** How each outcome reads, and how it is coloured. */
 const OUTCOME: Record<DeployOutcome, { label: string; className: string }> = {
   created: { label: "created", className: "text-brand" },
   existed: { label: "already there", className: "text-muted-foreground" },
@@ -939,18 +800,6 @@ const OUTCOME: Record<DeployOutcome, { label: string; className: string }> = {
   skipped: { label: "skipped", className: "text-amber-600 dark:text-amber-500" },
 };
 
-/**
- * What the deploy did, entity by entity.
- *
- * Every line is shown rather than only the failures, and in the order the deploy
- * went in. A deploy is somebody's first look at an organization they cannot see
- * yet, and "forty created, two failed" with the two named is a different thing
- * from a list of two errors: the first says what is now in Harness, and that is
- * the question being asked.
- *
- * Scrolls rather than paginates. It is a log, it is read top to bottom once, and
- * it is thrown away by the close button.
- */
 function DeployReportPanel({
   report,
   onClose,
@@ -979,8 +828,6 @@ function DeployReportPanel({
           <ExternalLink className="size-3" />
         </a>
 
-        {/* Only the counts that happened. A row of three zeroes reads as three
-            problems somebody has to check. */}
         <span className="ml-auto flex items-center gap-2 text-muted-foreground">
           {(Object.keys(OUTCOME) as DeployOutcome[])
             .filter((outcome) => counts[outcome] > 0)
@@ -1027,9 +874,6 @@ function DeployReportPanel({
               {OUTCOME[step.outcome].label}
             </span>
             {step.detail && (
-              // Full width beneath the line rather than truncated into it: this
-              // is Harness's own sentence about why, and it is the only thing on
-              // the page that can tell somebody what to change.
               <span className="w-full text-muted-foreground">{step.detail}</span>
             )}
           </li>

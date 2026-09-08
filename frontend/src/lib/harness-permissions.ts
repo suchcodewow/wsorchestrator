@@ -1,31 +1,11 @@
-/**
- * The permissions a saved Harness token is probed for, and what to call them.
- *
- * Not an attempt at Harness's whole permission model — that is hundreds of
- * identifiers, and a list of hundreds of green ticks tells nobody anything. This
- * is the set a workshop run actually exercises: one org per workshop, a project
- * per attendee, the secrets and connectors and templates deployed into them, a
- * delegate token, and the role assignments that let attendees in. So the answer
- * the tab gives is the useful one — "this token could run a workshop", or which
- * grant it is missing.
- *
- * Pure and shared deliberately: the probe runs on the server, the labels are
- * drawn on the client, and both should be looking at the same list.
- */
+/** What a Harness token is allowed to do. */
 
 export type PermissionProbe = {
-  /** Harness permission identifier. */
   permission: string;
-  /** Harness resource type it is asked about. */
   resourceType: string;
-  /** What it is called in the UI. Plain English, not the identifier. */
   label: string;
 };
 
-/**
- * Ordered roughly by how much a run depends on it, because that is the order
- * somebody scans looking for the reason a token isn't enough.
- */
 export const PERMISSION_PROBES: PermissionProbe[] = [
   {
     permission: "core_organization_create",
@@ -84,33 +64,13 @@ export const PERMISSION_PROBES: PermissionProbe[] = [
   },
 ];
 
-/**
- * "Administer the account" — the one probe answer anything acts on rather than
- * merely displays.
- *
- * Named here so the three places that care cannot drift apart: the tab decides
- * whether to offer a deploy on it, the route re-checks it live with Harness
- * before writing anything, and the probe list above is where it is asked in the
- * first place.
- */
 export const ACCOUNT_ADMIN = "core_account_edit";
 
-/**
- * Whether a recorded permission check says the token administers the account.
- *
- * A snapshot, and treated as one: this is what decides whether the button is
- * worth offering, never whether a write may go ahead. The grant may have been
- * taken away since, which is why the deploy asks Harness again.
- */
 export const administersAccount = (
   permissions: { permission: string; permitted: boolean }[],
 ) => permissions.some((p) => p.permission === ACCOUNT_ADMIN && p.permitted);
 
 const LABELS = new Map(PERMISSION_PROBES.map((p) => [p.permission, p.label]));
 
-/**
- * The label for a stored permission id, falling back to the identifier itself.
- * A row saved before a probe was renamed or removed still has to render.
- */
 export const permissionLabel = (permission: string) =>
   LABELS.get(permission) ?? permission;

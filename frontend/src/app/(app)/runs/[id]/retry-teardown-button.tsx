@@ -1,5 +1,7 @@
 "use client";
 
+/** Restarts a teardown that gave up. */
+
 import { useState } from "react";
 import { Loader2, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -12,21 +14,11 @@ const ERRORS: Record<string, string> = {
   unauthorized: "Sign in again to retry this teardown.",
 };
 
-/**
- * Restart a teardown that gave up.
- *
- * Shown only in `destroy_failed`, the one state where the reaper has stopped on
- * its own and is waiting to be told to try again. Not to be confused with
- * `RetryEventButton`, which re-runs a failed provision — that one builds, this
- * one removes, and showing both at once is impossible because no run is in
- * `failed` and `destroy_failed` at the same time.
- */
 export function RetryTeardownButton({
   run,
   onRetried,
 }: {
   run: WorkshopRun;
-  /** The teardown is queued again — the run is back to destroying. */
   onRetried: () => void;
 }) {
   const [pending, setPending] = useState(false);

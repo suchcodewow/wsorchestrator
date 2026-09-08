@@ -1,5 +1,7 @@
 "use client";
 
+/** The attendee page: a row per account, claimed by name. */
+
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -9,15 +11,8 @@ import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 import { Check, ChevronDown, Copy, ExternalLink, Loader2 } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
-// Type-only: erased at compile time, so the `server-only` module behind it is
-// never pulled into the client bundle.
 import type { AttendeeView, CloudLink } from "@/lib/attendees";
 
-/**
- * `claimedAt` is a Date on the server-rendered pass and a string once it has
- * been through JSON on a poll. It is only ever read as "does this row have a
- * name yet", so the union is the honest type rather than a lie in one direction.
- */
 type Row = Omit<AttendeeView["accounts"][number], "claimedAt"> & {
   claimedAt: string | Date | null;
 };
@@ -27,10 +22,8 @@ type Fields = { name: string; from: string; vacation: string };
 type FieldName = keyof Fields;
 const EMPTY: Fields = { name: "", from: "", vacation: "" };
 
-/** Statuses where the room's answers can still change and are worth polling. */
 const TERMINAL = new Set<RunStatus>(["destroyed", "failed"]);
 
-/** The current values for a row, from its persisted answers. */
 function fieldsOf(a: Row): Fields {
   return {
     name: a.claimedName ?? "",
@@ -43,18 +36,12 @@ function seed(accounts: Row[]): Record<number, Fields> {
   return Object.fromEntries(accounts.map((a) => [a.id, fieldsOf(a)]));
 }
 
-/**
- * What each cloud's environment is called, on the button that opens it. Names
- * the resource rather than the provider's console — "resource group" is what
- * an attendee is looking for once they are signed in.
- */
 const CLOUD_RESOURCE: Record<Cloud, string> = {
   gcp: "Google",
   azure: "Azure",
   aws: "AWS",
 };
 
-/** The button that opens one cloud's environment. */
 function CloudButton({ link, className }: { link: CloudLink; className?: string }) {
   return (
     <LinkButton href={link.url} className={className}>
@@ -63,10 +50,6 @@ function CloudButton({ link, className }: { link: CloudLink; className?: string 
   );
 }
 
-/**
- * One "open this somewhere else" button — the workshop guides, a cloud
- * environment, the Harness org.
- */
 function LinkButton({ href, className, children }: { href: string; className?: string; children: ReactNode }) {
   return (
     <Button variant="outline" size="sm" className={className} asChild>
@@ -78,41 +61,21 @@ function LinkButton({ href, className, children }: { href: string; className?: s
   );
 }
 
-/** How long after the last keystroke a row's answers are saved. */
 const SAVE_DEBOUNCE_MS = 500;
 
-/**
- * One shared column template. The header and every row read from the same
- * constant so they cannot drift out of alignment.
- *
- * Below `md` the template does not apply at all and each row stacks into a
- * labelled card — a five-column table is unusable on the phone most attendees
- * will actually open this link on.
- *
- * The last column is the row's Details toggle: everything that is not the
- * address or one of the three answers — passwords, the Azure pass, the link
- * into this competitor's environment — lives behind it.
- */
 const COLUMNS = "md:grid-cols-[minmax(0,20rem)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.25fr)_auto]";
 
 export function AttendeeGrid({ initial, runId }: { initial: View; runId: string }) {
   const [data, setData] = useState<View>(initial);
   const [values, setValues] = useState<Record<number, Fields>>(() => seed(initial.accounts));
 
-  // The latest values, for the debounced save to read without re-closing.
   const valuesRef = useRef(values);
   useEffect(() => {
     valuesRef.current = values;
   }, [values]);
 
-  // A poll must not yank a field out from under someone. A row is held to its
-  // local values while it is focused or has an edit that has not been confirmed
-  // saved; every other row takes the server's values, which is how one person's
-  // typing reaches everyone else.
   const focusedRef = useRef<{ id: number; field: FieldName } | null>(null);
   const dirtyRef = useRef<Set<number>>(new Set());
-  // Per-row edit counter, so a save only clears "dirty" if nothing was typed
-  // while it was in flight (otherwise the newer local edit would be clobbered).
   const genRef = useRef<Record<number, number>>({});
   const timersRef = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
 
@@ -131,8 +94,6 @@ export function AttendeeGrid({ initial, runId }: { initial: View; runId: string 
     });
   }, [runId]);
 
-  // Keep the page live for the whole event: answers keep flowing in, and other
-  // people's edits only appear via these polls. A finished event is static.
   const live = !TERMINAL.has(data.status);
   useEffect(() => {
     if (!live) return;
@@ -142,7 +103,6 @@ export function AttendeeGrid({ initial, runId }: { initial: View; runId: string 
     return () => clearInterval(timer);
   }, [live, refresh]);
 
-  // Flush any pending debounce timers when the page goes away.
   useEffect(() => {
     const timers = timersRef.current;
     return () => {
@@ -160,12 +120,9 @@ export function AttendeeGrid({ initial, runId }: { initial: View; runId: string 
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ accountId: id, ...fields }),
         });
-        if (!res.ok) return; // keep the row dirty so a poll won't overwrite it
-        // Nothing typed since this save started — safe to let polls take over.
+        if (!res.ok) return;
         if ((genRef.current[id] ?? 0) === gen) dirtyRef.current.delete(id);
-      } catch {
-        // Offline or a blip; the row stays dirty and the next edit re-saves.
-      }
+      } catch {}
     },
     [runId],
   );
@@ -195,12 +152,7 @@ export function AttendeeGrid({ initial, runId }: { initial: View; runId: string 
 
   const filledCount = data.accounts.filter((a) => a.claimedAt).length;
   const noun = data.mode === "challenge" ? "competitor" : "attendee";
-  // Azure sign-in takes a different credential, which is worth explaining once
-  // under the table rather than on every row — but only for an event that has
-  // one, since most do not.
   const hasAccessPass = data.accounts.some((a) => a.azureAccessPass);
-  // AWS is the one cloud the Google password does not open, so say so once
-  // under the table — but only for an event that actually built one.
   const hasAwsPassword = data.accounts.some((a) => a.awsPassword);
 
   return (
@@ -212,15 +164,7 @@ export function AttendeeGrid({ initial, runId }: { initial: View; runId: string 
             ? `Take a row and open Details for your password — ${filledCount} of ${data.accounts.length} taken.`
             : `Accounts for this ${data.mode} will appear here.`}
         </p>
-        {/* Everywhere the room is expected to go, in one place: the guides
-            themselves, the Harness org every event provisions, then a
-            workshop's shared environment per cloud (challenges link per
-            competitor on their own row).
 
-            The guides come first and are always there — this page hands out a
-            credential, and the workshop is what the room came to do with it.
-            It opens in its own tab like the rest: an attendee who lost this
-            page has lost the row they claimed and the password on it. */}
         <div className="mt-3 flex flex-wrap gap-2">
           <LinkButton href="/labs">Workshop guides</LinkButton>
           {data.harnessOrgUrl && <LinkButton href={data.harnessOrgUrl}>Open Harness organization</LinkButton>}
@@ -239,14 +183,7 @@ export function AttendeeGrid({ initial, runId }: { initial: View; runId: string 
           <motion.div variants={riseChild}>
             <Card>
               <CardContent className="px-0">
-                {/* Column headings, wide screens only — each stacked card
-                    below `md` carries its own inline labels instead.
 
-                    Every heading is indented to sit directly over the first
-                    character of what is under it: the three answer columns are
-                    text inputs, whose text starts one `px-3` in from the
-                    column edge, so their headings carry the same `px-3` while
-                    the address column's sits flush like the address does. */}
                 <div
                   className={cn(
                     "hidden items-end gap-4 border-b px-6 pb-3 text-[11px] font-medium tracking-wider text-muted-foreground uppercase md:grid",
@@ -260,12 +197,6 @@ export function AttendeeGrid({ initial, runId }: { initial: View; runId: string 
                   <span className="sr-only">Account details</span>
                 </div>
 
-                {/* No dividers: forty rows of rules is most of what made this
-                    page feel loud. A row is bounded by its own spacing, and
-                    the tint on a taken row is what the eye follows instead —
-                    which is why the rows are spaced apart rather than merely
-                    stacked: a run of taken rows with no gap fuses into one
-                    block, and the room can no longer count them. */}
                 <ul className="space-y-1 px-3 py-2">
                   {data.accounts.map((account) => (
                     <AccountRow
@@ -283,9 +214,6 @@ export function AttendeeGrid({ initial, runId }: { initial: View; runId: string 
           </motion.div>
 
           <motion.p variants={riseChild} className="text-xs leading-relaxed text-muted-foreground">
-            {/* No "you'll be asked to change your password": the accounts are
-                created without a forced reset on purpose, so the one password
-                keeps working across every cloud this event uses. */}
             Your password works as-is
             {hasAwsPassword && <>, except on AWS, which has its own in your row&rsquo;s details</>}
             {hasAccessPass && <>, and on Azure, which asks for your access pass</>}, and these accounts are deleted when
@@ -297,16 +225,6 @@ export function AttendeeGrid({ initial, runId }: { initial: View; runId: string 
   );
 }
 
-/**
- * One account: the address and the three answers, with everything else a click
- * away.
- *
- * The row is what the room reads across — who is on which account, and where
- * they are from — so it carries only that. Passwords are the opposite: needed
- * once, at sign-in, by one person, and a wall of them across every row is what
- * made this table hard to scan. They live in the details panel below, open one
- * row at a time.
- */
 function AccountRow({
   account,
   values,
@@ -325,9 +243,6 @@ function AccountRow({
   const detailsId = useId();
 
   return (
-    // The tint is inset and rounded rather than full-bleed: with the dividers
-    // gone it is the only thing marking one row off from the next, and a band
-    // running wall to wall reads as another rule.
     <li className={cn("rounded-lg px-3 py-2 transition-colors", filled ? "bg-muted/40" : "hover:bg-accent/25")}>
       <div className={cn("gap-4 md:grid md:items-center", COLUMNS)}>
         <Credential value={account.email} label="email" />
@@ -359,8 +274,6 @@ function AccountRow({
         />
 
         <div className="mt-3 md:mt-0 md:text-right">
-          {/* Ghost, not outline: one outlined button per row is forty outlines
-              down the page, competing with the inputs that are the point. */}
           <Button
             variant="ghost"
             size="sm"
@@ -375,9 +288,6 @@ function AccountRow({
         </div>
       </div>
 
-      {/* Kept in the DOM while closed so the copy buttons and the link are
-          there for anyone searching the page, and so opening a row costs
-          nothing. */}
       <div id={detailsId} hidden={!open} className="mt-2.5">
         <AccountDetails account={account} />
       </div>
@@ -385,61 +295,29 @@ function AccountRow({
   );
 }
 
-/**
- * Everything about an account that is not on its row: what to sign in with,
- * and — on a challenge — where this competitor's own environment is. The
- * address is not repeated here; it is on the row, with its own copy button.
- */
 function AccountDetails({ account }: { account: Row }) {
-  // Labelled as expired rather than hidden once it lapses: an attendee who
-  // cannot sign in needs to know which credential went stale, not to find the
-  // row it used to be on.
   const expired = accessPassExpired(account);
 
   return (
-    // Label on the left, value on the right, one pair per line. A two-column
-    // grid rather than stacked blocks so every value starts at the same x — the
-    // passwords read as one list to work down, and the eye has one edge to find
-    // instead of one per card.
-    //
-    // Tight on purpose: each value carries its own invisible padding as a copy
-    // target, so the panel's own gaps only have to separate the lines, not make
-    // room to click in.
     <dl className="grid grid-cols-[minmax(0,auto)_minmax(0,1fr)] items-baseline gap-x-3 gap-y-2.5 rounded-lg bg-muted/50 px-3 py-2.5">
-      {/* Named for the directory it belongs to, not just "password". An event
-          hands out two secrets that look alike, and an attendee staring at a
-          sign-in box needs to know which box this one is for — Harness has no
-          password of its own, it is entered through Sign in with Google. */}
       <Detail label="Google Password">
         <Credential value={account.tempPassword} label="Google password" />
       </Detail>
-      {/* Azure asks for this instead of the password — see the note under the
-          table. Only an event that provisioned Azure has one. */}
       {account.azureAccessPass && (
         <Detail label={`Azure Password${expired ? " (expired)" : ""}`}>
           <Credential value={account.azureAccessPass} label="Azure pass" />
         </Detail>
       )}
-      {/* AWS is the one cloud that does not take the Google password: its IAM
-          user carries an AWS-generated one. The sign-in name is the same email
-          as everywhere else, so the password is all that needs saying. */}
       {account.awsPassword && (
         <Detail label="AWS Password" hint="Sign in with your email address as the IAM user name.">
           <Credential value={account.awsPassword} label="AWS password" />
         </Detail>
       )}
-      {/* One per attendee on every event, whatever clouds it picked — this is
-          where the actual work happens, so it sits with the credentials rather
-          than with the org link at the top of the page. The button names the
-          thing itself, so it takes the value column with no label beside it. */}
       {account.harnessProjectUrl && (
         <Detail>
           <LinkButton href={account.harnessProjectUrl}>Your Harness Project</LinkButton>
         </Detail>
       )}
-      {/* This competitor's own environment, on a challenge — their project,
-          their resource group, their AWS account. A workshop shares one per
-          cloud and links to it once above the table, so its rows have none. */}
       {account.links.length > 0 && (
         <Detail label="Your environment">
           <div className="flex flex-wrap gap-2">
@@ -453,26 +331,17 @@ function AccountDetails({ account }: { account: Row }) {
   );
 }
 
-/**
- * One row of the details panel: its label in the left column, its value in the
- * right. A row with nothing to label — a button that names itself — still takes
- * the value column, so it lines up under the values above it.
- */
 function Detail({
   label,
   hint,
   children,
 }: {
   label?: string;
-  /** What this credential is actually for, when the label alone won't say. */
   hint?: string;
   children: ReactNode;
 }) {
   return (
     <>
-      {/* The label column is sized to its longest label, so the hint hangs
-          under the value instead — a sentence in the left column would push
-          every value halfway across the panel. */}
       <dt className="text-xs font-medium whitespace-nowrap text-foreground">{label}</dt>
       <dd className="min-w-0">
         {children}
@@ -482,18 +351,11 @@ function Detail({
   );
 }
 
-/** Whether this account's Azure access pass has already lapsed. */
 function accessPassExpired(account: Row): boolean {
   const at = account.azureAccessPassExpiresAt;
   return at ? new Date(at).getTime() <= Date.now() : false;
 }
 
-/**
- * One credential. The value itself is the copy target — someone reaching for a
- * password aims at the password, not at a 14px icon beside it — so the whole
- * block is the button. The icon stays on as the affordance that says so, faded
- * in on hover, and always shown where there is no hover to be had.
- */
 function Credential({ value, label }: { value: string; label: string }) {
   const [copied, setCopied] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -508,17 +370,8 @@ function Credential({ value, label }: { value: string; label: string }) {
   return (
     <button
       type="button"
-      // The padding is the target, and the negative margin cancels it out of
-      // the layout: the block is 8px easier to hit on every side than it looks,
-      // while the value still starts flush with the column edge and the rows
-      // above and below stay as tight as if it had no padding at all.
-      // `w-fit`, not `w-full`: on a wide screen the value column is far wider
-      // than any password in it, and a tint band running the whole way across
-      // reads as a row of its own — and makes a stray click copy something.
       className="group -mx-2 -my-1.5 flex w-fit max-w-full cursor-pointer items-start gap-1.5 rounded-md px-2 py-1.5 text-left transition-colors outline-none hover:bg-foreground/5 focus-visible:ring-[3px] focus-visible:ring-ring/50"
       onClick={async () => {
-        // Blocked outside a secure context and in some embedded browsers;
-        // the text is on screen either way, so a failure is not worth a error.
         try {
           await navigator.clipboard.writeText(value);
         } catch {
@@ -529,12 +382,7 @@ function Credential({ value, label }: { value: string; label: string }) {
         timer.current = setTimeout(() => setCopied(false), 1500);
       }}
     >
-      {/* Wrapped rather than truncated: an attendee has to be able to read the
-          whole value to type it into a sign-in box, and generated addresses
-          run longer than any column width worth giving them. */}
       <span className="min-w-0 font-mono text-sm break-all">{value}</span>
-      {/* The button's accessible name is the value plus what clicking it does,
-          rather than an aria-label that would hide the value itself. */}
       <span role="status" className="sr-only">
         {copied ? "Copied" : `, click to copy ${label}`}
       </span>
@@ -544,9 +392,7 @@ function Credential({ value, label }: { value: string; label: string }) {
           "shrink-0 py-0.5 text-muted-foreground transition-opacity",
           copied
             ? "opacity-100"
-            : // Hidden at rest so a details panel reads as a list of values
-              // rather than a column of icons — but not on touch, where the
-              // hover that would reveal it never comes.
+            :
               "opacity-0 group-hover:opacity-70 group-focus-visible:opacity-70 [@media(hover:none)]:opacity-70",
         )}
       >
@@ -556,13 +402,6 @@ function Credential({ value, label }: { value: string; label: string }) {
   );
 }
 
-/**
- * One shared answer input, with the label that only shows when stacked.
- *
- * No placeholder: the column heading above it (or the inline label, stacked)
- * already says what goes in, and a grid of grey example answers reads as a
- * grid of already-filled rows at a glance.
- */
 function Field({
   label,
   value,
@@ -583,11 +422,6 @@ function Field({
   return (
     <label className={cn("block", className)}>
       <span className="mb-1 block text-xs text-muted-foreground md:hidden">{label}</span>
-      {/* Borderless at rest, outlined on hover and while being typed in. Ten
-          rows of three outlined boxes is thirty rectangles down the page; the
-          field's own background is enough to say "you can type here", and the
-          border earns its place only on the one field being used. It is made
-          transparent rather than removed so nothing shifts when it appears. */}
       <Input
         className="border-transparent shadow-none hover:border-input focus:border-input"
         value={value}
@@ -601,7 +435,6 @@ function Field({
   );
 }
 
-/** Shown when the event has no accounts yet — or no longer has any. */
 function EmptyState({ status, noun }: { status: RunStatus; noun: string }) {
   const pending = status === "scheduled" || status === "requested" || status === "provisioning" || status === "applying";
   const message =

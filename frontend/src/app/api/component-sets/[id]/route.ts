@@ -1,3 +1,5 @@
+/** One candidate component set and the components it proposes. */
+
 import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
@@ -11,7 +13,6 @@ import {
 } from "@/lib/components/catalog";
 import { validateSet } from "@/lib/components/validate";
 
-/** The set, if the caller may see it: its author, or any manager. */
 async function readable(setId: string, userId: string, role: string) {
   const [set] = await db
     .select()
@@ -23,7 +24,6 @@ async function readable(setId: string, userId: string, role: string) {
   return set.authorId === userId ? set : null;
 }
 
-/** One candidate set and the components it proposes. */
 export async function GET(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -35,21 +35,11 @@ export async function GET(
 
   const { id } = await params;
   const set = await readable(id, viewer.id, viewer.siteRole);
-  // A set somebody else owns answers the same "not found" as one that never
-  // existed, so the endpoint does not confirm which ids are real.
   if (!set) return NextResponse.json({ error: "not_found" }, { status: 404 });
 
   return NextResponse.json({ set, components: await listSetComponents(id) });
 }
 
-/**
- * Replace what a set proposes — the contributor iterating after a sandbox run
- * showed them something.
- *
- * Only while it is still `testing`. Rewriting a submitted set would change what
- * a reviewer is reading underneath them; rewriting an approved one would put it
- * silently out of step with the baseline it was folded into.
- */
 export async function PUT(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -92,13 +82,6 @@ export async function PUT(
   return NextResponse.json({ setId: id, components: valid.length });
 }
 
-/**
- * Withdraw a submission, putting it back to `testing` so it can be worked on.
- *
- * A delete would be the obvious verb, but the set is what a sandbox run
- * deployed and what its logs refer to; removing it would cascade those
- * components out from under a run still standing.
- */
 export async function DELETE(
   req: Request,
   { params }: { params: Promise<{ id: string }> },

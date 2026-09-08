@@ -1,3 +1,5 @@
+/** Replaces or removes one org secret. */
+
 import { NextResponse } from "next/server";
 import { requireAdministrator } from "@/lib/api-auth";
 import {
@@ -7,16 +9,6 @@ import {
   updateOrgSecret,
 } from "@/lib/harness-org-secrets";
 
-/**
- * Replace a secret's value — and, with it, its identifier and whether it is
- * inline or a file. A rotation is a new value under the same name, which is the
- * same request as a correction.
- *
- * A PUT would be the tidier verb for "here is the whole row again", but there is
- * no way to send *part* of one: the value is required, because the old value can
- * never be read back to leave it alone. PATCH is what the rest of this app uses
- * for an edit form, and the shape follows that.
- */
 export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -51,10 +43,6 @@ export async function PATCH(
   return NextResponse.json({ secret: result.secret });
 }
 
-/**
- * Forget a secret. Only here: the copies already created in live workshop orgs
- * stay until those orgs are torn down — see `deleteOrgSecret`.
- */
 export async function DELETE(
   _req: Request,
   { params }: { params: Promise<{ id: string }> },

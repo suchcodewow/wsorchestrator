@@ -1,5 +1,7 @@
 "use client";
 
+/** Deletes an event, after saying what that tears down. */
+
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Trash2 } from "lucide-react";
@@ -21,13 +23,6 @@ const ERRORS: Record<string, string> = {
   unauthorized: "Sign in again to delete this event.",
 };
 
-/**
- * What deleting this run will actually do, in the words the dialog uses.
- *
- * Three shapes, because a run's resources decide how final a delete can be:
- * nothing built yet, everything already torn down, or live things that have to
- * be destroyed before the record can go.
- */
 function consequence(run: WorkshopRun): {
   blurb: string;
   confirm: string;
@@ -70,19 +65,13 @@ function consequence(run: WorkshopRun): {
   }
 }
 
-/**
- * Delete an event. Rendered for its owner and for a manager or above; the API
- * checks the same thing again, so this only decides what is worth showing.
- */
 export function DeleteEventButton({
   run,
   owned,
   onRequested,
 }: {
   run: WorkshopRun;
-  /** False when a manager is looking at somebody else's event. */
   owned: boolean;
-  /** Teardown was requested — the run is still there, with new log lines. */
   onRequested: () => void;
 }) {
   const router = useRouter();
@@ -106,7 +95,6 @@ export function DeleteEventButton({
 
       setOpen(false);
       if (body?.outcome === "deleted") {
-        // The page this is on no longer has anything to render.
         router.push("/events");
         router.refresh();
       } else {

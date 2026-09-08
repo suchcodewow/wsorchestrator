@@ -1,5 +1,7 @@
 "use client";
 
+/** Browses the image library and puts one in a guide. */
+
 import { useEffect, useRef, useState } from "react";
 import {
   ImageIcon,
@@ -24,51 +26,26 @@ import { LAB_IMAGE_LIMITS } from "@/db/schema";
 import { uploadImageFile, type PickerImage } from "@/lib/lab-image-upload";
 import { cn } from "@/lib/utils";
 
-/** What the editor needs to write a Markdown reference. */
 export type InsertedImage = { id: string; name: string; alt: string };
 
 const MAX_MB = LAB_IMAGE_LIMITS.bytes / (1024 * 1024);
 
-/** "812 KB", "1.4 MB" — a size an author can judge a page weight by. */
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-/**
- * Browse the image library and put one in the guide.
- *
- * The library is global rather than per-guide, for the same reason guides are
- * global rather than per-workshop: the console screenshot that opens one lab is
- * the same screenshot in the next one, and a per-guide library would mean
- * uploading it again every time.
- *
- * Nothing here is loaded until the dialog is opened — an editor is mostly used
- * to write prose, and a grid of screenshots nobody asked for is a page-load
- * cost on every visit to pay for a button that may not be pressed.
- */
 export function ImagePickerDialog({
   onInsert,
 }: {
-  /** Called with the chosen image; the editor decides where it lands. */
   onInsert: (image: InsertedImage) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [images, setImages] = useState<PickerImage[]>([]);
   const [query, setQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
-  /**
-   * Whether a load is in flight — tracked on its own rather than inferred from
-   * an empty list.
-   *
-   * These are three different states that look alike if you conflate them:
-   * still loading, loaded and genuinely empty, and failed. Reading "loading"
-   * off `images === null` meant a failed request never cleared it, so the
-   * spinner turned forever underneath the error message.
-   */
   const [loading, setLoading] = useState(true);
-  /** First load of this dialog session shouldn't sit behind the debounce. */
   const loaded = useRef(false);
 
   const [uploading, setUploading] = useState(false);
@@ -76,17 +53,9 @@ export function ImagePickerDialog({
   const [name, setName] = useState("");
   const fileInput = useRef<HTMLInputElement>(null);
 
-  /** The image whose name is being edited in place, and the text so far. */
   const [renaming, setRenaming] = useState<string | null>(null);
   const [draftName, setDraftName] = useState("");
 
-  /**
-   * Fetch the library, filtered by the search box.
-   *
-   * Debounced and abortable, like the editor's own preview: this runs on every
-   * keystroke otherwise, and a slow response landing after a faster one would
-   * leave the grid showing results for a query the author has moved on from.
-   */
   useEffect(() => {
     if (!open) return;
 
@@ -94,9 +63,6 @@ export function ImagePickerDialog({
 
     const timer = window.setTimeout(
       async () => {
-        // Set when the request actually starts rather than in the effect body:
-        // the results already on screen stay put through the debounce instead
-        // of blinking to a spinner on every keystroke.
         setLoading(true);
         try {
           const res = await fetch(
@@ -104,8 +70,6 @@ export function ImagePickerDialog({
             { signal: controller.signal },
           );
           if (!res.ok) {
-            // The route sends a message with the ones it expects; anything
-            // else (a proxy, a crash) only has its status to go on.
             const body = await res.json().catch(() => null);
             throw new Error(
               body?.message ?? `Could not load images (${res.status})`,
@@ -119,8 +83,6 @@ export function ImagePickerDialog({
           setImages([]);
           setError(err instanceof Error ? err.message : "Could not load images");
         } finally {
-          // Not on abort: another request is already in flight behind this
-          // one, and clearing the flag here would flash the empty state.
           if (!controller.signal.aborted) {
             setLoading(false);
             loaded.current = true;
@@ -147,18 +109,11 @@ export function ImagePickerDialog({
     setUploading(true);
     setError(null);
     try {
-      // Shared with the editor's paste handler, so an image is downscaled the
-      // same way whichever door it came in through. The name is what the
-      // library is searched by; the filename is a reasonable default but a
-      // poor one to be stuck with.
       const image = await uploadImageFile(file, {
         name: name.trim() || file.name,
         alt: name.trim() || file.name,
       });
 
-      // Straight into the guide: uploading an image mid-sentence is done
-      // because it is wanted *here*, and making the author then find it in the
-      // grid they just added to is a step for its own sake.
       setImages((prev) => [image, ...prev]);
       setFile(null);
       setName("");
@@ -171,13 +126,6 @@ export function ImagePickerDialog({
     }
   }
 
-  /**
-   * Save a new name for an image.
-   *
-   * The counterpart to auto-naming on paste: a screenshot filed under the
-   * guide's title gets a real name here, at a moment when the author is
-   * looking at the library rather than mid-sentence.
-   */
   async function saveName(image: PickerImage) {
     const next = draftName.trim();
     if (next.length === 0 || next === image.name) {
@@ -248,9 +196,6 @@ export function ImagePickerDialog({
         </DialogHeader>
 
         <div className="flex items-center gap-2">
-          {/* The fill lives on the wrapper, not the input: the search icon and
-              the clear button sit inside the same box, so the box is the
-              field. */}
           <div className="flex flex-1 items-center gap-2 rounded-md border border-input bg-field px-2.5">
             <Search className="size-4 shrink-0 text-muted-foreground" />
             <input
@@ -273,11 +218,6 @@ export function ImagePickerDialog({
           </div>
         </div>
 
-        {/*
-          Upload sits above the grid rather than behind a second toggle: it is
-          half of what this dialog is for, and an author who has just taken a
-          screenshot should not have to find a control to say so.
-        */}
         <div className="grid gap-2 rounded-lg border border-dashed p-3">
           <div className="flex flex-wrap items-center gap-2">
             <input
@@ -287,7 +227,6 @@ export function ImagePickerDialog({
               onChange={(e) => {
                 const chosen = e.target.files?.[0] ?? null;
                 setFile(chosen);
-                // Offer the filename, minus its extension, as the name.
                 if (chosen && name.trim().length === 0) {
                   setName(chosen.name.replace(/\.[^.]+$/, ""));
                 }
@@ -335,8 +274,6 @@ export function ImagePickerDialog({
               Loading…
             </p>
           ) : error ? (
-            // The message is already above; repeating it here would say the
-            // same thing twice in one dialog.
             <p className="py-8 text-center text-sm text-muted-foreground">
               The library could not be loaded.
             </p>
@@ -359,12 +296,6 @@ export function ImagePickerDialog({
                       "hover:border-brand-border/70 hover:bg-accent/40 dark:hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50",
                     )}
                   >
-                    {/*
-                      A plain <img>, not next/image: these are arbitrary
-                      uploads served from a dynamic route, so there is nothing
-                      for the optimiser to pre-size and no layout win to be had
-                      inside a fixed-height thumbnail box.
-                    */}
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={`/api/lab-images/${image.id}`}
@@ -372,11 +303,6 @@ export function ImagePickerDialog({
                       loading="lazy"
                       className="h-24 w-full bg-muted object-contain"
                     />
-                    {/*
-                      The name sits outside the insert button while it is being
-                      edited — a text field nested in a button cannot be typed
-                      into without the click landing on the button underneath.
-                    */}
                     {renaming !== image.id && (
                       <span className="block truncate px-2.5 pt-2 text-xs font-medium">
                         {image.name}
@@ -394,9 +320,6 @@ export function ImagePickerDialog({
                         onChange={(e) => setDraftName(e.target.value)}
                         maxLength={LAB_IMAGE_LIMITS.name}
                         autoFocus
-                        // Enter commits, Escape abandons — the two things a
-                        // rename-in-place has to answer without a pair of
-                        // buttons crowding a thumbnail.
                         onKeyDown={(e) => {
                           if (e.key === "Enter") {
                             e.preventDefault();
@@ -407,9 +330,6 @@ export function ImagePickerDialog({
                           }
                         }}
                         onBlur={() => void saveName(image)}
-                        // Floats over the thumbnail, so it leans on the Input
-                        // fill being opaque — a see-through field would put
-                        // the name on top of the picture it names.
                         className="h-7 text-xs shadow-sm"
                       />
                     </div>

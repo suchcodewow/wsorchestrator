@@ -1,5 +1,7 @@
 "use client";
 
+/** Re-runs a failed provision. */
+
 import { useState } from "react";
 import { Loader2, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -14,19 +16,11 @@ const ERRORS: Record<string, string> = {
   unauthorized: "Sign in again to retry this event.",
 };
 
-/**
- * Re-run a failed provision. Shown only when the run actually failed — a
- * first-provision failure lands in `failed` (a live workshop's grow failure is
- * left `ready` instead), and its half-built resources are adopted on the retry,
- * so re-running converges rather than duplicating. Rendered for the owner and
- * for a manager or above; the API checks the same thing again.
- */
 export function RetryEventButton({
   run,
   onRetried,
 }: {
   run: WorkshopRun;
-  /** The retry kicked off — the run is provisioning again. */
   onRetried: () => void;
 }) {
   const [pending, setPending] = useState(false);

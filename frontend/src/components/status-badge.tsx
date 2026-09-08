@@ -1,3 +1,5 @@
+/** The chip and dot that show a run's status. */
+
 import type { RunStatus } from "@/db/schema";
 import { cn } from "@/lib/utils";
 
@@ -13,17 +15,6 @@ const LABELS: Record<RunStatus, string> = {
   failed: "Failed",
 };
 
-/**
- * Each status carries a dot colour and a tinted chip.
- *
- * Both schemes are defined deliberately: the light-mode `-100/-700` pairs on
- * their own rendered as glaring near-white blocks against a dark page. Dark
- * uses a translucent wash of the same hue, so the chip sits in the surface
- * rather than on top of it.
- *
- * Exported as a pair because the calendar draws the same dot without the chip,
- * and the two must never drift apart.
- */
 const STYLES: Record<RunStatus, { chip: string; dot: string }> = {
   scheduled: {
     chip: "bg-violet-100 text-violet-700 dark:bg-violet-400/15 dark:text-violet-300",
@@ -49,9 +40,6 @@ const STYLES: Record<RunStatus, { chip: string; dot: string }> = {
     chip: "bg-orange-100 text-orange-700 dark:bg-orange-400/15 dark:text-orange-300",
     dot: "bg-orange-500",
   },
-  // Red, like `failed`, and for the same reason: a teardown that gave up may
-  // have left cloud resources running and billing, so it is a worse outcome than
-  // "Destroying" and must not read as a calmer shade of in-progress.
   destroy_failed: {
     chip: "bg-red-100 text-red-700 dark:bg-red-400/15 dark:text-red-300",
     dot: "bg-red-500",
@@ -66,12 +54,6 @@ const STYLES: Record<RunStatus, { chip: string; dot: string }> = {
   },
 };
 
-/**
- * Statuses where work is still in flight, and the dot should pulse.
- *
- * `destroy_failed` is excluded deliberately: nothing is happening, and a pulsing
- * dot would say the opposite of the thing that needs saying.
- */
 const ACTIVE: RunStatus[] = [
   "requested",
   "provisioning",
@@ -83,8 +65,6 @@ export function statusDot(status: RunStatus): string {
   return STYLES[status].dot;
 }
 
-/** The tinted chip background/text for a status — used by the calendar's
- * multi-day bars so a run's colour there matches its badge everywhere else. */
 export function statusChip(status: RunStatus): string {
   return STYLES[status].chip;
 }
@@ -104,7 +84,6 @@ export function StatusBadge({ status }: { status: RunStatus }) {
       )}
     >
       <span className="relative flex size-1.5">
-        {/* An expanding echo behind the dot, so in-flight runs read as live. */}
         {isActiveStatus(status) && (
           <span
             className={cn(

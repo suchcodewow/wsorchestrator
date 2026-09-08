@@ -1,13 +1,5 @@
-/**
- * The signed-in account as a single glyph.
- *
- * Decorative on purpose: everywhere this appears, the account is already named
- * in text beside it or in the label of the menu it opens. Left readable it
- * would announce a stray letter before the name that follows it.
- *
- * [[UserMenu]] draws it on both of the triggers that show an account rather
- * than a page: the sidebar footer row, and that row's collapsed rail form.
- */
+/** The signed-in account as a single glyph. */
+
 export function Avatar({
   name,
   email,

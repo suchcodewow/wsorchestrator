@@ -1,24 +1,10 @@
+/** Builds the contributor bundle from the live catalog. */
+
 import "server-only";
 import { zip, type ZipEntry } from "@/lib/zip";
 import { listBaseline, type CatalogComponent } from "./catalog";
 import { MAX_SET_COMPONENTS } from "./validate";
 
-/**
- * The contributor bundle: a Claude Code skill, generated from the live catalog.
- *
- * Generated per request rather than checked in, because the most useful thing
- * in it is the list of components that already exist — which is exactly the
- * part a static file gets wrong first. A contributor who unzips this is looking
- * at what the baseline holds right now, so Claude references the connector that
- * is actually there rather than inventing a plausible identifier.
- *
- * It carries no Harness credential. The scripts talk to the portal; the portal
- * talks to Harness with its own key. That is what makes handing this to people
- * outside the team reasonable at all, and it is why the sandbox run is started
- * through an API here rather than by anything the contributor runs locally.
- */
-
-/** Where the skill unpacks to, and what Claude Code will call it. */
 const SKILL_DIR = "harness-components";
 
 function skillMd(components: CatalogComponent[]): string {
@@ -211,7 +197,6 @@ environment; a real environment variable overrides the file.
 `;
 }
 
-/** One catalog component as a file a contributor reads and copies from. */
 function componentFile(c: CatalogComponent): ZipEntry {
   return {
     path: `${SKILL_DIR}/catalog/${c.identifier}.json`,
@@ -226,8 +211,6 @@ function componentFile(c: CatalogComponent): ZipEntry {
         requires: c.requires,
         dependsOn: c.dependsOn,
         versionLabel: c.versionLabel,
-        // Not part of the shape a contributor submits; included because it
-        // answers "may I change this one?" without a trip to the portal.
         builtin: c.builtin,
       },
       null,
@@ -236,7 +219,6 @@ function componentFile(c: CatalogComponent): ZipEntry {
   };
 }
 
-/** Shared preamble for the scripts: config, fetch, and error reporting. */
 const SCRIPT_LIB = `import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -537,12 +519,6 @@ Which is how "this workshop has no AWS" stays quiet while "the AWS credential
 arrived without its access key id" fails the run.
 `;
 
-/**
- * Build the bundle for the current baseline.
- *
- * Returns the archive and a filename carrying the component count, so a
- * contributor with two downloads can tell which is which.
- */
 export async function buildBundle(credential: {
   portalUrl: string;
   token: string;
@@ -553,9 +529,6 @@ export async function buildBundle(credential: {
   const entries: ZipEntry[] = [
     { path: `${SKILL_DIR}/SKILL.md`, content: skillMd(components) },
     { path: `${SKILL_DIR}/README.md`, content: readmeMd(credential.expiresAt) },
-    // The credential, and the one file in here that must not be committed.
-    // Written as .env rather than baked into lib.mjs because that is the file
-    // people already expect to hold a secret and already expect to ignore.
     {
       path: `${SKILL_DIR}/.env`,
       content:
@@ -578,9 +551,6 @@ export async function buildBundle(credential: {
     { path: `${SKILL_DIR}/scripts/sandbox.mjs`, content: SANDBOX_SCRIPT },
     { path: `${SKILL_DIR}/scripts/submit.mjs`, content: SUBMIT_SCRIPT },
     ...components.map(componentFile),
-    // An empty directory cannot be expressed in a ZIP, and the scripts fail
-    // with a readable message when `candidate/` is missing — but a contributor
-    // should find the place their work goes already there, with the shape in it.
     {
       path: `${SKILL_DIR}/candidate/EXAMPLE.json.txt`,
       content: `${JSON.stringify(

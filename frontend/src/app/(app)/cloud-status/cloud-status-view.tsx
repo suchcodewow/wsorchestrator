@@ -1,5 +1,7 @@
 "use client";
 
+/** The Cloud Status tables, one section per cloud. */
+
 import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
 import {
@@ -15,9 +17,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-// `AUDIT_TARGETS` is a plain array and the rest are types, erased at compile
-// time — so the `server-only` modules behind the audits are never pulled into
-// the client bundle.
 import {
   AUDIT_TARGETS,
   type AuditTarget,
@@ -28,23 +27,13 @@ import {
   type CloudStatusReport,
 } from "@/lib/cloud-audit/types";
 
-/**
- * All the per-target wording in one place. The audits themselves carry only the
- * column and scope labels they can't be written without; everything explanatory
- * lives here, next to what renders it.
- */
 const COPY: Record<
   AuditTarget,
   {
-    /** Tab label — short, because four of them share a row. */
     tab: string;
-    /** What the table is a list of, in the header sentence and the total tile. */
     plural: string;
-    /** One line under the title explaining what "untracked" means here. */
     blurb: string;
-    /** What `infra` means here. */
     infra: string;
-    /** What `unmanaged` means here. Null when the target can't produce any. */
     unmanaged: string | null;
     missing: { title: string; note: string };
     errors: Record<AuditUnavailable, string>;
@@ -132,9 +121,7 @@ const COPY: Record<
   },
 };
 
-/** Which subset of one target's resources the table is showing. */
 type Filter = "all" | Classification;
-/** Which column the table is sorted by, and in which direction. */
 type SortColumn = "id" | "name";
 type Sort = { column: SortColumn; dir: "asc" | "desc" } | null;
 
@@ -150,8 +137,6 @@ export function CloudStatus({
   const [message, setMessage] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
-  // Per target, so switching tabs doesn't carry a filter that means something
-  // different — "Unmanaged" exists on Azure and Harness, not on the other two.
   const [filters, setFilters] = useState<Partial<Record<AuditTarget, Filter>>>({});
   const [sorts, setSorts] = useState<Partial<Record<AuditTarget, Sort>>>({});
 
@@ -178,7 +163,6 @@ export function CloudStatus({
     }
   }, []);
 
-  /** Click a column header: sort asc → desc → back to the default order. */
   const toggleSort = useCallback(
     (column: SortColumn) => {
       setSorts((prev) => {
@@ -195,7 +179,6 @@ export function CloudStatus({
     [target],
   );
 
-  // Filter, then sort. With no sort the server order (untracked-first) stands.
   const rows = useMemo(() => {
     if (!result.ok) return [];
     const filtered =
@@ -231,8 +214,6 @@ export function CloudStatus({
 
       {message && <Problem>{message}</Problem>}
 
-      {/* One tab per target, each showing its own headline so a problem in one
-          the admin isn't looking at is still visible from here. */}
       <div
         role="tablist"
         aria-label="Platform"
@@ -275,7 +256,6 @@ export function CloudStatus({
             </span>
           </p>
 
-          {/* Counts double as filters — click one to narrow the table. */}
           <Counts
             audit={result.audit}
             copy={copy}
@@ -367,11 +347,6 @@ function Problem({ children }: { children: React.ReactNode }) {
   );
 }
 
-/**
- * One target's tab: its name, and the one number that matters for it. An
- * unconfigured target stays selectable — the panel then explains which env vars
- * are missing, which is more useful than a tab that does nothing.
- */
 function TargetTab({
   label,
   plural,
@@ -420,12 +395,6 @@ function TargetTab({
   );
 }
 
-/**
- * The count tiles. `total`, `untracked` and `tracked` are always shown — a zero
- * there is the answer, not an absence. `infra` and `unmanaged` appear only when
- * the cloud has any, so GCP and AWS never carry a permanently-empty
- * "Unmanaged 0".
- */
 function Counts({
   audit,
   copy,
@@ -498,7 +467,6 @@ function SortableHeader({
   );
 }
 
-/** The run a resource belongs to, linked so an orphan hunt can start from here. */
 function RunLink({ runId, name }: { runId: string; name: string }) {
   return (
     <Link href={`/runs/${runId}`} className="hover:underline">
@@ -522,16 +490,8 @@ function ResourceRow({
         flagged ? "bg-destructive/5 hover:bg-destructive/10" : "hover:bg-muted/40",
       )}
     >
-      {/* wrap-break-word, not break-all: an AWS account number is one long run of
-          digits, and break-all splits it mid-number into something unreadable.
-          This only breaks an identifier that cannot fit a line of its own, which
-          is what Azure's `MC_<rg>_<cluster>_<region>` node-group names need. */}
       <td className="px-6 py-3">
         {resource.url ? (
-          // Deliberately not inline-flex: an id that wraps makes the flex box as
-          // wide as the cell, and the icon strands itself at the far right
-          // looking like a column of its own. Inline keeps it against the last
-          // line of the name, wherever that ends.
           <a
             href={resource.url}
             target="_blank"

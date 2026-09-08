@@ -1,3 +1,5 @@
+/** Lists events, and books a new one. */
+
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/auth";
@@ -26,22 +28,13 @@ export async function GET() {
 const createSchema = z
   .object({
     name: z.string().trim().min(1).max(200),
-    // Absent on requests written before challenges existed.
     mode: z.enum(EVENT_MODES).default("workshop"),
     userCount: z.number().int().min(1).max(MAX_USERS),
-    // How many days the event runs before teardown. Absent on requests
-    // written before the field existed, which fall back to the default.
     ttlDays: z.number().int().min(1).max(MAX_TTL_DAYS).default(DEFAULT_TTL_DAYS),
-    // May be empty (a no-cloud workshop uses the shared testing project); the
-    // per-mode floor is enforced in the refinement below.
     clouds: z.array(z.enum(CLOUDS)).max(CLOUDS.length),
-    // Omitted when startNow is set — the run begins immediately instead.
     scheduledStart: z.string().datetime().optional(),
     startNow: z.boolean().optional(),
   })
-  // The caps above are the loosest any mode allows; narrow them to the mode
-  // actually asked for, so a challenge can't be posted with 50 users and
-  // three clouds by skipping the form.
   .superRefine((v, ctx) => {
     const limits = limitsFor(v.mode);
     if (v.userCount > limits.maxUsers) {
@@ -74,9 +67,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  // Creating an event is no longer implied by having signed in: a contributor
-  // has an account so they can test Harness components in a sandbox org, and a
-  // full run builds cloud projects and clusters they have no business in.
   if (!canCreateEvents(session.user.siteRole)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
@@ -98,8 +88,6 @@ export async function POST(req: Request) {
     ttlSeconds: parsed.data.ttlDays * DAY_SECONDS,
     clouds: [...new Set(parsed.data.clouds)],
     userId: session.user.id,
-    // A start-now run is backdated so the scheduler still claims it if the
-    // direct trigger below fails.
     scheduledStart: startNow ? new Date() : new Date(scheduledStart!),
     startNow,
   });

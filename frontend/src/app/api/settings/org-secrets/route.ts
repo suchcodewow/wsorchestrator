@@ -1,3 +1,5 @@
+/** The secrets every workshop's Harness organization gets. */
+
 import { NextResponse } from "next/server";
 import { requireAdministrator } from "@/lib/api-auth";
 import {
@@ -7,15 +9,6 @@ import {
   STATUS_FOR,
 } from "@/lib/harness-org-secrets";
 
-/**
- * The secrets every workshop org gets. Administrators only — see
- * `requireAdministrator`, which is session-only on purpose: these rows decide
- * what credentials land in every workshop Harness organization the deployment
- * builds.
- *
- * `multipart/form-data` for both the inline and the uploaded shape. The parsing
- * is in `readOrgSecretForm`, where the reason lives.
- */
 export async function GET() {
   const { error } = await requireAdministrator();
   if (error) return error;

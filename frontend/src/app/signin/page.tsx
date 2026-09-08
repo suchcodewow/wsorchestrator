@@ -1,3 +1,5 @@
+/** The sign-in page. */
+
 import { redirect } from "next/navigation";
 import { AlertTriangle, ArrowRight, CalendarClock, Cloud, Users } from "lucide-react";
 import { auth, googleHostedDomain, signIn } from "@/auth";
@@ -6,33 +8,18 @@ import { AmbientBackdrop } from "@/components/ambient-backdrop";
 import { BrandMark } from "@/components/brand-mark";
 import { SignInHero } from "./signin-hero";
 
-/** The three things the product does, shown rather than described. */
 const CAPABILITIES = [
   { Icon: CalendarClock, text: "Schedule events on a calendar" },
   { Icon: Users, text: "Accounts provisioned per attendee" },
   { Icon: Cloud, text: "Cloud environments torn down on a timer" },
 ];
 
-/**
- * Where to land after signing in.
- *
- * Only a path on this site is ever accepted. A value beginning `//` is
- * protocol-relative and a `/\` is read as scheme-relative by some parsers —
- * both would send the visitor to another origin, so anything that is not a
- * plain single-slash path falls back to the app.
- */
 function safeCallback(value: string | undefined): string {
   if (!value || !value.startsWith("/")) return "/events";
   if (value.startsWith("//") || value.startsWith("/\\")) return "/events";
   return value;
 }
 
-/**
- * Why a sign-in attempt came back here. Auth.js sends its errors to the page
- * named by `pages.error` — this one — as `?error=<type>`. Only the types that
- * a visitor can actually cause are worded for them; anything else is a
- * deployment problem they can do nothing about, so it says so plainly.
- */
 function errorMessage(error: string | undefined): string | null {
   if (!error) return null;
   switch (error) {
@@ -61,8 +48,6 @@ export default async function SignInPage({
 
   return (
     <main className="relative grid min-h-screen place-items-center overflow-hidden p-6">
-      {/* The drifting blooms replace the single static glow this page used to
-          carry — one ambient system rather than two overlapping ones. */}
       <AmbientBackdrop className="absolute inset-0" />
 
       <SignInHero>
@@ -114,9 +99,6 @@ export default async function SignInPage({
             className={problem ? "mt-5" : "mt-8"}
             action={async () => {
               "use server";
-              // Read inside the action, not at render: this is what is in force
-              // when the button is pressed, and the settings page can have
-              // changed the list since the page was served.
               const hd = await googleHostedDomain();
               await signIn(
                 "google",

@@ -1,5 +1,7 @@
 "use client";
 
+/** The backup history, and the dialogs for taking one or restoring from it. */
+
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
@@ -53,7 +55,6 @@ const when = new Intl.DateTimeFormat("en", {
 const format = (iso: string | null) =>
   iso ? when.format(new Date(iso)) : "—";
 
-/** How old the most recent successful backup is, in plain words. */
 function freshness(iso: string | null): { text: string; stale: boolean } | null {
   if (!iso) return null;
   const hours = (Date.now() - new Date(iso).getTime()) / 3_600_000;
@@ -63,7 +64,6 @@ function freshness(iso: string | null): { text: string; stale: boolean } | null 
     return { text: `${h} hour${h === 1 ? "" : "s"} ago`, stale: false };
   }
   const days = Math.round(hours / 24);
-  // Daily backups: anything past ~two days means the schedule is not running.
   return { text: `${days} day${days === 1 ? "" : "s"} ago`, stale: hours > 48 };
 }
 
@@ -104,7 +104,6 @@ export function BackupsTable({
   const [failure, setFailure] = useState<string | null>(null);
   const [backingUp, setBackingUp] = useState(false);
 
-  // The backup the restore dialog is open for, if any.
   const [target, setTarget] = useState<BackupRun | null>(null);
 
   const latest = backups.find((b) => b.status === "SUCCESSFUL") ?? null;
@@ -172,7 +171,6 @@ export function BackupsTable({
         </div>
       ) : (
         <>
-          {/* The question this page is usually opened to answer. */}
           <div
             className={cn(
               "mt-6 flex items-center gap-3 rounded-xl border p-4 text-sm",
@@ -276,14 +274,6 @@ export function BackupsTable({
 
 type StrandedRun = { id: string; name: string; status: string };
 
-/**
- * The confirmation. Deliberately not a one-click affair.
- *
- * It does three things a generic "are you sure" does not: names what a restore
- * actually replaces, lists the events that will be stranded by it, and makes
- * the administrator type the instance name. The stranded list is the important
- * one — it is fetched live, because it is the consequence nobody thinks of.
- */
 function RestoreDialog({
   backup,
   instance,
@@ -303,13 +293,6 @@ function RestoreDialog({
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
 
-  // Reset per backup, during render rather than in an effect — an effect runs
-  // after the paint, which would flash the previous backup's warning.
-  //
-  // `?? null` on both sides is load-bearing. The dialog is closed far more
-  // often than it is open, and with the id left as `undefined` the comparison
-  // against a `null` state is true forever: the reset sets state to the value
-  // it already holds, React re-renders, and the guard fires again.
   const [shownFor, setShownFor] = useState<string | null>(null);
   const openFor = backup?.id ?? null;
 
@@ -412,7 +395,6 @@ function RestoreDialog({
               <li>Site roles revert to what they were at that moment.</li>
             </ul>
 
-            {/* The consequence nobody thinks of, made specific. */}
             {stranded === null ? (
               <p className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="size-4 animate-spin" />

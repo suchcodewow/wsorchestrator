@@ -1,3 +1,5 @@
+/** One workshop, and the guides it is made of. */
+
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -35,7 +37,6 @@ export async function generateMetadata({
   };
 }
 
-/** One workshop: what it covers, and the guides it is made of, in order. */
 export default async function WorkshopPage({
   params,
 }: {

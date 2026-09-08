@@ -1,5 +1,7 @@
 "use client";
 
+/** The button primitive. */
+
 import * as React from "react";
 import { Slot } from "@radix-ui/react-slot";
 import { motion } from "framer-motion";
@@ -42,7 +44,6 @@ const buttonVariants = cva(
 type ButtonProps = React.ComponentProps<"button"> &
   VariantProps<typeof buttonVariants> & {
     asChild?: boolean;
-    /** Opt out of the hover lift where it would fight the surrounding layout. */
     animate?: boolean;
   };
 
@@ -56,8 +57,6 @@ function Button({
 }: ButtonProps) {
   const classes = cn(buttonVariants({ variant, size, className }));
 
-  // `asChild` hands rendering to whatever element is passed in, which Framer
-  // cannot drive — so those render as a plain Slot and skip the interaction.
   if (asChild) {
     return <Slot data-slot="button" className={classes} {...props} />;
   }
@@ -71,8 +70,6 @@ function Button({
       data-slot="button"
       className={classes}
       {...INTERACTIVE}
-      // Framer and React's DOM props disagree on these three event signatures;
-      // the button never animates on them, so they are simply not forwarded.
       {...(props as React.ComponentProps<typeof motion.button>)}
     />
   );

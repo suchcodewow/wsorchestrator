@@ -1,3 +1,5 @@
+/** The public front page. */
+
 import { auth } from "@/auth";
 import { AmbientBackdrop } from "@/components/ambient-backdrop";
 import { LearningScene } from "@/components/learning-scene";
@@ -33,14 +35,6 @@ const CAPABILITIES = [
   },
 ] as const;
 
-/**
- * The public front door — and only that. It is the pitch for someone who has
- * no account yet, so anyone who already has one is sent straight to the
- * orchestrator rather than being sold a product they are already using. The
- * header's brand link points here, which makes this the way back to Workshops
- * from anywhere; signing out clears the session first, so a visitor who just
- * left still lands on the page rather than bouncing off it.
- */
 export default async function Home() {
   if (await auth()) redirect("/events");
 
@@ -48,7 +42,6 @@ export default async function Home() {
     <div className="relative min-h-screen">
       <AmbientBackdrop className="fixed inset-0 -z-10" />
 
-      {/* Always the signed-out bar: a session would have redirected above. */}
       <SiteHeader session={null} />
 
       <main>
@@ -84,11 +77,6 @@ export default async function Home() {
             </div>
           </section>
 
-          {/*
-            The splash. Wider than the copy above it, and it fades out into the
-            page on its own — there is no bottom edge here for the next section
-            to align against.
-          */}
           <div className="mx-auto -mt-2 max-w-6xl px-6">
             <LearningScene />
           </div>

@@ -1,5 +1,7 @@
 "use client";
 
+/** The card primitives. */
+
 import * as React from "react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
@@ -10,7 +12,6 @@ function Card({
   interactive = false,
   ...props
 }: React.ComponentProps<"div"> & {
-  /** Adds the hover lift. Only for cards that are themselves clickable. */
   interactive?: boolean;
 }) {
   const classes = cn(

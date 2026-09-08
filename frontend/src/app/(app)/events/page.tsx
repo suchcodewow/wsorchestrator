@@ -1,3 +1,5 @@
+/** The events calendar page. */
+
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { canSeeAllEvents } from "@/lib/roles";
@@ -11,7 +13,6 @@ export default async function EventsPage() {
 
   const role = session.user.siteRole;
   const { calendarScope } = await getUserPreferences();
-  // A manager who was demoted keeps the saved preference but not the view.
   const scope = canSeeAllEvents(role) ? calendarScope : "own";
 
   const runs = await listCalendarRuns({ id: session.user.id, role }, scope);
@@ -26,8 +27,6 @@ export default async function EventsPage() {
     expiresAt: r.expiresAt ? r.expiresAt.toISOString() : null,
     userCount: r.userCount,
     clouds: r.clouds,
-    // Only shown at `all` scope, where the room the event belongs to is the
-    // one thing the owner's own calendar never has to say.
     owner:
       r.ownerId === session.user.id
         ? null

@@ -1,5 +1,7 @@
 "use client";
 
+/** The secrets every workshop's Harness organization is given. */
+
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
@@ -40,7 +42,6 @@ const ERRORS: Record<string, string> = {
 const message = (error: string | undefined, status: number) =>
   ERRORS[error ?? ""] ?? `Could not save (${status})`;
 
-/** Value sizes here run from a dozen bytes to a few kilobytes. */
 const size = (bytes: number) =>
   bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1)} KB`;
 
@@ -56,7 +57,6 @@ export function OrgSecretsView({
   configured,
 }: {
   secrets: OrgSecretRow[];
-  /** Whether an encryption key exists. Without one nothing can be saved. */
   configured: boolean;
 }) {
   const router = useRouter();
@@ -66,7 +66,6 @@ export function OrgSecretsView({
   const [editing, setEditing] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
 
-  /** One place for the fetch, the error shape, and the refresh after it. */
   async function send(
     key: string,
     url: string,
@@ -76,8 +75,6 @@ export function OrgSecretsView({
     setError(null);
     setSaved(null);
     try {
-      // No Content-Type header: every write here is a `FormData` body, and
-      // fetch has to set the multipart boundary itself.
       const res = await fetch(url, init);
       if (!res.ok) {
         const body = await res.json().catch(() => null);
@@ -136,9 +133,6 @@ export function OrgSecretsView({
         </motion.p>
       )}
 
-      {/* New secret. A card of its own rather than a row in the table below:
-          the form is three controls and one of them is a file input, which no
-          table cell has room for. */}
       <motion.div variants={riseChild}>
         {adding ? (
           <Card>
@@ -182,8 +176,6 @@ export function OrgSecretsView({
         variants={riseChild}
         className="overflow-hidden rounded-2xl border bg-card shadow-sm"
       >
-        {/* Scrolls inside the card rather than being clipped by it — the same
-            wrapper the users and domains tables use. */}
         <div className="overflow-x-auto">
           <table className="w-full min-w-160 text-sm">
             <thead>
@@ -311,18 +303,9 @@ export function OrgSecretsView({
   );
 }
 
-/** Mirrors the server's rule, so a typo is caught before a round trip. */
 const identifierValid = (value: string) =>
   /^[a-zA-Z_][0-9a-zA-Z_$-]{0,127}$/.test(value.trim());
 
-/**
- * The add and edit form are the same form — one used empty, one used with a
- * row's id and kind filled in.
- *
- * Editing still requires a value, and that is not an oversight: the stored one
- * cannot be read back to leave alone, so there is nothing to prefill and no way
- * to save "the same value under a new name". The form says so.
- */
 function SecretForm({
   row,
   busy,
@@ -374,8 +357,6 @@ function SecretForm({
           }}
         />
 
-        {/* Two buttons rather than a select: there are exactly two kinds, and
-            which one is chosen decides which control appears beside them. */}
         <div className="flex overflow-hidden rounded-md border">
           {(["text", "file"] as const).map((option) => (
             <button
@@ -402,8 +383,6 @@ function SecretForm({
 
         {kind === "text" ? (
           <Input
-            // A password field: this is a live credential, and it is pasted far
-            // more often than typed.
             type="password"
             value={value}
             autoComplete="off"

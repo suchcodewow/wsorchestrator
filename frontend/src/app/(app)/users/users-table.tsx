@@ -1,5 +1,7 @@
 "use client";
 
+/** Everyone with an account, and the control that sets their role. */
+
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
@@ -37,11 +39,6 @@ const ERRORS: Record<string, string> = {
   forbidden: "Your own role changed — reload the page.",
 };
 
-/**
- * Tint for the role chip. Operator stays neutral: it is the default. A
- * contributor is dimmer still — it is the one role below that default, and it
- * grants less than signing in used to.
- */
 const ROLE_CHIP: Record<SiteRole, string> = {
   contributor: "text-muted-foreground/70",
   operator: "text-muted-foreground",
@@ -56,12 +53,9 @@ export function UsersTable({
 }: {
   users: SiteUser[];
   viewerId: string;
-  /** `SITE_ADMIN_EMAILS` entries that have never signed in. */
   pendingAdmins: string[];
 }) {
   const router = useRouter();
-  // Optimistic role per user id, so the row updates the moment it is picked
-  // and the whole table doesn't have to wait on a refresh to look right.
   const [roles, setRoles] = useState<Record<string, SiteRole>>({});
   const [saving, setSaving] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -88,7 +82,6 @@ export function UsersTable({
           ERRORS[body?.error] ?? `Could not save (${res.status})`,
         );
       }
-      // Their next page load reads the new role; nothing on this one does.
       router.refresh();
     } catch (err) {
       setRoles((r) => ({ ...r, [user.id]: previous }));
@@ -152,13 +145,6 @@ export function UsersTable({
         variants={riseChild}
         className="overflow-hidden rounded-2xl border bg-card shadow-sm"
       >
-        {/*
-          The card keeps `overflow-hidden` for its rounded corners; the scroller
-          is this inner box. Without it a narrow viewport had the card clip the
-          table's right-hand columns with no way to reach them — and the pane is
-          now 16rem narrower whenever the sidebar is expanded, so "narrow" starts
-          on a laptop rather than only on a phone.
-        */}
         <div className="overflow-x-auto">
           <table className="w-full min-w-136 text-sm">
             <thead>
@@ -198,8 +184,6 @@ export function UsersTable({
                     </td>
                     <td className="px-5 py-3">
                       {isSelf ? (
-                        // An administrator demoting themselves could leave the
-                        // site with nobody able to grant the role back.
                         <span
                           className="inline-flex items-center gap-1.5 text-sm text-muted-foreground"
                           title="Another administrator has to change your role"

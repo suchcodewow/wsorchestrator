@@ -1,15 +1,15 @@
+/** Creates a workshop and sets its contents. */
+
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { createLabWorkshop, labWorkshopSchema } from "@/lib/lab-workshops";
 import { canManageLabGuides } from "@/lib/roles";
 
-/** Create a workshop and set its contents. Managers and above. */
 export async function POST(req: Request) {
   const session = await auth();
   if (!session?.user) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
-  // Not 401: they are signed in, they just aren't allowed to write material.
   if (!canManageLabGuides(session.user.siteRole)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }

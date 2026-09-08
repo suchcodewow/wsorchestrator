@@ -1,5 +1,7 @@
 "use client";
 
+/** A read-only SQL console. */
+
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { Loader2, Play, ShieldCheck, TriangleAlert } from "lucide-react";
@@ -20,10 +22,8 @@ type Ok = {
 type Err = { ok: false; error: string };
 type Result = Ok | Err;
 
-/** Tables whose rows are credentials — worth a nudge before someone selects * */
 const SENSITIVE = new Set(["sessions", "accounts", "workshop_accounts"]);
 
-/** Render one cell. Nulls read as muted NULL; JSON values are stringified. */
 function Cell({ value }: { value: unknown }) {
   if (value === null || value === undefined) {
     return <span className="text-muted-foreground/60 italic">NULL</span>;

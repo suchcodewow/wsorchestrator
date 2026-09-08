@@ -1,3 +1,5 @@
+/** The component catalog: the baseline, and the sets proposed against it. */
+
 import "server-only";
 import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import { db } from "@/db";
@@ -9,24 +11,8 @@ import {
 } from "@/db/schema";
 import type { ValidComponent } from "./validate";
 
-/**
- * Reading and writing the Harness component catalog.
- *
- * Two populations live in one table. The published baseline is the rows with a
- * null `setId` — what every workshop deploys. A candidate set is one
- * contributor's proposal, overlaid on that baseline by identifier when a
- * sandbox run deploys it.
- *
- * The lifecycle is deliberately short. A set is created by testing, not by
- * submitting, so the work is already here by the time anyone offers it; and
- * approval folds its rows into the baseline rather than leaving them
- * addressable, so there is exactly one place to look for what a workshop gets.
- */
-
-/** One component as the catalog stores it. */
 export type CatalogComponent = ValidComponent & { builtin: boolean };
 
-/** The published baseline: the components every workshop deploys. */
 export async function listBaseline(): Promise<CatalogComponent[]> {
   const rows = await db
     .select()
@@ -37,7 +23,6 @@ export async function listBaseline(): Promise<CatalogComponent[]> {
   return rows.map(toCatalogComponent);
 }
 
-/** The components proposed by one candidate set. */
 export async function listSetComponents(
   setId: string,
 ): Promise<CatalogComponent[]> {
@@ -52,7 +37,6 @@ export async function listSetComponents(
 
 type ComponentRow = typeof harnessComponents.$inferSelect;
 
-/** `jsonb` comes back as `unknown`; narrow it the way the runner does. */
 const stringArray = (v: unknown): string[] =>
   Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
 
@@ -71,13 +55,6 @@ function toCatalogComponent(r: ComponentRow): CatalogComponent {
   };
 }
 
-/**
- * Create a candidate set and its components in one transaction.
- *
- * Both together or neither: a set row with no components is a listing entry
- * that cannot be tested, reviewed, or explained, and it would sit in the
- * reviewer's queue looking like work.
- */
 export async function createComponentSet(input: {
   name: string;
   authorId: string;
@@ -109,19 +86,6 @@ export async function createComponentSet(input: {
   });
 }
 
-/**
- * Replace a candidate set's components with a new proposal.
- *
- * Wholesale rather than patched, for the same reason `labWorkshopGuides`
- * rewrites its ordering wholesale: the stored set is then always exactly what
- * was last submitted, with nothing surviving from an earlier attempt that the
- * contributor believes they removed.
- *
- * Only a set still being worked on may be rewritten. Editing one after it has
- * been submitted would change what a reviewer is looking at underneath them,
- * and editing an approved one would silently diverge from the baseline it was
- * folded into.
- */
 export async function replaceSetComponents(
   setId: string,
   components: ValidComponent[],
@@ -159,7 +123,6 @@ export async function replaceSetComponents(
   });
 }
 
-/** Move a set along its lifecycle, only from the status that allows it. */
 export async function setStatus(
   setId: string,
   from: ComponentSetStatus,
@@ -184,20 +147,6 @@ export async function setStatus(
   return updated.length > 0;
 }
 
-/**
- * Approve a set: fold its components into the published baseline.
- *
- * An identifier the baseline already has is *replaced* — that is what proposing
- * a row with an existing identifier means, and the contributor tested it that
- * way, since the sandbox overlay resolves the same collision the same
- * direction. `builtin` survives the replacement: whether a component is one the
- * repo seeds is a fact about where it came from, not about who last edited it,
- * and losing it would make a seeded connector deletable.
- *
- * The set's own rows stay put and the set is marked approved. They are the
- * record of what was proposed, which a baseline row overwritten by a later
- * change no longer tells anyone.
- */
 export async function approveComponentSet(
   setId: string,
   notes: string,
@@ -231,9 +180,6 @@ export async function approveComponentSet(
           versionLabel: c.versionLabel,
           builtin: false,
         })
-        // The baseline's unique index is partial — `where set_id is null` — so
-        // the conflict target must name that predicate too, or Postgres cannot
-        // tell which index this upsert means.
         .onConflictDoUpdate({
           target: harnessComponents.identifier,
           targetWhere: isNull(harnessComponents.setId),
@@ -260,7 +206,6 @@ export async function approveComponentSet(
   });
 }
 
-/** A candidate set with its author and the sandbox runs that exercised it. */
 export async function listComponentSets(status?: ComponentSetStatus) {
   return db
     .select({
@@ -274,7 +219,6 @@ export async function listComponentSets(status?: ComponentSetStatus) {
         select count(*)::int from ${harnessComponents}
          where ${harnessComponents.setId} = ${harnessComponentSets.id}
       )`,
-      // The runs that tested it — the reason there is no `runId` on the set.
       runCount: sql<number>`(
         select count(*)::int from ${workshopRuns}
          where ${workshopRuns.componentSetId} = ${harnessComponentSets.id}

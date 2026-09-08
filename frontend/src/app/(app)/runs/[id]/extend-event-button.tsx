@@ -1,5 +1,7 @@
 "use client";
 
+/** Adds a day to an event's lifetime. */
+
 import { useState } from "react";
 import { CalendarPlus, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -12,20 +14,13 @@ const ERRORS: Record<string, string> = {
   unauthorized: "Sign in again to extend this event.",
 };
 
-/** Statuses where the event is on its way out and can't be extended. */
 const GONE = new Set<RunStatus>(["destroying", "destroyed", "failed"]);
 
-/**
- * Add one day to an event's lifetime. Rendered for the owner and for a manager
- * or above; the API checks the same thing again, so this only decides what is
- * worth showing. Hidden entirely once the event is tearing down.
- */
 export function ExtendEventButton({
   run,
   onExtended,
 }: {
   run: WorkshopRun;
-  /** The extension landed — the run has a new expiry and a new log line. */
   onExtended: () => void;
 }) {
   const [pending, setPending] = useState(false);

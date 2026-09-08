@@ -1,3 +1,5 @@
+/** The guide library. */
+
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft, BookOpen, Plus } from "lucide-react";
@@ -17,17 +19,6 @@ const updated = new Intl.DateTimeFormat("en", {
   year: "numeric",
 });
 
-/**
- * The library: every guide, whichever workshops it belongs to.
- *
- * Public, like the workshops that assemble them, and public in full — a guide
- * has no published state of its own, so this lists the lot. A guide is reusable
- * material rather than a destination, so this is a level below `/labs` — but it
- * is the only way to reach a guide that no workshop has picked up yet, and the
- * only place to write one before there is a workshop to put it in.
- *
- * The session is read only to decide whether the write controls are shown.
- */
 export default async function GuideLibraryPage() {
   const session = await auth();
   const canEdit = session?.user

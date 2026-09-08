@@ -1,3 +1,5 @@
+/** Reads, reconfigures or deletes one event. */
+
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/auth";
@@ -12,7 +14,6 @@ import {
 } from "@/lib/runs";
 import { reprovisionRun } from "@/lib/trigger";
 
-/** The signed-in viewer, or null — every handler starts the same way. */
 async function viewer(): Promise<Viewer | null> {
   const session = await auth();
   if (!session?.user) return null;
@@ -41,8 +42,6 @@ export async function GET(
 
 const patchSchema = z.object({
   userCount: z.number().int().min(1).max(MAX_USERS),
-  // May be empty (a no-cloud workshop uses the shared testing project). The
-  // per-mode floor is enforced in updateRunConfig, which knows the run's mode.
   clouds: z.array(z.enum(CLOUDS)).max(CLOUDS.length),
 });
 
@@ -51,8 +50,6 @@ const STATUS_FOR: Record<UpdateRunError, number> = {
   locked: 409,
   shrink_not_allowed: 409,
   cloud_removal_not_allowed: 409,
-  // The body is well-formed; it just breaks the run's own mode caps, which
-  // only `updateRunConfig` can see.
   exceeds_mode_limits: 400,
 };
 
@@ -77,15 +74,12 @@ export async function PATCH(
     );
   }
 
-  // A live workshop needs the runner to create the added accounts / clouds.
   const applying = result.needsReprovision ? await reprovisionRun(id) : false;
   return NextResponse.json({ run: result.run, applying });
 }
 
 const DELETE_STATUS_FOR: Record<DeleteRunError, number> = {
   not_found: 404,
-  // Provisioning is part-way through; the run is deletable again as soon as it
-  // settles into ready or failed.
   in_flight: 409,
 };
 

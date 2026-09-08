@@ -1,5 +1,7 @@
 "use client";
 
+/** The contributor page: the bundle, its tokens, and what you have proposed. */
+
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -19,7 +21,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { MAX_TOKENS_PER_USER, TOKEN_NAME_MAX, TOKEN_TTL_DAYS } from "@/db/schema";
+import { MAX_TOKENS_PER_USER, TOKEN_NAME_MAX } from "@/db/schema";
 import type { TokenSummary } from "@/lib/api-tokens";
 import { riseChild, staggerParent } from "@/lib/motion";
 import { cn } from "@/lib/utils";
@@ -35,7 +37,6 @@ type SetSummary = {
   runCount: number;
 };
 
-/** A newly minted token, held in memory only — nothing can fetch it again. */
 type Minted = { prefix: string; token: string };
 
 const STATUS_TINT: Record<string, string> = {
@@ -58,7 +59,6 @@ const shortDate = (iso: string) =>
     day: "numeric",
   });
 
-/** One published component, with what it references worked out server-side. */
 type CatalogEntry = {
   identifier: string;
   kind: string;
@@ -71,7 +71,6 @@ type CatalogEntry = {
   usedBy: string[];
 };
 
-/** Reading order: what a thing is built from comes before what is built on it. */
 const KIND_ORDER = ["secret_text", "secret_file", "connector", "template"];
 
 const KIND_LABEL: Record<string, string> = {
@@ -108,8 +107,6 @@ export function ContributeView({
   const [minted, setMinted] = useState<Minted | null>(null);
   const [copied, setCopied] = useState(false);
 
-  // The cap is on hand-made tokens only; the bundle's is replaced on every
-  // download, so it can never accumulate. Mirrors `mintToken`.
   const activeManual = tokens.filter(
     (t) => t.status === "active" && t.source === "manual",
   );
@@ -181,16 +178,12 @@ export function ContributeView({
       await navigator.clipboard.writeText(value);
       setCopied(true);
     } catch {
-      // Clipboard access can be refused; the token is on screen and
-      // selectable, so this is a convenience failing, not the flow failing.
       setError("Could not copy — select the token and copy it manually.");
     }
   }
 
   const submitted = sets.filter((s) => s.status === "submitted");
 
-  // Grouped by what they are, in dependency order, so the list reads the way
-  // the runner builds: secrets, then the connectors on them, then templates.
   const grouped = KIND_ORDER.reduce<Array<[string, CatalogEntry[]]>>((acc, kind) => {
     const entries = catalog.filter((c) => c.kind === kind);
     if (entries.length === 0) return acc;
@@ -227,7 +220,6 @@ export function ContributeView({
         </motion.div>
       )}
 
-      {/* 1 — the bundle */}
       <motion.div variants={riseChild} className="space-y-3">
         <h2 className="text-sm font-medium">1. Get the bundle</h2>
         <Card>
@@ -246,8 +238,6 @@ export function ContributeView({
                 and tell Claude what you want to add.
               </p>
               {hasBundleToken && (
-                // Worth saying before they click, not after: the copy on their
-                // machine stops working, and that is surprising if unannounced.
                 <p className="text-muted-foreground">
                   Downloading again issues a new token and revokes the one in
                   your last download.
@@ -264,7 +254,6 @@ export function ContributeView({
         </Card>
       </motion.div>
 
-      {/* 2 — the tokens themselves, which most people never need to touch */}
       <motion.div variants={riseChild} className="space-y-3">
         <h2 className="text-sm font-medium">2. Tokens</h2>
         <Card>
@@ -275,9 +264,6 @@ export function ContributeView({
             </p>
 
             {minted && (
-              // Shown once. Nothing stores the secret half, so a page refresh
-              // loses it for good — which is worth saying plainly rather than
-              // letting somebody discover it.
               <div className="space-y-2 rounded-md border border-brand/40 bg-brand/5 p-3">
                 <p className="text-sm font-medium">
                   Copy this now — it will not be shown again.
@@ -389,7 +375,6 @@ export function ContributeView({
         </Card>
       </motion.div>
 
-      {/* 3 — what is deployed today */}
       <motion.div variants={riseChild} className="space-y-3">
         <h2 className="text-sm font-medium">3. What every workshop gets</h2>
         <Card>
@@ -432,10 +417,6 @@ export function ContributeView({
                                 </span>
                               )}
                               {!c.builtin && (
-                                // The answer to "what has been contributed?"
-                                // once a set is approved and folded in — at
-                                // that point its rows are indistinguishable
-                                // from the seeded ones except for this.
                                 <span className="rounded-full bg-brand/10 px-1.5 py-0.5 text-[11px] font-medium text-brand">
                                   contributed
                                 </span>
@@ -454,8 +435,6 @@ export function ContributeView({
                                 <span>used by {c.usedBy.join(", ")}</span>
                               )}
                               {c.requires.length > 0 && (
-                                // Why a component can be absent from a
-                                // workshop without anything being wrong.
                                 <span>needs {c.requires.join(", ")}</span>
                               )}
                             </div>
@@ -471,7 +450,6 @@ export function ContributeView({
         </Card>
       </motion.div>
 
-      {/* 4 — what they have proposed */}
       <motion.div variants={riseChild} className="space-y-3">
         <h2 className="text-sm font-medium">
           {canReview ? "4. Proposals" : "4. Your proposals"}
@@ -501,8 +479,6 @@ export function ContributeView({
                       {s.componentCount} component
                       {s.componentCount === 1 ? "" : "s"}
                       {" · "}
-                      {/* The first thing a reviewer needs, and the one thing
-                          reading the components cannot tell them. */}
                       {s.runCount === 0 ? (
                         <span className="text-destructive">never tested</span>
                       ) : (

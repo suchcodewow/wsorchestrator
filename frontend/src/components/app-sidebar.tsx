@@ -1,5 +1,7 @@
 "use client";
 
+/** The app's navigation sidebar, from lg up. */
+
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -18,21 +20,6 @@ import { writeSidebarCookie } from "@/lib/sidebar";
 import { setCalendarScope } from "@/lib/user-settings";
 import { cn } from "@/lib/utils";
 
-/**
- * The app's navigation, from `lg` up.
- *
- * Below `lg` this renders nothing and the dropdown under the username carries
- * everything instead — see [[UserMenu]]. That split, rather than a drawer that
- * slides over the page, is deliberate: the phone-sized case here is an operator
- * checking a run, and a 16rem panel over a 375px screen leaves no page behind
- * it worth revealing.
- *
- * Collapsed, the sidebar is a rail of icons rather than nothing at all, so
- * every destination stays one click away and the pane beside it still gains
- * 12rem. The state arrives from a cookie the server has already read, so the
- * first paint is the right width — a `useState(false)` here would render 16rem
- * and snap to 4rem on hydration for anyone who had collapsed it.
- */
 export function AppSidebar({
   name,
   email,
@@ -49,19 +36,9 @@ export function AppSidebar({
   role: SiteRole;
   initialTheme: ThemePreference;
   initialScope: CalendarScope;
-  /** Which build is serving this page; stamped into the image at build time. */
   build: BuildInfo;
-  /** From the sidebar cookie, so the server and the first client paint agree. */
   defaultCollapsed: boolean;
-  /**
-   * Hold still by sticking to the viewport instead of relying on the shell to
-   * have pinned the page. For the shells that keep the ordinary document scroll
-   * — see [[AppShell]]'s `scroll` prop. The height is the viewport less the
-   * header it sits under, so the nav inside still does its own scrolling and the
-   * account footer stays on the bottom edge rather than off it.
-   */
   sticky?: boolean;
-  /** Server action; it redirects, so it never resolves on the happy path. */
   signOutAction: () => Promise<void>;
 }) {
   const pathname = usePathname();
@@ -71,27 +48,15 @@ export function AppSidebar({
   function toggle() {
     const next = !collapsed;
     setCollapsed(next);
-    // Written from here rather than through a server action: it is a cookie the
-    // next *server* render needs, and a round trip would only delay a width the
-    // browser has already animated.
     writeSidebarCookie(next ? "collapsed" : "expanded");
   }
 
   return (
     <TooltipProvider>
       <aside
-        // Translucent over the ambient backdrop, matching the header rather than
-        // sitting on bare gradient: the blooms are strongest in the lower left,
-        // which is exactly where the account footer is, and unbacked text over
-        // them was the one part of this that read as muddy.
-        //
-        // `overflow-hidden` so nothing can spill sideways mid-transition; the
-        // nav inside it does its own vertical scrolling.
         className={cn(
           "hidden shrink-0 flex-col overflow-hidden border-r border-border/70 bg-background/50 backdrop-blur-xl transition-[width] duration-200 ease-out lg:flex",
           collapsed ? "w-16" : "w-64",
-          // `self-start` so the flex row does not stretch it to the page's
-          // height, which would leave nothing for `sticky` to do.
           sticky && "lg:sticky lg:top-14 lg:h-[calc(100vh-3.5rem)] lg:self-start",
         )}
       >
@@ -100,9 +65,6 @@ export function AppSidebar({
             <div key={section.heading ?? "main"} className="flex flex-col gap-0.5">
               {section.heading &&
                 (collapsed ? (
-                  // A rule instead of the word: the heading cannot be read at
-                  // 4rem, but the break between the two groups still carries
-                  // meaning and losing it would make the rail one long list.
                   <div aria-hidden className="mx-2 mb-2 border-t border-border/70" />
                 ) : (
                   <h2 className="px-3 pb-1.5 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
@@ -126,14 +88,6 @@ export function AppSidebar({
           ))}
         </nav>
 
-        {/*
-          Who is signed in, as a button rather than a panel.
-          Appearance and signing out are behind it: both are rare, a row each
-          spent permanent space on them, and the collapsed rail had to put them
-          in a menu regardless — so this is one surface at both widths instead
-          of two that can drift. Same [[UserMenu]] the mobile header opens, in
-          `accountOnly` mode because the nav above already lists every link.
-        */}
         <div
           className={cn(
             "shrink-0 border-t border-border/70 p-2",
@@ -175,11 +129,6 @@ export function AppSidebar({
   );
 }
 
-/**
- * One destination. Collapsed, the label becomes a tooltip — it is the only
- * thing naming the icon, so it is also the accessible name via `aria-label`
- * rather than being left to the tooltip alone.
- */
 function NavLink({
   item,
   active,
@@ -197,8 +146,6 @@ function NavLink({
       className={cn(
         "flex h-10 items-center gap-3 rounded-lg text-sm outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50",
         collapsed ? "justify-center px-0" : "px-3",
-        // Tinted rather than filled: one solid brand block in a column of
-        // otherwise quiet rows shouts, and the point is only "you are here".
         active
           ? "bg-brand/10 font-medium text-brand"
           : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
@@ -219,14 +166,6 @@ function NavLink({
   );
 }
 
-/**
- * Whose events the calendar shows.
- *
- * A switch and not a link, so it is the one row in the sidebar that changes
- * something instead of going somewhere — hence its own heading rather than a
- * place in the list above. Collapsed it becomes a toggle that shows its state
- * by being lit, which is all a 4rem rail has room to say.
- */
 function ScopeSwitch({
   initial,
   collapsed,
@@ -242,8 +181,6 @@ function ScopeSwitch({
   function flip() {
     const next: CalendarScope = on ? "own" : "all";
     setScope(next);
-    // Unlike the theme, the new view is a different set of rows that only the
-    // server can fetch, so the page is refreshed once the write lands.
     startTransition(async () => {
       await setCalendarScope(next);
       router.refresh();
@@ -269,7 +206,6 @@ function ScopeSwitch({
       {!collapsed && (
         <>
           <span className="flex-1 truncate text-left">Show all events</span>
-          {/* Decorative: `aria-checked` on the button already carries the state. */}
           <span
             aria-hidden
             className={cn(

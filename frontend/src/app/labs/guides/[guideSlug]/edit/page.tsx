@@ -1,3 +1,5 @@
+/** The guide editor. */
+
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
@@ -25,8 +27,6 @@ export default async function EditLabGuidePage({
   const guide = await getLabGuideBySlug(guideSlug);
   if (!guide) notFound();
 
-  // Reuse is invisible otherwise: a guide that opens three workshops looks
-  // exactly like one that opens none, right up until it is edited or deleted.
   const usedIn = await workshopsUsingGuide(guide.id);
 
   return (

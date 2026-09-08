@@ -1,3 +1,5 @@
+/** Reads everyone with an account, and sets their role. */
+
 import "server-only";
 
 import { asc, eq } from "drizzle-orm";
@@ -10,11 +12,9 @@ export type SiteUser = {
   name: string | null;
   email: string | null;
   siteRole: SiteRole;
-  /** How many events they have scheduled, ever. Context for a role change. */
   eventCount: number;
 };
 
-/** Everyone with an account, for the administrator's users page. */
 export async function listSiteUsers(): Promise<SiteUser[]> {
   const [rows, counts] = await Promise.all([
     db
@@ -34,14 +34,6 @@ export async function listSiteUsers(): Promise<SiteUser[]> {
 
 export type SetSiteRoleError = "not_found" | "self";
 
-/**
- * Set another user's role.
- *
- * An administrator cannot change their own — with one administrator on the
- * site, a mis-click would leave nobody able to hand the role back, and the
- * only way out would be `SITE_ADMIN_EMAILS` and a redeploy. Demoting an
- * administrator is therefore something a *second* administrator does.
- */
 export async function setSiteRole(
   actorId: string,
   targetUserId: string,

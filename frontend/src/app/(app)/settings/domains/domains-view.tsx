@@ -1,5 +1,7 @@
 "use client";
 
+/** The email domains allowed to sign in. */
+
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
@@ -15,7 +17,6 @@ export type DomainRow = {
   id: string;
   domain: string;
   note: string;
-  /** ISO — the server component can't hand a `Date` across the boundary. */
   createdAt: string;
   addedBy: string | null;
 };
@@ -40,10 +41,8 @@ export function DomainsView({
   viewerExempt,
 }: {
   domains: DomainRow[];
-  /** From `AUTH_ALLOWED_EMAIL_DOMAINS`. In force, but not editable here. */
   envDomains: string[];
   viewerEmail: string;
-  /** In `SITE_ADMIN_EMAILS`, so allowed in regardless of the list below. */
   viewerExempt: boolean;
 }) {
   const router = useRouter();
@@ -54,7 +53,6 @@ export function DomainsView({
 
   const restricted = domains.length + envDomains.length > 0;
 
-  /** One place for the fetch, the error shape, and the refresh after it. */
   async function send(
     key: string,
     url: string,
@@ -120,9 +118,6 @@ export function DomainsView({
         variants={riseChild}
         className="overflow-hidden rounded-2xl border bg-card shadow-sm"
       >
-        {/* Scrolls inside the card rather than being clipped by it — see the
-            same wrapper on the users table. Four columns need more floor than
-            three, and the note column is free text. */}
         <div className="overflow-x-auto">
           <table className="w-full min-w-160 text-sm">
             <thead>
@@ -279,7 +274,6 @@ export function DomainsView({
   );
 }
 
-/** A domain from the environment: in force, but nothing here can change it. */
 function EnvRow({ domain }: { domain: string }) {
   return (
     <tr className="border-b bg-muted/20 last:border-b-0">
@@ -299,11 +293,6 @@ function EnvRow({ domain }: { domain: string }) {
   );
 }
 
-/**
- * The add and edit row are the same row — one form, used once with a value and
- * once empty. Splitting them would have meant two copies of the validation and
- * the keyboard handling.
- */
 function EditRow({
   row,
   busy,
@@ -318,9 +307,6 @@ function EditRow({
   const [domain, setDomain] = useState(row?.domain ?? "");
   const [note, setNote] = useState(row?.note ?? "");
 
-  // Mirrors the server's rule so a typo is caught before a round trip. The
-  // server normalizes and validates again — this only decides when to grey the
-  // button out.
   const valid = normalizeDomain(domain) !== null;
 
   function submit() {

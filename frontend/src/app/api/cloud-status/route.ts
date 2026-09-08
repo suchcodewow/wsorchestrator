@@ -1,9 +1,10 @@
+/** Re-runs the cloud audit behind the page's Refresh button. */
+
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { canAuditProjects } from "@/lib/roles";
 import { auditClouds } from "@/lib/cloud-audit";
 
-/** Signed in, and allowed to audit the deployment's clouds. */
 async function requireAdministrator() {
   const session = await auth();
   if (!session?.user) {
@@ -15,13 +16,6 @@ async function requireAdministrator() {
   return { error: null };
 }
 
-/**
- * The cloud audit behind the page's Refresh button. Administrators only.
- *
- * Always 200 when the caller is allowed: each cloud carries its own ok/error, and
- * one cloud being unreachable is a thing to render, not a failed request. Only
- * auth says no here.
- */
 export async function GET() {
   const { error } = await requireAdministrator();
   if (error) return error;

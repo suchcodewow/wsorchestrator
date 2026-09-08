@@ -1,10 +1,11 @@
+/** Lists the backup history, and takes a backup. */
+
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/auth";
 import { auditBackupAction, createBackup, listBackups } from "@/lib/backups";
 import { canManageBackups } from "@/lib/roles";
 
-/** Signed in, and allowed to see the database's backups. */
 async function requireAdministrator() {
   const session = await auth();
   if (!session?.user) {
@@ -28,7 +29,6 @@ const STATUS_FOR: Record<string, number> = {
   unavailable: 502,
 };
 
-/** The backup history. Administrators only. */
 export async function GET() {
   const { error } = await requireAdministrator();
   if (error) return error;
@@ -48,11 +48,6 @@ const createSchema = z.object({
   description: z.string().trim().max(255).default(""),
 });
 
-/**
- * Take a backup now. Administrators only.
- *
- * The safe half of this page, and the one to press before the other half.
- */
 export async function POST(req: Request) {
   const { error, user } = await requireAdministrator();
   if (error) return error;

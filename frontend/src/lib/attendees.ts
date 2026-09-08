@@ -1,3 +1,5 @@
+/** Reads and writes an event's attendee page. */
+
 import "server-only";
 
 import { and, eq, sql } from "drizzle-orm";
@@ -5,72 +7,23 @@ import { db } from "@/db";
 import { CLAIM_LIMITS, workshopAccounts, workshopRuns } from "@/db/schema";
 import type { Cloud, RunStatus } from "@/db/schema";
 
-/**
- * Where one cloud's environment lives, as something an attendee can open.
- *
- * One per cloud the event actually built — the Google Cloud project, the Azure
- * resource group, the AWS account's console sign-in — so the page can offer the
- * same "here is your environment" button whichever clouds were picked. The
- * cloud is carried rather than a label: what the button should say is the
- * page's business, and differs between the one shared link a workshop shows
- * and the per-competitor link a challenge puts on each row.
- */
 export type CloudLink = {
   cloud: Cloud;
   url: string;
 };
 
-/**
- * The attendee-facing view of an event.
- *
- * This is the one place in the app that serves data to people who are not
- * signed in, so it is deliberately narrow: the event's name and kind, the
- * account rows, and — the one deliberate exception — a link per cloud into the
- * environment(s) attendees were granted. Those links are not secrets: they
- * carry a project id, a resource group path, an AWS account number, and
- * everyone here has editor/Contributor on those environments and sees all of it
- * the moment they sign in. Nothing about the organizer, the org unit, the rest
- * of the Terraform outputs, or the build log crosses this boundary.
- */
 export type AttendeeAccount = {
   id: number;
   email: string;
   tempPassword: string;
-  /**
-   * Entra Temporary Access Pass — what this attendee signs into the Azure
-   * portal with, since Microsoft enforces MFA there and a password alone is no
-   * longer accepted. Null when the run has no Azure environment, or when the
-   * tenant would not issue one.
-   */
   azureAccessPass: string | null;
-  /** When that pass stops working, so the page can say if it already has. */
   azureAccessPassExpiresAt: Date | null;
-  /**
-   * This attendee's AWS console password. AWS is the one cloud whose password
-   * is not the shared Google one — the IAM user is created with an
-   * AWS-generated password that comes back in the run's outputs, keyed by the
-   * address the user was created for. Null when the run built no AWS
-   * environment, or was provisioned before this output existed.
-   *
-   * The IAM user name is the attendee's email address, so this is the only
-   * extra thing they need: the sign-in name matches every other cloud.
-   */
   awsPassword: string | null;
   claimedName: string | null;
   claimedFrom: string | null;
   claimedVacation: string | null;
   claimedAt: Date | null;
-  /**
-   * This competitor's own environments, on a challenge — their GCP project,
-   * their Azure resource group, their AWS account. Empty on a workshop, which
-   * shares one environment per cloud and carries the links on the view instead.
-   */
   links: CloudLink[];
-  /**
-   * This attendee's own Harness project, which every event creates one of per
-   * attendee regardless of cloud. Null on a run provisioned before the runner
-   * emitted the per-attendee URLs, which has the projects but not their links.
-   */
   harnessProjectUrl: string | null;
 };
 
@@ -78,21 +31,7 @@ export type AttendeeView = {
   name: string;
   mode: "workshop" | "challenge";
   status: RunStatus;
-  /**
-   * The workshop's shared environment, one link per cloud it provisioned (and
-   * the shared testing project, for an event that picked no cloud at all —
-   * that project is still where its attendees were given access). Empty on a
-   * challenge, where every competitor has their own and the links sit on the
-   * rows.
-   */
   links: CloudLink[];
-  /**
-   * The event's Harness organization, for the room to open. Null for a run
-   * that has not provisioned Harness yet, or one from before the runner
-   * emitted the URL. Like the cloud links it is not a secret: it carries the
-   * account and org identifiers that every attendee sees the moment they sign
-   * in with the account this page hands them.
-   */
   harnessOrgUrl: string | null;
   accounts: AttendeeAccount[];
 };
@@ -100,104 +39,51 @@ export type AttendeeView = {
 const UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/**
- * The Terraform outputs this view reads, across every root that can run.
- *
- * The singular keys are a workshop's one shared environment per cloud; the maps
- * are a challenge's per-competitor ones, keyed by the address each was granted
- * to. Both the identifier and a ready-made console URL are read where the root
- * emits both, because older runs were provisioned before the URL outputs
- * existed and the identifier is enough to rebuild the link from.
- */
 type RunOutputs = {
   gcp_project_id?: unknown;
   gcp_console_url?: unknown;
-  /** The shared long-lived project, granted to a run that picked no cloud. */
   sandbox_project_id?: unknown;
   sandbox_console_url?: unknown;
   azure_portal_url?: unknown;
   aws_account_id?: unknown;
-  /** The account's sign-in alias — the host the console link is keyed by. */
   aws_account_alias?: unknown;
   aws_console_url?: unknown;
-  /**
-   * The region this run's AWS environment — and so its EKS cluster — was built
-   * in. Absent on runs provisioned before it was recorded, which were all built
-   * in {@link DEFAULT_AWS_REGION}.
-   */
   aws_region?: unknown;
-  /**
-   * AWS console passwords, address -> password. The one per-attendee secret
-   * that is not the shared Google password, because AWS generates it itself.
-   */
   aws_attendee_passwords?: unknown;
   gcp_projects?: unknown;
   gcp_console_urls?: unknown;
   azure_portal_urls?: unknown;
   aws_accounts?: unknown;
-  /** Per-competitor sign-in aliases, address -> alias. */
   aws_account_aliases?: unknown;
-  /** The event's Harness org, which every event provisions regardless of cloud. */
   harness_org_url?: unknown;
-  /** One project per attendee, keyed by the address it was created for. */
   harness_project_urls?: unknown;
 };
 
-/** An output value, if it is a non-empty string. */
 function str(value: unknown): string | null {
   return typeof value === "string" && value.length > 0 ? value : null;
 }
 
-/** An output map of address -> value, if it is one. */
 function map(value: unknown): Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {};
 }
 
-/** A project's console home — what "the project" means to someone opening it. */
 function gcpConsoleUrl(projectId: string): string {
   return `https://console.cloud.google.com/home/dashboard?project=${encodeURIComponent(
     projectId,
   )}`;
 }
 
-/**
- * Where a run with no recorded region opens. Every AWS run built before the
- * region became an output was built under the runner's `AWS_REGION` default, so
- * this is the region those runs are actually in, not a guess.
- */
 const DEFAULT_AWS_REGION = "us-east-1";
 
-/**
- * Region names are a closed vocabulary AWS adds to, so this checks the shape
- * rather than a list: the value is interpolated into a hostname, where
- * percent-encoding would not make a bad value safe.
- */
 const AWS_REGION = /^[a-z0-9-]+$/;
 
-/** The region a run's AWS environment is in, or the region it must have been. */
 function awsRegion(outputs: RunOutputs): string {
   const region = str(outputs.aws_region);
   return region && AWS_REGION.test(region) ? region : DEFAULT_AWS_REGION;
 }
 
-/**
- * The member account's own sign-in page, which is where its console lives,
- * pointed at the region the account's cluster is in.
- *
- * Keyed by the account's sign-in *alias*, not its id: AWS answers the
- * `<account-id>.signin.aws.amazon.com` form with a 404, and only the alias host
- * resolves. Either way the subdomain prefills the account, so nobody types the
- * 12-digit number.
- *
- * An AWS account is global but the console is not: signing in without saying
- * where lands on whatever region the browser last used, where the workshop's
- * EKS cluster does not appear. `region` is the parameter signin acts on — it
- * answers with a redirect to the region's own console home. (`redirect_uri`
- * looks like the parameter for this and is not: signin forwards it to the
- * region-less console home as a literal query param and ignores it.)
- */
 function awsConsoleUrl(alias: string, region: string): string {
   return (
     `https://${encodeURIComponent(alias)}.signin.aws.amazon.com/console` +
@@ -205,14 +91,12 @@ function awsConsoleUrl(alias: string, region: string): string {
   );
 }
 
-/** Drop the clouds this run did not build, keeping CLOUDS' order. */
 function linksOf(
   parts: Array<{ cloud: Cloud; url: string | null }>,
 ): CloudLink[] {
   return parts.flatMap(({ cloud, url }) => (url ? [{ cloud, url }] : []));
 }
 
-/** The one environment per cloud a workshop shares with the whole room. */
 function sharedLinks(
   outputs: RunOutputs,
   gcpProjectId: string | null,
@@ -224,11 +108,6 @@ function sharedLinks(
   return linksOf([
     {
       cloud: "aws",
-      // Built here in preference to the stored `aws_console_url` so a change to
-      // the link — the region, or the move to the alias host — reaches runs
-      // that were applied before it without re-applying them. A run with no
-      // alias predates that resource and has nothing to build from, so it keeps
-      // whatever URL it was provisioned with.
       url:
         (awsAlias && awsConsoleUrl(awsAlias, awsRegion(outputs))) ??
         str(outputs.aws_console_url),
@@ -245,7 +124,6 @@ function sharedLinks(
   ]);
 }
 
-/** The environments a single competitor owns on a challenge. */
 function competitorLinks(outputs: RunOutputs, email: string): CloudLink[] {
   const project = str(map(outputs.gcp_projects)[email]);
   const awsAlias = str(map(outputs.aws_account_aliases)[email]);
@@ -265,16 +143,9 @@ function competitorLinks(outputs: RunOutputs, email: string): CloudLink[] {
   ]);
 }
 
-/**
- * Load an event for its attendee page. Returns null for an unknown id, which
- * the page turns into a 404 — the same answer a real-but-finished event gives
- * once it has been reaped, so the link never reveals which it was.
- */
 export async function getAttendeeView(
   runId: string,
 ): Promise<AttendeeView | null> {
-  // The id comes straight off the URL. Postgres rejects a malformed uuid with
-  // an error rather than an empty result, so anything that isn't one is a miss.
   if (!UUID.test(runId)) return null;
 
   const run = await db.query.workshopRuns.findFirst({
@@ -307,15 +178,9 @@ export async function getAttendeeView(
 
   const outputs = (run.outputs ?? {}) as RunOutputs;
 
-  // A challenge builds one environment per competitor and a workshop one for
-  // the room, so exactly one of these two ever has anything in it — the roots
-  // a challenge runs emit only the keyed maps, and the workshop roots only the
-  // single values.
   const shared = sharedLinks(outputs, run.gcpProjectId);
 
   const harnessProjects = map(outputs.harness_project_urls);
-  // Keyed by address on both the workshop and the challenge roots, since either
-  // one creates an IAM user per attendee.
   const awsPasswords = map(outputs.aws_attendee_passwords);
 
   const accounts: AttendeeAccount[] = rows.map((a) => ({
@@ -343,20 +208,6 @@ export type SaveFieldsInput = {
 
 export type SaveFieldsError = "not_found" | "invalid";
 
-/**
- * Save an account row's shared answers, as the room types them.
- *
- * There is no lock: the row is a communal scratchpad, not a claim to win. Any
- * visitor may edit any field of any row, the last write wins, and everyone sees
- * it on their next poll — two people typing into the same row is a harmless
- * collision the workshop laughs off, not an error to guard against. The write
- * is a plain update; the run id is in the predicate so a guessed account id
- * from another event still cannot be written through this event's link.
- *
- * `claimedAt` is kept only as the "row has a name" marker the room's counter
- * reads: stamped the first time a name is entered, kept afterwards, cleared if
- * the name is removed again.
- */
 export async function saveAttendeeFields(
   runId: string,
   accountId: number,
@@ -392,6 +243,5 @@ export async function saveAttendeeFields(
     )
     .returning({ id: workshopAccounts.id });
 
-  // No row updated means the id is not this event's — a guessed or stale id.
   return saved ? { ok: true } : { ok: false, error: "not_found" };
 }

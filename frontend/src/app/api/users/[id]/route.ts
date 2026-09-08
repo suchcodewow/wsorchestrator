@@ -1,3 +1,5 @@
+/** Sets a user's site role. */
+
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/auth";
@@ -12,7 +14,6 @@ const STATUS_FOR: Record<SetSiteRoleError, number> = {
   self: 409,
 };
 
-/** Set a user's site role. Administrators only. */
 export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -21,7 +22,6 @@ export async function PATCH(
   if (!session?.user) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
-  // Not 401: they are signed in, they just aren't allowed here.
   if (!canManageUsers(session.user.siteRole)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }

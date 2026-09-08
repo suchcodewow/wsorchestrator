@@ -1,3 +1,5 @@
+/** The public explanation of what the site does. */
+
 import { auth } from "@/auth";
 import { AmbientBackdrop } from "@/components/ambient-backdrop";
 import { SiteHeader } from "@/components/site-header";
@@ -26,7 +28,6 @@ export const metadata: Metadata = {
     "How a workshop provisions attendee accounts and cloud environments at its start time, and tears them down when it ends.",
 };
 
-/** The four stages a visitor sees, top to bottom. */
 const STAGES: {
   n: string;
   Icon: LucideIcon;
@@ -69,7 +70,6 @@ const STAGES: {
   },
 ];
 
-/** What Terraform builds in each cloud during `applying`. Kept in step with the runner. */
 const CLOUDS: {
   name: string;
   dot: string;
@@ -116,17 +116,10 @@ type LifeNode = {
   title: string;
   desc: string;
   kind: "up" | "milestone" | "live" | "down";
-  /** A subtle right-hand pill, e.g. to mark the step that runs for every event. */
   pill?: string;
-  /** Only the `applying` step fans out into the per-cloud grid. */
   fanout?: boolean;
 };
 
-/**
- * The run lifecycle, build-up through teardown. The lowercase titles that match
- * a real `workshop_runs.status` are deliberate; "Harness org" and "in session"
- * are conceptual steps within `provisioning`/`applying` and `ready`.
- */
 const LIFECYCLE: LifeNode[] = [
   {
     Icon: CalendarClock,
@@ -180,7 +173,6 @@ const LIFECYCLE: LifeNode[] = [
   },
 ];
 
-/** Eyebrow + heading used to open each section. */
 function SectionHeading({ eyebrow, title }: { eyebrow: string; title: string }) {
   return (
     <div className="text-center">
@@ -194,7 +186,6 @@ function SectionHeading({ eyebrow, title }: { eyebrow: string; title: string }) 
   );
 }
 
-/** Colour of the node marker on the lifecycle spine, by phase. */
 const MARKER: Record<LifeNode["kind"], string> = {
   up: "border-brand-border bg-brand/10 text-brand",
   milestone: "border-transparent bg-brand text-brand-foreground shadow-sm",
@@ -213,7 +204,6 @@ export default async function HowItWorks() {
       <SiteHeader session={session} />
 
       <main className="mx-auto max-w-6xl px-6 pb-24">
-        {/* hero */}
         <section className="pt-16 pb-14 text-center sm:pt-24">
           <span className="inline-flex items-center gap-2 rounded-full border border-brand-border/70 bg-brand/8 px-3 py-1 text-xs font-medium text-brand">
             <span className="size-1.5 rounded-full bg-brand" />
@@ -228,7 +218,6 @@ export default async function HowItWorks() {
           </p>
         </section>
 
-        {/* four stages */}
         <section className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
           {STAGES.map(({ n, Icon, tag, auto, title, body }) => (
             <div
@@ -262,7 +251,6 @@ export default async function HowItWorks() {
           ))}
         </section>
 
-        {/* under the hood — the lifecycle flowchart */}
         <section className="mt-24">
           <SectionHeading
             eyebrow="Under the hood"
@@ -270,7 +258,6 @@ export default async function HowItWorks() {
           />
 
           <ol className="relative mx-auto mt-14 max-w-3xl space-y-9">
-            {/* the spine */}
             <span
               aria-hidden
               className="absolute top-3 bottom-3 left-5.25 w-px bg-linear-to-b from-brand/50 via-border to-border"
@@ -363,7 +350,6 @@ export default async function HowItWorks() {
           </p>
         </section>
 
-        {/* CTA */}
         <section className="mt-24">
           <div className="mx-auto max-w-3xl rounded-3xl border bg-card/60 dark:bg-card px-8 py-12 text-center backdrop-blur-sm">
             <h2 className="text-2xl font-medium tracking-tight text-balance">

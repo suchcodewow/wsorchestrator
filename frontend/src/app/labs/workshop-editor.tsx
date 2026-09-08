@@ -1,5 +1,7 @@
 "use client";
 
+/** Composes a workshop out of lab guides. */
+
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -20,7 +22,6 @@ import { LAB_WORKSHOP_LIMITS, type LabWorkshop } from "@/db/schema";
 import { cn } from "@/lib/utils";
 import { GuidePreviewDialog } from "./guide-preview-dialog";
 
-/** A guide as the picker and the contents list need it. */
 export type PickerGuide = {
   id: string;
   slug: string;
@@ -28,15 +29,6 @@ export type PickerGuide = {
   summary: string;
 };
 
-/**
- * Compose a workshop out of lab guides.
- *
- * The contents are held as an ordered list of guide ids and sent as one list on
- * save, rather than as a move/add/remove request per gesture. Rearranging is
- * something an author does five times in a row while they think; making each
- * nudge a round trip would make the list lag behind the pointer, and would put
- * the workshop in an order nobody chose if one of them failed.
- */
 export function WorkshopEditor({
   workshop,
   initialGuideIds = [],
@@ -44,7 +36,6 @@ export function WorkshopEditor({
 }: {
   workshop?: LabWorkshop;
   initialGuideIds?: string[];
-  /** Every guide that exists. */
   guides: PickerGuide[];
 }) {
   const router = useRouter();
@@ -66,8 +57,6 @@ export function WorkshopEditor({
     [guides],
   );
 
-  // The contents, resolved. Filtered rather than mapped: a guide deleted in
-  // another tab would otherwise render as a hole in the list.
   const chosen = contents
     .map((id) => byId.get(id))
     .filter((g): g is PickerGuide => g !== undefined);
@@ -91,14 +80,6 @@ export function WorkshopEditor({
     setContents((prev) => prev.filter((g) => g !== id));
   }
 
-  /**
-   * Move a step one place up or down.
-   *
-   * Buttons rather than drag-and-drop, and not only to avoid a dependency: a
-   * drag target is unusable from a keyboard without a parallel implementation,
-   * and these lists are a handful of items long, where a nudge is as fast as a
-   * drag and can be repeated without re-aiming.
-   */
   function move(index: number, delta: -1 | 1) {
     const to = index + delta;
     if (to < 0 || to >= contents.length) return;
@@ -110,16 +91,6 @@ export function WorkshopEditor({
     });
   }
 
-  /**
-   * Write the workshop as it currently stands, and hand back what was saved.
-   *
-   * Shared by the Save button and by "write a new guide", which has to persist
-   * before it navigates away — an author who has spent a minute ordering eight
-   * labs should not lose that because the ninth one needed writing first.
-   *
-   * Returns null on failure, with the error already on screen, so callers can
-   * simply not navigate.
-   */
   async function persist(): Promise<{ id: string; slug: string } | null> {
     if (title.trim().length === 0) {
       setError("Give the workshop a title.");
@@ -169,13 +140,6 @@ export function WorkshopEditor({
     router.refresh();
   }
 
-  /**
-   * Save, then go and write a guide.
-   *
-   * The workshop id is carried across so the guide editor knows where to put
-   * what it creates, and where to come back to — including when the workshop
-   * has only just been created and had no id a moment ago.
-   */
   async function saveThenWriteGuide() {
     const saved = await persist();
     if (!saved) return;
@@ -257,12 +221,6 @@ export function WorkshopEditor({
         />
       </div>
 
-      {/*
-        Contents is one bordered card — heading, list and picker on the same
-        surface. The picker used to be a box of its own floating under the list,
-        which left it reading as a third thing on the page rather than as the
-        way to fill the list directly above it.
-      */}
       <section className="overflow-hidden rounded-xl border bg-card/40 dark:bg-card/50">
         <div className="flex flex-col items-start gap-3 border-b bg-muted/30 px-4 py-3 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
           <div>
@@ -294,11 +252,6 @@ export function WorkshopEditor({
               </p>
             </div>
           ) : (
-            // A grid item's automatic minimum size is its min-content width,
-            // which the nowrap titles below made wider than the card on a
-            // narrow screen — the truncation never got a width to truncate
-            // against. `min-w-0` lets this list shrink inside the card, and the
-            // explicit `minmax(0, 1fr)` column lets each row shrink inside it.
             <ol className="grid min-w-0 grid-cols-1 gap-2">
               {chosen.map((guide, i) => (
                 <li
@@ -309,9 +262,6 @@ export function WorkshopEditor({
                     {i + 1}
                   </span>
 
-                  {/* `truncate` needs a block box to clip in — as an inline
-                      span it only stops the text wrapping, which pushed these
-                      rows wider than the card on a phone. */}
                   <span className="block min-w-0 flex-1">
                     <span className="block truncate text-sm font-medium">
                       {guide.title}
@@ -346,8 +296,6 @@ export function WorkshopEditor({
                     >
                       <ChevronDown />
                     </Button>
-                    {/* Reading it beats guessing from the title; the dialog
-                        itself offers the full page for anything longer. */}
                     <GuidePreviewDialog guide={guide} />
                     <Button
                       type="button"
@@ -379,8 +327,6 @@ export function WorkshopEditor({
               Add to these contents
             </p>
 
-            {/* Fill on the wrapper — the icon shares the box, so the box is
-                the field. */}
             <div className="flex items-center gap-2 rounded-md border border-input bg-field px-2.5">
               <Search className="size-4 shrink-0 text-muted-foreground" />
               <input
@@ -400,12 +346,6 @@ export function WorkshopEditor({
               </p>
             ) : (
               <ul className="max-h-72 min-w-0 overflow-y-auto">
-                {/*
-                  Two controls side by side rather than one nested in the other:
-                  "add this" and "let me read it first" are different
-                  intentions, and a button inside a button is not markup a
-                  browser will honour anyway.
-                */}
                 {matches.map((guide) => (
                   <li
                     key={guide.id}
@@ -437,17 +377,6 @@ export function WorkshopEditor({
               </ul>
             )}
 
-            {/*
-              The second way in, given equal weight to the search above it: a
-              filled, full-width button rather than the ghost row this was,
-              which sat quietly under the results and read as a caption.
-
-              Always here, whether or not the search found anything. This used
-              to live inside the empty state, which meant the way to write a new
-              guide vanished the moment there was an existing one to list —
-              exactly backwards, since a workshop with guides in it is when an
-              author is most likely to notice the one that is missing.
-            */}
             <div className="grid gap-2">
               <div className="flex items-center gap-3">
                 <span className="h-px flex-1 bg-border" />

@@ -1,15 +1,7 @@
+/** The site roles, and what each one may do. */
+
 import { SITE_ROLES, type SiteRole } from "@/db/schema";
 
-/**
- * Site roles and what each one unlocks.
- *
- * Deliberately pure — no database, no session — so the menu, the pages, the
- * API routes, and the runner-facing helpers all decide from the same rules
- * rather than each re-stating them. The server is still the only enforcer:
- * everything a client hides here is checked again before it takes effect.
- */
-
-/** Roles above an operator, for the "who can see this" copy in the UI. */
 export const SITE_ROLE_LABELS: Record<SiteRole, string> = {
   contributor: "Contributor",
   operator: "Operator",
@@ -25,105 +17,41 @@ export const SITE_ROLE_DESCRIPTIONS: Record<SiteRole, string> = {
   administrator: "Also manages the site's users and their roles.",
 };
 
-/**
- * Whether `role` is at least as privileged as `minimum`. The comparison is by
- * position in `SITE_ROLES`, which is ordered least to most privileged.
- */
 export function roleAtLeast(role: SiteRole, minimum: SiteRole): boolean {
   return SITE_ROLES.indexOf(role) >= SITE_ROLES.indexOf(minimum);
 }
 
-/**
- * Schedule and run an event — the thing an operator account exists to do.
- *
- * Explicit because it is no longer implied by having signed in. A contributor
- * has an account so they can test components against a sandbox org, and a
- * sandbox run is the *only* run they may start: a full one builds cloud
- * projects and clusters in accounts they have no other business in.
- */
 export const canCreateEvents = (role: SiteRole) => roleAtLeast(role, "operator");
 
-/**
- * Propose Harness components and test them in a Harness-only sandbox run.
- *
- * Everyone with an account can, contributors included — it is the floor rather
- * than a privilege. What it does not include is publishing: a set is reviewed
- * by a manager before any workshop deploys it, which is the real gate, because
- * a contributed pipeline template runs on a delegate inside a workshop's cloud
- * project.
- */
 export const canContributeComponents = (role: SiteRole) =>
   roleAtLeast(role, "contributor");
 
-/** Review a contributed component set and publish it into the baseline. */
 export const canPublishComponents = (role: SiteRole) =>
   roleAtLeast(role, "manager");
 
-/** Flip the calendar to every user's events rather than only their own. */
 export const canSeeAllEvents = (role: SiteRole) => roleAtLeast(role, "manager");
 
-/** Open, reconfigure, and delete an event belonging to somebody else. */
 export const canManageAnyEvent = (role: SiteRole) =>
   roleAtLeast(role, "manager");
 
-/**
- * Write, edit, publish, and delete the lab guides.
- *
- * The guides themselves are world-readable, so this gates writing only — and
- * it is the one permission here whose effect is visible to people who have no
- * account at all, which is reason enough not to hand it to every operator.
- */
 export const canManageLabGuides = (role: SiteRole) =>
   roleAtLeast(role, "manager");
 
-/** List the site's users and set their roles. */
 export const canManageUsers = (role: SiteRole) =>
   roleAtLeast(role, "administrator");
 
-/**
- * Change site-wide settings — today, which email domains may sign in.
- *
- * Administrators only, and for the plainest reason: this decides who can have
- * an account at all, which is the setting every other permission sits on top
- * of. It is also the one that can be got wrong in a way that shuts people out,
- * so it belongs with users and backups rather than a rung lower.
- */
 export const canManageSettings = (role: SiteRole) =>
   roleAtLeast(role, "administrator");
 
-/**
- * Run read-only SQL against the database from the in-app console.
- *
- * Administrators only, and even for them the server runs every query inside a
- * READ ONLY transaction so it cannot write. It still reads whatever it is
- * pointed at — session tokens, OAuth tokens, attendee passwords — so it sits at
- * the top role, the same as users and backups.
- */
 export const canRunSql = (role: SiteRole) =>
   roleAtLeast(role, "administrator");
 
-/**
- * Review the database's backup history, take one, and restore from one.
- *
- * The most consequential thing anybody can do here — a restore rolls the whole
- * instance back, this account's own session included — so it sits at the top
- * role and nowhere lower.
- */
 export const canManageBackups = (role: SiteRole) =>
   roleAtLeast(role, "administrator");
 
-/**
- * Review every Google project billed to the workshop account and spot the
- * orphaned or extraneous ones (billed, but with no run in the database).
- *
- * Reads the billing account's project list and the runs table — nothing it
- * touches is destructive — but it exposes the whole billing footprint, so it
- * sits at the top role alongside users, backups, and the SQL console.
- */
 export const canAuditProjects = (role: SiteRole) =>
   roleAtLeast(role, "administrator");
 
-/** Narrow an untrusted string — a form value, a JSON body — to a role. */
 export function asSiteRole(value: unknown): SiteRole | null {
   return SITE_ROLES.includes(value as SiteRole) ? (value as SiteRole) : null;
 }

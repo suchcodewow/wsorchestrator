@@ -1,8 +1,9 @@
+/** Adds a day to an event's lifetime. */
+
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { extendRun, type ExtendRunError, type Viewer } from "@/lib/runs";
 
-/** The signed-in viewer, or null. */
 async function viewer(): Promise<Viewer | null> {
   const session = await auth();
   if (!session?.user) return null;
@@ -11,11 +12,9 @@ async function viewer(): Promise<Viewer | null> {
 
 const STATUS_FOR: Record<ExtendRunError, number> = {
   not_found: 404,
-  // The event is tearing down or already gone; there is nothing to extend.
   not_extendable: 409,
 };
 
-/** Add one day to an event's lifetime. Owner, or a manager and above. */
 export async function POST(
   _req: Request,
   { params }: { params: Promise<{ id: string }> },

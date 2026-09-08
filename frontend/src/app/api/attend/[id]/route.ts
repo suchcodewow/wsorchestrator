@@ -1,3 +1,5 @@
+/** The attendee page's endpoints. */
+
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { CLAIM_LIMITS } from "@/db/schema";
@@ -6,13 +8,6 @@ import {
   saveAttendeeFields,
   type SaveFieldsError,
 } from "@/lib/attendees";
-
-/**
- * The attendee endpoints. Unlike everything under `/api/runs`, these take no
- * session — an attendee walking into the room has no account here, and the
- * unguessable event id in the URL is what stands in for one. `getAttendeeView`
- * is the boundary that keeps that from meaning "anyone can read the run".
- */
 
 export async function GET(
   _req: Request,
@@ -26,8 +21,6 @@ export async function GET(
   return NextResponse.json(view);
 }
 
-// A row is a shared scratchpad the room fills in live, so every field is
-// optional — an empty name just means nobody has put theirs on this row yet.
 const saveSchema = z.object({
   accountId: z.number().int().positive(),
   name: z.string().max(CLAIM_LIMITS.name),

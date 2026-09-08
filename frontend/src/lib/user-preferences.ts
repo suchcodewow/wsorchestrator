@@ -1,3 +1,5 @@
+/** The signed-in user's saved view preferences. */
+
 import "server-only";
 
 import { cache } from "react";
@@ -15,23 +17,11 @@ export type UserPreferences = {
   calendarScope: CalendarScope;
 };
 
-/** What a signed-out visitor — or a session whose row is gone — gets. */
 const DEFAULTS: UserPreferences = {
   themePreference: "system",
   calendarScope: "own",
 };
 
-/**
- * The signed-in user's saved view preferences.
- *
- * Deliberately not a server action: these are reads, and putting them in the
- * "use server" module alongside the setters would publish them as callable
- * endpoints for no reason.
- *
- * `cache` dedupes within a single request — the root layout wants the theme
- * for its inlined script, the header wants both to seed the menu, and the
- * events page wants the scope. That should be one query, not three.
- */
 export const getUserPreferences = cache(
   async (): Promise<UserPreferences> => {
     const session = await auth();
@@ -45,11 +35,6 @@ export const getUserPreferences = cache(
   },
 );
 
-/**
- * Colour scheme only. `system` follows the OS setting and can only be resolved
- * in the browser, so it is returned as-is for the inlined theme script to
- * settle.
- */
 export async function getThemePreference(): Promise<ThemePreference> {
   return (await getUserPreferences()).themePreference;
 }

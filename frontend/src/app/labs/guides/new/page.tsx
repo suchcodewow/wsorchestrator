@@ -1,3 +1,5 @@
+/** Writes a new guide. */
+
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
@@ -12,18 +14,6 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-/**
- * Write a new guide.
- *
- * `?workshop=<id>` means the author came from that workshop's editor, which
- * saved itself on the way out. Resolved here rather than in the form so the
- * editor is handed a title and a slug to show and to return to — the client
- * only ever had an id.
- *
- * An id that resolves to nothing is ignored rather than fatal: the guide is
- * still worth writing, and a 404 would throw away the author's reason for
- * being here over a stale query string.
- */
 export default async function NewLabGuidePage({
   searchParams,
 }: {
@@ -31,8 +21,6 @@ export default async function NewLabGuidePage({
 }) {
   const session = await auth();
   if (!session?.user) redirect("/signin");
-  // Not a redirect: for anyone below manager this page simply isn't there, and
-  // saying "forbidden" would only advertise it.
   if (!canManageLabGuides(session.user.siteRole)) notFound();
 
   const { workshop: workshopId } = await searchParams;

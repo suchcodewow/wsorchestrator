@@ -1,18 +1,10 @@
+/** The events a restore to a given time would strand. */
+
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { runsStrandedBy } from "@/lib/backups";
 import { canManageBackups } from "@/lib/roles";
 
-/**
- * Events that would be stranded by restoring to `?since=<ISO time>`.
- *
- * Read by the restore confirmation dialog so the warning names actual events
- * rather than a hypothetical risk. Administrators only — it is the same
- * audience as the page, and it lists every user's events regardless of owner.
- *
- * A static segment under `/api/runs`, so it takes precedence over `[id]`; a
- * run can never have the id "stranded".
- */
 export async function GET(req: Request) {
   const session = await auth();
   if (!session?.user) {

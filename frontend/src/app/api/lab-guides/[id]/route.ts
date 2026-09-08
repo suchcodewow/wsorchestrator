@@ -1,3 +1,5 @@
+/** Rewrites or deletes a lab guide. */
+
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import {
@@ -7,7 +9,6 @@ import {
 } from "@/lib/lab-guides";
 import { canManageLabGuides } from "@/lib/roles";
 
-/** Signed in, and allowed to write guides. */
 async function requireEditor() {
   const session = await auth();
   if (!session?.user) {
@@ -19,7 +20,6 @@ async function requireEditor() {
   return { error: null };
 }
 
-/** Rewrite a guide. Managers and above. */
 export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -41,7 +41,6 @@ export async function PATCH(
   return NextResponse.json({ guide: result.guide });
 }
 
-/** Delete a guide outright. Managers and above. */
 export async function DELETE(
   _req: Request,
   { params }: { params: Promise<{ id: string }> },

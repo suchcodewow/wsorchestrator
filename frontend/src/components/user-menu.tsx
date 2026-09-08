@@ -1,5 +1,7 @@
 "use client";
 
+/** The account menu, everywhere one is opened. */
+
 import { Fragment, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -33,10 +35,6 @@ import { SITE_ROLE_LABELS } from "@/lib/roles";
 import { applyTheme } from "@/lib/theme";
 import { setCalendarScope, setThemePreference } from "@/lib/user-settings";
 
-/**
- * Group headings sit a size below the items they head and in the muted colour,
- * so they read as signposts rather than as rows that can be selected.
- */
 const SECTION_HEADING =
   "px-2 py-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground";
 
@@ -46,14 +44,6 @@ const THEME_OPTIONS: { value: ThemePreference; label: string; Icon: LucideIcon }
   { value: "system", label: "System default", Icon: Laptop },
 ];
 
-/**
- * Where this menu can be opened from, and what its trigger looks like there.
- *
- * `header`: the username and a chevron, in the bar — below `lg`, or on the
- * pages that have no sidebar. `sidebar`: the account row in the sidebar footer.
- * `rail`: the same row with only room for an avatar, once the sidebar is
- * collapsed.
- */
 export type MenuVariant = "header" | "sidebar" | "rail";
 
 const TRIGGER_CLASS: Record<MenuVariant, string> = {
@@ -64,18 +54,6 @@ const TRIGGER_CLASS: Record<MenuVariant, string> = {
   rail: "flex size-10 cursor-pointer items-center justify-center rounded-lg outline-none transition-colors hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50",
 };
 
-/**
- * The account menu, everywhere one is opened.
- *
- * Below `lg` it is the whole of the app's navigation, because there is no
- * sidebar down there — every link, the calendar scope, appearance and signing
- * out. From `lg` up the sidebar lists the links itself, and this drops to
- * `accountOnly`: what is left is what belongs to the person rather than to a
- * page, opened from their name in the sidebar footer.
- *
- * The links come from [[NAV_SECTIONS]] rather than being listed here, so a page
- * added to the sidebar cannot go missing on mobile.
- */
 export function UserMenu({
   name,
   email,
@@ -92,16 +70,9 @@ export function UserMenu({
   role: SiteRole;
   initialTheme: ThemePreference;
   initialScope: CalendarScope;
-  /** Which build is serving this page; stamped into the image at build time. */
   build: BuildInfo;
-  /** Server action; it redirects, so it never resolves on the happy path. */
   signOutAction: () => Promise<void>;
-  /**
-   * Leave out the page links and the calendar scope, for when a sidebar beside
-   * this menu is already showing them.
-   */
   accountOnly?: boolean;
-  /** Where this is being opened from; see [[MenuVariant]]. */
   variant?: MenuVariant;
 }) {
   const router = useRouter();
@@ -110,15 +81,10 @@ export function UserMenu({
   const [, startTransition] = useTransition();
 
   function chooseTheme(value: string) {
-    // Radix hands back a plain string; narrow it before it goes any further.
     if (!THEME_PREFERENCES.includes(value as ThemePreference)) return;
     const preference = value as ThemePreference;
 
     setTheme(preference);
-    // Repaint immediately rather than waiting on the round trip — the write is
-    // only about surviving a reload, and the control should never feel laggy.
-    // Following a later OS change for `system` is ThemeSync's job in the root
-    // layout, so it works on every page and not only where a control is open.
     applyTheme(preference);
     startTransition(() => {
       void setThemePreference(preference);
@@ -128,8 +94,6 @@ export function UserMenu({
   function chooseScope(all: boolean) {
     const next: CalendarScope = all ? "all" : "own";
     setScope(next);
-    // Unlike the theme, the new view is a different set of rows that only the
-    // server can fetch, so the page is refreshed once the write lands.
     startTransition(async () => {
       await setCalendarScope(next);
       router.refresh();
@@ -142,14 +106,11 @@ export function UserMenu({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
-        // Nothing but a picture of an initial names the rail's trigger.
         aria-label={variant === "rail" ? (name ?? email) : undefined}
         className={TRIGGER_CLASS[variant]}
       >
         {variant === "header" && (
           <>
-            {/* Tighter below `sm`, where a long name in a 390px bar pushed the
-                bar — and with it the whole document — wider than the screen. */}
             <span className="max-w-28 truncate sm:max-w-48">{name ?? email}</span>
             <ChevronDown className="size-4 shrink-0" />
           </>
@@ -157,10 +118,6 @@ export function UserMenu({
 
         {variant === "rail" && <Avatar name={name} email={email} />}
 
-        {/*
-          Spans rather than divs: the trigger is a `button`, whose content model
-          is phrasing content only.
-        */}
         {variant === "sidebar" && (
           <>
             <Avatar name={name} email={email} />
@@ -170,18 +127,11 @@ export function UserMenu({
                 <span className="block truncate text-xs text-muted-foreground">{email}</span>
               )}
             </span>
-            {/* Not a direction: this opens to the right, or upward if that is
-                where the room is, and Radix decides which at open time. */}
             <ChevronsUpDown className="size-4 shrink-0 text-muted-foreground" />
           </>
         )}
       </DropdownMenuTrigger>
 
-      {/*
-        Out of the sidebar it opens sideways so it never covers the nav it was
-        opened from; in the header it hangs under a trigger near the right edge.
-        `align="end"` keeps it inside the viewport in both cases.
-      */}
       <DropdownMenuContent
         side={variant === "header" ? "bottom" : "right"}
         align="end"
@@ -192,8 +142,6 @@ export function UserMenu({
           {name && (
             <span className="block truncate text-xs text-muted-foreground">{email}</span>
           )}
-          {/* Only worth saying when it grants something — everyone is at
-              least an operator, and a badge on every account is just noise. */}
           {elevated && (
             <span className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-brand/10 px-2 py-0.5 text-[11px] font-medium text-brand">
               <ShieldCheck className="size-3" />
@@ -202,16 +150,9 @@ export function UserMenu({
           )}
         </DropdownMenuLabel>
 
-        {/*
-          A fragment rather than a wrapping element per section: the separators
-          and headings belong to the menu's own flat sequence of rows, and
-          boxing each group would put a div between the content and its items.
-        */}
         {sections.map((section) => (
           <Fragment key={section.heading ?? "main"}>
             <DropdownMenuSeparator />
-            {/* The first group is unheaded on purpose: an operator sees a plain
-                list, and the headed group below reads as an addition to it. */}
             {section.heading && (
               <DropdownMenuLabel className={SECTION_HEADING}>
                 {section.heading}
@@ -230,8 +171,6 @@ export function UserMenu({
               <DropdownMenuSwitchItem
                 checked={scope === "all"}
                 onCheckedChange={chooseScope}
-                // Keeps the menu open, so the calendar visibly swaps underneath
-                // it and a mis-toggle can be undone without reopening.
                 onSelect={(e) => e.preventDefault()}
               >
                 <CalendarRange />
@@ -243,11 +182,6 @@ export function UserMenu({
 
         <DropdownMenuSeparator />
 
-        {/*
-          Label and control on one line: three glyphs say as much as three
-          labelled rows, and the setting is one people change rarely and
-          recognise instantly.
-        */}
         <div className="flex items-center justify-between gap-2 px-2 py-1.5">
           <span className="text-xs text-muted-foreground">Appearance</span>
           <DropdownMenuRadioGroup
@@ -265,11 +199,6 @@ export function UserMenu({
 
         <DropdownMenuSeparator />
 
-        {/*
-          Fired from `onSelect` rather than from a form inside the item: Radix
-          closes the menu on select, which would unmount a form before it could
-          submit.
-        */}
         <DropdownMenuItem onSelect={() => startTransition(() => void signOutAction())}>
           <LogOut />
           Sign out
@@ -277,11 +206,6 @@ export function UserMenu({
 
         <DropdownMenuSeparator />
 
-        {/*
-          A plain div, not a menu item: it is a fact to read, not something to
-          select, and making it focusable would put a dead stop at the end of
-          keyboard navigation through the menu.
-        */}
         <div
           className="px-2 py-1 text-[11px] leading-tight text-muted-foreground"
           title={

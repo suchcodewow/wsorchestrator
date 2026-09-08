@@ -1,3 +1,5 @@
+/** The Google Cloud half of the Cloud Status page. */
+
 import "server-only";
 
 import { GoogleAuth } from "google-auth-library";
@@ -9,38 +11,13 @@ import {
   type CloudAuditResult,
 } from "./types";
 
-/**
- * The Google Cloud half of the Cloud Status page.
- *
- * It answers one question: is every project the workshop billing account is
- * charged for accounted for? It lists the billing account's projects (Cloud
- * Billing API, as the app service account — which holds `roles/billing.viewer`
- * for exactly this, see `infra/admin/iam.tf`) and matches each against the runs
- * table. Anything billed but unmatched — and not a known piece of control-plane
- * infra — is flagged as an orphan or an extraneous project someone stood up.
- *
- * Projects whose billing is disabled are left out. They stay associated with the
- * billing account but cannot be charged against it, and the page's job is spend
- * nobody has claimed — so listing them only crowds out the projects that cost
- * something. That makes the totals here smaller than the billing console's.
- *
- * Read-only throughout: `billing.viewer` cannot change billing or move projects,
- * and nothing here writes to the database.
- */
-
 const BILLING_API = "https://cloudbilling.googleapis.com/v1";
 const RESOURCE_MANAGER_API = "https://cloudresourcemanager.googleapis.com/v3";
 
-/** The billing account this deployment provisions under. Set by Terraform. */
 export function billingAccountId(): string | null {
   return process.env.GCP_BILLING_ACCOUNT_ID || null;
 }
 
-/**
- * Projects that are legitimately billed but never appear as a run: the durable
- * control plane and the shared sandbox. Kept out of the "untracked" bucket so
- * they don't read as orphans every time the page loads.
- */
 function infraProjectIds(): Set<string> {
   const ids = new Set<string>();
   const admin = process.env.GCP_ADMIN_PROJECT_ID;
@@ -69,7 +46,6 @@ type ProjectsResponse = {
 
 type BillingProject = { projectId: string; billingEnabled: boolean };
 
-/** Every project associated with the billing account, following pagination. */
 async function listBillingProjects(accountId: string): Promise<BillingProject[]> {
   const projects: BillingProject[] = [];
   let pageToken: string | undefined;
@@ -97,16 +73,6 @@ type ProjectSearchResponse = {
   nextPageToken?: string;
 };
 
-/**
- * projectId -> human display name, from Cloud Resource Manager.
- *
- * Best-effort: app-sa can only read names for projects it has
- * `resourcemanager.projects.get` on — `roles/browser` on the workshops folder
- * (see `infra/admin/iam.tf`) — so projects outside that scope, and this whole
- * call before the grant is applied, simply come back nameless rather than
- * failing the audit. `projects:search` returns everything the caller can see
- * in one paginated sweep, so it is one call regardless of project count.
- */
 async function projectDisplayNames(): Promise<Map<string, string>> {
   const names = new Map<string, string>();
   try {
@@ -122,9 +88,7 @@ async function projectDisplayNames(): Promise<Map<string, string>> {
       }
       pageToken = data.nextPageToken || undefined;
     } while (pageToken);
-  } catch {
-    // No resource-manager access (yet) — names are optional enrichment.
-  }
+  } catch {}
   return names;
 }
 
@@ -137,11 +101,6 @@ function classify(err: unknown): AuditUnavailable {
 const consoleUrl = (projectId: string) =>
   `https://console.cloud.google.com/home/dashboard?project=${encodeURIComponent(projectId)}`;
 
-/**
- * List the billing account's projects and classify each against the database.
- * Returns a typed error rather than throwing, so the page can explain a missing
- * `billing.viewer` grant instead of 500-ing.
- */
 export async function auditGcp(owners: OwnerMaps): Promise<CloudAuditResult> {
   const accountId = billingAccountId();
   if (!accountId) return { ok: false, error: "not_configured" };
@@ -158,11 +117,6 @@ export async function auditGcp(owners: OwnerMaps): Promise<CloudAuditResult> {
   const infra = infraProjectIds();
 
   const resources: AuditedResource[] = billing.flatMap((p) => {
-    // A project with billing disabled cannot be charged for anything, so it is
-    // not this page's business — the same cut `auditAws` makes on closed
-    // accounts. It differs in being reversible: the project still exists and
-    // still holds whatever was in it, so re-enabling billing brings it back
-    // here rather than this being a permanent exclusion.
     if (!p.billingEnabled) return [];
 
     const owner = known.get(p.projectId) ?? null;
@@ -172,8 +126,6 @@ export async function auditGcp(owners: OwnerMaps): Promise<CloudAuditResult> {
         name: names.get(p.projectId) ?? null,
         url: consoleUrl(p.projectId),
         state: { label: "enabled", ok: true },
-        // Every project here is billed to an account this deployment owns, so
-        // there is no `unmanaged` case: it is ours whether we meant it or not.
         classification: owner
           ? "tracked"
           : infra.has(p.projectId)
@@ -197,10 +149,6 @@ export async function auditGcp(owners: OwnerMaps): Promise<CloudAuditResult> {
       columns: { id: "Project", name: "Project name", state: "Billing" },
       missing: missingFromCloud(
         known,
-        // Every project the billing account listed, billing-disabled ones
-        // included — those are filtered out of the table above, but a run whose
-        // project merely had billing turned off must not then read as a project
-        // the billing account has never heard of.
         billing.map((p) => p.projectId),
         infra,
       ),

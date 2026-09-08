@@ -1,3 +1,5 @@
+/** Every published workshop. */
+
 import { auth } from "@/auth";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,12 +20,6 @@ const updated = new Intl.DateTimeFormat("en", {
   year: "numeric",
 });
 
-/**
- * Every workshop. Public — this is the page a room is pointed at.
- *
- * The session is read only to decide whether drafts and the write controls are
- * shown; signed out is the expected case.
- */
 export default async function LabsPage() {
   const session = await auth();
   const canEdit = session?.user ? canManageLabGuides(session.user.siteRole) : false;
@@ -93,22 +89,6 @@ export default async function LabsPage() {
         </ul>
       )}
 
-      {/*
-        The library, one level down. A guide is reusable material rather than a
-        destination, so it is not what this page leads with — but a guide in no
-        workshop has to be reachable, and an author needs somewhere to write one
-        before there is a workshop to put it in.
-
-      <div className="mt-10 flex items-center justify-between gap-4 rounded-xl border border-dashed p-4">
-        <p className="flex items-center gap-2.5 text-sm text-muted-foreground">
-          <BookOpen className="size-4 shrink-0" />
-          Every lab guide, including any not yet in a workshop.
-        </p>
-        <Button asChild variant="ghost" size="sm">
-          <Link href="/labs/guides">Browse guides</Link>
-        </Button>
-      </div>
-            */}
     </div>
   );
 }

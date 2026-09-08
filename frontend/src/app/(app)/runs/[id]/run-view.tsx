@@ -1,5 +1,7 @@
 "use client";
 
+/** One event: its status, credentials, resources and log. */
+
 import { StatusBadge } from "@/components/status-badge";
 import {
   Card,
@@ -55,25 +57,12 @@ type RunPayload = {
   run: WorkshopRun;
   logs: RunLog[];
   accounts: WorkshopAccount[];
-  /** What the run has actually built, in the order the runner confirmed it. */
   resources: RunResource[];
-  /** Who booked it. Null only if the account has since been removed. */
   owner: { id: string; name: string | null; email: string | null } | null;
 };
 
-// Poll only while the run is actively moving; scheduled/terminal runs are static.
 const ACTIVE = new Set(["requested", "provisioning", "applying", "destroying"]);
 
-/**
- * When the event's cloud resources go away, in the words the page should use.
- *
- * `projected` — it hasn't started yet, so the moment is start + lifetime and
- *   only an estimate; it firms up to `expiresAt` once the build goes ready.
- * A failed run was expired on the spot purely so the reaper cleans up its
- * half-built resources — that isn't a teardown worth advertising, so it's left
- * out.
- */
-/** A lifetime in seconds as the largest whole unit it divides into evenly. */
 function humanDuration(seconds: number): string {
   const plural = (n: number, unit: string) => `${n} ${unit}${n === 1 ? "" : "s"}`;
   if (seconds % 86400 === 0) return plural(seconds / 86400, "day");
@@ -105,10 +94,6 @@ function destroyMoment(
   return null;
 }
 
-/**
- * Render one Terraform output. A challenge's per-competitor outputs are maps
- * of address -> value, which `String(v)` would flatten to "[object Object]".
- */
 function OutputValue({ value }: { value: unknown }) {
   if (value !== null && typeof value === "object" && !Array.isArray(value)) {
     return (
@@ -132,18 +117,12 @@ export function RunView({
 }: {
   initial: RunPayload;
   runId: string;
-  /** Whose session this is — decides whether the event reads as theirs. */
   viewerId: string;
 }) {
   const router = useRouter();
   const [data, setData] = useState<RunPayload>(initial);
   const logBoxRef = useRef<HTMLDivElement>(null);
-  // Following is opt-in: a build can run for minutes, and yanking the reader
-  // back to the bottom every 2.5s poll makes the log unreadable while it is
-  // still being written.
   const [tail, setTail] = useState(false);
-  // The roster is a total on the page and a table on request; see the accounts
-  // card below for why it is not open by default.
   const [showCredentials, setShowCredentials] = useState(false);
   const [showOutputs, setShowOutputs] = useState(false);
 
@@ -153,16 +132,9 @@ export function RunView({
       setData(await res.json());
       return;
     }
-    // Gone — its teardown finished, or a manager deleted it out from under
-    // this tab. Either way there is nothing left here to poll.
     if (res.status === 404) router.replace("/events");
   }, [runId, router]);
 
-  // Poll while the run is moving, or awaiting deletion (which may sit in
-  // `ready` for a few minutes while the reaper finishes). A scheduled run is
-  // also polled once its start time is at hand, so the scheduler's "picked up"
-  // line and the first build output appear live rather than only on a reload —
-  // the page would otherwise sit still through the whole hand-off.
   const { status, scheduledStart, deleteRequested } = data.run;
   useEffect(() => {
     if (ACTIVE.has(status) || deleteRequested) {
@@ -172,13 +144,8 @@ export function RunView({
 
     if (status === "scheduled" && scheduledStart) {
       const lead = new Date(scheduledStart).getTime() - Date.now();
-      // Leave runs scheduled far out alone — a reload will pick them up; only
-      // watch ones starting within the next 12 hours.
       if (lead > 12 * 60 * 60 * 1000) return;
       let interval: ReturnType<typeof setInterval>;
-      // Start polling at the start time (or now, if it has already passed) and
-      // keep going until the scheduler flips it to `requested`, at which point
-      // this effect re-runs into the ACTIVE branch above.
       const start = setTimeout(() => {
         void refresh();
         interval = setInterval(refresh, 3000);
@@ -190,10 +157,6 @@ export function RunView({
     }
   }, [status, scheduledStart, deleteRequested, refresh]);
 
-  // Scroll the log box itself rather than calling `scrollIntoView` on a
-  // sentinel — that walks every scrollable ancestor, so it dragged the whole
-  // page down too, not just the log. Also runs on the switch-on so enabling
-  // tail jumps to the end immediately instead of waiting for the next line.
   useEffect(() => {
     if (!tail) return;
     const box = logBoxRef.current;
@@ -201,8 +164,6 @@ export function RunView({
   }, [tail, data.logs.length]);
 
   const { run, logs, accounts, resources, owner } = data;
-  // Azure issues one per attendee; nothing else does, so the column only earns
-  // its width on an event that selected Azure.
   const hasAccessPass = accounts.some((a) => a.azureAccessPass);
   const claimed = accounts.filter((a) => a.claimedAt).length;
   const outputs = run.outputs as Record<string, unknown> | null;
@@ -224,12 +185,6 @@ export function RunView({
           <ArrowLeft className="size-4 transition-transform duration-200 group-hover:-translate-x-0.5" />
           Back to events
         </Link>
-        {/*
-          Wrapping, because the actions are `shrink-0` and the title is not: on
-          a phone they held their full width and squeezed the heading into a
-          three-line column, then still pushed Delete off the right edge. Given
-          room to wrap they drop to their own line and the title gets the width.
-        */}
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
           <div className="min-w-0">
             <h1 className="text-2xl font-medium tracking-tight">{run.name}</h1>
@@ -260,8 +215,6 @@ export function RunView({
               </p>
             )}
             <div className="mt-2 flex flex-wrap items-center gap-2">
-              {/* Whose event this is, but only when that isn't the obvious
-                  answer — a manager arrives here from the all-users view. */}
               {!owned && owner && (
                 <span className="inline-flex items-center gap-1.5 rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground">
                   <User className="size-3" />
@@ -282,11 +235,6 @@ export function RunView({
         </div>
       </motion.div>
 
-      {/* Only while the teardown is actually running. A run in `destroy_failed`
-          normally has `deleteRequested` set too — that is what started the
-          teardown that then gave up — so without the status check this would
-          promise a reaper pass that is not coming. The Error card below carries
-          the real story, and "Retry teardown" is what resumes it. */}
       {run.deleteRequested && run.status !== "destroy_failed" && (
         <motion.div variants={riseChild}>
           <Card className="border-amber-500/40 bg-amber-500/5">
@@ -304,9 +252,6 @@ export function RunView({
             <CardHeader>
               <CardTitle className="text-destructive">Error</CardTitle>
             </CardHeader>
-            {/* `whitespace-pre-line`: a teardown that gave up stores the
-                provider's error and then what to do about it on the next line,
-                which collapses into one wall of text without this. */}
             <CardContent className="text-sm whitespace-pre-line">
               {run.error}
             </CardContent>
@@ -314,9 +259,6 @@ export function RunView({
         </motion.div>
       )}
 
-      {/* First card on the page: handing the room its link is what an
-          organizer opens this page to do, so it sits above the build detail
-          rather than below the config. */}
       {accounts.length > 0 && (
         <motion.div variants={riseChild}>
           <AttendeeLink runId={run.id} mode={run.mode} />
@@ -336,9 +278,6 @@ export function RunView({
               <div className="grid gap-1.5">
                 <CardTitle>Raw outputs</CardTitle>
                 <CardDescription>
-                  {/* The panel above is this, read out loud. What is left down
-                      here is the long tail — per-competitor maps, AWS's own
-                      generated passwords — so it starts closed. */}
                   Every value Terraform returned, as it returned it.
                 </CardDescription>
               </div>
@@ -394,11 +333,6 @@ export function RunView({
                 {claimed > 0 && ` · ${claimed} claimed`}
               </CardDescription>
             </div>
-            {/* Collapsed by default. Fifty rows of addresses and passwords is
-                the page's whole height, and it is not what anyone comes here
-                for while a build is running — the counts and the resources
-                above are. It stays one click away for the organizer handing
-                credentials out. */}
             <Button
               variant="outline"
               size="sm"
@@ -422,8 +356,6 @@ export function RunView({
                   <tr className="text-left text-[11px] uppercase tracking-wider text-muted-foreground">
                     <th className="pb-2 font-medium">Email</th>
                     <th className="pb-2 font-medium">Temporary password</th>
-                    {/* Only for an event that provisioned Azure, which is the
-                        only thing that issues one. */}
                     {hasAccessPass && (
                       <th className="pb-2 font-medium">Azure access pass</th>
                     )}
@@ -447,7 +379,6 @@ export function RunView({
                           )}
                         </td>
                       )}
-                      {/* Filled in by the attendee on the shared page below. */}
                       <td className="py-2 font-sans">
                         {a.claimedName ?? (
                           <span className="text-muted-foreground">
@@ -461,9 +392,6 @@ export function RunView({
               </table>
             </div>
             <p className="mt-3 text-xs text-muted-foreground">
-              {/* Not "prompted to change their password": accounts are created
-                  without a forced reset so the one password works across every
-                  cloud the event uses. */}
               This password works in every cloud except AWS, which generates its
               own on the attendee page
               {hasAccessPass && ", and Azure, which asks for the access pass"}.
@@ -512,8 +440,6 @@ export function RunView({
             {logs.map((l) => (
               <motion.div
                 key={l.id}
-                // New lines fade in as they stream, so the eye is drawn to what
-                // just arrived rather than to the whole block reflowing.
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ duration: 0.2 }}
@@ -540,12 +466,6 @@ export function RunView({
   );
 }
 
-/**
- * What each kind of provisioned thing looks like. Kinds are stored as free
- * text by the runner, so anything not listed here still renders — with the
- * generic icon and whatever label the runner gave it — rather than vanishing
- * from the list because this map has not caught up yet.
- */
 const RESOURCE_ICONS: Record<string, LucideIcon> = {
   org_unit: Building2,
   accounts: Users,
@@ -564,16 +484,6 @@ const RESOURCE_ICONS: Record<string, LucideIcon> = {
   harness_components: Boxes,
 };
 
-/**
- * Everything the run has built, as it builds it.
- *
- * This is the answer to "is it working?" during the ten minutes a build takes,
- * which nothing on the page could give before: the log says what was attempted
- * in Terraform's words, and the outputs card is empty until the whole run goes
- * ready. Each row appears the moment its provider confirmed the thing, so an
- * organizer watching sees the org unit, then the accounts counting up, then
- * each cloud environment as it lands.
- */
 function BuiltPanel({
   run,
   resources,
@@ -583,9 +493,6 @@ function BuiltPanel({
 }) {
   const building = ACTIVE.has(run.status) && run.status !== "destroying";
   const teardownGaveUp = run.status === "destroy_failed";
-  // Checked after `teardownGaveUp`, because a run whose teardown stopped is
-  // usually also `deleteRequested` — that is what started it — and would
-  // otherwise still claim to be on its way out.
   const tearingDown =
     !teardownGaveUp && (run.status === "destroying" || run.deleteRequested);
 
@@ -622,14 +529,6 @@ function BuiltPanel({
   );
 }
 
-/**
- * One built thing: what it is, what it is called, and — for the items created
- * one at a time — how far along the count is.
- *
- * A counted row is the point of the whole panel on a fifty-attendee workshop:
- * "Attendee accounts 31/50" in one line, in place, rather than thirty-one rows
- * of addresses that push the rest of the page out of sight.
- */
 function ResourceRow({ resource }: { resource: RunResource }) {
   const Icon = RESOURCE_ICONS[resource.kind] ?? Boxes;
   const { done, total } = resource;
@@ -670,7 +569,6 @@ function ResourceRow({ resource }: { resource: RunResource }) {
         </span>
       )}
 
-      {/* The console link, for the things that have one. */}
       {resource.url && (
         <Button variant="ghost" size="sm" asChild>
           <Link href={resource.url} target="_blank" rel="noreferrer">
@@ -689,14 +587,6 @@ function ResourceRow({ resource }: { resource: RunResource }) {
   );
 }
 
-/**
- * The shareable page the room uses to pick up their credentials.
- *
- * The path is rendered rather than the full URL because the origin is only
- * knowable in the browser, and reading it during render would not match what
- * the server sent. Copy resolves it against the current origin instead, so the
- * clipboard still gets something an attendee can paste into a phone.
- */
 function AttendeeLink({ runId, mode }: { runId: string; mode: string }) {
   const [copied, setCopied] = useState(false);
   const path = `/attend/${runId}`;
@@ -744,7 +634,6 @@ function AttendeeLink({ runId, mode }: { runId: string; mode: string }) {
   );
 }
 
-/** A small monospace fact — org unit path, project id, expiry. */
 function MetaChip({ children }: { children: React.ReactNode }) {
   return (
     <span className="inline-flex items-center rounded-md bg-muted px-2 py-1 font-mono text-xs text-muted-foreground">

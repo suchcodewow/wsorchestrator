@@ -1,3 +1,5 @@
+/** Reads and writes workshops and their contents. */
+
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
@@ -12,27 +14,11 @@ import {
 import { slugify } from "@/lib/runs";
 import { isUuid } from "@/lib/utils";
 
-/**
- * Reads and writes for workshops — the ordered collections of lab guides.
- *
- * This is where publishing lives, and the only place it does: a *published*
- * workshop is readable by anybody, a draft one needs a manager, and every write
- * needs a manager. Callers pass `canEdit` rather than a role, so there is one
- * place that decides and no route re-deriving it.
- *
- * The decision covers the workshop, not its contents. Guides carry no flag of
- * their own — a workshop that is ready to teach is ready in full, and a
- * contents list that silently drops steps out of the middle is a worse thing to
- * hand a room than one that is honest about what it holds.
- */
-
-/** A row of the workshop index. */
 export type LabWorkshopSummary = Pick<
   LabWorkshop,
   "id" | "slug" | "title" | "summary" | "published" | "updatedAt"
 > & { authorName: string | null; guideCount: number };
 
-/** One guide as it appears in a workshop's contents. */
 export type WorkshopGuideEntry = {
   id: string;
   slug: string;
@@ -45,14 +31,6 @@ export type LabWorkshopWithGuides = LabWorkshop & {
   guides: WorkshopGuideEntry[];
 };
 
-/**
- * Every workshop, with how many guides each holds.
- *
- * The count is a correlated subquery rather than a join and a group-by: the
- * outer row is already unique, and grouping it would only be a way to undo the
- * fan-out this avoids. Every viewer gets the same number — a workshop holds
- * what it holds.
- */
 export async function listLabWorkshops(
   canEdit: boolean,
 ): Promise<LabWorkshopSummary[]> {
@@ -76,7 +54,6 @@ export async function listLabWorkshops(
     .orderBy(desc(labWorkshops.updatedAt));
 }
 
-/** The guides in a workshop, in order. */
 async function guidesOf(workshopId: string): Promise<WorkshopGuideEntry[]> {
   return db
     .select({
@@ -91,13 +68,6 @@ async function guidesOf(workshopId: string): Promise<WorkshopGuideEntry[]> {
     .orderBy(asc(labWorkshopGuides.position));
 }
 
-/**
- * One workshop by id, without its contents. Editors only.
- *
- * Used by the "write a new guide" round trip, which carries the workshop as an
- * id in a query string — the guide it is about to create may well rename the
- * workshop's slug out from under it if the workshop is still a draft.
- */
 export async function getLabWorkshopById(
   id: string,
 ): Promise<LabWorkshop | null> {
@@ -109,7 +79,6 @@ export async function getLabWorkshopById(
   return workshop ?? null;
 }
 
-/** One workshop and its contents, or null if the viewer may not see it. */
 export async function getLabWorkshopBySlug(
   slug: string,
   canEdit: boolean,
@@ -140,12 +109,6 @@ export async function getLabWorkshopBySlug(
   return { ...workshop, guides: await guidesOf(workshop.id) };
 }
 
-/**
- * A guide read inside a workshop, with what comes before and after it.
- *
- * Neighbours come from the same list the contents rail is built from, so "next"
- * is always somewhere the reader can actually go.
- */
 export async function getWorkshopGuide(
   workshopSlug: string,
   guideSlug: string,
@@ -170,10 +133,8 @@ export async function getWorkshopGuide(
   };
 }
 
-/** Path segments under `/labs` that are pages in their own right. */
 const RESERVED_SLUGS = new Set(["new", "guides"]);
 
-/** A free slug derived from the title. See `availableSlug` in `@/lib/lab-guides`. */
 async function availableSlug(title: string, excludeId?: string): Promise<string> {
   const base = slugify(title, "workshop-guide");
   if (RESERVED_SLUGS.has(base)) return `${base}-workshop`;
@@ -194,14 +155,6 @@ async function availableSlug(title: string, excludeId?: string): Promise<string>
   }
 }
 
-/**
- * Everything a manager can set on a workshop.
- *
- * `guideIds` is the contents, in order — the whole list every time rather than
- * an add/remove/move verb per edit. The editor is a form: it holds an order the
- * author has been rearranging, and one request that says "this is the order
- * now" cannot half-apply the way a sequence of moves can.
- */
 export const labWorkshopSchema = z.object({
   title: z.string().trim().min(1).max(LAB_WORKSHOP_LIMITS.title),
   summary: z.string().trim().max(LAB_WORKSHOP_LIMITS.summary).default(""),
@@ -216,15 +169,6 @@ export type LabWorkshopInput = z.infer<typeof labWorkshopSchema>;
 
 export type LabWorkshopError = "not_found" | "unknown_guide";
 
-/**
- * The contents a save asked for, or null if any of it is not a real guide.
- *
- * Checked *before* the write rather than left to the foreign key, so a stale
- * editor tab holding a since-deleted guide gets a 400 saying so instead of a
- * 500 from the database. Duplicates are dropped rather than rejected: the
- * composite key forbids them, the editor never offers to add one twice, and
- * quietly keeping the first mention is friendlier than failing the whole save.
- */
 async function resolveContents(guideIds: string[]): Promise<string[] | null> {
   const ordered = [...new Set(guideIds)];
   if (ordered.length === 0) return ordered;
@@ -237,14 +181,6 @@ async function resolveContents(guideIds: string[]): Promise<string[] | null> {
   return found.length === ordered.length ? ordered : null;
 }
 
-/**
- * Write the contents of a workshop: delete what was there, insert the new
- * order. Runs inside the caller's transaction, on ids already resolved.
- *
- * Replace rather than reconcile. The set is at most a few dozen rows, and a
- * diff would be more code in exchange for a saving nobody can measure — while
- * being the sort of code that quietly leaves a stale `position` behind.
- */
 async function setContents(
   tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
   workshopId: string,
@@ -291,15 +227,6 @@ export async function createLabWorkshop(
   return { ok: true, workshop };
 }
 
-/**
- * Update a workshop and its contents.
- *
- * The slug follows the title only while the workshop is a draft. Once it is
- * published the address is already on a projector somewhere, and silently
- * moving it to fix a typo in the title would break every link handed out.
- * Guides are the other way round — theirs always follows the title — because
- * this is the URL a room is actually given.
- */
 export async function updateLabWorkshop(
   id: string,
   input: LabWorkshopInput,
@@ -338,19 +265,6 @@ export async function updateLabWorkshop(
 
 export type AppendGuideError = "not_found" | "unknown_guide" | "full";
 
-/**
- * Put one guide at the end of a workshop's contents.
- *
- * The narrow counterpart to `updateLabWorkshop`, and the only write that adds
- * to a workshop without being handed its whole order. It exists for one flow:
- * an author in the workshop editor writes a new guide, and comes back to find
- * it already in the list rather than having to go and add what they just made.
- *
- * Two authors appending at the same instant can land on the same `position`.
- * That is harmless — it only leaves the order between those two arbitrary, and
- * the next full save rewrites the whole run to 0..n-1 — and the alternative is
- * locking the table for a button click.
- */
 export async function appendGuideToWorkshop(
   workshopId: string,
   guideId: string,
@@ -378,8 +292,6 @@ export async function appendGuideToWorkshop(
 
   if (count >= LAB_WORKSHOP_LIMITS.guides) return { ok: false, error: "full" };
 
-  // Already in the workshop is success, not a conflict: the author asked for it
-  // to be in there, and it is.
   await db
     .insert(labWorkshopGuides)
     .values({ workshopId, guideId, position: next })
@@ -396,6 +308,5 @@ export async function deleteLabWorkshop(id: string): Promise<boolean> {
     .where(eq(labWorkshops.id, id))
     .returning({ id: labWorkshops.id });
 
-  // The guides themselves are untouched — only their membership cascades.
   return deleted.length > 0;
 }

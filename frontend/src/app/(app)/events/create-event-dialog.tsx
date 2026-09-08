@@ -1,5 +1,7 @@
 "use client";
 
+/** The form that books a workshop or a challenge. */
+
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -11,21 +13,13 @@ import { Check, Loader2, Zap } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-/**
- * The start time the form opens on: 9am on a day picked from the calendar,
- * otherwise the top of the next hour. Either way the minutes are zeroed, so
- * the exact moment this is called does not show up in the value.
- */
 function defaultStart(initialDate: Date | null): Date {
-  // Copied, not adjusted in place: `initialDate` is the caller's state, and
-  // this runs during render.
   const base = initialDate ? new Date(initialDate) : new Date();
   if (initialDate) base.setHours(9, 0, 0, 0);
   else base.setHours(base.getHours() + 1, 0, 0, 0);
   return base;
 }
 
-/** Format a Date as the value a datetime-local input expects (local time). */
 function toLocalInput(d: Date): string {
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
@@ -60,11 +54,7 @@ export function CreateEventDialog({
 }) {
   const copy = COPY[mode];
   const limits = limitsFor(mode);
-  // A challenge takes exactly one cloud, so the picker behaves as radios.
   const singleCloud = limits.maxClouds === 1;
-  // Picking nothing is itself a choice: attendees fall back to the shared
-  // internal project. Only offered where zero clouds is legal — a challenge
-  // always provisions one.
   const fallbackAllowed = limits.minClouds === 0;
 
   const router = useRouter();
@@ -77,13 +67,6 @@ export function CreateEventDialog({
   const [pending, setPending] = useState<"now" | "schedule" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Reset the form on the closed -> open transition, so each event is composed
-  // from scratch rather than inheriting whatever the last one was left on.
-  //
-  // Done during render rather than in an effect: an effect runs after the paint,
-  // which flashes the previous event's name and clouds for a frame as the dialog
-  // animates in. The dialog stays mounted while closed — that is what drives its
-  // exit animation — so a `key` remount is not available to do this instead.
   const [wasOpen, setWasOpen] = useState(open);
   if (open !== wasOpen) {
     setWasOpen(open);
@@ -98,8 +81,6 @@ export function CreateEventDialog({
   }
 
   function toggleCloud(cloud: Cloud) {
-    // Picking a cloud in single-cloud mode replaces the selection rather than
-    // adding to it, so the state can never hold a combination the API rejects.
     if (singleCloud) {
       setClouds([cloud]);
       return;
@@ -145,7 +126,6 @@ export function CreateEventDialog({
       if (!res.ok) throw new Error(`Could not create ${copy.noun} (${res.status})`);
       const { run } = await res.json();
       onOpenChange(false);
-      // Jump straight to the run so the build streams in view.
       if (startNow) router.push(`/runs/${run.id}`);
       else router.refresh();
     } catch (err) {
@@ -164,8 +144,6 @@ export function CreateEventDialog({
         </DialogHeader>
 
         <motion.form
-          // Fields arrive just behind the panel, which makes the dialog read as
-          // one movement instead of a box that pops and then fills in.
           variants={staggerParent(0.04, 0.08)}
           initial="hidden"
           animate="show"
@@ -214,10 +192,6 @@ export function CreateEventDialog({
             <legend className="mb-2 text-sm font-medium">
               {singleCloud ? "Cloud" : "(Optional) Cloud(s) to provision for attendee access"}
             </legend>
-            {/*
-             * Selectable cards rather than bare checkboxes: the whole row is a
-             * target and the selected state is legible at a glance.
-             */}
             <div className="grid gap-2">
               {CLOUDS.map((cloud) => {
                 const selected = clouds.includes(cloud);
@@ -253,14 +227,6 @@ export function CreateEventDialog({
                 );
               })}
 
-              {/*
-               * The implicit fourth option, rendered as a card so the fallback
-               * is visible in the picker rather than only described in the hint
-               * below — an empty selection otherwise reads as an unfinished
-               * form. Deliberately inert: it is the consequence of the three
-               * above, not a control of its own, so it greys out and checks
-               * itself whenever nothing else is checked.
-               */}
               {fallbackAllowed && (
                 <div
                   role="checkbox"
@@ -321,7 +287,6 @@ export function CreateEventDialog({
             </p>
           </motion.div>
 
-          {/* Separated from Schedule: this one ignores the date below. */}
           <motion.div variants={riseChild} className="grid gap-1.5 rounded-lg border border-dashed p-3">
             <Button type="button" variant="secondary" disabled={pending !== null} onClick={() => createRun(true)}>
               {pending === "now" ? <Loader2 className="animate-spin" /> : <Zap />}

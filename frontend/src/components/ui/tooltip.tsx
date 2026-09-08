@@ -1,16 +1,11 @@
 "use client";
 
+/** The tooltip primitives. */
+
 import * as React from "react";
 import * as TooltipPrimitive from "@radix-ui/react-tooltip";
 import { cn } from "@/lib/utils";
 
-/**
- * How long the pointer must rest before a tooltip opens, in ms. Deliberately
- * short — the calendar's truncated event names should be readable almost as
- * soon as the pointer lands, not after the browser's ~half-second `title`
- * delay. Once one tooltip is open, `skipDelayDuration` lets neighbours open
- * with no wait at all.
- */
 const OPEN_DELAY = 120;
 
 function TooltipProvider({

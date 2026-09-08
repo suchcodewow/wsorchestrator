@@ -1,3 +1,5 @@
+/** One lab guide on its own, outside any workshop. */
+
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { auth } from "@/auth";
@@ -22,14 +24,6 @@ export async function generateMetadata({
   return { title: guide.title, description: guide.summary || undefined };
 }
 
-/**
- * One lab guide, on its own — no workshop around it.
- *
- * This is the guide's canonical home: it is what the library links to, what
- * the editor returns to, and where a guide belonging to no workshop lives.
- * Readable by anyone; the session is read only to decide whether the Edit
- * button is shown.
- */
 export default async function GuidePage({
   params,
 }: {

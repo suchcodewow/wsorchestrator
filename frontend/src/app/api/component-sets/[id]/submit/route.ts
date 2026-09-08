@@ -1,3 +1,5 @@
+/** Offers a tested component set for review. */
+
 import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
@@ -6,19 +8,6 @@ import { harnessComponentSets, workshopRuns } from "@/db/schema";
 import { canContributeComponents } from "@/lib/roles";
 import { setStatus } from "@/lib/components/catalog";
 
-/**
- * Offer a tested set for review.
- *
- * The whole of "getting it back into the portal" — no upload, no import, no
- * parsing. The components have been in the database since the sandbox run that
- * tested them, so submitting is a change of status, and what the reviewer reads
- * is necessarily what was exercised.
- *
- * A set with no run against it is allowed through, because someone may have
- * authored without ever testing — but it is flagged, because "nobody has ever
- * run this" is the first thing a reviewer needs to know and the only thing
- * they cannot see by reading the components.
- */
 export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -55,8 +44,6 @@ export async function POST(
     );
   }
 
-  // The runs that exercised it — the reason the set carries no run id of its
-  // own. A reviewer follows these to see what actually applied.
   const runs = await db
     .select({ id: workshopRuns.id, status: workshopRuns.status })
     .from(workshopRuns)

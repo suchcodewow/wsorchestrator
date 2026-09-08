@@ -1,3 +1,5 @@
+/** Serves, renames or deletes one lab image. */
+
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import {
@@ -7,19 +9,6 @@ import {
 } from "@/lib/lab-images";
 import { canManageLabGuides } from "@/lib/roles";
 
-/**
- * Serve one image. Public, like the guides that show it.
- *
- * This is the URL that ends up inside the Markdown, so it is the one thing in
- * the image feature a signed-out reader touches. Cached hard and immutably: the
- * bytes at an id never change — an edited screenshot is a new upload with a new
- * id — so a reader who scrolls back up a guide should not re-fetch it, and a
- * room of thirty attendees on the same page should mostly hit their own caches.
- *
- * `Content-Disposition: inline` with a nosniff header is the belt and braces on
- * top of `sniffImageType`: the type was verified from the magic bytes on the
- * way in, and the browser is told not to second-guess it on the way out.
- */
 export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -42,7 +31,6 @@ export async function GET(
   });
 }
 
-/** Signed in, and allowed to write guides. */
 async function requireEditor() {
   const session = await auth();
   if (!session?.user) {
@@ -54,14 +42,6 @@ async function requireEditor() {
   return null;
 }
 
-/**
- * Rename an image. Managers only.
- *
- * The counterpart to auto-naming: a pasted screenshot is filed under the
- * guide's title because the clipboard offers nothing better, and this is how
- * that gets corrected without the author having to interrupt their writing at
- * the moment of pasting.
- */
 export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -84,13 +64,6 @@ export async function PATCH(
   return NextResponse.json({ image });
 }
 
-/**
- * Delete an image. Managers only.
- *
- * Guides that referenced it keep their Markdown and the image stops resolving —
- * there is no index from bytes back to the guides mentioning them, so the
- * alternative is scanning every guide body on every delete.
- */
 export async function DELETE(
   _req: Request,
   { params }: { params: Promise<{ id: string }> },

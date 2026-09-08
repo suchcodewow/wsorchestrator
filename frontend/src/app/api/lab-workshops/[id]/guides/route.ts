@@ -1,3 +1,5 @@
+/** Appends one guide to a workshop's contents. */
+
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/auth";
@@ -15,14 +17,6 @@ const STATUS_FOR: Record<AppendGuideError, number> = {
   full: 409,
 };
 
-/**
- * Append one guide to a workshop's contents. Managers and above.
- *
- * Deliberately narrower than `PATCH /api/lab-workshops/<id>`, which replaces
- * the whole order: this is called from the guide editor, which knows the guide
- * it just created and nothing about what else is in the workshop. Sending a
- * whole order from there would mean guessing at one.
- */
 export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -49,7 +43,5 @@ export async function POST(
     );
   }
 
-  // The slug comes back because the caller is about to navigate to the
-  // workshop editor, and a draft workshop's slug moves when its title changes.
   return NextResponse.json({ ok: true, slug: result.workshop.slug });
 }

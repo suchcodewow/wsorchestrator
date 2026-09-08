@@ -1,3 +1,5 @@
+/** The database console page. */
+
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
@@ -10,13 +12,6 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-/**
- * A read-only SQL console for troubleshooting.
- *
- * Administrators only — for anyone below it is a 404, the same as the users and
- * backups pages. The table list is fetched here through the same read-only path
- * the console uses, so the page arrives with something to click.
- */
 export const dynamic = "force-dynamic";
 
 export default async function DatabasePage() {

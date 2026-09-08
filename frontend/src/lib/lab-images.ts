@@ -1,3 +1,5 @@
+/** Reads and writes the lab image library. */
+
 import { desc, eq, ilike } from "drizzle-orm";
 import { db } from "@/db";
 import {
@@ -8,22 +10,6 @@ import {
 } from "@/db/schema";
 import { isUuid } from "@/lib/utils";
 
-/**
- * Reads and writes for the lab image library.
- *
- * Same shape of access rule as the guides: the *bytes* are readable by anybody,
- * because they are shown on public guide pages, and everything else — the
- * listing, the uploads, the deletes — needs a manager. Nothing here takes a
- * `canEdit`; the routes gate the manager half, and this file is only asked for
- * what the caller is already allowed to have.
- *
- * The bytes are deliberately not part of the listing type. A library of fifty
- * screenshots is several megabytes, and the picker needs names and sizes, not
- * pixels — so `data` is selected only by `getLabImageData`, which serves one
- * image at a time.
- */
-
-/** A row of the picker. Everything except the bytes. */
 export type LabImageSummary = Omit<LabImage, "data">;
 
 const summary = {
@@ -36,14 +22,6 @@ const summary = {
   createdAt: labImages.createdAt,
 };
 
-/**
- * The image library, newest first, optionally narrowed by name.
- *
- * The search is a case-insensitive substring rather than anything cleverer:
- * an author is looking for the screenshot they called "harness pipeline" and
- * will type "pipe". Wildcards in the query are escaped, so a name containing
- * `%` is searchable and a query of `%` matches nothing rather than everything.
- */
 export async function listLabImages(query = ""): Promise<LabImageSummary[]> {
   const q = query.trim();
 
@@ -54,12 +32,10 @@ export async function listLabImages(query = ""): Promise<LabImageSummary[]> {
     .orderBy(desc(labImages.createdAt));
 }
 
-/** `%`, `_` and `\` are wildcards to LIKE; an author typing them means them. */
 function escapeLike(value: string): string {
   return value.replace(/[\\%_]/g, (c) => `\\${c}`);
 }
 
-/** One image's bytes and content type, for serving it. Public. */
 export async function getLabImageData(
   id: string,
 ): Promise<{ data: Buffer; mimeType: string } | null> {
@@ -80,21 +56,11 @@ export type UploadLabImageError =
   | "unsupported_type"
   | "corrupt";
 
-/**
- * Store an uploaded image.
- *
- * The declared content type is not trusted. A browser will happily label
- * anything, and this writes to a table whose bytes are later served back from
- * the app's own origin — so the magic bytes decide what this is, and a file
- * whose header does not match a format we accept is refused rather than stored
- * and served as something it is not.
- */
 export async function uploadLabImage(input: {
   name: string;
   alt: string;
   data: Buffer;
   authorId: string;
-  /** Name was invented by the app, not typed by a person — make it unique. */
   autoName?: boolean;
 }): Promise<
   { ok: true; image: LabImageSummary } | { ok: false; error: UploadLabImageError }
@@ -124,18 +90,6 @@ export async function uploadLabImage(input: {
   return { ok: true, image };
 }
 
-/**
- * A name nothing else is using, derived from `base`.
- *
- * Only for names the app invented — a person typing "console" twice meant it,
- * and is not owed a number on the end. Pasting eight screenshots into one
- * guide is the case this exists for: without it the library fills with eight
- * rows sharing the guide's title, and the search box cannot tell them apart.
- *
- * Deliberately not a unique constraint. A collision here is a naming
- * inconvenience, not a data error, and a constraint would turn it into a failed
- * upload of an image the author has already lost from their clipboard.
- */
 async function availableImageName(base: string): Promise<string> {
   const taken = await db
     .select({ name: labImages.name })
@@ -151,16 +105,6 @@ async function availableImageName(base: string): Promise<string> {
   }
 }
 
-/**
- * Rename an image, and re-alt it to match.
- *
- * The two are set together because the picker offers one field: the name is
- * what the library is searched by and the alt is what a screen reader gets,
- * and for a screenshot called "the pipeline after a successful run" those are
- * the same sentence. Guides already referencing the image keep whatever alt
- * text was written into their Markdown at the time — this changes the library
- * entry, not documents that have already quoted it.
- */
 export async function renameLabImage(
   id: string,
   name: string,
@@ -179,21 +123,11 @@ export async function renameLabImage(
   return image ?? null;
 }
 
-/**
- * The image format these bytes actually are, or null for anything else.
- *
- * Header sniffing rather than a dependency: there are four formats to
- * recognise and each is a fixed signature in the first twelve bytes. Only the
- * formats in `LAB_IMAGE_MIME_TYPES` are listed, so this doubles as the
- * allow-list — SVG has no magic number and could not be admitted here even by
- * accident, which is the point.
- */
 export function sniffImageType(
   data: Buffer,
 ): (typeof LAB_IMAGE_MIME_TYPES)[number] | null {
   if (data.byteLength < 12) return null;
 
-  // PNG: \x89 P N G \r \n \x1a \n
   if (
     data[0] === 0x89 &&
     data[1] === 0x50 &&
@@ -207,17 +141,14 @@ export function sniffImageType(
     return "image/png";
   }
 
-  // JPEG: every variant starts FF D8 FF.
   if (data[0] === 0xff && data[1] === 0xd8 && data[2] === 0xff) {
     return "image/jpeg";
   }
 
-  // GIF: "GIF87a" or "GIF89a".
   if (data.subarray(0, 6).toString("latin1").match(/^GIF8[79]a$/)) {
     return "image/gif";
   }
 
-  // WebP: "RIFF" .... "WEBP" — the four size bytes in between are skipped.
   if (
     data.subarray(0, 4).toString("latin1") === "RIFF" &&
     data.subarray(8, 12).toString("latin1") === "WEBP"
@@ -236,8 +167,5 @@ export async function deleteLabImage(id: string): Promise<boolean> {
     .where(eq(labImages.id, id))
     .returning({ id: labImages.id });
 
-  // Guides that referenced it keep the Markdown; the image simply stops
-  // resolving. There is no index from bytes back to the guides mentioning
-  // them, so the alternative is a scan of every body on every delete.
   return deleted.length > 0;
 }

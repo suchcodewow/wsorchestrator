@@ -1,3 +1,5 @@
+/** Reads and writes lab guides. */
+
 import { and, desc, eq, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
@@ -12,23 +14,11 @@ import {
 import { slugify } from "@/lib/runs";
 import { isUuid } from "@/lib/utils";
 
-/**
- * Reads and writes for the lab guides.
- *
- * The access rule is simpler than the one in `@/lib/runs`, and simpler than it
- * used to be here: a guide is readable by anybody, signed in or not, and every
- * *write* needs a manager. Guides carry no published flag — that decision
- * belongs to the workshop a room is pointed at, and lives in
- * `@/lib/lab-workshops`.
- */
-
-/** A row of the index page. The body is left behind — it is never shown there. */
 export type LabGuideSummary = Pick<
   LabGuide,
   "id" | "slug" | "title" | "summary" | "updatedAt"
 > & { authorName: string | null };
 
-/** A guide with its author, as the detail page and the editor need it. */
 export type LabGuideWithAuthor = LabGuide & { authorName: string | null };
 
 const withAuthor = {
@@ -43,7 +33,6 @@ const withAuthor = {
   authorName: sql<string | null>`coalesce(${users.name}, ${users.email})`,
 };
 
-/** Every guide, most recently updated first. */
 export async function listLabGuides(): Promise<LabGuideSummary[]> {
   const rows = await db
     .select({
@@ -61,7 +50,6 @@ export async function listLabGuides(): Promise<LabGuideSummary[]> {
   return rows;
 }
 
-/** One guide by its URL slug, or null if there is no such guide. */
 export async function getLabGuideBySlug(
   slug: string,
 ): Promise<LabGuideWithAuthor | null> {
@@ -75,7 +63,6 @@ export async function getLabGuideBySlug(
   return row ?? null;
 }
 
-/** Every guide, for the workshop editor's "add a guide" picker. */
 export async function listGuidesForPicker(): Promise<
   Pick<LabGuide, "id" | "slug" | "title" | "summary">[]
 > {
@@ -90,13 +77,6 @@ export async function listGuidesForPicker(): Promise<
     .orderBy(labGuides.title);
 }
 
-/**
- * The workshops a guide appears in.
- *
- * Shown in the guide editor, where the reuse is otherwise invisible: a guide
- * that opens three workshops looks exactly like one that opens none, right up
- * until it is edited or deleted.
- */
 export async function workshopsUsingGuide(
   guideId: string,
 ): Promise<{ slug: string; title: string }[]> {
@@ -110,7 +90,6 @@ export async function workshopsUsingGuide(
     .orderBy(labWorkshops.title);
 }
 
-/** One guide by id. Editors only — this is the editor's load. */
 export async function getLabGuideById(
   id: string,
 ): Promise<LabGuideWithAuthor | null> {
@@ -126,21 +105,10 @@ export async function getLabGuideById(
   return row ?? null;
 }
 
-/** Path segments under `/labs` that are pages in their own right. */
 const RESERVED_SLUGS = new Set(["new"]);
 
-/**
- * A slug that is free, derived from the title.
- *
- * Collisions get a numeric suffix rather than an error: two managers naming
- * their labs "Getting started" is an ordinary thing to do, and neither of them
- * should have to think about URLs to get past it. `excludeId` is the guide
- * being renamed, so a guide keeping its own slug doesn't collide with itself.
- */
 async function availableSlug(title: string, excludeId?: string): Promise<string> {
   const base = slugify(title, "lab-guide");
-  // `/labs/new` is the editor. A guide that claimed that slug would be
-  // unreachable — the static route wins — so it never gets to.
   if (RESERVED_SLUGS.has(base)) return `${base}-guide`;
 
   const taken = await db
@@ -164,13 +132,6 @@ async function availableSlug(title: string, excludeId?: string): Promise<string>
   }
 }
 
-/**
- * Everything a manager can set. Lives here rather than in the route so the
- * create and the update validate identically — they are the same form, and the
- * only difference between them is whether a row already exists.
- *
- * `slug` is absent on purpose: it is derived, never submitted.
- */
 export const labGuideSchema = z.object({
   title: z.string().trim().min(1).max(LAB_GUIDE_LIMITS.title),
   summary: z.string().trim().max(LAB_GUIDE_LIMITS.summary).default(""),
@@ -193,16 +154,6 @@ export async function createLabGuide(
 
 export type UpdateLabGuideError = "not_found";
 
-/**
- * Update a guide.
- *
- * The slug always follows the title. A guide's own URL is not the address that
- * gets handed out — a room is pointed at `/labs/<workshop>`, and reads each lab
- * at `/labs/<workshop>/<guide>`, which is built from the workshop's slug and
- * the guide's current one. Keeping the address matching the title is worth more
- * than freezing a URL nobody was given, so the workshop's slug is the one that
- * stays put once published (see `@/lib/lab-workshops`).
- */
 export async function updateLabGuide(
   id: string,
   input: LabGuideInput,

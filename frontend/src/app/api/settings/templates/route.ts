@@ -1,16 +1,10 @@
+/** Where the site may read Harness templates from. */
+
 import { NextResponse } from "next/server";
 import { requireAdministrator } from "@/lib/api-auth";
 import { STATUS_FOR } from "@/lib/harness-template-errors";
 import { listTemplateSources, saveTemplateSource } from "@/lib/harness-templates";
 
-/**
- * Where the site may read Harness templates from. Administrators only.
- *
- * The org identifier is required and the project is optional, which is the whole
- * shape: a source is an org, narrowed to one project when somebody wants it
- * narrowed. Names are not accepted — `saveTemplateSource` reads them from
- * Harness, so what is stored is what the platform says it is called.
- */
 export async function GET() {
   const { error } = await requireAdministrator();
   if (error) return error;

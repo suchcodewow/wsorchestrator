@@ -1,3 +1,5 @@
+/** The workshop editor. */
+
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
@@ -23,7 +25,6 @@ export default async function EditWorkshopPage({
   if (!canManageLabGuides(session.user.siteRole)) notFound();
 
   const { workshopSlug } = await params;
-  // Drafts included — an editor is exactly who is allowed to see one.
   const workshop = await getLabWorkshopBySlug(workshopSlug, true);
   if (!workshop) notFound();
 

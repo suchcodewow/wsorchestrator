@@ -1,3 +1,5 @@
+/** One lab guide, rendered. */
+
 import Link from "next/link";
 import { ArrowLeft, ArrowRight, Pencil } from "lucide-react";
 import { LabGuideBody } from "@/components/lab-guide-body";
@@ -13,14 +15,6 @@ const updated = new Intl.DateTimeFormat("en", {
   year: "numeric",
 });
 
-/**
- * The workshop a guide is being read inside, when it is being read inside one.
- *
- * A guide belongs to any number of workshops, so "which one am I in?" is a
- * property of the URL rather than of the guide — everything positional here
- * (the step count, the neighbours, the contents rail) comes from this and not
- * from the row.
- */
 export type WorkshopContext = {
   slug: string;
   title: string;
@@ -30,14 +24,6 @@ export type WorkshopContext = {
   next: WorkshopGuideEntry | null;
 };
 
-/**
- * One lab guide, rendered.
- *
- * Shared by `/labs/guides/<guide>` and `/labs/<workshop>/<guide>` so the two
- * cannot drift into two different-looking readers of the same document. The
- * only difference between them is `context`, and everything it changes is
- * navigation — never the guide itself.
- */
 export async function GuideArticle({
   guide,
   canEdit,
@@ -49,9 +35,6 @@ export async function GuideArticle({
 }) {
   const { html, toc } = await renderMarkdown(guide.body);
 
-  // In a workshop the rail is the workshop; on its own, a long guide gets a
-  // list of its own headings. Below three headings that list is longer than
-  // the thing it indexes.
   const showRail = context !== undefined || toc.length >= 3;
 
   const editHref = `/labs/guides/${guide.slug}/edit`;
@@ -160,10 +143,6 @@ export async function GuideArticle({
         </div>
 
         {showRail && (
-          // The rail is a client component because it tracks the reading
-          // position; it is handed the three fields it draws with rather than
-          // the workshop rows, so nothing else about the curriculum is
-          // serialised into the page.
           <GuideContents
             toc={toc}
             workshop={

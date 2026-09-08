@@ -1,45 +1,20 @@
-/**
- * What can stop a deploy before it starts, as a status and as a sentence.
- *
- * Only the failures that mean *nothing was attempted*. Once the organization
- * exists the deploy always succeeds as a request and reports per-entity outcomes
- * instead — a connector Harness refused is a line in the report, not a 502 that
- * throws away the twenty things that did land.
- *
- * Pure and shared with the client, the same arrangement `harness-token-errors`
- * uses: the route picks the status, the tab prints the message, and neither can
- * drift into disagreeing about what an error means.
- */
+/** The sentence shown for each way a deploy can fail. */
 
 export type DeployError =
-  /** No such saved token for this user. */
   | "not_found"
-  /** The stored token cannot be decrypted — the encryption key changed. */
   | "unreadable"
-  /** Harness rejected the token outright. */
   | "invalid_token"
-  /** The token is real but does not administer the account. */
   | "not_permitted"
-  /** The organization name is empty, or has no legal identifier in it. */
   | "invalid_name"
-  /**
-   * An organization with that identifier is already there, and it is not one
-   * this token deployed into before — so it belongs to somebody else and is left
-   * alone. A repeat of the token's own last deploy is a re-run, not this.
-   */
   | "org_exists"
-  /** Harness refused to create the organization, so nothing else was tried. */
   | "org_failed"
-  /** Harness answered with its own failure. */
   | "harness_error"
-  /** Harness could not be reached. */
   | "unreachable";
 
 export const STATUS_FOR: Record<DeployError, number> = {
   not_found: 404,
   unreadable: 409,
   invalid_token: 409,
-  // Refused on a fact about the credential rather than on the request's shape.
   not_permitted: 403,
   invalid_name: 400,
   org_exists: 409,
@@ -66,13 +41,9 @@ export const MESSAGES: Record<DeployError, string> = {
   unreachable: "Couldn't reach Harness — check the network and try again.",
 };
 
-/** The message for whatever the route reported, with a fallback for the unforeseen. */
 export function messageFor(error: unknown, status: number, detail?: unknown) {
   const known = MESSAGES[error as DeployError];
   if (!known) return `Something went wrong (${status}).`;
-  // Harness's own words after ours, when there are any: their message names the
-  // reason — a name that clashes, a scope still propagating — which is exactly
-  // what somebody needs and exactly what a generic sentence cannot say.
   return typeof detail === "string" && detail.trim().length > 0
     ? `${known} Harness said: ${detail.trim()}`
     : known;

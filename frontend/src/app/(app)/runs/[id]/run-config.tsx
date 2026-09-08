@@ -1,5 +1,7 @@
 "use client";
 
+/** The form for changing an event's users and clouds. */
+
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { Check, Loader2, Lock, Save } from "lucide-react";
@@ -43,16 +45,8 @@ export function RunConfig({
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
-  // Re-sync when a save or a poll brings back a newer version of the run.
-  //
-  // Keyed on the values rather than on `run` itself: the parent replaces the
-  // whole payload every few seconds while a run is active, so `run.clouds` is a
-  // fresh array on each poll even when nothing about it changed. Adjusting
-  // during render rather than in an effect also means the form never paints the
-  // superseded values for a frame on the way to the new ones.
   const serverState = `${run.userCount}:${run.clouds.join(",")}`;
   const [syncedFrom, setSyncedFrom] = useState(serverState);
-  // An in-flight save is the one case where the server is behind the form.
   if (serverState !== syncedFrom && !pending) {
     setSyncedFrom(serverState);
     setUserCount(String(run.userCount));
@@ -71,9 +65,7 @@ export function RunConfig({
     clouds.some((c) => !run.clouds.includes(c));
 
   function toggleCloud(cloud: Cloud) {
-    // A provisioned cloud can't be taken away from a live event.
     if (growOnly && run.clouds.includes(cloud)) return;
-    // A single-cloud event swaps its choice instead of accumulating them.
     if (singleCloud) {
       setClouds([cloud]);
       return;
@@ -159,8 +151,6 @@ export function RunConfig({
           <legend className="mb-2 text-sm font-medium">
             {singleCloud ? "Cloud" : "Clouds"}
           </legend>
-          {/* Same selectable cards as the create dialog, so the two forms that
-              choose clouds do not look like they came from different apps. */}
           <div className="grid gap-2">
             {CLOUDS.map((cloud) => {
               const provisioned = growOnly && run.clouds.includes(cloud);

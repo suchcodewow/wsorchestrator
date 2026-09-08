@@ -1,3 +1,5 @@
+/** Creates a workshop. */
+
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
@@ -15,8 +17,6 @@ export const metadata: Metadata = {
 export default async function NewWorkshopPage() {
   const session = await auth();
   if (!session?.user) redirect("/signin");
-  // Not a redirect: for anyone below manager this page simply isn't there, and
-  // saying "forbidden" would only advertise it.
   if (!canManageLabGuides(session.user.siteRole)) notFound();
 
   return (

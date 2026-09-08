@@ -1,26 +1,15 @@
 "use client";
 
+/** Runs the sign-in page's entrance animation. */
+
 import { useLayoutEffect, useRef } from "react";
 import gsap from "gsap";
 
-/**
- * Runs the sign-in entrance: the panel and its contents settle into place in
- * sequence, and the glow behind the card breathes.
- *
- * GSAP rather than Framer here because this is one authored timeline across
- * several unrelated elements — expressing the same overlaps with per-component
- * variants would scatter the choreography across the tree.
- *
- * Children are marked with `data-anim` attributes instead of refs so the
- * markup stays a plain server-rendered tree with one client wrapper around it.
- */
 export function SignInHero({ children }: { children: React.ReactNode }) {
   const scope = useRef<HTMLDivElement>(null);
 
   useLayoutEffect(() => {
     const ctx = gsap.context((self) => {
-      // `matchMedia` is how GSAP reads the reduced-motion preference; the
-      // reduce branch simply reveals everything with no transforms.
       const mm = gsap.matchMedia();
 
       mm.add(
