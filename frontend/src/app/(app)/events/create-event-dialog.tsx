@@ -34,14 +34,14 @@ function toLocalInput(d: Date): string {
 const COPY: Record<EventMode, { title: string; description: string; noun: string; who: string }> = {
   workshop: {
     title: "Schedule a workshop",
-    description: "Attendee accounts and one shared cloud environment are created automatically when the start time arrives.",
+    description: "Attendee accounts and one shared cloud environment are created at the start time.",
     noun: "workshop",
     who: "attendee",
   },
   challenge: {
     title: "Start a challenge",
     description:
-      "Each competitor gets their own account and their own cloud environment, created automatically when the start time arrives.",
+      "Each competitor gets their own account and cloud environment at the start time.",
     noun: "challenge",
     who: "competitor",
   },
@@ -206,8 +206,7 @@ export function CreateEventDialog({
               className="tnum"
             />
             <p className="text-xs leading-relaxed text-muted-foreground">
-              1–{limits.maxUsers} accounts are created in a dedicated organizational unit named after the {copy.noun}.
-              {mode === "challenge" && " On Google Cloud, each competitor also gets their own project."}
+              1–{limits.maxUsers} accounts are created in an organizational unit named after the {copy.noun}.
             </p>
           </motion.div>
 
@@ -294,8 +293,8 @@ export function CreateEventDialog({
               fallbackAllowed && (
                 <p className="text-xs leading-relaxed text-muted-foreground">
                   {noCloudSelected
-                    ? "No cloud selected — attendees will share the long-lived testing project. Nothing is provisioned or torn down for them."
-                    : "Leave all unselected to grant attendees the shared testing project instead of a fresh one."}
+                    ? "With no cloud selected, attendees share the long-lived testing project."
+                    : "Leave all unselected to use the shared testing project instead."}
                 </p>
               )
             )}
@@ -318,8 +317,7 @@ export function CreateEventDialog({
               className="tnum"
             />
             <p className="text-xs leading-relaxed text-muted-foreground">
-              The {copy.noun} and everything it provisions are torn down automatically after this many days (1–{MAX_TTL_DAYS}).
-              You can add a day later from the {copy.noun}&rsquo;s page.
+              Everything is torn down after this many days (1–{MAX_TTL_DAYS}), and you can add a day later.
             </p>
           </motion.div>
 

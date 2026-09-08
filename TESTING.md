@@ -170,6 +170,37 @@ The wedged runs were deliberately **not** backfilled to `destroy_failed`. They k
 a zero counter and work through the new budget, so the reason recorded on the row is
 the one they actually hit rather than one guessed at migration time.
 
+**One shape of the loop survives the cap, and it is worth knowing about.** The
+counter only advances from the reaper's catch block. A destroy that never *returns*
+— `tofu destroy` running past the reaper job's `timeout = "1800s"`, an OOM, any
+killed container — never reaches that block, so `destroy_attempts` stays where it
+was and the run is handed back on the next tick with a full budget. Same infinite
+loop, invisible to the thing built to stop it. `max_retries = 0` and a serial
+`for` loop over every reapable run make it reachable: two slow teardowns in one
+execution and the second is killed rather than recorded.
+
+`make stuck-teardowns` is the check for it, and it is the answer to "how would I
+know?" — read-only, and it exits non-zero when something needs a person:
+
+```sh
+make stuck-teardowns
+```
+
+It sorts every run in `destroying` or `destroy_failed` into four shapes, which is
+the part that matters — three of them look identical in the database and want
+different responses:
+
+| shape | means |
+| --- | --- |
+| `backing off` / `in progress` | healthy. The budget is being spent as designed. |
+| `gave up` | terminal `destroy_failed`. The fix working; fix the cause and press **Retry teardown**. |
+| `retrying without recording` | zero recorded attempts an hour+ after becoming eligible. **The loop above.** Check the reaper job's executions for a timeout or non-zero exit. |
+| `due but not picked up` | overdue by an hour+. Not the backoff any more: the reaper is not running, or an advisory lock from a killed execution is still held. |
+
+It also prints the count of destroy-failure lines in `run_logs` beside the stored
+counter. When the log outruns the counter, some of that history predates the cap —
+which is how the 572 attempts would have shown up on day one.
+
 **Teardown reads IAM with the wrong credentials — still open.** During `aws-platform`'s
 destroy, `iam:GetUser` on the attendee users was refused as
 `arn:aws:iam::654129064688:user/workshop-orchestrator is not authorized` — that

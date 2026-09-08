@@ -58,11 +58,11 @@ TAG ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo latest)
 # The Next.js app, including the Drizzle schema and its SQL migrations.
 FRONTEND ?= frontend
 
-.PHONY: help bootstrap tf-admin-sa backend-local plan infra images deploy db-backup db-migrate db-push ship info
+.PHONY: help bootstrap tf-admin-sa backend-local plan infra images deploy db-backup db-migrate db-push stuck-teardowns ship info
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
-	  | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
+	  | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
 	@echo ""
 	@echo "Typical first run:  make bootstrap infra images deploy db-push"
 	@echo "Typical redeploy:   make ship"
@@ -118,6 +118,12 @@ db-migrate: ## Apply hand-written SQL migrations in frontend/drizzle (data backf
 db-push: ## Apply the Drizzle schema to Cloud SQL (via proxy)
 	DB_CONN=$(DB_CONN) PROJECT=$(PROJECT) ./scripts/with-db.sh \
 	  "npm --prefix $(FRONTEND) run db:push"
+
+# Read-only, and exits non-zero when something needs a person, so it is safe to
+# run any time and can be put on a schedule as-is.
+stuck-teardowns: ## Report teardowns that are not finishing, and why
+	DB_CONN=$(DB_CONN) PROJECT=$(PROJECT) ./scripts/with-db.sh \
+	  "node $(FRONTEND)/scripts/stuck-teardowns.mjs"
 
 # db-migrate runs first: it backfills and reshapes data that db-push would
 # otherwise destroy (push diffs schema only and cannot preserve data).

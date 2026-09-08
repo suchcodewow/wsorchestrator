@@ -125,7 +125,7 @@ export function RunConfig({
           <p className="text-sm text-muted-foreground">
             {run.status === "destroyed" || run.status === "failed"
               ? `This ${run.mode} has finished — its configuration is fixed.`
-              : "Provisioning is in progress. Configuration can be changed once it is ready."}
+              : "Configuration can be changed once provisioning is ready."}
           </p>
         ) : (
           <p className="text-sm text-muted-foreground">
@@ -224,8 +224,8 @@ export function RunConfig({
             </Button>
             {growOnly && dirty && (
               <p className="mt-2 text-xs text-muted-foreground">
-                Saving re-runs provisioning to create the additions. Existing
-                accounts keep their credentials.
+                Saving creates the additions; existing accounts keep their
+                credentials.
               </p>
             )}
           </div>

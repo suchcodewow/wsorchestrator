@@ -17,7 +17,7 @@ import type { RunStatus, WorkshopRun } from "@/db/schema";
 const ERRORS: Record<string, string> = {
   not_found: "This event no longer exists.",
   in_flight:
-    "This event is provisioning right now. It can be deleted once it finishes — or fails.",
+    "This event can only be deleted once provisioning has finished.",
   unauthorized: "Sign in again to delete this event.",
 };
 
@@ -37,13 +37,13 @@ function consequence(run: WorkshopRun): {
     case "scheduled":
       return {
         blurb:
-          "Nothing has been provisioned yet, so this just takes it off the calendar. It will not start.",
+          "Nothing has been provisioned yet, so this only takes it off the calendar.",
         confirm: "Delete event",
       };
     case "destroyed":
       return {
         blurb:
-          "This event has already been torn down. Deleting it removes the record and its build log.",
+          "This event is already torn down, so only its record and build log are removed.",
         confirm: "Delete event",
       };
     case "requested":
@@ -51,20 +51,20 @@ function consequence(run: WorkshopRun): {
     case "applying":
       return {
         blurb:
-          "Provisioning is in flight — accounts and cloud projects are being created right now. Wait for it to settle, then delete it; the teardown needs to know what exists.",
+          "Provisioning is still running, so wait for it to finish before deleting.",
         confirm: "Delete event",
         disabled: true,
       };
     case "destroying":
       return {
         blurb:
-          "Teardown is already running. Deleting now removes the event as soon as that finishes.",
+          "Teardown is already running, so the event is removed as soon as it finishes.",
         confirm: "Delete when torn down",
       };
     default:
       return {
         blurb:
-          "This event owns live attendee accounts, an org unit, and cloud resources. They are torn down first — usually within a few minutes — and the event disappears once that is done.",
+          "Everything this event created is torn down first, which takes a few minutes.",
         confirm: "Tear down and delete",
       };
   }
@@ -143,8 +143,8 @@ export function DeleteEventButton({
 
           {!owned && (
             <p className="rounded-lg border border-amber-500/40 bg-amber-500/8 px-3 py-2 text-sm">
-              This event belongs to someone else. You are deleting it as a
-              manager — they are not asked first.
+              This event belongs to someone else and they are not asked
+              first.
             </p>
           )}
 

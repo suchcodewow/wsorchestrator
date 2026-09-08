@@ -291,8 +291,8 @@ export function RunView({
         <motion.div variants={riseChild}>
           <Card className="border-amber-500/40 bg-amber-500/5">
             <CardContent className="py-4 text-sm">
-              Deletion requested. This event is being torn down and disappears
-              once that finishes — the reaper picks it up within a few minutes.
+              Deletion requested — this event is being torn down and will
+              disappear in a few minutes.
             </CardContent>
           </Card>
         </motion.div>
@@ -464,11 +464,9 @@ export function RunView({
               {/* Not "prompted to change their password": accounts are created
                   without a forced reset so the one password works across every
                   cloud the event uses. */}
-              The password is the same one in every cloud this {run.mode} uses, except AWS — AWS generates its own per
-              attendee, and it is on the attendee page with their row.
-              {hasAccessPass &&
-                " Azure asks for the access pass instead — Microsoft requires MFA on portal sign-in, and the pass satisfies it without an authenticator app."}{" "}
-              Accounts are deleted when the {run.mode} expires.
+              This password works in every cloud except AWS, which generates its
+              own on the attendee page
+              {hasAccessPass && ", and Azure, which asks for the access pass"}.
             </p>
           </CardContent>
           )}
@@ -597,9 +595,9 @@ function BuiltPanel({
         <CardTitle>{building ? "Building" : "Environment"}</CardTitle>
         <CardDescription>
           {teardownGaveUp
-            ? "Teardown stopped before finishing — whatever is still listed here may still exist."
+            ? "Teardown stopped early, so anything listed here may still exist."
             : tearingDown
-              ? "Being torn down — these disappear as the reaper removes them."
+              ? "Being torn down — these disappear as they are removed."
               : building
                 ? "Each item appears here as soon as it exists."
                 : `Everything this ${run.mode} created.`}
@@ -720,8 +718,7 @@ function AttendeeLink({ runId, mode }: { runId: string; mode: string }) {
       </CardHeader>
       <CardContent>
         <p className="text-sm text-muted-foreground">
-          Share this link with the room. Everyone who opens it sees the accounts
-          below and claims one by putting their name on it.
+          Share this link with the room to let attendees claim an account.
         </p>
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <code className="min-w-0 flex-1 truncate rounded-md bg-muted px-2.5 py-1.5 font-mono text-xs">
@@ -739,9 +736,8 @@ function AttendeeLink({ runId, mode }: { runId: string; mode: string }) {
           </Button>
         </div>
         <p className="mt-3 text-xs text-muted-foreground">
-          Anyone with the link can see these credentials — it is not behind a
-          sign-in, because attendees have no account here yet. The link stops
-          working when the {mode} is torn down.
+          This link is available to anyone and will be removed when the {mode}{" "}
+          ends.
         </p>
       </CardContent>
     </Card>
