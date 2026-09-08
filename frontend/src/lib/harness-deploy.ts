@@ -18,7 +18,10 @@ import {
   harnessTimestamp,
   recordDeployedSecret,
 } from "@/lib/harness-scrub";
-import { listTemplateSources, templateSourceToken } from "@/lib/harness-templates";
+import {
+  deployableTemplateSources,
+  templateSourceToken,
+} from "@/lib/harness-templates";
 import { recordHarnessDeploy } from "@/lib/harness-tokens";
 import { openSecret } from "@/lib/secret-box";
 
@@ -718,9 +721,10 @@ async function copyScope(from: Scope, to: Scope, record: Record_): Promise<void>
 async function deploySecrets(
   to: Scope,
   tokenId: string,
+  userId: string,
   record: Record_,
 ): Promise<void> {
-  for (const secret of await orgSecretValues()) {
+  for (const secret of await orgSecretValues(userId)) {
     if (secret.value === null) {
       record({
         scope: scopeLabel(to),
@@ -729,7 +733,9 @@ async function deploySecrets(
         outcome: "skipped",
         detail:
           "It cannot be decrypted with this deployment's key — re-enter it in " +
-          "Settings → Org Secrets.",
+          (secret.mine
+            ? "My settings → My org secrets."
+            : "Settings → Org Secrets."),
       });
       continue;
     }
@@ -946,9 +952,9 @@ export async function deployContent(
       : undefined,
   });
 
-  await deploySecrets(target, tokenId, record);
+  await deploySecrets(target, tokenId, userId, record);
 
-  const sources = await listTemplateSources();
+  const sources = await deployableTemplateSources(userId);
   const ordered = [
     ...sources.filter((s) => s.projectIdentifier === null),
     ...sources.filter((s) => s.projectIdentifier !== null),
@@ -964,7 +970,9 @@ export async function deployContent(
         outcome: "skipped",
         detail:
           "That template source's token cannot be decrypted — re-add it in " +
-          "Settings → Templates.",
+          (source.mine
+            ? "My settings → My templates."
+            : "Settings → Templates."),
       });
       continue;
     }

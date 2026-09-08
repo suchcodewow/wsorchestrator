@@ -1,7 +1,7 @@
-/** The secrets every workshop's Harness organization gets. */
+/** The secrets this account adds to every Harness organization it deploys. */
 
 import { NextResponse } from "next/server";
-import { requireAdministrator } from "@/lib/api-auth";
+import { requireUser } from "@/lib/api-auth";
 import {
   createOrgSecret,
   listOrgSecrets,
@@ -10,13 +10,13 @@ import {
 } from "@/lib/harness-org-secrets";
 
 export async function GET() {
-  const { error } = await requireAdministrator();
+  const { error, user } = await requireUser();
   if (error) return error;
-  return NextResponse.json({ secrets: await listOrgSecrets(null) });
+  return NextResponse.json({ secrets: await listOrgSecrets(user.id) });
 }
 
 export async function POST(req: Request) {
-  const { error, user } = await requireAdministrator();
+  const { error, user } = await requireUser();
   if (error) return error;
 
   const form = await req.formData().catch(() => null);
@@ -30,7 +30,12 @@ export async function POST(req: Request) {
     );
   }
 
-  const result = await createOrgSecret(null, parsed.identifier, parsed.input, user.id);
+  const result = await createOrgSecret(
+    user.id,
+    parsed.identifier,
+    parsed.input,
+    user.id,
+  );
   if (!result.ok) {
     return NextResponse.json(
       { error: result.error },

@@ -1,7 +1,10 @@
-/** The secrets every workshop's Harness organization is given. */
+/**
+ * The secrets a workshop's Harness organization is given: the site's own, plus
+ * whatever the user who deploys keeps of their own.
+ */
 
 import "server-only";
-import { and, asc, eq, ne } from "drizzle-orm";
+import { and, asc, eq, isNull, ne, or, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import {
   harnessOrgSecrets,
@@ -11,6 +14,14 @@ import {
   type OrgSecretKind,
 } from "@/db/schema";
 import { openSecret, sealSecret } from "@/lib/secret-box";
+
+/** A user's id for their own secrets, or null for the site's. */
+export type SecretOwner = string | null;
+
+const ownedBy = (owner: SecretOwner): SQL =>
+  owner === null
+    ? isNull(harnessOrgSecrets.userId)
+    : eq(harnessOrgSecrets.userId, owner);
 
 export type OrgSecretRow = {
   id: string;
@@ -68,11 +79,14 @@ const summarize = (
   usable: openSecret(row.secret) !== null,
 });
 
-export async function listOrgSecrets(): Promise<OrgSecretRow[]> {
+export async function listOrgSecrets(
+  owner: SecretOwner,
+): Promise<OrgSecretRow[]> {
   const rows = await db
     .select({ secret: harnessOrgSecrets, byName: users.name, byEmail: users.email })
     .from(harnessOrgSecrets)
     .leftJoin(users, eq(users.id, harnessOrgSecrets.updatedBy))
+    .where(ownedBy(owner))
     .orderBy(asc(harnessOrgSecrets.identifier));
 
   return rows.map((r) => summarize(r.secret, r.byName ?? r.byEmail ?? null));
@@ -83,20 +97,40 @@ export type OrgSecretValue = {
   kind: OrgSecretKind;
   fileName: string | null;
   value: string | null;
+  /** True when it came from the deploying user rather than the site. */
+  mine: boolean;
 };
 
-export async function orgSecretValues(): Promise<OrgSecretValue[]> {
+/**
+ * What one user's deploy should write: the site's secrets, with the user's own
+ * layered over them, so one of theirs named the same wins.
+ */
+export async function orgSecretValues(
+  userId: string,
+): Promise<OrgSecretValue[]> {
   const rows = await db
     .select()
     .from(harnessOrgSecrets)
+    .where(
+      or(isNull(harnessOrgSecrets.userId), eq(harnessOrgSecrets.userId, userId)),
+    )
     .orderBy(asc(harnessOrgSecrets.identifier));
 
-  return rows.map((row) => ({
-    identifier: row.identifier,
-    kind: row.kind as OrgSecretKind,
-    fileName: row.fileName,
-    value: openSecret(row.secret),
-  }));
+  const byIdentifier = new Map<string, OrgSecretValue>();
+  for (const row of rows) {
+    const mine = row.userId !== null;
+    if (!mine && byIdentifier.has(row.identifier)) continue;
+
+    byIdentifier.set(row.identifier, {
+      identifier: row.identifier,
+      kind: row.kind as OrgSecretKind,
+      fileName: row.fileName,
+      value: openSecret(row.secret),
+      mine,
+    });
+  }
+
+  return [...byIdentifier.values()];
 }
 
 export type OrgSecretInput = {
@@ -165,6 +199,7 @@ const fileNameFor = (input: OrgSecretInput) =>
     : null;
 
 export async function createOrgSecret(
+  owner: SecretOwner,
   identifier: string,
   input: OrgSecretInput,
   userId: string,
@@ -178,12 +213,13 @@ export async function createOrgSecret(
   const [clash] = await db
     .select({ id: harnessOrgSecrets.id })
     .from(harnessOrgSecrets)
-    .where(eq(harnessOrgSecrets.identifier, id));
+    .where(and(ownedBy(owner), eq(harnessOrgSecrets.identifier, id)));
   if (clash) return { ok: false, error: "duplicate" };
 
   const [row] = await db
     .insert(harnessOrgSecrets)
     .values({
+      userId: owner,
       identifier: id,
       kind: input.kind,
       fileName: fileNameFor(input),
@@ -197,6 +233,7 @@ export async function createOrgSecret(
 }
 
 export async function updateOrgSecret(
+  owner: SecretOwner,
   id: string,
   identifier: string,
   input: OrgSecretInput,
@@ -212,7 +249,11 @@ export async function updateOrgSecret(
     .select({ id: harnessOrgSecrets.id })
     .from(harnessOrgSecrets)
     .where(
-      and(eq(harnessOrgSecrets.identifier, name), ne(harnessOrgSecrets.id, id)),
+      and(
+        ownedBy(owner),
+        eq(harnessOrgSecrets.identifier, name),
+        ne(harnessOrgSecrets.id, id),
+      ),
     );
   if (clash) return { ok: false, error: "duplicate" };
 
@@ -227,17 +268,20 @@ export async function updateOrgSecret(
       updatedBy: userId,
       updatedAt: new Date(),
     })
-    .where(eq(harnessOrgSecrets.id, id))
+    .where(and(ownedBy(owner), eq(harnessOrgSecrets.id, id)))
     .returning();
 
   if (!row) return { ok: false, error: "not_found" };
   return { ok: true, secret: summarize(row, null) };
 }
 
-export async function deleteOrgSecret(id: string): Promise<boolean> {
+export async function deleteOrgSecret(
+  owner: SecretOwner,
+  id: string,
+): Promise<boolean> {
   const deleted = await db
     .delete(harnessOrgSecrets)
-    .where(eq(harnessOrgSecrets.id, id))
+    .where(and(ownedBy(owner), eq(harnessOrgSecrets.id, id)))
     .returning({ id: harnessOrgSecrets.id });
   return deleted.length > 0;
 }

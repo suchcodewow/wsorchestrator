@@ -559,6 +559,10 @@ export const harnessOrgSecrets = pgTable(
   "harness_org_secrets",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    /** Whose secret it is, or null for the site's own. */
+    userId: text("user_id").references(() => users.id, {
+      onDelete: "cascade",
+    }),
     identifier: text("identifier").notNull(),
     kind: text("kind").notNull(),
     fileName: text("file_name"),
@@ -574,7 +578,17 @@ export const harnessOrgSecrets = pgTable(
       .notNull()
       .defaultNow(),
   },
-  (t) => [uniqueIndex("harness_org_secrets_identifier_idx").on(t.identifier)],
+  (t) => [
+    // One value per name within an owner. Two indexes rather than one on
+    // (user_id, identifier), because Postgres treats nulls as distinct and so
+    // would let two site-wide rows share a name.
+    uniqueIndex("harness_org_secrets_identifier_idx")
+      .on(t.identifier)
+      .where(sql`${t.userId} is null`),
+    uniqueIndex("harness_org_secrets_user_identifier_idx")
+      .on(t.userId, t.identifier)
+      .where(sql`${t.userId} is not null`),
+  ],
 );
 
 export const ORG_SECRET_LIMITS = {
@@ -589,6 +603,10 @@ export const harnessTemplateSources = pgTable(
   "harness_template_sources",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    /** Whose source it is, or null for the site's own. */
+    userId: text("user_id").references(() => users.id, {
+      onDelete: "cascade",
+    }),
     accountId: text("account_id").notNull(),
     accountName: text("account_name"),
     orgIdentifier: text("org_identifier").notNull(),
@@ -606,14 +624,18 @@ export const harnessTemplateSources = pgTable(
       .defaultNow(),
   },
   (t) => [
-    uniqueIndex("harness_template_sources_idx").on(
-      t.fingerprint,
-      t.orgIdentifier,
-      t.projectIdentifier,
-    ),
+    // As with org secrets, one index per owner kind, since a nullable user_id
+    // inside a single index would not hold the site's own rows apart.
+    uniqueIndex("harness_template_sources_idx")
+      .on(t.fingerprint, t.orgIdentifier, t.projectIdentifier)
+      .where(sql`${t.userId} is null`),
+    uniqueIndex("harness_template_sources_user_idx")
+      .on(t.userId, t.fingerprint, t.orgIdentifier, t.projectIdentifier)
+      .where(sql`${t.userId} is not null`),
   ],
 );
 
+/** The limit is per owner: the site has its own, and so does each user. */
 export const MAX_TEMPLATE_SOURCES = 25;
 
 export type HarnessTemplateSource = typeof harnessTemplateSources.$inferSelect;

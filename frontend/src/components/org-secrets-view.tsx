@@ -1,6 +1,9 @@
 "use client";
 
-/** The secrets every workshop's Harness organization is given. */
+/**
+ * The secrets a workshop's Harness organization is given, either the site's own
+ * or one account's, which is all the two differ by.
+ */
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -55,10 +58,14 @@ const shortDate = (iso: string) =>
 export function OrgSecretsView({
   secrets,
   configured,
+  mine = false,
 }: {
   secrets: OrgSecretRow[];
   configured: boolean;
+  /** True on My settings, where the secrets are one account's own. */
+  mine?: boolean;
 }) {
+  const api = mine ? "/api/me/org-secrets" : "/api/settings/org-secrets";
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
@@ -99,11 +106,26 @@ export function OrgSecretsView({
       className="space-y-6"
     >
       <motion.div variants={riseChild} className="space-y-1.5">
-        <h2 className="text-xl font-medium tracking-tight">Org secrets</h2>
+        <h2 className="text-xl font-medium tracking-tight">
+          {mine ? "My org secrets" : "Org secrets"}
+        </h2>
         <p className="text-sm leading-relaxed text-muted-foreground">
-          Every secret here is created in each new workshop&rsquo;s Harness
-          organization, where a connector can reference it as{" "}
-          <span className="font-mono text-xs">org.&lt;id&gt;</span>.
+          {mine ? (
+            <>
+              Every secret here is created in each Harness organization{" "}
+              <em>you</em>{" "}
+              deploy, alongside the site&rsquo;s own org secrets. One of yours
+              named the same as a site secret is the one that gets written. A
+              connector can reference either as{" "}
+              <span className="font-mono text-xs">org.&lt;id&gt;</span>.
+            </>
+          ) : (
+            <>
+              Every secret here is created in each new workshop&rsquo;s Harness
+              organization, where a connector can reference it as{" "}
+              <span className="font-mono text-xs">org.&lt;id&gt;</span>.
+            </>
+          )}
         </p>
       </motion.div>
 
@@ -142,14 +164,18 @@ export function OrgSecretsView({
                 disabled={!configured}
                 onCancel={() => setAdding(false)}
                 onSave={async (form) => {
-                  const ok = await send("new", "/api/settings/org-secrets", {
+                  const ok = await send("new", api, {
                     method: "POST",
                     body: form,
                   });
                   if (ok) {
                     setAdding(false);
                     setSaved(
-                      `Saved. ${String(form.get("identifier"))} will be created in every new workshop's org.`,
+                      `Saved. ${String(form.get("identifier"))} will be created in ${
+                        mine
+                          ? "every org you deploy"
+                          : "every new workshop's org"
+                      }.`,
                     );
                   }
                 }}
@@ -194,7 +220,7 @@ export function OrgSecretsView({
                     colSpan={5}
                     className="px-5 py-8 text-center text-muted-foreground"
                   >
-                    No org secrets yet.
+                    {mine ? "No org secrets of your own yet." : "No org secrets yet."}
                   </td>
                 </tr>
               )}
@@ -209,11 +235,10 @@ export function OrgSecretsView({
                         disabled={!configured}
                         onCancel={() => setEditing(null)}
                         onSave={async (form) => {
-                          const ok = await send(
-                            row.id,
-                            `/api/settings/org-secrets/${row.id}`,
-                            { method: "PATCH", body: form },
-                          );
+                          const ok = await send(row.id, `${api}/${row.id}`, {
+                            method: "PATCH",
+                            body: form,
+                          });
                           if (ok) {
                             setEditing(null);
                             setSaved(`New value stored for ${String(form.get("identifier"))}.`);
@@ -279,7 +304,7 @@ export function OrgSecretsView({
                           disabled={busy === row.id}
                           className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                           onClick={() =>
-                            send(row.id, `/api/settings/org-secrets/${row.id}`, {
+                            send(row.id, `${api}/${row.id}`, {
                               method: "DELETE",
                             })
                           }

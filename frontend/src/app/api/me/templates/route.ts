@@ -1,18 +1,18 @@
-/** Where the site may read Harness templates from. */
+/** Where this account's own deploys may read Harness templates from. */
 
 import { NextResponse } from "next/server";
-import { requireAdministrator } from "@/lib/api-auth";
+import { requireUser } from "@/lib/api-auth";
 import { STATUS_FOR } from "@/lib/harness-template-errors";
 import { listTemplateSources, saveTemplateSource } from "@/lib/harness-templates";
 
 export async function GET() {
-  const { error } = await requireAdministrator();
+  const { error, user } = await requireUser();
   if (error) return error;
-  return NextResponse.json({ sources: await listTemplateSources(null) });
+  return NextResponse.json({ sources: await listTemplateSources(user.id) });
 }
 
 export async function POST(req: Request) {
-  const { error, user } = await requireAdministrator();
+  const { error, user } = await requireUser();
   if (error) return error;
 
   const body = (await req.json().catch(() => null)) as {
@@ -26,7 +26,7 @@ export async function POST(req: Request) {
   }
 
   const result = await saveTemplateSource(
-    null,
+    user.id,
     body.token,
     body.org,
     typeof body.project === "string" ? body.project : null,

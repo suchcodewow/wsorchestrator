@@ -1,7 +1,7 @@
-/** Replaces or removes one org secret. */
+/** Replaces or removes one of this account's own org secrets. */
 
 import { NextResponse } from "next/server";
-import { requireAdministrator } from "@/lib/api-auth";
+import { requireUser } from "@/lib/api-auth";
 import {
   deleteOrgSecret,
   readOrgSecretForm,
@@ -13,7 +13,7 @@ export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const { error, user } = await requireAdministrator();
+  const { error, user } = await requireUser();
   if (error) return error;
 
   const form = await req.formData().catch(() => null);
@@ -29,7 +29,7 @@ export async function PATCH(
 
   const { id } = await params;
   const result = await updateOrgSecret(
-    null,
+    user.id,
     id,
     parsed.identifier,
     parsed.input,
@@ -48,11 +48,11 @@ export async function DELETE(
   _req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const { error } = await requireAdministrator();
+  const { error, user } = await requireUser();
   if (error) return error;
 
   const { id } = await params;
-  if (!(await deleteOrgSecret(null, id))) {
+  if (!(await deleteOrgSecret(user.id, id))) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
   return NextResponse.json({ id, status: "removed" });

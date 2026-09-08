@@ -1,6 +1,9 @@
 "use client";
 
-/** The Harness organizations this site may read templates from. */
+/**
+ * The Harness organizations templates may be read from, either the site's own
+ * sources or one account's, which is all the two differ by.
+ */
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -39,12 +42,16 @@ export function TemplatesView({
   status,
   baseUrl,
   configured,
+  mine = false,
 }: {
   sources: TemplateSourceRow[];
   status: Record<string, SourceStatus>;
   baseUrl: string;
   configured: boolean;
+  /** True on My settings, where the sources are one account's own. */
+  mine?: boolean;
 }) {
+  const api = mine ? "/api/me/templates" : "/api/settings/templates";
   const router = useRouter();
   const [token, setToken] = useState("");
   const [reveal, setReveal] = useState(false);
@@ -98,7 +105,7 @@ export function TemplatesView({
   async function load() {
     if (token.trim().length === 0) return;
     resetScopes();
-    const body = await call("load", "/api/settings/templates/lookup", {
+    const body = await call("load", `${api}/lookup`, {
       method: "POST",
       body: JSON.stringify({ token: token.trim() }),
     });
@@ -121,7 +128,7 @@ export function TemplatesView({
     setProject("");
     if (identifier.length === 0) return;
 
-    const body = await call("projects", "/api/settings/templates/lookup", {
+    const body = await call("projects", `${api}/lookup`, {
       method: "POST",
       body: JSON.stringify({ token: token.trim(), org: identifier }),
     });
@@ -130,7 +137,7 @@ export function TemplatesView({
 
   async function save() {
     if (org.length === 0 || full) return;
-    const body = await call("save", "/api/settings/templates", {
+    const body = await call("save", api, {
       method: "POST",
       body: JSON.stringify({
         token: token.trim(),
@@ -155,7 +162,7 @@ export function TemplatesView({
   }
 
   async function remove(id: string) {
-    if (await call(id, `/api/settings/templates/${id}`, { method: "DELETE" })) {
+    if (await call(id, `${api}/${id}`, { method: "DELETE" })) {
       router.refresh();
     }
   }
@@ -168,11 +175,15 @@ export function TemplatesView({
       className="space-y-6"
     >
       <motion.div variants={riseChild} className="space-y-1.5">
-        <h2 className="text-xl font-medium tracking-tight">Templates</h2>
+        <h2 className="text-xl font-medium tracking-tight">
+          {mine ? "My templates" : "Templates"}
+        </h2>
         <p className="text-sm leading-relaxed text-muted-foreground">
           Paste a token to choose which organizations on{" "}
-          <span className="font-mono text-xs">{baseUrl}</span> this site may read
-          templates from.
+          <span className="font-mono text-xs">{baseUrl}</span>{" "}
+          {mine
+            ? "your own deploys may read templates from, on top of the site’s sources."
+            : "this site may read templates from."}
         </p>
       </motion.div>
 
@@ -325,7 +336,9 @@ export function TemplatesView({
                     colSpan={6}
                     className="px-5 py-8 text-center text-muted-foreground"
                   >
-                    No template sources yet.
+                    {mine
+                      ? "No template sources of your own yet."
+                      : "No template sources yet."}
                   </td>
                 </tr>
               )}
