@@ -34,7 +34,7 @@ type SiteUser = {
 const ERRORS: Record<string, string> = {
   self: "You can't change your own role — ask another administrator.",
   not_found: "That account no longer exists.",
-  forbidden: "Your own role changed. Reload the page.",
+  forbidden: "Your own role changed — reload the page.",
 };
 
 /**
@@ -134,9 +134,9 @@ export function UsersTable({
           <Card className="border-amber-500/40 bg-amber-500/5">
             <CardContent className="py-4 text-sm">
               <span className="font-medium">Waiting on a first sign-in:</span>{" "}
-              <span className="font-mono">{pendingAdmins.join(", ")}</span>.
-              These are listed in <code>SITE_ADMIN_EMAILS</code> but have no
-              account here yet — they become administrators when they sign in.
+              <span className="font-mono">{pendingAdmins.join(", ")}</span> —
+              listed in <code>SITE_ADMIN_EMAILS</code> and made administrators
+              once they sign in.
             </CardContent>
           </Card>
         </motion.div>

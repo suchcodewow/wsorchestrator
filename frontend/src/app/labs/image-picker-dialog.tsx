@@ -205,7 +205,7 @@ export function ImagePickerDialog({
   async function remove(image: PickerImage) {
     if (
       !window.confirm(
-        `Delete "${image.name}"? Guides already using it will show a broken image.`,
+        `Delete "${image.name}", leaving a broken image in any guide using it?`,
       )
     ) {
       return;
@@ -242,8 +242,8 @@ export function ImagePickerDialog({
         <DialogHeader>
           <DialogTitle>Insert an image</DialogTitle>
           <DialogDescription>
-            Click one to drop it into the guide where the cursor is. PNG, JPEG,
-            GIF and WebP, up to {MAX_MB} MB.
+            Click one to drop it into the guide (PNG, JPEG, GIF or WebP, up to{" "}
+            {MAX_MB} MB).
           </DialogDescription>
         </DialogHeader>
 
@@ -344,7 +344,7 @@ export function ImagePickerDialog({
             <p className="py-8 text-center text-sm text-muted-foreground">
               {query.trim()
                 ? "No image matches that name."
-                : "No images yet — upload the first one above."}
+                : "No images yet."}
             </p>
           ) : (
             <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">

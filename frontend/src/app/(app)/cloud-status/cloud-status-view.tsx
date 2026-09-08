@@ -54,80 +54,80 @@ const COPY: Record<
     tab: "Google Cloud",
     plural: "projects",
     blurb:
-      "Every project actively billed to the workshop account, matched against the runs database. A project with no matching run — and that isn’t the control plane or sandbox — is flagged. Projects with billing disabled are left out; they stay attached to the account but can’t be charged to it.",
+      "Every project billed to the workshop account, matched against the runs database.",
     infra: "Control plane / sandbox",
     unmanaged: null,
     missing: {
       title: "Referenced by a run, not billed",
-      note: "A run still records these project ids, but the billing account doesn’t list them — usually a project already deleted.",
+      note: "A run records these project ids, but the billing account doesn’t list them.",
     },
     errors: {
       not_configured:
         "No billing account is configured for this deployment (GCP_BILLING_ACCOUNT_ID is unset).",
       permission_denied:
-        "The app service account can’t read the billing account yet. Grant it roles/billing.viewer — the binding is in infra/admin/iam.tf; apply it with `make infra`.",
+        "The app service account needs roles/billing.viewer to read the billing account.",
       unavailable:
-        "Couldn’t reach the Cloud Billing API just now. Try refreshing in a moment.",
+        "Couldn’t reach the Cloud Billing API — try refreshing in a moment.",
     },
   },
   aws: {
     tab: "AWS",
     plural: "accounts",
     blurb:
-      "Every account in the workshop organization that can still be charged, matched against the runs database. Member accounts bill to the management account, so an account with no matching run is a cost nobody has claimed. Closed accounts are left out — AWS lists them for about 90 days after closure but they accrue nothing.",
+      "Every chargeable account in the workshop organization, matched against the runs database.",
     infra: "Management / permanent",
     unmanaged: null,
     missing: {
       title: "Referenced by a run, not in the organization",
-      note: "A run still records these account ids, but the organization doesn’t list them — an account closed long enough ago that AWS has dropped it.",
+      note: "A run records these account ids, but the organization doesn’t list them.",
     },
     errors: {
       not_configured:
         "AWS isn’t configured for this deployment (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY are unset).",
       permission_denied:
-        "The credentials were refused by AWS Organizations. They must belong to the organization’s management account and allow organizations:ListAccounts and organizations:DescribeOrganization.",
+        "AWS refused the credentials — they must belong to the organization’s management account and be able to list accounts.",
       unavailable:
-        "Couldn’t reach AWS Organizations just now. Try refreshing in a moment.",
+        "Couldn’t reach AWS Organizations — try refreshing in a moment.",
     },
   },
   azure: {
     tab: "Azure",
     plural: "resource groups",
     blurb:
-      "Every resource group in the workshop subscription. The subscription is shared, so only groups this orchestrator tagged can be orphans; anything else is listed as unmanaged.",
+      "Every resource group in the workshop subscription, matched against the runs database.",
     infra: "Permanent (configured)",
     unmanaged: "Not created here",
     missing: {
       title: "Referenced by a run, not in the subscription",
-      note: "A run still records these resource groups, but the subscription doesn’t list them — usually a group already deleted.",
+      note: "A run records these resource groups, but the subscription doesn’t list them.",
     },
     errors: {
       not_configured:
         "Azure isn’t configured for this deployment (AZURE_SUBSCRIPTION_ID, AZURE_TENANT_ID, ARM_CLIENT_ID and ARM_CLIENT_SECRET are needed).",
       permission_denied:
-        "Azure refused the service principal. It needs at least Reader on the subscription, and its client secret must not have expired.",
+        "Azure refused the service principal — it needs an unexpired secret and Reader on the subscription.",
       unavailable:
-        "Couldn’t reach Azure Resource Manager just now. Try refreshing in a moment.",
+        "Couldn’t reach Azure Resource Manager — try refreshing in a moment.",
     },
   },
   harness: {
     tab: "Harness",
     plural: "organizations",
     blurb:
-      "Every organization in the Harness account. One is created per event and deleted with it — so an organization this orchestrator made that no event claims is one a teardown didn’t finish, since Harness won’t delete an org that still has projects, connectors or delegates in it. The account is shared, so organizations created outside this app are listed as unmanaged. Nothing here costs money; it is the tidiness of the account that is at stake.",
+      "Every organization in the Harness account, matched against the runs database.",
     infra: "Permanent (configured)",
     unmanaged: "Not created here",
     missing: {
       title: "Referenced by a run, not in the account",
-      note: "A run still records these organization identifiers, but the account doesn’t list them — the usual case, and what a finished teardown looks like.",
+      note: "A run records these organization identifiers, but the account doesn’t list them.",
     },
     errors: {
       not_configured:
         "Harness isn’t configured for this deployment (HARNESS_ACCOUNT_ID and HARNESS_API_KEY are unset).",
       permission_denied:
-        "Harness refused the deployment’s API key — it has expired, been revoked, or can’t view organizations. It is the same key the runner builds events with, stored as the harness-api-key secret.",
+        "Harness refused the deployment’s API key — it has expired, been revoked, or can’t view organizations.",
       unavailable:
-        "Couldn’t reach Harness just now. Try refreshing in a moment.",
+        "Couldn’t reach Harness — try refreshing in a moment.",
     },
   },
 };
@@ -219,8 +219,7 @@ export function CloudStatus({
         <div className="max-w-2xl">
           <h1 className="text-2xl font-medium tracking-tight">Cloud Status</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            What each cloud — and the Harness account — is actually carrying,
-            matched against the runs database. Anything no run claims is flagged
+            What each cloud is carrying, with anything no run claims flagged
             here.
           </p>
         </div>

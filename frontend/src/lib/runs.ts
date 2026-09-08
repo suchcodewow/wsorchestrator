@@ -213,7 +213,7 @@ export async function updateRunConfig(
   await db.insert(runLogs).values({
     runId,
     stream: "system",
-    message: `Configuration updated: ${parts.join("; ")}. Now ${input.userCount} user(s), ${clouds
+    message: `Configuration updated: ${parts.join("; ")} — now ${input.userCount} user(s), ${clouds
       .map((c) => CLOUD_LABELS[c])
       .join(", ")}.`,
   });
@@ -445,10 +445,9 @@ export async function deleteRun(
     stream: "system",
     message:
       run.status === "destroy_failed"
-        ? "Deletion requested — teardown had given up, so it is being retried " +
-          "from the start. This event disappears once it finishes."
+        ? "Deletion requested — the teardown is being retried from the start."
         : "Deletion requested — tearing down accounts, org unit, and cloud " +
-          "resources first. This event disappears once that finishes.",
+          "resources first.",
   });
 
   return { ok: true, outcome: "teardown_requested" };
@@ -494,9 +493,8 @@ export async function retryTeardown(
     runId,
     stream: "system",
     message:
-      "Teardown retry requested — the reaper picks this up within a few " +
-      "minutes and starts again from the top. Destroy is idempotent, so " +
-      "whatever was already removed stays removed.",
+      "Teardown retry requested — this starts again from the top within a " +
+      "few minutes.",
   });
 
   return { ok: true, run: updated };

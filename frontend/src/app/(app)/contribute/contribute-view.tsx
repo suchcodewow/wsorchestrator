@@ -212,7 +212,7 @@ export function ContributeView({
         <h1 className="text-3xl font-medium tracking-tight">Contribute</h1>
         <p className="text-muted-foreground">
           Add Harness secrets, connectors, and templates to what every workshop
-          gets. Write them with Claude, test them in a sandbox, then submit.
+          gets.
         </p>
       </motion.div>
 
@@ -234,10 +234,9 @@ export function ContributeView({
           <CardContent className="flex flex-wrap items-center justify-between gap-4 py-5">
             <div className="space-y-1 text-sm">
               <p>
-                A Claude Code skill, built from the catalog as it stands right
-                now — all {catalog.length} published component
-                {catalog.length === 1 ? "" : "s"} are in it, along with a token
-                of your own. Nothing to set up.
+                A Claude Code skill holding all {catalog.length} published
+                component{catalog.length === 1 ? "" : "s"} and a token of your
+                own.
               </p>
               <p className="text-muted-foreground">
                 Unzip into{" "}
@@ -272,9 +271,7 @@ export function ContributeView({
           <CardContent className="space-y-4 py-5">
             <p className="text-sm text-muted-foreground">
               The download already includes one, so this is only for a second
-              machine or for CI. Tokens last {TOKEN_TTL_DAYS} days and reach the
-              component endpoints and nothing else — they cannot schedule events
-              or read attendee details. You never need a Harness API key.
+              machine or for CI.
             </p>
 
             {minted && (
@@ -399,22 +396,16 @@ export function ContributeView({
           <CardContent className="space-y-5 py-5 text-sm">
             {catalog.length === 0 ? (
               <p className="text-muted-foreground">
-                The catalog is empty — no components are deployed into
-                workshops yet.
+                No components are deployed into workshops yet.
               </p>
             ) : (
               <>
                 <p className="text-muted-foreground">
-                  Built in this order: a connector is created after the secret it
-                  references, a template after the connector it uses.{" "}
-                  <strong className="font-medium text-foreground">
-                    Nothing declares that
-                  </strong>{" "}
-                  — it is read out of the{" "}
+                  The build order is worked out from the{" "}
                   <code className="rounded bg-muted px-1 py-0.5 text-xs">
                     org.&lt;name&gt;
                   </code>{" "}
-                  references inside each one.
+                  references inside each component.
                 </p>
 
                 {grouped.map(([label, entries]) => {
@@ -489,7 +480,7 @@ export function ContributeView({
           <CardContent className="py-5 text-sm">
             {sets.length === 0 ? (
               <p className="text-muted-foreground">
-                Nothing yet. Run{" "}
+                Nothing yet &mdash; run{" "}
                 <code className="rounded bg-muted px-1 py-0.5 text-xs">
                   node scripts/sandbox.mjs
                 </code>{" "}
@@ -563,14 +554,11 @@ export function ContributeView({
             <CardContent className="py-4 text-sm">
               <p>
                 {submitted.length} set{submitted.length === 1 ? "" : "s"} waiting
-                on you. Publishing deploys those components into{" "}
-                <strong>every workshop</strong> — a contributed template runs on
-                a delegate inside a workshop&apos;s cloud project, so read them
-                before you do.{" "}
+                on you, and publishing deploys them into{" "}
+                <strong>every workshop</strong>.{" "}
                 <Link href="/events" className="text-brand underline">
                   Open the sandbox runs
-                </Link>{" "}
-                to see what actually applied.
+                </Link>
               </p>
             </CardContent>
           </Card>

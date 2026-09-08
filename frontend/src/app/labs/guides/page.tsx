@@ -50,8 +50,7 @@ export default async function GuideLibraryPage() {
         <div>
           <h1 className="text-2xl font-medium tracking-tight">Lab guides</h1>
           <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-            Every guide there is. Each one can sit in any number of workshops —
-            it is written and edited here, once.
+            Every guide, each written once and reusable in any workshop.
           </p>
         </div>
 
@@ -74,7 +73,7 @@ export default async function GuideLibraryPage() {
           <p className="mx-auto mt-1 max-w-sm text-sm leading-relaxed text-muted-foreground">
             {canEdit
               ? "Write the first one, then put it in a workshop."
-              : "Nothing has been written yet. Check back before your session."}
+              : "Nothing has been written yet."}
           </p>
         </div>
       ) : (

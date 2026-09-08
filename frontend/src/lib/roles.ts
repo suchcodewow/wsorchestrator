@@ -18,8 +18,7 @@ export const SITE_ROLE_LABELS: Record<SiteRole, string> = {
 };
 
 export const SITE_ROLE_DESCRIPTIONS: Record<SiteRole, string> = {
-  contributor:
-    "Writes Harness components and tests them in a sandbox. Cannot run events.",
+  contributor: "Writes Harness components but cannot run events.",
   operator: "Schedules and runs their own events.",
   manager:
     "Also sees every user's events, can delete any of them, and writes the lab guides.",

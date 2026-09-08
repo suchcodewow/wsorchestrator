@@ -10,7 +10,7 @@ const ERRORS: Record<string, string> = {
   not_retryable:
     "This event isn't in a failed state anymore, so there's nothing to retry.",
   trigger_failed:
-    "Couldn't start the runner just now. Nothing changed — try again in a moment.",
+    "Couldn't start the runner just now — try again in a moment.",
   unauthorized: "Sign in again to retry this event.",
 };
 

@@ -43,20 +43,20 @@ export const STATUS_FOR: Record<TemplateSourceError, number> = {
 
 export const MESSAGES: Record<TemplateSourceError, string> = {
   malformed:
-    "That doesn't look like a Harness token. They start with pat. or sat. and have four dot-separated parts.",
+    "A Harness token starts with pat. or sat. and has four dot-separated parts.",
   invalid_token:
-    "Harness rejected that token. It may be wrong, revoked, expired, or for a different Harness cluster.",
+    "Harness rejected that token — it may be wrong, revoked, expired, or for another cluster.",
   org_not_found:
     "Harness has no organization with that identifier, or this token cannot see it.",
   project_not_found:
     "Harness has no project with that identifier in that organization, or this token cannot see it.",
   duplicate: "That token is already saved for that organization and project.",
-  too_many: `The site holds as many template sources as it can (${MAX_TEMPLATE_SOURCES}). Remove one first.`,
-  harness_error: "Harness couldn't answer just now. Try again in a moment.",
-  unreachable: "Couldn't reach Harness. Check the network and try again.",
+  too_many: `Remove a template source before adding another (${MAX_TEMPLATE_SOURCES} is the limit).`,
+  harness_error: "Harness couldn't answer just now — try again in a moment.",
+  unreachable: "Couldn't reach Harness — check the network and try again.",
   no_key:
-    "This deployment has no encryption key configured, so a token can't be stored. An administrator needs to set AUTH_SECRET or HARNESS_TOKEN_ENC_KEY.",
-  not_found: "That source was already removed. Reload the page.",
+    "This deployment has no encryption key, so a token can't be stored.",
+  not_found: "That source was already removed — reload the page.",
 };
 
 /** The sentence for whatever a route reported, with Harness's own words after it. */

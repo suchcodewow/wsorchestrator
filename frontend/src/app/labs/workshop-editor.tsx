@@ -188,7 +188,7 @@ export function WorkshopEditor({
     if (!editing) return;
     if (
       !window.confirm(
-        `Delete "${workshop.title}"? The guides in it are kept — only the workshop goes.`,
+        `Delete "${workshop.title}", keeping the guides in it?`,
       )
     ) {
       return;
@@ -268,8 +268,8 @@ export function WorkshopEditor({
           <div>
             <h2 className="text-sm font-medium">Contents</h2>
             <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-              The order the room works through. A guide can sit in as many
-              workshops as you like — editing it here edits it everywhere.
+              The order the room works through, using guides that can sit in
+              any number of workshops.
             </p>
           </div>
 
@@ -290,8 +290,7 @@ export function WorkshopEditor({
             <div className="rounded-lg border border-dashed p-6 text-center">
               <p className="text-sm font-medium">No guides yet</p>
               <p className="mt-1 text-xs text-muted-foreground">
-                A workshop with no contents can be saved, but there is
-                nothing to read until you add one.
+                Add a guide to give the room something to read.
               </p>
             </div>
           ) : (
@@ -468,8 +467,7 @@ export function WorkshopEditor({
                 Write a new guide
               </Button>
               <p className="text-xs leading-relaxed text-muted-foreground">
-                This workshop is saved first, so nothing here is lost — you come
-                back to it with the new guide already at the end.
+                This workshop is saved first, so nothing here is lost.
               </p>
             </div>
           </div>
@@ -486,9 +484,8 @@ export function WorkshopEditor({
         <span>
           <span className="font-medium">Published</span>
           <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">
-            A published workshop is readable by anyone with the link, signed in
-            or not — every guide in it, in the order above. A draft is visible
-            only to managers.
+            A published workshop is readable by anyone with the link, while a
+            draft is visible only to managers.
           </span>
         </span>
       </label>

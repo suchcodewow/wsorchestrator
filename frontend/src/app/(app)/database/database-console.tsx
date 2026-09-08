@@ -83,12 +83,11 @@ export function DatabaseConsole({ tables }: { tables: string[] }) {
         <h1 className="text-2xl font-medium tracking-tight">Database</h1>
         <p className="mt-1 flex items-center gap-1.5 text-sm text-muted-foreground">
           <ShieldCheck className="size-4 text-emerald-600" />
-          Read-only console. Every query runs in a{" "}
+          Every query runs in a{" "}
           <code className="rounded bg-muted px-1 py-0.5 text-xs">
             READ ONLY
           </code>{" "}
-          transaction — statements that write, create, or drop are rejected by
-          Postgres.
+          transaction, so nothing here can change the data.
         </p>
       </motion.div>
 

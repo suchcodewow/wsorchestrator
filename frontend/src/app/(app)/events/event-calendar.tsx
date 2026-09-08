@@ -332,7 +332,7 @@ export function EventCalendar({
             <h1 className="text-3xl font-medium tracking-tight">Events</h1>
             <p className="text-muted-foreground">
               {scope === "all"
-                ? "Every user's events. Anything you create here is still your own."
+                ? "Every user's events, including your own."
                 : "Schedule events — each provisions automatically at its start time."}
             </p>
           </div>

@@ -36,18 +36,18 @@ export const STATUS_FOR: Record<HarnessTokenError, number> = {
 
 export const MESSAGES: Record<HarnessTokenError, string> = {
   malformed:
-    "That doesn't look like a Harness token. They start with pat. or sat. and have four dot-separated parts.",
+    "A Harness token starts with pat. or sat. and has four dot-separated parts.",
   invalid_token:
-    "Harness rejected that token. It may be wrong, revoked, expired, or for a different Harness cluster.",
-  harness_error: "Harness couldn't answer just now. Try again in a moment.",
-  unreachable: "Couldn't reach Harness. Check the network and try again.",
+    "Harness rejected that token — it may be wrong, revoked, expired, or for another cluster.",
+  harness_error: "Harness couldn't answer just now — try again in a moment.",
+  unreachable: "Couldn't reach Harness — check the network and try again.",
   duplicate: "That token is already saved below.",
-  too_many: "You've saved as many tokens as an account can hold. Remove one first.",
+  too_many: "Remove a saved token before adding another.",
   no_key:
-    "This deployment has no encryption key configured, so a token can't be stored. An administrator needs to set AUTH_SECRET or HARNESS_TOKEN_ENC_KEY.",
-  not_found: "That token was already removed. Reload the page.",
+    "This deployment has no encryption key, so a token can't be stored.",
+  not_found: "That token was already removed — reload the page.",
   unreadable:
-    "This token can no longer be decrypted — the deployment's encryption key changed. Remove it and paste the token again.",
+    "This token can no longer be decrypted, so remove it and paste it again.",
 };
 
 /** The message for whatever a route reported, with a fallback for the unforeseen. */

@@ -72,7 +72,7 @@ export async function reprovisionRun(runId: string): Promise<boolean> {
     await db.insert(runLogs).values({
       runId,
       stream: "stderr",
-      message: `Saved, but could not apply the change now (${message}). The live environment is unchanged.`,
+      message: `Saved, but could not apply the change now (${message}) — the live environment is unchanged.`,
     });
     return false;
   }
@@ -142,7 +142,7 @@ export async function retryRun(
     await db.insert(runLogs).values({
       runId,
       stream: "stderr",
-      message: `Could not start the retry (${message}). Nothing was changed; try again.`,
+      message: `Could not start the retry (${message}) — nothing was changed, so try again.`,
     });
     return { ok: false, error: "trigger_failed" };
   }

@@ -198,11 +198,10 @@ export function HarnessTokensView({
     const scrub = body.scrub as ScrubRun | null;
     if (scrub && scrub.problems.length > 0) {
       setError(
-        `Token removed, but ${scrub.problems.length} of this site's secrets could ` +
-          `not be scrubbed from Harness: ${scrub.problems
+        `Token removed, but ${scrub.problems.length} of this site's secrets ` +
+          `need removing in Harness by hand: ${scrub.problems
             .map((p) => p.secretIdentifier)
-            .join(", ")}. Nothing here can reach them now — remove them in ` +
-          `Harness by hand.`,
+            .join(", ")}.`,
       );
     } else if (scrub && scrub.scrubbed > 0) {
       setSaved(
@@ -271,7 +270,7 @@ export function HarnessTokensView({
       // A deploy runs long enough to outlive a laptop lid. Worth saying that the
       // organization may exist regardless, because it very likely does.
       setError(
-        "Lost contact with the server while deploying. Check the organization in Harness before trying again.",
+        "Lost contact with the server while deploying — check the organization in Harness first.",
       );
       return null;
     } finally {
@@ -291,9 +290,7 @@ export function HarnessTokensView({
         <p className="text-sm leading-relaxed text-muted-foreground">
           Paste a Harness platform token and it is checked against{" "}
           <span className="font-mono text-xs">{baseUrl}</span> before it is saved
-          — which account it is for, what that account is called, who the token
-          acts as, and what it is allowed to do. Only tokens Harness accepts end
-          up in the list below. They are stored encrypted and never shown again.
+          encrypted.
         </p>
       </motion.div>
 
@@ -306,8 +303,7 @@ export function HarnessTokensView({
           <AlertTriangle className="mt-0.5 size-4 shrink-0 text-destructive" />
           <span>
             This deployment has no encryption key, so a token cannot be stored
-            safely. An administrator needs to set <code>AUTH_SECRET</code> or{" "}
-            <code>HARNESS_TOKEN_ENC_KEY</code>.
+            safely.
           </span>
         </motion.div>
       )}
@@ -382,10 +378,7 @@ export function HarnessTokensView({
                   one first.
                 </>
               ) : (
-                <>
-                  Nothing else to fill in — the account is read out of the token
-                  and its name comes back from Harness with the check.
-                </>
+                <>Nothing else to fill in — the account comes from the token.</>
               )}
             </p>
           </CardContent>
@@ -649,19 +642,14 @@ function TokenRow({
                 <span className="font-medium text-foreground">
                   {token.lastDeploy?.orgName}
                 </span>{" "}
-                again, which this token already built. Anything already there is
-                left as it is, so this is how a deploy with failures in it gets
-                finished — change the name to build somewhere new instead.
+                again, leaving anything already there as it is.
               </>
             ) : (
               <>
                 A new organization in{" "}
                 <span className="font-medium text-foreground">{name}</span>,
-                filled with every secret from Settings → Org Secrets and
-                everything each template source holds — connectors, templates,
-                environments, and infrastructure definitions. Sources naming a
-                whole organization land at org level; sources naming a project
-                get a project of the same name.
+                filled with every org secret and template source this site
+                holds.
               </>
             )}
           </p>
@@ -679,8 +667,7 @@ function TokenRow({
                     scrubDays === 1 ? "" : "s"
                   }`}
             </span>
-            , so this deployment&apos;s credentials do not stay in another
-            account. This row counts down to it, and can do it early.
+            .
           </p>
           <div className="flex flex-wrap items-center gap-2">
             <Input
@@ -719,10 +706,7 @@ function TokenRow({
               org.trim().length === 0 ? (
                 <>Harness needs a name to create the organization under.</>
               ) : (
-                <>
-                  Nothing in that name is legal in a Harness identifier — it needs
-                  a letter, digit, or underscore somewhere.
-                </>
+                <>That name needs a letter, digit, or underscore in it.</>
               )
             ) : (
               <>
@@ -1022,9 +1006,8 @@ function DeployReportPanel({
         {counts.failed > 0 && (
           <>
             {" "}
-            Nothing was rolled back — the organization is there with everything
-            that did land, so the fix is usually to correct the cause and deploy
-            into a new one, or finish it by hand in Harness.
+            Nothing was rolled back, so whatever did land is still in the
+            organization.
           </>
         )}
       </p>

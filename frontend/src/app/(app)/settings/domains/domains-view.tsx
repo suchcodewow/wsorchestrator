@@ -21,12 +21,12 @@ export type DomainRow = {
 };
 
 const ERRORS: Record<string, string> = {
-  invalid: "That isn't a domain. Use the part after the @, like example.com.",
+  invalid: "Use just the part after the @, like example.com.",
   duplicate: "That domain is already on the list.",
-  not_found: "That entry was already removed. Reload the page.",
+  not_found: "That entry was already removed — reload the page.",
   self_lockout:
-    "That change would leave your own address unable to sign in. Add a domain that covers you first, or have another administrator make the change.",
-  forbidden: "Your own role changed. Reload the page.",
+    "That change would leave your own address unable to sign in.",
+  forbidden: "Your own role changed — reload the page.",
 };
 
 function message(error: string | undefined, status: number) {
@@ -93,20 +93,16 @@ export function DomainsView({
         <h2 className="text-xl font-medium tracking-tight">Sign-in domains</h2>
         <p className="text-sm leading-relaxed text-muted-foreground">
           {restricted ? (
-            <>
-              Only these email domains can sign in. Everyone else is turned away
-              at Google, before any account is created.
-            </>
+            <>Only these email domains can sign in.</>
           ) : (
             <>
               <span className="font-medium text-foreground">
                 Anyone with a Google account can sign in
               </span>{" "}
-              — and arrive as an operator, able to schedule events that build
-              real cloud accounts. Add a domain to limit that.
+              — add a domain to limit that.
             </>
           )}{" "}
-          Attendees are unaffected: they open a link and never sign in.
+          Attendees never sign in, so this does not affect them.
         </p>
       </motion.div>
 
@@ -265,8 +261,7 @@ export function DomainsView({
                 <>
                   A change that would leave{" "}
                   <span className="font-mono">{viewerEmail}</span> unable to sign
-                  in is refused. Addresses in <code>SITE_ADMIN_EMAILS</code> are
-                  always allowed, whatever their domain.
+                  in is refused.
                 </>
               )}
             </p>
@@ -274,9 +269,8 @@ export function DomainsView({
               <span className="font-medium text-foreground">
                 Existing sessions keep working.
               </span>{" "}
-              The check runs at sign-in, so removing a domain stops the next
-              sign-in rather than ending sessions already open. To cut someone
-              off now, delete their account on the users page.
+              Removing a domain blocks the next sign-in but does not end
+              sessions already open.
             </p>
           </CardContent>
         </Card>

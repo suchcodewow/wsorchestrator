@@ -9,7 +9,7 @@ import Link from "next/link";
 
 export const metadata: Metadata = {
   title: "Workshops",
-  description: "Step-by-step workshops for the sessions run on this site. No account needed.",
+  description: "Step-by-step workshops for the sessions run on this site.",
 };
 
 const updated = new Intl.DateTimeFormat("en", {
@@ -36,7 +36,7 @@ export default async function LabsPage() {
         <div>
           <h1 className="text-2xl font-medium tracking-tight">Workshops</h1>
           <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-            Each one is a run of lab guides, in order. Open a workshop and work through it — no account needed.
+            Open a workshop and work through its lab guides in order.
           </p>
         </div>
 
@@ -58,8 +58,8 @@ export default async function LabsPage() {
           <p className="mt-4 text-sm font-medium">No workshops yet</p>
           <p className="mx-auto mt-1 max-w-sm text-sm leading-relaxed text-muted-foreground">
             {canEdit
-              ? "Build the first one — write some guides, then put them in order."
-              : "Nothing has been published yet. Check back before your session."}
+              ? "Write some guides, then put them in order."
+              : "Nothing has been published yet."}
           </p>
         </div>
       ) : (

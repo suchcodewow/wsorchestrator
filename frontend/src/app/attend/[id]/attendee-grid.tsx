@@ -63,7 +63,10 @@ function CloudButton({ link, className }: { link: CloudLink; className?: string 
   );
 }
 
-/** One "open this somewhere else" button — a cloud environment, the Harness org. */
+/**
+ * One "open this somewhere else" button — the workshop guides, a cloud
+ * environment, the Harness org.
+ */
 function LinkButton({ href, className, children }: { href: string; className?: string; children: ReactNode }) {
   return (
     <Button variant="outline" size="sm" className={className} asChild>
@@ -206,20 +209,25 @@ export function AttendeeGrid({ initial, runId }: { initial: View; runId: string 
         <h1 className="text-2xl font-medium tracking-tight text-balance">{data.name}</h1>
         <p className="mt-1.5 text-sm text-muted-foreground">
           {data.accounts.length > 0
-            ? `Take a row, put your name on it, and open Details for the password to sign in with. ${filledCount} of ${data.accounts.length} taken.`
+            ? `Take a row and open Details for your password — ${filledCount} of ${data.accounts.length} taken.`
             : `Accounts for this ${data.mode} will appear here.`}
         </p>
-        {/* Everywhere the room is expected to go, in one place: the Harness
-            org every event provisions, then a workshop's shared environment
-            per cloud (challenges link per competitor on their own row). */}
-        {(data.harnessOrgUrl || data.links.length > 0) && (
-          <div className="mt-3 flex flex-wrap gap-2">
-            {data.harnessOrgUrl && <LinkButton href={data.harnessOrgUrl}>Open Harness organization</LinkButton>}
-            {data.links.map((link) => (
-              <CloudButton key={link.cloud} link={link} />
-            ))}
-          </div>
-        )}
+        {/* Everywhere the room is expected to go, in one place: the guides
+            themselves, the Harness org every event provisions, then a
+            workshop's shared environment per cloud (challenges link per
+            competitor on their own row).
+
+            The guides come first and are always there — this page hands out a
+            credential, and the workshop is what the room came to do with it.
+            It opens in its own tab like the rest: an attendee who lost this
+            page has lost the row they claimed and the password on it. */}
+        <div className="mt-3 flex flex-wrap gap-2">
+          <LinkButton href="/labs">Workshop guides</LinkButton>
+          {data.harnessOrgUrl && <LinkButton href={data.harnessOrgUrl}>Open Harness organization</LinkButton>}
+          {data.links.map((link) => (
+            <CloudButton key={link.cloud} link={link} />
+          ))}
+        </div>
       </motion.div>
 
       {data.accounts.length === 0 ? (
@@ -278,22 +286,10 @@ export function AttendeeGrid({ initial, runId }: { initial: View; runId: string 
             {/* No "you'll be asked to change your password": the accounts are
                 created without a forced reset on purpose, so the one password
                 keeps working across every cloud this event uses. */}
-            The Google Workspace password works as-is &mdash; there is nothing to change and nothing to enrol.
-            {hasAccessPass && (
-              <>
-                {" "}
-                On the Azure sign-in screen you may need to choose &ldquo;Use your Temporary Access Pass&rdquo; before it asks for
-                the pass.
-              </>
-            )}
-            {hasAwsPassword && (
-              <>
-                {" "}
-                AWS is the exception: it has its own password in your row&rsquo;s details, and your email address is the IAM
-                user name.
-              </>
-            )}{" "}
-            These accounts and everything in them are deleted when the {data.mode} ends.
+            Your password works as-is
+            {hasAwsPassword && <>, except on AWS, which has its own in your row&rsquo;s details</>}
+            {hasAccessPass && <>, and on Azure, which asks for your access pass</>}, and these accounts are deleted when
+            the {data.mode} ends.
           </motion.p>
         </>
       )}
@@ -610,11 +606,11 @@ function EmptyState({ status, noun }: { status: RunStatus; noun: string }) {
   const pending = status === "scheduled" || status === "requested" || status === "provisioning" || status === "applying";
   const message =
     status === "scheduled"
-      ? "This event hasn't started yet. Accounts appear here automatically once it's provisioned."
+      ? "This event hasn't started yet, so accounts will appear here later."
       : pending
-        ? `Accounts are being created right now. This page updates itself — no need to reload.`
+        ? `Accounts are being created right now — this page updates itself.`
         : status === "failed"
-          ? "This event didn't finish setting up. Check with your organizer."
+          ? "This event didn't finish setting up — check with your organizer."
           : `This event has ended and its ${noun} accounts have been deleted.`;
 
   return (

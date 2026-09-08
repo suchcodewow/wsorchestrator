@@ -23,7 +23,7 @@ import Link from "next/link";
 export const metadata: Metadata = {
   title: "How it works — Harness Events",
   description:
-    "From a calendar invite to three clouds and back to nothing: how a workshop provisions attendee accounts and cloud environments at its start time, and tears them down when it ends.",
+    "How a workshop provisions attendee accounts and cloud environments at its start time, and tears them down when it ends.",
 };
 
 /** The four stages a visitor sees, top to bottom. */
@@ -41,7 +41,7 @@ const STAGES: {
     tag: "Organizer",
     auto: false,
     title: "Schedule",
-    body: "An organizer books a workshop or challenge on a calendar — date, size and clouds. Nothing is provisioned or billed until it starts.",
+    body: "An organizer picks a date, a size and the clouds, and nothing is billed until it starts.",
   },
   {
     n: "02",
@@ -49,7 +49,7 @@ const STAGES: {
     tag: "Automatic · at start",
     auto: true,
     title: "Provision",
-    body: "About two hours ahead of the start it builds itself: a Google account per attendee, a Harness org, and the requested cloud environments via Terraform — ready when the room opens.",
+    body: "Two hours before the start, the accounts, Harness org and cloud environments build themselves.",
   },
   {
     n: "03",
@@ -57,7 +57,7 @@ const STAGES: {
     tag: "Attendees",
     auto: false,
     title: "Run",
-    body: "Each attendee signs in to their own ready-made environment and works through the labs. Time can be extended a day at a time.",
+    body: "Each attendee signs in to their own environment and works through the labs.",
   },
   {
     n: "04",
@@ -65,7 +65,7 @@ const STAGES: {
     tag: "Automatic · at end",
     auto: true,
     title: "Clean up",
-    body: "When the timer runs out, every account, project and org is torn down on a schedule — nothing is left running by accident.",
+    body: "When the timer runs out, every account, project and org is torn down.",
   },
 ];
 
@@ -132,51 +132,51 @@ const LIFECYCLE: LifeNode[] = [
     Icon: CalendarClock,
     title: "scheduled",
     kind: "up",
-    desc: "On the calendar, waiting. Nothing exists yet — no accounts, no cloud spend — until about two hours before the start, when the scheduler picks it up.",
+    desc: "On the calendar, with nothing built until about two hours before the start.",
   },
   {
     Icon: UserPlus,
     title: "provisioning",
     kind: "up",
-    desc: "A Google Workspace org-unit is created, then one attendee account per seat, each with a generated temporary password to hand out.",
+    desc: "A Google Workspace org-unit is created, then one attendee account per seat.",
   },
   {
     Icon: Boxes,
     title: "Harness org",
     kind: "up",
     pill: "every event",
-    desc: "Regardless of cloud, a Harness organization is created with one project per attendee — each attendee admins their own and can view the rest.",
+    desc: "A Harness organization is created with one project per attendee.",
   },
   {
     Icon: Cloud,
     title: "applying",
     kind: "up",
     fanout: true,
-    desc: "Terraform builds every requested cloud. In challenge mode each competitor gets their own project, account or resource group instead of a shared one.",
+    desc: "Terraform builds every requested cloud, one environment each in challenge mode.",
   },
   {
     Icon: Rocket,
     title: "ready",
     kind: "milestone",
-    desc: "Outputs are published and the expiry timer is set. The organizer hands out credentials and the room is open.",
+    desc: "Credentials are ready to hand out and the room is open.",
   },
   {
     Icon: PlayCircle,
     title: "in session",
     kind: "live",
-    desc: "Attendees work in their own environments. The organizer can extend the deadline a day at a time from the event's page.",
+    desc: "Attendees work in their own environments, and the deadline can be extended a day at a time.",
   },
   {
     Icon: Trash2,
     title: "destroying",
     kind: "down",
-    desc: "In reverse, on a timer: clouds first (they hold the access), then the Harness projects and org, then the attendee accounts, then the org-unit.",
+    desc: "Everything comes down in reverse: the clouds, then Harness, then the accounts.",
   },
   {
     Icon: CircleCheck,
     title: "destroyed",
     kind: "down",
-    desc: "Everything is gone. Nothing left running, nothing left billing.",
+    desc: "Nothing is left running or billing.",
   },
 ];
 
@@ -223,9 +223,8 @@ export default async function HowItWorks() {
             From a calendar invite to three clouds — and back to nothing.
           </h1>
           <p className="mx-auto mt-5 max-w-2xl text-base leading-relaxed text-pretty text-muted-foreground">
-            Book a workshop or a challenge. Attendee accounts and cloud
-            environments build themselves at the start time, and clean
-            themselves up when it ends. Here is the whole path.
+            Book a workshop or a challenge, and its attendee accounts and cloud
+            environments build and clean themselves up on schedule.
           </p>
         </section>
 
@@ -348,8 +347,7 @@ export default async function HowItWorks() {
                       <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
                         A workshop can also request{" "}
                         <span className="font-medium text-foreground">no cloud</span>{" "}
-                        — attendees share a long-lived sandbox project, so there
-                        is nothing throwaway to build or destroy.
+                        and share a long-lived sandbox project instead.
                       </p>
                     </div>
                   )}
@@ -360,9 +358,8 @@ export default async function HowItWorks() {
 
           <p className="mx-auto mt-10 max-w-3xl border-t pt-6 text-center text-xs leading-relaxed text-muted-foreground">
             Any step can end in{" "}
-            <span className="font-medium text-foreground">failed</span> — the run
-            stops and stays on the calendar, flagged, so nothing is half-built in
-            the dark. It’s retried or reaped from there.
+            <span className="font-medium text-foreground">failed</span>, where the
+            run stops and stays flagged on the calendar to be retried or reaped.
           </p>
         </section>
 
@@ -373,8 +370,8 @@ export default async function HowItWorks() {
               Ready to run one?
             </h2>
             <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-muted-foreground">
-              Pick a date, a size and the clouds. The orchestrator takes it from
-              there.
+              Pick a date, a size and the clouds, and the orchestrator takes it
+              from there.
             </p>
             <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
               <Button asChild variant="brand" size="lg" className="group">

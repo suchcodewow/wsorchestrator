@@ -148,8 +148,8 @@ export function validateComponent(
     } else if (RESERVED.has(identifier.toLowerCase())) {
       fail(
         "identifier",
-        `"${identifier}" is reserved by the Harness expression language — ` +
-          `Harness will reject it. Pick another name.`,
+        `"${identifier}" is reserved by the Harness expression language, so ` +
+          `pick another name.`,
       );
     }
   }

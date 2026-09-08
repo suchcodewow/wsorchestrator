@@ -439,8 +439,8 @@ export async function scrubSecret(
       return {
         status: "failed",
         note:
-          "The token that deployed this can no longer read it in Harness — " +
-          `remove the value by hand. Harness said: ${message}`,
+          "The token that deployed this can no longer read it in Harness, so " +
+          `remove the value by hand: ${message}`,
       };
     }
     return {
@@ -458,8 +458,7 @@ export async function scrubSecret(
       status: "skipped",
       note:
         "Somebody changed this secret in Harness after it was deployed, so the " +
-        "value there is theirs now and has been left alone. If it is still ours, " +
-        "replace it by hand.",
+        "value there is theirs now and has been left alone.",
     };
   }
 

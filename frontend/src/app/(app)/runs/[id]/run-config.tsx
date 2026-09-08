@@ -130,9 +130,9 @@ export function RunConfig({
         ) : (
           <p className="text-sm text-muted-foreground">
             {growOnly
-              ? `This ${run.mode} is live. You can add users${
+              ? `This ${run.mode} is live, so you can add users${
                   singleCloud ? "" : " and clouds"
-                }; existing ones can't be removed.`
+                } but not remove them.`
               : `This ${run.mode} hasn't been provisioned yet, so anything can change.`}
           </p>
         )}

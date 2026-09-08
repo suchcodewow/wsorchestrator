@@ -12,24 +12,24 @@ import { LandingHero } from "./landing-hero";
 export const metadata: Metadata = {
   title: "Event Orchestrator — cloud environments for teaching",
   description:
-    "Book a workshop or a challenge. Attendee accounts and cloud projects build themselves at the start time, and clean themselves up when it ends.",
+    "Book a workshop or a challenge, and its attendee accounts and cloud projects build and clean themselves up on schedule.",
 };
 
 const CAPABILITIES = [
   {
     Icon: CalendarClock,
     title: "Booked on a calendar",
-    body: "Pick a date and a start time. Nothing is provisioned — and nothing is billed — until the session actually begins.",
+    body: "Nothing is provisioned or billed until the session actually begins.",
   },
   {
     Icon: Users,
     title: "An account each",
-    body: "Every attendee gets their own sign-in, created ahead of the room and handed over ready to use.",
+    body: "Every attendee gets their own sign-in, ready before the room opens.",
   },
   {
     Icon: Cloud,
     title: "Cleaned up after",
-    body: "Projects and accounts are torn down on a timer when the session ends, so nothing is left running by accident.",
+    body: "Projects and accounts are torn down on a timer when the session ends.",
   },
 ] as const;
 
@@ -67,8 +67,8 @@ export default async function Home() {
             </h1>
 
             <p data-anim className="mx-auto mt-5 max-w-xl text-base leading-relaxed text-pretty text-muted-foreground">
-              Book a workshop or a challenge. Attendee accounts and cloud projects build themselves at the start time, and clean
-              themselves up when it ends.
+              Book a workshop or a challenge, and its attendee accounts and cloud projects build and clean themselves up on
+              schedule.
             </p>
 
             <div data-anim className="mt-9 flex flex-wrap items-center justify-center gap-3">

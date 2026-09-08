@@ -22,7 +22,7 @@ export default function MySettingsLayout({
       <div className="space-y-1.5">
         <h1 className="text-3xl font-medium tracking-tight">My settings</h1>
         <p className="text-muted-foreground">
-          Yours alone. Nothing here changes anything for anyone else.
+          These settings apply only to your own account.
         </p>
       </div>
 

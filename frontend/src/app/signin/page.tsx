@@ -37,13 +37,13 @@ function errorMessage(error: string | undefined): string | null {
   if (!error) return null;
   switch (error) {
     case "AccessDenied":
-      return "That account isn't allowed to sign in. Use your organization's account, or ask an administrator to have your domain added.";
+      return "That account isn't allowed to sign in — use your organization's account instead.";
     case "OAuthAccountNotLinked":
-      return "That address already signed in with a different provider. Use the one you used the first time.";
+      return "That address already signed in with a different provider.";
     case "Verification":
-      return "That sign-in link has expired or was already used. Try again.";
+      return "That sign-in link has expired or was already used.";
     default:
-      return "Sign-in isn't working right now. If this keeps happening, tell an administrator.";
+      return "Sign-in isn't working right now — tell an administrator if it continues.";
   }
 }
 
@@ -83,8 +83,8 @@ export default async function SignInPage({
           </h1>
 
           <p data-anim className="mt-3 text-sm leading-relaxed text-muted-foreground">
-            Book a workshop or a challenge. Accounts and cloud projects build
-            themselves at the start time, and clean themselves up after.
+            Book a workshop or a challenge, and its accounts and cloud projects
+            build and clean themselves up on schedule.
           </p>
 
           <ul data-anim className="mt-7 space-y-3">

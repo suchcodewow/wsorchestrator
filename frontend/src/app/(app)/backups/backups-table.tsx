@@ -39,10 +39,10 @@ type BackupRun = {
 
 const UNAVAILABLE: Record<string, string> = {
   not_configured:
-    "This deployment has no Cloud SQL instance configured, so there is nothing to list. Expected in local development; in production it means GCP_ADMIN_PROJECT_ID or CLOUD_SQL_INSTANCE is unset.",
+    "This deployment has no Cloud SQL instance configured, so there is nothing to list.",
   permission_denied:
-    "The app's service account is not allowed to read backups. It needs roles/cloudsql.editor — apply the Terraform in infra/admin.",
-  unavailable: "Could not reach the Cloud SQL API. Try again in a moment.",
+    "The app's service account needs roles/cloudsql.editor to read backups.",
+  unavailable: "Could not reach the Cloud SQL API — try again in a moment.",
 };
 
 const when = new Intl.DateTimeFormat("en", {
@@ -127,7 +127,7 @@ export function BackupsTable({
       });
       if (!res.ok) throw new Error(`Could not start a backup (${res.status})`);
       setNotice(
-        "Backup started. It appears in the list below once Cloud SQL finishes it — refresh in a minute.",
+        "Backup started — refresh in a minute to see it listed below.",
       );
       await refresh();
     } catch (err) {
@@ -145,8 +145,7 @@ export function BackupsTable({
           <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
             Cloud SQL backs up{" "}
             <code className="text-foreground">{instance ?? "the database"}</code>{" "}
-            every night and keeps a week of them. Point-in-time recovery covers
-            the gaps between, but only from the command line.
+            every night and keeps a week of them.
           </p>
         </div>
 
@@ -193,11 +192,10 @@ export function BackupsTable({
                   Last good backup{" "}
                   <span className="font-medium">{age?.text}</span> —{" "}
                   {format(latest.startTime)}.
-                  {age?.stale &&
-                    " That is older than the daily schedule should allow; check that automated backups are enabled."}
+                  {age?.stale && " That is older than the daily schedule allows."}
                 </>
               ) : (
-                "No successful backup yet. If this instance was only just configured, the first one runs tonight."
+                "No successful backup yet — the first one runs tonight."
               )}
             </span>
           </div>
@@ -373,10 +371,8 @@ function RestoreDialog({
             <DialogHeader>
               <DialogTitle>Restore started</DialogTitle>
               <DialogDescription className="leading-relaxed">
-                Cloud SQL has accepted the operation. The database goes offline
-                while it runs, so this app will fail for the next few minutes
-                and you will be signed out — your session is one of the things
-                being rolled back.
+                The database goes offline for a few minutes and you will be
+                signed out.
               </DialogDescription>
             </DialogHeader>
 
@@ -405,21 +401,15 @@ function RestoreDialog({
               <DialogDescription className="leading-relaxed">
                 This replaces <strong>everything</strong> on{" "}
                 <code>{instance}</code> with the backup from{" "}
-                <strong>{format(backup?.startTime ?? null)}</strong> — every
-                table, not just the lab guides. Anything written since is lost.
+                <strong>{format(backup?.startTime ?? null)}</strong>, losing
+                anything written since.
               </DialogDescription>
             </DialogHeader>
 
             <ul className="grid gap-2 rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm leading-relaxed">
               <li>The app is offline for the length of the restore.</li>
-              <li>
-                Every signed-in user is signed out, you included — sessions are
-                in the database being rolled back.
-              </li>
-              <li>
-                Site roles revert to what they were at that moment. If anyone
-                was promoted since, they lose it.
-              </li>
+              <li>Every signed-in user is signed out, you included.</li>
+              <li>Site roles revert to what they were at that moment.</li>
             </ul>
 
             {/* The consequence nobody thinks of, made specific. */}
@@ -436,11 +426,8 @@ function RestoreDialog({
                     : `${stranded.length} events would be stranded`}
                 </p>
                 <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                  These were provisioned after the backup was taken. Restoring
-                  removes their records while their Google Cloud projects,
-                  Workspace accounts, and Harness organizations keep running —
-                  the reaper only tears down what it has a row for. Write these
-                  down; they will need deleting by hand.
+                  Their records go, but their cloud resources keep running and
+                  will need deleting by hand.
                 </p>
                 <ul className="mt-2 grid gap-1 text-xs">
                   {stranded.map((run) => (
@@ -455,8 +442,8 @@ function RestoreDialog({
               </div>
             ) : (
               <p className="text-sm text-muted-foreground">
-                No events were provisioned after this backup, so nothing will be
-                stranded in the clouds.
+                No events were provisioned after this backup, so nothing will
+                be stranded.
               </p>
             )}
 

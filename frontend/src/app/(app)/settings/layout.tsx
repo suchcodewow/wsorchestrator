@@ -31,7 +31,7 @@ export default async function SiteSettingsLayout({
       <div className="space-y-1.5">
         <h1 className="text-3xl font-medium tracking-tight">Settings</h1>
         <p className="text-muted-foreground">
-          Site-wide configuration. Only administrators see this page.
+          Site-wide configuration, visible only to administrators.
         </p>
       </div>
 

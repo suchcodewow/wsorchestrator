@@ -24,17 +24,17 @@ import { cn } from "@/lib/utils";
 
 const ERRORS: Record<string, string> = {
   invalid_identifier:
-    "That isn't a Harness identifier. Letters, digits, underscores and hyphens, starting with a letter or underscore.",
+    "A Harness identifier holds letters, digits, underscores and hyphens, starting with a letter or underscore.",
   duplicate: "A secret with that id is already on the list.",
   empty: "There's no value to store.",
   too_large: `Values must be under ${ORG_SECRET_LIMITS.bytes / 1024} KB.`,
   binary:
-    "That file isn't text. A Harness secret file holds text — a key, a PEM, a config — so an archive or a binary can't be stored as one.",
-  malformed: "That form was incomplete. Reload the page and try again.",
-  not_found: "That secret was already removed. Reload the page.",
-  forbidden: "Your own role changed. Reload the page.",
+    "A Harness secret file holds text, so an archive or a binary can't be stored as one.",
+  malformed: "That form was incomplete — reload the page and try again.",
+  not_found: "That secret was already removed — reload the page.",
+  forbidden: "Your own role changed — reload the page.",
   no_key:
-    "This deployment has no encryption key, so a value can't be stored. An administrator needs to set AUTH_SECRET or HARNESS_TOKEN_ENC_KEY.",
+    "This deployment has no encryption key, so a value can't be stored.",
 };
 
 const message = (error: string | undefined, status: number) =>
@@ -104,13 +104,9 @@ export function OrgSecretsView({
       <motion.div variants={riseChild} className="space-y-1.5">
         <h2 className="text-xl font-medium tracking-tight">Org secrets</h2>
         <p className="text-sm leading-relaxed text-muted-foreground">
-          Every secret here is created in the Harness organization of every
-          workshop, as the org secret it is named after — before the component
-          catalog is applied, so a connector can reference one as{" "}
-          <span className="font-mono text-xs">org.&lt;id&gt;</span>. Values are
-          stored encrypted and never shown again; changing one changes what the
-          <em> next</em> workshop is built with, and leaves the copies in
-          workshops already running alone.
+          Every secret here is created in each new workshop&rsquo;s Harness
+          organization, where a connector can reference it as{" "}
+          <span className="font-mono text-xs">org.&lt;id&gt;</span>.
         </p>
       </motion.div>
 
@@ -123,8 +119,7 @@ export function OrgSecretsView({
           <AlertTriangle className="mt-0.5 size-4 shrink-0 text-destructive" />
           <span>
             This deployment has no encryption key, so a value cannot be stored
-            safely. Set <code>AUTH_SECRET</code> or{" "}
-            <code>HARNESS_TOKEN_ENC_KEY</code>.
+            safely.
           </span>
         </motion.div>
       )}
@@ -207,8 +202,7 @@ export function OrgSecretsView({
                     colSpan={5}
                     className="px-5 py-8 text-center text-muted-foreground"
                   >
-                    No org secrets. Workshops are built with the component
-                    catalog alone.
+                    No org secrets yet.
                   </td>
                 </tr>
               )}
@@ -259,7 +253,7 @@ export function OrgSecretsView({
                       {!row.usable && (
                         <span
                           className="ml-2 text-xs text-destructive"
-                          title="The deployment's encryption key changed. Store the value again."
+                          title="The encryption key changed, so store the value again."
                         >
                           unreadable
                         </span>
@@ -473,8 +467,8 @@ function SecretForm({
 
       <p className="text-xs text-muted-foreground">
         {row
-          ? "The stored value can't be read back, so an edit has to include the value again — even if only the id is changing."
-          : "A file is stored as a Harness secret file and has to be text: a service account key, a PEM, a config. Everything else is stored as inline text."}
+          ? "An edit has to include the value again, because the stored one can't be read back."
+          : "A file has to be text, such as a service account key, a PEM, or a config."}
       </p>
     </div>
   );

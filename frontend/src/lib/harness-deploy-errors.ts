@@ -49,21 +49,21 @@ export const STATUS_FOR: Record<DeployError, number> = {
 };
 
 export const MESSAGES: Record<DeployError, string> = {
-  not_found: "That token was already removed. Reload the page.",
+  not_found: "That token was already removed — reload the page.",
   unreadable:
-    "This token can no longer be decrypted — the deployment's encryption key changed. Remove it and paste the token again.",
+    "This token can no longer be decrypted, so remove it and paste it again.",
   invalid_token:
-    "Harness rejected that token. It may have been revoked or expired since it was last checked.",
+    "Harness rejected that token — it may have been revoked or expired.",
   not_permitted:
-    "That token no longer administers the account, so it can't create an organization. Re-check it to see what it holds now.",
+    "That token no longer administers the account, so it can't create an organization.",
   invalid_name:
-    "That name has no letters, digits, or underscores in it, so there is no identifier Harness would accept. Try another.",
+    "That name needs a letter, digit, or underscore in it.",
   org_exists:
-    "An organization with that identifier already exists in the account, and this token did not deploy it — so nothing was written to it. Pick a different name, or delete the existing one first.",
+    "An organization with that identifier already exists, so pick a different name.",
   org_failed:
     "Harness would not create the organization, so nothing else was deployed.",
-  harness_error: "Harness couldn't answer just now. Try again in a moment.",
-  unreachable: "Couldn't reach Harness. Check the network and try again.",
+  harness_error: "Harness couldn't answer just now — try again in a moment.",
+  unreachable: "Couldn't reach Harness — check the network and try again.",
 };
 
 /** The message for whatever the route reported, with a fallback for the unforeseen. */

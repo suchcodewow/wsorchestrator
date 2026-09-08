@@ -425,7 +425,7 @@ export function GuideEditor({
           // The guide exists and is saved; only the filing failed. Say so
           // rather than silently returning to a workshop without it in.
           setError(
-            "The guide was saved, but could not be added to the workshop. Add it from the workshop editor.",
+            "The guide was saved, but adding it to the workshop failed — add it from the workshop editor.",
           );
           setSaving(false);
           return;
@@ -451,14 +451,14 @@ export function GuideEditor({
     // that surprises somebody here.
     const where =
       usedIn.length > 0
-        ? ` It will be removed from ${usedIn.length === 1 ? "1 workshop" : `${usedIn.length} workshops`}: ${usedIn
+        ? `, and out of ${usedIn.length === 1 ? "1 workshop" : `${usedIn.length} workshops`}: ${usedIn
             .map((w) => w.title)
-            .join(", ")}.`
+            .join(", ")}`
         : "";
 
     if (
       !window.confirm(
-        `Delete "${guide.title}"? This cannot be undone.${where}`,
+        `Delete "${guide.title}" for good${where}?`,
       )
     ) {
       return;
@@ -507,10 +507,9 @@ export function GuideEditor({
         />
         {editing && (
           <p className="text-xs leading-relaxed text-muted-foreground">
-            The address follows the title:{" "}
-            <code className="text-foreground">/labs/guides/{guide.slug}</code>{" "}
-            moves when you rename this. Links into the workshops it sits in are
-            built fresh, so they follow it.
+            Renaming this moves its address,{" "}
+            <code className="text-foreground">/labs/guides/{guide.slug}</code>,
+            and every link follows it.
           </p>
         )}
       </div>
@@ -551,8 +550,8 @@ export function GuideEditor({
             </Link>
           </p>
           <p className="mt-1 text-muted-foreground">
-            That workshop has been saved, and this guide is added to the end of
-            it when you save here. Leaving without saving loses only this guide.
+            That workshop is saved, and this guide joins the end of it when you
+            save here.
           </p>
         </div>
       )}
@@ -751,28 +750,11 @@ export function GuideEditor({
 
         {tab !== "preview" && (
           <p className="text-xs leading-relaxed text-muted-foreground">
-            Markdown, with tables and task lists. Fence code with the language
-            for highlighting — <code className="text-foreground">```bash</code> —
-            and add{" "}
-            <code className="text-foreground">title=&quot;main.tf&quot;</code> to
-            label the block with a filename. Set something apart with{" "}
-            <code className="text-foreground">:::tip Worth knowing</code> on its
-            own line and <code className="text-foreground">:::</code> to close
-            it — the title is optional, and{" "}
-            <code className="text-foreground">note</code>,{" "}
-            <code className="text-foreground">success</code>,{" "}
-            <code className="text-foreground">warning</code> and{" "}
-            <code className="text-foreground">danger</code> are the same block in
-            rising order of “do not skip this”. Fold a hint or an answer away the
-            same way with{" "}
-            <code className="text-foreground">:::details Show the answer</code> —
-            add <code className="text-foreground">{"{open}"}</code> after the
-            title to have it start expanded. The toolbar drops a worked example in at
-            the cursor — table, list, callout — with the placeholder text
-            selected to type over. Paste or drop an image straight in, or pick an
-            existing one from the same toolbar. Indent anything two spaces —
-            Tab, once — to keep it inside the step above it and the numbering
-            running. Escape then Tab moves on.
+            Markdown, with fenced code (
+            <code className="text-foreground">```bash</code>), callouts (
+            <code className="text-foreground">:::tip</code>) and collapsible
+            sections (<code className="text-foreground">:::details</code>) — the
+            toolbar inserts an example of each.
           </p>
         )}
       </div>

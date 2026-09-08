@@ -40,7 +40,7 @@ export async function POST(req: Request) {
         error: result.error,
         message:
           result.error === "too_many"
-            ? `You already have ${MAX_TOKENS_PER_USER} active tokens. Revoke one first.`
+            ? `Revoke one of your ${MAX_TOKENS_PER_USER} active tokens before creating another.`
             : "A token needs a name.",
       },
       { status: result.error === "too_many" ? 409 : 400 },

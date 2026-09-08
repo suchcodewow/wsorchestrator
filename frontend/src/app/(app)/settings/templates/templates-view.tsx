@@ -191,12 +191,9 @@ export function TemplatesView({
       <motion.div variants={riseChild} className="space-y-1.5">
         <h2 className="text-xl font-medium tracking-tight">Templates</h2>
         <p className="text-sm leading-relaxed text-muted-foreground">
-          The Harness organizations this site may read templates from. Paste a
-          token and load it: the organizations it can see on{" "}
-          <span className="font-mono text-xs">{baseUrl}</span> are offered, then
-          the projects inside whichever one you pick. A project is optional —
-          leave it as the whole organization if that is what you want. Tokens are
-          stored encrypted and never shown again.
+          Paste a token to choose which organizations on{" "}
+          <span className="font-mono text-xs">{baseUrl}</span> this site may read
+          templates from.
         </p>
       </motion.div>
 
@@ -209,8 +206,7 @@ export function TemplatesView({
           <AlertTriangle className="mt-0.5 size-4 shrink-0 text-destructive" />
           <span>
             This deployment has no encryption key, so a token cannot be stored
-            safely. Set <code>AUTH_SECRET</code> or{" "}
-            <code>HARNESS_TOKEN_ENC_KEY</code>.
+            safely.
           </span>
         </motion.div>
       )}
@@ -326,8 +322,8 @@ export function TemplatesView({
 
             {full && (
               <p className="text-xs text-muted-foreground">
-                The site holds as many template sources as it can (
-                {MAX_TEMPLATE_SOURCES}). Remove one to add another.
+                Remove a source to add another ({MAX_TEMPLATE_SOURCES} is the
+                limit).
               </p>
             )}
           </CardContent>
