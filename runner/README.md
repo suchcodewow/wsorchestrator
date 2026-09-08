@@ -181,6 +181,16 @@ https://www.googleapis.com/auth/admin.directory.user
 
 and impersonates `GOOGLE_WORKSPACE_ADMIN_EMAIL` (a super-admin).
 
+A 403 **"Not Authorized to access this resource/api"** while creating attendees
+is usually not about that delegation. Google returns it for a `users.insert`
+naming an org unit created seconds earlier — the new OU is not visible to the
+user-creation path yet — and gives the identical answer when the impersonated
+admin genuinely may not create users. `directory.ts` waits the first case out
+(see `OU_VISIBLE_ATTEMPTS`) and, if the 403 outlasts the window, says so in the
+run log and points at the admin role. Deleting is symmetric: an account created
+moments ago is refused with 412 "User creation is not complete.", and an OU whose
+last member was just deleted stays undeletable for around half a minute.
+
 ## No second factor, anywhere
 
 A workshop account exists for a few hours, is read off a slide, and is deleted

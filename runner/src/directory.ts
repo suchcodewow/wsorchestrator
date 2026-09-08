@@ -200,16 +200,49 @@ function statusOf(err: unknown): number | undefined {
     : undefined;
 }
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 /**
  * Deleting an OU's users is eventually consistent: for a short while after the
- * last user is deleted, the OU can still report members and refuse to delete.
- * So sweep-and-delete is tried a few times with a pause between, converging
- * within one reaper tick rather than waiting for the next one.
+ * last user is deleted, the OU can still report members and refuse to delete
+ * (HTTP 412, "Cannot delete OrgUnit with following members: Users"). So
+ * sweep-and-delete is tried a few times with a pause between, converging within
+ * one reaper tick rather than waiting for the next one.
+ *
+ * Measured against harnessevents.io, a member deleted seconds earlier kept the
+ * OU undeletable for ~30s. The first sizing here — four attempts 5s apart, so
+ * 15s of patience — was inside that, which turned a teardown that only needed
+ * waiting into a flagged failure. 70s is the margin now.
  */
-const OU_DELETE_ATTEMPTS = 4;
-const OU_DELETE_BACKOFF_MS = 5000;
+const OU_DELETE_ATTEMPTS = 8;
+const OU_DELETE_BACKOFF_MS = 10_000;
+
+/**
+ * How long a *just-created* OU is given to become visible to `users.insert`.
+ *
+ * `orgunits.insert` returning does not mean the new OU is usable yet: for a few
+ * seconds, a user creation naming it comes back 403 "Not Authorized to access
+ * this resource/api" — the same answer Google gives an admin who genuinely may
+ * not create users. Probed against harnessevents.io, an insert 0.4s after the
+ * OU was created was refused and the same insert 12s later succeeded.
+ *
+ * The workshops that walk into this are the small ones. Between creating the OU
+ * and the first insert, a run only does its per-seat address checks
+ * (`allocateEmails`), so a 30-seat workshop spends seconds there and clears the
+ * window by accident, while a 1-seat workshop arrives in under half a second.
+ * Three 1-seat runs failed this way on 2026-09-08 before it was understood.
+ */
+const OU_VISIBLE_ATTEMPTS = 8;
+const OU_VISIBLE_BACKOFF_MS = 5000;
+
+/**
+ * How long a just-created account is given before its deletion is accepted.
+ * Google refuses one with 412 "User creation is not complete." — the other side
+ * of the same window `OU_VISIBLE_ATTEMPTS` waits out, met when a failed run is
+ * deleted straight away (see `deleteUserOnceCreated`).
+ */
+const USER_DELETE_ATTEMPTS = 6;
+const USER_DELETE_BACKOFF_MS = 5000;
 
 function joinOrgUnitPath(parent: string, name: string): string {
   const base = parent.endsWith("/") ? parent.slice(0, -1) : parent;
@@ -282,6 +315,41 @@ async function listOrgUnitUsers(
 }
 
 /**
+ * Delete one user, tolerating Google's consistency at both ends of the
+ * account's life: a 404 means it is already gone, and a 412 "User creation is
+ * not complete." is what a delete gets for an account created moments ago.
+ *
+ * That 412 is not hypothetical for a workshop. Deleting a run is what an
+ * instructor does the moment a provision fails, and the run's accounts may then
+ * be seconds old — so without this the cleanup for a broken workshop is itself
+ * broken, and the run is flagged for a condition that clears on its own.
+ */
+export async function deleteUserOnceCreated(
+  del: () => Promise<unknown>,
+  email: string,
+  /** Injectable so the wait loop can be tested without real delays. */
+  pause: (ms: number) => Promise<void> = sleep,
+): Promise<void> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await del();
+      return;
+    } catch (err) {
+      const status = statusOf(err);
+      if (status === 404) return; // already gone
+      if (status !== 412 || attempt >= USER_DELETE_ATTEMPTS) throw err;
+      const line =
+        `Google Workspace Directory (delete user): ${email} was created too ` +
+        `recently to delete; retrying in ` +
+        `${Math.round(USER_DELETE_BACKOFF_MS / 1000)}s (attempt ${attempt} of ` +
+        `${USER_DELETE_ATTEMPTS - 1})`;
+      console.warn(line);
+      await pause(USER_DELETE_BACKOFF_MS);
+    }
+  }
+}
+
+/**
  * Empty and delete a workshop's OU.
  *
  * Deletes whoever is *actually* in the OU, not just the accounts on record —
@@ -298,13 +366,13 @@ export async function deleteOrgUnit(orgUnitPath: string): Promise<void> {
   for (let attempt = 1; attempt <= OU_DELETE_ATTEMPTS; attempt++) {
     const users = await listOrgUnitUsers(svc, orgUnitPath);
     for (const email of users) {
-      try {
-        await directoryCall("delete OU user", undefined, () =>
-          svc.users.delete({ userKey: email }),
-        );
-      } catch (err) {
-        if (statusOf(err) !== 404) throw err;
-      }
+      await deleteUserOnceCreated(
+        () =>
+          directoryCall("delete OU user", undefined, () =>
+            svc.users.delete({ userKey: email }),
+          ),
+        email,
+      );
     }
 
     try {
@@ -316,9 +384,12 @@ export async function deleteOrgUnit(orgUnitPath: string): Promise<void> {
       if (statusOf(err) === 404) return; // already gone
       // Only the "still has members" case is worth another sweep — the just-
       // deleted users may not have propagated yet. Anything else is a real
-      // failure and should surface for the reaper to retry the whole run.
+      // failure and should surface for the reaper to retry the whole run. The
+      // status (412) and the message are both checked because Google states the
+      // condition in prose, and prose is the half that can be reworded.
       const message = err instanceof Error ? err.message : String(err);
-      if (attempt >= OU_DELETE_ATTEMPTS || !/member/i.test(message)) throw err;
+      const stillPopulated = statusOf(err) === 412 || /member/i.test(message);
+      if (attempt >= OU_DELETE_ATTEMPTS || !stillPopulated) throw err;
       await sleep(OU_DELETE_BACKOFF_MS);
     }
   }
@@ -337,6 +408,58 @@ function generatePassword(): string {
 }
 
 export type CreatedAccount = { email: string; tempPassword: string };
+
+/**
+ * Run a `users.insert` that names a freshly created OU, waiting out the 403 that
+ * OU's invisibility produces (see `OU_VISIBLE_ATTEMPTS`).
+ *
+ * Only 403 is waited on, and only for as long as the window lasts. Everything
+ * else — the 409 that means "someone already has this address", which the caller
+ * adopts — is re-thrown on the first attempt, unchanged, so the status checks
+ * around this still see what Google actually said.
+ *
+ * If the 403 outlives the window it is no longer plausibly the race, so the
+ * error names the other cause: the impersonated admin may genuinely not be
+ * allowed to create users. Both readings are given because Google's answer does
+ * not distinguish them and the operator's next move differs completely.
+ */
+export async function insertIntoNewOrgUnit<T>(
+  insert: () => Promise<T>,
+  ctx: { email: string; orgUnitPath: string; notify?: RetryNotify },
+  /** Injectable so the wait loop can be tested without real delays. */
+  pause: (ms: number) => Promise<void> = sleep,
+): Promise<T> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await insert();
+    } catch (err) {
+      if (statusOf(err) !== 403) throw err;
+
+      if (attempt >= OU_VISIBLE_ATTEMPTS) {
+        const waited = Math.round(
+          ((OU_VISIBLE_ATTEMPTS - 1) * OU_VISIBLE_BACKOFF_MS) / 1000,
+        );
+        throw new Error(
+          `Google Workspace refused to create ${ctx.email} in ` +
+            `${ctx.orgUnitPath} with 403 "Not Authorized" for ${waited}s. A ` +
+            `newly created org unit is invisible to user creation for a few ` +
+            `seconds, so this normally clears itself; that it did not suggests ` +
+            `${workspaceCfg().adminEmail} is not allowed to create users — ` +
+            `check its admin role in Admin console -> Account -> Admin roles.`,
+        );
+      }
+
+      const line =
+        `Google Workspace Directory (create user): the new org unit ` +
+        `${ctx.orgUnitPath} is not visible yet; retrying in ` +
+        `${Math.round(OU_VISIBLE_BACKOFF_MS / 1000)}s (attempt ${attempt} of ` +
+        `${OU_VISIBLE_ATTEMPTS - 1})`;
+      console.warn(line);
+      await ctx.notify?.(line);
+      await pause(OU_VISIBLE_BACKOFF_MS);
+    }
+  }
+}
 
 /**
  * Create one attendee account inside the workshop's OU. The display name is
@@ -367,8 +490,12 @@ export async function createAccount(
   };
 
   try {
-    await directoryCall("create user", notify, () =>
-      svc.users.insert({ requestBody: body }),
+    await insertIntoNewOrgUnit(
+      () =>
+        directoryCall("create user", notify, () =>
+          svc.users.insert({ requestBody: body }),
+        ),
+      { email: input.email, orgUnitPath: input.orgUnitPath, notify },
     );
   } catch (err) {
     if (statusOf(err) !== 409) throw err;
@@ -393,13 +520,13 @@ export async function createAccount(
 
 export async function deleteAccount(email: string): Promise<void> {
   const svc = await directory();
-  try {
-    await directoryCall("delete user", undefined, () =>
-      svc.users.delete({ userKey: email }),
-    );
-  } catch (err) {
-    if (statusOf(err) !== 404) throw err;
-  }
+  await deleteUserOnceCreated(
+    () =>
+      directoryCall("delete user", undefined, () =>
+        svc.users.delete({ userKey: email }),
+      ),
+    email,
+  );
 }
 
 function localPartOf(email: string): string {
