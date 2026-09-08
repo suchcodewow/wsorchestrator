@@ -48,6 +48,7 @@ import { riseChild, staggerParent } from "@/lib/motion";
 import { DeleteEventButton } from "./delete-event-button";
 import { ExtendEventButton } from "./extend-event-button";
 import { RetryEventButton } from "./retry-event-button";
+import { RetryTeardownButton } from "./retry-teardown-button";
 import { RunConfig } from "./run-config";
 
 type RunPayload = {
@@ -274,13 +275,19 @@ export function RunView({
           <div className="flex shrink-0 flex-wrap items-center gap-2">
             <StatusBadge status={run.status} />
             <RetryEventButton run={run} onRetried={refresh} />
+            <RetryTeardownButton run={run} onRetried={refresh} />
             <ExtendEventButton run={run} onExtended={refresh} />
             <DeleteEventButton run={run} owned={owned} onRequested={refresh} />
           </div>
         </div>
       </motion.div>
 
-      {run.deleteRequested && (
+      {/* Only while the teardown is actually running. A run in `destroy_failed`
+          normally has `deleteRequested` set too — that is what started the
+          teardown that then gave up — so without the status check this would
+          promise a reaper pass that is not coming. The Error card below carries
+          the real story, and "Retry teardown" is what resumes it. */}
+      {run.deleteRequested && run.status !== "destroy_failed" && (
         <motion.div variants={riseChild}>
           <Card className="border-amber-500/40 bg-amber-500/5">
             <CardContent className="py-4 text-sm">
@@ -297,7 +304,12 @@ export function RunView({
             <CardHeader>
               <CardTitle className="text-destructive">Error</CardTitle>
             </CardHeader>
-            <CardContent className="text-sm">{run.error}</CardContent>
+            {/* `whitespace-pre-line`: a teardown that gave up stores the
+                provider's error and then what to do about it on the next line,
+                which collapses into one wall of text without this. */}
+            <CardContent className="text-sm whitespace-pre-line">
+              {run.error}
+            </CardContent>
           </Card>
         </motion.div>
       )}
@@ -572,18 +584,25 @@ function BuiltPanel({
   resources: RunResource[];
 }) {
   const building = ACTIVE.has(run.status) && run.status !== "destroying";
-  const tearingDown = run.status === "destroying" || run.deleteRequested;
+  const teardownGaveUp = run.status === "destroy_failed";
+  // Checked after `teardownGaveUp`, because a run whose teardown stopped is
+  // usually also `deleteRequested` — that is what started it — and would
+  // otherwise still claim to be on its way out.
+  const tearingDown =
+    !teardownGaveUp && (run.status === "destroying" || run.deleteRequested);
 
   return (
     <Card>
       <CardHeader>
         <CardTitle>{building ? "Building" : "Environment"}</CardTitle>
         <CardDescription>
-          {tearingDown
-            ? "Being torn down — these disappear as the reaper removes them."
-            : building
-              ? "Each item appears here as soon as it exists."
-              : `Everything this ${run.mode} created.`}
+          {teardownGaveUp
+            ? "Teardown stopped before finishing — whatever is still listed here may still exist."
+            : tearingDown
+              ? "Being torn down — these disappear as the reaper removes them."
+              : building
+                ? "Each item appears here as soon as it exists."
+                : `Everything this ${run.mode} created.`}
         </CardDescription>
       </CardHeader>
       <CardContent>

@@ -30,11 +30,14 @@ export type RunRow = {
   ttl_seconds: number;
   expires_at: Date | null;
   outputs: Record<string, unknown> | null;
+  /** Consecutive failed teardown attempts; the reaper's retry budget. */
+  destroy_attempts: number;
 };
 
 const RUN_COLUMNS = `id, user_id, name, mode, slug, user_count, clouds, status,
                      org_unit_path, gcp_project_id, state_prefix, harness_only,
-                     component_set_id, ttl_seconds, expires_at, outputs`;
+                     component_set_id, ttl_seconds, expires_at, outputs,
+                     destroy_attempts`;
 
 export async function getRun(runId: string): Promise<RunRow | undefined> {
   const { rows } = await pool.query<RunRow>(
@@ -55,14 +58,28 @@ export async function getRun(runId: string): Promise<RunRow | undefined> {
  * `destroying` is included so a teardown that failed part-way (e.g. Workspace
  * lagging behind an account deletion) is retried rather than stranded — it was
  * already triggered by one of the two reasons above.
+ *
+ * Two exclusions bound that retry, and both are why this is a single ANDed
+ * condition rather than the three-way OR it used to be:
+ *
+ *   * `destroy_failed` is terminal. Note that it has to be excluded explicitly:
+ *     a run in that state usually also has `delete_requested` set — that is what
+ *     started the teardown — so the first clause matches it forever otherwise.
+ *     This is the whole bug in one line.
+ *   * `destroy_next_attempt_at` is the backoff. A run that failed recently is
+ *     not due yet and is skipped, instead of being retried on every tick.
  */
 export async function reapableRuns(): Promise<RunRow[]> {
   const { rows } = await pool.query<RunRow>(
     `select ${RUN_COLUMNS}
        from workshop_runs
-      where delete_requested
-         or status = 'destroying'
-         or (status = 'ready' and expires_at is not null and expires_at < now())`,
+      where (
+              delete_requested
+           or status = 'destroying'
+           or (status = 'ready' and expires_at is not null and expires_at < now())
+            )
+        and status <> 'destroy_failed'
+        and (destroy_next_attempt_at is null or destroy_next_attempt_at <= now())`,
   );
   return rows;
 }
@@ -145,10 +162,63 @@ export async function setLiveError(runId: string, error: string) {
   );
 }
 
+/**
+ * Begin a teardown attempt.
+ *
+ * Called at the top of every attempt, including retries, so it must not touch
+ * `destroy_attempts` — that counter is the retry budget and resetting it here
+ * would restore the infinite loop it exists to prevent.
+ */
 export async function setDestroying(runId: string) {
   await pool.query(
     `update workshop_runs set status = 'destroying' where id = $1`,
     [runId],
+  );
+}
+
+/**
+ * Record a failed teardown attempt that is worth trying again, and put the run
+ * to sleep until `delaySeconds` from now.
+ *
+ * The status stays `destroying`, so the run still reads as a teardown in
+ * progress — which it is. What changed is that the next attempt has a time on it.
+ */
+export async function scheduleDestroyRetry(
+  runId: string,
+  attempts: number,
+  delaySeconds: number,
+): Promise<void> {
+  await pool.query(
+    `update workshop_runs
+        set destroy_attempts = $2,
+            destroy_next_attempt_at = now() + make_interval(secs => $3)
+      where id = $1`,
+    [runId, attempts, delaySeconds],
+  );
+}
+
+/**
+ * Stop tearing this run down and leave it for a person.
+ *
+ * The error is stored on the row rather than only logged, because the run page
+ * shows `error` and nobody reads a log they have no reason to open. `expires_at`,
+ * `delete_requested` and the roster are all left exactly as they are: the run may
+ * still own cloud resources, and every one of those fields is a record of what
+ * there is left to remove. `retryTeardown` in the frontend is what clears this.
+ */
+export async function setDestroyFailed(
+  runId: string,
+  attempts: number,
+  error: string,
+): Promise<void> {
+  await pool.query(
+    `update workshop_runs
+        set status = 'destroy_failed',
+            destroy_attempts = $2,
+            destroy_next_attempt_at = null,
+            error = $3
+      where id = $1`,
+    [runId, attempts, error],
   );
 }
 
@@ -171,8 +241,18 @@ export async function setDestroyed(runId: string) {
   );
   if (rowCount && rowCount > 0) return;
 
+  // The retry budget and any pending backoff are cleared along with the error a
+  // failed attempt may have left: this teardown succeeded, so a row that keeps
+  // showing the attempt that did not would be lying about a run with nothing
+  // left to tear down.
   await pool.query(
-    `update workshop_runs set status = 'destroyed', destroyed_at = now() where id = $1`,
+    `update workshop_runs
+        set status = 'destroyed',
+            destroyed_at = now(),
+            destroy_attempts = 0,
+            destroy_next_attempt_at = null,
+            error = null
+      where id = $1`,
     [runId],
   );
 }

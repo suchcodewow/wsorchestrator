@@ -50,6 +50,18 @@ export type ProductionFailure = {
   /** The message, exactly as it was logged. */
   readonly message: string;
   readonly expect: Expectation;
+  /**
+   * Set when this message appears during a *teardown* and can never succeed, so
+   * the reaper must stop on the first attempt instead of spending its budget.
+   *
+   * Separate from `expect` rather than a value of it because the two answer
+   * different questions about the same string: `expect` is what the apply-time
+   * classifiers should conclude (here: `fail`, and it must stay in that loop),
+   * and this is whether the destroy retry policy should give up immediately.
+   * Every fixture without the flag is asserted *not* to be terminal, which is
+   * what keeps `PERMANENT_DESTROY_SIGNATURES` from being widened by accident.
+   */
+  readonly permanentDestroy?: true;
   /** Why that is the right answer — the thing a future reader needs. */
   readonly because: string;
 };
@@ -206,6 +218,7 @@ export const PRODUCTION_FAILURES: readonly ProductionFailure[] = [
       "timeout while waiting for resource to be gone (last state: 'ACTIVE', " +
       "timeout: 10m0s)",
     expect: "fail",
+    permanentDestroy: true,
     because:
       "A closed AWS account leaves the organization on AWS's own schedule, not " +
       "in ten minutes, so this destroy can never succeed as written. It must " +

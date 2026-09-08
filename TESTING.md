@@ -139,20 +139,38 @@ Worth adding beside it, in rough order of value per unit of effort:
    diagnosis (`_project_admin` on `_all_project_level_resources`) is exactly the
    assertion worth automating.
 
-## Two open defects this investigation surfaced
+## Two defects this investigation surfaced
 
-Neither is fixed here; both are worth knowing about.
-
-**Teardown retries forever.** `reap.ts` catches any destroy failure and leaves the
-run for the next tick, with no attempt cap and no backoff. A closed AWS account
+**Teardown retried forever — fixed.** `reap.ts` caught any destroy failure and left
+the run for the next tick, with no attempt cap and no backoff. A closed AWS account
 leaves its organization on AWS's schedule, not within the provider's 10-minute
 wait, so `aws_organizations_account` destroy can never succeed — and the reaper
-keeps trying. Run `aws-platform` has logged **572 destroy attempts over two
-days** and is still going; `zone-b-dfae0a` has been `destroying` since
-2026-08-06. This needs an attempt cap and a terminal `destroy_failed` state that
-asks for a human, rather than a silent infinite loop.
+kept trying. Run `aws-platform` logged **572 destroy attempts over two days**;
+`zone-b-dfae0a` had been `destroying` since 2026-08-06.
 
-**Teardown reads IAM with the wrong credentials.** During `aws-platform`'s
+`destroy-policy.ts` now bounds it: a failure that cannot succeed
+(`PERMANENT_DESTROY_SIGNATURES`) stops on attempt 1, everything else backs off
+5m → 10m → 20m → … through a budget of eight attempts spanning about ten hours, and
+the run then lands in a terminal `destroy_failed` with the error stored on the row
+and a **Retry teardown** button on its page. Two details carry most of the weight:
+
+- `reapableRuns` had to exclude `destroy_failed` **explicitly**. Its first clause is
+  `delete_requested`, which is what started the teardown, so a terminal status alone
+  would not have stopped the loop — the run would still have been handed back every
+  tick. A terminal state you can still be selected out of is not terminal.
+- `"timeout while waiting for resource to be gone"` (terminal) and
+  `"timeout while waiting for state to become"` (a starved GKE zone — move and
+  retry) share five words and have opposite verdicts. `classify.test.ts` asserts
+  each against the other's classifier so neither can be widened into the other, and
+  every fixture *not* marked `permanentDestroy` is asserted to stay retryable. The
+  asymmetry is the point: a false negative costs a few retries, a false positive
+  walks away from a cloud account that is still billing.
+
+The wedged runs were deliberately **not** backfilled to `destroy_failed`. They keep
+a zero counter and work through the new budget, so the reason recorded on the row is
+the one they actually hit rather than one guessed at migration time.
+
+**Teardown reads IAM with the wrong credentials — still open.** During `aws-platform`'s
 destroy, `iam:GetUser` on the attendee users was refused as
 `arn:aws:iam::654129064688:user/workshop-orchestrator is not authorized` — that
 is the *management* account's user reaching for resources that live in the member

@@ -251,6 +251,7 @@ export async function extendRun(
   const gone =
     run.deleteRequested ||
     run.status === "destroying" ||
+    run.status === "destroy_failed" ||
     run.status === "destroyed" ||
     run.status === "failed";
   if (gone) return { ok: false, error: "not_extendable" };
@@ -375,8 +376,31 @@ export type DeleteRunOutcome = "deleted" | "teardown_requested";
 /** Statuses where the runner is mid-flight and teardown would race it. */
 const IN_FLIGHT = new Set(["requested", "provisioning", "applying"]);
 
-/** Statuses where nothing was ever built, or it has already been torn down. */
+/**
+ * Statuses where nothing was ever built, or it has already been torn down.
+ *
+ * `destroy_failed` is pointedly not here. It means teardown gave up part-way, so
+ * the run may still own accounts and cloud projects — dropping the row would
+ * strand them with nothing left to say they exist, which is the one thing this
+ * set is meant to prevent.
+ */
 const NOTHING_TO_TEAR_DOWN = new Set(["scheduled", "destroyed"]);
+
+/**
+ * Hand a run back to the reaper: clear the retry budget, drop any pending
+ * backoff, and put it in `destroying` so the next tick picks it up.
+ *
+ * Shared by `deleteRun` and `retryTeardown` because getting these four fields
+ * right is the whole of "try again", and a caller that set three of them would
+ * produce a run that either never gets looked at (`destroy_failed` is excluded
+ * from `reapableRuns`) or gives up immediately on a used-up counter.
+ */
+const DESTROY_RESET = {
+  status: "destroying" as const,
+  destroyAttempts: 0,
+  destroyNextAttemptAt: null,
+  error: null,
+};
 
 /**
  * Delete a run. The owner may delete their own; a manager and above may delete
@@ -401,25 +425,81 @@ export async function deleteRun(
     return { ok: true, outcome: "deleted" };
   }
 
-  // `ready`, `failed`, or already `destroying`. The flag alone is what the
-  // reaper keys on for a delete — it does not depend on `expires_at`, so we
-  // leave the real end time untouched rather than shoving it to "now" (which
-  // used to conflate "deleted" with "expired"). The reaper tears it down on its
-  // next tick and removes the row once teardown finishes.
+  // `ready`, `failed`, `destroy_failed`, or already `destroying`. The flag alone
+  // is what the reaper keys on for a delete — it does not depend on `expires_at`,
+  // so we leave the real end time untouched rather than shoving it to "now"
+  // (which used to conflate "deleted" with "expired"). The reaper tears it down
+  // on its next tick and removes the row once teardown finishes.
+  //
+  // `DESTROY_RESET` goes with it, and matters only for a run in `destroy_failed`:
+  // the reaper excludes that status outright, so setting the flag alone would
+  // record a deletion that never happened. Asking to delete a run whose teardown
+  // gave up is a request to try again, so it is granted the budget again.
   await db
     .update(workshopRuns)
-    .set({ deleteRequested: true })
+    .set({ deleteRequested: true, ...DESTROY_RESET })
     .where(eq(workshopRuns.id, runId));
 
   await db.insert(runLogs).values({
     runId,
     stream: "system",
     message:
-      "Deletion requested — tearing down accounts, org unit, and cloud " +
-      "resources first. This event disappears once that finishes.",
+      run.status === "destroy_failed"
+        ? "Deletion requested — teardown had given up, so it is being retried " +
+          "from the start. This event disappears once it finishes."
+        : "Deletion requested — tearing down accounts, org unit, and cloud " +
+          "resources first. This event disappears once that finishes.",
   });
 
   return { ok: true, outcome: "teardown_requested" };
+}
+
+export type RetryTeardownError = "not_found" | "not_retryable";
+
+/**
+ * Retry a teardown that gave up.
+ *
+ * Only from `destroy_failed`, which is the one status where a teardown has
+ * stopped of its own accord and a person is being asked to intervene. Anything
+ * else is either still trying (`destroying` — nothing to restart), or was never
+ * torn down at all, and in both cases resetting the counter would just be a way
+ * to hide the state rather than change it.
+ *
+ * Whatever the operator fixed is outside this app — an IAM policy, a stuck
+ * Terraform state entry — so this makes no attempt to guess whether it will work
+ * now. It restores the budget and lets the reaper find out, which is also what
+ * makes it safe to press twice.
+ */
+export async function retryTeardown(
+  runId: string,
+  viewer: Viewer,
+): Promise<
+  { ok: true; run: WorkshopRun } | { ok: false; error: RetryTeardownError }
+> {
+  const run = await db.query.workshopRuns.findFirst({
+    where: and(eq(workshopRuns.id, runId), ownedBy(viewer)),
+  });
+  if (!run) return { ok: false, error: "not_found" };
+  if (run.status !== "destroy_failed") {
+    return { ok: false, error: "not_retryable" };
+  }
+
+  const [updated] = await db
+    .update(workshopRuns)
+    .set(DESTROY_RESET)
+    .where(eq(workshopRuns.id, runId))
+    .returning();
+
+  await db.insert(runLogs).values({
+    runId,
+    stream: "system",
+    message:
+      "Teardown retry requested — the reaper picks this up within a few " +
+      "minutes and starts again from the top. Destroy is idempotent, so " +
+      "whatever was already removed stays removed.",
+  });
+
+  return { ok: true, run: updated };
 }
 
 /** Runs a user still owns; used to warn before their role is taken away. */

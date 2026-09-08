@@ -139,6 +139,11 @@ export const runStatus = pgEnum("run_status", [
   "applying", // terraform apply of the per-cloud resources
   "ready", // outputs available; expires_at set
   "destroying", // reaper tearing down clouds, accounts, and the OU
+  // Teardown gave up: either the failure cannot succeed on any attempt, or it
+  // used its whole retry budget. Terminal until a person retries it — the run
+  // may still own cloud resources, so it is a state that asks to be looked at
+  // rather than one that resolves itself. See `runner/src/destroy-policy.ts`.
+  "destroy_failed",
   "destroyed",
   "failed",
   "scheduled", // created on the calendar, awaiting its start time
@@ -297,6 +302,21 @@ export const workshopRuns = pgTable(
     deleteRequested: boolean("delete_requested").notNull().default(false),
     /** Set when status -> ready; the reaper destroys runs past this. */
     expiresAt: timestamp("expires_at", { withTimezone: true }),
+    /**
+     * Consecutive failed teardown attempts. Reset only when a teardown finishes
+     * or a person retries it — deliberately not on partial progress, since a
+     * destroy that gets further each time and still cannot finish is exactly the
+     * loop this counter exists to bound.
+     */
+    destroyAttempts: integer("destroy_attempts").notNull().default(0),
+    /**
+     * Earliest the next teardown attempt may start. The reaper skips the run
+     * until then, which is what turns "retry every tick forever" into a backoff.
+     * Null means it is due now.
+     */
+    destroyNextAttemptAt: timestamp("destroy_next_attempt_at", {
+      withTimezone: true,
+    }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -307,6 +327,8 @@ export const workshopRuns = pgTable(
     index("workshop_runs_user_idx").on(t.userId, t.createdAt),
     // scheduler: find scheduled runs whose start time has arrived
     index("workshop_runs_scheduler_idx").on(t.status, t.scheduledStart),
+    // reaper: skip runs that are backing off
+    index("workshop_runs_destroy_due_idx").on(t.destroyNextAttemptAt),
   ],
 );
 

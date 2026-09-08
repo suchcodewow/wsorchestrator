@@ -8,6 +8,7 @@ const LABELS: Record<RunStatus, string> = {
   applying: "Applying",
   ready: "Ready",
   destroying: "Destroying",
+  destroy_failed: "Teardown failed",
   destroyed: "Destroyed",
   failed: "Failed",
 };
@@ -48,6 +49,13 @@ const STYLES: Record<RunStatus, { chip: string; dot: string }> = {
     chip: "bg-orange-100 text-orange-700 dark:bg-orange-400/15 dark:text-orange-300",
     dot: "bg-orange-500",
   },
+  // Red, like `failed`, and for the same reason: a teardown that gave up may
+  // have left cloud resources running and billing, so it is a worse outcome than
+  // "Destroying" and must not read as a calmer shade of in-progress.
+  destroy_failed: {
+    chip: "bg-red-100 text-red-700 dark:bg-red-400/15 dark:text-red-300",
+    dot: "bg-red-500",
+  },
   destroyed: {
     chip: "bg-slate-100 text-slate-500 dark:bg-slate-400/10 dark:text-slate-400",
     dot: "bg-slate-300 dark:bg-slate-600",
@@ -58,7 +66,12 @@ const STYLES: Record<RunStatus, { chip: string; dot: string }> = {
   },
 };
 
-/** Statuses where work is still in flight, and the dot should pulse. */
+/**
+ * Statuses where work is still in flight, and the dot should pulse.
+ *
+ * `destroy_failed` is excluded deliberately: nothing is happening, and a pulsing
+ * dot would say the opposite of the thing that needs saying.
+ */
 const ACTIVE: RunStatus[] = [
   "requested",
   "provisioning",

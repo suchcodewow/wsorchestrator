@@ -44,13 +44,16 @@ import {
   deleteAccounts,
   deleteResources,
   reapableRuns,
+  scheduleDestroyRetry,
   withRunLock,
   log,
   setDestroyed,
+  setDestroyFailed,
   setDestroying,
   type Component,
   type RunRow,
 } from "./db.js";
+import { describeDestroyDecision, nextDestroyStep } from "./destroy-policy.js";
 
 /** Root config that creates the workshop's single shared GCP project. */
 const GCP_TF_SOURCE = "workshops/gcp-base";
@@ -82,6 +85,11 @@ const AWS_CHALLENGE_TF_SOURCE = "challenges/aws-per-user";
  * scheduler's tick — without two of them tearing down the same run. Any run
  * another execution is already working is skipped, and the ticks spread across
  * the remaining ones instead of piling onto the first.
+ *
+ * "Due" now includes a retry budget: a run whose destroy failed is retried with
+ * exponential backoff and eventually stops, in `destroy_failed`, rather than
+ * being handed back here on every tick forever. See `destroy-policy.ts` — that
+ * loop cost this project two runs stuck for a month and 572 identical attempts.
  */
 export async function reap(): Promise<void> {
   const runs = await reapableRuns();
@@ -171,10 +179,28 @@ async function destroyRun(run: RunRow): Promise<void> {
     await log(run.id, "system", "Destroyed.");
     await setDestroyed(run.id);
   } catch (err) {
-    // Leave the run for the next reaper tick to retry.
+    // A failed teardown gets a bounded number of further attempts, spaced out —
+    // never the unbounded every-tick retry this used to be. `destroy-policy.ts`
+    // has the reasoning and the ladder; all that happens here is carrying out
+    // whichever of the two answers it gives.
     const message = err instanceof Error ? err.message : String(err);
-    await log(run.id, "stderr", `destroy failed, will retry: ${message}`);
-    console.error(`reaper: failed to destroy ${run.id}:`, message);
+    const decision = nextDestroyStep(run.destroy_attempts, message);
+    const explanation = describeDestroyDecision(decision, message);
+
+    if (decision.kind === "retry") {
+      await scheduleDestroyRetry(run.id, decision.attempts, decision.delaySeconds);
+      await log(run.id, "stderr", explanation);
+    } else {
+      // Logged before the status change for the same reason `setDestroyed`
+      // demands it: this is the line that explains why the run stopped, and it
+      // has to be on the page next to the state it explains.
+      await log(run.id, "stderr", explanation);
+      await setDestroyFailed(run.id, decision.attempts, explanation);
+    }
+    console.error(
+      `reaper: failed to destroy ${run.id} (${decision.kind}):`,
+      message,
+    );
   }
 }
 

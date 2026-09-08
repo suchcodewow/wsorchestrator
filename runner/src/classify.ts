@@ -109,3 +109,37 @@ export function awsRetryKind(text: string): AwsRetryKind | null {
   if (has(text, AWS_ACCOUNT_WARMUP_SIGNATURES)) return "warmup";
   return null;
 }
+
+/**
+ * Destroy failures that cannot succeed no matter how many times they are tried,
+ * so the reaper should stop on the first one rather than work through its whole
+ * retry budget to reach the same answer.
+ *
+ * The bar for an entry here is high, and it is the opposite of the bar for the
+ * retry lists above. A wrong entry there costs a wait; a wrong entry *here*
+ * abandons a teardown that would have succeeded, and leaves a cloud account
+ * running and billing. So: only messages that are impossible by construction,
+ * each with a real run behind it.
+ *
+ * One entry so far. `aws_organizations_account` with `close_on_deletion = true`
+ * calls CloseAccount and then waits for the account to leave the organization —
+ * but a closed AWS account stays in the org, SUSPENDED, for about ninety days
+ * before AWS frees it. The provider waits ten minutes. That destroy therefore
+ * cannot complete on any attempt, which is precisely how run `aws-platform`
+ * reached 572 identical attempts over two days on a five-minute tick: nothing in
+ * the message said "give up", so nothing did.
+ *
+ * Note how narrowly this is written. `GKE_CAPACITY_SIGNATURES` above contains
+ * "timeout while waiting for state to become", which is a retry-elsewhere
+ * signal; this one is "timeout while waiting for resource to be gone", which is
+ * terminal. Six words apart, opposite verdicts. Both fixtures assert against the
+ * other's classifier for exactly that reason — broadening either into the other
+ * would either abandon a live cluster or retry an impossible close forever.
+ */
+export const PERMANENT_DESTROY_SIGNATURES = [
+  "timeout while waiting for resource to be gone",
+] as const;
+
+export function isPermanentDestroyFailure(text: string): boolean {
+  return has(text, PERMANENT_DESTROY_SIGNATURES);
+}

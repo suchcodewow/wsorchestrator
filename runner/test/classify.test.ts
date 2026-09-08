@@ -15,6 +15,7 @@ import {
   AWS_ACCOUNT_WARMUP_SIGNATURES,
   awsRetryKind,
   isGkeCapacityError,
+  isPermanentDestroyFailure,
 } from "../src/classify.js";
 import {
   PRODUCTION_FAILURES,
@@ -108,6 +109,61 @@ describe("isGkeCapacityError", () => {
 
   test("an empty capture is not a stockout", () => {
     assert.equal(isGkeCapacityError(""), false);
+  });
+});
+
+describe("isPermanentDestroyFailure", () => {
+  for (const f of PRODUCTION_FAILURES.filter((f) => f.permanentDestroy)) {
+    test(`stops the teardown on ${f.id} (${f.run}, ${f.date})`, () => {
+      assert.equal(isPermanentDestroyFailure(f.message), true, f.because);
+    });
+  }
+
+  test("does not abandon a teardown for anything else in the corpus", () => {
+    // The asymmetry that makes this the strictest loop in the file: a false
+    // negative here costs a few retries, a false positive walks away from a
+    // cloud account that is still billing. So every message *not* marked
+    // terminal has to read as retryable, including the ones that are real
+    // failures at apply time.
+    for (const f of PRODUCTION_FAILURES) {
+      if (f.permanentDestroy) continue;
+      assert.equal(
+        isPermanentDestroyFailure(f.message),
+        false,
+        `${f.id} must not abandon a teardown — ${f.because}`,
+      );
+    }
+  });
+
+  test("stays six words away from the GKE capacity signature", () => {
+    // "timeout while waiting for resource to be gone" (terminal, stop) against
+    // "timeout while waiting for state to become 'DONE'" (a starved zone, move
+    // and retry). Both prefixes are identical for five words. Pinned in both
+    // directions because a future edit that shortens either signature to the
+    // common prefix would compile, read fine, and silently swap the two
+    // verdicts: abandoning a live cluster, or retrying an impossible close.
+    const terminal = failure("aws-org-account-delete-timeout").message;
+    const capacity = failure("gke-create-timeout").message;
+
+    assert.ok(isPermanentDestroyFailure(terminal));
+    assert.ok(!isGkeCapacityError(terminal));
+
+    assert.ok(isGkeCapacityError(capacity));
+    assert.ok(!isPermanentDestroyFailure(capacity));
+  });
+
+  test("matches whatever case the provider used", () => {
+    const { message } = failure("aws-org-account-delete-timeout");
+    assert.equal(isPermanentDestroyFailure(message.toUpperCase()), true);
+    assert.equal(isPermanentDestroyFailure(message.toLowerCase()), true);
+  });
+
+  test("an empty capture is not a reason to give up", () => {
+    // A destroy that crashed without printing anything is unexplained, not
+    // impossible — it has to keep its retries and end in `destroy_failed` by
+    // exhausting them, so the log shows eight identical silences rather than
+    // one confident "cannot succeed".
+    assert.equal(isPermanentDestroyFailure(""), false);
   });
 });
 
