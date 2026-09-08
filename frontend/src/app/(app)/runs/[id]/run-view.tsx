@@ -48,6 +48,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { riseChild, staggerParent } from "@/lib/motion";
 import { DeleteEventButton } from "./delete-event-button";
+import { EndNowButton } from "./end-now-button";
 import { ExtendEventButton } from "./extend-event-button";
 import { RetryEventButton } from "./retry-event-button";
 import { RetryTeardownButton } from "./retry-teardown-button";
@@ -80,7 +81,14 @@ function destroyMoment(
       : null;
   }
   if (run.expiresAt) {
-    return { label: "Destroys", when: new Date(run.expiresAt), projected: false };
+    const when = new Date(run.expiresAt);
+    // Already past: the end time has arrived (or was brought forward by "End
+    // now") and the reaper has yet to tick, so future tense would be wrong.
+    return {
+      label: when <= new Date() ? "Ended" : "Destroys",
+      when,
+      projected: false,
+    };
   }
   if (run.scheduledStart) {
     return {
@@ -135,10 +143,20 @@ export function RunView({
     if (res.status === 404) router.replace("/events");
   }, [runId, router]);
 
-  const { status, scheduledStart, deleteRequested } = data.run;
+  const { status, scheduledStart, deleteRequested, expiresAt } = data.run;
+  const overdue =
+    status === "ready" && expiresAt !== null && new Date(expiresAt) <= new Date();
   useEffect(() => {
     if (ACTIVE.has(status) || deleteRequested) {
       const timer = setInterval(refresh, 2500);
+      return () => clearInterval(timer);
+    }
+
+    // Past its end time but still `ready`: the reaper has not picked it up yet.
+    // Polled slower than a live build, since that wait is a scheduler tick long,
+    // and it is how ending an event early shows up here without a reload.
+    if (overdue) {
+      const timer = setInterval(refresh, 10_000);
       return () => clearInterval(timer);
     }
 
@@ -155,7 +173,7 @@ export function RunView({
         clearInterval(interval);
       };
     }
-  }, [status, scheduledStart, deleteRequested, refresh]);
+  }, [status, scheduledStart, deleteRequested, overdue, refresh]);
 
   useEffect(() => {
     if (!tail) return;
@@ -214,6 +232,11 @@ export function RunView({
                 )}
               </p>
             )}
+            {overdue && (
+              <p className="text-sm text-muted-foreground">
+                Teardown starts within a few minutes.
+              </p>
+            )}
             <div className="mt-2 flex flex-wrap items-center gap-2">
               {!owned && owner && (
                 <span className="inline-flex items-center gap-1.5 rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground">
@@ -230,6 +253,7 @@ export function RunView({
             <RetryEventButton run={run} onRetried={refresh} />
             <RetryTeardownButton run={run} onRetried={refresh} />
             <ExtendEventButton run={run} onExtended={refresh} />
+            <EndNowButton run={run} owned={owned} onEnded={refresh} />
             <DeleteEventButton run={run} owned={owned} onRequested={refresh} />
           </div>
         </div>

@@ -1,3 +1,5 @@
+/** Books, reconfigures, extends and deletes events. */
+
 import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
@@ -19,37 +21,17 @@ import {
 } from "@/db/schema";
 import { canManageAnyEvent, canSeeAllEvents } from "@/lib/roles";
 
-/**
- * Who is asking. Every read and write below takes one instead of a bare user
- * id, so "is this mine?" and "am I allowed to reach past mine?" are answered
- * in the same place rather than at each call site.
- */
 export type Viewer = { id: string; role: SiteRole };
 
-/**
- * The rows a viewer may act on: their own, or everyone's for a manager and
- * above. Composed into a `where` alongside the run id, so an operator asking
- * for somebody else's run gets the same "not found" as one asking for a run
- * that never existed.
- */
 export const ownedBy = (viewer: Viewer) =>
   canManageAnyEvent(viewer.role)
     ? undefined
     : eq(workshopRuns.userId, viewer.id);
 
-/**
- * Slugify a workshop name for use in account addresses and project ids:
- * lowercase, non-alphanumerics collapsed to single dashes.
- *
- * `fallback` is what a name made entirely of punctuation collapses to — the
- * result is an identifier, so it can never be empty. Lab guide slugs are built
- * with the same rules and only differ in that word.
- */
 export function slugify(name: string, fallback = "workshop"): string {
   const slug = name
     .toLowerCase()
     .normalize("NFKD")
-    // Drop the combining marks NFKD split off, so "é" becomes "e" not "e-".
     .replace(/[̀-ͯ]/g, "")
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
@@ -58,7 +40,6 @@ export function slugify(name: string, fallback = "workshop"): string {
   return slug.length > 0 ? slug : fallback;
 }
 
-/** A lifetime in seconds as the largest whole unit it divides into evenly. */
 function humanDuration(seconds: number): string {
   const plural = (n: number, unit: string) => `${n} ${unit}${n === 1 ? "" : "s"}`;
   if (seconds % 86400 === 0) return plural(seconds / 86400, "day");
@@ -66,11 +47,6 @@ function humanDuration(seconds: number): string {
   return plural(Math.round(seconds / 60), "minute");
 }
 
-/**
- * Schedule a workshop for a user. The run is created in `scheduled` with a
- * start time; the `tf-scheduler` job auto-provisions it ahead of that time (see
- * the runner's `PROVISION_LEAD_HOURS`, 2h by default) so it is ready at start.
- */
 export async function createScheduledRun(input: {
   name: string;
   mode: EventMode;
@@ -78,16 +54,9 @@ export async function createScheduledRun(input: {
   clouds: Cloud[];
   userId: string;
   scheduledStart: Date;
-  /** How long the event lives before teardown, in seconds. */
   ttlSeconds: number;
-  /** Started from "Start now" rather than booked for a future time. */
   startNow?: boolean;
-  /**
-   * Build the Harness org and the component catalog only — no Terraform. See
-   * `workshopRuns.harnessOnly`.
-   */
   harnessOnly?: boolean;
-  /** Candidate component set to deploy over the baseline, if any. */
   componentSetId?: string;
 }) {
   const runId = crypto.randomUUID();
@@ -141,10 +110,6 @@ export type UpdateRunError =
   | "cloud_removal_not_allowed"
   | "exceeds_mode_limits";
 
-/**
- * Change a run's attendee count and clouds. Returns whether the change needs
- * the runner to converge the live environment (only true for a `ready` run).
- */
 export async function updateRunConfig(
   runId: string,
   viewer: Viewer,
@@ -163,9 +128,6 @@ export async function updateRunConfig(
 
   const clouds = [...new Set(input.clouds)];
 
-  // The mode's caps are re-checked here rather than in the route schema: the
-  // request says nothing about the mode, so only the stored run can decide
-  // whether five users and one cloud is the ceiling or fifty and three.
   const limits = limitsFor(run.mode);
   if (
     input.userCount < 1 ||
@@ -223,20 +185,6 @@ export async function updateRunConfig(
 
 export type ExtendRunError = "not_found" | "not_extendable";
 
-/**
- * Grant an event one more day before teardown.
- *
- * Where the extra day lands depends on how far along the run is:
- *   * `ready`/`failed` already have an `expiresAt` the reaper watches, so the
- *     day is added there.
- *   * A `scheduled` or in-flight run has no expiry yet — `runWorkshop` computes
- *     it from `ttlSeconds` when it goes ready — so the day is added to that
- *     instead, and carries through when the expiry is finally set.
- *
- * A run that is tearing down, gone, or failed can't be extended: its resources
- * are on their way out (a failed run is expired on the spot so the reaper
- * cleans up whatever it half-built) and there is nothing left to keep alive.
- */
 export async function extendRun(
   runId: string,
   viewer: Viewer,
@@ -280,6 +228,47 @@ export async function extendRun(
   return { ok: true, run: updated };
 }
 
+export type EndRunError = "not_found" | "not_running";
+
+/**
+ * Bring a live event's end time forward to now, so the reaper tears it down on
+ * its next tick exactly as it would have at the hour it was booked for.
+ *
+ * Only a `ready` run qualifies, because `expires_at` is what the reaper reads
+ * and it reads it only for that status (see `reapableRuns`): moving it on a row
+ * in any other state would report success and destroy nothing. Nor is
+ * `deleteRequested` set — the point is an ordinary teardown, which leaves the
+ * run and its build log on record afterwards. Deleting is a separate button.
+ */
+export async function endRunNow(
+  runId: string,
+  viewer: Viewer,
+): Promise<{ ok: true; run: WorkshopRun } | { ok: false; error: EndRunError }> {
+  const run = await db.query.workshopRuns.findFirst({
+    where: and(eq(workshopRuns.id, runId), ownedBy(viewer)),
+  });
+  if (!run) return { ok: false, error: "not_found" };
+  if (run.status !== "ready" || run.deleteRequested) {
+    return { ok: false, error: "not_running" };
+  }
+
+  const [updated] = await db
+    .update(workshopRuns)
+    .set({ expiresAt: new Date() })
+    .where(eq(workshopRuns.id, runId))
+    .returning();
+
+  await db.insert(runLogs).values({
+    runId,
+    stream: "system",
+    message:
+      "Ended early — the end time is now, so teardown starts within a few " +
+      "minutes and runs as it would have at the scheduled end.",
+  });
+
+  return { ok: true, run: updated };
+}
+
 export async function listRunsForUser(userId: string) {
   return db.query.workshopRuns.findMany({
     where: eq(workshopRuns.userId, userId),
@@ -287,15 +276,6 @@ export async function listRunsForUser(userId: string) {
   });
 }
 
-/**
- * Runs for the calendar. `scope: "all"` widens it to every user's events —
- * honoured only for a manager and above, so a stale preference on a demoted
- * account quietly falls back to their own.
- *
- * The owner is joined in either way: at `own` scope the caller already knows
- * whose events these are and ignores it, and one query shape is cheaper to
- * keep honest than two.
- */
 export async function listCalendarRuns(
   viewer: Viewer,
   scope: CalendarScope = "own",
@@ -309,9 +289,6 @@ export async function listCalendarRuns(
       mode: workshopRuns.mode,
       status: workshopRuns.status,
       scheduledStart: workshopRuns.scheduledStart,
-      // Duration: how long it lives (from the form) and, once live, the moment
-      // it actually expires. The calendar draws an event across the days it
-      // covers from these.
       ttlSeconds: workshopRuns.ttlSeconds,
       expiresAt: workshopRuns.expiresAt,
       userCount: workshopRuns.userCount,
@@ -326,11 +303,6 @@ export async function listCalendarRuns(
     .orderBy(desc(workshopRuns.scheduledStart));
 }
 
-/**
- * One run with its logs, accounts, and the resources it has built so far, or
- * null if the viewer may not see it. A manager and above may open anyone's;
- * everyone else only their own.
- */
 export async function getRunForViewer(runId: string, viewer: Viewer) {
   const run = await db.query.workshopRuns.findFirst({
     where: and(eq(workshopRuns.id, runId), ownedBy(viewer)),
@@ -346,8 +318,6 @@ export async function getRunForViewer(runId: string, viewer: Viewer) {
       where: eq(workshopAccounts.runId, runId),
       orderBy: workshopAccounts.id,
     }),
-    // Insertion order, which is build order: the page reads top to bottom as
-    // the run happened.
     db.query.runResources.findMany({
       where: eq(runResources.runId, runId),
       orderBy: runResources.id,
@@ -362,43 +332,13 @@ export async function getRunForViewer(runId: string, viewer: Viewer) {
 
 export type DeleteRunError = "not_found" | "in_flight";
 
-/**
- * What deleting a run actually did.
- *
- * `deleted` — the row and everything hanging off it are gone.
- * `teardown_requested` — the run still owns Workspace accounts and cloud
- *   projects, so it can't simply be dropped: deleting the row would strand
- *   them with nothing left to say they exist. It is instead expired on the
- *   spot and flagged, and the reaper removes it once teardown finishes.
- */
 export type DeleteRunOutcome = "deleted" | "teardown_requested";
 
-/** Statuses where the runner is mid-flight and teardown would race it. */
 const IN_FLIGHT = new Set(["requested", "provisioning", "applying"]);
 
-/**
- * Statuses where nothing was ever built, or it has already been torn down.
- *
- * `destroy_failed` is pointedly not here. It means teardown gave up part-way, so
- * the run may still own accounts and cloud projects — dropping the row would
- * strand them with nothing left to say they exist, which is the one thing this
- * set is meant to prevent.
- */
 const NOTHING_TO_TEAR_DOWN = new Set(["scheduled", "destroyed"]);
 
-/**
- * Hand a teardown back to the reaper for one fresh attempt: `destroying`, so the
- * next tick picks it up, with nothing left over from the attempt that failed.
- *
- * Shared by `deleteRun` and `retryTeardown` because getting these three fields
- * right is the whole of "try again", and a caller that set two of them would
- * produce a run that either never gets looked at (`destroy_failed` is excluded
- * from `reapableRuns`) or is flagged again immediately as a death.
- *
- * `destroyAttempts` is deliberately *not* reset. It counts how many times this
- * teardown has been tried in total, including by hand, which is the number worth
- * seeing next to a run that has now failed twice.
- */
+/** Hand a teardown back to the reaper for one fresh attempt. */
 const DESTROY_RESET = {
   status: "destroying" as const,
   // Released so `claimDestroy` reads the run as unclaimed; leaving it set would
@@ -407,10 +347,6 @@ const DESTROY_RESET = {
   error: null,
 };
 
-/**
- * Delete a run. The owner may delete their own; a manager and above may delete
- * anyone's. See `DeleteRunOutcome` for why this isn't always a `delete`.
- */
 export async function deleteRun(
   runId: string,
   viewer: Viewer,
@@ -425,21 +361,10 @@ export async function deleteRun(
   if (IN_FLIGHT.has(run.status)) return { ok: false, error: "in_flight" };
 
   if (NOTHING_TO_TEAR_DOWN.has(run.status)) {
-    // Accounts and logs go with it — both cascade on the run id.
     await db.delete(workshopRuns).where(eq(workshopRuns.id, runId));
     return { ok: true, outcome: "deleted" };
   }
 
-  // `ready`, `failed`, `destroy_failed`, or already `destroying`. The flag alone
-  // is what the reaper keys on for a delete — it does not depend on `expires_at`,
-  // so we leave the real end time untouched rather than shoving it to "now"
-  // (which used to conflate "deleted" with "expired"). The reaper tears it down
-  // on its next tick and removes the row once teardown finishes.
-  //
-  // `DESTROY_RESET` goes with it, and matters only for a run in `destroy_failed`:
-  // the reaper excludes that status outright, so setting the flag alone would
-  // record a deletion that never happened. Asking to delete a run whose teardown
-  // was flagged is a request to try again, so it gets its one fresh attempt.
   await db
     .update(workshopRuns)
     .set({ deleteRequested: true, ...DESTROY_RESET })
@@ -460,20 +385,6 @@ export async function deleteRun(
 
 export type RetryTeardownError = "not_found" | "not_retryable";
 
-/**
- * Retry a teardown that gave up.
- *
- * Only from `destroy_failed`, which is the one status where a teardown has
- * stopped of its own accord and a person is being asked to intervene. Anything
- * else is either still trying (`destroying` — nothing to restart), or was never
- * torn down at all, and in both cases resetting the counter would just be a way
- * to hide the state rather than change it.
- *
- * Whatever the operator fixed is outside this app — an IAM policy, a stuck
- * Terraform state entry — so this makes no attempt to guess whether it will work
- * now. It restores the budget and lets the reaper find out, which is also what
- * makes it safe to press twice.
- */
 export async function retryTeardown(
   runId: string,
   viewer: Viewer,
@@ -505,7 +416,6 @@ export async function retryTeardown(
   return { ok: true, run: updated };
 }
 
-/** Runs a user still owns; used to warn before their role is taken away. */
 export async function countRunsForUsers(): Promise<Map<string, number>> {
   const rows = await db
     .select({
