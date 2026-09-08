@@ -1,17 +1,19 @@
 // Report every teardown that is not finishing, and say which kind of not
 // finishing it is.
 //
-// The teardown loop that ran 572 times went unnoticed for a month because
+// The teardown loop that ran 9,482 times went unnoticed for a month because
 // "retrying forever" and "making progress" were the same row: status
 // `destroying`, no counter, no timestamp, nothing on any page. `destroy-policy.ts`
-// fixed the loop, but a bounded retry is still only visible to somebody who
-// looks — so this is the looking, in one command:
+// removed the retry entirely — a teardown now gets one attempt and is flagged —
+// but the flag is still only visible to somebody who looks, and so is a reaper
+// that has stopped looking at all. This is the looking, in one command:
 //
 //   make stuck-teardowns          # against Cloud SQL, through the proxy
 //   node frontend/scripts/stuck-teardowns.mjs   # with DATABASE_URL already set
 //
-// Exits 1 when something needs a person, so it can be wired to a cron or a
-// pipeline step later without changing anything here.
+// Exit codes, so this can be wired to a cron or a pipeline step later without
+// changing anything here: 0 nothing to do, 1 something needs a person, 2 the
+// report could not run and says nothing either way.
 //
 // Read-only. Every query is a select; nothing here changes a run's state, on
 // purpose — deciding what to do about a wedged teardown needs the reason, and
@@ -19,35 +21,39 @@
 import pg from "pg";
 
 /**
- * How long a run may sit in `destroying` with nothing recorded before it counts
- * as suspicious.
+ * How long a run may sit in `destroying` unclaimed before it counts as suspicious.
  *
- * The reaper ticks every five minutes and its Cloud Run job is capped at 1800s,
- * so a single attempt cannot legitimately run longer than 30 minutes: past that
- * the container is killed. An hour is therefore two full attempts' worth of
- * grace, and a run still showing zero recorded attempts after it has not merely
- * been slow — nothing is reaching the code that records anything.
+ * The reaper ticks every five minutes, so a run that is due and unclaimed should
+ * be claimed within one tick. An hour is twelve ticks' worth of grace: past that,
+ * nothing is reaching this run, which is a statement about the reaper rather than
+ * about the run.
  */
 const SILENT_HOURS = Number(process.env.SILENT_HOURS ?? 1);
 
 /**
- * How overdue a backed-off run may be before the backoff stops being the
- * explanation. Past this, the run is due and is not being picked up, which is a
- * statement about the reaper rather than about the run.
+ * How long a single claimed attempt may be outstanding.
+ *
+ * The reaper's Cloud Run job is capped at 1800s, so an attempt physically cannot
+ * still be running after 30 minutes — the container is killed. 40 minutes allows
+ * for the kill plus a tick to notice it and flag the run. A claim older than that
+ * on a run still in `destroying` means nobody noticed, which means no tick has
+ * reached this run since.
  */
-const OVERDUE_HOURS = Number(process.env.OVERDUE_HOURS ?? 1);
+const ATTEMPT_MINUTES = Number(process.env.ATTEMPT_MINUTES ?? 40);
 
 /**
- * Log lines a failed destroy attempt writes, old and new.
+ * Log lines a stopped teardown writes, across all three generations of the policy.
  *
- * The pre-fix reaper wrote "destroy failed, will retry: …" on every tick, so
- * these patterns are what makes the history legible: a run whose stored counter
- * says 2 and whose log holds 500 of these has been through the old loop, and the
- * count is the honest measure of how long this has been going on.
+ * The pre-cap reaper wrote "destroy failed, will retry: …" on every tick, so these
+ * patterns are what makes the history legible: a run whose stored counter says 2
+ * and whose log holds 500 of these has been through the old loop, and the count is
+ * the honest measure of how long it was going on.
  */
 const FAILURE_PATTERNS = [
-  "destroy failed%", // both the old line and the new "(attempt N of 8)" one
-  "destroy cannot succeed%", // terminal, gave up on attempt 1
+  "destroy failed%", // the unbounded loop, and the "(attempt N of 8)" cap
+  "destroy cannot succeed%", // the cap's terminal case
+  "Teardown failed%", // one attempt, returned an error
+  "Teardown stopped%", // one attempt, killed mid-flight
 ];
 
 const QUERY = `
@@ -67,7 +73,7 @@ const QUERY = `
          r.clouds,
          r.mode,
          r.destroy_attempts,
-         r.destroy_next_attempt_at,
+         r.destroy_started_at,
          r.delete_requested,
          r.error,
          coalesce(f.failures, 0)          as failures,
@@ -92,84 +98,103 @@ function ago(then, now) {
   return `${Math.round(h / 24)}d ago`;
 }
 
-function ahead(then, now) {
-  const h = hours(new Date(now), new Date(then));
-  if (h < 0) return `${ago(then, now)} (overdue)`;
-  if (h < 1) return `in ${Math.round(h * 60)}m`;
-  return `in ${h.toFixed(1)}h`;
-}
-
 /**
- * Which of the four shapes a row is. Only `backing-off` is a healthy answer; the
- * others each want a different response, which is why they are named separately
- * rather than collapsed into "stuck".
+ * Which shape a row is.
+ *
+ * With no retry there are only four, and the two healthy ones are both transient:
+ * a run is waiting for its attempt, running it, flagged, or the reaper has stopped
+ * touching it. That last one is the only alarm left, and it is now the *only* way
+ * a teardown can quietly cost money indefinitely — which is why it gets two
+ * separate detections, one for each side of the claim.
  */
 function classify(r) {
   const now = new Date(r.now);
-  const silentFor = hours(new Date(r.eligible_since), now);
 
   if (r.status === "destroy_failed") {
     return {
       level: "attention",
-      kind: "gave up",
+      kind: "flagged",
       why:
         `stopped after ${r.destroy_attempts} attempt(s) and is waiting for you. ` +
-        "This is the fix working — it is on the run page as \"Teardown failed\" " +
-        "with the reason below. Fix the cause and press Retry teardown.",
+        "This is the policy working, not a fault — it is on the run page as " +
+        '"Teardown failed" with the reason below. Deal with the cause, then ' +
+        "press Retry teardown. Until then this run may still own billing resources.",
     };
   }
 
-  if (r.destroy_attempts === 0 && silentFor > SILENT_HOURS) {
-    return {
-      level: "alarm",
-      kind: "retrying without recording",
-      why:
-        `eligible for teardown ${ago(r.eligible_since, now)} and still at zero ` +
-        "recorded attempts. The retry budget only advances from the reaper's " +
-        "catch block, so a destroy that never returns — a tofu destroy running " +
-        "past the job's 1800s timeout, an OOM, a killed container — is retried " +
-        "on the next tick with the counter untouched. That is the old infinite " +
-        "loop, and it is the one shape the attempt cap cannot see. Check the " +
-        "reaper job's executions for a timeout or a non-zero exit.",
-    };
-  }
-
-  if (r.destroy_next_attempt_at) {
-    const overdueBy = hours(new Date(r.destroy_next_attempt_at), now);
-    if (overdueBy > OVERDUE_HOURS) {
+  // Claimed: an attempt owns this run. See `claimDestroy` — the claim is written
+  // before any work starts and cleared on every way out.
+  if (r.destroy_started_at) {
+    const runningFor = hours(new Date(r.destroy_started_at), now) * 60;
+    if (runningFor > ATTEMPT_MINUTES) {
       return {
         level: "alarm",
-        kind: "due but not picked up",
+        kind: "claim never cleared",
         why:
-          `next attempt was due ${ago(r.destroy_next_attempt_at, now)} and has ` +
-          "not happened. The backoff is not the explanation any more — either " +
-          "the reaper is not running, it is failing before it reaches this run, " +
-          "or an advisory lock from a killed execution is still held.",
+          `an attempt claimed this run ${ago(r.destroy_started_at, now)} and has ` +
+          `neither finished nor been flagged. It cannot still be running: the ` +
+          `reaper job is capped at 1800s. A killed attempt is flagged by the next ` +
+          `tick that reaches the run, so ${Math.round(runningFor)}m of silence ` +
+          "means no tick has. Check the reaper job's executions, and whether an " +
+          "advisory lock from a dead session is still held.",
       };
     }
     return {
       level: "ok",
-      kind: "backing off",
-      why: `attempt ${r.destroy_attempts + 1} due ${ahead(r.destroy_next_attempt_at, r.now)}`,
+      kind: "in progress",
+      // `claimDestroy` stamps the claim and bumps the counter in one statement, so
+      // these agree — except on a row that was mid-teardown when 0024 added the
+      // column, where the claim is this attempt's and the counter is not.
+      why: `attempt ${Math.max(r.destroy_attempts, 1)} started ${ago(r.destroy_started_at, now)}`,
+    };
+  }
+
+  // Unclaimed and in `destroying`: due, and waiting for a tick to pick it up.
+  const waitingFor = hours(new Date(r.eligible_since), now);
+  if (waitingFor > SILENT_HOURS) {
+    return {
+      level: "alarm",
+      kind: "never picked up",
+      why:
+        `eligible for teardown ${ago(r.eligible_since, now)} and no attempt has ` +
+        "claimed it. The reaper ticks every five minutes, so either it is not " +
+        "running, it is failing before it reaches this run, or an advisory lock " +
+        "from a killed execution is still held. Nothing will flag this on its own.",
     };
   }
 
   return {
     level: "ok",
-    kind: "in progress",
-    why: `attempt ${r.destroy_attempts + 1} is due now or running`,
+    kind: "queued",
+    why: `due ${ago(r.eligible_since, now)}, waiting for the next tick`,
   };
 }
 
 if (!process.env.DATABASE_URL) {
   console.error("DATABASE_URL is not set (run via make stuck-teardowns).");
-  process.exit(1);
+  process.exit(2);
 }
 
+// Exit 1 is reserved for "the report found something", so a database this could
+// not read has to be a different code — otherwise a monitor cannot tell a wedged
+// teardown from a monitor that is broken, and the second one hides the first.
+// This is not hypothetical: it happens for real whenever the code is ahead of the
+// schema, between a merge and the pipeline's migrate step.
+let rows;
 const client = new pg.Client({ connectionString: process.env.DATABASE_URL });
-await client.connect();
-const { rows } = await client.query(QUERY, FAILURE_PATTERNS);
-await client.end();
+try {
+  await client.connect();
+  ({ rows } = await client.query(QUERY, FAILURE_PATTERNS));
+} catch (err) {
+  console.error(`Could not read the database: ${err.message}`);
+  console.error(
+    "This report says nothing about the teardowns either way. If the column it " +
+      "asked for does not exist, this checkout is ahead of the database's schema.",
+  );
+  process.exit(2);
+} finally {
+  await client.end().catch(() => {});
+}
 
 if (rows.length === 0) {
   console.log("No run is tearing down. Nothing to look at.");
@@ -191,8 +216,8 @@ for (const { r, c } of seen) {
   console.log(`     ${c.why}`);
   console.log(
     `     attempts: ${r.destroy_attempts} recorded, ${r.failures} failure(s) in the log` +
-      (r.failures > r.destroy_attempts + 1
-        ? "  <- log outruns the counter, so some of this predates the cap"
+      (r.failures > r.destroy_attempts
+        ? "  <- log outruns the counter, so some of this predates the one-attempt policy"
         : ""),
   );
   console.log(
@@ -212,6 +237,7 @@ const attention = seen.filter((s) => s.c.level === "attention").length;
 const ok = seen.filter((s) => s.c.level === "ok").length;
 
 console.log(
-  `\n${seen.length} tearing down: ${alarms} looping, ${attention} gave up, ${ok} healthy`,
+  `\n${seen.length} tearing down: ${alarms} not being touched, ` +
+    `${attention} flagged for you, ${ok} healthy`,
 );
 if (alarms || attention) process.exit(1);

@@ -30,14 +30,16 @@ export type RunRow = {
   ttl_seconds: number;
   expires_at: Date | null;
   outputs: Record<string, unknown> | null;
-  /** Consecutive failed teardown attempts; the reaper's retry budget. */
+  /** How many teardown attempts this run has had, in total. */
   destroy_attempts: number;
+  /** Set while an attempt owns this teardown; see `claimDestroy`. */
+  destroy_started_at: Date | null;
 };
 
 const RUN_COLUMNS = `id, user_id, name, mode, slug, user_count, clouds, status,
                      org_unit_path, gcp_project_id, state_prefix, harness_only,
                      component_set_id, ttl_seconds, expires_at, outputs,
-                     destroy_attempts`;
+                     destroy_attempts, destroy_started_at`;
 
 export async function getRun(runId: string): Promise<RunRow | undefined> {
   const { rows } = await pool.query<RunRow>(
@@ -55,19 +57,16 @@ export async function getRun(runId: string): Promise<RunRow | undefined> {
  *   2. A live (`ready`) workshop has passed its real end time (`expires_at`,
  *      set only when it went ready and only ever pushed later, never to "now").
  *
- * `destroying` is included so a teardown that failed part-way (e.g. Workspace
- * lagging behind an account deletion) is retried rather than stranded — it was
- * already triggered by one of the two reasons above.
+ * `destroying` is included, but no longer so the teardown can be *retried* — a
+ * failed teardown is flagged, not repeated (see `destroy-policy.ts`). It is here
+ * because a run mid-attempt is in that status, and because an attempt that was
+ * killed leaves the run there with a claim still set: selecting it is what lets
+ * `claimDestroy` notice the death and flag it.
  *
- * Two exclusions bound that retry, and both are why this is a single ANDed
- * condition rather than the three-way OR it used to be:
- *
- *   * `destroy_failed` is terminal. Note that it has to be excluded explicitly:
- *     a run in that state usually also has `delete_requested` set — that is what
- *     started the teardown — so the first clause matches it forever otherwise.
- *     This is the whole bug in one line.
- *   * `destroy_next_attempt_at` is the backoff. A run that failed recently is
- *     not due yet and is skipped, instead of being retried on every tick.
+ * `destroy_failed` has to be excluded explicitly. A run in that state usually
+ * also has `delete_requested` set — that is what started the teardown — so the
+ * first clause matches it forever otherwise, and the terminal state would not be
+ * terminal. This is the whole of the original bug in one line.
  */
 export async function reapableRuns(): Promise<RunRow[]> {
   const { rows } = await pool.query<RunRow>(
@@ -78,8 +77,7 @@ export async function reapableRuns(): Promise<RunRow[]> {
            or status = 'destroying'
            or (status = 'ready' and expires_at is not null and expires_at < now())
             )
-        and status <> 'destroy_failed'
-        and (destroy_next_attempt_at is null or destroy_next_attempt_at <= now())`,
+        and status <> 'destroy_failed'`,
   );
   return rows;
 }
@@ -163,62 +161,64 @@ export async function setLiveError(runId: string, error: string) {
 }
 
 /**
- * Begin a teardown attempt.
+ * Take ownership of a teardown attempt, or report that the last one died.
  *
- * Called at the top of every attempt, including retries, so it must not touch
- * `destroy_attempts` — that counter is the retry budget and resetting it here
- * would restore the infinite loop it exists to prevent.
+ * The claim is written *before* any destroy work starts, and cleared on every way
+ * out of it — success, or a caught failure. So a claim that is still set means the
+ * previous attempt neither finished nor recorded a failure, which for a process is
+ * only possible if it was killed: the 1800s job timeout, an OOM, a rolled deploy.
+ *
+ * That inference needs one thing to be sound, and it is the caller's job: this must
+ * be called while holding the run's advisory lock. `withRunLock` takes a
+ * session-scoped `pg_try_advisory_lock`, which Postgres releases when the
+ * connection dies — so if a destroy really is still running elsewhere, the lock is
+ * held, the caller never gets here, and the run is skipped rather than declared
+ * dead. Holding the lock *and* seeing a claim is proof the claimant is gone.
+ *
+ * The update is a single statement rather than a read then a write, so two reapers
+ * racing the same run cannot both come away thinking they claimed it.
  */
-export async function setDestroying(runId: string) {
-  await pool.query(
-    `update workshop_runs set status = 'destroying' where id = $1`,
+export async function claimDestroy(
+  runId: string,
+): Promise<"claimed" | "abandoned"> {
+  const { rows } = await pool.query<{ destroy_attempts: number }>(
+    `update workshop_runs
+        set status = 'destroying',
+            destroy_started_at = now(),
+            destroy_attempts = destroy_attempts + 1
+      where id = $1
+        and destroy_started_at is null
+      returning destroy_attempts`,
     [runId],
   );
+  return rows.length > 0 ? "claimed" : "abandoned";
 }
 
 /**
- * Record a failed teardown attempt that is worth trying again, and put the run
- * to sleep until `delaySeconds` from now.
- *
- * The status stays `destroying`, so the run still reads as a teardown in
- * progress — which it is. What changed is that the next attempt has a time on it.
- */
-export async function scheduleDestroyRetry(
-  runId: string,
-  attempts: number,
-  delaySeconds: number,
-): Promise<void> {
-  await pool.query(
-    `update workshop_runs
-        set destroy_attempts = $2,
-            destroy_next_attempt_at = now() + make_interval(secs => $3)
-      where id = $1`,
-    [runId, attempts, delaySeconds],
-  );
-}
-
-/**
- * Stop tearing this run down and leave it for a person.
+ * Stop tearing this run down and leave it for a person. The only outcome of a
+ * teardown that does not succeed.
  *
  * The error is stored on the row rather than only logged, because the run page
  * shows `error` and nobody reads a log they have no reason to open. `expires_at`,
  * `delete_requested` and the roster are all left exactly as they are: the run may
  * still own cloud resources, and every one of those fields is a record of what
  * there is left to remove. `retryTeardown` in the frontend is what clears this.
+ *
+ * The claim is released, so a person's retry starts clean. `destroy_attempts` is
+ * not reset — it counts how many times this teardown has been attempted in total,
+ * which is the number worth seeing next to a run that has failed twice.
  */
 export async function setDestroyFailed(
   runId: string,
-  attempts: number,
   error: string,
 ): Promise<void> {
   await pool.query(
     `update workshop_runs
         set status = 'destroy_failed',
-            destroy_attempts = $2,
-            destroy_next_attempt_at = null,
-            error = $3
+            destroy_started_at = null,
+            error = $2
       where id = $1`,
-    [runId, attempts, error],
+    [runId, error],
   );
 }
 
@@ -241,16 +241,15 @@ export async function setDestroyed(runId: string) {
   );
   if (rowCount && rowCount > 0) return;
 
-  // The retry budget and any pending backoff are cleared along with the error a
-  // failed attempt may have left: this teardown succeeded, so a row that keeps
-  // showing the attempt that did not would be lying about a run with nothing
-  // left to tear down.
+  // The claim is released and the error a previous attempt may have left is
+  // cleared: this teardown succeeded, so a row that keeps showing the attempt
+  // that did not would be lying about a run with nothing left to tear down.
+  // `destroy_attempts` stays — it is the record of how many tries this took.
   await pool.query(
     `update workshop_runs
         set status = 'destroyed',
             destroyed_at = now(),
-            destroy_attempts = 0,
-            destroy_next_attempt_at = null,
+            destroy_started_at = null,
             error = null
       where id = $1`,
     [runId],

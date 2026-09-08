@@ -22,7 +22,7 @@ Every provisioning failure in `workshop_runs` to date, by cause:
 | A zone has no capacity | — | `isGkeCapacityError` | **Yes** |
 | Static Terraform error | 1 | `tofu validate` / `plan` | **Yes** |
 | Stale state lock from a killed run | 2 | nothing yet | Partly |
-| Teardown retried forever on an impossible destroy | 2 | `reap.ts` | **Yes** |
+| Teardown retried forever on an impossible destroy | 2 | `destroy-policy.ts` | **Yes** |
 | An API not yet enabled in a fresh project | 1 | Terraform | No |
 
 The shape of that table is the finding. Nearly every failure is **a pure function
@@ -141,65 +141,79 @@ Worth adding beside it, in rough order of value per unit of effort:
 
 ## Two defects this investigation surfaced
 
-**Teardown retried forever — fixed.** `reap.ts` caught any destroy failure and left
-the run for the next tick, with no attempt cap and no backoff. A closed AWS account
-leaves its organization on AWS's schedule, not within the provider's 10-minute
-wait, so `aws_organizations_account` destroy can never succeed — and the reaper
-kept trying. Run `aws-platform` logged **572 destroy attempts over two days**;
-`zone-b-dfae0a` had been `destroying` since 2026-08-06.
+**Teardown retried forever — fixed, twice.** `reap.ts` caught any destroy failure
+and left the run for the next tick, with no attempt cap and no backoff. A closed AWS
+account leaves its organization on AWS's schedule, not within the provider's
+10-minute wait, so `aws_organizations_account` destroy can never succeed — and the
+reaper kept trying. Every five minutes, for as long as the run existed:
+`zone-b-dfae0a` logged **9,482 failed attempts over 33 days**, `aws-platform` **640
+over three**.
 
-`destroy-policy.ts` now bounds it: a failure that cannot succeed
-(`PERMANENT_DESTROY_SIGNATURES`) stops on attempt 1, everything else backs off
-5m → 10m → 20m → … through a budget of eight attempts spanning about ten hours, and
-the run then lands in a terminal `destroy_failed` with the error stored on the row
-and a **Retry teardown** button on its page. Two details carry most of the weight:
+The first fix bounded the loop — permanent failures stopped on attempt 1, everything
+else backed off through a budget of eight attempts — and it worked, in that both
+runs stopped. But it kept the premise that a failed teardown is probably worth
+repeating, and the production evidence says otherwise: in both cases every single
+attempt was doomed for the same reason as the first, and each one is a Cloud Run
+execution plus a full `tofu init`/`destroy` against live cloud APIs. Cost control is
+the whole point of the reaper.
+
+So the budget is gone too. **One attempt, then a person.** A teardown that does not
+finish lands in a terminal `destroy_failed` with the reason on the row and a **Retry
+teardown** button on its page. Four details carry the weight:
 
 - `reapableRuns` had to exclude `destroy_failed` **explicitly**. Its first clause is
   `delete_requested`, which is what started the teardown, so a terminal status alone
   would not have stopped the loop — the run would still have been handed back every
   tick. A terminal state you can still be selected out of is not terminal.
+- **A teardown that never returns is flagged too**, and this is the shape the budget
+  could not see: the counter only advanced from the reaper's catch block, so a
+  `tofu destroy` killed by the job's `timeout = "1800s"` — or an OOM, or a rolled
+  deploy — left the counter untouched and got a full budget again next tick. Same
+  infinite loop, invisible to the thing built to stop it. `claimDestroy` closes it:
+  the claim is written before any work and cleared on every way out, and because the
+  caller holds the run's session-scoped advisory lock, *seeing a claim while holding
+  the lock proves the claimant is gone.*
+- `tofu destroy exited with code 1` used to be the **entire** stored error — the
+  provider's diagnostics went only to `run_logs` — so `isPermanentDestroyFailure`
+  could never match, and `aws-platform` was reported as "failed 8 times" instead of
+  "cannot succeed". `terraform.ts` now attaches the last 12 stderr lines to the
+  thrown error. With no retry left, that text *is* the handover.
 - `"timeout while waiting for resource to be gone"` (terminal) and
   `"timeout while waiting for state to become"` (a starved GKE zone — move and
   retry) share five words and have opposite verdicts. `classify.test.ts` asserts
   each against the other's classifier so neither can be widened into the other, and
   every fixture *not* marked `permanentDestroy` is asserted to stay retryable. The
-  asymmetry is the point: a false negative costs a few retries, a false positive
+  asymmetry is the point: a false negative costs a person a click, a false positive
   walks away from a cloud account that is still billing.
 
-The wedged runs were deliberately **not** backfilled to `destroy_failed`. They keep
-a zero counter and work through the new budget, so the reason recorded on the row is
-the one they actually hit rather than one guessed at migration time.
+The trade is deliberate: a genuinely transient failure — a state lock from a killed
+container, AWS eventual consistency, Workspace lagging an account delete — no longer
+heals itself in five minutes. It waits for a human, and what it holds keeps billing
+until then. That is acceptable only because the flag is loud, and because a silent
+loop was the more expensive failure by 9,482 attempts to one.
 
-**One shape of the loop survives the cap, and it is worth knowing about.** The
-counter only advances from the reaper's catch block. A destroy that never *returns*
-— `tofu destroy` running past the reaper job's `timeout = "1800s"`, an OOM, any
-killed container — never reaches that block, so `destroy_attempts` stays where it
-was and the run is handed back on the next tick with a full budget. Same infinite
-loop, invisible to the thing built to stop it. `max_retries = 0` and a serial
-`for` loop over every reapable run make it reachable: two slow teardowns in one
-execution and the second is killed rather than recorded.
-
-`make stuck-teardowns` is the check for it, and it is the answer to "how would I
-know?" — read-only, and it exits non-zero when something needs a person:
+`make stuck-teardowns` is how you find out without waiting to be told — read-only,
+and it exits non-zero when something needs a person:
 
 ```sh
 make stuck-teardowns
 ```
 
-It sorts every run in `destroying` or `destroy_failed` into four shapes, which is
-the part that matters — three of them look identical in the database and want
-different responses:
+It sorts every run in `destroying` or `destroy_failed` into four shapes. Two are
+transient and healthy; the interesting ones are the two that look identical in the
+database to a run making progress:
 
 | shape | means |
 | --- | --- |
-| `backing off` / `in progress` | healthy. The budget is being spent as designed. |
-| `gave up` | terminal `destroy_failed`. The fix working; fix the cause and press **Retry teardown**. |
-| `retrying without recording` | zero recorded attempts an hour+ after becoming eligible. **The loop above.** Check the reaper job's executions for a timeout or non-zero exit. |
-| `due but not picked up` | overdue by an hour+. Not the backoff any more: the reaper is not running, or an advisory lock from a killed execution is still held. |
+| `queued` / `in progress` | healthy. Waiting for a tick, or inside its one attempt. |
+| `flagged` | terminal `destroy_failed`. The policy working — deal with the cause and press **Retry teardown**. Still billing until you do. |
+| `claim never cleared` | claimed 40m+ ago and neither finished nor flagged. It cannot still be running (1800s cap), so no tick has reached the run since. Check the reaper job's executions and for a held advisory lock. |
+| `never picked up` | in `destroying`, unclaimed, an hour+ after becoming eligible. The reaper is not running, is failing before it reaches this run, or a dead session's lock is still held. **Nothing will flag this on its own.** |
 
-It also prints the count of destroy-failure lines in `run_logs` beside the stored
-counter. When the log outruns the counter, some of that history predates the cap —
-which is how the 572 attempts would have shown up on day one.
+It also prints the count of teardown-failure lines in `run_logs` beside the stored
+counter, matching all three generations of log line. When the log outruns the
+counter, that history predates the one-attempt policy — which is how the 9,482
+attempts would have shown up on day one.
 
 **Teardown reads IAM with the wrong credentials — still open.** During `aws-platform`'s
 destroy, `iam:GetUser` on the attendee users was refused as

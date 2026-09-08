@@ -387,18 +387,23 @@ const IN_FLIGHT = new Set(["requested", "provisioning", "applying"]);
 const NOTHING_TO_TEAR_DOWN = new Set(["scheduled", "destroyed"]);
 
 /**
- * Hand a run back to the reaper: clear the retry budget, drop any pending
- * backoff, and put it in `destroying` so the next tick picks it up.
+ * Hand a teardown back to the reaper for one fresh attempt: `destroying`, so the
+ * next tick picks it up, with nothing left over from the attempt that failed.
  *
- * Shared by `deleteRun` and `retryTeardown` because getting these four fields
- * right is the whole of "try again", and a caller that set three of them would
+ * Shared by `deleteRun` and `retryTeardown` because getting these three fields
+ * right is the whole of "try again", and a caller that set two of them would
  * produce a run that either never gets looked at (`destroy_failed` is excluded
- * from `reapableRuns`) or gives up immediately on a used-up counter.
+ * from `reapableRuns`) or is flagged again immediately as a death.
+ *
+ * `destroyAttempts` is deliberately *not* reset. It counts how many times this
+ * teardown has been tried in total, including by hand, which is the number worth
+ * seeing next to a run that has now failed twice.
  */
 const DESTROY_RESET = {
   status: "destroying" as const,
-  destroyAttempts: 0,
-  destroyNextAttemptAt: null,
+  // Released so `claimDestroy` reads the run as unclaimed; leaving it set would
+  // make the next tick mistake this retry for an attempt that died.
+  destroyStartedAt: null,
   error: null,
 };
 
@@ -434,7 +439,7 @@ export async function deleteRun(
   // `DESTROY_RESET` goes with it, and matters only for a run in `destroy_failed`:
   // the reaper excludes that status outright, so setting the flag alone would
   // record a deletion that never happened. Asking to delete a run whose teardown
-  // gave up is a request to try again, so it is granted the budget again.
+  // was flagged is a request to try again, so it gets its one fresh attempt.
   await db
     .update(workshopRuns)
     .set({ deleteRequested: true, ...DESTROY_RESET })

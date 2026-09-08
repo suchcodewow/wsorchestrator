@@ -122,8 +122,19 @@ db-push: ## Apply the Drizzle schema to Cloud SQL (via proxy)
 # Read-only, and exits non-zero when something needs a person, so it is safe to
 # run any time and can be put on a schedule as-is.
 stuck-teardowns: ## Report teardowns that are not finishing, and why
-	DB_CONN=$(DB_CONN) PROJECT=$(PROJECT) ./scripts/with-db.sh \
-	  "node $(FRONTEND)/scripts/stuck-teardowns.mjs"
+	@DB_CONN=$(DB_CONN) PROJECT=$(PROJECT) ./scripts/with-db.sh \
+	  "node $(FRONTEND)/scripts/stuck-teardowns.mjs" \
+	  || { status=$$?; \
+	       echo ""; \
+	       if [ $$status -eq 1 ]; then \
+	         echo "(exit 1 is the report's own signal that something above needs a person,"; \
+	         echo " not a failure of the command — it is what lets this go on a schedule."; \
+	         echo " A report that could not run at all exits 2 instead.)"; \
+	       else \
+	         echo "(exit $$status: the report did not run, so it has said nothing about"; \
+	         echo " the teardowns. Fix the above and run it again.)"; \
+	       fi; \
+	       exit $$status; }
 
 # db-migrate runs first: it backfills and reshapes data that db-push would
 # otherwise destroy (push diffs schema only and cannot preserve data).

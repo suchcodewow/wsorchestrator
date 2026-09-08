@@ -16,6 +16,15 @@ type OnLine = (line: TfLine) => void | Promise<void>;
  * `tee` is off for reads whose output is data rather than progress; see
  * `tfOutput`.
  */
+/**
+ * How many trailing stderr lines the thrown error carries.
+ *
+ * Enough for a Terraform diagnostic block, which is a header, a blank-trimmed
+ * body and usually a file/line — not so many that a run whose every resource
+ * failed writes an essay into `workshop_runs.error`.
+ */
+const DIAGNOSTIC_LINES = 12;
+
 function exec(
   args: string[],
   cwd: string,
@@ -24,6 +33,15 @@ function exec(
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const child = spawn(TF_BIN, args, { cwd, env: process.env });
+
+    // The reason the exit is what it is. `exited with code 1` on its own says
+    // only that something went wrong, and it was for a while the entire stored
+    // error on a failed teardown: the provider's actual complaint went to
+    // `onLine` and lived in run_logs, which is a table nobody queries when they
+    // are looking at a run that will not tear down. Worse, it defeated
+    // `isPermanentDestroyFailure` — that predicate reads the error message, and
+    // the message never contained a provider signature to match.
+    const diagnostics: string[] = [];
 
     const pump = (stream: "stdout" | "stderr") => (buf: Buffer) => {
       for (const text of buf.toString().split("\n")) {
@@ -34,6 +52,10 @@ function exec(
           const sink = stream === "stderr" ? process.stderr : process.stdout;
           sink.write(`${text}\n`);
         }
+        if (stream === "stderr") {
+          diagnostics.push(text);
+          if (diagnostics.length > DIAGNOSTIC_LINES) diagnostics.shift();
+        }
         void onLine?.({ stream, text });
       }
     };
@@ -41,11 +63,17 @@ function exec(
     child.stdout.on("data", pump("stdout"));
     child.stderr.on("data", pump("stderr"));
     child.on("error", reject);
-    child.on("close", (code) =>
-      code === 0
-        ? resolve()
-        : reject(new Error(`${TF_BIN} ${args[0]} exited with code ${code}`)),
-    );
+    child.on("close", (code) => {
+      if (code === 0) return resolve();
+      const summary = `${TF_BIN} ${args[0]} exited with code ${code}`;
+      reject(
+        new Error(
+          diagnostics.length > 0
+            ? `${summary}\n${diagnostics.join("\n")}`
+            : summary,
+        ),
+      );
+    });
   });
 }
 
