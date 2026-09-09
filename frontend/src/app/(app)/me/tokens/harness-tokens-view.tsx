@@ -454,22 +454,39 @@ function TokenRow({
     setReport(result);
   }
 
+  // Anything under the row shares its padding, so the row itself keeps the
+  // whole cell to click on when there is nothing below it.
+  const body = expanded || prompting || report !== null;
+
   return (
-    <div className="space-y-2 px-5 py-4">
-      <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+    <div>
+      <div
+        className={cn(
+          "group/row relative px-5 transition-colors hover:bg-muted/30",
+          body ? "pb-2 pt-4" : "py-4",
+        )}
+      >
+        {/* Sits under the row so every part of the cell toggles it, including
+            the padding — the buttons above take their own clicks back. */}
         <button
           type="button"
           onClick={onToggle}
           aria-expanded={expanded}
-          className="group flex min-w-0 flex-1 items-center gap-2 text-left"
-          title={expanded ? "Hide the details" : "Show everything about this token"}
-        >
+          aria-label={
+            expanded
+              ? `Hide the details for ${name}`
+              : `Show everything about ${name}`
+          }
+          className="absolute inset-0 cursor-pointer outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:ring-inset"
+        />
+
+        <div className="pointer-events-none relative flex flex-wrap items-center gap-x-2.5 gap-y-1">
           {expanded ? (
             <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
           ) : (
-            <ChevronRight className="size-3.5 shrink-0 text-muted-foreground transition-colors group-hover:text-foreground" />
+            <ChevronRight className="size-3.5 shrink-0 text-muted-foreground transition-colors group-hover/row:text-foreground" />
           )}
-          <span className="truncate font-medium">{name}</span>
+          <span className="min-w-0 truncate font-medium">{name}</span>
           {token.accountName !== null && (
             <code className="truncate rounded bg-muted px-1 py-0.5 font-mono text-xs text-muted-foreground">
               {token.accountId}
@@ -481,259 +498,263 @@ function TokenRow({
               can&apos;t be decrypted — paste it again
             </span>
           )}
-        </button>
 
-        <div className="flex shrink-0 items-center gap-1">
-          {canDeploy && (
+          <div className="pointer-events-auto ml-auto flex shrink-0 items-center gap-1">
+            {canDeploy && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-muted-foreground"
+                disabled={busy || deploying || !token.usable}
+                onClick={() => setPrompting((open) => !open)}
+                title="Create a Harness org and pick what to fill it with"
+              >
+                {deploying ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Rocket className="size-4" />
+                )}
+                Deploy content
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="sm"
               className="text-muted-foreground"
               disabled={busy || deploying || !token.usable}
-              onClick={() => setPrompting((open) => !open)}
-              title="Create a Harness org and pick what to fill it with"
+              onClick={onRecheck}
+              title="Ask Harness about this token again"
             >
-              {deploying ? (
+              {busy ? (
                 <Loader2 className="size-4 animate-spin" />
               ) : (
-                <Rocket className="size-4" />
+                <RefreshCw className="size-4" />
               )}
-              Deploy content
-            </Button>
-          )}
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-muted-foreground"
-            disabled={busy || deploying || !token.usable}
-            onClick={onRecheck}
-            title="Ask Harness about this token again"
-          >
-            {busy ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : (
-              <RefreshCw className="size-4" />
-            )}
-            Re-check
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label={`Remove the token for ${name}`}
-            className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-            disabled={busy || deploying}
-            onClick={onRemove}
-          >
-            <Trash2 className="size-3.5" />
-          </Button>
-        </div>
-      </div>
-
-      {prompting && (
-        <div className="space-y-2 rounded-lg border bg-muted/30 p-3">
-          <p className="text-xs leading-relaxed text-muted-foreground">
-            {rerun ? (
-              <>
-                Into{" "}
-                <span className="font-medium text-foreground">
-                  {token.lastDeploy?.orgName}
-                </span>{" "}
-                again, leaving anything already there as it is.
-              </>
-            ) : (
-              <>
-                A new organization in{" "}
-                <span className="font-medium text-foreground">{name}</span>,
-                filled with whatever is ticked below.
-              </>
-            )}
-          </p>
-
-          <DeployPicker
-            choices={choices}
-            selection={selection}
-            disabled={deploying}
-            onOfficial={(on) =>
-              setSelection((current) => ({ ...current, official: on }))
-            }
-            onMySecrets={(on) =>
-              setSelection((current) => ({ ...current, mySecrets: on }))
-            }
-            onTemplate={toggleTemplate}
-          />
-
-          {secretsGoing && (
-            <p className="text-xs leading-relaxed text-muted-foreground">
-              The org secrets go in with their real values so the content works
-              immediately, and{" "}
-              <span className="font-medium text-foreground">
-                {scrubDays === 0
-                  ? "are scrubbed to 123 at the next sweep"
-                  : `are scrubbed to 123 after ${scrubDays} day${
-                      scrubDays === 1 ? "" : "s"
-                    }`}
-              </span>
-              .
-            </p>
-          )}
-
-          <div className="flex flex-wrap items-center gap-2">
-            <Input
-              value={org}
-              autoFocus
-              autoComplete="off"
-              spellCheck={false}
-              placeholder="Organization name"
-              aria-label="Name for the new Harness organization"
-              disabled={deploying}
-              className="min-w-56 flex-1"
-              onChange={(e) => setOrg(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") submit();
-                if (e.key === "Escape") setPrompting(false);
-              }}
-            />
-            <Button
-              variant="brand"
-              disabled={identifier === null || deploying || empty}
-              onClick={submit}
-            >
-              {deploying && <Loader2 className="size-4 animate-spin" />}
-              {rerun ? "Deploy again" : "Deploy"}
+              Re-check
             </Button>
             <Button
               variant="ghost"
-              disabled={deploying}
-              onClick={() => setPrompting(false)}
+              size="icon"
+              aria-label={`Remove the token for ${name}`}
+              className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+              disabled={busy || deploying}
+              onClick={onRemove}
             >
-              Cancel
+              <Trash2 className="size-3.5" />
             </Button>
           </div>
-          <p className="text-xs text-muted-foreground">
-            {identifier === null ? (
-              org.trim().length === 0 ? (
-                <>Harness needs a name to create the organization under.</>
-              ) : (
-                <>That name needs a letter, digit, or underscore in it.</>
-              )
-            ) : empty ? (
-              <>Tick at least one thing above to deploy.</>
-            ) : (
-              <>
-                Harness identifier:{" "}
-                <code className="rounded bg-muted px-1 py-0.5 font-mono">
-                  {rerun ? token.lastDeploy?.orgIdentifier : identifier}
-                </code>
-                {deploying && (
-                  <> — this runs one call per entity, so give it a minute.</>
-                )}
-              </>
-            )}
-          </p>
         </div>
-      )}
+      </div>
 
-      {report && <DeployReportPanel report={report} onClose={() => setReport(null)} />}
-
-      {expanded && (
-        <div className="space-y-2 border-l pl-4 ml-1.5">
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-            {[
-              PRINCIPAL_LABEL[token.principalType ?? ""] ??
-                (token.kind === "sat" ? "Service account" : "Personal token"),
-              token.accountName === null ? (
-                <code className="font-mono">{token.accountId}</code>
-              ) : null,
-              token.principal,
-              <code key="tail" className="font-mono">
-                …{token.tail}
-              </code>,
-              token.verifiedAt
-                ? `verified ${shortDate(token.verifiedAt)}`
-                : "not currently valid",
-            ]
-              .filter(Boolean)
-              .map((part, i) => (
-                <Fragment key={i}>
-                  {i > 0 && <span>·</span>}
-                  {part}
-                </Fragment>
-              ))}
-          </div>
-
-          {token.lastDeploy ? (
-            <>
-              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-                <Rocket className="size-3.5 shrink-0" />
-                <span>
-                  Deployed to{" "}
-                  <a
-                    href={token.lastDeploy.orgUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="font-medium text-foreground hover:underline"
-                  >
-                    {token.lastDeploy.orgName}
-                  </a>
-                </span>
-                {token.lastDeploy.orgIdentifier !== token.lastDeploy.orgName && (
-                  <code className="rounded bg-muted px-1 py-0.5 font-mono">
-                    {token.lastDeploy.orgIdentifier}
-                  </code>
+      {body && (
+        <div className="space-y-2 px-5 pb-4">
+          {prompting && (
+            <div className="space-y-2 rounded-lg border bg-muted/30 p-3">
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                {rerun ? (
+                  <>
+                    Into{" "}
+                    <span className="font-medium text-foreground">
+                      {token.lastDeploy?.orgName}
+                    </span>{" "}
+                    again, leaving anything already there as it is.
+                  </>
+                ) : (
+                  <>
+                    A new organization in{" "}
+                    <span className="font-medium text-foreground">{name}</span>,
+                    filled with whatever is ticked below.
+                  </>
                 )}
-                <span>·</span>
-                <time dateTime={token.lastDeploy.at}>
-                  {stamp(token.lastDeploy.at)}
-                </time>
-              </div>
+              </p>
 
-              <DeployedContentLine content={token.lastDeploy.content} />
-            </>
-          ) : (
-            <p className="text-xs text-muted-foreground">
-              Never deployed with.
-            </p>
+              <DeployPicker
+                choices={choices}
+                selection={selection}
+                disabled={deploying}
+                onOfficial={(on) =>
+                  setSelection((current) => ({ ...current, official: on }))
+                }
+                onMySecrets={(on) =>
+                  setSelection((current) => ({ ...current, mySecrets: on }))
+                }
+                onTemplate={toggleTemplate}
+              />
+
+              {secretsGoing && (
+                <p className="text-xs leading-relaxed text-muted-foreground">
+                  The org secrets go in with their real values so the content works
+                  immediately, and{" "}
+                  <span className="font-medium text-foreground">
+                    {scrubDays === 0
+                      ? "are scrubbed to 123 at the next sweep"
+                      : `are scrubbed to 123 after ${scrubDays} day${
+                          scrubDays === 1 ? "" : "s"
+                        }`}
+                  </span>
+                  .
+                </p>
+              )}
+
+              <div className="flex flex-wrap items-center gap-2">
+                <Input
+                  value={org}
+                  autoFocus
+                  autoComplete="off"
+                  spellCheck={false}
+                  placeholder="Organization name"
+                  aria-label="Name for the new Harness organization"
+                  disabled={deploying}
+                  className="min-w-56 flex-1"
+                  onChange={(e) => setOrg(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") submit();
+                    if (e.key === "Escape") setPrompting(false);
+                  }}
+                />
+                <Button
+                  variant="brand"
+                  disabled={identifier === null || deploying || empty}
+                  onClick={submit}
+                >
+                  {deploying && <Loader2 className="size-4 animate-spin" />}
+                  {rerun ? "Deploy again" : "Deploy"}
+                </Button>
+                <Button
+                  variant="ghost"
+                  disabled={deploying}
+                  onClick={() => setPrompting(false)}
+                >
+                  Cancel
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {identifier === null ? (
+                  org.trim().length === 0 ? (
+                    <>Harness needs a name to create the organization under.</>
+                  ) : (
+                    <>That name needs a letter, digit, or underscore in it.</>
+                  )
+                ) : empty ? (
+                  <>Tick at least one thing above to deploy.</>
+                ) : (
+                  <>
+                    Harness identifier:{" "}
+                    <code className="rounded bg-muted px-1 py-0.5 font-mono">
+                      {rerun ? token.lastDeploy?.orgIdentifier : identifier}
+                    </code>
+                    {deploying && (
+                      <> — this runs one call per entity, so give it a minute.</>
+                    )}
+                  </>
+                )}
+              </p>
+            </div>
           )}
 
-          <DeployedCredentials
-            scrub={token.scrub}
-            scrubbing={scrubbing}
-            disabled={busy || deploying || !token.usable}
-            run={scrubbed}
-            onScrub={async () => setScrubbed(await onScrub())}
-            onDismiss={() => setScrubbed(null)}
-          />
+          {report && <DeployReportPanel report={report} onClose={() => setReport(null)} />}
 
-          <div className="space-y-1 pt-0.5">
-            <p className="text-xs text-muted-foreground">
-              {checked === 0
-                ? "No permission check recorded"
-                : `${granted} of ${checked} checked permissions granted`}
-            </p>
-            <ul className="grid gap-x-6 gap-y-1 text-xs sm:grid-cols-2">
-              {token.permissions.map((p) => (
-                <li
-                  key={`${p.resourceType}:${p.permission}`}
-                  className={cn(
-                    "flex items-center gap-1.5",
-                    p.permitted ? "text-foreground" : "text-muted-foreground",
-                  )}
-                >
-                  {p.permitted ? (
-                    <Check className="size-3.5 shrink-0 text-brand" />
-                  ) : (
-                    <X className="size-3.5 shrink-0" />
-                  )}
-                  {permissionLabel(p.permission)}
-                </li>
-              ))}
-              {token.permissions.length === 0 && (
-                <li className="text-muted-foreground">
-                  Harness did not answer the permission check for this token.
-                </li>
+          {expanded && (
+            <div className="space-y-2 border-l pl-4 ml-1.5">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                {[
+                  PRINCIPAL_LABEL[token.principalType ?? ""] ??
+                    (token.kind === "sat" ? "Service account" : "Personal token"),
+                  token.accountName === null ? (
+                    <code className="font-mono">{token.accountId}</code>
+                  ) : null,
+                  token.principal,
+                  <code key="tail" className="font-mono">
+                    …{token.tail}
+                  </code>,
+                  token.verifiedAt
+                    ? `verified ${shortDate(token.verifiedAt)}`
+                    : "not currently valid",
+                ]
+                  .filter(Boolean)
+                  .map((part, i) => (
+                    <Fragment key={i}>
+                      {i > 0 && <span>·</span>}
+                      {part}
+                    </Fragment>
+                  ))}
+              </div>
+
+              {token.lastDeploy ? (
+                <>
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                    <Rocket className="size-3.5 shrink-0" />
+                    <span>
+                      Deployed to{" "}
+                      <a
+                        href={token.lastDeploy.orgUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-medium text-foreground hover:underline"
+                      >
+                        {token.lastDeploy.orgName}
+                      </a>
+                    </span>
+                    {token.lastDeploy.orgIdentifier !== token.lastDeploy.orgName && (
+                      <code className="rounded bg-muted px-1 py-0.5 font-mono">
+                        {token.lastDeploy.orgIdentifier}
+                      </code>
+                    )}
+                    <span>·</span>
+                    <time dateTime={token.lastDeploy.at}>
+                      {stamp(token.lastDeploy.at)}
+                    </time>
+                  </div>
+
+                  <DeployedContentLine content={token.lastDeploy.content} />
+                </>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Never deployed with.
+                </p>
               )}
-            </ul>
-          </div>
+
+              <DeployedCredentials
+                scrub={token.scrub}
+                scrubbing={scrubbing}
+                disabled={busy || deploying || !token.usable}
+                run={scrubbed}
+                onScrub={async () => setScrubbed(await onScrub())}
+                onDismiss={() => setScrubbed(null)}
+              />
+
+              <div className="space-y-1 pt-0.5">
+                <p className="text-xs text-muted-foreground">
+                  {checked === 0
+                    ? "No permission check recorded"
+                    : `${granted} of ${checked} checked permissions granted`}
+                </p>
+                <ul className="grid gap-x-6 gap-y-1 text-xs sm:grid-cols-2">
+                  {token.permissions.map((p) => (
+                    <li
+                      key={`${p.resourceType}:${p.permission}`}
+                      className={cn(
+                        "flex items-center gap-1.5",
+                        p.permitted ? "text-foreground" : "text-muted-foreground",
+                      )}
+                    >
+                      {p.permitted ? (
+                        <Check className="size-3.5 shrink-0 text-brand" />
+                      ) : (
+                        <X className="size-3.5 shrink-0" />
+                      )}
+                      {permissionLabel(p.permission)}
+                    </li>
+                  ))}
+                  {token.permissions.length === 0 && (
+                    <li className="text-muted-foreground">
+                      Harness did not answer the permission check for this token.
+                    </li>
+                  )}
+                </ul>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
