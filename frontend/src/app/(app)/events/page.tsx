@@ -1,7 +1,7 @@
 /** The events calendar page. */
 
 import { redirect } from "next/navigation";
-import { auth } from "@/auth";
+import { auth, signInPath } from "@/auth";
 import { canSeeAllEvents } from "@/lib/roles";
 import { listCalendarRuns } from "@/lib/runs";
 import { getUserPreferences } from "@/lib/user-preferences";
@@ -9,7 +9,7 @@ import { EventCalendar } from "./event-calendar";
 
 export default async function EventsPage() {
   const session = await auth();
-  if (!session?.user) redirect("/signin");
+  if (!session?.user) redirect(await signInPath());
 
   const role = session.user.siteRole;
   const { calendarScope } = await getUserPreferences();

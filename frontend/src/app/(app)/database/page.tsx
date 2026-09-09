@@ -2,7 +2,7 @@
 
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
-import { auth } from "@/auth";
+import { auth, signInPath } from "@/auth";
 import { canRunSql } from "@/lib/roles";
 import { runReadOnlyQuery } from "@/lib/sql-console";
 import { DatabaseConsole } from "./database-console";
@@ -16,7 +16,7 @@ export const dynamic = "force-dynamic";
 
 export default async function DatabasePage() {
   const session = await auth();
-  if (!session?.user) redirect("/signin");
+  if (!session?.user) redirect(await signInPath());
   if (!canRunSql(session.user.siteRole)) notFound();
 
   const tablesRes = await runReadOnlyQuery(

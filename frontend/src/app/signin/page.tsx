@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { AlertTriangle, ArrowRight, CalendarClock, Cloud, Users } from "lucide-react";
 import { auth, googleHostedDomain, signIn } from "@/auth";
 import { Button } from "@/components/ui/button";
+import { returnPath } from "@/lib/request-path";
 import { AmbientBackdrop } from "@/components/ambient-backdrop";
 import { BrandMark } from "@/components/brand-mark";
 import { SignInHero } from "./signin-hero";
@@ -13,12 +14,6 @@ const CAPABILITIES = [
   { Icon: Users, text: "Accounts provisioned per attendee" },
   { Icon: Cloud, text: "Cloud environments torn down on a timer" },
 ];
-
-function safeCallback(value: string | undefined): string {
-  if (!value || !value.startsWith("/")) return "/events";
-  if (value.startsWith("//") || value.startsWith("/\\")) return "/events";
-  return value;
-}
 
 function errorMessage(error: string | undefined): string | null {
   if (!error) return null;
@@ -40,7 +35,7 @@ export default async function SignInPage({
   searchParams: Promise<{ callbackUrl?: string; error?: string }>;
 }) {
   const params = await searchParams;
-  const target = safeCallback(params.callbackUrl);
+  const target = returnPath(params.callbackUrl) ?? "/events";
   const problem = errorMessage(params.error);
 
   const session = await auth();

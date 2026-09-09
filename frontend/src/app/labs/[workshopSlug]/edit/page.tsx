@@ -4,7 +4,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
-import { auth } from "@/auth";
+import { auth, signInPath } from "@/auth";
 import { listGuidesForPicker } from "@/lib/lab-guides";
 import { getLabWorkshopBySlug } from "@/lib/lab-workshops";
 import { canManageLabGuides } from "@/lib/roles";
@@ -21,7 +21,7 @@ export default async function EditWorkshopPage({
   params: Promise<{ workshopSlug: string }>;
 }) {
   const session = await auth();
-  if (!session?.user) redirect("/signin");
+  if (!session?.user) redirect(await signInPath());
   if (!canManageLabGuides(session.user.siteRole)) notFound();
 
   const { workshopSlug } = await params;

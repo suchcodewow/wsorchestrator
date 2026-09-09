@@ -3,6 +3,7 @@
 import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
 import { DrizzleAdapter } from "@auth/drizzle-adapter";
+import { headers } from "next/headers";
 import { and, eq, inArray, ne } from "drizzle-orm";
 import { db } from "@/db";
 import {
@@ -16,6 +17,7 @@ import {
   effectiveAllowedDomains,
   isEmailAllowed,
 } from "@/lib/allowed-domains";
+import { REQUEST_PATH_HEADER, returnPath } from "@/lib/request-path";
 import { bootstrapAdminEmails, isBootstrapAdmin } from "@/lib/site-admins";
 
 async function applyBootstrapAdmin(email: string | null | undefined) {
@@ -74,6 +76,17 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     },
   },
 });
+
+/**
+ * Where to send a visitor who isn't signed in: the sign-in page, carrying the
+ * page they asked for so they land there afterwards.
+ */
+export async function signInPath(): Promise<string> {
+  const asked = returnPath((await headers()).get(REQUEST_PATH_HEADER));
+  if (!asked) return "/signin";
+
+  return `/signin?callbackUrl=${encodeURIComponent(asked)}`;
+}
 
 export async function pendingBootstrapAdmins(): Promise<string[]> {
   const listed = bootstrapAdminEmails();

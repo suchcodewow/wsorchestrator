@@ -1,7 +1,7 @@
 /** The layout for site settings, the deployment's own configuration. */
 
 import { notFound, redirect } from "next/navigation";
-import { auth } from "@/auth";
+import { auth, signInPath } from "@/auth";
 import { canManageSettings } from "@/lib/roles";
 import { SiteSettingsTabs } from "./settings-tabs";
 
@@ -11,7 +11,7 @@ export default async function SiteSettingsLayout({
   children: React.ReactNode;
 }) {
   const session = await auth();
-  if (!session?.user) redirect("/signin");
+  if (!session?.user) redirect(await signInPath());
   if (!canManageSettings(session.user.siteRole)) notFound();
 
   return (

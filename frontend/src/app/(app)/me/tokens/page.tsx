@@ -1,7 +1,7 @@
 /** The Harness tokens page. */
 
 import { redirect } from "next/navigation";
-import { auth } from "@/auth";
+import { auth, signInPath } from "@/auth";
 import { deployChoices } from "@/lib/harness-deploy-choices";
 import { harnessBaseUrl } from "@/lib/harness-platform";
 import { scrubWindowDays } from "@/lib/harness-scrub";
@@ -12,7 +12,7 @@ import { HarnessTokensView } from "./harness-tokens-view";
 
 export default async function MyTokensPage() {
   const session = await auth();
-  if (!session?.user) redirect("/signin");
+  if (!session?.user) redirect(await signInPath());
 
   return (
     <HarnessTokensView

@@ -2,7 +2,7 @@
 
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
-import { auth } from "@/auth";
+import { auth, signInPath } from "@/auth";
 import { canAuditProjects } from "@/lib/roles";
 import { auditClouds, firstConcern } from "@/lib/cloud-audit";
 import { CloudStatus } from "./cloud-status-view";
@@ -16,7 +16,7 @@ export const dynamic = "force-dynamic";
 
 export default async function CloudStatusPage() {
   const session = await auth();
-  if (!session?.user) redirect("/signin");
+  if (!session?.user) redirect(await signInPath());
   if (!canAuditProjects(session.user.siteRole)) notFound();
 
   const report = await auditClouds();

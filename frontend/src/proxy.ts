@@ -3,6 +3,7 @@
 import { readdirSync } from "node:fs";
 import { join } from "node:path";
 import { NextResponse, type NextRequest } from "next/server";
+import { REQUEST_PATH_HEADER } from "@/lib/request-path";
 
 function canonicalRedirect(request: NextRequest): NextResponse | null {
   const canonical = process.env.CANONICAL_HOST;
@@ -48,8 +49,19 @@ function assetMiss(request: NextRequest): NextResponse | null {
   });
 }
 
+/** Hand the requested path to the render, for post-sign-in returns. */
+function withRequestPath(request: NextRequest): NextResponse {
+  const headers = new Headers(request.headers);
+  const { pathname, search } = request.nextUrl;
+  headers.set(REQUEST_PATH_HEADER, `${pathname}${search}`);
+
+  return NextResponse.next({ request: { headers } });
+}
+
 export function proxy(request: NextRequest) {
-  return canonicalRedirect(request) ?? assetMiss(request) ?? NextResponse.next();
+  return (
+    canonicalRedirect(request) ?? assetMiss(request) ?? withRequestPath(request)
+  );
 }
 
 export const config = {

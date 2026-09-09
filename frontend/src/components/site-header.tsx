@@ -1,8 +1,8 @@
 /** The one header, on every page. */
 
-import { signOut } from "@/auth";
+import { signInPath, signOut } from "@/auth";
 import { BrandMark } from "@/components/brand-mark";
-import { SignInLink } from "@/components/sign-in-link";
+import { Button } from "@/components/ui/button";
 import { UserMenu } from "@/components/user-menu";
 import { buildInfo } from "@/lib/build-info";
 import { getUserPreferences } from "@/lib/user-preferences";
@@ -60,7 +60,10 @@ export async function SiteHeader({
                 }}
               />
             ) : (
-              <SignInLink />
+              // Signing in returns the reader to the page they were on.
+              <Button asChild variant="ghost" size="sm">
+                <Link href={await signInPath()}>Sign in</Link>
+              </Button>
             )}
           </div>
         </div>

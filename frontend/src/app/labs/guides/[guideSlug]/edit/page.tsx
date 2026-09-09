@@ -4,7 +4,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
-import { auth } from "@/auth";
+import { auth, signInPath } from "@/auth";
 import { getLabGuideBySlug, workshopsUsingGuide } from "@/lib/lab-guides";
 import { canManageLabGuides } from "@/lib/roles";
 import { GuideEditor } from "../../../guide-editor";
@@ -20,7 +20,7 @@ export default async function EditLabGuidePage({
   params: Promise<{ guideSlug: string }>;
 }) {
   const session = await auth();
-  if (!session?.user) redirect("/signin");
+  if (!session?.user) redirect(await signInPath());
   if (!canManageLabGuides(session.user.siteRole)) notFound();
 
   const { guideSlug } = await params;

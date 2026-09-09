@@ -1,7 +1,7 @@
 /** This account's own template sources. */
 
 import { redirect } from "next/navigation";
-import { auth } from "@/auth";
+import { auth, signInPath } from "@/auth";
 import { TemplatesView } from "@/components/templates-view";
 import { harnessBaseUrl } from "@/lib/harness-platform";
 import {
@@ -12,7 +12,7 @@ import { secretsConfigured } from "@/lib/secret-box";
 
 export default async function MyTemplateSourcesPage() {
   const session = await auth();
-  if (!session?.user) redirect("/signin");
+  if (!session?.user) redirect(await signInPath());
 
   const sources = await listTemplateSources(session.user.id);
 
