@@ -5,11 +5,17 @@
  * form — a heading level, a callout tone, a code language, a placeholder — is a
  * menu, so every form is visible instead of only whichever one the button
  * happened to write.
+ *
+ * Each menu carries a preview of whatever is highlighted, built out of the same
+ * classes the rendered guide uses. So the choice is made by looking at the
+ * result rather than by reading the Markdown that produces it.
  */
 
+import { useState, type ReactNode } from "react";
 import {
   Braces,
   ChevronDown,
+  ChevronRight,
   CircleCheck,
   Code,
   Heading,
@@ -51,8 +57,10 @@ type ToolOption = ToolInsert & {
   label: string;
   /** Shown in mono beside the label: the markdown this option writes. */
   token?: string;
-  /** A quiet second line, for when the label alone does not say enough. */
+  /** Captions the preview, for what looking at it does not tell you. */
   detail?: string;
+  /** What the option renders as, drawn with the guide's own styles. */
+  preview?: ReactNode;
   icon?: LucideIcon;
 };
 
@@ -100,8 +108,14 @@ function ToolMenu({
   tool: Tool;
   onInsert: (insert: ToolInsert) => void;
 }) {
+  /* Which option the preview is showing. Radix focuses an item on hover as well
+     as by keyboard, so focus alone tracks both ways of looking down a menu; the
+     last one looked at stays up, so the pane never blinks empty on the way out. */
+  const [shown, setShown] = useState(0);
+  const preview = tool.options[shown] ?? tool.options[0];
+
   return (
-    <DropdownMenu>
+    <DropdownMenu onOpenChange={(open) => open && setShown(0)}>
       <DropdownMenuTrigger asChild>
         <Button
           type="button"
@@ -124,46 +138,73 @@ function ToolMenu({
           pull focus to the trigger as the menu closes. */}
       <DropdownMenuContent
         align="start"
-        className="min-w-56 max-w-80"
+        className="w-80 p-0"
         onCloseAutoFocus={(e) => e.preventDefault()}
       >
-        {/* Named triggers say it already. */}
-        {!tool.named && (
-          <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
-            {tool.label}
-          </DropdownMenuLabel>
-        )}
+        {/* Long menus scroll; the preview below them does not scroll away. */}
+        <div className="max-h-72 overflow-y-auto p-1">
+          {/* Named triggers say it already. */}
+          {!tool.named && (
+            <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
+              {tool.label}
+            </DropdownMenuLabel>
+          )}
 
-        {tool.options.map((option) => (
-          <DropdownMenuItem
-            key={option.label}
-            onSelect={() => onInsert(option)}
-            className="items-start"
-          >
-            {option.icon && (
-              <option.icon className="mt-0.5 shrink-0 text-muted-foreground" />
-            )}
-            <span className="min-w-0 flex-1">
-              <span className="flex items-baseline gap-2">
-                <span className="min-w-0 truncate">{option.label}</span>
-                {option.token && (
-                  <code className="ml-auto shrink-0 font-mono text-[11px] text-muted-foreground">
-                    {option.token}
-                  </code>
-                )}
-              </span>
-              {option.detail && (
-                <span className="mt-0.5 block text-xs leading-snug text-muted-foreground">
-                  {option.detail}
-                </span>
+          {tool.options.map((option, index) => (
+            <DropdownMenuItem
+              key={option.label}
+              onFocus={() => setShown(index)}
+              onSelect={() => onInsert(option)}
+            >
+              {option.icon && (
+                <option.icon className="shrink-0 text-muted-foreground" />
               )}
-            </span>
-          </DropdownMenuItem>
-        ))}
+              <span className="min-w-0 flex-1 truncate">{option.label}</span>
+              {option.token && (
+                <code className="shrink-0 font-mono text-[11px] text-muted-foreground">
+                  {option.token}
+                </code>
+              )}
+            </DropdownMenuItem>
+          ))}
+        </div>
+
+        {(preview.detail || preview.preview) && (
+          {/* The page's own surface, not the popover's: a code block's fill is
+              mixed with the background it expects to be sitting on. */}
+          <div className="border-t bg-background px-3 py-2.5">
+            {preview.detail && (
+              <p className="text-xs leading-snug text-muted-foreground">
+                {preview.detail}
+              </p>
+            )}
+            {/* Decoration: the menu is the control, this is only what it makes. */}
+            {preview.preview && (
+              <div
+                aria-hidden="true"
+                className={cn(
+                  "lab-prose pointer-events-none select-none",
+                  preview.detail && "mt-2",
+                )}
+              >
+                {preview.preview}
+              </div>
+            )}
+          </div>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );
 }
+
+/*
+ * The previews below rebuild what `markdown.ts` emits, rather than running the
+ * renderer: every treatment a guide body has is a class in `globals.css`, and
+ * the icons that file draws by hand are these same Lucide glyphs. So a faithful
+ * preview costs a few elements and no server round trip. Structure matters more
+ * than it looks like it should — `.lab-callout-head`, `.lab-code-head` and the
+ * rest are styled where they sit.
+ */
 
 const heading = (
   level: 2 | 3 | 4,
@@ -178,6 +219,18 @@ const heading = (
   icon,
   snippet: `${"#".repeat(level)} ${title}`,
   select: title,
+  preview: (
+    <>
+      {level === 2 ? (
+        <h2>{title}</h2>
+      ) : level === 3 ? (
+        <h3>{title}</h3>
+      ) : (
+        <h4>{title}</h4>
+      )}
+      <p>How the step begins.</p>
+    </>
+  ),
 });
 
 const callout = (
@@ -185,14 +238,25 @@ const callout = (
   label: string,
   title: string,
   body: string,
-  icon: LucideIcon,
+  Icon: LucideIcon,
 ): ToolOption => ({
   label,
   token: `:::${name}`,
-  detail: body,
-  icon,
+  icon: Icon,
   snippet: `:::${name} ${title}\n${body}\n:::`,
   select: title,
+  preview: (
+    <div className="lab-callout" data-callout={name}>
+      <p className="lab-callout-head">
+        {/* The renderer draws this glyph as a hand-written path; same shape. */}
+        <Icon className="lab-callout-icon" />
+        <span className="lab-callout-title">{title}</span>
+      </p>
+      <div className="lab-callout-body">
+        <p>{body}</p>
+      </div>
+    </div>
+  ),
 });
 
 const fenced = (
@@ -207,6 +271,44 @@ const fenced = (
   // The first line only: a selection spanning a newline would not survive being
   // re-indented into a list.
   select: body.split("\n")[0],
+  // Untitled, the language names the block; titled, it becomes the subtitle.
+  preview: (
+    <figure className="lab-code my-0">
+      <figcaption className="lab-code-head">
+        <span className="lab-code-title">{title ?? label}</span>
+        {title && <span className="lab-code-lang">{label}</span>}
+      </figcaption>
+      <pre className="overflow-hidden px-3.5 py-3 font-mono text-[0.8125rem] leading-[1.65]">
+        {body}
+      </pre>
+    </figure>
+  ),
+});
+
+const collapsible = (
+  label: string,
+  token: string,
+  detail: string,
+  title: string,
+  body: string,
+  open: boolean,
+): ToolOption => ({
+  label,
+  token,
+  detail,
+  snippet: `:::details[${title}]${open ? "{open}" : ""}\n${body}\n:::`,
+  select: title,
+  preview: (
+    <details className="lab-details" open={open}>
+      <summary className="lab-details-summary">
+        <ChevronRight className="lab-details-chevron" />
+        <span className="lab-details-title">{title}</span>
+      </summary>
+      <div className="lab-details-body">
+        <p>{body}</p>
+      </div>
+    </details>
+  ),
 });
 
 const TERRAFORM = `resource "harness_platform_project" "demo" {
@@ -357,25 +459,22 @@ const TOOLS: Tool[] = [
     label: "Collapsible section",
     icon: ListCollapse,
     options: [
-      {
-        label: "Folded away",
-        token: ":::details",
-        detail: "Closed until the reader opens it — a hint, or a long output.",
-        snippet: `:::details[Show the answer]
-What to keep folded away until it is wanted — a hint, a long output, or what
-to do when it goes wrong.
-:::`,
-        select: "Show the answer",
-      },
-      {
-        label: "Open to start",
-        token: "{open}",
-        detail: "Shown open, and the reader can fold it away.",
-        snippet: `:::details[Before you begin]{open}
-What is worth reading now but not worth scrolling past later.
-:::`,
-        select: "Before you begin",
-      },
+      collapsible(
+        "Folded away",
+        ":::details",
+        "Closed until the reader opens it — a hint, or a long output.",
+        "Show the answer",
+        "What to keep folded away until it is wanted.",
+        false,
+      ),
+      collapsible(
+        "Open to start",
+        "{open}",
+        "Shown open, and the reader can fold it away.",
+        "Before you begin",
+        "What is worth reading now but not worth scrolling past later.",
+        true,
+      ),
     ],
   },
   {
@@ -385,8 +484,17 @@ What is worth reading now but not worth scrolling past later.
     options: GUIDE_VARIABLES.map((variable) => ({
       label: variable.label,
       token: `{{${variable.name}}}`,
+      detail: variable.hint,
       snippet: `{{${variable.name}}}`,
       inline: true,
+      // Not markup but a value: what stands here for one particular reader. A
+      // link's is long enough to fill the menu, so it is cut off rather than
+      // shown whole — the shape of it is the useful part.
+      preview: (
+        <p className="line-clamp-2 break-all">
+          Reads as <code>{variable.example}</code>
+        </p>
+      ),
     })),
   },
 ];

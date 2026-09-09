@@ -6,13 +6,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { CLAIM_LIMITS, type Cloud, type RunStatus } from "@/db/schema";
+import type { AttendeeView, CloudLink } from "@/lib/attendees";
 import { writeGuideContextCookie } from "@/lib/guide-variables";
 import { riseChild, staggerParent } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 import { Check, ChevronDown, Copy, ExternalLink, Loader2 } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
-import type { AttendeeView, CloudLink } from "@/lib/attendees";
 
 type Row = Omit<AttendeeView["accounts"][number], "claimedAt"> & {
   claimedAt: string | Date | null;
@@ -167,7 +167,6 @@ export function AttendeeGrid({ initial, runId }: { initial: View; runId: string 
         </p>
 
         <div className="mt-3 flex flex-wrap gap-2">
-          <LinkButton href="/labs">Workshop guides</LinkButton>
           {data.harnessOrgUrl && <LinkButton href={data.harnessOrgUrl}>Open Harness organization</LinkButton>}
           {data.links.map((link) => (
             <CloudButton key={link.cloud} link={link} />
@@ -184,7 +183,6 @@ export function AttendeeGrid({ initial, runId }: { initial: View; runId: string 
           <motion.div variants={riseChild}>
             <Card>
               <CardContent className="px-0">
-
                 <div
                   className={cn(
                     "hidden items-end gap-4 border-b px-6 pb-3 text-[11px] font-medium tracking-wider text-muted-foreground uppercase md:grid",
@@ -218,8 +216,8 @@ export function AttendeeGrid({ initial, runId }: { initial: View; runId: string 
           <motion.p variants={riseChild} className="text-xs leading-relaxed text-muted-foreground">
             Your password works as-is
             {hasAwsPassword && <>, except on AWS, which has its own in your row&rsquo;s details</>}
-            {hasAccessPass && <>, and on Azure, which asks for your access pass</>}, and these accounts are deleted when
-            the {data.mode} ends.
+            {hasAccessPass && <>, and on Azure, which asks for your access pass</>}, and these accounts are deleted when the{" "}
+            {data.mode} ends.
           </motion.p>
         </>
       )}
@@ -317,26 +315,21 @@ function AccountDetails({ account, runId }: { account: Row; runId: string }) {
           <Credential value={account.awsPassword} label="AWS password" />
         </Detail>
       )}
-      {account.harnessProjectUrl && (
-        <Detail>
-          <LinkButton href={account.harnessProjectUrl}>Your Harness Project</LinkButton>
-        </Detail>
-      )}
-      <Detail
-        label="Workshop guides"
-        hint="The guides then write your own project, organization and account into their steps."
-      >
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            writeGuideContextCookie({ runId, accountId: account.id, typed: {} });
-            window.open("/labs", "_blank", "noreferrer");
-          }}
-        >
-          <ExternalLink />
-          Open as you
-        </Button>
+      <Detail>
+        <div className="flex flex-wrap gap-2">
+          {account.harnessProjectUrl && <LinkButton href={account.harnessProjectUrl}>Harness Project</LinkButton>}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              writeGuideContextCookie({ runId, accountId: account.id, typed: {} });
+              window.open("/labs", "_blank", "noreferrer");
+            }}
+          >
+            <ExternalLink />
+            Workshop Guides
+          </Button>
+        </div>
       </Detail>
       {account.links.length > 0 && (
         <Detail label="Your environment">
@@ -351,15 +344,7 @@ function AccountDetails({ account, runId }: { account: Row; runId: string }) {
   );
 }
 
-function Detail({
-  label,
-  hint,
-  children,
-}: {
-  label?: string;
-  hint?: string;
-  children: ReactNode;
-}) {
+function Detail({ label, hint, children }: { label?: string; hint?: string; children: ReactNode }) {
   return (
     <>
       <dt className="text-xs font-medium whitespace-nowrap text-foreground">{label}</dt>
@@ -412,8 +397,7 @@ function Credential({ value, label }: { value: string; label: string }) {
           "shrink-0 py-0.5 text-muted-foreground transition-opacity",
           copied
             ? "opacity-100"
-            :
-              "opacity-0 group-hover:opacity-70 group-focus-visible:opacity-70 [@media(hover:none)]:opacity-70",
+            : "opacity-0 group-hover:opacity-70 group-focus-visible:opacity-70 [@media(hover:none)]:opacity-70",
         )}
       >
         {copied ? <Check className="size-3.5 text-emerald-600" /> : <Copy className="size-3.5" />}
@@ -459,11 +443,11 @@ function EmptyState({ status, noun }: { status: RunStatus; noun: string }) {
   const pending = status === "scheduled" || status === "requested" || status === "provisioning" || status === "applying";
   const message =
     status === "scheduled"
-      ? "This event hasn't started yet, so accounts will appear here later."
+      ? "This event hasn't started yet."
       : pending
-        ? `Accounts are being created right now — this page updates itself.`
+        ? `Accounts are being created.`
         : status === "failed"
-          ? "This event didn't finish setting up — check with your organizer."
+          ? "This event didn't finish.."
           : `This event has ended and its ${noun} accounts have been deleted.`;
 
   return (
