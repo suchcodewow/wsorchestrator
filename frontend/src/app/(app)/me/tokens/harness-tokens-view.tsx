@@ -15,6 +15,7 @@ import {
   EyeOff,
   ExternalLink,
   KeyRound,
+  Layers,
   Loader2,
   Plus,
   RefreshCw,
@@ -32,6 +33,7 @@ import type { DeployChoices } from "@/lib/harness-deploy-choices";
 import { messageFor as deployMessageFor } from "@/lib/harness-deploy-errors";
 import {
   nothingSelected,
+  type DeployedContent,
   type DeploySelection,
 } from "@/lib/harness-deploy-selection";
 import { harnessIdentifier } from "@/lib/harness-identifier";
@@ -455,25 +457,33 @@ function TokenRow({
   return (
     <div className="space-y-2 px-5 py-4">
       <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
-        <span className="font-medium">{name}</span>
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-expanded={expanded}
+          className="group flex min-w-0 flex-1 items-center gap-2 text-left"
+          title={expanded ? "Hide the details" : "Show everything about this token"}
+        >
+          {expanded ? (
+            <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
+          ) : (
+            <ChevronRight className="size-3.5 shrink-0 text-muted-foreground transition-colors group-hover:text-foreground" />
+          )}
+          <span className="truncate font-medium">{name}</span>
+          {token.accountName !== null && (
+            <code className="truncate rounded bg-muted px-1 py-0.5 font-mono text-xs text-muted-foreground">
+              {token.accountId}
+            </code>
+          )}
+          {!token.usable && (
+            <span className="inline-flex items-center gap-1 whitespace-nowrap text-xs text-destructive">
+              <AlertTriangle className="size-3.5" />
+              can&apos;t be decrypted — paste it again
+            </span>
+          )}
+        </button>
 
-        <span className="rounded-full bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
-          {PRINCIPAL_LABEL[token.principalType ?? ""] ??
-            (token.kind === "sat" ? "Service account" : "Personal token")}
-        </span>
-
-        <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs text-muted-foreground">
-          …{token.tail}
-        </code>
-
-        {!token.usable && (
-          <span className="inline-flex items-center gap-1 text-xs text-destructive">
-            <AlertTriangle className="size-3.5" />
-            can&apos;t be decrypted — paste it again
-          </span>
-        )}
-
-        <div className="ml-auto flex items-center gap-1">
+        <div className="flex shrink-0 items-center gap-1">
           {canDeploy && (
             <Button
               variant="ghost"
@@ -518,58 +528,6 @@ function TokenRow({
           </Button>
         </div>
       </div>
-
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-        {[
-          token.accountName !== null ? (
-            <code className="font-mono">{token.accountId}</code>
-          ) : null,
-          token.principal,
-          token.verifiedAt
-            ? `verified ${shortDate(token.verifiedAt)}`
-            : "not currently valid",
-        ]
-          .filter(Boolean)
-          .map((part, i) => (
-            <Fragment key={i}>
-              {i > 0 && <span>·</span>}
-              {part}
-            </Fragment>
-          ))}
-      </div>
-
-      {token.lastDeploy && (
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-          <Rocket className="size-3.5 shrink-0" />
-          <span>
-            Deployed to{" "}
-            <a
-              href={token.lastDeploy.orgUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="font-medium text-foreground hover:underline"
-            >
-              {token.lastDeploy.orgName}
-            </a>
-          </span>
-          {token.lastDeploy.orgIdentifier !== token.lastDeploy.orgName && (
-            <code className="rounded bg-muted px-1 py-0.5 font-mono">
-              {token.lastDeploy.orgIdentifier}
-            </code>
-          )}
-          <span>·</span>
-          <time dateTime={token.lastDeploy.at}>{stamp(token.lastDeploy.at)}</time>
-        </div>
-      )}
-
-      <DeployedCredentials
-        scrub={token.scrub}
-        scrubbing={scrubbing}
-        disabled={busy || deploying || !token.usable}
-        run={scrubbed}
-        onScrub={async () => setScrubbed(await onScrub())}
-        onDismiss={() => setScrubbed(null)}
-      />
 
       {prompting && (
         <div className="space-y-2 rounded-lg border bg-muted/30 p-3">
@@ -677,47 +635,151 @@ function TokenRow({
 
       {report && <DeployReportPanel report={report} onClose={() => setReport(null)} />}
 
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-expanded={expanded}
-        className="flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
-      >
-        {expanded ? (
-          <ChevronDown className="size-3.5" />
-        ) : (
-          <ChevronRight className="size-3.5" />
-        )}
-        {checked === 0
-          ? "No permission check recorded"
-          : `${granted} of ${checked} checked permissions granted`}
-      </button>
-
       {expanded && (
-        <ul className="grid gap-x-6 gap-y-1 pt-1 text-xs sm:grid-cols-2">
-          {token.permissions.map((p) => (
-            <li
-              key={`${p.resourceType}:${p.permission}`}
-              className={cn(
-                "flex items-center gap-1.5",
-                p.permitted ? "text-foreground" : "text-muted-foreground",
-              )}
-            >
-              {p.permitted ? (
-                <Check className="size-3.5 shrink-0 text-brand" />
-              ) : (
-                <X className="size-3.5 shrink-0" />
-              )}
-              {permissionLabel(p.permission)}
-            </li>
-          ))}
-          {token.permissions.length === 0 && (
-            <li className="text-muted-foreground">
-              Harness did not answer the permission check for this token.
-            </li>
+        <div className="space-y-2 border-l pl-4 ml-1.5">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+            {[
+              PRINCIPAL_LABEL[token.principalType ?? ""] ??
+                (token.kind === "sat" ? "Service account" : "Personal token"),
+              token.accountName === null ? (
+                <code className="font-mono">{token.accountId}</code>
+              ) : null,
+              token.principal,
+              <code key="tail" className="font-mono">
+                …{token.tail}
+              </code>,
+              token.verifiedAt
+                ? `verified ${shortDate(token.verifiedAt)}`
+                : "not currently valid",
+            ]
+              .filter(Boolean)
+              .map((part, i) => (
+                <Fragment key={i}>
+                  {i > 0 && <span>·</span>}
+                  {part}
+                </Fragment>
+              ))}
+          </div>
+
+          {token.lastDeploy ? (
+            <>
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                <Rocket className="size-3.5 shrink-0" />
+                <span>
+                  Deployed to{" "}
+                  <a
+                    href={token.lastDeploy.orgUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-medium text-foreground hover:underline"
+                  >
+                    {token.lastDeploy.orgName}
+                  </a>
+                </span>
+                {token.lastDeploy.orgIdentifier !== token.lastDeploy.orgName && (
+                  <code className="rounded bg-muted px-1 py-0.5 font-mono">
+                    {token.lastDeploy.orgIdentifier}
+                  </code>
+                )}
+                <span>·</span>
+                <time dateTime={token.lastDeploy.at}>
+                  {stamp(token.lastDeploy.at)}
+                </time>
+              </div>
+
+              <DeployedContentLine content={token.lastDeploy.content} />
+            </>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              Never deployed with.
+            </p>
           )}
-        </ul>
+
+          <DeployedCredentials
+            scrub={token.scrub}
+            scrubbing={scrubbing}
+            disabled={busy || deploying || !token.usable}
+            run={scrubbed}
+            onScrub={async () => setScrubbed(await onScrub())}
+            onDismiss={() => setScrubbed(null)}
+          />
+
+          <div className="space-y-1 pt-0.5">
+            <p className="text-xs text-muted-foreground">
+              {checked === 0
+                ? "No permission check recorded"
+                : `${granted} of ${checked} checked permissions granted`}
+            </p>
+            <ul className="grid gap-x-6 gap-y-1 text-xs sm:grid-cols-2">
+              {token.permissions.map((p) => (
+                <li
+                  key={`${p.resourceType}:${p.permission}`}
+                  className={cn(
+                    "flex items-center gap-1.5",
+                    p.permitted ? "text-foreground" : "text-muted-foreground",
+                  )}
+                >
+                  {p.permitted ? (
+                    <Check className="size-3.5 shrink-0 text-brand" />
+                  ) : (
+                    <X className="size-3.5 shrink-0" />
+                  )}
+                  {permissionLabel(p.permission)}
+                </li>
+              ))}
+              {token.permissions.length === 0 && (
+                <li className="text-muted-foreground">
+                  Harness did not answer the permission check for this token.
+                </li>
+              )}
+            </ul>
+          </div>
+        </div>
       )}
+    </div>
+  );
+}
+
+/** What the last deploy put into the organization, as far as it was recorded. */
+function DeployedContentLine({
+  content,
+}: {
+  content: DeployedContent | null;
+}) {
+  if (content === null) {
+    return (
+      <p className="text-xs text-muted-foreground">
+        That deploy ran before this site kept a record of what went in.
+      </p>
+    );
+  }
+
+  const parts = [
+    ...(content.official ? ["Official content"] : []),
+    ...(content.mySecrets ? ["My secrets"] : []),
+    ...content.myTemplates,
+  ];
+
+  if (parts.length === 0) {
+    return (
+      <p className="text-xs text-muted-foreground">
+        Nothing landed in that organization — every ticked source was skipped.
+      </p>
+    );
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+      <Layers className="size-3.5 shrink-0" />
+      <span>Holding</span>
+      {parts.map((part) => (
+        <span
+          key={part}
+          className="rounded-full bg-muted px-1.5 py-0.5 text-foreground"
+        >
+          {part}
+        </span>
+      ))}
     </div>
   );
 }

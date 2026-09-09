@@ -6,7 +6,9 @@ import { db } from "@/db";
 import { harnessTokens } from "@/db/schema";
 import type { DeployError } from "@/lib/harness-deploy-errors";
 import {
+  mergeDeployed,
   nothingSelected,
+  type DeployedContent,
   type DeploySelection,
 } from "@/lib/harness-deploy-selection";
 import { harnessIdentifier } from "@/lib/harness-identifier";
@@ -28,6 +30,7 @@ import {
 import {
   deployableTemplateSources,
   templateSourceToken,
+  type TemplateSourceRow,
 } from "@/lib/harness-templates";
 import { recordHarnessDeploy } from "@/lib/harness-tokens";
 import { openSecret } from "@/lib/secret-box";
@@ -248,6 +251,14 @@ const scopeQuery = (scope: Scope): Query => ({
 
 const scopeLabel = (scope: Scope) =>
   scope.project ? `${scope.org} / ${scope.project}` : scope.org;
+
+/** A template source the way the tokens page names it, kept for the record. */
+const sourceLabel = (source: TemplateSourceRow) =>
+  source.projectIdentifier === null
+    ? (source.orgName ?? source.orgIdentifier)
+    : `${source.orgName ?? source.orgIdentifier} / ${
+        source.projectName ?? source.projectIdentifier
+      }`;
 
 const TAGS = { deployed_by: "workshop-orchestrator" };
 const DESCRIPTION = "Deployed by Workshop Orchestrator.";
@@ -981,6 +992,11 @@ export async function deployContent(
     ...sources.filter((s) => s.projectIdentifier !== null),
   ];
 
+  // The user's own sources this run really read from, for the row's record of
+  // what the organization holds. A source that was skipped never lands, so it
+  // is not claimed here.
+  const copied: string[] = [];
+
   for (const source of ordered) {
     const token = await templateSourceToken(source.id);
     if (token === null) {
@@ -1007,6 +1023,7 @@ export async function deployContent(
 
     if (source.projectIdentifier === null) {
       await copyScope(from, target, record);
+      if (source.mine) copied.push(sourceLabel(source));
       continue;
     }
 
@@ -1047,6 +1064,7 @@ export async function deployContent(
     }
 
     await copyScope(from, { ...target, project }, record);
+    if (source.mine) copied.push(sourceLabel(source));
   }
 
   const counts: Record<DeployOutcome, number> = {
@@ -1057,9 +1075,18 @@ export async function deployContent(
   };
   for (const step of steps) counts[step.outcome] += 1;
 
-  await recordHarnessDeploy(userId, tokenId, { name, identifier }).catch(
-    () => {},
-  );
+  const content: DeployedContent = {
+    official: selection.official,
+    mySecrets: selection.mySecrets,
+    myTemplates: copied,
+  };
+
+  await recordHarnessDeploy(
+    userId,
+    tokenId,
+    { name, identifier },
+    rerun ? mergeDeployed(row.deployedContent, content) : content,
+  ).catch(() => {});
 
   return {
     ok: true,

@@ -9,6 +9,7 @@ import {
   type HarnessPermissionCheck,
   type HarnessToken,
 } from "@/db/schema";
+import type { DeployedContent } from "@/lib/harness-deploy-selection";
 import {
   checkHarnessToken,
   fingerprint,
@@ -29,6 +30,8 @@ export type HarnessDeploy = {
   orgIdentifier: string;
   orgUrl: string;
   at: string;
+  /** Null for a deploy recorded before the picker kept what was ticked. */
+  content: DeployedContent | null;
 };
 
 export type HarnessTokenSummary = {
@@ -56,6 +59,7 @@ const lastDeployOf = (row: HarnessToken): HarnessDeploy | null =>
         orgIdentifier: row.deployedOrgIdentifier,
         orgUrl: harnessOrgUrl(row.accountId, row.deployedOrgIdentifier),
         at: row.deployedAt.toISOString(),
+        content: row.deployedContent,
       }
     : null;
 
@@ -224,6 +228,7 @@ export async function recordHarnessDeploy(
   userId: string,
   id: string,
   org: { name: string; identifier: string },
+  content: DeployedContent,
 ): Promise<void> {
   await db
     .update(harnessTokens)
@@ -231,6 +236,7 @@ export async function recordHarnessDeploy(
       deployedOrgName: org.name,
       deployedOrgIdentifier: org.identifier,
       deployedAt: new Date(),
+      deployedContent: content,
     })
     .where(and(eq(harnessTokens.id, id), eq(harnessTokens.userId, userId)));
 }

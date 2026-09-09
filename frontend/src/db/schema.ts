@@ -18,6 +18,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import type { AdapterAccountType } from "next-auth/adapters";
+import type { DeployedContent } from "@/lib/harness-deploy-selection";
 
 const bytea = customType<{ data: Buffer; driverData: Buffer }>({
   dataType: () => "bytea",
@@ -335,6 +336,8 @@ export const harnessTokens = pgTable(
     deployedOrgName: text("deployed_org_name"),
     deployedOrgIdentifier: text("deployed_org_identifier"),
     deployedAt: timestamp("deployed_at", { withTimezone: true }),
+    /** What went into that organization, null for a token never deployed with. */
+    deployedContent: jsonb("deployed_content").$type<DeployedContent>(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
