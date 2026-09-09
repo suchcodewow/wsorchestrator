@@ -23,10 +23,21 @@ import remarkRehype from "remark-rehype";
 import { createHighlighter, type Highlighter } from "shiki";
 import { unified } from "unified";
 import { SKIP, visit } from "unist-util-visit";
+import {
+  fillGuideVariables,
+  newTally,
+  tallied,
+  type GuideValues,
+  type GuideVariableReport,
+} from "@/lib/guide-variables";
 
 export type TocEntry = { id: string; text: string; depth: 2 | 3 };
 
-export type RenderedMarkdown = { html: string; toc: TocEntry[] };
+export type RenderedMarkdown = {
+  html: string;
+  toc: TocEntry[];
+  variables: GuideVariableReport;
+};
 
 const THEMES = { light: "github-light-default", dark: "github-dark-default" };
 
@@ -363,6 +374,41 @@ function remarkBlockDirectives() {
         hProperties: { open: node.attributes?.open !== undefined },
       };
     });
+  };
+}
+
+/**
+ * Fills in `{{project}}` and the rest for whoever is reading. This works on the
+ * tree rather than the source text so a value can only ever land as literal
+ * text: an identifier with an underscore in it cannot turn into emphasis, and a
+ * fenced command carries the real value into what the reader copies.
+ */
+function remarkGuideVariables() {
+  return (tree: MdastRoot, file: { data: Record<string, unknown> }) => {
+    const values = (file.data.guideValues ?? {}) as GuideValues;
+    const tally = newTally();
+    const fill = (text: string) => fillGuideVariables(text, values, tally);
+
+    visit(tree, (node) => {
+      switch (node.type) {
+        case "text":
+        case "inlineCode":
+        case "code":
+          node.value = fill(node.value);
+          if (node.type === "code" && node.meta) node.meta = fill(node.meta);
+          break;
+
+        case "link":
+        case "image":
+        case "definition":
+          node.url = fill(node.url);
+          if (node.title) node.title = fill(node.title);
+          if (node.type === "image" && node.alt) node.alt = fill(node.alt);
+          break;
+      }
+    });
+
+    file.data.guideVariables = tallied(tally);
   };
 }
 
@@ -774,6 +820,7 @@ const buildProcessor = (highlighter: Highlighter, sourceLines: boolean) => {
     .use(remarkGfm)
     .use(remarkDirective)
     .use(remarkBlockDirectives)
+    .use(remarkGuideVariables)
     .use(remarkRehype)
     .use(rehypeCarryCodeTitle)
     .use(rehypeSanitize, SANITIZE_SCHEMA)
@@ -802,21 +849,35 @@ function getProcessor(sourceLines: boolean) {
   return processor;
 }
 
+const NO_VARIABLES: GuideVariableReport = { used: [], missing: [], unknown: [] };
+
 export async function renderMarkdown(
   markdown: string,
   {
     sourceLines = false,
-  }: { sourceLines?: boolean } = {},
+    values,
+  }: { sourceLines?: boolean; values?: GuideValues } = {},
 ): Promise<RenderedMarkdown> {
-  if (markdown.trim().length === 0) return { html: "", toc: [] };
+  if (markdown.trim().length === 0) {
+    return { html: "", toc: [], variables: NO_VARIABLES };
+  }
 
   const processor = await getProcessor(sourceLines);
-  const file = await processor.process(
-    normaliseListIndents(normaliseDirectiveTitles(markdown)),
-  );
+  // The reader's values ride on the file rather than the processor, which is
+  // built once and shared by every render.
+  const file = await processor.process({
+    value: normaliseListIndents(normaliseDirectiveTitles(markdown)),
+    data: { guideValues: values ?? {} },
+  });
+
+  const data = file.data as {
+    toc?: TocEntry[];
+    guideVariables?: GuideVariableReport;
+  };
 
   return {
     html: String(file),
-    toc: (file.data as { toc?: TocEntry[] }).toc ?? [],
+    toc: data.toc ?? [],
+    variables: data.guideVariables ?? NO_VARIABLES,
   };
 }

@@ -2,8 +2,10 @@
 
 import Link from "next/link";
 import { ArrowLeft, ArrowRight, Pencil } from "lucide-react";
+import { GuideVariablesPanel } from "@/components/guide-variables-panel";
 import { LabGuideBody } from "@/components/lab-guide-body";
 import { Button } from "@/components/ui/button";
+import { readGuideReader } from "@/lib/guide-values";
 import type { LabGuideWithAuthor } from "@/lib/lab-guides";
 import type { WorkshopGuideEntry } from "@/lib/lab-workshops";
 import { renderMarkdown } from "@/lib/markdown";
@@ -33,7 +35,10 @@ export async function GuideArticle({
   canEdit: boolean;
   context?: WorkshopContext;
 }) {
-  const { html, toc } = await renderMarkdown(guide.body);
+  const reader = await readGuideReader();
+  const { html, toc, variables } = await renderMarkdown(guide.body, {
+    values: reader.values,
+  });
 
   const showRail = context !== undefined || toc.length >= 3;
 
@@ -94,6 +99,15 @@ export async function GuideArticle({
         }
       >
         <div>
+          <GuideVariablesPanel
+            used={variables.used}
+            missing={variables.missing}
+            values={reader.values}
+            provided={reader.provided}
+            event={reader.event}
+            context={reader.context}
+          />
+
           {html.length > 0 ? (
             <LabGuideBody html={html} />
           ) : (

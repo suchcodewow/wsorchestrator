@@ -26,6 +26,7 @@ import { LabGuideBody } from "@/components/lab-guide-body";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { LAB_GUIDE_LIMITS, type LabGuide } from "@/db/schema";
+import { GUIDE_VARIABLES } from "@/lib/guide-variables";
 import { imageFromTransfer, uploadImageFile } from "@/lib/lab-image-upload";
 import { cn } from "@/lib/utils";
 import { ImagePickerDialog } from "./image-picker-dialog";
@@ -52,6 +53,7 @@ export function GuideEditor({
   const [tab, setTab] = useState<View>("write");
   const [preview, setPreview] = useState<string | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
+  const [unknownVariables, setUnknownVariables] = useState<string[]>([]);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -71,8 +73,9 @@ export function GuideEditor({
             signal: controller.signal,
           });
           if (!res.ok) throw new Error(`Preview failed (${res.status})`);
-          const { html } = await res.json();
+          const { html, variables } = await res.json();
           setPreview(html);
+          setUnknownVariables(variables?.unknown ?? []);
           setPreviewError(null);
         } catch (err) {
           if (controller.signal.aborted) return;
@@ -535,6 +538,37 @@ export function GuideEditor({
             <code className="text-foreground">:::tip</code>) and collapsible
             sections (<code className="text-foreground">:::details</code>) — the
             toolbar inserts an example of each.
+          </p>
+        )}
+
+        {tab !== "preview" && (
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            Write <code className="text-foreground">{"{{project}}"}</code> in a
+            sentence, a command or a link and each reader sees their own, taken
+            from the row they claimed on their event page. Available:{" "}
+            {GUIDE_VARIABLES.map((variable, i) => (
+              <span key={variable.name}>
+                {i > 0 && ", "}
+                <code className="text-foreground" title={variable.hint}>
+                  {`{{${variable.name}}}`}
+                </code>
+              </span>
+            ))}
+            . The preview leaves them as written.
+          </p>
+        )}
+
+        {unknownVariables.length > 0 && (
+          <p className="text-xs leading-relaxed text-amber-600 dark:text-amber-500">
+            Nothing fills in{" "}
+            {unknownVariables.map((name, i) => (
+              <span key={name}>
+                {i > 0 && ", "}
+                <code>{`{{${name}}}`}</code>
+              </span>
+            ))}{" "}
+            — readers will see that written out. Check the spelling against the
+            list above.
           </p>
         )}
       </div>

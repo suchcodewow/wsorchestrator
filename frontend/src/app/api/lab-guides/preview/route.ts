@@ -25,8 +25,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "invalid_body" }, { status: 400 });
   }
 
-  const { html } = await renderMarkdown(parsed.data.body, {
+  // No values: an author sees `{{project}}` where a reader will see their own
+  // project, which is what makes the blanks visible while writing.
+  const { html, variables } = await renderMarkdown(parsed.data.body, {
     sourceLines: true,
   });
-  return NextResponse.json({ html });
+  return NextResponse.json({ html, variables });
 }

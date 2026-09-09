@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { CLAIM_LIMITS, type Cloud, type RunStatus } from "@/db/schema";
+import { writeGuideContextCookie } from "@/lib/guide-variables";
 import { riseChild, staggerParent } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
@@ -202,6 +203,7 @@ export function AttendeeGrid({ initial, runId }: { initial: View; runId: string 
                     <AccountRow
                       key={account.id}
                       account={account}
+                      runId={runId}
                       values={values[account.id] ?? EMPTY}
                       onEdit={(field, value) => edit(account.id, field, value)}
                       onFocus={(field) => focus(account.id, field)}
@@ -227,12 +229,14 @@ export function AttendeeGrid({ initial, runId }: { initial: View; runId: string 
 
 function AccountRow({
   account,
+  runId,
   values,
   onEdit,
   onFocus,
   onBlur,
 }: {
   account: Row;
+  runId: string;
   values: Fields;
   onEdit: (field: FieldName, value: string) => void;
   onFocus: (field: FieldName) => void;
@@ -289,13 +293,13 @@ function AccountRow({
       </div>
 
       <div id={detailsId} hidden={!open} className="mt-2.5">
-        <AccountDetails account={account} />
+        <AccountDetails account={account} runId={runId} />
       </div>
     </li>
   );
 }
 
-function AccountDetails({ account }: { account: Row }) {
+function AccountDetails({ account, runId }: { account: Row; runId: string }) {
   const expired = accessPassExpired(account);
 
   return (
@@ -318,6 +322,22 @@ function AccountDetails({ account }: { account: Row }) {
           <LinkButton href={account.harnessProjectUrl}>Your Harness Project</LinkButton>
         </Detail>
       )}
+      <Detail
+        label="Workshop guides"
+        hint="The guides then write your own project, organization and account into their steps."
+      >
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            writeGuideContextCookie({ runId, accountId: account.id, typed: {} });
+            window.open("/labs", "_blank", "noreferrer");
+          }}
+        >
+          <ExternalLink />
+          Open as you
+        </Button>
+      </Detail>
       {account.links.length > 0 && (
         <Detail label="Your environment">
           <div className="flex flex-wrap gap-2">
