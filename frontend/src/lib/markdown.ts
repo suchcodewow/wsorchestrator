@@ -84,6 +84,16 @@ const LANG_LABELS: Record<string, string> = {
   toml: "TOML",
   ini: "INI",
   text: "Text",
+  typescript: "TypeScript",
+  javascript: "JavaScript",
+  python: "Python",
+  go: "Go",
+  java: "Java",
+  groovy: "Groovy",
+  dockerfile: "Dockerfile",
+  powershell: "PowerShell",
+  markdown: "Markdown",
+  diff: "Diff",
 };
 
 let highlighterPromise: Promise<Highlighter> | null = null;
@@ -811,6 +821,8 @@ const SANITIZE_SCHEMA = {
       ...(defaultSchema.attributes?.div ?? []),
       ["data-callout", ...Object.keys(CALLOUTS)] as [string, ...string[]],
     ],
+    // `:::details{open}` starts a section unfolded, which is dropped otherwise.
+    details: [...(defaultSchema.attributes?.details ?? []), "open"],
   },
 };
 

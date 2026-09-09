@@ -6,19 +6,11 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
-  Code,
   Columns2,
   Eye,
-  Heading2,
-  Info,
-  List,
-  ListChecks,
-  ListCollapse,
-  ListOrdered,
   Loader2,
   Pencil,
   Save,
-  Table,
   Trash2,
   type LucideIcon,
 } from "lucide-react";
@@ -26,10 +18,10 @@ import { LabGuideBody } from "@/components/lab-guide-body";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { LAB_GUIDE_LIMITS, type LabGuide } from "@/db/schema";
-import { GUIDE_VARIABLES } from "@/lib/guide-variables";
 import { imageFromTransfer, uploadImageFile } from "@/lib/lab-image-upload";
 import { cn } from "@/lib/utils";
 import { ImagePickerDialog } from "./image-picker-dialog";
+import { GuideToolbar, type ToolInsert } from "./guide-toolbar";
 
 export function GuideEditor({
   guide,
@@ -180,6 +172,28 @@ export function GuideEditor({
       field.setSelectionRange(from, to);
     });
   }
+
+  /** A placeholder belongs mid-sentence, so this writes it where the caret is. */
+  function insertInline(snippet: string) {
+    const field = bodyField.current;
+    const value = field ? field.value : body;
+    const start = field ? field.selectionStart : value.length;
+    const end = field ? field.selectionEnd : value.length;
+
+    const next = `${value.slice(0, start)}${snippet}${value.slice(end)}`;
+    setBody(next);
+    editedLine.current = lineAt(next, start);
+
+    if (!field) return;
+    const at = start + snippet.length;
+    requestAnimationFrame(() => {
+      field.focus();
+      field.setSelectionRange(at, at);
+    });
+  }
+
+  const insert = ({ snippet, select, inline }: ToolInsert) =>
+    inline ? insertInline(snippet) : insertBlock(snippet, select);
 
   const imageMarkdown = (image: { id: string; alt: string; name: string }) =>
     `![${(image.alt || image.name).replace(/[[\]]/g, "")}](/api/lab-images/${image.id})`;
@@ -426,20 +440,7 @@ export function GuideEditor({
 
         <div className="flex items-center justify-between gap-4 rounded-lg border p-1">
           <div className="flex flex-wrap items-center gap-0.5">
-            {SNIPPETS.map(({ label, icon: Icon, snippet, select }) => (
-              <Button
-                key={label}
-                type="button"
-                variant="ghost"
-                size="icon"
-                title={`Insert ${label.toLowerCase()}`}
-                aria-label={`Insert ${label.toLowerCase()}`}
-                onClick={() => insertBlock(snippet, select)}
-                className="size-8 text-muted-foreground hover:text-foreground"
-              >
-                <Icon />
-              </Button>
-            ))}
+            <GuideToolbar onInsert={insert} />
 
             <span aria-hidden="true" className="mx-1 h-5 w-px bg-border" />
 
@@ -548,7 +549,7 @@ export function GuideEditor({
             <code className="text-foreground">```bash</code>), callouts (
             <code className="text-foreground">:::tip</code>) and collapsible
             sections (<code className="text-foreground">:::details</code>) — the
-            toolbar inserts an example of each.
+            toolbar menus insert an example of each.
           </p>
         )}
 
@@ -556,16 +557,9 @@ export function GuideEditor({
           <p className="text-xs leading-relaxed text-muted-foreground">
             Write <code className="text-foreground">{"{{project}}"}</code> in a
             sentence, a command or a link and each reader sees their own, taken
-            from the row they claimed on their event page. Available:{" "}
-            {GUIDE_VARIABLES.map((variable, i) => (
-              <span key={variable.name}>
-                {i > 0 && ", "}
-                <code className="text-foreground" title={variable.hint}>
-                  {`{{${variable.name}}}`}
-                </code>
-              </span>
-            ))}
-            . The preview leaves them as written.
+            from the row they claimed on their event page. The{" "}
+            <span className="text-foreground">Placeholder</span> menu lists every
+            one; the preview leaves them as written.
           </p>
         )}
 
@@ -579,7 +573,7 @@ export function GuideEditor({
               </span>
             ))}{" "}
             — readers will see that written out. Check the spelling against the
-            list above.
+            Placeholder menu.
           </p>
         )}
       </div>
@@ -658,77 +652,6 @@ const VIEWS: { value: View; label: string; icon: LucideIcon }[] = [
   { value: "write", label: "Write", icon: Pencil },
   { value: "split", label: "Split", icon: Columns2 },
   { value: "preview", label: "Preview", icon: Eye },
-];
-
-const SNIPPETS: {
-  label: string;
-  icon: LucideIcon;
-  snippet: string;
-  select: string;
-}[] = [
-  {
-    label: "Heading",
-    icon: Heading2,
-    snippet: "## Section title",
-    select: "Section title",
-  },
-  {
-    label: "Bulleted list",
-    icon: List,
-    snippet: `- What the attendee needs open
-- Where they are starting from
-- What they will have at the end`,
-    select: "What the attendee needs open",
-  },
-  {
-    label: "Numbered list",
-    icon: ListOrdered,
-    snippet: `1. Open the console
-2. Create the resource
-3. Check that it came up`,
-    select: "Open the console",
-  },
-  {
-    label: "Task list",
-    icon: ListChecks,
-    snippet: `- [ ] Something to tick off
-- [ ] Something else to tick off`,
-    select: "Something to tick off",
-  },
-  {
-    label: "Table",
-    icon: Table,
-    snippet: `| Setting | Value | Notes |
-| --- | --- | --- |
-| Region | \`us-central1\` | Match the project default |
-| Machine type | \`e2-standard-4\` | Smaller runs out of memory |`,
-    select: "Setting",
-  },
-  {
-    label: "Code block",
-    icon: Code,
-    snippet: `\`\`\`bash title="setup.sh"
-gcloud auth login
-\`\`\``,
-    select: "gcloud auth login",
-  },
-  {
-    label: "Callout",
-    icon: Info,
-    snippet: `:::tip Worth knowing
-What to know before carrying on — a prerequisite or a gotcha.
-:::`,
-    select: "Worth knowing",
-  },
-  {
-    label: "Collapsible section",
-    icon: ListCollapse,
-    snippet: `:::details[Show the answer]
-What to keep folded away until it is wanted — a hint, a long output, or what
-to do when it goes wrong.
-:::`,
-    select: "Show the answer",
-  },
 ];
 
 const PLACEHOLDER = `## Before you start
