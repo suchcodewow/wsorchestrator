@@ -42,7 +42,9 @@ export async function GuideArticle({
 
   const showRail = context !== undefined || toc.length >= 3;
 
-  const editHref = `/labs/guides/${guide.slug}/edit`;
+  const editHref = context
+    ? `/labs/${context.slug}/${guide.slug}/edit`
+    : `/labs/guides/${guide.slug}/edit`;
   const back = context
     ? { href: `/labs/${context.slug}`, label: context.title }
     : { href: "/labs/guides", label: "All guides" };

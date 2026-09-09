@@ -105,7 +105,7 @@ export async function getLabGuideById(
   return row ?? null;
 }
 
-const RESERVED_SLUGS = new Set(["new"]);
+const RESERVED_SLUGS = new Set(["new", "edit"]);
 
 async function availableSlug(title: string, excludeId?: string): Promise<string> {
   const base = slugify(title, "lab-guide");

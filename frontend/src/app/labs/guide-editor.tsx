@@ -35,16 +35,23 @@ export function GuideEditor({
   guide,
   usedIn = [],
   addTo,
+  within,
 }: {
   guide?: LabGuide;
   usedIn?: { slug: string; title: string }[];
   addTo?: { id: string; slug: string; title: string };
+  /** The workshop this guide is being edited from — saving returns to it. */
+  within?: { slug: string; title: string };
 }) {
   const router = useRouter();
   const editing = guide !== undefined;
 
   const exitTo = (slug: string) =>
-    addTo ? `/labs/${addTo.slug}/edit` : `/labs/guides/${slug}`;
+    addTo
+      ? `/labs/${addTo.slug}/edit`
+      : within
+        ? `/labs/${within.slug}/${slug}`
+        : `/labs/guides/${slug}`;
 
   const [title, setTitle] = useState(guide?.title ?? "");
   const [summary, setSummary] = useState(guide?.summary ?? "");
@@ -311,7 +318,7 @@ export function GuideEditor({
         method: "DELETE",
       });
       if (!res.ok) throw new Error(`Could not delete the guide (${res.status})`);
-      router.push("/labs/guides");
+      router.push(within ? `/labs/${within.slug}` : "/labs/guides");
       router.refresh();
     } catch (err) {
       setError(
@@ -348,8 +355,12 @@ export function GuideEditor({
         {editing && (
           <p className="text-xs leading-relaxed text-muted-foreground">
             Renaming this moves its address,{" "}
-            <code className="text-foreground">/labs/guides/{guide.slug}</code>,
-            and every link follows it.
+            <code className="text-foreground">
+              {within
+                ? `/labs/${within.slug}/${guide.slug}`
+                : `/labs/guides/${guide.slug}`}
+            </code>
+            , and every link follows it.
           </p>
         )}
       </div>
@@ -587,7 +598,7 @@ export function GuideEditor({
               addTo
                 ? `/labs/${addTo.slug}/edit`
                 : editing
-                  ? `/labs/guides/${guide.slug}`
+                  ? exitTo(guide.slug)
                   : "/labs/guides"
             }
           >
