@@ -301,7 +301,7 @@ function AccountDetails({ account, runId }: { account: Row; runId: string }) {
   const expired = accessPassExpired(account);
 
   return (
-    <dl className="grid grid-cols-[minmax(0,auto)_minmax(0,1fr)] items-baseline gap-x-3 gap-y-2.5 rounded-lg bg-muted/50 px-3 py-2.5">
+    <dl className="grid grid-cols-[minmax(0,auto)_minmax(0,1fr)] items-baseline gap-x-3 gap-y-2.5 border-t pt-2.5 pb-1">
       <Detail label="Google Password">
         <Credential value={account.tempPassword} label="Google password" />
       </Detail>
@@ -311,7 +311,7 @@ function AccountDetails({ account, runId }: { account: Row; runId: string }) {
         </Detail>
       )}
       {account.awsPassword && (
-        <Detail label="AWS Password" hint="Sign in with your email address as the IAM user name.">
+        <Detail label="AWS Password">
           <Credential value={account.awsPassword} label="AWS password" />
         </Detail>
       )}
