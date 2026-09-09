@@ -548,8 +548,8 @@ export function GuideEditor({
             Markdown, with fenced code (
             <code className="text-foreground">```bash</code>), callouts (
             <code className="text-foreground">:::tip</code>) and collapsible
-            sections (<code className="text-foreground">:::details</code>) — the
-            toolbar menus insert an example of each.
+            sections (<code className="text-foreground">:::details</code>) — each
+            toolbar menu shows what it renders as before inserting an example.
           </p>
         )}
 

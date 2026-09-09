@@ -169,9 +169,10 @@ function ToolMenu({
           ))}
         </div>
 
+        {/* The pane keeps the page's own surface rather than the popover's: a
+            code block's fill is mixed with the background it expects to be
+            sitting on. */}
         {(preview.detail || preview.preview) && (
-          {/* The page's own surface, not the popover's: a code block's fill is
-              mixed with the background it expects to be sitting on. */}
           <div className="border-t bg-background px-3 py-2.5">
             {preview.detail && (
               <p className="text-xs leading-snug text-muted-foreground">
@@ -278,7 +279,9 @@ const fenced = (
         <span className="lab-code-title">{title ?? label}</span>
         {title && <span className="lab-code-lang">{label}</span>}
       </figcaption>
-      <pre className="overflow-hidden px-3.5 py-3 font-mono text-[0.8125rem] leading-[1.65]">
+      {/* A line wider than the menu trails off, rather than ending mid-word as
+          though it had been cut. */}
+      <pre className="mask-r-from-85% overflow-hidden px-3.5 py-3 font-mono text-[0.8125rem] leading-[1.65]">
         {body}
       </pre>
     </figure>
