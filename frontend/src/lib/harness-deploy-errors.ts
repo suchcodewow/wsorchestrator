@@ -6,6 +6,7 @@ export type DeployError =
   | "invalid_token"
   | "not_permitted"
   | "invalid_name"
+  | "nothing_selected"
   | "org_exists"
   | "org_failed"
   | "harness_error"
@@ -17,6 +18,7 @@ export const STATUS_FOR: Record<DeployError, number> = {
   invalid_token: 409,
   not_permitted: 403,
   invalid_name: 400,
+  nothing_selected: 400,
   org_exists: 409,
   org_failed: 502,
   harness_error: 502,
@@ -33,6 +35,8 @@ export const MESSAGES: Record<DeployError, string> = {
     "That token no longer administers the account, so it can't create an organization.",
   invalid_name:
     "That name needs a letter, digit, or underscore in it.",
+  nothing_selected:
+    "Nothing was ticked to deploy, so pick at least one thing first.",
   org_exists:
     "An organization with that identifier already exists, so pick a different name.",
   org_failed:

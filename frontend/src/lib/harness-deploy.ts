@@ -5,8 +5,15 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { harnessTokens } from "@/db/schema";
 import type { DeployError } from "@/lib/harness-deploy-errors";
+import {
+  nothingSelected,
+  type DeploySelection,
+} from "@/lib/harness-deploy-selection";
 import { harnessIdentifier } from "@/lib/harness-identifier";
-import { orgSecretValues } from "@/lib/harness-org-secrets";
+import {
+  orgSecretValues,
+  type SecretChoice,
+} from "@/lib/harness-org-secrets";
 import { ACCOUNT_ADMIN } from "@/lib/harness-permissions";
 import { isDuplicate, isRetryable } from "@/lib/harness-retry";
 import {
@@ -722,9 +729,10 @@ async function deploySecrets(
   to: Scope,
   tokenId: string,
   userId: string,
+  choice: SecretChoice,
   record: Record_,
 ): Promise<void> {
-  for (const secret of await orgSecretValues(userId)) {
+  for (const secret of await orgSecretValues(userId, choice)) {
     if (secret.value === null) {
       record({
         scope: scopeLabel(to),
@@ -868,11 +876,15 @@ export async function deployContent(
   userId: string,
   tokenId: string,
   orgName: string,
+  selection: DeploySelection,
 ): Promise<DeployResult> {
   const typed = orgName.trim();
   const derived = harnessIdentifier(typed);
   if (typed.length === 0 || derived === null) {
     return { ok: false, error: "invalid_name" };
+  }
+  if (nothingSelected(selection)) {
+    return { ok: false, error: "nothing_selected" };
   }
 
   const [row] = await db
@@ -952,9 +964,18 @@ export async function deployContent(
       : undefined,
   });
 
-  await deploySecrets(target, tokenId, userId, record);
+  await deploySecrets(
+    target,
+    tokenId,
+    userId,
+    { official: selection.official, mine: selection.mySecrets },
+    record,
+  );
 
-  const sources = await deployableTemplateSources(userId);
+  const sources = await deployableTemplateSources(userId, {
+    official: selection.official,
+    mine: selection.myTemplates,
+  });
   const ordered = [
     ...sources.filter((s) => s.projectIdentifier === null),
     ...sources.filter((s) => s.projectIdentifier !== null),

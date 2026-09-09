@@ -77,13 +77,24 @@ export async function listTemplateSources(
   return sourcesWhere(ownedBy(owner));
 }
 
+/** Which sources a deploy was asked to read from. */
+export type SourceChoice = {
+  /** All of the site's own sources. */
+  official: boolean;
+  /** The ids of the deploying user's own sources they picked. */
+  mine: string[];
+};
+
 /**
- * What one user's deploy may read from: the site's sources and the user's own,
- * each place named only once even if both scopes point at it.
+ * What one user's deploy may read from: the site's sources and whichever of
+ * their own they picked, each place named only once even if both point at it.
  */
 export async function deployableTemplateSources(
   userId: string,
+  choice: SourceChoice,
 ): Promise<TemplateSourceRow[]> {
+  if (!choice.official && choice.mine.length === 0) return [];
+
   const rows = await sourcesWhere(
     or(
       isNull(harnessTemplateSources.userId),
@@ -91,17 +102,21 @@ export async function deployableTemplateSources(
     )!,
   );
 
+  const picked = new Set(choice.mine);
+  const wanted = rows.filter((r) => (r.mine ? picked.has(r.id) : choice.official));
+
   // The user's own row wins where both scopes name the same place, since it is
   // the more specific of the two.
   const seen = new Set<string>();
-  return [...rows.filter((r) => r.mine), ...rows.filter((r) => !r.mine)].filter(
-    (row) => {
-      const place = `${row.accountId}/${row.orgIdentifier}/${row.projectIdentifier ?? ""}`;
-      if (seen.has(place)) return false;
-      seen.add(place);
-      return true;
-    },
-  );
+  return [
+    ...wanted.filter((r) => r.mine),
+    ...wanted.filter((r) => !r.mine),
+  ].filter((row) => {
+    const place = `${row.accountId}/${row.orgIdentifier}/${row.projectIdentifier ?? ""}`;
+    if (seen.has(place)) return false;
+    seen.add(place);
+    return true;
+  });
 }
 
 async function sourcesWhere(where: SQL): Promise<TemplateSourceRow[]> {

@@ -101,19 +101,35 @@ export type OrgSecretValue = {
   mine: boolean;
 };
 
+/** Whose secrets a deploy was asked for. */
+export type SecretChoice = {
+  /** The site's own secrets. */
+  official: boolean;
+  /** The deploying user's own secrets. */
+  mine: boolean;
+};
+
 /**
- * What one user's deploy should write: the site's secrets, with the user's own
- * layered over them, so one of theirs named the same wins.
+ * What one user's deploy should write: whichever of the two owners they picked,
+ * with the user's own layered over the site's, so one of theirs named the same
+ * wins.
  */
 export async function orgSecretValues(
   userId: string,
+  choice: SecretChoice,
 ): Promise<OrgSecretValue[]> {
+  if (!choice.official && !choice.mine) return [];
+
+  const owners = choice.official
+    ? choice.mine
+      ? or(isNull(harnessOrgSecrets.userId), eq(harnessOrgSecrets.userId, userId))!
+      : isNull(harnessOrgSecrets.userId)
+    : eq(harnessOrgSecrets.userId, userId);
+
   const rows = await db
     .select()
     .from(harnessOrgSecrets)
-    .where(
-      or(isNull(harnessOrgSecrets.userId), eq(harnessOrgSecrets.userId, userId)),
-    )
+    .where(owners)
     .orderBy(asc(harnessOrgSecrets.identifier));
 
   const byIdentifier = new Map<string, OrgSecretValue>();

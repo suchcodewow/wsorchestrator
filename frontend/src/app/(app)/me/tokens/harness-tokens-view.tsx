@@ -2,7 +2,7 @@
 
 /** The saved Harness tokens, and the deploy and scrub actions on each. */
 
-import { Fragment, useState } from "react";
+import { Fragment, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
@@ -28,11 +28,17 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { MAX_HARNESS_TOKENS_PER_USER } from "@/db/schema";
 import type { DeployOutcome, DeployReport } from "@/lib/harness-deploy";
+import type { DeployChoices } from "@/lib/harness-deploy-choices";
 import { messageFor as deployMessageFor } from "@/lib/harness-deploy-errors";
+import {
+  nothingSelected,
+  type DeploySelection,
+} from "@/lib/harness-deploy-selection";
 import { harnessIdentifier } from "@/lib/harness-identifier";
 import { messageFor } from "@/lib/harness-token-errors";
 import { administersAccount, permissionLabel } from "@/lib/harness-permissions";
 import type { ScrubRun, ScrubSummary } from "@/lib/harness-scrub";
+import type { TemplateSourceRow } from "@/lib/harness-templates";
 import type { HarnessTokenSummary } from "@/lib/harness-tokens";
 import { riseChild, staggerParent } from "@/lib/motion";
 import { cn } from "@/lib/utils";
@@ -72,14 +78,25 @@ const PRINCIPAL_LABEL: Record<string, string> = {
 
 const tokenName = (t: HarnessTokenSummary) => t.accountName ?? t.accountId;
 
+const countOf = (n: number, one: string, many = `${one}s`) =>
+  `${n} ${n === 1 ? one : many}`;
+
+/** The place a template source reads from, as short as it can be said. */
+const sourceLabel = (s: TemplateSourceRow) =>
+  s.projectIdentifier === null
+    ? (s.orgName ?? s.orgIdentifier)
+    : `${s.orgName ?? s.orgIdentifier} / ${s.projectName ?? s.projectIdentifier}`;
+
 export function HarnessTokensView({
   tokens,
+  choices,
   baseUrl,
   configured,
   canDeploy,
   scrubDays,
 }: {
   tokens: HarnessTokenSummary[];
+  choices: DeployChoices;
   baseUrl: string;
   configured: boolean;
   scrubDays: number;
@@ -187,6 +204,7 @@ export function HarnessTokensView({
   async function deploy(
     id: string,
     org: string,
+    selection: DeploySelection,
   ): Promise<DeployReport | null> {
     setBusy(`deploy:${id}`);
     setError(null);
@@ -195,7 +213,7 @@ export function HarnessTokensView({
       const res = await fetch(`/api/me/harness-tokens/${id}/deploy`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ org }),
+        body: JSON.stringify({ org, ...selection }),
       });
       const body = (await res.json().catch(() => null)) as {
         error?: unknown;
@@ -331,6 +349,7 @@ export function HarnessTokensView({
               <TokenRow
                 key={t.id}
                 token={t}
+                choices={choices}
                 busy={busy === t.id}
                 deploying={busy === `deploy:${t.id}`}
                 scrubbing={busy === `scrub:${t.id}`}
@@ -342,7 +361,7 @@ export function HarnessTokensView({
                 onRecheck={() => recheck(t.id)}
                 onRemove={() => remove(t.id)}
                 scrubDays={scrubDays}
-                onDeploy={(org) => deploy(t.id, org)}
+                onDeploy={(org, selection) => deploy(t.id, org, selection)}
                 onScrub={() => scrub(t.id)}
               />
             ))}
@@ -355,6 +374,7 @@ export function HarnessTokensView({
 
 function TokenRow({
   token,
+  choices,
   busy,
   deploying,
   scrubbing,
@@ -368,6 +388,7 @@ function TokenRow({
   onScrub,
 }: {
   token: HarnessTokenSummary;
+  choices: DeployChoices;
   busy: boolean;
   deploying: boolean;
   scrubbing: boolean;
@@ -377,7 +398,10 @@ function TokenRow({
   onToggle: () => void;
   onRecheck: () => void;
   onRemove: () => void;
-  onDeploy: (org: string) => Promise<DeployReport | null>;
+  onDeploy: (
+    org: string,
+    selection: DeploySelection,
+  ) => Promise<DeployReport | null>;
   onScrub: () => Promise<ScrubRun | null>;
 }) {
   const granted = token.permissions.filter((p) => p.permitted).length;
@@ -388,6 +412,15 @@ function TokenRow({
   const [org, setOrg] = useState(token.lastDeploy?.orgName ?? "");
   const [report, setReport] = useState<DeployReport | null>(null);
 
+  // Everything the site and this account hold starts ticked, which is what a
+  // deploy used to send before any of this could be chosen — bar a source whose
+  // token no longer opens, since ticking that only buys a skipped step.
+  const [selection, setSelection] = useState<DeploySelection>({
+    official: choices.official.secrets + choices.official.sources > 0,
+    mySecrets: choices.mySecrets > 0,
+    myTemplates: choices.myTemplates.filter((s) => s.usable).map((s) => s.id),
+  });
+
   const identifier = harnessIdentifier(org);
 
   const rerun =
@@ -397,9 +430,23 @@ function TokenRow({
 
   const [scrubbed, setScrubbed] = useState<ScrubRun | null>(null);
 
+  const empty = nothingSelected(selection);
+
+  const secretsGoing =
+    (selection.official && choices.official.secrets > 0) ||
+    (selection.mySecrets && choices.mySecrets > 0);
+
+  const toggleTemplate = (id: string) =>
+    setSelection((current) => ({
+      ...current,
+      myTemplates: current.myTemplates.includes(id)
+        ? current.myTemplates.filter((other) => other !== id)
+        : [...current.myTemplates, id],
+    }));
+
   async function submit() {
-    if (identifier === null || deploying) return;
-    const result = await onDeploy(org);
+    if (identifier === null || deploying || empty) return;
+    const result = await onDeploy(org, selection);
     if (!result) return;
     setPrompting(false);
     setReport(result);
@@ -434,7 +481,7 @@ function TokenRow({
               className="text-muted-foreground"
               disabled={busy || deploying || !token.usable}
               onClick={() => setPrompting((open) => !open)}
-              title="Create a Harness org and fill it from this site's settings"
+              title="Create a Harness org and pick what to fill it with"
             >
               {deploying ? (
                 <Loader2 className="size-4 animate-spin" />
@@ -539,23 +586,39 @@ function TokenRow({
               <>
                 A new organization in{" "}
                 <span className="font-medium text-foreground">{name}</span>,
-                filled with every org secret and template source this site
-                holds.
+                filled with whatever is ticked below.
               </>
             )}
           </p>
-          <p className="text-xs leading-relaxed text-muted-foreground">
-            The org secrets go in with their real values so the content works
-            immediately, and{" "}
-            <span className="font-medium text-foreground">
-              {scrubDays === 0
-                ? "are scrubbed to 123 at the next sweep"
-                : `are scrubbed to 123 after ${scrubDays} day${
-                    scrubDays === 1 ? "" : "s"
-                  }`}
-            </span>
-            .
-          </p>
+
+          <DeployPicker
+            choices={choices}
+            selection={selection}
+            disabled={deploying}
+            onOfficial={(on) =>
+              setSelection((current) => ({ ...current, official: on }))
+            }
+            onMySecrets={(on) =>
+              setSelection((current) => ({ ...current, mySecrets: on }))
+            }
+            onTemplate={toggleTemplate}
+          />
+
+          {secretsGoing && (
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              The org secrets go in with their real values so the content works
+              immediately, and{" "}
+              <span className="font-medium text-foreground">
+                {scrubDays === 0
+                  ? "are scrubbed to 123 at the next sweep"
+                  : `are scrubbed to 123 after ${scrubDays} day${
+                      scrubDays === 1 ? "" : "s"
+                    }`}
+              </span>
+              .
+            </p>
+          )}
+
           <div className="flex flex-wrap items-center gap-2">
             <Input
               value={org}
@@ -574,7 +637,7 @@ function TokenRow({
             />
             <Button
               variant="brand"
-              disabled={identifier === null || deploying}
+              disabled={identifier === null || deploying || empty}
               onClick={submit}
             >
               {deploying && <Loader2 className="size-4 animate-spin" />}
@@ -595,6 +658,8 @@ function TokenRow({
               ) : (
                 <>That name needs a letter, digit, or underscore in it.</>
               )
+            ) : empty ? (
+              <>Tick at least one thing above to deploy.</>
             ) : (
               <>
                 Harness identifier:{" "}
@@ -652,6 +717,147 @@ function TokenRow({
             </li>
           )}
         </ul>
+      )}
+    </div>
+  );
+}
+
+/** One tick, with a sentence under it saying what it stands for. */
+function Tick({
+  label,
+  hint,
+  checked,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  hint: ReactNode;
+  checked: boolean;
+  disabled: boolean;
+  onChange: (on: boolean) => void;
+}) {
+  return (
+    <label
+      className={cn(
+        "flex items-start gap-2.5 rounded-md px-2 py-1.5 text-xs",
+        disabled ? "opacity-60" : "cursor-pointer hover:bg-muted/60",
+      )}
+    >
+      <input
+        type="checkbox"
+        checked={checked}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.checked)}
+        className="mt-0.5 size-3.5 shrink-0 accent-brand"
+      />
+      <span>
+        <span className="font-medium text-foreground">{label}</span>
+        <span className="mt-0.5 block leading-relaxed text-muted-foreground">
+          {hint}
+        </span>
+      </span>
+    </label>
+  );
+}
+
+/** What to deploy: the site's content, this account's secrets, its templates. */
+function DeployPicker({
+  choices,
+  selection,
+  disabled,
+  onOfficial,
+  onMySecrets,
+  onTemplate,
+}: {
+  choices: DeployChoices;
+  selection: DeploySelection;
+  disabled: boolean;
+  onOfficial: (on: boolean) => void;
+  onMySecrets: (on: boolean) => void;
+  onTemplate: (id: string) => void;
+}) {
+  const { official } = choices;
+  const nothingOfficial = official.secrets + official.sources === 0;
+
+  return (
+    <div className="space-y-0.5 rounded-lg border bg-background/60 p-1.5">
+      <Tick
+        label="Official content"
+        hint={
+          nothingOfficial ? (
+            <>This site holds no org secrets or template sources of its own.</>
+          ) : (
+            <>
+              {countOf(official.secrets, "org secret")} and everything in{" "}
+              {countOf(official.sources, "template source")} this site holds.
+            </>
+          )
+        }
+        checked={selection.official}
+        disabled={disabled || nothingOfficial}
+        onChange={onOfficial}
+      />
+
+      <Tick
+        label="My secrets"
+        hint={
+          choices.mySecrets === 0 ? (
+            <>
+              You keep no org secrets of your own — add them in My settings → My
+              org secrets.
+            </>
+          ) : (
+            <>
+              {countOf(choices.mySecrets, "org secret")} of your own, written
+              into the organization. One named the same as an official secret
+              wins.
+            </>
+          )
+        }
+        checked={selection.mySecrets}
+        disabled={disabled || choices.mySecrets === 0}
+        onChange={onMySecrets}
+      />
+
+      {choices.myTemplates.length === 0 ? (
+        <p className="px-2 py-1.5 text-xs leading-relaxed text-muted-foreground">
+          You keep no template sources of your own — add one in My settings → My
+          templates to copy an organization&apos;s content in.
+        </p>
+      ) : (
+        <>
+          <p className="px-2 pt-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            My templates
+          </p>
+          {choices.myTemplates.map((source) => (
+            <Tick
+              key={source.id}
+              label={sourceLabel(source)}
+              hint={
+                source.usable ? (
+                  <>
+                    Copy every connector, template, environment, and
+                    infrastructure from{" "}
+                    <code className="rounded bg-muted px-1 py-0.5 font-mono">
+                      {source.projectIdentifier === null
+                        ? source.orgIdentifier
+                        : `${source.orgIdentifier}/${source.projectIdentifier}`}
+                    </code>{" "}
+                    in {source.accountName ?? source.accountId}.
+                  </>
+                ) : (
+                  <>
+                    Its token can no longer be decrypted — re-add it in My
+                    settings → My templates.
+                  </>
+                )
+              }
+              checked={selection.myTemplates.includes(source.id)}
+              disabled={disabled}
+              onChange={() => onTemplate(source.id)}
+            />
+          ))}
+        </>
       )}
     </div>
   );
