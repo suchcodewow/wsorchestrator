@@ -42,6 +42,7 @@ import { summarize } from "./retry.js";
 import { displayName } from "./usernames.js";
 import { applyCatalog } from "./components.js";
 import { applyOrgSecrets } from "./org-secrets.js";
+import { importOrgRepos, projectRepoImporter } from "./repos.js";
 import {
   createAttendeeRole,
   createOrg,
@@ -517,6 +518,11 @@ async function provisionHarness(run: RunRow): Promise<Record<string, unknown>> {
   // yet, and the catalog's graph only orders components against each other.
   await applyOrgSecrets(run, orgId);
 
+  // The repositories an administrator listed for the whole room. Best-effort:
+  // one bad address is logged and left behind rather than costing the workshop
+  // everything below it — see `repos.ts`.
+  await importOrgRepos(run, orgId);
+
   // The org-scope binding every attendee gets references this role, so it has
   // to exist before anyone is bound to it.
   await createAttendeeRole(orgId);
@@ -583,6 +589,14 @@ async function provisionHarness(run: RunRow): Promise<Record<string, unknown>> {
   // step — emitting the finished URL keeps those rules in one place.
   const projectUrls: Record<string, string> = {};
 
+  // Loaded once for the whole roster, then called with each project as it
+  // lands, so the counted row spans the roster instead of one row per attendee.
+  const importProjectRepos = await projectRepoImporter(
+    run,
+    orgId,
+    accounts.length,
+  );
+
   let built = 0;
   await countProjects(built);
   for (const { email } of accounts) {
@@ -610,6 +624,10 @@ async function provisionHarness(run: RunRow): Promise<Record<string, unknown>> {
       );
     }
     projectUrls[email] = projectUrl(orgId, projectId);
+
+    // After the grants, so an attendee whose project is still being wired up
+    // never sees a repository they cannot open yet.
+    await importProjectRepos(projectId);
 
     await log(run.id, "stdout", `${email} -> admin of project ${projectId}`);
     await countProjects(++built);

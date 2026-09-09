@@ -391,6 +391,55 @@ export async function loadOrgSecrets(): Promise<OrgSecret[]> {
   }));
 }
 
+/* ------------------------------------------------------------------ *
+ * Administrator-listed GitHub repositories
+ * ------------------------------------------------------------------ */
+
+/** Mirrors `REPO_SCOPES` in the frontend's Drizzle schema. */
+export type RepoScope = "org" | "project";
+
+/**
+ * One GitHub repository every workshop imports into Harness Code.
+ *
+ * `providerRepo` is the `owner/name` the importer takes; `url` is only what the
+ * administrator typed, kept for the log so a failure names the address they
+ * would go and check. `scope` decides how many copies get made: `"org"` means
+ * one in the event's organization, `"project"` means one in every attendee's own
+ * project.
+ */
+export type Repo = {
+  identifier: string;
+  providerRepo: string;
+  scope: RepoScope;
+  url: string;
+};
+
+/**
+ * Every repository the site imports, in a stable order.
+ *
+ * Site-wide, like the org secrets above and for the same reason: an
+ * administrator lists a repository once and every workshop gets it.
+ */
+export async function loadRepos(): Promise<Repo[]> {
+  const { rows } = await pool.query<{
+    identifier: string;
+    provider_repo: string;
+    scope: RepoScope;
+    url: string;
+  }>(
+    `select identifier, provider_repo, scope, url
+       from harness_repos
+      order by identifier`,
+  );
+
+  return rows.map((r) => ({
+    identifier: r.identifier,
+    providerRepo: r.provider_repo,
+    scope: r.scope,
+    url: r.url,
+  }));
+}
+
 /**
  * One thing this run has built, as the UI should name it.
  *

@@ -903,6 +903,57 @@ export async function deleteConnector(
 }
 
 /* ------------------------------------------------------------------ *
+ * Code repositories — the GitHub repos an administrator listed, copied
+ * into Harness Code so attendees have something to work on
+ * ------------------------------------------------------------------ */
+
+const REPO_IMPORT_PATH = "/code/api/v1/repos/import";
+
+/**
+ * Import a public GitHub repository into Harness Code.
+ *
+ * `providerRepo` is `owner/name`; `identifier` is what the repository will be
+ * called on the Harness side. Passing `projectId` puts it in that attendee's
+ * project, omitting it puts it in the org — the two are separate spaces, so the
+ * same identifier at both levels is fine.
+ *
+ * Returns whether it was already there. The endpoint answers 201 as soon as it
+ * has accepted the job — the copy itself finishes a few seconds later, with
+ * `importing: false` on the repo — and nothing downstream waits on it, so this
+ * does not poll: an attendee reaching the repository within seconds of their
+ * project appearing is not a case worth holding a provision open for.
+ *
+ * No credential is sent, so a private repository comes back as a 400 naming it
+ * `Not Found` at github. That is a thrown error like any other bad request; the
+ * caller in `repos.ts` catches it per repository rather than losing the rest of
+ * the workshop to one wrong address.
+ *
+ * `pipelines: "ignore"` leaves any Harness pipeline definitions in the
+ * repository as plain files. Converting them would create pipelines in the
+ * attendee's project that the labs never asked for.
+ */
+export async function importRepo(
+  orgId: string,
+  projectId: string | undefined,
+  identifier: string,
+  providerRepo: string,
+): Promise<boolean> {
+  const { duplicate } = await api(
+    "POST",
+    REPO_IMPORT_PATH,
+    { orgIdentifier: orgId, projectIdentifier: projectId },
+    {
+      identifier,
+      description: `Imported from github.com/${providerRepo} by Workshop Orchestrator.`,
+      provider: { type: "github" },
+      provider_repo: providerRepo,
+      pipelines: "ignore",
+    },
+  );
+  return duplicate;
+}
+
+/* ------------------------------------------------------------------ *
  * Delegate tokens — an org-scoped token per event, for the delegates
  * the runner installs into each workshop cluster.
  * ------------------------------------------------------------------ */

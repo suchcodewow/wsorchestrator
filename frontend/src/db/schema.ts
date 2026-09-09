@@ -254,6 +254,7 @@ export const RESOURCE_KINDS = [
   "harness_connector",
   "harness_template",
   "harness_components",
+  "harness_repos",
 ] as const;
 export type ResourceKind = (typeof RESOURCE_KINDS)[number];
 
@@ -639,6 +640,43 @@ export const harnessTemplateSources = pgTable(
 export const MAX_TEMPLATE_SOURCES = 25;
 
 export type HarnessTemplateSource = typeof harnessTemplateSources.$inferSelect;
+
+/**
+ * Where a workshop's copy of a repository lands: once in the event's
+ * organization, or once inside every attendee's own project.
+ */
+export const REPO_SCOPES = ["org", "project"] as const;
+export type RepoScope = (typeof REPO_SCOPES)[number];
+
+export const harnessRepos = pgTable(
+  "harness_repos",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** The GitHub URL an administrator typed, kept verbatim to show back. */
+    url: text("url").notNull(),
+    /** The `owner/name` the Harness importer takes, parsed out of the URL. */
+    providerRepo: text("provider_repo").notNull(),
+    /** What the repository is called once it is in Harness. */
+    identifier: text("identifier").notNull(),
+    scope: text("scope").notNull(),
+    addedBy: text("added_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    // One name per scope. Harness keeps org repos and project repos in separate
+    // spaces, so the same name at both levels is legal — two rows for the same
+    // name at the *same* level is only ever a mistake.
+    uniqueIndex("harness_repos_identifier_idx").on(t.identifier, t.scope),
+  ],
+);
+
+export const REPO_LIMITS = { url: 500, identifier: 100 } as const;
+
+export type HarnessRepo = typeof harnessRepos.$inferSelect;
 
 export const harnessDeployedSecrets = pgTable(
   "harness_deployed_secrets",

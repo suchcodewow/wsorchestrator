@@ -30,6 +30,7 @@ import {
   ExternalLink,
   FileCode,
   FolderKanban,
+  Github,
   KeyRound,
   Layers,
   Loader2,
@@ -506,6 +507,7 @@ const RESOURCE_ICONS: Record<string, LucideIcon> = {
   harness_secret: KeyRound,
   harness_template: FileCode,
   harness_components: Boxes,
+  harness_repos: Github,
 };
 
 function BuiltPanel({
