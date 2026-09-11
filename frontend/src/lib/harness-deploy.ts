@@ -299,38 +299,108 @@ const missingLabel = (missing: MissingSecret) =>
     ? `${missing.org} / ${missing.project}`
     : (missing.org ?? "the account");
 
+type SecretType = "SecretText" | "SecretFile";
+
+/**
+ * What kind of secret the missing reference names, asked of the organization it
+ * is being copied *from*.
+ *
+ * A reference carries only an identifier, and the two kinds are not
+ * interchangeable — a connector reaching for a service-account *file* is not
+ * satisfied by a text secret of the same name. The source knows which it is,
+ * since the real secret is sitting there; only the value is unreadable, which is
+ * the whole reason a stand-in is needed. Null when the source cannot answer, and
+ * the caller falls back to text.
+ */
+async function secretTypeOf(
+  from: Scope,
+  missing: MissingSecret,
+): Promise<SecretType | null> {
+  // Harness names the scope it looked in, which is the target. The place to ask
+  // is the matching level of the source.
+  const scope =
+    missing.project !== null
+      ? { orgIdentifier: from.org, projectIdentifier: from.project ?? undefined }
+      : missing.org !== null
+        ? { orgIdentifier: from.org }
+        : {};
+
+  const reply = await harnessRequest(
+    from.token,
+    "GET",
+    `/ng/api/v2/secrets/${encodeURIComponent(missing.identifier)}`,
+    { accountIdentifier: from.accountId, ...scope },
+  );
+  if (!ok(reply)) return null;
+
+  const type = dataOf<{ secret?: { type?: string } }>(reply)?.secret?.type;
+  return type === "SecretText" || type === "SecretFile" ? type : null;
+}
+
+/**
+ * Stand in for a secret the deployed content names and this site has no value
+ * for, as the same kind of secret the content is reaching for.
+ *
+ * `123` either way — inline for a text secret, and as the whole contents of the
+ * uploaded file for a file one, which goes to its own multipart endpoint.
+ */
 async function createPlaceholder(
   to: Scope,
   missing: MissingSecret,
+  type: SecretType,
 ): Promise<Reply> {
   const scope = {
     orgIdentifier: missing.org ?? undefined,
     projectIdentifier: missing.project ?? undefined,
   };
+  // The org's built-in manager, not the account's — the same one `deploySecrets`
+  // uses for the real values. Harness refuses to move a secret between managers
+  // after it is created, so a placeholder in the wrong one could never be
+  // replaced by a real value under the same identifier.
+  const secretManagerIdentifier =
+    missing.org === null ? "harnessSecretManager" : "org.harnessSecretManager";
+  const secret = {
+    name: missing.identifier,
+    identifier: missing.identifier,
+    ...scope,
+    description: PLACEHOLDER_DESCRIPTION,
+    tags: { ...TAGS, placeholder: "true" },
+    type,
+    spec:
+      type === "SecretFile"
+        ? { secretManagerIdentifier }
+        : {
+            secretManagerIdentifier,
+            valueType: "Inline",
+            value: PLACEHOLDER_VALUE,
+          },
+  };
+  const query = { accountIdentifier: to.accountId, ...scope };
+
+  if (type === "SecretText") {
+    return harnessRequest(to.token, "POST", "/ng/api/v2/secrets", query, {
+      secret,
+    });
+  }
+
+  const form = new FormData();
+  form.append("spec", JSON.stringify({ secret }));
+  form.append(
+    "file",
+    new Blob([PLACEHOLDER_VALUE], { type: "text/plain" }),
+    `${missing.identifier}.txt`,
+  );
   return harnessRequest(
     to.token,
     "POST",
-    "/ng/api/v2/secrets",
-    { accountIdentifier: to.accountId, ...scope },
-    {
-      secret: {
-        name: missing.identifier,
-        identifier: missing.identifier,
-        ...scope,
-        description: PLACEHOLDER_DESCRIPTION,
-        tags: { ...TAGS, placeholder: "true" },
-        type: "SecretText",
-        spec: {
-          secretManagerIdentifier: "harnessSecretManager",
-          valueType: "Inline",
-          value: PLACEHOLDER_VALUE,
-        },
-      },
-    },
+    "/ng/api/v2/secrets/files",
+    query,
+    form,
   );
 }
 
 async function createFillingGaps(
+  from: Scope,
   to: Scope,
   send: () => Promise<Reply>,
   record: Record_,
@@ -346,7 +416,11 @@ async function createFillingGaps(
     if (!missing || attempted.has(missing.identifier)) break;
     attempted.add(missing.identifier);
 
-    const placeholder = await createPlaceholder(to, missing);
+    // Text unless the source says otherwise: a source that cannot be asked is
+    // not a reason to refuse the stand-in, and text is what most of them are.
+    const type = (await secretTypeOf(from, missing)) ?? "SecretText";
+
+    const placeholder = await createPlaceholder(to, missing, type);
     const result = outcomeOf(placeholder);
     record({
       scope: missingLabel(missing),
@@ -355,8 +429,8 @@ async function createFillingGaps(
       outcome: result.outcome,
       detail:
         result.detail ??
-        `Value ${PLACEHOLDER_VALUE} — referenced by the content being deployed, ` +
-          `and no real value for it was available.`,
+        `A ${type} holding ${PLACEHOLDER_VALUE} — referenced by the content ` +
+          `being deployed, and no real value for it was available.`,
     });
 
     if (result.outcome === "failed") break;
@@ -407,6 +481,7 @@ async function copyConnectors(
     delete rest.accountIdentifier;
 
     const outcome = await createFillingGaps(
+      from,
       to,
       () =>
         harnessRequest(to.token, "POST", "/ng/api/connectors", scopeQuery(to), {
@@ -506,6 +581,7 @@ async function copyTemplates(
     }
 
     const outcome = await createFillingGaps(
+      from,
       to,
       () =>
         harnessRequest(
@@ -635,6 +711,7 @@ async function copyEnvironments(
     }
 
     const outcome = await createFillingGaps(
+      from,
       to,
       () =>
         harnessRequest(
@@ -759,6 +836,7 @@ async function copyInfrastructures(
     }
 
     const outcome = await createFillingGaps(
+      from,
       to,
       () =>
         harnessRequest(

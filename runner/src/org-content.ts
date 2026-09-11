@@ -1,6 +1,7 @@
 import { harnessCfg } from "./config.js";
 import {
   loadCatalog,
+  loadOrgSecrets,
   loadTemplateSources,
   log,
   recordResource,
@@ -28,7 +29,7 @@ import { openSecret, secretsConfigured } from "./secret-box.js";
  * and change them in both** — in particular what gets copied, the placeholder
  * value, and the tags, which are what somebody looking at the org sees.
  *
- * Three things about the shape of this are deliberate:
+ * Four things about the shape of this are deliberate:
  *
  *   * **Read wherever the row points, write at the org.** A source row naming a
  *     project is read from that project, and its content still lands at the
@@ -36,6 +37,13 @@ import { openSecret, secretsConfigured } from "./secret-box.js";
  *     attendee role grants org-level view/access — so content in the org is
  *     usable by every attendee, where content in a project of its own would be
  *     visible to nobody who needs it.
+ *
+ *   * **No secret value is ever copied.** Harness does not return one — every
+ *     secret reads back with `value: null` — and this does not ask. Real values
+ *     reach a workshop org from Settings → Org Secrets, applied just before this
+ *     runs, and from the catalog's cloud credentials. What the copy contributes
+ *     is a *stand-in*, of the same kind as the secret the content is reaching
+ *     for, for references neither of those covers: see `createPlaceholder`.
  *
  *   * **Best-effort, like the repositories.** A source whose token has been
  *     rotated, an entity Harness refuses, a whole account that is unreachable:
@@ -120,13 +128,17 @@ function messageOf(body: string): string {
  * own 5xx and rate limiter and returning the final status verbatim. Interpreting
  * it is the caller's job: a duplicate is success here, and a missing secret is
  * the start of a placeholder.
+ *
+ * A `FormData` body is sent as multipart with no Content-Type of our own — only
+ * the secret-file endpoint takes one, and the boundary has to come from fetch.
+ * It survives the retry loop because the parts are held in memory.
  */
 async function request(
   token: string,
   method: "GET" | "POST",
   path: string,
   query: Query,
-  body?: Json | string,
+  body?: Json | FormData | string,
 ): Promise<Reply> {
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(query)) {
@@ -142,7 +154,9 @@ async function request(
         method,
         headers: {
           "x-api-key": token,
-          ...(body === undefined ? {} : { "Content-Type": "application/json" }),
+          ...(body === undefined || body instanceof FormData
+            ? {}
+            : { "Content-Type": "application/json" }),
         },
         // A string body is sent verbatim — the template endpoint takes raw YAML
         // under a JSON content type, which is what Harness accepts (see
@@ -150,7 +164,7 @@ async function request(
         body:
           body === undefined
             ? undefined
-            : typeof body === "string"
+            : body instanceof FormData || typeof body === "string"
               ? body
               : JSON.stringify(body),
         signal: AbortSignal.timeout(TIMEOUT_MS),
@@ -329,63 +343,150 @@ export function missingSecret(body: string): MissingSecret | null {
   };
 }
 
+/** The two kinds of secret a copied entity can be referring to. */
+export type SecretType = "SecretText" | "SecretFile";
+
+/**
+ * What kind of secret the missing reference names, asked of the organization it
+ * was copied *from*.
+ *
+ * A reference says only an identifier, and the two kinds are not
+ * interchangeable: a connector wanting a service-account *file* is not satisfied
+ * by a text secret of the same name, so a stand-in has to be the kind the
+ * content is actually reaching for. The source knows, because the real secret is
+ * sitting there — only its value is unreadable (Harness returns `value: null`
+ * for every secret, which is the whole reason placeholders exist).
+ *
+ * The scope is mapped across rather than reused: Harness says where it *looked*,
+ * which is the workshop's org, and the corresponding place to ask is the same
+ * level of the source — org for an org reference, the source's project for a
+ * project one, the account for an unqualified one.
+ *
+ * Null when the source cannot answer — a reference to something that is not
+ * there either, a token without the standing to read it. The caller falls back
+ * to text, which is what the majority are.
+ */
+async function secretTypeOf(
+  from: Scope,
+  missing: MissingSecret,
+): Promise<SecretType | null> {
+  const scope =
+    missing.project !== null
+      ? { orgIdentifier: from.org, projectIdentifier: from.project ?? undefined }
+      : missing.org !== null
+        ? { orgIdentifier: from.org }
+        : {};
+
+  const reply = await request(
+    from.token,
+    "GET",
+    `/ng/api/v2/secrets/${encodeURIComponent(missing.identifier)}`,
+    { accountIdentifier: from.accountId, ...scope },
+  );
+  if (!ok(reply)) return null;
+
+  const type = dataOf<{ secret?: { type?: string } }>(reply)?.secret?.type;
+  return type === "SecretText" || type === "SecretFile" ? type : null;
+}
+
+/**
+ * Which secret manager a stand-in is created in.
+ *
+ * This is not cosmetic. Harness will not let a secret change managers after it
+ * is created — `Cannot change organization, project, identifier, type or secret
+ * manager of a secret after creation` — so a placeholder made in the *account's*
+ * built-in manager can never be updated by anything that addresses the org's,
+ * and the catalog's `upsertSecretText`/`upsertSecretFile` address the org's.
+ * Getting this wrong made a same-kind placeholder as fatal as a wrong-kind one,
+ * which is exactly the failure `mintedHere` exists to prevent.
+ *
+ * `org.harnessSecretManager` is the built-in manager as seen from an
+ * organization, which is what `harness.ts` and the app's `deploySecrets` both
+ * use; the bare name is the account's, and is right only for a reference that
+ * named no org at all.
+ */
+const secretManagerFor = (missing: MissingSecret) =>
+  missing.org === null ? "harnessSecretManager" : "org.harnessSecretManager";
+
+/** The JSON half of a placeholder, shared by both kinds. */
+const placeholderSecret = (missing: MissingSecret, type: SecretType) => ({
+  name: missing.identifier,
+  identifier: missing.identifier,
+  orgIdentifier: missing.org ?? undefined,
+  projectIdentifier: missing.project ?? undefined,
+  description: PLACEHOLDER_DESCRIPTION,
+  tags: { ...TAGS, placeholder: "true" },
+  type,
+  spec:
+    type === "SecretFile"
+      ? { secretManagerIdentifier: secretManagerFor(missing) }
+      : {
+          secretManagerIdentifier: secretManagerFor(missing),
+          valueType: "Inline",
+          value: PLACEHOLDER_VALUE,
+        },
+});
+
 /**
  * Create a stand-in for a secret the copied content names and the site has no
  * value for, so the entity above it can exist at all.
  *
- * The value fails at first use rather than half-working, and the description and
- * `placeholder` tag are there so nobody mistakes it for a credential that was
- * meant to work — the same bargain the app's deploy makes, and the same one the
- * scrub sweep leaves behind.
+ * `123` either way — inline for a text secret, and as the entire contents of the
+ * uploaded file for a file one. It fails at first use rather than half-working,
+ * and the description and `placeholder` tag are there so nobody mistakes it for
+ * a credential that was meant to work: the same bargain the app's deploy makes,
+ * and the same one the scrub sweep leaves behind.
+ *
+ * A file secret goes to its own endpoint as multipart, which is the only reason
+ * the two kinds are not one call — the JSON body is identical but for the spec.
  */
 async function createPlaceholder(
   to: Scope,
   missing: MissingSecret,
+  type: SecretType,
 ): Promise<Reply> {
-  const scope = {
+  const secret = placeholderSecret(missing, type);
+  const query = {
+    accountIdentifier: to.accountId,
     orgIdentifier: missing.org ?? undefined,
     projectIdentifier: missing.project ?? undefined,
   };
-  return request(
-    to.token,
-    "POST",
-    "/ng/api/v2/secrets",
-    { accountIdentifier: to.accountId, ...scope },
-    {
-      secret: {
-        name: missing.identifier,
-        identifier: missing.identifier,
-        ...scope,
-        description: PLACEHOLDER_DESCRIPTION,
-        tags: { ...TAGS, placeholder: "true" },
-        type: "SecretText",
-        spec: {
-          secretManagerIdentifier: "harnessSecretManager",
-          valueType: "Inline",
-          value: PLACEHOLDER_VALUE,
-        },
-      },
-    },
+
+  if (type === "SecretText") {
+    return request(to.token, "POST", "/ng/api/v2/secrets", query, { secret });
+  }
+
+  const form = new FormData();
+  form.append("spec", JSON.stringify({ secret }));
+  form.append(
+    "file",
+    new Blob([PLACEHOLDER_VALUE], { type: "text/plain" }),
+    `${missing.identifier}.txt`,
   );
+  return request(to.token, "POST", "/ng/api/v2/secrets/files", query, form);
 }
 
 /**
- * Everything one copy needs that is not the entity itself: where it is going,
- * which secrets the workshop mints for itself, and how to write down what
- * happened to a stand-in secret made along the way.
+ * Everything one copy needs that is not the entity itself: both ends of the
+ * copy, which secrets the workshop supplies for itself, and how to write down
+ * what happened to a stand-in secret made along the way.
  */
 type Copying = {
+  from: Scope;
   to: Scope;
   /**
-   * Identifiers the component catalog owns, which must never be stood in for.
+   * Every identifier this workshop provides a real value for, and which kind of
+   * secret that value is: the Settings → Org Secrets rows, applied moments ago,
+   * and the catalog's cloud credentials, minted once an apply finishes.
    *
-   * A placeholder is always a `SecretText`, and the catalog's `gcp_service_account`
-   * is a *file* secret — so a placeholder squatting on that identifier would
-   * make the catalog's later upsert a type change, which Harness refuses and
-   * which `upsertSecret` turns into a thrown error that fails the whole run. An
-   * entity that needs one of these waits for the real value instead.
+   * Standing in for one of these is fine and often useful — the real value is
+   * upserted over the placeholder later, so the entity that needed it ends up
+   * working. Standing in with the *wrong kind* is not: Harness will not change a
+   * secret's type (or its manager) after creation, `upsertSecret` throws on the
+   * refusal, and that throw fails the whole run. So a mismatch waits instead,
+   * which costs one entity rather than the workshop.
    */
-  mintedHere: Set<string>;
+  ownedHere: Map<string, SecretType>;
   record: Record_;
 };
 
@@ -413,16 +514,22 @@ async function createFillingGaps(
     if (!missing || attempted.has(missing.identifier)) break;
     attempted.add(missing.identifier);
 
-    if (ctx.mintedHere.has(missing.identifier)) {
+    // Text unless the source says otherwise: a source that cannot be asked is
+    // not a reason to refuse the stand-in, and text is what most of them are.
+    const type = (await secretTypeOf(ctx.from, missing)) ?? "SecretText";
+
+    const owned = ctx.ownedHere.get(missing.identifier);
+    if (owned !== undefined && owned !== type) {
       return {
         outcome: "waiting",
         detail:
-          `it references org.${missing.identifier}, which this workshop mints ` +
-          `for itself once its cloud is built`,
+          `it references org.${missing.identifier} as a ${type}, and this ` +
+          `workshop supplies that identifier as a ${owned} — a stand-in of the ` +
+          `wrong kind would block the real value from ever landing`,
       };
     }
 
-    const placeholder = await createPlaceholder(ctx.to, missing);
+    const placeholder = await createPlaceholder(ctx.to, missing, type);
     const result = outcomeOf(placeholder);
     await ctx.record(
       "secret",
@@ -431,8 +538,12 @@ async function createFillingGaps(
         ? result
         : {
             outcome: result.outcome,
-            detail: `value ${PLACEHOLDER_VALUE} — the copied content references ` +
-              `it and the site has no value for it`,
+            detail:
+              `${type} holding ${PLACEHOLDER_VALUE} — the copied content ` +
+              `references it and the site has no value for it` +
+              (owned !== undefined
+                ? `; this workshop's own value replaces it once it is minted`
+                : ""),
           },
     );
 
@@ -455,21 +566,14 @@ async function createFillingGaps(
  * ------------------------------------------------------------------ */
 
 /** One failed listing, said the same way whatever was being listed. */
-const listingFailed = (
-  ctx: Copying,
-  kind: string,
-  from: Scope,
-  detail: string,
-) =>
-  ctx.record(kind, `(all in ${scopeLabel(from)})`, {
+const listingFailed = (ctx: Copying, kind: string, detail: string) =>
+  ctx.record(kind, `(all in ${scopeLabel(ctx.from)})`, {
     outcome: "failed",
     detail: `could not list them: ${detail}`,
   });
 
-async function copyConnectors(
-  from: Scope,
-  ctx: Copying,
-): Promise<void> {
+async function copyConnectors(ctx: Copying): Promise<void> {
+  const { from, to } = ctx;
   const listed = await listPages<{ connector?: Json; harnessManaged?: boolean }>(
     from.token,
     "GET",
@@ -478,7 +582,7 @@ async function copyConnectors(
     { page: "pageIndex", size: "pageSize" },
   );
   if (!listed.ok) {
-    await listingFailed(ctx, "connector", from, listed.detail);
+    await listingFailed(ctx, "connector", listed.detail);
     return;
   }
 
@@ -494,11 +598,11 @@ async function copyConnectors(
     delete rest.accountIdentifier;
 
     const result = await createFillingGaps(ctx, () =>
-      request(ctx.to.token, "POST", "/ng/api/connectors", scopeQuery(ctx.to), {
+      request(to.token, "POST", "/ng/api/connectors", scopeQuery(to), {
         connector: {
           ...rest,
-          orgIdentifier: ctx.to.org,
-          projectIdentifier: ctx.to.project ?? undefined,
+          orgIdentifier: to.org,
+          projectIdentifier: to.project ?? undefined,
           tags: { ...((connector.tags as Json | undefined) ?? {}), ...TAGS },
         },
       }),
@@ -508,7 +612,8 @@ async function copyConnectors(
   }
 }
 
-async function copyTemplates(from: Scope, ctx: Copying): Promise<void> {
+async function copyTemplates(ctx: Copying): Promise<void> {
+  const { from, to } = ctx;
   const listed = await listPages<{
     identifier?: string;
     name?: string;
@@ -522,7 +627,7 @@ async function copyTemplates(from: Scope, ctx: Copying): Promise<void> {
     { filterType: "Template" },
   );
   if (!listed.ok) {
-    await listingFailed(ctx, "template", from, listed.detail);
+    await listingFailed(ctx, "template", listed.detail);
     return;
   }
 
@@ -558,8 +663,8 @@ async function copyTemplates(from: Scope, ctx: Copying): Promise<void> {
         name: meta.name ?? identifier,
         identifier,
         versionLabel,
-        orgIdentifier: ctx.to.org,
-        projectIdentifier: ctx.to.project,
+        orgIdentifier: to.org,
+        projectIdentifier: to.project,
       });
     } catch (err) {
       await ctx.record("template", label, {
@@ -571,10 +676,10 @@ async function copyTemplates(from: Scope, ctx: Copying): Promise<void> {
 
     const result = await createFillingGaps(ctx, () =>
       request(
-        ctx.to.token,
+        to.token,
         "POST",
         "/template/api/templates",
-        { ...scopeQuery(ctx.to), storeType: "INLINE" },
+        { ...scopeQuery(to), storeType: "INLINE" },
         body,
       ),
     );
@@ -583,7 +688,8 @@ async function copyTemplates(from: Scope, ctx: Copying): Promise<void> {
   }
 }
 
-async function copyEnvironments(from: Scope, ctx: Copying): Promise<void> {
+async function copyEnvironments(ctx: Copying): Promise<void> {
+  const { from, to } = ctx;
   const listed = await listPages<{ environment?: Json }>(
     from.token,
     "GET",
@@ -592,7 +698,7 @@ async function copyEnvironments(from: Scope, ctx: Copying): Promise<void> {
     { page: "page", size: "size" },
   );
   if (!listed.ok) {
-    await listingFailed(ctx, "environment", from, listed.detail);
+    await listingFailed(ctx, "environment", listed.detail);
     return;
   }
 
@@ -615,23 +721,23 @@ async function copyEnvironments(from: Scope, ctx: Copying): Promise<void> {
         body = rescopeYaml(yaml, "environment", {
           name,
           identifier,
-          orgIdentifier: ctx.to.org,
-          projectIdentifier: ctx.to.project,
+          orgIdentifier: to.org,
+          projectIdentifier: to.project,
         });
       } catch {}
     }
 
     const result = await createFillingGaps(ctx, () =>
       request(
-        ctx.to.token,
+        to.token,
         "POST",
         "/ng/api/environmentsV2",
-        { accountIdentifier: ctx.to.accountId },
+        { accountIdentifier: to.accountId },
         {
           identifier,
           name,
-          orgIdentifier: ctx.to.org,
-          projectIdentifier: ctx.to.project ?? undefined,
+          orgIdentifier: to.org,
+          projectIdentifier: to.project ?? undefined,
           description: DESCRIPTION,
           tags: { ...((environment.tags as Json | undefined) ?? {}), ...TAGS },
           type:
@@ -646,7 +752,6 @@ async function copyEnvironments(from: Scope, ctx: Copying): Promise<void> {
     await ctx.record("environment", identifier, result);
 
     await copyInfrastructures(
-      from,
       ctx,
       identifier,
       result.outcome === "created" || result.outcome === "existed"
@@ -665,11 +770,11 @@ async function copyEnvironments(from: Scope, ctx: Copying): Promise<void> {
  * the same thing several times over.
  */
 async function copyInfrastructures(
-  from: Scope,
   ctx: Copying,
   environment: string,
   blocked: string | null,
 ): Promise<void> {
+  const { from, to } = ctx;
   const listed = await listPages<{ infrastructure?: Json }>(
     from.token,
     "GET",
@@ -678,7 +783,7 @@ async function copyInfrastructures(
     { page: "page", size: "size" },
   );
   if (!listed.ok) {
-    await listingFailed(ctx, "infrastructure", from, listed.detail);
+    await listingFailed(ctx, "infrastructure", listed.detail);
     return;
   }
 
@@ -714,8 +819,8 @@ async function copyInfrastructures(
       body = rescopeYaml(yaml, "infrastructureDefinition", {
         name,
         identifier,
-        orgIdentifier: ctx.to.org,
-        projectIdentifier: ctx.to.project,
+        orgIdentifier: to.org,
+        projectIdentifier: to.project,
         environmentRef: environment,
       });
     } catch (err) {
@@ -728,15 +833,15 @@ async function copyInfrastructures(
 
     const result = await createFillingGaps(ctx, () =>
       request(
-        ctx.to.token,
+        to.token,
         "POST",
         "/ng/api/infrastructures",
-        { accountIdentifier: ctx.to.accountId },
+        { accountIdentifier: to.accountId },
         {
           identifier,
           name,
-          orgIdentifier: ctx.to.org,
-          projectIdentifier: ctx.to.project ?? undefined,
+          orgIdentifier: to.org,
+          projectIdentifier: to.project ?? undefined,
           environmentRef: environment,
           description: DESCRIPTION,
           tags: {
@@ -760,7 +865,8 @@ async function copyInfrastructures(
  * No tags and no description of ours: the variables API takes neither, and a
  * variable's whole content is its fixed value, so it is copied as it stands.
  */
-async function copyVariables(from: Scope, ctx: Copying): Promise<void> {
+async function copyVariables(ctx: Copying): Promise<void> {
+  const { from, to } = ctx;
   const listed = await listPages<{ variable?: Json }>(
     from.token,
     "GET",
@@ -769,7 +875,7 @@ async function copyVariables(from: Scope, ctx: Copying): Promise<void> {
     { page: "pageIndex", size: "pageSize" },
   );
   if (!listed.ok) {
-    await listingFailed(ctx, "variable", from, listed.detail);
+    await listingFailed(ctx, "variable", listed.detail);
     return;
   }
 
@@ -782,15 +888,15 @@ async function copyVariables(from: Scope, ctx: Copying): Promise<void> {
     delete rest.accountIdentifier;
 
     const reply = await request(
-      ctx.to.token,
+      to.token,
       "POST",
       "/ng/api/variables",
-      { accountIdentifier: ctx.to.accountId },
+      { accountIdentifier: to.accountId },
       {
         variable: {
           ...rest,
-          orgIdentifier: ctx.to.org,
-          projectIdentifier: ctx.to.project ?? undefined,
+          orgIdentifier: to.org,
+          projectIdentifier: to.project ?? undefined,
         },
       },
     );
@@ -804,11 +910,11 @@ async function copyVariables(from: Scope, ctx: Copying): Promise<void> {
  * connectors before the templates and infrastructure that name them, variables
  * alongside them since nothing depends on a variable existing first.
  */
-async function copySource(from: Scope, ctx: Copying): Promise<void> {
-  await copyConnectors(from, ctx);
-  await copyVariables(from, ctx);
-  await copyTemplates(from, ctx);
-  await copyEnvironments(from, ctx);
+async function copySource(ctx: Copying): Promise<void> {
+  await copyConnectors(ctx);
+  await copyVariables(ctx);
+  await copyTemplates(ctx);
+  await copyEnvironments(ctx);
 }
 
 /* ------------------------------------------------------------------ *
@@ -863,11 +969,27 @@ export async function copyOrgContent(
     project: null,
   };
 
-  const mintedHere = new Set(
-    (await loadCatalog(run.component_set_id ?? undefined))
+  // Everything this workshop puts a real value behind, and the kind each one
+  // takes, so a stand-in is only ever made where the real value can later land
+  // on top of it — see `Copying.ownedHere`. Both sources are listed, the org
+  // secrets applied minutes ago and the catalog credentials still to come,
+  // because a placeholder outlives the pass that made it: it is still there on
+  // the next provision, when a secret added to settings in between goes to
+  // overwrite it.
+  const ownedHere = new Map<string, SecretType>([
+    ...(await loadOrgSecrets()).map(
+      (s): [string, SecretType] => [
+        s.identifier,
+        s.kind === "file" ? "SecretFile" : "SecretText",
+      ],
+    ),
+    ...(await loadCatalog(run.component_set_id ?? undefined))
       .filter((c) => c.kind === "secret_text" || c.kind === "secret_file")
-      .map((c) => c.identifier),
-  );
+      .map((c): [string, SecretType] => [
+        c.identifier,
+        c.kind === "secret_file" ? "SecretFile" : "SecretText",
+      ]),
+  ]);
 
   const record: Record_ = async (kind, identifier, result) => {
     tally[result.outcome] += 1;
@@ -924,7 +1046,7 @@ export async function copyOrgContent(
     };
 
     try {
-      await copySource(from, { to, mintedHere, record });
+      await copySource({ from, to, ownedHere, record });
     } catch (err) {
       // `copySource` turns every expected failure into a recorded outcome, so
       // this is for the unexpected kind — and one source's surprise must not
