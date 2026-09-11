@@ -64,18 +64,46 @@ manual roll-back and an automated deploy take the same code path.
 
 ## Continuous deployment
 
-A push to `main` builds both images, applies the SQL migrations, and rolls
-Cloud Run — via the `deploy-on-push-main` Cloud Build trigger in
-[infra/admin/cicd.tf](infra/admin/cicd.tf).
+A push to `main` verifies the commit, applies infrastructure, builds both
+images, applies the SQL migrations, and rolls Cloud Run — via the
+`deploy_on_push_main` webhook trigger on the Harness pipeline
+`deploy_workshop_orchestrator` (org `operations`, project `orchestrator`).
 
 ```
 push to main
-  └─ Cloud Build (runs as build-sa)
-       ├─ build app + runner images
-       ├─ push both to Artifact Registry
-       ├─ db-migrate   ← before the new image is live
-       └─ gcloud run services/jobs update
+  └─ Harness: deploy_workshop_orchestrator
+       ├─ 1. Verify              typecheck + unit-test the runner
+       ├─ 2. Infrastructure      IaCM apply of the admin_control_plane workspace
+       └─ 3. Build/migrate/deploy (as build-sa)
+              ├─ build app + runner images
+              ├─ push both to Artifact Registry
+              ├─ db-migrate   ← before the new image is live
+              └─ gcloud run services/jobs update
 ```
+
+The pipeline is stored **INLINE in Harness** and mirrored for review at
+[infra/admin/deploy-pipeline.yml](infra/admin/deploy-pipeline.yml). That copy
+deploys nothing — **update both**. The IAM that `build-sa` needs beyond building
+is gated on `enable_cicd` in [infra/admin/cicd.tf](infra/admin/cicd.tf); setting
+it false strips the pipeline's deploy and migrate steps of their permissions.
+
+The pipeline takes four variables, all defaulting to the full path: `verify`,
+`run_infra`, `apply_infra`, and `deploy`. Running it by hand with
+`deploy=false` and `apply_infra=false` is the way to exercise CI against a
+branch without touching production.
+
+> **This replaced a Cloud Build trigger on 2026-09-03.** That trigger, its
+> GitHub App connection, and the repository link were deleted from the admin
+> project at the cutover — leaving them would have meant two systems racing to
+> deploy the same commit. [`cloudbuild.yaml`](cloudbuild.yaml) survives at the
+> repo root because `make images` still uses it for a manual build-and-push,
+> and as a break-glass route for when Harness itself is down. A step added
+> there gates that route, **not** the deploy.
+
+**Two deploys running at once will fight.** They apply OpenTofu against the same
+IaCM workspace and migrate the same database. There is no concurrency limit on
+the pipeline today, so if someone has just pushed, let their run finish before
+you push.
 
 **Migrations run before the deploy, on purpose.** The `.sql` files only add
 columns with defaults, so the currently-running revision keeps working against
@@ -92,44 +120,32 @@ data-loss risk. The consequence is a rule worth internalising:
 > in `frontend/drizzle/`, or it will not reach production.
 
 `make images` still only builds. The migrate and deploy steps in
-`cloudbuild.yaml` are gated on the `_DEPLOY` substitution, which only the
-trigger sets.
+`cloudbuild.yaml` are gated on the `_DEPLOY` substitution, which nothing sets
+any more — they run only if someone invokes that file by hand.
 
 ### One-time setup
 
-Terraform cannot create a GitHub App installation or a PAT, so three steps are
-manual. Until they are done, leave `enable_cicd = false` and nothing in
-`cicd.tf` is created.
+`enable_cicd = true` in `infra/admin/terraform.tfvars`, then `make infra`. The
+apply grants `build-sa` what it needs beyond building: `run.admin` to roll the
+service and jobs, `cloudsql.client` for the migration proxy, `secretAccessor` on
+`database-url`, and `serviceAccountUser` scoped to just `app-sa` and
+`runner-sa` — not project-wide, so it cannot impersonate anything else. Setting
+it false is the kill switch: the pipeline's deploy and migrate steps lose their
+permissions.
 
-```bash
-# 1. Install the Cloud Build GitHub App on the repo, and note the installation
-#    id from the URL it redirects to (.../installations/<ID>):
-#      https://github.com/apps/google-cloud-build
-
-# 2. Store a classic PAT (scopes: repo, read:user) in Secret Manager
-printf '%s' <TOKEN> | gcloud secrets create github-pat \
-  --data-file=- --project <ADMIN_PROJECT>
-
-# 3. In infra/admin/terraform.tfvars:
-#      enable_cicd                = true
-#      github_owner               = "suchcodewow"
-#      github_repo                = "wsorchestrator"
-#      github_app_installation_id = "<ID from step 1>"
-
-make infra
-```
-
-The apply also grants `build-sa` what it now needs beyond building: `run.admin`
-to roll the service and jobs, `cloudsql.client` for the migration proxy,
-`secretAccessor` on `database-url`, and `serviceAccountUser` scoped to just
-`app-sa` and `runner-sa` — not project-wide, so it cannot impersonate anything
-else.
+The pipeline authenticates as `build-sa` via a JSON key held in Harness's own
+secret manager. That key **exists nowhere on disk** — if it has to be replaced,
+mint a fresh one with `gcloud iam service-accounts keys create`, store it in
+Harness, and revoke the superseded one once a run verifies.
 
 ### Watching and rolling back
 
+The deploy runs in Harness, not Cloud Build, so `gcloud builds list` will not
+show it — that command now only sees manual `make images` submissions.
+
 ```bash
-gcloud builds list --region us-central1 --limit 5 --project <ADMIN_PROJECT>
-gcloud builds log <BUILD_ID> --region us-central1 --project <ADMIN_PROJECT>
+# The pipeline's executions
+open "https://app.harness.io/ng/account/8mh-FIIHQUapLuB6K0Cd-w/all/orgs/operations/projects/orchestrator/pipelines/deploy_workshop_orchestrator/executions"
 
 make deploy TAG=<older-sha>   # roll back; migrations are not reverted
 ```

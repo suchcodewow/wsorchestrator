@@ -232,3 +232,123 @@ npm test          # the suite, ~90ms
 npm run test:watch
 npm run verify    # typecheck + tests, what CI runs
 ```
+
+---
+
+# Exercising code without deploying
+
+The unit suite covers the pure functions. Everything else in this repo talks to
+a cloud, a database, or a browser, and the obvious way to check it — push and
+watch the deploy — is slow and happens in production. Three techniques cover
+almost every case.
+
+All three run against **`workshops_agent`**, never `workshops`. See
+[the two local databases](CONTRIBUTING.md#the-two-local-databases).
+
+## A runner module, end to end
+
+A module in `runner/src/` can be driven in seconds without deploying the Cloud
+Run job. Write a small entry script **inside `runner/`** — so `pg` and `tsx`
+resolve — run it, and delete it afterwards.
+
+```bash
+export DATABASE_URL=postgresql://postgres:postgres@localhost:5432/workshops_agent
+export HARNESS_TOKEN_ENC_KEY=anything    # seal/open only has to agree with itself
+export HARNESS_ACCOUNT_ID=8mh-FIIHQUapLuB6K0Cd-w
+export HARNESS_API_KEY=$(grep infra/admin/terraform.tfvars -e harness_api_key | sed 's/.*= *"//; s/"//')
+npx tsx probe-thing.ts
+```
+
+`workshops_agent` already carries the full schema and the six baseline
+`harness_components` rows, so it is the database to seed against.
+
+**For anything that talks to Harness, build throwaway orgs.** Create
+`wo_probe_src` / `wo_probe_dst` over REST, run the module against them, read the
+result back out of both the API *and* `run_logs` / `run_resources`, then
+`DELETE /ng/api/organizations/<id>` — which removes the org with everything in
+it. See [docs/harness.md](docs/harness.md) for the API paths.
+
+A sealed secret column (`harness_template_sources.secret`,
+`harness_org_secrets.secret`) can be written from a seed script by copying the
+20 lines of AES-GCM out of
+[frontend/src/lib/secret-box.ts](frontend/src/lib/secret-box.ts). The runner's
+copy only decrypts, on purpose.
+
+`psql` is not on the host PATH:
+
+```bash
+docker exec workshoporchestrator-postgres-1 psql -U postgres -d workshops_agent
+```
+
+## A frontend `server-only` library
+
+To exercise a lib that starts with `import "server-only"`, put a scratch `.mts`
+file in `frontend/`, import through the `@/` alias, and run:
+
+```bash
+npx tsx --conditions=react-server scratch.mts
+```
+
+with `DATABASE_URL` pointed at `workshops_agent` and `AUTH_SECRET` taken from
+`frontend/.env`.
+
+**`--conditions=react-server` is the whole trick.** Without it Node resolves the
+`server-only` package to its client entry and throws "This module cannot be
+imported from a Client Component module" before your code runs. The alternative
+— a second dev server with a seeded session row and a cookie — is far more setup
+for the same answer.
+
+Keep the scratch file inside the package so tsconfig paths apply, and delete it
+when you are done.
+
+## A screenshot of a signed-in page
+
+Verifying a UI change visually takes three tricks, none of them obvious.
+
+1. **Auth.** Sessions are database-strategy NextAuth, so a signed-in view needs
+   only a `users` row plus a `sessions` row whose `sessionToken` you then send
+   as the `authjs.session-token` cookie. No Google round-trip.
+2. **Cookies in headless Chrome.** `--headless=new --screenshot` cannot set one.
+   Run a ~20-line Node proxy that forwards to the dev server and adds the
+   `Cookie` header, and point Chrome at the proxy.
+3. **The page renders blank without a CSS override.** Every card is wrapped in
+   framer-motion variants that SSR as `style="opacity:0"` and only clear on
+   hydration, which headless dev-mode never reaches inside its virtual time
+   budget. Have the proxy inject, before `</head>`:
+   ```html
+   <style>[style*="opacity:0"]{opacity:1!important;transform:none!important}</style>
+   ```
+
+Then the things that will bite:
+
+- **Next 16 refuses a second dev server for the same directory.** It prints
+  "Another next dev server is already running" and names the PID of whoever is
+  on 3000 — which may be a colleague's. Do not kill it. `rsync` the tree to a
+  scratch copy, `cp -al` node_modules in (a symlink fails: Turbopack rejects one
+  pointing outside the project root), and run there. Re-`rsync`ing resets that
+  copy's `.env` back to the real `workshops` database and port 3000, so
+  re-point `DATABASE_URL` after every sync, before anything runs.
+- **To capture an expanded or toggled state, edit the copy** to default the
+  state open. Injecting CSS to un-hide `[hidden]` does not take. When the state
+  comes from a cookie the server reads (theme, sidebar), have the proxy send
+  that cookie instead.
+- **A stored user preference beats a cookie.** Setting `theme=dark` on the proxy
+  paints dark and then flips back, because the client re-applies the
+  `users.theme_preference` row after hydration. Update the row.
+- **`--window-size` has a ~500px floor on macOS**, so a 390px phone is silently
+  photographed at 500 and the one width that overflows goes untested. Drive
+  Chrome over CDP instead — `--remote-debugging-port`, then
+  `Emulation.setDeviceMetricsOverride`, which has no floor. Node's global
+  `WebSocket` is enough; no puppeteer needed. While there, read
+  `documentElement.scrollWidth` against `clientWidth` so horizontal overflow is
+  a number rather than a judgement about a picture.
+
+**When the screenshot is illegible, stop and read the HTML instead.** On
+2026-09-06 headless Chrome rendered every glyph on the page as mojibake, in both
+`--headless=new` and `--headless=old`, so the picture said nothing about the
+change. `curl` through the same proxy and grep the markup: asserting on
+`aria-label="…"`, row identifiers, and rendered copy verified structure, data,
+and per-row status marks faster than any screenshot would have. RSC boundary
+errors surface there as a 500 too — which is how the "Functions cannot be passed
+directly to Client Components" bug in the tab row was found, having passed both
+`tsc --noEmit` and `eslint`.

@@ -59,7 +59,24 @@ and dependencies; the root holds only what ties them together.
 | [`runner/`](runner)                              | `tf-runner`/`tf-scheduler`/`tf-reaper` container + workshop Terraform |
 | [`infra/admin/`](infra/admin)                    | Terraform for the admin control plane                  |
 | [`scripts/`](scripts)                            | Deploy helpers (Cloud SQL proxy wrapper)               |
+| [`docs/`](docs)                                  | The deployed environment, and Harness API/pipeline notes |
 | [`Makefile`](Makefile), [`DEPLOY.md`](DEPLOY.md) | Deploy orchestration + runbook                         |
+
+## Documentation
+
+| Document | Read it when |
+| --- | --- |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | **You are new.** Clone to running locally, changing the schema, how a change ships. |
+| [Initial setup](#initial-setup) (below) | You are standing up a *new* deployment from an empty Google Cloud org. |
+| [DEPLOY.md](DEPLOY.md) | Deploying, rolling back, or changing the schema in production. |
+| [TESTING.md](TESTING.md) | Adding tests, or exercising code without deploying. |
+| [docs/operations.md](docs/operations.md) | Something is broken in the deployed environment. |
+| [docs/harness.md](docs/harness.md) | Touching the deploy pipeline, a trigger, or the Harness API. |
+
+> **Joining an existing deployment?** You want
+> [CONTRIBUTING.md](CONTRIBUTING.md), not the setup guide below. Local
+> development needs Node, Docker, and an OAuth client — none of the cloud
+> credentials.
 
 ---
 
@@ -380,6 +397,10 @@ GitHub wiring to do here — Harness holds its own repo connector, and the
 ---
 
 ## Local development
+
+> The fuller version of this section, with the database rules, the schema-change
+> workflow, and how a change reaches production, is
+> [CONTRIBUTING.md](CONTRIBUTING.md). What follows is the short form.
 
 Local dev runs fully **isolated** from the Google deployment: its own Postgres
 (a local container, never prod Cloud SQL), its own `.env`, and localhost OAuth.
