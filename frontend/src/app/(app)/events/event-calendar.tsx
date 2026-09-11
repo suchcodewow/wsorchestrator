@@ -269,7 +269,7 @@ export function EventCalendar({
             <p className="text-muted-foreground">
               {scope === "all"
                 ? "Every user's events, including your own."
-                : "Schedule events — each provisions automatically at its start time."}
+                : "Schedule events - each will be provisioned automatically at its start time."}
             </p>
           </div>
           <div className="flex items-center gap-2">
