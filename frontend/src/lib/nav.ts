@@ -40,7 +40,7 @@ export type NavSection = {
 export const NAV_SECTIONS: NavSection[] = [
   {
     items: [
-      { href: "/labs", label: "Workshops", Icon: Layers },
+      { href: "/labs", label: "Event Guides", Icon: Layers },
       { href: "/events", label: "Orchestrator", Icon: CalendarDays, also: ["/runs"] },
       { href: "/contribute", label: "Contribute", Icon: Blocks },
       { href: "/me", label: "My settings", Icon: UserCog },
