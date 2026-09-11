@@ -49,6 +49,7 @@ export type DeployStep = {
     | "secret"
     | "connector"
     | "template"
+    | "variable"
     | "environment"
     | "infrastructure";
   identifier: string;
@@ -526,6 +527,69 @@ async function copyTemplates(
   }
 }
 
+/**
+ * Org variables — the plain `<+variable.org.x>` values pipelines read.
+ *
+ * No tags and no description of ours: the variables API takes neither, and a
+ * variable's whole content is its fixed value, so it is copied as it stands.
+ * Nothing references a variable by scope the way a connector references a
+ * secret, so there is no gap to fill here either.
+ */
+async function copyVariables(
+  from: Scope,
+  to: Scope,
+  record: Record_,
+): Promise<void> {
+  const listed = await listPages<{ variable?: Json }>(
+    from.token,
+    "GET",
+    "/ng/api/variables",
+    scopeQuery(from),
+    { page: "pageIndex", size: "pageSize" },
+  );
+
+  if (!listed.ok) {
+    record({
+      scope: scopeLabel(to),
+      kind: "variable",
+      identifier: `(all, from ${scopeLabel(from)})`,
+      outcome: "failed",
+      detail: `Could not list them: ${listed.detail}`,
+    });
+    return;
+  }
+
+  for (const entry of listed.items) {
+    const variable = entry.variable;
+    const identifier = variable?.identifier;
+    if (!variable || typeof identifier !== "string") continue;
+
+    const rest = { ...variable };
+    delete rest.accountIdentifier;
+
+    const reply = await harnessRequest(
+      to.token,
+      "POST",
+      "/ng/api/variables",
+      { accountIdentifier: to.accountId },
+      {
+        variable: {
+          ...rest,
+          orgIdentifier: to.org,
+          projectIdentifier: to.project ?? undefined,
+        },
+      },
+    );
+
+    record({
+      scope: scopeLabel(to),
+      kind: "variable",
+      identifier,
+      ...outcomeOf(reply),
+    });
+  }
+}
+
 async function copyEnvironments(
   from: Scope,
   to: Scope,
@@ -732,6 +796,7 @@ async function copyInfrastructures(
 
 async function copyScope(from: Scope, to: Scope, record: Record_): Promise<void> {
   await copyConnectors(from, to, record);
+  await copyVariables(from, to, record);
   await copyTemplates(from, to, record);
   await copyEnvironments(from, to, record);
 }

@@ -177,7 +177,7 @@ const MAX_ATTEMPTS = 4;
  * success, and a delete treats a 404 the same way, so a request that actually
  * did land before the connection broke converges rather than failing.
  */
-const isRetryable = (status: number) => status >= 500 || status === 429;
+export const isRetryable = (status: number) => status >= 500 || status === 429;
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 

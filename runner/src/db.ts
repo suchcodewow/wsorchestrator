@@ -392,6 +392,69 @@ export async function loadOrgSecrets(): Promise<OrgSecret[]> {
 }
 
 /* ------------------------------------------------------------------ *
+ * Administrator-listed template sources
+ * ------------------------------------------------------------------ */
+
+/**
+ * One Harness organization the site copies content out of — a row in
+ * Settings → Templates.
+ *
+ * The token is somebody else's, not this deployment's: a source may live in an
+ * account the runner's own API key has no standing in, which is why it is
+ * carried here (sealed) rather than assumed. `projectIdentifier` is null for a
+ * source that names a whole organization; when it names a project, that project
+ * is where the content is *read* from — see `org-content.ts` for why it is still
+ * written at the workshop org's level.
+ */
+export type TemplateSource = {
+  id: string;
+  accountId: string;
+  orgIdentifier: string;
+  orgName: string | null;
+  projectIdentifier: string | null;
+  projectName: string | null;
+  /** The sealed token — see `secret-box.ts`. */
+  secret: Buffer;
+};
+
+/**
+ * The site's own template sources, in a stable order.
+ *
+ * Only the site's: a row with a `user_id` belongs to one person and is theirs to
+ * deploy into their own Harness account from the tokens page. A workshop is the
+ * site's, so it gets the site's, exactly as with the org secrets above.
+ */
+export async function loadTemplateSources(): Promise<TemplateSource[]> {
+  const { rows } = await pool.query<{
+    id: string;
+    account_id: string;
+    org_identifier: string;
+    org_name: string | null;
+    project_identifier: string;
+    project_name: string | null;
+    secret: Buffer;
+  }>(
+    `select id, account_id, org_identifier, org_name,
+            project_identifier, project_name, secret
+       from harness_template_sources
+      where user_id is null
+      order by org_identifier, project_identifier`,
+  );
+
+  return rows.map((r) => ({
+    id: r.id,
+    accountId: r.account_id,
+    orgIdentifier: r.org_identifier,
+    orgName: r.org_name,
+    // The column is `not null default ''` — an org-wide source is the empty
+    // string there, and null is the clearer thing to carry around.
+    projectIdentifier: r.project_identifier === "" ? null : r.project_identifier,
+    projectName: r.project_name,
+    secret: r.secret,
+  }));
+}
+
+/* ------------------------------------------------------------------ *
  * Administrator-listed GitHub repositories
  * ------------------------------------------------------------------ */
 

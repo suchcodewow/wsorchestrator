@@ -33,6 +33,7 @@ import {
   Github,
   KeyRound,
   Layers,
+  Library,
   Loader2,
   Network,
   Plug,
@@ -507,6 +508,8 @@ const RESOURCE_ICONS: Record<string, LucideIcon> = {
   harness_secret: KeyRound,
   harness_template: FileCode,
   harness_components: Boxes,
+  harness_content: Library,
+  harness_org_secrets: KeyRound,
   harness_repos: Github,
 };
 

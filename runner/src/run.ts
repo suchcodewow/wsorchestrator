@@ -41,6 +41,7 @@ import { recordOutputResources } from "./resources.js";
 import { summarize } from "./retry.js";
 import { displayName } from "./usernames.js";
 import { applyCatalog } from "./components.js";
+import { copyOrgContent } from "./org-content.js";
 import { applyOrgSecrets } from "./org-secrets.js";
 import { importOrgRepos, projectRepoImporter } from "./repos.js";
 import {
@@ -156,7 +157,8 @@ export async function runWorkshop(runId: string): Promise<void> {
 
     // Harness is provisioned for every workshop, not gated on a cloud, and
     // after the accounts exist because each attendee is invited by address.
-    Object.assign(outputs, await provisionHarness(run));
+    const harness = await provisionHarness(run);
+    Object.assign(outputs, harness.outputs);
 
     // A first pass before any cloud exists: components that need nothing from
     // Terraform land now rather than waiting on an apply they do not depend on.
@@ -207,6 +209,17 @@ export async function runWorkshop(runId: string): Promise<void> {
           );
         }
       }
+    }
+
+    // Content that was held back when the org was made because it names a cloud
+    // credential only an apply could mint. Those credentials exist now, and
+    // every create here treats what already landed as "already there" — so this
+    // picks up exactly what the first pass could not, and costs a re-listing
+    // only when there was something to pick up. A run with nothing waiting,
+    // which is most of them, skips it; so does a sandbox run, where no apply
+    // happened and the same content would be held back for the same reason.
+    if (harness.contentWaiting > 0 && !run.harness_only) {
+      await copyOrgContent(run, orgId, "again");
     }
 
     // Put an org-scoped Harness delegate in each cluster that was built. This
@@ -491,6 +504,17 @@ async function provisionAccounts(run: RunRow): Promise<string> {
 }
 
 /**
+ * What the Harness half of a provision leaves behind: the outputs the run
+ * stores, and how much of the site's content is still waiting on a credential
+ * no cloud has minted yet. The second is not an output — it is over as soon as
+ * the clouds are up — so it rides alongside rather than inside them.
+ */
+type HarnessProvision = {
+  outputs: Record<string, unknown>;
+  contentWaiting: number;
+};
+
+/**
  * Create the workshop's Harness organization and one project per attendee.
  *
  * Each attendee administers their own project and gets view/use access across
@@ -498,7 +522,7 @@ async function provisionAccounts(run: RunRow): Promise<string> {
  * it. Every call is idempotent, so a grown or retried workshop only adds what
  * is missing.
  */
-async function provisionHarness(run: RunRow): Promise<Record<string, unknown>> {
+async function provisionHarness(run: RunRow): Promise<HarnessProvision> {
   const orgId = orgIdentifier(run.name, run.id);
 
   await log(run.id, "system", `Creating Harness organization ${orgId}`);
@@ -517,6 +541,14 @@ async function provisionHarness(run: RunRow): Promise<Record<string, unknown>> {
   // connector naming `org.<identifier>` is refused if the secret is not there
   // yet, and the catalog's graph only orders components against each other.
   await applyOrgSecrets(run, orgId);
+
+  // The site's authored content — templates, connectors, environments and their
+  // infrastructure, org variables — from every source on Settings → Templates.
+  // After the secrets for the same reason the catalog is: content that names an
+  // org secret is refused if the secret is not there yet. Best-effort, and what
+  // it left waiting on a cloud credential is copied again once the clouds are
+  // up (see `runWorkshop`).
+  const content = await copyOrgContent(run, orgId);
 
   // The repositories an administrator listed for the whole room. Best-effort:
   // one bad address is logged and left behind rather than costing the workshop
@@ -634,9 +666,12 @@ async function provisionHarness(run: RunRow): Promise<Record<string, unknown>> {
   }
 
   return {
-    harness_org: orgId,
-    harness_org_url: orgUrl(orgId),
-    harness_project_urls: projectUrls,
+    outputs: {
+      harness_org: orgId,
+      harness_org_url: orgUrl(orgId),
+      harness_project_urls: projectUrls,
+    },
+    contentWaiting: content.waiting,
   };
 }
 
