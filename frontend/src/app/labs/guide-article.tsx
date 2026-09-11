@@ -103,7 +103,6 @@ export async function GuideArticle({
         <div>
           <GuideVariablesPanel
             used={variables.used}
-            missing={variables.missing}
             values={reader.values}
             provided={reader.provided}
             event={reader.event}

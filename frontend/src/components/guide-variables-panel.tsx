@@ -1,10 +1,13 @@
 "use client";
 
-/** Where a reader tells a guide who they are, so it fills its blanks in for them. */
+/**
+ * A quiet line saying this guide filled its blanks in for the reader, which
+ * opens the form where they change or clear those values.
+ */
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Pencil, UserRound } from "lucide-react";
+import { Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -15,13 +18,11 @@ import {
   type GuideValues,
   type GuideVariableName,
 } from "@/lib/guide-variables";
-import { cn } from "@/lib/utils";
 
 export function GuideVariablesPanel({
   used,
   values,
   provided,
-  missing,
   event,
   context,
 }: {
@@ -29,7 +30,6 @@ export function GuideVariablesPanel({
   used: GuideVariableName[];
   values: GuideValues;
   provided: GuideValues;
-  missing: GuideVariableName[];
   event: { name: string; email: string } | null;
   context: GuideContext;
 }) {
@@ -60,25 +60,29 @@ export function GuideVariablesPanel({
     router.refresh();
   }
 
-  function forget() {
+  function clear() {
     clearGuideContextCookie();
     setOpen(false);
     router.refresh();
   }
 
-  const known = used.length - missing.length;
+  const filled = used.some((name) => (values[name] ?? "").length > 0);
   const anything =
     context.runId !== null || Object.keys(context.typed).length > 0;
 
   if (!open) {
     return (
-      <Summary
-        blanks={missing}
-        known={known}
-        event={event}
-        onEdit={edit}
-        onForget={anything ? forget : undefined}
-      />
+      <p className="mb-8 text-sm text-muted-foreground">
+        <button
+          type="button"
+          onClick={edit}
+          className="rounded-sm underline decoration-dotted underline-offset-4 outline-none transition-colors hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+        >
+          {filled
+            ? "This page loaded custom values for you."
+            : "This page can fill in values for you."}
+        </button>
+      </p>
     );
   }
 
@@ -140,85 +144,13 @@ export function GuideVariablesPanel({
             type="button"
             size="sm"
             variant="ghost"
-            onClick={forget}
+            onClick={clear}
             className="ml-auto text-muted-foreground"
           >
-            Forget me
+            Clear values
           </Button>
         )}
       </div>
-    </section>
-  );
-}
-
-function Summary({
-  blanks,
-  known,
-  event,
-  onEdit,
-  onForget,
-}: {
-  blanks: GuideVariableName[];
-  known: number;
-  event: { name: string; email: string } | null;
-  onEdit: () => void;
-  onForget?: () => void;
-}) {
-  const waiting = blanks.length > 0;
-
-  return (
-    <section
-      aria-label="Your details"
-      className={cn(
-        "mb-8 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border px-4 py-3 text-sm",
-        waiting ? "border-brand-border/60 bg-brand/5" : "bg-card/60",
-      )}
-    >
-      <UserRound
-        aria-hidden
-        className={cn("size-4 shrink-0", waiting ? "text-brand" : "text-muted-foreground")}
-      />
-
-      <p className="min-w-0 leading-relaxed">
-        {waiting ? (
-          <>
-            This guide can fill in{" "}
-            <span className="font-medium">{listOf(blanks)}</span> for you.
-          </>
-        ) : event ? (
-          <>
-            Written for{" "}
-            <span className="font-medium">{event.email}</span> on {event.name}.
-          </>
-        ) : (
-          <>
-            Using the {known === 1 ? "detail" : `${known} details`} you entered.
-          </>
-        )}
-      </p>
-
-      <Button
-        type="button"
-        size="sm"
-        variant={waiting ? "brand" : "ghost"}
-        onClick={onEdit}
-        className="ml-auto"
-      >
-        <Pencil />
-        {waiting ? "Fill these in" : "Change"}
-      </Button>
-
-      {!waiting && onForget && (
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          onClick={onForget}
-          className="text-muted-foreground"
-        >
-          Forget me
-        </Button>
-      )}
     </section>
   );
 }
@@ -227,10 +159,4 @@ function pick(values: GuideValues, names: GuideVariableName[]): GuideValues {
   return Object.fromEntries(
     names.map((name) => [name, values[name] ?? ""]),
   ) as GuideValues;
-}
-
-function listOf(names: GuideVariableName[]): string {
-  const labels = names.map((name) => guideVariable(name).label);
-  if (labels.length <= 1) return labels.join("");
-  return `${labels.slice(0, -1).join(", ")} and ${labels[labels.length - 1]}`;
 }

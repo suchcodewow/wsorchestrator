@@ -8,6 +8,7 @@
 //
 //   node frontend/scripts/seed-demo.mjs                    # the default event
 //   node frontend/scripts/seed-demo.mjs --status applying  # mid-build instead
+//   node frontend/scripts/seed-demo.mjs --mode challenge   # one env per person
 //   node frontend/scripts/seed-demo.mjs --clean            # remove seeded rows
 //
 // Every row it writes is marked with `seeded_demo` in the run's outputs, and
@@ -99,6 +100,8 @@ const DOMAIN = process.env.GOOGLE_WORKSPACE_DOMAIN ?? "harnessevents.io";
 const HARNESS_BASE = process.env.HARNESS_BASE_URL ?? "https://app.harness.io";
 const HARNESS_ACCOUNT = process.env.HARNESS_ACCOUNT_ID ?? "wlgELJ0TTre5aZhzEeQnmw";
 const AZURE_TENANT = process.env.AZURE_TENANT_ID ?? "f7c0a1e2-3b4d-4a5e-9c8f-2d1b6e0a7c93";
+const AWS_REGION = process.env.AWS_REGION ?? "us-east-1";
+const AZURE_SUBSCRIPTION = "3f9d2c81-64ab-4e77-9a52-8c0d15b7e4a6";
 
 const ADJECTIVES = [
   "bouncy", "clever", "dapper", "feisty", "giddy", "jaunty", "mellow",
@@ -146,6 +149,46 @@ const trim = (slug, max) => slug.slice(0, max).replace(/-+$/, "");
 const projectId = (slug, runId) =>
   `ws-${trim(slug, 20)}-${runId.replace(/-/g, "").slice(0, 6)}`;
 
+/**
+ * The `-<short>-<who>` tail every per-competitor identifier ends in, matching
+ * the `makeChallenge*` helpers in the runner: derived from the address, not the
+ * roster position, so a challenge that grows never renames what already exists.
+ */
+const challengeSuffix = (runId, email) =>
+  `-${runId.replace(/-/g, "").slice(0, 4)}-` +
+  crypto.createHash("sha1").update(email).digest("hex").slice(0, 6);
+
+/** One competitor's own GCP project id — `makeChallengeProjectId`, capped at 30. */
+const challengeProjectId = (slug, runId, email) => {
+  const suffix = challengeSuffix(runId, email);
+  return trim(`ch-${slug}`.slice(0, 30 - suffix.length), 30) + suffix;
+};
+
+/** One competitor's own Azure resource group — `makeChallengeResourceGroup`. */
+const challengeResourceGroup = (slug, runId, email) =>
+  `ch-${slug}` + challengeSuffix(runId, email);
+
+/**
+ * A workshop's AWS account name, which is also its sign-in alias —
+ * `makeAwsAccountName`. The console link is keyed by the alias rather than the
+ * account id, so this is what the attendee page's AWS button is built from.
+ */
+const awsAccountName = (slug, runId) =>
+  trim(`ws-${slug}-${runId.replace(/-/g, "").slice(0, 6)}`, 50);
+
+/** A competitor's own AWS account name/alias — `makeChallengeAwsAccountName`. */
+const challengeAwsAccountName = (slug, runId, email) => {
+  const suffix = challengeSuffix(runId, email);
+  return trim(`ch-${slug}`.slice(0, 50 - suffix.length), 50) + suffix;
+};
+
+/** A twelve-digit AWS account id. */
+const awsAccountId = () => String(100000000000 + crypto.randomInt(899999999999));
+
+/** The sign-in page, region-scoped, exactly as `aws-base` outputs it. */
+const awsConsoleUrl = (alias) =>
+  `https://${alias}.signin.aws.amazon.com/console?region=${AWS_REGION}`;
+
 /** <identifier>_<short>, matching `orgIdentifier` in the runner. */
 const harnessOrgId = (name, runId) =>
   `${name.replace(/[^A-Za-z0-9_$]/g, "_").slice(0, 55)}_${runId.replace(/-/g, "").slice(0, 6)}`;
@@ -177,12 +220,19 @@ const CLAIMS = [
   ["Rosa Milani", "Milan", "A week in Puglia"],
 ];
 
+/** The portal deep link for one resource group, as both Azure roots emit it. */
+const azurePortalUrl = (group) =>
+  `https://portal.azure.com/#@${AZURE_TENANT}/resource/subscriptions/` +
+  `${AZURE_SUBSCRIPTION}/resourceGroups/${group}`;
+
 /**
  * The Terraform outputs a workshop's roots emit, restricted to the clouds the
- * event asked for. Keys and URL shapes match runner/terraform/workshops/*.
+ * event asked for: one shared environment per cloud, with a cluster in it, and
+ * an AWS-generated console password per attendee. Keys and URL shapes match
+ * runner/terraform/workshops/*.
  */
-function buildOutputs(clouds, slug, runId) {
-  const out = { seeded_demo: true };
+function workshopOutputs(clouds, slug, runId, emails) {
+  const out = {};
   const short = runId.replace(/-/g, "").slice(0, 6);
 
   if (clouds.includes("gcp")) {
@@ -194,28 +244,74 @@ function buildOutputs(clouds, slug, runId) {
   }
   if (clouds.includes("azure")) {
     const group = `ws-${trim(slug, 20)}-${short}`;
-    const subscription = "3f9d2c81-64ab-4e77-9a52-8c0d15b7e4a6";
     out.azure_resource_group = group;
-    out.azure_portal_url =
-      `https://portal.azure.com/#@${AZURE_TENANT}/resource/subscriptions/` +
-      `${subscription}/resourceGroups/${group}`;
+    out.azure_portal_url = azurePortalUrl(group);
     out.aks_cluster_name = `ws-${trim(slug, 16)}-${short}`;
     out.aks_cluster_location = "eastus";
   }
   if (clouds.includes("aws")) {
-    const account = String(100000000000 + crypto.randomInt(899999999999));
-    out.aws_account_id = account;
-    out.aws_console_url = `https://${account}.signin.aws.amazon.com/console`;
+    const alias = awsAccountName(slug, runId);
+    out.aws_account_id = awsAccountId();
+    out.aws_account_alias = alias;
+    out.aws_region = AWS_REGION;
+    out.aws_console_url = awsConsoleUrl(alias);
+    // AWS is the one cloud whose password is not the shared Google one, so the
+    // attendee page shows a second credential on every row.
+    out.aws_attendee_passwords = Object.fromEntries(
+      emails.map((email) => [email, password()]),
+    );
     out.eks_cluster_name = `ws-${trim(slug, 16)}-${short}`;
   }
   return out;
 }
 
 /**
+ * The outputs a challenge's roots emit: address-keyed maps, one environment per
+ * competitor and no clusters. Keys and URL shapes match
+ * runner/terraform/challenges/* and the maps `provisionAwsPerUser` assembles.
+ */
+function challengeOutputs(clouds, slug, runId, emails) {
+  const out = {};
+  const byEmail = (fn) =>
+    Object.fromEntries(emails.map((email) => [email, fn(email)]));
+
+  if (clouds.includes("gcp")) {
+    out.gcp_projects = byEmail((e) => challengeProjectId(slug, runId, e));
+    out.gcp_console_urls = byEmail(
+      (e) =>
+        "https://console.cloud.google.com/home/dashboard?project=" +
+        out.gcp_projects[e],
+    );
+  }
+  if (clouds.includes("azure")) {
+    out.azure_resource_groups = byEmail((e) =>
+      challengeResourceGroup(slug, runId, e),
+    );
+    out.azure_portal_urls = byEmail((e) =>
+      azurePortalUrl(out.azure_resource_groups[e]),
+    );
+  }
+  if (clouds.includes("aws")) {
+    out.aws_accounts = byEmail(() => awsAccountId());
+    out.aws_account_aliases = byEmail((e) =>
+      challengeAwsAccountName(slug, runId, e),
+    );
+    out.aws_attendee_passwords = byEmail(() => password());
+    out.aws_region = AWS_REGION;
+  }
+  return out;
+}
+
+function buildOutputs(mode, clouds, slug, runId, emails) {
+  const build = mode === "challenge" ? challengeOutputs : workshopOutputs;
+  return { seeded_demo: true, ...build(clouds, slug, runId, emails) };
+}
+
+/**
  * What the run page lists as built, in the order a real build confirms it:
  * directory first, then Harness, then each cloud's apply.
  */
-function buildResources(clouds, outputs, orgUnitPath, orgId, users) {
+function buildResources(mode, clouds, outputs, orgUnitPath, orgId, users) {
   const rows = [
     { kind: "org_unit", label: "Google Workspace org unit", detail: orgUnitPath },
     { kind: "accounts", label: "Attendee accounts", done: users, total: users },
@@ -233,6 +329,30 @@ function buildResources(clouds, outputs, orgUnitPath, orgId, users) {
       total: users,
     },
   ];
+
+  // A challenge's environments are address-keyed maps, and `recordOutputResources`
+  // records each map as one counted row rather than one row per competitor.
+  if (mode === "challenge") {
+    const counted = [
+      ["gcp", "gcp_project", "GCP projects", "gcp_projects"],
+      ["azure", "azure_resource_group", "Azure resource groups", "azure_resource_groups"],
+      ["aws", "aws_account", "AWS accounts", "aws_accounts"],
+    ];
+    for (const [cloud, kind, label, key] of counted) {
+      if (!clouds.includes(cloud)) continue;
+      rows.push({
+        kind,
+        key,
+        label,
+        detail: "one per competitor",
+        done: users,
+        total: users,
+      });
+    }
+    // No delegate rows: `installDelegates` returns early for a challenge, and
+    // a challenge builds no clusters for one to sit in.
+    return rows;
+  }
 
   if (clouds.includes("gcp")) {
     rows.push(
@@ -292,28 +412,38 @@ function buildLogs(opts, outputs, orgUnitPath, orgId, emails) {
   const l = [];
   const say = (stream, message) => l.push({ stream, message });
 
+  const challenge = opts.mode === "challenge";
+  const noun = challenge ? "competitor" : "attendee";
+
   say("system",
     `Scheduled ${opts.mode} "${opts.name}" to start now — ` +
-    `${opts.users} attendees, ${opts.clouds.join(", ")}, ` +
+    `${opts.users} ${noun}s, ${opts.clouds.join(", ")}, ` +
     `runs ${opts.days} days before teardown`);
   say("system", `Creating organizational unit "${opts.name}"`);
   say("system", `Org unit ready at ${orgUnitPath}`);
-  say("system", `Creating ${opts.users} attendee account(s)`);
+  say("system", `Creating ${opts.users} ${noun} account(s)`);
   for (const email of emails) say("stdout", `created ${email}`);
   say("system", `Creating Harness organization ${orgId}`);
   say("stdout", `${opts.users} Harness project(s) created`);
 
   for (const cloud of opts.clouds) {
-    say("system", `Applying ${cloud.toUpperCase()} environment`);
+    say("system",
+      challenge
+        ? `Provisioning ${opts.users} ${cloud.toUpperCase()} environment(s), ` +
+          `one per competitor`
+        : `Applying ${cloud.toUpperCase()} environment`);
     say("stdout", "Terraform has been successfully initialized!");
     say("stdout", "Apply complete! Resources: 34 added, 0 changed, 0 destroyed.");
   }
   if (opts.clouds.includes("azure")) {
-    say("system", `Issuing Temporary Access Passes for ${opts.users} attendee(s)`);
+    say("system", `Issuing Temporary Access Passes for ${opts.users} ${noun}(s)`);
   }
-  for (const cloud of opts.clouds) {
-    say("system", `Installing org Harness delegate "ws-delegate-${cloud}"`);
-    say("stdout", `delegate ws-delegate-${cloud} installed`);
+  // Delegates are workshop-only, matching `installDelegates`.
+  if (!challenge) {
+    for (const cloud of opts.clouds) {
+      say("system", `Installing org Harness delegate "ws-delegate-${cloud}"`);
+      say("stdout", `delegate ws-delegate-${cloud} installed`);
+    }
   }
   return l;
 }
@@ -359,13 +489,15 @@ try {
   const slug = slugify(opts.name);
   const orgUnitPath = `/Workshops/${opts.name}`;
   const orgId = harnessOrgId(opts.name, runId);
-  const outputs = buildOutputs(opts.clouds, slug, runId);
+  const locals = usernames(opts.users);
+  const emails = locals.map((u) => `${u}@${DOMAIN}`);
+  // Addresses first: a challenge's environments, and AWS's own per-attendee
+  // passwords, are keyed by them.
+  const outputs = buildOutputs(opts.mode, opts.clouds, slug, runId, emails);
   // Cloud-independent, so it is set here rather than in `buildOutputs`: every
   // event gets a Harness org, and the attendee page links the room to it.
   outputs.harness_org = orgId;
   outputs.harness_org_url = harnessOrgUrl(orgId);
-  const locals = usernames(opts.users);
-  const emails = locals.map((u) => `${u}@${DOMAIN}`);
   // One project per attendee, keyed by address — the map the attendee page
   // reads to put a project link on each row.
   outputs.harness_project_urls = Object.fromEntries(
@@ -449,7 +581,9 @@ try {
     );
   }
 
-  const resources = buildResources(opts.clouds, outputs, orgUnitPath, orgId, opts.users);
+  const resources = buildResources(
+    opts.mode, opts.clouds, outputs, orgUnitPath, orgId, opts.users,
+  );
   for (const [i, r] of resources.entries()) {
     const at = new Date(startedAt.getTime() + step * (i + 1));
     await client.query(
