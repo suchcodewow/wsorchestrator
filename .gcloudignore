@@ -11,4 +11,3 @@ infra
 *.log
 .env
 .env*.local
-james.test
