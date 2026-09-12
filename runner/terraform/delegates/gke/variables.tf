@@ -44,3 +44,9 @@ variable "delegate_image" {
   type        = string
   default     = ""
 }
+
+variable "delegate_tags" {
+  description = "Comma-separated Harness delegate tags; the runner passes the cloud (gcp/azure/aws) so labs can target this cluster's delegate."
+  type        = string
+  default     = ""
+}

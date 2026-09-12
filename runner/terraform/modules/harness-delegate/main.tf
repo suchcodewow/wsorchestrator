@@ -38,6 +38,14 @@ resource "helm_release" "delegate" {
     value = var.account_id
   }
 
+  # Tags are how a lab's pipeline picks the delegate sitting in its own cluster,
+  # since every delegate in the event registers at the same org scope. Empty is
+  # also the chart's default, so an untagged install behaves as before.
+  set {
+    name  = "tags"
+    value = var.delegate_tags
+  }
+
   set {
     name  = "managerEndpoint"
     value = var.manager_endpoint

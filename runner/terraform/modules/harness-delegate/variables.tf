@@ -25,6 +25,12 @@ variable "delegate_image" {
   default     = ""
 }
 
+variable "delegate_tags" {
+  description = "Comma-separated Harness delegate tags (DELEGATE_TAGS). The runner passes the cloud — gcp, azure, or aws — so a lab's pipeline can select the delegate in its own cluster."
+  type        = string
+  default     = ""
+}
+
 variable "namespace" {
   description = "Namespace the delegate is installed into."
   type        = string

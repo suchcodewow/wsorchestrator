@@ -31,4 +31,5 @@ module "delegate" {
   account_id       = var.account_id
   manager_endpoint = var.manager_endpoint
   delegate_image   = var.delegate_image
+  delegate_tags    = var.delegate_tags
 }

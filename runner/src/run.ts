@@ -396,6 +396,10 @@ async function installDelegates(
         ...target.vars,
         ...common,
         delegate_name: delegateName,
+        // Tagged with its cloud — every delegate in the event registers at the
+        // same org scope, so the tag is what lets a lab's pipeline select the
+        // delegate running in the cluster that lab is about.
+        delegate_tags: target.cloud,
       });
       await tfInit(
         workDir,
