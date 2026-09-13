@@ -11,6 +11,7 @@ import { toString } from "hast-util-to-string";
 import type {
   BlockContent,
   DefinitionContent,
+  Image,
   Paragraph,
   Root as MdastRoot,
 } from "mdast";
@@ -30,6 +31,7 @@ import {
   type GuideValues,
   type GuideVariableReport,
 } from "@/lib/guide-variables";
+import { isUuid } from "@/lib/utils";
 
 export type TocEntry = { id: string; text: string; depth: 2 | 3 };
 
@@ -38,6 +40,9 @@ export type RenderedMarkdown = {
   toc: TocEntry[];
   variables: GuideVariableReport;
 };
+
+/** One picture a guide points at, named by the alt text its author wrote. */
+export type LabImageRef = { id: string; alt: string };
 
 const THEMES = { light: "github-light-default", dark: "github-dark-default" };
 
@@ -794,6 +799,56 @@ function rehypeInlineCopy() {
   };
 }
 
+/** The library image a URL points at, or null for anything else. */
+const LAB_IMAGE_PATH = /^\/api\/lab-images\/([^/?#]+)$/;
+
+function labImageId(url: unknown): string | null {
+  if (typeof url !== "string") return null;
+  const id = LAB_IMAGE_PATH.exec(url)?.[1];
+  return id !== undefined && isUuid(id) ? id : null;
+}
+
+/**
+ * Rings an image whose id has gone from the library — deleted out from under a
+ * guide that still points at it, which the picker warns about but does not
+ * prevent.
+ *
+ * Only an author asks for this. `missingLabImages` is unset when a reader's
+ * copy is rendered, so they get the browser's own broken image rather than a
+ * note about a library they cannot see.
+ */
+function rehypeLabImages() {
+  return (tree: Root, file: { data: Record<string, unknown> }) => {
+    const missing = file.data.missingLabImages as Set<string> | undefined;
+    if (!missing || missing.size === 0) return;
+
+    visit(tree, "element", (node: Element, index, parent) => {
+      if (node.tagName !== "img") return;
+      if (!parent || index === undefined) return;
+
+      const id = labImageId(node.properties.src);
+      if (id === null || !missing.has(id)) return;
+
+      // Wrapped rather than restyled: `::after` does not apply to a replaced
+      // element, and the note is the half that says what has gone wrong. The
+      // image stays inside it, so one that is only briefly unreachable still
+      // appears once it comes back.
+      parent.children[index] = el(
+        "span",
+        { className: ["lab-image-missing"], "data-image-id": id },
+        [
+          node,
+          el("span", { className: ["lab-image-missing-note"] }, [
+            { type: "text", value: "Not in the image library" },
+          ]),
+        ],
+      );
+
+      return SKIP;
+    });
+  };
+}
+
 const LINE_MARKED_TAGS = new Set([
   "p",
   "h1",
@@ -859,7 +914,8 @@ const buildProcessor = (highlighter: Highlighter, sourceLines: boolean) => {
     .use(rehypeCallouts)
     .use(rehypeHeadings)
     .use(rehypeExternalLinks)
-    .use(rehypeInlineCopy);
+    .use(rehypeInlineCopy)
+    .use(rehypeLabImages);
 
   if (sourceLines) processor.use(rehypeSourceLines);
 
@@ -882,12 +938,43 @@ function getProcessor(sourceLines: boolean) {
 
 const NO_VARIABLES: GuideVariableReport = { used: [], missing: [], unknown: [] };
 
+/**
+ * The library images a body points at, first mention first.
+ *
+ * Parsed rather than matched with a regular expression, so that a URL quoted
+ * inside a code fence — a guide explaining how the library itself works — is
+ * not counted as a picture the guide is trying to show. The same normalising
+ * the renderer does runs first, so this and the preview always agree on what
+ * is an image.
+ */
+const refProcessor = unified().use(remarkParse).use(remarkGfm);
+
+export function labImageRefs(markdown: string): LabImageRef[] {
+  const refs = new Map<string, LabImageRef>();
+  const tree = refProcessor.parse(
+    normaliseListIndents(normaliseDirectiveTitles(markdown)),
+  ) as MdastRoot;
+
+  visit(tree, "image", (node: Image) => {
+    const id = labImageId(node.url);
+    if (id !== null && !refs.has(id)) refs.set(id, { id, alt: node.alt ?? "" });
+  });
+
+  return [...refs.values()];
+}
+
 export async function renderMarkdown(
   markdown: string,
   {
     sourceLines = false,
     values,
-  }: { sourceLines?: boolean; values?: GuideValues } = {},
+    missingImages,
+  }: {
+    sourceLines?: boolean;
+    values?: GuideValues;
+    /** Image ids to ring in red. Left out for a reader, who gets no marks. */
+    missingImages?: string[];
+  } = {},
 ): Promise<RenderedMarkdown> {
   if (markdown.trim().length === 0) {
     return { html: "", toc: [], variables: NO_VARIABLES };
@@ -898,7 +985,10 @@ export async function renderMarkdown(
   // built once and shared by every render.
   const file = await processor.process({
     value: normaliseListIndents(normaliseDirectiveTitles(markdown)),
-    data: { guideValues: values ?? {} },
+    data: {
+      guideValues: values ?? {},
+      missingLabImages: missingImages && new Set(missingImages),
+    },
   });
 
   const data = file.data as {

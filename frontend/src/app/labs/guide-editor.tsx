@@ -18,6 +18,7 @@ import { LabGuideBody } from "@/components/lab-guide-body";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { LAB_GUIDE_LIMITS, type LabGuide } from "@/db/schema";
+import type { LabImageRef } from "@/lib/markdown";
 import { imageFromTransfer, uploadImageFile } from "@/lib/lab-image-upload";
 import { cn } from "@/lib/utils";
 import { ImagePickerDialog } from "./image-picker-dialog";
@@ -53,6 +54,7 @@ export function GuideEditor({
   const [preview, setPreview] = useState<string | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [unknownVariables, setUnknownVariables] = useState<string[]>([]);
+  const [missingImages, setMissingImages] = useState<LabImageRef[]>([]);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -89,6 +91,44 @@ export function GuideEditor({
       window.clearTimeout(timer);
     };
   }, [tab, body]);
+
+  /**
+   * Images the library has lost. Checked on its own rather than read off the
+   * preview, because the Write tab never asks for a preview and is where most
+   * of a guide gets written — a reference that has gone stale should not wait
+   * until someone thinks to look at the rendered version.
+   */
+  useEffect(() => {
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      // A guide with no library image in it cannot have lost one, and most
+      // guides never do, so the common case costs a substring search.
+      if (!body.includes("/api/lab-images/")) {
+        setMissingImages([]);
+        return;
+      }
+
+      try {
+        const res = await fetch("/api/lab-guides/image-refs", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ body }),
+          signal: controller.signal,
+        });
+        if (!res.ok) return;
+        const { missing } = await res.json();
+        setMissingImages(missing ?? []);
+      } catch {
+        // A failed check says nothing about the images, so it says nothing at
+        // all: the strip stays as it was rather than claiming they are fine.
+      }
+    }, 600);
+
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [body]);
 
   const previewPane = useRef<HTMLDivElement>(null);
   const editedLine = useRef<number | null>(null);
@@ -592,6 +632,27 @@ export function GuideEditor({
             ))}{" "}
             — readers will see that written out. Check the spelling against the
             Placeholder menu.
+          </p>
+        )}
+
+        {missingImages.length > 0 && (
+          <p className="text-xs leading-relaxed text-destructive">
+            {missingImages.length === 1 ? "An image" : `${missingImages.length} images`}{" "}
+            in this guide {missingImages.length === 1 ? "is" : "are"} no longer in
+            the library
+            {missingImages.some((image) => image.alt.trim().length > 0) && (
+              <>
+                {" — "}
+                {missingImages.map((image, i) => (
+                  <span key={image.id}>
+                    {i > 0 && ", "}
+                    <code>{image.alt.trim() || "(no description)"}</code>
+                  </span>
+                ))}
+              </>
+            )}
+            . Readers will see a gap. Insert {missingImages.length === 1 ? "it" : "them"}{" "}
+            again from the Image menu, or delete the reference.
           </p>
         )}
       </div>

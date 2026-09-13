@@ -526,6 +526,31 @@
     border: 1px solid var(--border);
   }
 
+  /* An image the library has lost, in an author's preview only — a reader's
+     copy is rendered without the mark. The image is still in there and still
+     broken; the ring and the note are what say so on purpose. */
+  .lab-image-missing {
+    display: inline-flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    align-items: flex-start;
+    max-width: 100%;
+    padding: 0.75rem;
+    border: 1px dashed var(--destructive);
+    border-radius: var(--radius-lg);
+    background: color-mix(in oklab, var(--destructive) 6%, transparent);
+  }
+
+  .lab-image-missing img {
+    border-color: color-mix(in oklab, var(--destructive) 40%, transparent);
+  }
+
+  .lab-image-missing-note {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--destructive);
+  }
+
   /* Tables scroll inside their own box rather than widening the page. */
   .lab-prose table {
     display: block;

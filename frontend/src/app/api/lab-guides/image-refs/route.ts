@@ -1,14 +1,20 @@
-/** Renders a draft guide body without saving it. */
+/**
+ * Which images a draft body points at that the library no longer holds.
+ *
+ * Separate from `preview` because the Write tab has no preview to look at and
+ * should not pay for one: this parses the body and runs a single lookup by id,
+ * where a preview also highlights every code block.
+ */
 
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/auth";
 import { LAB_GUIDE_LIMITS } from "@/db/schema";
 import { missingLabImages } from "@/lib/lab-images";
-import { labImageRefs, renderMarkdown } from "@/lib/markdown";
+import { labImageRefs } from "@/lib/markdown";
 import { canManageLabGuides } from "@/lib/roles";
 
-const previewSchema = z.object({
+const schema = z.object({
   body: z.string().max(LAB_GUIDE_LIMITS.body),
 });
 
@@ -21,19 +27,17 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
-  const parsed = previewSchema.safeParse(await req.json().catch(() => null));
+  const parsed = schema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json({ error: "invalid_body" }, { status: 400 });
   }
 
   const refs = labImageRefs(parsed.data.body);
-  const missing = await missingLabImages(refs.map((ref) => ref.id));
+  const gone = new Set(await missingLabImages(refs.map((ref) => ref.id)));
 
-  // No values: an author sees `{{project}}` where a reader will see their own
-  // project, which is what makes the blanks visible while writing.
-  const { html, variables } = await renderMarkdown(parsed.data.body, {
-    sourceLines: true,
-    missingImages: missing,
+  // The alt text goes back with the id: it is what the author wrote, and the
+  // only part of a reference they will recognise.
+  return NextResponse.json({
+    missing: refs.filter((ref) => gone.has(ref.id)),
   });
-  return NextResponse.json({ html, variables });
 }

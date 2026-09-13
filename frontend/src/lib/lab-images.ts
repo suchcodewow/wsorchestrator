@@ -1,6 +1,6 @@
 /** Reads and writes the lab image library. */
 
-import { desc, eq, ilike } from "drizzle-orm";
+import { desc, eq, ilike, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import {
   LAB_IMAGE_LIMITS,
@@ -48,6 +48,24 @@ export async function getLabImageData(
     .limit(1);
 
   return row ?? null;
+}
+
+/**
+ * Which of these ids are no longer in the library. Deleting an image leaves
+ * every guide that used it pointing at nothing — the picker says so before it
+ * deletes — so this is how an author finds out which guides those were.
+ */
+export async function missingLabImages(ids: string[]): Promise<string[]> {
+  const wanted = ids.filter(isUuid);
+  if (wanted.length === 0) return [];
+
+  const found = await db
+    .select({ id: labImages.id })
+    .from(labImages)
+    .where(inArray(labImages.id, wanted));
+
+  const have = new Set(found.map((row) => row.id));
+  return wanted.filter((id) => !have.has(id));
 }
 
 export type UploadLabImageError =
