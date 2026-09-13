@@ -199,17 +199,35 @@ pipeline:
             steps:
               - step:
                   type: Run
-                  name: Resolve Build Time
-                  identifier: resolve_build_time
+                  name: Resolve Build Info
+                  identifier: resolve_build_info
                   spec:
                     shell: Sh
                     image: alpine:3.20
+                    # The commit subject is read from the clone rather than from
+                    # <+codebase.commitMessage>, for two reasons: the expression
+                    # is empty on a manual execution, and Harness substitutes
+                    # expressions into the script text before the shell runs, so
+                    # a subject containing a backtick would execute here.
+                    #
+                    # Base64 because the value crosses a comma-joined buildArgs
+                    # list next — see frontend/src/lib/build-info.ts.
                     command: |
                       set -eu
+                      apk add --no-cache git >/dev/null
+                      git config --global --add safe.directory "$(pwd)"
+
                       export BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
                       echo "BUILD_TIME=$BUILD_TIME"
+
+                      # `|| true` so a missing clone costs the tooltip a line
+                      # rather than failing the deploy.
+                      SUBJECT="$(git log -1 --pretty=%s 2>/dev/null | cut -c1-120 || true)"
+                      export BUILD_MESSAGE_B64="$(printf '%s' "$SUBJECT" | base64 | tr -d '\n')"
+                      echo "BUILD_MESSAGE_B64=$BUILD_MESSAGE_B64"
                     outputVariables:
                       - name: BUILD_TIME
+                      - name: BUILD_MESSAGE_B64
               - step:
                   type: BuildAndPushGAR
                   name: Build and Push App
@@ -226,7 +244,8 @@ pipeline:
                     context: frontend
                     buildArgs:
                       BUILD_TAG: <+codebase.shortCommitSha>
-                      BUILD_TIME: <+steps.resolve_build_time.output.outputVariables.BUILD_TIME>
+                      BUILD_TIME: <+steps.resolve_build_info.output.outputVariables.BUILD_TIME>
+                      BUILD_MESSAGE_B64: <+steps.resolve_build_info.output.outputVariables.BUILD_MESSAGE_B64>
               - step:
                   type: BuildAndPushGAR
                   name: Build and Push Runner

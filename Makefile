@@ -88,9 +88,15 @@ infra: ## Apply admin control plane (uses placeholder images on first run)
 
 images: ## Build + push app and runner images via Cloud Build
 	@test -n "$(REPO)" || { echo "No REPO — run 'make infra' first"; exit 1; }
+	@# The commit subject goes along for the app's build tooltip. Resolved in the
+	@# shell and kept in a variable, not via make's $(shell ...) — subjects here
+	@# contain apostrophes and backticks, and only this form keeps them out of
+	@# the recipe's own quoting. Base64 then keeps the comma out of the
+	@# comma-separated --substitutions list.
+	MSG_B64="$$(git log -1 --pretty=%s 2>/dev/null | cut -c1-120 | base64 | tr -d '\n')"; \
 	gcloud builds submit --project $(PROJECT) --config cloudbuild.yaml \
 	  --service-account=projects/$(PROJECT)/serviceAccounts/build-sa@$(PROJECT).iam.gserviceaccount.com \
-	  --substitutions=_REPO=$(REPO),_TAG=$(TAG) .
+	  --substitutions=_REPO=$(REPO),_TAG=$(TAG),_MESSAGE_B64=$$MSG_B64 .
 
 deploy: ## Roll Cloud Run onto $(TAG)'s images (same path the CD trigger uses)
 	@test -n "$(REPO)" || { echo "No REPO — run 'make infra' first"; exit 1; }

@@ -25,8 +25,10 @@ COPY --from=build /app/.next/standalone ./
 COPY --from=build /app/.next/static ./.next/static
 
 # Which build this image is, surfaced in the app's user menu so the running
-# revision can be identified without leaving the UI. Supplied by
-# cloudbuild.yaml; the defaults are what a bare `docker build` gets.
+# revision can be identified without leaving the UI. Supplied by the Harness
+# pipeline, or by cloudbuild.yaml on the break-glass path; the defaults are
+# what a bare `docker build` gets. The commit subject arrives base64-encoded —
+# frontend/src/lib/build-info.ts says why.
 #
 # Declared after the COPYs on purpose: these change on every build, and putting
 # them earlier would invalidate the layer cache for everything below them.
@@ -34,8 +36,10 @@ COPY --from=build /app/.next/static ./.next/static
 # request time by the server — never inlined into the bundle.
 ARG BUILD_TAG=dev
 ARG BUILD_TIME=""
+ARG BUILD_MESSAGE_B64=""
 ENV BUILD_TAG=$BUILD_TAG
 ENV BUILD_TIME=$BUILD_TIME
+ENV BUILD_MESSAGE_B64=$BUILD_MESSAGE_B64
 
 EXPOSE 8080
 CMD ["node", "server.js"]

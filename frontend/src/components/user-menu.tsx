@@ -54,6 +54,18 @@ const TRIGGER_CLASS: Record<MenuVariant, string> = {
   rail: "flex size-10 cursor-pointer items-center justify-center rounded-lg outline-none transition-colors hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50",
 };
 
+/**
+ * The hover text for the build line. The visible line is only the tag and a
+ * rounded timestamp, so the tooltip carries what identifies the build to a
+ * person: the exact instant and the commit subject it was cut from.
+ */
+function buildTitle(build: BuildInfo): string {
+  if (!build.builtAt) return "Not a released build";
+
+  const built = `Built ${build.builtAt} from ${build.tag}`;
+  return build.message ? `${built}\n${build.message}` : built;
+}
+
 export function UserMenu({
   name,
   email,
@@ -208,9 +220,7 @@ export function UserMenu({
 
         <div
           className="px-2 py-1 text-[11px] leading-tight text-muted-foreground"
-          title={
-            build.builtAt ? `Built ${build.builtAt} from ${build.tag}` : "Not a released build"
-          }
+          title={buildTitle(build)}
         >
           <span className="font-mono">{build.tag}</span>
           {build.builtAtLabel && <span className="mt-0.5 block">built {build.builtAtLabel}</span>}

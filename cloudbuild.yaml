@@ -21,6 +21,10 @@
 substitutions:
   _REPO: "REPLACE_ME"
   _TAG: "latest"
+  # The commit subject, base64-encoded by the Makefile. `.git` is in
+  # .gcloudignore, so unlike the Harness pipeline this build cannot read it
+  # here — it has to be handed in. Empty just drops the line from the tooltip.
+  _MESSAGE_B64: ""
   # Everything below is only read when _DEPLOY is "true".
   _DEPLOY: "false"
   _REGION: "us-central1"
@@ -70,6 +74,12 @@ steps:
   - id: build-app
     name: gcr.io/cloud-builders/docker
     entrypoint: bash
+    # Carried as an env var rather than written straight into the script below,
+    # because substitutions are textual: `${_MESSAGE_B64}` inlined into bash
+    # would be re-parsed by the shell. Base64 already makes that harmless, and
+    # this keeps it that way if the encoding is ever dropped.
+    env:
+      - 'BUILD_MESSAGE_B64=${_MESSAGE_B64}'
     args:
       - -c
       - |
@@ -77,6 +87,7 @@ steps:
         docker build \
           --build-arg BUILD_TAG="${_TAG}" \
           --build-arg BUILD_TIME="$$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+          --build-arg BUILD_MESSAGE_B64="$$BUILD_MESSAGE_B64" \
           -t "${_REPO}/app:${_TAG}" \
           -t "${_REPO}/app:latest" \
           -f frontend/Dockerfile \
