@@ -261,8 +261,16 @@ const yamlScalar = (value: string) =>
  * Textual rather than parsed, for the reason `templateYaml` in `harness.ts` is:
  * a Harness body is full of `<+expressions>`, block scalars and deep structure,
  * and round-tripping it through a parser risks changing something the author
- * meant. The keys being replaced all sit at a known two-space indent under the
- * root, so the edit is exact without understanding the rest.
+ * meant. The keys being replaced are the root mapping's own, so the edit is
+ * exact without understanding the rest.
+ *
+ * **The indent is read off the body, not assumed.** This used to hardcode two
+ * spaces. Harness does not promise that: a template authored or stored some
+ * other way comes back indented four, and against one of those the two-space
+ * pattern matched nothing — so the original `name`/`identifier` lines stayed put,
+ * ours were added above them at a different indent, and Harness rejected the
+ * result as unparseable rather than as a bad field. The test fixture is the body
+ * shape that produced that.
  */
 export function rescopeYaml(
   yaml: string,
@@ -278,15 +286,30 @@ export function rescopeYaml(
     );
   }
 
-  const owned = new RegExp(`^ {2}(${Object.keys(keys).join("|")}):`);
+  const body = lines.slice(root + 1);
+
+  // The first thing under the root key is one of the root mapping's own keys, so
+  // its indent is the one this owns. Comments and blank lines are skipped — they
+  // may be indented anything at all, or nothing.
+  const indent = body
+    .find((line) => line.trim() !== "" && !line.trimStart().startsWith("#"))
+    ?.match(/^ +/)?.[0];
+  if (indent === undefined) {
+    throw new Error(
+      `expected this ${rootKey} to have indented keys under "${rootKey}:" — ` +
+        `Harness returned something else`,
+    );
+  }
+
+  const owned = new RegExp(`^${indent}(${Object.keys(keys).join("|")}):`);
   const replacements = Object.entries(keys)
     .filter(([, value]) => value !== null)
-    .map(([key, value]) => `  ${key}: ${yamlScalar(value!)}`);
+    .map(([key, value]) => `${indent}${key}: ${yamlScalar(value!)}`);
 
   return [
     ...lines.slice(0, root + 1),
     ...replacements,
-    ...lines.slice(root + 1).filter((line) => !owned.test(line)),
+    ...body.filter((line) => !owned.test(line)),
   ].join("\n");
 }
 

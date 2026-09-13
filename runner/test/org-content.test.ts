@@ -70,6 +70,61 @@ describe("rescopeYaml", () => {
     assert.equal(out.match(/^ {2}orgIdentifier:/gm)?.length, 1);
   });
 
+  /*
+   * A production "Deploy content" died on every template in a source with this
+   * body shape:
+   *
+   *   Invalid request: Cannot create template entity due to while parsing a
+   *   block mapping in 'reader', line 2, column 3: name: "IaCM Remediation
+   *   Test" ^ expected <block end>, but found '<block mapping start>' in
+   *   'reader', line 7, column 5 (HTTP 400)
+   *
+   * The indent was hardcoded at two spaces, so against a four-space body the
+   * owned pattern matched nothing: the original keys stayed, ours were prepended
+   * at two, and the document no longer parsed. Harness reported it as a YAML
+   * error with no field named, which is why it was not obvious what had been
+   * done to it.
+   */
+  test("takes the indent from the body instead of assuming two spaces", () => {
+    const yaml = [
+      "template:",
+      "    name: IaCM Remediation Test",
+      "    identifier: IaCM_Remediation_Test",
+      "    versionLabel: v1",
+      "    orgIdentifier: authoring",
+      "    projectIdentifier: content",
+      "    type: Stage",
+      "    spec:",
+      "        agent: iacm-agent",
+    ].join("\n");
+
+    const out = rescopeYaml(yaml, "template", {
+      name: "IaCM Remediation Test",
+      identifier: "IaCM_Remediation_Test",
+      versionLabel: "v1",
+      orgIdentifier: "workshop_abc",
+      projectIdentifier: "default_project",
+    });
+
+    // Ours are written at the body's own indent, and the originals are gone —
+    // exactly one of each key, or the document is invalid.
+    assert.equal(out.match(/^ {4}orgIdentifier:/gm)?.length, 1);
+    assert.equal(out.match(/^ {4}name:/gm)?.length, 1);
+    assert.equal(out.match(/^ {4}projectIdentifier:/gm)?.length, 1);
+    assert.match(out, /^ {4}orgIdentifier: "workshop_abc"$/m);
+    assert.doesNotMatch(out, /^ {2}\w/m);
+    // The body below the owned keys is untouched.
+    assert.match(out, /^ {4}spec:$/m);
+    assert.match(out, /^ {8}agent: iacm-agent$/m);
+  });
+
+  test("refuses a root key with nothing under it", () => {
+    assert.throws(
+      () => rescopeYaml("template:\n", "template", { name: "x" }),
+      /expected this template to have indented keys/,
+    );
+  });
+
   test("quotes the values it writes", () => {
     const out = rescopeYaml("environment:\n  name: old\n", "environment", {
       name: 'a "quoted" name',

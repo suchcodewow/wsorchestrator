@@ -211,6 +211,15 @@ async function listPages<T>(
 const yamlScalar = (value: string) =>
   `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
 
+/**
+ * The entity's own YAML with the keys that say *where it lives* replaced.
+ *
+ * **The indent is read off the body, not assumed.** This used to hardcode two
+ * spaces. Harness does not promise that: a template that comes back indented
+ * four left the original `name`/`identifier` lines in place while ours were added
+ * above them at two, which Harness rejected as unparseable YAML rather than as a
+ * bad field. Mirrored in the runner's `rescopeYaml`, which has the fixture.
+ */
 function rescopeYaml(
   yaml: string,
   rootKey: string,
@@ -225,15 +234,30 @@ function rescopeYaml(
     );
   }
 
-  const owned = new RegExp(`^ {2}(${Object.keys(keys).join("|")}):`);
+  const body = lines.slice(root + 1);
+
+  // The first thing under the root key is one of the root mapping's own keys, so
+  // its indent is the one this owns. Comments and blank lines are skipped — they
+  // may be indented anything at all, or nothing.
+  const indent = body
+    .find((line) => line.trim() !== "" && !line.trimStart().startsWith("#"))
+    ?.match(/^ +/)?.[0];
+  if (indent === undefined) {
+    throw new Error(
+      `expected this ${rootKey} to have indented keys under "${rootKey}:" — ` +
+        `Harness returned something else`,
+    );
+  }
+
+  const owned = new RegExp(`^${indent}(${Object.keys(keys).join("|")}):`);
   const replacements = Object.entries(keys)
     .filter(([, value]) => value !== null)
-    .map(([key, value]) => `  ${key}: ${yamlScalar(value!)}`);
+    .map(([key, value]) => `${indent}${key}: ${yamlScalar(value!)}`);
 
   return [
     ...lines.slice(0, root + 1),
     ...replacements,
-    ...lines.slice(root + 1).filter((line) => !owned.test(line)),
+    ...body.filter((line) => !owned.test(line)),
   ].join("\n");
 }
 
