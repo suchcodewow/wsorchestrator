@@ -14,7 +14,12 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 
-import { missingSecret, rescopeYaml } from "../src/org-content.js";
+import {
+  isPolicyDuplicate,
+  missingSecret,
+  policyIsInScope,
+  rescopeYaml,
+} from "../src/org-content.js";
 
 describe("rescopeYaml", () => {
   test("replaces the keys that say where the entity lives", () => {
@@ -162,5 +167,91 @@ describe("missingSecret", () => {
       message: "Connector with identifier github already exists",
     });
     assert.equal(missingSecret(body), null);
+  });
+});
+
+/**
+ * The policy API refuses a repeated create in wording no other Harness API
+ * uses, and both strings below came off the live account. `isDuplicate` matches
+ * neither, so without this the second copy pass — the one `run.ts` makes once
+ * the clouds are up — would mark every policy that is already there `failed`.
+ */
+describe("isPolicyDuplicate", () => {
+  const refusal = (message: string) =>
+    JSON.stringify({ name: "BadRequest", id: "4w215m-9", message });
+
+  test("reads the policy API's 400 as a duplicate", () => {
+    assert.equal(
+      isPolicyDuplicate(400, refusal("policy identifier must be unique")),
+      true,
+    );
+  });
+
+  test("reads the policy set API's 400 as a duplicate", () => {
+    assert.equal(
+      isPolicyDuplicate(400, refusal("policy set identifier must be unique")),
+      true,
+    );
+  });
+
+  test("still reads the platform APIs' own wording", () => {
+    assert.equal(
+      isPolicyDuplicate(
+        400,
+        JSON.stringify({ code: "DUPLICATE_FIELD", message: "A filter already exists" }),
+      ),
+      true,
+    );
+    assert.equal(isPolicyDuplicate(409, "{}"), true);
+  });
+
+  test("leaves a real 400 alone", () => {
+    assert.equal(
+      isPolicyDuplicate(400, refusal("rego compilation failed: undefined function")),
+      false,
+    );
+  });
+});
+
+/**
+ * Which policies a copied policy set may still point at.
+ *
+ * The trap this guards is that Harness accepts `account.foo` on a write and
+ * reads it back as a bare `foo` with an empty `org_id` — so the scope has to
+ * come from those fields, never from how the reference was spelled. Getting it
+ * wrong produces an org-level reference to a policy that is not in the org,
+ * which resolves to nothing and reports no error.
+ */
+describe("policyIsInScope", () => {
+  const orgSource = { token: "t", accountId: "a", org: "authoring", project: null };
+  const projectSource = { ...orgSource, project: "content" };
+
+  test("keeps a policy from the org the source names", () => {
+    assert.equal(
+      policyIsInScope({ org_id: "authoring", project_id: "" }, orgSource),
+      true,
+    );
+  });
+
+  test("drops an account-level policy, which reads back looking org-level", () => {
+    assert.equal(policyIsInScope({ org_id: "", project_id: "" }, orgSource), false);
+    // The same object with the fields absent entirely, which is how the API
+    // renders an account-level policy on some responses.
+    assert.equal(policyIsInScope({}, orgSource), false);
+  });
+
+  test("drops a policy from a different org", () => {
+    assert.equal(
+      policyIsInScope({ org_id: "elsewhere", project_id: "" }, orgSource),
+      false,
+    );
+  });
+
+  test("separates an org source from a project one", () => {
+    const inProject = { org_id: "authoring", project_id: "content" };
+    // A project-scoped source copies its project's policies...
+    assert.equal(policyIsInScope(inProject, projectSource), true);
+    // ...and an org-scoped source does not reach into that project.
+    assert.equal(policyIsInScope(inProject, orgSource), false);
   });
 });

@@ -51,7 +51,10 @@ export type DeployStep = {
     | "template"
     | "variable"
     | "environment"
-    | "infrastructure";
+    | "infrastructure"
+    | "policy"
+    | "policy set"
+    | "filter";
   identifier: string;
   outcome: DeployOutcome;
   detail?: string;
@@ -98,7 +101,7 @@ const wait = (ms: number) => new Promise((done) => setTimeout(done, ms));
 
 async function harnessRequest(
   token: string,
-  method: "GET" | "POST" | "PUT",
+  method: "GET" | "POST" | "PUT" | "PATCH",
   path: string,
   query: Query,
   body?: Json | FormData | string,
@@ -896,11 +899,408 @@ async function copyInfrastructures(
   }
 }
 
+/* ------------------------------------------------------------------ *
+ * Governance — policies, policy sets, filters
+ * ------------------------------------------------------------------ */
+
+/**
+ * The policy API is not the platform API. It lives under `/pm`, answers with a
+ * **bare JSON array** rather than the `{ data: { content } }` envelope every
+ * other list here returns, and pages on `page`/`per_page` — so `listPages` and
+ * `dataOf` do not apply.
+ *
+ * The listing is scope-*exact*: asking an organization returns that
+ * organization's own policies, not the account-level ones it inherits. That is
+ * what keeps the copy honest — an inheriting listing would clone the authoring
+ * account's builtin example policies into the target org.
+ */
+async function listPolicy<T>(
+  token: string,
+  path: string,
+  query: Query,
+): Promise<{ ok: true; items: T[] } | { ok: false; detail: string }> {
+  const items: T[] = [];
+
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const reply = await harnessRequest(token, "GET", path, {
+      ...query,
+      page: String(page),
+      per_page: String(PAGE_SIZE),
+    });
+    if (!ok(reply)) {
+      return {
+        ok: false,
+        detail:
+          reply.status === 0
+            ? reply.text
+            : `${messageOf(reply.text)} (HTTP ${reply.status})`,
+      };
+    }
+
+    let content: T[];
+    try {
+      const parsed: unknown = JSON.parse(reply.text);
+      content = Array.isArray(parsed) ? (parsed as T[]) : [];
+    } catch {
+      return { ok: false, detail: "Harness returned unreadable JSON." };
+    }
+
+    items.push(...content);
+    if (content.length < PAGE_SIZE) break;
+  }
+
+  return { ok: true, items };
+}
+
+/**
+ * A duplicate as the policy API words it.
+ *
+ * `isDuplicate` does not catch this one. The platform APIs answer a repeated
+ * create with 409 or a body saying `DUPLICATE_FIELD`/`already exists`; the
+ * policy API answers **HTTP 400** with `policy identifier must be unique` (and
+ * `policy set identifier must be unique` for a set). Left unhandled, deploying
+ * the same source twice reports every policy already there as a failure.
+ */
+function policyOutcomeOf(reply: Reply): {
+  outcome: DeployOutcome;
+  detail?: string;
+} {
+  if (
+    !ok(reply) &&
+    reply.status === 400 &&
+    /identifier must be unique/i.test(messageOf(reply.text))
+  ) {
+    return { outcome: "existed" };
+  }
+  return outcomeOf(reply);
+}
+
+/** How the policy API reports where a policy lives. Absent means the account. */
+type PolicyScope = { org_id?: string; project_id?: string };
+
+/**
+ * Whether a policy a set points at is one this deploy also brings across.
+ *
+ * A policy set names a policy above it as `account.<id>`, but **the read is not
+ * the write**: Harness accepts that on a PATCH and reads it back as a bare `id`
+ * with `org_id: ""`. Reusing the identifier verbatim would turn an
+ * account-level reference into an org-level one that resolves to nothing in the
+ * target org, and looks perfectly fine while doing it. So the scope is
+ * re-derived from these fields rather than taken from how it was named.
+ */
+function policyIsInScope(policy: PolicyScope, from: Scope): boolean {
+  return (
+    (policy.org_id ?? "") === from.org &&
+    (policy.project_id ?? "") === (from.project ?? "")
+  );
+}
+
+async function copyPolicies(
+  from: Scope,
+  to: Scope,
+  record: Record_,
+): Promise<void> {
+  const listed = await listPolicy<{
+    identifier?: string;
+    name?: string;
+    rego?: string;
+  }>(from.token, "/pm/api/v1/policies", scopeQuery(from));
+
+  if (!listed.ok) {
+    record({
+      scope: scopeLabel(to),
+      kind: "policy",
+      identifier: `(all, from ${scopeLabel(from)})`,
+      outcome: "failed",
+      detail: `Could not list them: ${listed.detail}`,
+    });
+    return;
+  }
+
+  for (const policy of listed.items) {
+    const { identifier, rego } = policy;
+    if (typeof identifier !== "string" || typeof rego !== "string") continue;
+
+    // No tags and no description of ours, the way a variable has none: the API
+    // takes an identifier, a name and a rego body and nothing else.
+    const reply = await harnessRequest(
+      to.token,
+      "POST",
+      "/pm/api/v1/policies",
+      scopeQuery(to),
+      { identifier, name: policy.name ?? identifier, rego },
+    );
+
+    record({
+      scope: scopeLabel(to),
+      kind: "policy",
+      identifier,
+      ...policyOutcomeOf(reply),
+    });
+  }
+}
+
+/**
+ * Policy sets, and the policies they point at.
+ *
+ * **A create does not attach the policies** — posting a set with a populated
+ * `policies` array returns `"policies": []`, silently — so each set is created
+ * and then PATCHed with its references. References that leave the source scope
+ * cannot come across at all (see `policyIsInScope`); those are dropped and named
+ * in the detail, because a policy set enforcing fewer rules than the one it was
+ * copied from is a difference somebody needs to be told about.
+ */
+async function copyPolicySets(
+  from: Scope,
+  to: Scope,
+  record: Record_,
+): Promise<void> {
+  const listed = await listPolicy<{ identifier?: string }>(
+    from.token,
+    "/pm/api/v1/policysets",
+    scopeQuery(from),
+  );
+
+  if (!listed.ok) {
+    record({
+      scope: scopeLabel(to),
+      kind: "policy set",
+      identifier: `(all, from ${scopeLabel(from)})`,
+      outcome: "failed",
+      detail: `Could not list them: ${listed.detail}`,
+    });
+    return;
+  }
+
+  for (const meta of listed.items) {
+    const identifier = meta.identifier;
+    if (typeof identifier !== "string") continue;
+
+    // The listing does not promise the policies, so each set is read whole.
+    const fetched = await harnessRequest(
+      from.token,
+      "GET",
+      `/pm/api/v1/policysets/${encodeURIComponent(identifier)}`,
+      scopeQuery(from),
+    );
+    if (!ok(fetched)) {
+      record({
+        scope: scopeLabel(to),
+        kind: "policy set",
+        identifier,
+        outcome: "failed",
+        detail: `Could not read it from ${scopeLabel(from)}.`,
+      });
+      continue;
+    }
+
+    let set: {
+      name?: string;
+      description?: string;
+      action?: string;
+      type?: string;
+      enabled?: boolean;
+      policies?: (PolicyScope & { identifier?: string; severity?: string })[];
+    };
+    try {
+      set = JSON.parse(fetched.text);
+    } catch {
+      record({
+        scope: scopeLabel(to),
+        kind: "policy set",
+        identifier,
+        outcome: "failed",
+        detail: "Harness returned unreadable JSON for it.",
+      });
+      continue;
+    }
+
+    const kept: { identifier: string; severity: string }[] = [];
+    const dropped: string[] = [];
+    for (const policy of set.policies ?? []) {
+      if (typeof policy.identifier !== "string") continue;
+      if (policyIsInScope(policy, from)) {
+        kept.push({
+          identifier: policy.identifier,
+          severity: policy.severity ?? "error",
+        });
+      } else {
+        dropped.push(policy.identifier);
+      }
+    }
+
+    const body = {
+      identifier,
+      name: set.name ?? identifier,
+      description: set.description || DESCRIPTION,
+      action: set.action ?? "onrun",
+      type: set.type ?? "pipeline",
+      enabled: set.enabled ?? false,
+    };
+
+    const created = await harnessRequest(
+      to.token,
+      "POST",
+      "/pm/api/v1/policysets",
+      scopeQuery(to),
+      body,
+    );
+    const outcome = policyOutcomeOf(created);
+    if (outcome.outcome === "failed") {
+      record({ scope: scopeLabel(to), kind: "policy set", identifier, ...outcome });
+      continue;
+    }
+
+    // The attach runs whether or not the create was new, so deploying twice
+    // repairs a set whose policies did not land the first time.
+    if (kept.length > 0) {
+      const attached = await harnessRequest(
+        to.token,
+        "PATCH",
+        `/pm/api/v1/policysets/${encodeURIComponent(identifier)}`,
+        scopeQuery(to),
+        { ...body, policies: kept },
+      );
+      if (!ok(attached)) {
+        record({
+          scope: scopeLabel(to),
+          kind: "policy set",
+          identifier,
+          outcome: "failed",
+          detail: "Created, but its policies could not be attached.",
+        });
+        continue;
+      }
+    }
+
+    record({
+      scope: scopeLabel(to),
+      kind: "policy set",
+      identifier,
+      ...outcome,
+      ...(dropped.length > 0
+        ? {
+            detail:
+              `Enforces ${kept.length} of ${kept.length + dropped.length} ` +
+              `policies — ${dropped.join(", ")} ` +
+              `${dropped.length === 1 ? "lives" : "live"} outside ` +
+              `${scopeLabel(from)} and ` +
+              `${dropped.length === 1 ? "was" : "were"} not copied, so the ` +
+              `reference would not resolve.`,
+          }
+        : {}),
+    });
+  }
+}
+
+/**
+ * Saved filters — the views Harness offers in the dropdown above a list.
+ *
+ * **A filter belongs to the service that owns what it selects, and there are
+ * three of them.** Connector, Environment, EnvironmentGroup and FileStore
+ * filters live under `/ng`, Template filters under `/template`, and the pipeline
+ * ones under `/pipeline`. Sending one to the wrong service is not a loud
+ * failure: a create answers `Unsupported filter type X for this service`, but a
+ * *list* answers **200 with an empty page**. Asking `/ng` for the template
+ * filters therefore reports that there are none and copies nothing, which is why
+ * this is a map of service to types rather than a list of types against one
+ * path.
+ *
+ * `Deployment` is absent because the endpoint refuses it without more of the
+ * filter's body than a copy has any business synthesising, and audit filters
+ * because they select over an account's own history, which the target org does
+ * not have.
+ *
+ * **Visibility is forced to `EveryOne`.** A filter saved `OnlyCreator` is
+ * visible to the identity that created it and nobody else — copied under this
+ * token, that identity is the orchestrator, so the filter would exist and be
+ * unusable by the person who asked for it.
+ */
+const FILTER_SERVICES: Record<string, readonly string[]> = {
+  "/ng/api/filters": ["Connector", "Environment", "EnvironmentGroup", "FileStore"],
+  "/template/api/filters": ["Template"],
+  "/pipeline/api/filters": ["PipelineSetup", "PipelineExecution"],
+};
+
+async function copyFilters(
+  from: Scope,
+  to: Scope,
+  record: Record_,
+): Promise<void> {
+  for (const [path, types] of Object.entries(FILTER_SERVICES)) {
+    for (const type of types) {
+      const listed = await listPages<Json>(
+        from.token,
+        "GET",
+        path,
+        { ...scopeQuery(from), type },
+        { page: "pageIndex", size: "pageSize" },
+      );
+
+      if (!listed.ok) {
+        record({
+          scope: scopeLabel(to),
+          kind: "filter",
+          identifier: `(all ${type}, from ${scopeLabel(from)})`,
+          outcome: "failed",
+          detail: `Could not list them: ${listed.detail}`,
+        });
+        continue;
+      }
+
+      for (const filter of listed.items) {
+        const identifier = filter.identifier;
+        if (typeof identifier !== "string") continue;
+
+        const properties = (filter.filterProperties as Json | undefined) ?? {};
+
+        const reply = await harnessRequest(
+          to.token,
+          "POST",
+          path,
+          { accountIdentifier: to.accountId },
+          {
+            name: typeof filter.name === "string" ? filter.name : identifier,
+            identifier,
+            orgIdentifier: to.org,
+            projectIdentifier: to.project ?? undefined,
+            filterVisibility: "EveryOne",
+            filterProperties: {
+              ...properties,
+              filterType: type,
+              tags: {
+                ...((properties.tags as Json | undefined) ?? {}),
+                ...TAGS,
+              },
+            },
+          },
+        );
+
+        record({
+          scope: scopeLabel(to),
+          kind: "filter",
+          identifier: `${type} / ${identifier}`,
+          ...outcomeOf(reply),
+        });
+      }
+    }
+  }
+}
+
+/**
+ * One scope, in the order that lets each kind find what it references:
+ * connectors before the templates and infrastructure that name them, policies
+ * before the policy sets that point at them, and filters last — a filter selects
+ * over content, so the content it selects should already be there.
+ */
 async function copyScope(from: Scope, to: Scope, record: Record_): Promise<void> {
   await copyConnectors(from, to, record);
   await copyVariables(from, to, record);
   await copyTemplates(from, to, record);
   await copyEnvironments(from, to, record);
+  await copyPolicies(from, to, record);
+  await copyPolicySets(from, to, record);
+  await copyFilters(from, to, record);
 }
 
 async function deploySecrets(

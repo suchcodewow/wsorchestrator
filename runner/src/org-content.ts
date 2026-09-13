@@ -17,7 +17,8 @@ import { openSecret, secretsConfigured } from "./secret-box.js";
  * The sources are the rows in Settings → Templates: organizations (or one
  * project inside one) in a Harness account somebody on the team authors in.
  * Everything org-shaped in them comes across — connectors, templates,
- * environments with their infrastructure definitions, and org variables — so a
+ * environments with their infrastructure definitions, org variables, and the
+ * governance around them (policies, policy sets and saved filters) — so a
  * workshop org opens with the content the labs were written against instead of
  * only the three cloud connectors the catalog builds.
  *
@@ -145,7 +146,7 @@ function messageOf(body: string): string {
  */
 async function request(
   token: string,
-  method: "GET" | "POST",
+  method: "GET" | "POST" | "PATCH",
   path: string,
   query: Query,
   body?: Json | FormData | string,
@@ -595,7 +596,7 @@ async function createFillingGaps(
 }
 
 /* ------------------------------------------------------------------ *
- * The five kinds of content
+ * The kinds of content
  * ------------------------------------------------------------------ */
 
 /** One failed listing, said the same way whatever was being listed. */
@@ -604,6 +605,351 @@ const listingFailed = (ctx: Copying, kind: string, detail: string) =>
     outcome: "failed",
     detail: `could not list them: ${detail}`,
   });
+
+/* ---------------------------- governance ---------------------------- */
+
+/**
+ * The policy API is not the platform API, and three things about it differ.
+ *
+ * It lives under `/pm`, it answers with a **bare JSON array** rather than the
+ * `{ data: { content } }` envelope every other list here returns, and it pages
+ * on `page`/`per_page`. So `listPages` and `dataOf` do not apply — `listPolicy`
+ * below is the equivalent.
+ *
+ * The listing is scope-*exact*: asking an organization returns that
+ * organization's own policies, not the account-level ones it inherits. That is
+ * what keeps a copy honest. The authoring account this was checked against
+ * carries 68 `builtin-example-policy-*` entries at the account level, and an
+ * inheriting listing would have cloned all of them into every workshop org.
+ */
+async function listPolicy<T>(
+  token: string,
+  path: string,
+  query: Query,
+): Promise<{ ok: true; items: T[] } | { ok: false; detail: string }> {
+  const items: T[] = [];
+
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const reply = await request(token, "GET", path, {
+      ...query,
+      page: String(page),
+      per_page: String(PAGE_SIZE),
+    });
+    if (!ok(reply)) return { ok: false, detail: detailOf(reply) };
+
+    let content: T[];
+    try {
+      const parsed: unknown = JSON.parse(reply.text);
+      content = Array.isArray(parsed) ? (parsed as T[]) : [];
+    } catch {
+      return { ok: false, detail: `Harness returned unreadable JSON` };
+    }
+
+    items.push(...content);
+    if (content.length < PAGE_SIZE) break;
+  }
+
+  return { ok: true, items };
+}
+
+/**
+ * A duplicate as the policy API words it.
+ *
+ * `isDuplicate` in `harness.ts` does not catch this one, and the difference is
+ * not cosmetic. The platform APIs answer a repeated create with 409 or a body
+ * saying `DUPLICATE_FIELD`/`already exists`; the policy API answers **HTTP 400**
+ * with `policy identifier must be unique` (and `policy set identifier must be
+ * unique` for a set) — no shared status, no shared wording.
+ *
+ * Left unhandled that breaks the re-entrancy the module comment promises: the
+ * second pass `run.ts` makes after the clouds are up would mark every already
+ * copied policy `failed`, turning a converged copy into a run page full of
+ * errors. The two strings are the fixtures in `org-content.test.ts`.
+ */
+export function isPolicyDuplicate(status: number, body: string): boolean {
+  return (
+    isDuplicate(status, body) ||
+    (status === 400 && /identifier must be unique/i.test(messageOf(body)))
+  );
+}
+
+const policyOutcomeOf = (reply: Reply): Result =>
+  ok(reply)
+    ? { outcome: "created" }
+    : isPolicyDuplicate(reply.status, reply.text)
+      ? { outcome: "existed" }
+      : { outcome: "failed", detail: detailOf(reply) };
+
+/** How the policy API reports where a policy lives. Absent means the account. */
+type PolicyScope = { org_id?: string; project_id?: string };
+
+/**
+ * Whether a policy a set points at is one this copy also brings across.
+ *
+ * A policy set names its policies, and the name it uses depends on where they
+ * sit relative to it: a policy in the same scope is named bare, one above it is
+ * named `account.<id>`. **The read is not the write.** Harness accepts
+ * `account.foo` on a PATCH and then reads it back as a bare `foo` with
+ * `org_id: ""` — so a copy that reuses the identifier verbatim silently turns an
+ * account-level reference into an org-level one, which resolves to nothing in
+ * the workshop org and looks perfectly fine while doing it.
+ *
+ * The scope therefore has to be re-derived from the policy's own `org_id` and
+ * `project_id` rather than taken from how it was named. Only a policy inside the
+ * source scope is copied, so only that one can be referenced; anything else is
+ * dropped and said out loud — see `copyPolicySets`.
+ */
+export function policyIsInScope(policy: PolicyScope, from: Scope): boolean {
+  return (
+    (policy.org_id ?? "") === from.org &&
+    (policy.project_id ?? "") === (from.project ?? "")
+  );
+}
+
+async function copyPolicies(ctx: Copying): Promise<void> {
+  const { from, to } = ctx;
+  const listed = await listPolicy<{
+    identifier?: string;
+    name?: string;
+    rego?: string;
+  }>(from.token, "/pm/api/v1/policies", scopeQuery(from));
+  if (!listed.ok) {
+    await listingFailed(ctx, "policy", listed.detail);
+    return;
+  }
+
+  for (const policy of listed.items) {
+    const { identifier, rego } = policy;
+    if (typeof identifier !== "string" || typeof rego !== "string") continue;
+
+    // No tags and no description of ours, the way `copyVariables` has none: a
+    // policy is an identifier, a name and a rego body, and the API takes
+    // nothing else to hang provenance on.
+    const reply = await request(
+      to.token,
+      "POST",
+      "/pm/api/v1/policies",
+      scopeQuery(to),
+      { identifier, name: policy.name ?? identifier, rego },
+    );
+
+    await ctx.record("policy", identifier, policyOutcomeOf(reply));
+  }
+}
+
+/**
+ * Policy sets, and the policies they point at.
+ *
+ * Two things make this more than a create. **A create does not attach the
+ * policies** — posting a set with a populated `policies` array returns
+ * `"policies": []`, silently — so each set is created and then PATCHed with its
+ * references. And a reference that leaves the source scope cannot come across at
+ * all: see `policyIsInScope`. Those are dropped and named in the detail rather
+ * than quietly omitted, because a policy set enforcing fewer rules than the one
+ * it was copied from is exactly the kind of difference somebody needs to be told
+ * about.
+ *
+ * Runs after `copyPolicies` so the references have something to resolve to.
+ */
+async function copyPolicySets(ctx: Copying): Promise<void> {
+  const { from, to } = ctx;
+  const listed = await listPolicy<{ identifier?: string }>(
+    from.token,
+    "/pm/api/v1/policysets",
+    scopeQuery(from),
+  );
+  if (!listed.ok) {
+    await listingFailed(ctx, "policy set", listed.detail);
+    return;
+  }
+
+  for (const meta of listed.items) {
+    const identifier = meta.identifier;
+    if (typeof identifier !== "string") continue;
+
+    // The listing does not promise the policies, so each set is read whole —
+    // the same list-then-get shape `copyTemplates` uses.
+    const fetched = await request(
+      from.token,
+      "GET",
+      `/pm/api/v1/policysets/${encodeURIComponent(identifier)}`,
+      scopeQuery(from),
+    );
+    if (!ok(fetched)) {
+      await ctx.record("policy set", identifier, {
+        outcome: "failed",
+        detail: `could not read it from ${scopeLabel(from)}: ${detailOf(fetched)}`,
+      });
+      continue;
+    }
+
+    let set: {
+      name?: string;
+      description?: string;
+      action?: string;
+      type?: string;
+      enabled?: boolean;
+      policies?: (PolicyScope & { identifier?: string; severity?: string })[];
+    };
+    try {
+      set = JSON.parse(fetched.text);
+    } catch {
+      await ctx.record("policy set", identifier, {
+        outcome: "failed",
+        detail: "Harness returned unreadable JSON for it",
+      });
+      continue;
+    }
+
+    const kept: { identifier: string; severity: string }[] = [];
+    const dropped: string[] = [];
+    for (const policy of set.policies ?? []) {
+      if (typeof policy.identifier !== "string") continue;
+      if (policyIsInScope(policy, from)) {
+        kept.push({
+          identifier: policy.identifier,
+          severity: policy.severity ?? "error",
+        });
+      } else {
+        dropped.push(policy.identifier);
+      }
+    }
+
+    const body = {
+      identifier,
+      name: set.name ?? identifier,
+      description: set.description || DESCRIPTION,
+      action: set.action ?? "onrun",
+      type: set.type ?? "pipeline",
+      enabled: set.enabled ?? false,
+    };
+
+    const created = await request(
+      to.token,
+      "POST",
+      "/pm/api/v1/policysets",
+      scopeQuery(to),
+      body,
+    );
+    const result = policyOutcomeOf(created);
+    if (result.outcome === "failed") {
+      await ctx.record("policy set", identifier, result);
+      continue;
+    }
+
+    // The attach is a separate call whether or not the create was new, so a
+    // second pass repairs a set whose policies did not land the first time.
+    let detail: string | undefined;
+    if (kept.length > 0) {
+      const attached = await request(
+        to.token,
+        "PATCH",
+        `/pm/api/v1/policysets/${encodeURIComponent(identifier)}`,
+        scopeQuery(to),
+        { ...body, policies: kept },
+      );
+      if (!ok(attached)) {
+        await ctx.record("policy set", identifier, {
+          outcome: "failed",
+          detail: `created, but its policies could not be attached: ${detailOf(attached)}`,
+        });
+        continue;
+      }
+    }
+
+    if (dropped.length > 0) {
+      const one = dropped.length === 1;
+      detail =
+        `enforces ${kept.length} of ${kept.length + dropped.length} policies — ` +
+        `${dropped.join(", ")} ${one ? "lives" : "live"} outside ` +
+        `${scopeLabel(from)} and ${one ? "was" : "were"} not copied, so the ` +
+        `reference would not resolve`;
+    }
+
+    await ctx.record("policy set", identifier, { ...result, detail });
+  }
+}
+
+/**
+ * Saved filters — the views Harness offers in the dropdown above a list.
+ *
+ * **A filter belongs to the service that owns what it selects, and there are
+ * three of them.** Connector, Environment, EnvironmentGroup and FileStore
+ * filters live under `/ng`, Template filters under `/template`, and the pipeline
+ * ones under `/pipeline`. Sending one to the wrong service is not a loud
+ * failure: a create answers `Unsupported filter type X for this service`, but a
+ * *list* answers **200 with an empty page**. Asking `/ng` for the template
+ * filters therefore reports that there are none and copies nothing, which is why
+ * this is a map of service to types rather than a list of types against one
+ * path.
+ *
+ * `Deployment` is absent because the endpoint refuses it without a good deal
+ * more of the filter's body than a copy has any business synthesising, and audit
+ * filters because they select over an account's own history, which a fresh
+ * workshop org does not have.
+ *
+ * **Visibility is forced to `EveryOne`.** A filter saved `OnlyCreator` is
+ * visible to the identity that created it and nobody else — copied under the
+ * site's token, that identity is the orchestrator, so the filter would be
+ * invisible to every attendee in the room. Faithfulness to the author's setting
+ * would produce a filter that exists and cannot be used.
+ */
+const FILTER_SERVICES: Record<string, readonly string[]> = {
+  "/ng/api/filters": ["Connector", "Environment", "EnvironmentGroup", "FileStore"],
+  "/template/api/filters": ["Template"],
+  "/pipeline/api/filters": ["PipelineSetup", "PipelineExecution"],
+};
+
+async function copyFilters(ctx: Copying): Promise<void> {
+  const { from, to } = ctx;
+
+  for (const [path, types] of Object.entries(FILTER_SERVICES)) {
+    for (const type of types) {
+      const listed = await listPages<Json>(
+        from.token,
+        "GET",
+        path,
+        { ...scopeQuery(from), type },
+        { page: "pageIndex", size: "pageSize" },
+      );
+      if (!listed.ok) {
+        await listingFailed(ctx, "filter", `${type}: ${listed.detail}`);
+        continue;
+      }
+
+      for (const filter of listed.items) {
+        const identifier = filter.identifier;
+        if (typeof identifier !== "string") continue;
+
+        const label = `${type} / ${identifier}`;
+        const properties = (filter.filterProperties as Json | undefined) ?? {};
+
+        const reply = await request(to.token, "POST", path, {
+          accountIdentifier: to.accountId,
+        },
+        {
+          name: typeof filter.name === "string" ? filter.name : identifier,
+          identifier,
+          orgIdentifier: to.org,
+          projectIdentifier: to.project ?? undefined,
+          filterVisibility: "EveryOne",
+          filterProperties: {
+            ...properties,
+            filterType: type,
+            tags: {
+              ...((properties.tags as Json | undefined) ?? {}),
+              ...TAGS,
+            },
+          },
+        });
+
+        await ctx.record("filter", label, outcomeOf(reply));
+      }
+    }
+  }
+}
+
+/* ------------- connectors, templates, environments, variables ------------- */
 
 async function copyConnectors(ctx: Copying): Promise<void> {
   const { from, to } = ctx;
@@ -941,13 +1287,18 @@ async function copyVariables(ctx: Copying): Promise<void> {
 /**
  * One source, in the order that lets each kind find what it references:
  * connectors before the templates and infrastructure that name them, variables
- * alongside them since nothing depends on a variable existing first.
+ * alongside them since nothing depends on a variable existing first, policies
+ * before the policy sets that point at them, and filters last — a filter
+ * selects over content, so the content it selects should already be there.
  */
 async function copySource(ctx: Copying): Promise<void> {
   await copyConnectors(ctx);
   await copyVariables(ctx);
   await copyTemplates(ctx);
   await copyEnvironments(ctx);
+  await copyPolicies(ctx);
+  await copyPolicySets(ctx);
+  await copyFilters(ctx);
 }
 
 /* ------------------------------------------------------------------ *

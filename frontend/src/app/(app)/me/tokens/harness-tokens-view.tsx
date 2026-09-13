@@ -919,8 +919,8 @@ function DeployPicker({
               hint={
                 source.usable ? (
                   <>
-                    Copy every connector, template, environment, and
-                    infrastructure from{" "}
+                    Copy every connector, template, environment,
+                    infrastructure, policy, policy set, and filter from{" "}
                     <code className="rounded bg-muted px-1 py-0.5 font-mono">
                       {source.projectIdentifier === null
                         ? source.orgIdentifier
