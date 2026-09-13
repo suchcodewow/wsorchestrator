@@ -111,6 +111,44 @@ export function awsRetryKind(text: string): AwsRetryKind | null {
 }
 
 /**
+ * Waits between attempts, counted per reason so a run that hits both still gets
+ * a full budget for each. Both are minutes rather than seconds: one waits on
+ * another account creation finishing, the other on AWS finishing this one.
+ */
+export const AWS_RETRY_DELAYS_MS: Record<AwsRetryKind, number[]> = {
+  contention: [60_000, 120_000, 240_000],
+  warmup: [60_000, 120_000, 180_000, 300_000],
+};
+
+/**
+ * What to do with an AWS apply that just exited non-zero, given how many
+ * attempts each reason has already spent.
+ *
+ * Separate from the applying itself because the answer decides two things, not
+ * one: whether to go round again, and whether the attempt's stderr was a
+ * failure. A retried attempt's diagnostics describe a condition that cleared
+ * itself, and logging those in red is what makes a healthy AWS run look broken
+ * — every run trips the warm-up race once. `run.ts` writes them at the
+ * severity this outcome implies.
+ */
+export type AwsAttemptOutcome =
+  | { action: "retry"; kind: AwsRetryKind; delayMs: number }
+  | { action: "fail" };
+
+export function awsAttemptOutcome(
+  stderr: string,
+  spent: Readonly<Record<AwsRetryKind, number>>,
+): AwsAttemptOutcome {
+  const kind = awsRetryKind(stderr);
+  if (kind === null) return { action: "fail" };
+
+  const delayMs = AWS_RETRY_DELAYS_MS[kind][spent[kind]];
+  if (delayMs === undefined) return { action: "fail" };
+
+  return { action: "retry", kind, delayMs };
+}
+
+/**
  * Destroy failures that describe a condition the cloud clears by itself, so the
  * reaper should take one more attempt instead of stopping for a person.
  *

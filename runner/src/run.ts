@@ -31,7 +31,7 @@ import {
 } from "./workspace.js";
 import { tfApply, tfInit, tfOutput } from "./terraform.js";
 import {
-  awsRetryKind,
+  awsAttemptOutcome,
   isGkeCapacityError,
   type AwsRetryKind,
 } from "./classify.js";
@@ -679,16 +679,6 @@ async function provisionHarness(run: RunRow): Promise<HarnessProvision> {
   };
 }
 
-/**
- * Waits between attempts, counted per reason so a run that hits both still gets
- * a full budget for each. Both are minutes rather than seconds: one waits on
- * another account creation finishing, the other on AWS finishing this one.
- */
-const AWS_RETRY_DELAYS_MS: Record<AwsRetryKind, number[]> = {
-  contention: [60_000, 120_000, 240_000],
-  warmup: [60_000, 120_000, 180_000, 300_000],
-};
-
 const AWS_RETRY_REASONS: Record<AwsRetryKind, string> = {
   contention:
     "AWS Organizations is busy with another workshop's account (only one " +
@@ -715,29 +705,66 @@ async function applyAwsWithRetry(run: RunRow, workDir: string): Promise<void> {
   const attempts: Record<AwsRetryKind, number> = { contention: 0, warmup: 0 };
 
   for (;;) {
-    let captured = "";
+    // Held back rather than logged as it arrives, because whether a line is a
+    // failure is not known until the attempt ends. Every AWS run trips the
+    // warm-up race once — the account is ACTIVE the moment it exists but EC2
+    // answers OptInRequired for another minute — and the attempt that hits it
+    // goes on to succeed. Streaming that diagnostic live paints a red
+    // `Error: ... not subscribed to this service` block into the log of a run
+    // that is fine, which reads as a broken workshop and has been reported as
+    // one. Once the attempt has ended the same lines can be logged at a
+    // severity that reflects what actually happened.
+    //
+    // Nothing is lost by waiting. tofu writes stderr only at the end of an
+    // apply, so there is no live output to delay; the progress a watcher wants
+    // is on stdout and still streams. `exec` tees to this process's stderr
+    // independently, so Cloud Logging keeps the unabridged copy either way.
+    const held: string[] = [];
     try {
       await tfApply(workDir, (l) => {
-        if (l.stream === "stderr") captured += l.text + "\n";
+        if (l.stream === "stderr") {
+          held.push(l.text);
+          return;
+        }
         return log(run.id, l.stream, l.text);
       });
+      // Exit 0, so anything on stderr was a warning, not a fault.
+      await replay(run.id, held, "stdout");
       return;
     } catch (err) {
-      const kind = awsRetryKind(captured);
-      if (!kind) throw err;
+      const outcome = awsAttemptOutcome(held.join("\n"), attempts);
+      if (outcome.action === "fail") {
+        // Out of budget, or never retryable: this is the failure the run dies
+        // on, so it is shown as one.
+        await replay(run.id, held, "stderr");
+        throw err;
+      }
 
-      const delay = AWS_RETRY_DELAYS_MS[kind][attempts[kind]++];
-      if (delay === undefined) throw err;
-
+      attempts[outcome.kind]++;
       await log(
         run.id,
         "system",
-        `AWS apply stopped because ${AWS_RETRY_REASONS[kind]}; ` +
-          `retrying in ${delay / 1000}s.`,
+        `AWS apply stopped because ${AWS_RETRY_REASONS[outcome.kind]}; ` +
+          `retrying in ${outcome.delayMs / 1000}s.`,
       );
-      await wait(delay);
+      await replay(run.id, held, "stdout");
+      await wait(outcome.delayMs);
     }
   }
+}
+
+/**
+ * Write back the stderr an attempt produced, at the severity its outcome
+ * earned. Ordered after the `system` line that explains a retry, so the log
+ * reads as the reason followed by its detail rather than an unexplained wall
+ * of red.
+ */
+async function replay(
+  runId: string,
+  lines: string[],
+  stream: "stdout" | "stderr",
+): Promise<void> {
+  for (const text of lines) await log(runId, stream, text);
 }
 
 /** Zone letter from a location like "us-west1-c" (region "us-west1"). */
