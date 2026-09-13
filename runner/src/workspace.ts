@@ -29,6 +29,24 @@ function commonVars(runId: string, region?: string) {
   };
 }
 
+/**
+ * Settings the GCP layers that build *into* already-created projects take — the
+ * challenge cluster layer and every scenario root.
+ *
+ * Deliberately smaller than `commonVars`: these layers create no projects, so
+ * they have no use for the folder, the billing account or the admin project,
+ * and passing values a root does not declare is a warning on every apply. It
+ * also keeps the `variables.tf` a scenario author copies down to what a
+ * scenario genuinely takes.
+ */
+function gcpLayerVars(runId: string, region: string) {
+  return {
+    region,
+    run_id: runId,
+    labels: labels(runId),
+  };
+}
+
 /** Settings both Azure root configs take. */
 function azureCommonVars(runId: string) {
   const cfg = azureCfg();
@@ -143,10 +161,67 @@ export function writeChallengeTfvars(
   workDir: string,
   runId: string,
   attendeeProjects: Record<string, string>,
+  /**
+   * APIs to enable in each competitor's project: the baseline plus whatever the
+   * selected scenarios need (`activateApisFor`). Omitted, the root's own default
+   * applies — which is the bare-challenge baseline, so a challenge with no
+   * scenarios builds exactly what it built before scenarios existed.
+   */
+  activateApis?: string[],
 ) {
   write(workDir, {
     ...commonVars(runId),
     attendee_projects: attendeeProjects,
+    ...(activateApis ? { activate_apis: activateApis } : {}),
+  });
+}
+
+/**
+ * Write terraform.tfvars.json for a challenge's per-competitor cluster layer —
+ * one GKE cluster in each competitor's own project, built only when a selected
+ * scenario needs one.
+ *
+ * `zoneLetter` is rewritten and the apply repeated when a zone turns out to be
+ * out of capacity, exactly as for a workshop (`applyGkeWithZoneFailover`).
+ */
+export function writeChallengeClusterTfvars(
+  workDir: string,
+  runId: string,
+  attendeeProjects: Record<string, string>,
+  region: string,
+  zoneLetter: string,
+) {
+  write(workDir, {
+    ...gcpLayerVars(runId, region),
+    attendee_projects: attendeeProjects,
+    zone_letter: zoneLetter,
+  });
+}
+
+/**
+ * Write terraform.tfvars.json for a scenario layer.
+ *
+ * Every scenario root declares the same variables (see
+ * `terraform/scenarios/README.md`), so one writer serves all of them and a
+ * contributor copies `variables.tf` verbatim. `networkNames` and `nodeTags`
+ * come from the cluster layer's outputs and are empty for a scenario that
+ * needs no cluster.
+ */
+export function writeScenarioTfvars(
+  workDir: string,
+  runId: string,
+  scenarioId: string,
+  attendeeProjects: Record<string, string>,
+  region: string,
+  networkNames: Record<string, string>,
+  nodeTags: Record<string, string>,
+) {
+  write(workDir, {
+    ...gcpLayerVars(runId, region),
+    scenario_id: scenarioId,
+    attendee_projects: attendeeProjects,
+    network_names: networkNames,
+    node_tags: nodeTags,
   });
 }
 

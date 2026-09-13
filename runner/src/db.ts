@@ -19,6 +19,13 @@ export type RunRow = {
   slug: string;
   user_count: number;
   clouds: Cloud[];
+  /**
+   * Scenario ids the organizer has selected — the desired state, which the
+   * provisioner reconciles against `outputs.scenarios_applied`. Ids, not
+   * manifests: the catalog lives on disk (see `scenarios.ts`), and a run can
+   * name a scenario the current code no longer ships.
+   */
+  scenarios: string[];
   status: string;
   org_unit_path: string | null;
   gcp_project_id: string | null;
@@ -36,10 +43,10 @@ export type RunRow = {
   destroy_started_at: Date | null;
 };
 
-const RUN_COLUMNS = `id, user_id, name, mode, slug, user_count, clouds, status,
-                     org_unit_path, gcp_project_id, state_prefix, harness_only,
-                     component_set_id, ttl_seconds, expires_at, outputs,
-                     destroy_attempts, destroy_started_at`;
+const RUN_COLUMNS = `id, user_id, name, mode, slug, user_count, clouds, scenarios,
+                     status, org_unit_path, gcp_project_id, state_prefix,
+                     harness_only, component_set_id, ttl_seconds, expires_at,
+                     outputs, destroy_attempts, destroy_started_at`;
 
 export async function getRun(runId: string): Promise<RunRow | undefined> {
   const { rows } = await pool.query<RunRow>(

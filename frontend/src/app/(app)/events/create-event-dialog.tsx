@@ -5,7 +5,8 @@
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { CLOUDS, CLOUD_LABELS, DEFAULT_TTL_DAYS, MAX_TTL_DAYS, limitsFor, type Cloud, type EventMode } from "@/db/schema";
+import { CLOUDS, CLOUD_LABELS, DEFAULT_TTL_DAYS, MAX_TTL_DAYS, limitsFor, type Cloud, type EventMode, type ScenarioId } from "@/db/schema";
+import { ScenarioPicker } from "@/components/scenario-picker";
 import { SPRING_SNAPPY, riseChild, staggerParent } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
@@ -62,6 +63,7 @@ export function CreateEventDialog({
   const [userCount, setUserCount] = useState(String(limits.defaultUsers));
   const [ttlDays, setTtlDays] = useState(String(DEFAULT_TTL_DAYS));
   const [clouds, setClouds] = useState<Cloud[]>([]);
+  const [scenarios, setScenarios] = useState<ScenarioId[]>([]);
   const noCloudSelected = clouds.length === 0;
   const [start, setStart] = useState("");
   const [pending, setPending] = useState<"now" | "schedule" | null>(null);
@@ -76,16 +78,24 @@ export function CreateEventDialog({
       setUserCount(String(limits.defaultUsers));
       setTtlDays(String(DEFAULT_TTL_DAYS));
       setClouds([]);
+      setScenarios([]);
       setError(null);
     }
   }
 
   function toggleCloud(cloud: Cloud) {
+    // Changing the cloud clears the scenarios: they belong to a cloud, so any
+    // that were ticked describe an environment this event will no longer build.
+    setScenarios([]);
     if (singleCloud) {
       setClouds([cloud]);
       return;
     }
     setClouds((prev) => (prev.includes(cloud) ? prev.filter((c) => c !== cloud) : [...prev, cloud]));
+  }
+
+  function toggleScenario(id: ScenarioId) {
+    setScenarios((prev) => (prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]));
   }
 
   async function createRun(startNow: boolean) {
@@ -120,6 +130,7 @@ export function CreateEventDialog({
           userCount: count,
           ttlDays: days,
           clouds,
+          scenarios,
           ...(startNow ? { startNow: true } : { scheduledStart: new Date(start).toISOString() }),
         }),
       });
@@ -265,6 +276,18 @@ export function CreateEventDialog({
               )
             )}
           </motion.fieldset>
+
+          {mode === "challenge" && (
+            <motion.div variants={riseChild}>
+              <ScenarioPicker
+                clouds={clouds}
+                selected={scenarios}
+                onToggle={toggleScenario}
+                legend="(Optional) Scenarios"
+                hint="Each competitor gets their own Kubernetes cluster, built alongside their environment, with these problems already in it. You can turn them on and off once the challenge is running."
+              />
+            </motion.div>
+          )}
 
           <motion.div variants={riseChild} className="grid gap-1.5">
             <label htmlFor="ws-days" className="text-sm font-medium">

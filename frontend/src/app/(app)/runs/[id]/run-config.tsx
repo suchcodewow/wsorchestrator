@@ -15,8 +15,10 @@ import {
   CLOUD_LABELS,
   limitsFor,
   type Cloud,
+  type ScenarioId,
   type WorkshopRun,
 } from "@/db/schema";
+import { ScenarioPicker } from "@/components/scenario-picker";
 
 const ERRORS: Record<string, string> = {
   locked: "This event can no longer be changed.",
@@ -41,16 +43,18 @@ export function RunConfig({
 }) {
   const [userCount, setUserCount] = useState(String(run.userCount));
   const [clouds, setClouds] = useState<Cloud[]>(run.clouds);
+  const [scenarios, setScenarios] = useState<ScenarioId[]>(run.scenarios);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
-  const serverState = `${run.userCount}:${run.clouds.join(",")}`;
+  const serverState = `${run.userCount}:${run.clouds.join(",")}:${run.scenarios.join(",")}`;
   const [syncedFrom, setSyncedFrom] = useState(serverState);
   if (serverState !== syncedFrom && !pending) {
     setSyncedFrom(serverState);
     setUserCount(String(run.userCount));
     setClouds(run.clouds);
+    setScenarios(run.scenarios);
   }
 
   const locked = editability === "locked";
@@ -62,16 +66,25 @@ export function RunConfig({
   const dirty =
     count !== run.userCount ||
     clouds.length !== run.clouds.length ||
-    clouds.some((c) => !run.clouds.includes(c));
+    clouds.some((c) => !run.clouds.includes(c)) ||
+    scenarios.length !== run.scenarios.length ||
+    scenarios.some((s) => !run.scenarios.includes(s));
 
   function toggleCloud(cloud: Cloud) {
     if (growOnly && run.clouds.includes(cloud)) return;
+    setScenarios([]);
     if (singleCloud) {
       setClouds([cloud]);
       return;
     }
     setClouds((prev) =>
       prev.includes(cloud) ? prev.filter((c) => c !== cloud) : [...prev, cloud],
+    );
+  }
+
+  function toggleScenario(id: ScenarioId) {
+    setScenarios((prev) =>
+      prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id],
     );
   }
 
@@ -92,7 +105,7 @@ export function RunConfig({
       const res = await fetch(`/api/runs/${run.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userCount: count, clouds }),
+        body: JSON.stringify({ userCount: count, clouds, scenarios }),
       });
       const body = await res.json().catch(() => null);
       if (!res.ok) {
@@ -200,6 +213,20 @@ export function RunConfig({
             })}
           </div>
         </fieldset>
+
+        {run.mode === "challenge" && (
+          <ScenarioPicker
+            clouds={clouds}
+            selected={scenarios}
+            onToggle={toggleScenario}
+            disabled={locked || pending}
+            hint={
+              growOnly
+                ? "Unlike a cloud, a scenario can be turned off again — saving removes just that scenario's resources. The competitors' clusters stay up either way."
+                : undefined
+            }
+          />
+        )}
 
         {error && <p className="text-sm text-destructive">{error}</p>}
         {saved && !dirty && !error && (

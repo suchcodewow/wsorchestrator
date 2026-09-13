@@ -27,6 +27,8 @@ resource "google_compute_subnetwork" "this" {
   region        = var.region
   network       = google_compute_network.this.id
   ip_cidr_range = "10.0.0.0/20"
+
+  private_ip_google_access = var.private_google_access
 }
 
 resource "google_container_cluster" "this" {
@@ -49,6 +51,16 @@ resource "google_container_cluster" "this" {
   # Without this the provider (google >= 6) refuses to delete the cluster, which
   # would strand the reaper's `terraform destroy`.
   deletion_protection = false
+
+  # Consult the project's Binary Authorization policy at admission, when asked
+  # to. Left off the cluster entirely otherwise, so a workshop's plan is
+  # unchanged by this block existing.
+  dynamic "binary_authorization" {
+    for_each = var.enable_binary_authorization ? [1] : []
+    content {
+      evaluation_mode = "PROJECT_SINGLETON_POLICY_ENFORCE"
+    }
+  }
 
   resource_labels = var.labels
 
@@ -76,6 +88,7 @@ resource "google_container_node_pool" "primary" {
 
     oauth_scopes = ["https://www.googleapis.com/auth/cloud-platform"]
     labels       = var.labels
+    tags         = var.node_tags
 
     metadata = {
       disable-legacy-endpoints = "true"

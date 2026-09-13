@@ -3,7 +3,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/auth";
-import { CLOUDS, MAX_USERS } from "@/db/schema";
+import { CLOUDS, MAX_USERS, SCENARIOS, type ScenarioId } from "@/db/schema";
 import {
   deleteRun,
   getRunForViewer,
@@ -40,9 +40,15 @@ export async function GET(
   return NextResponse.json(result);
 }
 
+const SCENARIO_IDS = SCENARIOS.map((s) => s.id) as [ScenarioId, ...ScenarioId[]];
+
 const patchSchema = z.object({
   userCount: z.number().int().min(1).max(MAX_USERS),
   clouds: z.array(z.enum(CLOUDS)).max(CLOUDS.length),
+  // Optional, so a caller that predates scenarios leaves them as they are
+  // rather than silently clearing them. `updateRunConfig` drops any that do not
+  // belong to a cloud the event runs on.
+  scenarios: z.array(z.enum(SCENARIO_IDS)).max(SCENARIOS.length).optional(),
 });
 
 const STATUS_FOR: Record<UpdateRunError, number> = {

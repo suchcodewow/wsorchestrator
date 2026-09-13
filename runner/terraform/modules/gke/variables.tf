@@ -59,3 +59,21 @@ variable "labels" {
   type    = map(string)
   default = {}
 }
+
+variable "node_tags" {
+  description = "Network tags on every node. Empty for a workshop, whose cluster has no firewall rules aimed at it; a challenge scenario sets one so its egress rules can target this competitor's nodes and nobody else's."
+  type        = list(string)
+  default     = []
+}
+
+variable "private_google_access" {
+  description = "Turn on Private Google Access for the subnet, which routes Google APIs over the restricted/private VIPs instead of the internet. Off for a workshop, where nodes have external IPs and reach Google the ordinary way. A challenge that denies internet egress needs it on, or cutting egress takes the Google APIs — and so the nodes' ability to register with the control plane — down with it."
+  type        = bool
+  default     = false
+}
+
+variable "enable_binary_authorization" {
+  description = "Have the cluster consult the project's Binary Authorization policy at pod admission. Inert on its own: a project with no policy of its own gets GCP's default, which admits everything. It is the scenario that later writes a deny policy and gives this teeth."
+  type        = bool
+  default     = false
+}

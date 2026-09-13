@@ -25,11 +25,24 @@ import {
   writeAwsTfvars,
   writeAzureChallengeTfvars,
   writeAzureTfvars,
+  writeChallengeClusterTfvars,
   writeChallengeTfvars,
   writeDelegateTfvars,
+  writeScenarioTfvars,
   writeTfvars,
 } from "./workspace.js";
-import { tfApply, tfInit, tfOutput } from "./terraform.js";
+import {
+  activateApisFor,
+  appliedScenarios,
+  clusterStatePrefix,
+  needsCluster,
+  resolveScenarios,
+  scenarioStatePrefix,
+  scenarioTfSource,
+  unknownScenarios,
+  type Scenario,
+} from "./scenarios.js";
+import { tfApply, tfDestroy, tfInit, tfOutput } from "./terraform.js";
 import {
   awsAttemptOutcome,
   isGkeCapacityError,
@@ -83,6 +96,12 @@ const GCP_TF_SOURCE = "workshops/gcp-base";
 
 /** Root config that creates one GCP project per challenge competitor. */
 const GCP_CHALLENGE_TF_SOURCE = "challenges/gcp-per-user";
+
+/** Root config that creates one GKE cluster per challenge competitor. */
+const GCP_CHALLENGE_GKE_TF_SOURCE = "challenges/gcp-per-user-gke";
+
+/** APIs every challenge project gets, before any scenario asks for more. */
+const CHALLENGE_BASELINE_APIS = ["compute.googleapis.com"];
 
 /** Grant-only config: attendees get access to the shared long-lived project. */
 const GCP_SANDBOX_TF_SOURCE = "workshops/gcp-sandbox";
@@ -808,14 +827,34 @@ function zoneLetterFromLocation(
  * short life.
  *
  * Read from the recorded cluster location, which is the one output that
- * carries a placement. Runs with no cluster (challenges, whose per-competitor
- * projects have no regional resources at all) have nothing to pin and nothing
- * that moving the region would disturb.
+ * carries a placement. A challenge with no scenario has no cluster, and so
+ * nothing to pin and nothing that moving the region would disturb.
  */
 function gcpRegionFor(run: RunRow): string {
-  return (
-    regionFromLocation(run.outputs?.gke_cluster_location) ?? gcpCfg().region
-  );
+  return regionFromLocation(recordedClusterLocation(run)) ?? gcpCfg().region;
+}
+
+/**
+ * Where this run's GKE cluster was built, whichever shape recorded it.
+ *
+ * A workshop has one cluster and records `gke_cluster_location`. A challenge
+ * whose scenarios needed clusters has one per competitor, recorded as the
+ * `gke_cluster_locations` map — but they are applied as a single layer in a
+ * single zone, so any entry answers for all of them.
+ *
+ * Both are read here because a challenge's clusters have to be pinned for the
+ * same reason a workshop's are: re-applying a live event after the default
+ * region moved must not destroy and rebuild the cluster someone is working in.
+ */
+function recordedClusterLocation(run: RunRow): unknown {
+  const one = run.outputs?.gke_cluster_location;
+  if (typeof one === "string") return one;
+
+  const many = run.outputs?.gke_cluster_locations;
+  if (many && typeof many === "object" && !Array.isArray(many)) {
+    return Object.values(many as Record<string, unknown>)[0];
+  }
+  return undefined;
 }
 
 /**
@@ -844,10 +883,7 @@ async function applyGkeWithZoneFailover(
 ): Promise<void> {
   const cfg = gcpCfg();
   const region = gcpRegionFor(run);
-  const pinned = zoneLetterFromLocation(
-    run.outputs?.gke_cluster_location,
-    region,
-  );
+  const pinned = zoneLetterFromLocation(recordedClusterLocation(run), region);
   const zones = pinned ? [pinned] : cfg.gkeZones;
 
   for (let i = 0; i < zones.length; i++) {
@@ -1013,6 +1049,11 @@ async function provisionSandbox(run: RunRow): Promise<Record<string, unknown>> {
  * put in it. The full address -> project id mapping lands in the run's
  * outputs, and the ids are recomputed rather than stored because
  * `makeChallengeProjectId` is deterministic in the address.
+ *
+ * Selected scenarios are layered on afterwards: the cluster they need, then the
+ * scenarios themselves, each on its own state prefix. This function builds only
+ * the projects, because the container API it enables for them has to exist and
+ * propagate before anything can be created inside one.
  */
 async function provisionGcpPerUser(
   run: RunRow,
@@ -1030,6 +1071,7 @@ async function provisionGcpPerUser(
     (await accountsFor(run.id)).map((a) => a.email),
   );
   const count = Object.keys(projects).length;
+  const scenarios = resolveScenarios(run.scenarios);
 
   await log(
     run.id,
@@ -1037,7 +1079,15 @@ async function provisionGcpPerUser(
     `Provisioning ${count} GCP project(s), one per competitor`,
   );
 
-  writeChallengeTfvars(workDir, run.id, projects);
+  // The union of what the selected scenarios need, on top of the baseline. With
+  // nothing selected this is the baseline alone, which is the root's own default
+  // — so a bare challenge builds what it always did.
+  writeChallengeTfvars(
+    workDir,
+    run.id,
+    projects,
+    activateApisFor(CHALLENGE_BASELINE_APIS, scenarios),
+  );
 
   await log(run.id, "system", "terraform init");
   await tfInit(workDir, cfg.stateBucket, run.state_prefix, (l) =>
@@ -1052,8 +1102,167 @@ async function provisionGcpPerUser(
   );
   await tfApply(workDir, (l) => log(run.id, l.stream, l.text));
 
+  const outputs = await tfOutput(workDir);
+
+  // The cluster layer, then the scenarios that sit on it. Both read the same
+  // project map this apply just built.
+  const cluster = await provisionChallengeCluster(run, projects, scenarios);
+  Object.assign(outputs, cluster);
+
+  Object.assign(
+    outputs,
+    await reconcileScenarios(run, projects, scenarios, cluster),
+  );
+
+  return outputs;
+}
+
+/**
+ * Build one GKE cluster in every competitor's project, when a selected scenario
+ * needs one.
+ *
+ * A bare challenge builds no cluster — standing one up is the challenge — so
+ * this is a no-op unless a scenario says `requiresCluster`. Every competitor is
+ * one `for_each` key in a single apply, so their clusters are built
+ * concurrently rather than one after another; contrast the AWS challenge, which
+ * has to apply once per competitor because it needs a provider per account.
+ *
+ * Zone failover is the workshop's (`applyGkeWithZoneFailover`): a zonal stockout
+ * moves the whole layer to the next zone. Moving them together is deliberate —
+ * competitors in one challenge should be racing on equal ground, not on whichever
+ * zone had room.
+ */
+async function provisionChallengeCluster(
+  run: RunRow,
+  projects: Record<string, string>,
+  scenarios: Scenario[],
+): Promise<Record<string, unknown>> {
+  if (!needsCluster(scenarios)) return {};
+
+  const workDir = path.join(TF_ROOT, GCP_CHALLENGE_GKE_TF_SOURCE);
+  const count = Object.keys(projects).length;
+  const region = gcpRegionFor(run);
+
+  await log(
+    run.id,
+    "system",
+    `Provisioning ${count} GKE cluster(s), one per competitor, in parallel`,
+  );
+
+  await tfInit(
+    workDir,
+    stateBucket(),
+    clusterStatePrefix(run.state_prefix),
+    (l) => log(run.id, l.stream, l.text),
+  );
+
+  await applyGkeWithZoneFailover(run, workDir, (zone) =>
+    writeChallengeClusterTfvars(workDir, run.id, projects, region, zone),
+  );
+
   return tfOutput(workDir);
 }
+
+/**
+ * Bring the run's scenario layers in line with what the organizer has selected:
+ * apply the ones that are on, destroy the ones that have been switched off.
+ *
+ * The desired set is `run.scenarios`; what is actually standing is
+ * `outputs.scenarios_applied`, recorded here. Reconciling against that recorded
+ * set rather than against the whole catalog means unchecking a scenario costs
+ * one destroy, and a run that never had a scenario costs nothing at all.
+ *
+ * Destroying a scenario must return the competitor's environment to working
+ * order without disturbing anything else — which is why each scenario owns a
+ * separate state prefix, and why the cluster underneath them is deliberately
+ * left standing. Unchecking an issue is not a reason to delete the environment
+ * someone is working in; that happens when the run is torn down.
+ */
+async function reconcileScenarios(
+  run: RunRow,
+  projects: Record<string, string>,
+  selected: Scenario[],
+  clusterOutputs: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  const previous = appliedScenarios(run.outputs);
+  const wanted = new Set(selected.map((s) => s.id));
+  const removed = previous.filter((id) => !wanted.has(id));
+
+  if (selected.length === 0 && removed.length === 0) return {};
+
+  const missing = unknownScenarios(run.scenarios);
+  if (missing.length > 0) {
+    await log(
+      run.id,
+      "stderr",
+      `This challenge selected scenario(s) this build no longer ships ` +
+        `(${missing.join(", ")}), so they were skipped. Anything they built ` +
+        `earlier is still standing and will be removed when the run is torn down.`,
+    );
+  }
+
+  const map = (key: string): Record<string, string> => {
+    const v = clusterOutputs[key];
+    return v && typeof v === "object" && !Array.isArray(v)
+      ? (v as Record<string, string>)
+      : {};
+  };
+  const networkNames = map("network_names");
+  const nodeTags = map("node_tags");
+  const region = gcpRegionFor(run);
+  const outputs: Record<string, unknown> = {};
+
+  // Off first: a scenario being switched off and another switched on in the
+  // same save should not have the incoming one's rules briefly overlap the
+  // outgoing one's.
+  for (const id of removed) {
+    const workDir = path.join(TF_ROOT, scenarioTfSource(id));
+    await log(run.id, "system", `Removing scenario ${id}`);
+    writeScenarioTfvars(
+      workDir,
+      run.id,
+      id,
+      projects,
+      region,
+      networkNames,
+      nodeTags,
+    );
+    await tfInit(
+      workDir,
+      stateBucket(),
+      scenarioStatePrefix(run.state_prefix, id),
+      (l) => log(run.id, l.stream, l.text),
+    );
+    await tfDestroy(workDir, (l) => log(run.id, l.stream, l.text));
+  }
+
+  for (const scenario of selected) {
+    const workDir = path.join(TF_ROOT, scenarioTfSource(scenario.id));
+    await log(run.id, "system", `Applying scenario ${scenario.label}`);
+    writeScenarioTfvars(
+      workDir,
+      run.id,
+      scenario.id,
+      projects,
+      region,
+      networkNames,
+      nodeTags,
+    );
+    await tfInit(
+      workDir,
+      stateBucket(),
+      scenarioStatePrefix(run.state_prefix, scenario.id),
+      (l) => log(run.id, l.stream, l.text),
+    );
+    await tfApply(workDir, (l) => log(run.id, l.stream, l.text));
+    Object.assign(outputs, await tfOutput(workDir));
+  }
+
+  // What is standing now, for the next reconcile to diff against.
+  outputs.scenarios_applied = selected.map((s) => s.id);
+  return outputs;
+}
+
 
 /** Address -> temp-password map the Azure roots turn into native Entra users. */
 async function attendeePasswords(

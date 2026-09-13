@@ -142,6 +142,25 @@ export const EVENT_LIMITS: Record<
 
 export const limitsFor = (mode: EventMode) => EVENT_LIMITS[mode];
 
+/**
+ * The scenario catalog lives in its own import-free module so the runner's
+ * tests can load it and check it against the Terraform manifests it mirrors.
+ * Re-exported here because this is where the rest of the event vocabulary
+ * (`CLOUDS`, `EVENT_MODES`, `EVENT_LIMITS`) lives, and callers should not have
+ * to know which of the two files a constant came from.
+ */
+export {
+  SCENARIOS,
+  isScenarioId,
+  scenariosForCloud,
+  scenariosForClouds,
+  type ScenarioId,
+} from "@/lib/scenario-catalog";
+
+// Also imported, not just re-exported: the runs table below types its column
+// with it.
+import type { ScenarioId } from "@/lib/scenario-catalog";
+
 export const DAY_SECONDS = 24 * 60 * 60;
 
 export const DEFAULT_TTL_DAYS = 1;
@@ -167,6 +186,14 @@ export const workshopRuns = pgTable(
     slug: text("slug").notNull(),
     userCount: integer("user_count").notNull(),
     clouds: text("clouds").array().$type<Cloud[]>().notNull().default([]),
+    /**
+     * Scenario ids the organizer has selected — desired state, which the runner
+     * reconciles against what it has actually built. Ids rather than a foreign
+     * key: the catalog is code that ships in the runner's image (see
+     * `SCENARIOS`), and a long-lived run may name one a later build no longer
+     * has.
+     */
+    scenarios: text("scenarios").array().$type<ScenarioId[]>().notNull().default([]),
     status: runStatus("status").notNull().default("scheduled"),
     scheduledStart: timestamp("scheduled_start", { withTimezone: true }),
     orgUnitPath: text("org_unit_path"),

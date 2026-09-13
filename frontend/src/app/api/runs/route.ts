@@ -10,7 +10,9 @@ import {
   EVENT_MODES,
   MAX_TTL_DAYS,
   MAX_USERS,
+  SCENARIOS,
   limitsFor,
+  type ScenarioId,
 } from "@/db/schema";
 import { canCreateEvents } from "@/lib/roles";
 import { createScheduledRun, listRunsForUser } from "@/lib/runs";
@@ -32,6 +34,10 @@ const createSchema = z
     userCount: z.number().int().min(1).max(MAX_USERS),
     ttlDays: z.number().int().min(1).max(MAX_TTL_DAYS).default(DEFAULT_TTL_DAYS),
     clouds: z.array(z.enum(CLOUDS)).max(CLOUDS.length),
+    scenarios: z
+      .array(z.enum(SCENARIOS.map((s) => s.id) as [ScenarioId, ...ScenarioId[]]))
+      .max(SCENARIOS.length)
+      .default([]),
     scheduledStart: z.string().datetime().optional(),
     startNow: z.boolean().optional(),
   })
@@ -57,6 +63,19 @@ const createSchema = z
         code: z.ZodIssueCode.custom,
         path: ["clouds"],
         message: `a ${v.mode} needs at least ${limits.minClouds} cloud(s)`,
+      });
+    }
+    // A scenario builds on a cloud environment, so selecting one for a cloud
+    // this event does not run on describes something that can never be applied.
+    const stranded = v.scenarios.filter((id) => {
+      const scenario = SCENARIOS.find((s) => s.id === id);
+      return !scenario || !v.clouds.includes(scenario.cloud);
+    });
+    if (stranded.length > 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["scenarios"],
+        message: `scenario(s) ${stranded.join(", ")} need a cloud this event does not run on`,
       });
     }
   });
@@ -87,6 +106,7 @@ export async function POST(req: Request) {
     userCount: parsed.data.userCount,
     ttlSeconds: parsed.data.ttlDays * DAY_SECONDS,
     clouds: [...new Set(parsed.data.clouds)],
+    scenarios: [...new Set(parsed.data.scenarios)] as ScenarioId[],
     userId: session.user.id,
     scheduledStart: startNow ? new Date() : new Date(scheduledStart!),
     startNow,

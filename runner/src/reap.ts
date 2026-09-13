@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import path from "node:path";
 import {
   awsAccountEmail,
@@ -21,9 +22,18 @@ import {
   writeAwsTfvars,
   writeAzureChallengeTfvars,
   writeAzureTfvars,
+  writeChallengeClusterTfvars,
   writeChallengeTfvars,
+  writeScenarioTfvars,
   writeTfvars,
 } from "./workspace.js";
+import {
+  appliedScenarios,
+  clusterStatePrefix,
+  scenarioStatePrefix,
+  scenarioTfSource,
+} from "./scenarios.js";
+import { summarize } from "./retry.js";
 import { tfDestroy, tfInit } from "./terraform.js";
 import { deleteAccount, deleteOrgUnit } from "./directory.js";
 import { teardownOrder } from "./components.js";
@@ -64,6 +74,9 @@ const GCP_TF_SOURCE = "workshops/gcp-base";
 
 /** Root config that creates one GCP project per challenge competitor. */
 const GCP_CHALLENGE_TF_SOURCE = "challenges/gcp-per-user";
+
+/** Root config that creates one GKE cluster per challenge competitor. */
+const GCP_CHALLENGE_GKE_TF_SOURCE = "challenges/gcp-per-user-gke";
 
 /** Grant-only config: revoking here removes attendee access, not the project. */
 const GCP_SANDBOX_TF_SOURCE = "workshops/gcp-sandbox";
@@ -439,7 +452,15 @@ async function destroySandbox(run: RunRow): Promise<void> {
   await tfDestroy(workDir, (l) => log(run.id, l.stream, l.text));
 }
 
-/** Tear down a challenge's per-competitor projects. */
+/**
+ * Tear down a challenge's per-competitor projects, and whatever the run's
+ * scenarios layered on top of them first.
+ *
+ * The order is the reverse of provisioning and it is not cosmetic: deleting a
+ * GCP project takes everything inside it, so a scenario or cluster layer
+ * destroyed afterwards would be reconciling state against resources that no
+ * longer exist. Destroying them first leaves each layer's state honestly empty.
+ */
 async function destroyGcpPerUser(run: RunRow): Promise<void> {
   const cfg = gcpCfg();
   const workDir = path.join(TF_ROOT, GCP_CHALLENGE_TF_SOURCE);
@@ -452,6 +473,9 @@ async function destroyGcpPerUser(run: RunRow): Promise<void> {
     (await accountsFor(run.id)).map((a) => a.email),
   );
 
+  await destroyChallengeScenarios(run, projects);
+  await destroyChallengeCluster(run, projects);
+
   await log(
     run.id,
     "system",
@@ -462,6 +486,102 @@ async function destroyGcpPerUser(run: RunRow): Promise<void> {
     log(run.id, l.stream, l.text),
   );
   await tfDestroy(workDir, (l) => log(run.id, l.stream, l.text));
+}
+
+/**
+ * Destroy the scenario layers a run actually built.
+ *
+ * Driven by `outputs.scenarios_applied` — what is standing — rather than
+ * `run.scenarios`, which is what the organizer last asked for. The two differ
+ * when a scenario was unchecked and the reprovision that would have removed it
+ * failed, and in that case it is the standing one that has to go.
+ *
+ * Best-effort per scenario: one that will not destroy is logged and the rest
+ * still run, because the project destroy below removes its resources anyway.
+ * Letting one wedged layer block that would strand a whole challenge's projects.
+ */
+async function destroyChallengeScenarios(
+  run: RunRow,
+  projects: Record<string, string>,
+): Promise<void> {
+  const standing = [...new Set([...appliedScenarios(run.outputs), ...run.scenarios])];
+  if (standing.length === 0) return;
+
+  const region = regionFromLocation(challengeClusterLocation(run)) ?? gcpCfg().region;
+
+  for (const id of standing) {
+    const workDir = path.join(TF_ROOT, scenarioTfSource(id));
+    if (!existsSync(workDir)) {
+      await log(
+        run.id,
+        "stderr",
+        `Scenario ${id} is not in this build, so its layer could not be ` +
+          `destroyed on its own — the project destroy below removes what it built.`,
+      );
+      continue;
+    }
+
+    try {
+      await log(run.id, "system", `Destroying scenario ${id}`);
+      writeScenarioTfvars(workDir, run.id, id, projects, region, {}, {});
+      await tfInit(
+        workDir,
+        stateBucket(),
+        scenarioStatePrefix(run.state_prefix, id),
+        (l) => log(run.id, l.stream, l.text),
+      );
+      await tfDestroy(workDir, (l) => log(run.id, l.stream, l.text));
+    } catch (err) {
+      await log(
+        run.id,
+        "stderr",
+        `Scenario ${id} would not destroy (${summarize(err)}). Continuing — ` +
+          `destroying the projects removes what it built.`,
+      );
+    }
+  }
+}
+
+/** Destroy the per-competitor clusters, if any scenario built them. */
+async function destroyChallengeCluster(
+  run: RunRow,
+  projects: Record<string, string>,
+): Promise<void> {
+  const location = challengeClusterLocation(run);
+  if (!location) return;
+
+  const workDir = path.join(TF_ROOT, GCP_CHALLENGE_GKE_TF_SOURCE);
+  const region = regionFromLocation(location) ?? gcpCfg().region;
+  const zone = location.slice(location.lastIndexOf("-") + 1);
+
+  await log(
+    run.id,
+    "system",
+    `Destroying ${Object.keys(projects).length} competitor GKE cluster(s)`,
+  );
+  writeChallengeClusterTfvars(workDir, run.id, projects, region, zone);
+  await tfInit(
+    workDir,
+    stateBucket(),
+    clusterStatePrefix(run.state_prefix),
+    (l) => log(run.id, l.stream, l.text),
+  );
+  await tfDestroy(workDir, (l) => log(run.id, l.stream, l.text));
+}
+
+/**
+ * Where this challenge's clusters were built, or undefined if it never had any.
+ *
+ * Doubles as the "was there a cluster layer at all" test, which is why teardown
+ * reads it rather than re-deriving from the scenario manifests: a scenario
+ * removed from the repo since the run was built would answer that question
+ * wrong, and the recorded output cannot.
+ */
+function challengeClusterLocation(run: RunRow): string | undefined {
+  const many = run.outputs?.gke_cluster_locations;
+  if (!many || typeof many !== "object" || Array.isArray(many)) return undefined;
+  const first = Object.values(many as Record<string, unknown>)[0];
+  return typeof first === "string" ? first : undefined;
 }
 
 /** Address -> temp-password map, matching the Azure tfvars provisioning wrote. */

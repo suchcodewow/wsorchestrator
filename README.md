@@ -13,7 +13,10 @@ All three clouds are provisioned via Terraform: Google Cloud gets an ephemeral
 project per workshop, AWS a member account, and Azure a resource group — each
 with a small Kubernetes cluster (GKE/EKS/AKS) and every attendee granted on it.
 A workshop can select more than one; a challenge runs on exactly one and builds
-a separate environment per competitor. All three are part of every deployment:
+a separate environment per competitor — bare by default, since standing up a
+cluster is the challenge, unless the organizer ticks on a *scenario* that builds
+one and breaks something about it
+([runner/terraform/scenarios](runner/terraform/scenarios)). All three are part of every deployment:
 credentials for each are configured up front (see
 [infra/admin/variables.tf](infra/admin/variables.tf)), and a run that selects a
 cloud whose credentials are missing fails its preflight rather than starting.
@@ -710,7 +713,8 @@ shape:
    [`runner/terraform/challenges/<cloud>-per-user/`](runner/terraform/challenges),
    plus a cluster module under
    [`runner/terraform/modules/`](runner/terraform/modules) if the workshop root
-   builds one.
+   builds one. Scenarios are separate and optional — see
+   [`runner/terraform/scenarios/README.md`](runner/terraform/scenarios/README.md).
 3. Add a tfvars writer in
    [`runner/src/workspace.ts`](runner/src/workspace.ts) and the cloud's config
    accessor in [`runner/src/config.ts`](runner/src/config.ts).

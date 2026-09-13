@@ -1,0 +1,12 @@
+{
+  "id": "gcp-connectivity-binauthz",
+  "label": "Connectivity: Binary Auth",
+  "cloud": "gcp",
+  "description": "Only images from the competitor's own registries are admitted. Anything else is denied at pod admission and never pulled.",
+  "requiresCluster": true,
+  "activateApis": [
+    "container.googleapis.com",
+    "binaryauthorization.googleapis.com",
+    "artifactregistry.googleapis.com"
+  ]
+}

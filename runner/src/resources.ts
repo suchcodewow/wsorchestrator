@@ -53,6 +53,14 @@ const OUTPUT_RESOURCES: OutputResource[] = [
     label: "GKE cluster",
   },
   {
+    // A challenge whose scenarios needed clusters: one per competitor, in their
+    // own project.
+    from: "gke_clusters",
+    map: true,
+    kind: "gke_cluster",
+    label: "GKE clusters",
+  },
+  {
     from: "azure_resource_group",
     urlFrom: "azure_portal_url",
     kind: "azure_resource_group",

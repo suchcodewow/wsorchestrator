@@ -54,6 +54,19 @@ A run is self-describing: a name, an attendee count, and a set of clouds.
    per competitor instead — a project, resource group, or account each, owned
    solely by that competitor, and no cluster (building one is the challenge).
 
+   Unless a **scenario** says otherwise. Scenarios are optional Terraform an
+   organizer ticks on for a challenge, layered onto those environments and
+   switchable on and off while it is live. Both that ship today build a cluster
+   per competitor ([`challenges/gcp-per-user-gke`](terraform/challenges/gcp-per-user-gke))
+   and then break something about it: `Connectivity: Egress` cuts the nodes off
+   from the internet, `Connectivity: Binary Auth` denies any image but the
+   competitor's own. Each is its own root on its own state prefix —
+   `<run>/cluster` and `<run>/scenarios/<id>` — which is what lets one be
+   destroyed without disturbing another or the cluster underneath both, and what
+   makes the teardown order (scenarios, cluster, then projects) matter.
+   [`terraform/scenarios/README.md`](terraform/scenarios/README.md) covers
+   writing one.
+
    GCP keeps the bare per-run state prefix it has always used; every other cloud
    gets a subpath (`cloudStatePrefix`), so a multi-cloud run's states never
    collide in one bucket object.
@@ -102,6 +115,11 @@ A run is self-describing: a name, an attendee count, and a set of clouds.
    delegate is Helm-installed into each ([`delegates/`](terraform/delegates)).
    Best-effort: a delegate that will not install is logged and the workshop
    still goes ready. Teardown is implicit — destroying the cluster takes it.
+
+   Workshops only, including when a challenge scenario has built clusters.
+   Installing one is the competitor's job: the connectivity scenarios are what
+   stops a delegate registering, so getting one to come up is how a competitor
+   demonstrates they have fixed the environment.
    The image is the version Harness reports as current, looked up per run
    (`latestDelegateImage`), because the chart's default image trails the
    delegate release by months and Harness expires a delegate six months out —

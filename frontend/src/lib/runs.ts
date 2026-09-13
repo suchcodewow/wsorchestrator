@@ -6,6 +6,7 @@ import {
   CLOUD_LABELS,
   DAY_SECONDS,
   EXTENSION_SECONDS,
+  SCENARIOS,
   editabilityOf,
   limitsFor,
   runLogs,
@@ -16,6 +17,7 @@ import {
   type CalendarScope,
   type Cloud,
   type EventMode,
+  type ScenarioId,
   type SiteRole,
   type WorkshopRun,
 } from "@/db/schema";
@@ -52,6 +54,7 @@ export async function createScheduledRun(input: {
   mode: EventMode;
   userCount: number;
   clouds: Cloud[];
+  scenarios?: ScenarioId[];
   userId: string;
   scheduledStart: Date;
   ttlSeconds: number;
@@ -71,6 +74,7 @@ export async function createScheduledRun(input: {
       slug: slugify(input.name),
       userCount: input.userCount,
       clouds: input.clouds,
+      scenarios: input.scenarios ?? [],
       status: "scheduled",
       scheduledStart: input.scheduledStart,
       ttlSeconds: input.ttlSeconds,
@@ -113,7 +117,7 @@ export type UpdateRunError =
 export async function updateRunConfig(
   runId: string,
   viewer: Viewer,
-  input: { userCount: number; clouds: Cloud[] },
+  input: { userCount: number; clouds: Cloud[]; scenarios?: ScenarioId[] },
 ): Promise<
   | { ok: true; run: WorkshopRun; needsReprovision: boolean }
   | { ok: false; error: UpdateRunError }
@@ -127,6 +131,13 @@ export async function updateRunConfig(
   if (editability === "locked") return { ok: false, error: "locked" };
 
   const clouds = [...new Set(input.clouds)];
+
+  // Only scenarios belonging to a cloud this event actually runs on. A stale
+  // checkbox from before the cloud was changed would otherwise ask the runner
+  // to apply a layer against an environment that was never built.
+  const scenarios = [...new Set(input.scenarios ?? run.scenarios)].filter((id) =>
+    SCENARIOS.some((s) => s.id === id && clouds.includes(s.cloud)),
+  );
 
   const limits = limitsFor(run.mode);
   if (
@@ -146,21 +157,35 @@ export async function updateRunConfig(
     if (removed.length > 0) {
       return { ok: false, error: "cloud_removal_not_allowed" };
     }
+    // Scenarios are deliberately exempt from the rule above. A cloud cannot be
+    // taken away from a live event because attendees are working in it; a
+    // scenario is the opposite — being able to switch an issue off mid-challenge
+    // is the point of it being a checkbox. Turning one off destroys only its own
+    // layer, and the cluster underneath stays.
   }
 
   const addedUsers = input.userCount - run.userCount;
   const addedClouds = clouds.filter((c) => !run.clouds.includes(c));
   const removedClouds = run.clouds.filter((c) => !clouds.includes(c));
+  const addedScenarios = scenarios.filter((s) => !run.scenarios.includes(s));
+  const removedScenarios = run.scenarios.filter((s) => !scenarios.includes(s));
   const changed =
-    addedUsers !== 0 || addedClouds.length > 0 || removedClouds.length > 0;
+    addedUsers !== 0 ||
+    addedClouds.length > 0 ||
+    removedClouds.length > 0 ||
+    addedScenarios.length > 0 ||
+    removedScenarios.length > 0;
 
   if (!changed) return { ok: true, run, needsReprovision: false };
 
   const [updated] = await db
     .update(workshopRuns)
-    .set({ userCount: input.userCount, clouds })
+    .set({ userCount: input.userCount, clouds, scenarios })
     .where(eq(workshopRuns.id, runId))
     .returning();
+
+  const label = (id: string) =>
+    SCENARIOS.find((s) => s.id === id)?.label ?? id;
 
   const parts: string[] = [];
   if (addedUsers > 0) parts.push(`+${addedUsers} user(s)`);
@@ -170,6 +195,12 @@ export async function updateRunConfig(
   }
   if (removedClouds.length > 0) {
     parts.push(`removed ${removedClouds.map((c) => CLOUD_LABELS[c]).join(", ")}`);
+  }
+  if (addedScenarios.length > 0) {
+    parts.push(`turned on ${addedScenarios.map(label).join(", ")}`);
+  }
+  if (removedScenarios.length > 0) {
+    parts.push(`turned off ${removedScenarios.map(label).join(", ")}`);
   }
 
   await db.insert(runLogs).values({
