@@ -557,6 +557,21 @@
     /* Face comes from the base `code` rule — one source of truth for mono. */
   }
 
+  /*
+   * Inline code copies itself when clicked. It stays dressed exactly as above —
+   * the only tells are the pointer and a tint that fades out after the copy, so
+   * a page of prose does not turn into a page of buttons.
+   */
+  .lab-prose :not(pre) > code[data-copy] {
+    cursor: pointer;
+    transition: background-color 400ms ease;
+  }
+
+  .lab-prose :not(pre) > code[data-copied] {
+    background-color: color-mix(in oklab, var(--brand) 22%, transparent);
+    transition: none;
+  }
+
   .lab-prose .sr-only {
     position: absolute;
     width: 1px;

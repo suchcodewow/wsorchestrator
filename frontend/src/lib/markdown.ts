@@ -776,6 +776,24 @@ function rehypeExternalLinks() {
   };
 }
 
+/**
+ * Marks inline code as click-to-copy. A guide is full of names to paste — an
+ * account id, a pipeline, a branch — and selecting one by hand is fiddly. Code
+ * inside a link is left alone so the click still follows the link, which covers
+ * headings too: `rehypeHeadings` has already wrapped those in an anchor.
+ */
+function rehypeInlineCopy() {
+  return (tree: Root) => {
+    visit(tree, "element", (node: Element, index, parent) => {
+      if (node.tagName === "a") return SKIP;
+      if (node.tagName !== "code") return;
+      if (parent?.type === "element" && parent.tagName === "pre") return;
+
+      node.properties["data-copy"] = "inline";
+    });
+  };
+}
+
 const LINE_MARKED_TAGS = new Set([
   "p",
   "h1",
@@ -840,7 +858,8 @@ const buildProcessor = (highlighter: Highlighter, sourceLines: boolean) => {
     .use(rehypeDetails)
     .use(rehypeCallouts)
     .use(rehypeHeadings)
-    .use(rehypeExternalLinks);
+    .use(rehypeExternalLinks)
+    .use(rehypeInlineCopy);
 
   if (sourceLines) processor.use(rehypeSourceLines);
 

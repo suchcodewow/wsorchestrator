@@ -44,14 +44,14 @@ export function LabGuideBody({ html }: { html: string }) {
 
     const timers = new Map<HTMLElement, number>();
 
-    function flash(button: HTMLElement) {
-      button.dataset.copied = "true";
-      window.clearTimeout(timers.get(button));
+    function flash(trigger: HTMLElement) {
+      trigger.dataset.copied = "true";
+      window.clearTimeout(timers.get(trigger));
       timers.set(
-        button,
+        trigger,
         window.setTimeout(() => {
-          delete button.dataset.copied;
-          timers.delete(button);
+          delete trigger.dataset.copied;
+          timers.delete(trigger);
         }, 1600),
       );
     }
@@ -89,16 +89,27 @@ export function LabGuideBody({ html }: { html: string }) {
 
     function onClick(event: MouseEvent) {
       const target = event.target as HTMLElement | null;
-      const button = target?.closest<HTMLElement>("[data-copy]");
-      if (!button || !root!.contains(button)) return;
+      // A copy button in a block, or a run of inline code standing in for one.
+      const trigger = target?.closest<HTMLElement>("[data-copy]");
+      if (!trigger || !root!.contains(trigger)) return;
+
+      // Dragging out part of an identifier is a copy of its own; let it stand.
+      if (
+        trigger.dataset.copy === "inline" &&
+        window.getSelection()?.isCollapsed === false
+      ) {
+        return;
+      }
 
       const scope =
-        button.dataset.copy === "line"
-          ? button.closest(".line")
-          : button.closest(".lab-code")?.querySelector("code");
+        trigger.dataset.copy === "inline"
+          ? trigger
+          : trigger.dataset.copy === "line"
+            ? trigger.closest(".line")
+            : trigger.closest(".lab-code")?.querySelector("code");
       if (!scope) return;
 
-      void copy(codeText(scope)).then((ok) => ok && flash(button));
+      void copy(codeText(scope)).then((ok) => ok && flash(trigger));
     }
 
     root.addEventListener("click", onClick);
