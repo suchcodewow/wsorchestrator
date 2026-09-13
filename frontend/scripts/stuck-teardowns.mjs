@@ -42,18 +42,36 @@ const SILENT_HOURS = Number(process.env.SILENT_HOURS ?? 1);
 const ATTEMPT_MINUTES = Number(process.env.ATTEMPT_MINUTES ?? 40);
 
 /**
- * Log lines a stopped teardown writes, across all three generations of the policy.
+ * How long after a failed attempt a run may sit unclaimed before the silence is
+ * worth reporting rather than expected.
+ *
+ * The reaper ticks every five minutes and `setDestroyRetry` leaves the run due
+ * immediately, so the next attempt lands inside one tick. Fifteen covers a missed
+ * tick and the clock skew between the two jobs without hiding a run that has
+ * genuinely stopped being picked up.
+ */
+const RETRY_MINUTES = Number(process.env.RETRY_MINUTES ?? 15);
+
+/**
+ * Log lines a teardown attempt writes when it does not finish, across all four
+ * generations of the policy.
  *
  * The pre-cap reaper wrote "destroy failed, will retry: …" on every tick, so these
  * patterns are what makes the history legible: a run whose stored counter says 2
  * and whose log holds 500 of these has been through the old loop, and the count is
  * the honest measure of how long it was going on.
+ *
+ * The last entry is not a stopped teardown — it is one that is about to try again.
+ * It belongs here anyway, because `last_failure` is what the `retrying` shape below
+ * measures its patience from, and a pattern list that cannot see the line would
+ * make that shape unreachable and report the wait as an alarm.
  */
 const FAILURE_PATTERNS = [
   "destroy failed%", // the unbounded loop, and the "(attempt N of 8)" cap
   "destroy cannot succeed%", // the cap's terminal case
   "Teardown failed%", // one attempt, returned an error
   "Teardown stopped%", // one attempt, killed mid-flight
+  "Teardown attempt%", // a self-clearing failure, waiting for the next tick
 ];
 
 const QUERY = `
@@ -101,11 +119,11 @@ function ago(then, now) {
 /**
  * Which shape a row is.
  *
- * With no retry there are only four, and the two healthy ones are both transient:
- * a run is waiting for its attempt, running it, flagged, or the reaper has stopped
- * touching it. That last one is the only alarm left, and it is now the *only* way
- * a teardown can quietly cost money indefinitely — which is why it gets two
- * separate detections, one for each side of the claim.
+ * Five, and the three healthy ones are all transient: a run is waiting for its
+ * attempt, running it, waiting out a self-clearing failure between ticks, flagged,
+ * or the reaper has stopped touching it. That last one is the only alarm left, and
+ * it is the *only* way a teardown can quietly cost money indefinitely — which is
+ * why it gets two separate detections, one for each side of the claim.
  */
 function classify(r) {
   const now = new Date(r.now);
@@ -146,6 +164,26 @@ function classify(r) {
       // these agree — except on a row that was mid-teardown when 0024 added the
       // column, where the claim is this attempt's and the counter is not.
       why: `attempt ${Math.max(r.destroy_attempts, 1)} started ${ago(r.destroy_started_at, now)}`,
+    };
+  }
+
+  // Unclaimed, but this run has already run an attempt and failed recently: it is
+  // between ticks on a self-clearing failure, which `setDestroyRetry` leaves in
+  // exactly this state (see rule 3 in `destroy-policy.ts`). Recognised before the
+  // silence check below, and measured from the failure rather than from
+  // eligibility, because a slow AWS teardown can burn most of SILENT_HOURS before
+  // the retry is even due — which would report a working policy as an alarm.
+  if (
+    r.destroy_attempts > 0 &&
+    r.last_failure &&
+    hours(new Date(r.last_failure), now) * 60 < RETRY_MINUTES
+  ) {
+    return {
+      level: "ok",
+      kind: "retrying",
+      why:
+        `attempt ${r.destroy_attempts} failed ${ago(r.last_failure, now)} on a ` +
+        "condition that clears itself; the next tick picks it up",
     };
   }
 

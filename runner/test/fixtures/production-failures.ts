@@ -51,17 +51,19 @@ export type ProductionFailure = {
   readonly message: string;
   readonly expect: Expectation;
   /**
-   * Set when this message appears during a *teardown* and can never succeed, so
-   * the reaper must stop on the first attempt instead of spending its budget.
+   * Set when this message appears during a *teardown* and describes a condition
+   * that clears on its own, so the reaper should tick again rather than stop and
+   * wait for a person.
    *
    * Separate from `expect` rather than a value of it because the two answer
    * different questions about the same string: `expect` is what the apply-time
    * classifiers should conclude (here: `fail`, and it must stay in that loop),
-   * and this is whether the destroy retry policy should give up immediately.
-   * Every fixture without the flag is asserted *not* to be terminal, which is
-   * what keeps `PERMANENT_DESTROY_SIGNATURES` from being widened by accident.
+   * and this is whether the destroy policy should spend another attempt on it.
+   * Every fixture without the flag is asserted *not* to be self-clearing, which
+   * is what keeps `SELF_CLEARING_DESTROY_SIGNATURES` from being widened into
+   * "retry any teardown" — the policy this project has twice had to unwind.
    */
-  readonly permanentDestroy?: true;
+  readonly selfClearingDestroy?: true;
   /** Why that is the right answer — the thing a future reader needs. */
   readonly because: string;
 };
@@ -218,17 +220,42 @@ export const PRODUCTION_FAILURES: readonly ProductionFailure[] = [
       "timeout while waiting for resource to be gone (last state: 'ACTIVE', " +
       "timeout: 10m0s)",
     expect: "fail",
-    permanentDestroy: true,
+    selfClearingDestroy: true,
     because:
-      "A closed AWS account leaves the organization on AWS's own schedule, not " +
-      "in ten minutes, so this destroy can never succeed as written. It must " +
-      "classify as a real failure rather than something to retry — see the " +
-      "unbounded teardown retry it currently feeds, which reached 572 attempts " +
-      "over two days on run `aws-platform`. It opens with the same words as the " +
-      "GKE capacity signature 'timeout while waiting for state to become' and " +
-      "diverges at 'resource to be gone' — near enough that a future edit could " +
-      "broaden one into the other, which is what the assertion on this fixture " +
-      "exists to catch.",
+      "`close_on_deletion` calls CloseAccount and then waits ten minutes for the " +
+      "account to stop reading as live. AWS takes a little longer than that — but " +
+      "only a little, and the wait is satisfied by SUSPENDED, not by the account " +
+      "leaving the organization: provider 5.100.0 maps SUSPENDED to NotFound " +
+      "(`findAccountByID`), so the next refresh drops the resource from state and " +
+      "the destroy is a no-op. This very run proves it. It hit this error at " +
+      "19:12:46 and reached `destroyed` at 19:13:53 on the following tick, as did " +
+      "`aws` (2026-08-24), `nationwide-insurnace` (2026-08-26) and " +
+      "`aws-platform-team` twice — five for five, every one on the next attempt. " +
+      "It opens with the same words as the GKE capacity signature 'timeout while " +
+      "waiting for state to become' and diverges at 'resource to be gone' — near " +
+      "enough that a future edit could broaden one into the other, which is what " +
+      "the assertion on this fixture exists to catch.",
+  },
+  {
+    id: "aws-org-account-delete-timeout-after-flagging",
+    run: "jdb-test-workshop5-aws",
+    date: "2026-09-11",
+    message:
+      "Error: waiting for AWS Organizations Account (997139435304) delete: " +
+      "timeout while waiting for resource to be gone (last state: 'ACTIVE', " +
+      "timeout: 10m0s)",
+    expect: "fail",
+    selfClearingDestroy: true,
+    because:
+      "The same string sixteen days later, and by the rule at the top of this " +
+      "file that makes it a regression rather than a duplicate. Between the two, " +
+      "944a92f read the first one as permanent and stopped the teardown on " +
+      "attempt 1 — so where the 2026-08-27 run healed itself in 67 seconds, this " +
+      "one sat in `destroy_failed` with its Harness org, attendee account and " +
+      "Google OU still standing until someone pressed a button. Two more runs " +
+      "(`aws-billing-fixed`, `jdb-test-workshop3-aws`) wedged the same way. " +
+      "Account 997139435304 read SUSPENDED/CLOSED when checked afterwards, which " +
+      "is the state the destroy was waiting for.",
   },
 
   /* ---------------------------------------------------------------- *

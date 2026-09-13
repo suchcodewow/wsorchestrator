@@ -111,35 +111,44 @@ export function awsRetryKind(text: string): AwsRetryKind | null {
 }
 
 /**
- * Destroy failures that cannot succeed no matter how many times they are tried,
- * so the reaper should stop on the first one rather than work through its whole
- * retry budget to reach the same answer.
+ * Destroy failures that describe a condition the cloud clears by itself, so the
+ * reaper should take one more attempt instead of stopping for a person.
  *
- * The bar for an entry here is high, and it is the opposite of the bar for the
- * retry lists above. A wrong entry there costs a wait; a wrong entry *here*
- * abandons a teardown that would have succeeded, and leaves a cloud account
- * running and billing. So: only messages that are impossible by construction,
- * each with a real run behind it.
+ * `destroy-policy.ts` is deliberately a one-attempt policy, and this list is the
+ * only exception to it. The bar is therefore not "might work next time" — it is
+ * a message whose mechanism is *understood*, with runs on the record showing the
+ * next attempt succeeding.
  *
- * One entry so far. `aws_organizations_account` with `close_on_deletion = true`
- * calls CloseAccount and then waits for the account to leave the organization —
- * but a closed AWS account stays in the org, SUSPENDED, for about ninety days
- * before AWS frees it. The provider waits ten minutes. That destroy therefore
- * cannot complete on any attempt, which is precisely how run `aws-platform`
- * reached 572 identical attempts over two days on a five-minute tick: nothing in
- * the message said "give up", so nothing did.
+ * One entry, and it has both. `aws_organizations_account` with
+ * `close_on_deletion = true` calls CloseAccount and then waits ten minutes for
+ * the account to stop reading as live. What it waits for is not the account
+ * leaving the organization — a closed account stays in the org, SUSPENDED, for
+ * about ninety days, and if that were the condition this really would be
+ * hopeless. It is not: provider 5.100.0's `findAccountByID` maps SUSPENDED to
+ * NotFound, so the wait is satisfied the moment the close lands, and a later
+ * refresh drops the resource from state and makes the destroy a no-op. AWS takes
+ * a bit over ten minutes to get there. The reaper ticks every five.
  *
- * Note how narrowly this is written. `GKE_CAPACITY_SIGNATURES` above contains
- * "timeout while waiting for state to become", which is a retry-elsewhere
- * signal; this one is "timeout while waiting for resource to be gone", which is
- * terminal. Six words apart, opposite verdicts. Both fixtures assert against the
- * other's classifier for exactly that reason — broadening either into the other
- * would either abandon a live cluster or retry an impossible close forever.
+ * Production agrees, five times out of five: `jdb-test-workshop` (2026-08-27)
+ * hit this at 19:12:46 and was `destroyed` at 19:13:53, and `aws`,
+ * `nationwide-insurnace` and `aws-platform-team` (twice) all recovered on the
+ * attempt straight after. The reading this replaces — that the message was
+ * permanent — cost three runs their automatic teardown before it was caught, and
+ * attributed to this string a 572-attempt loop that belonged to a different
+ * failure on `aws-platform` entirely.
+ *
+ * Note how narrowly it is still written. `GKE_CAPACITY_SIGNATURES` above
+ * contains "timeout while waiting for state to become", which means move to
+ * another zone at apply time; this is "timeout while waiting for resource to be
+ * gone", which means tick the teardown again. Six words apart, different
+ * machinery. Both fixtures assert against the other's classifier for exactly
+ * that reason — collapsing either into the common prefix would compile, read
+ * fine, and quietly swap them.
  */
-export const PERMANENT_DESTROY_SIGNATURES = [
+export const SELF_CLEARING_DESTROY_SIGNATURES = [
   "timeout while waiting for resource to be gone",
 ] as const;
 
-export function isPermanentDestroyFailure(text: string): boolean {
-  return has(text, PERMANENT_DESTROY_SIGNATURES);
+export function isSelfClearingDestroyFailure(text: string): boolean {
+  return has(text, SELF_CLEARING_DESTROY_SIGNATURES);
 }

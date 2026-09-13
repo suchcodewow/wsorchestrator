@@ -15,7 +15,7 @@ import {
   AWS_ACCOUNT_WARMUP_SIGNATURES,
   awsRetryKind,
   isGkeCapacityError,
-  isPermanentDestroyFailure,
+  isSelfClearingDestroyFailure,
 } from "../src/classify.js";
 import {
   PRODUCTION_FAILURES,
@@ -112,58 +112,60 @@ describe("isGkeCapacityError", () => {
   });
 });
 
-describe("isPermanentDestroyFailure", () => {
-  for (const f of PRODUCTION_FAILURES.filter((f) => f.permanentDestroy)) {
-    test(`stops the teardown on ${f.id} (${f.run}, ${f.date})`, () => {
-      assert.equal(isPermanentDestroyFailure(f.message), true, f.because);
+describe("isSelfClearingDestroyFailure", () => {
+  for (const f of PRODUCTION_FAILURES.filter((f) => f.selfClearingDestroy)) {
+    test(`gives the teardown another tick on ${f.id} (${f.run}, ${f.date})`, () => {
+      assert.equal(isSelfClearingDestroyFailure(f.message), true, f.because);
     });
   }
 
-  test("does not abandon a teardown for anything else in the corpus", () => {
-    // The asymmetry that makes this the strictest loop in the file: a false
-    // negative here costs a few retries, a false positive walks away from a
-    // cloud account that is still billing. So every message *not* marked
-    // terminal has to read as retryable, including the ones that are real
-    // failures at apply time.
+  test("does not retry anything else in the corpus", () => {
+    // The default is one attempt and then a person, so this list is an exception
+    // to the policy and has to stay the size of its evidence. A false positive
+    // does not loop forever — `MAX_DESTROY_ATTEMPTS` bounds it — but it does
+    // spend Cloud Run executions re-deriving a known answer, which is the habit
+    // this module has twice been rewritten to break. Every message not marked
+    // self-clearing must read as final.
     for (const f of PRODUCTION_FAILURES) {
-      if (f.permanentDestroy) continue;
+      if (f.selfClearingDestroy) continue;
       assert.equal(
-        isPermanentDestroyFailure(f.message),
+        isSelfClearingDestroyFailure(f.message),
         false,
-        `${f.id} must not abandon a teardown — ${f.because}`,
+        `${f.id} must not earn a teardown retry — ${f.because}`,
       );
     }
   });
 
   test("stays six words away from the GKE capacity signature", () => {
-    // "timeout while waiting for resource to be gone" (terminal, stop) against
-    // "timeout while waiting for state to become 'DONE'" (a starved zone, move
-    // and retry). Both prefixes are identical for five words. Pinned in both
-    // directions because a future edit that shortens either signature to the
-    // common prefix would compile, read fine, and silently swap the two
-    // verdicts: abandoning a live cluster, or retrying an impossible close.
-    const terminal = failure("aws-org-account-delete-timeout").message;
+    // "timeout while waiting for resource to be gone" (tick the teardown again)
+    // against "timeout while waiting for state to become 'DONE'" (a starved
+    // zone: move, at apply time). Both prefixes are identical for five words,
+    // and they drive different machinery. Pinned in both directions because a
+    // future edit that shortens either signature to the common prefix would
+    // compile, read fine, and silently swap the two.
+    const close = failure("aws-org-account-delete-timeout").message;
     const capacity = failure("gke-create-timeout").message;
 
-    assert.ok(isPermanentDestroyFailure(terminal));
-    assert.ok(!isGkeCapacityError(terminal));
+    assert.ok(isSelfClearingDestroyFailure(close));
+    assert.ok(!isGkeCapacityError(close));
 
     assert.ok(isGkeCapacityError(capacity));
-    assert.ok(!isPermanentDestroyFailure(capacity));
+    assert.ok(!isSelfClearingDestroyFailure(capacity));
   });
 
   test("matches whatever case the provider used", () => {
     const { message } = failure("aws-org-account-delete-timeout");
-    assert.equal(isPermanentDestroyFailure(message.toUpperCase()), true);
-    assert.equal(isPermanentDestroyFailure(message.toLowerCase()), true);
+    assert.equal(isSelfClearingDestroyFailure(message.toUpperCase()), true);
+    assert.equal(isSelfClearingDestroyFailure(message.toLowerCase()), true);
   });
 
-  test("an empty capture is not a reason to give up", () => {
-    // A destroy that crashed without printing anything is unexplained, not
-    // impossible — it has to keep its retries and end in `destroy_failed` by
-    // exhausting them, so the log shows eight identical silences rather than
-    // one confident "cannot succeed".
-    assert.equal(isPermanentDestroyFailure(""), false);
+  test("an empty capture earns no retry", () => {
+    // A destroy that crashed without printing anything is unexplained, and an
+    // unexplained failure is not a known-self-clearing one. This is also the
+    // shape a killed attempt arrives in, which `decideDestroyFailure` refuses
+    // separately — belt and braces, because waving a death through here would
+    // hand it the retry loop that `claimDestroy` exists to stop.
+    assert.equal(isSelfClearingDestroyFailure(""), false);
   });
 });
 

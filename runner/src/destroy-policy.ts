@@ -18,7 +18,7 @@
  *
  * So: one attempt. It works, or the run goes to `destroy_failed` with the reason
  * on the row, where a person sees it on the page and presses Retry teardown once
- * they have dealt with the cause. Two rules follow from that, and they are the
+ * they have dealt with the cause. Three rules follow from that, and they are the
  * whole module:
  *
  *   1. **A failure flags.** No budget, no backoff, no second attempt.
@@ -30,19 +30,45 @@
  *      `claimDestroy` in `db.ts`: the claim is written before the work starts, so
  *      finding a claim already set while holding the run's advisory lock proves
  *      the previous holder is gone.
+ *   3. **A named self-clearing failure gets one more tick.** The third rule is
+ *      the correction to the first two, and it is deliberately the narrowest of
+ *      the three: it applies only to a message in
+ *      `SELF_CLEARING_DESTROY_SIGNATURES`, only to a `failed` (never a `died`),
+ *      and only up to `MAX_DESTROY_ATTEMPTS`.
  *
- * The trade is deliberate and worth stating: a genuinely transient failure — a
- * state lock from a killed container, AWS eventual consistency, Workspace lagging
- * an account delete — no longer heals itself after five minutes. It waits for a
- * human instead, and the resources it holds keep billing until then. That is
- * acceptable only because the flag is *loud*: a red badge on the run, an error on
- * the row, and `make stuck-teardowns` exiting non-zero. A silent loop was the more
- * expensive failure, by 9,482 attempts to one.
+ * Rule 3 exists because rule 1 was applied to a failure that did not deserve it.
+ * The AWS member-account close overruns its ten-minute wait by a minute or two
+ * and then succeeds on the following tick — five runs on the record do exactly
+ * that. Reading it as permanent stopped three teardowns dead, each leaving a
+ * Harness org, an attendee account and a Google OU standing until someone noticed
+ * and pressed a button. "Flag it and wait for a person" is the right default and
+ * the wrong answer for a condition that resolves itself in ninety seconds.
  *
- * Pure string handling, so `destroy-policy.test.ts` exercises it without a
- * database or a cloud.
+ * The trade in the other direction still stands, and rule 3 does not reopen it: an
+ * *unnamed* transient failure — a state lock from a killed container, Workspace
+ * lagging an account delete — still waits for a human, and the resources it holds
+ * keep billing until then. That is acceptable only because the flag is *loud*: a
+ * red badge on the run, an error on the row, and `make stuck-teardowns` exiting
+ * non-zero. A silent loop was the more expensive failure, by 9,482 attempts to
+ * one — which is why the exception is a list of strings with runs behind them
+ * rather than a category like "timeouts are retryable".
+ *
+ * Pure string handling and arithmetic, so `destroy-policy.test.ts` exercises it
+ * without a database or a cloud.
  */
-import { isPermanentDestroyFailure } from "./classify.js";
+import { isSelfClearingDestroyFailure } from "./classify.js";
+
+/**
+ * Total attempts a self-clearing failure may spend before it flags like any
+ * other — the initial attempt plus two retries, at one tick (five minutes) each.
+ *
+ * Sized from the evidence rather than guessed: every recorded recovery landed on
+ * the attempt immediately after the first, so two is already one more than has
+ * ever been needed. The cap is what keeps rule 3 from becoming the unbounded loop
+ * this module exists to prevent — if AWS ever stops closing accounts, this costs
+ * three Cloud Run executions and then flags, instead of 288 a day.
+ */
+export const MAX_DESTROY_ATTEMPTS = 3;
 
 /** Why a teardown stopped. Both flag; they differ only in what to tell someone. */
 export type DestroyFailureKind =
@@ -51,28 +77,57 @@ export type DestroyFailureKind =
   /** The destroy never returned — the process was killed mid-attempt. */
   | "died";
 
+/** What the reaper should do about a teardown that did not finish. */
+export type DestroyDecision =
+  /** Hand it back for another tick; `note` goes on the row and in the log. */
+  | { action: "retry"; note: string }
+  /** Stop, and leave `reason` for a person. */
+  | { action: "flag"; reason: string };
+
 /**
- * Extra guidance for a failure whose cause is known and structural, appended to
- * the reason stored on the run.
+ * The decision, given what happened and how many attempts this teardown has
+ * already had (`attempts` counts the one that just failed — `claimDestroy`
+ * increments before the work starts).
  *
- * Only the AWS member-account close so far, and it earns its place: it is not a
- * fault anyone can fix by trying again or by changing the config.
- * `aws_organizations_account` with `close_on_deletion` calls CloseAccount and then
- * waits ten minutes for the account to leave the organization, but a closed AWS
- * account stays in the org, SUSPENDED, for about ninety days. The destroy cannot
- * complete, and the account is already closed and no longer billing — what is left
- * is a state entry describing it.
+ * A `died` never retries however it is classified. The signature is read from the
+ * error text, and a death has no error text by construction, so an attempt killed
+ * mid-close would otherwise be waved through as self-clearing on the strength of
+ * a message it never got to print.
  */
-function permanentHint(message: string): string {
-  if (!isPermanentDestroyFailure(message)) return "";
+export function decideDestroyFailure(
+  kind: DestroyFailureKind,
+  message: string,
+  attempts: number,
+): DestroyDecision {
+  if (
+    kind === "failed" &&
+    isSelfClearingDestroyFailure(message) &&
+    attempts < MAX_DESTROY_ATTEMPTS
+  ) {
+    return { action: "retry", note: describeDestroyRetry(message, attempts) };
+  }
+  return { action: "flag", reason: describeDestroyFailure(kind, message) };
+}
+
+/**
+ * What a run says about itself while it waits for the next tick.
+ *
+ * Stored on the row, so it is what the page shows for the few minutes the run
+ * sits in `destroying` having just failed. It has to distinguish itself from the
+ * old "destroy failed, will retry" that this module spent two commits removing:
+ * that line was written on all 9,482 attempts of an unbounded loop and meant
+ * nothing. This one names the condition, says which attempt is next and out of
+ * how many, and commits to flagging after that.
+ */
+export function describeDestroyRetry(message: string, attempts: number): string {
   return (
-    "\n\nThis one cannot be fixed by retrying. Closing an AWS member account " +
-    "starts a ~90-day suspension during which it stays in the organization, so " +
-    "Terraform's 10-minute wait for it to disappear can never be satisfied. The " +
-    "account is already closed and is no longer billing; what is left is the " +
-    "state entry describing it. Clear that with " +
-    "`tofu state rm aws_organizations_account.this` against this run's state " +
-    "prefix, then retry the teardown to remove everything else."
+    `Teardown attempt ${attempts} did not finish, on a condition that clears ` +
+    `itself — the reaper will try again within a few minutes (attempt ` +
+    `${attempts + 1} of ${MAX_DESTROY_ATTEMPTS}). Closing an AWS member account ` +
+    "usually takes a little longer than the provider's ten-minute wait; once " +
+    "the close lands, the next destroy has nothing left to do. No action is " +
+    "needed unless this run is still here after " +
+    `${MAX_DESTROY_ATTEMPTS} attempts.\n\n${message}`
   );
 }
 
@@ -105,7 +160,6 @@ export function describeDestroyFailure(
   return (
     head +
     "\n\nThis run may still own cloud resources that are costing money. Deal " +
-    "with the cause, then press Retry teardown on this page." +
-    permanentHint(message)
+    "with the cause, then press Retry teardown on this page."
   );
 }

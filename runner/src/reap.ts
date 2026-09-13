@@ -49,10 +49,14 @@ import {
   log,
   setDestroyed,
   setDestroyFailed,
+  setDestroyRetry,
   type Component,
   type RunRow,
 } from "./db.js";
-import { describeDestroyFailure } from "./destroy-policy.js";
+import {
+  decideDestroyFailure,
+  describeDestroyFailure,
+} from "./destroy-policy.js";
 
 /** Root config that creates the workshop's single shared GCP project. */
 const GCP_TF_SOURCE = "workshops/gcp-base";
@@ -85,10 +89,13 @@ const AWS_CHALLENGE_TF_SOURCE = "challenges/aws-per-user";
  * another execution is already working is skipped, and the ticks spread across
  * the remaining ones instead of piling onto the first.
  *
- * A teardown gets exactly one attempt. Whether it fails or is killed mid-flight,
- * the run ends in `destroy_failed` with the reason on the row and waits for a
- * person — it is never handed back here on the next tick. See `destroy-policy.ts`
- * for why: the retry this replaced cost 9,482 identical attempts on one run.
+ * A teardown gets one attempt. Whether it fails or is killed mid-flight, the run
+ * ends in `destroy_failed` with the reason on the row and waits for a person. The
+ * single exception is a failure whose message is on a short list of conditions
+ * known to clear themselves, which is handed back here for up to
+ * `MAX_DESTROY_ATTEMPTS` ticks. See `destroy-policy.ts` for both halves: the
+ * retry this replaced cost 9,482 identical attempts on one run, and the flag that
+ * replaced *it* stopped three teardowns that would have finished by themselves.
  */
 export async function reap(): Promise<void> {
   const runs = await reapableRuns();
@@ -112,7 +119,8 @@ async function destroyRun(run: RunRow): Promise<void> {
   // attempt that took it is gone — killed before it could finish or report. That
   // is flagged, not retried: an attempt that dies the same way every time is the
   // one shape a retry budget cannot see, because nothing ever increments it.
-  if ((await claimDestroy(run.id)) === "abandoned") {
+  const claim = await claimDestroy(run.id);
+  if (claim.outcome === "abandoned") {
     const explanation = describeDestroyFailure("died", "");
     await log(run.id, "stderr", explanation);
     await setDestroyFailed(run.id, explanation);
@@ -188,18 +196,30 @@ async function destroyRun(run: RunRow): Promise<void> {
     await log(run.id, "system", "Destroyed.");
     await setDestroyed(run.id);
   } catch (err) {
-    // One attempt, then a person. No budget and no backoff: every retry is a
-    // Cloud Run execution and a full init/destroy against live cloud APIs, and
-    // the failures this has actually had were doomed identically every time.
+    // One attempt, then a person — except for the named conditions that clear
+    // themselves, which get another tick up to a cap. Every retry is a Cloud Run
+    // execution and a full init/destroy against live cloud APIs, so the exception
+    // is a short list of strings with runs behind them, not a category.
     // `destroy-policy.ts` has the reasoning and the numbers.
     const message = err instanceof Error ? err.message : String(err);
-    const explanation = describeDestroyFailure("failed", message);
+    const decision = decideDestroyFailure("failed", message, claim.attempt);
 
     // Logged before the status change for the same reason `setDestroyed` demands
-    // it: this is the line that explains why the run stopped, and it has to be
-    // on the page next to the state it explains.
-    await log(run.id, "stderr", explanation);
-    await setDestroyFailed(run.id, explanation);
+    // it: this is the line that explains why the run stopped — or why it has not
+    // — and it has to be on the page next to the state it explains.
+    if (decision.action === "retry") {
+      await log(run.id, "stderr", decision.note);
+      await setDestroyRetry(run.id, decision.note);
+      console.error(
+        `reaper: destroy of ${run.id} hit a self-clearing failure on attempt ` +
+          `${claim.attempt}, retrying next tick:`,
+        message,
+      );
+      return;
+    }
+
+    await log(run.id, "stderr", decision.reason);
+    await setDestroyFailed(run.id, decision.reason);
     console.error(`reaper: failed to destroy ${run.id}:`, message);
   }
 }

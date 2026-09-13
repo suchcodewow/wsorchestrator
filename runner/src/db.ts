@@ -180,7 +180,9 @@ export async function setLiveError(runId: string, error: string) {
  */
 export async function claimDestroy(
   runId: string,
-): Promise<"claimed" | "abandoned"> {
+): Promise<
+  { outcome: "claimed"; attempt: number } | { outcome: "abandoned" }
+> {
   const { rows } = await pool.query<{ destroy_attempts: number }>(
     `update workshop_runs
         set status = 'destroying',
@@ -191,7 +193,44 @@ export async function claimDestroy(
       returning destroy_attempts`,
     [runId],
   );
-  return rows.length > 0 ? "claimed" : "abandoned";
+  // The post-increment count, which is this attempt's number. Read from the
+  // `returning` rather than from the RunRow the reaper already holds: that was
+  // selected before the claim, and two reapers racing the same run would both
+  // compute the same stale number from it.
+  if (rows.length === 0) return { outcome: "abandoned" };
+  return { outcome: "claimed", attempt: rows[0].destroy_attempts };
+}
+
+/**
+ * Hand a teardown back for another tick, without burning it.
+ *
+ * The mirror of `setDestroyFailed` for the one case that earns a retry — see rule
+ * 3 in `destroy-policy.ts`. The run stays in `destroying`, which is a status
+ * `reapableRuns` already selects, so nothing needs to schedule the next attempt:
+ * the five-minute cron is the backoff, and it is the same interval every recorded
+ * recovery of this failure actually used.
+ *
+ * Clearing the claim is what makes the run eligible rather than abandoned. Were
+ * it left set, the next tick would hold the advisory lock, see a claim, and
+ * correctly conclude the previous attempt had been killed — flagging the run for
+ * a death that never happened.
+ *
+ * `note` is stored on `error` so the page can explain the pause; `setDestroyed`
+ * clears it when the retry works, and `setDestroyFailed` overwrites it when the
+ * attempts run out.
+ */
+export async function setDestroyRetry(
+  runId: string,
+  note: string,
+): Promise<void> {
+  await pool.query(
+    `update workshop_runs
+        set status = 'destroying',
+            destroy_started_at = null,
+            error = $2
+      where id = $1`,
+    [runId, note],
+  );
 }
 
 /**
