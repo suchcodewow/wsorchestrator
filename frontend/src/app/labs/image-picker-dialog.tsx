@@ -98,7 +98,11 @@ export function ImagePickerDialog({
     };
   }, [open, query]);
 
+  /** Set for the close that follows an insert, and read by `onCloseAutoFocus`. */
+  const inserted = useRef(false);
+
   function choose(image: PickerImage) {
+    inserted.current = true;
     onInsert({ id: image.id, name: image.name, alt: image.alt || image.name });
     setOpen(false);
   }
@@ -186,7 +190,20 @@ export function ImagePickerDialog({
         </Button>
       </DialogTrigger>
 
-      <DialogContent className="max-w-3xl">
+      {/* An insert puts the caret back in the guide body, so Radix must not
+          pull focus to the trigger as the dialog closes: its refocus lands a
+          couple of frames *after* the insert — once the close animation has
+          finished — and it scrolls the toolbar into view, taking the page with
+          it. Closed without inserting, the trigger is still where focus
+          belongs. */}
+      <DialogContent
+        className="max-w-3xl"
+        onCloseAutoFocus={(event) => {
+          if (!inserted.current) return;
+          inserted.current = false;
+          event.preventDefault();
+        }}
+      >
         <DialogHeader>
           <DialogTitle>Insert an image</DialogTitle>
           <DialogDescription>

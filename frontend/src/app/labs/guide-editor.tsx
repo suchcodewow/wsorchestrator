@@ -141,11 +141,34 @@ export function GuideEditor({
 
   const bodyField = useRef<HTMLTextAreaElement>(null);
 
+  /**
+   * Puts the caret back after an insert, leaving the view where it was. React
+   * re-assigns the textarea's `value` for a controlled update, which drops the
+   * caret at the end of the guide and scrolls the box down to follow it; the
+   * saved `scrollTop` is what puts the reader back at the line they inserted
+   * into rather than at the bottom of the lab. `preventScroll` keeps the page
+   * itself still — the textarea is already on screen, since that is where the
+   * caret was.
+   */
+  function restoreCaret(
+    field: HTMLTextAreaElement,
+    from: number,
+    to: number,
+    scrollTop: number,
+  ) {
+    requestAnimationFrame(() => {
+      field.focus({ preventScroll: true });
+      field.setSelectionRange(from, to);
+      field.scrollTop = scrollTop;
+    });
+  }
+
   function insertBlock(snippet: string, select?: string) {
     const field = bodyField.current;
     const value = field ? field.value : body;
     const start = field ? field.selectionStart : value.length;
     const end = field ? field.selectionEnd : value.length;
+    const scrollTop = field ? field.scrollTop : 0;
 
     const before = value.slice(0, start);
     const after = value.slice(end);
@@ -167,10 +190,7 @@ export function GuideEditor({
     const at = select ? block.indexOf(select) : -1;
     const from = at === -1 ? start + text.length : start + leading.length + at;
     const to = at === -1 ? from : from + select!.length;
-    requestAnimationFrame(() => {
-      field.focus();
-      field.setSelectionRange(from, to);
-    });
+    restoreCaret(field, from, to, scrollTop);
   }
 
   /** A placeholder belongs mid-sentence, so this writes it where the caret is. */
@@ -179,6 +199,7 @@ export function GuideEditor({
     const value = field ? field.value : body;
     const start = field ? field.selectionStart : value.length;
     const end = field ? field.selectionEnd : value.length;
+    const scrollTop = field ? field.scrollTop : 0;
 
     const next = `${value.slice(0, start)}${snippet}${value.slice(end)}`;
     setBody(next);
@@ -186,10 +207,7 @@ export function GuideEditor({
 
     if (!field) return;
     const at = start + snippet.length;
-    requestAnimationFrame(() => {
-      field.focus();
-      field.setSelectionRange(at, at);
-    });
+    restoreCaret(field, at, at, scrollTop);
   }
 
   const insert = ({ snippet, select, inline }: ToolInsert) =>
