@@ -355,11 +355,17 @@ export async function createAttendeeRole(orgId: string): Promise<boolean> {
   return duplicate;
 }
 
-/** Create one attendee's project inside the workshop org. */
+/**
+ * Create a project inside the workshop org. Returns whether it already existed.
+ *
+ * Usually an attendee's own, hence the default description; `copyOrgContent`
+ * also makes one per project-scoped template source, and says so instead.
+ */
 export async function createProject(
   orgId: string,
   identifier: string,
   name: string,
+  description = "Workshop attendee project.",
 ): Promise<boolean> {
   const { duplicate } = await api(
     "POST",
@@ -370,7 +376,7 @@ export async function createProject(
         identifier,
         name,
         orgIdentifier: orgId,
-        description: "Workshop attendee project.",
+        description,
         tags: { managed_by: "workshop-orchestrator" },
       },
     },
@@ -503,6 +509,32 @@ export async function grantProjectAdmin(
     {
       identifier: cfg.projectAdminResourceGroup,
       name: cfg.projectAdminResourceGroupName,
+    },
+  );
+}
+
+/**
+ * Let an attendee read one of the projects a template source brought across.
+ *
+ * Needed because the org-wide attendee binding stops at the org: its resource
+ * group is `_all_organization_level_resources`, which does not reach into
+ * projects — so without this the content copied into a template source's project
+ * would be visible to nobody who needs it.
+ */
+export async function grantProjectViewer(
+  orgId: string,
+  projectId: string,
+  email: string,
+): Promise<boolean> {
+  const cfg = harnessCfg();
+  return assignRole(
+    email,
+    { orgIdentifier: orgId, projectIdentifier: projectId },
+    "project",
+    { identifier: cfg.projectViewerRole, name: cfg.projectViewerRoleName },
+    {
+      identifier: cfg.projectViewerResourceGroup,
+      name: cfg.projectViewerResourceGroupName,
     },
   );
 }

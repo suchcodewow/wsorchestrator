@@ -8,7 +8,7 @@ import {
   type RunRow,
   type TemplateSource,
 } from "./db.js";
-import { isDuplicate, isRetryable } from "./harness.js";
+import { createProject, isDuplicate, isRetryable } from "./harness.js";
 import { openSecret, secretsConfigured } from "./secret-box.js";
 
 /**
@@ -31,12 +31,18 @@ import { openSecret, secretsConfigured } from "./secret-box.js";
  *
  * Four things about the shape of this are deliberate:
  *
- *   * **Read wherever the row points, write at the org.** A source row naming a
- *     project is read from that project, and its content still lands at the
- *     workshop org's level. Attendees work in their own projects, and the
- *     attendee role grants org-level view/access — so content in the org is
- *     usable by every attendee, where content in a project of its own would be
- *     visible to nobody who needs it.
+ *   * **Write at the level the row points at.** An org-wide row lands at the
+ *     workshop org's level, where the org-level attendee binding makes it usable
+ *     by the whole room. A row naming a *project* gets a project of the same name
+ *     inside the workshop org, and its content lands in there — so an authored
+ *     project arrives as the project it was written as, rather than having its
+ *     entities flattened in among every other source's. This is what the app's
+ *     `deployContent` has always done with the same rows.
+ *
+ *     The org binding does not reach inside a project: its resource group is
+ *     `_all_organization_level_resources`. So the projects made here are returned
+ *     for `run.ts` to give every attendee a viewer binding on — see
+ *     `grantProjectViewer`.
  *
  *   * **No secret value is ever copied.** Harness does not return one — every
  *     secret reads back with `value: null` — and this does not ask. Real values
@@ -101,6 +107,10 @@ const sourceLabel = (source: TemplateSource) =>
 
 const TAGS = { managed_by: "workshop-orchestrator" };
 const DESCRIPTION = "Copied from the site's template sources.";
+
+/** Said on a project made to hold one project-scoped source's content. */
+const PROJECT_DESCRIPTION =
+  "Holds the content copied from one of the site's template sources.";
 
 const MAX_ATTEMPTS = 3;
 const TIMEOUT_MS = 30_000;
@@ -931,13 +941,28 @@ export type ContentResult = {
    * than zero is what makes a second pass after the clouds worth running.
    */
   waiting: number;
+  /**
+   * The projects inside the workshop org that hold a project-scoped source's
+   * content, whether this pass created them. Every attendee needs a viewer
+   * binding on each — see the module comment.
+   */
+  projects: string[];
 };
+
+/** Nothing copied, for the two ways this gives up before reading a source. */
+const nothing = (): ContentResult => ({
+  copied: 0,
+  failed: 0,
+  waiting: 0,
+  projects: [],
+});
 
 /**
  * Copy every site template source into the workshop's organization.
  *
- * Returns what happened so `run.ts` can decide whether to come back. Never
- * throws: see the module comment on why this is best-effort.
+ * Returns what happened so `run.ts` can decide whether to come back, and which
+ * projects the attendees need access to. Never throws: see the module comment on
+ * why this is best-effort.
  */
 export async function copyOrgContent(
   run: RunRow,
@@ -946,7 +971,7 @@ export async function copyOrgContent(
 ): Promise<ContentResult> {
   const tally: Tally = { created: 0, existed: 0, failed: 0, waiting: 0 };
   const sources = await loadTemplateSources();
-  if (sources.length === 0) return { copied: 0, failed: 0, waiting: 0 };
+  if (sources.length === 0) return nothing();
 
   // Said once, up front, the way `applyOrgSecrets` does: with no key every
   // token comes back unreadable, and "this runner has no key" is a deployment
@@ -958,7 +983,7 @@ export async function copyOrgContent(
       `${sources.length} template source(s) skipped — this runner has no ` +
         `HARNESS_TOKEN_ENC_KEY or AUTH_SECRET, so no token can be decrypted`,
     );
-    return { copied: 0, failed: 0, waiting: 0 };
+    return nothing();
   }
 
   const cfg = harnessCfg();
@@ -1023,7 +1048,21 @@ export async function copyOrgContent(
       : `Copying the content that was waiting on a cloud credential into org ${orgId}`,
   );
 
-  for (const source of sources) {
+  // Org-wide rows before the project ones. Content copied into a project may
+  // reference a connector or template at the org's level, and Harness refuses a
+  // reference to something that is not there yet — the same ordering, for the
+  // same reason, as `deployContent`'s.
+  const ordered = [
+    ...sources.filter((s) => s.projectIdentifier === null),
+    ...sources.filter((s) => s.projectIdentifier !== null),
+  ];
+
+  // By identifier, since two rows in different source orgs may name the same
+  // project: the second create is a duplicate, their content merges, and the
+  // attendees need one binding rather than two.
+  const projects = new Set<string>();
+
+  for (const source of ordered) {
     const token = openSecret(source.secret);
     if (token === null) {
       // One unreadable source must not cost the workshop the others. The fix is
@@ -1045,8 +1084,37 @@ export async function copyOrgContent(
       project: source.projectIdentifier,
     };
 
+    // An org-wide row writes at the org; a project row writes into a project of
+    // the same name, made here because nothing else in a provision would.
+    let into = to;
+    if (source.projectIdentifier !== null) {
+      const projectId = source.projectIdentifier;
+      try {
+        const existed = await createProject(
+          orgId,
+          projectId,
+          source.projectName ?? projectId,
+          PROJECT_DESCRIPTION,
+        );
+        await record("project", projectId, {
+          outcome: existed ? "existed" : "created",
+        });
+      } catch (err) {
+        // Without the project there is nowhere for this row's content to go, so
+        // the rest of it is skipped — but the sources after it are not.
+        const message = err instanceof Error ? err.message : String(err);
+        await record("project", projectId, {
+          outcome: "failed",
+          detail: `${message}; nothing from ${sourceLabel(source)} was copied`,
+        });
+        continue;
+      }
+      projects.add(projectId);
+      into = { ...to, project: projectId };
+    }
+
     try {
-      await copySource({ from, to, ownedHere, record });
+      await copySource({ from, to: into, ownedHere, record });
     } catch (err) {
       // `copySource` turns every expected failure into a recorded outcome, so
       // this is for the unexpected kind — and one source's surprise must not
@@ -1085,5 +1153,10 @@ export async function copyOrgContent(
     total,
   });
 
-  return { copied, failed: tally.failed, waiting: tally.waiting };
+  return {
+    copied,
+    failed: tally.failed,
+    waiting: tally.waiting,
+    projects: [...projects],
+  };
 }

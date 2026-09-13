@@ -52,6 +52,7 @@ import {
   grantAccountAdmin,
   grantOrgAttendee,
   grantProjectAdmin,
+  grantProjectViewer,
   latestDelegateImage,
   orgIdentifier,
   orgUrl,
@@ -523,8 +524,9 @@ type HarnessProvision = {
  *
  * Each attendee administers their own project and gets view/use access across
  * the org, so they can see everyone else's work without being able to change
- * it. Every call is idempotent, so a grown or retried workshop only adds what
- * is missing.
+ * it — plus read-only access to each project a project-scoped template source
+ * brought across, which the org-level binding does not reach. Every call is
+ * idempotent, so a grown or retried workshop only adds what is missing.
  */
 async function provisionHarness(run: RunRow): Promise<HarnessProvision> {
   const orgId = orgIdentifier(run.name, run.id);
@@ -659,13 +661,27 @@ async function provisionHarness(run: RunRow): Promise<HarnessProvision> {
         } — Harness reported the binding as already applied`,
       );
     }
+    // Read-only on each project a template source brought across. The org-wide
+    // binding above stops at the org, so without this the content copied into
+    // one of those projects would be invisible to the room it was copied for.
+    for (const templateProject of content.projects) {
+      await grantProjectViewer(orgId, templateProject, email);
+    }
+
     projectUrls[email] = projectUrl(orgId, projectId);
 
     // After the grants, so an attendee whose project is still being wired up
     // never sees a repository they cannot open yet.
     await importProjectRepos(projectId);
 
-    await log(run.id, "stdout", `${email} -> admin of project ${projectId}`);
+    await log(
+      run.id,
+      "stdout",
+      `${email} -> admin of project ${projectId}` +
+        (content.projects.length > 0
+          ? `, viewer of ${content.projects.join(", ")}`
+          : ""),
+    );
     await countProjects(++built);
   }
 

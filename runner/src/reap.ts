@@ -44,6 +44,7 @@ import {
   deleteAccounts,
   deleteResources,
   claimDestroy,
+  loadTemplateSources,
   reapableRuns,
   withRunLock,
   log,
@@ -231,8 +232,10 @@ async function destroyRun(run: RunRow): Promise<void> {
  * The projects are read from the org itself, not recomputed from the attendee
  * roster — a project created for an attendee whose DB row was later lost would
  * otherwise linger and block the org delete, the same orphan-wedge that stalled
- * OU deletion. If the org can't be listed, fall back to the roster-derived ids
- * (which are deterministic in the address) rather than skipping the delete.
+ * OU deletion. If the org can't be listed, fall back to the ids a provision
+ * would have made: one per attendee, deterministic in the address, plus one per
+ * project-scoped template source (see `copyOrgContent`). Either of those left
+ * behind wedges the org delete just as surely.
  */
 async function destroyHarness(run: RunRow): Promise<void> {
   const orgId = orgIdentifier(run.name, run.id);
@@ -249,9 +252,12 @@ async function destroyHarness(run: RunRow): Promise<void> {
       "stdout",
       `could not list org projects (${message}); falling back to the roster`,
     );
-    projectIds = (await accountsFor(run.id)).map((a) =>
-      projectIdentifier(a.email),
-    );
+    projectIds = [
+      ...(await accountsFor(run.id)).map((a) => projectIdentifier(a.email)),
+      ...(await loadTemplateSources())
+        .map((s) => s.projectIdentifier)
+        .filter((id): id is string => id !== null),
+    ];
   }
   for (const projectId of projectIds) {
     await deleteProject(orgId, projectId);

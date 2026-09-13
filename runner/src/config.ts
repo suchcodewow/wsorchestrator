@@ -411,6 +411,24 @@ export function harnessCfg() {
       "All Project Level Resources",
 
     /**
+     * Read-only binding every attendee gets on each project a template source
+     * brought across (see `copyOrgContent`). The built-in viewer rather than the
+     * custom attendee role: that content is the site's, authored elsewhere, and
+     * an attendee needs to read and reference it rather than edit it — where the
+     * project they administer is theirs to change.
+     */
+    projectViewerRole:
+      process.env.HARNESS_PROJECT_VIEWER_ROLE ?? "_project_viewer",
+    projectViewerRoleName:
+      process.env.HARNESS_PROJECT_VIEWER_ROLE_NAME ?? "Project Viewer",
+    projectViewerResourceGroup:
+      process.env.HARNESS_PROJECT_VIEWER_RESOURCE_GROUP ??
+      "_all_project_level_resources",
+    projectViewerResourceGroupName:
+      process.env.HARNESS_PROJECT_VIEWER_RESOURCE_GROUP_NAME ??
+      "All Project Level Resources",
+
+    /**
      * Custom org-level role every attendee is bound to, giving the IDP and
      * core view/access permissions the reference's `attendeeRole` grants. The
      * identifier and name are what `createAttendeeRole` creates and what the
