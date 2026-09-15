@@ -22,7 +22,7 @@ locals {
   # argument. The optional cloud secrets appear only when that cloud is
   # configured, so no empty Secret Manager version is created.
   secret_ids = concat(
-    ["database-url", "auth-secret", "google-oauth-client-id", "google-oauth-client-secret", "harness-api-key"],
+    ["database-url", "auth-secret", "google-oauth-client-id", "google-oauth-client-secret", "harness-api-key", "github-pat"],
     var.azure_subscription_id != "" ? ["azure-client-secret"] : [],
     var.aws_access_key_id != "" ? ["aws-access-key-id", "aws-secret-access-key"] : [],
   )
@@ -36,6 +36,7 @@ locals {
     "google-oauth-client-id"     = var.google_oauth_client_id
     "google-oauth-client-secret" = var.google_oauth_client_secret
     "harness-api-key"            = var.harness_api_key
+    "github-pat"                 = var.github_pat
     "azure-client-secret"        = var.azure_client_secret
     "aws-access-key-id"          = var.aws_access_key_id
     "aws-secret-access-key"      = var.aws_secret_access_key

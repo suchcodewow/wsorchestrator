@@ -81,6 +81,12 @@ variable "harness_api_key" {
   sensitive   = true
 }
 
+variable "github_pat" {
+  description = "Github PAT"
+  type        = string
+  sensitive   = true
+}
+
 variable "harness_base_url" {
   description = "Harness base URL. Change for a non-SaaS or non-prod cluster (e.g. https://app.harness.io/gratis)."
   type        = string
