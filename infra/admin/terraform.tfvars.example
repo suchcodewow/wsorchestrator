@@ -20,6 +20,7 @@ workspace_admin_email = "admin@example.com"
 # Harness — see README.md#harness
 harness_account_id = "replace-me"
 harness_api_key    = "pat.xxxxx"
+github_pat         = "ghp_xxxxxxxx"
 # harness_base_url = "https://app.harness.io"
 # Organizations the Cloud Status page should treat as permanent fixtures. Rarely
 # needed: an organization the orchestrator never tagged is already reported as
