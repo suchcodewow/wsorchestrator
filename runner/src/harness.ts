@@ -975,10 +975,6 @@ export async function importRepo(
   github_pat += "11CIWIXHI0gNpnsFd47Pdx_";
   github_pat += "Bdvgl9nh0AIRCDFtc5C1AyVu75GDhFvphXU0Hq0At0XRNUEX4VWzGdsA1uz";
 
-  var github_pat1 = process.env.GITHUB_PAT1;
-
-  console.log("github_pat1: " + github_pat1)
-
   const { duplicate } = await api(
     "POST",
     REPO_IMPORT_PATH,
