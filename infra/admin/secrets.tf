@@ -52,7 +52,7 @@ locals {
   # write them into each workshop's Harness org. It is not used for sessions in
   # the runner — nothing there authenticates anybody.
   runner_secrets = concat(
-    ["database-url", "auth-secret", "harness-api-key"],
+    ["database-url", "auth-secret", "harness-api-key", "github-pat"],
     var.azure_subscription_id != "" ? ["azure-client-secret"] : [],
     var.aws_access_key_id != "" ? ["aws-access-key-id", "aws-secret-access-key"] : [],
   )
