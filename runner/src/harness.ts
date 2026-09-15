@@ -970,11 +970,6 @@ export async function importRepo(
   identifier: string,
   providerRepo: string,
 ): Promise<boolean> {
-
-  var github_pat = "github_pat_";
-  github_pat += "11CIWIXHI0gNpnsFd47Pdx_";
-  github_pat += "Bdvgl9nh0AIRCDFtc5C1AyVu75GDhFvphXU0Hq0At0XRNUEX4VWzGdsA1uz";
-
   const { duplicate } = await api(
     "POST",
     REPO_IMPORT_PATH,
@@ -982,7 +977,7 @@ export async function importRepo(
     {
       identifier,
       description: `Imported from github.com/${providerRepo} by Workshop Orchestrator.`,
-      provider: { type: "github", password: github_pat },
+      provider: { type: "github", password: process.env.GITHUB_PAT },
       provider_repo: providerRepo,
       pipelines: "ignore",
     },
