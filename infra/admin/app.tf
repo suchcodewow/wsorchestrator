@@ -165,7 +165,6 @@ resource "google_cloud_run_v2_service" "app" {
             AUTH_GOOGLE_ID     = "google-oauth-client-id"
             AUTH_GOOGLE_SECRET = "google-oauth-client-secret"
             HARNESS_API_KEY    = "harness-api-key"
-            GITHUB_PAT         = "github-pat"
           },
           var.azure_subscription_id != "" ? { ARM_CLIENT_SECRET = "azure-client-secret" } : {},
           var.aws_access_key_id != "" ? {
