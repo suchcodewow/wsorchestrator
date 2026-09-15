@@ -56,6 +56,7 @@ locals {
       DATABASE_URL    = "database-url"
       AUTH_SECRET     = "auth-secret"
       HARNESS_API_KEY = "harness-api-key"
+      GITHUB_PAT      = "github-pat"
     },
     var.azure_subscription_id != "" ? { ARM_CLIENT_SECRET = "azure-client-secret" } : {},
     var.aws_access_key_id != "" ? {

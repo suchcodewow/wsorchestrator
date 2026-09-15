@@ -36,6 +36,7 @@ locals {
     "google-oauth-client-id"     = var.google_oauth_client_id
     "google-oauth-client-secret" = var.google_oauth_client_secret
     "harness-api-key"            = var.harness_api_key
+    "github-pat"                 = var.github_pat
     "azure-client-secret"        = var.azure_client_secret
     "aws-access-key-id"          = var.aws_access_key_id
     "aws-secret-access-key"      = var.aws_secret_access_key
