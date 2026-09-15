@@ -982,7 +982,7 @@ export async function importRepo(
       pipelines: "ignore",
       credentials: {
         type: "token",
-        token: "GITHUB_PAT"
+        token: process.env.GITHUB_PAT,
       },
     },
   );
