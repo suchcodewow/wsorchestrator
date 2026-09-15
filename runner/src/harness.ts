@@ -980,6 +980,10 @@ export async function importRepo(
       provider: { type: "github" },
       provider_repo: providerRepo,
       pipelines: "ignore",
+      credentials: {
+        type: "token",
+        token: "GITHUB_PAT"
+      },
     },
   );
   return duplicate;
