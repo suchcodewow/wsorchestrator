@@ -15,6 +15,7 @@ import {
   type ScenarioId,
 } from "@/db/schema";
 import { canCreateEvents } from "@/lib/roles";
+import { withClusterScenario } from "@/lib/scenario-catalog";
 import { createScheduledRun, listRunsForUser } from "@/lib/runs";
 import { startRunNow } from "@/lib/trigger";
 
@@ -106,7 +107,12 @@ export async function POST(req: Request) {
     userCount: parsed.data.userCount,
     ttlSeconds: parsed.data.ttlDays * DAY_SECONDS,
     clouds: [...new Set(parsed.data.clouds)],
-    scenarios: [...new Set(parsed.data.scenarios)] as ScenarioId[],
+    // Normalised, so booking something that needs a cluster books the cluster
+    // too even when the caller is not the dialog.
+    scenarios: withClusterScenario(
+      [...new Set(parsed.data.scenarios)] as ScenarioId[],
+      parsed.data.clouds,
+    ),
     userId: session.user.id,
     scheduledStart: startNow ? new Date() : new Date(scheduledStart!),
     startNow,

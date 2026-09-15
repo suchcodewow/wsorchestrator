@@ -19,15 +19,21 @@ import {
   makeResourceGroupName,
   regionFromLocation,
   PROVISION_LEAD_HOURS,
+  SCENARIO_CONCURRENCY,
 } from "./config.js";
 import {
   writeAwsChallengeTfvars,
+  writeAwsClusterTfvars,
+  writeAwsCompetitorScenarioTfvars,
   writeAwsTfvars,
   writeAzureChallengeTfvars,
+  writeAzureClusterTfvars,
+  writeAzureScenarioTfvars,
   writeAzureTfvars,
   writeChallengeClusterTfvars,
   writeChallengeTfvars,
   writeDelegateTfvars,
+  writeGcpCompetitorScenarioTfvars,
   writeScenarioTfvars,
   writeTfvars,
 } from "./workspace.js";
@@ -35,14 +41,25 @@ import {
   activateApisFor,
   appliedScenarios,
   clusterStatePrefix,
+  competitorSlug,
+  hasScenarioRoot,
   needsCluster,
   resolveScenarios,
   scenarioStatePrefix,
   scenarioTfSource,
+  scenarioWorkName,
   unknownScenarios,
   type Scenario,
 } from "./scenarios.js";
-import { tfApply, tfDestroy, tfInit, tfOutput } from "./terraform.js";
+import {
+  tfApply,
+  tfDestroy,
+  tfInit,
+  tfOutput,
+  warmProviderCache,
+  withWorkDir,
+  type TfLine,
+} from "./terraform.js";
 import {
   awsAttemptOutcome,
   isGkeCapacityError,
@@ -51,7 +68,7 @@ import {
 import { issueAccessPass, tapPolicy } from "./graph.js";
 import { allocateEmails, createAccount, createOrgUnit } from "./directory.js";
 import { recordOutputResources } from "./resources.js";
-import { summarize } from "./retry.js";
+import { mapConcurrent, summarize } from "./retry.js";
 import { displayName } from "./usernames.js";
 import { applyCatalog } from "./components.js";
 import { copyOrgContent } from "./org-content.js";
@@ -112,11 +129,17 @@ const AZURE_TF_SOURCE = "workshops/azure-base";
 /** Root config that creates one Azure resource group per challenge competitor. */
 const AZURE_CHALLENGE_TF_SOURCE = "challenges/azure-per-user";
 
+/** Root config that creates one AKS cluster per challenge competitor. */
+const AZURE_CHALLENGE_AKS_TF_SOURCE = "challenges/azure-per-user-aks";
+
 /** Root config that creates the workshop's single AWS member account. */
 const AWS_TF_SOURCE = "workshops/aws-base";
 
 /** Single-account root the runner applies once per AWS challenge competitor. */
 const AWS_CHALLENGE_TF_SOURCE = "challenges/aws-per-user";
+
+/** Single-cluster root, applied once per AWS challenge competitor. */
+const AWS_CHALLENGE_EKS_TF_SOURCE = "challenges/aws-per-user-eks";
 
 /** Delegate roots — install an org delegate into a cluster of the given cloud. */
 const DELEGATE_GKE_TF_SOURCE = "delegates/gke";
@@ -1109,9 +1132,42 @@ async function provisionGcpPerUser(
   const cluster = await provisionChallengeCluster(run, projects, scenarios);
   Object.assign(outputs, cluster);
 
+  const mapOf = (key: string): Record<string, string> => {
+    const v = cluster[key];
+    return v && typeof v === "object" && !Array.isArray(v)
+      ? (v as Record<string, string>)
+      : {};
+  };
+  const networkNames = mapOf("network_names");
+  const nodeTags = mapOf("node_tags");
+  const clusters = mapOf("gke_clusters");
+  const locations = mapOf("gke_cluster_locations");
+  const region = gcpRegionFor(run);
+
   Object.assign(
     outputs,
-    await reconcileScenarios(run, projects, scenarios, cluster),
+    await reconcileScenarios(run, "gcp", {
+      emails: Object.keys(projects),
+      writeRoster: (dir, scenario) =>
+        writeScenarioTfvars(
+          dir,
+          run.id,
+          scenario.id,
+          projects,
+          region,
+          networkNames,
+          nodeTags,
+        ),
+      writeOne: (dir, scenario, email) =>
+        writeGcpCompetitorScenarioTfvars(dir, run.id, scenario.id, region, {
+          email,
+          projectId: projects[email],
+          clusterName: clusters[email] ?? "",
+          location: locations[email] ?? "",
+          networkName: networkNames[email] ?? "",
+          nodeTag: nodeTags[email] ?? "",
+        }),
+    }),
   );
 
   return outputs;
@@ -1180,88 +1236,171 @@ async function provisionChallengeCluster(
  */
 async function reconcileScenarios(
   run: RunRow,
-  projects: Record<string, string>,
-  selected: Scenario[],
-  clusterOutputs: Record<string, unknown>,
+  cloud: Cloud,
+  ctx: ScenarioContext,
 ): Promise<Record<string, unknown>> {
+  // A challenge runs on one cloud, but filtering by it anyway means a run whose
+  // cloud was changed before it was ever built does not try to apply the old
+  // cloud's scenarios against the new cloud's environment.
+  const selected = resolveScenarios(run.scenarios).filter(
+    (s) => s.cloud === cloud,
+  );
   const previous = appliedScenarios(run.outputs);
   const wanted = new Set(selected.map((s) => s.id));
-  const removed = previous.filter((id) => !wanted.has(id));
+  const removed = resolveScenarios(previous).filter((s) => !wanted.has(s.id));
 
   if (selected.length === 0 && removed.length === 0) return {};
 
-  const missing = unknownScenarios(run.scenarios);
+  const missing = unknownScenarios([...run.scenarios, ...previous]);
   if (missing.length > 0) {
     await log(
       run.id,
       "stderr",
       `This challenge selected scenario(s) this build no longer ships ` +
-        `(${missing.join(", ")}), so they were skipped. Anything they built ` +
-        `earlier is still standing and will be removed when the run is torn down.`,
+        `(${[...new Set(missing)].join(", ")}), so they were skipped. Anything ` +
+        `they built earlier is still standing and will be removed when the run ` +
+        `is torn down.`,
     );
   }
 
-  const map = (key: string): Record<string, string> => {
-    const v = clusterOutputs[key];
-    return v && typeof v === "object" && !Array.isArray(v)
-      ? (v as Record<string, string>)
-      : {};
-  };
-  const networkNames = map("network_names");
-  const nodeTags = map("node_tags");
-  const region = gcpRegionFor(run);
   const outputs: Record<string, unknown> = {};
 
   // Off first: a scenario being switched off and another switched on in the
   // same save should not have the incoming one's rules briefly overlap the
   // outgoing one's.
-  for (const id of removed) {
-    const workDir = path.join(TF_ROOT, scenarioTfSource(id));
-    await log(run.id, "system", `Removing scenario ${id}`);
-    writeScenarioTfvars(
-      workDir,
-      run.id,
-      id,
-      projects,
-      region,
-      networkNames,
-      nodeTags,
-    );
-    await tfInit(
-      workDir,
-      stateBucket(),
-      scenarioStatePrefix(run.state_prefix, id),
-      (l) => log(run.id, l.stream, l.text),
-    );
-    await tfDestroy(workDir, (l) => log(run.id, l.stream, l.text));
+  for (const scenario of removed) {
+    await log(run.id, "system", `Removing scenario ${scenario.label}`);
+    await runScenario(run, scenario, ctx, "destroy");
   }
 
   for (const scenario of selected) {
-    const workDir = path.join(TF_ROOT, scenarioTfSource(scenario.id));
     await log(run.id, "system", `Applying scenario ${scenario.label}`);
-    writeScenarioTfvars(
-      workDir,
-      run.id,
-      scenario.id,
-      projects,
-      region,
-      networkNames,
-      nodeTags,
-    );
-    await tfInit(
-      workDir,
-      stateBucket(),
-      scenarioStatePrefix(run.state_prefix, scenario.id),
-      (l) => log(run.id, l.stream, l.text),
-    );
-    await tfApply(workDir, (l) => log(run.id, l.stream, l.text));
-    Object.assign(outputs, await tfOutput(workDir));
+    Object.assign(outputs, await runScenario(run, scenario, ctx, "apply"));
   }
 
-  // What is standing now, for the next reconcile to diff against.
-  outputs.scenarios_applied = selected.map((s) => s.id);
+  // What is standing now, for the next reconcile to diff against. Ids the
+  // current build cannot resolve are carried through rather than dropped: their
+  // layers really are still standing, and forgetting them here is how they get
+  // left behind at teardown.
+  outputs.scenarios_applied = [
+    ...selected.map((s) => s.id),
+    ...unknownScenarios(previous),
+  ];
   return outputs;
 }
+
+/**
+ * Apply or destroy one scenario, in whichever of the two shapes it declares.
+ *
+ * A roster scenario is a single apply that `for_each`es over every competitor.
+ * A `perCompetitor` one is an apply each — because its provider cannot be
+ * instantiated more than once in a single configuration, which is true of an
+ * AWS cross-account role and of the `kubernetes`/`helm` providers alike. Those
+ * run concurrently: independent environments, and the wait is otherwise
+ * multiplied by the size of the room.
+ */
+async function runScenario(
+  run: RunRow,
+  scenario: Scenario,
+  ctx: ScenarioContext,
+  action: "apply" | "destroy",
+): Promise<Record<string, unknown>> {
+  // The cluster scenarios are manifests only — the cluster layer above has
+  // already built (or not built) what they ask for, and there is nothing else
+  // to apply. Applying a layer would create an empty state object.
+  if (!hasScenarioRoot(scenario)) return {};
+
+  const source = scenarioTfSource(scenario.id);
+  const bucket = stateBucket();
+  const line = (l: TfLine) => log(run.id, l.stream, l.text);
+
+  if (!scenario.perCompetitor) {
+    const workDir = path.join(TF_ROOT, source);
+    ctx.writeRoster(workDir, scenario);
+    await tfInit(
+      workDir,
+      bucket,
+      scenarioStatePrefix(run.state_prefix, scenario.id),
+      line,
+    );
+    if (action === "destroy") {
+      await tfDestroy(workDir, line);
+      return {};
+    }
+    await tfApply(workDir, line);
+    return tfOutput(workDir);
+  }
+
+  // One apply per competitor, each against its own copy of the root and its own
+  // state prefix. The copy is what makes concurrency possible at all: a shared
+  // directory would have them overwriting each other's tfvars.
+  //
+  // The provider cache is populated once, serially, before the copies race for
+  // it — see `warmProviderCache`.
+  await warmProviderCache(
+    source,
+    bucket,
+    scenarioStatePrefix(run.state_prefix, scenario.id),
+  );
+
+  await log(
+    run.id,
+    "system",
+    `${action === "apply" ? "Applying" : "Removing"} ${scenario.label} for ` +
+      `${ctx.emails.length} competitor(s), ${SCENARIO_CONCURRENCY} at a time`,
+  );
+
+  const perCompetitor = await mapConcurrent(
+    ctx.emails,
+    SCENARIO_CONCURRENCY,
+    async (email) => {
+      const slug = competitorSlug(email);
+      return withWorkDir(
+        source,
+        scenarioWorkName(run.id, scenario.id, slug),
+        async (workDir) => {
+          ctx.writeOne(workDir, scenario, email);
+          await tfInit(
+            workDir,
+            bucket,
+            scenarioStatePrefix(run.state_prefix, scenario.id, slug),
+            line,
+          );
+          if (action === "destroy") {
+            await tfDestroy(workDir, line);
+            return {};
+          }
+          await tfApply(workDir, line);
+          return tfOutput(workDir);
+        },
+      );
+    },
+  );
+
+  // Per-competitor outputs are merged under the competitor's address, so two
+  // competitors' values for the same output name do not overwrite each other.
+  if (action === "destroy") return {};
+  const byCompetitor: Record<string, unknown> = {};
+  ctx.emails.forEach((email, i) => {
+    byCompetitor[email] = perCompetitor[i];
+  });
+  return { [`scenario_${scenario.id.replace(/-/g, "_")}`]: byCompetitor };
+}
+
+/**
+ * What a cloud's provisioning path hands the scenario reconciler: who the
+ * competitors are, and how to write tfvars for that cloud in each of the two
+ * shapes.
+ *
+ * The reconcile logic — diffing selected against standing, the ordering, the
+ * concurrency — is identical on every cloud; only the variables differ. Passing
+ * the writers in keeps it that way instead of growing a switch per cloud.
+ */
+type ScenarioContext = {
+  emails: string[];
+  writeRoster: (workDir: string, scenario: Scenario) => void;
+  writeOne: (workDir: string, scenario: Scenario, email: string) => void;
+};
 
 
 /** Address -> temp-password map the Azure roots turn into native Entra users. */
@@ -1477,6 +1616,89 @@ async function provisionAzurePerUser(
   // After the apply, because a pass is issued against a user that has to exist.
   await issueAzureAccessPasses(run, Object.keys(attendees));
 
+  const outputs = await tfOutput(workDir);
+
+  // The cluster layer, then the scenarios that sit on it — the same order and
+  // for the same reasons as the GCP path.
+  const scenarios = resolveScenarios(run.scenarios).filter(
+    (s) => s.cloud === "azure",
+  );
+  const cluster = await provisionAzureChallengeCluster(run, groups, scenarios);
+  Object.assign(outputs, cluster);
+
+  const mapOf = (key: string): Record<string, string> => {
+    const v = cluster[key];
+    return v && typeof v === "object" && !Array.isArray(v)
+      ? (v as Record<string, string>)
+      : {};
+  };
+  const subnetIds = mapOf("subnet_ids");
+  const clusterNames = mapOf("aks_clusters");
+
+  Object.assign(
+    outputs,
+    await reconcileScenarios(run, "azure", {
+      emails: Object.keys(groups),
+      writeRoster: (dir, scenario) =>
+        writeAzureScenarioTfvars(
+          dir,
+          run.id,
+          scenario.id,
+          groups,
+          subnetIds,
+          clusterNames,
+        ),
+      // No per-competitor Azure scenario ships yet; a future in-cluster one
+      // would take this path, and the resource group is what identifies a
+      // competitor's environment.
+      writeOne: (dir, scenario, email) =>
+        writeAzureScenarioTfvars(
+          dir,
+          run.id,
+          scenario.id,
+          { [email]: groups[email] },
+          { [email]: subnetIds[email] ?? "" },
+          { [email]: clusterNames[email] ?? "" },
+        ),
+    }),
+  );
+
+  return outputs;
+}
+
+/**
+ * Build an AKS cluster in every competitor's resource group, when a selected
+ * scenario needs one.
+ *
+ * One apply covering every competitor, unlike AWS: the resource groups all live
+ * in the same subscription, so a single provider reaches them and Terraform
+ * builds the clusters concurrently within the apply.
+ */
+async function provisionAzureChallengeCluster(
+  run: RunRow,
+  groups: Record<string, string>,
+  scenarios: Scenario[],
+): Promise<Record<string, unknown>> {
+  if (!needsCluster(scenarios)) return {};
+
+  const workDir = path.join(TF_ROOT, AZURE_CHALLENGE_AKS_TF_SOURCE);
+  const count = Object.keys(groups).length;
+
+  await log(
+    run.id,
+    "system",
+    `Provisioning ${count} AKS cluster(s), one per competitor, in parallel`,
+  );
+
+  writeAzureClusterTfvars(workDir, run.id, groups);
+  await tfInit(
+    workDir,
+    stateBucket(),
+    clusterStatePrefix(cloudStatePrefix(run.state_prefix, "azure")),
+    (l) => log(run.id, l.stream, l.text),
+  );
+  await tfApply(workDir, (l) => log(run.id, l.stream, l.text));
+
   return tfOutput(workDir);
 }
 
@@ -1580,10 +1802,110 @@ async function provisionAwsPerUser(
   // hand rather than passed through, and every account in the loop was applied
   // from the same tfvars region. Recorded so the attendee page opens each
   // competitor's console in the region their environment was built in.
-  return {
+  const outputs: Record<string, unknown> = {
     aws_accounts: accountIds,
     aws_account_aliases: aliases,
     aws_attendee_passwords: passwords,
     aws_region: cfg.region,
   };
+
+  // The cluster layer, then the scenarios on it. Both need the account ids the
+  // loop above collected, which is why they run here rather than beside the
+  // other clouds' — there is nothing to assume into until the accounts exist.
+  const scenarios = resolveScenarios(run.scenarios).filter(
+    (s) => s.cloud === "aws",
+  );
+  const clusters = await provisionAwsChallengeCluster(run, accountIds, scenarios);
+  Object.assign(outputs, clusters.outputs);
+
+  Object.assign(
+    outputs,
+    await reconcileScenarios(run, "aws", {
+      // Only competitors whose account actually came up. One that failed has
+      // nothing to assume into, and asking for it would fail the whole layer
+      // rather than the one competitor already in trouble.
+      emails: Object.keys(accountIds),
+      // Every AWS scenario is perCompetitor — a cross-account provider cannot
+      // be built dynamically — so nothing takes this path. It is here so that a
+      // roster-shaped AWS scenario fails loudly at apply rather than silently
+      // writing tfvars nothing declares.
+      writeRoster: (dir, scenario) =>
+        writeAwsCompetitorScenarioTfvars(dir, run.id, scenario.id, "", "", ""),
+      writeOne: (dir, scenario, email) =>
+        writeAwsCompetitorScenarioTfvars(
+          dir,
+          run.id,
+          scenario.id,
+          email,
+          accountIds[email],
+          clusters.names[email] ?? "",
+        ),
+    }),
+  );
+
+  return outputs;
+}
+
+/**
+ * Build an EKS cluster in every competitor's account, when a selected scenario
+ * needs one.
+ *
+ * One apply per competitor — the account boundary again — but run concurrently,
+ * which matters more here than anywhere else: an EKS cluster takes something
+ * like fifteen minutes, so five competitors done one after another would spend
+ * an hour and a quarter of a challenge's life building. Concurrently it is
+ * roughly the time of one.
+ *
+ * The account creation above stays sequential. That is not inconsistency: AWS
+ * rate-limits account creation specifically, and it is the one step where
+ * running in parallel reliably makes things slower.
+ */
+async function provisionAwsChallengeCluster(
+  run: RunRow,
+  accountIds: Record<string, string>,
+  scenarios: Scenario[],
+): Promise<{ outputs: Record<string, unknown>; names: Record<string, string> }> {
+  if (!needsCluster(scenarios)) return { outputs: {}, names: {} };
+
+  const emails = Object.keys(accountIds);
+  const bucket = stateBucket();
+  const base = cloudStatePrefix(run.state_prefix, "aws");
+  const line = (l: TfLine) => log(run.id, l.stream, l.text);
+
+  await log(
+    run.id,
+    "system",
+    `Provisioning ${emails.length} EKS cluster(s), one per competitor, ` +
+      `${SCENARIO_CONCURRENCY} at a time`,
+  );
+
+  await warmProviderCache(AWS_CHALLENGE_EKS_TF_SOURCE, bucket, `${base}/cluster`);
+
+  const built = await mapConcurrent(
+    emails,
+    SCENARIO_CONCURRENCY,
+    async (email) => {
+      const slug = competitorSlug(email);
+      const clusterName = makeChallengeAwsAccountName(run.slug, run.id, email);
+      return withWorkDir(
+        AWS_CHALLENGE_EKS_TF_SOURCE,
+        scenarioWorkName(run.id, "eks", slug),
+        async (workDir) => {
+          writeAwsClusterTfvars(
+            workDir,
+            run.id,
+            email,
+            accountIds[email],
+            clusterName,
+          );
+          await tfInit(workDir, bucket, `${base}/cluster/${slug}`, line);
+          await tfApply(workDir, line);
+          return { email, name: clusterName };
+        },
+      );
+    },
+  );
+
+  const names = Object.fromEntries(built.map((b) => [b.email, b.name]));
+  return { outputs: { eks_clusters: names }, names };
 }

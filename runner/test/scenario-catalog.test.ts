@@ -39,7 +39,23 @@ type Manifest = {
   description: string;
   requiresCluster?: boolean;
   activateApis?: string[];
+  perCompetitor?: boolean;
+  providesCluster?: boolean;
 };
+
+/** The variables declared by a scenario root, by name. */
+function declaredVars(dir: string): Set<string> {
+  const file = path.join(SCENARIOS_DIR, dir, "variables.tf");
+  return new Set(
+    fs
+      .readFileSync(file, "utf8")
+      .split("\n")
+      .flatMap((l) => {
+        const m = l.match(/^variable "([^"]+)"/);
+        return m ? [m[1]] : [];
+      }),
+  );
+}
 
 /** Every scenario directory on disk, by directory name. */
 function manifestsOnDisk(): Map<string, Manifest> {
@@ -85,14 +101,60 @@ describe("scenario manifests", () => {
   });
 
   test("every scenario has the Terraform a root config needs", () => {
-    // A manifest with no root is a checkbox that fails the apply when ticked.
-    for (const dir of manifestsOnDisk().keys()) {
+    // A manifest with no root is a checkbox that fails the apply when ticked —
+    // unless it is a cluster scenario, which deliberately has none.
+    for (const [dir, m] of manifestsOnDisk()) {
+      if (m.providesCluster) continue;
       for (const file of ["main.tf", "variables.tf", "backend.tf"]) {
         assert.ok(
           fs.existsSync(path.join(SCENARIOS_DIR, dir, file)),
           `terraform/scenarios/${dir} is missing ${file}`,
         );
       }
+    }
+  });
+
+  test("a cluster scenario has no Terraform of its own", () => {
+    // The cluster layer builds the cluster. A stray .tf here would be applied
+    // against a state prefix nothing else knows about, and destroyed by
+    // nothing — the runner skips the apply step for these entirely.
+    for (const [dir, m] of manifestsOnDisk()) {
+      if (!m.providesCluster) continue;
+      const stray = fs
+        .readdirSync(path.join(SCENARIOS_DIR, dir))
+        .filter((f) => f.endsWith(".tf"));
+      assert.deepEqual(
+        stray,
+        [],
+        `${dir} provides the cluster, so it must have no .tf files — the runner never applies it`,
+      );
+    }
+  });
+
+  test("every cloud that breaks a cluster can also build one", () => {
+    // Otherwise the dependency has nothing to resolve to: the checkbox would
+    // tick something that does not exist, and the cluster would never be built.
+    const manifests = [...manifestsOnDisk().values()];
+    const breaks = new Set(
+      manifests.filter((m) => m.requiresCluster).map((m) => m.cloud),
+    );
+    const builds = new Set(
+      manifests.filter((m) => m.providesCluster).map((m) => m.cloud),
+    );
+    for (const cloud of breaks) {
+      assert.ok(
+        builds.has(cloud),
+        `${cloud} has a scenario needing a cluster but none providing one`,
+      );
+    }
+  });
+
+  test("a scenario does not both provide and require a cluster", () => {
+    for (const [dir, m] of manifestsOnDisk()) {
+      assert.ok(
+        !(m.providesCluster && m.requiresCluster),
+        `${dir}: providesCluster and requiresCluster are mutually exclusive`,
+      );
     }
   });
 
@@ -104,6 +166,61 @@ describe("scenario manifests", () => {
       assert.ok(
         (m.activateApis ?? []).includes("container.googleapis.com"),
         `${dir}: requiresCluster is true, so activateApis must include container.googleapis.com`,
+      );
+    }
+  });
+
+  test("each root's variables match the shape its manifest declares", () => {
+    // The two shapes take different tfvars, written by different functions. A
+    // root whose variables disagree with its manifest gets tfvars full of
+    // undeclared names and nothing it actually needs — an apply that fails, or
+    // worse, silently does nothing because every `for_each` is empty.
+    for (const [dir, m] of manifestsOnDisk()) {
+      // A cluster scenario has no root, so it has no variables to check.
+      if (m.providesCluster) continue;
+
+      const vars = declaredVars(dir);
+
+      if (m.perCompetitor) {
+        assert.ok(
+          vars.has("attendee_email"),
+          `${dir}: perCompetitor, so it must declare attendee_email`,
+        );
+        for (const plural of [
+          "attendee_projects",
+          "attendee_resource_groups",
+          "node_tags",
+          "network_names",
+        ]) {
+          assert.ok(
+            !vars.has(plural),
+            `${dir}: perCompetitor roots get one competitor, so ${plural} would never be filled in`,
+          );
+        }
+        continue;
+      }
+
+      assert.ok(
+        vars.has("attendee_projects") || vars.has("attendee_resource_groups"),
+        `${dir}: a roster scenario must declare the map it for_eaches over`,
+      );
+      assert.ok(
+        !vars.has("attendee_email"),
+        `${dir}: attendee_email is only filled in for perCompetitor roots`,
+      );
+    }
+  });
+
+  test("every AWS scenario is perCompetitor", () => {
+    // Not a style rule: each competitor owns a separate member account, so
+    // reaching into one needs an assumed-role provider, and Terraform cannot
+    // build a dynamic number of those in a single configuration. A roster-shaped
+    // AWS scenario cannot work.
+    for (const [dir, m] of manifestsOnDisk()) {
+      if (m.cloud !== "aws" || m.providesCluster) continue;
+      assert.ok(
+        m.perCompetitor,
+        `${dir}: an AWS scenario needs perCompetitor — one assumed-role provider per account`,
       );
     }
   });
@@ -135,6 +252,29 @@ describe("the frontend catalog mirrors the manifests", () => {
         entry.description,
         m.description,
         `${entry.id}: description differs — the manifest is the source of truth`,
+      );
+    }
+  });
+
+  test("the cluster dependency agrees on both sides", () => {
+    // The frontend decides from these two flags which checkbox to tick and
+    // which to lock; the runner decides from them whether to build a cluster
+    // and whether there is a layer to apply. Disagreeing means the box says one
+    // thing and the provisioning does another — a challenge that looks right
+    // and comes up wrong.
+    const manifests = manifestsOnDisk();
+    for (const entry of SCENARIOS) {
+      const m = manifests.get(entry.id);
+      assert.ok(m, `${entry.id}: no manifest`);
+      assert.equal(
+        "providesCluster" in entry,
+        m.providesCluster === true,
+        `${entry.id}: providesCluster differs from the manifest`,
+      );
+      assert.equal(
+        "requiresCluster" in entry,
+        m.requiresCluster === true,
+        `${entry.id}: requiresCluster differs from the manifest`,
       );
     }
   });

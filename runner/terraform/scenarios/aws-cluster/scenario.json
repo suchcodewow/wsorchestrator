@@ -1,0 +1,8 @@
+{
+  "id": "aws-cluster",
+  "label": "Kubernetes cluster",
+  "cloud": "aws",
+  "description": "Builds each competitor an EKS cluster in their own account. On its own that is all it does — a working cluster and nothing wrong with it. Every scenario below needs one, and turns it on automatically.",
+  "providesCluster": true,
+  "activateApis": []
+}

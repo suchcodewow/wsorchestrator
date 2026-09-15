@@ -22,6 +22,7 @@ import {
   type WorkshopRun,
 } from "@/db/schema";
 import { canManageAnyEvent, canSeeAllEvents } from "@/lib/roles";
+import { withClusterScenario } from "@/lib/scenario-catalog";
 
 export type Viewer = { id: string; role: SiteRole };
 
@@ -135,8 +136,15 @@ export async function updateRunConfig(
   // Only scenarios belonging to a cloud this event actually runs on. A stale
   // checkbox from before the cloud was changed would otherwise ask the runner
   // to apply a layer against an environment that was never built.
-  const scenarios = [...new Set(input.scenarios ?? run.scenarios)].filter((id) =>
-    SCENARIOS.some((s) => s.id === id && clouds.includes(s.cloud)),
+  //
+  // Then normalised, so a selection that breaks a cluster also builds one. The
+  // UI does this on click; doing it here too means an API caller cannot store a
+  // challenge that could never be provisioned.
+  const scenarios = withClusterScenario(
+    [...new Set(input.scenarios ?? run.scenarios)].filter((id) =>
+      SCENARIOS.some((s) => s.id === id && clouds.includes(s.cloud)),
+    ),
+    clouds,
   );
 
   const limits = limitsFor(run.mode);

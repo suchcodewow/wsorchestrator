@@ -1,0 +1,8 @@
+{
+  "id": "gcp-delegate-blocked-manager",
+  "label": "Delegate: Blocked Manager",
+  "cloud": "gcp",
+  "description": "The cluster is healthy and images pull, but nothing reaches the public internet. A Harness delegate installs and starts, then fills its log with connection failures and never registers.",
+  "requiresCluster": true,
+  "activateApis": ["container.googleapis.com", "dns.googleapis.com"]
+}

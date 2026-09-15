@@ -30,6 +30,12 @@ variable "disk_size_gb" {
   default     = 32
 }
 
+variable "vnet_subnet_id" {
+  description = "Subnet the nodes go in. Empty — the default, and what every workshop uses — lets AKS create and manage its own network. A challenge supplies one, because a scenario has to be able to attach an NSG or a route table to the node subnet, and neither is possible on a subnet living in the AKS-managed node resource group."
+  type        = string
+  default     = ""
+}
+
 variable "labels" {
   type    = map(string)
   default = {}

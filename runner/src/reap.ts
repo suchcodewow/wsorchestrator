@@ -16,25 +16,40 @@ import {
   makeResourceGroupName,
   makeHarnessIdentity,
   regionFromLocation,
+  SCENARIO_CONCURRENCY,
 } from "./config.js";
 import {
   writeAwsChallengeTfvars,
+  writeAwsClusterTfvars,
+  writeAwsCompetitorScenarioTfvars,
   writeAwsTfvars,
   writeAzureChallengeTfvars,
+  writeAzureClusterTfvars,
+  writeAzureScenarioTfvars,
   writeAzureTfvars,
   writeChallengeClusterTfvars,
   writeChallengeTfvars,
+  writeGcpCompetitorScenarioTfvars,
   writeScenarioTfvars,
   writeTfvars,
 } from "./workspace.js";
 import {
   appliedScenarios,
   clusterStatePrefix,
+  competitorSlug,
+  hasScenarioRoot,
+  scenarioById,
   scenarioStatePrefix,
   scenarioTfSource,
+  scenarioWorkName,
 } from "./scenarios.js";
-import { summarize } from "./retry.js";
-import { tfDestroy, tfInit } from "./terraform.js";
+import { mapConcurrent, summarize } from "./retry.js";
+import {
+  tfDestroy,
+  tfInit,
+  warmProviderCache,
+  withWorkDir,
+} from "./terraform.js";
 import { deleteAccount, deleteOrgUnit } from "./directory.js";
 import { teardownOrder } from "./components.js";
 import {
@@ -61,6 +76,7 @@ import {
   setDestroyed,
   setDestroyFailed,
   setDestroyRetry,
+  type Cloud,
   type Component,
   type RunRow,
 } from "./db.js";
@@ -87,11 +103,17 @@ const AZURE_TF_SOURCE = "workshops/azure-base";
 /** Root config that creates one Azure resource group per challenge competitor. */
 const AZURE_CHALLENGE_TF_SOURCE = "challenges/azure-per-user";
 
+/** Root config that creates one AKS cluster per challenge competitor. */
+const AZURE_CHALLENGE_AKS_TF_SOURCE = "challenges/azure-per-user-aks";
+
 /** Root config that creates the workshop's single AWS member account. */
 const AWS_TF_SOURCE = "workshops/aws-base";
 
 /** Single-account root, destroyed once per AWS challenge competitor. */
 const AWS_CHALLENGE_TF_SOURCE = "challenges/aws-per-user";
+
+/** Single-cluster root, destroyed once per AWS challenge competitor. */
+const AWS_CHALLENGE_EKS_TF_SOURCE = "challenges/aws-per-user-eks";
 
 /**
  * Destroy every run that is due: past its end time, or explicitly deleted in
@@ -504,39 +526,126 @@ async function destroyChallengeScenarios(
   run: RunRow,
   projects: Record<string, string>,
 ): Promise<void> {
-  const standing = [...new Set([...appliedScenarios(run.outputs), ...run.scenarios])];
-  if (standing.length === 0) return;
-
   const region = regionFromLocation(challengeClusterLocation(run)) ?? gcpCfg().region;
 
+  await destroyScenarioLayers(run, "gcp", {
+    emails: Object.keys(projects),
+    writeRoster: (dir, id) =>
+      writeScenarioTfvars(dir, run.id, id, projects, region, {}, {}),
+    writeOne: (dir, id, email) =>
+      writeGcpCompetitorScenarioTfvars(dir, run.id, id, region, {
+        email,
+        projectId: projects[email] ?? "",
+        clusterName: "",
+        location: "",
+        networkName: "",
+        nodeTag: "",
+      }),
+  });
+}
+
+/**
+ * Destroy whichever scenario layers a run has standing, in whichever shape each
+ * declares.
+ *
+ * Driven by `outputs.scenarios_applied` — what is standing — unioned with what
+ * the organizer last selected. The two differ when a scenario was unchecked and
+ * the reprovision that would have removed it failed, and in that case it is the
+ * standing one that has to go.
+ *
+ * **Best-effort throughout, deliberately.** Destroying the environment below
+ * removes everything a scenario built anyway: deleting a GCP project, closing
+ * an AWS account or removing an Azure resource group takes the contents with it.
+ * What this pass buys is state that honestly says the resources are gone, and a
+ * competitor's environment returned to working order if the run is somehow kept.
+ * Neither is worth letting one wedged layer strand an entire challenge's
+ * teardown, so a failure is logged and the next one runs.
+ *
+ * Per-competitor layers are destroyed concurrently, like they were applied.
+ */
+async function destroyScenarioLayers(
+  run: RunRow,
+  cloud: Cloud,
+  ctx: {
+    emails: string[];
+    writeRoster: (workDir: string, scenarioId: string) => void;
+    writeOne: (workDir: string, scenarioId: string, email: string) => void;
+  },
+): Promise<void> {
+  const standing = [
+    ...new Set([...appliedScenarios(run.outputs), ...run.scenarios]),
+  ];
+  if (standing.length === 0) return;
+
+  const bucket = stateBucket();
+  const line = (l: { stream: "stdout" | "stderr"; text: string }) =>
+    log(run.id, l.stream, l.text);
+
   for (const id of standing) {
-    const workDir = path.join(TF_ROOT, scenarioTfSource(id));
-    if (!existsSync(workDir)) {
+    const scenario = scenarioById(id);
+
+    // A scenario the current build no longer ships, or one belonging to another
+    // cloud. Neither can be destroyed on its own; the environment teardown
+    // below is what actually removes what it built.
+    if (!scenario) {
       await log(
         run.id,
         "stderr",
         `Scenario ${id} is not in this build, so its layer could not be ` +
-          `destroyed on its own — the project destroy below removes what it built.`,
+          `destroyed on its own — destroying the environment removes what it built.`,
       );
       continue;
     }
+    if (scenario.cloud !== cloud) continue;
+
+    // A cluster scenario has no layer of its own; the cluster teardown below is
+    // what removes what it asked for.
+    if (!hasScenarioRoot(scenario)) continue;
 
     try {
       await log(run.id, "system", `Destroying scenario ${id}`);
-      writeScenarioTfvars(workDir, run.id, id, projects, region, {}, {});
-      await tfInit(
-        workDir,
-        stateBucket(),
+
+      if (!scenario.perCompetitor) {
+        const workDir = path.join(TF_ROOT, scenarioTfSource(id));
+        ctx.writeRoster(workDir, id);
+        await tfInit(
+          workDir,
+          bucket,
+          scenarioStatePrefix(run.state_prefix, id),
+          line,
+        );
+        await tfDestroy(workDir, line);
+        continue;
+      }
+
+      await warmProviderCache(
+        scenarioTfSource(id),
+        bucket,
         scenarioStatePrefix(run.state_prefix, id),
-        (l) => log(run.id, l.stream, l.text),
       );
-      await tfDestroy(workDir, (l) => log(run.id, l.stream, l.text));
+      await mapConcurrent(ctx.emails, SCENARIO_CONCURRENCY, async (email) => {
+        const slug = competitorSlug(email);
+        await withWorkDir(
+          scenarioTfSource(id),
+          scenarioWorkName(run.id, id, slug),
+          async (workDir) => {
+            ctx.writeOne(workDir, id, email);
+            await tfInit(
+              workDir,
+              bucket,
+              scenarioStatePrefix(run.state_prefix, id, slug),
+              line,
+            );
+            await tfDestroy(workDir, line);
+          },
+        );
+      });
     } catch (err) {
       await log(
         run.id,
         "stderr",
         `Scenario ${id} would not destroy (${summarize(err)}). Continuing — ` +
-          `destroying the projects removes what it built.`,
+          `destroying the environment removes what it built.`,
       );
     }
   }
@@ -637,6 +746,26 @@ async function destroyAzurePerUser(run: RunRow): Promise<void> {
     Object.keys(attendees),
   );
 
+  // Scenarios, then the clusters they sat on, then the resource groups — the
+  // reverse of provisioning, for the same reason as GCP: removing a resource
+  // group takes everything in it, and a layer destroyed afterwards would be
+  // reconciling against resources that no longer exist.
+  await destroyScenarioLayers(run, "azure", {
+    emails: Object.keys(groups),
+    writeRoster: (dir, id) =>
+      writeAzureScenarioTfvars(dir, run.id, id, groups, {}, {}),
+    writeOne: (dir, id, email) =>
+      writeAzureScenarioTfvars(
+        dir,
+        run.id,
+        id,
+        { [email]: groups[email] },
+        {},
+        {},
+      ),
+  });
+  await destroyAzureChallengeCluster(run, groups);
+
   await log(
     run.id,
     "system",
@@ -647,6 +776,32 @@ async function destroyAzurePerUser(run: RunRow): Promise<void> {
     workDir,
     stateBucket(),
     cloudStatePrefix(run.state_prefix, "azure"),
+    (l) => log(run.id, l.stream, l.text),
+  );
+  await tfDestroy(workDir, (l) => log(run.id, l.stream, l.text));
+}
+
+/** Destroy a challenge's per-competitor AKS clusters, if a scenario built them. */
+async function destroyAzureChallengeCluster(
+  run: RunRow,
+  groups: Record<string, string>,
+): Promise<void> {
+  // The recorded output is the "were there any" test, for the same reason GCP's
+  // is: a scenario dropped from the repo since the run was built would answer
+  // that question wrong, and what was recorded cannot.
+  if (!run.outputs?.aks_clusters) return;
+
+  const workDir = path.join(TF_ROOT, AZURE_CHALLENGE_AKS_TF_SOURCE);
+  await log(
+    run.id,
+    "system",
+    `Destroying ${Object.keys(groups).length} competitor AKS cluster(s)`,
+  );
+  writeAzureClusterTfvars(workDir, run.id, groups);
+  await tfInit(
+    workDir,
+    stateBucket(),
+    clusterStatePrefix(cloudStatePrefix(run.state_prefix, "azure")),
     (l) => log(run.id, l.stream, l.text),
   );
   await tfDestroy(workDir, (l) => log(run.id, l.stream, l.text));
@@ -702,6 +857,27 @@ async function destroyAwsPerUser(run: RunRow): Promise<void> {
   const workDir = path.join(TF_ROOT, AWS_CHALLENGE_TF_SOURCE);
   const emails = (await accountsFor(run.id)).map((a) => a.email);
 
+  // The account ids the provisioner recorded. Scenario and cluster layers need
+  // them to assume back in, and once the account is closed they are useless —
+  // which is why both run before the loop below rather than after it.
+  const accountIds = mapOutput(run.outputs?.aws_accounts);
+
+  await destroyScenarioLayers(run, "aws", {
+    emails: emails.filter((e) => accountIds[e]),
+    writeRoster: (dir, id) =>
+      writeAwsCompetitorScenarioTfvars(dir, run.id, id, "", "", ""),
+    writeOne: (dir, id, email) =>
+      writeAwsCompetitorScenarioTfvars(
+        dir,
+        run.id,
+        id,
+        email,
+        accountIds[email] ?? "",
+        makeChallengeAwsAccountName(run.slug, run.id, email),
+      ),
+  });
+  await destroyAwsChallengeCluster(run, accountIds);
+
   await log(
     run.id,
     "system",
@@ -720,4 +896,61 @@ async function destroyAwsPerUser(run: RunRow): Promise<void> {
     );
     await tfDestroy(workDir, (l) => log(run.id, l.stream, l.text));
   }
+}
+
+/**
+ * Destroy a challenge's per-competitor EKS clusters, if a scenario built them.
+ *
+ * Concurrently, like they were built. Closing the account below would take the
+ * cluster with it either way, but an account with a live EKS cluster in it is
+ * slower to close and leaves a bill running in the meantime, so this is worth
+ * doing properly rather than leaving to the account closure.
+ */
+async function destroyAwsChallengeCluster(
+  run: RunRow,
+  accountIds: Record<string, string>,
+): Promise<void> {
+  if (!run.outputs?.eks_clusters) return;
+
+  const emails = Object.keys(accountIds);
+  const bucket = stateBucket();
+  const base = cloudStatePrefix(run.state_prefix, "aws");
+  const line = (l: { stream: "stdout" | "stderr"; text: string }) =>
+    log(run.id, l.stream, l.text);
+
+  await log(
+    run.id,
+    "system",
+    `Destroying ${emails.length} competitor EKS cluster(s)`,
+  );
+
+  await warmProviderCache(AWS_CHALLENGE_EKS_TF_SOURCE, bucket, `${base}/cluster`);
+  await mapConcurrent(emails, SCENARIO_CONCURRENCY, async (email) => {
+    const slug = competitorSlug(email);
+    await withWorkDir(
+      AWS_CHALLENGE_EKS_TF_SOURCE,
+      scenarioWorkName(run.id, "eks", slug),
+      async (workDir) => {
+        writeAwsClusterTfvars(
+          workDir,
+          run.id,
+          email,
+          accountIds[email],
+          makeChallengeAwsAccountName(run.slug, run.id, email),
+        );
+        await tfInit(workDir, bucket, `${base}/cluster/${slug}`, line);
+        await tfDestroy(workDir, line);
+      },
+    );
+  });
+}
+
+/** A run output that should be an address -> string map, or an empty one. */
+function mapOutput(v: unknown): Record<string, string> {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return {};
+  return Object.fromEntries(
+    Object.entries(v as Record<string, unknown>).flatMap(([k, val]) =>
+      typeof val === "string" ? [[k, val] as const] : [],
+    ),
+  );
 }

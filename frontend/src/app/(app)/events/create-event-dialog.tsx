@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { CLOUDS, CLOUD_LABELS, DEFAULT_TTL_DAYS, MAX_TTL_DAYS, limitsFor, type Cloud, type EventMode, type ScenarioId } from "@/db/schema";
 import { ScenarioPicker } from "@/components/scenario-picker";
+import { withClusterScenario } from "@/lib/scenario-catalog";
 import { SPRING_SNAPPY, riseChild, staggerParent } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
@@ -95,7 +96,13 @@ export function CreateEventDialog({
   }
 
   function toggleScenario(id: ScenarioId) {
-    setScenarios((prev) => (prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]));
+    setScenarios((prev) => {
+      const next = prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id];
+      // Ticking something that needs a cluster ticks the cluster too, in the
+      // same click — the server does this as well, but only doing it there
+      // would leave the checkbox looking un-ticked until the page reloaded.
+      return withClusterScenario(next, clouds);
+    });
   }
 
   async function createRun(startNow: boolean) {

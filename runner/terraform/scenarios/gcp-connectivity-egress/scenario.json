@@ -2,7 +2,7 @@
   "id": "gcp-connectivity-egress",
   "label": "Connectivity: Egress",
   "cloud": "gcp",
-  "description": "Cluster nodes cannot reach the internet. Pods stay in ImagePullBackOff against Docker Hub and quay.io, and a Harness delegate cannot register.",
+  "description": "Nothing leaves the VPC. Every image pull fails, the competitor's own included, and pods across the cluster sit in ImagePullBackOff.",
   "requiresCluster": true,
   "activateApis": ["container.googleapis.com"]
 }

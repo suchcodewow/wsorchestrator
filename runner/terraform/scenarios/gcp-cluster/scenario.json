@@ -1,0 +1,8 @@
+{
+  "id": "gcp-cluster",
+  "label": "Kubernetes cluster",
+  "cloud": "gcp",
+  "description": "Builds each competitor a GKE cluster in their own project. On its own that is all it does — a working cluster and nothing wrong with it. Every scenario below needs one, and turns it on automatically.",
+  "providesCluster": true,
+  "activateApis": ["container.googleapis.com"]
+}

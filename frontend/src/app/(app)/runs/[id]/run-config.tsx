@@ -19,6 +19,7 @@ import {
   type WorkshopRun,
 } from "@/db/schema";
 import { ScenarioPicker } from "@/components/scenario-picker";
+import { withClusterScenario } from "@/lib/scenario-catalog";
 
 const ERRORS: Record<string, string> = {
   locked: "This event can no longer be changed.",
@@ -83,9 +84,12 @@ export function RunConfig({
   }
 
   function toggleScenario(id: ScenarioId) {
-    setScenarios((prev) =>
-      prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id],
-    );
+    setScenarios((prev) => {
+      const next = prev.includes(id)
+        ? prev.filter((s) => s !== id)
+        : [...prev, id];
+      return withClusterScenario(next, clouds);
+    });
   }
 
   async function save() {

@@ -94,6 +94,20 @@ export const PROVISION_LEAD_HOURS = (() => {
 })();
 
 /**
+ * How many per-competitor Terraform applies run at once.
+ *
+ * Four by default: enough that five competitors' EKS clusters finish in roughly
+ * the time one takes rather than five times it, and few enough not to trip the
+ * per-account rate limits on the cloud APIs underneath — AWS Organizations and
+ * EKS especially. Override with `SCENARIO_CONCURRENCY`; 1 makes everything
+ * serial again, which is the thing to try first when a cloud starts throttling.
+ */
+export const SCENARIO_CONCURRENCY = (() => {
+  const raw = Number(process.env.SCENARIO_CONCURRENCY);
+  return Number.isInteger(raw) && raw >= 1 ? raw : 4;
+})();
+
+/**
  * GCP config, read lazily — a workshop that asks for no GCP environment must
  * still be able to provision its Workspace accounts without these set.
  */

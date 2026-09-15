@@ -20,6 +20,13 @@ resource "azurerm_kubernetes_cluster" "this" {
     node_count      = var.node_count
     vm_size         = var.vm_size
     os_disk_size_gb = var.disk_size_gb
+
+    # Empty lets AKS manage its own network, which is what a workshop wants and
+    # what this module has always done. A challenge passes a subnet it created,
+    # because a scenario has to be able to attach an NSG or a route table to it
+    # — and neither is possible on a subnet living in the AKS-managed node
+    # resource group.
+    vnet_subnet_id = var.vnet_subnet_id != "" ? var.vnet_subnet_id : null
   }
 
   # A system-assigned managed identity is the simplest control-plane identity

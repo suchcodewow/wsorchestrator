@@ -1,0 +1,9 @@
+{
+  "id": "aws-connectivity-egress",
+  "label": "Connectivity: Egress",
+  "cloud": "aws",
+  "description": "Nodes can reach AWS itself but not the internet. ECR works, Docker Hub and quay.io do not, and a Harness delegate cannot register.",
+  "requiresCluster": true,
+  "activateApis": [],
+  "perCompetitor": true
+}

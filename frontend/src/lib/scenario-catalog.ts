@@ -19,13 +19,24 @@
 /** Mirrors `CLOUDS` in the Drizzle schema; kept local to stay import-free. */
 type ScenarioCloud = "aws" | "azure" | "gcp";
 
+// Declared cluster-first per cloud: the picker renders them in this order, and
+// the thing everything else depends on should be the thing at the top.
 export const SCENARIOS = [
+  {
+    id: "gcp-cluster",
+    label: "Kubernetes cluster",
+    cloud: "gcp",
+    description:
+      "Builds each competitor a GKE cluster in their own project. On its own that is all it does — a working cluster and nothing wrong with it. Every scenario below needs one, and turns it on automatically.",
+    providesCluster: true,
+  },
   {
     id: "gcp-connectivity-egress",
     label: "Connectivity: Egress",
     cloud: "gcp",
     description:
-      "Cluster nodes cannot reach the internet. Pods stay in ImagePullBackOff against Docker Hub and quay.io, and a Harness delegate cannot register.",
+      "Nothing leaves the VPC. Every image pull fails, the competitor's own included, and pods across the cluster sit in ImagePullBackOff.",
+    requiresCluster: true,
   },
   {
     id: "gcp-connectivity-binauthz",
@@ -33,13 +44,60 @@ export const SCENARIOS = [
     cloud: "gcp",
     description:
       "Only images from the competitor's own registries are admitted. Anything else is denied at pod admission and never pulled.",
+    requiresCluster: true,
+  },
+  {
+    id: "gcp-delegate-blocked-manager",
+    label: "Delegate: Blocked Manager",
+    cloud: "gcp",
+    description:
+      "The cluster is healthy and images pull, but nothing reaches the public internet. A Harness delegate installs and starts, then fills its log with connection failures and never registers.",
+    requiresCluster: true,
+  },
+  {
+    id: "aws-cluster",
+    label: "Kubernetes cluster",
+    cloud: "aws",
+    description:
+      "Builds each competitor an EKS cluster in their own account. On its own that is all it does — a working cluster and nothing wrong with it. Every scenario below needs one, and turns it on automatically.",
+    providesCluster: true,
+  },
+  {
+    id: "aws-connectivity-egress",
+    label: "Connectivity: Egress",
+    cloud: "aws",
+    description:
+      "Nodes can reach AWS itself but not the internet. ECR works, Docker Hub and quay.io do not, and a Harness delegate cannot register.",
+    requiresCluster: true,
+  },
+  {
+    id: "azure-cluster",
+    label: "Kubernetes cluster",
+    cloud: "azure",
+    description:
+      "Builds each competitor an AKS cluster in their own resource group. On its own that is all it does — a working cluster and nothing wrong with it. Every scenario below needs one, and turns it on automatically.",
+    providesCluster: true,
+  },
+  {
+    id: "azure-connectivity-egress",
+    label: "Connectivity: Egress",
+    cloud: "azure",
+    description:
+      "Nodes can reach Azure itself but not the internet. Microsoft's registries work, Docker Hub and quay.io do not, and a Harness delegate cannot register.",
+    requiresCluster: true,
   },
 ] as const satisfies readonly {
   id: string;
   label: string;
   cloud: ScenarioCloud;
   description: string;
+  /** Selecting this builds the cluster layer; it has no Terraform of its own. */
+  providesCluster?: true;
+  /** Needs a cluster, so it pulls the cloud's cluster scenario in with it. */
+  requiresCluster?: true;
 }[];
+
+export type Scenario = (typeof SCENARIOS)[number];
 
 export type ScenarioId = (typeof SCENARIOS)[number]["id"];
 
@@ -57,3 +115,55 @@ export const scenariosForClouds = (clouds: readonly ScenarioCloud[]) =>
 
 export const isScenarioId = (v: string): v is ScenarioId =>
   SCENARIOS.some((s) => s.id === v);
+
+/** The scenario that builds a cloud's clusters, if that cloud has one. */
+export const clusterScenarioFor = (cloud: ScenarioCloud) =>
+  SCENARIOS.find((s) => s.cloud === cloud && "providesCluster" in s);
+
+const scenarioById = (id: string) => SCENARIOS.find((s) => s.id === id);
+
+/** Does this selection include something that cannot run without a cluster? */
+export function needsClusterScenario(
+  ids: readonly string[],
+  cloud: ScenarioCloud,
+): boolean {
+  return ids.some((id) => {
+    const s = scenarioById(id);
+    return s?.cloud === cloud && "requiresCluster" in s;
+  });
+}
+
+/**
+ * Normalise a scenario selection: anything that needs a cluster brings that
+ * cloud's cluster scenario in with it.
+ *
+ * Applied in the UI so the checkbox ticks itself where the organizer can see
+ * it, and **again in the API**, because a selection that asks to break a
+ * cluster without building one is not a state worth being able to store — and
+ * the UI is not the only way to reach the API.
+ */
+export function withClusterScenario<T extends string>(
+  ids: readonly T[],
+  clouds: readonly ScenarioCloud[],
+): T[] {
+  const out = new Set<string>(ids);
+  for (const cloud of clouds) {
+    if (!needsClusterScenario(ids, cloud)) continue;
+    const cluster = clusterScenarioFor(cloud);
+    if (cluster) out.add(cluster.id);
+  }
+  // Catalog order, so the cluster sorts to the top of its cloud's group.
+  return SCENARIOS.filter((s) => out.has(s.id)).map((s) => s.id) as T[];
+}
+
+/**
+ * Whether the cluster checkbox should be locked on: something depending on it
+ * is selected, so turning it off would describe a challenge that cannot be
+ * built.
+ */
+export function clusterScenarioLocked(
+  ids: readonly string[],
+  clouds: readonly ScenarioCloud[],
+): boolean {
+  return clouds.some((cloud) => needsClusterScenario(ids, cloud));
+}

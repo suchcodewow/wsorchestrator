@@ -14,6 +14,7 @@
  * is why it exists.
  */
 
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { TF_ROOT } from "./config.js";
@@ -31,6 +32,28 @@ export type Scenario = {
   requiresCluster: boolean;
   /** APIs this scenario needs enabled in each competitor's project. */
   activateApis: string[];
+  /**
+   * This scenario *is* the cluster: selecting it turns that cloud's cluster
+   * layer on, and it has no Terraform root of its own.
+   *
+   * It exists so an organizer can hand competitors a working cluster without
+   * also breaking something about it. Everything with `requiresCluster` pulls
+   * it in automatically — see `withClusterScenario` in the frontend catalog,
+   * which both the UI and the API enforce.
+   */
+  providesCluster: boolean;
+  /**
+   * Apply this root once per competitor instead of once for the roster.
+   *
+   * Needed whenever the scenario cannot be expressed as a `for_each` in a single
+   * apply — an AWS scenario, because each competitor's account needs its own
+   * assumed-role provider, or any scenario reaching inside a cluster, because
+   * the `kubernetes` and `helm` providers cannot be instantiated per-cluster.
+   *
+   * The runner applies these concurrently, each against a private copy of the
+   * root and its own state prefix.
+   */
+  perCompetitor: boolean;
 };
 
 const CLOUDS: readonly Cloud[] = ["aws", "azure", "gcp"];
@@ -64,6 +87,8 @@ function parseManifest(dir: string, raw: string): Scenario {
     description: typeof m.description === "string" ? m.description : "",
     requiresCluster: m.requiresCluster === true,
     activateApis: Array.isArray(m.activateApis) ? m.activateApis : [],
+    perCompetitor: m.perCompetitor === true,
+    providesCluster: m.providesCluster === true,
   };
 }
 
@@ -102,6 +127,11 @@ export function clearScenarioCache(): void {
   cache = undefined;
 }
 
+/** One scenario by id, or undefined if this build does not ship it. */
+export function scenarioById(id: string): Scenario | undefined {
+  return allScenarios().get(id);
+}
+
 /** The scenarios offered for a cloud, in a stable order. */
 export function scenariosFor(cloud: Cloud): Scenario[] {
   return [...allScenarios().values()]
@@ -133,9 +163,23 @@ export function unknownScenarios(ids: readonly string[]): string[] {
   return ids.filter((id) => !all.has(id));
 }
 
-/** Whether any of these scenarios needs the per-competitor cluster layer. */
+/**
+ * Whether any of these scenarios needs the per-competitor cluster layer built —
+ * either because it breaks one, or because it *is* one.
+ */
 export function needsCluster(scenarios: readonly Scenario[]): boolean {
-  return scenarios.some((s) => s.requiresCluster);
+  return scenarios.some((s) => s.requiresCluster || s.providesCluster);
+}
+
+/**
+ * Whether this scenario has Terraform of its own to apply.
+ *
+ * A `providesCluster` scenario does not: the cluster layer builds the cluster,
+ * and the manifest exists only so the organizer can ask for one. Applying a
+ * layer for it would create an empty state object and nothing else.
+ */
+export function hasScenarioRoot(scenario: Scenario): boolean {
+  return !scenario.providesCluster;
 }
 
 /**
@@ -150,9 +194,42 @@ export function activateApisFor(
   return [...new Set([...baseline, ...scenarios.flatMap((s) => s.activateApis)])];
 }
 
-/** The state prefix a scenario's own layer lives on, under the run's. */
-export function scenarioStatePrefix(base: string, id: string): string {
-  return `${base}/scenarios/${id}`;
+/**
+ * The state prefix a scenario's layer lives on, under the run's.
+ *
+ * A per-competitor scenario passes `slug` and gets one prefix each, so its
+ * applies never share state — which is what lets them run at the same time, and
+ * what lets one competitor's environment be rebuilt without touching another's.
+ */
+export function scenarioStatePrefix(
+  base: string,
+  id: string,
+  slug?: string,
+): string {
+  const root = `${base}/scenarios/${id}`;
+  return slug ? `${root}/${slug}` : root;
+}
+
+/**
+ * A competitor's short, stable identifier, derived from their address.
+ *
+ * The same six hex characters `makeChallengeProjectId` already appends to a
+ * project id, lifted out so the state prefixes, working-directory names and
+ * resource names all agree on who a competitor is. Derived from the address
+ * rather than a roster position for the reason given there: a challenge that
+ * grows must not renumber the competitors already in it.
+ */
+export function competitorSlug(email: string): string {
+  return createHash("sha1").update(email).digest("hex").slice(0, 6);
+}
+
+/** The working-directory name for one competitor's copy of a scenario root. */
+export function scenarioWorkName(
+  runId: string,
+  scenarioId: string,
+  slug: string,
+): string {
+  return `${runId.replace(/-/g, "").slice(0, 8)}-${scenarioId}-${slug}`;
 }
 
 /** The state prefix the per-competitor cluster layer lives on. */

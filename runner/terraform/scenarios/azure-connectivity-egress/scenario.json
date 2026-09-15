@@ -1,0 +1,8 @@
+{
+  "id": "azure-connectivity-egress",
+  "label": "Connectivity: Egress",
+  "cloud": "azure",
+  "description": "Nodes can reach Azure itself but not the internet. Microsoft's registries work, Docker Hub and quay.io do not, and a Harness delegate cannot register.",
+  "requiresCluster": true,
+  "activateApis": []
+}

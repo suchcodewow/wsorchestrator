@@ -201,3 +201,55 @@ export async function withRetry<T>(
     }
   }
 }
+
+/**
+ * Run `fn` over every item with at most `limit` in flight, preserving input
+ * order in the result.
+ *
+ * Exists for per-competitor Terraform applies. An EKS cluster takes something
+ * like fifteen minutes, so five competitors done one after another is over an
+ * hour of a challenge's short life spent waiting — and there is no reason for
+ * it, since each competitor's environment is genuinely independent.
+ *
+ * Bounded rather than a bare `Promise.all` because the things being called are
+ * rate-limited cloud APIs (AWS account operations especially), and unbounded
+ * fan-out is how you discover a throttling limit during an event.
+ *
+ * **Every item is attempted.** The first failure is re-thrown once the rest have
+ * settled, rather than immediately: an apply abandoned mid-flight leaves
+ * Terraform state describing resources whose creation is still in progress,
+ * which is worse to clean up than the extra wait. Callers get the first error,
+ * as `Promise.all` would give them.
+ */
+export async function mapConcurrent<T, R>(
+  items: readonly T[],
+  limit: number,
+  fn: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  const width = Math.max(1, Math.min(limit, items.length));
+  let next = 0;
+  let firstError: unknown;
+  let failed = false;
+
+  const worker = async (): Promise<void> => {
+    for (;;) {
+      const i = next++;
+      if (i >= items.length) return;
+      try {
+        results[i] = await fn(items[i], i);
+      } catch (err) {
+        // Keep going: see the note above about abandoning applies mid-flight.
+        if (!failed) {
+          failed = true;
+          firstError = err;
+        }
+      }
+    }
+  };
+
+  await Promise.all(Array.from({ length: width }, worker));
+
+  if (failed) throw firstError;
+  return results;
+}

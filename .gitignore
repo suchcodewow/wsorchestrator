@@ -36,6 +36,9 @@ yarn-error.log*
 
 # terraform / opentofu
 **/.terraform/*
+# per-competitor working copies of a root config, made and removed by the
+# runner around each concurrent apply (see withWorkDir). Never source.
+/runner/terraform/.work/
 *.tfstate
 *.tfstate.*
 crash.log

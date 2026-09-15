@@ -226,6 +226,139 @@ export function writeScenarioTfvars(
 }
 
 /**
+ * Write terraform.tfvars.json for a challenge's per-competitor AKS clusters —
+ * one apply, one cluster per competitor, built only when a scenario needs them.
+ *
+ * Azure keeps the roster shape GCP uses rather than AWS's per-competitor one:
+ * every resource group is in the same subscription, so a single `azurerm`
+ * provider reaches all of them and Terraform builds the clusters concurrently
+ * inside one apply.
+ */
+export function writeAzureClusterTfvars(
+  workDir: string,
+  runId: string,
+  attendeeResourceGroups: Record<string, string>,
+) {
+  write(workDir, {
+    ...azureCommonVars(runId),
+    attendee_resource_groups: attendeeResourceGroups,
+  });
+}
+
+/**
+ * Write terraform.tfvars.json for one competitor's EKS cluster.
+ *
+ * Per competitor, like everything else on AWS: the cluster is built inside that
+ * competitor's own member account, which needs its own assumed-role provider.
+ */
+export function writeAwsClusterTfvars(
+  workDir: string,
+  runId: string,
+  attendeeEmail: string,
+  accountId: string,
+  clusterName: string,
+) {
+  write(workDir, {
+    ...awsCommonVars(runId),
+    attendee_email: attendeeEmail,
+    account_id: accountId,
+    cluster_name: clusterName,
+  });
+}
+
+/**
+ * One competitor's identity, as every per-competitor scenario root takes it.
+ *
+ * The cloud-specific fields differ, but the shape is the same on all three: who
+ * the competitor is, which environment is theirs, and how to find the cluster
+ * inside it.
+ */
+export type CompetitorTarget = {
+  email: string;
+  projectId: string;
+  clusterName: string;
+  location: string;
+  networkName: string;
+  nodeTag: string;
+};
+
+/**
+ * Write terraform.tfvars.json for one competitor's copy of a GCP scenario root
+ * — the `perCompetitor` shape, for a scenario whose providers cannot be
+ * instantiated once per competitor inside a single configuration (anything
+ * reaching into the cluster with `kubernetes` or `helm`).
+ *
+ * Singular where the roster writer is plural: one project, one cluster, one
+ * tag. A root takes one or the other, never both, which is what
+ * `scenario-catalog.test.ts` checks.
+ */
+export function writeGcpCompetitorScenarioTfvars(
+  workDir: string,
+  runId: string,
+  scenarioId: string,
+  region: string,
+  target: CompetitorTarget,
+) {
+  write(workDir, {
+    ...gcpLayerVars(runId, region),
+    scenario_id: scenarioId,
+    attendee_email: target.email,
+    project_id: target.projectId,
+    cluster_name: target.clusterName,
+    location: target.location,
+    network_name: target.networkName,
+    node_tag: target.nodeTag,
+  });
+}
+
+/**
+ * Write terraform.tfvars.json for an Azure scenario applied over the whole
+ * roster — the Azure mirror of `writeScenarioTfvars`.
+ */
+export function writeAzureScenarioTfvars(
+  workDir: string,
+  runId: string,
+  scenarioId: string,
+  attendeeResourceGroups: Record<string, string>,
+  subnetIds: Record<string, string>,
+  clusterNames: Record<string, string>,
+) {
+  write(workDir, {
+    ...azureCommonVars(runId),
+    scenario_id: scenarioId,
+    attendee_resource_groups: attendeeResourceGroups,
+    subnet_ids: subnetIds,
+    cluster_names: clusterNames,
+  });
+}
+
+/**
+ * Write terraform.tfvars.json for one competitor's copy of an AWS scenario
+ * root.
+ *
+ * Every AWS scenario is `perCompetitor`, and not by choice: each competitor
+ * owns a separate member account, and reaching into it means an assumed-role
+ * provider that Terraform cannot create a dynamic number of. `account_id` is
+ * what the copy assumes into.
+ */
+export function writeAwsCompetitorScenarioTfvars(
+  workDir: string,
+  runId: string,
+  scenarioId: string,
+  attendeeEmail: string,
+  accountId: string,
+  clusterName: string,
+) {
+  write(workDir, {
+    ...awsCommonVars(runId),
+    scenario_id: scenarioId,
+    attendee_email: attendeeEmail,
+    account_id: accountId,
+    cluster_name: clusterName,
+  });
+}
+
+/**
  * Write terraform.tfvars.json for a workshop's Azure environment: the shared
  * resource group, the AKS cluster, and the attendee address -> temp-password
  * map Terraform turns into native Entra users. The whole roster is passed every
