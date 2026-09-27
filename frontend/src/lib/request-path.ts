@@ -12,7 +12,18 @@ export const REQUEST_PATH_HEADER = "x-request-path";
  */
 export function returnPath(value: string | null | undefined): string | null {
   if (!value || !value.startsWith("/")) return null;
-  if (value.startsWith("//") || value.startsWith("/\\")) return null;
-  if (value === "/signin" || value.startsWith("/signin?")) return null;
+  // A browser drops tabs and newlines from a URL and reads `\` as `/`, so
+  // `/\t/evil.example` lands on another site. Judge by where the value lands.
+  if (/[\u0000-\u001f\u007f]/.test(value)) return null;
+  let url: URL;
+  try {
+    url = new URL(value, RESOLVE_AGAINST);
+  } catch {
+    return null;
+  }
+  if (url.origin !== RESOLVE_AGAINST) return null;
+  if (url.pathname === "/signin") return null;
   return value;
 }
+
+const RESOLVE_AGAINST = "http://return-path.invalid";

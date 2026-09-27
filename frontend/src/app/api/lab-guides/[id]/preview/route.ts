@@ -14,7 +14,7 @@ export async function GET(
   if (!session?.user) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
-  if (!canManageLabGuides(session.user.siteRole)) {
+  if (!canManageLabGuides(session.user.access)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 

@@ -10,8 +10,8 @@ import {
   DAY_SECONDS,
   MAX_TOKENS_PER_USER,
   TOKEN_TTL_DAYS,
-  type SiteRole,
 } from "@/db/schema";
+import type { Access } from "@/lib/roles";
 
 const TOKEN_PREFIX = "wo";
 
@@ -147,7 +147,7 @@ export async function mintBundleToken(
   return result.ok ? result.token : null;
 }
 
-export type TokenBearer = { id: string; siteRole: SiteRole; email: string | null };
+export type TokenBearer = { id: string; access: Access; email: string | null };
 
 export async function resolveToken(
   presented: string,
@@ -165,7 +165,9 @@ export async function resolveToken(
       tokenHash: apiTokens.tokenHash,
       expiresAt: apiTokens.expiresAt,
       revokedAt: apiTokens.revokedAt,
-      siteRole: users.siteRole,
+      eventRole: users.eventRole,
+      schedulerRole: users.schedulerRole,
+      isPlatformAdmin: users.isPlatformAdmin,
       email: users.email,
     })
     .from(apiTokens)
@@ -186,5 +188,13 @@ export async function resolveToken(
     .where(eq(apiTokens.id, row.id))
     .catch(() => {});
 
-  return { id: row.userId, siteRole: row.siteRole, email: row.email };
+  return {
+    id: row.userId,
+    access: {
+      event: row.eventRole,
+      scheduler: row.schedulerRole,
+      platform: row.isPlatformAdmin,
+    },
+    email: row.email,
+  };
 }

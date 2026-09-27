@@ -22,7 +22,7 @@ export default async function EditWorkshopPage({
 }) {
   const session = await auth();
   if (!session?.user) redirect(await signInPath());
-  if (!canManageLabGuides(session.user.siteRole)) notFound();
+  if (!canManageLabGuides(session.user.access)) notFound();
 
   const { workshopSlug } = await params;
   const workshop = await getLabWorkshopBySlug(workshopSlug, true);

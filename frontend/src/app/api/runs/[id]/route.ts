@@ -17,7 +17,7 @@ import { reprovisionRun } from "@/lib/trigger";
 async function viewer(): Promise<Viewer | null> {
   const session = await auth();
   if (!session?.user) return null;
-  return { id: session.user.id, role: session.user.siteRole };
+  return { id: session.user.id, access: session.user.access };
 }
 
 const UNAUTHORIZED = NextResponse.json(

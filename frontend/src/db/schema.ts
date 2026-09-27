@@ -29,15 +29,27 @@ export type ThemePreference = (typeof THEME_PREFERENCES)[number];
 
 export const themePreference = pgEnum("theme_preference", THEME_PREFERENCES);
 
-export const SITE_ROLES = [
+/**
+ * The event area's roles, lowest first — `lib/roles.ts` compares by position.
+ * The database type keeps its original name, `site_role`, from before the
+ * site had more than one functional area.
+ */
+export const EVENT_ROLES = [
+  "none",
   "contributor",
   "operator",
   "manager",
   "administrator",
 ] as const;
-export type SiteRole = (typeof SITE_ROLES)[number];
+export type EventRole = (typeof EVENT_ROLES)[number];
 
-export const siteRole = pgEnum("site_role", SITE_ROLES);
+export const eventRole = pgEnum("site_role", EVENT_ROLES);
+
+/** The scheduler area's roles, lowest first. No role at all is no access. */
+export const SCHEDULER_ROLES = ["viewer", "administrator"] as const;
+export type SchedulerRole = (typeof SCHEDULER_ROLES)[number];
+
+export const schedulerRole = pgEnum("scheduler_role", SCHEDULER_ROLES);
 
 export const CALENDAR_SCOPES = ["own", "all"] as const;
 export type CalendarScope = (typeof CALENDAR_SCOPES)[number];
@@ -55,7 +67,9 @@ export const users = pgTable("users", {
   themePreference: themePreference("theme_preference")
     .notNull()
     .default("system"),
-  siteRole: siteRole("site_role").notNull().default("operator"),
+  eventRole: eventRole("site_role").notNull().default("none"),
+  schedulerRole: schedulerRole("scheduler_role"),
+  isPlatformAdmin: boolean("is_platform_admin").notNull().default(false),
   calendarScope: calendarScope("calendar_scope").notNull().default("own"),
 });
 

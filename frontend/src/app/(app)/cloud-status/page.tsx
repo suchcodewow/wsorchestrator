@@ -17,7 +17,7 @@ export const dynamic = "force-dynamic";
 export default async function CloudStatusPage() {
   const session = await auth();
   if (!session?.user) redirect(await signInPath());
-  if (!canAuditProjects(session.user.siteRole)) notFound();
+  if (!canAuditProjects(session.user.access)) notFound();
 
   const report = await auditClouds();
 

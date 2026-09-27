@@ -1,7 +1,9 @@
-/** The navigation sections, and which of them a role may see. */
+/** The navigation sections, and which of them a user's access may see. */
 
 import {
   Blocks,
+  CalendarClock,
+  CalendarCog,
   CalendarDays,
   Cloud,
   DatabaseBackup,
@@ -12,14 +14,17 @@ import {
   UsersRound,
   type LucideIcon,
 } from "lucide-react";
-import type { SiteRole } from "@/db/schema";
 import {
   canAuditProjects,
   canManageBackups,
+  canManageSchedulerSettings,
   canManageSettings,
   canManageUsers,
   canRunSql,
   canSeeAllEvents,
+  canUseEvents,
+  canUseScheduler,
+  type Access,
 } from "@/lib/roles";
 
 export type NavItem = {
@@ -27,22 +32,29 @@ export type NavItem = {
   label: string;
   Icon: LucideIcon;
   also?: string[];
-  visible?: (role: SiteRole) => boolean;
+  visible?: (access: Access) => boolean;
 };
 
 export type NavSection = {
   heading?: string;
   items: NavItem[];
   control?: "calendar-scope";
-  visible?: (role: SiteRole) => boolean;
+  visible?: (access: Access) => boolean;
 };
 
 export const NAV_SECTIONS: NavSection[] = [
   {
     items: [
-      { href: "/labs", label: "Event Guides", Icon: Layers },
-      { href: "/events", label: "Orchestrator", Icon: CalendarDays, also: ["/runs"] },
-      { href: "/contribute", label: "Contribute", Icon: Blocks },
+      { href: "/labs", label: "Event Guides", Icon: Layers, visible: canUseEvents },
+      {
+        href: "/events",
+        label: "Orchestrator",
+        Icon: CalendarDays,
+        also: ["/runs"],
+        visible: canUseEvents,
+      },
+      { href: "/contribute", label: "Contribute", Icon: Blocks, visible: canUseEvents },
+      { href: "/scheduler", label: "Scheduler", Icon: CalendarClock, visible: canUseScheduler },
       { href: "/me", label: "My settings", Icon: UserCog },
     ],
   },
@@ -65,17 +77,23 @@ export const NAV_SECTIONS: NavSection[] = [
         Icon: SlidersHorizontal,
         visible: canManageSettings,
       },
+      {
+        href: "/scheduler-settings",
+        label: "Scheduler settings",
+        Icon: CalendarCog,
+        visible: canManageSchedulerSettings,
+      },
     ],
   },
 ];
 
-export function visibleSections(role: SiteRole): NavSection[] {
+export function visibleSections(access: Access): NavSection[] {
   return NAV_SECTIONS.map((section) => ({
     ...section,
-    items: section.items.filter((item) => item.visible?.(role) ?? true),
+    items: section.items.filter((item) => item.visible?.(access) ?? true),
   })).filter(
     (section) =>
-      section.items.length > 0 || (section.control ? (section.visible?.(role) ?? true) : false),
+      section.items.length > 0 || (section.control ? (section.visible?.(access) ?? true) : false),
   );
 }
 

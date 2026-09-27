@@ -17,7 +17,7 @@ export const metadata: Metadata = {
 export default async function NewWorkshopPage() {
   const session = await auth();
   if (!session?.user) redirect(await signInPath());
-  if (!canManageLabGuides(session.user.siteRole)) notFound();
+  if (!canManageLabGuides(session.user.access)) notFound();
 
   return (
     <div className="mx-auto max-w-4xl">

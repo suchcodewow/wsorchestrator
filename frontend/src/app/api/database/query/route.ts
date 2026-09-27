@@ -13,7 +13,7 @@ export async function POST(req: Request) {
   if (!session?.user) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
-  if (!canRunSql(session.user.siteRole)) {
+  if (!canRunSql(session.user.access)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 

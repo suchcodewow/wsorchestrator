@@ -21,7 +21,7 @@ export default async function NewLabGuidePage({
 }) {
   const session = await auth();
   if (!session?.user) redirect(await signInPath());
-  if (!canManageLabGuides(session.user.siteRole)) notFound();
+  if (!canManageLabGuides(session.user.access)) notFound();
 
   const { workshop: workshopId } = await searchParams;
   const workshop = workshopId ? await getLabWorkshopById(workshopId) : null;

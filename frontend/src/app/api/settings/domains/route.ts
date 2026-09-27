@@ -7,14 +7,14 @@ import {
   domainInputSchema,
   STATUS_FOR,
 } from "@/lib/allowed-domains";
-import { canManageSettings } from "@/lib/roles";
+import { canManageSignInDomains } from "@/lib/roles";
 
 export async function POST(req: Request) {
   const session = await auth();
   if (!session?.user) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
-  if (!canManageSettings(session.user.siteRole)) {
+  if (!canManageSignInDomains(session.user.access)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 

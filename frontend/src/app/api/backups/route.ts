@@ -14,7 +14,7 @@ async function requireAdministrator() {
       user: null,
     };
   }
-  if (!canManageBackups(session.user.siteRole)) {
+  if (!canManageBackups(session.user.access)) {
     return {
       error: NextResponse.json({ error: "forbidden" }, { status: 403 }),
       user: null,

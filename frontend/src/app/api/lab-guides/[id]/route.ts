@@ -14,7 +14,7 @@ async function requireEditor() {
   if (!session?.user) {
     return { error: NextResponse.json({ error: "unauthorized" }, { status: 401 }) };
   }
-  if (!canManageLabGuides(session.user.siteRole)) {
+  if (!canManageLabGuides(session.user.access)) {
     return { error: NextResponse.json({ error: "forbidden" }, { status: 403 }) };
   }
   return { error: null };

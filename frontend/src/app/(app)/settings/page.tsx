@@ -1,8 +1,12 @@
-/** Sends /settings to its first tab. */
+/** Sends /settings to the first tab the viewer can see. */
 
 import { redirect } from "next/navigation";
-import { SITE_SETTINGS_TABS } from "./tabs";
+import { auth, signInPath } from "@/auth";
+import { visibleSettingsTabs } from "./tabs";
 
-export default function SiteSettingsPage() {
-  redirect(SITE_SETTINGS_TABS[0]!.href);
+export default async function SiteSettingsPage() {
+  const session = await auth();
+  if (!session?.user) redirect(await signInPath());
+
+  redirect(visibleSettingsTabs(session.user.access)[0]!.href);
 }

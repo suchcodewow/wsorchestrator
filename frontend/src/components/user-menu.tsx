@@ -28,10 +28,10 @@ import {
   DropdownMenuSwitchItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { THEME_PREFERENCES, type CalendarScope, type SiteRole, type ThemePreference } from "@/db/schema";
+import { THEME_PREFERENCES, type CalendarScope, type ThemePreference } from "@/db/schema";
 import type { BuildInfo } from "@/lib/build-info";
 import { visibleSections } from "@/lib/nav";
-import { SITE_ROLE_LABELS } from "@/lib/roles";
+import { accessBadges, type Access } from "@/lib/roles";
 import { applyTheme } from "@/lib/theme";
 import { setCalendarScope, setThemePreference } from "@/lib/user-settings";
 
@@ -69,7 +69,7 @@ function buildTitle(build: BuildInfo): string {
 export function UserMenu({
   name,
   email,
-  role,
+  access,
   initialTheme,
   initialScope,
   build,
@@ -79,7 +79,7 @@ export function UserMenu({
 }: {
   name: string | null;
   email: string;
-  role: SiteRole;
+  access: Access;
   initialTheme: ThemePreference;
   initialScope: CalendarScope;
   build: BuildInfo;
@@ -112,8 +112,8 @@ export function UserMenu({
     });
   }
 
-  const elevated = role !== "operator";
-  const sections = accountOnly ? [] : visibleSections(role);
+  const badges = accessBadges(access);
+  const sections = accountOnly ? [] : visibleSections(access);
 
   return (
     <DropdownMenu>
@@ -154,10 +154,17 @@ export function UserMenu({
           {name && (
             <span className="block truncate text-xs text-muted-foreground">{email}</span>
           )}
-          {elevated && (
-            <span className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-brand/10 px-2 py-0.5 text-[11px] font-medium text-brand">
-              <ShieldCheck className="size-3" />
-              {SITE_ROLE_LABELS[role]}
+          {badges.length > 0 && (
+            <span className="mt-1.5 flex flex-wrap gap-1">
+              {badges.map((badge) => (
+                <span
+                  key={badge}
+                  className="inline-flex items-center gap-1 rounded-full bg-brand/10 px-2 py-0.5 text-[11px] font-medium text-brand"
+                >
+                  <ShieldCheck className="size-3" />
+                  {badge}
+                </span>
+              ))}
             </span>
           )}
         </DropdownMenuLabel>

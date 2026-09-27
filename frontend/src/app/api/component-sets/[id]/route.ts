@@ -5,7 +5,11 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { sessionOrToken } from "@/lib/api-auth";
 import { harnessComponentSets } from "@/db/schema";
-import { canContributeComponents, canPublishComponents } from "@/lib/roles";
+import {
+  canContributeComponents,
+  canPublishComponents,
+  type Access,
+} from "@/lib/roles";
 import {
   listSetComponents,
   replaceSetComponents,
@@ -13,14 +17,14 @@ import {
 } from "@/lib/components/catalog";
 import { validateSet } from "@/lib/components/validate";
 
-async function readable(setId: string, userId: string, role: string) {
+async function readable(setId: string, userId: string, access: Access) {
   const [set] = await db
     .select()
     .from(harnessComponentSets)
     .where(eq(harnessComponentSets.id, setId));
 
   if (!set) return null;
-  if (canPublishComponents(role as never)) return set;
+  if (canPublishComponents(access)) return set;
   return set.authorId === userId ? set : null;
 }
 
@@ -32,9 +36,12 @@ export async function GET(
   if (!viewer) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
+  if (!canContributeComponents(viewer.access)) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
 
   const { id } = await params;
-  const set = await readable(id, viewer.id, viewer.siteRole);
+  const set = await readable(id, viewer.id, viewer.access);
   if (!set) return NextResponse.json({ error: "not_found" }, { status: 404 });
 
   return NextResponse.json({ set, components: await listSetComponents(id) });
@@ -48,12 +55,12 @@ export async function PUT(
   if (!viewer) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
-  if (!canContributeComponents(viewer.siteRole)) {
+  if (!canContributeComponents(viewer.access)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
   const { id } = await params;
-  const set = await readable(id, viewer.id, viewer.siteRole);
+  const set = await readable(id, viewer.id, viewer.access);
   if (!set) return NextResponse.json({ error: "not_found" }, { status: 404 });
 
   const body = (await req.json().catch(() => null)) as {
@@ -92,7 +99,7 @@ export async function DELETE(
   }
 
   const { id } = await params;
-  const set = await readable(id, viewer.id, viewer.siteRole);
+  const set = await readable(id, viewer.id, viewer.access);
   if (!set) return NextResponse.json({ error: "not_found" }, { status: 404 });
 
   const moved = await setStatus(id, "submitted", "testing");

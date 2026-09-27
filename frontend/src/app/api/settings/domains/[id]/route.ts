@@ -8,12 +8,12 @@ import {
   STATUS_FOR,
   updateAllowedDomain,
 } from "@/lib/allowed-domains";
-import { canManageSettings } from "@/lib/roles";
+import { canManageSignInDomains } from "@/lib/roles";
 
 async function actor() {
   const session = await auth();
   if (!session?.user) return { error: "unauthorized" as const, status: 401 };
-  if (!canManageSettings(session.user.siteRole)) {
+  if (!canManageSignInDomains(session.user.access)) {
     return { error: "forbidden" as const, status: 403 };
   }
   return { actor: { id: session.user.id, email: session.user.email } };

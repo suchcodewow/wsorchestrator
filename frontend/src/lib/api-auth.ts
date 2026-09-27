@@ -13,7 +13,7 @@ export async function sessionOrToken(
   if (session?.user) {
     return {
       id: session.user.id,
-      siteRole: session.user.siteRole,
+      access: session.user.access,
       email: session.user.email ?? null,
     };
   }
@@ -56,7 +56,7 @@ export async function requireAdministrator(): Promise<
       user: null,
     };
   }
-  if (!canManageSettings(session.user.siteRole)) {
+  if (!canManageSettings(session.user.access)) {
     return {
       error: NextResponse.json({ error: "forbidden" }, { status: 403 }),
       user: null,

@@ -50,7 +50,7 @@ export async function SiteHeader({
               <UserMenu
                 name={session.user.name ?? null}
                 email={session.user.email ?? ""}
-                role={session.user.siteRole}
+                access={session.user.access}
                 initialTheme={themePreference}
                 initialScope={calendarScope}
                 build={buildInfo()}

@@ -17,7 +17,7 @@ export const dynamic = "force-dynamic";
 export default async function BackupsPage() {
   const session = await auth();
   if (!session?.user) redirect(await signInPath());
-  if (!canManageBackups(session.user.siteRole)) notFound();
+  if (!canManageBackups(session.user.access)) notFound();
 
   const target = backupTarget();
   const result = await listBackups();

@@ -10,7 +10,7 @@ export async function GET(req: Request) {
   if (!session?.user) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
-  if (!canManageBackups(session.user.siteRole)) {
+  if (!canManageBackups(session.user.access)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 

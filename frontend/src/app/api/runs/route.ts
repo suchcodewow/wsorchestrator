@@ -14,7 +14,7 @@ import {
   limitsFor,
   type ScenarioId,
 } from "@/db/schema";
-import { canCreateEvents } from "@/lib/roles";
+import { canCreateEvents, canUseEvents } from "@/lib/roles";
 import { withClusterScenario } from "@/lib/scenario-catalog";
 import { createScheduledRun, listRunsForUser } from "@/lib/runs";
 import { startRunNow } from "@/lib/trigger";
@@ -23,6 +23,11 @@ export async function GET() {
   const session = await auth();
   if (!session?.user) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+  // Someone without event access has no events, including ones they booked
+  // before losing it — the same rule `ownedBy` applies to a single event.
+  if (!canUseEvents(session.user.access)) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
   const runs = await listRunsForUser(session.user.id);
   return NextResponse.json({ runs });
@@ -87,7 +92,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  if (!canCreateEvents(session.user.siteRole)) {
+  if (!canCreateEvents(session.user.access)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 

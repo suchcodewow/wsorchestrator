@@ -1,18 +1,19 @@
 /** The contributor page. */
 
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { auth, signInPath } from "@/auth";
 import { listTokens } from "@/lib/api-tokens";
 import { listComponentSets, listBaseline } from "@/lib/components/catalog";
 import { referenceMap } from "@/lib/components/graph";
-import { canPublishComponents } from "@/lib/roles";
+import { canPublishComponents, canUseEvents } from "@/lib/roles";
 import { ContributeView } from "./contribute-view";
 
 export default async function ContributePage() {
   const session = await auth();
   if (!session?.user) redirect(await signInPath());
+  if (!canUseEvents(session.user.access)) notFound();
 
-  const canReview = canPublishComponents(session.user.siteRole);
+  const canReview = canPublishComponents(session.user.access);
   const [tokens, sets, baseline] = await Promise.all([
     listTokens(session.user.id),
     listComponentSets(),

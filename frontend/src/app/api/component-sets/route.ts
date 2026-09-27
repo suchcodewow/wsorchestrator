@@ -16,7 +16,7 @@ export async function GET(req: Request) {
   if (!viewer) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
-  if (!canContributeComponents(viewer.siteRole)) {
+  if (!canContributeComponents(viewer.access)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
@@ -25,7 +25,7 @@ export async function GET(req: Request) {
     (status as ComponentSetStatus | null) ?? undefined,
   );
 
-  const mine = canPublishComponents(viewer.siteRole)
+  const mine = canPublishComponents(viewer.access)
     ? sets
     : sets.filter((s) => s.authorId === viewer.id);
 
@@ -37,7 +37,7 @@ export async function POST(req: Request) {
   if (!viewer) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
-  if (!canContributeComponents(viewer.siteRole)) {
+  if (!canContributeComponents(viewer.access)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 

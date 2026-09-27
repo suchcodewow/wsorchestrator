@@ -13,9 +13,10 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import type { CalendarScope, SiteRole, ThemePreference } from "@/db/schema";
+import type { CalendarScope, ThemePreference } from "@/db/schema";
 import type { BuildInfo } from "@/lib/build-info";
 import { isNavItemActive, visibleSections, type NavItem } from "@/lib/nav";
+import type { Access } from "@/lib/roles";
 import { writeSidebarCookie } from "@/lib/sidebar";
 import { setCalendarScope } from "@/lib/user-settings";
 import { cn } from "@/lib/utils";
@@ -23,7 +24,7 @@ import { cn } from "@/lib/utils";
 export function AppSidebar({
   name,
   email,
-  role,
+  access,
   initialTheme,
   initialScope,
   build,
@@ -33,7 +34,7 @@ export function AppSidebar({
 }: {
   name: string | null;
   email: string;
-  role: SiteRole;
+  access: Access;
   initialTheme: ThemePreference;
   initialScope: CalendarScope;
   build: BuildInfo;
@@ -43,7 +44,7 @@ export function AppSidebar({
 }) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
-  const sections = visibleSections(role);
+  const sections = visibleSections(access);
 
   function toggle() {
     const next = !collapsed;
@@ -97,7 +98,7 @@ export function AppSidebar({
           <UserMenu
             name={name}
             email={email}
-            role={role}
+            access={access}
             initialTheme={initialTheme}
             initialScope={initialScope}
             build={build}

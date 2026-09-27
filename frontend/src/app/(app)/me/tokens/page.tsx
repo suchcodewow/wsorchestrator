@@ -20,7 +20,7 @@ export default async function MyTokensPage() {
       choices={await deployChoices(session.user.id)}
       baseUrl={harnessBaseUrl()}
       configured={secretsConfigured()}
-      canDeploy={canManageSettings(session.user.siteRole)}
+      canDeploy={canManageSettings(session.user.access)}
       scrubDays={scrubWindowDays()}
     />
   );

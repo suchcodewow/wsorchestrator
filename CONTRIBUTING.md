@@ -79,7 +79,7 @@ attention:
 - **`AUTH_URL`** — already `http://localhost:3000`. If you run on another port,
   change it here too or sign-in redirects to the wrong place.
 - **`SITE_ADMIN_EMAILS`** — optional. Set it to your own address to land as a
-  site administrator on first sign-in, which is how you see the manager and
+  platform administrator on first sign-in, which is how you see every area's
   administrator features. Your local database is its own, so whatever role you
   hold in the deployment does not carry over. See
   [Site roles](README.md#site-roles).
@@ -218,8 +218,13 @@ Before you push:
 
 ```bash
 cd runner && npm run verify      # typecheck + unit tests — the same gate CI runs
-cd frontend && npm run typecheck && npm run lint
+cd frontend && npm run verify    # typecheck + lint + unit tests
+cd frontend && npm run test:db   # role rules against workshops_agent
 ```
+
+If you changed who may see or do something, also build and run the role
+matrix: `npm run build && npm run test:e2e`. [TESTING.md](TESTING.md#the-frontends-suites)
+describes all three suites.
 
 `runner`'s unit suite is the corpus of every provider message a real run has
 died on. It is worth reading [TESTING.md](TESTING.md) once to understand why it

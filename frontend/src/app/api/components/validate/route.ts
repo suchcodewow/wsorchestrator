@@ -10,7 +10,7 @@ export async function POST(req: Request) {
   if (!viewer) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
-  if (!canContributeComponents(viewer.siteRole)) {
+  if (!canContributeComponents(viewer.access)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 

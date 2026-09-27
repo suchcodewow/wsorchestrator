@@ -1,17 +1,24 @@
-/** Sets a user's site role. */
+/** Sets one of a user's roles: in an area, or platform administration. */
 
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/auth";
-import { SITE_ROLES } from "@/db/schema";
+import { EVENT_ROLES, SCHEDULER_ROLES } from "@/db/schema";
 import { canManageUsers } from "@/lib/roles";
-import { setSiteRole, type SetSiteRoleError } from "@/lib/site-users";
+import { setUserRole, type SetRoleError } from "@/lib/site-users";
 
-const patchSchema = z.object({ role: z.enum(SITE_ROLES) });
+const patchSchema = z.discriminatedUnion("area", [
+  z.object({ area: z.literal("event"), role: z.enum(EVENT_ROLES) }),
+  z.object({ area: z.literal("scheduler"), role: z.enum(SCHEDULER_ROLES).nullable() }),
+  z.object({ area: z.literal("platform"), value: z.boolean() }),
+]);
 
-const STATUS_FOR: Record<SetSiteRoleError, number> = {
+const STATUS_FOR: Record<SetRoleError, number> = {
   not_found: 404,
   self: 409,
+  forbidden: 403,
+  platform_target: 403,
+  bootstrap: 409,
 };
 
 export async function PATCH(
@@ -22,7 +29,7 @@ export async function PATCH(
   if (!session?.user) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
-  if (!canManageUsers(session.user.siteRole)) {
+  if (!canManageUsers(session.user.access)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
@@ -32,12 +39,16 @@ export async function PATCH(
   }
 
   const { id } = await params;
-  const result = await setSiteRole(session.user.id, id, parsed.data.role);
+  const result = await setUserRole(
+    { id: session.user.id, access: session.user.access },
+    id,
+    parsed.data,
+  );
   if (!result.ok) {
     return NextResponse.json(
       { error: result.error },
       { status: STATUS_FOR[result.error] },
     );
   }
-  return NextResponse.json({ ok: true, role: parsed.data.role });
+  return NextResponse.json({ ok: true, ...parsed.data });
 }

@@ -220,7 +220,7 @@ Worth setting now, though both have defaults:
 # Where the control plane runs. Workshops are built in `workshop_region`
 # (default us-west1) instead — see infra/admin/terraform.tfvars.example.
 region            = "us-central1"
-# You, so you land as a site administrator on first sign-in (see Site roles).
+# You, so you land as a platform administrator on first sign-in (see Site roles).
 site_admin_emails = ["you@example.com"]
 ```
 
@@ -326,8 +326,8 @@ them, and applies the database schema. It prints the app URL when done.
 ## 7. Verify
 
 Open `APP_URL` and sign in with Google. If your address is in
-`site_admin_emails`, that first sign-in is what makes you an administrator —
-the user menu should show the role badge, a **Show all events** switch, and
+`site_admin_emails`, that first sign-in is what makes you a platform
+administrator — the user menu should show the Platform Administrator badge, a **Show all events** switch, and
 **Manage users** (see [Site roles](#site-roles)).
 
 Then schedule a workshop — give it a name, an attendee count, and tick **Google
@@ -435,7 +435,7 @@ container. You just need:
   `http://localhost:3000/api/auth/callback/google`
   (a client can hold both the prod and localhost callbacks at once).
 - `SITE_ADMIN_EMAILS` — optional, but set it to your own address if you want to
-  see the manager and administrator features locally. The local database is its
+  see every area's administrator features locally. The local database is its
   own, so the role you hold in the deployment does not carry over. See
   [Site roles](#site-roles).
 
@@ -457,22 +457,43 @@ Workspace accounts and GCP projects and belongs in the deployed environment.
 
 ## Site roles
 
-Every signed-in user has one of three roles. They are cumulative — each does
-everything the one before it does:
+The site is divided into functional areas, and every user holds a role in each
+one separately. An area's administrators set everyone's role in that area and
+no other.
 
-| Role              | Adds                                                            |
-| ----------------- | --------------------------------------------------------------- |
-| **operator**      | Schedules and runs their own events. What everyone starts as.   |
-| **manager**       | A **Show all events** switch in the user menu that flips the calendar to every user's events, and can open and delete any of them. Also writes the [workshops and lab guides](#workshops-and-lab-guides). |
-| **administrator** | A **Manage users** page listing everyone, where roles are set; **Admin settings**, which decides [who may sign in at all](#restricting-sign-in); and the [**Backups**](#backups) page — including restoring the database. |
+**Events** — the orchestrator, lab guides and components. Cumulative: each
+role does everything the one before it does.
 
-Roles are granted by an administrator, so the first one has to come from
-outside the app: any address in `SITE_ADMIN_EMAILS` (`site_admin_emails` in
-`terraform.tfvars`, comma-separated in `.env` locally) is made an administrator
-when it signs in. Once someone holds the role they can promote the rest, and
-the setting can be emptied. An administrator cannot change their own role —
-that takes a second administrator, so a mis-click can't leave the site with
-nobody able to hand it back.
+| Role                    | Adds                                                            |
+| ----------------------- | --------------------------------------------------------------- |
+| **No event access**     | Nothing. What everyone starts as.                               |
+| **Event Contributor**   | Writes Harness components but cannot run events.                |
+| **Event Operator**      | Schedules and runs their own events.                            |
+| **Event Manager**       | A **Show all events** switch that flips the calendar to every user's events, and can open and delete any of them. Also writes the [workshops and lab guides](#workshops-and-lab-guides). |
+| **Event Administrator** | Sets everyone's event role on **Manage users**; **Admin settings** (org secrets, templates, GitHub repos); and **Cloud Status**. |
+
+**Scheduler** — a placeholder for now.
+
+| Role                        | Adds                                                        |
+| --------------------------- | ----------------------------------------------------------- |
+| *(none)*                    | Nothing. What everyone starts as.                           |
+| **Scheduler Viewer**        | The **Scheduler** page.                                     |
+| **Scheduler Administrator** | Sets everyone's scheduler role on **Manage users**, and **Scheduler settings**. |
+
+**Platform Administrator** is a flag rather than a role in an area. It counts
+as administrator in every area, and adds what reaches past any single one:
+[who may sign in at all](#restricting-sign-in), the [**Backups**](#backups)
+page — restoring rolls back every area at once — the **Database** console, and
+making other people platform administrators. Only a platform administrator can
+change another platform administrator's roles.
+
+The first platform administrator has to come from outside the app: any address
+in `SITE_ADMIN_EMAILS` (`site_admin_emails` in `terraform.tfvars`,
+comma-separated in `.env` locally) is made one when it signs in, and again on
+every sign-in after — so the flag can't be removed from those addresses in the
+app, and the page refuses to try. Nobody can change their own roles — that
+takes a second administrator, so a mis-click can't leave the site with nobody
+able to hand them back.
 
 Deleting an event that owns live accounts and cloud projects does not drop the
 record on the spot: the run is expired immediately and flagged, the reaper
@@ -488,10 +509,10 @@ worth showing.
 
 ## Restricting sign-in
 
-By default anyone with a Google account can sign in, arriving as an
-`operator` — enough to schedule events that create real cloud accounts. To
-limit that to your own organization, an administrator adds the domains you
-allow under **Admin settings** in the user menu.
+By default anyone with a Google account can sign in, arriving with no access to
+any area until an administrator grants a role. To limit
+that to your own organization, a platform administrator adds the domains you
+allow under **Admin settings → Sign-in domains**.
 
 The list lives in the database (`allowed_email_domains`), so changing it is a
 page and not a redeploy. Domains can be added, edited, and removed there, each
@@ -564,7 +585,7 @@ takes you back to 03:00, while PITR replays the write-ahead log, so a table
 dropped at 14:32 can be recovered to 14:31. That is a `gcloud sql instances
 clone --point-in-time` operation.
 
-`/backups` is an **administrator-only** page listing the history, with how old
+`/backups` is a **platform-administrator-only** page listing the history, with how old
 the last good backup is — the question it is usually opened to answer — plus a
 **Back up now** button and a restore.
 

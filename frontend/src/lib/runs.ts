@@ -18,18 +18,28 @@ import {
   type Cloud,
   type EventMode,
   type ScenarioId,
-  type SiteRole,
   type WorkshopRun,
 } from "@/db/schema";
-import { canManageAnyEvent, canSeeAllEvents } from "@/lib/roles";
+import {
+  canManageAnyEvent,
+  canSeeAllEvents,
+  canUseEvents,
+  type Access,
+} from "@/lib/roles";
 import { withClusterScenario } from "@/lib/scenario-catalog";
 
-export type Viewer = { id: string; role: SiteRole };
+export type Viewer = { id: string; access: Access };
 
+/**
+ * The runs `viewer` may see and act on. Someone moved to "No event access"
+ * still owns the events they booked, but loses them along with the area.
+ */
 export const ownedBy = (viewer: Viewer) =>
-  canManageAnyEvent(viewer.role)
-    ? undefined
-    : eq(workshopRuns.userId, viewer.id);
+  !canUseEvents(viewer.access)
+    ? sql`false`
+    : canManageAnyEvent(viewer.access)
+      ? undefined
+      : eq(workshopRuns.userId, viewer.id);
 
 export function slugify(name: string, fallback = "workshop"): string {
   const slug = name
@@ -319,7 +329,7 @@ export async function listCalendarRuns(
   viewer: Viewer,
   scope: CalendarScope = "own",
 ) {
-  const showAll = scope === "all" && canSeeAllEvents(viewer.role);
+  const showAll = scope === "all" && canSeeAllEvents(viewer.access);
 
   return db
     .select({
@@ -338,7 +348,7 @@ export async function listCalendarRuns(
     })
     .from(workshopRuns)
     .innerJoin(users, eq(users.id, workshopRuns.userId))
-    .where(showAll ? undefined : eq(workshopRuns.userId, viewer.id))
+    .where(showAll ? undefined : and(ownedBy(viewer), eq(workshopRuns.userId, viewer.id)))
     .orderBy(desc(workshopRuns.scheduledStart));
 }
 

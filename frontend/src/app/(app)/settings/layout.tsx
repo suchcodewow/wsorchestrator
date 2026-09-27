@@ -12,18 +12,18 @@ export default async function SiteSettingsLayout({
 }) {
   const session = await auth();
   if (!session?.user) redirect(await signInPath());
-  if (!canManageSettings(session.user.siteRole)) notFound();
+  if (!canManageSettings(session.user.access)) notFound();
 
   return (
     <div className="space-y-8">
       <div className="space-y-1.5">
         <h1 className="text-3xl font-medium tracking-tight">Settings</h1>
         <p className="text-muted-foreground">
-          Site-wide configuration, visible only to administrators.
+          Configuration for running events, visible only to administrators.
         </p>
       </div>
 
-      <SiteSettingsTabs />
+      <SiteSettingsTabs access={session.user.access} />
 
       {children}
     </div>

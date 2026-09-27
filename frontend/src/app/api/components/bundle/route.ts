@@ -11,7 +11,7 @@ export async function GET(req: Request) {
   if (!session?.user) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
-  if (!canContributeComponents(session.user.siteRole)) {
+  if (!canContributeComponents(session.user.access)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 

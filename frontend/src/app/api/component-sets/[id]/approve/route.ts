@@ -13,7 +13,7 @@ export async function POST(
   if (!session?.user) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
-  if (!canPublishComponents(session.user.siteRole)) {
+  if (!canPublishComponents(session.user.access)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 

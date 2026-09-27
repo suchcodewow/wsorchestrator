@@ -4,30 +4,39 @@ import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
 import { DrizzleAdapter } from "@auth/drizzle-adapter";
 import { headers } from "next/headers";
-import { and, eq, inArray, ne } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import {
   accounts,
   sessions,
   users,
   verificationTokens,
-  type SiteRole,
+  type EventRole,
+  type SchedulerRole,
 } from "@/db/schema";
 import {
   effectiveAllowedDomains,
   isEmailAllowed,
 } from "@/lib/allowed-domains";
 import { REQUEST_PATH_HEADER, returnPath } from "@/lib/request-path";
+import type { Access } from "@/lib/roles";
 import { bootstrapAdminEmails, isBootstrapAdmin } from "@/lib/site-admins";
 
+/** The bootstrap administrators in SITE_ADMIN_EMAILS are platform administrators. */
 async function applyBootstrapAdmin(email: string | null | undefined) {
   if (!email || !isBootstrapAdmin(email)) return;
 
   await db
     .update(users)
-    .set({ siteRole: "administrator" })
-    .where(and(eq(users.email, email), ne(users.siteRole, "administrator")));
+    .set({ isPlatformAdmin: true })
+    .where(and(eq(users.email, email), eq(users.isPlatformAdmin, false)));
 }
+
+type UserRow = {
+  eventRole?: EventRole;
+  schedulerRole?: SchedulerRole | null;
+  isPlatformAdmin?: boolean;
+};
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   adapter: DrizzleAdapter(db, {
@@ -61,17 +70,22 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     async session({ session, user }) {
       if (!session.user) return session;
       session.user.id = user.id;
-      let role = (user as { siteRole?: SiteRole }).siteRole ?? "operator";
+      const row = user as UserRow;
+      const access: Access = {
+        event: row.eventRole ?? "none",
+        scheduler: row.schedulerRole ?? null,
+        platform: row.isPlatformAdmin ?? false,
+      };
 
-      if (role !== "administrator" && isBootstrapAdmin(session.user.email)) {
+      if (!access.platform && isBootstrapAdmin(session.user.email)) {
         await db
           .update(users)
-          .set({ siteRole: "administrator" })
+          .set({ isPlatformAdmin: true })
           .where(eq(users.id, user.id));
-        role = "administrator";
+        access.platform = true;
       }
 
-      session.user.siteRole = role;
+      session.user.access = access;
       return session;
     },
   },

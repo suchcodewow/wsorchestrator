@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { auth, signInPath } from "@/auth";
-import { canSeeAllEvents } from "@/lib/roles";
+import { canSeeAllEvents, canUseEvents, homePath } from "@/lib/roles";
 import { listCalendarRuns } from "@/lib/runs";
 import { getUserPreferences } from "@/lib/user-preferences";
 import { EventCalendar } from "./event-calendar";
@@ -11,11 +11,15 @@ export default async function EventsPage() {
   const session = await auth();
   if (!session?.user) redirect(await signInPath());
 
-  const role = session.user.siteRole;
-  const { calendarScope } = await getUserPreferences();
-  const scope = canSeeAllEvents(role) ? calendarScope : "own";
+  const access = session.user.access;
+  // Where sign-in and the front page land everyone, so it is also what sends
+  // someone without event access on to the area they do have.
+  if (!canUseEvents(access)) redirect(homePath(access));
 
-  const runs = await listCalendarRuns({ id: session.user.id, role }, scope);
+  const { calendarScope } = await getUserPreferences();
+  const scope = canSeeAllEvents(access) ? calendarScope : "own";
+
+  const runs = await listCalendarRuns({ id: session.user.id, access }, scope);
 
   const events = runs.map((r) => ({
     id: r.id,

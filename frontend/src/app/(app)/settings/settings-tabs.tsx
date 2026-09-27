@@ -3,8 +3,9 @@
 /** The tab row for site settings. */
 
 import { TabNav } from "@/components/tab-nav";
-import { SITE_SETTINGS_TABS } from "./tabs";
+import type { Access } from "@/lib/roles";
+import { visibleSettingsTabs } from "./tabs";
 
-export function SiteSettingsTabs() {
-  return <TabNav tabs={SITE_SETTINGS_TABS} label="Site settings" />;
+export function SiteSettingsTabs({ access }: { access: Access }) {
+  return <TabNav tabs={visibleSettingsTabs(access)} label="Site settings" />;
 }

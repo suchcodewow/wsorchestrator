@@ -46,7 +46,10 @@ export const MESSAGES: Record<DeployError, string> = {
 };
 
 export function messageFor(error: unknown, status: number, detail?: unknown) {
-  const known = MESSAGES[error as DeployError];
+  const known =
+    typeof error === "string" && Object.hasOwn(MESSAGES, error)
+      ? MESSAGES[error as DeployError]
+      : undefined;
   if (!known) return `Something went wrong (${status}).`;
   return typeof detail === "string" && detail.trim().length > 0
     ? `${known} Harness said: ${detail.trim()}`

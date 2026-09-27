@@ -9,7 +9,7 @@ import { UsersTable } from "./users-table";
 export default async function UsersPage() {
   const session = await auth();
   if (!session?.user) redirect(await signInPath());
-  if (!canManageUsers(session.user.siteRole)) notFound();
+  if (!canManageUsers(session.user.access)) notFound();
 
   const [users, pendingAdmins] = await Promise.all([
     listSiteUsers(),
@@ -20,6 +20,7 @@ export default async function UsersPage() {
     <UsersTable
       users={users}
       viewerId={session.user.id}
+      viewerAccess={session.user.access}
       pendingAdmins={pendingAdmins}
     />
   );

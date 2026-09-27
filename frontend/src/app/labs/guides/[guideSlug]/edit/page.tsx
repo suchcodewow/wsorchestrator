@@ -21,7 +21,7 @@ export default async function EditLabGuidePage({
 }) {
   const session = await auth();
   if (!session?.user) redirect(await signInPath());
-  if (!canManageLabGuides(session.user.siteRole)) notFound();
+  if (!canManageLabGuides(session.user.access)) notFound();
 
   const { guideSlug } = await params;
   const guide = await getLabGuideBySlug(guideSlug);

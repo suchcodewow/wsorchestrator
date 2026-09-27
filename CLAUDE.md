@@ -63,8 +63,14 @@ change either does not run or is invisible to review.
 
 ```bash
 cd runner    && npm run verify              # typecheck + unit tests, the CI gate
-cd frontend  && npm run typecheck && npm run lint
+cd frontend  && npm run verify              # typecheck + lint + unit tests
+cd frontend  && npm run test:db             # role rules, against workshops_agent
 ```
+
+If you touched a role, a `can*` check, or the gate on a page or route, also run
+`npm run build && npm run test:e2e` in `frontend/`. It starts the standalone
+server on :3100 and checks every persona against every page and route; add
+any new route to its matrix.
 
 `runner`'s unit suite is the corpus of provider messages that real runs have
 died on. If you touch a classifier in `runner/src/classify.ts` or

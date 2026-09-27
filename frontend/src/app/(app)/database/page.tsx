@@ -17,7 +17,7 @@ export const dynamic = "force-dynamic";
 export default async function DatabasePage() {
   const session = await auth();
   if (!session?.user) redirect(await signInPath());
-  if (!canRunSql(session.user.siteRole)) notFound();
+  if (!canRunSql(session.user.access)) notFound();
 
   const tablesRes = await runReadOnlyQuery(
     "select table_name from information_schema.tables where table_schema = 'public' order by table_name",

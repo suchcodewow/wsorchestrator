@@ -472,7 +472,7 @@ try {
   const { rows: owners } = await client.query(
     opts.owner
       ? `select id, email from users where email = $1`
-      : `select id, email from users order by site_role = 'administrator' desc, email limit 1`,
+      : `select id, email from users order by is_platform_admin desc, site_role = 'administrator' desc, email limit 1`,
     opts.owner ? [opts.owner] : [],
   );
   if (owners.length === 0) {

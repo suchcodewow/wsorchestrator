@@ -10,7 +10,7 @@ import { GuideArticle } from "../../guide-article";
 
 async function viewerCanEdit(): Promise<boolean> {
   const session = await auth();
-  return session?.user ? canManageLabGuides(session.user.siteRole) : false;
+  return session?.user ? canManageLabGuides(session.user.access) : false;
 }
 
 export async function generateMetadata({

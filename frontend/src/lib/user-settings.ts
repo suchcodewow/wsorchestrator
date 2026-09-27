@@ -32,7 +32,7 @@ export async function setThemePreference(
 export async function setCalendarScope(scope: CalendarScope): Promise<void> {
   const session = await auth();
   if (!session?.user?.id) return;
-  if (!canSeeAllEvents(session.user.siteRole)) return;
+  if (!canSeeAllEvents(session.user.access)) return;
   if (!CALENDAR_SCOPES.includes(scope)) return;
 
   await db

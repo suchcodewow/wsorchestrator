@@ -233,6 +233,48 @@ npm run test:watch
 npm run verify    # typecheck + tests, what CI runs
 ```
 
+## The frontend's suites
+
+The frontend has three, each slower and wider than the last:
+
+```sh
+cd frontend
+npm test            # unit: pure libraries, no database, a few seconds
+npm run test:db     # the role rules against workshops_agent
+npm run build && npm run test:e2e   # every role against the production build
+npm run verify      # typecheck + lint + unit
+```
+
+- **`test/unit/`** covers the pure libraries: the role checks for all 30
+  combinations of roles, the sidebar and settings tabs for each persona, the
+  Harness error and retry modules, markdown, and the rest. A test that imports
+  `@/db` swaps the pool for one that throws, so an accidental query fails
+  instead of running.
+- **`test/db/`** runs the rules that need rows. It checks `setUserRole` for
+  every actor, target and change, which is about a thousand calls with the
+  reason for each refusal. It also covers whose events each role can see or act
+  on, and what a personal access token carries.
+- **`test/e2e/`** starts `.next/standalone/server.js` on port 3100 (`E2E_PORT`)
+  with a bare environment: the scratch database, a throwaway `AUTH_SECRET`, and
+  no cloud credentials. It signs in as each persona by writing a session row and
+  sending its cookie, then requests every page and API route and checks that
+  each response is the one those roles should get. Allowed requests carry a body
+  the route rejects, or an id that doesn't exist, so passing a gate changes
+  nothing. `E2E_BASE_URL` points it at a server that is already running instead.
+
+A persona is one of the fixed role combinations in `test/support/access.ts`.
+Adding a role or a gated route means adding it there and to the matrix in
+`test/e2e/roles.test.ts`; the unit suite fails if a `can*` check exists that its
+policy table doesn't mention.
+
+The DB and e2e suites refuse to run against anything but `workshops_agent` or
+`workshops_test`, and they check with a query rather than trusting the URL.
+Every row they create has an id starting `wo_test_<suite>_`, and cleanup deletes
+only those rows.
+
+A test marked `todo` records a suspected bug that hasn't been fixed yet. It runs,
+fails, and is reported without failing the suite.
+
 ---
 
 # Exercising code without deploying

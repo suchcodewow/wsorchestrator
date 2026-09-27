@@ -22,7 +22,7 @@ const updated = new Intl.DateTimeFormat("en", {
 
 export default async function LabsPage() {
   const session = await auth();
-  const canEdit = session?.user ? canManageLabGuides(session.user.siteRole) : false;
+  const canEdit = session?.user ? canManageLabGuides(session.user.access) : false;
 
   const workshops = await listLabWorkshops(canEdit);
 

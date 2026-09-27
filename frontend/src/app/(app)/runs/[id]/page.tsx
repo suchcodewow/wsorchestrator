@@ -1,7 +1,8 @@
 /** One event's page. */
 
-import { notFound } from "next/navigation";
-import { auth } from "@/auth";
+import { notFound, redirect } from "next/navigation";
+import { auth, signInPath } from "@/auth";
+import { canUseEvents } from "@/lib/roles";
 import { getRunForViewer } from "@/lib/runs";
 import { RunView } from "./run-view";
 
@@ -11,8 +12,10 @@ export default async function RunPage({
   params: Promise<{ id: string }>;
 }) {
   const session = await auth();
+  if (!session?.user) redirect(await signInPath());
   const { id } = await params;
-  const viewer = { id: session!.user.id, role: session!.user.siteRole };
+  if (!canUseEvents(session.user.access)) notFound();
+  const viewer = { id: session.user.id, access: session.user.access };
   const result = await getRunForViewer(id, viewer);
   if (!result) notFound();
 

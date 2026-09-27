@@ -10,7 +10,7 @@ async function requireAdministrator() {
   if (!session?.user) {
     return { error: NextResponse.json({ error: "unauthorized" }, { status: 401 }) };
   }
-  if (!canAuditProjects(session.user.siteRole)) {
+  if (!canAuditProjects(session.user.access)) {
     return { error: NextResponse.json({ error: "forbidden" }, { status: 403 }) };
   }
   return { error: null };

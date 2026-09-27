@@ -1,4 +1,4 @@
-/** The bootstrap administrators, from SITE_ADMIN_EMAILS. */
+/** The bootstrap platform administrators, from SITE_ADMIN_EMAILS. */
 
 export function bootstrapAdminEmails(): string[] {
   return (process.env.SITE_ADMIN_EMAILS ?? "")
