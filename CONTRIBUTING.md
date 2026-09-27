@@ -210,7 +210,7 @@ do not touch production.
 
 **A push to `main` deploys to production.** The `deploy_on_push_main` webhook
 trigger runs the `deploy_workshop_orchestrator` Harness pipeline, which
-typechecks and unit-tests the runner, applies infrastructure, builds both
+typechecks and unit-tests the runner and the frontend, applies infrastructure, builds both
 images, runs the SQL migrations against Cloud SQL, and rolls Cloud Run. There is
 no staging environment between your push and the app attendees use.
 
@@ -218,8 +218,8 @@ Before you push:
 
 ```bash
 cd runner && npm run verify      # typecheck + unit tests — the same gate CI runs
-cd frontend && npm run verify    # typecheck + lint + unit tests
-cd frontend && npm run test:db   # role rules against workshops_agent
+cd frontend && npm run verify    # typecheck + lint + unit tests — also run by CI
+cd frontend && npm run test:db   # role rules against workshops_agent — local only
 ```
 
 If you changed who may see or do something, also build and run the role

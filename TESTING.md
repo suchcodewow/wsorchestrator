@@ -77,7 +77,9 @@ appears twice means the fix never landed. Both of those are visible now.
 - The Harness pipeline `deploy_workshop_orchestrator` gains a **Verify stage**,
   first, ahead of the infrastructure apply and both image builds: `npm ci &&
   npm run verify` in `runner/`. This is the gate that was missing entirely, and
-  it is on the path a push to main actually takes.
+  it is on the path a push to main actually takes. A second step,
+  `verify_frontend`, runs the frontend's `npm run verify` (typecheck, lint, and
+  the unit suite with the role tables) in the same stage.
 
   Worth being explicit about why it took two tries to put it in the right place:
   a `verify` step was first added to `cloudbuild.yaml`, which reads like the
@@ -242,8 +244,11 @@ cd frontend
 npm test            # unit: pure libraries, no database, a few seconds
 npm run test:db     # the role rules against workshops_agent
 npm run build && npm run test:e2e   # every role against the production build
-npm run verify      # typecheck + lint + unit
+npm run verify      # typecheck + lint + unit — what the pipeline's Verify stage runs
 ```
+
+Only `verify` runs in CI. The DB and e2e suites need Postgres and a built
+server, so run them yourself before pushing a change to who may do what.
 
 - **`test/unit/`** covers the pure libraries: the role checks for all 30
   combinations of roles, the sidebar and settings tabs for each persona, the

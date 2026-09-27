@@ -63,7 +63,7 @@ change either does not run or is invisible to review.
 
 ```bash
 cd runner    && npm run verify              # typecheck + unit tests, the CI gate
-cd frontend  && npm run verify              # typecheck + lint + unit tests
+cd frontend  && npm run verify              # typecheck + lint + unit tests, also the CI gate
 cd frontend  && npm run test:db             # role rules, against workshops_agent
 ```
 

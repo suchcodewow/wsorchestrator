@@ -16,7 +16,9 @@ pipeline:
          provider message a real run has died on (see TESTING.md); most of this
          project's failed workshops were a pure function reading one of those
          strings and reaching the wrong conclusion. Cheap, and it fails here
-         rather than in front of a room.
+         rather than in front of a room. The frontend gets the same gate —
+         typecheck, lint, and its unit suite, including the role rules — so a
+         permission regression fails here rather than in production.
       2. Infrastructure — an IACM stage against the `admin_control_plane`
          workspace. Runs before the build so a commit that changes an env var or
          a Cloud Run setting takes effect in the same run that ships the code.
@@ -54,7 +56,7 @@ pipeline:
   variables:
     - name: verify
       type: String
-      description: "\"true\" typechecks and unit-tests the runner before anything else runs; \"false\" skips the gate."
+      description: "\"true\" typechecks and unit-tests the runner and frontend before anything else runs; \"false\" skips the gate."
       required: false
       value: <+input>.default(true).allowedValues(true,false)
     - name: run_infra
@@ -136,6 +138,24 @@ pipeline:
                       # typecheck + the unit suite. ~90ms of actual work; the
                       # install dominates. Pure — no cloud, no database, no
                       # credentials — so it is safe on every commit.
+                      npm run verify
+              - step:
+                  type: Run
+                  name: Typecheck Lint and Test Frontend
+                  identifier: verify_frontend
+                  timeout: 15m
+                  spec:
+                    shell: Sh
+                    image: node:22-slim
+                    command: |
+                      set -eu
+                      cd frontend
+                      npm ci --no-audit --no-fund --silent
+                      # typecheck + lint + the unit suite, which includes every
+                      # role's permission table. Pure, like the runner's: no
+                      # database, no build, no credentials. The DB and e2e role
+                      # suites need Postgres and a built server, so they stay
+                      # local — see TESTING.md.
                       npm run verify
         when:
           pipelineStatus: Success

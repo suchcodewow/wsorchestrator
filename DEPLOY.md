@@ -72,7 +72,7 @@ images, applies the SQL migrations, and rolls Cloud Run — via the
 ```
 push to main
   └─ Harness: deploy_workshop_orchestrator
-       ├─ 1. Verify              typecheck + unit-test the runner
+       ├─ 1. Verify              typecheck + unit-test the runner and frontend
        ├─ 2. Infrastructure      IaCM apply of the admin_control_plane workspace
        └─ 3. Build/migrate/deploy (as build-sa)
               ├─ build app + runner images
