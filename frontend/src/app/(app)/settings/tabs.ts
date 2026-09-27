@@ -1,13 +1,7 @@
-/** The tabs across the top of site settings. */
+/** The tabs across the top of event settings. */
 
-import {
-  AtSign,
-  FileCode2,
-  Github,
-  KeySquare,
-  type LucideIcon,
-} from "lucide-react";
-import { canManageSignInDomains, type Access } from "@/lib/roles";
+import { FileCode2, Github, KeySquare, type LucideIcon } from "lucide-react";
+import type { Access } from "@/lib/roles";
 
 export type SiteSettingsTab = {
   href: string;
@@ -18,12 +12,6 @@ export type SiteSettingsTab = {
 };
 
 export const SITE_SETTINGS_TABS: SiteSettingsTab[] = [
-  {
-    href: "/settings/domains",
-    label: "Sign-in domains",
-    Icon: AtSign,
-    visible: canManageSignInDomains,
-  },
   { href: "/settings/org-secrets", label: "Org Secrets", Icon: KeySquare },
   { href: "/settings/templates", label: "Templates", Icon: FileCode2 },
   { href: "/settings/repos", label: "GitHub Repos", Icon: Github },

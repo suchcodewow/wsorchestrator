@@ -470,7 +470,7 @@ role does everything the one before it does.
 | **Event Contributor**   | Writes Harness components but cannot run events.                |
 | **Event Operator**      | Schedules and runs their own events.                            |
 | **Event Manager**       | A **Show all events** switch that flips the calendar to every user's events, and can open and delete any of them. Also writes the [workshops and lab guides](#workshops-and-lab-guides). |
-| **Event Administrator** | Sets everyone's event role on **Manage users**; **Admin settings** (org secrets, templates, GitHub repos); and **Cloud Status**. |
+| **Event Administrator** | Sets everyone's event role on **Manage users**; **Event Settings** (org secrets, templates, GitHub repos); and **Cloud Status**. |
 
 **Scheduler** — a placeholder for now.
 
@@ -482,7 +482,7 @@ role does everything the one before it does.
 
 **Platform Administrator** is a flag rather than a role in an area. It counts
 as administrator in every area, and adds what reaches past any single one:
-[who may sign in at all](#restricting-sign-in), the [**Backups**](#backups)
+[who may sign in at all](#restricting-sign-in) on **Admin Settings**, the [**Backups**](#backups)
 page — restoring rolls back every area at once — the **Database** console, and
 making other people platform administrators. Only a platform administrator can
 change another platform administrator's roles.
@@ -512,7 +512,7 @@ worth showing.
 By default anyone with a Google account can sign in, arriving with no access to
 any area until an administrator grants a role. To limit
 that to your own organization, a platform administrator adds the domains you
-allow under **Admin settings → Sign-in domains**.
+allow under **Admin Settings**.
 
 The list lives in the database (`allowed_email_domains`), so changing it is a
 page and not a redeploy. Domains can be added, edited, and removed there, each

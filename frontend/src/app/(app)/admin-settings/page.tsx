@@ -1,4 +1,4 @@
-/** The sign-in domains page. */
+/** Admin settings: the platform's own configuration, beyond any single area. */
 
 import { notFound, redirect } from "next/navigation";
 import { auth, signInPath } from "@/auth";
@@ -7,7 +7,7 @@ import { canManageSignInDomains } from "@/lib/roles";
 import { isBootstrapAdmin } from "@/lib/site-admins";
 import { DomainsView } from "./domains-view";
 
-export default async function SignInDomainsPage() {
+export default async function AdminSettingsPage() {
   const session = await auth();
   if (!session?.user) redirect(await signInPath());
   if (!canManageSignInDomains(session.user.access)) notFound();
@@ -15,14 +15,23 @@ export default async function SignInDomainsPage() {
   const domains = await listAllowedDomains();
 
   return (
-    <DomainsView
-      domains={domains.map((d) => ({
-        ...d,
-        createdAt: d.createdAt.toISOString(),
-      }))}
-      envDomains={envAllowedDomains()}
-      viewerEmail={session.user.email ?? ""}
-      viewerExempt={isBootstrapAdmin(session.user.email)}
-    />
+    <div className="space-y-8">
+      <div className="space-y-1.5">
+        <h1 className="text-3xl font-medium tracking-tight">Admin Settings</h1>
+        <p className="text-muted-foreground">
+          Configuration for the whole site, visible only to platform administrators.
+        </p>
+      </div>
+
+      <DomainsView
+        domains={domains.map((d) => ({
+          ...d,
+          createdAt: d.createdAt.toISOString(),
+        }))}
+        envDomains={envAllowedDomains()}
+        viewerEmail={session.user.email ?? ""}
+        viewerExempt={isBootstrapAdmin(session.user.email)}
+      />
+    </div>
   );
 }

@@ -1,4 +1,4 @@
-/** The layout for site settings, the deployment's own configuration. */
+/** The layout for event settings, the configuration events run with. */
 
 import { notFound, redirect } from "next/navigation";
 import { auth, signInPath } from "@/auth";
@@ -17,7 +17,7 @@ export default async function SiteSettingsLayout({
   return (
     <div className="space-y-8">
       <div className="space-y-1.5">
-        <h1 className="text-3xl font-medium tracking-tight">Settings</h1>
+        <h1 className="text-3xl font-medium tracking-tight">Event Settings</h1>
         <p className="text-muted-foreground">
           Configuration for running events, visible only to administrators.
         </p>

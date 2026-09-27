@@ -1,5 +1,5 @@
 /**
- * What each person sees in the sidebar and across the top of site settings.
+ * What each person sees in the sidebar and across the top of event settings.
  *
  * The sidebar is the only place most people learn a feature exists, so these
  * pin the exact entries per role rather than "at least these": a platform
@@ -39,7 +39,7 @@ const EXPECTED_SIDEBAR: Record<Persona, string[]> = {
     "[Administration]",
     "Manage users",
     "Cloud Status",
-    "Admin settings",
+    "Event Settings",
   ],
   schedulerViewer: ["Scheduler", "My settings"],
   schedulerAdmin: [
@@ -59,7 +59,7 @@ const EXPECTED_SIDEBAR: Record<Persona, string[]> = {
     "[Administration]",
     "Manage users",
     "Cloud Status",
-    "Admin settings",
+    "Event Settings",
     "Scheduler settings",
   ],
   platform: [
@@ -74,8 +74,9 @@ const EXPECTED_SIDEBAR: Record<Persona, string[]> = {
     "Backups",
     "Database",
     "Cloud Status",
-    "Admin settings",
+    "Event Settings",
     "Scheduler settings",
+    "Admin Settings",
   ],
 };
 
@@ -111,7 +112,7 @@ describe("sidebar", () => {
   test("platform-only pages never show for anyone who is not a platform administrator", () => {
     for (const a of EVERY_ACCESS.filter((a) => !a.platform)) {
       const labels = sidebar(a);
-      for (const page of ["Backups", "Database"]) {
+      for (const page of ["Backups", "Database", "Admin Settings"]) {
         assert.ok(!labels.includes(page), `${describeAccess(a)} sees ${page}`);
       }
     }
@@ -152,26 +153,18 @@ describe("isNavItemActive", () => {
   });
 });
 
-describe("site settings tabs", () => {
+describe("event settings tabs", () => {
   const labels = (a: Access) => visibleSettingsTabs(a).map((t) => t.label);
 
-  test("an event administrator gets everything but sign-in domains", () => {
-    assert.deepEqual(labels(PERSONAS.eventAdmin), ["Org Secrets", "Templates", "GitHub Repos"]);
-  });
-
-  test("a platform administrator also gets sign-in domains, first", () => {
-    assert.deepEqual(labels(PERSONAS.platform), [
-      "Sign-in domains",
-      "Org Secrets",
-      "Templates",
-      "GitHub Repos",
-    ]);
-  });
-
-  test("sign-in domains is platform-only across every combination", () => {
-    for (const a of EVERY_ACCESS) {
-      assert.equal(labels(a).includes("Sign-in domains"), a.platform, describeAccess(a));
+  test("every event administrator gets every tab, platform administrators included", () => {
+    for (const a of [PERSONAS.eventAdmin, PERSONAS.platform]) {
+      assert.deepEqual(labels(a), ["Org Secrets", "Templates", "GitHub Repos"], describeAccess(a));
     }
+  });
+
+  test("sign-in domains is not here: it belongs to Admin Settings", () => {
+    // It decides who may sign in at all, which reaches past the event area.
+    for (const a of EVERY_ACCESS) assert.ok(!labels(a).includes("Sign-in domains"), describeAccess(a));
   });
 
   test("every tab lives under /settings", () => {

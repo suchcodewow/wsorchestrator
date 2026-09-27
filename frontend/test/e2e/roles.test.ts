@@ -167,11 +167,11 @@ const PAGES: Record<string, PageCase> = {
   "/backups": { path: () => "/backups", expect: gated(canManageBackups) },
   "/database": { path: () => "/database", expect: gated(canRunSql) },
   "/cloud-status": { path: () => "/cloud-status", expect: gated(canAuditProjects) },
+  "/admin-settings": { path: () => "/admin-settings", expect: gated(canManageSignInDomains) },
   "/settings": {
     path: () => "/settings",
     expect: (a) => (canManageSettings(a) ? { to: visibleSettingsTabs(a)[0]!.href } : 404),
   },
-  "/settings/domains": { path: () => "/settings/domains", expect: gated(canManageSignInDomains) },
   "/settings/org-secrets": { path: () => "/settings/org-secrets", expect: gated(canManageSettings) },
   "/settings/templates": { path: () => "/settings/templates", expect: gated(canManageSettings) },
   "/settings/repos": { path: () => "/settings/repos", expect: gated(canManageSettings) },
