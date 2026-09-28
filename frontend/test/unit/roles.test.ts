@@ -83,6 +83,7 @@ const POLICY: Record<string, { actual: Check; expected: Check }> = {
     actual: roles.canManageUsers,
     expected: (a) => event("administrator")(a) || scheduler("administrator")(a),
   },
+  canDeleteUsers: { actual: roles.canDeleteUsers, expected: platformOnly },
 };
 
 test("the combinations cover every role", () => {
@@ -119,6 +120,7 @@ describe("the areas are independent", () => {
     assert.equal(roles.canManageBackups(a), false);
     assert.equal(roles.canRunSql(a), false);
     assert.equal(roles.canManageSignInDomains(a), false);
+    assert.equal(roles.canDeleteUsers(a), false);
   });
 
   test("an event administrator keeps the event settings, cloud status and user management", () => {

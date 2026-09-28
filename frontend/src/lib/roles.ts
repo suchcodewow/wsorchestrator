@@ -129,6 +129,8 @@ export function canManageRoles(access: Access, area: Area | "platform"): boolean
 export const canManageUsers = (access: Access) =>
   canManageRoles(access, "event") || canManageRoles(access, "scheduler");
 
+export const canDeleteUsers = (access: Access) => access.platform;
+
 /** The labels worth showing beside someone's name; an ordinary operator has none. */
 export function accessBadges(access: Access): string[] {
   if (access.platform) return [PLATFORM_ADMIN_LABEL];

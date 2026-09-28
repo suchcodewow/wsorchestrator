@@ -1,11 +1,16 @@
-/** Sets one of a user's roles: in an area, or platform administration. */
+/** Sets one of a user's roles (in an area, or platform administration), or deletes them. */
 
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/auth";
 import { EVENT_ROLES, SCHEDULER_ROLES } from "@/db/schema";
-import { canManageUsers } from "@/lib/roles";
-import { setUserRole, type SetRoleError } from "@/lib/site-users";
+import { canDeleteUsers, canManageUsers } from "@/lib/roles";
+import {
+  deleteUser,
+  setUserRole,
+  type DeleteUserError,
+  type SetRoleError,
+} from "@/lib/site-users";
 
 const patchSchema = z.discriminatedUnion("area", [
   z.object({ area: z.literal("event"), role: z.enum(EVENT_ROLES) }),
@@ -51,4 +56,38 @@ export async function PATCH(
     );
   }
   return NextResponse.json({ ok: true, ...parsed.data });
+}
+
+const DELETE_STATUS_FOR: Record<DeleteUserError, number> = {
+  not_found: 404,
+  self: 409,
+  forbidden: 403,
+  bootstrap: 409,
+  owns_events: 409,
+};
+
+export async function DELETE(
+  _req: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const session = await auth();
+  if (!session?.user) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+  if (!canDeleteUsers(session.user.access)) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
+
+  const { id } = await params;
+  const result = await deleteUser(
+    { id: session.user.id, access: session.user.access },
+    id,
+  );
+  if (!result.ok) {
+    return NextResponse.json(
+      { error: result.error },
+      { status: DELETE_STATUS_FOR[result.error] },
+    );
+  }
+  return NextResponse.json({ ok: true });
 }

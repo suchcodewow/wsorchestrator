@@ -1,11 +1,11 @@
-/** Reads everyone with an account, and sets their roles. */
+/** Reads everyone with an account, sets their roles, and deletes them. */
 
 import "server-only";
 
-import { asc, eq } from "drizzle-orm";
+import { asc, count, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { users, type EventRole, type SchedulerRole } from "@/db/schema";
-import { canManageRoles, type Access } from "@/lib/roles";
+import { users, workshopRuns, type EventRole, type SchedulerRole } from "@/db/schema";
+import { canDeleteUsers, canManageRoles, type Access } from "@/lib/roles";
 import { countRunsForUsers } from "@/lib/runs";
 import { isBootstrapAdmin } from "@/lib/site-admins";
 
@@ -104,4 +104,61 @@ export async function setUserRole(
 
   if (updated.length === 0) return { ok: false, error: "not_found" };
   return { ok: true };
+}
+
+/**
+ * - `self`        — nobody deletes their own account, so the last platform
+ *                   administrator can never remove themselves.
+ * - `forbidden`   — only a platform administrator deletes accounts.
+ * - `bootstrap`   — SITE_ADMIN_EMAILS would recreate it, as a platform
+ *                   administrator, on their next sign-in.
+ * - `owns_events` — events keep their owner, and carry cloud resources that
+ *                   are torn down through the event, not by deleting a person.
+ */
+export type DeleteUserError =
+  | "not_found"
+  | "self"
+  | "forbidden"
+  | "bootstrap"
+  | "owns_events";
+
+/** Removes an account, its sessions and its own settings; what they authored stays, unattributed. */
+export async function deleteUser(
+  actor: { id: string; access: Access },
+  targetUserId: string,
+): Promise<{ ok: true } | { ok: false; error: DeleteUserError }> {
+  if (actor.id === targetUserId) return { ok: false, error: "self" };
+  if (!canDeleteUsers(actor.access)) return { ok: false, error: "forbidden" };
+
+  const [target] = await db
+    .select({ email: users.email })
+    .from(users)
+    .where(eq(users.id, targetUserId));
+
+  if (!target) return { ok: false, error: "not_found" };
+  if (isBootstrapAdmin(target.email)) return { ok: false, error: "bootstrap" };
+
+  const [{ events }] = await db
+    .select({ events: count() })
+    .from(workshopRuns)
+    .where(eq(workshopRuns.userId, targetUserId));
+  if (events > 0) return { ok: false, error: "owns_events" };
+
+  try {
+    const deleted = await db
+      .delete(users)
+      .where(eq(users.id, targetUserId))
+      .returning({ id: users.id });
+    if (deleted.length === 0) return { ok: false, error: "not_found" };
+  } catch (err) {
+    // An event created since the count above still holds its owner.
+    if (pgCode(err) === "23503") return { ok: false, error: "owns_events" };
+    throw err;
+  }
+  return { ok: true };
+}
+
+function pgCode(err: unknown): string | undefined {
+  const e = err as { code?: string; cause?: { code?: string } } | null;
+  return e?.code ?? e?.cause?.code;
 }
