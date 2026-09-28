@@ -348,6 +348,32 @@ export const apiTokens = pgTable(
   (t) => [index("api_tokens_user_idx").on(t.userId, t.createdAt)],
 );
 
+/**
+ * A link that gives whoever follows it, and signs in, the roles it names —
+ * as long as they have no access yet. Null means that area is not granted.
+ * Only the token's hash is kept; the link itself is shown once.
+ */
+export const userInvites = pgTable(
+  "user_invites",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tokenHash: text("token_hash").notNull().unique(),
+    eventRole: eventRole("event_role"),
+    schedulerRole: schedulerRole("scheduler_role"),
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    uses: integer("uses").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [index("user_invites_created_by_idx").on(t.createdBy, t.createdAt)],
+);
+
+export const INVITE_TTL_MINUTES = 15;
+
 export const TOKEN_TTL_DAYS = 30;
 
 export const TOKEN_NAME_MAX = 80;

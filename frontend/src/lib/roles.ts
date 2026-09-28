@@ -141,6 +141,10 @@ export function accessBadges(access: Access): string[] {
   return badges;
 }
 
+/** No role in any area — someone who has signed in and been given nothing. */
+export const hasNoAccess = (access: Access) =>
+  !access.platform && access.event === "none" && access.scheduler === null;
+
 /** Where a signed-in user lands: the first area they can use. */
 export function homePath(access: Access): string {
   if (canUseEvents(access)) return "/events";

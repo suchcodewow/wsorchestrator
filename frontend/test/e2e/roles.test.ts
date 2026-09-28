@@ -164,6 +164,7 @@ const PAGES: Record<string, PageCase> = {
     expect: (a) => (homePath(a) === "/welcome" ? 200 : { to: homePath(a) }),
   },
   "/users": { path: () => "/users", expect: gated(canManageUsers) },
+  "/invite/<unknown>": { path: () => `/invite/${"A".repeat(32)}`, expect: () => 200 },
   "/backups": { path: () => "/backups", expect: gated(canManageBackups) },
   "/database": { path: () => "/database", expect: gated(canRunSql) },
   "/cloud-status": { path: () => "/cloud-status", expect: gated(canAuditProjects) },
@@ -277,6 +278,8 @@ const ROUTES: RouteCase[] = [
 
   // Users
   { method: "PATCH", path: `/api/users/${MISSING}`, allowed: canManageUsers, body: () => ({}) },
+  { method: "POST", path: "/api/users/invites", allowed: canManageUsers, body: () => ({}) },
+  { method: "POST", path: "/api/invites/accept", allowed: true, body: () => ({}) },
 
   // Components
   { method: "GET", path: "/api/component-sets", allowed: canContributeComponents },
@@ -477,6 +480,82 @@ describe("PATCH /api/users/:id", () => {
     for (const body of [{ area: "event", role: "owner" }, { area: "platform" }, { role: "manager" }, null]) {
       assert.equal((await patch("platform", target.id, body)).status, 400, JSON.stringify(body));
     }
+  });
+});
+
+describe("invite links", () => {
+  const create = (who: Persona, grant: unknown) => send(who, "POST", "/api/users/invites", grant);
+  const accept = (cookie: string, token: string) =>
+    send({ cookie }, "POST", "/api/invites/accept", { token });
+
+  async function link(who: Persona, grant: unknown) {
+    const res = await create(who, grant);
+    assert.equal(res.status, 201, res.body);
+    const { path } = JSON.parse(res.body) as { path: string };
+    assert.match(path, /^\/invite\/[A-Za-z0-9_-]{32}$/);
+    return path;
+  }
+
+  test("someone with no access signs in, opens the link, and gets its roles", async () => {
+    const path = await link("eventAdmin", { eventRole: "manager", schedulerRole: null });
+    const newcomer = await scope.createUser("inv_newcomer", PERSONAS.nobody);
+    const cookie = await createSession(newcomer.id);
+
+    const page = await send({ cookie }, "GET", path);
+    assert.equal(page.status, 200);
+    assert.deepEqual(await readRoles(newcomer.id), PERSONAS.nobody, "opening the page grants nothing");
+
+    const res = await accept(cookie, path.split("/").pop()!);
+    assert.equal(res.status, 200, res.body);
+    assert.deepEqual(JSON.parse(res.body), { applied: true, home: "/events" });
+    assert.deepEqual(await readRoles(newcomer.id), { event: "manager", scheduler: null, platform: false });
+    assert.equal((await send({ cookie }, "GET", "/events")).status, 200);
+  });
+
+  test("signed out, the link goes through sign-in and back", async () => {
+    const path = await link("eventAdmin", { eventRole: "operator", schedulerRole: null });
+    const res = await fetch(`${server.baseUrl}${path}`, { redirect: "manual" });
+    assert.ok(isRedirect(res.status), String(res.status));
+    const to = new URL(res.headers.get("location")!, server.baseUrl);
+    assert.equal(to.pathname, "/signin");
+    assert.equal(to.searchParams.get("callbackUrl"), path);
+  });
+
+  test("someone who already has access keeps what they have", async () => {
+    const path = await link("platform", { eventRole: "administrator", schedulerRole: "administrator" });
+    const res = await accept(cookies.operator, path.split("/").pop()!);
+    assert.equal(res.status, 200, res.body);
+    assert.equal(JSON.parse(res.body).applied, false);
+    assert.deepEqual(await readRoles(people.operator.id), PERSONAS.operator);
+  });
+
+  test("an administrator links only the areas they administer", async () => {
+    assert.equal((await create("schedulerAdmin", { eventRole: "operator", schedulerRole: null })).status, 403);
+    assert.equal((await create("eventAdmin", { eventRole: null, schedulerRole: "viewer" })).status, 403);
+    assert.equal((await create("schedulerAdmin", { eventRole: null, schedulerRole: "viewer" })).status, 201);
+  });
+
+  test("a link that grants nothing, or platform administration, is not made", async () => {
+    for (const body of [
+      { eventRole: "none", schedulerRole: null },
+      { eventRole: null, schedulerRole: null },
+      { eventRole: "operator", schedulerRole: null, platform: true },
+    ]) {
+      const res = await create("platform", body);
+      if ("platform" in body) {
+        // An unknown key is dropped, never honoured: the link grants the rest.
+        const token = JSON.parse(res.body).path.split("/").pop();
+        const newcomer = await scope.createUser("inv_plat", PERSONAS.nobody);
+        await accept(await createSession(newcomer.id), token);
+        assert.equal((await readRoles(newcomer.id))?.platform, false);
+      } else {
+        assert.equal(res.status, 400, JSON.stringify(body));
+      }
+    }
+  });
+
+  test("an unknown link is 404", async () => {
+    assert.equal((await accept(cookies.nobody, "A".repeat(32))).status, 404);
   });
 });
 

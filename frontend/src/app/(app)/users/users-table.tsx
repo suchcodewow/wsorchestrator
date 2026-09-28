@@ -38,6 +38,7 @@ import {
 } from "@/lib/roles";
 import { riseChild, staggerParent } from "@/lib/motion";
 import { cn } from "@/lib/utils";
+import { CreateInviteDialog } from "./create-invite-dialog";
 
 type SiteUser = {
   id: string;
@@ -149,12 +150,18 @@ export function UsersTable({
       animate="show"
       className="space-y-8"
     >
-      <motion.div variants={riseChild} className="space-y-1.5">
-        <h1 className="text-3xl font-medium tracking-tight">Users</h1>
-        <p className="text-muted-foreground">
-          Everyone who has signed in, and what they are allowed to do in each
-          area. Each area&apos;s administrators set its roles.
-        </p>
+      <motion.div
+        variants={riseChild}
+        className="flex flex-col items-start gap-4 sm:flex-row sm:justify-between"
+      >
+        <div className="space-y-1.5">
+          <h1 className="text-3xl font-medium tracking-tight">Users</h1>
+          <p className="text-muted-foreground">
+            Everyone who has signed in, and what they are allowed to do in each
+            area. Each area&apos;s administrators set its roles.
+          </p>
+        </div>
+        <CreateInviteDialog viewerAccess={viewerAccess} />
       </motion.div>
 
       <motion.div variants={riseChild}>
