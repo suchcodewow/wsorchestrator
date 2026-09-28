@@ -30,7 +30,7 @@ export default async function LabsPage() {
     <div className="mx-auto max-w-3xl">
       <div className="flex items-start justify-between gap-6">
         <div>
-          <h1 className="text-2xl font-medium tracking-tight">Workshops</h1>
+          <h1 className="text-2xl font-medium tracking-tight">Event Guides</h1>
           <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
             Open a workshop and work through its lab guides in order.
           </p>

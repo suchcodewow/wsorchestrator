@@ -265,7 +265,7 @@ export function EventCalendar({
           className="flex flex-wrap items-end justify-between gap-4"
         >
           <div className="space-y-1.5">
-            <h1 className="text-3xl font-medium tracking-tight">Events</h1>
+            <h1 className="text-3xl font-medium tracking-tight">Orchestrator</h1>
             <p className="text-muted-foreground">
               {scope === "all"
                 ? "Every user's events, including your own."

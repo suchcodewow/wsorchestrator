@@ -5,7 +5,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { ChevronDown, ChevronRight, Loader2, Search, ShieldCheck } from "lucide-react";
+import { ChevronDown, Loader2, Search, ShieldCheck } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -27,7 +27,6 @@ import {
   EVENT_ROLE_DESCRIPTIONS,
   EVENT_ROLE_LABELS,
   NO_SCHEDULER_ACCESS_LABEL,
-  PLATFORM_ADMIN_DESCRIPTION,
   PLATFORM_ADMIN_LABEL,
   SCHEDULER_ROLE_DESCRIPTIONS,
   SCHEDULER_ROLE_LABELS,
@@ -96,7 +95,6 @@ export function UsersTable({
   const [edits, setEdits] = useState<Record<string, Partial<Roles>>>({});
   const [saving, setSaving] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [legendOpen, setLegendOpen] = useState(false);
   const [query, setQuery] = useState("");
 
   const shown = useMemo(() => {
@@ -179,43 +177,8 @@ export function UsersTable({
         variants={riseChild}
         className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between"
       >
-        <h1 className="text-3xl font-medium tracking-tight">Users</h1>
+        <h1 className="text-3xl font-medium tracking-tight">Manage users</h1>
         <CreateInviteDialog viewerAccess={viewerAccess} />
-      </motion.div>
-
-      <motion.div variants={riseChild}>
-        <Card className="gap-0 py-0">
-          <button
-            type="button"
-            onClick={() => setLegendOpen((o) => !o)}
-            aria-expanded={legendOpen}
-            className="flex w-full cursor-pointer items-center gap-2 rounded-xl px-6 py-3 text-left text-sm text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
-          >
-            <ChevronRight
-              className={cn("size-4 transition-transform", legendOpen && "rotate-90")}
-            />
-            What each role can do
-          </button>
-          {legendOpen && (
-            <CardContent className="grid gap-5 pb-5 text-sm">
-              <Legend
-                heading="Events"
-                rows={EVENT_ROLES.map((r) => [EVENT_ROLE_LABELS[r], EVENT_ROLE_DESCRIPTIONS[r]])}
-              />
-              <Legend
-                heading="Scheduler"
-                rows={SCHEDULER_ROLES.map((r) => [
-                  SCHEDULER_ROLE_LABELS[r],
-                  SCHEDULER_ROLE_DESCRIPTIONS[r],
-                ])}
-              />
-              <Legend
-                heading="Platform"
-                rows={[[PLATFORM_ADMIN_LABEL, PLATFORM_ADMIN_DESCRIPTION]]}
-              />
-            </CardContent>
-          )}
-        </Card>
       </motion.div>
 
       {pendingAdmins.length > 0 && (
@@ -424,22 +387,6 @@ export function UsersTable({
         </div>
       </motion.div>
     </motion.div>
-  );
-}
-
-function Legend({ heading, rows }: { heading: string; rows: [string, string][] }) {
-  return (
-    <div className="grid gap-2">
-      <h2 className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
-        {heading}
-      </h2>
-      {rows.map(([label, description]) => (
-        <div key={label} className="flex flex-wrap gap-x-2.5">
-          <span className="w-44 shrink-0 font-medium">{label}</span>
-          <span className="text-muted-foreground">{description}</span>
-        </div>
-      ))}
-    </div>
   );
 }
 
