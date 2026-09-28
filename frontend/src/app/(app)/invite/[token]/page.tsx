@@ -10,7 +10,13 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { auth, signInPath } from "@/auth";
-import { EVENT_ROLE_LABELS, SCHEDULER_ROLE_LABELS, hasNoAccess, homePath } from "@/lib/roles";
+import {
+  EVALS_ROLE_LABELS,
+  EVENT_ROLE_LABELS,
+  SCHEDULER_ROLE_LABELS,
+  hasNoAccess,
+  homePath,
+} from "@/lib/roles";
 import { readInvite, type InviteGrant } from "@/lib/user-invites";
 import { InviteView } from "./invite-view";
 
@@ -24,6 +30,7 @@ function grantLabels(grant: InviteGrant): string[] {
   return [
     ...(grant.eventRole ? [EVENT_ROLE_LABELS[grant.eventRole]] : []),
     ...(grant.schedulerRole ? [SCHEDULER_ROLE_LABELS[grant.schedulerRole]] : []),
+    ...(grant.evalsRole ? [EVALS_ROLE_LABELS[grant.evalsRole]] : []),
   ];
 }
 

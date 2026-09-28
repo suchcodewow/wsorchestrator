@@ -22,6 +22,7 @@ import {
   INVITE_TTL_MINUTES,
   userInvites,
   users,
+  type EvalsRole,
   type EventRole,
   type SchedulerRole,
 } from "@/db/schema";
@@ -31,6 +32,7 @@ import { canManageRoles, type Access } from "@/lib/roles";
 export type InviteGrant = {
   eventRole: Exclude<EventRole, "none"> | null;
   schedulerRole: SchedulerRole | null;
+  evalsRole: EvalsRole | null;
 };
 
 const TOKEN_BYTES = 24;
@@ -44,7 +46,8 @@ const sha256 = (value: string) =>
 export function mayGrant(access: Access, grant: InviteGrant): boolean {
   return (
     (grant.eventRole === null || canManageRoles(access, "event")) &&
-    (grant.schedulerRole === null || canManageRoles(access, "scheduler"))
+    (grant.schedulerRole === null || canManageRoles(access, "scheduler")) &&
+    (grant.evalsRole === null || canManageRoles(access, "evals"))
   );
 }
 
@@ -61,7 +64,7 @@ export async function createInvite(
   | { ok: true; token: string; expiresAt: Date }
   | { ok: false; error: CreateInviteError }
 > {
-  if (grant.eventRole === null && grant.schedulerRole === null) {
+  if (grant.eventRole === null && grant.schedulerRole === null && grant.evalsRole === null) {
     return { ok: false, error: "empty" };
   }
   if (!mayGrant(actor.access, grant)) return { ok: false, error: "forbidden" };
@@ -73,6 +76,7 @@ export async function createInvite(
     tokenHash: sha256(token),
     eventRole: grant.eventRole,
     schedulerRole: grant.schedulerRole,
+    evalsRole: grant.evalsRole,
     createdBy: actor.id,
     expiresAt,
   });
@@ -104,11 +108,13 @@ export async function readInvite(
       id: userInvites.id,
       eventRole: userInvites.eventRole,
       schedulerRole: userInvites.schedulerRole,
+      evalsRole: userInvites.evalsRole,
       expiresAt: userInvites.expiresAt,
       creatorName: users.name,
       creatorEmail: users.email,
       creatorEvent: users.eventRole,
       creatorScheduler: users.schedulerRole,
+      creatorEvals: users.evalsRole,
       creatorPlatform: users.isPlatformAdmin,
     })
     .from(userInvites)
@@ -121,10 +127,12 @@ export async function readInvite(
   const grant: InviteGrant = {
     eventRole: row.eventRole === "none" ? null : row.eventRole,
     schedulerRole: row.schedulerRole,
+    evalsRole: row.evalsRole,
   };
   const creator: Access = {
     event: row.creatorEvent,
     scheduler: row.creatorScheduler,
+    evals: row.creatorEvals,
     platform: row.creatorPlatform,
   };
   if (!mayGrant(creator, grant)) return { ok: false, error: "revoked" };
@@ -163,12 +171,14 @@ export async function acceptInvite(
       .set({
         eventRole: invite.grant.eventRole ?? "none",
         schedulerRole: invite.grant.schedulerRole,
+        evalsRole: invite.grant.evalsRole,
       })
       .where(
         and(
           eq(users.id, userId),
           eq(users.eventRole, "none"),
           isNull(users.schedulerRole),
+          isNull(users.evalsRole),
           eq(users.isPlatformAdmin, false),
         ),
       )

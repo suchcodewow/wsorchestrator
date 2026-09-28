@@ -167,6 +167,7 @@ export async function resolveToken(
       revokedAt: apiTokens.revokedAt,
       eventRole: users.eventRole,
       schedulerRole: users.schedulerRole,
+      evalsRole: users.evalsRole,
       isPlatformAdmin: users.isPlatformAdmin,
       email: users.email,
     })
@@ -193,6 +194,7 @@ export async function resolveToken(
     access: {
       event: row.eventRole,
       scheduler: row.schedulerRole,
+      evals: row.evalsRole,
       platform: row.isPlatformAdmin,
     },
     email: row.email,

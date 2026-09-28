@@ -4,7 +4,13 @@ import "server-only";
 
 import { asc, count, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { users, workshopRuns, type EventRole, type SchedulerRole } from "@/db/schema";
+import {
+  users,
+  workshopRuns,
+  type EvalsRole,
+  type EventRole,
+  type SchedulerRole,
+} from "@/db/schema";
 import { canDeleteUsers, canManageRoles, type Access } from "@/lib/roles";
 import { countRunsForUsers } from "@/lib/runs";
 import { isBootstrapAdmin } from "@/lib/site-admins";
@@ -15,6 +21,7 @@ export type SiteUser = {
   email: string | null;
   eventRole: EventRole;
   schedulerRole: SchedulerRole | null;
+  evalsRole: EvalsRole | null;
   isPlatformAdmin: boolean;
   /** Listed in SITE_ADMIN_EMAILS, so made a platform administrator on every sign-in. */
   isBootstrapAdmin: boolean;
@@ -30,6 +37,7 @@ export async function listSiteUsers(): Promise<SiteUser[]> {
         email: users.email,
         eventRole: users.eventRole,
         schedulerRole: users.schedulerRole,
+        evalsRole: users.evalsRole,
         isPlatformAdmin: users.isPlatformAdmin,
       })
       .from(users)
@@ -47,6 +55,7 @@ export async function listSiteUsers(): Promise<SiteUser[]> {
 export type RoleChange =
   | { area: "event"; role: EventRole }
   | { area: "scheduler"; role: SchedulerRole | null }
+  | { area: "evals"; role: EvalsRole | null }
   | { area: "platform"; value: boolean };
 
 /**
@@ -94,7 +103,9 @@ export async function setUserRole(
       ? { eventRole: change.role }
       : change.area === "scheduler"
         ? { schedulerRole: change.role }
-        : { isPlatformAdmin: change.value };
+        : change.area === "evals"
+          ? { evalsRole: change.role }
+          : { isPlatformAdmin: change.value };
 
   const updated = await db
     .update(users)

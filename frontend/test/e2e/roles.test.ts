@@ -32,6 +32,7 @@ import {
   canCreateEvents,
   canDeleteUsers,
   canManageBackups,
+  canManageEvalsSettings,
   canManageLabGuides,
   canManageSchedulerSettings,
   canManageSettings,
@@ -40,6 +41,7 @@ import {
   canPublishComponents,
   canRunSql,
   canSeeAllEvents,
+  canUseEvals,
   canUseEvents,
   canUseScheduler,
   homePath,
@@ -159,6 +161,11 @@ const PAGES: Record<string, PageCase> = {
   "/scheduler-settings": {
     path: () => "/scheduler-settings",
     expect: gated(canManageSchedulerSettings),
+  },
+  "/evals": { path: () => "/evals", expect: gated(canUseEvals) },
+  "/evals-settings": {
+    path: () => "/evals-settings",
+    expect: gated(canManageEvalsSettings),
   },
   "/welcome": {
     path: () => "/welcome",
@@ -429,14 +436,38 @@ describe("PATCH /api/users/:id", () => {
 
     assert.equal((await patch("eventAdmin", target.id, { area: "scheduler", role: "viewer" })).status, 403);
     assert.equal((await patch("eventAdmin", target.id, { area: "platform", value: true })).status, 403);
-    assert.deepEqual(await readRoles(target.id), { event: "manager", scheduler: null, platform: false });
+    assert.deepEqual(await readRoles(target.id), {
+      event: "manager",
+      scheduler: null,
+      evals: null,
+      platform: false,
+    });
   });
 
   test("a scheduler administrator sets scheduler roles, and only scheduler roles", async () => {
     const target = await scope.createUser("u_target2", PERSONAS.operator);
     assert.equal((await patch("schedulerAdmin", target.id, { area: "scheduler", role: "viewer" })).status, 200);
     assert.equal((await patch("schedulerAdmin", target.id, { area: "event", role: "manager" })).status, 403);
-    assert.deepEqual(await readRoles(target.id), { event: "operator", scheduler: "viewer", platform: false });
+    assert.equal((await patch("schedulerAdmin", target.id, { area: "evals", role: "viewer" })).status, 403);
+    assert.deepEqual(await readRoles(target.id), {
+      event: "operator",
+      scheduler: "viewer",
+      evals: null,
+      platform: false,
+    });
+  });
+
+  test("an eVals administrator sets eVals roles, and only eVals roles", async () => {
+    const target = await scope.createUser("u_target6", PERSONAS.operator);
+    assert.equal((await patch("evalsAdmin", target.id, { area: "evals", role: "viewer" })).status, 200);
+    assert.equal((await patch("evalsAdmin", target.id, { area: "event", role: "manager" })).status, 403);
+    assert.equal((await patch("evalsAdmin", target.id, { area: "scheduler", role: "viewer" })).status, 403);
+    assert.deepEqual(await readRoles(target.id), {
+      event: "operator",
+      scheduler: null,
+      evals: "viewer",
+      platform: false,
+    });
   });
 
   test("a platform administrator sets anything, on anyone", async () => {
@@ -444,6 +475,7 @@ describe("PATCH /api/users/:id", () => {
     for (const body of [
       { area: "event", role: "administrator" },
       { area: "scheduler", role: "administrator" },
+      { area: "evals", role: "administrator" },
       { area: "platform", value: true },
     ]) {
       assert.equal((await patch("platform", target.id, body)).status, 200, JSON.stringify(body));
@@ -451,6 +483,7 @@ describe("PATCH /api/users/:id", () => {
     assert.deepEqual(await readRoles(target.id), {
       event: "administrator",
       scheduler: "administrator",
+      evals: "administrator",
       platform: true,
     });
   });
@@ -459,12 +492,18 @@ describe("PATCH /api/users/:id", () => {
     const target = await scope.createUser("u_target4", PERSONAS.platform);
     assert.equal((await patch("eventAdmin", target.id, { area: "event", role: "none" })).status, 403);
     assert.equal((await patch("schedulerAdmin", target.id, { area: "scheduler", role: null })).status, 403);
+    assert.equal((await patch("evalsAdmin", target.id, { area: "evals", role: null })).status, 403);
     assert.deepEqual(await readRoles(target.id), PERSONAS.platform);
   });
 
   test("nobody changes their own roles", async () => {
-    for (const p of ["eventAdmin", "schedulerAdmin", "platform"] as const) {
-      const body = p === "schedulerAdmin" ? { area: "scheduler", role: null } : { area: "event", role: "none" };
+    for (const p of ["eventAdmin", "schedulerAdmin", "evalsAdmin", "platform"] as const) {
+      const body =
+        p === "schedulerAdmin"
+          ? { area: "scheduler", role: null }
+          : p === "evalsAdmin"
+            ? { area: "evals", role: null }
+            : { area: "event", role: "none" };
       assert.equal((await patch(p, people[p].id, body)).status, 409, p);
       assert.deepEqual(await readRoles(people[p].id), PERSONAS[p]);
     }
@@ -479,7 +518,13 @@ describe("PATCH /api/users/:id", () => {
   test("an unknown user is 404, and a malformed change is 400", async () => {
     assert.equal((await patch("platform", MISSING, { area: "event", role: "manager" })).status, 404);
     const target = await scope.createUser("u_target5", PERSONAS.operator);
-    for (const body of [{ area: "event", role: "owner" }, { area: "platform" }, { role: "manager" }, null]) {
+    for (const body of [
+      { area: "event", role: "owner" },
+      { area: "evals", role: "manager" },
+      { area: "platform" },
+      { role: "manager" },
+      null,
+    ]) {
       assert.equal((await patch("platform", target.id, body)).status, 400, JSON.stringify(body));
     }
   });
@@ -510,7 +555,12 @@ describe("invite links", () => {
     const res = await accept(cookie, path.split("/").pop()!);
     assert.equal(res.status, 200, res.body);
     assert.deepEqual(JSON.parse(res.body), { applied: true, home: "/events" });
-    assert.deepEqual(await readRoles(newcomer.id), { event: "manager", scheduler: null, platform: false });
+    assert.deepEqual(await readRoles(newcomer.id), {
+      event: "manager",
+      scheduler: null,
+      evals: null,
+      platform: false,
+    });
     assert.equal((await send({ cookie }, "GET", "/events")).status, 200);
   });
 
@@ -535,12 +585,32 @@ describe("invite links", () => {
     assert.equal((await create("schedulerAdmin", { eventRole: "operator", schedulerRole: null })).status, 403);
     assert.equal((await create("eventAdmin", { eventRole: null, schedulerRole: "viewer" })).status, 403);
     assert.equal((await create("schedulerAdmin", { eventRole: null, schedulerRole: "viewer" })).status, 201);
+    assert.equal(
+      (await create("schedulerAdmin", { eventRole: null, schedulerRole: null, evalsRole: "viewer" })).status,
+      403,
+    );
+    assert.equal(
+      (await create("evalsAdmin", { eventRole: null, schedulerRole: null, evalsRole: "viewer" })).status,
+      201,
+    );
+  });
+
+  test("an eVals link lands its newcomer on eVals", async () => {
+    const path = await link("evalsAdmin", { eventRole: null, schedulerRole: null, evalsRole: "viewer" });
+    const newcomer = await scope.createUser("inv_evals", PERSONAS.nobody);
+    const cookie = await createSession(newcomer.id);
+    const res = await accept(cookie, path.split("/").pop()!);
+    assert.equal(res.status, 200, res.body);
+    assert.deepEqual(JSON.parse(res.body), { applied: true, home: "/evals" });
+    assert.equal((await readRoles(newcomer.id))?.evals, "viewer");
+    assert.equal((await send({ cookie }, "GET", "/evals")).status, 200);
   });
 
   test("a link that grants nothing, or platform administration, is not made", async () => {
     for (const body of [
       { eventRole: "none", schedulerRole: null },
       { eventRole: null, schedulerRole: null },
+      { eventRole: null, schedulerRole: null, evalsRole: null },
       { eventRole: "operator", schedulerRole: null, platform: true },
     ]) {
       const res = await create("platform", body);

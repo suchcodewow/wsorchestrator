@@ -49,6 +49,8 @@ const EXPECTED_SIDEBAR: Record<Persona, string[]> = {
     "Manage users",
     "Scheduler settings",
   ],
+  evalsViewer: ["eVals", "My settings"],
+  evalsAdmin: ["eVals", "My settings", "[Administration]", "Manage users", "eVals settings"],
   bothAdmins: [
     "Event Guides",
     "Orchestrator",
@@ -67,6 +69,7 @@ const EXPECTED_SIDEBAR: Record<Persona, string[]> = {
     "Orchestrator",
     "Contribute",
     "Scheduler",
+    "eVals",
     "My settings",
     "[Management]",
     "[Administration]",
@@ -76,6 +79,7 @@ const EXPECTED_SIDEBAR: Record<Persona, string[]> = {
     "Cloud Status",
     "Event Settings",
     "Scheduler settings",
+    "eVals settings",
     "Admin Settings",
   ],
 };
@@ -130,6 +134,10 @@ describe("isNavItemActive", () => {
   const schedulerSettings = NAV_SECTIONS.flatMap((s) => s.items).find(
     (i) => i.label === "Scheduler settings",
   )!;
+  const evals = NAV_SECTIONS[0]!.items.find((i) => i.label === "eVals")!;
+  const evalsSettings = NAV_SECTIONS.flatMap((s) => s.items).find(
+    (i) => i.label === "eVals settings",
+  )!;
 
   test("matches the page itself and anything beneath it", () => {
     assert.equal(isNavItemActive("/events", orchestrator), true);
@@ -150,6 +158,11 @@ describe("isNavItemActive", () => {
     // Why /scheduler-settings sits beside /scheduler rather than under it.
     assert.equal(isNavItemActive("/scheduler-settings", scheduler), false);
     assert.equal(isNavItemActive("/scheduler-settings", schedulerSettings), true);
+  });
+
+  test("eVals settings does not also light up the eVals entry", () => {
+    assert.equal(isNavItemActive("/evals-settings", evals), false);
+    assert.equal(isNavItemActive("/evals-settings", evalsSettings), true);
   });
 });
 

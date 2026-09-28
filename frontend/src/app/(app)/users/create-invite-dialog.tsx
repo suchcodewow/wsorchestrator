@@ -17,10 +17,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { EVENT_ROLES, INVITE_TTL_MINUTES, SCHEDULER_ROLES } from "@/db/schema";
+import { EVALS_ROLES, EVENT_ROLES, INVITE_TTL_MINUTES, SCHEDULER_ROLES } from "@/db/schema";
 import {
+  EVALS_ROLE_DESCRIPTIONS,
+  EVALS_ROLE_LABELS,
   EVENT_ROLE_DESCRIPTIONS,
   EVENT_ROLE_LABELS,
+  NO_EVALS_ACCESS_LABEL,
   NO_SCHEDULER_ACCESS_LABEL,
   SCHEDULER_ROLE_DESCRIPTIONS,
   SCHEDULER_ROLE_LABELS,
@@ -42,10 +45,12 @@ type Created = { url: string; expiresAt: Date };
 export function CreateInviteDialog({ viewerAccess }: { viewerAccess: Access }) {
   const offersEvent = canManageRoles(viewerAccess, "event");
   const offersScheduler = canManageRoles(viewerAccess, "scheduler");
+  const offersEvals = canManageRoles(viewerAccess, "evals");
 
   const [open, setOpen] = useState(false);
   const [eventRole, setEventRole] = useState<string>(offersEvent ? "operator" : NONE);
   const [schedulerRole, setSchedulerRole] = useState<string>(NONE);
+  const [evalsRole, setEvalsRole] = useState<string>(NONE);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<Created | null>(null);
@@ -54,6 +59,7 @@ export function CreateInviteDialog({ viewerAccess }: { viewerAccess: Access }) {
   function reset() {
     setEventRole(offersEvent ? "operator" : NONE);
     setSchedulerRole(NONE);
+    setEvalsRole(NONE);
     setError(null);
     setCreated(null);
     setCopied(false);
@@ -69,6 +75,7 @@ export function CreateInviteDialog({ viewerAccess }: { viewerAccess: Access }) {
         body: JSON.stringify({
           eventRole: eventRole === NONE ? null : eventRole,
           schedulerRole: schedulerRole === NONE ? null : schedulerRole,
+          evalsRole: evalsRole === NONE ? null : evalsRole,
         }),
       });
       const body = await res.json().catch(() => null);
@@ -95,7 +102,7 @@ export function CreateInviteDialog({ viewerAccess }: { viewerAccess: Access }) {
     }
   }
 
-  const grantsSomething = eventRole !== NONE || schedulerRole !== NONE;
+  const grantsSomething = eventRole !== NONE || schedulerRole !== NONE || evalsRole !== NONE;
 
   return (
     <>
@@ -174,6 +181,26 @@ export function CreateInviteDialog({ viewerAccess }: { viewerAccess: Access }) {
                       value: r,
                       label: SCHEDULER_ROLE_LABELS[r],
                       description: SCHEDULER_ROLE_DESCRIPTIONS[r],
+                    })),
+                  ]}
+                />
+              )}
+              {offersEvals && (
+                <RoleChoice
+                  legend="eVals role"
+                  name="invite-evals-role"
+                  value={evalsRole}
+                  onChange={setEvalsRole}
+                  options={[
+                    {
+                      value: NONE,
+                      label: NO_EVALS_ACCESS_LABEL,
+                      description: "Cannot see eVals.",
+                    },
+                    ...EVALS_ROLES.map((r) => ({
+                      value: r,
+                      label: EVALS_ROLE_LABELS[r],
+                      description: EVALS_ROLE_DESCRIPTIONS[r],
                     })),
                   ]}
                 />

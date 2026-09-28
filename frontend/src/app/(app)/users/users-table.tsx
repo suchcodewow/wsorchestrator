@@ -18,18 +18,24 @@ import {
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
+  EVALS_ROLES,
   EVENT_ROLES,
   SCHEDULER_ROLES,
+  type EvalsRole,
   type EventRole,
   type SchedulerRole,
 } from "@/db/schema";
 import {
+  EVALS_ROLE_DESCRIPTIONS,
+  EVALS_ROLE_LABELS,
   EVENT_ROLE_DESCRIPTIONS,
   EVENT_ROLE_LABELS,
+  NO_EVALS_ACCESS_LABEL,
   NO_SCHEDULER_ACCESS_LABEL,
   PLATFORM_ADMIN_LABEL,
   SCHEDULER_ROLE_DESCRIPTIONS,
   SCHEDULER_ROLE_LABELS,
+  asEvalsRole,
   asEventRole,
   asSchedulerRole,
   canDeleteUsers,
@@ -48,16 +54,18 @@ type SiteUser = {
   email: string | null;
   eventRole: EventRole;
   schedulerRole: SchedulerRole | null;
+  evalsRole: EvalsRole | null;
   isPlatformAdmin: boolean;
   isBootstrapAdmin: boolean;
   eventCount: number;
 };
 
-type Roles = Pick<SiteUser, "eventRole" | "schedulerRole" | "isPlatformAdmin">;
+type Roles = Pick<SiteUser, "eventRole" | "schedulerRole" | "evalsRole" | "isPlatformAdmin">;
 
 type Change =
   | { area: "event"; role: EventRole }
   | { area: "scheduler"; role: SchedulerRole | null }
+  | { area: "evals"; role: EvalsRole | null }
   | { area: "platform"; value: boolean };
 
 const ERRORS: Record<string, string> = {
@@ -69,8 +77,9 @@ const ERRORS: Record<string, string> = {
     "That address is in SITE_ADMIN_EMAILS, which makes it a platform administrator on every sign-in.",
 };
 
-/** The scheduler's radio value for "no role", which a radio group can't hold as null. */
+/** The scheduler's and eVals' radio value for "no role", which a radio group can't hold as null. */
 const NO_SCHEDULER = "none";
+const NO_EVALS = "none";
 
 const EVENT_CHIP: Record<EventRole, string> = {
   none: "text-muted-foreground/70",
@@ -109,6 +118,7 @@ export function UsersTable({
   const rolesOf = (u: SiteUser): Roles => ({
     eventRole: u.eventRole,
     schedulerRole: u.schedulerRole,
+    evalsRole: u.evalsRole,
     isPlatformAdmin: u.isPlatformAdmin,
     ...edits[u.id],
   });
@@ -139,7 +149,9 @@ export function UsersTable({
         ? { eventRole: next.role }
         : next.area === "scheduler"
           ? { schedulerRole: next.role }
-          : { isPlatformAdmin: next.value };
+          : next.area === "evals"
+            ? { evalsRole: next.role }
+            : { isPlatformAdmin: next.value };
 
     const previous = edits[user.id];
     setEdits((e) => ({ ...e, [user.id]: { ...e[user.id], ...patch } }));
@@ -215,13 +227,14 @@ export function UsersTable({
 
         <div className="overflow-hidden rounded-2xl border bg-card shadow-sm">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-176 text-sm">
+            <table className="w-full min-w-220 text-sm">
               <thead>
                 <tr className="border-b bg-muted/30 text-left text-[11px] uppercase tracking-wider text-muted-foreground">
                   <th className="px-5 py-2.5 font-medium">User</th>
                   <th className="px-5 py-2.5 font-medium">Events</th>
                   <th className="px-5 py-2.5 font-medium">Event role</th>
                   <th className="px-5 py-2.5 font-medium">Scheduler role</th>
+                  <th className="px-5 py-2.5 font-medium">eVals role</th>
                   <th className="px-5 py-2.5 font-medium">Platform admin</th>
                   {viewerDeletes && (
                     <th className="w-px px-5 py-2.5">
@@ -234,7 +247,7 @@ export function UsersTable({
                 {shown.length === 0 && (
                   <tr>
                     <td
-                      colSpan={viewerDeletes ? 6 : 5}
+                      colSpan={viewerDeletes ? 7 : 6}
                       className="px-5 py-8 text-center text-muted-foreground"
                     >
                       No one matches “{query.trim()}”.
@@ -348,6 +361,55 @@ export function UsersTable({
                             {roles.schedulerRole
                               ? SCHEDULER_ROLE_LABELS[roles.schedulerRole]
                               : NO_SCHEDULER_ACCESS_LABEL}
+                          </ReadOnly>
+                        )}
+                      </td>
+
+                      <td className="px-5 py-3">
+                        {roles.isPlatformAdmin ? (
+                          <ViaPlatform />
+                        ) : editable(u, "evals") ? (
+                          <RoleMenu
+                            heading="eVals role"
+                            value={roles.evalsRole ?? NO_EVALS}
+                            label={
+                              roles.evalsRole
+                                ? EVALS_ROLE_LABELS[roles.evalsRole]
+                                : NO_EVALS_ACCESS_LABEL
+                            }
+                            chip={
+                              roles.evalsRole === "administrator"
+                                ? "text-brand"
+                                : roles.evalsRole
+                                  ? "text-muted-foreground"
+                                  : "text-muted-foreground/70"
+                            }
+                            saving={saving === `${u.id}:evals`}
+                            options={[
+                              {
+                                value: NO_EVALS,
+                                label: NO_EVALS_ACCESS_LABEL,
+                                description: "Cannot see eVals.",
+                              },
+                              ...EVALS_ROLES.map((r) => ({
+                                value: r,
+                                label: EVALS_ROLE_LABELS[r],
+                                description: EVALS_ROLE_DESCRIPTIONS[r],
+                              })),
+                            ]}
+                            onChange={(v) => {
+                              const role = v === NO_EVALS ? null : asEvalsRole(v);
+                              if (v !== NO_EVALS && !role) return;
+                              if (role !== roles.evalsRole) {
+                                void change(u, { area: "evals", role });
+                              }
+                            }}
+                          />
+                        ) : (
+                          <ReadOnly title={readOnlyTitle}>
+                            {roles.evalsRole
+                              ? EVALS_ROLE_LABELS[roles.evalsRole]
+                              : NO_EVALS_ACCESS_LABEL}
                           </ReadOnly>
                         )}
                       </td>

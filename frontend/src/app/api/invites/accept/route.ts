@@ -37,6 +37,7 @@ export async function POST(req: Request) {
     ? {
         event: result.grant.eventRole ?? "none",
         scheduler: result.grant.schedulerRole,
+        evals: result.grant.evalsRole,
         platform: false,
       }
     : session.user.access;

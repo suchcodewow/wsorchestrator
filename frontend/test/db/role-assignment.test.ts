@@ -12,7 +12,7 @@
  * The rules, in the order they apply:
  * 1. `self`            — nobody changes their own roles.
  * 2. `forbidden`       — the actor does not administer that area (event and
- *                        scheduler administrators, their own area only; the
+ *                        scheduler and eVals administrators, their own area only; the
  *                        platform flag, platform administrators only).
  * 3. `not_found`       — no such user.
  * 4. `platform_target` — only a platform administrator touches another one.
@@ -24,7 +24,7 @@ import "../support/test-env";
 import { after, before, describe, test } from "node:test";
 import assert from "node:assert/strict";
 
-import { EVENT_ROLES, SCHEDULER_ROLES } from "@/db/schema";
+import { EVALS_ROLES, EVENT_ROLES, SCHEDULER_ROLES } from "@/db/schema";
 import type { Access } from "@/lib/roles";
 import { setUserRole, listSiteUsers, type RoleChange, type SetRoleError } from "@/lib/site-users";
 import { PERSONAS, PERSONA_NAMES, describeAccess } from "../support/access";
@@ -40,6 +40,7 @@ const ALL_BOOTSTRAP = [BOOTSTRAP_EMAIL, ...MORE_BOOTSTRAP].join(",");
 const CHANGES: RoleChange[] = [
   ...EVENT_ROLES.map((role) => ({ area: "event" as const, role })),
   ...[null, ...SCHEDULER_ROLES].map((role) => ({ area: "scheduler" as const, role })),
+  ...[null, ...EVALS_ROLES].map((role) => ({ area: "evals" as const, role })),
   { area: "platform", value: true },
   { area: "platform", value: false },
 ];
@@ -57,7 +58,9 @@ function expected(
       ? actor.platform
       : change.area === "event"
         ? actor.platform || actor.event === "administrator"
-        : actor.platform || actor.scheduler === "administrator";
+        : change.area === "scheduler"
+          ? actor.platform || actor.scheduler === "administrator"
+          : actor.platform || actor.evals === "administrator";
   if (!administers) return "forbidden";
   if (target.platform && !actor.platform) return "platform_target";
   if (change.area === "platform" && !change.value && target.bootstrap) return "bootstrap";
@@ -67,6 +70,7 @@ function expected(
 function applied(change: RoleChange, before: Access): Access {
   if (change.area === "event") return { ...before, event: change.role };
   if (change.area === "scheduler") return { ...before, scheduler: change.role };
+  if (change.area === "evals") return { ...before, evals: change.role };
   return { ...before, platform: change.value };
 }
 
@@ -169,7 +173,7 @@ describe("the edges", () => {
     assert.equal((await readRoles(target.id))?.platform, false);
   });
 
-  test("a bootstrap address may still have its event and scheduler roles changed", async () => {
+  test("a bootstrap address may still have its event, scheduler and eVals roles changed", async () => {
     const admin = await scope.createUser("bs2_actor", PERSONAS.platform);
     const target = await scope.createUser("bs2_target", PERSONAS.platform, MORE_BOOTSTRAP[0]);
     assert.deepEqual(await setUserRole(admin, target.id, { area: "event", role: "operator" }), {
@@ -178,9 +182,13 @@ describe("the edges", () => {
     assert.deepEqual(await setUserRole(admin, target.id, { area: "scheduler", role: "viewer" }), {
       ok: true,
     });
+    assert.deepEqual(await setUserRole(admin, target.id, { area: "evals", role: "viewer" }), {
+      ok: true,
+    });
     assert.deepEqual(await readRoles(target.id), {
       event: "operator",
       scheduler: "viewer",
+      evals: "viewer",
       platform: true,
     });
   });
@@ -191,12 +199,14 @@ describe("the edges", () => {
     const target = await scope.createUser("fall_target", {
       event: "manager",
       scheduler: "viewer",
+      evals: null,
       platform: true,
     });
     await setUserRole(admin, target.id, { area: "platform", value: false });
     assert.deepEqual(await readRoles(target.id), {
       event: "manager",
       scheduler: "viewer",
+      evals: null,
       platform: false,
     });
   });
@@ -219,6 +229,7 @@ describe("listSiteUsers", () => {
     const plain = await scope.createUser("list_plain", {
       event: "manager",
       scheduler: "viewer",
+      evals: "administrator",
       platform: false,
     });
     const boot = await scope.createUser("list_boot", PERSONAS.platform, MORE_BOOTSTRAP[1]);
@@ -230,6 +241,7 @@ describe("listSiteUsers", () => {
       {
         eventRole: listed.get(plain.id)?.eventRole,
         schedulerRole: listed.get(plain.id)?.schedulerRole,
+        evalsRole: listed.get(plain.id)?.evalsRole,
         isPlatformAdmin: listed.get(plain.id)?.isPlatformAdmin,
         isBootstrapAdmin: listed.get(plain.id)?.isBootstrapAdmin,
         eventCount: listed.get(plain.id)?.eventCount,
@@ -237,6 +249,7 @@ describe("listSiteUsers", () => {
       {
         eventRole: "manager",
         schedulerRole: "viewer",
+        evalsRole: "administrator",
         isPlatformAdmin: false,
         isBootstrapAdmin: false,
         eventCount: 2,

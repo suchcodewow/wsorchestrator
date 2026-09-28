@@ -13,6 +13,7 @@
  *   administrator, and each includes the ones below it.
  * - Scheduler roles are ranked viewer < administrator; no scheduler role is no
  *   scheduler access.
+ * - eVals roles are ranked the same way, and are independent of the scheduler's.
  * - A platform administrator is an administrator in every area whatever their
  *   stored roles say, and alone runs backups, the database console and
  *   sign-in domains, and grants platform administration.
@@ -21,7 +22,14 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 
-import { EVENT_ROLES, SCHEDULER_ROLES, type EventRole, type SchedulerRole } from "@/db/schema";
+import {
+  EVALS_ROLES,
+  EVENT_ROLES,
+  SCHEDULER_ROLES,
+  type EvalsRole,
+  type EventRole,
+  type SchedulerRole,
+} from "@/db/schema";
 import * as roles from "@/lib/roles";
 import type { Access } from "@/lib/roles";
 import { EVERY_ACCESS, PERSONAS, describeAccess } from "../support/access";
@@ -36,11 +44,16 @@ const EVENT_RANK: Record<EventRole, number> = {
 
 const SCHEDULER_RANK: Record<SchedulerRole, number> = { viewer: 1, administrator: 2 };
 
+const EVALS_RANK: Record<EvalsRole, number> = { viewer: 1, administrator: 2 };
+
 const event = (min: EventRole) => (a: Access) =>
   a.platform || EVENT_RANK[a.event] >= EVENT_RANK[min];
 
 const scheduler = (min: SchedulerRole) => (a: Access) =>
   a.platform || (a.scheduler !== null && SCHEDULER_RANK[a.scheduler] >= SCHEDULER_RANK[min]);
+
+const evals = (min: EvalsRole) => (a: Access) =>
+  a.platform || (a.evals !== null && EVALS_RANK[a.evals] >= EVALS_RANK[min]);
 
 const platformOnly = (a: Access) => a.platform;
 
@@ -63,6 +76,12 @@ const POLICY: Record<string, { actual: Check; expected: Check }> = {
     expected: scheduler("administrator"),
   },
 
+  canUseEvals: { actual: roles.canUseEvals, expected: evals("viewer") },
+  canManageEvalsSettings: {
+    actual: roles.canManageEvalsSettings,
+    expected: evals("administrator"),
+  },
+
   canRunSql: { actual: roles.canRunSql, expected: platformOnly },
   canManageBackups: { actual: roles.canManageBackups, expected: platformOnly },
   canManageSignInDomains: { actual: roles.canManageSignInDomains, expected: platformOnly },
@@ -75,20 +94,28 @@ const POLICY: Record<string, { actual: Check; expected: Check }> = {
     actual: (a) => roles.canManageRoles(a, "scheduler"),
     expected: scheduler("administrator"),
   },
+  "canManageRoles(evals)": {
+    actual: (a) => roles.canManageRoles(a, "evals"),
+    expected: evals("administrator"),
+  },
   "canManageRoles(platform)": {
     actual: (a) => roles.canManageRoles(a, "platform"),
     expected: platformOnly,
   },
   canManageUsers: {
     actual: roles.canManageUsers,
-    expected: (a) => event("administrator")(a) || scheduler("administrator")(a),
+    expected: (a) =>
+      event("administrator")(a) || scheduler("administrator")(a) || evals("administrator")(a),
   },
   canDeleteUsers: { actual: roles.canDeleteUsers, expected: platformOnly },
 };
 
 test("the combinations cover every role", () => {
-  // 5 event × (none + 2 scheduler) × platform on/off.
-  assert.equal(EVERY_ACCESS.length, EVENT_ROLES.length * (SCHEDULER_ROLES.length + 1) * 2);
+  // 5 event × (none + 2 scheduler) × (none + 2 eVals) × platform on/off.
+  assert.equal(
+    EVERY_ACCESS.length,
+    EVENT_ROLES.length * (SCHEDULER_ROLES.length + 1) * (EVALS_ROLES.length + 1) * 2,
+  );
   assert.equal(new Set(EVERY_ACCESS.map(describeAccess)).size, EVERY_ACCESS.length);
 });
 
@@ -137,6 +164,20 @@ describe("the areas are independent", () => {
     assert.equal(roles.canManageUsers(a), true);
   });
 
+  test("a scheduler administrator has no eVals access, and an eVals administrator no scheduler access", () => {
+    assert.equal(roles.canUseEvals(PERSONAS.schedulerAdmin), false);
+    assert.equal(roles.canManageRoles(PERSONAS.schedulerAdmin, "evals"), false);
+    assert.equal(roles.canUseScheduler(PERSONAS.evalsAdmin), false);
+    assert.equal(roles.canManageRoles(PERSONAS.evalsAdmin, "scheduler"), false);
+  });
+
+  test("an eVals administrator has no event access", () => {
+    const a = PERSONAS.evalsAdmin;
+    assert.equal(roles.canUseEvents(a), false);
+    assert.equal(roles.canManageRoles(a, "event"), false);
+    assert.equal(roles.canManageUsers(a), true);
+  });
+
   test("administering both areas does not make someone a platform administrator", () => {
     const a = PERSONAS.bothAdmins;
     assert.equal(roles.canManageRoles(a, "platform"), false);
@@ -144,11 +185,12 @@ describe("the areas are independent", () => {
   });
 });
 
-describe("eventRoleOf / schedulerRoleOf", () => {
+describe("eventRoleOf / schedulerRoleOf / evalsRoleOf", () => {
   test("return the stored role for everyone but a platform administrator", () => {
     for (const a of EVERY_ACCESS.filter((a) => !a.platform)) {
       assert.equal(roles.eventRoleOf(a), a.event, describeAccess(a));
       assert.equal(roles.schedulerRoleOf(a), a.scheduler, describeAccess(a));
+      assert.equal(roles.evalsRoleOf(a), a.evals, describeAccess(a));
     }
   });
 
@@ -156,6 +198,7 @@ describe("eventRoleOf / schedulerRoleOf", () => {
     for (const a of EVERY_ACCESS.filter((a) => a.platform)) {
       assert.equal(roles.eventRoleOf(a), "administrator", describeAccess(a));
       assert.equal(roles.schedulerRoleOf(a), "administrator", describeAccess(a));
+      assert.equal(roles.evalsRoleOf(a), "administrator", describeAccess(a));
     }
   });
 });
@@ -167,7 +210,9 @@ describe("homePath", () => {
         ? "/events"
         : scheduler("viewer")(a)
           ? "/scheduler"
-          : "/welcome";
+          : evals("viewer")(a)
+            ? "/evals"
+            : "/welcome";
       assert.equal(roles.homePath(a), want, describeAccess(a));
     }
   });
@@ -189,18 +234,19 @@ describe("accessBadges", () => {
     assert.deepEqual(roles.accessBadges(PERSONAS.nobody), []);
   });
 
-  test("shows the event role, then the scheduler role", () => {
+  test("shows the event role, then the scheduler role, then the eVals role", () => {
     assert.deepEqual(
-      roles.accessBadges({ event: "manager", scheduler: "viewer", platform: false }),
-      ["Event Manager", "Scheduler Viewer"],
+      roles.accessBadges({ event: "manager", scheduler: "viewer", evals: "viewer", platform: false }),
+      ["Event Manager", "Scheduler Viewer", "eVals Viewer"],
     );
     assert.deepEqual(roles.accessBadges(PERSONAS.schedulerAdmin), ["Scheduler Administrator"]);
+    assert.deepEqual(roles.accessBadges(PERSONAS.evalsAdmin), ["eVals Administrator"]);
     assert.deepEqual(roles.accessBadges(PERSONAS.contributor), ["Event Contributor"]);
   });
 });
 
 describe("labels", () => {
-  test("every event and scheduler role has a label and a description", () => {
+  test("every event, scheduler and eVals role has a label and a description", () => {
     for (const r of EVENT_ROLES) {
       assert.ok(roles.EVENT_ROLE_LABELS[r], r);
       assert.ok(roles.EVENT_ROLE_DESCRIPTIONS[r], r);
@@ -209,6 +255,22 @@ describe("labels", () => {
       assert.ok(roles.SCHEDULER_ROLE_LABELS[r], r);
       assert.ok(roles.SCHEDULER_ROLE_DESCRIPTIONS[r], r);
     }
+    for (const r of EVALS_ROLES) {
+      assert.ok(roles.EVALS_ROLE_LABELS[r], r);
+      assert.ok(roles.EVALS_ROLE_DESCRIPTIONS[r], r);
+    }
+  });
+
+  test("eVals is spelled eVals wherever it is shown", () => {
+    const shown = [
+      ...Object.values(roles.EVALS_ROLE_LABELS),
+      ...Object.values(roles.EVALS_ROLE_DESCRIPTIONS),
+      roles.NO_EVALS_ACCESS_LABEL,
+    ];
+    for (const text of shown) {
+      assert.match(text, /eVals/, text);
+      assert.doesNotMatch(text, /\b(?!eVals)[eE][vV][aA][lL][sS]\b/, text);
+    }
   });
 
   test("the lowest event role reads as no access", () => {
@@ -216,10 +278,11 @@ describe("labels", () => {
   });
 });
 
-describe("asEventRole / asSchedulerRole", () => {
+describe("asEventRole / asSchedulerRole / asEvalsRole", () => {
   test("accept exactly the stored values", () => {
     for (const r of EVENT_ROLES) assert.equal(roles.asEventRole(r), r);
     for (const r of SCHEDULER_ROLES) assert.equal(roles.asSchedulerRole(r), r);
+    for (const r of EVALS_ROLES) assert.equal(roles.asEvalsRole(r), r);
   });
 
   test("reject anything else", () => {
@@ -228,6 +291,7 @@ describe("asEventRole / asSchedulerRole", () => {
     }
     for (const bad of ["", "none", "Viewer", "manager", null, undefined, 1]) {
       assert.equal(roles.asSchedulerRole(bad), null, JSON.stringify(bad));
+      assert.equal(roles.asEvalsRole(bad), null, JSON.stringify(bad));
     }
   });
 

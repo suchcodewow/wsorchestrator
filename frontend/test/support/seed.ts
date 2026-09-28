@@ -22,6 +22,7 @@ export function testScope(name: string) {
     const roles = {
       eventRole: access.event,
       schedulerRole: access.scheduler,
+      evalsRole: access.evals,
       isPlatformAdmin: access.platform,
     };
     await db
@@ -80,6 +81,7 @@ export async function readRoles(id: string) {
     .select({
       event: users.eventRole,
       scheduler: users.schedulerRole,
+      evals: users.evalsRole,
       platform: users.isPlatformAdmin,
     })
     .from(users)

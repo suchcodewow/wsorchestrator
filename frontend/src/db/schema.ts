@@ -51,6 +51,12 @@ export type SchedulerRole = (typeof SCHEDULER_ROLES)[number];
 
 export const schedulerRole = pgEnum("scheduler_role", SCHEDULER_ROLES);
 
+/** The eVals area's roles, lowest first. No role at all is no access. */
+export const EVALS_ROLES = ["viewer", "administrator"] as const;
+export type EvalsRole = (typeof EVALS_ROLES)[number];
+
+export const evalsRole = pgEnum("evals_role", EVALS_ROLES);
+
 export const CALENDAR_SCOPES = ["own", "all"] as const;
 export type CalendarScope = (typeof CALENDAR_SCOPES)[number];
 
@@ -69,6 +75,7 @@ export const users = pgTable("users", {
     .default("system"),
   eventRole: eventRole("site_role").notNull().default("none"),
   schedulerRole: schedulerRole("scheduler_role"),
+  evalsRole: evalsRole("evals_role"),
   isPlatformAdmin: boolean("is_platform_admin").notNull().default(false),
   calendarScope: calendarScope("calendar_scope").notNull().default("own"),
 });
@@ -360,6 +367,7 @@ export const userInvites = pgTable(
     tokenHash: text("token_hash").notNull().unique(),
     eventRole: eventRole("event_role"),
     schedulerRole: schedulerRole("scheduler_role"),
+    evalsRole: evalsRole("evals_role"),
     createdBy: text("created_by")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),

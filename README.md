@@ -480,6 +480,14 @@ role does everything the one before it does.
 | **Scheduler Viewer**        | The **Scheduler** page.                                     |
 | **Scheduler Administrator** | Sets everyone's scheduler role on **Manage users**, and **Scheduler settings**. |
 
+**eVals** — a placeholder for now, with the same roles as the scheduler.
+
+| Role                    | Adds                                                            |
+| ----------------------- | --------------------------------------------------------------- |
+| *(none)*                | Nothing. What everyone starts as.                               |
+| **eVals Viewer**        | The **eVals** page.                                             |
+| **eVals Administrator** | Sets everyone's eVals role on **Manage users**, and **eVals settings**. |
+
 **Platform Administrator** is a flag rather than a role in an area. It counts
 as administrator in every area, and adds what reaches past any single one:
 [who may sign in at all](#restricting-sign-in) on **Admin Settings**, the [**Backups**](#backups)

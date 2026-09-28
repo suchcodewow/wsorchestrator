@@ -11,6 +11,7 @@ import {
   sessions,
   users,
   verificationTokens,
+  type EvalsRole,
   type EventRole,
   type SchedulerRole,
 } from "@/db/schema";
@@ -35,6 +36,7 @@ async function applyBootstrapAdmin(email: string | null | undefined) {
 type UserRow = {
   eventRole?: EventRole;
   schedulerRole?: SchedulerRole | null;
+  evalsRole?: EvalsRole | null;
   isPlatformAdmin?: boolean;
 };
 
@@ -74,6 +76,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       const access: Access = {
         event: row.eventRole ?? "none",
         scheduler: row.schedulerRole ?? null,
+        evals: row.evalsRole ?? null,
         platform: row.isPlatformAdmin ?? false,
       };
 
