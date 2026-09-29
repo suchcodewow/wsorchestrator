@@ -37,11 +37,33 @@ have uncommitted edits in the same checkout. So:
 - If a file holds both your change and someone else's, leave it out of your
   commit and say so in the message.
 
-**A push to `main` deploys to production.** It applies infrastructure, migrates
-Cloud SQL, and rolls Cloud Run. There is no staging. Do not push to test
-something — run the pipeline by hand with `deploy=false` and `apply_infra=false`
-instead. Two deploys running at once will fight over the same OpenTofu workspace
-and database.
+**Work on a branch and open a pull request. Never push to `main`.** A merge to
+`main` deploys QA (https://qa.harnessevents.io): it applies `qa_control_plane`,
+migrates QA's Cloud SQL, and rolls QA's Cloud Run. The GitHub ruleset lets
+repository admins bypass the PR requirement, and the credentials on this
+machine may belong to one. That bypass is for the owner, not for you. Push a
+branch, run `gh pr create`, and stop there unless the user says to merge.
+
+**Production is released by a person, not by you.** `deploy_production` copies
+the image QA built into production, after an approval that only the
+`prod_deployers` group can give. Do not start `deploy_production` unless the
+user asks you to in so many words. **Never approve a production approval,
+even when asked.** The Harness PAT on this machine is the owner's own, so an
+approval you submit is recorded as theirs. Do not change `prod_deployers`,
+the approval stage, or the ruleset either. The full flow is in
+[docs/environments.md](docs/environments.md).
+
+**QA is not a sandbox either.** It shares the Harness account, the AWS
+organization, the Azure subscription and the Google Workspace with production.
+A QA workshop run creates real orgs, accounts and users. Prefer runs with no
+cloud, or GCP only. **Never copy production data into QA's database.** QA's
+reaper would then tear down production's live workshops, because the accounts
+are shared.
+
+**Do not run a deploy pipeline to test something.** Run `verify` on your branch,
+or `deploy_qa` by hand with `deploy=false` and `apply_infra=false`. Each deploy
+pipeline has a Queue step, so a second run waits rather than fighting the
+first over the same OpenTofu workspace and database.
 
 ## Conventions
 
@@ -52,12 +74,20 @@ Run the new `frontend/drizzle/NNNN_*.sql` (they are written to be re-runnable)
 rather than `drizzle-kit push --force`, which drops things.
 
 **A `schema.ts` change must also be paired with a migration in
-`frontend/drizzle/`**, or it never reaches production — the pipeline runs the
-`.sql` files and never `db:push`.
+`frontend/drizzle/`**, or it never reaches QA or production — the pipelines run
+the `.sql` files and never `db:push`.
 
-**The Harness pipeline is stored inline and mirrored at
-`infra/admin/deploy-pipeline.yml`.** Update both in the same commit, or the
-change either does not run or is invisible to review.
+**The Harness pipelines are stored inline and mirrored in
+`infra/admin/pipelines/`** (`verify.yml`, `deploy-qa.yml`,
+`deploy-production.yml`). Update Harness and the mirror in the same change, or
+the change either does not run or is invisible to review. Editing
+`deploy-production.yml` is a production change: say so in the PR.
+
+**`infra/admin` serves both environments.** Anything environment-specific is a
+variable. Production's value is the default; QA's is set on `qa_control_plane`.
+Never hard-code `administration-459416` or `harnessevents.io` in a new
+resource. A `.tf` change reaches QA on merge but reaches production only when
+`deploy_production` runs with `run_infra=true`.
 
 ## Before saying you are done
 
@@ -93,6 +123,7 @@ docker exec workshoporchestrator-postgres-1 psql -U postgres -d workshops_agent 
 | Document | Covers |
 | --- | --- |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Clone to running locally; schema changes; how a change ships |
+| [docs/environments.md](docs/environments.md) | QA vs production: what is separate, what is shared, who can release |
 | [README.md](README.md) | What the product does, architecture, standing up a new deployment |
 | [DEPLOY.md](DEPLOY.md) | Makefile targets, the deploy pipeline, rollback |
 | [TESTING.md](TESTING.md) | Why the runner's tests exist; exercising code without deploying |

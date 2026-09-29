@@ -74,10 +74,12 @@ appears twice means the fix never landed. Both of those are visible now.
 
 ## Layer 2 — static checks (in place)
 
-- The Harness pipeline `deploy_workshop_orchestrator` gains a **Verify stage**,
-  first, ahead of the infrastructure apply and both image builds: `npm ci &&
-  npm run verify` in `runner/`. This is the gate that was missing entirely, and
-  it is on the path a push to main actually takes. A second step,
+- The Harness pipeline gains a **Verify stage**, first, ahead of the
+  infrastructure apply and both image builds: `npm ci && npm run verify` in
+  `runner/`. This is the gate that was missing entirely, and it is on the path
+  a merge to main actually takes. (Since 2026-09-29 it is also the `verify`
+  pipeline, a required check on every pull request, and the first stage of
+  `deploy_qa`. Production never builds: it promotes what QA ran.) A second step,
   `verify_frontend`, runs the frontend's `npm run verify` (typecheck, lint, and
   the unit suite with the role tables) in the same stage.
 
@@ -91,7 +93,7 @@ appears twice means the fix never landed. Both of those are visible now.
 
   The pipeline is stored INLINE in Harness and so was not in the repository at
   all: unreviewable, undiffable, and no record of who changed the deploy path or
-  when. It is now mirrored at `infra/admin/deploy-pipeline.yml`. That is a mirror
+  when. It is now mirrored in `infra/admin/pipelines/`. That is a mirror
   and not the source, which is a weakness; converting the pipeline to a
   git-backed (REMOTE) definition would remove the class of drift entirely and is
   the right next move on this file.

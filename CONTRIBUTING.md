@@ -208,13 +208,34 @@ do not touch production.
 
 ## How your change ships
 
-**A push to `main` deploys to production.** The `deploy_on_push_main` webhook
-trigger runs the `deploy_workshop_orchestrator` Harness pipeline, which
-typechecks and unit-tests the runner and the frontend, applies infrastructure, builds both
-images, runs the SQL migrations against Cloud SQL, and rolls Cloud Run. There is
-no staging environment between your push and the app attendees use.
+```
+branch → pull request → verify → merge to main → deploy_qa → QA
+                                                  deploy_production (approved) → production
+```
 
-Before you push:
+**Work on a branch and open a pull request.** `main` is protected by the
+GitHub ruleset `protect-main`: changes arrive by PR, and the `verify` Harness
+pipeline has to pass on it. That pipeline typechecks, lints and unit-tests the
+runner and the frontend. It needs no credentials and touches nothing deployed.
+
+**Merging deploys QA, at https://qa.harnessevents.io.** The
+`deploy_qa_on_push_main` trigger runs `deploy_qa`. That pipeline verifies
+again, applies the `qa_control_plane` workspace, builds both images into QA's
+registry, runs the SQL migrations against QA's Cloud SQL, and rolls QA's Cloud
+Run. The QA header carries an amber **qa** badge, so the two are hard to
+confuse. QA has its own GCP project and database. It shares the Harness,
+AWS, Azure and Google Workspace accounts with production, so a workshop you
+run there creates real things. Prefer runs with no cloud, or GCP only.
+[docs/environments.md](docs/environments.md) has the full map.
+
+**Production is a separate, approved release.** `deploy_production` takes a
+commit QA has already built (by default whatever QA runs right now) and copies
+that exact image into production, so production never runs a build QA didn't.
+Anyone may start the pipeline. Every run then stops at an approval that only
+the `prod_deployers` group (Shawn) can pass. The approval message shows the
+commit, what production runs now, and a GitHub compare link between them.
+
+Before you open the PR:
 
 ```bash
 cd runner && npm run verify      # typecheck + unit tests — the same gate CI runs
@@ -231,17 +252,28 @@ died on. It is worth reading [TESTING.md](TESTING.md) once to understand why it
 exists — nearly every workshop failure to date was a pure function reading a
 string and reaching the wrong conclusion.
 
-To watch what your push did:
+To watch what your merge did:
 
 ```bash
-# The pipeline, in the Harness UI
-open "https://app.harness.io/ng/account/8mh-FIIHQUapLuB6K0Cd-w/all/orgs/operations/projects/orchestrator/pipelines/deploy_workshop_orchestrator/executions"
+open "https://app.harness.io/ng/account/8mh-FIIHQUapLuB6K0Cd-w/all/orgs/operations/projects/orchestrator/pipelines/deploy_qa/executions"
 ```
 
-To confirm what is actually live, open the app's user menu — the bottom line
-shows the short SHA the running image was built from. Rolling back is
-`make deploy TAG=<older-sha>`; see
-[DEPLOY.md](DEPLOY.md#watching-and-rolling-back).
+To confirm what is actually live, open the app's user menu: its bottom line
+shows the short SHA the running image was built from. Rolling production back
+means running `deploy_production` with `sha=<older-sha>` and
+`allow_rollback=true`; see [DEPLOY.md](DEPLOY.md#watching-and-rolling-back).
+
+**Migrations must be additive.** Migrations run before the new image rolls, so
+the old image runs briefly against the new schema. A rollback also runs an old
+image against the new schema, because migrations are never reverted. Add
+columns and tables; do not rename or drop one that code still in production
+reads. Do that in a later change, once nothing reads it.
+
+**Infrastructure changes reach production separately.** A `.tf` change applies
+to QA on merge. It reaches production only when `deploy_production` runs with
+`run_infra=true`. IaCM applies the head of `main`, not the commit being
+promoted, so preflight refuses that combination when the two differ in
+`infra/admin/*.tf`.
 
 > **Environment variables do not ship this way.** The pipeline's infrastructure
 > stage applies them, but a value that lives only in the git-ignored
@@ -252,21 +284,22 @@ shows the short SHA the running image was built from. Rolling back is
 
 ## Working alongside other people
 
-The project ran for its first 150 commits with a single developer pushing
-straight to `main`. That worked because one person cannot conflict with
-themselves. With more than one it needs a little structure:
+Three people, and their AI sessions, work on this now. What keeps that sane:
 
-- **Pull before you start.** `git pull --rebase` — the history is linear and
-  rebasing keeps it that way.
-- **Do not push work-in-progress to `main`.** Every push is a production
-  deploy, including infrastructure and migrations. If you want to test the
-  pipeline itself, run it manually from the Harness UI against your branch with
-  `deploy=false` and `apply_infra=false` rather than committing a probe.
-- **Two deploys running at once will fight.** They apply OpenTofu against the
-  same IaCM workspace and migrate the same database. If someone else just
-  pushed, let their run finish before you push.
+- **One branch per change, rebased on `main`.** `git pull --rebase` before you
+  start and again before you merge. The history is kept linear.
+- **Keep PRs small and merge them soon.** Every merge is a QA deploy, and QA is
+  where the others check their own work. A branch that sits for a week collides
+  with someone's schema change.
+- **Merges queue; they do not fight.** `deploy_qa` and `deploy_production`
+  each begin with a Queue step, so a second run waits for the first to finish.
+- **Tell the others before a schema or infrastructure change merges.** It
+  changes QA for everyone at once.
 - **Stage explicit paths, not `git add -A`.** More than one person — and more
   than one AI session — may have uncommitted work in a checkout at a time.
+- **Do not copy production data into QA.** QA's reaper acts on whatever rows its
+  database holds, against accounts shared with production. See
+  [docs/environments.md](docs/environments.md#never-copy-production-data-into-qa).
 
 ---
 

@@ -1,0 +1,422 @@
+pipeline:
+  name: Deploy Production
+  identifier: deploy_production
+  projectIdentifier: orchestrator
+  orgIdentifier: operations
+  description: |
+    Promotes a commit QA has already run to production
+    (https://harnessevents.io, GCP project administration-459416). Nothing
+    triggers it: it is run by hand, and every run stops at an approval only the
+    prod_deployers user group (Shawn) can pass — including runs Shawn starts,
+    so no API key or automation reaches production without a person clicking.
+
+    It does not rebuild. The images deploy_qa built are copied from QA's
+    registry into production's, so production runs byte-for-byte what QA ran.
+
+    Stage order:
+      1. Queue — one production deploy at a time.
+      2. Preflight — resolves `sha` (default: whatever QA is serving) and
+         refuses to continue unless
+           - the commit is on main;
+           - deploy_qa built it (its image exists in QA's registry);
+           - it descends from what production runs now, unless
+             allow_rollback is "true";
+           - infra/admin/*.tf is identical at that commit and at the head of
+             main, when run_infra is "true" — the IaCM workspace always applies
+             the head of main, so promoting an older commit while newer
+             infrastructure sits on main would ship that infrastructure too.
+      3. Approval — the gate. The message shows the commit and a GitHub compare
+         link from what production runs now.
+      4. Infrastructure — IaCM against admin_control_plane.
+      5. Promote/migrate/deploy — copy images, apply the commit's migrations,
+         roll Cloud Run.
+
+    Stored INLINE in Harness and mirrored at
+    infra/admin/pipelines/deploy-production.yml. Update both.
+  properties:
+    ci:
+      codebase:
+        connectorRef: github_wsorchestrator
+        # Always main, in full: preflight checks ancestry against it and the
+        # promote stage checks out the promoted commit from this clone.
+        build:
+          type: branch
+          spec:
+            branch: main
+        depth: 0
+  variables:
+    - name: sha
+      type: String
+      description: "Commit to promote (short or full). \"qa\" promotes whatever QA is serving now."
+      required: false
+      value: <+input>.default(qa)
+    - name: run_infra
+      type: String
+      description: "\"false\" skips the infrastructure stage (and the infra/admin-matches-main check)."
+      required: false
+      value: <+input>.default(true).allowedValues(true,false)
+    - name: apply_infra
+      type: String
+      description: "\"false\" plans without applying."
+      required: false
+      value: <+input>.default(true).allowedValues(true,false)
+    - name: allow_rollback
+      type: String
+      description: "\"true\" permits a commit that is older than what production runs now."
+      required: false
+      value: <+input>.default(false).allowedValues(true,false)
+    - name: gcp_project
+      type: String
+      required: false
+      value: administration-459416
+    - name: qa_project
+      type: String
+      required: false
+      value: harnessevents-qa
+    - name: region
+      type: String
+      required: false
+      value: us-central1
+    - name: repo
+      type: String
+      required: false
+      value: us-central1-docker.pkg.dev/administration-459416/workshop-orchestrator
+    - name: qa_repo
+      type: String
+      required: false
+      value: us-central1-docker.pkg.dev/harnessevents-qa/workshop-orchestrator
+    - name: db_conn
+      type: String
+      required: false
+      value: administration-459416:us-central1:workshops-db
+    - name: app_service
+      type: String
+      required: false
+      value: workshop-orchestrator
+    - name: runner_jobs
+      type: String
+      required: false
+      value: tf-runner tf-reaper tf-scheduler
+  stages:
+    - stage:
+        name: Queue
+        identifier: queue
+        type: Custom
+        spec:
+          execution:
+            steps:
+              - step:
+                  type: Queue
+                  name: One Production Deploy At A Time
+                  identifier: queue
+                  timeout: 2h
+                  spec:
+                    key: deploy_production
+                    scope: Pipeline
+    - stage:
+        name: Preflight
+        identifier: preflight
+        type: CI
+        spec:
+          cloneCodebase: true
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec: {}
+          execution:
+            steps:
+              - step:
+                  type: Run
+                  name: Resolve and Check
+                  identifier: resolve
+                  timeout: 10m
+                  spec:
+                    shell: Bash
+                    image: gcr.io/google.com/cloudsdktool/google-cloud-cli:slim
+                    envVariables:
+                      PROD_KEY_B64: <+secrets.getValue("gcp_build_sa_key_b64")>
+                      QA_KEY_B64: <+secrets.getValue("gcp_qa_build_sa_key_b64")>
+                      REQUESTED: <+pipeline.variables.sha>
+                      RUN_INFRA: <+pipeline.variables.run_infra>
+                      ALLOW_ROLLBACK: <+pipeline.variables.allow_rollback>
+                      GCP_PROJECT: <+pipeline.variables.gcp_project>
+                      QA_PROJECT: <+pipeline.variables.qa_project>
+                      REGION: <+pipeline.variables.region>
+                      QA_REPO: <+pipeline.variables.qa_repo>
+                      APP_SERVICE: <+pipeline.variables.app_service>
+                    command: |
+                      set -euo pipefail
+                      umask 077
+                      command -v git >/dev/null || { apt-get update -qq && apt-get install -y -qq git >/dev/null; }
+                      git config --global --add safe.directory "$(pwd)"
+                      fail() { echo "::: REFUSED: $*" >&2; exit 1; }
+
+                      printf '%s' "$PROD_KEY_B64" | base64 -d > /tmp/prod.json
+                      printf '%s' "$QA_KEY_B64" | base64 -d > /tmp/qa.json
+                      PROD_SA="$(sed -nE 's/.*"client_email": *"([^"]+)".*/\1/p' /tmp/prod.json)"
+                      QA_SA="$(sed -nE 's/.*"client_email": *"([^"]+)".*/\1/p' /tmp/qa.json)"
+                      gcloud auth activate-service-account --key-file /tmp/prod.json --quiet
+                      gcloud auth activate-service-account --key-file /tmp/qa.json --quiet
+                      rm -f /tmp/prod.json /tmp/qa.json
+
+                      live_tag() { # project account
+                        gcloud run services describe "$APP_SERVICE" --project "$1" --region "$REGION" \
+                          --account "$2" --format 'value(spec.template.spec.containers[0].image)' | sed 's/.*://'
+                      }
+                      QA_TAG="$(live_tag "$QA_PROJECT" "$QA_SA")"
+                      PROD_TAG="$(live_tag "$GCP_PROJECT" "$PROD_SA")"
+                      echo "QA serves ${QA_TAG}; production serves ${PROD_TAG}"
+
+                      if [ "$REQUESTED" = "qa" ] || [ -z "$REQUESTED" ]; then REQUESTED="$QA_TAG"; fi
+                      SHA="$(git rev-parse --verify --quiet "${REQUESTED}^{commit}")" \
+                        || fail "${REQUESTED} is not a commit in this repository"
+                      TAG="${SHA:0:7}"
+                      SUBJECT="$(git log -1 --pretty=%s "$SHA" | cut -c1-120)"
+                      echo "promoting ${TAG}: ${SUBJECT}"
+
+                      git merge-base --is-ancestor "$SHA" HEAD \
+                        || fail "${TAG} is not on main. Merge it first; deploy_qa will build it."
+
+                      gcloud artifacts docker images describe "${QA_REPO}/app:${TAG}" --account "$QA_SA" >/dev/null 2>&1 \
+                        || fail "${QA_REPO}/app:${TAG} does not exist, so deploy_qa never built ${TAG}."
+                      gcloud artifacts docker images describe "${QA_REPO}/runner:${TAG}" --account "$QA_SA" >/dev/null 2>&1 \
+                        || fail "${QA_REPO}/runner:${TAG} does not exist, so deploy_qa never built ${TAG}."
+                      [ "$TAG" = "$QA_TAG" ] || echo "::: note: QA is serving ${QA_TAG}, not ${TAG}"
+
+                      if PROD_SHA="$(git rev-parse --verify --quiet "${PROD_TAG}^{commit}")"; then
+                        if [ "$PROD_SHA" = "$SHA" ]; then
+                          echo "::: note: production already runs ${TAG}; this redeploys it"
+                        elif ! git merge-base --is-ancestor "$PROD_SHA" "$SHA"; then
+                          [ "$ALLOW_ROLLBACK" = "true" ] \
+                            || fail "${TAG} does not contain ${PROD_TAG}, which production runs now. Re-run with allow_rollback=true if going back is intended."
+                          echo "::: note: rolling back from ${PROD_TAG}"
+                        fi
+                      else
+                        echo "::: note: production's tag ${PROD_TAG} is not a commit; skipping the ancestry check"
+                      fi
+
+                      if [ "$RUN_INFRA" = "true" ] && ! git diff --quiet "$SHA" HEAD -- 'infra/admin/*.tf'; then
+                        git diff --stat "$SHA" HEAD -- 'infra/admin/*.tf'
+                        fail "infra/admin changed on main after ${TAG}, and the IaCM workspace applies the head of main. Promote the head of main, or re-run with run_infra=false."
+                      fi
+
+                      export SHA TAG PROD_TAG SUBJECT
+                      export COMPARE="https://github.com/suchcodewow/wsorchestrator/compare/${PROD_TAG}...${TAG}"
+                    outputVariables:
+                      - name: SHA
+                      - name: TAG
+                      - name: PROD_TAG
+                      - name: SUBJECT
+                      - name: COMPARE
+    - stage:
+        name: Approval
+        identifier: approval
+        type: Approval
+        spec:
+          execution:
+            steps:
+              - step:
+                  type: HarnessApproval
+                  name: Approve Production
+                  identifier: approve
+                  timeout: 1d
+                  spec:
+                    approvalMessage: |-
+                      Deploy <+pipeline.stages.preflight.spec.execution.steps.resolve.output.outputVariables.TAG> to production?
+                      <+pipeline.stages.preflight.spec.execution.steps.resolve.output.outputVariables.SUBJECT>
+
+                      Production runs <+pipeline.stages.preflight.spec.execution.steps.resolve.output.outputVariables.PROD_TAG> now.
+                      Changes: <+pipeline.stages.preflight.spec.execution.steps.resolve.output.outputVariables.COMPARE>
+                    includePipelineExecutionHistory: true
+                    isAutoRejectEnabled: false
+                    approvers:
+                      userGroups:
+                        - prod_deployers
+                      minimumCount: 1
+                      disallowPipelineExecutor: false
+                    approverInputs: []
+    - stage:
+        name: Infrastructure
+        identifier: infra
+        type: IACM
+        spec:
+          workspace: admin_control_plane
+          cloneCodebase: false
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec: {}
+          execution:
+            steps:
+              - step:
+                  type: IACMTerraformPlugin
+                  name: Init
+                  identifier: init
+                  timeout: 20m
+                  spec:
+                    command: init
+              - step:
+                  type: IACMTerraformPlugin
+                  name: Plan
+                  identifier: plan
+                  timeout: 30m
+                  spec:
+                    command: plan
+              - step:
+                  type: IACMTerraformPlugin
+                  name: Apply
+                  identifier: apply
+                  timeout: 60m
+                  spec:
+                    command: apply
+                  when:
+                    stageStatus: Success
+                    condition: <+pipeline.variables.apply_infra> == "true" && (<+steps.plan.output.outputVariables['plannedChanges.added']> != "0" || <+steps.plan.output.outputVariables['plannedChanges.changed']> != "0" || <+steps.plan.output.outputVariables['plannedChanges.deleted']> != "0")
+        when:
+          pipelineStatus: Success
+          condition: <+pipeline.variables.run_infra> == "true"
+    - stage:
+        name: Promote Migrate Deploy
+        identifier: promote_migrate_deploy
+        type: CI
+        spec:
+          cloneCodebase: true
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec: {}
+          execution:
+            steps:
+              - step:
+                  type: Run
+                  name: Copy Images From QA
+                  identifier: promote
+                  timeout: 15m
+                  spec:
+                    shell: Sh
+                    image: gcr.io/go-containerregistry/crane:debug
+                    envVariables:
+                      GCP_KEY_B64: <+secrets.getValue("gcp_build_sa_key_b64")>
+                      REPO: <+pipeline.variables.repo>
+                      QA_REPO: <+pipeline.variables.qa_repo>
+                      TAG: <+pipeline.stages.preflight.spec.execution.steps.resolve.output.outputVariables.TAG>
+                    # Production's build-sa, which reads QA's repository through
+                    # the image_readers grant in QA's workspace.
+                    command: |
+                      set -eu
+                      printf '%s' "$GCP_KEY_B64" | crane auth login us-central1-docker.pkg.dev -u _json_key_base64 --password-stdin
+                      for image in app runner; do
+                        crane copy "${QA_REPO}/${image}:${TAG}" "${REPO}/${image}:${TAG}"
+                        crane tag "${REPO}/${image}:${TAG}" latest
+                      done
+              - step:
+                  type: Run
+                  name: Check Out Promoted Commit
+                  identifier: checkout
+                  spec:
+                    shell: Sh
+                    image: mirror.gcr.io/library/alpine:3.20
+                    envVariables:
+                      SHA: <+pipeline.stages.preflight.spec.execution.steps.resolve.output.outputVariables.SHA>
+                    # The clone is main's head; the migrations must be the
+                    # promoted commit's, or a newer migration would run against
+                    # production ahead of the code that expects it.
+                    command: |
+                      set -eu
+                      apk add --no-cache git >/dev/null
+                      git config --global --add safe.directory "$(pwd)"
+                      git checkout --quiet --detach "$SHA"
+                      git log -1 --oneline
+              - step:
+                  type: Run
+                  name: Fetch Database URL
+                  identifier: fetch_db_url
+                  spec:
+                    shell: Bash
+                    image: gcr.io/google.com/cloudsdktool/google-cloud-cli:slim
+                    envVariables:
+                      GCP_KEY_B64: <+secrets.getValue("gcp_build_sa_key_b64")>
+                      GCP_PROJECT: <+pipeline.variables.gcp_project>
+                    command: |
+                      set -euo pipefail
+                      umask 077
+                      printf '%s' "$GCP_KEY_B64" | base64 -d > /tmp/sa.json
+                      gcloud auth activate-service-account --key-file /tmp/sa.json --quiet
+                      gcloud secrets versions access latest --secret=database-url \
+                        --project "$GCP_PROJECT" > /harness/.db_url
+                      rm -f /tmp/sa.json
+                      echo "fetched database-url ($(wc -c < /harness/.db_url) bytes)"
+              - step:
+                  type: Run
+                  name: Migrate Database
+                  identifier: migrate
+                  spec:
+                    shell: Bash
+                    image: mirror.gcr.io/library/node:22-slim
+                    envVariables:
+                      GCP_KEY_B64: <+secrets.getValue("gcp_build_sa_key_b64")>
+                      DB_CONN: <+pipeline.variables.db_conn>
+                    command: |
+                      set -euo pipefail
+                      umask 077
+                      apt-get update -qq && apt-get install -y -qq curl ca-certificates >/dev/null
+
+                      curl -sSL -o /usr/local/bin/cloud-sql-proxy \
+                        https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.14.1/cloud-sql-proxy.linux.amd64
+                      chmod +x /usr/local/bin/cloud-sql-proxy
+
+                      printf '%s' "$GCP_KEY_B64" | base64 -d > /tmp/sa.json
+
+                      DATABASE_URL_SOCKET="$(cat /harness/.db_url)"
+                      CREDS="$(printf '%s' "$DATABASE_URL_SOCKET" | sed -E 's#^postgresql://([^@]+)@.*#\1#')"
+                      DBNAME="$(printf '%s' "$DATABASE_URL_SOCKET" | sed -E 's#.*/([^/?]+)\?.*#\1#')"
+                      export DATABASE_URL="postgresql://${CREDS}@127.0.0.1:5432/${DBNAME}"
+
+                      cloud-sql-proxy --credentials-file /tmp/sa.json --port 5432 "$DB_CONN" &
+                      for _ in $(seq 1 30); do
+                        (exec 3<>/dev/tcp/127.0.0.1/5432) 2>/dev/null && break
+                        sleep 1
+                      done
+
+                      cd frontend
+                      npm install pg --no-save --no-audit --no-fund --silent
+                      node scripts/apply-sql.mjs
+
+                      rm -f /tmp/sa.json /harness/.db_url
+              - step:
+                  type: Run
+                  name: Deploy Cloud Run
+                  identifier: deploy
+                  spec:
+                    shell: Bash
+                    image: gcr.io/google.com/cloudsdktool/google-cloud-cli:slim
+                    envVariables:
+                      GCP_KEY_B64: <+secrets.getValue("gcp_build_sa_key_b64")>
+                      GCP_PROJECT: <+pipeline.variables.gcp_project>
+                      REGION: <+pipeline.variables.region>
+                      REPO: <+pipeline.variables.repo>
+                      APP_SERVICE: <+pipeline.variables.app_service>
+                      RUNNER_JOBS: <+pipeline.variables.runner_jobs>
+                      TAG: <+pipeline.stages.preflight.spec.execution.steps.resolve.output.outputVariables.TAG>
+                    command: |
+                      set -euo pipefail
+                      umask 077
+                      printf '%s' "$GCP_KEY_B64" | base64 -d > /tmp/sa.json
+                      gcloud auth activate-service-account --key-file /tmp/sa.json --quiet
+                      rm -f /tmp/sa.json
+
+                      gcloud run services update "$APP_SERVICE" \
+                        --project "$GCP_PROJECT" --region "$REGION" \
+                        --image "$REPO/app:$TAG"
+
+                      for job in $RUNNER_JOBS; do
+                        gcloud run jobs update "$job" \
+                          --project "$GCP_PROJECT" --region "$REGION" \
+                          --image "$REPO/runner:$TAG"
+                      done

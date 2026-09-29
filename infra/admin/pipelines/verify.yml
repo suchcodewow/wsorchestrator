@@ -1,0 +1,62 @@
+pipeline:
+  name: Verify
+  identifier: verify
+  projectIdentifier: orchestrator
+  orgIdentifier: operations
+  description: |
+    The pull-request gate. Typechecks, lints and unit-tests the runner and the
+    frontend, and nothing else: no credentials, no cloud, no database. Its
+    GitHub status is a required check on main (ruleset protect-main), so a PR
+    cannot merge until this passes.
+
+    The same two steps run again as the first stage of deploy_qa, because a
+    push to main by an admin bypasses the PR and so never came through here.
+
+    Stored INLINE in Harness and mirrored at infra/admin/pipelines/verify.yml.
+    Update both.
+  properties:
+    ci:
+      codebase:
+        connectorRef: github_wsorchestrator
+        build: <+input>
+  stages:
+    - stage:
+        name: Verify
+        identifier: verify
+        type: CI
+        spec:
+          cloneCodebase: true
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec: {}
+          execution:
+            steps:
+              - step:
+                  type: Run
+                  name: Typecheck and Test Runner
+                  identifier: verify_runner
+                  timeout: 10m
+                  spec:
+                    shell: Sh
+                    image: mirror.gcr.io/library/node:22-slim
+                    command: |
+                      set -eu
+                      cd runner
+                      npm ci --no-audit --no-fund --silent
+                      npm run verify
+              - step:
+                  type: Run
+                  name: Typecheck Lint and Test Frontend
+                  identifier: verify_frontend
+                  timeout: 15m
+                  spec:
+                    shell: Sh
+                    image: mirror.gcr.io/library/node:22-slim
+                    command: |
+                      set -eu
+                      cd frontend
+                      npm ci --no-audit --no-fund --silent
+                      npm run verify
