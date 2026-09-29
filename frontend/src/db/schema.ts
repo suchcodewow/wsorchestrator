@@ -14,6 +14,8 @@ import {
   index,
   uniqueIndex,
   customType,
+  date,
+  doublePrecision,
   type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
@@ -795,6 +797,136 @@ export const SCRUB_STATUSES = [
 export type ScrubStatus = (typeof SCRUB_STATUSES)[number];
 
 export type HarnessDeployedSecret = typeof harnessDeployedSecrets.$inferSelect;
+
+/**
+ * The HiBob service user eVals imports employees with, and how the last import
+ * went. One row at most, keyed `site`.
+ */
+export const hibobConnection = pgTable("hibob_connection", {
+  id: text("id").primaryKey().default("site"),
+  serviceUserId: text("service_user_id").notNull(),
+  /** The service user's token, sealed with `secret-box`. */
+  secret: bytea("secret").notNull(),
+  /** The token's last four characters, to show which one is saved. */
+  tail: text("tail").notNull(),
+  updatedBy: text("updated_by").references(() => users.id, {
+    onDelete: "set null",
+  }),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  lastImportAt: timestamp("last_import_at", { withTimezone: true }),
+  lastImportCount: integer("last_import_count"),
+  lastImportBy: text("last_import_by").references(() => users.id, {
+    onDelete: "set null",
+  }),
+  /** Why the last attempt failed, or null if it succeeded. */
+  lastImportError: text("last_import_error"),
+});
+
+export const HIBOB_LIMITS = { serviceUserId: 100, token: 500 } as const;
+
+/**
+ * Every active HiBob employee, as of the last import. An import replaces the
+ * whole table, so someone who has left drops out.
+ */
+export const hibobEmployees = pgTable(
+  "hibob_employees",
+  {
+    /** HiBob's own id for the person. */
+    id: text("id").primaryKey(),
+    /** Lowercased. */
+    email: text("email").notNull(),
+    fullName: text("full_name").notNull(),
+    /** The readable title, not HiBob's numeric code for it. */
+    title: text("title").notNull().default(""),
+    department: text("department").notNull().default(""),
+    site: text("site").notNull().default(""),
+    /** Lowercased; empty for someone who reports to nobody. */
+    reportsToEmail: text("reports_to_email").notNull().default(""),
+    reportsToName: text("reports_to_name").notNull().default(""),
+    /** First day at the company. */
+    startDate: date("start_date", { mode: "string" }),
+    /** When their current position took effect — a transfer resets it. */
+    activeEffectiveDate: date("active_effective_date", { mode: "string" }),
+    /** The record as HiBob sent it, less the flattened `/…` duplicates. */
+    raw: jsonb("raw").notNull(),
+    importedAt: timestamp("imported_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("hibob_employees_email_idx").on(t.email),
+    index("hibob_employees_reports_to_idx").on(t.reportsToEmail),
+  ],
+);
+
+export type HibobEmployee = typeof hibobEmployees.$inferSelect;
+
+/**
+ * The title lists that sort attendees: a title on the Sales or Engineer list
+ * gives that role, and one on the Ignored list keeps its holder off the
+ * rosters. A title sits on one list at most, compared case-insensitively.
+ */
+export const EVALS_TITLE_LISTS = ["sales", "engineer", "ignored"] as const;
+export type EvalsTitleList = (typeof EVALS_TITLE_LISTS)[number];
+
+export const evalsTitles = pgTable(
+  "evals_titles",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    list: text("list").notNull(),
+    title: text("title").notNull(),
+    createdBy: text("created_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [uniqueIndex("evals_titles_title_idx").on(sql`lower(${t.title})`)],
+);
+
+export const EVALS_TITLE_LIMITS = { title: 200, perRequest: 500 } as const;
+
+export type EvalsTitle = typeof evalsTitles.$inferSelect;
+
+/**
+ * Who has been through bootcamp (BTC) and the intermediate event (INT), and
+ * how they scored. One row per email. A date of 2000-01-01 is the sheet's
+ * marker for "exempt": someone who never needs to attend.
+ */
+export const bootcampHistory = pgTable(
+  "bootcamp_history",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** Lowercased. */
+    email: text("email").notNull(),
+    btcDate: date("btc_date", { mode: "string" }),
+    intDate: date("int_date", { mode: "string" }),
+    btcScore: doublePrecision("btc_score"),
+    intScore: doublePrecision("int_score"),
+    /** Score per exercise, e.g. `{"Score-Exams": 4}`. */
+    btcIndividualScores: jsonb("btc_individual_scores").$type<Record<string, number>>(),
+    intIndividualScores: jsonb("int_individual_scores").$type<Record<string, number>>(),
+    updatedBy: text("updated_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [uniqueIndex("bootcamp_history_email_idx").on(t.email)],
+);
+
+export const EXEMPT_DATE = "2000-01-01";
+
+export const BOOTCAMP_HISTORY_LIMITS = { bytes: 5 * 1024 * 1024, rows: 20_000, email: 320 } as const;
+
+export type BootcampHistory = typeof bootcampHistory.$inferSelect;
 
 export type WorkshopRun = typeof workshopRuns.$inferSelect;
 export type LabGuide = typeof labGuides.$inferSelect;

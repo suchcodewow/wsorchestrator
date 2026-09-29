@@ -480,7 +480,21 @@ role does everything the one before it does.
 | **Scheduler Viewer**        | The **Scheduler** page.                                     |
 | **Scheduler Administrator** | Sets everyone's scheduler role on **Manage users**, and **Scheduler settings**. |
 
-**eVals** — a placeholder for now, with the same roles as the scheduler.
+**eVals** — the same roles as the scheduler. The **eVals** page is still a
+placeholder; **eVals settings** holds what it will draw on:
+
+- **HiBob**: a service user's id and token, entered on the page and sealed like
+  a Harness token. **Import now** replaces the stored employees with HiBob's
+  active ones. It then lists everyone whose reporting line reaches
+  `carlos.delatorre@harness.io`, with each person's list and bootcamp dates.
+- **Automatic Sales Titles**, **Automatic Engineer Titles** and **Ignored
+  Titles**: the job titles that put someone on each list. Each title can be on
+  only one list, and case doesn't matter.
+- **Attendee Tracking**: bootcamp (BTC) and INT history, one row per email.
+  This table replaced the `Bootcamp_History` sheet and is the record now, so
+  people are added and edited here. An **Exempt** switch stores the sheet's
+  `2000-01-01` marker. The old sheet can still be uploaded: rows are matched
+  by email and only the file's own columns are written.
 
 | Role                    | Adds                                                            |
 | ----------------------- | --------------------------------------------------------------- |

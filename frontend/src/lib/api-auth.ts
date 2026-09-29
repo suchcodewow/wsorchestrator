@@ -4,7 +4,11 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { resolveToken, type TokenBearer } from "@/lib/api-tokens";
-import { canManageSettings } from "@/lib/roles";
+import {
+  canManageEvalsSettings,
+  canManageSettings,
+  type Access,
+} from "@/lib/roles";
 
 export async function sessionOrToken(
   req: Request,
@@ -45,7 +49,18 @@ export async function requireUser(): Promise<
   };
 }
 
-export async function requireAdministrator(): Promise<
+export function requireAdministrator() {
+  return requireAccess(canManageSettings);
+}
+
+/** An eVals administrator, for eVals settings. */
+export function requireEvalsAdministrator() {
+  return requireAccess(canManageEvalsSettings);
+}
+
+async function requireAccess(
+  allowed: (access: Access) => boolean,
+): Promise<
   | { error: NextResponse; user: null }
   | { error: null; user: { id: string; email: string | null } }
 > {
@@ -56,7 +71,7 @@ export async function requireAdministrator(): Promise<
       user: null,
     };
   }
-  if (!canManageSettings(session.user.access)) {
+  if (!allowed(session.user.access)) {
     return {
       error: NextResponse.json({ error: "forbidden" }, { status: 403 }),
       user: null,

@@ -47,6 +47,7 @@ import {
   homePath,
   type Access,
 } from "@/lib/roles";
+import { visibleEvalsSettingsTabs } from "@/app/(app)/evals-settings/tabs";
 import { visibleSettingsTabs } from "@/app/(app)/settings/tabs";
 import { PERSONAS, PERSONA_NAMES, type Persona } from "../support/access";
 import { createRun, createSession, readRoles, testScope, type TestUser } from "../support/seed";
@@ -165,6 +166,23 @@ const PAGES: Record<string, PageCase> = {
   "/evals": { path: () => "/evals", expect: gated(canUseEvals) },
   "/evals-settings": {
     path: () => "/evals-settings",
+    expect: (a) => (canManageEvalsSettings(a) ? { to: visibleEvalsSettingsTabs(a)[0]!.href } : 404),
+  },
+  "/evals-settings/hibob": { path: () => "/evals-settings/hibob", expect: gated(canManageEvalsSettings) },
+  "/evals-settings/sales-titles": {
+    path: () => "/evals-settings/sales-titles",
+    expect: gated(canManageEvalsSettings),
+  },
+  "/evals-settings/engineer-titles": {
+    path: () => "/evals-settings/engineer-titles",
+    expect: gated(canManageEvalsSettings),
+  },
+  "/evals-settings/ignored-titles": {
+    path: () => "/evals-settings/ignored-titles",
+    expect: gated(canManageEvalsSettings),
+  },
+  "/evals-settings/attendee-tracking": {
+    path: () => "/evals-settings/attendee-tracking",
     expect: gated(canManageEvalsSettings),
   },
   "/welcome": {
@@ -283,6 +301,18 @@ const ROUTES: RouteCase[] = [
   { method: "DELETE", path: `/api/settings/repos/${MISSING}`, allowed: canManageSettings },
   { method: "POST", path: `/api/me/harness-tokens/${MISSING}/deploy`, allowed: canManageSettings, body: () => ({}) },
   { method: "POST", path: `/api/me/harness-tokens/${MISSING}/scrub`, allowed: canManageSettings },
+
+  // eVals administration
+  { method: "PUT", path: "/api/evals/hibob/connection", allowed: canManageEvalsSettings, body: () => ({}) },
+  { method: "DELETE", path: "/api/evals/hibob/connection", allowed: canManageEvalsSettings, denyOnly: true },
+  { method: "POST", path: "/api/evals/hibob/import", allowed: canManageEvalsSettings, denyOnly: true },
+  { method: "POST", path: "/api/evals/titles", allowed: canManageEvalsSettings, body: () => ({}) },
+  { method: "PATCH", path: `/api/evals/titles/${MISSING}`, allowed: canManageEvalsSettings, body: () => ({}) },
+  { method: "DELETE", path: `/api/evals/titles/${MISSING}`, allowed: canManageEvalsSettings },
+  { method: "POST", path: "/api/evals/attendee-tracking", allowed: canManageEvalsSettings, body: () => ({}) },
+  { method: "POST", path: "/api/evals/attendee-tracking/import", allowed: canManageEvalsSettings, body: form },
+  { method: "PATCH", path: `/api/evals/attendee-tracking/${MISSING}`, allowed: canManageEvalsSettings, body: () => ({}) },
+  { method: "DELETE", path: `/api/evals/attendee-tracking/${MISSING}`, allowed: canManageEvalsSettings },
 
   // Users
   { method: "PATCH", path: `/api/users/${MISSING}`, allowed: canManageUsers, body: () => ({}) },
