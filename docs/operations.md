@@ -47,7 +47,7 @@ seed` / anything through `with-db.sh` with the **VPN off**, or from Cloud Shell.
 The symptom is `ECONNRESET` against `:3307`.
 
 **Zscaler re-signs `api.hibob.com`, and Node rejects the certificate.** So an
-eVals HiBob save or import run locally fails with `unable to get local issuer
+eVals HiBob sync run locally fails with `unable to get local issuer
 certificate`, while GitHub and Harness calls are unaffected.
 `NODE_USE_SYSTEM_CA=1` makes Node trust the macOS keychain, which holds the
 Zscaler root. `npm run dev` sets it. A `tsx` script that calls HiBob needs it

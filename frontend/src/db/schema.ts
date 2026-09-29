@@ -799,39 +799,13 @@ export type ScrubStatus = (typeof SCRUB_STATUSES)[number];
 export type HarnessDeployedSecret = typeof harnessDeployedSecrets.$inferSelect;
 
 /**
- * The HiBob service user eVals imports employees with, and how the last import
- * went. One row at most, keyed `site`.
+ * Every active HiBob employee, as of the last sync. A sync replaces the whole
+ * table, so someone who has left drops out. Until 0034 this was
+ * `hibob_employees`, a name a view still answers to for the revision a deploy
+ * replaces.
  */
-export const hibobConnection = pgTable("hibob_connection", {
-  id: text("id").primaryKey().default("site"),
-  serviceUserId: text("service_user_id").notNull(),
-  /** The service user's token, sealed with `secret-box`. */
-  secret: bytea("secret").notNull(),
-  /** The token's last four characters, to show which one is saved. */
-  tail: text("tail").notNull(),
-  updatedBy: text("updated_by").references(() => users.id, {
-    onDelete: "set null",
-  }),
-  updatedAt: timestamp("updated_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-  lastImportAt: timestamp("last_import_at", { withTimezone: true }),
-  lastImportCount: integer("last_import_count"),
-  lastImportBy: text("last_import_by").references(() => users.id, {
-    onDelete: "set null",
-  }),
-  /** Why the last attempt failed, or null if it succeeded. */
-  lastImportError: text("last_import_error"),
-});
-
-export const HIBOB_LIMITS = { serviceUserId: 100, token: 500 } as const;
-
-/**
- * Every active HiBob employee, as of the last import. An import replaces the
- * whole table, so someone who has left drops out.
- */
-export const hibobEmployees = pgTable(
-  "hibob_employees",
+export const employees = pgTable(
+  "employees",
   {
     /** HiBob's own id for the person. */
     id: text("id").primaryKey(),
@@ -856,12 +830,52 @@ export const hibobEmployees = pgTable(
       .defaultNow(),
   },
   (t) => [
-    index("hibob_employees_email_idx").on(t.email),
-    index("hibob_employees_reports_to_idx").on(t.reportsToEmail),
+    index("employees_email_idx").on(t.email),
+    index("employees_reports_to_idx").on(t.reportsToEmail),
   ],
 );
 
-export type HibobEmployee = typeof hibobEmployees.$inferSelect;
+export type Employee = typeof employees.$inferSelect;
+
+export const HIBOB_SYNC_TRIGGERS = ["schedule", "manual"] as const;
+export type HibobSyncTrigger = (typeof HIBOB_SYNC_TRIGGERS)[number];
+
+export const HIBOB_SYNC_STATUSES = ["running", "succeeded", "failed"] as const;
+export type HibobSyncStatus = (typeof HIBOB_SYNC_STATUSES)[number];
+
+/** One HiBob sync, scheduled or manual, and how it ended. */
+export const hibobSyncRuns = pgTable(
+  "hibob_sync_runs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    trigger: text("trigger").$type<HibobSyncTrigger>().notNull(),
+    /** Who pressed the button; null for a scheduled run. */
+    triggeredBy: text("triggered_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    /** `running` until it ends; one that never ends was cut off mid-sync. */
+    status: text("status").$type<HibobSyncStatus>().notNull().default("running"),
+    startedAt: timestamp("started_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+    /** Employees stored, on success. */
+    employeeCount: integer("employee_count"),
+    /** Records HiBob sent with no id or email, or a repeated id. */
+    skipped: integer("skipped"),
+    /** Why it failed. */
+    error: text("error"),
+  },
+  (t) => [
+    index("hibob_sync_runs_started_at_idx").on(t.startedAt),
+    // One sync at a time: a second insert while one runs is a conflict.
+    uniqueIndex("hibob_sync_runs_one_running_idx")
+      .on(t.status)
+      .where(sql`${t.status} = 'running'`),
+  ],
+);
+
+export type HibobSyncRun = typeof hibobSyncRuns.$inferSelect;
 
 /**
  * The title lists that sort attendees: a title on the Sales or Engineer list

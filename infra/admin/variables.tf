@@ -87,6 +87,25 @@ variable "github_pat" {
   sensitive   = true
 }
 
+variable "hibob_userid" {
+  description = "HiBob service user ID eVals syncs employees with. Empty leaves the sync unconfigured: no secret, no env var, and every run is logged as failed."
+  type        = string
+  default     = ""
+}
+
+variable "hibob_token" {
+  description = "Token for hibob_userid. Stored in Secret Manager as hibob-token and read by the app alone."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "hibob_sync_schedule" {
+  description = "Cron for the daily HiBob employee sync, in America/New_York."
+  type        = string
+  default     = "0 3 * * *"
+}
+
 variable "harness_base_url" {
   description = "Harness base URL. Change for a non-SaaS or non-prod cluster (e.g. https://app.harness.io/gratis)."
   type        = string

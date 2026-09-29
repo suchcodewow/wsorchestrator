@@ -1,96 +1,89 @@
 /**
- * The HiBob connection eVals imports employees with, and the import itself.
+ * The HiBob sync: every active employee into `employees`, and a log of each run.
  *
- * The service user's token is sealed like a Harness token and never leaves
- * the server; the settings page sees its last four characters. An import asks
- * HiBob for every active employee and replaces `hibob_employees` with them in
- * one transaction, so a failed import leaves the previous one in place.
+ * The service user comes from the deployment — `hibob_userid` and `hibob_token`
+ * in terraform.tfvars, which reach the app as `HIBOB_SERVICE_USER_ID` and
+ * `HIBOB_TOKEN` — not from anything entered in the app. A sync runs every day
+ * at 3 AM Eastern (Cloud Scheduler, see infra/admin/scheduler.tf) and whenever
+ * an eVals administrator asks. Like the Apps Script it replaces
+ * (`fetchHibobToEmployees`), it asks HiBob for every active employee and
+ * rewrites the whole table — here in one transaction, so a failed sync leaves
+ * the previous one in place.
  */
 
 import "server-only";
 
-import { eq, sql } from "drizzle-orm";
-import { z } from "zod";
+import { and, desc, eq, lt, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { HIBOB_LIMITS, hibobConnection, hibobEmployees, users } from "@/db/schema";
+import {
+  employees,
+  hibobSyncRuns,
+  users,
+  type HibobSyncStatus,
+  type HibobSyncTrigger,
+} from "@/db/schema";
 import { hibobAuthorization, toEmployeeRow } from "@/lib/evals/hibob-record";
-import { openSecret, sealSecret } from "@/lib/secret-box";
 
 const SEARCH_URL = "https://api.hibob.com/v1/people/search";
-const ID = "site";
+
+/**
+ * How long a run may say `running` before it is taken to have been cut off —
+ * an instance recycled mid-sync never writes its end. Well past the route's
+ * 180s limit.
+ */
+const STALE_MS = 10 * 60_000;
 
 export type HibobError =
-  | "invalid"
   | "not_configured"
+  | "already_running"
   | "rejected"
   | "unreachable"
-  | "bad_response"
-  | "no_key"
-  | "unreadable";
+  | "bad_response";
 
 export const STATUS_FOR: Record<HibobError, number> = {
-  invalid: 400,
   not_configured: 409,
+  already_running: 409,
   rejected: 422,
   unreachable: 502,
   bad_response: 502,
-  no_key: 503,
-  unreadable: 409,
 };
 
-export const connectionInputSchema = z.object({
-  serviceUserId: z.string().trim().min(1).max(HIBOB_LIMITS.serviceUserId),
-  token: z.string().trim().min(1).max(HIBOB_LIMITS.token),
-});
-
-export type HibobConnectionSummary = {
-  serviceUserId: string;
-  tail: string;
-  updatedAt: Date;
-  updatedBy: string | null;
-  lastImportAt: Date | null;
-  lastImportCount: number | null;
-  lastImportError: string | null;
+/** What a failed run records, before any detail HiBob gave. */
+const LOGGED: Record<HibobError, string> = {
+  not_configured: "HiBob credentials are not configured — set hibob_userid and hibob_token in terraform.tfvars.",
+  already_running: "Another sync was already running.",
+  rejected: "HiBob turned the service user's credentials down.",
+  unreachable: "Could not reach HiBob.",
+  bad_response: "HiBob answered with something unexpected.",
 };
 
-export async function getHibobConnection(): Promise<HibobConnectionSummary | null> {
-  const [row] = await db
-    .select({
-      serviceUserId: hibobConnection.serviceUserId,
-      tail: hibobConnection.tail,
-      updatedAt: hibobConnection.updatedAt,
-      updatedByName: users.name,
-      updatedByEmail: users.email,
-      lastImportAt: hibobConnection.lastImportAt,
-      lastImportCount: hibobConnection.lastImportCount,
-      lastImportError: hibobConnection.lastImportError,
-    })
-    .from(hibobConnection)
-    .leftJoin(users, eq(users.id, hibobConnection.updatedBy))
-    .where(eq(hibobConnection.id, ID));
-  if (!row) return null;
-  const { updatedByName, updatedByEmail, ...rest } = row;
-  return { ...rest, updatedBy: updatedByName ?? updatedByEmail };
+type Credentials = { serviceUserId: string; token: string };
+
+function credentials(): Credentials | null {
+  const serviceUserId = process.env.HIBOB_SERVICE_USER_ID?.trim();
+  const token = process.env.HIBOB_TOKEN?.trim();
+  return serviceUserId && token ? { serviceUserId, token } : null;
 }
 
-type Search = { fields?: string[] };
+/** The service user the deployment syncs with; the token is never shown. */
+export function hibobServiceUser(): string | null {
+  return credentials()?.serviceUserId ?? null;
+}
 
 /** One `people/search` call; the employees, or why there are none. */
 async function search(
-  serviceUserId: string,
-  token: string,
-  body: Search,
+  creds: Credentials,
 ): Promise<{ ok: true; employees: unknown[] } | { ok: false; error: HibobError; detail?: string }> {
   let res: Response;
   try {
     res = await fetch(SEARCH_URL, {
       method: "POST",
       headers: {
-        Authorization: hibobAuthorization(serviceUserId, token),
+        Authorization: hibobAuthorization(creds.serviceUserId, creds.token),
         Accept: "application/json",
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ showInactive: false, humanReadable: "APPEND", ...body }),
+      body: JSON.stringify({ showInactive: false, humanReadable: "APPEND" }),
       signal: AbortSignal.timeout(120_000),
       cache: "no-store",
     });
@@ -119,87 +112,146 @@ async function search(
   return { ok: true, employees: json.employees };
 }
 
-/** Checks the credentials with a one-field search, then saves them sealed. */
-export async function saveHibobConnection(
-  actorId: string,
-  input: z.infer<typeof connectionInputSchema>,
-): Promise<{ ok: true } | { ok: false; error: HibobError; detail?: string }> {
-  const check = await search(input.serviceUserId, input.token, { fields: ["/root/id"] });
-  if (!check.ok) return check;
-
-  let secret: Buffer;
-  try {
-    secret = sealSecret(input.token);
-  } catch {
-    return { ok: false, error: "no_key" };
-  }
-
-  const values = {
-    serviceUserId: input.serviceUserId,
-    secret,
-    tail: input.token.slice(-4),
-    updatedBy: actorId,
-    updatedAt: new Date(),
-  };
+/** Marks runs that have said `running` for too long as cut off. */
+async function closeStaleRuns(): Promise<void> {
   await db
-    .insert(hibobConnection)
-    .values({ id: ID, ...values })
-    .onConflictDoUpdate({ target: hibobConnection.id, set: values });
-  return { ok: true };
+    .update(hibobSyncRuns)
+    .set({ status: "failed", error: "Did not finish — the server stopped mid-sync." })
+    .where(
+      and(
+        eq(hibobSyncRuns.status, "running"),
+        lt(hibobSyncRuns.startedAt, new Date(Date.now() - STALE_MS)),
+      ),
+    );
 }
 
-/** Forgets the credentials. Imported employees stay until the next import. */
-export async function deleteHibobConnection(): Promise<void> {
-  await db.delete(hibobConnection).where(eq(hibobConnection.id, ID));
+/** Opens a run, or null if one is already running — the partial unique index allows one. */
+async function startRun(trigger: HibobSyncTrigger, actorId: string | null): Promise<string | null> {
+  await closeStaleRuns();
+  const [run] = await db
+    .insert(hibobSyncRuns)
+    .values({ trigger, triggeredBy: actorId })
+    .onConflictDoNothing()
+    .returning({ id: hibobSyncRuns.id });
+  return run?.id ?? null;
+}
+
+async function failRun(runId: string, error: HibobError, detail?: string): Promise<void> {
+  await db
+    .update(hibobSyncRuns)
+    .set({
+      status: "failed",
+      finishedAt: new Date(),
+      error: detail && error !== "not_configured" ? `${LOGGED[error]} ${detail}` : LOGGED[error],
+    })
+    .where(eq(hibobSyncRuns.id, runId));
 }
 
 const BATCH = 500;
 
-export type ImportResult =
-  | { ok: true; count: number; skipped: number }
-  | { ok: false; error: HibobError; detail?: string };
+export type SyncResult =
+  | { ok: true; runId: string; count: number; skipped: number }
+  | { ok: false; runId: string | null; error: HibobError; detail?: string };
 
-/** Replaces every stored employee with HiBob's current list. */
-export async function importHibobEmployees(actorId: string): Promise<ImportResult> {
-  const [conn] = await db.select().from(hibobConnection).where(eq(hibobConnection.id, ID));
-  if (!conn) return { ok: false, error: "not_configured" };
+/**
+ * Replaces every stored employee with HiBob's current list, logging the run.
+ * `actorId` is whoever pressed the button, or null for the schedule.
+ */
+export async function syncHibobEmployees(
+  trigger: HibobSyncTrigger,
+  actorId: string | null,
+): Promise<SyncResult> {
+  const runId = await startRun(trigger, actorId);
+  if (!runId) return { ok: false, runId: null, error: "already_running" };
 
-  const token = openSecret(conn.secret);
-  if (token === null) return { ok: false, error: "unreadable" };
-
-  const result = await search(conn.serviceUserId, token, {});
-  if (!result.ok) {
-    await db
-      .update(hibobConnection)
-      .set({ lastImportError: result.detail ?? result.error })
-      .where(eq(hibobConnection.id, ID));
-    return result;
-  }
-
-  const rows = result.employees.map(toEmployeeRow).filter((r) => r !== null);
-  // HiBob ids are unique, but a repeat would abort the whole insert.
-  const unique = [...new Map(rows.map((r) => [r.id, r])).values()];
-  const importedAt = new Date();
-
-  await db.transaction(async (tx) => {
-    // Two imports at once would otherwise interleave their delete and insert.
-    await tx.execute(sql`select pg_advisory_xact_lock(hashtext('hibob_employees'))`);
-    await tx.delete(hibobEmployees);
-    for (let i = 0; i < unique.length; i += BATCH) {
-      await tx
-        .insert(hibobEmployees)
-        .values(unique.slice(i, i + BATCH).map((r) => ({ ...r, importedAt })));
+  try {
+    const creds = credentials();
+    if (!creds) {
+      await failRun(runId, "not_configured");
+      return { ok: false, runId, error: "not_configured" };
     }
-    await tx
-      .update(hibobConnection)
-      .set({
-        lastImportAt: importedAt,
-        lastImportCount: unique.length,
-        lastImportBy: actorId,
-        lastImportError: null,
-      })
-      .where(eq(hibobConnection.id, ID));
-  });
 
-  return { ok: true, count: unique.length, skipped: result.employees.length - unique.length };
+    const result = await search(creds);
+    if (!result.ok) {
+      await failRun(runId, result.error, result.detail);
+      return { ...result, runId };
+    }
+
+    const rows = result.employees.map(toEmployeeRow).filter((r) => r !== null);
+    // HiBob ids are unique, but a repeat would abort the whole insert.
+    const unique = [...new Map(rows.map((r) => [r.id, r])).values()];
+    const skipped = result.employees.length - unique.length;
+    const importedAt = new Date();
+
+    await db.transaction(async (tx) => {
+      // Two syncs are kept apart by the one-running index, but a revision from
+      // before it (importing through the hibob_employees view) is not.
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext('hibob_employees'))`);
+      await tx.delete(employees);
+      for (let i = 0; i < unique.length; i += BATCH) {
+        await tx.insert(employees).values(unique.slice(i, i + BATCH).map((r) => ({ ...r, importedAt })));
+      }
+      await tx
+        .update(hibobSyncRuns)
+        .set({ status: "succeeded", finishedAt: new Date(), employeeCount: unique.length, skipped })
+        .where(eq(hibobSyncRuns.id, runId));
+    });
+
+    return { ok: true, runId, count: unique.length, skipped };
+  } catch (err) {
+    // Anything else — the database, most likely — still ends the run, so the
+    // log never shows a sync as running that is not.
+    await db
+      .update(hibobSyncRuns)
+      .set({
+        status: "failed",
+        finishedAt: new Date(),
+        error: err instanceof Error ? err.message.slice(0, 500) : "The sync failed.",
+      })
+      .where(eq(hibobSyncRuns.id, runId))
+      .catch(() => {});
+    throw err;
+  }
+}
+
+export type HibobSyncRunSummary = {
+  id: string;
+  trigger: HibobSyncTrigger;
+  triggeredBy: string | null;
+  status: HibobSyncStatus;
+  startedAt: Date;
+  finishedAt: Date | null;
+  employeeCount: number | null;
+  skipped: number | null;
+  error: string | null;
+};
+
+/** The most recent runs, newest first. */
+export async function listHibobSyncRuns(limit = 30): Promise<HibobSyncRunSummary[]> {
+  const rows = await db
+    .select({
+      id: hibobSyncRuns.id,
+      trigger: hibobSyncRuns.trigger,
+      triggeredByName: users.name,
+      triggeredByEmail: users.email,
+      status: hibobSyncRuns.status,
+      startedAt: hibobSyncRuns.startedAt,
+      finishedAt: hibobSyncRuns.finishedAt,
+      employeeCount: hibobSyncRuns.employeeCount,
+      skipped: hibobSyncRuns.skipped,
+      error: hibobSyncRuns.error,
+    })
+    .from(hibobSyncRuns)
+    .leftJoin(users, eq(users.id, hibobSyncRuns.triggeredBy))
+    .orderBy(desc(hibobSyncRuns.startedAt))
+    .limit(limit);
+  const staleBefore = Date.now() - STALE_MS;
+  return rows.map(({ triggeredByName, triggeredByEmail, ...rest }) => ({
+    ...rest,
+    triggeredBy: triggeredByName ?? triggeredByEmail,
+    // The next sync closes it for good; until then, say what happened.
+    ...(rest.status === "running" && rest.startedAt.getTime() < staleBefore
+      ? { status: "failed" as const, error: "Did not finish — the server stopped mid-sync." }
+      : {}),
+  }));
 }

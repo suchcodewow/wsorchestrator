@@ -7,7 +7,7 @@
 import "server-only";
 
 import { db } from "@/db";
-import { bootcampHistory, hibobEmployees, type EvalsTitleList } from "@/db/schema";
+import { bootcampHistory, employees, type Employee, type EvalsTitleList } from "@/db/schema";
 import { orgUnder, ORG_ROOT_EMAIL } from "@/lib/evals/org";
 import { listForTitle, titleKey } from "@/lib/evals/title-lists";
 import { titleListMap } from "@/lib/evals/titles";
@@ -45,27 +45,52 @@ export type Roster = {
 /** Every imported employee's name, by lowercased email. */
 export async function employeeNamesByEmail(): Promise<Map<string, string>> {
   const rows = await db
-    .select({ email: hibobEmployees.email, fullName: hibobEmployees.fullName })
-    .from(hibobEmployees);
+    .select({ email: employees.email, fullName: employees.fullName })
+    .from(employees);
   return new Map(rows.map((r) => [r.email, r.fullName]));
 }
 
+export type EmployeeListing = Omit<Employee, "raw" | "importedAt">;
+
+/** Every stored employee, for the Employees tab — not only those under the root. */
+export async function listEmployees(): Promise<{ people: EmployeeListing[]; syncedAt: Date | null }> {
+  const rows = await db
+    .select({
+      id: employees.id,
+      email: employees.email,
+      fullName: employees.fullName,
+      title: employees.title,
+      department: employees.department,
+      site: employees.site,
+      reportsToEmail: employees.reportsToEmail,
+      reportsToName: employees.reportsToName,
+      startDate: employees.startDate,
+      activeEffectiveDate: employees.activeEffectiveDate,
+      importedAt: employees.importedAt,
+    })
+    .from(employees)
+    .orderBy(employees.fullName);
+  // A sync stamps every row with the same time.
+  const syncedAt = rows[0]?.importedAt ?? null;
+  return { people: rows.map(({ importedAt: _, ...person }) => person), syncedAt };
+}
+
 export async function loadRoster(rootEmail = ORG_ROOT_EMAIL): Promise<Roster> {
-  const [employees, lists, history] = await Promise.all([
+  const [staff, lists, history] = await Promise.all([
     db
       .select({
-        id: hibobEmployees.id,
-        email: hibobEmployees.email,
-        fullName: hibobEmployees.fullName,
-        title: hibobEmployees.title,
-        department: hibobEmployees.department,
-        site: hibobEmployees.site,
-        reportsToEmail: hibobEmployees.reportsToEmail,
-        reportsToName: hibobEmployees.reportsToName,
-        startDate: hibobEmployees.startDate,
-        activeEffectiveDate: hibobEmployees.activeEffectiveDate,
+        id: employees.id,
+        email: employees.email,
+        fullName: employees.fullName,
+        title: employees.title,
+        department: employees.department,
+        site: employees.site,
+        reportsToEmail: employees.reportsToEmail,
+        reportsToName: employees.reportsToName,
+        startDate: employees.startDate,
+        activeEffectiveDate: employees.activeEffectiveDate,
       })
-      .from(hibobEmployees),
+      .from(employees),
     titleListMap(),
     db
       .select({
@@ -79,7 +104,7 @@ export async function loadRoster(rootEmail = ORG_ROOT_EMAIL): Promise<Roster> {
   const historyByEmail = new Map(history.map((h) => [h.email, h]));
   const root = rootEmail.toLowerCase();
 
-  const people = orgUnder(employees, root)
+  const people = orgUnder(staff, root)
     .map(({ chain, ...person }): RosterPerson => {
       const h = historyByEmail.get(person.email);
       return {
@@ -103,8 +128,8 @@ export async function loadRoster(rootEmail = ORG_ROOT_EMAIL): Promise<Roster> {
 
   return {
     rootEmail: root,
-    rootFound: employees.some((e) => e.email === root),
-    employeeCount: employees.length,
+    rootFound: staff.some((e) => e.email === root),
+    employeeCount: staff.length,
     people,
     unlisted: [...counts.values()].sort((a, b) => b.count - a.count || a.title.localeCompare(b.title)),
   };

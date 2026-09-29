@@ -21,6 +21,9 @@ workspace_admin_email = "admin@example.com"
 harness_account_id = "replace-me"
 harness_api_key    = "pat.xxxxx"
 github_pat         = "ghp_xxxxxxxx"
+# The HiBob service user eVals syncs employees with, daily and on demand.
+# hibob_userid = "SERVICE-12345"
+# hibob_token  = "xxxxxxxx"
 # harness_base_url = "https://app.harness.io"
 # Organizations the Cloud Status page should treat as permanent fixtures. Rarely
 # needed: an organization the orchestrator never tagged is already reported as

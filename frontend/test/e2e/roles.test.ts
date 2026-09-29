@@ -169,6 +169,10 @@ const PAGES: Record<string, PageCase> = {
     expect: (a) => (canManageEvalsSettings(a) ? { to: visibleEvalsSettingsTabs(a)[0]!.href } : 404),
   },
   "/evals-settings/hibob": { path: () => "/evals-settings/hibob", expect: gated(canManageEvalsSettings) },
+  "/evals-settings/employees": {
+    path: () => "/evals-settings/employees",
+    expect: gated(canManageEvalsSettings),
+  },
   "/evals-settings/sales-titles": {
     path: () => "/evals-settings/sales-titles",
     expect: gated(canManageEvalsSettings),
@@ -303,9 +307,7 @@ const ROUTES: RouteCase[] = [
   { method: "POST", path: `/api/me/harness-tokens/${MISSING}/scrub`, allowed: canManageSettings },
 
   // eVals administration
-  { method: "PUT", path: "/api/evals/hibob/connection", allowed: canManageEvalsSettings, body: () => ({}) },
-  { method: "DELETE", path: "/api/evals/hibob/connection", allowed: canManageEvalsSettings, denyOnly: true },
-  { method: "POST", path: "/api/evals/hibob/import", allowed: canManageEvalsSettings, denyOnly: true },
+  { method: "POST", path: "/api/evals/hibob/sync", allowed: canManageEvalsSettings, denyOnly: true },
   { method: "POST", path: "/api/evals/titles", allowed: canManageEvalsSettings, body: () => ({}) },
   { method: "PATCH", path: `/api/evals/titles/${MISSING}`, allowed: canManageEvalsSettings, body: () => ({}) },
   { method: "DELETE", path: `/api/evals/titles/${MISSING}`, allowed: canManageEvalsSettings },
@@ -385,6 +387,20 @@ describe("API routes", () => {
       assert.deepEqual(wrong, []);
     });
   }
+});
+
+describe("the scheduled HiBob sync", () => {
+  // Cloud Scheduler's OIDC token is the only way in: no session, and no token
+  // that is not Google's, gets past it.
+  test("refuses every session and a forged token", async () => {
+    const wrong: string[] = [];
+    const forged = { bearer: "not-a-google-token" };
+    for (const who of [SIGNED_OUT, ...PERSONA_NAMES, forged]) {
+      const { status } = await send(who, "POST", "/api/evals/hibob/sync/scheduled");
+      if (status !== 401) wrong.push(`${who === forged ? "forged token" : label(who as Who)}: got ${status}`);
+    }
+    assert.deepEqual(wrong, []);
+  });
 });
 
 describe("events over the API", () => {

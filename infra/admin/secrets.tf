@@ -25,6 +25,8 @@ locals {
     ["database-url", "auth-secret", "google-oauth-client-id", "google-oauth-client-secret", "harness-api-key", "github-pat"],
     var.azure_subscription_id != "" ? ["azure-client-secret"] : [],
     var.aws_access_key_id != "" ? ["aws-access-key-id", "aws-secret-access-key"] : [],
+    # Gated on the service user id, not the token, for the reason above.
+    var.hibob_userid != "" ? ["hibob-token"] : [],
   )
 
   # id -> value, holding the (mostly sensitive) payloads. Only ever looked up by
@@ -40,6 +42,7 @@ locals {
     "azure-client-secret"        = var.azure_client_secret
     "aws-access-key-id"          = var.aws_access_key_id
     "aws-secret-access-key"      = var.aws_secret_access_key
+    "hibob-token"                = var.hibob_token
   }
 
   # Secrets the runner/reaper/scheduler jobs read. The runner has no use for the

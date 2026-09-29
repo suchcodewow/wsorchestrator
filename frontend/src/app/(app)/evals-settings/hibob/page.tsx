@@ -1,26 +1,22 @@
-/** The HiBob tab: the connection, the import, and who is in the org. */
+/** The HiBob tab: the sync, its log, and who is in the org. */
 
-import { getHibobConnection } from "@/lib/evals/hibob";
+import { hibobServiceUser, listHibobSyncRuns } from "@/lib/evals/hibob";
 import { loadRoster } from "@/lib/evals/roster";
-import { secretsConfigured } from "@/lib/secret-box";
-import { HibobConnectionView } from "./connection-view";
 import { OrgTable } from "./org-table";
+import { HibobSyncView } from "./sync-view";
 
 export default async function HibobPage() {
-  const [connection, roster] = await Promise.all([getHibobConnection(), loadRoster()]);
+  const [runs, roster] = await Promise.all([listHibobSyncRuns(), loadRoster()]);
 
   return (
     <div className="space-y-10">
-      <HibobConnectionView
-        connection={
-          connection && {
-            ...connection,
-            updatedAt: connection.updatedAt.toISOString(),
-            lastImportAt: connection.lastImportAt?.toISOString() ?? null,
-          }
-        }
-        employeeCount={roster.employeeCount}
-        keyConfigured={secretsConfigured()}
+      <HibobSyncView
+        serviceUser={hibobServiceUser()}
+        runs={runs.map((run) => ({
+          ...run,
+          startedAt: run.startedAt.toISOString(),
+          finishedAt: run.finishedAt?.toISOString() ?? null,
+        }))}
       />
       {roster.employeeCount > 0 && (
         <OrgTable

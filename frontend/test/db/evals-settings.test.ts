@@ -1,25 +1,26 @@
 /**
  * eVals settings against a real database: the title lists' one-list-per-title
  * rule (a case-insensitive unique index), the bootcamp history upsert, and the
- * HiBob import that replaces every employee at once.
+ * HiBob sync that replaces every employee at once and logs each run.
  *
- * HiBob itself is replaced by a stubbed `fetch`. The import empties
- * `hibob_employees` and rewrites the connection row, so both tables are saved
- * before and put back after — the scratch database may hold someone's import.
+ * HiBob itself is replaced by a stubbed `fetch`, and its credentials by
+ * environment variables. A sync empties `employees`, so the table is saved
+ * before and put back after — the scratch database may hold someone's sync.
  * Titles and history rows this suite writes carry `TEST_PREFIX` or the test
- * email domain, and cleanup deletes by those alone.
+ * email domain, sync runs are remembered by id, and cleanup deletes by those
+ * alone.
  */
 
 import "../support/test-env";
 
 import { after, afterEach, before, describe, test } from "node:test";
 import assert from "node:assert/strict";
-import { like } from "drizzle-orm";
+import { eq, inArray, like } from "drizzle-orm";
 
 process.env.AUTH_SECRET ||= "evals-settings-test-secret-evals-settings";
 
 import { db } from "@/db";
-import { bootcampHistory, evalsTitles, EXEMPT_DATE, hibobConnection, hibobEmployees } from "@/db/schema";
+import { bootcampHistory, employees, evalsTitles, EXEMPT_DATE, hibobSyncRuns } from "@/db/schema";
 import {
   createHistory,
   historyInputSchema,
@@ -28,11 +29,7 @@ import {
   listHistory,
   updateHistory,
 } from "@/lib/evals/bootcamp-history";
-import {
-  getHibobConnection,
-  importHibobEmployees,
-  saveHibobConnection,
-} from "@/lib/evals/hibob";
+import { hibobServiceUser, listHibobSyncRuns, syncHibobEmployees } from "@/lib/evals/hibob";
 import { loadRoster } from "@/lib/evals/roster";
 import { addTitles, deleteTitle, listTitles, updateTitle } from "@/lib/evals/titles";
 import { TEST_EMAIL_DOMAIN, TEST_PREFIX } from "../support/db";
@@ -44,9 +41,11 @@ const T = (title: string) => `${TEST_PREFIX}${title}`;
 const email = (name: string) => `${name}@${TEST_EMAIL_DOMAIN}`;
 
 let admin: TestUser;
-let savedEmployees: (typeof hibobEmployees.$inferSelect)[];
-let savedConnection: (typeof hibobConnection.$inferSelect)[];
+let savedEmployees: (typeof employees.$inferSelect)[];
 const realFetch = globalThis.fetch;
+const realEnv = { id: process.env.HIBOB_SERVICE_USER_ID, token: process.env.HIBOB_TOKEN };
+/** Every sync run this suite made, so cleanup touches no one else's. */
+const runIds: string[] = [];
 
 async function clearOwnRows() {
   await db.delete(evalsTitles).where(like(evalsTitles.title, `${TEST_PREFIX}%`));
@@ -57,29 +56,36 @@ before(async () => {
   await scope.setUp();
   await clearOwnRows();
   admin = await scope.createUser("admin", PERSONAS.evalsAdmin);
-  savedEmployees = await db.select().from(hibobEmployees);
-  savedConnection = await db.select().from(hibobConnection);
+  savedEmployees = await db.select().from(employees);
 });
 
 after(async () => {
   globalThis.fetch = realFetch;
+  restoreEnv();
   await clearOwnRows();
+  if (runIds.length > 0) await db.delete(hibobSyncRuns).where(inArray(hibobSyncRuns.id, runIds));
   await db.transaction(async (tx) => {
-    await tx.delete(hibobEmployees);
-    await tx.delete(hibobConnection);
+    await tx.delete(employees);
     for (let i = 0; i < savedEmployees.length; i += 500) {
-      await tx.insert(hibobEmployees).values(savedEmployees.slice(i, i + 500));
-    }
-    if (savedConnection.length > 0) {
-      // The admin who saved it is this suite's, and is about to be deleted.
-      await tx.insert(hibobConnection).values(savedConnection);
+      await tx.insert(employees).values(savedEmployees.slice(i, i + 500));
     }
   });
   await scope.tearDown();
 });
 
+function restoreEnv() {
+  for (const [name, value] of [
+    ["HIBOB_SERVICE_USER_ID", realEnv.id],
+    ["HIBOB_TOKEN", realEnv.token],
+  ] as const) {
+    if (value === undefined) delete process.env[name];
+    else process.env[name] = value;
+  }
+}
+
 afterEach(() => {
   globalThis.fetch = realFetch;
+  restoreEnv();
 });
 
 describe("title lists", () => {
@@ -226,7 +232,7 @@ describe("bootcamp history edits", () => {
   });
 });
 
-describe("HiBob import", () => {
+describe("HiBob sync", () => {
   const person = (id: string, name: string, manager: string, title = "") => ({
     id,
     email: email(name),
@@ -235,46 +241,76 @@ describe("HiBob import", () => {
     humanReadable: { work: { title } },
   });
 
-  function stubHibob(status: number, employees: unknown[] = []) {
-    const calls: { fields?: string[] }[] = [];
+  function configure() {
+    process.env.HIBOB_SERVICE_USER_ID = "SERVICE-TEST";
+    process.env.HIBOB_TOKEN = "test-token";
+  }
+
+  function stubHibob(status: number, people: unknown[] = []) {
+    const calls: { authorization: string | null; body: unknown }[] = [];
     globalThis.fetch = (async (_url: unknown, init?: RequestInit) => {
-      calls.push(JSON.parse(String(init?.body)));
-      return new Response(JSON.stringify({ employees }), { status });
+      calls.push({
+        authorization: new Headers(init?.headers).get("authorization"),
+        body: JSON.parse(String(init?.body)),
+      });
+      return new Response(JSON.stringify({ employees: people }), { status });
     }) as typeof fetch;
     return calls;
   }
 
-  test("refuses credentials HiBob turns down, and saves ones it accepts", async () => {
-    stubHibob(401);
-    const refused = await saveHibobConnection(admin.id, { serviceUserId: "SERVICE-X", token: "bad-token" });
-    assert.equal(refused.ok, false);
-    assert.equal(!refused.ok && refused.error, "rejected");
+  async function sync(trigger: "manual" | "schedule" = "manual") {
+    const result = await syncHibobEmployees(trigger, trigger === "manual" ? admin.id : null);
+    if (result.runId) runIds.push(result.runId);
+    return result;
+  }
 
+  async function run(id: string | null) {
+    assert.ok(id);
+    return (await listHibobSyncRuns(100)).find((r) => r.id === id)!;
+  }
+
+  test("without credentials nothing is asked of HiBob, and the run says why", async () => {
+    delete process.env.HIBOB_SERVICE_USER_ID;
+    delete process.env.HIBOB_TOKEN;
     const calls = stubHibob(200);
-    assert.deepEqual(await saveHibobConnection(admin.id, { serviceUserId: "SERVICE-X", token: "good-token-1234" }), {
-      ok: true,
-    });
-    // The check asks for one field, not the ~10 MB of everyone.
-    assert.deepEqual(calls[0]!.fields, ["/root/id"]);
-    const saved = await getHibobConnection();
-    assert.equal(saved?.serviceUserId, "SERVICE-X");
-    assert.equal(saved?.tail, "1234");
+    assert.equal(hibobServiceUser(), null);
+
+    const result = await sync("schedule");
+    assert.equal(!result.ok && result.error, "not_configured");
+    assert.equal(calls.length, 0);
+    const logged = await run(result.runId);
+    assert.equal(logged.status, "failed");
+    assert.equal(logged.trigger, "schedule");
+    assert.match(logged.error ?? "", /hibob_userid and hibob_token/);
   });
 
-  test("replaces every employee, and the roster walks up to the root", async () => {
-    stubHibob(200, [
+  test("replaces every employee, logs the count, and the roster walks up to the root", async () => {
+    configure();
+    const calls = stubHibob(200, [
       person("1", "root", "ceo"),
       person("2", "vp", "root", "Director"),
       person("3", "ae", "vp", `${T("Account Executive")}`),
       person("4", "outsider", "ceo", "Director"),
       { email: "no-id@x.com" },
     ]);
-    const result = await importHibobEmployees(admin.id);
-    assert.deepEqual(result, { ok: true, count: 4, skipped: 1 });
+    const first = await sync();
+    assert.ok(first.ok, JSON.stringify(first));
+    assert.deepEqual([first.count, first.skipped], [4, 1]);
+    // What fetchHibobToEmployees asked for: active people, labels alongside ids.
+    assert.deepEqual(calls[0]!.body, { showInactive: false, humanReadable: "APPEND" });
+    assert.equal(calls[0]!.authorization, `Basic ${Buffer.from("SERVICE-TEST:test-token").toString("base64")}`);
 
     stubHibob(200, [person("1", "root", ""), person("3", "ae", "root", T("Account Executive"))]);
-    assert.deepEqual(await importHibobEmployees(admin.id), { ok: true, count: 2, skipped: 0 });
-    assert.equal((await db.select().from(hibobEmployees)).length, 2);
+    const second = await sync();
+    assert.ok(second.ok);
+    assert.equal(second.count, 2);
+    assert.equal((await db.select().from(employees)).length, 2);
+
+    const logged = await run(second.runId);
+    assert.equal(logged.status, "succeeded");
+    assert.equal(logged.employeeCount, 2);
+    assert.equal(logged.triggeredBy, "admin");
+    assert.ok(logged.finishedAt);
 
     await importHistory(admin.id, new File([`email,BTCDate\n${email("ae")},2026-03-01\n`], "h.csv"));
     const roster = await loadRoster(email("root"));
@@ -283,14 +319,41 @@ describe("HiBob import", () => {
       roster.people.map((p) => [p.email, p.depth, p.list, p.btcDate]),
       [[email("ae"), 1, "sales", "2026-03-01"]],
     );
-    assert.equal((await getHibobConnection())?.lastImportCount, 2);
   });
 
-  test("a failed import keeps the last one and records why", async () => {
+  test("a failed sync keeps the last one and records why", async () => {
+    configure();
     stubHibob(500);
-    const result = await importHibobEmployees(admin.id);
-    assert.equal(!result.ok && result.error, "bad_response");
-    assert.equal((await db.select().from(hibobEmployees)).length, 2);
-    assert.match((await getHibobConnection())?.lastImportError ?? "", /HiBob answered 500/);
+    const failed = await sync();
+    assert.equal(!failed.ok && failed.error, "bad_response");
+    assert.equal((await db.select().from(employees)).length, 2);
+    assert.match((await run(failed.runId)).error ?? "", /HiBob answered 500/);
+
+    stubHibob(401);
+    const rejected = await sync();
+    assert.equal(!rejected.ok && rejected.error, "rejected");
+  });
+
+  test("one sync at a time, unless the running one was cut off long ago", async () => {
+    configure();
+    stubHibob(200, [person("1", "root", "")]);
+    const [running] = await db
+      .insert(hibobSyncRuns)
+      .values({ trigger: "schedule" })
+      .returning({ id: hibobSyncRuns.id });
+    runIds.push(running!.id);
+
+    const refused = await sync();
+    assert.deepEqual(refused, { ok: false, runId: null, error: "already_running" });
+
+    await db
+      .update(hibobSyncRuns)
+      .set({ startedAt: new Date(Date.now() - 11 * 60_000) })
+      .where(eq(hibobSyncRuns.id, running!.id));
+    const after = await sync();
+    assert.ok(after.ok, JSON.stringify(after));
+    const cutOff = await run(running!.id);
+    assert.equal(cutOff.status, "failed");
+    assert.match(cutOff.error ?? "", /Did not finish/);
   });
 });

@@ -128,6 +128,14 @@ resource "google_cloud_run_v2_service" "app" {
           length(var.harness_infra_orgs) > 0
           ? { HARNESS_INFRA_ORGS = join(",", var.harness_infra_orgs) }
           : {},
+          # The HiBob service user, and who may call the scheduled sync: the
+          # scheduler's OIDC token must carry this audience and this email
+          # (see scheduler.tf). The token itself is secret-backed, below.
+          var.hibob_userid != "" ? { HIBOB_SERVICE_USER_ID = var.hibob_userid } : {},
+          {
+            HIBOB_SYNC_AUDIENCE = local.hibob_sync_audience
+            HIBOB_SYNC_INVOKER  = google_service_account.scheduler.email
+          },
         )
         content {
           name  = env.key
@@ -172,6 +180,7 @@ resource "google_cloud_run_v2_service" "app" {
             AWS_ACCESS_KEY_ID     = "aws-access-key-id"
             AWS_SECRET_ACCESS_KEY = "aws-secret-access-key"
           } : {},
+          var.hibob_userid != "" ? { HIBOB_TOKEN = "hibob-token" } : {},
         )
         content {
           name = env.key

@@ -483,10 +483,19 @@ role does everything the one before it does.
 **eVals** — the same roles as the scheduler. The **eVals** page is still a
 placeholder; **eVals settings** holds what it will draw on:
 
-- **HiBob**: a service user's id and token, entered on the page and sealed like
-  a Harness token. **Import now** replaces the stored employees with HiBob's
-  active ones. It then lists everyone whose reporting line reaches
+- **HiBob**: syncs HiBob's active employees into the `employees` table, replacing
+  the previous sync, every day at 3:00 AM Eastern and whenever **Sync HiBob
+  Now** is pressed. Every run, scheduled or manual, is logged on the tab with
+  its count or error. The service user comes from the deployment, not the page:
+  `hibob_userid` and `hibob_token` in `terraform.tfvars` (and the IaCM
+  workspace, the token as the `tf_hibob_token` secret), which reach Cloud Run
+  as `HIBOB_SERVICE_USER_ID` and `HIBOB_TOKEN`. Cloud Scheduler job
+  `hibob-sync-trigger` calls `/api/evals/hibob/sync/scheduled` with an OIDC
+  token for the scheduler service account; nothing else gets past that route.
+  Below the log, the tab lists everyone whose reporting line reaches
   `carlos.delatorre@harness.io`, with each person's list and bootcamp dates.
+- **Employees**: the whole `employees` table, searchable and sortable by any
+  column.
 - **Automatic Sales Titles**, **Automatic Engineer Titles** and **Ignored
   Titles**: the job titles that put someone on each list. Each title can be on
   only one list, and case doesn't matter.
