@@ -18,6 +18,8 @@
 --   * fresh/empty      — skipped entirely; db:push creates the schema outright
 --   * before this      — renamed, created, backfilled and dropped as above
 --   * already migrated — every step is a guarded no-op
+--   * pushed, then run  — an empty hibob_employees table left by 0033 is
+--                        replaced with the view
 
 begin;
 
@@ -55,6 +57,18 @@ begin
   );
   create index if not exists employees_email_idx on employees (email);
   create index if not exists employees_reports_to_idx on employees (reports_to_email);
+
+  -- Before 0033 learned to skip them, a database built by db:push and then
+  -- migrated got an empty hibob_employees table beside employees (QA did).
+  -- Drop it so the view goes in, as everywhere else. One with rows is left.
+  if exists (select 1 from pg_class where relname = 'hibob_employees' and relkind = 'r')
+     and to_regclass('public.employees') is not null then
+    if exists (select 1 from hibob_employees) then
+      raise notice 'hibob_employees is a table with rows beside employees — left alone';
+    else
+      drop table hibob_employees;
+    end if;
+  end if;
 
   if to_regclass('public.hibob_employees') is null then
     create view hibob_employees as select * from employees;
