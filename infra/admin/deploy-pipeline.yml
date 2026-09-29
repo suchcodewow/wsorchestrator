@@ -30,6 +30,11 @@ pipeline:
          would serve a new image against a schema missing the columns it reads
          on every request.
 
+    No image is pulled from Docker Hub. Harness Cloud pulls anonymously from
+    shared IPs, which hit Docker Hub's unauthenticated rate limit mid-deploy.
+    Official images come from mirror.gcr.io and the gcloud image from gcr.io,
+    and the Dockerfiles do the same.
+
     Variables:
       verify      "false" skips the verify stage. Present as an escape hatch for
                   an emergency roll-forward, not as a normal setting.
@@ -126,7 +131,7 @@ pipeline:
                   timeout: 10m
                   spec:
                     shell: Sh
-                    image: node:22-slim
+                    image: mirror.gcr.io/library/node:22-slim
                     command: |
                       set -eu
                       cd runner
@@ -146,7 +151,7 @@ pipeline:
                   timeout: 15m
                   spec:
                     shell: Sh
-                    image: node:22-slim
+                    image: mirror.gcr.io/library/node:22-slim
                     command: |
                       set -eu
                       cd frontend
@@ -223,7 +228,7 @@ pipeline:
                   identifier: resolve_build_info
                   spec:
                     shell: Sh
-                    image: alpine:3.20
+                    image: mirror.gcr.io/library/alpine:3.20
                     # The commit subject is read from the clone rather than from
                     # <+codebase.commitMessage>, for two reasons: the expression
                     # is empty on a manual execution, and Harness substitutes
@@ -286,7 +291,7 @@ pipeline:
                   identifier: fetch_db_url
                   spec:
                     shell: Bash
-                    image: google/cloud-sdk:slim
+                    image: gcr.io/google.com/cloudsdktool/google-cloud-cli:slim
                     envVariables:
                       GCP_KEY_B64: <+secrets.getValue("gcp_build_sa_key_b64")>
                       GCP_PROJECT: <+pipeline.variables.gcp_project>
@@ -308,7 +313,7 @@ pipeline:
                   identifier: migrate
                   spec:
                     shell: Bash
-                    image: node:22-slim
+                    image: mirror.gcr.io/library/node:22-slim
                     envVariables:
                       GCP_KEY_B64: <+secrets.getValue("gcp_build_sa_key_b64")>
                       DB_CONN: <+pipeline.variables.db_conn>
@@ -354,7 +359,7 @@ pipeline:
                   identifier: deploy
                   spec:
                     shell: Bash
-                    image: google/cloud-sdk:slim
+                    image: gcr.io/google.com/cloudsdktool/google-cloud-cli:slim
                     envVariables:
                       GCP_KEY_B64: <+secrets.getValue("gcp_build_sa_key_b64")>
                       GCP_PROJECT: <+pipeline.variables.gcp_project>

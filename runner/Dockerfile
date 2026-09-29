@@ -6,7 +6,10 @@
 # The binary is downloaded rather than copied from ghcr.io/opentofu/opentofu —
 # that image carries an `ONBUILD RUN exit 1` which deliberately fails any build
 # using it as a base (unsupported since OpenTofu 1.10, see opentofu#1931).
-FROM node:22-slim AS tf
+#
+# node comes from mirror.gcr.io, Google's Docker Hub cache, because CI builds
+# from shared IPs that hit Docker Hub's anonymous pull limit.
+FROM mirror.gcr.io/library/node:22-slim AS tf
 
 # Pinned, and the download is checksum-verified against the release manifest so
 # a tampered or truncated artifact fails the build rather than shipping.
@@ -37,7 +40,7 @@ RUN apt-get update \
   && chmod +x /usr/local/bin/tofu \
   && tofu version
 
-FROM node:22-slim
+FROM mirror.gcr.io/library/node:22-slim
 
 # tofu (a Go binary) needs the system CA bundle to verify TLS to
 # storage.googleapis.com / the provider registry; slim images omit it.

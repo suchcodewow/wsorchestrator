@@ -1,11 +1,13 @@
+# Base images come from mirror.gcr.io, Google's Docker Hub cache, because CI
+# builds from shared IPs that hit Docker Hub's anonymous pull limit.
 # --- deps ---
-FROM node:22-slim AS deps
+FROM mirror.gcr.io/library/node:22-slim AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --ignore-scripts=false
 
 # --- build ---
-FROM node:22-slim AS build
+FROM mirror.gcr.io/library/node:22-slim AS build
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
@@ -13,7 +15,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 
 # --- runtime (standalone) ---
-FROM node:22-slim AS runtime
+FROM mirror.gcr.io/library/node:22-slim AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
