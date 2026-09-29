@@ -248,13 +248,9 @@ describe("links", () => {
     assert.match(out, /href="mailto:a@b.example"/);
   });
 
-  test(
-    "an upper-case scheme is still a link",
-    { todo: "rehype-sanitize drops HTTP://… hrefs; rehypeExternalLinks' /i flag shows they were meant to work" },
-    async () => {
-      assert.match(await html("[d](HTTPS://X.EXAMPLE)"), /href="HTTPS:\/\/X\.EXAMPLE"/);
-    },
-  );
+  test("an upper-case scheme is still a link", async () => {
+    assert.match(await html("[d](HTTPS://X.EXAMPLE)"), /href="HTTPS:\/\/X\.EXAMPLE"/);
+  });
 
   test("inline code in a link is left alone; elsewhere it is click-to-copy", async () => {
     const out = await html("[`code`](https://x.example) and `loose`");
@@ -316,18 +312,10 @@ describe("callouts", () => {
     assert.match(out, /<figure class="lab-code" data-lang="bash">/);
   });
 
-  test(
-    "an upper-case name is a callout too",
-    {
-      todo:
-        "normaliseDirectiveTitles lowercases the name and rewrites the line to :::NOTE[Upper], " +
-        "but remarkBlockDirectives matches case-sensitively, so the page shows `:::NOTE[Upper]` — text the author never wrote",
-    },
-    async () => {
-      const out = await html(":::NOTE Upper\nx\n:::");
-      assert.match(out, /data-callout="note"/);
-    },
-  );
+  test("an upper-case name is a callout too", async () => {
+    const out = await html(":::NOTE Upper\nx\n:::");
+    assert.match(out, /data-callout="note"/);
+  });
 
   test("a directive-looking line inside a code fence is left as written", async () => {
     for (const fence of ["```", "~~~"]) {
@@ -417,14 +405,10 @@ describe("code blocks", () => {
     assert.match(await html("```Bash\nx\n```"), /data-lang="bash"[\s\S]*lab-code-title">Shell</);
   });
 
-  test(
-    "an alias gets the same label as its language",
-    { todo: "shiki loads `sh`, `yml`, `ts` as aliases, so they miss LANG_LABELS and show raw as `sh`, `yml`, `ts`" },
-    async () => {
-      assert.match(await html("```sh\nx\n```"), /lab-code-title">Shell</);
-      assert.match(await html("```yml\nx\n```"), /lab-code-title">YAML</);
-    },
-  );
+  test("an alias gets the same label as its language", async () => {
+    assert.match(await html("```sh\nx\n```"), /lab-code-title">Shell</);
+    assert.match(await html("```yml\nx\n```"), /lab-code-title">YAML</);
+  });
 
   test("the code itself is escaped", async () => {
     const out = await html("```html\n<script>alert(1)</script>\n```");
@@ -543,15 +527,7 @@ describe("labImageRefs", () => {
     );
   });
 
-  test(
-    "counts a reference-style image, which the renderer shows and rings",
-    {
-      todo:
-        "labImageRefs visits only `image`, not `imageReference`, so `![a][r]` / `[r]: /api/lab-images/<id>` " +
-        "renders (and is ringed when missing) but is never reported — the preview and the list disagree",
-    },
-    () => {
-      assert.deepEqual(labImageRefs(`![alt][r]\n\n[r]: /api/lab-images/${IMG}`), [{ id: IMG, alt: "alt" }]);
-    },
-  );
+  test("counts a reference-style image, which the renderer shows and rings", () => {
+    assert.deepEqual(labImageRefs(`![alt][r]\n\n[r]: /api/lab-images/${IMG}`), [{ id: IMG, alt: "alt" }]);
+  });
 });

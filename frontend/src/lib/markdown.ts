@@ -12,6 +12,7 @@ import type {
   BlockContent,
   DefinitionContent,
   Image,
+  ImageReference,
   Paragraph,
   Root as MdastRoot,
 } from "mdast";
@@ -21,7 +22,7 @@ import remarkDirective from "remark-directive";
 import remarkGfm from "remark-gfm";
 import remarkParse from "remark-parse";
 import remarkRehype from "remark-rehype";
-import { createHighlighter, type Highlighter } from "shiki";
+import { bundledLanguagesInfo, createHighlighter, type Highlighter } from "shiki";
 import { unified } from "unified";
 import { SKIP, visit } from "unist-util-visit";
 import {
@@ -100,6 +101,28 @@ const LANG_LABELS: Record<string, string> = {
   markdown: "Markdown",
   diff: "Diff",
 };
+
+// Shiki loads each of LANGS under its own aliases too (`sh`/`shell`/`zsh` for
+// `bash`, `yml` for `yaml`, `ts`/`cts`/`mts` for `typescript`, …), so a fence
+// tagged with an alias resolves to the LANGS entry that shares a shiki
+// grammar with it, and LANG_LABELS is looked up under that instead of the
+// raw alias.
+const LANG_ALIASES: Record<string, string> = (() => {
+  const idOrAliasToInfo = new Map<string, (typeof bundledLanguagesInfo)[number]>();
+  for (const info of bundledLanguagesInfo) {
+    idOrAliasToInfo.set(info.id, info);
+    for (const alias of info.aliases ?? []) idOrAliasToInfo.set(alias, info);
+  }
+
+  const aliases: Record<string, string> = {};
+  for (const lang of LANGS) {
+    const info = idOrAliasToInfo.get(lang);
+    if (!info) continue;
+    aliases[info.id] = lang;
+    for (const alias of info.aliases ?? []) aliases[alias] = lang;
+  }
+  return aliases;
+})();
 
 let highlighterPromise: Promise<Highlighter> | null = null;
 
@@ -294,13 +317,14 @@ function normaliseDirectiveTitles(markdown: string): string {
       }
 
       const open = line.match(DIRECTIVE_OPEN);
-      if (!open || !hasTitle(open[2].toLowerCase())) return line;
+      const name = open?.[2].toLowerCase();
+      if (!open || !name || !hasTitle(name)) return line;
 
       const rest = open[3];
       if (rest.startsWith("[") || rest.startsWith("{")) return line;
 
       const label = rest.replace(/[[\]\\]/g, "\\$&");
-      return `${open[1]}:::${open[2]}[${label}]`;
+      return `${open[1]}:::${name}[${label}]`;
     })
     .join("\n");
 }
@@ -570,7 +594,7 @@ function rehypeHighlight(highlighter: Highlighter) {
         addClass(pre, "has-line-numbers");
       }
 
-      const label = LANG_LABELS[language] ?? language;
+      const label = LANG_LABELS[LANG_ALIASES[language] ?? language] ?? language;
 
       const figure = el(
         "figure",
@@ -886,6 +910,19 @@ function rehypeSourceLines() {
   };
 }
 
+// hast-util-sanitize matches protocols case-sensitively, but a URL scheme
+// isn't case-sensitive (RFC 3986), so every allowed protocol needs its
+// upper-case form listed too or `HTTPS://…` links get dropped.
+const withUpperCaseProtocols = (
+  protocols: Record<string, string[] | null | undefined> | null | undefined,
+): Record<string, string[]> =>
+  Object.fromEntries(
+    Object.entries(protocols ?? {}).map(([key, list]) => [
+      key,
+      [...new Set((list ?? []).flatMap((p) => [p, p.toUpperCase()]))],
+    ]),
+  );
+
 const SANITIZE_SCHEMA = {
   ...defaultSchema,
   attributes: {
@@ -897,6 +934,7 @@ const SANITIZE_SCHEMA = {
     // `:::details{open}` starts a section unfolded, which is dropped otherwise.
     details: [...(defaultSchema.attributes?.details ?? []), "open"],
   },
+  protocols: withUpperCaseProtocols(defaultSchema.protocols),
 };
 
 const buildProcessor = (highlighter: Highlighter, sourceLines: boolean) => {
@@ -955,9 +993,21 @@ export function labImageRefs(markdown: string): LabImageRef[] {
     normaliseListIndents(normaliseDirectiveTitles(markdown)),
   ) as MdastRoot;
 
+  const definitions = new Map<string, string>();
+  visit(tree, "definition", (node) => {
+    definitions.set(node.identifier, node.url);
+  });
+
+  const add = (id: string | null, alt: string) => {
+    if (id !== null && !refs.has(id)) refs.set(id, { id, alt });
+  };
+
   visit(tree, "image", (node: Image) => {
-    const id = labImageId(node.url);
-    if (id !== null && !refs.has(id)) refs.set(id, { id, alt: node.alt ?? "" });
+    add(labImageId(node.url), node.alt ?? "");
+  });
+
+  visit(tree, "imageReference", (node: ImageReference) => {
+    add(labImageId(definitions.get(node.identifier)), node.alt ?? "");
   });
 
   return [...refs.values()];

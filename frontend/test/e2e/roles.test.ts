@@ -25,7 +25,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 
 import { mintToken } from "@/lib/api-tokens";
-import { NAV_SECTIONS, visibleSections } from "@/lib/nav";
+import { NAV_SECTIONS, navLinks, visibleSections } from "@/lib/nav";
 import {
   canAuditProjects,
   canContributeComponents,
@@ -238,13 +238,13 @@ describe("pages", () => {
 
 describe("the sidebar", () => {
   // Every link the sidebar can hold, and whether this persona's should.
-  const HREFS = NAV_SECTIONS.flatMap((s) => s.items.map((i) => i.href));
+  const HREFS = NAV_SECTIONS.flatMap((s) => navLinks(s).map((i) => i.href));
 
   for (const p of PERSONA_NAMES) {
     test(p, async () => {
       const { status, body } = await send(p, "GET", "/me/tokens");
       assert.equal(status, 200);
-      const shown = new Set(visibleSections(PERSONAS[p]).flatMap((s) => s.items.map((i) => i.href)));
+      const shown = new Set(visibleSections(PERSONAS[p]).flatMap((s) => navLinks(s).map((i) => i.href)));
       const wrong = HREFS.filter((href) => body.includes(`href="${href}"`) !== shown.has(href)).map(
         (href) => `${href}: ${shown.has(href) ? "missing" : "shown"}`,
       );

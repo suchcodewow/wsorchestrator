@@ -124,7 +124,7 @@ export function resolveBindings<T>(spec: T, b: Bindings, identifier: string): T 
  * template's `templateRef` without needing to know which of those it is
  * looking at.
  */
-const ORG_REF = /\borg\.([a-zA-Z_][\w$]*)/g;
+const ORG_REF = /\borg\.([a-zA-Z_][\w$-]*)/g;
 
 /**
  * Everything a component must be created after: what it declares, plus every

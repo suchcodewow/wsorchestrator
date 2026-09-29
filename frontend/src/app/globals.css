@@ -65,6 +65,11 @@
 
   /* How much of the accent the box is tinted with. */
   --callout-tint: 7%;
+
+  /* Scrollbar thumb, mixed from the foreground. The track is left transparent —
+     see the base rule. */
+  --scrollbar-thumb: color-mix(in oklab, var(--foreground) 18%, transparent);
+  --scrollbar-thumb-hover: color-mix(in oklab, var(--foreground) 32%, transparent);
 }
 
 .dark {
@@ -131,6 +136,12 @@
   --callout-warning: oklch(0.81 0.125 74);
 
   --callout-tint: 13%;
+
+  /* Restated rather than inherited: a custom property resolves its `var()`s
+     where it is declared, so the `:root` pair would carry the light foreground
+     into any `.dark` scope below the root. */
+  --scrollbar-thumb: color-mix(in oklab, var(--foreground) 22%, transparent);
+  --scrollbar-thumb-hover: color-mix(in oklab, var(--foreground) 36%, transparent);
 }
 
 @theme inline {
@@ -203,6 +214,57 @@
 
     /* InterVariable carries an opsz axis (14–32); let headings take it. */
     font-optical-sizing: auto;
+  }
+
+  /*
+   * Scrollbars: thin, a thumb drawn from the palette, and no track.
+   *
+   * The native bar brings an opaque gutter in a grey of its own, which on the
+   * sidebar and the page pane reads as a strip of browser chrome down the side
+   * of the app. A transparent track lets the surface under it — card, page,
+   * bloom — carry on to the edge, so only the thumb is left to say "this
+   * scrolls".
+   *
+   * Set on every element rather than inherited from the root, because an
+   * inherited `scrollbar-color` arrives as the colour the root resolved — so a
+   * `.dark` scope, or `.scrollbar-on-dark` below, could not change it. Chromium
+   * and Firefox take the standard properties. Safari only knows the prefixed
+   * pseudo-elements, and Chromium ignores those whenever `scrollbar-color` is
+   * set — so they are fenced off to the browsers that still need them.
+   */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) transparent;
+  }
+
+  @supports not (scrollbar-color: auto) {
+    ::-webkit-scrollbar {
+      width: 10px;
+      height: 10px;
+    }
+
+    ::-webkit-scrollbar-track,
+    ::-webkit-scrollbar-corner {
+      background: transparent;
+    }
+
+    /* The transparent border insets the thumb from the edge of the pane. */
+    ::-webkit-scrollbar-thumb {
+      border: 2px solid transparent;
+      border-radius: 9999px;
+      background-color: var(--scrollbar-thumb);
+      background-clip: padding-box;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background-color: var(--scrollbar-thumb-hover);
+    }
+  }
+
+  /* A box that is always dark (the run log) keeps a light thumb in light mode. */
+  .scrollbar-on-dark {
+    --scrollbar-thumb: oklch(1 0 0 / 20%);
+    --scrollbar-thumb-hover: oklch(1 0 0 / 35%);
   }
 
   /*

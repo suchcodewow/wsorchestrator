@@ -30,7 +30,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { THEME_PREFERENCES, type CalendarScope, type ThemePreference } from "@/db/schema";
 import type { BuildInfo } from "@/lib/build-info";
-import { visibleSections } from "@/lib/nav";
+import { isNavLink, visibleSections } from "@/lib/nav";
 import { accessBadges, type Access } from "@/lib/roles";
 import { applyTheme } from "@/lib/theme";
 import { setCalendarScope, setThemePreference } from "@/lib/user-settings";
@@ -170,31 +170,28 @@ export function UserMenu({
         </DropdownMenuLabel>
 
         {sections.map((section) => (
-          <Fragment key={section.heading ?? "main"}>
+          <Fragment key={section.heading}>
             <DropdownMenuSeparator />
-            {section.heading && (
-              <DropdownMenuLabel className={SECTION_HEADING}>
-                {section.heading}
-              </DropdownMenuLabel>
-            )}
-            {section.items.map((item) => (
-              <DropdownMenuItem key={item.href} asChild>
-                <Link href={item.href}>
-                  <item.Icon />
-                  {item.label}
-                </Link>
-              </DropdownMenuItem>
-            ))}
-
-            {section.control === "calendar-scope" && (
-              <DropdownMenuSwitchItem
-                checked={scope === "all"}
-                onCheckedChange={chooseScope}
-                onSelect={(e) => e.preventDefault()}
-              >
-                <CalendarRange />
-                Show all events
-              </DropdownMenuSwitchItem>
+            <DropdownMenuLabel className={SECTION_HEADING}>{section.heading}</DropdownMenuLabel>
+            {section.items.map((entry) =>
+              isNavLink(entry) ? (
+                <DropdownMenuItem key={entry.href} asChild>
+                  <Link href={entry.href}>
+                    <entry.Icon />
+                    {entry.label}
+                  </Link>
+                </DropdownMenuItem>
+              ) : (
+                <DropdownMenuSwitchItem
+                  key={entry.control}
+                  checked={scope === "all"}
+                  onCheckedChange={chooseScope}
+                  onSelect={(e) => e.preventDefault()}
+                >
+                  <CalendarRange />
+                  {entry.label}
+                </DropdownMenuSwitchItem>
+              ),
             )}
           </Fragment>
         ))}

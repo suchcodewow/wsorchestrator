@@ -12,7 +12,7 @@ const KEY_BYTES = 32;
 const HKDF_INFO = "workshop-orchestrator/harness-token/v1";
 
 function key(): Buffer {
-  const material = process.env.HARNESS_TOKEN_ENC_KEY ?? process.env.AUTH_SECRET;
+  const material = process.env.HARNESS_TOKEN_ENC_KEY || process.env.AUTH_SECRET;
   if (!material) {
     throw new Error(
       "Cannot encrypt: set HARNESS_TOKEN_ENC_KEY or AUTH_SECRET.",
@@ -24,7 +24,7 @@ function key(): Buffer {
 }
 
 export function secretsConfigured(): boolean {
-  return Boolean(process.env.HARNESS_TOKEN_ENC_KEY ?? process.env.AUTH_SECRET);
+  return Boolean(process.env.HARNESS_TOKEN_ENC_KEY || process.env.AUTH_SECRET);
 }
 
 export function sealSecret(plaintext: string): Buffer {

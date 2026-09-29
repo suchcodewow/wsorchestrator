@@ -149,19 +149,10 @@ describe("key material", () => {
     assert.equal(secretsConfigured(), true);
   });
 
-  test(
-    "an empty HARNESS_TOKEN_ENC_KEY falls back to AUTH_SECRET",
-    {
-      todo:
-        "`??` treats `HARNESS_TOKEN_ENC_KEY=` (empty, as a .env line often is) as set, so AUTH_SECRET is " +
-        "ignored: sealSecret throws and secretsConfigured() is false despite AUTH_SECRET being present " +
-        "(secret-box.ts:15, :27). runner/src/secret-box.ts:34 has the same `??`, so both must change together.",
-    },
-    () => {
-      process.env.HARNESS_TOKEN_ENC_KEY = "";
-      process.env.AUTH_SECRET = "auth-secret";
-      assert.equal(secretsConfigured(), true);
-      assert.equal(openSecret(sealSecret("hello")), "hello");
-    },
-  );
+  test("an empty HARNESS_TOKEN_ENC_KEY falls back to AUTH_SECRET", () => {
+    process.env.HARNESS_TOKEN_ENC_KEY = "";
+    process.env.AUTH_SECRET = "auth-secret";
+    assert.equal(secretsConfigured(), true);
+    assert.equal(openSecret(sealSecret("hello")), "hello");
+  });
 });

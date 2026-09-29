@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/tooltip";
 import type { CalendarScope, ThemePreference } from "@/db/schema";
 import type { BuildInfo } from "@/lib/build-info";
-import { isNavItemActive, visibleSections, type NavItem } from "@/lib/nav";
+import { isNavItemActive, isNavLink, visibleSections, type NavItem } from "@/lib/nav";
 import type { Access } from "@/lib/roles";
 import { writeSidebarCookie } from "@/lib/sidebar";
 import { setCalendarScope } from "@/lib/user-settings";
@@ -63,27 +63,26 @@ export function AppSidebar({
       >
         <nav className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-3 py-5">
           {sections.map((section) => (
-            <div key={section.heading ?? "main"} className="flex flex-col gap-0.5">
-              {section.heading &&
-                (collapsed ? (
-                  <div aria-hidden className="mx-2 mb-2 border-t border-border/70" />
+            <div key={section.heading} className="flex flex-col gap-0.5">
+              {collapsed ? (
+                <div aria-hidden className="mx-2 mb-2 border-t border-border/70" />
+              ) : (
+                <h2 className="px-3 pb-1.5 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+                  {section.heading}
+                </h2>
+              )}
+
+              {section.items.map((entry) =>
+                isNavLink(entry) ? (
+                  <NavLink
+                    key={entry.href}
+                    item={entry}
+                    active={isNavItemActive(pathname, entry)}
+                    collapsed={collapsed}
+                  />
                 ) : (
-                  <h2 className="px-3 pb-1.5 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
-                    {section.heading}
-                  </h2>
-                ))}
-
-              {section.items.map((item) => (
-                <NavLink
-                  key={item.href}
-                  item={item}
-                  active={isNavItemActive(pathname, item)}
-                  collapsed={collapsed}
-                />
-              ))}
-
-              {section.control === "calendar-scope" && (
-                <ScopeSwitch initial={initialScope} collapsed={collapsed} />
+                  <ScopeSwitch key={entry.control} initial={initialScope} collapsed={collapsed} />
+                ),
               )}
             </div>
           ))}

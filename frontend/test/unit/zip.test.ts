@@ -124,18 +124,10 @@ describe("zip", () => {
     assert.equal(unzip(zip([{ path: "dir/café.md", content: "x" }]))[0]?.path, "dir/café.md");
   });
 
-  test(
-    "marks a non-ASCII name as UTF-8",
-    {
-      todo:
-        "general purpose bit 11 is never set (zip.ts writes flags 0), so unzip tools read a " +
-        "non-ASCII name as CP437 — latent while bundle paths are ASCII identifiers",
-    },
-    () => {
-      const [entry] = unzip(zip([{ path: "café.md", content: "x" }]));
-      assert.equal((entry?.flags ?? 0) & 0x0800, 0x0800);
-    },
-  );
+  test("marks a non-ASCII name as UTF-8", () => {
+    const [entry] = unzip(zip([{ path: "café.md", content: "x" }]));
+    assert.equal((entry?.flags ?? 0) & 0x0800, 0x0800);
+  });
 
   test("dates every entry 1980-01-01, so the same input gives the same bytes", () => {
     const entries = [{ path: "a", content: "1" }, { path: "b", content: "2" }];

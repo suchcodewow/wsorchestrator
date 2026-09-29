@@ -31,7 +31,7 @@ const HKDF_INFO = "workshop-orchestrator/harness-token/v1";
  * missing rather than failing to start.
  */
 function key(): Buffer {
-  const material = process.env.HARNESS_TOKEN_ENC_KEY ?? process.env.AUTH_SECRET;
+  const material = process.env.HARNESS_TOKEN_ENC_KEY || process.env.AUTH_SECRET;
   if (!material) {
     throw new Error(
       "cannot decrypt stored secrets: set HARNESS_TOKEN_ENC_KEY or AUTH_SECRET",
@@ -44,7 +44,7 @@ function key(): Buffer {
 
 /** Whether a key is available at all, so a caller can say so before it tries. */
 export function secretsConfigured(): boolean {
-  return Boolean(process.env.HARNESS_TOKEN_ENC_KEY ?? process.env.AUTH_SECRET);
+  return Boolean(process.env.HARNESS_TOKEN_ENC_KEY || process.env.AUTH_SECRET);
 }
 
 /**

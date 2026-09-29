@@ -25,6 +25,7 @@ function crc32(buf: Buffer): number {
 export type ZipEntry = { path: string; content: string };
 
 const DEFLATED = 8;
+const UTF8_NAME_FLAG = 0x0800;
 
 export function zip(entries: ZipEntry[]): Buffer {
   const DOS_TIME = 0;
@@ -39,11 +40,12 @@ export function zip(entries: ZipEntry[]): Buffer {
     const raw = Buffer.from(entry.content, "utf8");
     const deflated = deflateRawSync(raw);
     const crc = crc32(raw);
+    const flags = /[^\x00-\x7f]/.test(entry.path) ? UTF8_NAME_FLAG : 0;
 
     const local = Buffer.alloc(30);
     local.writeUInt32LE(0x04034b50, 0);
     local.writeUInt16LE(20, 4);
-    local.writeUInt16LE(0, 6);
+    local.writeUInt16LE(flags, 6);
     local.writeUInt16LE(DEFLATED, 8);
     local.writeUInt16LE(DOS_TIME, 10);
     local.writeUInt16LE(DOS_DATE, 12);
@@ -59,7 +61,7 @@ export function zip(entries: ZipEntry[]): Buffer {
     dir.writeUInt32LE(0x02014b50, 0);
     dir.writeUInt16LE(20, 4);
     dir.writeUInt16LE(20, 6);
-    dir.writeUInt16LE(0, 8);
+    dir.writeUInt16LE(flags, 8);
     dir.writeUInt16LE(DEFLATED, 10);
     dir.writeUInt16LE(DOS_TIME, 12);
     dir.writeUInt16LE(DOS_DATE, 14);

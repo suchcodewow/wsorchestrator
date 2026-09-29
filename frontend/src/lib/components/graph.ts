@@ -1,6 +1,6 @@
 /** Works out what order components must be created in. */
 
-const ORG_REF = /\borg\.([a-zA-Z_][\w$]*)/g;
+const ORG_REF = /\borg\.([a-zA-Z_][\w$-]*)/g;
 
 export type ReferencingComponent = {
   identifier: string;

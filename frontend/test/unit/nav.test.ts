@@ -12,74 +12,67 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 
-import { NAV_SECTIONS, isNavItemActive, visibleSections, type NavItem } from "@/lib/nav";
+import {
+  NAV_SECTIONS,
+  isNavItemActive,
+  isNavLink,
+  navLinks,
+  visibleSections,
+  type NavItem,
+} from "@/lib/nav";
 import { SITE_SETTINGS_TABS, visibleSettingsTabs } from "@/app/(app)/settings/tabs";
 import type { Access } from "@/lib/roles";
 import { EVERY_ACCESS, PERSONAS, describeAccess, type Persona } from "../support/access";
 
 /** The sidebar as a person sees it: headings in brackets, then their entries. */
 function sidebar(a: Access): string[] {
-  return visibleSections(a).flatMap((s) => [
-    ...(s.heading ? [`[${s.heading}]`] : []),
-    ...s.items.map((i) => i.label),
-  ]);
+  return visibleSections(a).flatMap((s) => [`[${s.heading}]`, ...s.items.map((i) => i.label)]);
 }
 
+const EVENTS_USER = ["[Events]", "Event Guides", "Orchestrator", "Contribute"];
+const EVENTS_MANAGER = [...EVENTS_USER, "Show all events"];
+const EVENTS_ADMIN = [...EVENTS_MANAGER, "Cloud Status", "Event Settings"];
+const ACCOUNT = ["[Account]", "My settings"];
+
 const EXPECTED_SIDEBAR: Record<Persona, string[]> = {
-  nobody: ["My settings"],
-  contributor: ["Event Guides", "Orchestrator", "Contribute", "My settings"],
-  operator: ["Event Guides", "Orchestrator", "Contribute", "My settings"],
-  manager: ["Event Guides", "Orchestrator", "Contribute", "My settings", "[Management]"],
-  eventAdmin: [
-    "Event Guides",
-    "Orchestrator",
-    "Contribute",
-    "My settings",
-    "[Management]",
-    "[Administration]",
-    "Manage users",
-    "Cloud Status",
-    "Event Settings",
-  ],
-  schedulerViewer: ["Scheduler", "My settings"],
+  nobody: ACCOUNT,
+  contributor: [...EVENTS_USER, ...ACCOUNT],
+  operator: [...EVENTS_USER, ...ACCOUNT],
+  manager: [...EVENTS_MANAGER, ...ACCOUNT],
+  eventAdmin: [...EVENTS_ADMIN, ...ACCOUNT, "[Administration]", "Manage users"],
+  schedulerViewer: ["[Scheduler]", "Scheduler", ...ACCOUNT],
   schedulerAdmin: [
+    "[Scheduler]",
     "Scheduler",
-    "My settings",
+    "Scheduler settings",
+    ...ACCOUNT,
     "[Administration]",
     "Manage users",
-    "Scheduler settings",
   ],
-  evalsViewer: ["eVals", "My settings"],
-  evalsAdmin: ["eVals", "My settings", "[Administration]", "Manage users", "eVals settings"],
+  evalsViewer: ["[eVals]", "eVals", ...ACCOUNT],
+  evalsAdmin: ["[eVals]", "eVals", "eVals settings", ...ACCOUNT, "[Administration]", "Manage users"],
   bothAdmins: [
-    "Event Guides",
-    "Orchestrator",
-    "Contribute",
+    ...EVENTS_ADMIN,
+    "[Scheduler]",
     "Scheduler",
-    "My settings",
-    "[Management]",
+    "Scheduler settings",
+    ...ACCOUNT,
     "[Administration]",
     "Manage users",
-    "Cloud Status",
-    "Event Settings",
-    "Scheduler settings",
   ],
   platform: [
-    "Event Guides",
-    "Orchestrator",
-    "Contribute",
+    ...EVENTS_ADMIN,
+    "[Scheduler]",
     "Scheduler",
+    "Scheduler settings",
+    "[eVals]",
     "eVals",
-    "My settings",
-    "[Management]",
+    "eVals settings",
+    ...ACCOUNT,
     "[Administration]",
     "Manage users",
     "Backups",
     "Database",
-    "Cloud Status",
-    "Event Settings",
-    "Scheduler settings",
-    "eVals settings",
     "Admin Settings",
   ],
 };
@@ -100,14 +93,16 @@ describe("sidebar", () => {
   test("a heading never appears with nothing under it", () => {
     for (const a of EVERY_ACCESS) {
       for (const s of visibleSections(a)) {
-        assert.ok(s.items.length > 0 || s.control, `${describeAccess(a)}: empty "${s.heading}"`);
+        assert.ok(s.items.length > 0, `${describeAccess(a)}: empty "${s.heading}"`);
       }
     }
   });
 
   test("the calendar-scope control shows exactly for those who can see all events", () => {
     for (const a of EVERY_ACCESS) {
-      const shown = visibleSections(a).some((s) => s.control === "calendar-scope");
+      const shown = visibleSections(a).some((s) =>
+        s.items.some((i) => !isNavLink(i) && i.control === "calendar-scope"),
+      );
       const canSeeAll = a.platform || a.event === "manager" || a.event === "administrator";
       assert.equal(shown, canSeeAll, describeAccess(a));
     }
@@ -123,21 +118,18 @@ describe("sidebar", () => {
   });
 
   test("every entry has a distinct href", () => {
-    const hrefs = NAV_SECTIONS.flatMap((s) => s.items.map((i) => i.href));
+    const hrefs = NAV_SECTIONS.flatMap((s) => navLinks(s).map((i) => i.href));
     assert.equal(new Set(hrefs).size, hrefs.length);
   });
 });
 
 describe("isNavItemActive", () => {
-  const orchestrator = NAV_SECTIONS[0]!.items.find((i) => i.label === "Orchestrator")!;
-  const scheduler = NAV_SECTIONS[0]!.items.find((i) => i.label === "Scheduler")!;
-  const schedulerSettings = NAV_SECTIONS.flatMap((s) => s.items).find(
-    (i) => i.label === "Scheduler settings",
-  )!;
-  const evals = NAV_SECTIONS[0]!.items.find((i) => i.label === "eVals")!;
-  const evalsSettings = NAV_SECTIONS.flatMap((s) => s.items).find(
-    (i) => i.label === "eVals settings",
-  )!;
+  const link = (label: string) => NAV_SECTIONS.flatMap(navLinks).find((i) => i.label === label)!;
+  const orchestrator = link("Orchestrator");
+  const scheduler = link("Scheduler");
+  const schedulerSettings = link("Scheduler settings");
+  const evals = link("eVals");
+  const evalsSettings = link("eVals settings");
 
   test("matches the page itself and anything beneath it", () => {
     assert.equal(isNavItemActive("/events", orchestrator), true);

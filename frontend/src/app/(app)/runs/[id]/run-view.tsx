@@ -458,7 +458,7 @@ export function RunView({
         <CardContent>
           <div
             ref={logBoxRef}
-            className="max-h-112 overflow-auto rounded-lg border border-slate-800 bg-slate-950 p-4 font-mono text-xs leading-relaxed text-slate-200"
+            className="scrollbar-on-dark max-h-112 overflow-auto rounded-lg border border-slate-800 bg-slate-950 p-4 font-mono text-xs leading-relaxed text-slate-200"
           >
             {logs.length === 0 && (
               <span className="text-slate-500">Waiting for output…</span>

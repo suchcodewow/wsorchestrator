@@ -85,32 +85,15 @@ describe("dependenciesOf", () => {
     assert.deepEqual(dependenciesOf(comp("gcp"), known), []);
   });
 
-  test(
-    "a hyphenated secret identifier is matched whole",
-    {
-      todo:
-        "ORG_REF stops at a hyphen, but secret identifiers may contain one (validate.ts SECRET_IDENTIFIER). " +
-        "`secretKeyRef: org.gcp-key` yields no dependency on `gcp-key`, so the connector can be created " +
-        "before its secret. The same regex is in runner/src/components.ts:127.",
-    },
-    () => {
-      const c = comp("gcp", { secretKeyRef: "org.gcp-key" });
-      assert.deepEqual(dependenciesOf(c, new Set(["gcp-key", "gcp"])), ["gcp-key"]);
-    },
-  );
+  test("a hyphenated secret identifier is matched whole", () => {
+    const c = comp("gcp", { secretKeyRef: "org.gcp-key" });
+    assert.deepEqual(dependenciesOf(c, new Set(["gcp-key", "gcp"])), ["gcp-key"]);
+  });
 
-  test(
-    "a hyphenated reference does not match a shorter known identifier",
-    {
-      todo:
-        "`org.gcp-key` is read as a reference to `gcp`, so a component that names secret `gcp-key` is " +
-        "reported as depending on connector `gcp`.",
-    },
-    () => {
-      const c = comp("deploy_to_gke", { secretKeyRef: "org.gcp-key" });
-      assert.deepEqual(dependenciesOf(c, new Set(["gcp", "gcp-key"])), ["gcp-key"]);
-    },
-  );
+  test("a hyphenated reference does not match a shorter known identifier", () => {
+    const c = comp("deploy_to_gke", { secretKeyRef: "org.gcp-key" });
+    assert.deepEqual(dependenciesOf(c, new Set(["gcp", "gcp-key"])), ["gcp-key"]);
+  });
 });
 
 describe("referenceMap", () => {
