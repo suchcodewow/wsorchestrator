@@ -56,7 +56,7 @@ resource "google_cloud_run_v2_service" "app" {
     # quietly raised the ceiling. A room of attendees is tens of readers, not
     # hundreds, and a runaway loop against a 1-vCPU database is worth capping.
     scaling {
-      min_instance_count = 1
+      min_instance_count = var.app_min_instances
       max_instance_count = 20
     }
 
@@ -96,6 +96,8 @@ resource "google_cloud_run_v2_service" "app" {
           # resource rather than configured, so the page can never be pointed
           # at an instance this deployment does not own.
           { CLOUD_SQL_INSTANCE = google_sql_database_instance.main.name },
+          # Anything but production puts a badge in the header.
+          var.environment != "production" ? { APP_ENVIRONMENT = var.environment } : {},
           var.app_url != "" ? { AUTH_URL = var.app_url } : {},
           # Host part of app_url. The proxy redirects any other host here,
           # so www and the run.app URL converge on the one origin Auth.js and

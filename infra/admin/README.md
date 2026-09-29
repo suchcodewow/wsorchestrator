@@ -314,11 +314,20 @@ changing them on an existing deployment does nothing. Roll with
 
 ### Continuous deployment
 
-Push to main applies infrastructure, builds, migrates, and rolls Cloud Run — in
-Harness, pipeline `deploy_workshop_orchestrator` (org `operations`, project
-`orchestrator`). Nothing about that pipeline is declared here; Harness holds
-its own repo connector and, in the `admin_control_plane` IaCM workspace, this
-module's state and variables.
+This module is applied twice: by the `qa_control_plane` IaCM workspace (QA, on
+every merge to main, via `deploy_qa`) and by `admin_control_plane`
+(production, only when `deploy_production` runs and is approved). Nothing about
+those pipelines is declared here. Harness holds its own repo connector, and
+each workspace holds its own copy of this module's state and variables.
+[docs/environments.md](../../docs/environments.md) lists the variables that
+differ.
+
+**Everything environment-specific is a variable, and its default is
+production's.** A new resource that names `administration-459416`,
+`harnessevents.io` or a production-only group directly will be created in QA
+pointing at production. `environment`, `app_min_instances`,
+`manage_billing_iam`, `image_readers` and `developer_members` exist for this
+reason; see [environments.tf](environments.tf).
 
 What is declared here is the IAM build-sa needs beyond building. `enable_cicd =
 true` grants `run.admin` + `cloudsql.client`, `actAs` on app-sa and runner-sa,

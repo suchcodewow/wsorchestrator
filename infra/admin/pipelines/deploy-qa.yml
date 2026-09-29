@@ -1,58 +1,38 @@
 pipeline:
-  name: Deploy Workshop Orchestrator
-  identifier: deploy_workshop_orchestrator
+  name: Deploy QA
+  identifier: deploy_qa
   projectIdentifier: orchestrator
   orgIdentifier: operations
   description: |
-    Verifies the commit, applies infrastructure, builds both images, applies the
-    SQL migrations, and rolls Cloud Run. A port of cloudbuild.yaml plus the
-    `make infra` step that used to be manual, running on Harness Cloud.
+    Every merge to main lands here: verify, apply QA's infrastructure, build
+    both images into QA's registry, migrate QA's database, and roll QA's Cloud
+    Run. https://qa.harnessevents.io, GCP project harnessevents-qa.
 
-    Stage order is deliberate:
-      1. Verify — typecheck and unit-test the runner before anything is applied,
-         built, or deployed. The runner ships as raw TypeScript executed by tsx,
-         so this is the only compile step between a commit and a Cloud Run Job
-         provisioning a live workshop. Its unit suite is the corpus of every
-         provider message a real run has died on (see TESTING.md); most of this
-         project's failed workshops were a pure function reading one of those
-         strings and reaching the wrong conclusion. Cheap, and it fails here
-         rather than in front of a room. The frontend gets the same gate —
-         typecheck, lint, and its unit suite, including the role rules — so a
-         permission regression fails here rather than in production.
-      2. Infrastructure — an IACM stage against the `admin_control_plane`
-         workspace. Runs before the build so a commit that changes an env var or
-         a Cloud Run setting takes effect in the same run that ships the code.
-         The Cloud Run resources ignore_changes on their image, so this never
-         fights stage 3.
-      3. Build/migrate/deploy — migrations run BEFORE the new image goes live.
-         They only ever add columns with defaults, so the currently-running
-         revision keeps working against the migrated schema. The reverse order
-         would serve a new image against a schema missing the columns it reads
-         on every request.
+    Nothing here can reach production. The IaCM workspace (qa_control_plane)
+    authenticates as tf-admin-qa and the build steps as QA's build-sa, and
+    neither holds a role outside the orchestrator-qa folder. Production is
+    deploy_production, run by hand, which promotes the image this pipeline
+    built — so a commit reaches production only after it has run here.
 
-    No image is pulled from Docker Hub. Harness Cloud pulls anonymously from
-    shared IPs, which hit Docker Hub's unauthenticated rate limit mid-deploy.
-    Official images come from mirror.gcr.io and the gcloud image from gcr.io,
-    and the Dockerfiles do the same.
+    Stage order:
+      1. Queue — one QA deploy at a time. Two merges in quick succession would
+         otherwise apply OpenTofu against the same workspace and migrate the
+         same database at once; the second now waits for the first.
+      2. Verify — the same gate as the verify pipeline. Repeated because an
+         admin can push to main without a PR.
+      3. Infrastructure — IaCM against qa_control_plane. Note the workspace
+         applies the HEAD of main, not necessarily this run's commit.
+      4. Build/migrate/deploy — migrations before the new image, as in
+         production. On an empty database the migrations have nothing to alter,
+         so the first run also bootstraps the schema with `drizzle-kit push`;
+         that is the only place drizzle-kit ever runs unattended, and only
+         against a database with no tables in it.
 
-    Variables:
-      verify      "false" skips the verify stage. Present as an escape hatch for
-                  an emergency roll-forward, not as a normal setting.
-      run_infra   "false" skips the infrastructure stage entirely.
-      apply_infra "false" plans but never applies — drift detection only. With
-                  "true" the apply still only runs if the plan reported changes.
-      deploy      "false" builds and pushes only, the old _DEPLOY=false mode.
+    Images come from mirror.gcr.io and gcr.io, never Docker Hub (rate limits on
+    Harness Cloud's shared IPs).
 
-    Everything the OpenTofu module needs — the 29 variables that used to live in
-    the git-ignored infra/admin/terraform.tfvars, the GCP credential, and the
-    provisioner version — belongs to the workspace, not to this pipeline. So
-    does the state. That is the point of the IACM stage: the workspace owns the
-    state and the inputs, so nothing has to be reconstructed in the runner
-    container on every run.
-
-    A copy of this YAML is committed at infra/admin/deploy-pipeline.yml so the
-    deploy path is reviewable and diffable in the repo. The pipeline is stored
-    INLINE in Harness, so that copy is a mirror, not the source — update both.
+    Stored INLINE in Harness and mirrored at infra/admin/pipelines/deploy-qa.yml.
+    Update both.
   properties:
     ci:
       codebase:
@@ -61,55 +41,66 @@ pipeline:
   variables:
     - name: verify
       type: String
-      description: "\"true\" typechecks and unit-tests the runner and frontend before anything else runs; \"false\" skips the gate."
+      description: "\"false\" skips the verify stage."
       required: false
       value: <+input>.default(true).allowedValues(true,false)
     - name: run_infra
       type: String
-      description: "\"true\" runs the infrastructure stage; \"false\" skips it."
+      description: "\"false\" skips the infrastructure stage."
       required: false
       value: <+input>.default(true).allowedValues(true,false)
     - name: apply_infra
       type: String
-      description: "\"true\" applies the plan; \"false\" plans only, leaving the workspace's drift visible without changing anything."
+      description: "\"false\" plans without applying."
       required: false
       value: <+input>.default(true).allowedValues(true,false)
     - name: deploy
       type: String
-      description: "\"true\" applies migrations and rolls Cloud Run; \"false\" builds and pushes only."
+      description: "\"false\" builds and pushes only."
       required: false
       value: <+input>.default(true).allowedValues(true,false)
     - name: gcp_project
       type: String
-      description: GCP admin project that owns the registry, Cloud Run, and Cloud SQL.
+      description: QA admin project.
       required: false
-      value: administration-459416
+      value: harnessevents-qa
     - name: region
       type: String
-      description: Cloud Run / Artifact Registry region.
       required: false
       value: us-central1
     - name: repo
       type: String
-      description: Artifact Registry path every image tag is built from.
+      description: QA's Artifact Registry path. deploy_production copies from here.
       required: false
-      value: us-central1-docker.pkg.dev/administration-459416/workshop-orchestrator
+      value: us-central1-docker.pkg.dev/harnessevents-qa/workshop-orchestrator
     - name: db_conn
       type: String
-      description: Cloud SQL instance connection name for cloud-sql-proxy.
       required: false
-      value: administration-459416:us-central1:workshops-db
+      value: harnessevents-qa:us-central1:workshops-db
     - name: app_service
       type: String
-      description: Cloud Run service running the app image.
       required: false
       value: workshop-orchestrator
     - name: runner_jobs
       type: String
-      description: Space-separated Cloud Run jobs that all run the runner image.
       required: false
       value: tf-runner tf-reaper tf-scheduler
   stages:
+    - stage:
+        name: Queue
+        identifier: queue
+        type: Custom
+        spec:
+          execution:
+            steps:
+              - step:
+                  type: Queue
+                  name: One QA Deploy At A Time
+                  identifier: queue
+                  timeout: 2h
+                  spec:
+                    key: deploy_qa
+                    scope: Pipeline
     - stage:
         name: Verify
         identifier: verify
@@ -135,14 +126,7 @@ pipeline:
                     command: |
                       set -eu
                       cd runner
-                      # `npm ci` rather than `npm install` so the versions match
-                      # the lockfile the image is built from — a test that passes
-                      # against re-resolved caret ranges has verified something
-                      # other than what ships.
                       npm ci --no-audit --no-fund --silent
-                      # typecheck + the unit suite. ~90ms of actual work; the
-                      # install dominates. Pure — no cloud, no database, no
-                      # credentials — so it is safe on every commit.
                       npm run verify
               - step:
                   type: Run
@@ -156,11 +140,6 @@ pipeline:
                       set -eu
                       cd frontend
                       npm ci --no-audit --no-fund --silent
-                      # typecheck + lint + the unit suite, which includes every
-                      # role's permission table. Pure, like the runner's: no
-                      # database, no build, no credentials. The DB and e2e role
-                      # suites need Postgres and a built server, so they stay
-                      # local — see TESTING.md.
                       npm run verify
         when:
           pipelineStatus: Success
@@ -170,7 +149,7 @@ pipeline:
         identifier: infra
         type: IACM
         spec:
-          workspace: admin_control_plane
+          workspace: qa_control_plane
           cloneCodebase: false
           platform:
             os: Linux
@@ -229,24 +208,16 @@ pipeline:
                   spec:
                     shell: Sh
                     image: mirror.gcr.io/library/alpine:3.20
-                    # The commit subject is read from the clone rather than from
-                    # <+codebase.commitMessage>, for two reasons: the expression
-                    # is empty on a manual execution, and Harness substitutes
-                    # expressions into the script text before the shell runs, so
-                    # a subject containing a backtick would execute here.
-                    #
-                    # Base64 because the value crosses a comma-joined buildArgs
-                    # list next — see frontend/src/lib/build-info.ts.
+                    # Read from the clone, not <+codebase.commitMessage>: that is
+                    # empty on manual runs and would be substituted into the
+                    # script before the shell sees it. Base64 because buildArgs
+                    # is comma-joined — see frontend/src/lib/build-info.ts.
                     command: |
                       set -eu
                       apk add --no-cache git >/dev/null
                       git config --global --add safe.directory "$(pwd)"
-
                       export BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
                       echo "BUILD_TIME=$BUILD_TIME"
-
-                      # `|| true` so a missing clone costs the tooltip a line
-                      # rather than failing the deploy.
                       SUBJECT="$(git log -1 --pretty=%s 2>/dev/null | cut -c1-120 || true)"
                       export BUILD_MESSAGE_B64="$(printf '%s' "$SUBJECT" | base64 | tr -d '\n')"
                       echo "BUILD_MESSAGE_B64=$BUILD_MESSAGE_B64"
@@ -258,9 +229,9 @@ pipeline:
                   name: Build and Push App
                   identifier: build_push_app
                   spec:
-                    connectorRef: gcp_build_sa
+                    connectorRef: gcp_qa_build_sa
                     host: us-central1-docker.pkg.dev
-                    projectID: administration-459416
+                    projectID: harnessevents-qa
                     imageName: workshop-orchestrator/app
                     tags:
                       - <+codebase.shortCommitSha>
@@ -276,9 +247,9 @@ pipeline:
                   name: Build and Push Runner
                   identifier: build_push_runner
                   spec:
-                    connectorRef: gcp_build_sa
+                    connectorRef: gcp_qa_build_sa
                     host: us-central1-docker.pkg.dev
-                    projectID: administration-459416
+                    projectID: harnessevents-qa
                     imageName: workshop-orchestrator/runner
                     tags:
                       - <+codebase.shortCommitSha>
@@ -293,7 +264,7 @@ pipeline:
                     shell: Bash
                     image: gcr.io/google.com/cloudsdktool/google-cloud-cli:slim
                     envVariables:
-                      GCP_KEY_B64: <+secrets.getValue("gcp_build_sa_key_b64")>
+                      GCP_KEY_B64: <+secrets.getValue("gcp_qa_build_sa_key_b64")>
                       GCP_PROJECT: <+pipeline.variables.gcp_project>
                     command: |
                       set -euo pipefail
@@ -315,7 +286,7 @@ pipeline:
                     shell: Bash
                     image: mirror.gcr.io/library/node:22-slim
                     envVariables:
-                      GCP_KEY_B64: <+secrets.getValue("gcp_build_sa_key_b64")>
+                      GCP_KEY_B64: <+secrets.getValue("gcp_qa_build_sa_key_b64")>
                       DB_CONN: <+pipeline.variables.db_conn>
                     command: |
                       set -euo pipefail
@@ -328,10 +299,6 @@ pipeline:
 
                       printf '%s' "$GCP_KEY_B64" | base64 -d > /tmp/sa.json
 
-                      # The stored URL points at the Cloud Run connector socket.
-                      # Swap in the proxy's TCP endpoint, exactly as
-                      # scripts/with-db.sh does locally, so the credentials keep
-                      # a single source of truth.
                       DATABASE_URL_SOCKET="$(cat /harness/.db_url)"
                       CREDS="$(printf '%s' "$DATABASE_URL_SOCKET" | sed -E 's#^postgresql://([^@]+)@.*#\1#')"
                       DBNAME="$(printf '%s' "$DATABASE_URL_SOCKET" | sed -E 's#.*/([^/?]+)\?.*#\1#')"
@@ -343,10 +310,29 @@ pipeline:
                         sleep 1
                       done
 
-                      # apply-sql.mjs needs only `pg`; a full `npm ci` of the
-                      # frontend would cost minutes to install one dependency.
                       cd frontend
                       npm install pg --no-save --no-audit --no-fund --silent
+
+                      # A database with no tables is a new QA environment: the
+                      # .sql files only ALTER tables that already exist, so
+                      # create them from schema.ts first. Never taken once the
+                      # schema exists, so drizzle-kit cannot drop anything here.
+                      EMPTY="$(node -e "
+                        const pg = require('pg');
+                        (async () => {
+                          const c = new pg.Client({ connectionString: process.env.DATABASE_URL });
+                          await c.connect();
+                          const r = await c.query(\"select count(*)::int as n from information_schema.tables where table_schema = 'public'\");
+                          console.log(r.rows[0].n === 0 ? 'yes' : 'no');
+                          await c.end();
+                        })();
+                      ")"
+                      if [ "$EMPTY" = "yes" ]; then
+                        echo "empty database: bootstrapping the schema from schema.ts"
+                        npm ci --no-audit --no-fund --silent
+                        npx drizzle-kit push --force
+                      fi
+
                       node scripts/apply-sql.mjs
 
                       rm -f /tmp/sa.json /harness/.db_url
@@ -361,7 +347,7 @@ pipeline:
                     shell: Bash
                     image: gcr.io/google.com/cloudsdktool/google-cloud-cli:slim
                     envVariables:
-                      GCP_KEY_B64: <+secrets.getValue("gcp_build_sa_key_b64")>
+                      GCP_KEY_B64: <+secrets.getValue("gcp_qa_build_sa_key_b64")>
                       GCP_PROJECT: <+pipeline.variables.gcp_project>
                       REGION: <+pipeline.variables.region>
                       REPO: <+pipeline.variables.repo>
@@ -379,7 +365,6 @@ pipeline:
                         --project "$GCP_PROJECT" --region "$REGION" \
                         --image "$REPO/app:$TAG"
 
-                      # All three jobs run the same runner image.
                       for job in $RUNNER_JOBS; do
                         gcloud run jobs update "$job" \
                           --project "$GCP_PROJECT" --region "$REGION" \
@@ -388,4 +373,3 @@ pipeline:
                   when:
                     stageStatus: Success
                     condition: <+pipeline.variables.deploy> == "true"
-        description: ""

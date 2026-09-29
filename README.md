@@ -362,24 +362,30 @@ registrar, and add `<domain>/api/auth/callback/google` to the OAuth client.
 
 ## Continuous deployment
 
-A push to `main` applies any infrastructure change, builds both images, applies
-the SQL migrations, and rolls Cloud Run. It runs in **Harness** — org
-`operations`, project `orchestrator`, pipeline `deploy_workshop_orchestrator` —
-on Harness Cloud runners, in two stages:
+There are two deployments, QA (https://qa.harnessevents.io) and production.
+Each is its own apply of this module; [docs/environments.md](docs/environments.md)
+maps them. A merge to `main` runs `deploy_qa`: it applies QA's infrastructure,
+builds both images, applies the SQL migrations, and rolls QA's Cloud Run.
+Production changes only when someone runs `deploy_production` and the
+`prod_deployers` group approves it. That pipeline copies the images QA built
+into production rather than rebuilding them. Both run in **Harness** (org
+`operations`, project `orchestrator`) on Harness Cloud runners, and each has
+these two stages:
 
-1. **Infrastructure**, an IaCM stage against the `admin_control_plane` workspace.
-   The workspace owns this module's state, its OpenTofu version, its 29 variable
-   values, and the GCP credential it plans as, so nothing has to be
-   reconstructed per run. The apply step only runs when the plan reported
+1. **Infrastructure**, an IaCM stage against the environment's workspace:
+   `qa_control_plane` or `admin_control_plane`. The workspace owns this
+   module's state, its OpenTofu version, its variable values, and the GCP
+   credential it plans as, so nothing has to be reconstructed per run. The apply step only runs when the plan reported
    changes, which for a code-only commit it will not.
-2. **Build/migrate/deploy**, a CI stage: both images to Artifact Registry, then
+2. **Build/migrate/deploy**, a CI stage. QA builds; production copies QA's images.
+   Both images go to Artifact Registry, then
    the migrations, then `gcloud run services update`. Migrations run *before*
    the new image goes live — they only add columns with defaults, so the
    currently-running revision keeps working against the migrated schema, where
    the reverse order would serve a new image against a schema missing columns it
    reads on every request.
 
-Three pipeline variables narrow a manual run: `run_infra=false` skips the
+Three `deploy_qa` variables narrow a manual run: `run_infra=false` skips the
 infrastructure stage, `apply_infra=false` plans without applying, `deploy=false`
 builds and pushes without touching Cloud Run or the database.
 

@@ -4,7 +4,7 @@ import { signInPath, signOut } from "@/auth";
 import { BrandMark } from "@/components/brand-mark";
 import { Button } from "@/components/ui/button";
 import { UserMenu } from "@/components/user-menu";
-import { buildInfo } from "@/lib/build-info";
+import { buildInfo, deploymentEnvironment } from "@/lib/build-info";
 import { getUserPreferences } from "@/lib/user-preferences";
 import { cn } from "@/lib/utils";
 import type { Session } from "next-auth";
@@ -20,6 +20,7 @@ export async function SiteHeader({
   sidebar?: boolean;
 }) {
   const { themePreference, calendarScope } = await getUserPreferences();
+  const environment = deploymentEnvironment();
 
   return (
     <header className="sticky top-0 z-40 border-b border-border/70 bg-background/70 backdrop-blur-xl">
@@ -32,6 +33,15 @@ export async function SiteHeader({
           <BrandMark className="transition-transform duration-200 group-hover:scale-105" />
           <span className="hidden sm:inline">Harness Events</span>
         </Link>
+
+        {environment && (
+          <span
+            title={`This is the ${environment} deployment, not production`}
+            className="rounded-full border border-amber-500/40 bg-amber-500/15 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300"
+          >
+            {environment}
+          </span>
+        )}
 
         <div className="ml-auto flex items-center gap-4">
           {!session?.user && (

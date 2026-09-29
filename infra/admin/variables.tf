@@ -368,3 +368,42 @@ variable "github_pat_secret_id" {
     error_message = "github_pat_secret_id must be the NAME of a Secret Manager secret (letters, digits, '-' and '_' only), not the PAT value. Store the token first:\n  printf '%s' <GITHUB_TOKEN> | gcloud secrets create github-pat --data-file=- --project <ADMIN_PROJECT>\nthen set github_pat_secret_id = \"github-pat\"."
   }
 }
+
+# ---------------------------------------------------------------------------
+# Environments
+#
+# This module is applied twice: production (workspace admin_control_plane,
+# project administration-459416) and QA (workspace qa_control_plane, project
+# harnessevents-qa). Every default below is production's value, so the prod
+# workspace sets none of them. See docs/environments.md.
+# ---------------------------------------------------------------------------
+
+variable "environment" {
+  description = "Which deployment this is. Anything other than \"production\" is shown as a badge in the app's header, so nobody mistakes QA for the real thing."
+  type        = string
+  default     = "production"
+}
+
+variable "app_min_instances" {
+  description = "Cloud Run min instances for the app. 1 in production (a cold start stalls the first page for ~10s); QA can scale to zero."
+  type        = number
+  default     = 1
+}
+
+variable "manage_billing_iam" {
+  description = "Grant runner-sa billing.user and app-sa billing.viewer on the billing account. Needs billing.admin, which the QA operator (tf-admin-qa) deliberately lacks, so QA sets this false and scripts/qa-bootstrap.sh --grant-billing makes the grants instead."
+  type        = bool
+  default     = true
+}
+
+variable "image_readers" {
+  description = "Members granted artifactregistry.reader on this deployment's image repository. QA lists production's build-sa here, so the prod pipeline can promote the exact image QA ran instead of rebuilding it."
+  type        = list(string)
+  default     = []
+}
+
+variable "developer_members" {
+  description = "Members (user:/group:) given read access to this project for debugging: viewer, logs, a Cloud SQL proxy connection, and the database-url secret. Meant for QA; production leaves it empty."
+  type        = list(string)
+  default     = []
+}

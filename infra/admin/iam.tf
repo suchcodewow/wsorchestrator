@@ -71,6 +71,8 @@ resource "google_folder_iam_member" "instructor_groups" {
 
 # Link newly created workshop projects to the billing account.
 resource "google_billing_account_iam_member" "runner_billing" {
+  count = var.manage_billing_iam ? 1 : 0
+
   billing_account_id = var.billing_account_id
   role               = "roles/billing.user"
   member             = "serviceAccount:${google_service_account.runner.email}"
@@ -81,9 +83,23 @@ resource "google_billing_account_iam_member" "runner_billing" {
 # with no matching run in the database (orphans / extraneous projects). Viewer
 # grants only list/get; app-sa still cannot change billing or move projects.
 resource "google_billing_account_iam_member" "app_billing_viewer" {
+  count = var.manage_billing_iam ? 1 : 0
+
   billing_account_id = var.billing_account_id
   role               = "roles/billing.viewer"
   member             = "serviceAccount:${google_service_account.app.email}"
+}
+
+# Both were unconditional before manage_billing_iam. QA's applier cannot grant
+# on the billing account, so qa-bootstrap.sh --grant-billing does it there.
+moved {
+  from = google_billing_account_iam_member.runner_billing
+  to   = google_billing_account_iam_member.runner_billing[0]
+}
+
+moved {
+  from = google_billing_account_iam_member.app_billing_viewer
+  to   = google_billing_account_iam_member.app_billing_viewer[0]
 }
 
 # Read project display names for the Cloud Status page. roles/browser is

@@ -64,46 +64,83 @@ manual roll-back and an automated deploy take the same code path.
 
 ## Continuous deployment
 
-A push to `main` verifies the commit, applies infrastructure, builds both
-images, applies the SQL migrations, and rolls Cloud Run — via the
-`deploy_on_push_main` webhook trigger on the Harness pipeline
-`deploy_workshop_orchestrator` (org `operations`, project `orchestrator`).
+There are two deployed environments, QA and production. Both are built from
+[infra/admin](infra/admin) and each is its own apply;
+[docs/environments.md](docs/environments.md) maps one to the other. Three
+Harness pipelines move a change through them, all in org `operations`, project
+`orchestrator`:
 
 ```
-push to main
-  └─ Harness: deploy_workshop_orchestrator
-       ├─ 1. Verify              typecheck + unit-test the runner and frontend
-       ├─ 2. Infrastructure      IaCM apply of the admin_control_plane workspace
-       └─ 3. Build/migrate/deploy (as build-sa)
-              ├─ build app + runner images
-              ├─ push both to Artifact Registry
+pull request ─▶ verify                    typecheck + lint + unit-test (required check)
+
+merge to main ─▶ deploy_qa                 (trigger deploy_qa_on_push_main)
+       ├─ 0. Queue            one deploy_qa at a time
+       ├─ 1. Verify
+       ├─ 2. Infrastructure   IaCM apply of qa_control_plane
+       └─ 3. Build/migrate/deploy (as build-sa@harnessevents-qa)
+              ├─ build app + runner, push to QA's Artifact Registry
               ├─ db-migrate   ← before the new image is live
+              └─ gcloud run services/jobs update
+
+by hand ─▶ deploy_production               (sha = qa by default)
+       ├─ 0. Queue            one deploy_production at a time
+       ├─ 1. Preflight        resolve the commit; refuse if QA never built it,
+       │                      it is not on main, or it is older than prod
+       ├─ 2. Approval         prod_deployers only — every run, no exceptions
+       ├─ 3. Infrastructure   IaCM apply of admin_control_plane (run_infra)
+       └─ 4. Promote/migrate/deploy (as build-sa@administration-459416)
+              ├─ crane copy app + runner from QA's registry to production's
+              ├─ db-migrate
               └─ gcloud run services/jobs update
 ```
 
-The pipeline is stored **INLINE in Harness** and mirrored for review at
-[infra/admin/deploy-pipeline.yml](infra/admin/deploy-pipeline.yml). That copy
-deploys nothing — **update both**. The IAM that `build-sa` needs beyond building
-is gated on `enable_cicd` in [infra/admin/cicd.tf](infra/admin/cicd.tf); setting
-it false strips the pipeline's deploy and migrate steps of their permissions.
+**Production never builds.** It promotes the exact image digest QA ran, so
+nothing reaches production untested on QA. Production's build-sa can read QA's
+registry because QA's workspace lists it in `image_readers`.
 
-The pipeline takes four variables, all defaulting to the full path: `verify`,
-`run_infra`, `apply_infra`, and `deploy`. Running it by hand with
-`deploy=false` and `apply_infra=false` is the way to exercise CI against a
-branch without touching production.
+The pipelines are stored **INLINE in Harness** and mirrored for review in
+[infra/admin/pipelines/](infra/admin/pipelines/). Those copies deploy nothing,
+so **update both**. The IAM that each environment's `build-sa` needs beyond
+building is gated on `enable_cicd` in [infra/admin/cicd.tf](infra/admin/cicd.tf).
+Setting it false strips that environment's deploy and migrate steps of their
+permissions.
 
-> **This replaced a Cloud Build trigger on 2026-09-03.** That trigger, its
-> GitHub App connection, and the repository link were deleted from the admin
-> project at the cutover — leaving them would have meant two systems racing to
-> deploy the same commit. [`cloudbuild.yaml`](cloudbuild.yaml) survives at the
-> repo root because `make images` still uses it for a manual build-and-push,
-> and as a break-glass route for when Harness itself is down. A step added
-> there gates that route, **not** the deploy.
+`deploy_qa` takes four variables, each defaulting to the full path: `verify`,
+`run_infra`, `apply_infra` and `deploy`. Running it by hand against a branch
+with `deploy=false` and `apply_infra=false` exercises the pipeline without
+changing QA.
 
-**Two deploys running at once will fight.** They apply OpenTofu against the same
-IaCM workspace and migrate the same database. There is no concurrency limit on
-the pipeline today, so if someone has just pushed, let their run finish before
-you push.
+`deploy_production` takes:
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `sha` | `qa` | The commit to release. `qa` means whatever QA serves now; otherwise any SHA whose images QA built. |
+| `run_infra` | `true` | Apply `admin_control_plane` before promoting. IaCM applies the head of `main`, so preflight refuses this when the commit's `infra/admin/*.tf` differs from main's. |
+| `apply_infra` | `true` | With `run_infra`, apply rather than only plan. |
+| `allow_rollback` | `false` | Permit a commit older than what production runs now. |
+
+**Who can release.** Anyone in `orchestrator_developers` can start either
+pipeline. Only `prod_deployers` can pass production's approval stage. The
+Harness PAT used for API calls from a laptop belongs to its owner, so a run
+started that way waits for the same approval. See
+[docs/environments.md](docs/environments.md#who-can-do-what) for where this
+gate is weaker than it looks.
+
+> **This replaced a single push-to-production pipeline on 2026-09-29.** That
+> pipeline, `deploy_workshop_orchestrator`, deployed every push to main
+> straight to production. It is retired: its trigger is disabled and its only
+> stage now fails with a pointer here.
+>
+> **That pipeline had in turn replaced a Cloud Build trigger on 2026-09-03.**
+> [`cloudbuild.yaml`](cloudbuild.yaml) survives because `make images` still
+> uses it for a manual build-and-push, and it is the break-glass route for when
+> Harness itself is down. A step added there gates that route, **not** the
+> deploy.
+
+**Deploys queue rather than fight.** Each deploy pipeline starts with a Queue
+step keyed on its own name, so a second run waits for the first. QA and
+production use different workspaces and databases, so a QA deploy and a
+production release can run at the same time.
 
 **Migrations run before the deploy, on purpose.** The `.sql` files only add
 columns with defaults, so the currently-running revision keeps working against
@@ -117,7 +154,12 @@ drop a column whose data is still needed; unattended on every push that is a
 data-loss risk. The consequence is a rule worth internalising:
 
 > A change to `frontend/src/db/schema.ts` **must** be paired with a migration
-> in `frontend/drizzle/`, or it will not reach production.
+> in `frontend/drizzle/`, or it will not reach QA or production.
+
+The one exception is a database with **no tables at all**. There, `deploy_qa`
+runs `drizzle-kit push` once to create the schema before the migrations. That
+happens only when an environment is new: the migrations alone cannot build a
+schema from nothing.
 
 `make images` still only builds. The migrate and deploy steps in
 `cloudbuild.yaml` are gated on the `_DEPLOY` substitution, which nothing sets
@@ -125,30 +167,45 @@ any more — they run only if someone invokes that file by hand.
 
 ### One-time setup
 
-`enable_cicd = true` in `infra/admin/terraform.tfvars`, then `make infra`. The
-apply grants `build-sa` what it needs beyond building: `run.admin` to roll the
+`enable_cicd = true` on the environment's workspace, then apply. The apply
+grants `build-sa` what it needs beyond building: `run.admin` to roll the
 service and jobs, `cloudsql.client` for the migration proxy, `secretAccessor` on
 `database-url`, and `serviceAccountUser` scoped to just `app-sa` and
-`runner-sa` — not project-wide, so it cannot impersonate anything else. Setting
-it false is the kill switch: the pipeline's deploy and migrate steps lose their
-permissions.
+`runner-sa`. It is not project-wide, so build-sa cannot impersonate anything
+else.
 
-The pipeline authenticates as `build-sa` via a JSON key held in Harness's own
-secret manager. That key **exists nowhere on disk** — if it has to be replaced,
-mint a fresh one with `gcloud iam service-accounts keys create`, store it in
-Harness, and revoke the superseded one once a run verifies.
+Each pipeline authenticates as its environment's `build-sa` with a JSON key held
+in Harness's own secret manager:
+
+- production: `gcp_build_sa_key` and `gcp_build_sa_key_b64`;
+- QA: `gcp_qa_build_sa_key` and `gcp_qa_build_sa_key_b64`.
+
+No key **exists on disk**. To replace one, mint a fresh key with `gcloud iam
+service-accounts keys create`, store it in Harness, and revoke the old one
+once a run verifies.
 
 ### Watching and rolling back
 
-The deploy runs in Harness, not Cloud Build, so `gcloud builds list` will not
-show it — that command now only sees manual `make images` submissions.
+The deploys run in Harness, not Cloud Build, so `gcloud builds list` will not
+show them. That command now only sees manual `make images` submissions.
 
 ```bash
-# The pipeline's executions
-open "https://app.harness.io/ng/account/8mh-FIIHQUapLuB6K0Cd-w/all/orgs/operations/projects/orchestrator/pipelines/deploy_workshop_orchestrator/executions"
-
-make deploy TAG=<older-sha>   # roll back; migrations are not reverted
+# Executions
+open "https://app.harness.io/ng/account/8mh-FIIHQUapLuB6K0Cd-w/all/orgs/operations/projects/orchestrator/pipelines/deploy_qa/executions"
+open "https://app.harness.io/ng/account/8mh-FIIHQUapLuB6K0Cd-w/all/orgs/operations/projects/orchestrator/pipelines/deploy_production/executions"
 ```
+
+**Roll production back** by running `deploy_production` with `sha=<older-sha>`,
+`allow_rollback=true` and `run_infra=false`. It goes through the same approval.
+Only a commit QA built can be chosen, which in practice is any commit merged
+since QA existed.
+
+**Roll QA back** by reverting the commit on `main` through a PR.
+
+`make deploy TAG=<older-sha>` still works as **break-glass** for production. It
+reads the local `admin_control_plane` outputs, needs the operator's own GCP
+rights on the production project, and skips the approval. Use it only when
+Harness is down.
 
 Rolling back the image does **not** roll back the schema. That is safe in the
 one direction the migrations are written for — they are additive, so an older

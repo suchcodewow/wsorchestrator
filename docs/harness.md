@@ -1,19 +1,22 @@
 # Harness
 
-How to talk to the Harness account this project deploys from, and the four traps
+How to talk to the Harness account this project deploys from, and the five traps
 that each cost a debugging round. None of this is in the Harness docs.
 
-The deploy pipeline itself is described in
-[DEPLOY.md](../DEPLOY.md#continuous-deployment) and mirrored at
-[infra/admin/deploy-pipeline.yml](../infra/admin/deploy-pipeline.yml).
+The pipelines themselves are described in
+[DEPLOY.md](../DEPLOY.md#continuous-deployment), the environments they deploy
+in [environments.md](environments.md), and the YAML is mirrored in
+[infra/admin/pipelines/](../infra/admin/pipelines/).
 
 | | |
 | --- | --- |
 | **Account** | `8mh-FIIHQUapLuB6K0Cd-w` |
 | **Org / project** | `operations` / `orchestrator` |
-| **Pipeline** | `deploy_workshop_orchestrator` (stored **INLINE**) |
-| **Trigger** | `deploy_on_push_main` (Webhook, enabled) |
-| **IaCM workspace** | `admin_control_plane` |
+| **Pipelines** (all **INLINE**) | `verify`, `deploy_qa`, `deploy_production` |
+| **Triggers** | `verify_pull_requests` (PR to main → `verify`), `deploy_qa_on_push_main` (push to main → `deploy_qa`) |
+| **IaCM workspaces** | `qa_control_plane` (QA), `admin_control_plane` (production) |
+| **User groups** | `prod_deployers` — the only group that can approve `deploy_production`; `orchestrator_developers` — Project Viewer + Pipeline Executor |
+| **Retired** | `deploy_workshop_orchestrator` and its trigger `deploy_on_push_main` (pushed main straight to production until 2026-09-29) |
 
 ---
 
@@ -22,6 +25,13 @@ The deploy pipeline itself is described in
 The working PAT lives in `infra/admin/terraform.tfvars` as `harness_api_key`.
 That file is git-ignored, so it exists only on machines that have been set up to
 deploy. Use it for any direct REST call, as `x-api-key: <PAT>`.
+
+**That PAT belongs to a person** (`GET /ng/api/user/currentUser` says whose).
+Anything done with it is recorded as that person's action: a pipeline it
+starts shows them as the trigger, and an approval it submits is their
+approval. That is why `deploy_production` asks for approval on every run, even
+one its approver started, and why an agent must never submit a
+`deploy_production` approval.
 
 > **Do not read credentials from `~/Library/Application Support/Code/User/mcp.json`.**
 > The PAT in there belongs to a different account (`fjf_VfuITK2bBrMLg5xV7g`) and
@@ -80,7 +90,7 @@ levels of map and silently resolves to null. The step still *succeeds*, so a
 `when.condition` built on it quietly evaluates as though there were no changes —
 the apply is skipped and nothing reports a problem.
 
-In `deploy_workshop_orchestrator` this gates the Apply step on added / changed /
+In `deploy_qa` and `deploy_production` this gates the Apply step on added / changed /
 deleted all being non-`"0"`. Verified both directions: a 4-deletion plan
 applied, a 0-change plan skipped.
 
@@ -161,9 +171,29 @@ Do disable the old trigger before the cutover, or both fire on the same push.
 
 ## Trap 4 — the pipeline YAML is stored inline, and the repo copy is a mirror
 
-[infra/admin/deploy-pipeline.yml](../infra/admin/deploy-pipeline.yml) exists so
-the deploy path is reviewable and diffable in git. It is **not** the source —
-Harness holds the pipeline INLINE. Changing one does not change the other.
+[infra/admin/pipelines/](../infra/admin/pipelines/) exists so the deploy path is
+reviewable and diffable in git. It is **not** the source — Harness holds each
+pipeline INLINE. Changing one does not change the other.
 
 **Update both, in the same commit.** A change made only in Harness is invisible
-to review; a change made only in the repo does not run.
+to review; a change made only in the repo does not run. To push a mirror into
+Harness:
+
+```bash
+curl -sS -X PUT -H "x-api-key: $PAT" -H 'Content-Type: application/yaml' \
+  --data-binary @infra/admin/pipelines/deploy-qa.yml \
+  "https://app.harness.io/pipeline/api/pipelines/v2/deploy_qa?accountIdentifier=8mh-FIIHQUapLuB6K0Cd-w&orgIdentifier=operations&projectIdentifier=orchestrator"
+```
+
+A change to `deploy-production.yml` loosens or tightens the production gate.
+It needs the owner's review before it goes into Harness, not after.
+
+## Trap 5 — IaCM applies the head of the workspace's branch, not the run's commit
+
+A workspace is bound to `repository_branch: main`. Its plan and apply check out
+**the head of main** at the time the stage runs, whatever commit the pipeline's
+own codebase was cloned at. In `deploy_qa` the two are the same commit, apart
+from a race with the next merge. In `deploy_production` they are not:
+promoting yesterday's commit while today's `.tf` changes sit on main would
+apply today's infrastructure under yesterday's image. Preflight refuses that
+case. Use `run_infra=false` to promote code alone.
