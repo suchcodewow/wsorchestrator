@@ -142,7 +142,10 @@ repeated.
      us-central1 --project harnessevents-qa`. It needs Cloud Run admin on
      `harnessevents-qa`; `group:300@harnessevents.io` has owner there.
 7. Manual steps outside GCP and Harness:
-   - DNS: `qa  CNAME  ghs.googlehosted.com.`
+   - DNS: the records the mapping asks for, which for `qa` are four `A`
+     records (`216.239.32.21`, `.34.21`, `.36.21`, `.38.21`) and four `AAAA`
+     records (`2001:4860:4802:32::15`, `34::15`, `36::15`, `38::15`), not a
+     CNAME. `gcloud beta run domain-mappings describe` lists them.
    - OAuth client: add `https://qa.harnessevents.io/api/auth/callback/google`.
    - Workspace Admin console: create the OU `/QA`, and authorize QA
      runner-sa's numeric client id for domain-wide delegation with scopes
