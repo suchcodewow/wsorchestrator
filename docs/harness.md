@@ -48,6 +48,10 @@ must not start one unless asked to in so many words.
 | Create a text secret | `POST /ng/api/v2/secrets` |
 | Create a file secret | `POST /ng/api/v2/secrets/files` — multipart, `file=@…` plus `spec=…` |
 | Create an IaCM workspace | `POST /gateway/iacm/api/orgs/{org}/projects/{prj}/workspaces?accountIdentifier=…` |
+| Create/update a CD service | `POST` / `PUT /ng/api/servicesV2` — JSON `{identifier,name,orgIdentifier,projectIdentifier,yaml}` |
+| Create an environment / infrastructure | `POST /ng/api/environmentsV2`, `POST /ng/api/infrastructures` — same JSON shape |
+| Upload a File Store file | `POST /ng/api/file-store` — multipart: `name`, `identifier`, `type=FILE`, `parentIdentifier=Root`, `fileUsage=MANIFEST_FILE`, `content=@…` |
+| Retry failed stages | `POST /pipeline/api/pipeline/execute/retry/{pipeline}?planExecutionId=…&retryStages=…&runAllStages=false` — inputs YAML body. `PUT` answers 405. A retry reuses the original run's pipeline YAML, so it will not pick up an edit. |
 
 ### Where the MCP server falls short
 
@@ -196,3 +200,24 @@ from a race with the next merge. In `deploy_production` they are not:
 promoting yesterday's commit while today's `.tf` changes sit on main would
 apply today's infrastructure under yesterday's image. Preflight refuses that
 case. Use `run_infra=false` to promote code alone.
+
+## Trap 6 — the Cloud Run CD steps
+
+These traps were hit while building the Deploy stage (see "Cloud Run deploys"
+in [DEPLOY.md](../DEPLOY.md)):
+
+- **An Inline manifest store fails at stage Initialize** with `Inline store
+  type not supported for GoogleCloudRunService Manifest`. Use the Harness File
+  Store.
+- **`preExecution` loses its backslashes.** Harness unescapes the script before
+  the plugin's entrypoint `eval`s it, so `\1` arrives as `\x01`. Write the
+  script without backslashes. A Run step's `command` is not affected.
+- **The deploy step needs `monitoring.timeSeries.list`.** After `services
+  replace` it polls Cloud Monitoring for the instance count. Without the
+  permission, the step fails after traffic has already moved, and the rollback
+  step fails the same way after routing traffic back.
+- **`services replace` applies the manifest's traffic block as written.** An
+  exported spec taken after a rollback pins traffic to the old revision, so
+  the new revision would serve nothing. Reset the block before replacing.
+- **`GoogleCloudRunJob` executes the job** after replacing it. To change a
+  job's image without running it, use a Run step with `gcloud run jobs update`.

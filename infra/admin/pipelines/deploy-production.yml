@@ -26,8 +26,12 @@ pipeline:
              the head of main, so promoting an older commit while newer
              infrastructure sits on main would ship that infrastructure too.
       3. Infrastructure — IaCM against admin_control_plane.
-      4. Promote/migrate/deploy — copy images, apply the commit's migrations,
-         roll Cloud Run.
+      4. Promote and migrate — copy images, apply the commit's migrations.
+      5. Deploy — a Harness CD stage (service workshop_orchestrator,
+         environment production, infrastructure production_cloud_run). It
+         rolls the app with the native Cloud Run steps, points the runner jobs
+         at the new image, and on failure routes traffic back to the revision
+         that was serving. See "Cloud Run deploys" in DEPLOY.md.
 
     Stored INLINE in Harness and mirrored at
     infra/admin/pipelines/deploy-production.yml. Update both.
@@ -251,8 +255,8 @@ pipeline:
           pipelineStatus: Success
           condition: <+pipeline.variables.run_infra> == "true"
     - stage:
-        name: Promote Migrate Deploy
-        identifier: promote_migrate_deploy
+        name: Promote and Migrate
+        identifier: promote_migrate
         type: CI
         spec:
           cloneCodebase: true
@@ -360,34 +364,169 @@ pipeline:
                       node scripts/apply-sql.mjs
 
                       rm -f /tmp/sa.json /harness/.db_url
-              - step:
-                  type: Run
-                  name: Deploy Cloud Run
-                  identifier: deploy
-                  spec:
-                    shell: Bash
-                    image: gcr.io/google.com/cloudsdktool/google-cloud-cli:slim
-                    envVariables:
-                      GCP_KEY_B64: <+secrets.getValue("gcp_build_sa_key_b64")>
-                      GCP_PROJECT: <+pipeline.variables.gcp_project>
-                      REGION: <+pipeline.variables.region>
-                      REPO: <+pipeline.variables.repo>
-                      APP_SERVICE: <+pipeline.variables.app_service>
-                      RUNNER_JOBS: <+pipeline.variables.runner_jobs>
-                      TAG: <+pipeline.stages.preflight.spec.execution.steps.resolve.output.outputVariables.TAG>
-                    command: |
-                      set -euo pipefail
-                      umask 077
-                      printf '%s' "$GCP_KEY_B64" | base64 -d > /tmp/sa.json
-                      gcloud auth activate-service-account --key-file /tmp/sa.json --quiet
-                      rm -f /tmp/sa.json
+    - stage:
+        name: Deploy
+        identifier: deploy
+        description: |
+          Rolls Cloud Run with Harness CD. Terraform (infra/admin/app.tf) owns the
+          service's spec: env, secrets, the Cloud SQL volume, scaling, identity. So
+          the Deploy step does not apply the service's placeholder manifest. Its
+          preExecution exports the live service and the plugin replaces only the
+          image. The export must carry DATABASE_URL, or the step fails before
+          anything is replaced.
+        type: Deployment
+        spec:
+          deploymentType: GoogleCloudRun
+          service:
+            serviceRef: workshop_orchestrator
+            serviceInputs:
+              serviceDefinition:
+                type: GoogleCloudRun
+                spec:
+                  artifacts:
+                    primary:
+                      sources:
+                        - identifier: app
+                          type: GoogleArtifactRegistry
+                          spec:
+                            connectorRef: gcp_build_sa
+                            project: <+pipeline.variables.gcp_project>
+                            version: <+pipeline.stages.preflight.spec.execution.steps.resolve.output.outputVariables.TAG>
+          environment:
+            environmentRef: production
+            deployToAll: false
+            infrastructureDefinitions:
+              - identifier: production_cloud_run
+          execution:
+            steps:
+              - stepGroup:
+                  name: Cloud Run
+                  identifier: cloud_run
+                  # A pod on gcp-account-delegate's cluster. The Cloud Run steps
+                  # are containers and need one; Harness Cloud cannot host them.
+                  stepGroupInfra:
+                    type: KubernetesDirect
+                    spec:
+                      connectorRef: account.Account_GCP_Connector
+                      namespace: harness-delegate-ng
+                  steps:
+                    - step:
+                        type: DownloadManifests
+                        name: Download Manifests
+                        identifier: download_manifests
+                        timeout: 5m
+                        spec: {}
+                    - step:
+                        type: GoogleCloudRunPrepareRollbackData
+                        name: Record Serving Revision
+                        identifier: prepare_rollback
+                        timeout: 10m
+                        spec:
+                          connectorRef: account.harnessImage
+                          image: harness/google-cloud-run-plugin:1.0.9-linux-amd64
+                          imagePullPolicy: IfNotPresent
+                    - step:
+                        type: GoogleCloudRunDeploy
+                        name: Deploy App
+                        identifier: deploy_app
+                        timeout: 15m
+                        spec:
+                          connectorRef: account.harnessImage
+                          image: harness/google-cloud-run-plugin:1.0.9-linux-amd64
+                          imagePullPolicy: IfNotPresent
+                          # Runs in the plugin's shell before the plugin, so the
+                          # manifest it exports here is the one the plugin applies
+                          # (gcloud run services replace). No backslashes: Harness
+                          # unescapes them before the shell sees this, so a sed
+                          # backreference arrives as a control character.
+                          preExecution: |
+                            set -euo pipefail
+                            umask 077
+                            case "$PLUGIN_GCP_SERVICE_ACCOUNT_KEY" in
+                              "{"*) printf '%s' "$PLUGIN_GCP_SERVICE_ACCOUNT_KEY" > /tmp/sa.json ;;
+                              *) printf '%s' "$PLUGIN_GCP_SERVICE_ACCOUNT_KEY" | base64 -d > /tmp/sa.json ;;
+                            esac
+                            gcloud auth activate-service-account --key-file /tmp/sa.json --quiet
+                            rm -f /tmp/sa.json
 
-                      gcloud run services update "$APP_SERVICE" \
-                        --project "$GCP_PROJECT" --region "$REGION" \
-                        --image "$REPO/app:$TAG"
+                            SERVICE=<+pipeline.variables.app_service>
+                            gcloud run services describe "$SERVICE" --project <+pipeline.variables.gcp_project> --region <+pipeline.variables.region> --format export > /tmp/live.yaml
+                            refuse() { echo "::: REFUSED: $*" >&2; exit 1; }
+                            grep -q 'name: DATABASE_URL' /tmp/live.yaml || refuse "the live $SERVICE has no DATABASE_URL"
+                            [ "$(grep -c '^ *image: ' /tmp/live.yaml)" = 1 ] || refuse "expected one container image in the live $SERVICE"
 
-                      for job in $RUNNER_JOBS; do
-                        gcloud run jobs update "$job" \
-                          --project "$GCP_PROJECT" --region "$REGION" \
-                          --image "$REPO/runner:$TAG"
-                      done
+                            # A rollback pins traffic to a named revision, and the
+                            # export carries that pin. Replacing it as-is would give
+                            # the new revision no traffic, so send 100% to latest.
+                            [ "$(grep -c '^  traffic:' /tmp/live.yaml)" = 1 ] || refuse "expected one traffic block in the live $SERVICE"
+                            awk '/^  traffic:/{ print; print "  - latestRevision: true"; print "    percent: 100"; skip=1; next } skip && (/^[^ ]/ || /^ [^ ]/ || /^  [^ -]/){ skip=0 } !skip{ print }' /tmp/live.yaml > /tmp/latest.yaml
+                            [ "$(grep -c 'revisionName:' /tmp/latest.yaml)" = 0 ] || refuse "could not reset the traffic split"
+                            [ "$(grep -c 'latestRevision: true' /tmp/latest.yaml)" = 1 ] || refuse "could not reset the traffic split"
+
+                            IMAGE="$PLUGIN_CLOUD_RUN_SERVICE_CONTAINER_IMAGE_URL"
+                            awk -v img="$IMAGE" '/^ *image: /{ sub(/image: .*/, "image: " img) } { print }' /tmp/latest.yaml > /tmp/next.yaml
+                            grep -qF "image: $IMAGE" /tmp/next.yaml || refuse "could not set the image to $IMAGE"
+                            [ "$(wc -l < /tmp/next.yaml)" = "$(wc -l < /tmp/latest.yaml)" ] || refuse "the image swap changed more than one line"
+                            echo "deploying $IMAGE onto the live spec of $SERVICE"
+
+                            if [ -n "${PLUGIN_CLOUD_RUN_SERVICE_MANIFEST_FILE_PATH:-}" ]; then
+                              cp /tmp/next.yaml "$PLUGIN_CLOUD_RUN_SERVICE_MANIFEST_FILE_PATH"
+                            fi
+                            export PLUGIN_CLOUD_RUN_SERVICE_MANIFEST_FILE_CONTENT="$(cat /tmp/next.yaml)"
+                    - step:
+                        type: Run
+                        name: Update Runner Jobs
+                        identifier: update_runner_jobs
+                        timeout: 10m
+                        # Not GoogleCloudRunJob: that step executes the job after
+                        # replacing it, and these jobs must only run when the app
+                        # or Cloud Scheduler starts them.
+                        spec:
+                          connectorRef: account.harnessImage
+                          image: harness/google-cloud-run-plugin:1.0.9-linux-amd64
+                          imagePullPolicy: IfNotPresent
+                          shell: Bash
+                          envVariables:
+                            GCP_KEY_B64: <+secrets.getValue("gcp_build_sa_key_b64")>
+                            GCP_PROJECT: <+pipeline.variables.gcp_project>
+                            REGION: <+pipeline.variables.region>
+                            REPO: <+pipeline.variables.repo>
+                            RUNNER_JOBS: <+pipeline.variables.runner_jobs>
+                            TAG: <+pipeline.stages.preflight.spec.execution.steps.resolve.output.outputVariables.TAG>
+                          command: |
+                            set -euo pipefail
+                            umask 077
+                            printf '%s' "$GCP_KEY_B64" | base64 -d > /tmp/sa.json
+                            gcloud auth activate-service-account --key-file /tmp/sa.json --quiet
+                            rm -f /tmp/sa.json
+
+                            for job in $RUNNER_JOBS; do
+                              gcloud run jobs update "$job" \
+                                --project "$GCP_PROJECT" --region "$REGION" \
+                                --image "$REPO/runner:$TAG"
+                            done
+            rollbackSteps:
+              - stepGroup:
+                  name: Cloud Run Rollback
+                  identifier: cloud_run_rollback
+                  stepGroupInfra:
+                    type: KubernetesDirect
+                    spec:
+                      connectorRef: account.Account_GCP_Connector
+                      namespace: harness-delegate-ng
+                  steps:
+                    - step:
+                        type: GoogleCloudRunRollback
+                        name: Route Traffic Back
+                        identifier: rollback
+                        timeout: 10m
+                        spec:
+                          connectorRef: account.harnessImage
+                          image: harness/google-cloud-run-plugin:1.0.9-linux-amd64
+                          imagePullPolicy: IfNotPresent
+        failureStrategies:
+          - onFailure:
+              errors:
+                - AllErrors
+              action:
+                type: StageRollback
