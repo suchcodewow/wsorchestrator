@@ -6,9 +6,9 @@ pipeline:
   description: |
     Promotes a commit QA has already run to production
     (https://harnessevents.io, GCP project administration-459416). Nothing
-    triggers it: it is run by hand, and every run stops at an approval only the
-    prod_deployers user group (Shawn) can pass — including runs Shawn starts,
-    so no API key or automation reaches production without a person clicking.
+    triggers it: it is run by hand, and it releases as soon as preflight
+    passes. There is no approval stage; who can start this pipeline is who can
+    release.
 
     It does not rebuild. The images deploy_qa built are copied from QA's
     registry into production's, so production runs byte-for-byte what QA ran.
@@ -25,10 +25,8 @@ pipeline:
              main, when run_infra is "true" — the IaCM workspace always applies
              the head of main, so promoting an older commit while newer
              infrastructure sits on main would ship that infrastructure too.
-      3. Approval — the gate. The message shows the commit and a GitHub compare
-         link from what production runs now.
-      4. Infrastructure — IaCM against admin_control_plane.
-      5. Promote/migrate/deploy — copy images, apply the commit's migrations,
+      3. Infrastructure — IaCM against admin_control_plane.
+      4. Promote/migrate/deploy — copy images, apply the commit's migrations,
          roll Cloud Run.
 
     Stored INLINE in Harness and mirrored at
@@ -210,33 +208,6 @@ pipeline:
                       - name: PROD_TAG
                       - name: SUBJECT
                       - name: COMPARE
-    - stage:
-        name: Approval
-        identifier: approval
-        type: Approval
-        spec:
-          execution:
-            steps:
-              - step:
-                  type: HarnessApproval
-                  name: Approve Production
-                  identifier: approve
-                  timeout: 1d
-                  spec:
-                    approvalMessage: |-
-                      Deploy <+pipeline.stages.preflight.spec.execution.steps.resolve.output.outputVariables.TAG> to production?
-                      <+pipeline.stages.preflight.spec.execution.steps.resolve.output.outputVariables.SUBJECT>
-
-                      Production runs <+pipeline.stages.preflight.spec.execution.steps.resolve.output.outputVariables.PROD_TAG> now.
-                      Changes: <+pipeline.stages.preflight.spec.execution.steps.resolve.output.outputVariables.COMPARE>
-                    includePipelineExecutionHistory: true
-                    isAutoRejectEnabled: false
-                    approvers:
-                      userGroups:
-                        - prod_deployers
-                      minimumCount: 1
-                      disallowPipelineExecutor: false
-                    approverInputs: []
     - stage:
         name: Infrastructure
         identifier: infra
