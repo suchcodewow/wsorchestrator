@@ -15,7 +15,7 @@ in [environments.md](environments.md), and the YAML is mirrored in
 | **Pipelines** (all **INLINE**) | `verify`, `deploy_qa`, `deploy_production` |
 | **Triggers** | `verify_pull_requests` (PR to main → `verify`), `deploy_qa_on_push_main` (push to main → `deploy_qa`) |
 | **IaCM workspaces** | `qa_control_plane` (QA), `admin_control_plane` (production) |
-| **User groups** | `prod_deployers` — the only group that can approve `deploy_production`; `orchestrator_developers` — Project Viewer + Pipeline Executor |
+| **User groups** | `orchestrator_developers` — Project Viewer + Pipeline Executor; `prod_deployers` — gated `deploy_production`'s approval stage until it was removed on 2026-09-30, now unused |
 | **Retired** | `deploy_workshop_orchestrator` and its trigger `deploy_on_push_main` (pushed main straight to production until 2026-09-29) |
 
 ---
@@ -28,10 +28,9 @@ deploy. Use it for any direct REST call, as `x-api-key: <PAT>`.
 
 **That PAT belongs to a person** (`GET /ng/api/user/currentUser` says whose).
 Anything done with it is recorded as that person's action: a pipeline it
-starts shows them as the trigger, and an approval it submits is their
-approval. That is why `deploy_production` asks for approval on every run, even
-one its approver started, and why an agent must never submit a
-`deploy_production` approval.
+starts shows them as the trigger. `deploy_production` has no approval stage,
+so a run started with that PAT releases to production as that person; an agent
+must not start one unless asked to in so many words.
 
 > **Do not read credentials from `~/Library/Application Support/Code/User/mcp.json`.**
 > The PAT in there belongs to a different account (`fjf_VfuITK2bBrMLg5xV7g`) and

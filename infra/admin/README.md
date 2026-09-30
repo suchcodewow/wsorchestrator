@@ -316,7 +316,7 @@ changing them on an existing deployment does nothing. Roll with
 
 This module is applied twice: by the `qa_control_plane` IaCM workspace (QA, on
 every merge to main, via `deploy_qa`) and by `admin_control_plane`
-(production, only when `deploy_production` runs and is approved). Nothing about
+(production, only when `deploy_production` is run by hand). Nothing about
 those pipelines is declared here. Harness holds its own repo connector, and
 each workspace holds its own copy of this module's state and variables.
 [docs/environments.md](../../docs/environments.md) lists the variables that

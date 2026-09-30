@@ -86,9 +86,8 @@ by hand ─▶ deploy_production               (sha = qa by default)
        ├─ 0. Queue            one deploy_production at a time
        ├─ 1. Preflight        resolve the commit; refuse if QA never built it,
        │                      it is not on main, or it is older than prod
-       ├─ 2. Approval         prod_deployers only — every run, no exceptions
-       ├─ 3. Infrastructure   IaCM apply of admin_control_plane (run_infra)
-       └─ 4. Promote/migrate/deploy (as build-sa@administration-459416)
+       ├─ 2. Infrastructure   IaCM apply of admin_control_plane (run_infra)
+       └─ 3. Promote/migrate/deploy (as build-sa@administration-459416)
               ├─ crane copy app + runner from QA's registry to production's
               ├─ db-migrate
               └─ gcloud run services/jobs update
@@ -119,12 +118,12 @@ changing QA.
 | `apply_infra` | `true` | With `run_infra`, apply rather than only plan. |
 | `allow_rollback` | `false` | Permit a commit older than what production runs now. |
 
-**Who can release.** Anyone in `orchestrator_developers` can start either
-pipeline. Only `prod_deployers` can pass production's approval stage. The
-Harness PAT used for API calls from a laptop belongs to its owner, so a run
-started that way waits for the same approval. See
-[docs/environments.md](docs/environments.md#who-can-do-what) for where this
-gate is weaker than it looks.
+**Who can release.** Whoever can start `deploy_production` in Harness can
+release: there is no approval stage, and a run that passes preflight goes
+straight to production. That is Harness RBAC, not this repo. See
+[docs/environments.md](docs/environments.md#who-can-do-what). The approval
+stage was removed on 2026-09-30; its `prod_deployers` user group still exists
+but gates nothing.
 
 > **This replaced a single push-to-production pipeline on 2026-09-29.** That
 > pipeline, `deploy_workshop_orchestrator`, deployed every push to main
@@ -196,7 +195,7 @@ open "https://app.harness.io/ng/account/8mh-FIIHQUapLuB6K0Cd-w/all/orgs/operatio
 ```
 
 **Roll production back** by running `deploy_production` with `sha=<older-sha>`,
-`allow_rollback=true` and `run_infra=false`. It goes through the same approval.
+`allow_rollback=true` and `run_infra=false`.
 Only a commit QA built can be chosen, which in practice is any commit merged
 since QA existed.
 
@@ -204,7 +203,7 @@ since QA existed.
 
 `make deploy TAG=<older-sha>` still works as **break-glass** for production. It
 reads the local `admin_control_plane` outputs, needs the operator's own GCP
-rights on the production project, and skips the approval. Use it only when
+rights on the production project, and skips preflight. Use it only when
 Harness is down.
 
 Rolling back the image does **not** roll back the schema. That is safe in the

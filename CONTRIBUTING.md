@@ -210,7 +210,7 @@ do not touch production.
 
 ```
 branch → pull request → verify → merge to main → deploy_qa → QA
-                                                  deploy_production (approved) → production
+                                                  deploy_production (by hand) → production
 ```
 
 **Work on a branch and open a pull request.** `main` is protected by the
@@ -228,12 +228,11 @@ AWS, Azure and Google Workspace accounts with production, so a workshop you
 run there creates real things. Prefer runs with no cloud, or GCP only.
 [docs/environments.md](docs/environments.md) has the full map.
 
-**Production is a separate, approved release.** `deploy_production` takes a
-commit QA has already built (by default whatever QA runs right now) and copies
-that exact image into production, so production never runs a build QA didn't.
-Anyone may start the pipeline. Every run then stops at an approval that only
-the `prod_deployers` group (Shawn) can pass. The approval message shows the
-commit, what production runs now, and a GitHub compare link between them.
+**Production is a separate release, started by hand.** `deploy_production`
+takes a commit QA has already built (by default whatever QA runs right now) and
+copies that exact image into production, so production never runs a build QA
+didn't. There is no approval stage: once preflight passes, the run releases.
+Leave starting it to Shawn.
 
 Before you open the PR:
 

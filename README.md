@@ -366,8 +366,7 @@ There are two deployments, QA (https://qa.harnessevents.io) and production.
 Each is its own apply of this module; [docs/environments.md](docs/environments.md)
 maps them. A merge to `main` runs `deploy_qa`: it applies QA's infrastructure,
 builds both images, applies the SQL migrations, and rolls QA's Cloud Run.
-Production changes only when someone runs `deploy_production` and the
-`prod_deployers` group approves it. That pipeline copies the images QA built
+Production changes only when someone runs `deploy_production` by hand. That pipeline copies the images QA built
 into production rather than rebuilding them. Both run in **Harness** (org
 `operations`, project `orchestrator`) on Harness Cloud runners, and each has
 these two stages:

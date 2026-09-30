@@ -45,12 +45,12 @@ machine may belong to one. That bypass is for the owner, not for you. Push a
 branch, run `gh pr create`, and stop there unless the user says to merge.
 
 **Production is released by a person, not by you.** `deploy_production` copies
-the image QA built into production, after an approval that only the
-`prod_deployers` group can give. Do not start `deploy_production` unless the
-user asks you to in so many words. **Never approve a production approval,
-even when asked.** The Harness PAT on this machine is the owner's own, so an
-approval you submit is recorded as theirs. Do not change `prod_deployers`,
-the approval stage, or the ruleset either. The full flow is in
+the image QA built into production. It has no approval stage, so **starting it
+is releasing**: once preflight passes it migrates production's database and
+rolls production's Cloud Run. Do not start `deploy_production` unless the user
+asks you to in so many words. The Harness PAT on this machine is the owner's
+own, so a run you start is recorded as theirs. Do not change the ruleset or
+who can run `deploy_production` either. The full flow is in
 [docs/environments.md](docs/environments.md).
 
 **QA is not a sandbox either.** It shares the Harness account, the AWS

@@ -12,7 +12,7 @@ database, secrets and identities.
 | Harness IaCM workspace | `admin_control_plane` | `qa_control_plane` |
 | Identity that applies it | `tf-admin-sa@administration-459416` (connector `gcp_tf_admin`) | `tf-admin-qa@harnessevents-qa` (connector `gcp_tf_admin_qa`) |
 | Identity that builds and deploys it | `build-sa@administration-459416` (connector `gcp_build_sa`) | `build-sa@harnessevents-qa` (connector `gcp_qa_build_sa`) |
-| Deployed by | `deploy_production`: run by hand, approved by `prod_deployers` | `deploy_qa`: every push to `main` |
+| Deployed by | `deploy_production`: run by hand | `deploy_qa`: every push to `main` |
 | Workspace OU for attendees | `/` (one OU per run under it) | `/QA` |
 | Header badge | none | amber `qa` |
 
@@ -25,7 +25,7 @@ branch ──PR──▶ verify (required check) ──merge──▶ main
                                                    │
                                      QA: qa.harnessevents.io
                                                    │
-                        deploy_production (by hand; prod_deployers approves)
+                            deploy_production (by hand)
                                                    │
                                    production: harnessevents.io
 ```
@@ -42,13 +42,13 @@ branch ──PR──▶ verify (required check) ──merge──▶ main
   `main`, that QA never built, or that is older than what production runs now
   (unless `allow_rollback=true`). It also refuses when `infra/admin/*.tf`
   differs between the commit and the head of `main`, because IaCM always
-  applies the head of `main`. After preflight, **every run waits for approval
-  from the `prod_deployers` user group**, including runs Shawn starts himself.
+  applies the head of `main`. There is **no approval stage**: a run that
+  passes preflight releases.
 
 Promote whatever QA is serving now:
 
 ```
-Harness → deploy_production → Run → sha = qa (the default) → approve
+Harness → deploy_production → Run → sha = qa (the default)
 ```
 
 Roll back production to an older commit that QA built:
@@ -94,14 +94,15 @@ author it again on QA; do not copy rows, not even "just the content tables".
 | Push to `main` without a PR | Repository admins (Shawn) | Ruleset bypass list |
 | Deploy QA | Anyone who can merge | The `deploy_qa_on_push_main` trigger |
 | Run a Harness pipeline | Project group `orchestrator_developers` (Pipeline Executor + Project Viewer) | Harness RBAC |
-| Deploy production | Only after `prod_deployers` (Shawn) approves | Approval stage in `deploy_production` |
+| Deploy production | Anyone who can run `deploy_production` | Harness RBAC on the project |
 | Read QA's logs, database and secrets | `developer_members` in `qa_control_plane` | GCP IAM on `harnessevents-qa` |
 
-**Where this is weaker than it looks.** These are the gaps as of 2026-09-29:
+**Where this is weaker than it looks.** These are the gaps as of 2026-09-30:
 
-- **Harness account administrators** can edit `deploy_production`, delete its
-  approval stage, or add themselves to `prod_deployers`. About 18 people have
-  that role. The approval gate is only as strong as that list.
+- **Nothing but Harness RBAC stands between a run and production.** The
+  approval stage was removed on 2026-09-30. Harness account administrators
+  (about 18 people) and anyone given Pipeline Executor on the project can run
+  `deploy_production`, and so can release.
 - **Group `300@harnessevents.io` holds `roles/owner` on production's GCP
   project.** Any member can deploy with `gcloud` directly and skip Harness
   altogether. Anyone added to that group has production access.
