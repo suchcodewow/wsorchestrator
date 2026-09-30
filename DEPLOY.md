@@ -244,6 +244,13 @@ Four constraints come with this design:
   Monitoring. Without that role they fail *after* the rollout, and the rollback
   fails the same way. [infra/admin/cicd.tf](infra/admin/cicd.tf) grants it.
 
+**The Deploy stage is slower than the `gcloud` step it replaced**: about 27s
+then, several minutes now. Two costs account for it. Every plugin step sets up
+`gcloud` from scratch, which is why each step asks for 1 CPU rather than the
+default 0.4. And after the rollout, Deploy App waits at least 2 minutes for
+Cloud Monitoring's instance count, a wait that cannot be switched off. See
+Trap 6 in [docs/harness.md](docs/harness.md).
+
 When you edit Deploy App's `preExecution`, use no backslashes. Harness
 unescapes them before the shell sees the script, so a `sed` backreference such
 as `\1` arrives as a control character. The image swap uses `awk` for that

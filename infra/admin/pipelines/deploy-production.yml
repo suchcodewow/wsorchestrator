@@ -404,6 +404,9 @@ pipeline:
                   identifier: cloud_run
                   # A pod on gcp-account-delegate's cluster. The Cloud Run steps
                   # are containers and need one; Harness Cloud cannot host them.
+                  # Each step asks for 1 CPU: at the default 0.4 every gcloud
+                  # call is 2.5x slower, and 2 CPU is no faster but waits for
+                  # the cluster to find room.
                   stepGroupInfra:
                     type: KubernetesDirect
                     spec:
@@ -423,8 +426,12 @@ pipeline:
                         timeout: 10m
                         spec:
                           connectorRef: account.harnessImage
-                          image: harness/google-cloud-run-plugin:1.0.9-linux-amd64
+                          image: harness/google-cloud-run-plugin:1.0.10-linux-amd64
                           imagePullPolicy: IfNotPresent
+                          resources:
+                            limits:
+                              cpu: "1"
+                              memory: 1Gi
                     - step:
                         type: GoogleCloudRunDeploy
                         name: Deploy App
@@ -432,8 +439,12 @@ pipeline:
                         timeout: 15m
                         spec:
                           connectorRef: account.harnessImage
-                          image: harness/google-cloud-run-plugin:1.0.9-linux-amd64
+                          image: harness/google-cloud-run-plugin:1.0.10-linux-amd64
                           imagePullPolicy: IfNotPresent
+                          resources:
+                            limits:
+                              cpu: "1"
+                              memory: 1Gi
                           # Runs in the plugin's shell before the plugin, so the
                           # manifest it exports here is the one the plugin applies
                           # (gcloud run services replace). No backslashes: Harness
@@ -483,8 +494,12 @@ pipeline:
                         # or Cloud Scheduler starts them.
                         spec:
                           connectorRef: account.harnessImage
-                          image: harness/google-cloud-run-plugin:1.0.9-linux-amd64
+                          image: harness/google-cloud-run-plugin:1.0.10-linux-amd64
                           imagePullPolicy: IfNotPresent
+                          resources:
+                            limits:
+                              cpu: "1"
+                              memory: 1Gi
                           shell: Bash
                           envVariables:
                             GCP_KEY_B64: <+secrets.getValue("gcp_build_sa_key_b64")>
@@ -522,8 +537,12 @@ pipeline:
                         timeout: 10m
                         spec:
                           connectorRef: account.harnessImage
-                          image: harness/google-cloud-run-plugin:1.0.9-linux-amd64
+                          image: harness/google-cloud-run-plugin:1.0.10-linux-amd64
                           imagePullPolicy: IfNotPresent
+                          resources:
+                            limits:
+                              cpu: "1"
+                              memory: 1Gi
         failureStrategies:
           - onFailure:
               errors:

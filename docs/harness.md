@@ -221,3 +221,13 @@ in [DEPLOY.md](../DEPLOY.md)):
   the new revision would serve nothing. Reset the block before replacing.
 - **`GoogleCloudRunJob` executes the job** after replacing it. To change a
   job's image without running it, use a Run step with `gcloud run jobs update`.
+- **A step-group container defaults to 0.4 CPU and 500Mi**, and `gcloud` is
+  CPU-bound at that size: each call takes 10–45s. Every plugin step logs in and
+  runs three `gcloud config set` calls before its real work, so at the default
+  the Deploy stage took over 10 minutes. Set `resources.limits` on each step.
+  1 CPU is about 2.5x faster. 2 CPU is no faster, and its pod waited 84s for
+  the cluster to find room.
+- **The deploy step waits at least 2 minutes after the rollout** for Cloud
+  Monitoring's instance count: it retries every 60s until data appears, then
+  waits another 60s for a stable read, up to 10 minutes in all. It cannot be
+  turned off, so it is a fixed cost of using `GoogleCloudRunDeploy`.
