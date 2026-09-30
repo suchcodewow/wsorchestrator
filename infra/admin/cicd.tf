@@ -35,6 +35,10 @@ resource "google_project_iam_member" "build_deploy" {
   for_each = var.enable_cicd ? toset([
     "roles/run.admin",       # update the app service and the three jobs
     "roles/cloudsql.client", # open a cloud-sql-proxy connection for migrations
+    # The Harness Cloud Run deploy and rollback steps read the service's
+    # instance count from Cloud Monitoring once traffic has moved, and fail the
+    # step (after the rollout) without it.
+    "roles/monitoring.viewer",
   ]) : toset([])
 
   project = var.admin_project_id

@@ -1,0 +1,18 @@
+# Placeholder manifest for the Harness service workshop_orchestrator. It is
+# never applied. Harness requires a Cloud Run service manifest, but Terraform
+# (infra/admin/app.tf) owns the spec, and `gcloud run services replace` needs a
+# complete one. So the Deploy App step's preExecution replaces this with an
+# export of the live service, swaps in the new image, and fails the step if that
+# export is missing DATABASE_URL. See "Cloud Run deploys" in DEPLOY.md.
+#
+# Stored in the project's Harness File Store at /cloud-run-service.yaml and
+# mirrored here. Update both.
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: workshop-orchestrator
+spec:
+  template:
+    spec:
+      containers:
+        - image: <+artifacts.primary.image>

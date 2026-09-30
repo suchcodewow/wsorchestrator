@@ -77,20 +77,24 @@ merge to main ─▶ deploy_qa                 (trigger deploy_qa_on_push_main)
        ├─ 0. Queue            one deploy_qa at a time
        ├─ 1. Verify
        ├─ 2. Infrastructure   IaCM apply of qa_control_plane
-       └─ 3. Build/migrate/deploy (as build-sa@harnessevents-qa)
-              ├─ build app + runner, push to QA's Artifact Registry
-              ├─ db-migrate   ← before the new image is live
-              └─ gcloud run services/jobs update
+       ├─ 3. Build and migrate (as build-sa@harnessevents-qa)
+       │      ├─ build app + runner, push to QA's Artifact Registry
+       │      └─ db-migrate   ← before the new image is live
+       └─ 4. Deploy           CD stage: env qa, infra qa_cloud_run
+              ├─ record the serving revision, roll the app, update the jobs
+              └─ on failure: traffic back to the recorded revision
 
 by hand ─▶ deploy_production               (sha = qa by default)
        ├─ 0. Queue            one deploy_production at a time
        ├─ 1. Preflight        resolve the commit; refuse if QA never built it,
        │                      it is not on main, or it is older than prod
        ├─ 2. Infrastructure   IaCM apply of admin_control_plane (run_infra)
-       └─ 3. Promote/migrate/deploy (as build-sa@administration-459416)
-              ├─ crane copy app + runner from QA's registry to production's
-              ├─ db-migrate
-              └─ gcloud run services/jobs update
+       ├─ 3. Promote and migrate (as build-sa@administration-459416)
+       │      ├─ crane copy app + runner from QA's registry to production's
+       │      └─ db-migrate
+       └─ 4. Deploy           CD stage: env production, infra production_cloud_run
+              ├─ record the serving revision, roll the app, update the jobs
+              └─ on failure: traffic back to the recorded revision
 ```
 
 **Production never builds.** It promotes the exact image digest QA ran, so
@@ -164,11 +168,93 @@ schema from nothing.
 `cloudbuild.yaml` are gated on the `_DEPLOY` substitution, which nothing sets
 any more — they run only if someone invokes that file by hand.
 
+### Cloud Run deploys
+
+Each pipeline's last stage is a Harness CD **Deployment** stage of type Google
+Cloud Run, not a script. The stage deploys the same service to two places:
+
+| Harness entity | QA | Production |
+| --- | --- | --- |
+| Service | `workshop_orchestrator` | `workshop_orchestrator` |
+| Environment | `qa` (PreProduction) | `production` (Production) |
+| Infrastructure definition | `qa_cloud_run`: `gcp_qa_build_sa`, `harnessevents-qa` | `production_cloud_run`: `gcp_build_sa`, `administration-459416` |
+| Artifact version | the build stage's `TAG` output | preflight's `TAG` output |
+
+The stage runs these steps:
+
+1. **Download Manifests.**
+2. **Record Serving Revision** (`GoogleCloudRunPrepareRollbackData`) saves the
+   revision and traffic split that are live now.
+3. **Deploy App** (`GoogleCloudRunDeploy`) runs `gcloud run services replace`
+   and sends 100% of traffic to the new revision.
+4. **Update Runner Jobs** is a plain Run step that calls `gcloud run jobs
+   update` for `tf-runner`, `tf-reaper` and `tf-scheduler`. It is not
+   `GoogleCloudRunJob`, because that step also *executes* the job, and these
+   jobs must only run when the app or Cloud Scheduler starts them.
+
+If any step fails, the stage rolls back. **Route Traffic Back**
+(`GoogleCloudRunRollback`) returns traffic to the revision recorded in step 2.
+The rollback does not touch the jobs or the database.
+
+**Terraform still owns the service's spec**, not Harness. The spec is the
+~40 env vars and secret refs, the Cloud SQL volume, scaling, `app-sa` and
+resources, all in [infra/admin/app.tf](infra/admin/app.tf). `services replace`
+applies a *complete* spec, so the service's manifest in Harness is only a
+placeholder and is never applied. Instead, Deploy App's `preExecution` works
+from the live service:
+
+1. It exports the live service with `gcloud run services describe --format
+   export`.
+2. It refuses to continue unless the export contains `DATABASE_URL` and
+   exactly one container image.
+3. It resets the traffic block to 100% on the latest revision (see below).
+4. It swaps in the new image and hands the result to the plugin as its
+   manifest.
+
+A Terraform change to the service therefore reaches the next deploy with
+nothing to copy into Harness.
+
+The CD entities (service, environments, infrastructure definitions) are mirrored
+in [infra/admin/pipelines/cd-entities.yml](infra/admin/pipelines/cd-entities.yml)
+and the placeholder manifest in
+[infra/admin/pipelines/cloud-run-service.yaml](infra/admin/pipelines/cloud-run-service.yaml).
+Like the pipelines, the Harness copy is the one that runs. The placeholder
+lives in the Harness File Store at `/cloud-run-service.yaml`, because Harness
+refuses an Inline store for a `GoogleCloudRunService` manifest.
+
+Four constraints come with this design:
+
+- **These steps need the delegate.** The Cloud Run steps are containers and
+  cannot run on Harness Cloud. They run in a step group whose pods start in
+  namespace `harness-delegate-ng`, through the account connector
+  `Account_GCP_Connector` and `gcp-account-delegate`. If that delegate is
+  down, the build stages pass and the deploy stage waits. The plugin image
+  `harness/google-cloud-run-plugin` is pulled through `account.harnessImage`.
+- **A Harness rollback leaves the traffic split pinned.** After a Route
+  Traffic Back, traffic points at a named revision rather than "latest", and
+  the export carries that pin. Replaced as-is, the export would give the next
+  deploy's new revision no traffic at all. That is why Deploy App rewrites the
+  traffic block to `latestRevision: true` before the replace. Terraform
+  declares no `traffic` block, so it does not fight either state.
+- **Changing the service in Harness does nothing to its spec.** To change an
+  env var, scaling or the service account, edit `app.tf` and let the
+  Infrastructure stage apply it.
+- **`build-sa` needs `roles/monitoring.viewer`.** Once traffic has moved,
+  the deploy and rollback steps read the service's instance count from Cloud
+  Monitoring. Without that role they fail *after* the rollout, and the rollback
+  fails the same way. [infra/admin/cicd.tf](infra/admin/cicd.tf) grants it.
+
+When you edit Deploy App's `preExecution`, use no backslashes. Harness
+unescapes them before the shell sees the script, so a `sed` backreference such
+as `\1` arrives as a control character. The image swap uses `awk` for that
+reason.
+
 ### One-time setup
 
 `enable_cicd = true` on the environment's workspace, then apply. The apply
 grants `build-sa` what it needs beyond building: `run.admin` to roll the
-service and jobs, `cloudsql.client` for the migration proxy, `secretAccessor` on
+service and jobs, `cloudsql.client` for the migration proxy, `monitoring.viewer`
+for the Cloud Run deploy step's post-rollout check, `secretAccessor` on
 `database-url`, and `serviceAccountUser` scoped to just `app-sa` and
 `runner-sa`. It is not project-wide, so build-sa cannot impersonate anything
 else.

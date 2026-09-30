@@ -1,0 +1,86 @@
+# The Harness CD entities the Deploy stage of deploy_qa and deploy_production
+# uses: one service, two environments, one infrastructure definition each.
+# Like the pipelines beside this file, they are stored in Harness (org
+# `operations`, project `orchestrator`) and mirrored here for review only —
+# editing this file changes nothing. Update the entity in Harness (REST:
+# /ng/api/servicesV2, /ng/api/environmentsV2, /ng/api/infrastructures) and this
+# copy in the same change. The service's manifest is the File Store file
+# mirrored at cloud-run-service.yaml.
+---
+service:
+  name: workshop-orchestrator
+  identifier: workshop_orchestrator
+  orgIdentifier: operations
+  projectIdentifier: orchestrator
+  description: The app's Cloud Run service. Terraform (infra/admin/app.tf) owns its spec; the deploy step exports the live spec and changes only the image. Its manifest is a placeholder in the File Store, mirrored at infra/admin/pipelines/cloud-run-service.yaml.
+  serviceDefinition:
+    type: GoogleCloudRun
+    spec:
+      manifests:
+        - manifest:
+            identifier: cloud_run_service
+            type: GoogleCloudRunService
+            spec:
+              store:
+                type: Harness
+                spec:
+                  files:
+                    - /cloud-run-service.yaml
+      artifacts:
+        primary:
+          primaryArtifactRef: app
+          sources:
+            - identifier: app
+              type: GoogleArtifactRegistry
+              spec:
+                connectorRef: <+input>
+                project: <+input>
+                region: us-central1
+                repositoryName: workshop-orchestrator
+                package: app
+                repositoryType: docker
+                version: <+input>
+---
+environment:
+  name: qa
+  identifier: qa
+  orgIdentifier: operations
+  projectIdentifier: orchestrator
+  type: PreProduction
+  description: "QA — harnessevents-qa, qa.harnessevents.io. deploy_qa deploys here."
+---
+environment:
+  name: production
+  identifier: production
+  orgIdentifier: operations
+  projectIdentifier: orchestrator
+  type: Production
+  description: "Production — administration-459416, harnessevents.io. deploy_production deploys here, after prod_deployers approves."
+---
+infrastructureDefinition:
+  name: qa_cloud_run
+  identifier: qa_cloud_run
+  orgIdentifier: operations
+  projectIdentifier: orchestrator
+  environmentRef: qa
+  deploymentType: GoogleCloudRun
+  type: GoogleCloudRun
+  allowSimultaneousDeployments: false
+  spec:
+    connectorRef: gcp_qa_build_sa
+    project: harnessevents-qa
+    region: us-central1
+---
+infrastructureDefinition:
+  name: production_cloud_run
+  identifier: production_cloud_run
+  orgIdentifier: operations
+  projectIdentifier: orchestrator
+  environmentRef: production
+  deploymentType: GoogleCloudRun
+  type: GoogleCloudRun
+  allowSimultaneousDeployments: false
+  spec:
+    connectorRef: gcp_build_sa
+    project: administration-459416
+    region: us-central1

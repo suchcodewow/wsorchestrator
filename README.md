@@ -368,21 +368,24 @@ maps them. A merge to `main` runs `deploy_qa`: it applies QA's infrastructure,
 builds both images, applies the SQL migrations, and rolls QA's Cloud Run.
 Production changes only when someone runs `deploy_production` by hand. That pipeline copies the images QA built
 into production rather than rebuilding them. Both run in **Harness** (org
-`operations`, project `orchestrator`) on Harness Cloud runners, and each has
-these two stages:
+`operations`, project `orchestrator`), and each has these three stages:
 
 1. **Infrastructure**, an IaCM stage against the environment's workspace:
    `qa_control_plane` or `admin_control_plane`. The workspace owns this
    module's state, its OpenTofu version, its variable values, and the GCP
    credential it plans as, so nothing has to be reconstructed per run. The apply step only runs when the plan reported
    changes, which for a code-only commit it will not.
-2. **Build/migrate/deploy**, a CI stage. QA builds; production copies QA's images.
-   Both images go to Artifact Registry, then
-   the migrations, then `gcloud run services update`. Migrations run *before*
-   the new image goes live — they only add columns with defaults, so the
-   currently-running revision keeps working against the migrated schema, where
-   the reverse order would serve a new image against a schema missing columns it
-   reads on every request.
+2. **Build and migrate**, a CI stage. QA builds; production copies QA's images.
+   Both images go to Artifact Registry, then the migrations run. Migrations run
+   *before* the new image goes live — they only add columns with defaults, so
+   the currently-running revision keeps working against the migrated schema,
+   where the reverse order would serve a new image against a schema missing
+   columns it reads on every request.
+3. **Deploy**, a Harness CD stage of type Google Cloud Run. It rolls the
+   service and points the runner jobs at the new image. On failure it routes
+   traffic back to the revision that was serving. Terraform still owns the
+   service's spec: the stage exports the live service and changes only the
+   image. [DEPLOY.md](DEPLOY.md#cloud-run-deploys) explains why.
 
 Three `deploy_qa` variables narrow a manual run: `run_infra=false` skips the
 infrastructure stage, `apply_infra=false` plans without applying, `deploy=false`
