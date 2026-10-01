@@ -33,7 +33,7 @@ export async function assertScratchDatabase(url = testDatabaseUrl()): Promise<vo
   } catch (err) {
     throw new Error(
       `cannot reach the test database (${redact(url)}): ${(err as Error).message}. ` +
-        "Start it with `npm run db:up`.",
+        "Create it with `npm run dev:setup`, or start the container with `npm run db:up`.",
     );
   }
   try {

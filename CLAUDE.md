@@ -3,6 +3,36 @@
 Guidance for AI coding agents. Humans: [CONTRIBUTING.md](CONTRIBUTING.md) is the
 one to read.
 
+## Getting a working checkout
+
+`frontend/` is the Next.js app and owns the database schema; `runner/` is the
+Cloud Run job that provisions workshops; `infra/admin/` is the control-plane
+Terraform. From a fresh clone:
+
+```bash
+cd frontend && npm install && npm run dev:setup   # .env, Postgres, both local databases
+cd ../runner && npm install
+```
+
+`dev:setup` is safe to re-run: it creates what is missing and leaves any
+database that already has tables alone. After it, every check under
+[Before saying you are done](#before-saying-you-are-done) passes with **no
+credentials at all**. If one fails on an untouched checkout, the setup is
+wrong, not the code; say so rather than working around it.
+
+What a contributor's machine usually does *not* have: Google OAuth values in
+`.env`, `infra/admin/terraform.tfvars` (which holds the Harness PAT), and
+gcloud access to production. Without OAuth you cannot sign in through the
+browser; to see a signed-in page, use the session-row technique in
+[TESTING.md](TESTING.md#a-screenshot-of-a-signed-in-page). Anything in
+`docs/harness.md` or `docs/operations.md` that needs the others is for someone
+who holds them. Say what you need and stop; do not look for a credential
+elsewhere.
+
+Before investigating a failure in the deployed app, read
+[Known issues](docs/operations.md#known-issues). Several things that look broken
+are expected or were deliberately left alone.
+
 ## Guardrails
 
 These are the mistakes that have actually been made here, each of which
@@ -127,5 +157,5 @@ docker exec workshoporchestrator-postgres-1 psql -U postgres -d workshops_agent 
 | [README.md](README.md) | What the product does, architecture, standing up a new deployment |
 | [DEPLOY.md](DEPLOY.md) | Makefile targets, the deploy pipeline, rollback |
 | [TESTING.md](TESTING.md) | Why the runner's tests exist; exercising code without deploying |
-| [docs/operations.md](docs/operations.md) | The deployed environment, its quirks, production data, known outages |
+| [docs/operations.md](docs/operations.md) | The deployed environment, its quirks, production data, known issues |
 | [docs/harness.md](docs/harness.md) | Harness API access and the pipeline/trigger traps |

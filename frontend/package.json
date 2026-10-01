@@ -21,7 +21,7 @@
     "db:studio": "drizzle-kit studio",
     "db:up": "docker compose -f ../docker-compose.yml up -d",
     "db:down": "docker compose -f ../docker-compose.yml down",
-    "dev:setup": "docker compose -f ../docker-compose.yml up -d --wait && drizzle-kit push --force"
+    "dev:setup": "docker compose -f ../docker-compose.yml up -d --wait && node scripts/dev-setup.mjs"
   },
   "dependencies": {
     "@auth/drizzle-adapter": "^1.7.4",
