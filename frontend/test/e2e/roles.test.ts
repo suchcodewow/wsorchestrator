@@ -161,7 +161,6 @@ const PAGES: Record<string, PageCase> = {
   },
   "/runs/<own event>": { path: () => "/runs/:own", expect: gated(canUseEvents) },
   "/runs/<someone else's>": { path: () => `/runs/${aliceRun}`, expect: gated(canSeeAllEvents) },
-  "/contribute": { path: () => "/contribute", expect: gated(canUseEvents) },
   "/scheduler": { path: () => "/scheduler", expect: gated(canUseScheduler) },
   "/scheduler-settings": {
     path: () => "/scheduler-settings",
@@ -338,7 +337,6 @@ const ROUTES: RouteCase[] = [
   { method: "POST", path: `/api/component-sets/${MISSING}/submit`, allowed: canContributeComponents },
   { method: "POST", path: `/api/component-sets/${MISSING}/approve`, allowed: canPublishComponents },
   { method: "POST", path: "/api/components/validate", allowed: canContributeComponents, body: () => ({}) },
-  { method: "GET", path: "/api/components/bundle", allowed: canContributeComponents, sessionOnly: true },
 
   // Event guides
   { method: "GET", path: "/api/lab-guides", allowed: "public" },
@@ -502,7 +500,6 @@ describe("personal access tokens", () => {
     for (const [method, path] of [
       ["GET", "/api/tokens"],
       ["POST", "/api/tokens"],
-      ["GET", "/api/components/bundle"],
       ["POST", "/api/database/query"],
     ]) {
       const { status } = await send({ bearer: contributorToken }, method!, path!, method === "GET" ? undefined : {});

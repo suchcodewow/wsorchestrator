@@ -1,5 +1,5 @@
 /**
- * Which component references which, as the Contribute page shows it.
+ * Which component references which, as `GET /api/components` reports it.
  *
  * Dependencies are inferred from `org.<identifier>` references inside a spec —
  * a connector's `secretKeyRef: org.gcp_service_account`, a template's

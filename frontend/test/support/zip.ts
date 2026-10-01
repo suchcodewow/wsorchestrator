@@ -1,4 +1,4 @@
-/** Packs entries into a ZIP archive. */
+/** Packs entries into a ZIP archive, for building .xlsx fixtures. */
 
 import { deflateRawSync } from "node:zlib";
 
