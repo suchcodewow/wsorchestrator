@@ -23,10 +23,6 @@ export default async function SchedulerSettingsPage() {
   if (!canManageSchedulerSettings(session.user.access)) notFound();
 
   return (
-    <ComingSoon
-      title="Scheduler settings"
-      description="Configuration for the scheduler, visible only to scheduler administrators."
-      Icon={CalendarCog}
-    />
+    <ComingSoon title="Scheduler settings" Icon={CalendarCog} />
   );
 }

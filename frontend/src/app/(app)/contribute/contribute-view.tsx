@@ -201,12 +201,8 @@ export function ContributeView({
       animate="show"
       className="space-y-8"
     >
-      <motion.div variants={riseChild} className="space-y-1.5">
+      <motion.div variants={riseChild}>
         <h1 className="text-3xl font-medium tracking-tight">Contribute</h1>
-        <p className="text-muted-foreground">
-          Add Harness secrets, connectors, and templates to what every workshop
-          gets.
-        </p>
       </motion.div>
 
       {error && (

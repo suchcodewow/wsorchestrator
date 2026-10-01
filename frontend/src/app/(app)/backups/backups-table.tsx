@@ -144,11 +144,6 @@ export function BackupsTable({
       <div className="flex items-start justify-between gap-6">
         <div>
           <h1 className="text-2xl font-medium tracking-tight">Backups</h1>
-          <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-            Cloud SQL backs up{" "}
-            <code className="text-foreground">{instance ?? "the database"}</code>{" "}
-            every night and keeps a week of them.
-          </p>
         </div>
 
         <Button

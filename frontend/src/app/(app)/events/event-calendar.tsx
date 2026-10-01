@@ -5,7 +5,7 @@
 import { isActiveStatus, statusChip, statusDot } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import type { CalendarScope, Cloud, EventMode, RunStatus } from "@/db/schema";
+import type { Cloud, EventMode, RunStatus } from "@/db/schema";
 import { DAY_SECONDS } from "@/db/schema";
 import { EASE, SPRING_SNAPPY } from "@/lib/motion";
 import { cn } from "@/lib/utils";
@@ -75,10 +75,8 @@ function eventTitle(e: CalendarEvent, days: number): string {
 
 export function EventCalendar({
   events,
-  scope,
 }: {
   events: CalendarEvent[];
-  scope: CalendarScope;
 }) {
   const router = useRouter();
   const today = new Date();
@@ -266,11 +264,6 @@ export function EventCalendar({
         >
           <div className="space-y-1.5">
             <h1 className="text-3xl font-medium tracking-tight">Orchestrator</h1>
-            <p className="text-muted-foreground">
-              {scope === "all"
-                ? "Every user's events, including your own."
-                : "Schedule events - each will be provisioned automatically at its start time."}
-            </p>
           </div>
           <div className="flex items-center gap-2">
             <Button variant="outline" onClick={openChallenge}>

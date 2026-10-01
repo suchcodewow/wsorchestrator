@@ -201,10 +201,6 @@ export function CloudStatus({
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="max-w-2xl">
           <h1 className="text-2xl font-medium tracking-tight">Cloud Status</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            What each cloud is carrying, with anything no run claims flagged
-            here.
-          </p>
         </div>
         <Button variant="outline" size="sm" onClick={refresh} disabled={pending}>
           {pending ? <Loader2 className="animate-spin" /> : <RefreshCw />}

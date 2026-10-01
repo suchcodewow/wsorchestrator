@@ -1,7 +1,6 @@
 /** The template sources page. */
 
 import { TemplatesView } from "@/components/templates-view";
-import { harnessBaseUrl } from "@/lib/harness-platform";
 import {
   checkTemplateSources,
   listTemplateSources,
@@ -15,7 +14,6 @@ export default async function TemplateSourcesPage() {
     <TemplatesView
       sources={sources}
       status={await checkTemplateSources(sources)}
-      baseUrl={harnessBaseUrl()}
       configured={secretsConfigured()}
     />
   );

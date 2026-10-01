@@ -105,28 +105,10 @@ export function OrgSecretsView({
       animate="show"
       className="space-y-6"
     >
-      <motion.div variants={riseChild} className="space-y-1.5">
+      <motion.div variants={riseChild}>
         <h2 className="text-xl font-medium tracking-tight">
           {mine ? "My org secrets" : "Org secrets"}
         </h2>
-        <p className="text-sm leading-relaxed text-muted-foreground">
-          {mine ? (
-            <>
-              Every secret here is created in each Harness organization{" "}
-              <em>you</em>{" "}
-              deploy, alongside the site&rsquo;s own org secrets. One of yours
-              named the same as a site secret is the one that gets written. A
-              connector can reference either as{" "}
-              <span className="font-mono text-xs">org.&lt;id&gt;</span>.
-            </>
-          ) : (
-            <>
-              Every secret here is created in each new workshop&rsquo;s Harness
-              organization, where a connector can reference it as{" "}
-              <span className="font-mono text-xs">org.&lt;id&gt;</span>.
-            </>
-          )}
-        </p>
       </motion.div>
 
       {!configured && (

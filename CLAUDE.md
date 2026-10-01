@@ -121,6 +121,17 @@ Never hard-code `administration-459416` or `harnessevents.io` in a new
 resource. A `.tf` change reaches QA on merge but reaches production only when
 `deploy_production` runs with `run_infra=true`.
 
+**A heading's subtitle must earn its place with a live value.** A `<p>` under
+an `<h1>`/`<h2>`/`<h3>` stays only if it leads with or consists of something
+that changes at runtime — a count, a timestamp, a configured value, a name.
+Prose that only explains what the page is or how it works, with nothing live
+in it, gets deleted rather than written in the first place; don't reach for a
+subtitle to restate what the heading and the surrounding controls already
+make obvious. `frontend/src/app/(app)/evals-settings/employees/employees-table.tsx`
+("N active employees, as of the HiBob sync on {date}") is the shape to copy;
+a page like the old `frontend/src/app/(app)/settings/layout.tsx` ("Configuration
+for running events, visible only to administrators.") is the shape to avoid.
+
 ## Before saying you are done
 
 ```bash

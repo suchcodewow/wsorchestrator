@@ -5,19 +5,14 @@ import { Card, CardContent } from "@/components/ui/card";
 
 export function ComingSoon({
   title,
-  description,
   Icon,
 }: {
   title: string;
-  description: string;
   Icon: LucideIcon;
 }) {
   return (
     <div className="space-y-8">
-      <div className="space-y-1.5">
-        <h1 className="text-3xl font-medium tracking-tight">{title}</h1>
-        <p className="text-muted-foreground">{description}</p>
-      </div>
+      <h1 className="text-3xl font-medium tracking-tight">{title}</h1>
 
       <Card>
         <CardContent className="flex flex-col items-center gap-3 py-16 text-center">

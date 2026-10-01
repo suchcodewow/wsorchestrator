@@ -51,8 +51,6 @@ export function DomainsView({
   const [editing, setEditing] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
 
-  const restricted = domains.length + envDomains.length > 0;
-
   async function send(
     key: string,
     url: string,
@@ -87,21 +85,8 @@ export function DomainsView({
       animate="show"
       className="space-y-6"
     >
-      <motion.div variants={riseChild} className="space-y-1.5">
+      <motion.div variants={riseChild}>
         <h2 className="text-xl font-medium tracking-tight">Sign-in domains</h2>
-        <p className="text-sm leading-relaxed text-muted-foreground">
-          {restricted ? (
-            <>Only these email domains can sign in.</>
-          ) : (
-            <>
-              <span className="font-medium text-foreground">
-                Anyone with a Google account can sign in
-              </span>{" "}
-              — add a domain to limit that.
-            </>
-          )}{" "}
-          Attendees never sign in, so this does not affect them.
-        </p>
       </motion.div>
 
       {error && (

@@ -40,9 +40,6 @@ export default async function GuideLibraryPage() {
       <div className="mt-6 flex items-start justify-between gap-6">
         <div>
           <h1 className="text-2xl font-medium tracking-tight">Lab guides</h1>
-          <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-            Every guide, each written once and reusable in any workshop.
-          </p>
         </div>
 
         {canEdit && (

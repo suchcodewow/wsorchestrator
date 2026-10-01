@@ -89,13 +89,8 @@ export function ReposView({ repos }: { repos: RepoRow[] }) {
       animate="show"
       className="space-y-6"
     >
-      <motion.div variants={riseChild} className="space-y-1.5">
+      <motion.div variants={riseChild}>
         <h2 className="text-xl font-medium tracking-tight">GitHub Repos</h2>
-        <p className="text-sm leading-relaxed text-muted-foreground">
-          Every repository here is imported into Harness Code when a workshop is
-          created — once into the event&rsquo;s organization, or once into each
-          attendee&rsquo;s own project, whichever this list says.
-        </p>
       </motion.div>
 
       {error && (

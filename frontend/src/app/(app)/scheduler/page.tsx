@@ -15,10 +15,6 @@ export default async function SchedulerPage() {
   if (!canUseScheduler(session.user.access)) notFound();
 
   return (
-    <ComingSoon
-      title="Scheduler"
-      description="Visible to scheduler viewers and administrators."
-      Icon={CalendarClock}
-    />
+    <ComingSoon title="Scheduler" Icon={CalendarClock} />
   );
 }
