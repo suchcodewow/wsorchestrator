@@ -1,13 +1,6 @@
 /** How eVals settings writes dates, scores and lists. */
 
-import { EXEMPT_DATE, type EvalsTitleList } from "@/db/schema";
-
-/** The colour of each list's badge. */
-export const LIST_BADGE: Record<EvalsTitleList, string> = {
-  sales: "border-transparent bg-sky-500/15 text-sky-700 dark:text-sky-300",
-  engineer: "border-transparent bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
-  ignored: "border-transparent bg-muted text-muted-foreground",
-};
+import { EXEMPT_DATE } from "@/db/schema";
 
 const DATE = new Intl.DateTimeFormat("en-US", {
   month: "short",

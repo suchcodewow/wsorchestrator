@@ -14,7 +14,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         notes:
           "pendingAdmins lists the SITE_ADMIN_EMAILS addresses that have not signed in yet.",
         returns:
-          "{ users: { id, name, email, eventRole, schedulerRole, evalsRole, isPlatformAdmin, isBootstrapAdmin, eventCount }[], pendingAdmins: string[] }",
+          "{ users: { id, name, email, eventRole, trainingRole, evalsRole, isPlatformAdmin, isBootstrapAdmin, eventCount }[], pendingAdmins: string[] }",
       },
       {
         method: "PATCH",
@@ -30,7 +30,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           fields: [
             {
               name: "area",
-              type: `"event" | "scheduler" | "evals" | "platform"`,
+              type: `"event" | "training" | "evals" | "platform"`,
               required: true,
               note: "picks which of the fields below applies",
             },
@@ -42,7 +42,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
             {
               name: "role",
               type: `"viewer" | "administrator" | null`,
-              note: "required when area is scheduler or evals; null removes access",
+              note: "required when area is training or evals; null removes access",
             },
             { name: "value", type: "boolean", note: "required when area is platform" },
           ],
@@ -92,7 +92,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
               note: `null or "none" grants no event access`,
             },
             {
-              name: "schedulerRole",
+              name: "trainingRole",
               type: `"viewer" | "administrator" | null`,
               required: true,
             },
@@ -234,85 +234,21 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         ],
       },
       {
-        method: "POST",
-        path: "/api/evals/attendee-tracking",
-        summary: "Adds one person to bootcamp history.",
+        method: "PUT",
+        path: "/api/evals/org-leader",
+        summary: "Sets the Organization Leader whose reports eVals draws attendees from.",
         access: "evalsAdmin",
         token: true,
         body: {
           kind: "json",
           fields: [
-            { name: "email", type: "string", required: true, note: "up to 320 characters; stored lowercased" },
-            { name: "btcDate", type: "string | null", required: true, note: "YYYY-MM-DD" },
-            { name: "intDate", type: "string | null", required: true, note: "YYYY-MM-DD" },
-            { name: "btcScore", type: "number | null", required: true },
-            { name: "intScore", type: "number | null", required: true },
-          ],
-        },
-        returns: "{ id: string }",
-        errors: [
-          { status: 400, error: "invalid", when: "a field is missing or malformed" },
-          { status: 409, error: "duplicate", when: "that email already has a row" },
-        ],
-      },
-      {
-        method: "PATCH",
-        path: "/api/evals/attendee-tracking/{id}",
-        summary: "Edits one person's bootcamp history.",
-        access: "evalsAdmin",
-        token: true,
-        notes: "Changes only the fields you send.",
-        params: [{ name: "id", type: "string", required: true, note: "UUID" }],
-        body: {
-          kind: "json",
-          fields: [
-            { name: "email", type: "string", note: "up to 320 characters; stored lowercased" },
-            { name: "btcDate", type: "string | null", note: "YYYY-MM-DD" },
-            { name: "intDate", type: "string | null", note: "YYYY-MM-DD" },
-            { name: "btcScore", type: "number | null" },
-            { name: "intScore", type: "number | null" },
+            { name: "email", type: "string", required: true, note: "an employee from the last HiBob sync; stored lowercased" },
           ],
         },
         returns: "{ ok: true }",
         errors: [
-          { status: 400, error: "invalid", when: "a field is malformed" },
-          { status: 404, error: "not_found", when: "id is not a UUID, or no such row" },
-          { status: 409, error: "duplicate", when: "the new email already has a row" },
-        ],
-      },
-      {
-        method: "DELETE",
-        path: "/api/evals/attendee-tracking/{id}",
-        summary: "Removes one person's bootcamp history.",
-        access: "evalsAdmin",
-        token: true,
-        params: [{ name: "id", type: "string", required: true, note: "UUID" }],
-        returns: "{ ok: true }",
-        errors: [{ status: 404, error: "not_found", when: "id is not a UUID, or no such row" }],
-      },
-      {
-        method: "POST",
-        path: "/api/evals/attendee-tracking/import",
-        summary: "Imports a Bootcamp_History sheet into bootcamp history.",
-        access: "evalsAdmin",
-        token: true,
-        notes:
-          "Rows are matched by email and upserted in one transaction. Only the columns the sheet has are written, and a blank cell in one of them clears it. Emails not in the file are left alone.",
-        body: {
-          kind: "multipart",
-          fields: [
-            { name: "file", type: "file", required: true, note: ".xlsx or .csv; up to 5 MB and 20,000 rows" },
-          ],
-        },
-        returns: "{ added: number, updated: number, problems: { row: number, message: string }[], ignoredColumns: string[] }",
-        errors: [
-          { status: 400, error: "malformed", when: "the body is not multipart form data" },
-          { status: 400, error: "no_file", when: "no file, or an empty one" },
-          { status: 400, error: "unreadable", when: "the file could not be read as a spreadsheet" },
-          { status: 400, error: "empty", when: "no header row was found" },
-          { status: 400, error: "no_email_column", when: "the header has no email column" },
-          { status: 413, error: "too_large", when: "the file is over 5 MB" },
-          { status: 413, error: "too_many_rows", when: "the sheet has over 20,000 rows" },
+          { status: 400, error: "invalid", when: "email is missing or malformed" },
+          { status: 400, error: "not_an_employee", when: "the last HiBob sync did not import that email" },
         ],
       },
     ],
@@ -565,7 +501,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
               name: "snapshot[]",
               type: "object[]",
               required: true,
-              note: "QA's users before the restore: id, email, name, image, eventRole, schedulerRole, evalsRole, isPlatformAdmin, calendarScope, accounts[]",
+              note: "QA's users before the restore: id, email, name, image, eventRole, trainingRole, evalsRole, isPlatformAdmin, calendarScope, accounts[]",
             },
           ],
         },

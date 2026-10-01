@@ -9,7 +9,7 @@ import {
   workshopRuns,
   type EvalsRole,
   type EventRole,
-  type SchedulerRole,
+  type TrainingRole,
 } from "@/db/schema";
 import { canDeleteUsers, canManageRoles, type Access } from "@/lib/roles";
 import { countRunsForUsers } from "@/lib/runs";
@@ -20,7 +20,7 @@ export type SiteUser = {
   name: string | null;
   email: string | null;
   eventRole: EventRole;
-  schedulerRole: SchedulerRole | null;
+  trainingRole: TrainingRole | null;
   evalsRole: EvalsRole | null;
   isPlatformAdmin: boolean;
   /** Listed in SITE_ADMIN_EMAILS, so made a platform administrator on every sign-in. */
@@ -36,7 +36,7 @@ export async function listSiteUsers(): Promise<SiteUser[]> {
         name: users.name,
         email: users.email,
         eventRole: users.eventRole,
-        schedulerRole: users.schedulerRole,
+        trainingRole: users.trainingRole,
         evalsRole: users.evalsRole,
         isPlatformAdmin: users.isPlatformAdmin,
       })
@@ -54,7 +54,7 @@ export async function listSiteUsers(): Promise<SiteUser[]> {
 
 export type RoleChange =
   | { area: "event"; role: EventRole }
-  | { area: "scheduler"; role: SchedulerRole | null }
+  | { area: "training"; role: TrainingRole | null }
   | { area: "evals"; role: EvalsRole | null }
   | { area: "platform"; value: boolean };
 
@@ -101,8 +101,8 @@ export async function setUserRole(
   const set =
     change.area === "event"
       ? { eventRole: change.role }
-      : change.area === "scheduler"
-        ? { schedulerRole: change.role }
+      : change.area === "training"
+        ? { trainingRole: change.role }
         : change.area === "evals"
           ? { evalsRole: change.role }
           : { isPlatformAdmin: change.value };

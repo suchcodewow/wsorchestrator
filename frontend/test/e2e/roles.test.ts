@@ -34,7 +34,7 @@ import {
   canManageBackups,
   canManageEvalsSettings,
   canManageLabGuides,
-  canManageSchedulerSettings,
+  canManageTrainingSettings,
   canManageSettings,
   canManageSignInDomains,
   canManageUsers,
@@ -42,11 +42,11 @@ import {
   canSeeAllEvents,
   canUseEvals,
   canUseEvents,
-  canUseScheduler,
+  canUseTraining,
   homePath,
   type Access,
 } from "@/lib/roles";
-import { visibleEvalsSettingsTabs } from "@/app/(app)/evals-settings/tabs";
+import { visibleCohortSettingsTabs } from "@/app/(app)/cohort-settings/tabs";
 import { visibleSettingsTabs } from "@/app/(app)/settings/tabs";
 import { PERSONAS, PERSONA_NAMES, type Persona } from "../support/access";
 import { createRun, createSession, readRoles, testScope, type TestUser } from "../support/seed";
@@ -160,27 +160,28 @@ const PAGES: Record<string, PageCase> = {
   },
   "/runs/<own event>": { path: () => "/runs/:own", expect: gated(canUseEvents) },
   "/runs/<someone else's>": { path: () => `/runs/${aliceRun}`, expect: gated(canSeeAllEvents) },
-  "/scheduler": { path: () => "/scheduler", expect: gated(canUseScheduler) },
+  "/scheduler": { path: () => "/scheduler", expect: gated(canUseTraining) },
   "/scheduler-settings": {
     path: () => "/scheduler-settings",
-    expect: gated(canManageSchedulerSettings),
+    expect: gated(canManageTrainingSettings),
+  },
+  "/cohorts": { path: () => "/cohorts", expect: gated(canUseTraining) },
+  "/cohort-settings": {
+    path: () => "/cohort-settings",
+    expect: (a) => (canManageTrainingSettings(a) ? { to: visibleCohortSettingsTabs(a)[0]!.href } : 404),
+  },
+  "/cohort-settings/hibob": { path: () => "/cohort-settings/hibob", expect: gated(canManageTrainingSettings) },
+  "/cohort-settings/employees": {
+    path: () => "/cohort-settings/employees",
+    expect: gated(canManageTrainingSettings),
+  },
+  "/cohort-settings/automation": {
+    path: () => "/cohort-settings/automation",
+    expect: gated(canManageTrainingSettings),
   },
   "/evals": { path: () => "/evals", expect: gated(canUseEvals) },
   "/evals-settings": {
     path: () => "/evals-settings",
-    expect: (a) => (canManageEvalsSettings(a) ? { to: visibleEvalsSettingsTabs(a)[0]!.href } : 404),
-  },
-  "/evals-settings/hibob": { path: () => "/evals-settings/hibob", expect: gated(canManageEvalsSettings) },
-  "/evals-settings/employees": {
-    path: () => "/evals-settings/employees",
-    expect: gated(canManageEvalsSettings),
-  },
-  "/evals-settings/automation": {
-    path: () => "/evals-settings/automation",
-    expect: gated(canManageEvalsSettings),
-  },
-  "/evals-settings/attendee-tracking": {
-    path: () => "/evals-settings/attendee-tracking",
     expect: gated(canManageEvalsSettings),
   },
   "/welcome": {
@@ -315,10 +316,6 @@ const ROUTES: RouteCase[] = [
   { method: "POST", path: "/api/evals/titles", allowed: canManageEvalsSettings, body: () => ({}) },
   { method: "PATCH", path: `/api/evals/titles/${MISSING}`, allowed: canManageEvalsSettings, body: () => ({}) },
   { method: "DELETE", path: `/api/evals/titles/${MISSING}`, allowed: canManageEvalsSettings },
-  { method: "POST", path: "/api/evals/attendee-tracking", allowed: canManageEvalsSettings, body: () => ({}) },
-  { method: "POST", path: "/api/evals/attendee-tracking/import", allowed: canManageEvalsSettings, body: form },
-  { method: "PATCH", path: `/api/evals/attendee-tracking/${MISSING}`, allowed: canManageEvalsSettings, body: () => ({}) },
-  { method: "DELETE", path: `/api/evals/attendee-tracking/${MISSING}`, allowed: canManageEvalsSettings },
 
   // Users
   { method: "GET", path: "/api/users", allowed: canManageUsers },
@@ -526,24 +523,24 @@ describe("PATCH /api/users/:id", () => {
     assert.equal((await patch("eventAdmin", target.id, { area: "event", role: "manager" })).status, 200);
     assert.equal((await readRoles(target.id))?.event, "manager");
 
-    assert.equal((await patch("eventAdmin", target.id, { area: "scheduler", role: "viewer" })).status, 403);
+    assert.equal((await patch("eventAdmin", target.id, { area: "training", role: "viewer" })).status, 403);
     assert.equal((await patch("eventAdmin", target.id, { area: "platform", value: true })).status, 403);
     assert.deepEqual(await readRoles(target.id), {
       event: "manager",
-      scheduler: null,
+      training: null,
       evals: null,
       platform: false,
     });
   });
 
-  test("a scheduler administrator sets scheduler roles, and only scheduler roles", async () => {
+  test("a training administrator sets training roles, and only training roles", async () => {
     const target = await scope.createUser("u_target2", PERSONAS.operator);
-    assert.equal((await patch("schedulerAdmin", target.id, { area: "scheduler", role: "viewer" })).status, 200);
-    assert.equal((await patch("schedulerAdmin", target.id, { area: "event", role: "manager" })).status, 403);
-    assert.equal((await patch("schedulerAdmin", target.id, { area: "evals", role: "viewer" })).status, 403);
+    assert.equal((await patch("trainingAdmin", target.id, { area: "training", role: "viewer" })).status, 200);
+    assert.equal((await patch("trainingAdmin", target.id, { area: "event", role: "manager" })).status, 403);
+    assert.equal((await patch("trainingAdmin", target.id, { area: "evals", role: "viewer" })).status, 403);
     assert.deepEqual(await readRoles(target.id), {
       event: "operator",
-      scheduler: "viewer",
+      training: "viewer",
       evals: null,
       platform: false,
     });
@@ -553,10 +550,10 @@ describe("PATCH /api/users/:id", () => {
     const target = await scope.createUser("u_target6", PERSONAS.operator);
     assert.equal((await patch("evalsAdmin", target.id, { area: "evals", role: "viewer" })).status, 200);
     assert.equal((await patch("evalsAdmin", target.id, { area: "event", role: "manager" })).status, 403);
-    assert.equal((await patch("evalsAdmin", target.id, { area: "scheduler", role: "viewer" })).status, 403);
+    assert.equal((await patch("evalsAdmin", target.id, { area: "training", role: "viewer" })).status, 403);
     assert.deepEqual(await readRoles(target.id), {
       event: "operator",
-      scheduler: null,
+      training: null,
       evals: "viewer",
       platform: false,
     });
@@ -566,7 +563,7 @@ describe("PATCH /api/users/:id", () => {
     const target = await scope.createUser("u_target3", PERSONAS.nobody);
     for (const body of [
       { area: "event", role: "administrator" },
-      { area: "scheduler", role: "administrator" },
+      { area: "training", role: "administrator" },
       { area: "evals", role: "administrator" },
       { area: "platform", value: true },
     ]) {
@@ -574,7 +571,7 @@ describe("PATCH /api/users/:id", () => {
     }
     assert.deepEqual(await readRoles(target.id), {
       event: "administrator",
-      scheduler: "administrator",
+      training: "administrator",
       evals: "administrator",
       platform: true,
     });
@@ -583,16 +580,16 @@ describe("PATCH /api/users/:id", () => {
   test("only a platform administrator touches another one", async () => {
     const target = await scope.createUser("u_target4", PERSONAS.platform);
     assert.equal((await patch("eventAdmin", target.id, { area: "event", role: "none" })).status, 403);
-    assert.equal((await patch("schedulerAdmin", target.id, { area: "scheduler", role: null })).status, 403);
+    assert.equal((await patch("trainingAdmin", target.id, { area: "training", role: null })).status, 403);
     assert.equal((await patch("evalsAdmin", target.id, { area: "evals", role: null })).status, 403);
     assert.deepEqual(await readRoles(target.id), PERSONAS.platform);
   });
 
   test("nobody changes their own roles", async () => {
-    for (const p of ["eventAdmin", "schedulerAdmin", "evalsAdmin", "platform"] as const) {
+    for (const p of ["eventAdmin", "trainingAdmin", "evalsAdmin", "platform"] as const) {
       const body =
-        p === "schedulerAdmin"
-          ? { area: "scheduler", role: null }
+        p === "trainingAdmin"
+          ? { area: "training", role: null }
           : p === "evalsAdmin"
             ? { area: "evals", role: null }
             : { area: "event", role: "none" };
@@ -636,7 +633,7 @@ describe("invite links", () => {
   }
 
   test("someone with no access signs in, opens the link, and gets its roles", async () => {
-    const path = await link("eventAdmin", { eventRole: "manager", schedulerRole: null });
+    const path = await link("eventAdmin", { eventRole: "manager", trainingRole: null });
     const newcomer = await scope.createUser("inv_newcomer", PERSONAS.nobody);
     const cookie = await createSession(newcomer.id);
 
@@ -649,7 +646,7 @@ describe("invite links", () => {
     assert.deepEqual(JSON.parse(res.body), { applied: true, home: "/events" });
     assert.deepEqual(await readRoles(newcomer.id), {
       event: "manager",
-      scheduler: null,
+      training: null,
       evals: null,
       platform: false,
     });
@@ -657,7 +654,7 @@ describe("invite links", () => {
   });
 
   test("signed out, the link goes through sign-in and back", async () => {
-    const path = await link("eventAdmin", { eventRole: "operator", schedulerRole: null });
+    const path = await link("eventAdmin", { eventRole: "operator", trainingRole: null });
     const res = await fetch(`${server.baseUrl}${path}`, { redirect: "manual" });
     assert.ok(isRedirect(res.status), String(res.status));
     const to = new URL(res.headers.get("location")!, server.baseUrl);
@@ -666,7 +663,7 @@ describe("invite links", () => {
   });
 
   test("someone who already has access keeps what they have", async () => {
-    const path = await link("platform", { eventRole: "administrator", schedulerRole: "administrator" });
+    const path = await link("platform", { eventRole: "administrator", trainingRole: "administrator" });
     const res = await accept(cookies.operator, path.split("/").pop()!);
     assert.equal(res.status, 200, res.body);
     assert.equal(JSON.parse(res.body).applied, false);
@@ -674,21 +671,21 @@ describe("invite links", () => {
   });
 
   test("an administrator links only the areas they administer", async () => {
-    assert.equal((await create("schedulerAdmin", { eventRole: "operator", schedulerRole: null })).status, 403);
-    assert.equal((await create("eventAdmin", { eventRole: null, schedulerRole: "viewer" })).status, 403);
-    assert.equal((await create("schedulerAdmin", { eventRole: null, schedulerRole: "viewer" })).status, 201);
+    assert.equal((await create("trainingAdmin", { eventRole: "operator", trainingRole: null })).status, 403);
+    assert.equal((await create("eventAdmin", { eventRole: null, trainingRole: "viewer" })).status, 403);
+    assert.equal((await create("trainingAdmin", { eventRole: null, trainingRole: "viewer" })).status, 201);
     assert.equal(
-      (await create("schedulerAdmin", { eventRole: null, schedulerRole: null, evalsRole: "viewer" })).status,
+      (await create("trainingAdmin", { eventRole: null, trainingRole: null, evalsRole: "viewer" })).status,
       403,
     );
     assert.equal(
-      (await create("evalsAdmin", { eventRole: null, schedulerRole: null, evalsRole: "viewer" })).status,
+      (await create("evalsAdmin", { eventRole: null, trainingRole: null, evalsRole: "viewer" })).status,
       201,
     );
   });
 
   test("an eVals link lands its newcomer on eVals", async () => {
-    const path = await link("evalsAdmin", { eventRole: null, schedulerRole: null, evalsRole: "viewer" });
+    const path = await link("evalsAdmin", { eventRole: null, trainingRole: null, evalsRole: "viewer" });
     const newcomer = await scope.createUser("inv_evals", PERSONAS.nobody);
     const cookie = await createSession(newcomer.id);
     const res = await accept(cookie, path.split("/").pop()!);
@@ -700,10 +697,10 @@ describe("invite links", () => {
 
   test("a link that grants nothing, or platform administration, is not made", async () => {
     for (const body of [
-      { eventRole: "none", schedulerRole: null },
-      { eventRole: null, schedulerRole: null },
-      { eventRole: null, schedulerRole: null, evalsRole: null },
-      { eventRole: "operator", schedulerRole: null, platform: true },
+      { eventRole: "none", trainingRole: null },
+      { eventRole: null, trainingRole: null },
+      { eventRole: null, trainingRole: null, evalsRole: null },
+      { eventRole: "operator", trainingRole: null, platform: true },
     ]) {
       const res = await create("platform", body);
       if ("platform" in body) {

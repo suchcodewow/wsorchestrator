@@ -6,7 +6,7 @@
  * - an operator (or contributor) sees and acts on their own events only;
  * - an event manager or administrator, and a platform administrator, on
  *   everyone's;
- * - someone with no event access — never granted it, a scheduler-only user, or
+ * - someone with no event access — never granted it, a training-only user, or
  *   demoted — on nobody's, including the events they booked themselves.
  *
  * "Can't see it" is always `not_found`, never "forbidden": a person without

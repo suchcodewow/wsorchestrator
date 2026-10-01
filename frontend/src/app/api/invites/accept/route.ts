@@ -36,7 +36,7 @@ export async function POST(req: Request) {
   const access: Access = result.applied
     ? {
         event: result.grant.eventRole ?? "none",
-        scheduler: result.grant.schedulerRole,
+        training: result.grant.trainingRole,
         evals: result.grant.evalsRole,
         platform: false,
       }

@@ -1,20 +1,20 @@
-/** The scheduler. A placeholder until its functions are specified. */
+/** Cohorts. A placeholder until its functions are specified. */
 
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
-import { CalendarClock } from "lucide-react";
+import { Users } from "lucide-react";
 import { auth, signInPath } from "@/auth";
 import { ComingSoon } from "@/components/coming-soon";
 import { canUseTraining } from "@/lib/roles";
 
-export const metadata: Metadata = { title: "Scheduler" };
+export const metadata: Metadata = { title: "Cohorts" };
 
-export default async function SchedulerPage() {
+export default async function CohortsPage() {
   const session = await auth();
   if (!session?.user) redirect(await signInPath());
   if (!canUseTraining(session.user.access)) notFound();
 
   return (
-    <ComingSoon title="Scheduler" Icon={CalendarClock} />
+    <ComingSoon title="Cohorts" Icon={Users} />
   );
 }

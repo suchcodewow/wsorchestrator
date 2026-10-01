@@ -75,7 +75,7 @@ export function EmployeesTable({ people, syncedAt }: { people: EmployeeListing[]
           ) : (
             <>
               No employees yet — run a sync from the{" "}
-              <Link href="/evals-settings/hibob" className="underline underline-offset-4">
+              <Link href="/cohort-settings/hibob" className="underline underline-offset-4">
                 HiBob
               </Link>{" "}
               tab.

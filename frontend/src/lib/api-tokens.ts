@@ -145,7 +145,7 @@ export async function resolveToken(
       expiresAt: apiTokens.expiresAt,
       revokedAt: apiTokens.revokedAt,
       eventRole: users.eventRole,
-      schedulerRole: users.schedulerRole,
+      trainingRole: users.trainingRole,
       evalsRole: users.evalsRole,
       isPlatformAdmin: users.isPlatformAdmin,
       email: users.email,
@@ -172,7 +172,7 @@ export async function resolveToken(
     id: row.userId,
     access: {
       event: row.eventRole,
-      scheduler: row.schedulerRole,
+      training: row.trainingRole,
       evals: row.evalsRole,
       platform: row.isPlatformAdmin,
     },

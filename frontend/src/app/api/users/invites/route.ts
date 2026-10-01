@@ -3,13 +3,13 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/auth";
-import { EVALS_ROLES, EVENT_ROLES, SCHEDULER_ROLES } from "@/db/schema";
+import { EVALS_ROLES, EVENT_ROLES, TRAINING_ROLES } from "@/db/schema";
 import { canManageUsers } from "@/lib/roles";
 import { createInvite, type CreateInviteError } from "@/lib/user-invites";
 
 const postSchema = z.object({
   eventRole: z.enum(EVENT_ROLES).nullable(),
-  schedulerRole: z.enum(SCHEDULER_ROLES).nullable(),
+  trainingRole: z.enum(TRAINING_ROLES).nullable(),
   // Optional, so a caller written before eVals existed still works.
   evalsRole: z.enum(EVALS_ROLES).nullable().default(null),
 });
@@ -33,10 +33,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "invalid_body" }, { status: 400 });
   }
 
-  const { eventRole, schedulerRole, evalsRole } = parsed.data;
+  const { eventRole, trainingRole, evalsRole } = parsed.data;
   const result = await createInvite(
     { id: session.user.id, access: session.user.access },
-    { eventRole: eventRole === "none" ? null : eventRole, schedulerRole, evalsRole },
+    { eventRole: eventRole === "none" ? null : eventRole, trainingRole, evalsRole },
   );
   if (!result.ok) {
     return NextResponse.json(

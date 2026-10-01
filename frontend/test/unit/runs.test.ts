@@ -107,11 +107,11 @@ describe("ownedBy", () => {
     assert.deepEqual(render(PERSONAS.operator), own);
   });
 
-  test("someone with no event access sees nothing, even their own, whatever their scheduler role", () => {
+  test("someone with no event access sees nothing, even their own, whatever their training role", () => {
     const nothing = { sql: "false", params: [] };
     assert.deepEqual(render(PERSONAS.nobody), nothing);
-    assert.deepEqual(render(PERSONAS.schedulerViewer), nothing);
-    assert.deepEqual(render(PERSONAS.schedulerAdmin), nothing);
+    assert.deepEqual(render(PERSONAS.trainingViewer), nothing);
+    assert.deepEqual(render(PERSONAS.trainingAdmin), nothing);
   });
 
   test("every combination of roles gets one of the three answers, matching canUseEvents / canManageAnyEvent", () => {
