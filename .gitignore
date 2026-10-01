@@ -16,6 +16,9 @@ next-env.d.ts
 # personal Claude Code settings; the shared ones are .claude/settings.json
 .claude/settings.local.json
 *.pem
+# console/page logs the Playwright MCP server writes while a session drives
+# a browser; local scratch, not test output
+/.playwright-mcp/
 
 # debug
 npm-debug.log*
