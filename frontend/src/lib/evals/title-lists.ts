@@ -8,7 +8,7 @@ export const TITLE_LIST_LABELS: Record<EvalsTitleList, string> = {
   ignored: "Ignored",
 };
 
-/** Each list's tab under eVals settings. */
+/** Each list's section id on the Automation tab. */
 export const TITLE_LIST_SLUGS: Record<EvalsTitleList, string> = {
   sales: "sales-titles",
   engineer: "engineer-titles",

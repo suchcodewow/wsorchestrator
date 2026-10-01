@@ -1,12 +1,10 @@
 /** The tabs across the top of eVals settings. */
 
 import {
-  Briefcase,
   ClipboardList,
-  EyeOff,
   Network,
+  Settings2,
   Users,
-  Wrench,
   type LucideIcon,
 } from "lucide-react";
 import type { Access } from "@/lib/roles";
@@ -22,9 +20,7 @@ export type EvalsSettingsTab = {
 export const EVALS_SETTINGS_TABS: EvalsSettingsTab[] = [
   { href: "/evals-settings/hibob", label: "HiBob", Icon: Network },
   { href: "/evals-settings/employees", label: "Employees", Icon: Users },
-  { href: "/evals-settings/sales-titles", label: "Automatic Sales Titles", Icon: Briefcase },
-  { href: "/evals-settings/engineer-titles", label: "Automatic Engineer Titles", Icon: Wrench },
-  { href: "/evals-settings/ignored-titles", label: "Ignored Titles", Icon: EyeOff },
+  { href: "/evals-settings/automation", label: "Automation", Icon: Settings2 },
   { href: "/evals-settings/attendee-tracking", label: "Attendee Tracking", Icon: ClipboardList },
 ];
 
