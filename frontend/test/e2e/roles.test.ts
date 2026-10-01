@@ -284,6 +284,9 @@ const ROUTES: RouteCase[] = [
   { method: "GET", path: "/api/backups", allowed: canManageBackups, unconfigured: true },
   { method: "POST", path: "/api/backups", allowed: canManageBackups, body: () => ({ description: 1 }) },
   { method: "POST", path: `/api/backups/${MISSING}/restore`, allowed: canManageBackups, denyOnly: true },
+  // The test server is not QA, so past the gate both answer 404.
+  { method: "GET", path: "/api/backups/production", allowed: canManageBackups },
+  { method: "POST", path: `/api/backups/production/${MISSING}/import`, allowed: canManageBackups, body: () => ({}) },
   { method: "GET", path: "/api/cloud-status", allowed: canAuditProjects },
   { method: "POST", path: "/api/database/query", allowed: canRunSql, body: () => ({}) },
   { method: "POST", path: "/api/settings/domains", allowed: canManageSignInDomains, body: () => ({}) },
@@ -397,6 +400,20 @@ describe("the scheduled HiBob sync", () => {
     const forged = { bearer: "not-a-google-token" };
     for (const who of [SIGNED_OUT, ...PERSONA_NAMES, forged]) {
       const { status } = await send(who, "POST", "/api/evals/hibob/sync/scheduled");
+      if (status !== 401) wrong.push(`${who === forged ? "forged token" : label(who as Who)}: got ${status}`);
+    }
+    assert.deepEqual(wrong, []);
+  });
+});
+
+describe("the production import's finish step", () => {
+  // Called by QA's import job with runner-sa's OIDC token, after the restore
+  // has emptied the sessions table. Nothing else gets past it.
+  test("refuses every session and a forged token", async () => {
+    const wrong: string[] = [];
+    const forged = { bearer: "not-a-google-token" };
+    for (const who of [SIGNED_OUT, ...PERSONA_NAMES, forged]) {
+      const { status } = await send(who, "POST", "/api/backups/production/finish", {});
       if (status !== 401) wrong.push(`${who === forged ? "forged token" : label(who as Who)}: got ${status}`);
     }
     assert.deepEqual(wrong, []);

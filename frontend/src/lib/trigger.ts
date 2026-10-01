@@ -4,6 +4,7 @@ import { and, eq } from "drizzle-orm";
 import { GoogleAuth } from "google-auth-library";
 import { db } from "@/db";
 import { runLogs, workshopRuns } from "@/db/schema";
+import { localRun } from "@/lib/deployment";
 import { ownedBy, type Viewer } from "@/lib/runs";
 
 async function triggerRunnerJob(runId: string): Promise<void> {
@@ -38,7 +39,9 @@ export async function reprovisionRun(runId: string): Promise<boolean> {
   const claimed = await db
     .update(workshopRuns)
     .set({ status: "requested" })
-    .where(and(eq(workshopRuns.id, runId), eq(workshopRuns.status, "ready")))
+    .where(
+      and(eq(workshopRuns.id, runId), eq(workshopRuns.status, "ready"), localRun()),
+    )
     .returning({ id: workshopRuns.id });
 
   if (claimed.length === 0) return false;
@@ -80,6 +83,7 @@ export async function retryRun(
         eq(workshopRuns.id, runId),
         eq(workshopRuns.status, "failed"),
         ownedBy(viewer),
+        localRun(),
       ),
     )
     .returning({ id: workshopRuns.id });
@@ -119,7 +123,9 @@ export async function startRunNow(runId: string): Promise<boolean> {
   const claimed = await db
     .update(workshopRuns)
     .set({ status: "requested" })
-    .where(and(eq(workshopRuns.id, runId), eq(workshopRuns.status, "scheduled")))
+    .where(
+      and(eq(workshopRuns.id, runId), eq(workshopRuns.status, "scheduled"), localRun()),
+    )
     .returning({ id: workshopRuns.id });
 
   if (claimed.length === 0) return false;

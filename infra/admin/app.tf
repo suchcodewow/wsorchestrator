@@ -138,6 +138,13 @@ resource "google_cloud_run_v2_service" "app" {
             HIBOB_SYNC_AUDIENCE = local.hibob_sync_audience
             HIBOB_SYNC_INVOKER  = google_service_account.scheduler.email
           },
+          # QA's production import: the job calls the app back to finish, with
+          # an OIDC token that must carry this audience and runner-sa's email.
+          # Unset (production) refuses every call. See production-import.tf.
+          local.production_import ? {
+            PRODUCTION_IMPORT_AUDIENCE = local.production_import_audience
+            PRODUCTION_IMPORT_INVOKER  = google_service_account.runner.email
+          } : {},
         )
         content {
           name  = env.key

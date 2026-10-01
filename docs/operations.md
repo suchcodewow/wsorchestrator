@@ -202,6 +202,20 @@ purpose: one org-scoped connector cannot stand for per-competitor environments,
 and installing a delegate is the win condition for the connectivity scenarios.
 Do not "fix" it by installing one automatically.
 
+### QA's reaper or scheduler stopped after a production import
+
+A production import on QA pauses `tf-reaper-trigger` and
+`tf-scheduler-trigger` while it runs. It leaves them paused on purpose if it
+failed between the restore and the quarantine, or if the execution hit the
+job's 3600s timeout. Either way the database may list production's workshops
+without marking them as production's, and resuming would let QA's reaper tear
+them down. Check the `tf-runner` execution's `component: "production-import"`
+logs before resuming anything, then follow
+[When it goes wrong](environments.md#when-it-goes-wrong).
+
+Imported events on QA show "Imported from production" and refuse every
+change. That is the quarantine working, not a bug.
+
 ### About 64 template failures on every content deploy (left alone)
 
 "Deploy content", and workshop provisioning, report a large batch of template

@@ -26,6 +26,7 @@ import {
   canUseEvents,
   type Access,
 } from "@/lib/roles";
+import { deploymentEnvironment, localRun } from "@/lib/deployment";
 import { withClusterScenario } from "@/lib/scenario-catalog";
 
 export type Viewer = { id: string; access: Access };
@@ -40,6 +41,13 @@ export const ownedBy = (viewer: Viewer) =>
     : canManageAnyEvent(viewer.access)
       ? undefined
       : eq(workshopRuns.userId, viewer.id);
+
+/**
+ * The runs `viewer` may change: theirs, and created by this deployment. A run
+ * imported from production is visible on QA but cannot be acted on; see
+ * `lib/deployment.ts`.
+ */
+const changeableBy = (viewer: Viewer) => and(ownedBy(viewer), localRun());
 
 export function slugify(name: string, fallback = "workshop"): string {
   const slug = name
@@ -92,6 +100,7 @@ export async function createScheduledRun(input: {
       statePrefix: `workshops/${runId}`,
       harnessOnly: input.harnessOnly ?? false,
       componentSetId: input.componentSetId ?? null,
+      environment: deploymentEnvironment(),
     })
     .returning();
 
@@ -134,7 +143,7 @@ export async function updateRunConfig(
   | { ok: false; error: UpdateRunError }
 > {
   const run = await db.query.workshopRuns.findFirst({
-    where: and(eq(workshopRuns.id, runId), ownedBy(viewer)),
+    where: and(eq(workshopRuns.id, runId), changeableBy(viewer)),
   });
   if (!run) return { ok: false, error: "not_found" };
 
@@ -241,7 +250,7 @@ export async function extendRun(
   { ok: true; run: WorkshopRun } | { ok: false; error: ExtendRunError }
 > {
   const run = await db.query.workshopRuns.findFirst({
-    where: and(eq(workshopRuns.id, runId), ownedBy(viewer)),
+    where: and(eq(workshopRuns.id, runId), changeableBy(viewer)),
   });
   if (!run) return { ok: false, error: "not_found" };
 
@@ -294,7 +303,7 @@ export async function endRunNow(
   viewer: Viewer,
 ): Promise<{ ok: true; run: WorkshopRun } | { ok: false; error: EndRunError }> {
   const run = await db.query.workshopRuns.findFirst({
-    where: and(eq(workshopRuns.id, runId), ownedBy(viewer)),
+    where: and(eq(workshopRuns.id, runId), changeableBy(viewer)),
   });
   if (!run) return { ok: false, error: "not_found" };
   if (run.status !== "ready" || run.deleteRequested) {
@@ -403,7 +412,7 @@ export async function deleteRun(
   { ok: true; outcome: DeleteRunOutcome } | { ok: false; error: DeleteRunError }
 > {
   const run = await db.query.workshopRuns.findFirst({
-    where: and(eq(workshopRuns.id, runId), ownedBy(viewer)),
+    where: and(eq(workshopRuns.id, runId), changeableBy(viewer)),
   });
   if (!run) return { ok: false, error: "not_found" };
 
@@ -441,7 +450,7 @@ export async function retryTeardown(
   { ok: true; run: WorkshopRun } | { ok: false; error: RetryTeardownError }
 > {
   const run = await db.query.workshopRuns.findFirst({
-    where: and(eq(workshopRuns.id, runId), ownedBy(viewer)),
+    where: and(eq(workshopRuns.id, runId), changeableBy(viewer)),
   });
   if (!run) return { ok: false, error: "not_found" };
   if (run.status !== "destroy_failed") {

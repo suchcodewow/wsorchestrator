@@ -25,6 +25,10 @@ ENV PORT=8080
 COPY --from=build /app/public ./public
 COPY --from=build /app/.next/standalone ./
 COPY --from=build /app/.next/static ./.next/static
+# The migrations, for QA's production import, which has to bring a restored
+# database up to this build's schema before it can clean it
+# (src/lib/production-import.ts). A few kilobytes of SQL.
+COPY --from=build /app/drizzle ./drizzle
 
 # Which build this image is, surfaced in the app's user menu so the running
 # revision can be identified without leaving the UI. Supplied by the Harness

@@ -2,6 +2,7 @@
 
 import { notFound, redirect } from "next/navigation";
 import { auth, signInPath } from "@/auth";
+import { isImportedRun } from "@/lib/deployment";
 import { canUseEvents } from "@/lib/roles";
 import { getRunForViewer } from "@/lib/runs";
 import { RunView } from "./run-view";
@@ -19,5 +20,12 @@ export default async function RunPage({
   const result = await getRunForViewer(id, viewer);
   if (!result) notFound();
 
-  return <RunView initial={result} runId={id} viewerId={viewer.id} />;
+  return (
+    <RunView
+      initial={result}
+      runId={id}
+      viewerId={viewer.id}
+      imported={isImportedRun(result.run)}
+    />
+  );
 }

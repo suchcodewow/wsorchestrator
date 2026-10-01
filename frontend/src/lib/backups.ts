@@ -70,10 +70,15 @@ function classify(err: unknown): BackupsUnavailable {
   return "unavailable";
 }
 
-export async function listBackups(): Promise<
+/**
+ * An instance's backups, newest first. This deployment's own unless told
+ * otherwise; QA also lists production's (`lib/production-import.ts`).
+ */
+export async function listBackups(
+  target: { project: string; instance: string } | null = backupTarget(),
+): Promise<
   { ok: true; backups: BackupRun[] } | { ok: false; error: BackupsUnavailable }
 > {
-  const target = backupTarget();
   if (!target) return { ok: false, error: "not_configured" };
 
   try {
@@ -197,12 +202,15 @@ export async function restoreBackup(
 }
 
 export function auditBackupAction(entry: {
-  action: "restore" | "backup";
+  action: "restore" | "backup" | "import_production" | "import_production_finished";
   actorId: string;
   actorEmail: string;
   backupId?: string;
   backupTime?: string | null;
   strandedRunIds?: string[];
+  /** Production imports: the job execution started, and what the finish did. */
+  execution?: string | null;
+  result?: unknown;
 }): void {
   console.log(
     JSON.stringify({

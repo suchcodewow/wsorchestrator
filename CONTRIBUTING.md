@@ -332,8 +332,9 @@ Three people, and their AI sessions, work on this now. What keeps that sane:
 - **Stage explicit paths, not `git add -A`.** More than one person — and more
   than one AI session — may have uncommitted work in a checkout at a time.
 - **Do not copy production data into QA.** QA's reaper acts on whatever rows its
-  database holds, against accounts shared with production. See
-  [docs/environments.md](docs/environments.md#never-copy-production-data-into-qa).
+  database holds, against accounts shared with production. The one exception is
+  the import on QA's Backups page, which quarantines what it brings. See
+  [docs/environments.md](docs/environments.md#never-copy-production-data-into-qa-except-by-importing-a-backup).
 
 ---
 

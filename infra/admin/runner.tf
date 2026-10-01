@@ -36,6 +36,15 @@ locals {
     AWS_REGION               = var.aws_region
     AWS_PARENT_OU_ID         = var.aws_parent_ou_id
     AWS_ACCOUNT_EMAIL_DOMAIN = var.aws_account_email_domain != "" ? var.aws_account_email_domain : var.workspace_domain
+    # Which deployment this is. The runner and the app act only on runs stamped
+    # with it (or unstamped), so production's runs imported into QA are inert
+    # there. See production-import.tf.
+    DEPLOYMENT_ENVIRONMENT = var.environment
+    # The instance QA's production import backs up and restores over.
+    CLOUD_SQL_INSTANCE = google_sql_database_instance.main.name
+    # Where production's backups are. Empty (production) means no import.
+    PRODUCTION_BACKUP_PROJECT  = var.production_backup_project
+    PRODUCTION_BACKUP_INSTANCE = local.production_import ? var.production_backup_instance : ""
   }
 
   # Every job reads the DB URL and the Harness key the same way. The Azure and

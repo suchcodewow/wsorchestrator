@@ -241,6 +241,14 @@ export const workshopRuns = pgTable(
       .notNull()
       .defaultNow(),
     destroyedAt: timestamp("destroyed_at", { withTimezone: true }),
+    /**
+     * The deployment that created this run, and the only one allowed to act on
+     * it. Null on rows from before the column, which belong to the database
+     * they are in. QA can import a production backup (see
+     * `lib/production-import.ts`), and every row that import brings over is
+     * stamped `production`, so QA's runner and app leave those workshops alone.
+     */
+    environment: text("environment"),
   },
   (t) => [
     index("workshop_runs_reaper_idx").on(t.status, t.expiresAt),

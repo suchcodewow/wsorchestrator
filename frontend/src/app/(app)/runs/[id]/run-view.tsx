@@ -124,10 +124,16 @@ export function RunView({
   initial,
   runId,
   viewerId,
+  imported,
 }: {
   initial: RunPayload;
   runId: string;
   viewerId: string;
+  /**
+   * A copy of another deployment's run, from an imported production backup.
+   * Shown, but nothing on it can be changed; see `lib/deployment.ts`.
+   */
+  imported: boolean;
 }) {
   const router = useRouter();
   const [data, setData] = useState<RunPayload>(initial);
@@ -252,14 +258,31 @@ export function RunView({
           </div>
           <div className="flex shrink-0 flex-wrap items-center gap-2">
             <StatusBadge status={run.status} />
-            <RetryEventButton run={run} onRetried={refresh} />
-            <RetryTeardownButton run={run} onRetried={refresh} />
-            <ExtendEventButton run={run} onExtended={refresh} />
-            <EndNowButton run={run} owned={owned} onEnded={refresh} />
-            <DeleteEventButton run={run} owned={owned} onRequested={refresh} />
+            {!imported && (
+              <>
+                <RetryEventButton run={run} onRetried={refresh} />
+                <RetryTeardownButton run={run} onRetried={refresh} />
+                <ExtendEventButton run={run} onExtended={refresh} />
+                <EndNowButton run={run} owned={owned} onEnded={refresh} />
+                <DeleteEventButton run={run} owned={owned} onRequested={refresh} />
+              </>
+            )}
           </div>
         </div>
       </motion.div>
+
+      {imported && (
+        <motion.div variants={riseChild}>
+          <Card className="border-amber-500/40 bg-amber-500/5">
+            <CardContent className="py-4 text-sm">
+              Imported from production. This is a read-only copy of the
+              production event, so it cannot be changed, started or deleted
+              here, and this deployment&apos;s runner never acts on it. Its
+              attendee passwords were removed during the import.
+            </CardContent>
+          </Card>
+        </motion.div>
+      )}
 
       {run.deleteRequested && run.status !== "destroy_failed" && (
         <motion.div variants={riseChild}>
@@ -341,7 +364,7 @@ export function RunView({
       <motion.div variants={riseChild}>
         <RunConfig
           run={run}
-          editability={editabilityOf(run.status)}
+          editability={imported ? "locked" : editabilityOf(run.status)}
           onSaved={refresh}
         />
       </motion.div>
