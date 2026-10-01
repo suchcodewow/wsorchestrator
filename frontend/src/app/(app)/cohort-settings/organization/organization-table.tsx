@@ -6,7 +6,7 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { TriangleAlert } from "lucide-react";
 import { HEADER_ROW, Pager, SortHeader, TableSearch } from "@/components/data-table";
-import type { EvalsOrganizationMember } from "@/db/schema";
+import type { OrganizationMember } from "@/lib/evals/roster";
 import type { OrganizationSort } from "@/lib/list-specs";
 import { riseChild, staggerParent } from "@/lib/motion";
 import type { ListQuery, Page } from "@/lib/paging";
@@ -16,8 +16,6 @@ const COLUMNS: { column: OrganizationSort; label: string }[] = [
   { column: "email", label: "Email" },
   { column: "title", label: "Title" },
   { column: "department", label: "Department" },
-  { column: "reportsToName", label: "Manager" },
-  { column: "depth", label: "Links from leader" },
 ];
 
 export function OrganizationTable({
@@ -29,7 +27,7 @@ export function OrganizationTable({
   current,
 }: {
   query: ListQuery<OrganizationSort>;
-  page: Page<EvalsOrganizationMember>;
+  page: Page<OrganizationMember>;
   /** Everyone the sync found, whatever the search. */
   count: number;
   leaderEmail: string | null;
@@ -97,13 +95,11 @@ export function OrganizationTable({
                   <td className="px-5 py-2.5 text-muted-foreground">{m.email}</td>
                   <td className="px-5 py-2.5">{m.title || "—"}</td>
                   <td className="px-5 py-2.5 text-muted-foreground">{m.department || "—"}</td>
-                  <td className="px-5 py-2.5 text-muted-foreground">{m.reportsToName || m.reportsToEmail || "—"}</td>
-                  <td className="px-5 py-2.5 tabular-nums text-muted-foreground">{m.depth}</td>
                 </tr>
               ))}
               {shown.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-5 py-8 text-center text-muted-foreground">
+                  <td colSpan={COLUMNS.length}className="px-5 py-8 text-center text-muted-foreground">
                     {count ? "No one matches." : "No one reports up to the leader yet."}
                   </td>
                 </tr>

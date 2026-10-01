@@ -6,14 +6,13 @@
 
 import "server-only";
 
-import { sql } from "drizzle-orm";
+import { and, desc, eq, isNotNull, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   bootcampHistory,
   employees,
-  evalsOrganizationMembers,
+  hibobSyncRuns,
   type Employee,
-  type EvalsOrganizationMember,
   type EvalsTitleList,
 } from "@/db/schema";
 import { orgUnder } from "@/lib/evals/org";
@@ -54,7 +53,7 @@ export type Roster = {
   unlisted: UnlistedTitle[];
 };
 
-export type EmployeeListing = Omit<Employee, "raw" | "importedAt">;
+export type EmployeeListing = Omit<Employee, "raw" | "importedAt" | "orgDepth">;
 
 const EMPLOYEE_COLUMNS = {
   id: employees.id,
@@ -138,50 +137,85 @@ export type OrganizationSummary = {
   current: boolean;
 };
 
+/** Someone the last sync found under the Organization Leader, as the Organization tab lists them. */
+export type OrganizationMember = Pick<
+  Employee,
+  "email" | "fullName" | "title" | "department" | "reportsToEmail" | "reportsToName"
+> & {
+  /** Links between this person and the leader, counting the leader. */
+  depth: number;
+  /** Lowercased; whom the sync that stored them worked `depth` out for. */
+  leaderEmail: string;
+};
+
 const ORGANIZATION_SORT_COLUMNS = {
-  depth: evalsOrganizationMembers.depth,
-  fullName: sql`lower(${evalsOrganizationMembers.fullName})`,
-  email: evalsOrganizationMembers.email,
-  title: sql`lower(${blankAsNull(evalsOrganizationMembers.title)})`,
-  department: sql`lower(${blankAsNull(evalsOrganizationMembers.department)})`,
-  reportsToName: sql`lower(coalesce(${blankAsNull(evalsOrganizationMembers.reportsToName)}, ${blankAsNull(evalsOrganizationMembers.reportsToEmail)}))`,
+  depth: employees.orgDepth,
+  fullName: sql`lower(${employees.fullName})`,
+  email: employees.email,
+  title: sql`lower(${blankAsNull(employees.title)})`,
+  department: sql`lower(${blankAsNull(employees.department)})`,
+  reportsToName: sql`lower(coalesce(${blankAsNull(employees.reportsToName)}, ${blankAsNull(employees.reportsToEmail)}))`,
 } as const;
 
+/** Whom the latest successful sync worked `employees.org_depth` out for, or null if none has. */
+async function syncedLeaderEmail(): Promise<string | null> {
+  const [run] = await db
+    .select({ leaderEmail: hibobSyncRuns.orgLeaderEmail })
+    .from(hibobSyncRuns)
+    .where(eq(hibobSyncRuns.status, "succeeded"))
+    .orderBy(desc(hibobSyncRuns.startedAt))
+    .limit(1);
+  return run?.leaderEmail ?? null;
+}
+
 /**
- * One page of the Organization tab: who the last HiBob sync found reporting
- * up to the configured Organization Leader. Read from
- * `evals_organization_members` rather than recomputed here, because the chain
- * is only ever as fresh as the last sync — recomputing on every page view
- * would silently show a chain HiBob has not actually synced yet.
+ * One page of the Organization tab: the employees the last HiBob sync found
+ * reporting up to the Organization Leader, which is those it gave an
+ * `org_depth`. Read from what the sync stored rather than recomputed here,
+ * because the chain is only ever as fresh as the last sync — recomputing on
+ * every page view would silently show a chain HiBob has not actually synced yet.
  */
 export async function listOrganizationMembers(
   query: ListQuery<OrganizationSort>,
-): Promise<Page<EvalsOrganizationMember>> {
+): Promise<Page<OrganizationMember>> {
   const { limit, offset } = pageWindow(query.page);
-  const m = evalsOrganizationMembers;
-  const rows = await db
-    .select()
-    .from(m)
-    .where(searchAny(query.q, [m.fullName, m.email, m.title, m.department, m.reportsToName, m.reportsToEmail]))
-    .orderBy(...orderFor(ORGANIZATION_SORT_COLUMNS[query.sort], query.dir, sql`lower(${m.fullName})`, m.email))
-    .limit(limit)
-    .offset(offset);
-  return toPage(rows, query.page);
+  const e = employees;
+  const [rows, leaderEmail] = await Promise.all([
+    db
+      .select({
+        email: e.email,
+        fullName: e.fullName,
+        title: e.title,
+        department: e.department,
+        reportsToEmail: e.reportsToEmail,
+        reportsToName: e.reportsToName,
+        depth: sql<number>`${e.orgDepth}`,
+      })
+      .from(e)
+      .where(
+        and(
+          isNotNull(e.orgDepth),
+          searchAny(query.q, [e.fullName, e.email, e.title, e.department, e.reportsToName, e.reportsToEmail]),
+        ),
+      )
+      .orderBy(...orderFor(ORGANIZATION_SORT_COLUMNS[query.sort], query.dir, sql`lower(${e.fullName})`, e.id))
+      .limit(limit)
+      .offset(offset),
+    syncedLeaderEmail(),
+  ]);
+  return toPage(rows.map((r) => ({ ...r, leaderEmail: leaderEmail ?? "" })), query.page);
 }
 
 /** How many the Organization tab lists, and whether they are still for the configured leader. */
 export async function organizationSummary(): Promise<OrganizationSummary> {
-  const [[row], configuredLeader] = await Promise.all([
+  const [[row], leaderEmail, configuredLeader] = await Promise.all([
     db
-      .select({
-        count: sql<number>`count(*)::int`,
-        // A sync writes every row for the same leader.
-        leaderEmail: sql<string | null>`min(${evalsOrganizationMembers.leaderEmail})`,
-      })
-      .from(evalsOrganizationMembers),
+      .select({ count: sql<number>`count(*)::int` })
+      .from(employees)
+      .where(isNotNull(employees.orgDepth)),
+    syncedLeaderEmail(),
     getOrgLeaderEmail(),
   ]);
-  const leaderEmail = row?.leaderEmail ?? null;
   return {
     count: row?.count ?? 0,
     leaderEmail,

@@ -835,6 +835,12 @@ export const employees = pgTable(
     importedAt: timestamp("imported_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
+    /**
+     * Links between this person and the Organization Leader, counting the
+     * leader, as the sync that stored them worked it out; null for anyone not
+     * under the leader. Who has one is who the Organization tab lists.
+     */
+    orgDepth: integer("org_depth"),
   },
   (t) => [
     index("employees_email_idx").on(t.email),
@@ -872,6 +878,8 @@ export const hibobSyncRuns = pgTable(
     skipped: integer("skipped"),
     /** Why it failed. */
     error: text("error"),
+    /** Lowercased; the Organization Leader this sync worked `employees.org_depth` out for. */
+    orgLeaderEmail: text("org_leader_email"),
   },
   (t) => [
     index("hibob_sync_runs_started_at_idx").on(t.startedAt),
@@ -969,29 +977,6 @@ export const EXEMPT_DATE = "2000-01-01";
 export const BOOTCAMP_HISTORY_LIMITS = { bytes: 5 * 1024 * 1024, rows: 20_000, email: 320 } as const;
 
 export type BootcampHistory = typeof bootcampHistory.$inferSelect;
-
-/**
- * Everyone under the configured Organization Leader, as of the last HiBob
- * sync — computed there, from that sync's `employees` rows and whichever
- * leader `evals_settings` named at the time, rather than on every page view.
- * A sync always rewrites the whole table, in the same transaction as
- * `employees`, so the two never disagree about which sync they reflect.
- */
-export const evalsOrganizationMembers = pgTable("evals_organization_members", {
-  /** Lowercased. */
-  email: text("email").primaryKey(),
-  fullName: text("full_name").notNull(),
-  title: text("title").notNull().default(""),
-  department: text("department").notNull().default(""),
-  reportsToEmail: text("reports_to_email").notNull().default(""),
-  reportsToName: text("reports_to_name").notNull().default(""),
-  /** Links between this person and the leader, counting the leader. */
-  depth: integer("depth").notNull(),
-  /** Lowercased; whoever `evals_settings` named when this sync ran. */
-  leaderEmail: text("leader_email").notNull(),
-});
-
-export type EvalsOrganizationMember = typeof evalsOrganizationMembers.$inferSelect;
 
 /**
  * How an audited action reached the app: a signed-in browser, a personal
