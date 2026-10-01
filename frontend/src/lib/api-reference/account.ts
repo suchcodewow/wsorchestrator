@@ -148,7 +148,7 @@ export const ACCOUNT_GROUPS: EndpointGroup[] = [
         token: false,
         notes: "Session only: a personal access token gets 401. The token values are never returned.",
         returns:
-          "{ tokens: { id, name, source: \"manual\" | \"bundle\", prefix, status: \"active\" | \"expired\" | \"revoked\", createdAt, expiresAt, lastUsedAt: string | null }[] }",
+          "{ tokens: { id, name, source: \"manual\" | \"bundle\", prefix, status: \"active\" | \"expired\" | \"revoked\", createdAt, expiresAt: string | null, lastUsedAt: string | null }[] }",
       },
       {
         method: "POST",
@@ -157,14 +157,14 @@ export const ACCOUNT_GROUPS: EndpointGroup[] = [
         access: "signedIn",
         token: false,
         notes:
-          "Session only, so a token cannot mint its own replacement. The token lasts 30 days. Its value is in this response only; just its SHA-256 is stored. You can hold 5 active tokens; old bundle tokens do not count.",
+          "Session only, so a token cannot mint its own replacement. The token never expires (expiresAt is null); it lasts until revoked or its owner is deleted. Its value is in this response only; just its SHA-256 is stored. You can hold 5 active tokens; old bundle tokens do not count.",
         body: {
           kind: "json",
           fields: [
             { name: "name", type: "string", required: true, note: "trimmed; cut to 80 characters" },
           ],
         },
-        returns: "201 { token: { id, name, prefix, expiresAt, token } }",
+        returns: "201 { token: { id, name, prefix, expiresAt: null, token } }",
         errors: [
           { status: 400, error: "invalid_name", when: "name is missing or blank (with a message)" },
           { status: 409, error: "too_many", when: "you already have 5 active tokens (with a message)" },

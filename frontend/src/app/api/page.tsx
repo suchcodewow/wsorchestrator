@@ -6,7 +6,7 @@ import Link from "next/link";
 import { auth } from "@/auth";
 import { AmbientBackdrop } from "@/components/ambient-backdrop";
 import { SiteHeader } from "@/components/site-header";
-import { MAX_TOKENS_PER_USER, TOKEN_TTL_DAYS } from "@/db/schema";
+import { MAX_TOKENS_PER_USER } from "@/db/schema";
 import {
   ACCESS_LABELS,
   GROUPS,
@@ -310,9 +310,9 @@ export default async function ApiReferencePage() {
               </li>
               <li>
                 Send it as <Code>Authorization: Bearer wo_…</Code>. A token
-                lasts {TOKEN_TTL_DAYS} days, and each account can hold{" "}
-                {MAX_TOKENS_PER_USER} active ones. Revoking one takes effect on
-                the next request.
+                does not expire, and each account can hold{" "}
+                {MAX_TOKENS_PER_USER} active ones. Revoking one, or deleting
+                the account, takes effect on the next request.
               </li>
               <li>
                 A token has no scopes. It acts as you, with the roles you have

@@ -21,8 +21,9 @@ reference.
 
 - A token looks like `wo_<16 hex>_<secret>`. Only its SHA-256 is stored, so it
   is shown once, when it is created.
-- It lasts 30 days (`TOKEN_TTL_DAYS`). Revoking it takes effect on the next
-  request.
+- It never expires. It stops working when it is revoked or when its owner's
+  account is deleted (the delete removes every token the account held). Either
+  takes effect on the next request.
 - Each account can have 5 active tokens (`MAX_TOKENS_PER_USER`). Tokens marked
   "in a download" came with the contributor bundle, which has been removed. They
   still work until they expire and do not count toward the limit.

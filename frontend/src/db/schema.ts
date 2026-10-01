@@ -355,7 +355,8 @@ export const apiTokens = pgTable(
     source: text("source").notNull().default("manual"),
     prefix: text("prefix").notNull().unique(),
     tokenHash: text("token_hash").notNull(),
-    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    /** Null for a token that never expires; only old bundle tokens carry one. */
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
     revokedAt: timestamp("revoked_at", { withTimezone: true }),
     lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
@@ -391,8 +392,6 @@ export const userInvites = pgTable(
 );
 
 export const INVITE_TTL_MINUTES = 15;
-
-export const TOKEN_TTL_DAYS = 30;
 
 export const TOKEN_NAME_MAX = 80;
 

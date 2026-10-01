@@ -179,7 +179,9 @@ export function ApiTokensCard({
                 <span className="text-xs text-muted-foreground">
                   {t.status === "revoked"
                     ? "revoked"
-                    : `expires ${shortDate(t.expiresAt)}`}
+                    : t.expiresAt
+                      ? `expires ${shortDate(t.expiresAt)}`
+                      : "never expires"}
                   {" · "}
                   {t.lastUsedAt ? `last used ${shortDate(t.lastUsedAt)}` : "never used"}
                 </span>
