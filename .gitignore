@@ -13,6 +13,8 @@ next-env.d.ts
 
 # misc
 .DS_Store
+# personal Claude Code settings; the shared ones are .claude/settings.json
+.claude/settings.local.json
 *.pem
 
 # debug

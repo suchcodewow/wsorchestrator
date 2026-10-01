@@ -10,7 +10,7 @@
  */
 
 import { spawn, type ChildProcess } from "node:child_process";
-import { existsSync, mkdtempSync, openSync } from "node:fs";
+import { existsSync, mkdtempSync, openSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -54,6 +54,14 @@ export async function startServer(databaseUrl: string): Promise<Server> {
   const logFile = path.join(home, "server.log");
   const log = openSync(logFile, "a");
   const server = standaloneServer();
+
+  // `next build` copies frontend/.env into the standalone directory, and the
+  // server loads it for every variable not set below, so a developer's real
+  // credentials (or .env.example's placeholders) would reach the server under
+  // test. The deployed image never has one: .dockerignore excludes it.
+  for (const file of readdirSync(path.dirname(server))) {
+    if (file.startsWith(".env")) rmSync(path.join(path.dirname(server), file));
+  }
 
   const child: ChildProcess = spawn(process.execPath, [server], {
     cwd: path.dirname(server),

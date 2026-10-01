@@ -420,16 +420,15 @@ The two coexist — nothing you do locally touches the deployed app or its data.
 ```bash
 cd frontend
 npm install
-cp .env.example .env         # then edit (see below)
-npx auth secret              # writes AUTH_SECRET into .env
-
-npm run dev:setup            # docker compose up + db:push
+npm run dev:setup            # .env, Postgres, both local databases; safe to re-run
 npm run dev                  # http://localhost:3000
 ```
 
-`dev:setup` starts the local Postgres from [docker-compose.yml](docker-compose.yml)
-(`npm run db:up` / `db:down` to control it on its own) and applies the schema.
-On later runs, just `npm run dev`.
+`dev:setup` creates `.env` from `.env.example` with a generated `AUTH_SECRET`,
+starts the local Postgres from [docker-compose.yml](docker-compose.yml)
+(`npm run db:up` / `db:down` to control it on its own), and gives each empty
+local database the schema and the `.sql` migrations. It leaves a database that
+already has tables alone. On later runs, just `npm run dev`.
 
 All of the `npm` commands above run from `frontend/` — that's where the app's
 `package.json`, `.env`, and Drizzle config live.

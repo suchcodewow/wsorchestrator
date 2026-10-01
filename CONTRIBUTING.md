@@ -45,31 +45,45 @@ git clone https://github.com/suchcodewow/wsorchestrator.git
 cd wsorchestrator/frontend
 
 npm install
-cp .env.example .env
-npx auth secret              # writes AUTH_SECRET into .env
-
-npm run dev:setup            # starts Postgres + applies the schema  (FIRST RUN ONLY)
+npm run dev:setup            # .env, Postgres, both local databases; safe to re-run
 npm run dev                  # http://localhost:3000
+
+cd ../runner && npm install  # only if you will touch the runner
 ```
 
-Every `npm` command in this guide runs from `frontend/`. That is where the app's
-`package.json`, `.env`, and Drizzle config live. The `runner/` package is
-separate and has its own.
+Every `npm` command in this guide runs from `frontend/` unless it says
+otherwise. That is where the app's `package.json`, `.env`, and Drizzle config
+live. The `runner/` package is separate and has its own.
 
-> **`npm run dev:setup` is a first-run command only.** It ends in
-> `drizzle-kit push --force`, which diffs the schema onto the database and
-> applies the result without asking. Against the empty database you just
-> created that is exactly right. Against a database you have since put work
-> into, `--force` will drop a column it thinks is no longer in the schema. Once
-> you are set up, use `npm run dev` to start and `npm run db:up` to start just
-> the container. To change the schema later, see
-> [Changing the schema](#changing-the-schema).
+`npm run dev:setup` takes a few seconds and does everything the database side
+needs:
+
+1. Creates `frontend/.env` from `.env.example` if it is missing, and replaces the
+   `AUTH_SECRET` placeholder with a generated secret.
+2. Starts the Postgres container from [docker-compose.yml](docker-compose.yml).
+3. Creates [both local databases](#the-two-local-databases), `workshops` and
+   `workshops_agent`. Each one that is empty gets the schema
+   (`drizzle-kit push`) and then the hand-written `.sql` migrations, which add
+   rows a fresh database needs, such as the baseline `harness_components`. That
+   is the same order `deploy_qa` uses on an empty Cloud SQL database.
+
+A database that already has tables is left alone, so running it again is always
+safe; it never runs `push --force` against your work. To bring an existing
+database up to date, see [Changing the schema](#changing-the-schema). Day to
+day, `npm run dev` starts the app and `npm run db:up` starts just the container.
+
+`npm install` warns that install scripts for `esbuild`, `fsevents` and
+`unrs-resolver` are "not yet covered by allowScripts". That is npm 11 being
+cautious. Nothing here needs those scripts, so the warning is safe to ignore.
+
+The container publishes Postgres on port 5432. If another Postgres already
+listens there (a Homebrew one, say), stop it first.
 
 ### Filling in `.env`
 
 [`.env.example`](frontend/.env.example) is heavily commented and the defaults
-already point `DATABASE_URL` at the local container. Three things need your
-attention:
+already point `DATABASE_URL` at the local container, and `dev:setup` has written
+`AUTH_SECRET`. Three things need your attention:
 
 - **`AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET`** — ask another dev for the deployed
   OAuth client's values, and have them add
@@ -93,11 +107,24 @@ and Workspace. Leave them at their placeholders. Each page that needs one says
 Open http://localhost:3000, sign in with Google, and create an event on the
 calendar. It will sit in `scheduled` forever, which is correct — see below.
 
+You do not need the OAuth values to start contributing. Every test suite runs
+without them, and without any other credential:
+
+```bash
+npm run verify                        # typecheck + lint + unit tests, ~10s
+npm run test:db                       # role rules against workshops_agent, ~5s
+npm run build && npm run test:e2e     # every persona against every route, ~20s
+cd ../runner && npm run verify        # runner typecheck + unit tests, ~4s
+```
+
+If those pass on a fresh clone, your setup is complete.
+
 ---
 
 ## The two local databases
 
-The container from [docker-compose.yml](docker-compose.yml) holds two:
+The container from [docker-compose.yml](docker-compose.yml) holds two, both
+created by `npm run dev:setup`:
 
 | Database | What it is for |
 | --- | --- |
@@ -108,6 +135,14 @@ Point tests, seed scripts, and scratch experiments at `workshops_agent`:
 
 ```bash
 DATABASE_URL="postgresql://postgres:postgres@localhost:5432/workshops_agent" npm run dev -- -p 3100
+```
+
+To start `workshops_agent` over, drop it and run setup again. It is recreated
+from the schema and migrations in a few seconds:
+
+```bash
+docker exec workshoporchestrator-postgres-1 psql -U postgres -c "drop database workshops_agent"
+npm run dev:setup
 ```
 
 **Never run an unqualified `DELETE` or `TRUNCATE` against `workshops`.** It looks
@@ -174,15 +209,15 @@ cd frontend && npx drizzle-kit push < /dev/null
 the statements it would run and then abort for lack of confirmation. A safe dry
 run.
 
-> **One permanent false positive** in that output:
-> `ALTER TABLE "workshop_runs" ALTER COLUMN "clouds" SET DEFAULT '{}';`
-> The database already has `'{}'::text[]`; drizzle-kit does not recognise the
-> array cast and reports it forever. If that is the *only* statement, you are in
-> sync.
+> **Two permanent false positives** in that output:
+> `ALTER TABLE "workshop_runs" ALTER COLUMN "clouds" SET DEFAULT '{}';` and the
+> same for `"scenarios"`. The database already has `'{}'::text[]`; drizzle-kit
+> does not recognise the array cast and reports it forever. If those are the
+> *only* statements, you are in sync.
 
 ### Migration numbering
 
-Migrations are sequentially numbered (`0001_` … `0020_`). Two people working on
+Migrations are sequentially numbered (`0001_`, `0002_`, …). Two people working on
 separate branches will both reach for the next number. Before you name a file,
 check what is on `main` — and if you hit a collision at merge time, renumber
 yours to come last rather than resolving the conflict in place.

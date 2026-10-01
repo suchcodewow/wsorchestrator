@@ -146,46 +146,70 @@ valid credential sources found" until static `AWS_ACCESS_KEY_ID` /
 
 ## Known issues
 
-### AWS member accounts are never activated (open since 2026-09-02)
+### A red `OptInRequired` in an AWS run log is normally a warm-up, not a fault
 
-Every AWS workshop run fails. The member account is created and reads `ACTIVE`
-in Organizations, `OrganizationAccountAccessRole` assumes fine, IAM works — but
-no other service is ever subscribed. Not a warm-up delay; still true hours
-later.
+Organizations reports a new member account `ACTIVE` the moment `CreateAccount`
+returns, but EC2 takes another 60–120 seconds, and the apply first calls EC2
+about 8 seconds in. So almost every AWS run logs a red
+`Error: … OptInRequired` block, waits (`retrying in 60s`), and then builds
+normally. `AWS_ACCOUNT_WARMUP_SIGNATURES` in
+[runner/src/classify.ts](../runner/src/classify.ts) is what retries it.
+Verified on 2026-09-12, run `fe1c540a` / account `357647916927`: EC2 refused
+8 seconds after creation, the retry 60 seconds later succeeded, and the VPC,
+subnets and EKS cluster built.
 
-| Service | Error |
-| --- | --- |
-| EC2 | `OptInRequired` |
-| S3 | `NotSignedUp` |
-| EKS | `SubscriptionRequiredException` |
+**Before treating it as an outage, check whether the run recovered.** Look in
+`run_logs` for the retry line followed by `Creation complete`, rather than
+reading the first red block as the outcome. Only conclude the account was never
+activated if it still refuses EC2 *minutes* later when probed directly with the
+orchestrator's keys.
 
-That triple is the signature of an AWS account whose sign-up never completed.
+That did happen once. Between about 2026-09-02 and 2026-09-08 new accounts were
+created `ACTIVE` but never had services switched on: EC2 `OptInRequired`, S3
+`NotSignedUp`, EKS `SubscriptionRequiredException`, still true hours later. Every
+AWS run failed. It cleared on its own, with no code change and no AWS Support
+case.
 
-**The evidence:** matching `aws_organizations_account.this: Creation complete`
-to `module.eks.aws_vpc.this: Creation complete` in Cloud Logging, 6 of 6 runs
-got a VPC about 81 seconds after account creation through 2026-08-27, and 0 of 3
-have since 2026-09-02 (accounts `143853720355`, `064437474572`, `577331852365`).
+**Still open, and separate:** `sts:AssumeRole` into a `SUSPENDED` account fails
+and the AWS provider silently falls back to management credentials. That is the
+source of `role_arn is required, but no definition was found` and
+`AccessDenied … user/workshop-orchestrator` in reaper teardowns; runs
+`1dc3ab1d` and `8cfff126` sat in `destroy_failed` on it.
 
-**No code change caused it and no code change fixes it.** This needs an AWS
-Support case against management account `654129064688`. Best guess, unproven:
-the org holds 13 accounts, 11 `SUSPENDED`, 9 closed since 2026-08-18; AWS caps
-closures at 10% of an org per 30 days and closed accounts hold their slot about
-90 days, so the account-vending pipeline is likely held. It cannot be confirmed
-from here — the `workshop-orchestrator` IAM user is denied
-`list-create-account-status`, service quotas, and SCP reads.
+### Challenge mode has never run for real
 
-**Two consequences in the code, worth knowing while this is open:**
+As of 2026-09-13 production had 27 runs, all `mode = 'workshop'`: zero
+challenges, ever. The code, the three roots under
+`runner/terraform/challenges/` and the teardown path are complete and
+internally consistent. They validate, and the tfvars the runner writes match
+every variable each root declares. *Scenarios*
+([runner/terraform/scenarios](../runner/terraform/scenarios)) pass the same
+static checks. None of it has met a live cloud, so treat "challenge mode works"
+as static-analysis confidence only.
 
-1. `AWS_ACCOUNT_WARMUP_SIGNATURES` in
-   [runner/src/classify.ts](../runner/src/classify.ts) matches `optinrequired`,
-   so the runner spends 5 attempts and about 11 minutes treating a permanent
-   state as a timing race, then reports a generic failure. The real cause never
-   surfaces in the run log.
-2. `sts:AssumeRole` into a `SUSPENDED` account fails and the AWS provider
-   silently falls back to management credentials. That is the source of
-   `role_arn is required, but no definition was found` and
-   `AccessDenied … user/workshop-orchestrator` in reaper teardowns, retried
-   every 5 minutes indefinitely.
+Where the first real run is likely to find problems:
+
+- AWS creates one account per competitor, **sequentially**. Account creation is
+  slow and rate-limited, and each one has the warm-up above.
+- Azure needs a Temporary Access Pass per competitor, or mandatory MFA locks them
+  out of the portal (see [runner/README.md](../runner/README.md)).
+- A GCP competitor's project has only `compute.googleapis.com` enabled. Enabling
+  `container.googleapis.com` is the competitor's job, deliberately: building the
+  cluster is the challenge.
+
+A challenge also gets **no Harness cloud connector and no delegate**, on
+purpose: one org-scoped connector cannot stand for per-competitor environments,
+and installing a delegate is the win condition for the connectivity scenarios.
+Do not "fix" it by installing one automatically.
+
+### About 64 template failures on every content deploy (left alone)
+
+"Deploy content", and workshop provisioning, report a large batch of template
+failures (64 as of 2026-09-13). They come from the site's template source, the
+**sandbox / Demo_Committee** project of the *HarnessEvents* source account, and
+they are all v1/Agent templates. This is known, and Shawn decided on 2026-09-13
+to leave it alone. Do not re-investigate it from scratch, and do not "fix" it
+without asking.
 
 ### Harness has no admin set-password API
 
