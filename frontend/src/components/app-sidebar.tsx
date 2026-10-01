@@ -2,10 +2,10 @@
 
 /** The app's navigation sidebar, from lg up. */
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { CalendarRange, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { usePathname } from "next/navigation";
+import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { UserMenu } from "@/components/user-menu";
 import {
   Tooltip,
@@ -13,12 +13,11 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import type { CalendarScope, ThemePreference } from "@/db/schema";
+import type { ThemePreference } from "@/db/schema";
 import type { BuildInfo } from "@/lib/build-info";
-import { isNavItemActive, isNavLink, visibleSections, type NavItem } from "@/lib/nav";
+import { isNavItemActive, visibleSections, type NavItem } from "@/lib/nav";
 import type { Access } from "@/lib/roles";
 import { writeSidebarCookie } from "@/lib/sidebar";
-import { setCalendarScope } from "@/lib/user-settings";
 import { cn } from "@/lib/utils";
 
 export function AppSidebar({
@@ -27,7 +26,6 @@ export function AppSidebar({
   image,
   access,
   initialTheme,
-  initialScope,
   build,
   defaultCollapsed,
   sticky = false,
@@ -38,7 +36,6 @@ export function AppSidebar({
   image: string | null;
   access: Access;
   initialTheme: ThemePreference;
-  initialScope: CalendarScope;
   build: BuildInfo;
   defaultCollapsed: boolean;
   sticky?: boolean;
@@ -74,18 +71,14 @@ export function AppSidebar({
                 </h2>
               )}
 
-              {section.items.map((entry) =>
-                isNavLink(entry) ? (
-                  <NavLink
-                    key={entry.href}
-                    item={entry}
-                    active={isNavItemActive(pathname, entry)}
-                    collapsed={collapsed}
-                  />
-                ) : (
-                  <ScopeSwitch key={entry.control} initial={initialScope} collapsed={collapsed} />
-                ),
-              )}
+              {section.items.map((item) => (
+                <NavLink
+                  key={item.href}
+                  item={item}
+                  active={isNavItemActive(pathname, item)}
+                  collapsed={collapsed}
+                />
+              ))}
             </div>
           ))}
         </nav>
@@ -102,7 +95,6 @@ export function AppSidebar({
             image={image}
             access={access}
             initialTheme={initialTheme}
-            initialScope={initialScope}
             build={build}
             signOutAction={signOutAction}
             accountOnly
@@ -169,73 +161,3 @@ function NavLink({
   );
 }
 
-function ScopeSwitch({
-  initial,
-  collapsed,
-}: {
-  initial: CalendarScope;
-  collapsed: boolean;
-}) {
-  const router = useRouter();
-  const [scope, setScope] = useState<CalendarScope>(initial);
-  const [, startTransition] = useTransition();
-  const on = scope === "all";
-
-  function flip() {
-    const next: CalendarScope = on ? "own" : "all";
-    setScope(next);
-    startTransition(async () => {
-      await setCalendarScope(next);
-      router.refresh();
-    });
-  }
-
-  const button = (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={on}
-      aria-label={collapsed ? "Show all events" : undefined}
-      onClick={flip}
-      className={cn(
-        "flex h-10 w-full cursor-pointer items-center gap-3 rounded-lg text-sm outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50",
-        collapsed ? "justify-center px-0" : "px-3",
-        collapsed && on
-          ? "bg-brand/10 text-brand"
-          : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
-      )}
-    >
-      <CalendarRange className="size-4 shrink-0" />
-      {!collapsed && (
-        <>
-          <span className="flex-1 truncate text-left">Show all events</span>
-          <span
-            aria-hidden
-            className={cn(
-              "flex h-4 w-7 shrink-0 items-center rounded-full p-0.5 transition-colors",
-              on ? "bg-brand" : "bg-input",
-            )}
-          >
-            <span
-              className={cn(
-                "size-3 rounded-full bg-background shadow-xs transition-transform duration-200 ease-out",
-                on && "translate-x-3",
-              )}
-            />
-          </span>
-        </>
-      )}
-    </button>
-  );
-
-  if (!collapsed) return button;
-
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>{button}</TooltipTrigger>
-      <TooltipContent side="right">
-        {on ? "Showing all events" : "Show all events"}
-      </TooltipContent>
-    </Tooltip>
-  );
-}

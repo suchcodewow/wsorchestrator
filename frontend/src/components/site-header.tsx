@@ -19,7 +19,7 @@ export async function SiteHeader({
   width?: string;
   sidebar?: boolean;
 }) {
-  const { themePreference, calendarScope } = await getUserPreferences();
+  const { themePreference } = await getUserPreferences();
   const environment = deploymentEnvironment();
 
   return (
@@ -63,7 +63,6 @@ export async function SiteHeader({
                 image={session.user.image ?? null}
                 access={session.user.access}
                 initialTheme={themePreference}
-                initialScope={calendarScope}
                 build={buildInfo()}
                 signOutAction={async () => {
                   "use server";

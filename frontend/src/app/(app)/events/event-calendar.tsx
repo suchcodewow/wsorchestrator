@@ -5,15 +5,16 @@
 import { isActiveStatus, statusChip, statusDot } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import type { Cloud, EventMode, RunStatus } from "@/db/schema";
+import type { CalendarScope, Cloud, EventMode, RunStatus } from "@/db/schema";
 import { DAY_SECONDS } from "@/db/schema";
 import { EASE, SPRING_SNAPPY } from "@/lib/motion";
+import { setCalendarScope } from "@/lib/user-settings";
 import { cn } from "@/lib/utils";
 import { AnimatePresence, motion } from "framer-motion";
 import gsap from "gsap";
-import { ChevronLeft, ChevronRight, Plus, Swords } from "lucide-react";
+import { CalendarRange, ChevronLeft, ChevronRight, Plus, Swords } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from "react";
 import { CreateEventDialog } from "./create-event-dialog";
 
 type CalendarEvent = {
@@ -75,8 +76,12 @@ function eventTitle(e: CalendarEvent, days: number): string {
 
 export function EventCalendar({
   events,
+  canSeeAllEvents,
+  initialScope,
 }: {
   events: CalendarEvent[];
+  canSeeAllEvents: boolean;
+  initialScope: CalendarScope;
 }) {
   const router = useRouter();
   const today = new Date();
@@ -84,6 +89,18 @@ export function EventCalendar({
   const [dialogOpen, setDialogOpen] = useState(false);
   const [initialDate, setInitialDate] = useState<Date | null>(null);
   const [mode, setMode] = useState<EventMode>("workshop");
+  const [scope, setScope] = useState<CalendarScope>(initialScope);
+  const [, startScopeTransition] = useTransition();
+  const showingAll = scope === "all";
+
+  function flipScope() {
+    const next: CalendarScope = showingAll ? "own" : "all";
+    setScope(next);
+    startScopeTransition(async () => {
+      await setCalendarScope(next);
+      router.refresh();
+    });
+  }
 
   const [now, setNow] = useState<Date | null>(null);
   useEffect(() => {
@@ -282,19 +299,53 @@ export function EventCalendar({
           className="overflow-hidden rounded-2xl border bg-card shadow-sm"
         >
           <div className="flex items-center justify-between border-b px-5 py-4">
-            <div className="relative h-7 overflow-hidden">
-              <AnimatePresence mode="wait" initial={false}>
-                <motion.h2
-                  key={`${year}-${month}`}
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -8 }}
-                  transition={{ duration: 0.22, ease: EASE }}
-                  className="text-lg font-medium tracking-tight tnum"
+            <div className="flex items-center gap-4">
+              <div className="relative h-7 overflow-hidden">
+                <AnimatePresence mode="wait" initial={false}>
+                  <motion.h2
+                    key={`${year}-${month}`}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -8 }}
+                    transition={{ duration: 0.22, ease: EASE }}
+                    className="text-lg font-medium tracking-tight tnum"
+                  >
+                    {MONTHS[month]} <span className="text-muted-foreground">{year}</span>
+                  </motion.h2>
+                </AnimatePresence>
+              </div>
+
+              {canSeeAllEvents && (
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={showingAll}
+                  onClick={flipScope}
+                  className={cn(
+                    "flex h-7 cursor-pointer items-center gap-2 rounded-full border px-2.5 text-xs font-medium outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50",
+                    showingAll
+                      ? "border-brand/30 bg-brand/10 text-brand"
+                      : "border-border text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+                  )}
                 >
-                  {MONTHS[month]} <span className="text-muted-foreground">{year}</span>
-                </motion.h2>
-              </AnimatePresence>
+                  <CalendarRange className="size-3.5 shrink-0" />
+                  Show all events
+                  <span
+                    aria-hidden
+                    className={cn(
+                      "flex h-4 w-7 shrink-0 items-center rounded-full p-0.5 transition-colors",
+                      showingAll ? "bg-brand" : "bg-input",
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "size-3 rounded-full bg-background shadow-xs transition-transform duration-200 ease-out",
+                        showingAll && "translate-x-3",
+                      )}
+                    />
+                  </span>
+                </button>
+              )}
             </div>
 
             <div className="flex items-center gap-1">

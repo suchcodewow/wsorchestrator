@@ -37,5 +37,11 @@ export default async function EventsPage() {
         : (r.ownerName ?? r.ownerEmail ?? "Unknown"),
   }));
 
-  return <EventCalendar events={events} />;
+  return (
+    <EventCalendar
+      events={events}
+      canSeeAllEvents={canSeeAllEvents(access)}
+      initialScope={scope}
+    />
+  );
 }

@@ -4,9 +4,7 @@
 
 import { Fragment, useState, useTransition } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import {
-  CalendarRange,
   ChevronDown,
   ChevronsUpDown,
   Laptop,
@@ -25,15 +23,14 @@ import {
   DropdownMenuRadioGroup,
   DropdownMenuRadioIconItem,
   DropdownMenuSeparator,
-  DropdownMenuSwitchItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { THEME_PREFERENCES, type CalendarScope, type ThemePreference } from "@/db/schema";
+import { THEME_PREFERENCES, type ThemePreference } from "@/db/schema";
 import type { BuildInfo } from "@/lib/build-info";
-import { isNavLink, visibleSections } from "@/lib/nav";
+import { visibleSections } from "@/lib/nav";
 import { accessBadges, type Access } from "@/lib/roles";
 import { applyTheme } from "@/lib/theme";
-import { setCalendarScope, setThemePreference } from "@/lib/user-settings";
+import { setThemePreference } from "@/lib/user-settings";
 
 const SECTION_HEADING =
   "px-2 py-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground";
@@ -72,7 +69,6 @@ export function UserMenu({
   image,
   access,
   initialTheme,
-  initialScope,
   build,
   signOutAction,
   accountOnly = false,
@@ -83,15 +79,12 @@ export function UserMenu({
   image: string | null;
   access: Access;
   initialTheme: ThemePreference;
-  initialScope: CalendarScope;
   build: BuildInfo;
   signOutAction: () => Promise<void>;
   accountOnly?: boolean;
   variant?: MenuVariant;
 }) {
-  const router = useRouter();
   const [theme, setTheme] = useState<ThemePreference>(initialTheme);
-  const [scope, setScope] = useState<CalendarScope>(initialScope);
   const [, startTransition] = useTransition();
 
   function chooseTheme(value: string) {
@@ -102,15 +95,6 @@ export function UserMenu({
     applyTheme(preference);
     startTransition(() => {
       void setThemePreference(preference);
-    });
-  }
-
-  function chooseScope(all: boolean) {
-    const next: CalendarScope = all ? "all" : "own";
-    setScope(next);
-    startTransition(async () => {
-      await setCalendarScope(next);
-      router.refresh();
     });
   }
 
@@ -176,26 +160,14 @@ export function UserMenu({
           <Fragment key={section.heading}>
             <DropdownMenuSeparator />
             <DropdownMenuLabel className={SECTION_HEADING}>{section.heading}</DropdownMenuLabel>
-            {section.items.map((entry) =>
-              isNavLink(entry) ? (
-                <DropdownMenuItem key={entry.href} asChild>
-                  <Link href={entry.href}>
-                    <entry.Icon />
-                    {entry.label}
-                  </Link>
-                </DropdownMenuItem>
-              ) : (
-                <DropdownMenuSwitchItem
-                  key={entry.control}
-                  checked={scope === "all"}
-                  onCheckedChange={chooseScope}
-                  onSelect={(e) => e.preventDefault()}
-                >
-                  <CalendarRange />
-                  {entry.label}
-                </DropdownMenuSwitchItem>
-              ),
-            )}
+            {section.items.map((item) => (
+              <DropdownMenuItem key={item.href} asChild>
+                <Link href={item.href}>
+                  <item.Icon />
+                  {item.label}
+                </Link>
+              </DropdownMenuItem>
+            ))}
           </Fragment>
         ))}
 

@@ -12,14 +12,7 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 
-import {
-  NAV_SECTIONS,
-  isNavItemActive,
-  isNavLink,
-  navLinks,
-  visibleSections,
-  type NavItem,
-} from "@/lib/nav";
+import { NAV_SECTIONS, isNavItemActive, visibleSections, type NavItem } from "@/lib/nav";
 import { SITE_SETTINGS_TABS, visibleSettingsTabs } from "@/app/(app)/settings/tabs";
 import type { Access } from "@/lib/roles";
 import { EVERY_ACCESS, PERSONAS, describeAccess, type Persona } from "../support/access";
@@ -30,7 +23,7 @@ function sidebar(a: Access): string[] {
 }
 
 const EVENTS_USER = ["[Events]", "Event Guides", "Orchestrator"];
-const EVENTS_MANAGER = [...EVENTS_USER, "Show all events"];
+const EVENTS_MANAGER = [...EVENTS_USER];
 const EVENTS_ADMIN = [...EVENTS_MANAGER, "Cloud Status", "Event Settings"];
 const ACCOUNT = ["[Account]", "My settings"];
 
@@ -104,16 +97,6 @@ describe("sidebar", () => {
     }
   });
 
-  test("the calendar-scope control shows exactly for those who can see all events", () => {
-    for (const a of EVERY_ACCESS) {
-      const shown = visibleSections(a).some((s) =>
-        s.items.some((i) => !isNavLink(i) && i.control === "calendar-scope"),
-      );
-      const canSeeAll = a.platform || a.event === "manager" || a.event === "administrator";
-      assert.equal(shown, canSeeAll, describeAccess(a));
-    }
-  });
-
   test("platform-only pages never show for anyone who is not a platform administrator", () => {
     for (const a of EVERY_ACCESS.filter((a) => !a.platform)) {
       const labels = sidebar(a);
@@ -124,13 +107,14 @@ describe("sidebar", () => {
   });
 
   test("every entry has a distinct href", () => {
-    const hrefs = NAV_SECTIONS.flatMap((s) => navLinks(s).map((i) => i.href));
+    const hrefs = NAV_SECTIONS.flatMap((s) => s.items.map((i) => i.href));
     assert.equal(new Set(hrefs).size, hrefs.length);
   });
 });
 
 describe("isNavItemActive", () => {
-  const link = (label: string) => NAV_SECTIONS.flatMap(navLinks).find((i) => i.label === label)!;
+  const link = (label: string) =>
+    NAV_SECTIONS.flatMap((s) => s.items).find((i) => i.label === label)!;
   const orchestrator = link("Orchestrator");
   const scheduler = link("Scheduler");
   const schedulerSettings = link("Scheduler settings");
