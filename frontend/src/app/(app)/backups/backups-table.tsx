@@ -2,7 +2,7 @@
 
 /** The backup history, and the dialogs for taking one or restoring from it. */
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
@@ -28,7 +28,7 @@ import { Input } from "@/components/ui/input";
 import { riseChild, staggerParent } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 
-type BackupRun = {
+export type BackupRun = {
   id: string;
   type: string;
   status: string;
@@ -52,7 +52,7 @@ const when = new Intl.DateTimeFormat("en", {
   timeStyle: "short",
 });
 
-const format = (iso: string | null) =>
+export const format = (iso: string | null) =>
   iso ? when.format(new Date(iso)) : "—";
 
 function freshness(iso: string | null): { text: string; stale: boolean } | null {
@@ -67,7 +67,7 @@ function freshness(iso: string | null): { text: string; stale: boolean } | null 
   return { text: `${days} day${days === 1 ? "" : "s"} ago`, stale: hours > 48 };
 }
 
-function StatusChip({ status }: { status: string }) {
+export function StatusChip({ status }: { status: string }) {
   const done = status === "SUCCESSFUL";
   const failed = status === "FAILED";
   const Icon = done ? CheckCircle2 : failed ? XCircle : Clock;
@@ -92,11 +92,14 @@ export function BackupsTable({
   project,
   initial,
   error,
+  children,
 }: {
   instance: string | null;
   project: string | null;
   initial: BackupRun[];
   error: string | null;
+  /** Below the list: production's backups, where they can be imported. */
+  children?: ReactNode;
 }) {
   const router = useRouter();
   const [backups, setBackups] = useState(initial);
@@ -257,6 +260,8 @@ export function BackupsTable({
           )}
         </>
       )}
+
+      {children}
 
       <RestoreDialog
         backup={target}

@@ -2,6 +2,7 @@ import { runWorkshop } from "./run.js";
 import { reap } from "./reap.js";
 import { provisionDue } from "./schedule.js";
 import { scrubDeployedSecrets } from "./scrub.js";
+import { importProduction } from "./import-production.js";
 import { endPool } from "./db.js";
 
 async function main() {
@@ -27,9 +28,14 @@ async function main() {
     case "provision-due":
       await provisionDue();
       break;
+    // QA only, and it refuses anywhere else. Started from QA's Backups page as
+    // a tf-runner execution with this as its args.
+    case "import-production":
+      await importProduction();
+      break;
     default:
       throw new Error(
-        `unknown command "${command}" (expected "run", "reap", or "provision-due")`,
+        `unknown command "${command}" (expected "run", "reap", "provision-due", or "import-production")`,
       );
   }
 }

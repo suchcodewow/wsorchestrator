@@ -149,7 +149,9 @@ const DELEGATE_EKS_TF_SOURCE = "delegates/eks";
 /** Provision one workshop end to end: Workspace OU, accounts, then clouds. */
 export async function runWorkshop(runId: string): Promise<void> {
   const run = await getRun(runId);
-  if (!run) throw new Error(`run ${runId} not found`);
+  if (!run) {
+    throw new Error(`run ${runId} not found, or it belongs to another deployment`);
+  }
 
   try {
     await setProvisioning(runId);

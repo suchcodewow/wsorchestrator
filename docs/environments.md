@@ -77,14 +77,87 @@ Each environment's **Cloud Status** page lists everything in the shared
 accounts, so QA shows production's resources as orphans and production shows
 QA's. The page is read-only, and these entries are expected.
 
-## Never copy production data into QA
+## Never copy production data into QA, except by importing a backup
 
 The reaper works from its own database's `workshop_runs` rows. It tears down
 the Workspace OU and users, the Harness org, and the cloud accounts those rows
 name. Production rows restored into QA's database would give QA's reaper
 production's live workshops to destroy, and the shared accounts above mean
-nothing stops it. QA's data is created on QA. If a lab guide is needed there,
-author it again on QA; do not copy rows, not even "just the content tables".
+nothing stops it. So do not copy rows into QA by hand, with `pg_dump`, a
+`gcloud sql backups restore`, or anything else, not even "just the content
+tables".
+
+There is one supported way to get production's data onto QA: **Backups →
+Production backups → Import**, on QA. It exists so production's guides and
+events can be looked at on QA, and everything it does is there to keep QA's
+runner off them.
+
+### What the import does
+
+The page starts a `tf-runner` execution with the args `import-production`
+(`runner/src/import-production.ts`). In order:
+
+1. **Refuses** anywhere but QA, and while QA has events of its own that still
+   hold resources (any status but `scheduled` or `destroyed`). The restore
+   would erase the only record of them. The page lists them.
+2. **Takes a snapshot** of QA's users who have any access, with their roles
+   and Google account links.
+3. **Pauses** `tf-reaper-trigger` and `tf-scheduler-trigger`, then refuses if
+   any other `tf-runner`, `tf-reaper` or `tf-scheduler` execution is running.
+4. **Backs up QA**, on demand, described as "Before importing production
+   backup …". Restoring that backup from the same page undoes the import.
+5. **Restores** production's backup over QA's instance, then puts QA's
+   `appuser` password back, since the restore brings production's.
+6. **Quarantines** the restored database: every `workshop_runs` row is
+   stamped `environment = 'production'`, and production's sessions and pending
+   secret scrubs (`harness_deployed_secrets`) are deleted. From here the runner
+   and the app treat every one of those runs as someone else's.
+7. **Calls the app's finish step** (`POST /api/backups/production/finish`,
+   OIDC as QA's runner-sa). That applies QA's migrations, deletes production's
+   saved credentials (Harness tokens, org secrets, template sources, API
+   tokens, invites, OAuth tokens), blanks imported attendee passwords, and
+   sets every role back to the snapshot. Production's users stay in the
+   database with no access.
+8. **Resumes** the triggers.
+
+### What the environment stamp does
+
+`workshop_runs.environment` records which deployment created a run. The
+runner and the app both read their own from `DEPLOYMENT_ENVIRONMENT`, which
+is unset, and so `production`, on production. A run is local when the stamp is
+null or matches. On QA, every other run is:
+
+- invisible to the reaper, the scheduler, and `tf-runner`, which refuses to
+  provision or destroy it (`runner/src/environment.ts`);
+- read-only in the app: shown, with an "Imported from production" note, but
+  Retry, Extend, End, Delete and editing all answer not found.
+
+### When it goes wrong
+
+| What happened | State | What to do |
+| --- | --- | --- |
+| Refused before the restore (runs holding resources, another execution running, the backup failed) | Nothing changed. The triggers resume. | Fix the cause and import again. |
+| Failed after the restore, before the quarantine finished | **The triggers stay paused**, and the execution logs an ERROR saying so. The database may list production's runs unstamped. | Restore the pre-import backup from the Backups page, or stamp the runs with `update workshop_runs set environment = 'production'`, and then resume both triggers. |
+| The finish step failed | Quarantined, so the triggers resume. Production's users may still hold production's roles, and production's credentials may still be in the tables. | Restore the pre-import backup. `SITE_ADMIN_EMAILS` users regain platform admin on sign-in, so one of them can always get to the page. |
+| The execution hit the job's 3600s timeout | The `finally` never runs, so the triggers stay paused, whatever the stage. | Read the logs to see how far it got, then follow the row above that matches. |
+
+Every import is logged by QA's app as a `component: "backups"` NOTICE:
+`import_production` when it starts, with who started it and the execution
+name, and `import_production_finished` with what the finish step did.
+
+### Setting it up
+
+Both halves are off by default. A person sets them, because each one is an
+apply:
+
+- **QA:** `production_backup_project` (and `production_backup_instance`, if
+  it is not `workshops-db`) on `qa_control_plane`. That gives QA's runner-sa
+  the custom role `workshopProductionImport` and tells the app where to look.
+- **Production:** `backup_reader_members` on `admin_control_plane`, listing
+  QA's `app-sa` and `runner-sa`. That grants them `roles/cloudsql.viewer` on
+  production's project, which lists and reads backups and cannot restore over
+  or connect to production's instance. It reaches production only through
+  `deploy_production` with `run_infra=true`.
 
 ## Who can do what
 
@@ -96,6 +169,7 @@ author it again on QA; do not copy rows, not even "just the content tables".
 | Run a Harness pipeline | Project group `orchestrator_developers` (Pipeline Executor + Project Viewer) | Harness RBAC |
 | Deploy production | Anyone who can run `deploy_production` | Harness RBAC on the project |
 | Read QA's logs, database and secrets | `developer_members` in `qa_control_plane` | GCP IAM on `harnessevents-qa` |
+| Import a production backup into QA | Anyone who can manage backups on QA | `canManageBackups`, plus typing QA's instance name |
 
 **Where this is weaker than it looks.** These are the gaps as of 2026-09-30:
 

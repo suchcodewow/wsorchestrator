@@ -329,6 +329,12 @@ pointing at production. `environment`, `app_min_instances`,
 `manage_billing_iam`, `image_readers` and `developer_members` exist for this
 reason; see [environments.tf](environments.tf).
 
+`production_backup_project`, `production_backup_instance` and
+`backup_reader_members` are the two halves of QA's production import (see
+[production-import.tf](production-import.tf)). QA sets the first two, and
+production sets `backup_reader_members` to QA's app-sa and runner-sa. All are
+empty by default, so a deployment has none of it until someone sets it.
+
 What is declared here is the IAM build-sa needs beyond building. `enable_cicd =
 true` grants `run.admin` + `cloudsql.client`, `actAs` on app-sa and runner-sa,
 and accessor on the `database-url` secret. Left `false` (the default) build-sa

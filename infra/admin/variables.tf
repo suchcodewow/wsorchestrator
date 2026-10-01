@@ -407,3 +407,21 @@ variable "developer_members" {
   type        = list(string)
   default     = []
 }
+
+variable "production_backup_project" {
+  description = "QA only: the project holding production's Cloud SQL instance, whose backups QA's Backups page can import. Empty (production) turns the import off. See production-import.tf."
+  type        = string
+  default     = ""
+}
+
+variable "production_backup_instance" {
+  description = "QA only: production's Cloud SQL instance name, with production_backup_project."
+  type        = string
+  default     = "workshops-db"
+}
+
+variable "backup_reader_members" {
+  description = "Production only: members (serviceAccount:) that may list and read this deployment's Cloud SQL backups, so QA can import them. QA's app-sa and runner-sa. Empty in QA. See production-import.tf."
+  type        = list(string)
+  default     = []
+}

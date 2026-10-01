@@ -88,7 +88,9 @@ organization, the Azure subscription and the Google Workspace with production.
 A QA workshop run creates real orgs, accounts and users. Prefer runs with no
 cloud, or GCP only. **Never copy production data into QA's database.** QA's
 reaper would then tear down production's live workshops, because the accounts
-are shared.
+are shared. The only exception is the import on QA's Backups page, which a
+person starts; do not start one yourself, and do not restore a production
+backup into QA any other way.
 
 **Do not run a deploy pipeline to test something.** Run `verify` on your branch,
 or `deploy_qa` by hand with `deploy=false` and `apply_infra=false`. Each deploy

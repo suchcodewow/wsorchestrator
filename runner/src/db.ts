@@ -1,5 +1,6 @@
 import pg from "pg";
 import { PROVISION_LEAD_HOURS } from "./config.js";
+import { deploymentEnvironment, localRunClause } from "./environment.js";
 
 const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
@@ -48,10 +49,16 @@ const RUN_COLUMNS = `id, user_id, name, mode, slug, user_count, clouds, scenario
                      harness_only, component_set_id, ttl_seconds, expires_at,
                      outputs, destroy_attempts, destroy_started_at`;
 
+/**
+ * One run, if this deployment may act on it. A run another deployment created —
+ * production's rows in a QA database that imported a backup — reads as absent,
+ * so a trigger for one does nothing. See `environment.ts`.
+ */
 export async function getRun(runId: string): Promise<RunRow | undefined> {
   const { rows } = await pool.query<RunRow>(
-    `select ${RUN_COLUMNS} from workshop_runs where id = $1`,
-    [runId],
+    `select ${RUN_COLUMNS} from workshop_runs
+      where id = $1 and ${localRunClause(2)}`,
+    [runId, deploymentEnvironment()],
   );
   return rows[0];
 }
@@ -74,6 +81,10 @@ export async function getRun(runId: string): Promise<RunRow | undefined> {
  * also has `delete_requested` set — that is what started the teardown — so the
  * first clause matches it forever otherwise, and the terminal state would not be
  * terminal. This is the whole of the original bug in one line.
+ *
+ * Only this deployment's runs. A QA database that imported a production backup
+ * holds production's live workshops, and the accounts they name are shared, so
+ * this guard is all that keeps QA's reaper from destroying them.
  */
 export async function reapableRuns(): Promise<RunRow[]> {
   const { rows } = await pool.query<RunRow>(
@@ -84,7 +95,9 @@ export async function reapableRuns(): Promise<RunRow[]> {
            or status = 'destroying'
            or (status = 'ready' and expires_at is not null and expires_at < now())
             )
-        and status <> 'destroy_failed'`,
+        and status <> 'destroy_failed'
+        and ${localRunClause(1)}`,
+    [deploymentEnvironment()],
   );
   return rows;
 }
@@ -700,6 +713,7 @@ export async function deleteAccounts(runId: string) {
  * within `PROVISION_LEAD_HOURS` from now, so everything is built and ready by
  * the time the workshop actually starts. The status='scheduled' guard means
  * two concurrent scheduler executions can't claim the same run twice.
+ * Only this deployment's runs; see `reapableRuns`.
  */
 export async function claimDueScheduledRuns(): Promise<{ id: string }[]> {
   const { rows } = await pool.query<{ id: string }>(
@@ -708,8 +722,9 @@ export async function claimDueScheduledRuns(): Promise<{ id: string }[]> {
       where status = 'scheduled'
         and scheduled_start is not null
         and scheduled_start <= now() + $1::interval
+        and ${localRunClause(2)}
       returning id`,
-    [`${PROVISION_LEAD_HOURS} hours`],
+    [`${PROVISION_LEAD_HOURS} hours`, deploymentEnvironment()],
   );
   return rows;
 }
@@ -937,6 +952,97 @@ export async function withScrubLock(
   }
 }
 
+/* ------------------------------------------------------------------ *
+ * Importing a production backup (QA only)
+ * ------------------------------------------------------------------ */
+
+/**
+ * This deployment's runs that still own something in a cloud, Workspace or
+ * Harness.
+ *
+ * A restore replaces every row, and a run's row is the only record of what it
+ * built. An import underneath one of these would leave its accounts and orgs
+ * standing with nothing left that knows to tear them down. `scheduled` has
+ * built nothing yet and `destroyed` has nothing left. Every other status may
+ * hold something, `failed` included, which can be a partial build.
+ */
+export async function runsHoldingResources(): Promise<
+  { id: string; name: string; status: string }[]
+> {
+  const { rows } = await pool.query<{ id: string; name: string; status: string }>(
+    `select id, name, status
+       from workshop_runs
+      where status not in ('scheduled', 'destroyed')
+        and ${localRunClause(1)}
+      order by created_at`,
+    [deploymentEnvironment()],
+  );
+  return rows;
+}
+
+/**
+ * Who has access on this deployment, taken before a restore replaces the
+ * users table. The app puts it back afterwards
+ * (`frontend/src/lib/production-import.ts`), so importing production's data
+ * does not also import production's idea of who administers QA.
+ *
+ * Only people with some access. Anyone else gets a fresh account at their next
+ * sign-in, the same as they would have had anyway.
+ */
+export type UserSnapshot = {
+  id: string;
+  email: string;
+  name: string | null;
+  image: string | null;
+  eventRole: string;
+  schedulerRole: string | null;
+  evalsRole: string | null;
+  isPlatformAdmin: boolean;
+  calendarScope: string;
+  accounts: { type: string; provider: string; providerAccountId: string }[];
+};
+
+export async function snapshotUsers(): Promise<UserSnapshot[]> {
+  const { rows } = await pool.query<UserSnapshot>(
+    `select u.id,
+            u.email,
+            u.name,
+            u.image,
+            u.site_role::text        as "eventRole",
+            u.scheduler_role::text   as "schedulerRole",
+            u.evals_role::text       as "evalsRole",
+            u.is_platform_admin      as "isPlatformAdmin",
+            u.calendar_scope::text   as "calendarScope",
+            coalesce(
+              json_agg(json_build_object(
+                'type', a.type,
+                'provider', a.provider,
+                'providerAccountId', a."providerAccountId"
+              )) filter (where a.provider is not null),
+              '[]'
+            ) as accounts
+       from users u
+       left join accounts a on a."userId" = u.id
+      where u.email is not null
+        and (u.is_platform_admin
+             or u.site_role <> 'none'
+             or u.scheduler_role is not null
+             or u.evals_role is not null)
+      group by u.id
+      order by u.email`,
+  );
+  return rows;
+}
+
+let poolEnded = false;
+
+/**
+ * Close the pool. Safe to call twice: the import closes it before the restore,
+ * which drops every connection under it, and `main` closes it again on the way
+ * out.
+ */
 export async function endPool() {
+  if (poolEnded) return;
+  poolEnded = true;
   await pool.end();
 }
