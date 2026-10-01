@@ -1,7 +1,6 @@
 /** The navigation sections, and which of them a user's access may see. */
 
 import {
-  Blocks,
   CalendarClock,
   CalendarCog,
   CalendarDays,
@@ -72,7 +71,6 @@ export const NAV_SECTIONS: NavSection[] = [
         also: ["/runs"],
         visible: canUseEvents,
       },
-      { href: "/contribute", label: "Contribute", Icon: Blocks, visible: canUseEvents },
       { control: "calendar-scope", label: "Show all events", visible: canSeeAllEvents },
       { href: "/cloud-status", label: "Cloud Status", Icon: Cloud, visible: canAuditProjects },
       {

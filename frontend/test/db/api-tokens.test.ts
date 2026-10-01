@@ -19,7 +19,6 @@ import { db } from "@/db";
 import { apiTokens, MAX_TOKENS_PER_USER } from "@/db/schema";
 import {
   listTokens,
-  mintBundleToken,
   mintToken,
   resolveToken,
   revokeToken,
@@ -112,16 +111,6 @@ describe("minting and revoking", () => {
     const [first] = await listTokens(user.id);
     await revokeToken(user.id, first!.id);
     assert.equal((await mintToken(user.id, "replacement")).ok, true);
-  });
-
-  test("bundle tokens do not count against the limit, and replace each other", async () => {
-    const user = await scope.createUser("bundle", PERSONAS.contributor);
-    for (let i = 0; i < MAX_TOKENS_PER_USER; i++) await mint(user.id, `t${i}`);
-    const first = await mintBundleToken(user.id);
-    const second = await mintBundleToken(user.id);
-    assert.ok(first && second);
-    assert.equal(await resolveToken(first.token), null, "the older bundle token is revoked");
-    assert.notEqual(await resolveToken(second.token), null);
   });
 
   test("nobody revokes someone else's token", async () => {

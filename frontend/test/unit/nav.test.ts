@@ -29,7 +29,7 @@ function sidebar(a: Access): string[] {
   return visibleSections(a).flatMap((s) => [`[${s.heading}]`, ...s.items.map((i) => i.label)]);
 }
 
-const EVENTS_USER = ["[Events]", "Event Guides", "Orchestrator", "Contribute"];
+const EVENTS_USER = ["[Events]", "Event Guides", "Orchestrator"];
 const EVENTS_MANAGER = [...EVENTS_USER, "Show all events"];
 const EVENTS_ADMIN = [...EVENTS_MANAGER, "Cloud Status", "Event Settings"];
 const ACCOUNT = ["[Account]", "My settings"];
