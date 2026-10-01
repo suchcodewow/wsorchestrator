@@ -86,7 +86,7 @@ add it to the table above.
 | My settings (theme, calendar scope) | `GET`/`PATCH /api/me` |
 | Users | `GET /api/users` |
 | Admin settings (sign-in domains) | `GET /api/settings/domains` |
-| eVals settings | `GET /api/evals/employees`, `GET /api/evals/hibob/sync`, `GET /api/evals/titles` |
+| Cohort Settings | `GET /api/evals/employees`, `GET /api/evals/hibob/sync`, `GET /api/evals/titles` |
 | Labs | `GET /api/lab-workshops`, `GET /api/lab-workshops/[id or slug]`, `GET /api/lab-guides`, `GET /api/lab-guides/[id or slug]`, `GET /api/lab-images` |
 
 Changes go through the same routes the pages call: `POST`, `PATCH` and `DELETE`

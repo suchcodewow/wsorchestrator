@@ -18,16 +18,31 @@ begin
     return;
   end if;
 
-  create table if not exists user_invites (
-    id uuid primary key default gen_random_uuid(),
-    token_hash text not null unique,
-    event_role site_role,
-    scheduler_role scheduler_role,
-    created_by text not null references users(id) on delete cascade,
-    expires_at timestamptz not null,
-    uses integer not null default 0,
-    created_at timestamptz not null default now()
-  );
+  -- 0035 renames scheduler_role to training_role; on a database it has
+  -- already run on, create the table the way it would have left it.
+  if exists (select 1 from pg_type where typname = 'training_role') then
+    create table if not exists user_invites (
+      id uuid primary key default gen_random_uuid(),
+      token_hash text not null unique,
+      event_role site_role,
+      training_role training_role,
+      created_by text not null references users(id) on delete cascade,
+      expires_at timestamptz not null,
+      uses integer not null default 0,
+      created_at timestamptz not null default now()
+    );
+  else
+    create table if not exists user_invites (
+      id uuid primary key default gen_random_uuid(),
+      token_hash text not null unique,
+      event_role site_role,
+      scheduler_role scheduler_role,
+      created_by text not null references users(id) on delete cascade,
+      expires_at timestamptz not null,
+      uses integer not null default 0,
+      created_at timestamptz not null default now()
+    );
+  end if;
 
   create index if not exists user_invites_created_by_idx
     on user_invites (created_by, created_at);
