@@ -206,6 +206,7 @@ const PAGES: Record<string, PageCase> = {
   "/me/templates": { path: () => "/me/templates", expect: () => 200 },
   "/me/api-tokens": { path: () => "/me/api-tokens", expect: () => 200 },
   "/labs": { path: () => "/labs", expect: () => 200, signedOut: 200 },
+  "/api": { path: () => "/api", expect: () => 200, signedOut: 200 },
   "/labs/new": {
     path: () => "/labs/new",
     expect: gated(canManageLabGuides),

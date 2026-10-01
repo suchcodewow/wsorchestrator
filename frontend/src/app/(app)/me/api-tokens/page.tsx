@@ -1,5 +1,6 @@
 /** Your personal access tokens, for calling the API from a script. */
 
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth, signInPath } from "@/auth";
 import { ApiTokensCard } from "@/components/api-tokens-card";
@@ -17,7 +18,12 @@ export default async function MyApiTokensPage() {
         <p className="text-sm text-muted-foreground">
           A token acts as you, with your roles, for {TOKEN_TTL_DAYS} days.
           Backups, the SQL console, user and invite changes, sign-in domains
-          and tokens themselves still need the browser.
+          and tokens themselves still need the browser. Every endpoint is in
+          the{" "}
+          <Link href="/api" className="text-brand hover:underline">
+            API reference
+          </Link>
+          .
         </p>
       }
       usage={
