@@ -19,6 +19,7 @@ import {
   effectiveAllowedDomains,
   isEmailAllowed,
 } from "@/lib/allowed-domains";
+import { googlePhotoChosen, syncGoogleProfile } from "@/lib/google-profile";
 import { REQUEST_PATH_HEADER, returnPath } from "@/lib/request-path";
 import type { Access } from "@/lib/roles";
 import { bootstrapAdminEmails, isBootstrapAdmin } from "@/lib/site-admins";
@@ -59,8 +60,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     error: "/signin",
   },
   events: {
-    signIn({ user }) {
-      return applyBootstrapAdmin(user.email);
+    async signIn({ user, account, profile }) {
+      const photoChosen = await googlePhotoChosen(account?.access_token);
+      await syncGoogleProfile(user.id, profile, photoChosen);
+      await applyBootstrapAdmin(user.email);
     },
   },
   callbacks: {

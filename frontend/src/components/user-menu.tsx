@@ -48,7 +48,7 @@ export type MenuVariant = "header" | "sidebar" | "rail";
 
 const TRIGGER_CLASS: Record<MenuVariant, string> = {
   header:
-    "flex cursor-pointer items-center gap-1 rounded-md px-2 py-1 text-sm text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50",
+    "flex cursor-pointer items-center gap-1.5 rounded-md px-2 py-1 text-sm text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50",
   sidebar:
     "flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2 text-left outline-none transition-colors hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50",
   rail: "flex size-10 cursor-pointer items-center justify-center rounded-lg outline-none transition-colors hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50",
@@ -69,6 +69,7 @@ function buildTitle(build: BuildInfo): string {
 export function UserMenu({
   name,
   email,
+  image,
   access,
   initialTheme,
   initialScope,
@@ -79,6 +80,7 @@ export function UserMenu({
 }: {
   name: string | null;
   email: string;
+  image: string | null;
   access: Access;
   initialTheme: ThemePreference;
   initialScope: CalendarScope;
@@ -123,16 +125,17 @@ export function UserMenu({
       >
         {variant === "header" && (
           <>
+            <Avatar name={name} email={email} image={image} className="size-6 text-[11px]" />
             <span className="max-w-28 truncate sm:max-w-48">{name ?? email}</span>
             <ChevronDown className="size-4 shrink-0" />
           </>
         )}
 
-        {variant === "rail" && <Avatar name={name} email={email} />}
+        {variant === "rail" && <Avatar name={name} email={email} image={image} />}
 
         {variant === "sidebar" && (
           <>
-            <Avatar name={name} email={email} />
+            <Avatar name={name} email={email} image={image} />
             <span className="min-w-0 flex-1">
               <span className="block truncate text-sm font-medium">{name ?? email}</span>
               {name && (

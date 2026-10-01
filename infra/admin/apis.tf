@@ -19,6 +19,12 @@ locals {
     # on first use). Declared now because the CD connection and trigger in
     # cicd.tf are created by Terraform and fail if the API is off.
     "cloudbuild.googleapis.com",
+    # People API — at sign-in the app asks whether the account's Google photo is
+    # one its owner chose or Google's generated initial. The call carries the
+    # user's access token, so it counts against the project that owns the OAuth
+    # client: production's, which QA shares. QA enabling it alone does nothing.
+    # Without it the app falls back to whatever picture the ID token carries.
+    "people.googleapis.com",
   ]
 }
 
