@@ -17,9 +17,8 @@ export default async function MyApiTokensPage() {
       intro={
         <p className="text-sm text-muted-foreground">
           A token acts as you, with your roles, for {TOKEN_TTL_DAYS} days.
-          Backups, the SQL console, user and invite changes, sign-in domains
-          and tokens themselves still need the browser. Every endpoint is in
-          the{" "}
+          Backups, user and invite changes, sign-in domains and tokens
+          themselves still need the browser. Every endpoint is in the{" "}
           <Link href="/api" className="text-brand hover:underline">
             API reference
           </Link>
