@@ -34,7 +34,7 @@ export async function AppShell({
     );
   }
 
-  const { themePreference, calendarScope } = await getUserPreferences();
+  const { themePreference } = await getUserPreferences();
   const collapsed =
     parseSidebarState((await cookies()).get(SIDEBAR_COOKIE)?.value) === "collapsed";
 
@@ -58,7 +58,6 @@ export async function AppShell({
           image={user.image ?? null}
           access={user.access}
           initialTheme={themePreference}
-          initialScope={calendarScope}
           build={buildInfo()}
           defaultCollapsed={collapsed}
           sticky={!pane}

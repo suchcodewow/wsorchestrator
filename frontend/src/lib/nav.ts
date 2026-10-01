@@ -26,7 +26,6 @@ import {
   canManageSignInDomains,
   canManageTrainingSettings,
   canManageUsers,
-  canSeeAllEvents,
   canUseEvals,
   canUseEvents,
   canUseTraining,
@@ -42,15 +41,6 @@ export type NavItem = {
   visible?: (access: Access) => boolean;
 };
 
-/** A switch that sits among a section's links rather than leading anywhere. */
-export type NavControl = {
-  control: "calendar-scope";
-  label: string;
-  visible?: (access: Access) => boolean;
-};
-
-export type NavEntry = NavItem | NavControl;
-
 /**
  * One area of the app, or the account and platform pages around them. Within
  * an area the entries run from what everyone in it uses, through what its
@@ -58,7 +48,7 @@ export type NavEntry = NavItem | NavControl;
  */
 export type NavSection = {
   heading: string;
-  items: NavEntry[];
+  items: NavItem[];
 };
 
 export const NAV_SECTIONS: NavSection[] = [
@@ -73,7 +63,6 @@ export const NAV_SECTIONS: NavSection[] = [
         also: ["/runs"],
         visible: canUseEvents,
       },
-      { control: "calendar-scope", label: "Show all events", visible: canSeeAllEvents },
       { href: "/cloud-status", label: "Cloud Status", Icon: Cloud, visible: canAuditProjects },
       {
         href: "/settings",
@@ -133,15 +122,6 @@ export const NAV_SECTIONS: NavSection[] = [
     ],
   },
 ];
-
-export function isNavLink(entry: NavEntry): entry is NavItem {
-  return "href" in entry;
-}
-
-/** The links in `section`, leaving out its controls. */
-export function navLinks(section: NavSection): NavItem[] {
-  return section.items.filter(isNavLink);
-}
 
 /** The sections `access` may see, each holding only the entries it may see. */
 export function visibleSections(access: Access): NavSection[] {
