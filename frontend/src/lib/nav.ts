@@ -11,7 +11,6 @@ import {
   Settings,
   SlidersHorizontal,
   TestTubes,
-  Terminal,
   UserCog,
   UsersRound,
   type LucideIcon,
@@ -24,7 +23,6 @@ import {
   canManageSettings,
   canManageSignInDomains,
   canManageUsers,
-  canRunSql,
   canSeeAllEvents,
   canUseEvals,
   canUseEvents,
@@ -114,7 +112,6 @@ export const NAV_SECTIONS: NavSection[] = [
     items: [
       { href: "/users", label: "Manage users", Icon: UsersRound, visible: canManageUsers },
       { href: "/backups", label: "Backups", Icon: DatabaseBackup, visible: canManageBackups },
-      { href: "/database", label: "Database", Icon: Terminal, visible: canRunSql },
       {
         href: "/admin-settings",
         label: "Admin Settings",
