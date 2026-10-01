@@ -18,6 +18,7 @@ import { canCreateEvents, canUseEvents } from "@/lib/roles";
 import { withClusterScenario } from "@/lib/scenario-catalog";
 import { createScheduledRun, listRunsForUser } from "@/lib/runs";
 import { startRunNow } from "@/lib/trigger";
+import { audited } from "@/lib/audit";
 
 export async function GET(req: Request) {
   const caller = await sessionOrToken(req);
@@ -86,7 +87,7 @@ const createSchema = z
     }
   });
 
-export async function POST(req: Request) {
+export const POST = audited(async function POST(req: Request) {
   const caller = await sessionOrToken(req);
   if (!caller) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -125,4 +126,4 @@ export async function POST(req: Request) {
 
   const started = startNow ? await startRunNow(result.run.id) : false;
   return NextResponse.json({ run: result.run, started }, { status: 201 });
-}
+});

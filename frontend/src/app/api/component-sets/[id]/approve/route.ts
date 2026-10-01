@@ -4,8 +4,9 @@ import { NextResponse } from "next/server";
 import { sessionOrToken } from "@/lib/api-auth";
 import { canPublishComponents } from "@/lib/roles";
 import { approveComponentSet, setStatus } from "@/lib/components/catalog";
+import { audited } from "@/lib/audit";
 
-export async function POST(
+export const POST = audited(async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -44,4 +45,4 @@ export async function POST(
   }
 
   return NextResponse.json({ setId: id, status: "approved" });
-}
+});

@@ -993,6 +993,61 @@ export const evalsOrganizationMembers = pgTable("evals_organization_members", {
 
 export type EvalsOrganizationMember = typeof evalsOrganizationMembers.$inferSelect;
 
+/**
+ * How an audited action reached the app: a signed-in browser, a personal
+ * access token, the app itself (the runner, Cloud Scheduler, Auth.js), or
+ * someone with no account (an attendee claiming a workshop login).
+ */
+export const AUDIT_VIA = ["session", "token", "system", "anonymous"] as const;
+export type AuditVia = (typeof AUDIT_VIA)[number];
+export const auditVia = pgEnum("audit_via", AUDIT_VIA);
+
+/** Whether it worked: refused at the gate (403), or tried and failed (any other 4xx/5xx). */
+export const AUDIT_OUTCOMES = ["succeeded", "denied", "failed"] as const;
+export type AuditOutcome = (typeof AUDIT_OUTCOMES)[number];
+export const auditOutcome = pgEnum("audit_outcome", AUDIT_OUTCOMES);
+
+/**
+ * One action anyone or anything took: every change made through the API, a
+ * sign-in or sign-out, a saved preference, and what the runner did to a
+ * workshop. Written by `src/lib/audit.ts` (and `runner/src/db.ts`), never
+ * updated, and kept when the actor's account is deleted — the name and email
+ * are copied in for that reason.
+ */
+export const auditEvents = pgTable(
+  "audit_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
+    actorId: text("actor_id").references(() => users.id, { onDelete: "set null" }),
+    actorName: text("actor_name"),
+    actorEmail: text("actor_email"),
+    via: auditVia("via").notNull(),
+    /** "PATCH /api/users/{id}" for a route; "auth.sign-in", "runner.provisioned" and the like otherwise. */
+    action: text("action").notNull(),
+    /** What the action does, in words — the API reference's summary for a route. */
+    summary: text("summary").notNull(),
+    /** The URL actually requested, for a route. */
+    path: text("path"),
+    /** The id the action was aimed at, if any. */
+    target: text("target"),
+    /** A readable name for it, where the action knew one. */
+    targetLabel: text("target_label"),
+    status: integer("status"),
+    outcome: auditOutcome("outcome").notNull(),
+    /** The request body with secrets redacted, the error code, and anything the action added. */
+    detail: jsonb("detail").$type<Record<string, unknown>>(),
+    ip: text("ip"),
+  },
+  (t) => [
+    index("audit_events_at_idx").on(t.at),
+    index("audit_events_actor_idx").on(t.actorId, t.at),
+    index("audit_events_action_idx").on(t.action, t.at),
+  ],
+);
+
+export type AuditEvent = typeof auditEvents.$inferSelect;
+
 export type WorkshopRun = typeof workshopRuns.$inferSelect;
 export type LabGuide = typeof labGuides.$inferSelect;
 export type LabWorkshop = typeof labWorkshops.$inferSelect;

@@ -8,6 +8,7 @@ import { validateSet } from "@/lib/components/validate";
 import { createScheduledRun } from "@/lib/runs";
 import { startRunNow } from "@/lib/trigger";
 import type { ComponentSetStatus } from "@/db/schema";
+import { audited } from "@/lib/audit";
 
 const SANDBOX_TTL_SECONDS = 2 * 60 * 60;
 
@@ -32,7 +33,7 @@ export async function GET(req: Request) {
   return NextResponse.json({ sets: mine });
 }
 
-export async function POST(req: Request) {
+export const POST = audited(async function POST(req: Request) {
   const viewer = await sessionOrToken(req);
   if (!viewer) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -86,4 +87,4 @@ export async function POST(req: Request) {
   const started = await startRunNow(run.id);
 
   return NextResponse.json({ setId, run, started }, { status: 201 });
-}
+});

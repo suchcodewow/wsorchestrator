@@ -1,5 +1,5 @@
 /**
- * The sign-in domains, and adding one. Reading takes a token; adding is
+ * The sign-in domains, a page at a time, and adding one. Reading takes a token; adding is
  * session-only, as it decides who can sign in at all.
  */
 
@@ -14,18 +14,21 @@ import {
   STATUS_FOR,
 } from "@/lib/allowed-domains";
 import { canManageSignInDomains } from "@/lib/roles";
+import { audited } from "@/lib/audit";
+import { DOMAIN_LIST } from "@/lib/list-specs";
+import { parseListQuery } from "@/lib/paging";
 
 export async function GET(req: Request) {
   const { error } = await requireCaller(req, canManageSignInDomains);
   if (error) return error;
 
-  return NextResponse.json({
-    domains: await listAllowedDomains(),
-    fromEnvironment: envAllowedDomains(),
-  });
+  const { rows, page, hasMore } = await listAllowedDomains(
+    parseListQuery(new URL(req.url).searchParams, DOMAIN_LIST),
+  );
+  return NextResponse.json({ domains: rows, page, hasMore, fromEnvironment: envAllowedDomains() });
 }
 
-export async function POST(req: Request) {
+export const POST = audited(async function POST(req: Request) {
   const session = await auth();
   if (!session?.user) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -52,4 +55,4 @@ export async function POST(req: Request) {
     );
   }
   return NextResponse.json({ ok: true });
-}
+});

@@ -53,7 +53,8 @@ export async function assertScratchDatabase(url = testDatabaseUrl()): Promise<vo
  * Removes everything one suite created — the users whose id starts with
  * `TEST_PREFIX` + `scope` — children first: `workshop_runs.user_id` does not
  * cascade, and a run left behind would keep its owner alive. Sessions, tokens
- * and the rest cascade from the user.
+ * and the rest cascade from the user. Audit rows outlive a deleted user by
+ * design, so the suite's own are deleted by actor first.
  */
 export async function deleteTestRows(
   query: (sql: string, params: unknown[]) => Promise<unknown>,
@@ -61,6 +62,7 @@ export async function deleteTestRows(
 ) {
   if (!/^[a-z0-9]+_$/.test(scope)) throw new Error(`bad test scope "${scope}"`);
   const like = `${TEST_PREFIX}${scope}%`;
+  await query("delete from audit_events where actor_id like $1", [like]);
   await query(
     "delete from workshop_runs where user_id in (select id from users where id like $1)",
     [like],

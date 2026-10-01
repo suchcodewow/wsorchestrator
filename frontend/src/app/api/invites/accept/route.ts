@@ -5,6 +5,7 @@ import { z } from "zod";
 import { auth } from "@/auth";
 import { homePath, type Access } from "@/lib/roles";
 import { acceptInvite, type InviteError } from "@/lib/user-invites";
+import { audited } from "@/lib/audit";
 
 const postSchema = z.object({ token: z.string().min(1).max(200) });
 
@@ -14,7 +15,7 @@ const STATUS_FOR: Record<InviteError, number> = {
   revoked: 410,
 };
 
-export async function POST(req: Request) {
+export const POST = audited(async function POST(req: Request) {
   const session = await auth();
   if (!session?.user) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -42,4 +43,4 @@ export async function POST(req: Request) {
       }
     : session.user.access;
   return NextResponse.json({ applied: result.applied, home: homePath(access) });
-}
+});

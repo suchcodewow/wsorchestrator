@@ -19,6 +19,7 @@ import {
   effectiveAllowedDomains,
   isEmailAllowed,
 } from "@/lib/allowed-domains";
+import { recordAudit, requestIp } from "@/lib/audit";
 import { googlePhotoChosen, syncGoogleProfile } from "@/lib/google-profile";
 import { REQUEST_PATH_HEADER, returnPath } from "@/lib/request-path";
 import type { Access } from "@/lib/roles";
@@ -60,16 +61,58 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     error: "/signin",
   },
   events: {
-    async signIn({ user, account, profile }) {
+    async signIn({ user, account, profile, isNewUser }) {
       const photoChosen = await googlePhotoChosen(account?.access_token);
       await syncGoogleProfile(user.id, profile, photoChosen);
       await applyBootstrapAdmin(user.email);
+      if (user.id) {
+        await recordAudit({
+          actor: { id: user.id, email: user.email ?? null, name: user.name ?? null },
+          via: "session",
+          action: "auth.sign-in",
+          summary: isNewUser ? "Signed in for the first time, creating the account." : "Signed in with Google.",
+          outcome: "succeeded",
+          ip: await requestIp(),
+        });
+      }
+    },
+    async signOut(message) {
+      const userId = "session" in message ? message.session?.userId : undefined;
+      if (!userId) return;
+      await recordAudit({
+        actor: { id: userId, email: null },
+        via: "session",
+        action: "auth.sign-out",
+        summary: "Signed out.",
+        outcome: "succeeded",
+        ip: await requestIp(),
+      });
     },
   },
   callbacks: {
-    signIn({ user, profile }) {
-      if (profile && profile.email_verified === false) return false;
-      return isEmailAllowed(user.email ?? profile?.email);
+    async signIn({ user, profile }) {
+      const email = user.email ?? profile?.email ?? null;
+      const why =
+        profile && profile.email_verified === false
+          ? "unverified_email"
+          : (await isEmailAllowed(email))
+            ? null
+            : "domain_not_allowed";
+      if (!why) return true;
+
+      await recordAudit({
+        actor: null,
+        actorName: user.name ?? email ?? undefined,
+        via: "anonymous",
+        action: "auth.sign-in",
+        summary: "Tried to sign in and was refused.",
+        target: email,
+        status: 403,
+        outcome: "denied",
+        detail: { error: why },
+        ip: await requestIp(),
+      });
+      return false;
     },
 
     async session({ session, user }) {

@@ -18,6 +18,7 @@ import {
   finishSchema,
   productionImportAvailable,
 } from "@/lib/production-import";
+import { audited } from "@/lib/audit";
 
 // Every migration, then the clean-up. The job waits up to this long.
 export const maxDuration = 300;
@@ -40,7 +41,7 @@ async function fromImportJob(req: Request): Promise<boolean> {
   }
 }
 
-export async function POST(req: Request) {
+export const POST = audited(async function POST(req: Request) {
   if (!productionImportAvailable() || !(await fromImportJob(req))) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
@@ -67,4 +68,4 @@ export async function POST(req: Request) {
     );
     return NextResponse.json({ error: "finish_failed", detail: message }, { status: 500 });
   }
-}
+});

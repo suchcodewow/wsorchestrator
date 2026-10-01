@@ -8,8 +8,9 @@ import {
   STATUS_FOR,
   updateOrgSecret,
 } from "@/lib/harness-org-secrets";
+import { audited } from "@/lib/audit";
 
-export async function PATCH(
+export const PATCH = audited(async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -42,9 +43,9 @@ export async function PATCH(
     );
   }
   return NextResponse.json({ secret: result.secret });
-}
+});
 
-export async function DELETE(
+export const DELETE = audited(async function DELETE(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -56,4 +57,4 @@ export async function DELETE(
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
   return NextResponse.json({ id, status: "removed" });
-}
+});

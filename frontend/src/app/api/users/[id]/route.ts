@@ -11,6 +11,7 @@ import {
   type DeleteUserError,
   type SetRoleError,
 } from "@/lib/site-users";
+import { audited } from "@/lib/audit";
 
 const patchSchema = z.discriminatedUnion("area", [
   z.object({ area: z.literal("event"), role: z.enum(EVENT_ROLES) }),
@@ -27,7 +28,7 @@ const STATUS_FOR: Record<SetRoleError, number> = {
   bootstrap: 409,
 };
 
-export async function PATCH(
+export const PATCH = audited(async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -57,7 +58,7 @@ export async function PATCH(
     );
   }
   return NextResponse.json({ ok: true, ...parsed.data });
-}
+});
 
 const DELETE_STATUS_FOR: Record<DeleteUserError, number> = {
   not_found: 404,
@@ -67,7 +68,7 @@ const DELETE_STATUS_FOR: Record<DeleteUserError, number> = {
   owns_events: 409,
 };
 
-export async function DELETE(
+export const DELETE = audited(async function DELETE(
   _req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -91,4 +92,4 @@ export async function DELETE(
     );
   }
   return NextResponse.json({ ok: true });
-}
+});

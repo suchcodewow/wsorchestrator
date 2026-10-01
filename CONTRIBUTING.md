@@ -224,6 +224,109 @@ yours to come last rather than resolving the conflict in place.
 
 ---
 
+## Adding a feature
+
+Every feature meets three requirements. The unit suite enforces the first two,
+so a change that misses either fails `npm run verify`.
+
+### It can be reached through the API
+
+Anything a person can see or do in the UI, a script holding a personal access
+token can see or do through the API.
+
+- **A page that shows data needs a `GET` that returns the same data.** The page
+  and the route call the same `src/lib` function. Neither has its own query.
+- **Every route goes through `requireCaller`**
+  ([`api-auth.ts`](frontend/src/lib/api-auth.ts)), so a token works on it as
+  well as a session. Call `auth()` directly only for the session-only kinds in
+  [docs/api.md](docs/api.md#session-only-routes).
+- **Every route has an entry in
+  [`src/lib/api-reference/`](frontend/src/lib/api-reference/)**, which is
+  published at `/api`. Describe what the handler actually does: its parameters,
+  its response, and every error it can return.
+- **Every route has an entry in the e2e matrix** in
+  `frontend/test/e2e/roles.test.ts`, giving the role it needs. A session-only
+  route is marked `sessionOnly`.
+- Add the page to the table in
+  [docs/api.md](docs/api.md#what-a-page-shows-and-where-to-read-it).
+
+### It leaves an audit trail
+
+Every action is recorded in `audit_events`. Administrators read it on
+**Administration → Audit Trail**, or through `GET /api/audit`.
+
+- **Wrap every `POST`, `PATCH`, `PUT` and `DELETE` handler in `audited`**
+  ([`audit.ts`](frontend/src/lib/audit.ts)):
+
+  ```ts
+  export const POST = audited(async function POST(req: Request) { … });
+  ```
+
+  The wrapper records the caller, whether they came by session or token, the
+  route, the request body with secrets redacted, and the outcome. A 403 is
+  recorded as `denied` and any other status of 400 or above as `failed`. It
+  does not record a 401, because a caller nobody could identify has nothing to
+  attribute.
+- **Name what the action changed with `noteAudit({ target, targetLabel })`**
+  once the handler knows it. `target` is the id and `targetLabel` the name a
+  person recognises. "Deleted lab guide *Intro to CD*" is useful to someone
+  reading the trail. "DELETE /api/lab-guides/8f3c…" is not.
+- **A `POST` that changes nothing** (a preview, a validation, a search) is not
+  audited. Mark its api-reference entry `changesNothing: true` instead of
+  leaving the handler unwrapped. The coverage test in
+  `test/unit/audit.test.ts` checks every mutating handler for one or the other.
+- **An action that does not come through a route** (sign-in, a scheduled job,
+  anything the runner does) calls `recordAudit` itself. When no person did it,
+  pass `actor: null` and an `actorName` from `SYSTEM_ACTORS`. The runner uses `recordRunAudit` in
+  [`runner/src/db.ts`](runner/src/db.ts).
+
+### Its tables read 100 rows at a time
+
+A table backed by the database never loads everything and filters in the
+browser. Searching, sorting and paging all happen in the query, and each query
+returns at most `PAGE_SIZE` (100) rows.
+
+1. **Add a `ListSpec`** to [`list-specs.ts`](frontend/src/lib/list-specs.ts),
+   listing the columns the table can sort by (the first is the default) and the
+   default direction. This file must stay free of server-only imports, because
+   the API reference that runs in the browser reads it.
+2. **Write the list function** in `src/lib`. It takes a
+   `ListQuery<YourSort>` and returns a `Page<Row>`, built from
+   [`paging.ts`](frontend/src/lib/paging.ts) and
+   [`paging-sql.ts`](frontend/src/lib/paging-sql.ts):
+
+   ```ts
+   const { limit, offset } = pageWindow(query.page);   // LIMIT 101: one row past the page
+   const rows = await db.select().from(t)
+     .where(searchAny(query.q, [t.name, t.email]))      // ILIKE, wildcards escaped
+     .orderBy(...orderFor(SORT_COLUMNS[query.sort], query.dir, t.id))  // nulls last, stable
+     .limit(limit).offset(offset);
+   return toPage(rows, query.page);                     // { rows, page, hasMore }
+   ```
+
+   Always give `orderFor` a unique column (usually `id`) to break ties last.
+   Without one, a row can appear on two pages, or on neither.
+3. **Have the page and the `GET` both use `parseListQuery(params, YOUR_LIST)`.**
+   The page reads its `searchParams` and the route reads its URL. Both take the
+   same `q`, `sort`, `dir` and `page`. In the api-reference entry, spread
+   `listQuery(...)` into `query` and `PAGE_FIELDS` into the response.
+4. **Build the table from
+   [`data-table.tsx`](frontend/src/components/data-table.tsx)**:
+   `TableSearch`, a `SortHeader` per sortable column (a `PlainHeader` for the
+   others), and a `Pager` under the table. They write to the URL, and the
+   server component re-runs the query.
+5. **When a page has several tables**, give each a prefix such as `"sales"`.
+   Its sort and page then live under `sales.sort` and `sales.page`, and every
+   table on the page shares one search box (`q`).
+6. **A total for the heading** ("1,204 employees") comes from a separate
+   `count(*)`. Do not count the page's rows for it.
+
+A list with a small hard limit enforced when rows are written (template sources
+stop at `MAX_TEMPLATE_SOURCES` per owner) does not need paging. Neither does a
+list that does not come from the database.
+
+---
+
 ## What does not work locally
 
 Sign-in, the calendar, scheduling a workshop, run history, and the live run

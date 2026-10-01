@@ -65,6 +65,12 @@ export type Endpoint = {
   access: AccessKey;
   /** False only where the handler calls auth() directly and so refuses a personal access token. */
   token: boolean;
+  /**
+   * True for a POST that only computes an answer — a preview, a lookup, a
+   * validation — and stores nothing. Every other non-GET handler is wrapped
+   * in `audited` and writes a row to the audit trail; these are not.
+   */
+  changesNothing?: true;
   notes?: string;
   params?: Field[];
   query?: Field[];

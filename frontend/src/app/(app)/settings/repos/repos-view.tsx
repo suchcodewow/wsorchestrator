@@ -1,6 +1,6 @@
 "use client";
 
-/** The GitHub repositories every workshop imports into Harness Code. */
+/** A page of the GitHub repositories every workshop imports into Harness Code. */
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -16,6 +16,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
+import { HEADER_ROW, Pager, PlainHeader, SortHeader, TableSearch } from "@/components/data-table";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -26,7 +27,9 @@ import {
   suggestedIdentifier,
   type RepoRow,
 } from "@/lib/github-repos";
+import type { RepoSort } from "@/lib/list-specs";
 import { riseChild, staggerParent } from "@/lib/motion";
+import type { ListQuery, Page } from "@/lib/paging";
 import { cn } from "@/lib/utils";
 
 const ERRORS: Record<string, string> = {
@@ -48,7 +51,9 @@ const SCOPES: { value: RepoScope; label: string; Icon: typeof Layers }[] = [
   { value: "project", label: "Project", Icon: FolderKanban },
 ];
 
-export function ReposView({ repos }: { repos: RepoRow[] }) {
+export function ReposView({ query, page }: { query: ListQuery<RepoSort>; page: Page<RepoRow> }) {
+  const repos = page.rows;
+  const sortProps = { sort: query.sort, dir: query.dir };
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -93,6 +98,10 @@ export function ReposView({ repos }: { repos: RepoRow[] }) {
         <h2 className="text-xl font-medium tracking-tight">GitHub Repos</h2>
       </motion.div>
 
+      <motion.div variants={riseChild}>
+        <TableSearch value={query.q} placeholder="Search by repository, name or who added it" label="Search repositories" />
+      </motion.div>
+
       {error && (
         <motion.p
           variants={riseChild}
@@ -110,12 +119,20 @@ export function ReposView({ repos }: { repos: RepoRow[] }) {
         <div className="overflow-x-auto">
           <table className="w-full min-w-160 text-sm">
             <thead>
-              <tr className="border-b bg-muted/30 text-left text-[11px] uppercase tracking-wider text-muted-foreground">
-                <th className="px-5 py-2.5 font-medium">Repository</th>
-                <th className="px-5 py-2.5 font-medium">Name in Harness</th>
-                <th className="px-5 py-2.5 font-medium">Imported into</th>
-                <th className="px-5 py-2.5 font-medium">Added by</th>
-                <th className="w-24 px-5 py-2.5" />
+              <tr className={HEADER_ROW}>
+                <SortHeader column="providerRepo" {...sortProps}>
+                  Repository
+                </SortHeader>
+                <SortHeader column="identifier" {...sortProps}>
+                  Name in Harness
+                </SortHeader>
+                <SortHeader column="scope" {...sortProps}>
+                  Imported into
+                </SortHeader>
+                <SortHeader column="addedBy" {...sortProps}>
+                  Added by
+                </SortHeader>
+                <PlainHeader className="w-24" />
               </tr>
             </thead>
             <tbody>
@@ -125,7 +142,7 @@ export function ReposView({ repos }: { repos: RepoRow[] }) {
                     colSpan={5}
                     className="px-5 py-8 text-center text-muted-foreground"
                   >
-                    No repositories yet.
+                    {query.q ? "No repositories match." : "No repositories yet."}
                   </td>
                 </tr>
               )}
@@ -251,6 +268,9 @@ export function ReposView({ repos }: { repos: RepoRow[] }) {
               )}
             </tbody>
           </table>
+        </div>
+        <div className="border-t empty:hidden">
+          <Pager page={page} noun="repositories" />
         </div>
       </motion.div>
 

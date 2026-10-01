@@ -77,6 +77,7 @@ export const CONTENT_GROUPS: EndpointGroup[] = [
         summary: "Checks a proposed set of components without storing anything.",
         access: "contributor",
         token: true,
+        changesNothing: true,
         notes:
           "Per-component checks only. Dependency cycles and references to components that do not exist are checked by the runner when a sandbox run starts. Problems come back with status 200 and `ok: false`.",
         body: { kind: "json", fields: componentFields },
@@ -315,6 +316,7 @@ export const CONTENT_GROUPS: EndpointGroup[] = [
         summary: "Renders a draft guide body to HTML without saving it.",
         access: "manager",
         token: true,
+        changesNothing: true,
         notes:
           "The HTML carries source-line markers for the editor, and images missing from the library are ringed in red. Variables are left unfilled; `variables` reports which ones the body uses.",
         body: {
@@ -330,6 +332,7 @@ export const CONTENT_GROUPS: EndpointGroup[] = [
         summary: "Lists the lab images a draft body points at that the library no longer holds.",
         access: "manager",
         token: true,
+        changesNothing: true,
         notes: "Cheaper than a preview: it parses the body and does one lookup.",
         body: {
           kind: "json",

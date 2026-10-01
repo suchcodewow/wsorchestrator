@@ -9,6 +9,7 @@ import {
   updateAllowedDomain,
 } from "@/lib/allowed-domains";
 import { canManageSignInDomains } from "@/lib/roles";
+import { audited } from "@/lib/audit";
 
 async function actor() {
   const session = await auth();
@@ -19,7 +20,7 @@ async function actor() {
   return { actor: { id: session.user.id, email: session.user.email } };
 }
 
-export async function PATCH(
+export const PATCH = audited(async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -44,9 +45,9 @@ export async function PATCH(
     );
   }
   return NextResponse.json({ ok: true });
-}
+});
 
-export async function DELETE(
+export const DELETE = audited(async function DELETE(
   _req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -64,4 +65,4 @@ export async function DELETE(
     );
   }
   return NextResponse.json({ ok: true });
-}
+});

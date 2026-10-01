@@ -1,7 +1,7 @@
 /** What the deploy picker offers: the site's content, and one user's own. */
 
 import "server-only";
-import { listOrgSecrets } from "@/lib/harness-org-secrets";
+import { countOrgSecrets } from "@/lib/harness-org-secrets";
 import {
   listTemplateSources,
   type TemplateSourceRow,
@@ -18,15 +18,15 @@ export type DeployChoices = {
 
 export async function deployChoices(userId: string): Promise<DeployChoices> {
   const [secrets, sources, mySecrets, myTemplates] = await Promise.all([
-    listOrgSecrets(null),
+    countOrgSecrets(null),
     listTemplateSources(null),
-    listOrgSecrets(userId),
+    countOrgSecrets(userId),
     listTemplateSources(userId),
   ]);
 
   return {
-    official: { secrets: secrets.length, sources: sources.length },
-    mySecrets: mySecrets.length,
+    official: { secrets, sources: sources.length },
+    mySecrets,
     myTemplates,
   };
 }

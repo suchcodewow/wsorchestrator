@@ -2,7 +2,7 @@
 
 import "server-only";
 
-import { asc, eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
 import {
@@ -13,6 +13,9 @@ import {
   type EvalsTitleList,
 } from "@/db/schema";
 import { cleanTitle, titleKey } from "@/lib/evals/title-lists";
+import type { TitleSort } from "@/lib/list-specs";
+import { pageWindow, toPage, type ListQuery, type Page } from "@/lib/paging";
+import { orderFor, searchAny } from "@/lib/paging-sql";
 
 export type TitleRow = {
   id: string;
@@ -22,7 +25,20 @@ export type TitleRow = {
   addedBy: string | null;
 };
 
-export async function listTitles(): Promise<TitleRow[]> {
+const TITLE_SORT_COLUMNS = {
+  title: sql`lower(${evalsTitles.title})`,
+  addedBy: sql`lower(coalesce(nullif(${users.name}, ''), ${users.email}))`,
+  createdAt: evalsTitles.createdAt,
+} as const;
+
+/**
+ * One page of titles: one list's when `list` is given, every list's
+ * otherwise. The search matches the title or who added it.
+ */
+export async function listTitles(
+  query: ListQuery<TitleSort> & { list?: EvalsTitleList },
+): Promise<Page<TitleRow>> {
+  const { limit, offset } = pageWindow(query.page);
   const rows = await db
     .select({
       id: evalsTitles.id,
@@ -34,13 +50,37 @@ export async function listTitles(): Promise<TitleRow[]> {
     })
     .from(evalsTitles)
     .leftJoin(users, eq(users.id, evalsTitles.createdBy))
-    .orderBy(sql`lower(${evalsTitles.title})`, asc(evalsTitles.id));
+    .where(
+      and(
+        query.list ? eq(evalsTitles.list, query.list) : undefined,
+        searchAny(query.q, [evalsTitles.title, users.name, users.email]),
+      ),
+    )
+    .orderBy(
+      ...orderFor(TITLE_SORT_COLUMNS[query.sort], query.dir, sql`lower(${evalsTitles.title})`, evalsTitles.id),
+    )
+    .limit(limit)
+    .offset(offset);
 
-  return rows.map(({ addedByName, addedByEmail, list, ...row }) => ({
-    ...row,
-    list: list as EvalsTitleList,
-    addedBy: addedByName ?? addedByEmail,
-  }));
+  return toPage(
+    rows.map(({ addedByName, addedByEmail, list, ...row }) => ({
+      ...row,
+      list: list as EvalsTitleList,
+      addedBy: addedByName ?? addedByEmail,
+    })),
+    query.page,
+  );
+}
+
+/** How many titles each list holds. */
+export async function titleCounts(): Promise<Record<EvalsTitleList, number>> {
+  const rows = await db
+    .select({ list: evalsTitles.list, count: sql<number>`count(*)::int` })
+    .from(evalsTitles)
+    .groupBy(evalsTitles.list);
+  const counts = Object.fromEntries(EVALS_TITLE_LISTS.map((l) => [l, 0])) as Record<EvalsTitleList, number>;
+  for (const r of rows) counts[r.list as EvalsTitleList] = r.count;
+  return counts;
 }
 
 /** Every listed title, keyed by `titleKey`. */

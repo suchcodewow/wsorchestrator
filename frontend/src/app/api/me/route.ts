@@ -3,6 +3,7 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/api-auth";
 import { preferencesOf, savePreferences } from "@/lib/user-preferences";
+import { audited } from "@/lib/audit";
 
 export async function GET(req: Request) {
   const { error, user } = await requireUser(req);
@@ -16,7 +17,7 @@ export async function GET(req: Request) {
   });
 }
 
-export async function PATCH(req: Request) {
+export const PATCH = audited(async function PATCH(req: Request) {
   const { error, user } = await requireUser(req);
   if (error) return error;
 
@@ -36,4 +37,4 @@ export async function PATCH(req: Request) {
     );
   }
   return NextResponse.json({ preferences: await preferencesOf(user.id) });
-}
+});

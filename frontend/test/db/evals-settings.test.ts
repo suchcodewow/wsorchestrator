@@ -32,12 +32,19 @@ import {
 import { hibobServiceUser, listHibobSyncRuns, syncHibobEmployees } from "@/lib/evals/hibob";
 import { loadRoster } from "@/lib/evals/roster";
 import { addTitles, deleteTitle, listTitles, updateTitle } from "@/lib/evals/titles";
+import { HIBOB_SYNC_LIST, TITLE_LIST, type TitleSort } from "@/lib/list-specs";
+import type { ListQuery } from "@/lib/paging";
 import { TEST_EMAIL_DOMAIN, TEST_PREFIX } from "../support/db";
 import { PERSONAS } from "../support/access";
 import { testScope, type TestUser } from "../support/seed";
 
 const scope = testScope("evals");
 const T = (title: string) => `${TEST_PREFIX}${title}`;
+
+/** This file's titles, as the first page of a search for the prefix finds them. */
+async function myTitles(list?: "sales" | "engineer" | "ignored", sort: Partial<ListQuery<TitleSort>> = {}) {
+  return (await listTitles({ ...TITLE_LIST, q: TEST_PREFIX, page: 1, list, ...sort })).rows;
+}
 const email = (name: string) => `${name}@${TEST_EMAIL_DOMAIN}`;
 
 let admin: TestUser;
@@ -97,7 +104,7 @@ describe("title lists", () => {
     assert.deepEqual(again.added, [T("Sales Engineer")]);
     assert.deepEqual(again.existing, [{ title: T("Account Executive"), list: "sales" }]);
 
-    const mine = (await listTitles()).filter((t) => t.title.startsWith(TEST_PREFIX));
+    const mine = await myTitles();
     assert.deepEqual(
       mine.map((t) => [t.title, t.list, t.addedBy]),
       [
@@ -108,8 +115,18 @@ describe("title lists", () => {
     );
   });
 
+  test("a page holds one list's titles, sorted as asked", async () => {
+    assert.deepEqual(
+      (await myTitles("sales", { dir: "desc" })).map((t) => t.title),
+      [T("SDR"), T("Account Executive")],
+    );
+    assert.deepEqual((await myTitles("ignored")).map((t) => t.title), []);
+    const later = await listTitles({ ...TITLE_LIST, q: TEST_PREFIX, page: 2 });
+    assert.deepEqual([later.rows.length, later.hasMore], [0, false]);
+  });
+
   test("renaming onto another title is refused, naming its list; moving lists works", async () => {
-    const titles = (await listTitles()).filter((t) => t.title.startsWith(TEST_PREFIX));
+    const titles = await myTitles();
     const sdr = titles.find((t) => t.title === T("SDR"))!;
 
     assert.deepEqual(await updateTitle(sdr.id, { title: T("sales engineer") }), {
@@ -119,7 +136,7 @@ describe("title lists", () => {
     });
     assert.deepEqual(await updateTitle(sdr.id, { title: `  ${T("SDR")}  II `, list: "ignored" }), { ok: true });
 
-    const moved = (await listTitles()).find((t) => t.id === sdr.id)!;
+    const moved = (await myTitles()).find((t) => t.id === sdr.id)!;
     assert.equal(moved.title, `${T("SDR")} II`);
     assert.equal(moved.list, "ignored");
   });
@@ -266,7 +283,7 @@ describe("HiBob sync", () => {
 
   async function run(id: string | null) {
     assert.ok(id);
-    return (await listHibobSyncRuns(100)).find((r) => r.id === id)!;
+    return (await listHibobSyncRuns({ ...HIBOB_SYNC_LIST, q: "", page: 1 })).rows.find((r) => r.id === id)!;
   }
 
   test("without credentials nothing is asked of HiBob, and the run says why", async () => {

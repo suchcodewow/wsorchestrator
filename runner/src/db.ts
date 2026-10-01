@@ -113,6 +113,55 @@ export async function log(
   );
 }
 
+/* ------------------------------------------------------------------ *
+ * The audit trail
+ * ------------------------------------------------------------------ */
+
+/**
+ * The actor name the frontend shows for these rows; `SYSTEM_ACTORS.runner` in
+ * `frontend/src/lib/audit.ts` is the same string.
+ */
+const AUDIT_ACTOR = "Runner";
+
+type AuditOutcome = "succeeded" | "denied" | "failed";
+
+/**
+ * Write one row to the app's audit trail for something the runner did to a
+ * run on its own. Called from the state transitions below rather than by their
+ * callers, so a new caller cannot forget it.
+ *
+ * The run's name is copied in by the same statement, so the row still says
+ * which workshop it was after the run is deleted — which is why `setDestroyed`
+ * writes its row before the delete. Like the frontend's `recordAudit`, this
+ * never fails the work it records: a database without `audit_events` yet, or
+ * any other error, is logged and dropped.
+ */
+async function recordRunAudit(
+  runId: string,
+  action: string,
+  summary: string,
+  outcome: AuditOutcome = "succeeded",
+  detail?: Record<string, unknown>,
+): Promise<void> {
+  try {
+    await pool.query(
+      `insert into audit_events
+              (actor_name, via, action, summary, target, target_label, outcome, detail)
+       select $2, 'system', $3, $4, id, name, $5::audit_outcome, $6::jsonb
+         from workshop_runs
+        where id = $1`,
+      [runId, AUDIT_ACTOR, action, summary, outcome, detail ? JSON.stringify(detail) : null],
+    );
+  } catch (err) {
+    console.error(`audit: could not record ${action} for ${runId}:`, err);
+  }
+}
+
+/** Errors are stored whole on the run; the trail keeps enough to search by. */
+function errorDetail(error: string): Record<string, unknown> {
+  return { error: error.length > 500 ? `${error.slice(0, 500)}…` : error };
+}
+
 /**
  * Start (or restart) a provision. The previous attempt's `error` is cleared
  * here rather than on success: a run that failed, was fixed, and re-provisioned
@@ -123,6 +172,7 @@ export async function setProvisioning(runId: string) {
     `update workshop_runs set status = 'provisioning', error = null where id = $1`,
     [runId],
   );
+  await recordRunAudit(runId, "runner.provision.start", "Started provisioning the event.");
 }
 
 export async function setOrgUnitPath(runId: string, orgUnitPath: string) {
@@ -150,6 +200,9 @@ export async function setReady(
       where id = $1`,
     [runId, JSON.stringify(outputs), expiresAt.toISOString()],
   );
+  await recordRunAudit(runId, "runner.provision.ready", "Finished provisioning; the event is live.", "succeeded", {
+    expiresAt: expiresAt.toISOString(),
+  });
 }
 
 /**
@@ -163,6 +216,7 @@ export async function setFailed(runId: string, error: string) {
     `update workshop_runs set status = 'failed', error = $2 where id = $1`,
     [runId, error],
   );
+  await recordRunAudit(runId, "runner.provision.failed", "Provisioning failed.", "failed", errorDetail(error));
 }
 
 /**
@@ -177,6 +231,13 @@ export async function setLiveError(runId: string, error: string) {
   await pool.query(
     `update workshop_runs set status = 'ready', error = $2 where id = $1`,
     [runId, error],
+  );
+  await recordRunAudit(
+    runId,
+    "runner.update.failed",
+    "A change to the live event failed; the event was left as it was.",
+    "failed",
+    errorDetail(error),
   );
 }
 
@@ -218,7 +279,11 @@ export async function claimDestroy(
   // selected before the claim, and two reapers racing the same run would both
   // compute the same stale number from it.
   if (rows.length === 0) return { outcome: "abandoned" };
-  return { outcome: "claimed", attempt: rows[0].destroy_attempts };
+  const attempt = rows[0].destroy_attempts;
+  await recordRunAudit(runId, "runner.teardown.start", "Started tearing down the event.", "succeeded", {
+    attempt,
+  });
+  return { outcome: "claimed", attempt };
 }
 
 /**
@@ -251,6 +316,13 @@ export async function setDestroyRetry(
       where id = $1`,
     [runId, note],
   );
+  await recordRunAudit(
+    runId,
+    "runner.teardown.retry",
+    "Teardown paused; it is retried on the next reaper tick.",
+    "failed",
+    errorDetail(note),
+  );
 }
 
 /**
@@ -279,6 +351,13 @@ export async function setDestroyFailed(
       where id = $1`,
     [runId, error],
   );
+  await recordRunAudit(
+    runId,
+    "runner.teardown.failed",
+    "Teardown failed and was left for a person.",
+    "failed",
+    errorDetail(error),
+  );
 }
 
 /**
@@ -294,6 +373,8 @@ export async function setDestroyFailed(
  * line written after the delete would have nothing to hang off.
  */
 export async function setDestroyed(runId: string) {
+  // Before the delete: the row is where the audit entry gets the run's name.
+  await recordRunAudit(runId, "runner.teardown.done", "Finished tearing down the event.");
   const { rowCount } = await pool.query(
     `delete from workshop_runs where id = $1 and delete_requested`,
     [runId],
@@ -726,6 +807,9 @@ export async function claimDueScheduledRuns(): Promise<{ id: string }[]> {
       returning id`,
     [`${PROVISION_LEAD_HOURS} hours`, deploymentEnvironment()],
   );
+  for (const { id } of rows) {
+    await recordRunAudit(id, "runner.schedule.due", "A scheduled event came due and was queued to provision.");
+  }
   return rows;
 }
 
@@ -820,6 +904,29 @@ export async function recordScrub(
       where id = $1`,
     [id, status, note],
   );
+  try {
+    await pool.query(
+      `insert into audit_events
+              (actor_name, via, action, summary, target, target_label, outcome, detail)
+       select $2, 'system', 'runner.scrub', $3, id,
+              org_identifier || '/' || secret_identifier, $4::audit_outcome, $5::jsonb
+         from harness_deployed_secrets
+        where id = $1`,
+      [
+        id,
+        AUDIT_ACTOR,
+        status === "scrubbed"
+          ? "Overwrote a deployed secret in a customer's Harness account."
+          : status === "skipped"
+            ? "Left a deployed secret alone: its owner had changed it."
+            : "Could not overwrite a deployed secret.",
+        status === "failed" ? "failed" : "succeeded",
+        JSON.stringify({ status, note }),
+      ],
+    );
+  } catch (err) {
+    console.error(`audit: could not record runner.scrub for ${id}:`, err);
+  }
 }
 
 /**

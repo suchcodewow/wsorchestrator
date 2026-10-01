@@ -9,10 +9,11 @@ import {
   updateTitle,
   updateTitleSchema,
 } from "@/lib/evals/titles";
+import { audited } from "@/lib/audit";
 
 const idSchema = z.string().uuid();
 
-export async function PATCH(
+export const PATCH = audited(async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -37,9 +38,9 @@ export async function PATCH(
     );
   }
   return NextResponse.json({ ok: true });
-}
+});
 
-export async function DELETE(
+export const DELETE = audited(async function DELETE(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -59,4 +60,4 @@ export async function DELETE(
     );
   }
   return NextResponse.json({ ok: true });
-}
+});

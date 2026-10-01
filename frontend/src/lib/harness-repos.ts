@@ -7,7 +7,7 @@
  */
 
 import "server-only";
-import { and, asc, eq, ne } from "drizzle-orm";
+import { and, eq, ne, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { harnessRepos, REPO_SCOPES, users, type RepoScope } from "@/db/schema";
 import {
@@ -16,6 +16,9 @@ import {
   suggestedIdentifier,
   type RepoRow,
 } from "@/lib/github-repos";
+import type { RepoSort } from "@/lib/list-specs";
+import { pageWindow, toPage, type ListQuery, type Page } from "@/lib/paging";
+import { orderFor, searchAny } from "@/lib/paging-sql";
 
 export type RepoError =
   | "invalid_url"
@@ -35,7 +38,16 @@ export const STATUS_FOR: Record<RepoError, number> = {
 const isScope = (value: unknown): value is RepoScope =>
   typeof value === "string" && (REPO_SCOPES as readonly string[]).includes(value);
 
-export async function listRepos(): Promise<RepoRow[]> {
+const REPO_SORT_COLUMNS = {
+  identifier: sql`lower(${harnessRepos.identifier})`,
+  providerRepo: sql`lower(${harnessRepos.providerRepo})`,
+  scope: harnessRepos.scope,
+  addedBy: sql`lower(coalesce(nullif(${users.name}, ''), ${users.email}))`,
+} as const;
+
+/** One page of the list; the search matches the address, either name, the level or who added it. */
+export async function listRepos(query: ListQuery<RepoSort>): Promise<Page<RepoRow>> {
+  const { limit, offset } = pageWindow(query.page);
   const rows = await db
     .select({
       id: harnessRepos.id,
@@ -49,9 +61,21 @@ export async function listRepos(): Promise<RepoRow[]> {
     })
     .from(harnessRepos)
     .leftJoin(users, eq(users.id, harnessRepos.addedBy))
-    .orderBy(asc(harnessRepos.identifier));
+    .where(
+      searchAny(query.q, [
+        harnessRepos.url,
+        harnessRepos.providerRepo,
+        harnessRepos.identifier,
+        harnessRepos.scope,
+        users.name,
+        users.email,
+      ]),
+    )
+    .orderBy(...orderFor(REPO_SORT_COLUMNS[query.sort], query.dir, harnessRepos.identifier, harnessRepos.id))
+    .limit(limit)
+    .offset(offset);
 
-  return rows.map((row) => ({
+  return toPage(rows.map((row) => ({
     id: row.id,
     url: row.url,
     providerRepo: row.providerRepo,
@@ -59,7 +83,7 @@ export async function listRepos(): Promise<RepoRow[]> {
     scope: isScope(row.scope) ? row.scope : "org",
     createdAt: row.createdAt.toISOString(),
     addedBy: row.byName ?? row.byEmail ?? null,
-  }));
+  })), query.page);
 }
 
 /** Straight off the wire, so every field is suspect until `check` has had it. */

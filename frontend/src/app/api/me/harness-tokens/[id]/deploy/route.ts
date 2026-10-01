@@ -5,6 +5,7 @@ import { requireAdministrator } from "@/lib/api-auth";
 import { deployContent } from "@/lib/harness-deploy";
 import { STATUS_FOR } from "@/lib/harness-deploy-errors";
 import type { DeploySelection } from "@/lib/harness-deploy-selection";
+import { audited } from "@/lib/audit";
 
 export const maxDuration = 300;
 
@@ -26,7 +27,7 @@ function selectionOf(body: Body): DeploySelection {
   };
 }
 
-export async function POST(
+export const POST = audited(async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -48,4 +49,4 @@ export async function POST(
   }
 
   return NextResponse.json({ report: result.report });
-}
+});

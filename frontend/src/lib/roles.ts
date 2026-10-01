@@ -143,6 +143,9 @@ export const canManageBackups = (access: Access) => access.platform;
 
 export const canManageSignInDomains = (access: Access) => access.platform;
 
+/** The audit trail records everyone's actions in every area, so only a platform administrator reads it. */
+export const canViewAuditTrail = (access: Access) => access.platform;
+
 /** Whether `access` may set other people's role in `area`, or the platform flag. */
 export function canManageRoles(access: Access, area: Area | "platform"): boolean {
   switch (area) {

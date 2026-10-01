@@ -8,6 +8,7 @@ import {
   DatabaseBackup,
   FlaskConical,
   Layers,
+  ScrollText,
   Settings,
   Settings2,
   SlidersHorizontal,
@@ -29,6 +30,7 @@ import {
   canUseEvals,
   canUseEvents,
   canUseTraining,
+  canViewAuditTrail,
   type Access,
 } from "@/lib/roles";
 
@@ -127,6 +129,7 @@ export const NAV_SECTIONS: NavSection[] = [
         Icon: Settings,
         visible: canManageSignInDomains,
       },
+      { href: "/audit", label: "Audit Trail", Icon: ScrollText, visible: canViewAuditTrail },
     ],
   },
 ];

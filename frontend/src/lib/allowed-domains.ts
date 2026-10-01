@@ -2,7 +2,7 @@
 
 import "server-only";
 
-import { asc, eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
 import { ALLOWED_DOMAIN_LIMITS, allowedEmailDomains, users } from "@/db/schema";
@@ -11,6 +11,9 @@ import {
   normalizeDomain,
   parseDomainList,
 } from "@/lib/email-domains";
+import type { DomainSort } from "@/lib/list-specs";
+import { pageWindow, toPage, type ListQuery, type Page } from "@/lib/paging";
+import { blankAsNull, orderFor, searchAny } from "@/lib/paging-sql";
 import { isBootstrapAdmin } from "@/lib/site-admins";
 
 export function envAllowedDomains(): string[] {
@@ -40,7 +43,15 @@ export type AllowedDomainRow = {
   addedBy: string | null;
 };
 
-export async function listAllowedDomains(): Promise<AllowedDomainRow[]> {
+const DOMAIN_SORT_COLUMNS = {
+  domain: allowedEmailDomains.domain,
+  note: sql`lower(${blankAsNull(allowedEmailDomains.note)})`,
+  addedBy: sql`lower(coalesce(nullif(${users.name}, ''), ${users.email}))`,
+} as const;
+
+/** One page of the domains added here; the search matches the domain, the note or who added it. */
+export async function listAllowedDomains(query: ListQuery<DomainSort>): Promise<Page<AllowedDomainRow>> {
+  const { limit, offset } = pageWindow(query.page);
   const rows = await db
     .select({
       id: allowedEmailDomains.id,
@@ -52,12 +63,20 @@ export async function listAllowedDomains(): Promise<AllowedDomainRow[]> {
     })
     .from(allowedEmailDomains)
     .leftJoin(users, eq(users.id, allowedEmailDomains.createdBy))
-    .orderBy(asc(allowedEmailDomains.domain));
+    .where(
+      searchAny(query.q, [allowedEmailDomains.domain, allowedEmailDomains.note, users.name, users.email]),
+    )
+    .orderBy(...orderFor(DOMAIN_SORT_COLUMNS[query.sort], query.dir, allowedEmailDomains.domain))
+    .limit(limit)
+    .offset(offset);
 
-  return rows.map(({ addedByName, addedByEmail, ...row }) => ({
-    ...row,
-    addedBy: addedByName ?? addedByEmail,
-  }));
+  return toPage(
+    rows.map(({ addedByName, addedByEmail, ...row }) => ({
+      ...row,
+      addedBy: addedByName ?? addedByEmail,
+    })),
+    query.page,
+  );
 }
 
 export type DomainError =

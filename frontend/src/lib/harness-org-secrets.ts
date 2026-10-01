@@ -4,7 +4,7 @@
  */
 
 import "server-only";
-import { and, asc, eq, isNull, ne, or, type SQL } from "drizzle-orm";
+import { and, asc, eq, isNull, ne, or, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import {
   harnessOrgSecrets,
@@ -13,6 +13,9 @@ import {
   type HarnessOrgSecret,
   type OrgSecretKind,
 } from "@/db/schema";
+import type { OrgSecretSort } from "@/lib/list-specs";
+import { pageWindow, toPage, type ListQuery, type Page } from "@/lib/paging";
+import { orderFor, searchAny } from "@/lib/paging-sql";
 import { openSecret, sealSecret } from "@/lib/secret-box";
 
 /** A user's id for their own secrets, or null for the site's. */
@@ -79,17 +82,57 @@ const summarize = (
   usable: openSecret(row.secret) !== null,
 });
 
+const SECRET_SORT_COLUMNS = {
+  identifier: sql`lower(${harnessOrgSecrets.identifier})`,
+  kind: harnessOrgSecrets.kind,
+  updatedAt: harnessOrgSecrets.updatedAt,
+  updatedBy: sql`lower(coalesce(nullif(${users.name}, ''), ${users.email}))`,
+} as const;
+
+/**
+ * One page of one owner's secrets, without their values. The search matches
+ * the id, the file name, the kind or who last stored it.
+ */
 export async function listOrgSecrets(
   owner: SecretOwner,
-): Promise<OrgSecretRow[]> {
+  query: ListQuery<OrgSecretSort>,
+): Promise<Page<OrgSecretRow>> {
+  const { limit, offset } = pageWindow(query.page);
   const rows = await db
     .select({ secret: harnessOrgSecrets, byName: users.name, byEmail: users.email })
     .from(harnessOrgSecrets)
     .leftJoin(users, eq(users.id, harnessOrgSecrets.updatedBy))
-    .where(ownedBy(owner))
-    .orderBy(asc(harnessOrgSecrets.identifier));
+    .where(
+      and(
+        ownedBy(owner),
+        searchAny(query.q, [
+          harnessOrgSecrets.identifier,
+          harnessOrgSecrets.fileName,
+          harnessOrgSecrets.kind,
+          users.name,
+          users.email,
+        ]),
+      ),
+    )
+    .orderBy(
+      ...orderFor(SECRET_SORT_COLUMNS[query.sort], query.dir, harnessOrgSecrets.identifier, harnessOrgSecrets.id),
+    )
+    .limit(limit)
+    .offset(offset);
 
-  return rows.map((r) => summarize(r.secret, r.byName ?? r.byEmail ?? null));
+  return toPage(
+    rows.map((r) => summarize(r.secret, r.byName ?? r.byEmail ?? null)),
+    query.page,
+  );
+}
+
+/** How many secrets one owner keeps. */
+export async function countOrgSecrets(owner: SecretOwner): Promise<number> {
+  const [row] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(harnessOrgSecrets)
+    .where(ownedBy(owner));
+  return row?.count ?? 0;
 }
 
 export type OrgSecretValue = {

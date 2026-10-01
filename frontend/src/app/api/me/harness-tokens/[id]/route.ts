@@ -4,8 +4,9 @@ import { NextResponse } from "next/server";
 import { sessionOrToken } from "@/lib/api-auth";
 import { deleteHarnessToken, recheckHarnessToken } from "@/lib/harness-tokens";
 import { STATUS_FOR } from "@/lib/harness-token-errors";
+import { audited } from "@/lib/audit";
 
-export async function POST(
+export const POST = audited(async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -23,9 +24,9 @@ export async function POST(
     );
   }
   return NextResponse.json({ token: result.token });
-}
+});
 
-export async function DELETE(
+export const DELETE = audited(async function DELETE(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -41,4 +42,4 @@ export async function DELETE(
   }
 
   return NextResponse.json({ id, status: "removed", scrub });
-}
+});

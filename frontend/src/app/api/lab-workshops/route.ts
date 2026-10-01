@@ -8,6 +8,7 @@ import {
   listLabWorkshops,
 } from "@/lib/lab-workshops";
 import { canManageLabGuides } from "@/lib/roles";
+import { audited } from "@/lib/audit";
 
 /** Lab editors also see unpublished workshops; anyone else, the published ones. */
 async function canEdit(req: Request): Promise<boolean> {
@@ -19,7 +20,7 @@ export async function GET(req: Request) {
   return NextResponse.json({ workshops: await listLabWorkshops(await canEdit(req)) });
 }
 
-export async function POST(req: Request) {
+export const POST = audited(async function POST(req: Request) {
   const caller = await sessionOrToken(req);
   if (!caller) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -39,4 +40,4 @@ export async function POST(req: Request) {
   }
 
   return NextResponse.json({ workshop: result.workshop }, { status: 201 });
-}
+});

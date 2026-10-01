@@ -26,6 +26,7 @@ import assert from "node:assert/strict";
 
 import { EVALS_ROLES, EVENT_ROLES, TRAINING_ROLES } from "@/db/schema";
 import type { Access } from "@/lib/roles";
+import { USER_LIST } from "@/lib/list-specs";
 import { setUserRole, listSiteUsers, type RoleChange, type SetRoleError } from "@/lib/site-users";
 import { PERSONAS, PERSONA_NAMES, describeAccess } from "../support/access";
 import { createRun, readRoles, testScope, type TestUser } from "../support/seed";
@@ -236,7 +237,9 @@ describe("listSiteUsers", () => {
     await createRun(plain.id, "one");
     await createRun(plain.id, "two");
 
-    const listed = new Map((await listSiteUsers()).map((u) => [u.id, u]));
+    const page = await listSiteUsers({ ...USER_LIST, q: "list_", page: 1 });
+    const listed = new Map(page.rows.map((u) => [u.id, u]));
+    assert.ok(page.rows.every((u) => `${u.name} ${u.email}`.includes("list_")), "the search narrows the page");
     assert.deepEqual(
       {
         eventRole: listed.get(plain.id)?.eventRole,
@@ -257,6 +260,19 @@ describe("listSiteUsers", () => {
     );
     assert.equal(listed.get(boot.id)?.isBootstrapAdmin, true);
     assert.equal(listed.get(boot.id)?.eventCount, 0);
+  });
+
+  test("sorts by any column in the database, and pages", async () => {
+    const busy = await scope.createUser("sort_busy", PERSONAS.nobody);
+    const idle = await scope.createUser("sort_idle", PERSONAS.nobody);
+    await createRun(busy.id, "one");
+    const ids = async (dir: "asc" | "desc") =>
+      (await listSiteUsers({ q: "sort_", sort: "events", dir, page: 1 })).rows.map((u) => u.id);
+    assert.deepEqual(await ids("desc"), [busy.id, idle.id]);
+    assert.deepEqual(await ids("asc"), [idle.id, busy.id]);
+
+    const beyond = await listSiteUsers({ q: "sort_", sort: "user", dir: "asc", page: 2 });
+    assert.deepEqual([beyond.rows, beyond.hasMore], [[], false]);
   });
 });
 

@@ -3,8 +3,9 @@
 import { NextResponse } from "next/server";
 import { requireAdministrator } from "@/lib/api-auth";
 import { deleteTemplateSource } from "@/lib/harness-templates";
+import { audited } from "@/lib/audit";
 
-export async function DELETE(
+export const DELETE = audited(async function DELETE(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -16,4 +17,4 @@ export async function DELETE(
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
   return NextResponse.json({ id, status: "removed" });
-}
+});

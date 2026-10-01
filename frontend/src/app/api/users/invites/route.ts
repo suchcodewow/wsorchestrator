@@ -6,6 +6,7 @@ import { auth } from "@/auth";
 import { EVALS_ROLES, EVENT_ROLES, TRAINING_ROLES } from "@/db/schema";
 import { canManageUsers } from "@/lib/roles";
 import { createInvite, type CreateInviteError } from "@/lib/user-invites";
+import { audited } from "@/lib/audit";
 
 const postSchema = z.object({
   eventRole: z.enum(EVENT_ROLES).nullable(),
@@ -19,7 +20,7 @@ const STATUS_FOR: Record<CreateInviteError, number> = {
   forbidden: 403,
 };
 
-export async function POST(req: Request) {
+export const POST = audited(async function POST(req: Request) {
   const session = await auth();
   if (!session?.user) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -48,4 +49,4 @@ export async function POST(req: Request) {
     { path: `/invite/${result.token}`, expiresAt: result.expiresAt.toISOString() },
     { status: 201 },
   );
-}
+});

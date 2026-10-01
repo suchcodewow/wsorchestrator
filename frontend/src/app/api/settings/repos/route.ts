@@ -1,16 +1,20 @@
-/** The GitHub repositories every workshop imports into Harness. */
+/** The GitHub repositories every workshop imports into Harness, a page at a time, and adding one. */
 
 import { NextResponse } from "next/server";
 import { requireAdministrator } from "@/lib/api-auth";
 import { addRepo, listRepos, STATUS_FOR } from "@/lib/harness-repos";
+import { audited } from "@/lib/audit";
+import { REPO_LIST } from "@/lib/list-specs";
+import { parseListQuery } from "@/lib/paging";
 
 export async function GET(req: Request) {
   const { error } = await requireAdministrator(req);
   if (error) return error;
-  return NextResponse.json({ repos: await listRepos() });
+  const { rows, page, hasMore } = await listRepos(parseListQuery(new URL(req.url).searchParams, REPO_LIST));
+  return NextResponse.json({ repos: rows, page, hasMore });
 }
 
-export async function POST(req: Request) {
+export const POST = audited(async function POST(req: Request) {
   const { error, user } = await requireAdministrator(req);
   if (error) return error;
 
@@ -31,4 +35,4 @@ export async function POST(req: Request) {
     );
   }
   return NextResponse.json({ ok: true }, { status: 201 });
-}
+});

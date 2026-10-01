@@ -4,10 +4,11 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireEvalsAdministrator } from "@/lib/api-auth";
 import { setOrgLeaderEmail } from "@/lib/evals/settings";
+import { audited } from "@/lib/audit";
 
 const bodySchema = z.object({ email: z.string().email() });
 
-export async function PUT(req: Request) {
+export const PUT = audited(async function PUT(req: Request) {
   const { error, user } = await requireEvalsAdministrator(req);
   if (error) return error;
 
@@ -21,4 +22,4 @@ export async function PUT(req: Request) {
     return NextResponse.json({ error: result.error }, { status: 400 });
   }
   return NextResponse.json({ ok: true });
-}
+});

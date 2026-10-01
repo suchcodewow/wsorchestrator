@@ -84,6 +84,7 @@ const POLICY: Record<string, { actual: Check; expected: Check }> = {
 
   canManageBackups: { actual: roles.canManageBackups, expected: platformOnly },
   canManageSignInDomains: { actual: roles.canManageSignInDomains, expected: platformOnly },
+  canViewAuditTrail: { actual: roles.canViewAuditTrail, expected: platformOnly },
 
   "canManageRoles(event)": {
     actual: (a) => roles.canManageRoles(a, "event"),

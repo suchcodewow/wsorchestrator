@@ -51,6 +51,34 @@ Responses are JSON:
 The gate is `requireCaller` in
 [`frontend/src/lib/api-auth.ts`](../frontend/src/lib/api-auth.ts).
 
+Every request that changes something is written to the audit trail under the
+token's owner, marked as made with a token. This covers requests that are
+refused with 403 or that fail. Administrators can read the trail on the Audit
+Trail page or through `GET /api/audit`.
+
+### Lists come 100 rows at a time
+
+A `GET` that returns a table's rows takes the same parameters as the page's
+URL, and returns at most 100 rows:
+
+| Parameter | Meaning |
+| --- | --- |
+| `q` | Search text, matched case-insensitively against the columns the entry at `/api` lists |
+| `sort` | A column name from that entry. Anything else falls back to the default |
+| `dir` | `asc` or `desc` |
+| `page` | 1-based |
+
+The response has `page` and `hasMore`. Keep incrementing `page` until
+`hasMore` is false:
+
+```bash
+curl -H "Authorization: Bearer $TOKEN" "https://harnessevents.io/api/audit?q=lab-guides&sort=at&dir=desc&page=2"
+```
+
+`GET /api/evals/titles` returns all three title lists together. Pass
+`list=sales|engineer|ignored` to get only one of them, as each table on the page
+does.
+
 ## Session-only routes
 
 These refuse a token with 401, even when it belongs to someone who could do the
@@ -87,7 +115,8 @@ add it to the table above.
 | My settings (theme, calendar scope) | `GET`/`PATCH /api/me` |
 | Users | `GET /api/users` |
 | Admin settings (sign-in domains) | `GET /api/settings/domains` |
-| Cohort Settings | `GET /api/evals/employees`, `GET /api/evals/hibob/sync`, `GET /api/evals/titles` |
+| Cohort Settings | `GET /api/evals/employees`, `GET /api/evals/organization`, `GET /api/evals/hibob/sync`, `GET /api/evals/titles?list=` |
+| Audit Trail | `GET /api/audit` |
 | Labs | `GET /api/lab-workshops`, `GET /api/lab-workshops/[id or slug]`, `GET /api/lab-guides`, `GET /api/lab-guides/[id or slug]`, `GET /api/lab-images` |
 
 Changes go through the same routes the pages call: `POST`, `PATCH` and `DELETE`

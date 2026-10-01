@@ -7,8 +7,9 @@ import { sessionOrToken } from "@/lib/api-auth";
 import { harnessComponentSets, workshopRuns } from "@/db/schema";
 import { canContributeComponents } from "@/lib/roles";
 import { setStatus } from "@/lib/components/catalog";
+import { audited } from "@/lib/audit";
 
-export async function POST(
+export const POST = audited(async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -55,4 +56,4 @@ export async function POST(
     testedBy: runs,
     untested: runs.length === 0,
   });
-}
+});
