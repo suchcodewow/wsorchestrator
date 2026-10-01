@@ -5,10 +5,10 @@ import { requireAdministrator } from "@/lib/api-auth";
 import { deleteTemplateSource } from "@/lib/harness-templates";
 
 export async function DELETE(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const { error } = await requireAdministrator();
+  const { error } = await requireAdministrator(req);
   if (error) return error;
 
   const { id } = await params;

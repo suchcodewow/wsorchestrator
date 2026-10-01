@@ -9,7 +9,7 @@ import { listHarnessOrgs, listHarnessProjects } from "@/lib/harness-platform";
 import { STATUS_FOR } from "@/lib/harness-template-errors";
 
 export async function POST(req: Request) {
-  const { error } = await requireUser();
+  const { error } = await requireUser(req);
   if (error) return error;
 
   const body = (await req.json().catch(() => null)) as {

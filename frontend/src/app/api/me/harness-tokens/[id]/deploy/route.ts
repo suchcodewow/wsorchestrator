@@ -30,7 +30,7 @@ export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const { error, user } = await requireAdministrator();
+  const { error, user } = await requireAdministrator(req);
   if (error) return error;
 
   const body = (await req.json().catch(() => null)) as Body | null;

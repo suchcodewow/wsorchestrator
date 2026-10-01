@@ -1,0 +1,90 @@
+# The API
+
+Everything the site does goes through `/api/*` route handlers, and almost all of
+them take a personal access token in place of a browser session. A script can
+read what a page shows and make the changes a page makes, as you and with your
+roles.
+
+## Getting a token
+
+**My settings → My API tokens** (`/me/api-tokens`). Contributors also have the
+same card on `/contribute`, and the contributor bundle download includes a token
+of its own.
+
+- A token looks like `wo_<16 hex>_<secret>`. Only its SHA-256 is stored, so it
+  is shown once, when it is created.
+- It lasts 30 days (`TOKEN_TTL_DAYS`). Revoking it takes effect on the next
+  request.
+- Each account can have 5 active tokens it created itself (`MAX_TOKENS_PER_USER`).
+  Bundle tokens do not count toward that limit, and each new download revokes
+  the previous one.
+- A token has no scopes. It carries its owner's roles, which are read from
+  `users` on every request. Changing someone's roles therefore changes what
+  their tokens can do straight away.
+
+## Using it
+
+```bash
+export TOKEN="wo_..."
+curl -H "Authorization: Bearer $TOKEN" https://harnessevents.io/api/me
+curl -H "Authorization: Bearer $TOKEN" "https://harnessevents.io/api/runs/calendar?scope=all"
+curl -X PATCH -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"themePreference":"dark"}' https://harnessevents.io/api/me
+```
+
+If a request carries both a session cookie and a token, the session wins.
+Responses are JSON:
+
+- `401 {"error":"unauthorized"}`: no session, or the token is missing, revoked,
+  expired or malformed.
+- `403 {"error":"forbidden"}`: the owner's roles do not allow the request.
+
+The gate is `requireCaller` in
+[`frontend/src/lib/api-auth.ts`](../frontend/src/lib/api-auth.ts).
+
+## Session-only routes
+
+These refuse a token with 401, even when it belongs to someone who could do the
+same thing in a browser. Each one either touches every account at once or can
+escalate itself:
+
+| Route | Why |
+| --- | --- |
+| `POST /api/database/query` | Arbitrary SQL |
+| `/api/backups/**` | Taking, restoring and importing backups |
+| `PATCH`/`DELETE /api/users/[id]`, `POST /api/users/invites`, `POST /api/invites/accept` | Granting roles and creating accounts |
+| `POST /api/settings/domains`, `PATCH`/`DELETE /api/settings/domains/[id]` | Who can sign in at all |
+| `/api/tokens/**`, `GET /api/components/bundle` | Minting tokens (a token must not be able to mint its own replacement) |
+
+You can still *read* users (`GET /api/users`) and sign-in domains
+(`GET /api/settings/domains`) with a token.
+
+To make a new route session-only, call `auth()` directly instead of going
+through `requireCaller`. Then mark it `sessionOnly: true` in the e2e matrix
+(`frontend/test/e2e/roles.test.ts`) and add it to the table above.
+
+## What a page shows, and where to read it
+
+| Page | Endpoint |
+| --- | --- |
+| Events | `GET /api/runs`, `GET /api/runs/calendar?scope=own\|all` |
+| An event | `GET /api/runs/[id]` |
+| Stranded events | `GET /api/runs/stranded` |
+| Contribute | `GET /api/components`, `GET /api/component-sets`, `GET /api/component-sets/[id]` |
+| Cloud status | `GET /api/cloud-status` |
+| Settings → org secrets / templates / repos | `GET /api/settings/org-secrets`, `GET /api/settings/templates[?status=1]`, `GET /api/settings/repos` |
+| My Harness tokens | `GET /api/me/harness-tokens` |
+| My org secrets / templates | `GET /api/me/org-secrets`, `GET /api/me/templates[?status=1]` |
+| My settings (theme, calendar scope) | `GET`/`PATCH /api/me` |
+| Users | `GET /api/users` |
+| Admin settings (sign-in domains) | `GET /api/settings/domains` |
+| eVals settings | `GET /api/evals/employees`, `GET /api/evals/hibob/sync`, `GET /api/evals/titles` |
+| Labs | `GET /api/lab-workshops`, `GET /api/lab-workshops/[id or slug]`, `GET /api/lab-guides`, `GET /api/lab-guides/[id or slug]`, `GET /api/lab-images` |
+
+Changes go through the same routes the pages call: `POST`, `PATCH` and `DELETE`
+on the paths above. The e2e matrix in `roles.test.ts` lists every route along
+with the role it needs.
+
+Lab workshops and guides can be read without signing in. If an editor's token
+is attached, the response also includes unpublished workshops and, for a guide,
+the workshops that use it.

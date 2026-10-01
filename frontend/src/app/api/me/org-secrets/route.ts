@@ -8,15 +8,19 @@ import {
   readOrgSecretForm,
   STATUS_FOR,
 } from "@/lib/harness-org-secrets";
+import { secretsConfigured } from "@/lib/secret-box";
 
-export async function GET() {
-  const { error, user } = await requireUser();
+export async function GET(req: Request) {
+  const { error, user } = await requireUser(req);
   if (error) return error;
-  return NextResponse.json({ secrets: await listOrgSecrets(user.id) });
+  return NextResponse.json({
+    secrets: await listOrgSecrets(user.id),
+    configured: secretsConfigured(),
+  });
 }
 
 export async function POST(req: Request) {
-  const { error, user } = await requireUser();
+  const { error, user } = await requireUser(req);
   if (error) return error;
 
   const form = await req.formData().catch(() => null);

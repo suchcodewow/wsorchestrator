@@ -1,16 +1,16 @@
 /** The events a restore to a given time would strand. */
 
 import { NextResponse } from "next/server";
-import { auth } from "@/auth";
+import { sessionOrToken } from "@/lib/api-auth";
 import { runsStrandedBy } from "@/lib/backups";
 import { canManageBackups } from "@/lib/roles";
 
 export async function GET(req: Request) {
-  const session = await auth();
-  if (!session?.user) {
+  const caller = await sessionOrToken(req);
+  if (!caller) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
-  if (!canManageBackups(session.user.access)) {
+  if (!canManageBackups(caller.access)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 

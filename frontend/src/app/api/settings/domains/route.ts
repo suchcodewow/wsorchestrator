@@ -1,13 +1,29 @@
-/** Adds a sign-in domain. */
+/**
+ * The sign-in domains, and adding one. Reading takes a token; adding is
+ * session-only, as it decides who can sign in at all.
+ */
 
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
+import { requireCaller } from "@/lib/api-auth";
 import {
   addAllowedDomain,
   domainInputSchema,
+  envAllowedDomains,
+  listAllowedDomains,
   STATUS_FOR,
 } from "@/lib/allowed-domains";
 import { canManageSignInDomains } from "@/lib/roles";
+
+export async function GET(req: Request) {
+  const { error } = await requireCaller(req, canManageSignInDomains);
+  if (error) return error;
+
+  return NextResponse.json({
+    domains: await listAllowedDomains(),
+    fromEnvironment: envAllowedDomains(),
+  });
+}
 
 export async function POST(req: Request) {
   const session = await auth();

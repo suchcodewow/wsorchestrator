@@ -75,6 +75,7 @@ and dependencies; the root holds only what ties them together.
 | [TESTING.md](TESTING.md) | Adding tests, or exercising code without deploying. |
 | [docs/operations.md](docs/operations.md) | Something is broken in the deployed environment. |
 | [docs/harness.md](docs/harness.md) | Touching the deploy pipeline, a trigger, or the Harness API. |
+| [docs/api.md](docs/api.md) | Calling this site's API from a script with a personal access token. |
 
 > **Joining an existing deployment?** You want
 > [CONTRIBUTING.md](CONTRIBUTING.md), not the setup guide below. Local

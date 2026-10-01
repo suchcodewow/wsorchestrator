@@ -1,16 +1,30 @@
-/** Creates a workshop and sets its contents. */
+/** The workshops, and creating one. Reading is public, like /labs. */
 
 import { NextResponse } from "next/server";
-import { auth } from "@/auth";
-import { createLabWorkshop, labWorkshopSchema } from "@/lib/lab-workshops";
+import { sessionOrToken } from "@/lib/api-auth";
+import {
+  createLabWorkshop,
+  labWorkshopSchema,
+  listLabWorkshops,
+} from "@/lib/lab-workshops";
 import { canManageLabGuides } from "@/lib/roles";
 
+/** Lab editors also see unpublished workshops; anyone else, the published ones. */
+async function canEdit(req: Request): Promise<boolean> {
+  const caller = await sessionOrToken(req);
+  return caller !== null && canManageLabGuides(caller.access);
+}
+
+export async function GET(req: Request) {
+  return NextResponse.json({ workshops: await listLabWorkshops(await canEdit(req)) });
+}
+
 export async function POST(req: Request) {
-  const session = await auth();
-  if (!session?.user) {
+  const caller = await sessionOrToken(req);
+  if (!caller) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
-  if (!canManageLabGuides(session.user.access)) {
+  if (!canManageLabGuides(caller.access)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
@@ -19,7 +33,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "invalid_body" }, { status: 400 });
   }
 
-  const result = await createLabWorkshop(parsed.data, session.user.id);
+  const result = await createLabWorkshop(parsed.data, caller.id);
   if (!result.ok) {
     return NextResponse.json({ error: result.error }, { status: 400 });
   }

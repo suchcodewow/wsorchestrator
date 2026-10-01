@@ -1,4 +1,9 @@
-/** Authenticates an API request from either a session or a bundle token. */
+/**
+ * Authenticates an API request from either a session or a personal access
+ * token. Every route goes through `requireCaller` (or one of the shorthands
+ * below) unless it is deliberately session-only; those call `auth()` directly
+ * and are listed in docs/api.md.
+ */
 
 import "server-only";
 import { NextResponse } from "next/server";
@@ -10,9 +15,13 @@ import {
   type Access,
 } from "@/lib/roles";
 
-export async function sessionOrToken(
-  req: Request,
-): Promise<TokenBearer | null> {
+export type Caller = TokenBearer;
+
+export type CallerGate =
+  | { error: NextResponse; user: null }
+  | { error: null; user: Caller };
+
+export async function sessionOrToken(req: Request): Promise<Caller | null> {
   const session = await auth();
   if (session?.user) {
     return {
@@ -31,54 +40,40 @@ export async function sessionOrToken(
   return resolveToken(match[1]!);
 }
 
-/** Any signed-in account, for the things that are only ever their own. */
-export async function requireUser(): Promise<
-  | { error: NextResponse; user: null }
-  | { error: null; user: { id: string; email: string | null } }
-> {
-  const session = await auth();
-  if (!session?.user) {
+/**
+ * The caller, from a session or a token: 401 if neither, 403 if `allowed`
+ * says no. Without `allowed`, any signed-in account passes.
+ */
+export async function requireCaller(
+  req: Request,
+  allowed?: (access: Access) => boolean,
+): Promise<CallerGate> {
+  const caller = await sessionOrToken(req);
+  if (!caller) {
     return {
       error: NextResponse.json({ error: "unauthorized" }, { status: 401 }),
       user: null,
     };
   }
-  return {
-    error: null,
-    user: { id: session.user.id, email: session.user.email ?? null },
-  };
-}
-
-export function requireAdministrator() {
-  return requireAccess(canManageSettings);
-}
-
-/** An eVals administrator, for eVals settings. */
-export function requireEvalsAdministrator() {
-  return requireAccess(canManageEvalsSettings);
-}
-
-async function requireAccess(
-  allowed: (access: Access) => boolean,
-): Promise<
-  | { error: NextResponse; user: null }
-  | { error: null; user: { id: string; email: string | null } }
-> {
-  const session = await auth();
-  if (!session?.user) {
-    return {
-      error: NextResponse.json({ error: "unauthorized" }, { status: 401 }),
-      user: null,
-    };
-  }
-  if (!allowed(session.user.access)) {
+  if (allowed && !allowed(caller.access)) {
     return {
       error: NextResponse.json({ error: "forbidden" }, { status: 403 }),
       user: null,
     };
   }
-  return {
-    error: null,
-    user: { id: session.user.id, email: session.user.email ?? null },
-  };
+  return { error: null, user: caller };
+}
+
+/** Any signed-in account, for the things that are only ever their own. */
+export function requireUser(req: Request) {
+  return requireCaller(req);
+}
+
+export function requireAdministrator(req: Request) {
+  return requireCaller(req, canManageSettings);
+}
+
+/** An eVals administrator, for eVals settings. */
+export function requireEvalsAdministrator(req: Request) {
+  return requireCaller(req, canManageEvalsSettings);
 }

@@ -5,10 +5,10 @@ import { requireUser } from "@/lib/api-auth";
 import { deleteTemplateSource } from "@/lib/harness-templates";
 
 export async function DELETE(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const { error, user } = await requireUser();
+  const { error, user } = await requireUser(req);
   if (error) return error;
 
   const { id } = await params;

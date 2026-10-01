@@ -1,7 +1,7 @@
 /** Publishes a reviewed component set, or sends it back. */
 
 import { NextResponse } from "next/server";
-import { auth } from "@/auth";
+import { sessionOrToken } from "@/lib/api-auth";
 import { canPublishComponents } from "@/lib/roles";
 import { approveComponentSet, setStatus } from "@/lib/components/catalog";
 
@@ -9,11 +9,11 @@ export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const session = await auth();
-  if (!session?.user) {
+  const caller = await sessionOrToken(req);
+  if (!caller) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
-  if (!canPublishComponents(session.user.access)) {
+  if (!canPublishComponents(caller.access)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 

@@ -7,10 +7,10 @@ import { scrubDeployedSecrets } from "@/lib/harness-scrub";
 export const maxDuration = 120;
 
 export async function POST(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const { error, user } = await requireAdministrator();
+  const { error, user } = await requireAdministrator(req);
   if (error) return error;
 
   const { id } = await params;

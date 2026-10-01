@@ -1,7 +1,7 @@
 /** Serves, renames or deletes one lab image. */
 
 import { NextResponse } from "next/server";
-import { auth } from "@/auth";
+import { sessionOrToken } from "@/lib/api-auth";
 import {
   deleteLabImage,
   getLabImageData,
@@ -31,12 +31,12 @@ export async function GET(
   });
 }
 
-async function requireEditor() {
-  const session = await auth();
-  if (!session?.user) {
+async function requireEditor(req: Request) {
+  const caller = await sessionOrToken(req);
+  if (!caller) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
-  if (!canManageLabGuides(session.user.access)) {
+  if (!canManageLabGuides(caller.access)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
   return null;
@@ -46,7 +46,7 @@ export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const denied = await requireEditor();
+  const denied = await requireEditor(req);
   if (denied) return denied;
 
   const body = await req.json().catch(() => null);
@@ -65,10 +65,10 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const denied = await requireEditor();
+  const denied = await requireEditor(req);
   if (denied) return denied;
 
   const { id } = await params;

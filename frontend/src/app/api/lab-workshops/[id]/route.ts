@@ -1,9 +1,11 @@
-/** Rewrites or deletes a workshop, contents and all. */
+/** Reads, rewrites or deletes a workshop, contents and all. */
 
 import { NextResponse } from "next/server";
-import { auth } from "@/auth";
+import { sessionOrToken } from "@/lib/api-auth";
 import {
   deleteLabWorkshop,
+  getLabWorkshopById,
+  getLabWorkshopBySlug,
   labWorkshopSchema,
   updateLabWorkshop,
   type LabWorkshopError,
@@ -15,22 +17,42 @@ const STATUS_FOR: Record<LabWorkshopError, number> = {
   unknown_guide: 400,
 };
 
-async function requireEditor() {
-  const session = await auth();
-  if (!session?.user) {
+async function requireEditor(req: Request) {
+  const caller = await sessionOrToken(req);
+  if (!caller) {
     return { error: NextResponse.json({ error: "unauthorized" }, { status: 401 }) };
   }
-  if (!canManageLabGuides(session.user.access)) {
+  if (!canManageLabGuides(caller.access)) {
     return { error: NextResponse.json({ error: "forbidden" }, { status: 403 }) };
   }
   return { error: null };
+}
+
+/** Lab editors also see unpublished workshops; anyone else, the published ones. */
+async function canEdit(req: Request): Promise<boolean> {
+  const caller = await sessionOrToken(req);
+  return caller !== null && canManageLabGuides(caller.access);
+}
+
+/** By id or by slug, with its guides in order. */
+export async function GET(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const { id } = await params;
+  const editor = await canEdit(req);
+  const slug = (await getLabWorkshopById(id))?.slug ?? id;
+
+  const workshop = await getLabWorkshopBySlug(slug, editor);
+  if (!workshop) return NextResponse.json({ error: "not_found" }, { status: 404 });
+  return NextResponse.json({ workshop });
 }
 
 export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const { error } = await requireEditor();
+  const { error } = await requireEditor(req);
   if (error) return error;
 
   const parsed = labWorkshopSchema.safeParse(await req.json().catch(() => null));
@@ -51,10 +73,10 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const { error } = await requireEditor();
+  const { error } = await requireEditor(req);
   if (error) return error;
 
   const { id } = await params;
