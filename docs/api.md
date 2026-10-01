@@ -5,6 +5,16 @@ them take a personal access token in place of a browser session. A script can
 read what a page shows and make the changes a page makes, as you and with your
 roles.
 
+The reference for every endpoint is published on the site itself at
+[`/api`](https://harnessevents.io/api). It covers each endpoint's role, body,
+response and errors. It is built from
+[`frontend/src/lib/api-reference/`](../frontend/src/lib/api-reference/), and
+`test/unit/api-reference.test.ts` fails when a route handler is missing from
+that catalog, or when an entry describes a handler that no longer exists or
+gets session-only wrong. A new route therefore needs a catalog entry before
+the unit suite passes. This file covers the parts that sit behind the
+reference.
+
 ## Getting a token
 
 **My settings → My API tokens** (`/me/api-tokens`).
@@ -59,7 +69,8 @@ You can still *read* users (`GET /api/users`) and sign-in domains
 
 To make a new route session-only, call `auth()` directly instead of going
 through `requireCaller`. Then mark it `sessionOnly: true` in the e2e matrix
-(`frontend/test/e2e/roles.test.ts`) and add it to the table above.
+(`frontend/test/e2e/roles.test.ts`), give its catalog entry `token: false`, and
+add it to the table above.
 
 ## What a page shows, and where to read it
 

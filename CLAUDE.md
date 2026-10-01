@@ -125,7 +125,9 @@ resource. A `.tf` change reaches QA on merge but reaches production only when
 so that a personal access token works on it as well as a session. Call `auth()`
 directly only for the session-only kinds listed in [docs/api.md](docs/api.md),
 and mark those `sessionOnly` in the e2e matrix. A page that shows data needs a
-`GET` that returns the same data.
+`GET` that returns the same data. Every route also needs an entry in
+`frontend/src/lib/api-reference/`, which is published at `/api`. The unit suite
+fails until that entry exists, so describe the handler as it actually behaves.
 
 **A heading's subtitle must earn its place with a live value.** A `<p>` under
 an `<h1>`/`<h2>`/`<h3>` stays only if it leads with or consists of something
@@ -178,4 +180,4 @@ docker exec workshoporchestrator-postgres-1 psql -U postgres -d workshops_agent 
 | [TESTING.md](TESTING.md) | Why the runner's tests exist; exercising code without deploying |
 | [docs/operations.md](docs/operations.md) | The deployed environment, its quirks, production data, known issues |
 | [docs/harness.md](docs/harness.md) | Harness API access and the pipeline/trigger traps |
-| [docs/api.md](docs/api.md) | Personal access tokens, which routes take one, and the session-only exceptions |
+| [docs/api.md](docs/api.md) | Personal access tokens, which routes take one, and the session-only exceptions; the endpoint reference itself is `/api` |
