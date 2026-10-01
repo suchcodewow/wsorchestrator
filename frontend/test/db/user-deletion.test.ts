@@ -17,6 +17,7 @@ import { eq } from "drizzle-orm";
 
 import { db } from "@/db";
 import { apiTokens, labGuides, sessions, users, workshopRuns } from "@/db/schema";
+import { mintToken, resolveToken } from "@/lib/api-tokens";
 import { deleteUser } from "@/lib/site-users";
 import { PERSONAS, PERSONA_NAMES } from "../support/access";
 import { createRun, createSession, testScope } from "../support/seed";
@@ -97,13 +98,8 @@ describe("deleteUser", () => {
     const admin = await scope.createUser("gone_actor", PERSONAS.platform);
     const target = await scope.createUser("gone_target", PERSONAS.manager);
     const token = await createSession(target.id);
-    await db.insert(apiTokens).values({
-      userId: target.id,
-      name: "t",
-      tokenHash: "unused",
-      prefix: `wo_test_delete_${Date.now()}`,
-      expiresAt: new Date(Date.now() + 60_000),
-    });
+    const minted = await mintToken(target.id, "t");
+    assert.ok(minted.ok);
     const [guide] = await db
       .insert(labGuides)
       .values({ slug: `wo-test-delete-${Date.now()}`, title: "kept", authorId: target.id })
@@ -120,6 +116,7 @@ describe("deleteUser", () => {
         (await db.select().from(apiTokens).where(eq(apiTokens.userId, target.id))).length,
         0,
       );
+      assert.equal(await resolveToken(minted.token.token), null);
       const [kept] = await db.select().from(labGuides).where(eq(labGuides.id, guide!.id));
       assert.equal(kept?.authorId, null);
     } finally {

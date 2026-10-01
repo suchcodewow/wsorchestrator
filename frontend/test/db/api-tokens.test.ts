@@ -5,8 +5,9 @@
  * matters most is that it carries the owner's roles *as they are now*: a token
  * minted by an administrator who has since been demoted must act as the
  * demoted user, not as the administrator it was minted by. The rest pins what
- * makes a token unusable — revoked, expired, altered — since each of those is
- * a request that has to be treated as signed out.
+ * makes a token unusable — revoked, expired, altered, its owner deleted — since
+ * each of those is a request that has to be treated as signed out. A token
+ * minted here never expires; `expired` covers the old bundle tokens that do.
  */
 
 import "../support/test-env";
@@ -16,7 +17,7 @@ import assert from "node:assert/strict";
 import { eq } from "drizzle-orm";
 
 import { db } from "@/db";
-import { apiTokens, MAX_TOKENS_PER_USER } from "@/db/schema";
+import { apiTokens, MAX_TOKENS_PER_USER, users } from "@/db/schema";
 import {
   listTokens,
   mintToken,
@@ -68,6 +69,18 @@ describe("an unusable token resolves to nobody", () => {
     assert.equal(await resolveToken(minted.token), null);
   });
 
+  test("its owner deleted", async () => {
+    const user = await scope.createUser("deleted", PERSONAS.operator);
+    const { token } = await mint(user.id);
+    assert.notEqual(await resolveToken(token), null);
+    await db.delete(users).where(eq(users.id, user.id));
+    assert.equal(await resolveToken(token), null);
+    assert.equal(
+      (await db.select().from(apiTokens).where(eq(apiTokens.userId, user.id))).length,
+      0,
+    );
+  });
+
   test("expired", async () => {
     const user = await scope.createUser("expired", PERSONAS.operator);
     const minted = await mint(user.id);
@@ -97,6 +110,16 @@ describe("an unusable token resolves to nobody", () => {
 });
 
 describe("minting and revoking", () => {
+  test("a minted token never expires", async () => {
+    const user = await scope.createUser("forever", PERSONAS.operator);
+    const minted = await mint(user.id);
+    assert.equal(minted.expiresAt, null);
+    const [row] = await db.select().from(apiTokens).where(eq(apiTokens.id, minted.id));
+    assert.equal(row?.expiresAt, null);
+    const [listed] = await listTokens(user.id);
+    assert.deepEqual([listed?.status, listed?.expiresAt], ["active", null]);
+  });
+
   test("a name is required", async () => {
     const user = await scope.createUser("noname", PERSONAS.operator);
     assert.deepEqual(await mintToken(user.id, "   "), { ok: false, error: "invalid_name" });

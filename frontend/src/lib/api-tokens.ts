@@ -7,9 +7,7 @@ import { db } from "@/db";
 import {
   apiTokens,
   users,
-  DAY_SECONDS,
   MAX_TOKENS_PER_USER,
-  TOKEN_TTL_DAYS,
 } from "@/db/schema";
 import type { Access } from "@/lib/roles";
 
@@ -28,7 +26,7 @@ export type MintedToken = {
   id: string;
   name: string;
   prefix: string;
-  expiresAt: Date;
+  expiresAt: null;
   token: string;
 };
 
@@ -52,7 +50,6 @@ export async function mintToken(
   const prefix = randomBytes(PREFIX_BYTES).toString("hex");
   const secret = randomBytes(SECRET_BYTES).toString("base64url");
   const token = `${TOKEN_PREFIX}_${prefix}_${secret}`;
-  const expiresAt = new Date(Date.now() + TOKEN_TTL_DAYS * DAY_SECONDS * 1000);
 
   const [row] = await db
     .insert(apiTokens)
@@ -61,14 +58,13 @@ export async function mintToken(
       name: trimmed,
       prefix,
       tokenHash: sha256(token),
-      expiresAt,
       source: "manual",
     })
     .returning({ id: apiTokens.id });
 
   return {
     ok: true,
-    token: { id: row!.id, name: trimmed, prefix, expiresAt, token },
+    token: { id: row!.id, name: trimmed, prefix, expiresAt: null, token },
   };
 }
 
@@ -79,7 +75,7 @@ export type TokenSummary = {
   prefix: string;
   status: "active" | "expired" | "revoked";
   createdAt: string;
-  expiresAt: string;
+  expiresAt: string | null;
   lastUsedAt: string | null;
 };
 
@@ -98,11 +94,11 @@ export async function listTokens(userId: string): Promise<TokenSummary[]> {
     prefix: r.prefix,
     status: r.revokedAt
       ? ("revoked" as const)
-      : r.expiresAt.getTime() < now
+      : r.expiresAt && r.expiresAt.getTime() < now
         ? ("expired" as const)
         : ("active" as const),
     createdAt: r.createdAt.toISOString(),
-    expiresAt: r.expiresAt.toISOString(),
+    expiresAt: r.expiresAt?.toISOString() ?? null,
     lastUsedAt: r.lastUsedAt?.toISOString() ?? null,
   }));
 }
@@ -154,7 +150,9 @@ export async function resolveToken(
     .innerJoin(users, eq(users.id, apiTokens.userId))
     .where(eq(apiTokens.prefix, prefix));
 
-  if (!row || row.revokedAt || row.expiresAt.getTime() < Date.now()) return null;
+  if (!row || row.revokedAt || (row.expiresAt && row.expiresAt.getTime() < Date.now())) {
+    return null;
+  }
 
   const expected = Buffer.from(row.tokenHash, "hex");
   const actual = Buffer.from(sha256(presented), "hex");
