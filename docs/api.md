@@ -58,7 +58,6 @@ escalate itself:
 
 | Route | Why |
 | --- | --- |
-| `POST /api/database/query` | Arbitrary SQL |
 | `/api/backups/**` | Taking, restoring and importing backups |
 | `PATCH`/`DELETE /api/users/[id]`, `POST /api/users/invites`, `POST /api/invites/accept` | Granting roles and creating accounts |
 | `POST /api/settings/domains`, `PATCH`/`DELETE /api/settings/domains/[id]` | Who can sign in at all |

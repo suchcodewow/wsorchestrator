@@ -5,7 +5,7 @@
  * rather than derived from `roles.ts`: a test that computes its expectations
  * with the code under test agrees with any change to it. Moving a permission
  * from one role to another therefore means editing both, which is the point —
- * it is a decision about who can reach backups or the database console, and it
+ * it is a decision about who can reach backups or sign-in domains, and it
  * should not happen as a side effect.
  *
  * The rules it encodes:
@@ -15,8 +15,8 @@
  *   scheduler access.
  * - eVals roles are ranked the same way, and are independent of the scheduler's.
  * - A platform administrator is an administrator in every area whatever their
- *   stored roles say, and alone runs backups, the database console and
- *   sign-in domains, and grants platform administration.
+ *   stored roles say, and alone runs backups and sign-in domains, and grants
+ *   platform administration.
  */
 
 import { describe, test } from "node:test";
@@ -82,7 +82,6 @@ const POLICY: Record<string, { actual: Check; expected: Check }> = {
     expected: evals("administrator"),
   },
 
-  canRunSql: { actual: roles.canRunSql, expected: platformOnly },
   canManageBackups: { actual: roles.canManageBackups, expected: platformOnly },
   canManageSignInDomains: { actual: roles.canManageSignInDomains, expected: platformOnly },
 
@@ -145,7 +144,6 @@ describe("the areas are independent", () => {
     assert.equal(roles.canManageRoles(a, "scheduler"), false);
     assert.equal(roles.canManageRoles(a, "platform"), false);
     assert.equal(roles.canManageBackups(a), false);
-    assert.equal(roles.canRunSql(a), false);
     assert.equal(roles.canManageSignInDomains(a), false);
     assert.equal(roles.canDeleteUsers(a), false);
   });

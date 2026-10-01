@@ -72,7 +72,6 @@ const EXPECTED_SIDEBAR: Record<Persona, string[]> = {
     "[Administration]",
     "Manage users",
     "Backups",
-    "Database",
     "Admin Settings",
   ],
 };
@@ -111,7 +110,7 @@ describe("sidebar", () => {
   test("platform-only pages never show for anyone who is not a platform administrator", () => {
     for (const a of EVERY_ACCESS.filter((a) => !a.platform)) {
       const labels = sidebar(a);
-      for (const page of ["Backups", "Database", "Admin Settings"]) {
+      for (const page of ["Backups", "Admin Settings"]) {
         assert.ok(!labels.includes(page), `${describeAccess(a)} sees ${page}`);
       }
     }

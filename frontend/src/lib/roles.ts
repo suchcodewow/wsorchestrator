@@ -69,7 +69,7 @@ export const NO_EVALS_ACCESS_LABEL = "No eVals access";
 export const PLATFORM_ADMIN_LABEL = "Platform Administrator";
 
 export const PLATFORM_ADMIN_DESCRIPTION =
-  "An administrator in every area. Also runs backups, the database console and sign-in domains, and grants platform administration.";
+  "An administrator in every area. Also runs backups and sign-in domains, and grants platform administration.";
 
 export function eventRoleOf(access: Access): EventRole {
   return access.platform ? "administrator" : access.event;
@@ -138,8 +138,6 @@ export const canManageEvalsSettings = (access: Access) =>
   evalsAtLeast(access, "administrator");
 
 // The platform: whatever reaches past a single area.
-
-export const canRunSql = (access: Access) => access.platform;
 
 export const canManageBackups = (access: Access) => access.platform;
 
