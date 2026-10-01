@@ -20,10 +20,10 @@ import { Input } from "@/components/ui/input";
 import {
   EVALS_ROLES,
   EVENT_ROLES,
-  SCHEDULER_ROLES,
+  TRAINING_ROLES,
   type EvalsRole,
   type EventRole,
-  type SchedulerRole,
+  type TrainingRole,
 } from "@/db/schema";
 import {
   EVALS_ROLE_DESCRIPTIONS,
@@ -31,13 +31,13 @@ import {
   EVENT_ROLE_DESCRIPTIONS,
   EVENT_ROLE_LABELS,
   NO_EVALS_ACCESS_LABEL,
-  NO_SCHEDULER_ACCESS_LABEL,
+  NO_TRAINING_ACCESS_LABEL,
   PLATFORM_ADMIN_LABEL,
-  SCHEDULER_ROLE_DESCRIPTIONS,
-  SCHEDULER_ROLE_LABELS,
+  TRAINING_ROLE_DESCRIPTIONS,
+  TRAINING_ROLE_LABELS,
   asEvalsRole,
   asEventRole,
-  asSchedulerRole,
+  asTrainingRole,
   canDeleteUsers,
   canManageRoles,
   type Access,
@@ -53,18 +53,18 @@ type SiteUser = {
   name: string | null;
   email: string | null;
   eventRole: EventRole;
-  schedulerRole: SchedulerRole | null;
+  trainingRole: TrainingRole | null;
   evalsRole: EvalsRole | null;
   isPlatformAdmin: boolean;
   isBootstrapAdmin: boolean;
   eventCount: number;
 };
 
-type Roles = Pick<SiteUser, "eventRole" | "schedulerRole" | "evalsRole" | "isPlatformAdmin">;
+type Roles = Pick<SiteUser, "eventRole" | "trainingRole" | "evalsRole" | "isPlatformAdmin">;
 
 type Change =
   | { area: "event"; role: EventRole }
-  | { area: "scheduler"; role: SchedulerRole | null }
+  | { area: "training"; role: TrainingRole | null }
   | { area: "evals"; role: EvalsRole | null }
   | { area: "platform"; value: boolean };
 
@@ -77,8 +77,8 @@ const ERRORS: Record<string, string> = {
     "That address is in SITE_ADMIN_EMAILS, which makes it a platform administrator on every sign-in.",
 };
 
-/** The scheduler's and eVals' radio value for "no role", which a radio group can't hold as null. */
-const NO_SCHEDULER = "none";
+/** The training area's and eVals' radio value for "no role", which a radio group can't hold as null. */
+const NO_TRAINING = "none";
 const NO_EVALS = "none";
 
 const EVENT_CHIP: Record<EventRole, string> = {
@@ -117,7 +117,7 @@ export function UsersTable({
 
   const rolesOf = (u: SiteUser): Roles => ({
     eventRole: u.eventRole,
-    schedulerRole: u.schedulerRole,
+    trainingRole: u.trainingRole,
     evalsRole: u.evalsRole,
     isPlatformAdmin: u.isPlatformAdmin,
     ...edits[u.id],
@@ -147,8 +147,8 @@ export function UsersTable({
     const patch: Partial<Roles> =
       next.area === "event"
         ? { eventRole: next.role }
-        : next.area === "scheduler"
-          ? { schedulerRole: next.role }
+        : next.area === "training"
+          ? { trainingRole: next.role }
           : next.area === "evals"
             ? { evalsRole: next.role }
             : { isPlatformAdmin: next.value };
@@ -233,7 +233,7 @@ export function UsersTable({
                   <th className="px-5 py-2.5 font-medium">User</th>
                   <th className="px-5 py-2.5 font-medium">Events</th>
                   <th className="px-5 py-2.5 font-medium">Event role</th>
-                  <th className="px-5 py-2.5 font-medium">Scheduler role</th>
+                  <th className="px-5 py-2.5 font-medium">Training role</th>
                   <th className="px-5 py-2.5 font-medium">eVals role</th>
                   <th className="px-5 py-2.5 font-medium">Platform admin</th>
                   {viewerDeletes && (
@@ -319,48 +319,48 @@ export function UsersTable({
                       <td className="px-5 py-3">
                         {roles.isPlatformAdmin ? (
                           <ViaPlatform />
-                        ) : editable(u, "scheduler") ? (
+                        ) : editable(u, "training") ? (
                           <RoleMenu
-                            heading="Scheduler role"
-                            value={roles.schedulerRole ?? NO_SCHEDULER}
+                            heading="Training role"
+                            value={roles.trainingRole ?? NO_TRAINING}
                             label={
-                              roles.schedulerRole
-                                ? SCHEDULER_ROLE_LABELS[roles.schedulerRole]
-                                : NO_SCHEDULER_ACCESS_LABEL
+                              roles.trainingRole
+                                ? TRAINING_ROLE_LABELS[roles.trainingRole]
+                                : NO_TRAINING_ACCESS_LABEL
                             }
                             chip={
-                              roles.schedulerRole === "administrator"
+                              roles.trainingRole === "administrator"
                                 ? "text-brand"
-                                : roles.schedulerRole
+                                : roles.trainingRole
                                   ? "text-muted-foreground"
                                   : "text-muted-foreground/70"
                             }
-                            saving={saving === `${u.id}:scheduler`}
+                            saving={saving === `${u.id}:training`}
                             options={[
                               {
-                                value: NO_SCHEDULER,
-                                label: NO_SCHEDULER_ACCESS_LABEL,
-                                description: "Cannot see the scheduler.",
+                                value: NO_TRAINING,
+                                label: NO_TRAINING_ACCESS_LABEL,
+                                description: "Cannot see the training.",
                               },
-                              ...SCHEDULER_ROLES.map((r) => ({
+                              ...TRAINING_ROLES.map((r) => ({
                                 value: r,
-                                label: SCHEDULER_ROLE_LABELS[r],
-                                description: SCHEDULER_ROLE_DESCRIPTIONS[r],
+                                label: TRAINING_ROLE_LABELS[r],
+                                description: TRAINING_ROLE_DESCRIPTIONS[r],
                               })),
                             ]}
                             onChange={(v) => {
-                              const role = v === NO_SCHEDULER ? null : asSchedulerRole(v);
-                              if (v !== NO_SCHEDULER && !role) return;
-                              if (role !== roles.schedulerRole) {
-                                void change(u, { area: "scheduler", role });
+                              const role = v === NO_TRAINING ? null : asTrainingRole(v);
+                              if (v !== NO_TRAINING && !role) return;
+                              if (role !== roles.trainingRole) {
+                                void change(u, { area: "training", role });
                               }
                             }}
                           />
                         ) : (
                           <ReadOnly title={readOnlyTitle}>
-                            {roles.schedulerRole
-                              ? SCHEDULER_ROLE_LABELS[roles.schedulerRole]
-                              : NO_SCHEDULER_ACCESS_LABEL}
+                            {roles.trainingRole
+                              ? TRAINING_ROLE_LABELS[roles.trainingRole]
+                              : NO_TRAINING_ACCESS_LABEL}
                           </ReadOnly>
                         )}
                       </td>

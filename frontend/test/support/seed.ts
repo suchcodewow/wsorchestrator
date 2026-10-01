@@ -21,7 +21,7 @@ export function testScope(name: string) {
     const address = email ?? `${scope}${key}@${TEST_EMAIL_DOMAIN}`.toLowerCase();
     const roles = {
       eventRole: access.event,
-      schedulerRole: access.scheduler,
+      trainingRole: access.training,
       evalsRole: access.evals,
       isPlatformAdmin: access.platform,
     };
@@ -80,7 +80,7 @@ export async function readRoles(id: string) {
   const [row] = await db
     .select({
       event: users.eventRole,
-      scheduler: users.schedulerRole,
+      training: users.trainingRole,
       evals: users.evalsRole,
       platform: users.isPlatformAdmin,
     })

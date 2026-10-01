@@ -13,7 +13,7 @@ import { auth, signInPath } from "@/auth";
 import {
   EVALS_ROLE_LABELS,
   EVENT_ROLE_LABELS,
-  SCHEDULER_ROLE_LABELS,
+  TRAINING_ROLE_LABELS,
   hasNoAccess,
   homePath,
 } from "@/lib/roles";
@@ -29,7 +29,7 @@ export const metadata: Metadata = {
 function grantLabels(grant: InviteGrant): string[] {
   return [
     ...(grant.eventRole ? [EVENT_ROLE_LABELS[grant.eventRole]] : []),
-    ...(grant.schedulerRole ? [SCHEDULER_ROLE_LABELS[grant.schedulerRole]] : []),
+    ...(grant.trainingRole ? [TRAINING_ROLE_LABELS[grant.trainingRole]] : []),
     ...(grant.evalsRole ? [EVALS_ROLE_LABELS[grant.evalsRole]] : []),
   ];
 }

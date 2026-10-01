@@ -3,27 +3,27 @@
 import {
   EVALS_ROLES,
   EVENT_ROLES,
-  SCHEDULER_ROLES,
+  TRAINING_ROLES,
   type EvalsRole,
   type EventRole,
-  type SchedulerRole,
+  type TrainingRole,
 } from "@/db/schema";
 
 /**
  * Everything a signed-in user may do, one entry per functional area. A
  * platform administrator counts as an administrator in every area, whatever
  * their stored per-area roles say — so read roles through `eventRoleOf`,
- * `schedulerRoleOf` and `evalsRoleOf`, never off this object directly.
+ * `trainingRoleOf` and `evalsRoleOf`, never off this object directly.
  */
 export type Access = {
   event: EventRole;
-  scheduler: SchedulerRole | null;
+  training: TrainingRole | null;
   evals: EvalsRole | null;
   platform: boolean;
 };
 
 /** An area whose roles are granted by that area's own administrators. */
-export type Area = "event" | "scheduler" | "evals";
+export type Area = "event" | "training" | "evals";
 
 export const EVENT_ROLE_LABELS: Record<EventRole, string> = {
   none: "No event access",
@@ -42,17 +42,17 @@ export const EVENT_ROLE_DESCRIPTIONS: Record<EventRole, string> = {
   administrator: "Also manages event settings and everyone's event role.",
 };
 
-export const SCHEDULER_ROLE_LABELS: Record<SchedulerRole, string> = {
-  viewer: "Scheduler Viewer",
-  administrator: "Scheduler Administrator",
+export const TRAINING_ROLE_LABELS: Record<TrainingRole, string> = {
+  viewer: "Training Viewer",
+  administrator: "Training Administrator",
 };
 
-export const SCHEDULER_ROLE_DESCRIPTIONS: Record<SchedulerRole, string> = {
-  viewer: "Sees the scheduler.",
-  administrator: "Also manages scheduler settings and everyone's scheduler role.",
+export const TRAINING_ROLE_DESCRIPTIONS: Record<TrainingRole, string> = {
+  viewer: "Sees the training.",
+  administrator: "Also manages training settings and everyone's training role.",
 };
 
-export const NO_SCHEDULER_ACCESS_LABEL = "No scheduler access";
+export const NO_TRAINING_ACCESS_LABEL = "No training access";
 
 export const EVALS_ROLE_LABELS: Record<EvalsRole, string> = {
   viewer: "eVals Viewer",
@@ -75,8 +75,8 @@ export function eventRoleOf(access: Access): EventRole {
   return access.platform ? "administrator" : access.event;
 }
 
-export function schedulerRoleOf(access: Access): SchedulerRole | null {
-  return access.platform ? "administrator" : access.scheduler;
+export function trainingRoleOf(access: Access): TrainingRole | null {
+  return access.platform ? "administrator" : access.training;
 }
 
 export function evalsRoleOf(access: Access): EvalsRole | null {
@@ -87,9 +87,9 @@ function eventAtLeast(access: Access, minimum: EventRole): boolean {
   return EVENT_ROLES.indexOf(eventRoleOf(access)) >= EVENT_ROLES.indexOf(minimum);
 }
 
-function schedulerAtLeast(access: Access, minimum: SchedulerRole): boolean {
-  const role = schedulerRoleOf(access);
-  return role !== null && SCHEDULER_ROLES.indexOf(role) >= SCHEDULER_ROLES.indexOf(minimum);
+function trainingAtLeast(access: Access, minimum: TrainingRole): boolean {
+  const role = trainingRoleOf(access);
+  return role !== null && TRAINING_ROLES.indexOf(role) >= TRAINING_ROLES.indexOf(minimum);
 }
 
 function evalsAtLeast(access: Access, minimum: EvalsRole): boolean {
@@ -123,12 +123,12 @@ export const canManageSettings = (access: Access) =>
 export const canAuditProjects = (access: Access) =>
   eventAtLeast(access, "administrator");
 
-// The scheduler area.
+// The training area.
 
-export const canUseScheduler = (access: Access) => schedulerAtLeast(access, "viewer");
+export const canUseTraining = (access: Access) => trainingAtLeast(access, "viewer");
 
-export const canManageSchedulerSettings = (access: Access) =>
-  schedulerAtLeast(access, "administrator");
+export const canManageTrainingSettings = (access: Access) =>
+  trainingAtLeast(access, "administrator");
 
 // The eVals area.
 
@@ -148,8 +148,8 @@ export function canManageRoles(access: Access, area: Area | "platform"): boolean
   switch (area) {
     case "event":
       return eventAtLeast(access, "administrator");
-    case "scheduler":
-      return schedulerAtLeast(access, "administrator");
+    case "training":
+      return trainingAtLeast(access, "administrator");
     case "evals":
       return evalsAtLeast(access, "administrator");
     case "platform":
@@ -159,7 +159,7 @@ export function canManageRoles(access: Access, area: Area | "platform"): boolean
 
 export const canManageUsers = (access: Access) =>
   canManageRoles(access, "event") ||
-  canManageRoles(access, "scheduler") ||
+  canManageRoles(access, "training") ||
   canManageRoles(access, "evals");
 
 export const canDeleteUsers = (access: Access) => access.platform;
@@ -172,7 +172,7 @@ export function accessBadges(access: Access): string[] {
   if (access.event !== "none" && access.event !== "operator") {
     badges.push(EVENT_ROLE_LABELS[access.event]);
   }
-  if (access.scheduler) badges.push(SCHEDULER_ROLE_LABELS[access.scheduler]);
+  if (access.training) badges.push(TRAINING_ROLE_LABELS[access.training]);
   if (access.evals) badges.push(EVALS_ROLE_LABELS[access.evals]);
   return badges;
 }
@@ -181,13 +181,13 @@ export function accessBadges(access: Access): string[] {
 export const hasNoAccess = (access: Access) =>
   !access.platform &&
   access.event === "none" &&
-  access.scheduler === null &&
+  access.training === null &&
   access.evals === null;
 
 /** Where a signed-in user lands: the first area they can use. */
 export function homePath(access: Access): string {
   if (canUseEvents(access)) return "/events";
-  if (canUseScheduler(access)) return "/scheduler";
+  if (canUseTraining(access)) return "/scheduler";
   if (canUseEvals(access)) return "/evals";
   return "/welcome";
 }
@@ -196,9 +196,9 @@ export function asEventRole(value: unknown): EventRole | null {
   return EVENT_ROLES.includes(value as EventRole) ? (value as EventRole) : null;
 }
 
-export function asSchedulerRole(value: unknown): SchedulerRole | null {
-  return SCHEDULER_ROLES.includes(value as SchedulerRole)
-    ? (value as SchedulerRole)
+export function asTrainingRole(value: unknown): TrainingRole | null {
+  return TRAINING_ROLES.includes(value as TrainingRole)
+    ? (value as TrainingRole)
     : null;
 }
 

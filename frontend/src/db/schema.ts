@@ -47,11 +47,11 @@ export type EventRole = (typeof EVENT_ROLES)[number];
 
 export const eventRole = pgEnum("site_role", EVENT_ROLES);
 
-/** The scheduler area's roles, lowest first. No role at all is no access. */
-export const SCHEDULER_ROLES = ["viewer", "administrator"] as const;
-export type SchedulerRole = (typeof SCHEDULER_ROLES)[number];
+/** The training area's roles, lowest first. No role at all is no access. */
+export const TRAINING_ROLES = ["viewer", "administrator"] as const;
+export type TrainingRole = (typeof TRAINING_ROLES)[number];
 
-export const schedulerRole = pgEnum("scheduler_role", SCHEDULER_ROLES);
+export const trainingRole = pgEnum("training_role", TRAINING_ROLES);
 
 /** The eVals area's roles, lowest first. No role at all is no access. */
 export const EVALS_ROLES = ["viewer", "administrator"] as const;
@@ -76,7 +76,7 @@ export const users = pgTable("users", {
     .notNull()
     .default("system"),
   eventRole: eventRole("site_role").notNull().default("none"),
-  schedulerRole: schedulerRole("scheduler_role"),
+  trainingRole: trainingRole("training_role"),
   evalsRole: evalsRole("evals_role"),
   isPlatformAdmin: boolean("is_platform_admin").notNull().default(false),
   calendarScope: calendarScope("calendar_scope").notNull().default("own"),
@@ -376,7 +376,7 @@ export const userInvites = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     tokenHash: text("token_hash").notNull().unique(),
     eventRole: eventRole("event_role"),
-    schedulerRole: schedulerRole("scheduler_role"),
+    trainingRole: trainingRole("training_role"),
     evalsRole: evalsRole("evals_role"),
     createdBy: text("created_by")
       .notNull()
@@ -892,6 +892,27 @@ export type HibobSyncRun = typeof hibobSyncRuns.$inferSelect;
  */
 export const EVALS_TITLE_LISTS = ["sales", "engineer", "ignored"] as const;
 export type EvalsTitleList = (typeof EVALS_TITLE_LISTS)[number];
+
+/**
+ * eVals-wide settings with exactly one value each, such as the organization
+ * leader whose reports eVals draws attendees from. One row per setting, keyed
+ * by name rather than a fixed id so a new setting needs no migration beyond
+ * an insert.
+ */
+export const evalsSettings = pgTable("evals_settings", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+  updatedBy: text("updated_by").references(() => users.id, {
+    onDelete: "set null",
+  }),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const EVALS_SETTINGS_KEYS = {
+  orgLeaderEmail: "org_leader_email",
+} as const;
 
 export const evalsTitles = pgTable(
   "evals_titles",

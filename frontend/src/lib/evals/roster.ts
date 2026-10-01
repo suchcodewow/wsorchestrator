@@ -8,7 +8,8 @@ import "server-only";
 
 import { db } from "@/db";
 import { bootcampHistory, employees, type Employee, type EvalsTitleList } from "@/db/schema";
-import { orgUnder, ORG_ROOT_EMAIL } from "@/lib/evals/org";
+import { orgUnder } from "@/lib/evals/org";
+import { getOrgLeaderEmail } from "@/lib/evals/settings";
 import { listForTitle, titleKey } from "@/lib/evals/title-lists";
 import { titleListMap } from "@/lib/evals/titles";
 
@@ -75,8 +76,8 @@ export async function listEmployees(): Promise<{ people: EmployeeListing[]; sync
   return { people: rows.map(({ importedAt: _, ...person }) => person), syncedAt };
 }
 
-export async function loadRoster(rootEmail = ORG_ROOT_EMAIL): Promise<Roster> {
-  const [staff, lists, history] = await Promise.all([
+export async function loadRoster(rootEmail?: string): Promise<Roster> {
+  const [staff, lists, history, configuredLeader] = await Promise.all([
     db
       .select({
         id: employees.id,
@@ -99,10 +100,11 @@ export async function loadRoster(rootEmail = ORG_ROOT_EMAIL): Promise<Roster> {
         intDate: bootcampHistory.intDate,
       })
       .from(bootcampHistory),
+    rootEmail ? Promise.resolve(rootEmail) : getOrgLeaderEmail(),
   ]);
 
   const historyByEmail = new Map(history.map((h) => [h.email, h]));
-  const root = rootEmail.toLowerCase();
+  const root = configuredLeader.toLowerCase();
 
   const people = orgUnder(staff, root)
     .map(({ chain, ...person }): RosterPerson => {

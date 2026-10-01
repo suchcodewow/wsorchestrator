@@ -40,20 +40,27 @@ const ERRORS: Record<string, string> = {
   invalid: "A title can't be blank.",
   not_found: "That title was already removed — reload the page.",
   forbidden: "Your own role changed — reload the page.",
+  not_an_employee: "That email isn't in the imported employee list.",
 };
 
 function describeExisting(existing: { title: string; list: EvalsTitleList }[]) {
   return existing.map((e) => `${e.title} (${TITLE_LIST_LABELS[e.list]})`).join(", ");
 }
 
+export type LeaderCandidate = { email: string; fullName: string };
+
 export function AutomationView({
   titles,
   suggestions,
   imported,
+  employees,
+  orgLeaderEmail,
 }: {
   titles: Record<EvalsTitleList, ListedTitle[]>;
   suggestions: { title: string; count: number }[];
   imported: boolean;
+  employees: LeaderCandidate[];
+  orgLeaderEmail: string;
 }) {
   const router = useRouter();
   const [query, setQuery] = useState("");
@@ -113,6 +120,21 @@ export function AutomationView({
     <motion.div variants={staggerParent(0.05)} initial="hidden" animate="show" className="space-y-10">
       <motion.div variants={riseChild}>
         <h2 className="text-xl font-medium tracking-tight">Automation</h2>
+      </motion.div>
+
+      <motion.div variants={riseChild}>
+        <OrgLeaderField
+          employees={employees}
+          orgLeaderEmail={orgLeaderEmail}
+          busy={busy === "org-leader"}
+          onSave={async (email) => {
+            const ok = await send("org-leader", "/api/evals/org-leader", {
+              method: "PUT",
+              body: JSON.stringify({ email }),
+            });
+            if (ok) setNotice("Organization Leader saved.");
+          }}
+        />
       </motion.div>
 
       <motion.div variants={riseChild} className="space-y-3">
@@ -274,6 +296,88 @@ export function AutomationView({
         );
       })}
     </motion.div>
+  );
+}
+
+function OrgLeaderField({
+  employees,
+  orgLeaderEmail,
+  busy,
+  onSave,
+}: {
+  employees: LeaderCandidate[];
+  orgLeaderEmail: string;
+  busy: boolean;
+  onSave: (email: string) => Promise<void>;
+}) {
+  const current = employees.find((e) => e.email.toLowerCase() === orgLeaderEmail.toLowerCase()) ?? null;
+  const [query, setQuery] = useState(current ? `${current.fullName} <${current.email}>` : orgLeaderEmail);
+  const [open, setOpen] = useState(false);
+  const [selected, setSelected] = useState(orgLeaderEmail);
+
+  const q = query.trim().toLowerCase();
+  const matches = useMemo(
+    () =>
+      q.length === 0
+        ? []
+        : employees.filter((e) => e.fullName.toLowerCase().includes(q) || e.email.toLowerCase().includes(q)),
+    [employees, q],
+  );
+
+  const dirty = selected.toLowerCase() !== orgLeaderEmail.toLowerCase();
+
+  function choose(e: LeaderCandidate) {
+    setQuery(`${e.fullName} <${e.email}>`);
+    setSelected(e.email);
+    setOpen(false);
+  }
+
+  return (
+    <div className="max-w-sm space-y-1.5">
+      <label htmlFor="org-leader" className="text-sm font-medium">
+        Organization Leader
+      </label>
+      <div className="flex items-start gap-2">
+        <div className="relative flex-1">
+          <Input
+            id="org-leader"
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setSelected("");
+            }}
+            onFocus={() => setOpen(true)}
+            onBlur={() => setOpen(false)}
+            placeholder="Search employees by name or email"
+            aria-label="Organization Leader"
+          />
+          {open && matches.length > 0 && (
+            <div className="absolute inset-x-0 top-full z-20 mt-1 max-h-64 overflow-y-auto rounded-md border bg-popover shadow-md">
+              {matches.slice(0, 8).map((e) => (
+                <button
+                  key={e.email}
+                  type="button"
+                  onMouseDown={(ev) => ev.preventDefault()}
+                  onClick={() => choose(e)}
+                  className="flex w-full flex-col items-start gap-0.5 px-3 py-2 text-left text-sm transition-colors hover:bg-muted/50"
+                >
+                  <span>{e.fullName}</span>
+                  <span className="text-xs text-muted-foreground">{e.email}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        <Button
+          variant="brand"
+          disabled={!dirty || selected === "" || busy}
+          onClick={() => onSave(selected)}
+        >
+          {busy ? <Loader2 className="animate-spin" /> : <Check />}
+          Save
+        </Button>
+      </div>
+    </div>
   );
 }
 

@@ -1,13 +1,19 @@
 /** The Automation tab: one search box, then the Sales, Engineer and Ignored title lists. */
 
 import { EVALS_TITLE_LISTS, type EvalsTitleList } from "@/db/schema";
-import { loadRoster } from "@/lib/evals/roster";
+import { listEmployees, loadRoster } from "@/lib/evals/roster";
+import { getOrgLeaderEmail } from "@/lib/evals/settings";
 import { titleKey } from "@/lib/evals/title-lists";
 import { listTitles } from "@/lib/evals/titles";
 import { AutomationView, type ListedTitle } from "../automation-view";
 
 export default async function AutomationPage() {
-  const [titles, roster] = await Promise.all([listTitles(), loadRoster()]);
+  const [titles, roster, { people: employees }, orgLeaderEmail] = await Promise.all([
+    listTitles(),
+    loadRoster(),
+    listEmployees(),
+    getOrgLeaderEmail(),
+  ]);
 
   const holders = new Map<string, number>();
   for (const p of roster.people) {
@@ -31,6 +37,8 @@ export default async function AutomationPage() {
       titles={byList}
       suggestions={roster.unlisted}
       imported={roster.employeeCount > 0}
+      employees={employees.map((e) => ({ email: e.email, fullName: e.fullName }))}
+      orgLeaderEmail={orgLeaderEmail}
     />
   );
 }

@@ -995,7 +995,7 @@ export type UserSnapshot = {
   name: string | null;
   image: string | null;
   eventRole: string;
-  schedulerRole: string | null;
+  trainingRole: string | null;
   evalsRole: string | null;
   isPlatformAdmin: boolean;
   calendarScope: string;
@@ -1009,7 +1009,7 @@ export async function snapshotUsers(): Promise<UserSnapshot[]> {
             u.name,
             u.image,
             u.site_role::text        as "eventRole",
-            u.scheduler_role::text   as "schedulerRole",
+            u.training_role::text    as "trainingRole",
             u.evals_role::text       as "evalsRole",
             u.is_platform_admin      as "isPlatformAdmin",
             u.calendar_scope::text   as "calendarScope",
@@ -1026,7 +1026,7 @@ export async function snapshotUsers(): Promise<UserSnapshot[]> {
       where u.email is not null
         and (u.is_platform_admin
              or u.site_role <> 'none'
-             or u.scheduler_role is not null
+             or u.training_role is not null
              or u.evals_role is not null)
       group by u.id
       order by u.email`,

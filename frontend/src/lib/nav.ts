@@ -9,9 +9,11 @@ import {
   FlaskConical,
   Layers,
   Settings,
+  Settings2,
   SlidersHorizontal,
   TestTubes,
   UserCog,
+  Users,
   UsersRound,
   type LucideIcon,
 } from "lucide-react";
@@ -19,14 +21,14 @@ import {
   canAuditProjects,
   canManageBackups,
   canManageEvalsSettings,
-  canManageSchedulerSettings,
   canManageSettings,
   canManageSignInDomains,
+  canManageTrainingSettings,
   canManageUsers,
   canSeeAllEvents,
   canUseEvals,
   canUseEvents,
-  canUseScheduler,
+  canUseTraining,
   type Access,
 } from "@/lib/roles";
 
@@ -80,14 +82,21 @@ export const NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
-    heading: "Scheduler",
+    heading: "Training",
     items: [
-      { href: "/scheduler", label: "Scheduler", Icon: CalendarClock, visible: canUseScheduler },
+      { href: "/scheduler", label: "Scheduler", Icon: CalendarClock, visible: canUseTraining },
       {
         href: "/scheduler-settings",
         label: "Scheduler settings",
         Icon: CalendarCog,
-        visible: canManageSchedulerSettings,
+        visible: canManageTrainingSettings,
+      },
+      { href: "/cohorts", label: "Cohorts", Icon: Users, visible: canUseTraining },
+      {
+        href: "/cohort-settings",
+        label: "Cohort Settings",
+        Icon: Settings2,
+        visible: canManageTrainingSettings,
       },
     ],
   },

@@ -10,7 +10,7 @@ import { notFound, redirect } from "next/navigation";
 import { CalendarCog } from "lucide-react";
 import { auth, signInPath } from "@/auth";
 import { ComingSoon } from "@/components/coming-soon";
-import { canManageSchedulerSettings } from "@/lib/roles";
+import { canManageTrainingSettings } from "@/lib/roles";
 
 export const metadata: Metadata = {
   title: "Scheduler settings",
@@ -20,7 +20,7 @@ export const metadata: Metadata = {
 export default async function SchedulerSettingsPage() {
   const session = await auth();
   if (!session?.user) redirect(await signInPath());
-  if (!canManageSchedulerSettings(session.user.access)) notFound();
+  if (!canManageTrainingSettings(session.user.access)) notFound();
 
   return (
     <ComingSoon title="Scheduler settings" Icon={CalendarCog} />

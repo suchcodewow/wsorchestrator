@@ -17,16 +17,16 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { EVALS_ROLES, EVENT_ROLES, INVITE_TTL_MINUTES, SCHEDULER_ROLES } from "@/db/schema";
+import { EVALS_ROLES, EVENT_ROLES, INVITE_TTL_MINUTES, TRAINING_ROLES } from "@/db/schema";
 import {
   EVALS_ROLE_DESCRIPTIONS,
   EVALS_ROLE_LABELS,
   EVENT_ROLE_DESCRIPTIONS,
   EVENT_ROLE_LABELS,
   NO_EVALS_ACCESS_LABEL,
-  NO_SCHEDULER_ACCESS_LABEL,
-  SCHEDULER_ROLE_DESCRIPTIONS,
-  SCHEDULER_ROLE_LABELS,
+  NO_TRAINING_ACCESS_LABEL,
+  TRAINING_ROLE_DESCRIPTIONS,
+  TRAINING_ROLE_LABELS,
   canManageRoles,
   type Access,
 } from "@/lib/roles";
@@ -44,12 +44,12 @@ type Created = { url: string; expiresAt: Date };
 
 export function CreateInviteDialog({ viewerAccess }: { viewerAccess: Access }) {
   const offersEvent = canManageRoles(viewerAccess, "event");
-  const offersScheduler = canManageRoles(viewerAccess, "scheduler");
+  const offersTraining = canManageRoles(viewerAccess, "training");
   const offersEvals = canManageRoles(viewerAccess, "evals");
 
   const [open, setOpen] = useState(false);
   const [eventRole, setEventRole] = useState<string>(offersEvent ? "operator" : NONE);
-  const [schedulerRole, setSchedulerRole] = useState<string>(NONE);
+  const [trainingRole, setTrainingRole] = useState<string>(NONE);
   const [evalsRole, setEvalsRole] = useState<string>(NONE);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -58,7 +58,7 @@ export function CreateInviteDialog({ viewerAccess }: { viewerAccess: Access }) {
 
   function reset() {
     setEventRole(offersEvent ? "operator" : NONE);
-    setSchedulerRole(NONE);
+    setTrainingRole(NONE);
     setEvalsRole(NONE);
     setError(null);
     setCreated(null);
@@ -74,7 +74,7 @@ export function CreateInviteDialog({ viewerAccess }: { viewerAccess: Access }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           eventRole: eventRole === NONE ? null : eventRole,
-          schedulerRole: schedulerRole === NONE ? null : schedulerRole,
+          trainingRole: trainingRole === NONE ? null : trainingRole,
           evalsRole: evalsRole === NONE ? null : evalsRole,
         }),
       });
@@ -102,7 +102,7 @@ export function CreateInviteDialog({ viewerAccess }: { viewerAccess: Access }) {
     }
   }
 
-  const grantsSomething = eventRole !== NONE || schedulerRole !== NONE || evalsRole !== NONE;
+  const grantsSomething = eventRole !== NONE || trainingRole !== NONE || evalsRole !== NONE;
 
   return (
     <>
@@ -165,22 +165,22 @@ export function CreateInviteDialog({ viewerAccess }: { viewerAccess: Access }) {
                   }))}
                 />
               )}
-              {offersScheduler && (
+              {offersTraining && (
                 <RoleChoice
-                  legend="Scheduler role"
-                  name="invite-scheduler-role"
-                  value={schedulerRole}
-                  onChange={setSchedulerRole}
+                  legend="Training role"
+                  name="invite-training-role"
+                  value={trainingRole}
+                  onChange={setTrainingRole}
                   options={[
                     {
                       value: NONE,
-                      label: NO_SCHEDULER_ACCESS_LABEL,
-                      description: "Cannot see the scheduler.",
+                      label: NO_TRAINING_ACCESS_LABEL,
+                      description: "Cannot see the training.",
                     },
-                    ...SCHEDULER_ROLES.map((r) => ({
+                    ...TRAINING_ROLES.map((r) => ({
                       value: r,
-                      label: SCHEDULER_ROLE_LABELS[r],
-                      description: SCHEDULER_ROLE_DESCRIPTIONS[r],
+                      label: TRAINING_ROLE_LABELS[r],
+                      description: TRAINING_ROLE_DESCRIPTIONS[r],
                     })),
                   ]}
                 />
