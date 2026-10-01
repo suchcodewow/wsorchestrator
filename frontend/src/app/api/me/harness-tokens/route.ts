@@ -1,23 +1,29 @@
 /** A user's own saved Harness platform tokens. */
 
 import { NextResponse } from "next/server";
-import { auth } from "@/auth";
+import { sessionOrToken } from "@/lib/api-auth";
+import { deployChoices } from "@/lib/harness-deploy-choices";
+import { scrubWindowDays } from "@/lib/harness-scrub";
 import { listHarnessTokens, saveHarnessToken } from "@/lib/harness-tokens";
+import { secretsConfigured } from "@/lib/secret-box";
 import { STATUS_FOR } from "@/lib/harness-token-errors";
 
-export async function GET() {
-  const session = await auth();
-  if (!session?.user) {
+export async function GET(req: Request) {
+  const caller = await sessionOrToken(req);
+  if (!caller) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
   return NextResponse.json({
-    tokens: await listHarnessTokens(session.user.id),
+    tokens: await listHarnessTokens(caller.id),
+    choices: await deployChoices(caller.id),
+    configured: secretsConfigured(),
+    scrubDays: scrubWindowDays(),
   });
 }
 
 export async function POST(req: Request) {
-  const session = await auth();
-  if (!session?.user) {
+  const caller = await sessionOrToken(req);
+  if (!caller) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
@@ -29,7 +35,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "malformed" }, { status: 400 });
   }
 
-  const result = await saveHarnessToken(session.user.id, body.token);
+  const result = await saveHarnessToken(caller.id, body.token);
 
   if (!result.ok) {
     return NextResponse.json(

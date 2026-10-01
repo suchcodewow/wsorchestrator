@@ -3,16 +3,26 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/api-auth";
 import { STATUS_FOR } from "@/lib/harness-template-errors";
-import { listTemplateSources, saveTemplateSource } from "@/lib/harness-templates";
+import {
+  checkTemplateSources,
+  listTemplateSources,
+  saveTemplateSource,
+} from "@/lib/harness-templates";
+import { secretsConfigured } from "@/lib/secret-box";
 
-export async function GET() {
-  const { error, user } = await requireUser();
+export async function GET(req: Request) {
+  const { error, user } = await requireUser(req);
   if (error) return error;
-  return NextResponse.json({ sources: await listTemplateSources(user.id) });
+  const sources = await listTemplateSources(user.id);
+  // ?status=1 adds the live check the page shows; it asks Harness, so it is slow.
+  const status = new URL(req.url).searchParams.get("status") === "1"
+    ? await checkTemplateSources(sources)
+    : undefined;
+  return NextResponse.json({ sources, status, configured: secretsConfigured() });
 }
 
 export async function POST(req: Request) {
-  const { error, user } = await requireUser();
+  const { error, user } = await requireUser(req);
   if (error) return error;
 
   const body = (await req.json().catch(() => null)) as {

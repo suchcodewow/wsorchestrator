@@ -4,14 +4,14 @@ import { NextResponse } from "next/server";
 import { requireAdministrator } from "@/lib/api-auth";
 import { addRepo, listRepos, STATUS_FOR } from "@/lib/harness-repos";
 
-export async function GET() {
-  const { error } = await requireAdministrator();
+export async function GET(req: Request) {
+  const { error } = await requireAdministrator(req);
   if (error) return error;
   return NextResponse.json({ repos: await listRepos() });
 }
 
 export async function POST(req: Request) {
-  const { error, user } = await requireAdministrator();
+  const { error, user } = await requireAdministrator(req);
   if (error) return error;
 
   const body = (await req.json().catch(() => null)) as {

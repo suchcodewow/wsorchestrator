@@ -1,17 +1,17 @@
 /** Restarts a teardown that gave up. */
 
 import { NextResponse } from "next/server";
-import { auth } from "@/auth";
+import { sessionOrToken } from "@/lib/api-auth";
 import {
   retryTeardown,
   type RetryTeardownError,
   type Viewer,
 } from "@/lib/runs";
 
-async function viewer(): Promise<Viewer | null> {
-  const session = await auth();
-  if (!session?.user) return null;
-  return { id: session.user.id, access: session.user.access };
+async function viewer(req: Request): Promise<Viewer | null> {
+  const caller = await sessionOrToken(req);
+  if (!caller) return null;
+  return { id: caller.id, access: caller.access };
 }
 
 const STATUS_FOR: Record<RetryTeardownError, number> = {
@@ -20,10 +20,10 @@ const STATUS_FOR: Record<RetryTeardownError, number> = {
 };
 
 export async function POST(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const who = await viewer();
+  const who = await viewer(req);
   if (!who) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }

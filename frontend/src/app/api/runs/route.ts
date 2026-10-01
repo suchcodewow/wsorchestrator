@@ -2,7 +2,7 @@
 
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { auth } from "@/auth";
+import { sessionOrToken } from "@/lib/api-auth";
 import {
   CLOUDS,
   DAY_SECONDS,
@@ -19,17 +19,17 @@ import { withClusterScenario } from "@/lib/scenario-catalog";
 import { createScheduledRun, listRunsForUser } from "@/lib/runs";
 import { startRunNow } from "@/lib/trigger";
 
-export async function GET() {
-  const session = await auth();
-  if (!session?.user) {
+export async function GET(req: Request) {
+  const caller = await sessionOrToken(req);
+  if (!caller) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
   // Someone without event access has no events, including ones they booked
   // before losing it — the same rule `ownedBy` applies to a single event.
-  if (!canUseEvents(session.user.access)) {
+  if (!canUseEvents(caller.access)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
-  const runs = await listRunsForUser(session.user.id);
+  const runs = await listRunsForUser(caller.id);
   return NextResponse.json({ runs });
 }
 
@@ -87,12 +87,12 @@ const createSchema = z
   });
 
 export async function POST(req: Request) {
-  const session = await auth();
-  if (!session?.user) {
+  const caller = await sessionOrToken(req);
+  if (!caller) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  if (!canCreateEvents(session.user.access)) {
+  if (!canCreateEvents(caller.access)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
@@ -118,7 +118,7 @@ export async function POST(req: Request) {
       [...new Set(parsed.data.scenarios)] as ScenarioId[],
       parsed.data.clouds,
     ),
-    userId: session.user.id,
+    userId: caller.id,
     scheduledStart: startNow ? new Date() : new Date(scheduledStart!),
     startNow,
   });

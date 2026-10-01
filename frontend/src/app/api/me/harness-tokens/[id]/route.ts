@@ -1,21 +1,21 @@
 /** Re-checks or removes one saved Harness token. */
 
 import { NextResponse } from "next/server";
-import { auth } from "@/auth";
+import { sessionOrToken } from "@/lib/api-auth";
 import { deleteHarnessToken, recheckHarnessToken } from "@/lib/harness-tokens";
 import { STATUS_FOR } from "@/lib/harness-token-errors";
 
 export async function POST(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const session = await auth();
-  if (!session?.user) {
+  const caller = await sessionOrToken(req);
+  if (!caller) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
   const { id } = await params;
-  const result = await recheckHarnessToken(session.user.id, id);
+  const result = await recheckHarnessToken(caller.id, id);
   if (!result.ok) {
     return NextResponse.json(
       { error: result.error, detail: result.detail },
@@ -26,16 +26,16 @@ export async function POST(
 }
 
 export async function DELETE(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const session = await auth();
-  if (!session?.user) {
+  const caller = await sessionOrToken(req);
+  if (!caller) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
   const { id } = await params;
-  const { deleted, scrub } = await deleteHarnessToken(session.user.id, id);
+  const { deleted, scrub } = await deleteHarnessToken(caller.id, id);
   if (!deleted) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }

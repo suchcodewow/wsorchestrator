@@ -1,11 +1,17 @@
-/** Adds titles to one of the Sales, Engineer or Ignored lists. */
+/** The Sales, Engineer and Ignored title lists, and adding to them. */
 
 import { NextResponse } from "next/server";
 import { requireEvalsAdministrator } from "@/lib/api-auth";
-import { addTitles, addTitlesSchema } from "@/lib/evals/titles";
+import { addTitles, addTitlesSchema, listTitles } from "@/lib/evals/titles";
+
+export async function GET(req: Request) {
+  const { error } = await requireEvalsAdministrator(req);
+  if (error) return error;
+  return NextResponse.json({ titles: await listTitles() });
+}
 
 export async function POST(req: Request) {
-  const { error, user } = await requireEvalsAdministrator();
+  const { error, user } = await requireEvalsAdministrator(req);
   if (error) return error;
 
   const parsed = addTitlesSchema.safeParse(await req.json().catch(() => null));

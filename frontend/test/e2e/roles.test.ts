@@ -24,7 +24,7 @@ import { after, before, describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 
-import { mintToken } from "@/lib/api-tokens";
+import { mintToken, revokeToken } from "@/lib/api-tokens";
 import { NAV_SECTIONS, navLinks, visibleSections } from "@/lib/nav";
 import {
   canAuditProjects,
@@ -63,6 +63,7 @@ type Who = Persona | typeof SIGNED_OUT;
 let server: Server;
 const people = {} as Record<Persona, TestUser>;
 const cookies = {} as Record<Persona, string>;
+const tokens = {} as Record<Persona, string>;
 const ownRun = {} as Record<Persona, string>;
 let aliceRun: string;
 
@@ -75,6 +76,9 @@ before(async () => {
   for (const p of PERSONA_NAMES) {
     people[p] = await scope.createUser(p, PERSONAS[p]);
     cookies[p] = await createSession(people[p].id);
+    const minted = await mintToken(people[p].id, "e2e matrix");
+    assert.ok(minted.ok);
+    tokens[p] = minted.token.token;
     ownRun[p] = await createRun(people[p].id, `${p}'s workshop`);
   }
 });
@@ -201,6 +205,7 @@ const PAGES: Record<string, PageCase> = {
   "/me/tokens": { path: () => "/me/tokens", expect: () => 200 },
   "/me/org-secrets": { path: () => "/me/org-secrets", expect: () => 200 },
   "/me/templates": { path: () => "/me/templates", expect: () => 200 },
+  "/me/api-tokens": { path: () => "/me/api-tokens", expect: () => 200 },
   "/labs": { path: () => "/labs", expect: () => 200, signedOut: 200 },
   "/labs/new": {
     path: () => "/labs/new",
@@ -262,6 +267,8 @@ type RouteCase = {
   denyOnly?: boolean;
   /** Past the gate it needs a cloud the test server is not given, and says so. */
   unconfigured?: boolean;
+  /** Refuses a personal access token, even its owner's; see docs/api.md. */
+  sessionOnly?: boolean;
 };
 
 const form = () => new FormData();
@@ -271,19 +278,21 @@ const ROUTES: RouteCase[] = [
   { method: "GET", path: "/api/runs", allowed: canUseEvents },
   { method: "POST", path: "/api/runs", allowed: canCreateEvents, body: () => ({}) },
   { method: "GET", path: "/api/runs/stranded", allowed: canManageBackups },
+  { method: "GET", path: "/api/runs/calendar", allowed: canUseEvents },
 
   // Platform
-  { method: "GET", path: "/api/backups", allowed: canManageBackups, unconfigured: true },
-  { method: "POST", path: "/api/backups", allowed: canManageBackups, body: () => ({ description: 1 }) },
-  { method: "POST", path: `/api/backups/${MISSING}/restore`, allowed: canManageBackups, denyOnly: true },
+  { method: "GET", path: "/api/backups", allowed: canManageBackups, unconfigured: true, sessionOnly: true },
+  { method: "POST", path: "/api/backups", allowed: canManageBackups, body: () => ({ description: 1 }), sessionOnly: true },
+  { method: "POST", path: `/api/backups/${MISSING}/restore`, allowed: canManageBackups, denyOnly: true, sessionOnly: true },
   // The test server is not QA, so past the gate both answer 404.
-  { method: "GET", path: "/api/backups/production", allowed: canManageBackups },
-  { method: "POST", path: `/api/backups/production/${MISSING}/import`, allowed: canManageBackups, body: () => ({}) },
+  { method: "GET", path: "/api/backups/production", allowed: canManageBackups, sessionOnly: true },
+  { method: "POST", path: `/api/backups/production/${MISSING}/import`, allowed: canManageBackups, body: () => ({}), sessionOnly: true },
   { method: "GET", path: "/api/cloud-status", allowed: canAuditProjects },
-  { method: "POST", path: "/api/database/query", allowed: canRunSql, body: () => ({}) },
-  { method: "POST", path: "/api/settings/domains", allowed: canManageSignInDomains, body: () => ({}) },
-  { method: "PATCH", path: `/api/settings/domains/${MISSING}`, allowed: canManageSignInDomains, body: () => ({}) },
-  { method: "DELETE", path: `/api/settings/domains/${MISSING}`, allowed: canManageSignInDomains },
+  { method: "POST", path: "/api/database/query", allowed: canRunSql, body: () => ({}), sessionOnly: true },
+  { method: "GET", path: "/api/settings/domains", allowed: canManageSignInDomains },
+  { method: "POST", path: "/api/settings/domains", allowed: canManageSignInDomains, body: () => ({}), sessionOnly: true },
+  { method: "PATCH", path: `/api/settings/domains/${MISSING}`, allowed: canManageSignInDomains, body: () => ({}), sessionOnly: true },
+  { method: "DELETE", path: `/api/settings/domains/${MISSING}`, allowed: canManageSignInDomains, sessionOnly: true },
 
   // Event administration
   { method: "GET", path: "/api/settings/org-secrets", allowed: canManageSettings },
@@ -302,6 +311,9 @@ const ROUTES: RouteCase[] = [
   { method: "POST", path: `/api/me/harness-tokens/${MISSING}/scrub`, allowed: canManageSettings },
 
   // eVals administration
+  { method: "GET", path: "/api/evals/employees", allowed: canManageEvalsSettings },
+  { method: "GET", path: "/api/evals/hibob/sync", allowed: canManageEvalsSettings },
+  { method: "GET", path: "/api/evals/titles", allowed: canManageEvalsSettings },
   { method: "POST", path: "/api/evals/hibob/sync", allowed: canManageEvalsSettings, denyOnly: true },
   { method: "POST", path: "/api/evals/titles", allowed: canManageEvalsSettings, body: () => ({}) },
   { method: "PATCH", path: `/api/evals/titles/${MISSING}`, allowed: canManageEvalsSettings, body: () => ({}) },
@@ -312,21 +324,25 @@ const ROUTES: RouteCase[] = [
   { method: "DELETE", path: `/api/evals/attendee-tracking/${MISSING}`, allowed: canManageEvalsSettings },
 
   // Users
-  { method: "PATCH", path: `/api/users/${MISSING}`, allowed: canManageUsers, body: () => ({}) },
-  { method: "DELETE", path: `/api/users/${MISSING}`, allowed: canDeleteUsers },
-  { method: "POST", path: "/api/users/invites", allowed: canManageUsers, body: () => ({}) },
-  { method: "POST", path: "/api/invites/accept", allowed: true, body: () => ({}) },
+  { method: "GET", path: "/api/users", allowed: canManageUsers },
+  { method: "PATCH", path: `/api/users/${MISSING}`, allowed: canManageUsers, body: () => ({}), sessionOnly: true },
+  { method: "DELETE", path: `/api/users/${MISSING}`, allowed: canDeleteUsers, sessionOnly: true },
+  { method: "POST", path: "/api/users/invites", allowed: canManageUsers, body: () => ({}), sessionOnly: true },
+  { method: "POST", path: "/api/invites/accept", allowed: true, body: () => ({}), sessionOnly: true },
 
   // Components
+  { method: "GET", path: "/api/components", allowed: canUseEvents },
   { method: "GET", path: "/api/component-sets", allowed: canContributeComponents },
   { method: "POST", path: "/api/component-sets", allowed: canContributeComponents, body: () => ({}) },
   { method: "GET", path: `/api/component-sets/${MISSING}`, allowed: canContributeComponents },
   { method: "POST", path: `/api/component-sets/${MISSING}/submit`, allowed: canContributeComponents },
   { method: "POST", path: `/api/component-sets/${MISSING}/approve`, allowed: canPublishComponents },
   { method: "POST", path: "/api/components/validate", allowed: canContributeComponents, body: () => ({}) },
-  { method: "GET", path: "/api/components/bundle", allowed: canContributeComponents },
+  { method: "GET", path: "/api/components/bundle", allowed: canContributeComponents, sessionOnly: true },
 
   // Event guides
+  { method: "GET", path: "/api/lab-guides", allowed: "public" },
+  { method: "GET", path: `/api/lab-guides/${MISSING}`, allowed: "public" },
   { method: "POST", path: "/api/lab-guides", allowed: canManageLabGuides, body: () => ({}) },
   { method: "PATCH", path: `/api/lab-guides/${MISSING}`, allowed: canManageLabGuides, body: () => ({}) },
   { method: "DELETE", path: `/api/lab-guides/${MISSING}`, allowed: canManageLabGuides },
@@ -338,36 +354,47 @@ const ROUTES: RouteCase[] = [
   { method: "GET", path: `/api/lab-images/${MISSING}`, allowed: "public" },
   { method: "PATCH", path: `/api/lab-images/${MISSING}`, allowed: canManageLabGuides, body: () => ({}) },
   { method: "DELETE", path: `/api/lab-images/${MISSING}`, allowed: canManageLabGuides },
+  { method: "GET", path: "/api/lab-workshops", allowed: "public" },
+  { method: "GET", path: `/api/lab-workshops/${MISSING}`, allowed: "public" },
   { method: "POST", path: "/api/lab-workshops", allowed: canManageLabGuides, body: () => ({}) },
   { method: "PATCH", path: `/api/lab-workshops/${MISSING}`, allowed: canManageLabGuides, body: () => ({}) },
   { method: "DELETE", path: `/api/lab-workshops/${MISSING}`, allowed: canManageLabGuides },
   { method: "POST", path: `/api/lab-workshops/${MISSING}/guides`, allowed: canManageLabGuides, body: () => ({}) },
 
   // Everyone's own
+  { method: "GET", path: "/api/me", allowed: true },
+  { method: "PATCH", path: "/api/me", allowed: true, body: () => ({ themePreference: "bogus" }) },
   { method: "GET", path: "/api/me/org-secrets", allowed: true },
   { method: "GET", path: "/api/me/templates", allowed: true },
   { method: "GET", path: "/api/me/harness-tokens", allowed: true },
-  { method: "GET", path: "/api/tokens", allowed: true },
-  { method: "POST", path: "/api/tokens", allowed: true, body: () => ({}) },
-  { method: "DELETE", path: `/api/tokens/${MISSING}`, allowed: true },
+  { method: "GET", path: "/api/tokens", allowed: true, sessionOnly: true },
+  { method: "POST", path: "/api/tokens", allowed: true, body: () => ({}), sessionOnly: true },
+  { method: "DELETE", path: `/api/tokens/${MISSING}`, allowed: true, sessionOnly: true },
 ];
 
-function refusal(route: RouteCase, who: Who): 401 | 403 | null {
+type Via = "session" | "token";
+
+function refusal(route: RouteCase, who: Who, via: Via): 401 | 403 | null {
   if (route.allowed === "public") return null;
   if (who === SIGNED_OUT) return 401;
+  if (via === "token" && route.sessionOnly) return 401;
   if (route.allowed === true) return null;
   return route.allowed(PERSONAS[who]) ? null : 403;
 }
 
-describe("API routes", () => {
-  for (const who of [SIGNED_OUT, ...PERSONA_NAMES] as Who[]) {
+// Run once as each persona's session and once as their token: a token stands
+// in for its owner everywhere except the routes marked session-only.
+for (const via of ["session", "token"] as const) describe(`API routes, by ${via}`, () => {
+  const callers = via === "session" ? [SIGNED_OUT, ...PERSONA_NAMES] : PERSONA_NAMES;
+  for (const who of callers as Who[]) {
     test(label(who), async () => {
       const wrong: string[] = [];
       for (const route of ROUTES) {
-        const want = refusal(route, who);
+        const want = refusal(route, who, via);
         if (want === null && route.denyOnly) continue;
 
-        const { status, body } = await send(who, route.method, route.path, route.body?.());
+        const as = via === "token" && who ? { bearer: tokens[who] } : who;
+        const { status, body } = await send(as, route.method, route.path, route.body?.());
         const name = `${route.method} ${route.path}`;
         if (want !== null && status !== want) {
           wrong.push(`${name}: got ${status}, want ${want}`);
@@ -472,9 +499,24 @@ describe("personal access tokens", () => {
   });
 
   test("are not accepted where only a browser session is", async () => {
-    for (const path of ["/api/runs", "/api/tokens", "/api/me/org-secrets"]) {
-      assert.equal((await send({ bearer: contributorToken }, "GET", path)).status, 401, path);
+    for (const [method, path] of [
+      ["GET", "/api/tokens"],
+      ["POST", "/api/tokens"],
+      ["GET", "/api/components/bundle"],
+      ["POST", "/api/database/query"],
+    ]) {
+      const { status } = await send({ bearer: contributorToken }, method!, path!, method === "GET" ? undefined : {});
+      assert.equal(status, 401, `${method} ${path}`);
     }
+  });
+
+  test("a revoked token is signed out at once", async () => {
+    const minted = await mintToken(people.operator.id, "e2e revoke");
+    assert.ok(minted.ok);
+    const bearer = { bearer: minted.token.token };
+    assert.equal((await send(bearer, "GET", "/api/runs")).status, 200);
+    await revokeToken(people.operator.id, minted.token.id);
+    assert.equal((await send(bearer, "GET", "/api/runs")).status, 401);
   });
 });
 

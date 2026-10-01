@@ -1,20 +1,20 @@
 /** Renders a stored guide for the workshop editor's preview. */
 
 import { NextResponse } from "next/server";
-import { auth } from "@/auth";
+import { sessionOrToken } from "@/lib/api-auth";
 import { getLabGuideById } from "@/lib/lab-guides";
 import { renderMarkdown } from "@/lib/markdown";
 import { canManageLabGuides } from "@/lib/roles";
 
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const session = await auth();
-  if (!session?.user) {
+  const caller = await sessionOrToken(req);
+  if (!caller) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
-  if (!canManageLabGuides(session.user.access)) {
+  if (!canManageLabGuides(caller.access)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 

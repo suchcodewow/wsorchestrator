@@ -1,30 +1,30 @@
 /** The lab image library, and uploads into it. */
 
 import { NextResponse } from "next/server";
-import { auth } from "@/auth";
+import { sessionOrToken } from "@/lib/api-auth";
 import { LAB_IMAGE_LIMITS } from "@/db/schema";
 import { listLabImages, uploadLabImage } from "@/lib/lab-images";
 import { canManageLabGuides } from "@/lib/roles";
 
-async function requireEditor() {
-  const session = await auth();
-  if (!session?.user) {
+async function requireEditor(req: Request) {
+  const caller = await sessionOrToken(req);
+  if (!caller) {
     return {
       error: NextResponse.json({ error: "unauthorized" }, { status: 401 }),
       user: null,
     };
   }
-  if (!canManageLabGuides(session.user.access)) {
+  if (!canManageLabGuides(caller.access)) {
     return {
       error: NextResponse.json({ error: "forbidden" }, { status: 403 }),
       user: null,
     };
   }
-  return { error: null, user: session.user };
+  return { error: null, user: caller };
 }
 
 export async function GET(req: Request) {
-  const { error } = await requireEditor();
+  const { error } = await requireEditor(req);
   if (error) return error;
 
   const q = new URL(req.url).searchParams.get("q") ?? "";
@@ -63,7 +63,7 @@ const UPLOAD_ERRORS: Record<string, { status: number; message: string }> = {
 };
 
 export async function POST(req: Request) {
-  const { error, user } = await requireEditor();
+  const { error, user } = await requireEditor(req);
   if (error) return error;
 
   let form: FormData;

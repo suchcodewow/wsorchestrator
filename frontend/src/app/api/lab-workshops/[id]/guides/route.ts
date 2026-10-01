@@ -2,7 +2,7 @@
 
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { auth } from "@/auth";
+import { sessionOrToken } from "@/lib/api-auth";
 import {
   appendGuideToWorkshop,
   type AppendGuideError,
@@ -21,11 +21,11 @@ export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const session = await auth();
-  if (!session?.user) {
+  const caller = await sessionOrToken(req);
+  if (!caller) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
-  if (!canManageLabGuides(session.user.access)) {
+  if (!canManageLabGuides(caller.access)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 

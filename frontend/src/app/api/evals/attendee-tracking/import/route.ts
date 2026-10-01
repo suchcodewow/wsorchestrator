@@ -5,7 +5,7 @@ import { requireEvalsAdministrator } from "@/lib/api-auth";
 import { importHistory, STATUS_FOR } from "@/lib/evals/bootcamp-history";
 
 export async function POST(req: Request) {
-  const { error, user } = await requireEvalsAdministrator();
+  const { error, user } = await requireEvalsAdministrator(req);
   if (error) return error;
 
   const form = await req.formData().catch(() => null);

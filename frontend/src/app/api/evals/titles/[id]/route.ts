@@ -16,7 +16,7 @@ export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const { error } = await requireEvalsAdministrator();
+  const { error } = await requireEvalsAdministrator(req);
   if (error) return error;
 
   const id = idSchema.safeParse((await params).id);
@@ -40,10 +40,10 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const { error } = await requireEvalsAdministrator();
+  const { error } = await requireEvalsAdministrator(req);
   if (error) return error;
 
   const id = idSchema.safeParse((await params).id);

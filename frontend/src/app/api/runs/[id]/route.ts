@@ -2,7 +2,7 @@
 
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { auth } from "@/auth";
+import { sessionOrToken } from "@/lib/api-auth";
 import { CLOUDS, MAX_USERS, SCENARIOS, type ScenarioId } from "@/db/schema";
 import {
   deleteRun,
@@ -14,10 +14,10 @@ import {
 } from "@/lib/runs";
 import { reprovisionRun } from "@/lib/trigger";
 
-async function viewer(): Promise<Viewer | null> {
-  const session = await auth();
-  if (!session?.user) return null;
-  return { id: session.user.id, access: session.user.access };
+async function viewer(req: Request): Promise<Viewer | null> {
+  const caller = await sessionOrToken(req);
+  if (!caller) return null;
+  return { id: caller.id, access: caller.access };
 }
 
 const UNAUTHORIZED = NextResponse.json(
@@ -26,10 +26,10 @@ const UNAUTHORIZED = NextResponse.json(
 );
 
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const who = await viewer();
+  const who = await viewer(req);
   if (!who) return UNAUTHORIZED;
 
   const { id } = await params;
@@ -63,7 +63,7 @@ export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const who = await viewer();
+  const who = await viewer(req);
   if (!who) return UNAUTHORIZED;
 
   const parsed = patchSchema.safeParse(await req.json().catch(() => null));
@@ -90,10 +90,10 @@ const DELETE_STATUS_FOR: Record<DeleteRunError, number> = {
 };
 
 export async function DELETE(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const who = await viewer();
+  const who = await viewer(req);
   if (!who) return UNAUTHORIZED;
 
   const { id } = await params;

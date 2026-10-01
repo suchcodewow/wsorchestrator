@@ -7,21 +7,16 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import {
-  Check,
-  Copy,
   Download,
   FileCode,
   KeyRound,
   Loader2,
   Plug,
-  Plus,
-  Trash2,
   TriangleAlert,
 } from "lucide-react";
+import { ApiTokensCard } from "@/components/api-tokens-card";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { MAX_TOKENS_PER_USER, TOKEN_NAME_MAX } from "@/db/schema";
 import type { TokenSummary } from "@/lib/api-tokens";
 import { riseChild, staggerParent } from "@/lib/motion";
 import { cn } from "@/lib/utils";
@@ -37,19 +32,11 @@ type SetSummary = {
   runCount: number;
 };
 
-type Minted = { prefix: string; token: string };
-
 const STATUS_TINT: Record<string, string> = {
   testing: "text-muted-foreground",
   submitted: "text-brand",
   approved: "text-brand",
   rejected: "text-destructive",
-};
-
-const TOKEN_TINT: Record<TokenSummary["status"], string> = {
-  active: "text-brand",
-  expired: "text-muted-foreground",
-  revoked: "text-muted-foreground",
 };
 
 const shortDate = (iso: string) =>
@@ -101,15 +88,9 @@ export function ContributeView({
   mine: string;
 }) {
   const router = useRouter();
-  const [name, setName] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [minted, setMinted] = useState<Minted | null>(null);
-  const [copied, setCopied] = useState(false);
 
-  const activeManual = tokens.filter(
-    (t) => t.status === "active" && t.source === "manual",
-  );
   const hasBundleToken = tokens.some(
     (t) => t.status === "active" && t.source === "bundle",
   );
@@ -141,27 +122,6 @@ export function ContributeView({
     }
   }
 
-  async function createToken() {
-    if (name.trim().length === 0) return;
-    const body = (await call("mint", "/api/tokens", {
-      method: "POST",
-      body: JSON.stringify({ name: name.trim() }),
-    })) as { token?: Minted } | null;
-
-    if (body?.token) {
-      setMinted({ prefix: body.token.prefix, token: body.token.token });
-      setName("");
-      setCopied(false);
-      router.refresh();
-    }
-  }
-
-  async function revoke(id: string) {
-    if (await call(id, `/api/tokens/${id}`, { method: "DELETE" })) {
-      router.refresh();
-    }
-  }
-
   async function review(id: string, approve: boolean) {
     if (
       await call(id, `/api/component-sets/${id}/approve`, {
@@ -170,15 +130,6 @@ export function ContributeView({
       })
     ) {
       router.refresh();
-    }
-  }
-
-  async function copy(value: string) {
-    try {
-      await navigator.clipboard.writeText(value);
-      setCopied(true);
-    } catch {
-      setError("Could not copy — select the token and copy it manually.");
     }
   }
 
@@ -252,123 +203,23 @@ export function ContributeView({
 
       <motion.div variants={riseChild} className="space-y-3">
         <h2 className="text-sm font-medium">2. Tokens</h2>
-        <Card>
-          <CardContent className="space-y-4 py-5">
+        <ApiTokensCard
+          tokens={tokens}
+          intro={
             <p className="text-sm text-muted-foreground">
               The download already includes one, so this is only for a second
               machine or for CI.
             </p>
-
-            {minted && (
-              <div className="space-y-2 rounded-md border border-brand/40 bg-brand/5 p-3">
-                <p className="text-sm font-medium">
-                  Copy this now — it will not be shown again.
-                </p>
-                <div className="flex items-center gap-2">
-                  <code className="min-w-0 flex-1 truncate rounded bg-background px-2 py-1.5 font-mono text-xs">
-                    {minted.token}
-                  </code>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => copy(minted.token)}
-                  >
-                    {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
-                    {copied ? "Copied" : "Copy"}
-                  </Button>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Then:{" "}
-                  <code className="rounded bg-muted px-1 py-0.5">
-                    export WORKSHOP_API_TOKEN=&quot;…&quot;
-                  </code>
-                </p>
-              </div>
-            )}
-
-            <div className="flex flex-wrap items-center gap-2">
-              <Input
-                value={name}
-                maxLength={TOKEN_NAME_MAX}
-                onChange={(e) => setName(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && createToken()}
-                placeholder="What is it for? e.g. laptop"
-                className="max-w-64"
-                disabled={activeManual.length >= MAX_TOKENS_PER_USER}
-              />
-              <Button
-                onClick={createToken}
-                disabled={
-                  busy === "mint" ||
-                  name.trim().length === 0 ||
-                  activeManual.length >= MAX_TOKENS_PER_USER
-                }
-              >
-                {busy === "mint" ? (
-                  <Loader2 className="size-4 animate-spin" />
-                ) : (
-                  <Plus className="size-4" />
-                )}
-                Create
-              </Button>
-              {activeManual.length >= MAX_TOKENS_PER_USER && (
-                <span className="text-sm text-muted-foreground">
-                  {MAX_TOKENS_PER_USER} active tokens is the limit — revoke one
-                  first.
-                </span>
-              )}
-            </div>
-
-            {tokens.length > 0 && (
-              <div className="divide-y divide-border/70 border-t border-border/70 text-sm">
-                {tokens.map((t) => (
-                  <div
-                    key={t.id}
-                    className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2.5"
-                  >
-                    <span className="font-medium">{t.name}</span>
-                    {t.source === "bundle" && (
-                      <span className="rounded-full bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
-                        in a download
-                      </span>
-                    )}
-                    <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs text-muted-foreground">
-                      {t.prefix}…
-                    </code>
-                    <span className={cn("text-xs", TOKEN_TINT[t.status])}>
-                      {t.status}
-                    </span>
-                    <span className="text-xs text-muted-foreground">
-                      {t.status === "revoked"
-                        ? "revoked"
-                        : `expires ${shortDate(t.expiresAt)}`}
-                      {" · "}
-                      {t.lastUsedAt
-                        ? `last used ${shortDate(t.lastUsedAt)}`
-                        : "never used"}
-                    </span>
-                    {t.status === "active" && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="ml-auto text-muted-foreground hover:text-destructive"
-                        onClick={() => revoke(t.id)}
-                        disabled={busy === t.id}
-                      >
-                        {busy === t.id ? (
-                          <Loader2 className="size-4 animate-spin" />
-                        ) : (
-                          <Trash2 className="size-4" />
-                        )}
-                        Revoke
-                      </Button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+          }
+          usage={
+            <>
+              Then:{" "}
+              <code className="rounded bg-muted px-1 py-0.5">
+                export WORKSHOP_API_TOKEN=&quot;…&quot;
+              </code>
+            </>
+          }
+        />
       </motion.div>
 
       <motion.div variants={riseChild} className="space-y-3">

@@ -13,7 +13,7 @@ export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const { error, user } = await requireAdministrator();
+  const { error, user } = await requireAdministrator(req);
   if (error) return error;
 
   const form = await req.formData().catch(() => null);
@@ -45,10 +45,10 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const { error } = await requireAdministrator();
+  const { error } = await requireAdministrator(req);
   if (error) return error;
 
   const { id } = await params;
