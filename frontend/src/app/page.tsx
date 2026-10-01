@@ -2,38 +2,20 @@
 
 import { auth } from "@/auth";
 import { AmbientBackdrop } from "@/components/ambient-backdrop";
-import { LearningScene } from "@/components/learning-scene";
+import { EventTimeline } from "@/components/event-timeline";
 import { SiteHeader } from "@/components/site-header";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, CalendarClock, Cloud, Users } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { LandingHero } from "./landing-hero";
 
 export const metadata: Metadata = {
-  title: "Event Orchestrator — cloud environments for teaching",
+  title: "Harness Events — plan, set up, track and assess",
   description:
-    "Book a workshop or a challenge, and its attendee accounts and cloud projects build and clean themselves up on schedule.",
+    "Plan a workshop or a challenge, set up its labs and cloud environments, follow it while it runs, and record how everyone scored.",
 };
-
-const CAPABILITIES = [
-  {
-    Icon: CalendarClock,
-    title: "Booked on a calendar",
-    body: "Nothing is provisioned or billed until the session actually begins.",
-  },
-  {
-    Icon: Users,
-    title: "An account each",
-    body: "Every attendee gets their own sign-in, ready before the room opens.",
-  },
-  {
-    Icon: Cloud,
-    title: "Cleaned up after",
-    body: "Projects and accounts are torn down on a timer when the session ends.",
-  },
-] as const;
 
 export default async function Home() {
   if (await auth()) redirect("/events");
@@ -46,23 +28,18 @@ export default async function Home() {
 
       <main>
         <LandingHero>
-          <section className="mx-auto max-w-6xl px-6 pt-16 pb-4 text-center sm:pt-24">
+          <section className="mx-auto max-w-6xl px-6 pt-16 text-center sm:pt-24">
             <span
               data-anim
               className="inline-flex items-center gap-2 rounded-full border border-brand-border/70 bg-brand/8 px-3 py-1 text-xs font-medium text-brand"
             >
               <span className="size-1.5 rounded-full bg-brand" />
-              Workshops and challenges, provisioned on demand
+              Workshops, Challenges, and Training
             </span>
 
             <h1 data-anim className="mx-auto mt-6 max-w-3xl text-4xl font-medium tracking-tight text-balance sm:text-5xl">
-              Cloud environments for teaching, gone by morning.
+              Event Planning, Management, and Scoring.
             </h1>
-
-            <p data-anim className="mx-auto mt-5 max-w-xl text-base leading-relaxed text-pretty text-muted-foreground">
-              Book a workshop or a challenge, and its attendee accounts and cloud projects build and clean themselves up on
-              schedule.
-            </p>
 
             <div data-anim className="mt-9 flex flex-wrap items-center justify-center gap-3">
               <Button asChild variant="brand" size="lg" className="group">
@@ -77,24 +54,10 @@ export default async function Home() {
             </div>
           </section>
 
-          <div className="mx-auto -mt-2 max-w-6xl px-6">
-            <LearningScene />
-          </div>
+          <section aria-label="One event, start to finish" className="mx-auto max-w-6xl px-6 pt-16 pb-24 sm:pt-20">
+            <EventTimeline />
+          </section>
         </LandingHero>
-
-        <section id="how" className="mx-auto max-w-6xl scroll-mt-20 px-6 pt-14 pb-24">
-          <div className="grid gap-6 sm:grid-cols-3">
-            {CAPABILITIES.map(({ Icon, title, body }) => (
-              <div key={title} className="rounded-2xl border bg-card/60 dark:bg-card p-6 backdrop-blur-sm">
-                <span className="flex size-9 items-center justify-center rounded-lg bg-brand/10 text-brand ring-1 ring-brand/15">
-                  <Icon className="size-4.5" />
-                </span>
-                <h2 className="mt-4 text-sm font-medium">{title}</h2>
-                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{body}</p>
-              </div>
-            ))}
-          </div>
-        </section>
       </main>
 
       <footer className="border-t border-border/70">
