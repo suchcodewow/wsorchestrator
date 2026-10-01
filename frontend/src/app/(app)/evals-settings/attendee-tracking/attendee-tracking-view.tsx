@@ -135,13 +135,8 @@ export function AttendeeTrackingView({
 
   return (
     <motion.div variants={staggerParent(0.05)} initial="hidden" animate="show" className="space-y-6">
-      <motion.div variants={riseChild} className="space-y-1.5">
+      <motion.div variants={riseChild}>
         <h2 className="text-xl font-medium tracking-tight">Attendee tracking</h2>
-        <p className="text-sm leading-relaxed text-muted-foreground">
-          Who has been through bootcamp (BTC) and INT, and how they scored. This list is the record — add people
-          and edit their results here. Someone with no BTC date is due for BTC; someone with BTC but no INT date is
-          due for INT. Exempt people are marked with a date of 2000-01-01.
-        </p>
       </motion.div>
 
       {error && (

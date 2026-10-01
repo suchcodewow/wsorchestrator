@@ -4,7 +4,7 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Loader2, Play, ShieldCheck, TriangleAlert } from "lucide-react";
+import { Loader2, Play, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
@@ -81,14 +81,6 @@ export function DatabaseConsole({ tables }: { tables: string[] }) {
     >
       <motion.div variants={riseChild}>
         <h1 className="text-2xl font-medium tracking-tight">Database</h1>
-        <p className="mt-1 flex items-center gap-1.5 text-sm text-muted-foreground">
-          <ShieldCheck className="size-4 text-emerald-600" />
-          Every query runs in a{" "}
-          <code className="rounded bg-muted px-1 py-0.5 text-xs">
-            READ ONLY
-          </code>{" "}
-          transaction, so nothing here can change the data.
-        </p>
       </motion.div>
 
       {tables.length > 0 && (

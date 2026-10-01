@@ -16,12 +16,7 @@ export default async function SiteSettingsLayout({
 
   return (
     <div className="space-y-8">
-      <div className="space-y-1.5">
-        <h1 className="text-3xl font-medium tracking-tight">Event Settings</h1>
-        <p className="text-muted-foreground">
-          Configuration for running events, visible only to administrators.
-        </p>
-      </div>
+      <h1 className="text-3xl font-medium tracking-tight">Event Settings</h1>
 
       <SiteSettingsTabs access={session.user.access} />
 

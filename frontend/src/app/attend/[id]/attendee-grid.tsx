@@ -160,11 +160,11 @@ export function AttendeeGrid({ initial, runId }: { initial: View; runId: string 
     <motion.div variants={staggerParent(0.05)} initial="hidden" animate="show" className="space-y-5">
       <motion.div variants={riseChild}>
         <h1 className="text-2xl font-medium tracking-tight text-balance">{data.name}</h1>
-        <p className="mt-1.5 text-sm text-muted-foreground">
-          {data.accounts.length > 0
-            ? `Take a row and open Details for your password — ${filledCount} of ${data.accounts.length} taken.`
-            : `Accounts for this ${data.mode} will appear here.`}
-        </p>
+        {data.accounts.length > 0 && (
+          <p className="mt-1.5 text-sm text-muted-foreground">
+            {filledCount} of {data.accounts.length} taken.
+          </p>
+        )}
 
         <div className="mt-3 flex flex-wrap gap-2">
           {data.harnessOrgUrl && <LinkButton href={data.harnessOrgUrl}>Open Harness organization</LinkButton>}

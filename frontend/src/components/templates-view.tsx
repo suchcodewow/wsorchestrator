@@ -40,13 +40,11 @@ const scopeLabel = (name: string | null, identifier: string) =>
 export function TemplatesView({
   sources,
   status,
-  baseUrl,
   configured,
   mine = false,
 }: {
   sources: TemplateSourceRow[];
   status: Record<string, SourceStatus>;
-  baseUrl: string;
   configured: boolean;
   /** True on My settings, where the sources are one account's own. */
   mine?: boolean;
@@ -174,17 +172,10 @@ export function TemplatesView({
       animate="show"
       className="space-y-6"
     >
-      <motion.div variants={riseChild} className="space-y-1.5">
+      <motion.div variants={riseChild}>
         <h2 className="text-xl font-medium tracking-tight">
           {mine ? "My templates" : "Templates"}
         </h2>
-        <p className="text-sm leading-relaxed text-muted-foreground">
-          Paste a token to choose which organizations on{" "}
-          <span className="font-mono text-xs">{baseUrl}</span>{" "}
-          {mine
-            ? "your own deploys may read templates from, on top of the site’s sources."
-            : "this site may read templates from."}
-        </p>
       </motion.div>
 
       {!configured && (

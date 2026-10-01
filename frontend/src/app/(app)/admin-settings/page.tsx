@@ -16,12 +16,7 @@ export default async function AdminSettingsPage() {
 
   return (
     <div className="space-y-8">
-      <div className="space-y-1.5">
-        <h1 className="text-3xl font-medium tracking-tight">Admin Settings</h1>
-        <p className="text-muted-foreground">
-          Configuration for the whole site, visible only to platform administrators.
-        </p>
-      </div>
+      <h1 className="text-3xl font-medium tracking-tight">Admin Settings</h1>
 
       <DomainsView
         domains={domains.map((d) => ({

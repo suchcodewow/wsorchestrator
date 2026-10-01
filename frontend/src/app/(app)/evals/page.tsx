@@ -15,10 +15,6 @@ export default async function EvalsPage() {
   if (!canUseEvals(session.user.access)) notFound();
 
   return (
-    <ComingSoon
-      title="eVals"
-      description="Visible to eVals viewers and administrators."
-      Icon={FlaskConical}
-    />
+    <ComingSoon title="eVals" Icon={FlaskConical} />
   );
 }

@@ -37,5 +37,5 @@ export default async function EventsPage() {
         : (r.ownerName ?? r.ownerEmail ?? "Unknown"),
   }));
 
-  return <EventCalendar events={events} scope={scope} />;
+  return <EventCalendar events={events} />;
 }

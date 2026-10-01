@@ -3,7 +3,6 @@
 import { redirect } from "next/navigation";
 import { auth, signInPath } from "@/auth";
 import { deployChoices } from "@/lib/harness-deploy-choices";
-import { harnessBaseUrl } from "@/lib/harness-platform";
 import { scrubWindowDays } from "@/lib/harness-scrub";
 import { listHarnessTokens } from "@/lib/harness-tokens";
 import { canManageSettings } from "@/lib/roles";
@@ -18,7 +17,6 @@ export default async function MyTokensPage() {
     <HarnessTokensView
       tokens={await listHarnessTokens(session.user.id)}
       choices={await deployChoices(session.user.id)}
-      baseUrl={harnessBaseUrl()}
       configured={secretsConfigured()}
       canDeploy={canManageSettings(session.user.access)}
       scrubDays={scrubWindowDays()}

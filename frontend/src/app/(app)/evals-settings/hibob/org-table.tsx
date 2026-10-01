@@ -3,7 +3,6 @@
 /** Everyone under the org root, with the list their title is on and their bootcamp dates. */
 
 import { useMemo, useState } from "react";
-import Link from "next/link";
 import { motion } from "framer-motion";
 import { Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -62,19 +61,7 @@ export function OrgTable({
           {rootFound ? (
             <>
               <span className="font-medium text-foreground">{people.length.toLocaleString()} people</span> report
-              up to <span className="font-mono">{rootEmail}</span>. A title on the{" "}
-              <Link href="/evals-settings/sales-titles" className="underline underline-offset-4">
-                Sales
-              </Link>{" "}
-              or{" "}
-              <Link href="/evals-settings/engineer-titles" className="underline underline-offset-4">
-                Engineer
-              </Link>{" "}
-              list gives its holder that role; one on the{" "}
-              <Link href="/evals-settings/ignored-titles" className="underline underline-offset-4">
-                Ignored
-              </Link>{" "}
-              list keeps them off the rosters.
+              up to <span className="font-mono">{rootEmail}</span>.
             </>
           ) : (
             <span className="text-destructive">

@@ -76,14 +76,7 @@ export function HibobSyncView({ serviceUser, runs }: { serviceUser: string | nul
   return (
     <motion.div variants={staggerParent(0.05)} initial="hidden" animate="show" className="space-y-6">
       <motion.div variants={riseChild} className="flex flex-wrap items-start justify-between gap-4">
-        <div className="max-w-2xl space-y-1.5">
-          <h2 className="text-xl font-medium tracking-tight">HiBob sync</h2>
-          <p className="text-sm leading-relaxed text-muted-foreground">
-            eVals reads every active employee from HiBob into the Employees table, replacing the previous
-            sync so people who have left drop out. It runs every day at 3:00 AM Eastern, and whenever
-            you sync now.
-          </p>
-        </div>
+        <h2 className="text-xl font-medium tracking-tight">HiBob sync</h2>
         <Button variant="brand" disabled={running} onClick={syncNow}>
           {running ? <Loader2 className="animate-spin" /> : <RefreshCw />}
           {running ? "Syncing…" : "Sync HiBob Now"}

@@ -3,7 +3,6 @@
 import { redirect } from "next/navigation";
 import { auth, signInPath } from "@/auth";
 import { TemplatesView } from "@/components/templates-view";
-import { harnessBaseUrl } from "@/lib/harness-platform";
 import {
   checkTemplateSources,
   listTemplateSources,
@@ -21,7 +20,6 @@ export default async function MyTemplateSourcesPage() {
       mine
       sources={sources}
       status={await checkTemplateSources(sources)}
-      baseUrl={harnessBaseUrl()}
       configured={secretsConfigured()}
     />
   );

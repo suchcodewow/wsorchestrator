@@ -92,14 +92,12 @@ const sourceLabel = (s: TemplateSourceRow) =>
 export function HarnessTokensView({
   tokens,
   choices,
-  baseUrl,
   configured,
   canDeploy,
   scrubDays,
 }: {
   tokens: HarnessTokenSummary[];
   choices: DeployChoices;
-  baseUrl: string;
   configured: boolean;
   scrubDays: number;
   canDeploy: boolean;
@@ -245,13 +243,8 @@ export function HarnessTokensView({
       animate="show"
       className="space-y-6"
     >
-      <motion.div variants={riseChild} className="space-y-1.5">
+      <motion.div variants={riseChild}>
         <h2 className="text-xl font-medium tracking-tight">Harness tokens</h2>
-        <p className="text-sm leading-relaxed text-muted-foreground">
-          Paste a Harness platform token and it is checked against{" "}
-          <span className="font-mono text-xs">{baseUrl}</span> before it is saved
-          encrypted.
-        </p>
       </motion.div>
 
       {!configured && (

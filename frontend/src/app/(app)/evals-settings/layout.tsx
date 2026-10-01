@@ -28,13 +28,7 @@ export default async function EvalsSettingsLayout({
 
   return (
     <div className="space-y-8">
-      <div className="space-y-1.5">
-        <h1 className="text-3xl font-medium tracking-tight">eVals settings</h1>
-        <p className="text-muted-foreground">
-          Where eVals attendees come from and how they are sorted, visible only
-          to eVals administrators.
-        </p>
-      </div>
+      <h1 className="text-3xl font-medium tracking-tight">eVals settings</h1>
 
       <EvalsSettingsTabs access={session.user.access} />
 
