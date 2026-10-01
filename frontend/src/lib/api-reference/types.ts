@@ -19,7 +19,7 @@ export type Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
  *   eventAdmin   Event Administrator                   (canManageSettings, canAuditProjects)
  *   evalsAdmin   eVals Administrator                   (canManageEvalsSettings)
  *   userAdmin    an administrator in any area          (canManageUsers)
- *   platform     Platform Administrator                (canRunSql, canManageBackups, canManageSignInDomains, canDeleteUsers)
+ *   platform     Platform Administrator                (canManageBackups, canManageSignInDomains, canDeleteUsers)
  *   internal     not for people: Cloud Scheduler or runner OIDC, or Auth.js
  * A platform administrator passes every check, so no entry says so.
  */

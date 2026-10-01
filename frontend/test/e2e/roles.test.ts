@@ -39,7 +39,6 @@ import {
   canManageSignInDomains,
   canManageUsers,
   canPublishComponents,
-  canRunSql,
   canSeeAllEvents,
   canUseEvals,
   canUseEvents,
@@ -191,7 +190,6 @@ const PAGES: Record<string, PageCase> = {
   "/users": { path: () => "/users", expect: gated(canManageUsers) },
   "/invite/<unknown>": { path: () => `/invite/${"A".repeat(32)}`, expect: () => 200 },
   "/backups": { path: () => "/backups", expect: gated(canManageBackups) },
-  "/database": { path: () => "/database", expect: gated(canRunSql) },
   "/cloud-status": { path: () => "/cloud-status", expect: gated(canAuditProjects) },
   "/admin-settings": { path: () => "/admin-settings", expect: gated(canManageSignInDomains) },
   "/settings": {
@@ -288,7 +286,6 @@ const ROUTES: RouteCase[] = [
   { method: "GET", path: "/api/backups/production", allowed: canManageBackups, sessionOnly: true },
   { method: "POST", path: `/api/backups/production/${MISSING}/import`, allowed: canManageBackups, body: () => ({}), sessionOnly: true },
   { method: "GET", path: "/api/cloud-status", allowed: canAuditProjects },
-  { method: "POST", path: "/api/database/query", allowed: canRunSql, body: () => ({}), sessionOnly: true },
   { method: "GET", path: "/api/settings/domains", allowed: canManageSignInDomains },
   { method: "POST", path: "/api/settings/domains", allowed: canManageSignInDomains, body: () => ({}), sessionOnly: true },
   { method: "PATCH", path: `/api/settings/domains/${MISSING}`, allowed: canManageSignInDomains, body: () => ({}), sessionOnly: true },
@@ -501,7 +498,7 @@ describe("personal access tokens", () => {
     for (const [method, path] of [
       ["GET", "/api/tokens"],
       ["POST", "/api/tokens"],
-      ["POST", "/api/database/query"],
+      ["POST", "/api/backups"],
     ]) {
       const { status } = await send({ bearer: contributorToken }, method!, path!, method === "GET" ? undefined : {});
       assert.equal(status, 401, `${method} ${path}`);
@@ -741,7 +738,7 @@ describe("a session carries the roles as they are now", () => {
   test("a SITE_ADMIN_EMAILS address is made a platform administrator when it signs in", async () => {
     const user = await scope.createUser("pending", PERSONAS.nobody, E2E_BOOTSTRAP_EMAILS[1]);
     const cookie = await createSession(user.id);
-    assert.equal((await send({ cookie }, "GET", "/database")).status, 200);
+    assert.equal((await send({ cookie }, "GET", "/backups")).status, 200);
     assert.equal((await readRoles(user.id))?.platform, true);
   });
 
