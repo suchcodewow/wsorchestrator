@@ -1,6 +1,6 @@
 /**
  * Reading an uploaded .xlsx or .csv. The workbooks are built here with the
- * site's own zip writer, laid out the way Google Sheets exports them: shared
+ * test suite's zip writer, laid out the way Google Sheets exports them: shared
  * strings, cells placed by reference with gaps between, and dates stored as
  * day counts.
  */
@@ -16,7 +16,7 @@ import {
   readXlsx,
   unzip,
 } from "@/lib/spreadsheet-file";
-import { zip } from "@/lib/zip";
+import { zip } from "../support/zip";
 
 function workbook({
   sheet,

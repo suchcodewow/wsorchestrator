@@ -7,17 +7,15 @@ roles.
 
 ## Getting a token
 
-**My settings → My API tokens** (`/me/api-tokens`). Contributors also have the
-same card on `/contribute`, and the contributor bundle download includes a token
-of its own.
+**My settings → My API tokens** (`/me/api-tokens`).
 
 - A token looks like `wo_<16 hex>_<secret>`. Only its SHA-256 is stored, so it
   is shown once, when it is created.
 - It lasts 30 days (`TOKEN_TTL_DAYS`). Revoking it takes effect on the next
   request.
-- Each account can have 5 active tokens it created itself (`MAX_TOKENS_PER_USER`).
-  Bundle tokens do not count toward that limit, and each new download revokes
-  the previous one.
+- Each account can have 5 active tokens (`MAX_TOKENS_PER_USER`). Tokens marked
+  "in a download" came with the contributor bundle, which has been removed. They
+  still work until they expire and do not count toward the limit.
 - A token has no scopes. It carries its owner's roles, which are read from
   `users` on every request. Changing someone's roles therefore changes what
   their tokens can do straight away.
@@ -54,7 +52,7 @@ escalate itself:
 | `/api/backups/**` | Taking, restoring and importing backups |
 | `PATCH`/`DELETE /api/users/[id]`, `POST /api/users/invites`, `POST /api/invites/accept` | Granting roles and creating accounts |
 | `POST /api/settings/domains`, `PATCH`/`DELETE /api/settings/domains/[id]` | Who can sign in at all |
-| `/api/tokens/**`, `GET /api/components/bundle` | Minting tokens (a token must not be able to mint its own replacement) |
+| `/api/tokens/**` | Minting tokens (a token must not be able to mint its own replacement) |
 
 You can still *read* users (`GET /api/users`) and sign-in domains
 (`GET /api/settings/domains`) with a token.
@@ -70,7 +68,7 @@ through `requireCaller`. Then mark it `sessionOnly: true` in the e2e matrix
 | Events | `GET /api/runs`, `GET /api/runs/calendar?scope=own\|all` |
 | An event | `GET /api/runs/[id]` |
 | Stranded events | `GET /api/runs/stranded` |
-| Contribute | `GET /api/components`, `GET /api/component-sets`, `GET /api/component-sets/[id]` |
+| (no page) Components and contributed sets | `GET /api/components`, `GET /api/component-sets`, `GET /api/component-sets/[id]` |
 | Cloud status | `GET /api/cloud-status` |
 | Settings → org secrets / templates / repos | `GET /api/settings/org-secrets`, `GET /api/settings/templates[?status=1]`, `GET /api/settings/repos` |
 | My Harness tokens | `GET /api/me/harness-tokens` |

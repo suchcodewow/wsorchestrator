@@ -21,6 +21,7 @@ const SECRET_BYTES = 32;
 const sha256 = (value: string) =>
   createHash("sha256").update(value, "utf8").digest("hex");
 
+/** `bundle` tokens came with the contributor bundle download, now removed; old ones run out. */
 export type TokenSource = "manual" | "bundle";
 
 export type MintedToken = {
@@ -36,19 +37,16 @@ export type TokenError = "too_many" | "invalid_name";
 export async function mintToken(
   userId: string,
   name: string,
-  source: TokenSource = "manual",
 ): Promise<{ ok: true; token: MintedToken } | { ok: false; error: TokenError }> {
   const trimmed = name.trim();
   if (trimmed.length === 0) return { ok: false, error: "invalid_name" };
 
-  if (source === "manual") {
-    const live = await listTokens(userId);
-    const manual = live.filter(
-      (t) => t.status === "active" && t.source === "manual",
-    );
-    if (manual.length >= MAX_TOKENS_PER_USER) {
-      return { ok: false, error: "too_many" };
-    }
+  const live = await listTokens(userId);
+  const manual = live.filter(
+    (t) => t.status === "active" && t.source === "manual",
+  );
+  if (manual.length >= MAX_TOKENS_PER_USER) {
+    return { ok: false, error: "too_many" };
   }
 
   const prefix = randomBytes(PREFIX_BYTES).toString("hex");
@@ -64,7 +62,7 @@ export async function mintToken(
       prefix,
       tokenHash: sha256(token),
       expiresAt,
-      source,
+      source: "manual",
     })
     .returning({ id: apiTokens.id });
 
@@ -126,25 +124,6 @@ export async function revokeToken(
     .returning({ id: apiTokens.id });
 
   return revoked.length > 0;
-}
-
-export async function mintBundleToken(
-  userId: string,
-): Promise<MintedToken | null> {
-  await db
-    .update(apiTokens)
-    .set({ revokedAt: new Date() })
-    .where(
-      and(
-        eq(apiTokens.userId, userId),
-        eq(apiTokens.source, "bundle"),
-        isNull(apiTokens.revokedAt),
-      ),
-    );
-
-  const issued = new Date().toISOString().slice(0, 10);
-  const result = await mintToken(userId, `Bundle download ${issued}`, "bundle");
-  return result.ok ? result.token : null;
 }
 
 export type TokenBearer = { id: string; access: Access; email: string | null };

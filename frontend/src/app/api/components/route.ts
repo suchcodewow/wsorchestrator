@@ -1,4 +1,4 @@
-/** The published components every workshop gets, as the contributor page lists them. */
+/** The published components every workshop gets, with what each depends on and is used by. */
 
 import { NextResponse } from "next/server";
 import { requireCaller } from "@/lib/api-auth";
