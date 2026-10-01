@@ -13,7 +13,7 @@
 import { afterEach, beforeEach, describe, test } from "node:test";
 import assert from "node:assert/strict";
 
-import { buildInfo } from "@/lib/build-info";
+import { buildInfo, deploymentEnvironment } from "@/lib/build-info";
 
 const KEYS = ["BUILD_TAG", "BUILD_TIME", "BUILD_MESSAGE_B64"] as const;
 let saved: Record<string, string | undefined> = {};
@@ -121,6 +121,43 @@ describe("commit message", () => {
   test("the surrounding whitespace a shell may add to the variable is ignored", () => {
     process.env.BUILD_MESSAGE_B64 = `  ${b64("Ship it")}\n`;
     assert.equal(buildInfo().message, "Ship it");
+  });
+});
+
+describe("deployment environment", () => {
+  const ENV_KEYS = ["APP_ENVIRONMENT", "NODE_ENV"] as const;
+  let envSaved: Record<string, string | undefined> = {};
+  // NODE_ENV is typed read-only; the tests need to set it.
+  const env = process.env as Record<string, string | undefined>;
+  beforeEach(() => {
+    envSaved = Object.fromEntries(ENV_KEYS.map((k) => [k, env[k]]));
+    for (const k of ENV_KEYS) delete env[k];
+  });
+  afterEach(() => {
+    for (const k of ENV_KEYS) {
+      if (envSaved[k] === undefined) delete env[k];
+      else env[k] = envSaved[k];
+    }
+  });
+
+  test("is the trimmed APP_ENVIRONMENT when set", () => {
+    env.APP_ENVIRONMENT = " qa\n";
+    assert.equal(deploymentEnvironment(), "qa");
+    env.NODE_ENV = "development";
+    assert.equal(deploymentEnvironment(), "qa");
+  });
+
+  test("is dev under next dev", () => {
+    env.NODE_ENV = "development";
+    assert.equal(deploymentEnvironment(), "dev");
+    env.APP_ENVIRONMENT = "  ";
+    assert.equal(deploymentEnvironment(), "dev");
+  });
+
+  test("is null in a production build without APP_ENVIRONMENT", () => {
+    assert.equal(deploymentEnvironment(), null);
+    env.NODE_ENV = "production";
+    assert.equal(deploymentEnvironment(), null);
   });
 });
 

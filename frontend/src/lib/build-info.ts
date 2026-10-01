@@ -62,11 +62,16 @@ export function buildInfo(): BuildInfo {
  * Which deployment this is, when it is not production.
  *
  * Set by Terraform (`environment` in infra/admin) only on non-production
- * deployments, so production and a local `npm run dev` both read null. The
- * header shows it as a badge: QA and production share a sign-in domain and
- * look identical otherwise, and someone editing a lab guide on the wrong one
- * finds out only when their work is missing.
+ * deployments, so production reads null. A local `npm run dev` reads "dev".
+ * The header shows it as a badge: QA, production and a local server all look
+ * identical otherwise, and someone editing a lab guide on the wrong one finds
+ * out only when their work is missing.
+ *
+ * The local fallback keys off `next dev`, not the absence of a variable, so a
+ * production image that somehow lost `APP_ENVIRONMENT` still shows no badge.
  */
 export function deploymentEnvironment(): string | null {
-  return process.env.APP_ENVIRONMENT?.trim() || null;
+  const configured = process.env.APP_ENVIRONMENT?.trim();
+  if (configured) return configured;
+  return process.env.NODE_ENV === "development" ? "dev" : null;
 }
