@@ -179,6 +179,10 @@ const PAGES: Record<string, PageCase> = {
     path: () => "/cohort-settings/automation",
     expect: gated(canManageTrainingSettings),
   },
+  "/cohort-settings/organization": {
+    path: () => "/cohort-settings/organization",
+    expect: gated(canManageTrainingSettings),
+  },
   "/evals": { path: () => "/evals", expect: gated(canUseEvals) },
   "/evals-settings": {
     path: () => "/evals-settings",

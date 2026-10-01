@@ -971,6 +971,29 @@ export const BOOTCAMP_HISTORY_LIMITS = { bytes: 5 * 1024 * 1024, rows: 20_000, e
 
 export type BootcampHistory = typeof bootcampHistory.$inferSelect;
 
+/**
+ * Everyone under the configured Organization Leader, as of the last HiBob
+ * sync — computed there, from that sync's `employees` rows and whichever
+ * leader `evals_settings` named at the time, rather than on every page view.
+ * A sync always rewrites the whole table, in the same transaction as
+ * `employees`, so the two never disagree about which sync they reflect.
+ */
+export const evalsOrganizationMembers = pgTable("evals_organization_members", {
+  /** Lowercased. */
+  email: text("email").primaryKey(),
+  fullName: text("full_name").notNull(),
+  title: text("title").notNull().default(""),
+  department: text("department").notNull().default(""),
+  reportsToEmail: text("reports_to_email").notNull().default(""),
+  reportsToName: text("reports_to_name").notNull().default(""),
+  /** Links between this person and the leader, counting the leader. */
+  depth: integer("depth").notNull(),
+  /** Lowercased; whoever `evals_settings` named when this sync ran. */
+  leaderEmail: text("leader_email").notNull(),
+});
+
+export type EvalsOrganizationMember = typeof evalsOrganizationMembers.$inferSelect;
+
 export type WorkshopRun = typeof workshopRuns.$inferSelect;
 export type LabGuide = typeof labGuides.$inferSelect;
 export type LabWorkshop = typeof labWorkshops.$inferSelect;

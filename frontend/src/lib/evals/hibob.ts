@@ -17,12 +17,15 @@ import { and, desc, eq, lt, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   employees,
+  evalsOrganizationMembers,
   hibobSyncRuns,
   users,
   type HibobSyncStatus,
   type HibobSyncTrigger,
 } from "@/db/schema";
 import { hibobAuthorization, toEmployeeRow } from "@/lib/evals/hibob-record";
+import { orgUnder } from "@/lib/evals/org";
+import { getOrgLeaderEmail } from "@/lib/evals/settings";
 
 const SEARCH_URL = "https://api.hibob.com/v1/people/search";
 
@@ -183,6 +186,20 @@ export async function syncHibobEmployees(
     const skipped = result.employees.length - unique.length;
     const importedAt = new Date();
 
+    // Who the Automation tab's Organization Leader field names right now —
+    // whoever that was when this sync started, not when an admin next changes it.
+    const leaderEmail = (await getOrgLeaderEmail()).toLowerCase();
+    const members = orgUnder(unique, leaderEmail).map(({ chain, ...person }) => ({
+      email: person.email,
+      fullName: person.fullName,
+      title: person.title,
+      department: person.department,
+      reportsToEmail: person.reportsToEmail,
+      reportsToName: person.reportsToName,
+      depth: chain.length,
+      leaderEmail,
+    }));
+
     await db.transaction(async (tx) => {
       // Two syncs are kept apart by the one-running index, but a revision from
       // before it (importing through the hibob_employees view) is not.
@@ -190,6 +207,10 @@ export async function syncHibobEmployees(
       await tx.delete(employees);
       for (let i = 0; i < unique.length; i += BATCH) {
         await tx.insert(employees).values(unique.slice(i, i + BATCH).map((r) => ({ ...r, importedAt })));
+      }
+      await tx.delete(evalsOrganizationMembers);
+      for (let i = 0; i < members.length; i += BATCH) {
+        await tx.insert(evalsOrganizationMembers).values(members.slice(i, i + BATCH));
       }
       await tx
         .update(hibobSyncRuns)

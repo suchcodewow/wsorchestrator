@@ -37,6 +37,16 @@ begin
     return;
   end if;
 
+  alter table users
+    add column if not exists is_platform_admin boolean not null default false;
+
+  -- 0035 renames this type and column to training_role. Once it has, adding
+  -- them back here would leave both, and 0035 would then fail to rename.
+  if exists (select 1 from pg_type where typname = 'training_role') then
+    raise notice 'already renamed to training_role by 0035 — skipped';
+    return;
+  end if;
+
   -- `create type` has no `if not exists`, so the guard is explicit.
   if not exists (select 1 from pg_type where typname = 'scheduler_role') then
     create type scheduler_role as enum ('viewer', 'administrator');
@@ -45,8 +55,7 @@ begin
   end if;
 
   alter table users
-    add column if not exists scheduler_role scheduler_role,
-    add column if not exists is_platform_admin boolean not null default false;
+    add column if not exists scheduler_role scheduler_role;
 end $$;
 
 commit;

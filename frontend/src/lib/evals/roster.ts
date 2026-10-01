@@ -7,7 +7,14 @@
 import "server-only";
 
 import { db } from "@/db";
-import { bootcampHistory, employees, type Employee, type EvalsTitleList } from "@/db/schema";
+import {
+  bootcampHistory,
+  employees,
+  evalsOrganizationMembers,
+  type Employee,
+  type EvalsOrganizationMember,
+  type EvalsTitleList,
+} from "@/db/schema";
 import { orgUnder } from "@/lib/evals/org";
 import { getOrgLeaderEmail } from "@/lib/evals/settings";
 import { listForTitle, titleKey } from "@/lib/evals/title-lists";
@@ -74,6 +81,38 @@ export async function listEmployees(): Promise<{ people: EmployeeListing[]; sync
   // A sync stamps every row with the same time.
   const syncedAt = rows[0]?.importedAt ?? null;
   return { people: rows.map(({ importedAt: _, ...person }) => person), syncedAt };
+}
+
+export type OrganizationSnapshot = {
+  /** Everyone found under the leader as of the last sync, deepest last. */
+  members: EvalsOrganizationMember[];
+  /** Who the snapshot was computed for — null if no sync has run yet. */
+  leaderEmail: string | null;
+  /** False once an admin has picked a different leader since that sync ran. */
+  current: boolean;
+};
+
+/**
+ * The Organization tab's data: who the last HiBob sync found reporting up to
+ * the configured Organization Leader. Read from `evals_organization_members`
+ * rather than recomputed here, because the chain is only ever as fresh as the
+ * last sync — recomputing on every page view would silently show a chain
+ * HiBob has not actually synced yet.
+ */
+export async function listOrganizationMembers(): Promise<OrganizationSnapshot> {
+  const [rows, configuredLeader] = await Promise.all([
+    db
+      .select()
+      .from(evalsOrganizationMembers)
+      .orderBy(evalsOrganizationMembers.depth, evalsOrganizationMembers.fullName),
+    getOrgLeaderEmail(),
+  ]);
+  const leaderEmail = rows[0]?.leaderEmail ?? null;
+  return {
+    members: rows,
+    leaderEmail,
+    current: leaderEmail === null || leaderEmail === configuredLeader.toLowerCase(),
+  };
 }
 
 export async function loadRoster(rootEmail?: string): Promise<Roster> {
