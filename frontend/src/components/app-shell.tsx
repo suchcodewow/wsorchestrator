@@ -55,6 +55,7 @@ export async function AppShell({
         <AppSidebar
           name={user.name ?? null}
           email={user.email ?? ""}
+          image={user.image ?? null}
           access={user.access}
           initialTheme={themePreference}
           initialScope={calendarScope}

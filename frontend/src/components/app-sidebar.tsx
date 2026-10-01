@@ -24,6 +24,7 @@ import { cn } from "@/lib/utils";
 export function AppSidebar({
   name,
   email,
+  image,
   access,
   initialTheme,
   initialScope,
@@ -34,6 +35,7 @@ export function AppSidebar({
 }: {
   name: string | null;
   email: string;
+  image: string | null;
   access: Access;
   initialTheme: ThemePreference;
   initialScope: CalendarScope;
@@ -97,6 +99,7 @@ export function AppSidebar({
           <UserMenu
             name={name}
             email={email}
+            image={image}
             access={access}
             initialTheme={initialTheme}
             initialScope={initialScope}
