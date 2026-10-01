@@ -11,6 +11,7 @@ import {
   type RestoreError,
 } from "@/lib/backups";
 import { canManageBackups } from "@/lib/roles";
+import { audited } from "@/lib/audit";
 
 const restoreSchema = z.object({
   confirmation: z.string().min(1),
@@ -25,7 +26,7 @@ const STATUS_FOR: Record<RestoreError, number> = {
   confirmation_mismatch: 400,
 };
 
-export async function POST(
+export const POST = audited(async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -71,4 +72,4 @@ export async function POST(
     { ok: true, stranded: stranded.map((r) => ({ id: r.id, name: r.name })) },
     { status: 202 },
   );
-}
+});

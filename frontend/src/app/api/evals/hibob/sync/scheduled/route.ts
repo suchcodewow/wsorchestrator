@@ -11,6 +11,7 @@
 import { NextResponse } from "next/server";
 import { OAuth2Client } from "google-auth-library";
 import { STATUS_FOR, syncHibobEmployees } from "@/lib/evals/hibob";
+import { audited } from "@/lib/audit";
 
 export const maxDuration = 180;
 
@@ -32,7 +33,7 @@ async function fromScheduler(req: Request): Promise<boolean> {
   }
 }
 
-export async function POST(req: Request) {
+export const POST = audited(async function POST(req: Request) {
   if (!(await fromScheduler(req))) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
@@ -47,4 +48,4 @@ export async function POST(req: Request) {
     );
   }
   return NextResponse.json({ count: result.count, skipped: result.skipped });
-}
+});

@@ -2,10 +2,10 @@
 
 /** Everyone with an account, and the controls that set their roles or delete them. */
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { ChevronDown, Loader2, Search, ShieldCheck } from "lucide-react";
+import { ChevronDown, Loader2, ShieldCheck } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,8 +15,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { HEADER_ROW, Pager, PlainHeader, SortHeader, TableSearch } from "@/components/data-table";
 import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import {
   EVALS_ROLES,
   EVENT_ROLES,
@@ -44,6 +44,8 @@ import {
   type Area,
 } from "@/lib/roles";
 import { riseChild, staggerParent } from "@/lib/motion";
+import type { ListQuery, Page } from "@/lib/paging";
+import type { UserSort } from "@/lib/list-specs";
 import { cn } from "@/lib/utils";
 import { CreateInviteDialog } from "./create-invite-dialog";
 import { DeleteUserButton } from "./delete-user-button";
@@ -90,12 +92,14 @@ const EVENT_CHIP: Record<EventRole, string> = {
 };
 
 export function UsersTable({
-  users,
+  query,
+  page,
   viewerId,
   viewerAccess,
   pendingAdmins,
 }: {
-  users: SiteUser[];
+  query: ListQuery<UserSort>;
+  page: Page<SiteUser>;
   viewerId: string;
   viewerAccess: Access;
   pendingAdmins: string[];
@@ -104,16 +108,8 @@ export function UsersTable({
   const [edits, setEdits] = useState<Record<string, Partial<Roles>>>({});
   const [saving, setSaving] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [query, setQuery] = useState("");
-
-  const shown = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return users;
-    return users.filter(
-      (u) =>
-        u.name?.toLowerCase().includes(q) || u.email?.toLowerCase().includes(q),
-    );
-  }, [users, query]);
+  const shown = page.rows;
+  const sortProps = { sort: query.sort, dir: query.dir };
 
   const rolesOf = (u: SiteUser): Roles => ({
     eventRole: u.eventRole,
@@ -213,33 +209,27 @@ export function UsersTable({
       )}
 
       <motion.div variants={riseChild} className="space-y-3">
-        <div className="relative max-w-sm">
-          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            type="search"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search by name or email"
-            aria-label="Search users by name or email"
-            className="pl-9"
-          />
-        </div>
+        <TableSearch
+          value={query.q}
+          placeholder="Search by name or email"
+          label="Search users by name or email"
+        />
 
         <div className="overflow-hidden rounded-2xl border bg-card shadow-sm">
           <div className="overflow-x-auto">
             <table className="w-full min-w-220 text-sm">
               <thead>
-                <tr className="border-b bg-muted/30 text-left text-[11px] uppercase tracking-wider text-muted-foreground">
-                  <th className="px-5 py-2.5 font-medium">User</th>
-                  <th className="px-5 py-2.5 font-medium">Events</th>
-                  <th className="px-5 py-2.5 font-medium">Event role</th>
-                  <th className="px-5 py-2.5 font-medium">Training role</th>
-                  <th className="px-5 py-2.5 font-medium">eVals role</th>
-                  <th className="px-5 py-2.5 font-medium">Platform admin</th>
+                <tr className={HEADER_ROW}>
+                  <SortHeader column="user" {...sortProps}>User</SortHeader>
+                  <SortHeader column="events" {...sortProps}>Events</SortHeader>
+                  <SortHeader column="eventRole" {...sortProps}>Event role</SortHeader>
+                  <SortHeader column="trainingRole" {...sortProps}>Training role</SortHeader>
+                  <SortHeader column="evalsRole" {...sortProps}>eVals role</SortHeader>
+                  <SortHeader column="platform" {...sortProps}>Platform admin</SortHeader>
                   {viewerDeletes && (
-                    <th className="w-px px-5 py-2.5">
+                    <PlainHeader className="w-px">
                       <span className="sr-only">Delete</span>
-                    </th>
+                    </PlainHeader>
                   )}
                 </tr>
               </thead>
@@ -250,7 +240,7 @@ export function UsersTable({
                       colSpan={viewerDeletes ? 7 : 6}
                       className="px-5 py-8 text-center text-muted-foreground"
                     >
-                      No one matches “{query.trim()}”.
+                      {query.q ? <>No one matches “{query.q}”.</> : "No one on this page."}
                     </td>
                   </tr>
                 )}
@@ -445,6 +435,9 @@ export function UsersTable({
                 })}
               </tbody>
             </table>
+          </div>
+          <div className="border-t empty:hidden">
+            <Pager page={page} noun="users" />
           </div>
         </div>
       </motion.div>

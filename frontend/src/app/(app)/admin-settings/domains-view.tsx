@@ -1,17 +1,23 @@
 "use client";
 
-/** The email domains allowed to sign in. */
+/**
+ * The email domains allowed to sign in: the deployment's own, then a page of
+ * those added here, searched and sorted by the database.
+ */
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Check, Loader2, Lock, Pencil, Plus, Trash2, X } from "lucide-react";
+import { HEADER_ROW, Pager, PlainHeader, SortHeader, TableSearch } from "@/components/data-table";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ALLOWED_DOMAIN_LIMITS } from "@/db/schema";
 import { normalizeDomain } from "@/lib/email-domains";
+import type { DomainSort } from "@/lib/list-specs";
 import { riseChild, staggerParent } from "@/lib/motion";
+import type { ListQuery, Page } from "@/lib/paging";
 
 export type DomainRow = {
   id: string;
@@ -35,12 +41,14 @@ function message(error: string | undefined, status: number) {
 }
 
 export function DomainsView({
-  domains,
-  envDomains,
+  query,
+  page,
+  envDomains: allEnvDomains,
   viewerEmail,
   viewerExempt,
 }: {
-  domains: DomainRow[];
+  query: ListQuery<DomainSort>;
+  page: Page<DomainRow>;
   envDomains: string[];
   viewerEmail: string;
   viewerExempt: boolean;
@@ -50,6 +58,13 @@ export function DomainsView({
   const [busy, setBusy] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+
+  const domains = page.rows;
+  const sortProps = { sort: query.sort, dir: query.dir };
+  // The deployment's own come from its configuration, not the database: a
+  // handful, shown above the first page.
+  const q = query.q.toLowerCase();
+  const envDomains = page.page === 1 ? allEnvDomains.filter((d) => d.includes(q)) : [];
 
   async function send(
     key: string,
@@ -89,6 +104,10 @@ export function DomainsView({
         <h2 className="text-xl font-medium tracking-tight">Sign-in domains</h2>
       </motion.div>
 
+      <motion.div variants={riseChild}>
+        <TableSearch value={query.q} placeholder="Search by domain, note or who added it" label="Search domains" />
+      </motion.div>
+
       {error && (
         <motion.p
           variants={riseChild}
@@ -106,11 +125,17 @@ export function DomainsView({
         <div className="overflow-x-auto">
           <table className="w-full min-w-160 text-sm">
             <thead>
-              <tr className="border-b bg-muted/30 text-left text-[11px] uppercase tracking-wider text-muted-foreground">
-                <th className="px-5 py-2.5 font-medium">Domain</th>
-                <th className="px-5 py-2.5 font-medium">Note</th>
-                <th className="px-5 py-2.5 font-medium">Added by</th>
-                <th className="w-24 px-5 py-2.5" />
+              <tr className={HEADER_ROW}>
+                <SortHeader column="domain" {...sortProps}>
+                  Domain
+                </SortHeader>
+                <SortHeader column="note" {...sortProps}>
+                  Note
+                </SortHeader>
+                <SortHeader column="addedBy" {...sortProps}>
+                  Added by
+                </SortHeader>
+                <PlainHeader className="w-24" />
               </tr>
             </thead>
             <tbody>
@@ -222,6 +247,9 @@ export function DomainsView({
               )}
             </tbody>
           </table>
+        </div>
+        <div className="border-t empty:hidden">
+          <Pager page={page} noun="domains" />
         </div>
       </motion.div>
 

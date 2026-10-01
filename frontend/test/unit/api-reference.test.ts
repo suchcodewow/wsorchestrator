@@ -10,42 +10,10 @@
 
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync, readdirSync } from "node:fs";
-import { join, relative, sep } from "node:path";
+import { readFileSync } from "node:fs";
 
 import { ACCESS_LABELS, GROUPS, endpointAnchor } from "@/lib/api-reference";
-
-const API_DIR = join(import.meta.dirname, "../../src/app/api");
-
-function routeFiles(dir: string): string[] {
-  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
-    const path = join(dir, entry.name);
-    if (entry.isDirectory()) return routeFiles(path);
-    return entry.name === "route.ts" ? [path] : [];
-  });
-}
-
-/** "src/app/api/runs/[id]/end/route.ts" → "/api/runs/{id}/end". */
-function urlPath(file: string): string {
-  const dir = relative(API_DIR, file).split(sep).slice(0, -1);
-  const segments = dir.map((s) =>
-    s.replace(/^\[\.\.\.(.+)\]$/, "{...$1}").replace(/^\[(.+)\]$/, "{$1}"),
-  );
-  return ["/api", ...segments].join("/");
-}
-
-const CALLS_AUTH = /\bawait auth\(\)/;
-
-/** Each top-level function in a file, keyed by name, with its source. */
-function topLevelFunctions(source: string): Map<string, { exported: boolean; body: string }> {
-  const starts = [...source.matchAll(/^(export )?(?:async )?function (\w+)/gm)];
-  const out = new Map<string, { exported: boolean; body: string }>();
-  starts.forEach((m, i) => {
-    const end = starts[i + 1]?.index ?? source.length;
-    out.set(m[2]!, { exported: Boolean(m[1]), body: source.slice(m.index, end) });
-  });
-  return out;
-}
+import { API_DIR, CALLS_AUTH, routeFiles, topLevelFunctions, urlPath } from "../support/routes";
 
 /** "GET /api/runs" → whether the handler takes a token. */
 function routesInCode(): Map<string, boolean> {

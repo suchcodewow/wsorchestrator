@@ -16,6 +16,7 @@ import {
   setStatus,
 } from "@/lib/components/catalog";
 import { validateSet } from "@/lib/components/validate";
+import { audited } from "@/lib/audit";
 
 async function readable(setId: string, userId: string, access: Access) {
   const [set] = await db
@@ -47,7 +48,7 @@ export async function GET(
   return NextResponse.json({ set, components: await listSetComponents(id) });
 }
 
-export async function PUT(
+export const PUT = audited(async function PUT(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -87,9 +88,9 @@ export async function PUT(
   }
 
   return NextResponse.json({ setId: id, components: valid.length });
-}
+});
 
-export async function DELETE(
+export const DELETE = audited(async function DELETE(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -114,4 +115,4 @@ export async function DELETE(
   }
 
   return NextResponse.json({ setId: id, status: "testing" });
-}
+});

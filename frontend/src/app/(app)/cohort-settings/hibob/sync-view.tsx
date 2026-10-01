@@ -6,9 +6,12 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { AlertTriangle, CalendarClock, CheckCircle2, Loader2, RefreshCw, User, XCircle } from "lucide-react";
+import { HEADER_ROW, Pager, PlainHeader, SortHeader, TableSearch } from "@/components/data-table";
 import { Button } from "@/components/ui/button";
 import type { HibobSyncStatus, HibobSyncTrigger } from "@/db/schema";
+import type { HibobSyncSort } from "@/lib/list-specs";
 import { riseChild, staggerParent } from "@/lib/motion";
+import type { ListQuery, Page } from "@/lib/paging";
 import { formatWhen } from "../format";
 
 export type SyncRun = {
@@ -44,7 +47,20 @@ function duration(run: SyncRun): string {
   return seconds < 60 ? `${seconds.toFixed(1)}s` : `${Math.floor(seconds / 60)}m ${Math.round(seconds % 60)}s`;
 }
 
-export function HibobSyncView({ serviceUser, runs }: { serviceUser: string | null; runs: SyncRun[] }) {
+export function HibobSyncView({
+  serviceUser,
+  query,
+  page,
+  running: syncing,
+}: {
+  serviceUser: string | null;
+  query: ListQuery<HibobSyncSort>;
+  page: Page<SyncRun>;
+  /** Whether a sync is under way now, whichever page this is. */
+  running: boolean;
+}) {
+  const runs = page.rows;
+  const sortProps = { sort: query.sort, dir: query.dir };
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -71,7 +87,7 @@ export function HibobSyncView({ serviceUser, runs }: { serviceUser: string | nul
     }
   }
 
-  const running = busy || runs.some((r) => r.status === "running");
+  const running = busy || syncing;
 
   return (
     <motion.div variants={staggerParent(0.05)} initial="hidden" animate="show" className="space-y-6">
@@ -109,15 +125,25 @@ export function HibobSyncView({ serviceUser, runs }: { serviceUser: string | nul
         </motion.p>
       )}
 
+      <motion.div variants={riseChild}>
+        <TableSearch value={query.q} placeholder="Search by who, status or error" label="Search the sync log" />
+      </motion.div>
+
       <motion.div variants={riseChild} className="overflow-hidden rounded-2xl border bg-card shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full min-w-180 text-sm">
             <thead>
-              <tr className="border-b bg-muted/30 text-left text-[11px] uppercase tracking-wider text-muted-foreground">
-                <th className="px-5 py-2.5 font-medium">Started</th>
-                <th className="px-5 py-2.5 font-medium">Triggered by</th>
-                <th className="px-5 py-2.5 font-medium">Result</th>
-                <th className="px-5 py-2.5 text-right font-medium">Took</th>
+              <tr className={HEADER_ROW}>
+                <SortHeader column="startedAt" {...sortProps}>
+                  Started
+                </SortHeader>
+                <SortHeader column="triggeredBy" {...sortProps}>
+                  Triggered by
+                </SortHeader>
+                <SortHeader column="status" {...sortProps}>
+                  Result
+                </SortHeader>
+                <PlainHeader className="text-right">Took</PlainHeader>
               </tr>
             </thead>
             <tbody>
@@ -170,12 +196,15 @@ export function HibobSyncView({ serviceUser, runs }: { serviceUser: string | nul
               {runs.length === 0 && (
                 <tr>
                   <td colSpan={4} className="px-5 py-8 text-center text-muted-foreground">
-                    No syncs yet.
+                    {query.q ? "No syncs match." : "No syncs yet."}
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
+        </div>
+        <div className="border-t empty:hidden">
+          <Pager page={page} noun="syncs" />
         </div>
       </motion.div>
     </motion.div>

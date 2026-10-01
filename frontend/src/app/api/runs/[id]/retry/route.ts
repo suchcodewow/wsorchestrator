@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { sessionOrToken } from "@/lib/api-auth";
 import type { Viewer } from "@/lib/runs";
 import { retryRun, type RetryRunError } from "@/lib/trigger";
+import { audited } from "@/lib/audit";
 
 async function viewer(req: Request): Promise<Viewer | null> {
   const caller = await sessionOrToken(req);
@@ -17,7 +18,7 @@ const STATUS_FOR: Record<RetryRunError, number> = {
   trigger_failed: 502,
 };
 
-export async function POST(
+export const POST = audited(async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -35,4 +36,4 @@ export async function POST(
     );
   }
   return NextResponse.json({ ok: true });
-}
+});

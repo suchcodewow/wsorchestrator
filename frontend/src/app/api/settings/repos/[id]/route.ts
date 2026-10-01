@@ -3,8 +3,9 @@
 import { NextResponse } from "next/server";
 import { requireAdministrator } from "@/lib/api-auth";
 import { deleteRepo, STATUS_FOR, updateRepo } from "@/lib/harness-repos";
+import { audited } from "@/lib/audit";
 
-export async function PATCH(
+export const PATCH = audited(async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -29,9 +30,9 @@ export async function PATCH(
     );
   }
   return NextResponse.json({ ok: true });
-}
+});
 
-export async function DELETE(
+export const DELETE = audited(async function DELETE(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -47,4 +48,4 @@ export async function DELETE(
     );
   }
   return NextResponse.json({ ok: true });
-}
+});

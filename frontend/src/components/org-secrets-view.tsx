@@ -23,7 +23,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ORG_SECRET_LIMITS, type OrgSecretKind } from "@/db/schema";
+import { HEADER_ROW, Pager, PlainHeader, SortHeader, TableSearch } from "@/components/data-table";
 import type { OrgSecretRow } from "@/lib/harness-org-secrets";
+import type { OrgSecretSort } from "@/lib/list-specs";
+import type { ListQuery, Page } from "@/lib/paging";
 import { riseChild, staggerParent } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 
@@ -56,16 +59,20 @@ const shortDate = (iso: string) =>
   });
 
 export function OrgSecretsView({
-  secrets,
+  query,
+  page,
   configured,
   mine = false,
 }: {
-  secrets: OrgSecretRow[];
+  query: ListQuery<OrgSecretSort>;
+  page: Page<OrgSecretRow>;
   configured: boolean;
   /** True on My settings, where the secrets are one account's own. */
   mine?: boolean;
 }) {
   const api = mine ? "/api/me/org-secrets" : "/api/settings/org-secrets";
+  const secrets = page.rows;
+  const sortProps = { sort: query.sort, dir: query.dir };
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
@@ -180,6 +187,10 @@ export function OrgSecretsView({
         )}
       </motion.div>
 
+      <motion.div variants={riseChild}>
+        <TableSearch value={query.q} placeholder="Search by id, file or who stored it" label="Search org secrets" />
+      </motion.div>
+
       <motion.div
         variants={riseChild}
         className="overflow-hidden rounded-2xl border bg-card shadow-sm"
@@ -187,12 +198,20 @@ export function OrgSecretsView({
         <div className="overflow-x-auto">
           <table className="w-full min-w-160 text-sm">
             <thead>
-              <tr className="border-b bg-muted/30 text-left text-[11px] uppercase tracking-wider text-muted-foreground">
-                <th className="px-5 py-2.5 font-medium">Id</th>
-                <th className="px-5 py-2.5 font-medium">Value</th>
-                <th className="px-5 py-2.5 font-medium">Updated</th>
-                <th className="px-5 py-2.5 font-medium">By</th>
-                <th className="w-24 px-5 py-2.5" />
+              <tr className={HEADER_ROW}>
+                <SortHeader column="identifier" {...sortProps}>
+                  Id
+                </SortHeader>
+                <SortHeader column="kind" {...sortProps}>
+                  Value
+                </SortHeader>
+                <SortHeader column="updatedAt" {...sortProps}>
+                  Updated
+                </SortHeader>
+                <SortHeader column="updatedBy" {...sortProps}>
+                  By
+                </SortHeader>
+                <PlainHeader className="w-24" />
               </tr>
             </thead>
             <tbody>
@@ -202,7 +221,11 @@ export function OrgSecretsView({
                     colSpan={5}
                     className="px-5 py-8 text-center text-muted-foreground"
                   >
-                    {mine ? "No org secrets of your own yet." : "No org secrets yet."}
+                    {query.q
+                      ? "No org secrets match."
+                      : mine
+                        ? "No org secrets of your own yet."
+                        : "No org secrets yet."}
                   </td>
                 </tr>
               )}
@@ -304,6 +327,9 @@ export function OrgSecretsView({
               )}
             </tbody>
           </table>
+        </div>
+        <div className="border-t empty:hidden">
+          <Pager page={page} noun="secrets" />
         </div>
       </motion.div>
     </motion.div>

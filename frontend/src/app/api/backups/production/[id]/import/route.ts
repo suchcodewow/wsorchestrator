@@ -13,6 +13,7 @@ import {
   type ImportError,
 } from "@/lib/production-import";
 import { canManageBackups } from "@/lib/roles";
+import { audited } from "@/lib/audit";
 
 const importSchema = z.object({
   confirmation: z.string().min(1),
@@ -28,7 +29,7 @@ const STATUS_FOR: Record<ImportError, number> = {
   runs_hold_resources: 409,
 };
 
-export async function POST(
+export const POST = audited(async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -70,4 +71,4 @@ export async function POST(
   });
 
   return NextResponse.json({ ok: true, execution: result.execution }, { status: 202 });
-}
+});

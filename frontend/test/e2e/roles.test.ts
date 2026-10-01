@@ -43,6 +43,7 @@ import {
   canUseEvals,
   canUseEvents,
   canUseTraining,
+  canViewAuditTrail,
   homePath,
   type Access,
 } from "@/lib/roles";
@@ -197,6 +198,11 @@ const PAGES: Record<string, PageCase> = {
   "/backups": { path: () => "/backups", expect: gated(canManageBackups) },
   "/cloud-status": { path: () => "/cloud-status", expect: gated(canAuditProjects) },
   "/admin-settings": { path: () => "/admin-settings", expect: gated(canManageSignInDomains) },
+  "/audit": { path: () => "/audit", expect: gated(canViewAuditTrail) },
+  "/audit?q=nothing&sort=actor&page=2": {
+    path: () => "/audit?q=nothing&sort=actor&page=2",
+    expect: gated(canViewAuditTrail),
+  },
   "/settings": {
     path: () => "/settings",
     expect: (a) => (canManageSettings(a) ? { to: visibleSettingsTabs(a)[0]!.href } : 404),
@@ -291,6 +297,7 @@ const ROUTES: RouteCase[] = [
   { method: "GET", path: "/api/backups/production", allowed: canManageBackups, sessionOnly: true },
   { method: "POST", path: `/api/backups/production/${MISSING}/import`, allowed: canManageBackups, body: () => ({}), sessionOnly: true },
   { method: "GET", path: "/api/cloud-status", allowed: canAuditProjects },
+  { method: "GET", path: "/api/audit", allowed: canViewAuditTrail },
   { method: "GET", path: "/api/settings/domains", allowed: canManageSignInDomains },
   { method: "POST", path: "/api/settings/domains", allowed: canManageSignInDomains, body: () => ({}), sessionOnly: true },
   { method: "PATCH", path: `/api/settings/domains/${MISSING}`, allowed: canManageSignInDomains, body: () => ({}), sessionOnly: true },
@@ -315,6 +322,7 @@ const ROUTES: RouteCase[] = [
   // eVals administration
   { method: "GET", path: "/api/evals/employees", allowed: canManageEvalsSettings },
   { method: "GET", path: "/api/evals/hibob/sync", allowed: canManageEvalsSettings },
+  { method: "GET", path: "/api/evals/organization", allowed: canManageEvalsSettings },
   { method: "GET", path: "/api/evals/titles", allowed: canManageEvalsSettings },
   { method: "POST", path: "/api/evals/hibob/sync", allowed: canManageEvalsSettings, denyOnly: true },
   { method: "POST", path: "/api/evals/titles", allowed: canManageEvalsSettings, body: () => ({}) },
@@ -721,6 +729,64 @@ describe("invite links", () => {
 
   test("an unknown link is 404", async () => {
     assert.equal((await accept(cookies.nobody, "A".repeat(32))).status, 404);
+  });
+});
+
+describe("the audit trail", () => {
+  /** Rows the matrix wrote are the platform persona's too; a marker finds only this test's. */
+  async function find(marker: string) {
+    const res = await send("platform", "GET", `/api/audit?q=${marker}`);
+    assert.equal(res.status, 200, res.body);
+    return JSON.parse(res.body) as {
+      events: { actorId: string | null; via: string; action: string; outcome: string; status: number; detail: { body?: Record<string, unknown>; error?: string } | null }[];
+      page: number;
+      hasMore: boolean;
+    };
+  }
+
+  test("records a change, a refusal and a failure, with secrets redacted, and not a 401", async () => {
+    const marker = `wo_test_audit_${randomUUID().slice(0, 8)}`;
+    const body = { title: 1, list: "nope", domain: 1, note: marker, password: "hunter2" };
+    assert.equal((await send({ bearer: tokens.platform }, "POST", "/api/evals/titles", body)).status, 400);
+    assert.equal((await send("nobody", "POST", "/api/evals/titles", body)).status, 403);
+    assert.equal((await send(SIGNED_OUT, "POST", "/api/evals/titles", body)).status, 401);
+    // Session-only: it calls auth() itself, so the wrapper has to find the caller afterwards.
+    assert.equal((await send("platform", "POST", "/api/settings/domains", body)).status, 400);
+
+    const { events, page, hasMore } = await find(marker);
+    assert.deepEqual([page, hasMore], [1, false]);
+    assert.deepEqual(
+      events.map((e) => [e.via, e.action, e.outcome, e.status]).sort(),
+      [
+        ["session", "POST /api/evals/titles", "denied", 403],
+        ["session", "POST /api/settings/domains", "failed", 400],
+        ["token", "POST /api/evals/titles", "failed", 400],
+      ],
+    );
+    for (const e of events) {
+      assert.equal(e.detail?.body?.password, "[redacted]");
+      assert.equal(e.detail?.body?.note, marker);
+    }
+    assert.ok(events.every((e) => e.actorId), "every row names its account");
+  });
+
+  test("a read-only POST and a GET leave nothing behind", async () => {
+    const marker = `wo_test_audit_${randomUUID().slice(0, 8)}`;
+    await send("platform", "POST", "/api/components/validate", { note: marker });
+    await send("platform", "GET", `/api/runs?note=${marker}`);
+    assert.deepEqual((await find(marker)).events, []);
+  });
+
+  test("pages at 100 and sorts on any column", async () => {
+    for (const sort of ["at", "actor", "action", "target", "outcome"]) {
+      for (const dir of ["asc", "desc"]) {
+        const res = await send("platform", "GET", `/api/audit?sort=${sort}&dir=${dir}&page=2`);
+        assert.equal(res.status, 200, `${sort} ${dir}: ${res.body}`);
+        const { events, page } = JSON.parse(res.body);
+        assert.equal(page, 2);
+        assert.ok(events.length <= 100);
+      }
+    }
   });
 });
 

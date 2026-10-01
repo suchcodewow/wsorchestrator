@@ -5,6 +5,7 @@ import { z } from "zod";
 import { auth } from "@/auth";
 import { auditBackupAction, createBackup, listBackups } from "@/lib/backups";
 import { canManageBackups } from "@/lib/roles";
+import { audited } from "@/lib/audit";
 
 async function requireAdministrator() {
   const session = await auth();
@@ -48,7 +49,7 @@ const createSchema = z.object({
   description: z.string().trim().max(255).default(""),
 });
 
-export async function POST(req: Request) {
+export const POST = audited(async function POST(req: Request) {
   const { error, user } = await requireAdministrator();
   if (error) return error;
 
@@ -75,4 +76,4 @@ export async function POST(req: Request) {
   });
 
   return NextResponse.json({ ok: true }, { status: 202 });
-}
+});

@@ -1,21 +1,17 @@
 "use client";
 
-/** Every employee the last HiBob sync stored, sortable by any column and searchable. */
+/** One page of the employees the last HiBob sync stored, sorted and searched by the database. */
 
-import { useMemo, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { ArrowDown, ArrowUp, ChevronsUpDown, Search } from "lucide-react";
-import { Input } from "@/components/ui/input";
+import { HEADER_ROW, Pager, SortHeader, TableSearch } from "@/components/data-table";
 import type { EmployeeListing } from "@/lib/evals/roster";
+import type { EmployeeSort } from "@/lib/list-specs";
 import { riseChild, staggerParent } from "@/lib/motion";
-import { cn } from "@/lib/utils";
+import type { ListQuery, Page } from "@/lib/paging";
 import { formatDate, formatWhen } from "../format";
 
-type Column = "fullName" | "email" | "title" | "department" | "site" | "reportsToName" | "startDate" | "activeEffectiveDate";
-type Sort = { column: Column; dir: "asc" | "desc" };
-
-const COLUMNS: { column: Column; label: string }[] = [
+const COLUMNS: { column: EmployeeSort; label: string }[] = [
   { column: "fullName", label: "Name" },
   { column: "email", label: "Email" },
   { column: "title", label: "Title" },
@@ -26,41 +22,18 @@ const COLUMNS: { column: Column; label: string }[] = [
   { column: "activeEffectiveDate", label: "In role since" },
 ];
 
-const collator = new Intl.Collator("en", { sensitivity: "base", numeric: true });
-
-function valueOf(p: EmployeeListing, column: Column): string {
-  if (column === "reportsToName") return p.reportsToName || p.reportsToEmail;
-  return p[column] ?? "";
-}
-
-export function EmployeesTable({ people, syncedAt }: { people: EmployeeListing[]; syncedAt: string | null }) {
-  const [query, setQuery] = useState("");
-  const [sort, setSort] = useState<Sort>({ column: "fullName", dir: "asc" });
-
-  const shown = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const matched = q
-      ? people.filter((p) =>
-          [p.fullName, p.email, p.title, p.department, p.site, p.reportsToName, p.reportsToEmail].some((v) =>
-            v.toLowerCase().includes(q),
-          ),
-        )
-      : people;
-    return [...matched].sort((a, b) => {
-      const x = valueOf(a, sort.column);
-      const y = valueOf(b, sort.column);
-      // Blanks sink to the bottom whichever way the column is sorted.
-      if (!x || !y) return x ? -1 : y ? 1 : 0;
-      const c = collator.compare(x, y) || collator.compare(a.fullName, b.fullName);
-      return sort.dir === "asc" ? c : -c;
-    });
-  }, [people, query, sort]);
-
-  function onSort(column: Column) {
-    setSort((prev) =>
-      prev.column === column ? { column, dir: prev.dir === "asc" ? "desc" : "asc" } : { column, dir: "asc" },
-    );
-  }
+export function EmployeesTable({
+  query,
+  page,
+  count,
+  syncedAt,
+}: {
+  query: ListQuery<EmployeeSort>;
+  page: Page<EmployeeListing>;
+  count: number;
+  syncedAt: string | null;
+}) {
+  const shown = page.rows;
 
   return (
     <motion.div variants={staggerParent(0.05)} initial="hidden" animate="show" className="space-y-4">
@@ -69,7 +42,7 @@ export function EmployeesTable({ people, syncedAt }: { people: EmployeeListing[]
         <p className="text-sm leading-relaxed text-muted-foreground">
           {syncedAt ? (
             <>
-              <span className="font-medium text-foreground">{people.length.toLocaleString()} active employees</span>,
+              <span className="font-medium text-foreground">{count.toLocaleString()} active employees</span>,
               as of the HiBob sync on {formatWhen(syncedAt)}.
             </>
           ) : (
@@ -84,53 +57,24 @@ export function EmployeesTable({ people, syncedAt }: { people: EmployeeListing[]
         </p>
       </motion.div>
 
-      <motion.div variants={riseChild} className="flex flex-wrap items-center gap-3">
-        <div className="relative w-full max-w-sm">
-          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            type="search"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search by name, email, title, department or manager"
-            aria-label="Search employees"
-            className="pl-9"
-          />
-        </div>
-        {query.trim() && (
-          <span className="text-xs tabular-nums text-muted-foreground">
-            {shown.length.toLocaleString()} of {people.length.toLocaleString()}
-          </span>
-        )}
+      <motion.div variants={riseChild}>
+        <TableSearch
+          value={query.q}
+          placeholder="Search by name, email, title, department or manager"
+          label="Search employees"
+        />
       </motion.div>
 
       <motion.div variants={riseChild} className="overflow-hidden rounded-2xl border bg-card shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full min-w-240 text-sm">
             <thead>
-              <tr className="border-b bg-muted/30 text-left text-[11px] text-muted-foreground">
-                {COLUMNS.map(({ column, label }) => {
-                  const active = sort.column === column;
-                  const Icon = !active ? ChevronsUpDown : sort.dir === "asc" ? ArrowUp : ArrowDown;
-                  return (
-                    <th
-                      key={column}
-                      aria-sort={active ? (sort.dir === "asc" ? "ascending" : "descending") : "none"}
-                      className="px-5 py-2.5 font-medium"
-                    >
-                      <button
-                        type="button"
-                        onClick={() => onSort(column)}
-                        className={cn(
-                          "inline-flex cursor-pointer items-center gap-1 whitespace-nowrap uppercase tracking-wider outline-none hover:text-foreground focus-visible:text-foreground",
-                          active && "text-foreground",
-                        )}
-                      >
-                        {label}
-                        <Icon className={cn("size-3", !active && "opacity-40")} />
-                      </button>
-                    </th>
-                  );
-                })}
+              <tr className={HEADER_ROW}>
+                {COLUMNS.map(({ column, label }) => (
+                  <SortHeader key={column} column={column} sort={query.sort} dir={query.dir}>
+                    {label}
+                  </SortHeader>
+                ))}
               </tr>
             </thead>
             <tbody>
@@ -153,12 +97,15 @@ export function EmployeesTable({ people, syncedAt }: { people: EmployeeListing[]
               {shown.length === 0 && (
                 <tr>
                   <td colSpan={COLUMNS.length} className="px-5 py-8 text-center text-muted-foreground">
-                    {people.length ? "No one matches." : "No employees."}
+                    {query.q ? "No one matches." : page.page > 1 ? "No one on this page." : "No employees."}
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
+        </div>
+        <div className="border-t empty:hidden">
+          <Pager page={page} noun="employees" />
         </div>
       </motion.div>
     </motion.div>

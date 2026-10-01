@@ -8,6 +8,7 @@ import {
   saveAttendeeFields,
   type SaveFieldsError,
 } from "@/lib/attendees";
+import { audited } from "@/lib/audit";
 
 export async function GET(
   _req: Request,
@@ -33,7 +34,7 @@ const STATUS_FOR: Record<SaveFieldsError, number> = {
   invalid: 400,
 };
 
-export async function PATCH(
+export const PATCH = audited(async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -52,4 +53,4 @@ export async function PATCH(
     );
   }
   return NextResponse.json({ ok: true });
-}
+});

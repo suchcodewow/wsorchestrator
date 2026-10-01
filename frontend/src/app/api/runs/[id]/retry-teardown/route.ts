@@ -7,6 +7,7 @@ import {
   type RetryTeardownError,
   type Viewer,
 } from "@/lib/runs";
+import { audited } from "@/lib/audit";
 
 async function viewer(req: Request): Promise<Viewer | null> {
   const caller = await sessionOrToken(req);
@@ -19,7 +20,7 @@ const STATUS_FOR: Record<RetryTeardownError, number> = {
   not_retryable: 409,
 };
 
-export async function POST(
+export const POST = audited(async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -37,4 +38,4 @@ export async function POST(
     );
   }
   return NextResponse.json({ ok: true });
-}
+});

@@ -1,4 +1,8 @@
+import { ORG_SECRET_LIST, REPO_LIST } from "@/lib/list-specs";
+import { PAGE_FIELDS, listQuery } from "./paging";
 import type { EndpointGroup } from "./types";
+
+const ORG_SECRET_SEARCH = "the id, the file name, the kind or who last stored it";
 
 const ORG_SECRET_ROW =
   "{ id, identifier, kind: \"text\" | \"file\", fileName: string | null, bytes: number, createdAt, updatedAt, updatedBy: string | null, usable: boolean }";
@@ -316,11 +320,12 @@ export const ACCOUNT_GROUPS: EndpointGroup[] = [
       {
         method: "GET",
         path: "/api/me/org-secrets",
-        summary: "Lists your own org secrets, without their values.",
+        summary: "Lists your own org secrets a page at a time, without their values.",
         access: "signedIn",
         token: true,
         notes: "configured is false when secrets encryption isn't set up. usable is false when a value can no longer be decrypted.",
-        returns: `{ secrets: ${ORG_SECRET_ROW}[], configured: boolean }`,
+        query: listQuery(ORG_SECRET_LIST.sorts, ORG_SECRET_SEARCH),
+        returns: `{ secrets: ${ORG_SECRET_ROW}[], ${PAGE_FIELDS}, configured: boolean }`,
       },
       {
         method: "POST",
@@ -400,6 +405,7 @@ export const ACCOUNT_GROUPS: EndpointGroup[] = [
         summary: "Lists the organizations a Harness token can see, or one organization's projects.",
         access: "signedIn",
         token: true,
+        changesNothing: true,
         notes: "Calls Harness with the token you send and stores nothing.",
         body: { kind: "json", fields: LOOKUP_BODY },
         returns: "{ scopes: { identifier, name }[] }  (sorted by name)",
@@ -416,11 +422,12 @@ export const ACCOUNT_GROUPS: EndpointGroup[] = [
       {
         method: "GET",
         path: "/api/settings/org-secrets",
-        summary: "Lists the site's org secrets, without their values.",
+        summary: "Lists the site's org secrets a page at a time, without their values.",
         access: "eventAdmin",
         token: true,
         notes: "configured is false when secrets encryption isn't set up. usable is false when a value can no longer be decrypted.",
-        returns: `{ secrets: ${ORG_SECRET_ROW}[], configured: boolean }`,
+        query: listQuery(ORG_SECRET_LIST.sorts, ORG_SECRET_SEARCH),
+        returns: `{ secrets: ${ORG_SECRET_ROW}[], ${PAGE_FIELDS}, configured: boolean }`,
       },
       {
         method: "POST",
@@ -499,6 +506,7 @@ export const ACCOUNT_GROUPS: EndpointGroup[] = [
         summary: "Lists the organizations a Harness token can see, or one organization's projects.",
         access: "eventAdmin",
         token: true,
+        changesNothing: true,
         notes: "Calls Harness with the token you send and stores nothing.",
         body: { kind: "json", fields: LOOKUP_BODY },
         returns: "{ scopes: { identifier, name }[] }  (sorted by name)",
@@ -507,11 +515,11 @@ export const ACCOUNT_GROUPS: EndpointGroup[] = [
       {
         method: "GET",
         path: "/api/settings/repos",
-        summary: "Lists the GitHub repositories every workshop imports into Harness.",
+        summary: "Lists the GitHub repositories every workshop imports into Harness, a page at a time.",
         access: "eventAdmin",
         token: true,
-        returns:
-          "{ repos: { id, url, providerRepo, identifier, scope: \"org\" | \"project\", createdAt, addedBy: string | null }[] }",
+        query: listQuery(REPO_LIST.sorts, "the address, the GitHub or Harness name, the level or who added it"),
+        returns: `{ repos: { id, url, providerRepo, identifier, scope: "org" | "project", createdAt, addedBy: string | null }[], ${PAGE_FIELDS} }`,
       },
       {
         method: "POST",

@@ -26,6 +26,9 @@ import {
 import { hibobAuthorization, toEmployeeRow } from "@/lib/evals/hibob-record";
 import { orgUnder } from "@/lib/evals/org";
 import { getOrgLeaderEmail } from "@/lib/evals/settings";
+import type { HibobSyncSort } from "@/lib/list-specs";
+import { pageWindow, toPage, type ListQuery, type Page } from "@/lib/paging";
+import { orderFor, searchAny } from "@/lib/paging-sql";
 
 const SEARCH_URL = "https://api.hibob.com/v1/people/search";
 
@@ -247,8 +250,19 @@ export type HibobSyncRunSummary = {
   error: string | null;
 };
 
-/** The most recent runs, newest first. */
-export async function listHibobSyncRuns(limit = 30): Promise<HibobSyncRunSummary[]> {
+const SYNC_SORT_COLUMNS = {
+  startedAt: hibobSyncRuns.startedAt,
+  // The schedule sorts as "Schedule", among the people.
+  triggeredBy: sql`lower(case when ${hibobSyncRuns.trigger} = 'schedule' then 'Schedule' else coalesce(nullif(${users.name}, ''), ${users.email}) end)`,
+  status: hibobSyncRuns.status,
+} as const;
+
+/**
+ * One page of the sync log, newest first unless asked otherwise. The search
+ * matches who started it, how, the status and the error.
+ */
+export async function listHibobSyncRuns(query: ListQuery<HibobSyncSort>): Promise<Page<HibobSyncRunSummary>> {
+  const { limit, offset } = pageWindow(query.page);
   const rows = await db
     .select({
       id: hibobSyncRuns.id,
@@ -264,15 +278,42 @@ export async function listHibobSyncRuns(limit = 30): Promise<HibobSyncRunSummary
     })
     .from(hibobSyncRuns)
     .leftJoin(users, eq(users.id, hibobSyncRuns.triggeredBy))
-    .orderBy(desc(hibobSyncRuns.startedAt))
-    .limit(limit);
+    .where(
+      searchAny(query.q, [
+        users.name,
+        users.email,
+        sql`${hibobSyncRuns.trigger}::text`,
+        sql`${hibobSyncRuns.status}::text`,
+        hibobSyncRuns.error,
+      ]),
+    )
+    .orderBy(
+      ...orderFor(SYNC_SORT_COLUMNS[query.sort], query.dir, desc(hibobSyncRuns.startedAt), hibobSyncRuns.id),
+    )
+    .limit(limit)
+    .offset(offset);
   const staleBefore = Date.now() - STALE_MS;
-  return rows.map(({ triggeredByName, triggeredByEmail, ...rest }) => ({
+  return toPage(rows.map(({ triggeredByName, triggeredByEmail, ...rest }) => ({
     ...rest,
     triggeredBy: triggeredByName ?? triggeredByEmail,
     // The next sync closes it for good; until then, say what happened.
     ...(rest.status === "running" && rest.startedAt.getTime() < staleBefore
       ? { status: "failed" as const, error: "Did not finish — the server stopped mid-sync." }
       : {}),
-  }));
+  })), query.page);
+}
+
+/** Whether a sync is running now: one marked running that has not gone stale. */
+export async function syncInProgress(): Promise<boolean> {
+  const [row] = await db
+    .select({ id: hibobSyncRuns.id })
+    .from(hibobSyncRuns)
+    .where(
+      and(
+        eq(hibobSyncRuns.status, "running"),
+        sql`${hibobSyncRuns.startedAt} >= ${new Date(Date.now() - STALE_MS)}`,
+      ),
+    )
+    .limit(1);
+  return Boolean(row);
 }

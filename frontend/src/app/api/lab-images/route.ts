@@ -5,6 +5,7 @@ import { sessionOrToken } from "@/lib/api-auth";
 import { LAB_IMAGE_LIMITS } from "@/db/schema";
 import { listLabImages, uploadLabImage } from "@/lib/lab-images";
 import { canManageLabGuides } from "@/lib/roles";
+import { audited } from "@/lib/audit";
 
 async function requireEditor(req: Request) {
   const caller = await sessionOrToken(req);
@@ -62,7 +63,7 @@ const UPLOAD_ERRORS: Record<string, { status: number; message: string }> = {
   corrupt: { status: 400, message: "That file could not be read." },
 };
 
-export async function POST(req: Request) {
+export const POST = audited(async function POST(req: Request) {
   const { error, user } = await requireEditor(req);
   if (error) return error;
 
@@ -104,4 +105,4 @@ export async function POST(req: Request) {
   }
 
   return NextResponse.json({ image: result.image }, { status: 201 });
-}
+});

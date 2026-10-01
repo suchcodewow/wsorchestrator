@@ -3,8 +3,9 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { revokeToken } from "@/lib/api-tokens";
+import { audited } from "@/lib/audit";
 
-export async function DELETE(
+export const DELETE = audited(async function DELETE(
   _req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -18,4 +19,4 @@ export async function DELETE(
   if (!revoked) return NextResponse.json({ error: "not_found" }, { status: 404 });
 
   return NextResponse.json({ id, status: "revoked" });
-}
+});

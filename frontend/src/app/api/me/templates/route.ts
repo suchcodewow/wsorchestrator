@@ -9,6 +9,7 @@ import {
   saveTemplateSource,
 } from "@/lib/harness-templates";
 import { secretsConfigured } from "@/lib/secret-box";
+import { audited } from "@/lib/audit";
 
 export async function GET(req: Request) {
   const { error, user } = await requireUser(req);
@@ -21,7 +22,7 @@ export async function GET(req: Request) {
   return NextResponse.json({ sources, status, configured: secretsConfigured() });
 }
 
-export async function POST(req: Request) {
+export const POST = audited(async function POST(req: Request) {
   const { error, user } = await requireUser(req);
   if (error) return error;
 
@@ -50,4 +51,4 @@ export async function POST(req: Request) {
     );
   }
   return NextResponse.json({ source: result.source }, { status: 201 });
-}
+});

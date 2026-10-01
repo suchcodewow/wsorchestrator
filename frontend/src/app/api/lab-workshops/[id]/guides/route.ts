@@ -8,6 +8,7 @@ import {
   type AppendGuideError,
 } from "@/lib/lab-workshops";
 import { canManageLabGuides } from "@/lib/roles";
+import { audited } from "@/lib/audit";
 
 const appendSchema = z.object({ guideId: z.string().uuid() });
 
@@ -17,7 +18,7 @@ const STATUS_FOR: Record<AppendGuideError, number> = {
   full: 409,
 };
 
-export async function POST(
+export const POST = audited(async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -44,4 +45,4 @@ export async function POST(
   }
 
   return NextResponse.json({ ok: true, slug: result.workshop.slug });
-}
+});

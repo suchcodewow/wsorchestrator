@@ -121,6 +121,24 @@ Never hard-code `administration-459416` or `harnessevents.io` in a new
 resource. A `.tf` change reaches QA on merge but reaches production only when
 `deploy_production` runs with `run_infra=true`.
 
+**Every feature meets three requirements**, set out in
+[CONTRIBUTING.md](CONTRIBUTING.md#adding-a-feature):
+
+- It can be reached through the API.
+- Every action it adds writes an audit record.
+- Every table it adds fetches at most 100 rows per query.
+
+In practice:
+
+- Wrap each `POST`, `PATCH`, `PUT` and `DELETE` handler in `audited`
+  (`frontend/src/lib/audit.ts`) and name its target with `noteAudit`. Actions
+  outside a route call `recordAudit`, or `recordRunAudit` in the runner.
+- Back each table with a `ListSpec` in `frontend/src/lib/list-specs.ts`, a list
+  function built from `paging.ts` and `paging-sql.ts`, and the controls in
+  `frontend/src/components/data-table.tsx`.
+- Never load every row and filter or sort it in the browser. Neither the
+  unit suite nor review catches that, so it falls to you.
+
 **A new API route goes through `requireCaller`** (`frontend/src/lib/api-auth.ts`)
 so that a personal access token works on it as well as a session. Call `auth()`
 directly only for the session-only kinds listed in [docs/api.md](docs/api.md),

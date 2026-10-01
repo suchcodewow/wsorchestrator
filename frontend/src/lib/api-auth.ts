@@ -9,6 +9,7 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { resolveToken, type TokenBearer } from "@/lib/api-tokens";
+import { noteCaller } from "@/lib/audit-context";
 import {
   canManageEvalsSettings,
   canManageSettings,
@@ -24,11 +25,13 @@ export type CallerGate =
 export async function sessionOrToken(req: Request): Promise<Caller | null> {
   const session = await auth();
   if (session?.user) {
-    return {
+    const caller = {
       id: session.user.id,
       access: session.user.access,
       email: session.user.email ?? null,
     };
+    noteCaller({ ...caller, name: session.user.name ?? null }, "session");
+    return caller;
   }
 
   const header = req.headers.get("authorization");
@@ -37,7 +40,9 @@ export async function sessionOrToken(req: Request): Promise<Caller | null> {
   const match = /^bearer\s+(\S+)$/i.exec(header.trim());
   if (!match) return null;
 
-  return resolveToken(match[1]!);
+  const bearer = await resolveToken(match[1]!);
+  if (bearer) noteCaller(bearer, "token");
+  return bearer;
 }
 
 /**

@@ -1,16 +1,23 @@
 "use client";
 
-/** The Automation tab: one search box to find or add a title, then each list's titles. */
+/**
+ * The Automation tab: one search box to find or add a title, then a page of
+ * each list's titles. The search goes to the URL, so the database does the
+ * matching; see `components/data-table.tsx`.
+ */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Check, Loader2, Pencil, Plus, Search, Trash2, X } from "lucide-react";
+import { HEADER_ROW, Pager, PlainHeader, SortHeader, useListParams } from "@/components/data-table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { EVALS_TITLE_LIMITS, EVALS_TITLE_LISTS, type EvalsTitleList } from "@/db/schema";
 import { cleanTitle, TITLE_LIST_LABELS, TITLE_LIST_SLUGS } from "@/lib/evals/title-lists";
+import type { TitleSort } from "@/lib/list-specs";
 import { riseChild, staggerParent } from "@/lib/motion";
+import type { ListQuery, Page } from "@/lib/paging";
 import { cn } from "@/lib/utils";
 
 export type ListedTitle = {
@@ -20,6 +27,16 @@ export type ListedTitle = {
   /** How many people in the org hold it. */
   holders: number;
 };
+
+/** One list's page of titles, the query it answers, and how many the list holds in all. */
+export type ListedTitles = {
+  query: ListQuery<TitleSort>;
+  page: Page<ListedTitle>;
+  count: number;
+};
+
+/** How long the search box waits after the last keystroke before it queries. */
+const SEARCH_DEBOUNCE_MS = 300;
 
 const INTRO: Record<EvalsTitleList, { heading: string; button: string }> = {
   sales: {
@@ -50,25 +67,51 @@ function describeExisting(existing: { title: string; list: EvalsTitleList }[]) {
 export type LeaderCandidate = { email: string; fullName: string };
 
 export function AutomationView({
-  titles,
+  q: searched,
+  lists,
   suggestions,
   imported,
-  employees,
   orgLeaderEmail,
+  orgLeader,
 }: {
-  titles: Record<EvalsTitleList, ListedTitle[]>;
+  /** The search the lists were queried with. */
+  q: string;
+  lists: Record<EvalsTitleList, ListedTitles>;
   suggestions: { title: string; count: number }[];
   imported: boolean;
-  employees: LeaderCandidate[];
   orgLeaderEmail: string;
+  /** The Organization Leader as the employee list has them, if it does. */
+  orgLeader: LeaderCandidate | null;
 }) {
   const router = useRouter();
-  const [query, setQuery] = useState("");
+  const { set: setList, pending: searching } = useListParams();
+  const [query, setQuery] = useState(searched);
+  const sent = useRef(searched);
   const [searchOpen, setSearchOpen] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+
+  // Follow the URL when it changes underneath us (back button, a link).
+  useEffect(() => {
+    if (searched !== sent.current) {
+      sent.current = searched;
+      setQuery(searched);
+    }
+  }, [searched]);
+
+  useEffect(() => {
+    const next = query.trim();
+    if (next === sent.current) return;
+    const t = setTimeout(() => {
+      sent.current = next;
+      setList({ q: next });
+    }, SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(t);
+    // `setList` changes identity every render; the text is what drives this.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query]);
 
   const q = query.trim().toLowerCase();
   const shownSuggestions = useMemo(
@@ -124,7 +167,7 @@ export function AutomationView({
 
       <motion.div variants={riseChild}>
         <OrgLeaderField
-          employees={employees}
+          current={orgLeader}
           orgLeaderEmail={orgLeaderEmail}
           busy={busy === "org-leader"}
           onSave={async (email) => {
@@ -149,8 +192,11 @@ export function AutomationView({
             onBlur={() => setSearchOpen(false)}
             placeholder="Search titles, or type one to add"
             aria-label="Search titles"
-            className="pl-9"
+            className="pl-9 pr-9"
           />
+          {searching && (
+            <Loader2 className="absolute right-3 top-1/2 size-4 -translate-y-1/2 animate-spin text-muted-foreground" />
+          )}
           {searchOpen && q.length > 0 && shownSuggestions.length > 0 && (
             <div className="absolute inset-x-0 top-full z-20 mt-1 max-h-64 overflow-y-auto rounded-md border bg-popover shadow-md">
               {shownSuggestions.slice(0, 8).map((s) => (
@@ -205,8 +251,9 @@ export function AutomationView({
       )}
 
       {EVALS_TITLE_LISTS.map((list) => {
-        const listTitles = titles[list];
-        const shown = listTitles.filter((t) => t.title.toLowerCase().includes(q));
+        const { query: listQuery, page, count } = lists[list];
+        const shown = page.rows;
+        const sortProps = { sort: listQuery.sort, dir: listQuery.dir, prefix: list };
         return (
           <motion.div key={list} id={TITLE_LIST_SLUGS[list]} variants={riseChild} className="space-y-3">
             <h3 className="text-lg font-medium tracking-tight">{INTRO[list].heading}</h3>
@@ -215,11 +262,15 @@ export function AutomationView({
               <div className="overflow-x-auto">
                 <table className="w-full min-w-160 text-sm">
                   <thead>
-                    <tr className="border-b bg-muted/30 text-left text-[11px] uppercase tracking-wider text-muted-foreground">
-                      <th className="px-5 py-2.5 font-medium">Title · {listTitles.length}</th>
-                      <th className="px-5 py-2.5 font-medium">In the org</th>
-                      <th className="px-5 py-2.5 font-medium">Added by</th>
-                      <th className="w-24 px-5 py-2.5" />
+                    <tr className={HEADER_ROW}>
+                      <SortHeader column="title" {...sortProps}>
+                        Title · {count.toLocaleString()}
+                      </SortHeader>
+                      <PlainHeader>In the org</PlainHeader>
+                      <SortHeader column="addedBy" {...sortProps}>
+                        Added by
+                      </SortHeader>
+                      <PlainHeader className="w-24" />
                     </tr>
                   </thead>
                   <tbody>
@@ -282,14 +333,15 @@ export function AutomationView({
                     {shown.length === 0 && (
                       <tr>
                         <td colSpan={4} className="px-5 py-8 text-center text-muted-foreground">
-                          {listTitles.length === 0
-                            ? `No ${TITLE_LIST_LABELS[list]} titles yet.`
-                            : "No titles match."}
+                          {count === 0 ? `No ${TITLE_LIST_LABELS[list]} titles yet.` : "No titles match."}
                         </td>
                       </tr>
                     )}
                   </tbody>
                 </table>
+              </div>
+              <div className="border-t empty:hidden">
+                <Pager page={page} noun="titles" prefix={list} />
               </div>
             </div>
           </motion.div>
@@ -300,29 +352,44 @@ export function AutomationView({
 }
 
 function OrgLeaderField({
-  employees,
+  current,
   orgLeaderEmail,
   busy,
   onSave,
 }: {
-  employees: LeaderCandidate[];
+  current: LeaderCandidate | null;
   orgLeaderEmail: string;
   busy: boolean;
   onSave: (email: string) => Promise<void>;
 }) {
-  const current = employees.find((e) => e.email.toLowerCase() === orgLeaderEmail.toLowerCase()) ?? null;
-  const [query, setQuery] = useState(current ? `${current.fullName} <${current.email}>` : orgLeaderEmail);
+  const shown = current ? `${current.fullName} <${current.email}>` : orgLeaderEmail;
+  const [query, setQuery] = useState(shown);
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState(orgLeaderEmail);
+  const [matches, setMatches] = useState<LeaderCandidate[]>([]);
 
-  const q = query.trim().toLowerCase();
-  const matches = useMemo(
-    () =>
-      q.length === 0
-        ? []
-        : employees.filter((e) => e.fullName.toLowerCase().includes(q) || e.email.toLowerCase().includes(q)),
-    [employees, q],
-  );
+  // Ask the employee list, one page of it, rather than shipping everyone here.
+  const q = query.trim();
+  const searching = q.length > 0 && q !== shown && !selected;
+  useEffect(() => {
+    if (!searching) return;
+    const ctrl = new AbortController();
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/evals/employees?${new URLSearchParams({ q })}`, { signal: ctrl.signal });
+        const body = res.ok ? await res.json() : null;
+        setMatches(
+          ((body?.people ?? []) as LeaderCandidate[]).map((e) => ({ email: e.email, fullName: e.fullName })),
+        );
+      } catch {
+        // Aborted by the next keystroke, or offline: the list just stays as it was.
+      }
+    }, SEARCH_DEBOUNCE_MS);
+    return () => {
+      clearTimeout(t);
+      ctrl.abort();
+    };
+  }, [q, searching]);
 
   const dirty = selected.toLowerCase() !== orgLeaderEmail.toLowerCase();
 
@@ -351,7 +418,7 @@ function OrgLeaderField({
             placeholder="Search employees by name or email"
             aria-label="Organization Leader"
           />
-          {open && matches.length > 0 && (
+          {open && searching && matches.length > 0 && (
             <div className="absolute inset-x-0 top-full z-20 mt-1 max-h-64 overflow-y-auto rounded-md border bg-popover shadow-md">
               {matches.slice(0, 8).map((e) => (
                 <button

@@ -4,12 +4,13 @@ import { NextResponse } from "next/server";
 import { sessionOrToken } from "@/lib/api-auth";
 import { createLabGuide, labGuideSchema, listLabGuides } from "@/lib/lab-guides";
 import { canManageLabGuides } from "@/lib/roles";
+import { audited } from "@/lib/audit";
 
 export async function GET() {
   return NextResponse.json({ guides: await listLabGuides() });
 }
 
-export async function POST(req: Request) {
+export const POST = audited(async function POST(req: Request) {
   const caller = await sessionOrToken(req);
   if (!caller) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -25,4 +26,4 @@ export async function POST(req: Request) {
 
   const guide = await createLabGuide(parsed.data, caller.id);
   return NextResponse.json({ guide }, { status: 201 });
-}
+});

@@ -3,10 +3,11 @@
 import { NextResponse } from "next/server";
 import { requireAdministrator } from "@/lib/api-auth";
 import { scrubDeployedSecrets } from "@/lib/harness-scrub";
+import { audited } from "@/lib/audit";
 
 export const maxDuration = 120;
 
-export async function POST(
+export const POST = audited(async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -23,4 +24,4 @@ export async function POST(
   }
 
   return NextResponse.json({ run: result });
-}
+});

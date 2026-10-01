@@ -13,6 +13,7 @@ import {
   type Viewer,
 } from "@/lib/runs";
 import { reprovisionRun } from "@/lib/trigger";
+import { audited } from "@/lib/audit";
 
 async function viewer(req: Request): Promise<Viewer | null> {
   const caller = await sessionOrToken(req);
@@ -59,7 +60,7 @@ const STATUS_FOR: Record<UpdateRunError, number> = {
   exceeds_mode_limits: 400,
 };
 
-export async function PATCH(
+export const PATCH = audited(async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -82,14 +83,14 @@ export async function PATCH(
 
   const applying = result.needsReprovision ? await reprovisionRun(id) : false;
   return NextResponse.json({ run: result.run, applying });
-}
+});
 
 const DELETE_STATUS_FOR: Record<DeleteRunError, number> = {
   not_found: 404,
   in_flight: 409,
 };
 
-export async function DELETE(
+export const DELETE = audited(async function DELETE(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -105,4 +106,4 @@ export async function DELETE(
     );
   }
   return NextResponse.json({ outcome: result.outcome });
-}
+});

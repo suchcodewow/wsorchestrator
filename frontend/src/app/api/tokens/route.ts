@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { listTokens, mintToken } from "@/lib/api-tokens";
 import { MAX_TOKENS_PER_USER, TOKEN_NAME_MAX } from "@/db/schema";
+import { audited } from "@/lib/audit";
 
 export async function GET() {
   const session = await auth();
@@ -13,7 +14,7 @@ export async function GET() {
   return NextResponse.json({ tokens: await listTokens(session.user.id) });
 }
 
-export async function POST(req: Request) {
+export const POST = audited(async function POST(req: Request) {
   const session = await auth();
   if (!session?.user) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -38,4 +39,4 @@ export async function POST(req: Request) {
   }
 
   return NextResponse.json({ token: result.token }, { status: 201 });
-}
+});

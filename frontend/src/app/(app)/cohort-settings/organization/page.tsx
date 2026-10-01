@@ -1,19 +1,29 @@
 /**
  * The Organization tab: everyone the last HiBob sync found reporting up to
- * the Organization Leader set on the Automation tab.
+ * the Organization Leader set on the Automation tab, a page at a time.
  */
 
-import { employeeNamesByEmail, listOrganizationMembers } from "@/lib/evals/roster";
+import { employeeByEmail, listOrganizationMembers, organizationSummary } from "@/lib/evals/roster";
+import { ORGANIZATION_LIST } from "@/lib/list-specs";
+import { parseListQuery } from "@/lib/paging";
 import { OrganizationTable } from "./organization-table";
 
-export default async function OrganizationPage() {
-  const [snapshot, names] = await Promise.all([listOrganizationMembers(), employeeNamesByEmail()]);
+export default async function OrganizationPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const query = parseListQuery(await searchParams, ORGANIZATION_LIST);
+  const [page, summary] = await Promise.all([listOrganizationMembers(query), organizationSummary()]);
+  const leader = summary.leaderEmail ? await employeeByEmail(summary.leaderEmail) : null;
   return (
     <OrganizationTable
-      members={snapshot.members}
-      leaderEmail={snapshot.leaderEmail}
-      leaderName={snapshot.leaderEmail ? names.get(snapshot.leaderEmail) ?? null : null}
-      current={snapshot.current}
+      query={query}
+      page={page}
+      count={summary.count}
+      leaderEmail={summary.leaderEmail}
+      leaderName={leader?.fullName ?? null}
+      current={summary.current}
     />
   );
 }

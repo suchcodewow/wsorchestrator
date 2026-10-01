@@ -2,7 +2,7 @@
 
 import "server-only";
 
-import { asc, count, eq } from "drizzle-orm";
+import { count, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   users,
@@ -11,8 +11,11 @@ import {
   type EventRole,
   type TrainingRole,
 } from "@/db/schema";
+import { noteAudit } from "@/lib/audit-context";
 import { canDeleteUsers, canManageRoles, type Access } from "@/lib/roles";
-import { countRunsForUsers } from "@/lib/runs";
+import type { UserSort } from "@/lib/list-specs";
+import { pageWindow, toPage, type ListQuery, type Page } from "@/lib/paging";
+import { orderFor, searchAny } from "@/lib/paging-sql";
 import { isBootstrapAdmin } from "@/lib/site-admins";
 
 export type SiteUser = {
@@ -28,28 +31,43 @@ export type SiteUser = {
   eventCount: number;
 };
 
-export async function listSiteUsers(): Promise<SiteUser[]> {
-  const [rows, counts] = await Promise.all([
-    db
-      .select({
-        id: users.id,
-        name: users.name,
-        email: users.email,
-        eventRole: users.eventRole,
-        trainingRole: users.trainingRole,
-        evalsRole: users.evalsRole,
-        isPlatformAdmin: users.isPlatformAdmin,
-      })
-      .from(users)
-      .orderBy(asc(users.email)),
-    countRunsForUsers(),
-  ]);
+// Qualified by hand: in a single-table select Drizzle leaves column names bare,
+// and a bare "id" inside this subquery would be workshop_runs.id.
+const eventCount = sql<number>`(select count(*)::int from ${workshopRuns} where ${workshopRuns}."user_id" = ${users}."id")`;
 
-  return rows.map((u) => ({
-    ...u,
-    isBootstrapAdmin: isBootstrapAdmin(u.email),
-    eventCount: counts.get(u.id) ?? 0,
-  }));
+const USER_SORT_COLUMNS = {
+  user: sql`lower(coalesce(nullif(${users.name}, ''), ${users.email}))`,
+  events: eventCount,
+  eventRole: users.eventRole,
+  trainingRole: users.trainingRole,
+  evalsRole: users.evalsRole,
+  platform: users.isPlatformAdmin,
+} as const;
+
+/** One page of accounts, searched by name or email. */
+export async function listSiteUsers(query: ListQuery<UserSort>): Promise<Page<SiteUser>> {
+  const { limit, offset } = pageWindow(query.page);
+  const rows = await db
+    .select({
+      id: users.id,
+      name: users.name,
+      email: users.email,
+      eventRole: users.eventRole,
+      trainingRole: users.trainingRole,
+      evalsRole: users.evalsRole,
+      isPlatformAdmin: users.isPlatformAdmin,
+      eventCount,
+    })
+    .from(users)
+    .where(searchAny(query.q, [users.name, users.email]))
+    .orderBy(...orderFor(USER_SORT_COLUMNS[query.sort], query.dir, users.email, users.id))
+    .limit(limit)
+    .offset(offset);
+
+  return toPage(
+    rows.map((u) => ({ ...u, isBootstrapAdmin: isBootstrapAdmin(u.email) })),
+    query.page,
+  );
 }
 
 export type RoleChange =
@@ -91,6 +109,7 @@ export async function setUserRole(
     .where(eq(users.id, targetUserId));
 
   if (!target) return { ok: false, error: "not_found" };
+  noteAudit({ targetLabel: target.email ?? undefined });
   if (target.isPlatformAdmin && !actor.access.platform) {
     return { ok: false, error: "platform_target" };
   }
@@ -147,6 +166,7 @@ export async function deleteUser(
     .where(eq(users.id, targetUserId));
 
   if (!target) return { ok: false, error: "not_found" };
+  noteAudit({ targetLabel: target.email ?? undefined });
   if (isBootstrapAdmin(target.email)) return { ok: false, error: "bootstrap" };
 
   const [{ events }] = await db

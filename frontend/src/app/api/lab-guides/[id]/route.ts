@@ -11,6 +11,7 @@ import {
   workshopsUsingGuide,
 } from "@/lib/lab-guides";
 import { canManageLabGuides } from "@/lib/roles";
+import { audited } from "@/lib/audit";
 
 async function requireEditor(req: Request) {
   const caller = await sessionOrToken(req);
@@ -43,7 +44,7 @@ export async function GET(
   return NextResponse.json({ guide, usedIn });
 }
 
-export async function PATCH(
+export const PATCH = audited(async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -62,9 +63,9 @@ export async function PATCH(
   }
 
   return NextResponse.json({ guide: result.guide });
-}
+});
 
-export async function DELETE(
+export const DELETE = audited(async function DELETE(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -77,4 +78,4 @@ export async function DELETE(
   }
 
   return NextResponse.json({ ok: true });
-}
+});

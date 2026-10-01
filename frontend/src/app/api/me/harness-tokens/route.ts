@@ -7,6 +7,7 @@ import { scrubWindowDays } from "@/lib/harness-scrub";
 import { listHarnessTokens, saveHarnessToken } from "@/lib/harness-tokens";
 import { secretsConfigured } from "@/lib/secret-box";
 import { STATUS_FOR } from "@/lib/harness-token-errors";
+import { audited } from "@/lib/audit";
 
 export async function GET(req: Request) {
   const caller = await sessionOrToken(req);
@@ -21,7 +22,7 @@ export async function GET(req: Request) {
   });
 }
 
-export async function POST(req: Request) {
+export const POST = audited(async function POST(req: Request) {
   const caller = await sessionOrToken(req);
   if (!caller) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -45,4 +46,4 @@ export async function POST(req: Request) {
   }
 
   return NextResponse.json({ token: result.token }, { status: 201 });
-}
+});

@@ -28,6 +28,7 @@ import {
 } from "@/lib/roles";
 import { deploymentEnvironment, localRun } from "@/lib/deployment";
 import { withClusterScenario } from "@/lib/scenario-catalog";
+import { noteAudit } from "@/lib/audit-context";
 
 export type Viewer = { id: string; access: Access };
 
@@ -146,6 +147,7 @@ export async function updateRunConfig(
     where: and(eq(workshopRuns.id, runId), changeableBy(viewer)),
   });
   if (!run) return { ok: false, error: "not_found" };
+  noteAudit({ targetLabel: run.name });
 
   const editability = editabilityOf(run.status);
   if (editability === "locked") return { ok: false, error: "locked" };
@@ -253,6 +255,7 @@ export async function extendRun(
     where: and(eq(workshopRuns.id, runId), changeableBy(viewer)),
   });
   if (!run) return { ok: false, error: "not_found" };
+  noteAudit({ targetLabel: run.name });
 
   const gone =
     run.deleteRequested ||
@@ -306,6 +309,7 @@ export async function endRunNow(
     where: and(eq(workshopRuns.id, runId), changeableBy(viewer)),
   });
   if (!run) return { ok: false, error: "not_found" };
+  noteAudit({ targetLabel: run.name });
   if (run.status !== "ready" || run.deleteRequested) {
     return { ok: false, error: "not_running" };
   }
@@ -415,6 +419,7 @@ export async function deleteRun(
     where: and(eq(workshopRuns.id, runId), changeableBy(viewer)),
   });
   if (!run) return { ok: false, error: "not_found" };
+  noteAudit({ targetLabel: run.name });
 
   if (IN_FLIGHT.has(run.status)) return { ok: false, error: "in_flight" };
 
@@ -453,6 +458,7 @@ export async function retryTeardown(
     where: and(eq(workshopRuns.id, runId), changeableBy(viewer)),
   });
   if (!run) return { ok: false, error: "not_found" };
+  noteAudit({ targetLabel: run.name });
   if (run.status !== "destroy_failed") {
     return { ok: false, error: "not_retryable" };
   }
@@ -472,16 +478,4 @@ export async function retryTeardown(
   });
 
   return { ok: true, run: updated };
-}
-
-export async function countRunsForUsers(): Promise<Map<string, number>> {
-  const rows = await db
-    .select({
-      userId: workshopRuns.userId,
-      count: sql<number>`count(*)::int`,
-    })
-    .from(workshopRuns)
-    .groupBy(workshopRuns.userId);
-
-  return new Map(rows.map((r) => [r.userId, r.count]));
 }

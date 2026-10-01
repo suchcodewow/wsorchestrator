@@ -1,3 +1,5 @@
+import { AUDIT_LIST, DOMAIN_LIST, EMPLOYEE_LIST, HIBOB_SYNC_LIST, ORGANIZATION_LIST, TITLE_LIST, USER_LIST } from "@/lib/list-specs";
+import { PAGE_FIELDS, listQuery } from "./paging";
 import type { EndpointGroup } from "./types";
 
 export const ADMIN_GROUPS: EndpointGroup[] = [
@@ -8,13 +10,13 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       {
         method: "GET",
         path: "/api/users",
-        summary: "Lists every account, as the Users page shows them.",
+        summary: "Lists accounts a page at a time, as the Users page shows them.",
         access: "userAdmin",
         token: true,
         notes:
-          "pendingAdmins lists the SITE_ADMIN_EMAILS addresses that have not signed in yet.",
-        returns:
-          "{ users: { id, name, email, eventRole, trainingRole, evalsRole, isPlatformAdmin, isBootstrapAdmin, eventCount }[], pendingAdmins: string[] }",
+          "pendingAdmins lists the SITE_ADMIN_EMAILS addresses that have not signed in yet, whichever page is asked for.",
+        query: listQuery(USER_LIST.sorts, "the name or email"),
+        returns: `{ users: { id, name, email, eventRole, trainingRole, evalsRole, isPlatformAdmin, isBootstrapAdmin, eventCount }[], ${PAGE_FIELDS}, pendingAdmins: string[] }`,
       },
       {
         method: "PATCH",
@@ -141,20 +143,36 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       {
         method: "GET",
         path: "/api/evals/employees",
-        summary: "Lists every employee stored by the last HiBob sync.",
+        summary: "Lists the employees stored by the last HiBob sync, a page at a time.",
         access: "evalsAdmin",
         token: true,
-        returns:
-          "{ people: { id, email, fullName, title, department, site, reportsToEmail, reportsToName, startDate, activeEffectiveDate }[], syncedAt: ISO 8601 string | null }",
+        notes: "total counts every stored employee, whatever the search.",
+        query: listQuery(EMPLOYEE_LIST.sorts, "the name, email, title, department, site, or the manager's name or email"),
+        returns: `{ people: { id, email, fullName, title, department, site, reportsToEmail, reportsToName, startDate, activeEffectiveDate }[], ${PAGE_FIELDS}, total: number, syncedAt: ISO 8601 string | null }`,
+      },
+      {
+        method: "GET",
+        path: "/api/evals/organization",
+        summary: "Lists who the last HiBob sync found reporting up to the Organization Leader, a page at a time.",
+        access: "evalsAdmin",
+        token: true,
+        notes:
+          "depth counts the links between a person and the leader, the leader included. The list is as of the last sync; current is false once a different leader has been set since, until the next sync runs. total counts everyone listed, whatever the search.",
+        query: listQuery(ORGANIZATION_LIST.sorts, "the name, email, title, department, or the manager's name or email"),
+        returns: `{ members: { email, fullName, title, department, reportsToEmail, reportsToName, depth, leaderEmail }[], ${PAGE_FIELDS}, total: number, leaderEmail: string | null, current: boolean }`,
       },
       {
         method: "GET",
         path: "/api/evals/titles",
-        summary: "Lists the titles on the Sales, Engineer and Ignored lists.",
+        summary: "Lists the titles on the Sales, Engineer and Ignored lists, a page at a time.",
         access: "evalsAdmin",
         token: true,
-        returns:
-          "{ titles: { id, list: \"sales\" | \"engineer\" | \"ignored\", title, createdAt, addedBy: string | null }[] }",
+        query: [
+          { name: "list", type: `"sales" | "engineer" | "ignored"`, note: "One list only. Default every list." },
+          ...listQuery(TITLE_LIST.sorts, "the title or who added it"),
+        ],
+        returns: `{ titles: { id, list: "sales" | "engineer" | "ignored", title, createdAt, addedBy: string | null }[], ${PAGE_FIELDS} }`,
+        errors: [{ status: 400, error: "invalid_list", when: "list is not one of the three" }],
       },
       {
         method: "POST",
@@ -208,13 +226,13 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       {
         method: "GET",
         path: "/api/evals/hibob/sync",
-        summary: "Lists the 30 most recent HiBob syncs.",
+        summary: "Lists the HiBob sync log a page at a time, newest first.",
         access: "evalsAdmin",
         token: true,
         notes:
-          "A run that has said running for over 10 minutes is shown as failed. The HiBob token itself is never returned.",
-        returns:
-          "{ runs: { id, trigger: \"schedule\" | \"manual\", triggeredBy: string | null, status: \"running\" | \"succeeded\" | \"failed\", startedAt, finishedAt, employeeCount, skipped, error }[], serviceUser: string | null }",
+          "A run that has said running for over 10 minutes is shown as failed, and running is false for it. running says whether a sync is under way, whichever page is asked for. The HiBob token itself is never returned.",
+        query: listQuery(HIBOB_SYNC_LIST.sorts, "who started it, the trigger, the status or the error", "desc"),
+        returns: `{ runs: { id, trigger: "schedule" | "manual", triggeredBy: string | null, status: "running" | "succeeded" | "failed", startedAt, finishedAt, employeeCount, skipped, error }[], ${PAGE_FIELDS}, running: boolean, serviceUser: string | null }`,
       },
       {
         method: "POST",
@@ -260,12 +278,13 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       {
         method: "GET",
         path: "/api/settings/domains",
-        summary: "Lists the email domains allowed to sign in.",
+        summary: "Lists the email domains allowed to sign in, those added here a page at a time.",
         access: "platform",
         token: true,
-        notes: "fromEnvironment comes from AUTH_ALLOWED_EMAIL_DOMAINS and cannot be changed through the API.",
-        returns:
-          "{ domains: { id, domain, note, createdAt, addedBy: string | null }[], fromEnvironment: string[] }",
+        notes:
+          "fromEnvironment comes from AUTH_ALLOWED_EMAIL_DOMAINS, cannot be changed through the API, and is returned whole whatever the query: the search and the paging apply to domains only.",
+        query: listQuery(DOMAIN_LIST.sorts, "the domain, the note or who added it"),
+        returns: `{ domains: { id, domain, note, createdAt, addedBy: string | null }[], ${PAGE_FIELDS}, fromEnvironment: string[] }`,
       },
       {
         method: "POST",
@@ -443,6 +462,23 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           { status: 502, error: "permission_denied", when: "Google Cloud refused the app's credentials" },
           { status: 502, error: "unavailable", when: "Cloud SQL or Cloud Run failed for another reason" },
         ],
+      },
+    ],
+  },
+  {
+    id: "audit",
+    title: "Audit trail",
+    endpoints: [
+      {
+        method: "GET",
+        path: "/api/audit",
+        summary: "Lists the audit trail a page at a time: every change made through the API, every sign-in, and what the runner did on its own.",
+        access: "platform",
+        token: true,
+        notes:
+          "A request refused with 401 is not recorded, and nor is a GET or a POST that changes nothing. Request bodies are stored with secret-looking fields redacted.",
+        query: listQuery(AUDIT_LIST.sorts, "who, action, summary, path, target, address, outcome or detail", "desc"),
+        returns: `{ events: { id, at: ISO 8601 string, actorId: string | null, actorName: string | null, actorEmail: string | null, via: "session" | "token" | "system" | "anonymous", action, summary, path: string | null, target: string | null, targetLabel: string | null, status: number | null, outcome: "succeeded" | "denied" | "failed", detail: object | null, ip: string | null }[], ${PAGE_FIELDS} }`,
       },
     ],
   },
