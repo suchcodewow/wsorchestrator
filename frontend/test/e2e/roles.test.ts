@@ -173,16 +173,8 @@ const PAGES: Record<string, PageCase> = {
     path: () => "/evals-settings/employees",
     expect: gated(canManageEvalsSettings),
   },
-  "/evals-settings/sales-titles": {
-    path: () => "/evals-settings/sales-titles",
-    expect: gated(canManageEvalsSettings),
-  },
-  "/evals-settings/engineer-titles": {
-    path: () => "/evals-settings/engineer-titles",
-    expect: gated(canManageEvalsSettings),
-  },
-  "/evals-settings/ignored-titles": {
-    path: () => "/evals-settings/ignored-titles",
+  "/evals-settings/automation": {
+    path: () => "/evals-settings/automation",
     expect: gated(canManageEvalsSettings),
   },
   "/evals-settings/attendee-tracking": {
