@@ -508,22 +508,6 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           { status: 502, error: "unavailable", when: "Cloud SQL or Cloud Run failed for another reason" },
         ],
       },
-      {
-        method: "POST",
-        path: "/api/database/query",
-        summary: "Runs one SQL query for the database console.",
-        access: "platform",
-        token: false,
-        notes:
-          "Runs inside a read-only transaction that is always rolled back, with a 15-second statement timeout. Several statements in one string are allowed; the last one with columns is returned, capped at 1,000 rows. The query text is logged. A SQL error is still a 200, with ok: false.",
-        body: {
-          kind: "json",
-          fields: [{ name: "sql", type: "string", required: true, note: "1–20,000 characters" }],
-        },
-        returns:
-          "{ ok: true, columns: string[], rows: unknown[][], rowCount: number, truncated: boolean, elapsedMs: number, command: string } or { ok: false, error: string }",
-        errors: [{ status: 400, error: "invalid_body", when: "sql is missing or too long" }],
-      },
     ],
   },
   {
