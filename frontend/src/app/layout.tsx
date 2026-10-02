@@ -2,6 +2,7 @@
 
 import { MotionProvider } from "@/components/motion-provider";
 import { ThemeSync } from "@/components/theme-sync";
+import { deploymentEnvironment } from "@/lib/build-info";
 import { DARK_CLASS, THEME_COOKIE, parseScheme, themeScript } from "@/lib/theme";
 import { getThemePreference } from "@/lib/user-preferences";
 import type { Metadata } from "next";
@@ -29,10 +30,23 @@ const inter = localFont({
 
 const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-mono", display: "swap" });
 
-export const metadata: Metadata = {
-  title: "Harness Events",
-  description: "Event Orchestration for Harness.",
-};
+/**
+ * The header's gear, as a tab icon. QA and production run the same image, so
+ * the choice is made per request: anything that is not production gets the
+ * orange one, for the same reason the header carries an environment badge.
+ */
+export async function generateMetadata(): Promise<Metadata> {
+  const icon = deploymentEnvironment() ? "favicon-qa" : "favicon";
+
+  return {
+    title: "Harness Events",
+    description: "Event Orchestration for Harness.",
+    icons: {
+      icon: { url: `/${icon}.svg`, type: "image/svg+xml" },
+      apple: `/${icon}-apple.png`,
+    },
+  };
+}
 
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const theme = await getThemePreference();
