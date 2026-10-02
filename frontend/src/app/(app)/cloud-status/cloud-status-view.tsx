@@ -45,7 +45,7 @@ const COPY: Record<
     blurb:
       "Every project billed to the workshop account, matched against the runs database.",
     infra: "Control plane / sandbox",
-    unmanaged: null,
+    unmanaged: "Created elsewhere",
     missing: {
       title: "Referenced by a run, not billed",
       note: "A run records these project ids, but the billing account doesn’t list them.",

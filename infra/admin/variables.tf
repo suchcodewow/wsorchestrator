@@ -402,6 +402,12 @@ variable "image_readers" {
   default     = []
 }
 
+variable "gcp_infra_project_ids" {
+  description = "Projects on the billing account that are another deployment's control plane, so this deployment's Cloud Status page shows them as infra rather than orphans. Its own admin and sandbox projects are recognised without being listed. Production lists QA's; QA lists production's."
+  type        = list(string)
+  default     = ["harnessevents-qa", "sbx-harnessevents-qa"]
+}
+
 variable "developer_members" {
   description = "Members (user:/group:) given read access to this project for debugging: viewer, logs, a Cloud SQL proxy connection, and the database-url secret. Meant for QA; production leaves it empty."
   type        = list(string)
