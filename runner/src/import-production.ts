@@ -13,8 +13,8 @@
  *
  *   1. Refuse anywhere but QA (`importConfig`), and refuse while QA has
  *      workshops of its own standing, which the restore would orphan.
- *   2. Pause the reaper's and provisioner's triggers, then check that no
- *      runner, reaper or provisioner execution is still running.
+ *   2. Pause the reaper's and provisioner's triggers, then wait for any
+ *      runner, reaper or provisioner execution still running to finish.
  *   3. Take an on-demand backup of QA, so the import can be undone from the
  *      Backups page.
  *   4. Restore production's backup, and put QA's database password back.
@@ -61,6 +61,15 @@ const TRIGGERS = ["tf-reaper-trigger", "tf-scheduler-trigger"];
 export const FINISH_AUDIENCE = "workshop-orchestrator/production-import";
 
 const POLL_MS = 10_000;
+
+/**
+ * How long to wait for running executions to finish once the triggers are
+ * paused. The provisioner fires every five minutes and takes a minute or two,
+ * so an import started at random often lands on one; refusing outright made
+ * the import fail about a third of the time. Ten minutes is `tf-scheduler`'s
+ * own timeout (`infra/admin/runner.tf`).
+ */
+const DRAIN_MS = 10 * 60_000;
 
 function say(message: string, extra: Record<string, unknown> = {}) {
   console.log(
@@ -164,6 +173,25 @@ async function runningExecutions(config: ImportConfig): Promise<string[]> {
     running.push(...otherRunningExecutions(data.executions ?? [], self));
   }
   return running;
+}
+
+/**
+ * Wait for every other execution to finish. With the triggers paused nothing
+ * new starts, so this drains rather than racing.
+ */
+async function waitForExecutions(config: ImportConfig) {
+  const started = Date.now();
+  let running = await runningExecutions(config);
+  while (running.length > 0) {
+    if (Date.now() - started > DRAIN_MS) {
+      throw new Error(
+        `other executions are still running after ${DRAIN_MS / 60_000} minutes: ${running.join(", ")}. Try again when they finish.`,
+      );
+    }
+    say("waiting for other executions to finish", { running });
+    await sleep(POLL_MS);
+    running = await runningExecutions(config);
+  }
 }
 
 async function checkBackup(config: ImportConfig) {
@@ -278,10 +306,7 @@ export async function importProduction(): Promise<void> {
     await pauseTriggers(config, paused);
     say("paused triggers", { paused });
 
-    const running = await runningExecutions(config);
-    if (running.length > 0) {
-      throw new Error(`other executions are still running: ${running.join(", ")}. Try again when they finish.`);
-    }
+    await waitForExecutions(config);
 
     // Nothing else should touch the database from here, and the restore is
     // about to close every connection anyway.
