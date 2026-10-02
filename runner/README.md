@@ -8,8 +8,11 @@ One container image, two entrypoints, run as **Cloud Run Jobs** under
   (`terraform apply` per requested cloud) → `ready` (outputs + `expires_at`).
   Streams every Terraform line into `run_logs`.
 - **`reap`** — finds runs past `expires_at` (or failed) and destroys them:
-  `terraform destroy` → project delete → accounts deleted → OU deleted →
-  `destroyed`. Cloud Scheduler fires this every few minutes.
+  the run's own GCP projects deleted outright, then their state (no
+  per-resource destroy: everything is inside the project) → `terraform destroy`
+  for Azure, AWS and a no-cloud run's slice of the shared sandbox → accounts
+  deleted → OU deleted → `destroyed`. Cloud Scheduler fires this every few
+  minutes.
 - **`provision-due`** — cron entrypoint that claims `scheduled` runs whose start
   time is within the lead window (`PROVISION_LEAD_HOURS`, 2h by default) and
   triggers a `run` execution for each, so environments are ready by the start.
@@ -90,9 +93,10 @@ A run is self-describing: a name, an attendee count, and a set of clouds.
    outputs** — each is stripped after the upload, so none is stored on the run or
    shown in the run page's raw outputs (the GCP service account address, the
    Azure client/tenant id and the AWS access key id do stay: identities, not
-   credentials). Teardown deletes all three connectors and secrets, and
-   `terraform destroy` deletes the identities — which revokes the credentials
-   even where the environment outlives the run, as the sandbox project does.
+   credentials). Teardown deletes all three connectors and secrets, and the
+   identities go too: the GCP one with the run's project, the others by
+   `terraform destroy`. In the shared sandbox project, which outlives the run,
+   `terraform destroy` deletes the service account, which revokes its key.
 
    Each cloud has an off switch: `GCP_HARNESS_CONNECTOR_ENABLED=false`,
    `AZURE_HARNESS_CONNECTOR_ENABLED=false`, `AWS_HARNESS_CONNECTOR_ENABLED=false`
