@@ -18,14 +18,33 @@ export function billingAccountId(): string | null {
   return process.env.GCP_BILLING_ACCOUNT_ID || null;
 }
 
-function infraProjectIds(): Set<string> {
-  const ids = new Set<string>();
+/**
+ * This deployment's own admin and sandbox projects, plus any listed in
+ * `GCP_INFRA_PROJECT_IDS`. QA and production share a billing account, so each
+ * lists the other's control plane there.
+ */
+export function infraProjectIds(): Set<string> {
+  const ids = new Set(
+    (process.env.GCP_INFRA_PROJECT_IDS ?? "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean),
+  );
   const admin = process.env.GCP_ADMIN_PROJECT_ID;
   const sandbox = process.env.GCP_SANDBOX_PROJECT_ID;
   if (admin) ids.add(admin);
   if (sandbox) ids.add(sandbox);
   return ids;
 }
+
+/**
+ * Another team bills its projects to the same account, all named `event-…`.
+ * The runner never uses that prefix (its projects are `ws-`, `ch-`, `sbx-`).
+ */
+const UNMANAGED_PREFIXES = ["event-"];
+
+export const isUnmanagedProject = (projectId: string) =>
+  UNMANAGED_PREFIXES.some((p) => projectId.startsWith(p));
 
 let auth: GoogleAuth | null = null;
 
@@ -130,7 +149,9 @@ export async function auditGcp(owners: OwnerMaps): Promise<CloudAuditResult> {
           ? "tracked"
           : infra.has(p.projectId)
             ? "infra"
-            : "untracked",
+            : isUnmanagedProject(p.projectId)
+              ? "unmanaged"
+              : "untracked",
         owner,
       } satisfies AuditedResource,
     ];

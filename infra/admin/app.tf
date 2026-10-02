@@ -116,11 +116,15 @@ resource "google_cloud_run_v2_service" "app" {
           ? { AUTH_ALLOWED_EMAIL_DOMAINS = join(",", var.allowed_email_domains) }
           : {},
           # Permanent fixtures the Cloud Status page must not call orphans. GCP's
-          # equivalents are derived (the admin and sandbox projects), but an AWS
+          # own are derived (the admin and sandbox projects), but the billing
+          # account also bills the other environment's control plane, and an AWS
           # organization, an Azure subscription or a Harness account can hold
           # long-lived accounts, groups and organizations this deployment never
           # created and can't infer, so they are listed by hand. App-only: the
           # runner has no use for them.
+          length(var.gcp_infra_project_ids) > 0
+          ? { GCP_INFRA_PROJECT_IDS = join(",", var.gcp_infra_project_ids) }
+          : {},
           length(var.aws_infra_account_ids) > 0
           ? { AWS_INFRA_ACCOUNT_IDS = join(",", var.aws_infra_account_ids) }
           : {},

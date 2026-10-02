@@ -77,6 +77,13 @@ Each environment's **Cloud Status** page lists everything in the shared
 accounts, so QA shows production's resources as orphans and production shows
 QA's. The page is read-only, and these entries are expected.
 
+The GCP billing account is shared too. `gcp_infra_project_ids` lists the other
+environment's admin and sandbox projects, so they show as infra rather than
+orphans. Its default is QA's pair, for production. QA overrides it on
+`qa_control_plane` with `["administration-459416", "sbx-administration-459416"]`.
+The page shows projects named `event-…` as *Created elsewhere*, not as orphans.
+Another team bills them to the same account.
+
 ## Never copy production data into QA, except by importing a backup
 
 The reaper works from its own database's `workshop_runs` rows. It tears down
