@@ -21,7 +21,11 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 
-import { deleteUserOnceCreated, insertIntoNewOrgUnit } from "../src/directory.js";
+import {
+  deleteUserOnceCreated,
+  insertIntoNewOrgUnit,
+  orgUnitAbsent,
+} from "../src/directory.js";
 
 /** The shape gaxios hands back; `directory.ts` reads the status off `code`. */
 const gaxiosError = (status: number, message = "request failed") =>
@@ -200,5 +204,45 @@ describe("deleteUserOnceCreated", () => {
     );
     assert.equal(calls, 6);
     assert.equal(delays.length, 5);
+  });
+});
+
+describe("orgUnitAbsent", () => {
+  // Verbatim from the reaper on run 3c6e6a7c, 2026-10-02: everything else in
+  // the run was gone, and this one answer flagged it.
+  const invalidOuId = () => gaxiosError(400, "Invalid Input: INVALID_OU_ID");
+
+  test("a 404 is gone without asking again", async () => {
+    let listed = false;
+    const absent = await orgUnitAbsent(gaxiosError(404), "/gcp challenge", async () => {
+      listed = true;
+      return [];
+    });
+    assert.equal(absent, true);
+    assert.equal(listed, false);
+  });
+
+  test("INVALID_OU_ID for an OU that is not listed is gone", async () => {
+    const absent = await orgUnitAbsent(invalidOuId(), "/gcp challenge", async () => [
+      "/SE Bootcamp Workshop",
+      "/Parent/gcp challenge",
+    ]);
+    assert.equal(absent, true);
+  });
+
+  test("INVALID_OU_ID for an OU that is still listed is a real failure", async () => {
+    // In any case: OU names are unique without regard to it, and leaving an
+    // OU standing while calling the run destroyed is the wrong way to be wrong.
+    for (const listed of ["/gcp challenge", "/GCP Challenge"]) {
+      const absent = await orgUnitAbsent(invalidOuId(), "/gcp challenge", async () => [listed]);
+      assert.equal(absent, false, listed);
+    }
+  });
+
+  test("an OU list that cannot be read is not taken as absence", async () => {
+    const absent = await orgUnitAbsent(invalidOuId(), "/gcp challenge", async () => {
+      throw gaxiosError(403, "Not Authorized to access this resource/api");
+    });
+    assert.equal(absent, false);
   });
 });
