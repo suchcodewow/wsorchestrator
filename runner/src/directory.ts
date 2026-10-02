@@ -349,6 +349,46 @@ export async function deleteUserOnceCreated(
   }
 }
 
+/** Every OU path in the customer, at any depth. */
+async function listOrgUnitPaths(svc: admin_directory_v1.Admin): Promise<string[]> {
+  const res = await directoryCall("list OUs", undefined, () =>
+    svc.orgunits.list({ customerId: workspaceCfg().customerId, type: "all" }),
+  );
+  return (res.data.organizationUnits ?? [])
+    .map((o) => o.orgUnitPath)
+    .filter((p): p is string => !!p);
+}
+
+/**
+ * Whether a refused OU call means the OU is not there.
+ *
+ * A 404 says so outright, but the Directory API does not always use it: a
+ * delete of an OU that is already gone can come back 400 "Invalid Input:
+ * INVALID_OU_ID" instead. That is what flagged run 3c6e6a7c on 2026-10-02,
+ * whose OU had been removed by hand after its first teardown failed, and which
+ * was otherwise fully torn down. The same 400 is also what Google gives a
+ * request it really cannot parse, so the status alone is not trusted: the OU
+ * list is read, and only an OU that is not in it counts as gone. If that list
+ * cannot be read either, the answer is no and the caller surfaces its error.
+ */
+export async function orgUnitAbsent(
+  err: unknown,
+  orgUnitPath: string,
+  listPaths: () => Promise<string[]>,
+): Promise<boolean> {
+  if (statusOf(err) === 404) return true;
+  let paths: string[];
+  try {
+    paths = await listPaths();
+  } catch {
+    return false;
+  }
+  // OU names are unique without regard to case, so a match in any case means
+  // the OU is still there.
+  const wanted = orgUnitPath.toLowerCase();
+  return !paths.some((p) => p.toLowerCase() === wanted);
+}
+
 /**
  * Empty and delete a workshop's OU.
  *
@@ -357,14 +397,22 @@ export async function deleteUserOnceCreated(
  * 502 on `users.insert`, say) leaves an untracked user here, and Google will
  * not delete an OU that still has members. Reading the OU's real membership is
  * what lets teardown clear that orphan; the run's own roster never knew about
- * it. Idempotent: a 404 (already gone) at any step is success.
+ * it. Idempotent: an OU that is already gone is success, however Google
+ * reports it (see `orgUnitAbsent`).
  */
 export async function deleteOrgUnit(orgUnitPath: string): Promise<void> {
   const svc = await directory();
   const key = orgUnitPath.replace(/^\//, "");
+  const listPaths = () => listOrgUnitPaths(svc);
 
   for (let attempt = 1; attempt <= OU_DELETE_ATTEMPTS; attempt++) {
-    const users = await listOrgUnitUsers(svc, orgUnitPath);
+    let users: string[];
+    try {
+      users = await listOrgUnitUsers(svc, orgUnitPath);
+    } catch (err) {
+      if (await orgUnitAbsent(err, orgUnitPath, listPaths)) return;
+      throw err;
+    }
     for (const email of users) {
       await deleteUserOnceCreated(
         () =>
@@ -381,16 +429,21 @@ export async function deleteOrgUnit(orgUnitPath: string): Promise<void> {
       );
       return;
     } catch (err) {
-      if (statusOf(err) === 404) return; // already gone
       // Only the "still has members" case is worth another sweep — the just-
-      // deleted users may not have propagated yet. Anything else is a real
-      // failure and should surface for the reaper to retry the whole run. The
-      // status (412) and the message are both checked because Google states the
-      // condition in prose, and prose is the half that can be reworded.
+      // deleted users may not have propagated yet. The status (412) and the
+      // message are both checked because Google states the condition in prose,
+      // and prose is the half that can be reworded.
       const message = err instanceof Error ? err.message : String(err);
       const stillPopulated = statusOf(err) === 412 || /member/i.test(message);
-      if (attempt >= OU_DELETE_ATTEMPTS || !stillPopulated) throw err;
-      await sleep(OU_DELETE_BACKOFF_MS);
+      if (stillPopulated) {
+        if (attempt >= OU_DELETE_ATTEMPTS) throw err;
+        await sleep(OU_DELETE_BACKOFF_MS);
+        continue;
+      }
+      // Anything else is a real failure for the reaper to flag, unless the OU
+      // turns out to be gone already.
+      if (await orgUnitAbsent(err, orgUnitPath, listPaths)) return;
+      throw err;
     }
   }
 }
