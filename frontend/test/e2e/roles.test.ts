@@ -326,6 +326,11 @@ const ROUTES: RouteCase[] = [
 
   // Cohorts
   { method: "GET", path: "/api/cohorts/current", allowed: canUseTraining },
+  { method: "POST", path: "/api/cohorts/current/track", allowed: canManageTrainingSettings, body: () => ({}) },
+  { method: "GET", path: "/api/scheduler/bootcamps", allowed: canUseTraining },
+  { method: "POST", path: "/api/scheduler/bootcamps", allowed: canManageTrainingSettings, body: () => ({}) },
+  { method: "PATCH", path: `/api/scheduler/bootcamps/${MISSING}`, allowed: canManageTrainingSettings, body: () => ({}) },
+  { method: "DELETE", path: `/api/scheduler/bootcamps/${MISSING}`, allowed: canManageTrainingSettings },
 
   // eVals administration
   { method: "GET", path: "/api/evals/employees", allowed: canManageEvalsSettings },

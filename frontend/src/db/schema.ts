@@ -967,7 +967,7 @@ export const bootcampHistory = pgTable(
     email: text("email").notNull(),
     btcDate: date("btc_date", { mode: "string" }),
     intDate: date("int_date", { mode: "string" }),
-    /** The overall BTC result: a whole number from 1 (poor) to 4 (outstanding). */
+    /** The overall BTC result, from 1 (poor) to 4 (outstanding), to one decimal place. */
     btcScore: doublePrecision("btc_score"),
     /** The overall INT result, scored the same way. */
     intScore: doublePrecision("int_score"),
@@ -986,19 +986,64 @@ export const bootcampHistory = pgTable(
   },
   (t) => [
     uniqueIndex("bootcamp_history_email_idx").on(t.email),
-    check("bootcamp_history_btc_score_check", sql`${t.btcScore} in (1, 2, 3, 4)`),
-    check("bootcamp_history_int_score_check", sql`${t.intScore} in (1, 2, 3, 4)`),
+    check("bootcamp_history_btc_score_check", sql`${t.btcScore} between 1 and 4`),
+    check("bootcamp_history_int_score_check", sql`${t.intScore} between 1 and 4`),
   ],
 );
 
-/** The overall scores a class can give, from poor to outstanding. */
-export const BOOTCAMP_SCORE = { min: 1, max: 4 } as const;
+/** The scores a class can give, from poor to outstanding, and the decimal places they are kept to. */
+export const BOOTCAMP_SCORE = { min: 1, max: 4, decimals: 1 } as const;
 
 export const EXEMPT_DATE = "2000-01-01";
 
 export const BOOTCAMP_HISTORY_LIMITS = { bytes: 5 * 1024 * 1024, rows: 20_000, email: 320 } as const;
 
 export type BootcampHistory = typeof bootcampHistory.$inferSelect;
+
+export const BOOTCAMP_STATUSES = ["scheduled", "active"] as const;
+export type BootcampStatus = (typeof BOOTCAMP_STATUSES)[number];
+
+/**
+ * A bootcamp the Scheduler has planned: BTC over `btcDays` from `startDate`,
+ * with INT alongside it unless `intDays` is null. At most one is `active`,
+ * and its start date is the BTC or INT date that loading its final scores
+ * writes to bootcamp history.
+ */
+export const bootcamps = pgTable(
+  "bootcamps",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    startDate: date("start_date", { mode: "string" }).notNull(),
+    btcDays: integer("btc_days").notNull(),
+    /** Null when this bootcamp holds no intermediate class. */
+    intDays: integer("int_days"),
+    status: text("status").$type<BootcampStatus>().notNull().default("scheduled"),
+    createdBy: text("created_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("bootcamps_start_date_idx").on(t.startDate),
+    // One active bootcamp: a second while one is active is a conflict.
+    uniqueIndex("bootcamps_one_active_idx")
+      .on(t.status)
+      .where(sql`${t.status} = 'active'`),
+    check("bootcamps_status_check", sql`${t.status} in ('scheduled', 'active')`),
+    check("bootcamps_btc_days_check", sql`${t.btcDays} between 1 and 30`),
+    check("bootcamps_int_days_check", sql`${t.intDays} between 1 and 30`),
+  ],
+);
+
+export const BOOTCAMP_LIMITS = { minDays: 1, maxDays: 30 } as const;
+export const BOOTCAMP_DEFAULTS = { btcDays: 4, intDays: 3 } as const;
+
+export type Bootcamp = typeof bootcamps.$inferSelect;
 
 /**
  * How an audited action reached the app: a signed-in browser, a personal

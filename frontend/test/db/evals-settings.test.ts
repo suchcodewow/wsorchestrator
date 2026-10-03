@@ -22,6 +22,7 @@ process.env.AUTH_SECRET ||= "evals-settings-test-secret-evals-settings";
 import { db } from "@/db";
 import {
   bootcampHistory,
+  bootcamps,
   employees,
   EVALS_SETTINGS_KEYS,
   evalsSettings,
@@ -39,9 +40,19 @@ import {
   updateHistory,
 } from "@/lib/evals/bootcamp-history";
 import { hibobServiceUser, listHibobSyncRuns, syncHibobEmployees } from "@/lib/evals/hibob";
+import { currentCohortSummary, listCurrentCohort, type CandidateStage } from "@/lib/evals/current-cohort";
 import { loadRoster } from "@/lib/evals/roster";
 import { addTitles, deleteTitle, listTitles, updateTitle } from "@/lib/evals/titles";
-import { HIBOB_SYNC_LIST, TITLE_LIST, type TitleSort } from "@/lib/list-specs";
+import { sortUndecidedTitle } from "@/lib/evals/tracks";
+import { BOOTCAMP_LIST, CURRENT_COHORT_LIST, HIBOB_SYNC_LIST, TITLE_LIST, type TitleSort } from "@/lib/list-specs";
+import {
+  activeBootcamp,
+  bootcampInputSchema,
+  createBootcamp,
+  deleteBootcamp,
+  listBootcamps,
+  updateBootcamp,
+} from "@/lib/scheduler/bootcamps";
 import type { ListQuery } from "@/lib/paging";
 import { TEST_EMAIL_DOMAIN, TEST_PREFIX } from "../support/db";
 import { PERSONAS } from "../support/access";
@@ -255,9 +266,12 @@ describe("bootcamp history edits", () => {
     assert.equal(historyInputSchema.safeParse({ ...blank, email: "nope" }).success, false);
     assert.equal(historyInputSchema.safeParse({ ...blank, email: email("a"), btcDate: "2026-02-30" }).success, false);
     assert.equal(historyInputSchema.safeParse({ ...blank, email: email("a"), intScore: "4" }).success, false);
-    for (const btcScore of [0, 5, 3.5]) {
+    for (const btcScore of [0, 5, 4.01]) {
       assert.equal(historyInputSchema.safeParse({ ...blank, email: email("a"), btcScore }).success, false);
     }
+    const decimal = historyInputSchema.safeParse({ ...blank, email: email("a"), btcScore: 3.25, intScore: 3.5 });
+    assert.ok(decimal.success);
+    assert.deepEqual([decimal.data.btcScore, decimal.data.intScore], [3.3, 3.5]);
   });
 });
 
@@ -446,6 +460,163 @@ describe("HiBob sync", () => {
     } finally {
       if (saved) await db.update(evalsSettings).set(saved).where(eq(evalsSettings.key, key));
       else await db.delete(evalsSettings).where(eq(evalsSettings.key, key));
+    }
+  });
+
+  test("the Current tab lists candidates by stage, and sorting an undecided title retracks everyone with it", async () => {
+    configure();
+    const key = EVALS_SETTINGS_KEYS.orgLeaderEmail;
+    const [saved] = await db.select().from(evalsSettings).where(eq(evalsSettings.key, key));
+    await db
+      .insert(evalsSettings)
+      .values({ key, value: email("root"), updatedBy: admin.id })
+      .onConflictDoUpdate({ target: evalsSettings.key, set: { value: email("root") } });
+    try {
+      await addTitles(admin.id, "sales", [T("Cand AE")]);
+      await importHistory(
+        admin.id,
+        new File(
+          [`email,BTCDate,INTDate\n${email("c-int")},2026-03-01,\n${email("c-done")},2026-03-01,2026-04-01\n`],
+          "h.csv",
+        ),
+      );
+      stubHibob(200, [
+        person("1", "root", ""),
+        person("2", "c-ae", "root", T("Cand AE")),
+        person("3", "c-int", "root", T("Cand AE")),
+        person("4", "c-done", "root", T("Cand AE")),
+        person("5", "c-new1", "root", T("Cand  Mystery")),
+        person("6", "c-new2", "root", T("cand mystery")),
+        person("7", "c-odd", "root", T("Cand Odd")),
+        person("8", "c-late", "root", T("Cand Late")),
+        person("9", "c-out", "elsewhere", T("Cand Odd")),
+        person("10", "c-blank", "root", ""),
+      ]);
+      assert.ok((await sync()).ok);
+
+      const stage = async (s: CandidateStage) =>
+        (await listCurrentCohort(s, { ...CURRENT_COHORT_LIST, q: "", page: 1, sort: "email", dir: "asc" })).rows.map(
+          (m) => [m.email.split("@")[0], m.track, m.btcDate],
+        );
+      assert.deepEqual(await stage("bootcamp"), [
+        ["c-ae", "sales", null],
+        ["c-blank", "undecided", null],
+        ["c-late", "undecided", null],
+        ["c-new1", "undecided", null],
+        ["c-new2", "undecided", null],
+        ["c-odd", "undecided", null],
+      ]);
+      assert.deepEqual(await stage("intermediate"), [["c-int", "sales", "2026-03-01"]]);
+      assert.deepEqual((await currentCohortSummary()).counts, { bootcamp: 6, intermediate: 1, undecided: 5 });
+
+      // Engineer: the title goes on the list, and both spellings of it move at once.
+      const sorted = await sortUndecidedTitle(admin.id, email("c-new1"), "engineer");
+      assert.deepEqual(sorted, {
+        ok: true,
+        result: { title: T("Cand Mystery"), list: "engineer", added: true, retracked: 2 },
+      });
+      assert.equal((await myTitles("engineer")).find((t) => t.title === T("Cand Mystery"))?.addedBy, "admin");
+      assert.deepEqual(await sortUndecidedTitle(admin.id, email("c-new2"), "sales"), {
+        ok: false,
+        error: "not_undecided",
+      });
+
+      // A title someone listed since the sync stays on its list.
+      await addTitles(admin.id, "sales", [T("Cand Late")]);
+      const late = await sortUndecidedTitle(admin.id, email("c-late"), "engineer");
+      assert.ok(late.ok);
+      assert.deepEqual([late.result.list, late.result.added], ["sales", false]);
+
+      // Ignored takes them off the Current tab. No one outside the org can be sorted.
+      assert.ok((await sortUndecidedTitle(admin.id, email("c-odd"), "ignored")).ok);
+      assert.deepEqual(await sortUndecidedTitle(admin.id, email("c-out"), "ignored"), {
+        ok: false,
+        error: "not_found",
+      });
+      assert.deepEqual(await sortUndecidedTitle(admin.id, email("c-blank"), "sales"), { ok: false, error: "no_title" });
+
+      assert.deepEqual(await stage("bootcamp"), [
+        ["c-ae", "sales", null],
+        ["c-blank", "undecided", null],
+        ["c-late", "sales", null],
+        ["c-new1", "engineer", null],
+        ["c-new2", "engineer", null],
+      ]);
+      assert.deepEqual((await currentCohortSummary()).counts, { bootcamp: 5, intermediate: 1, undecided: 1 });
+    } finally {
+      if (saved) await db.update(evalsSettings).set(saved).where(eq(evalsSettings.key, key));
+      else await db.delete(evalsSettings).where(eq(evalsSettings.key, key));
+    }
+  });
+});
+
+describe("bootcamps", () => {
+  const made: string[] = [];
+  after(async () => {
+    if (made.length > 0) await db.delete(bootcamps).where(inArray(bootcamps.id, made));
+  });
+
+  async function create(input: Parameters<typeof createBootcamp>[1]) {
+    const result = await createBootcamp(admin.id, input);
+    if (result.ok) made.push(result.id);
+    return result;
+  }
+
+  test("only one is active at a time, and the refusal names it", async (t) => {
+    if (await activeBootcamp()) return t.skip("another bootcamp is already active in this database");
+
+    const first = await create({ startDate: "2031-03-03", btcDays: 4, intDays: 3, status: "scheduled" });
+    const second = await create({ startDate: "2031-06-02", btcDays: 5, intDays: null, status: "active" });
+    assert.ok(first.ok && second.ok);
+    const active = { id: second.id, startDate: "2031-06-02", btcDays: 5, intDays: null };
+    assert.deepEqual(await activeBootcamp(), active);
+
+    assert.deepEqual(await create({ startDate: "2031-09-01", btcDays: 4, intDays: 3, status: "active" }), {
+      ok: false,
+      error: "active_exists",
+      active,
+    });
+    assert.deepEqual(await updateBootcamp(first.id, { status: "active" }), {
+      ok: false,
+      error: "active_exists",
+      active,
+    });
+
+    assert.deepEqual(await updateBootcamp(second.id, { status: "scheduled" }), { ok: true });
+    assert.deepEqual(await updateBootcamp(first.id, { status: "active", intDays: null }), { ok: true });
+    assert.deepEqual(await activeBootcamp(), { id: first.id, startDate: "2031-03-03", btcDays: 4, intDays: null });
+
+    const listed = (await listBootcamps({ ...BOOTCAMP_LIST, q: "", page: 1 })).rows.filter((b) => made.includes(b.id));
+    assert.deepEqual(
+      listed.map((b) => [b.startDate, b.status, b.createdBy]),
+      [
+        ["2031-06-02", "scheduled", "admin"],
+        ["2031-03-03", "active", "admin"],
+      ],
+    );
+  });
+
+  test("a missing bootcamp is not found, and a removed one is gone", async () => {
+    const missing = "00000000-0000-4000-8000-000000000000";
+    assert.deepEqual(await updateBootcamp(missing, { btcDays: 2 }), { ok: false, error: "not_found" });
+    const made1 = await create({ startDate: "2031-12-01", btcDays: 4, intDays: 3, status: "scheduled" });
+    assert.ok(made1.ok);
+    assert.equal(await deleteBootcamp(made1.id), true);
+    assert.equal(await deleteBootcamp(made1.id), false);
+  });
+
+  test("the form's values are checked", () => {
+    const ok = { startDate: "2031-03-03", btcDays: 4, intDays: 3, status: "scheduled" };
+    assert.ok(bootcampInputSchema.safeParse(ok).success);
+    for (const bad of [
+      { startDate: "2031-02-30" },
+      { btcDays: 0 },
+      { btcDays: 31 },
+      { btcDays: 2.5 },
+      { intDays: 0 },
+      { status: "completed" },
+    ]) {
+      assert.equal(bootcampInputSchema.safeParse({ ...ok, ...bad }).success, false, JSON.stringify(bad));
     }
   });
 });

@@ -1,7 +1,21 @@
 /**
- * The checks a bootcamp history email and date must pass, shared by the
- * sheet reader, the API and the edit form.
+ * The checks a bootcamp history email, date and score must pass, shared by
+ * the sheet reader, the API and the edit form.
  */
+
+import { BOOTCAMP_SCORE } from "@/db/schema";
+
+const SCORE_SCALE = 10 ** BOOTCAMP_SCORE.decimals;
+
+/** A score as it is kept and shown: to one decimal place, so 3.25 is 3.3 and 3.0 is 3. */
+export function roundScore(score: number): number {
+  return Math.round(score * SCORE_SCALE) / SCORE_SCALE;
+}
+
+/** Whether `score` is one a class can give, before rounding. */
+export function inScoreRange(score: number): boolean {
+  return Number.isFinite(score) && score >= BOOTCAMP_SCORE.min && score <= BOOTCAMP_SCORE.max;
+}
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 

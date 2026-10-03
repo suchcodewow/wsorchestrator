@@ -1,4 +1,4 @@
-import { AUDIT_LIST, CURRENT_COHORT_LIST, DOMAIN_LIST, EMPLOYEE_LIST, HIBOB_SYNC_LIST, ORGANIZATION_LIST, TITLE_LIST, USER_LIST } from "@/lib/list-specs";
+import { AUDIT_LIST, BOOTCAMP_LIST, CURRENT_COHORT_LIST, DOMAIN_LIST, EMPLOYEE_LIST, HIBOB_SYNC_LIST, ORGANIZATION_LIST, TITLE_LIST, USER_LIST } from "@/lib/list-specs";
 import { PAGE_FIELDS, listQuery } from "./paging";
 import type { EndpointGroup } from "./types";
 
@@ -143,13 +143,113 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       {
         method: "GET",
         path: "/api/cohorts/current",
-        summary: "Lists everyone the last HiBob sync put on the Sales or Engineer track, a page at a time.",
+        summary: "Lists one stage of the org members still to train — bootcamp or intermediate candidates — a page at a time.",
         access: "trainingViewer",
         token: true,
         notes:
-          "A person's track is the title list their title was on when the sync ran, for everyone under the Organization Leader, unless their bootcamp history marks BTC or INT exempt, which makes it exempt and leaves them off this list. Changing a list takes effect at the next sync; changing someone's bootcamp history takes effect at once. counts gives everyone on each track, whatever the search.",
-        query: listQuery(CURRENT_COHORT_LIST.sorts, "the name, email, title, department, track, or the manager's name or email"),
-        returns: `{ members: { email, fullName, title, department, reportsToEmail, reportsToName, track: "sales" | "engineer" }[], ${PAGE_FIELDS}, counts: { sales: number, engineer: number }, syncedAt: ISO 8601 string | null }`,
+          "A bootcamp candidate is anyone under the Organization Leader, on the sales or engineer track or on none, with no BTC date in their bootcamp history; an intermediate candidate has a BTC date and no INT date. The ignored and exempt tracks are left out. A track is the title list the person's title was on when the HiBob sync ran, or exempt where their history says so; undecided is a title on no list, which POST /api/cohorts/current/track settles. counts gives each stage, and the undecided in both, whatever the search. activeBootcamp is the one active bootcamp, or null.",
+        query: [
+          { name: "stage", type: `"bootcamp" | "intermediate"`, note: "which candidates to list; bootcamp if omitted" },
+          ...listQuery(CURRENT_COHORT_LIST.sorts, "the name, email, title, department, track, or the manager's name or email"),
+        ],
+        returns: `{ stage, members: { email, fullName, title, department, reportsToEmail, reportsToName, track: "sales" | "engineer" | "undecided", btcDate: "YYYY-MM-DD" | null }[], ${PAGE_FIELDS}, counts: { bootcamp: number, intermediate: number, undecided: number }, syncedAt: ISO 8601 string | null, activeBootcamp: { id, startDate, btcDays, intDays } | null }`,
+        errors: [{ status: 400, error: "invalid_stage", when: "stage is neither bootcamp nor intermediate" }],
+      },
+      {
+        method: "POST",
+        path: "/api/cohorts/current/track",
+        summary: "Decides an undecided candidate's track by putting their title on the Sales, Engineer or Ignored list.",
+        access: "trainingAdmin",
+        token: true,
+        notes:
+          "Everyone in the org who holds the same title, compared as the lists compare titles, has their track reset at once rather than at the next sync; on the ignored list, they leave the Current tab. A title already on a list stays where it is, and that list decides.",
+        body: {
+          kind: "json",
+          fields: [
+            { name: "email", type: "string", required: true, note: "the candidate's" },
+            { name: "list", type: `"sales" | "engineer" | "ignored"`, required: true },
+          ],
+        },
+        returns: `{ title: string, list: "sales" | "engineer" | "ignored", added: boolean, retracked: number }`,
+        errors: [
+          { status: 400, error: "invalid", when: "the body is not one of those shapes" },
+          { status: 400, error: "no_title", when: "HiBob gives the person no title to put on a list" },
+          { status: 404, error: "not_found", when: "no one under the Organization Leader has that email" },
+          { status: 409, error: "not_undecided", when: "the person already has a track" },
+        ],
+      },
+    ],
+  },
+  {
+    id: "scheduler",
+    title: "Scheduler",
+    endpoints: [
+      {
+        method: "GET",
+        path: "/api/scheduler/bootcamps",
+        summary: "Lists the bootcamps the Scheduler has planned, a page at a time, latest first.",
+        access: "trainingViewer",
+        token: true,
+        notes: "intDays is null for a bootcamp with no intermediate class. At most one bootcamp is active.",
+        query: listQuery(BOOTCAMP_LIST.sorts, "the status, or who created it"),
+        returns: `{ bootcamps: { id, startDate: "YYYY-MM-DD", btcDays: number, intDays: number | null, status: "scheduled" | "active", createdBy: string | null, createdAt: ISO 8601 string }[], ${PAGE_FIELDS} }`,
+      },
+      {
+        method: "POST",
+        path: "/api/scheduler/bootcamps",
+        summary: "Schedules a bootcamp.",
+        access: "trainingAdmin",
+        token: true,
+        notes:
+          "Only one bootcamp may be active; the active one's start date is the BTC and INT date its final scores are loaded with.",
+        body: {
+          kind: "json",
+          fields: [
+            { name: "startDate", type: `"YYYY-MM-DD"`, required: true },
+            { name: "btcDays", type: "number", required: true, note: "a whole number from 1 to 30" },
+            { name: "intDays", type: "number | null", required: true, note: "1 to 30, or null for no intermediate class" },
+            { name: "status", type: `"scheduled" | "active"`, required: true },
+          ],
+        },
+        returns: "201 { id }",
+        errors: [
+          { status: 400, error: "invalid", when: "the body is not that shape" },
+          { status: 409, error: "active_exists", when: "status is active and another bootcamp already is; active names it" },
+        ],
+      },
+      {
+        method: "PATCH",
+        path: "/api/scheduler/bootcamps/{id}",
+        summary: "Changes a bootcamp's dates, length or status.",
+        access: "trainingAdmin",
+        token: true,
+        notes: "Takes any of POST's fields and changes only those.",
+        params: [{ name: "id", type: "string", required: true, note: "the bootcamp's id" }],
+        body: {
+          kind: "json",
+          fields: [
+            { name: "startDate", type: `"YYYY-MM-DD"` },
+            { name: "btcDays", type: "number" },
+            { name: "intDays", type: "number | null" },
+            { name: "status", type: `"scheduled" | "active"` },
+          ],
+        },
+        returns: "{ ok: true }",
+        errors: [
+          { status: 400, error: "invalid", when: "the body is not that shape" },
+          { status: 404, error: "not_found", when: "no such bootcamp" },
+          { status: 409, error: "active_exists", when: "making it active while another is; active names it" },
+        ],
+      },
+      {
+        method: "DELETE",
+        path: "/api/scheduler/bootcamps/{id}",
+        summary: "Removes a bootcamp.",
+        access: "trainingAdmin",
+        token: true,
+        params: [{ name: "id", type: "string", required: true, note: "the bootcamp's id" }],
+        returns: "{ ok: true }",
+        errors: [{ status: 404, error: "not_found", when: "no such bootcamp" }],
       },
     ],
   },
@@ -174,7 +274,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "evalsAdmin",
         token: true,
         notes:
-          "depth counts the links between a person and the leader, the leader included. track is exempt when the person's bootcamp history marks BTC or INT exempt, otherwise the title list their title was on when the sync ran, or null for a title on no list. btcDate, btcScore, intDate and intScore are from their bootcamp history, null where there is none; a date of 2000-01-01 means they are exempt from that class, and a score is a whole number from 1 (poor) to 4 (outstanding). The list is as of the last sync; current is false once a different leader has been set since, until the next sync runs. total counts everyone listed, whatever the search.",
+          "depth counts the links between a person and the leader, the leader included. track is exempt when the person's bootcamp history marks BTC or INT exempt, otherwise the title list their title was on when the sync ran, or null for a title on no list. btcDate, btcScore, intDate and intScore are from their bootcamp history, null where there is none; a date of 2000-01-01 means they are exempt from that class, and a score runs from 1 (poor) to 4 (outstanding), to one decimal place. The list is as of the last sync; current is false once a different leader has been set since, until the next sync runs. total counts everyone listed, whatever the search.",
         query: listQuery(ORGANIZATION_LIST.sorts, "the name, email, title, department, track, or the manager's name or email"),
         returns: `{ members: { email, fullName, title, department, reportsToEmail, reportsToName, track: "sales" | "engineer" | "ignored" | "exempt" | null, depth, leaderEmail, btcDate, btcScore, intDate, intScore }[], ${PAGE_FIELDS}, total: number, leaderEmail: string | null, current: boolean }`,
       },

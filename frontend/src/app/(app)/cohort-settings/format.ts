@@ -1,6 +1,7 @@
 /** How eVals settings writes dates, scores and lists. */
 
 import { EXEMPT_DATE } from "@/db/schema";
+import { roundScore } from "@/lib/evals/history-values";
 
 const DATE = new Intl.DateTimeFormat("en-US", {
   month: "short",
@@ -31,6 +32,7 @@ export function formatWhen(iso: string | null): string {
   return iso ? WHEN.format(new Date(iso)) : "—";
 }
 
+/** A score to one decimal place, with none for a whole number: "3.3", "4". */
 export function formatScore(score: number | null): string {
-  return score === null ? "—" : String(Math.round(score * 100) / 100);
+  return score === null ? "—" : String(roundScore(score));
 }

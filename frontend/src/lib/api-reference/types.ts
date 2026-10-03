@@ -19,6 +19,7 @@ export type Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
  *   manager      Event Manager or above                (canSeeAllEvents, canManageLabGuides, canPublishComponents)
  *   eventAdmin   Event Administrator                   (canManageSettings, canAuditProjects)
  *   trainingViewer Training Viewer or above           (canUseTraining)
+ *   trainingAdmin Training Administrator              (canManageTrainingSettings)
  *   evalsAdmin   eVals Administrator                   (canManageEvalsSettings)
  *   userAdmin    an administrator in any area          (canManageUsers)
  *   platform     Platform Administrator                (canManageBackups, canManageSignInDomains, canDeleteUsers)
@@ -34,6 +35,7 @@ export type AccessKey =
   | "manager"
   | "eventAdmin"
   | "trainingViewer"
+  | "trainingAdmin"
   | "evalsAdmin"
   | "userAdmin"
   | "platform"
@@ -48,6 +50,7 @@ export const ACCESS_LABELS: Record<AccessKey, string> = {
   manager: `${EVENT_ROLE_LABELS.manager} or above`,
   eventAdmin: EVENT_ROLE_LABELS.administrator,
   trainingViewer: `${TRAINING_ROLE_LABELS.viewer} or above`,
+  trainingAdmin: TRAINING_ROLE_LABELS.administrator,
   evalsAdmin: EVALS_ROLE_LABELS.administrator,
   userAdmin: "An administrator in any area",
   platform: PLATFORM_ADMIN_LABEL,
