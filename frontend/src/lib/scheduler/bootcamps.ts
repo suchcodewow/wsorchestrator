@@ -14,7 +14,9 @@ import { db } from "@/db";
 import {
   BOOTCAMP_LIMITS,
   BOOTCAMP_STATUSES,
+  bootcampJudges,
   bootcamps,
+  evalsSubmissions,
   users,
   type BootcampStatus,
 } from "@/db/schema";
@@ -34,12 +36,18 @@ export type BootcampRow = {
   status: BootcampStatus;
   createdBy: string | null;
   createdAt: Date;
+  /** How many guest judges it has. */
+  judges: number;
 };
 
 /** The active bootcamp, as the Current tab shows it. */
 export type ActiveBootcamp = Pick<BootcampRow, "id" | "startDate" | "btcDays" | "intDays">;
 
 const createdBy = sql<string | null>`coalesce(nullif(${users.name}, ''), ${users.email})`;
+
+// Spelled out, because Drizzle leaves the table off a column in a one-table
+// query, and an unqualified `id` here would mean the judge's own.
+const judges = sql<number>`(select count(*)::int from ${bootcampJudges} j where j.bootcamp_id = ${bootcamps}.id)`;
 
 const SORT_COLUMNS = {
   startDate: bootcamps.startDate,
@@ -59,6 +67,7 @@ export async function listBootcamps(query: ListQuery<BootcampSort>): Promise<Pag
       status: bootcamps.status,
       createdBy,
       createdAt: bootcamps.createdAt,
+      judges,
     })
     .from(bootcamps)
     .leftJoin(users, eq(users.id, bootcamps.createdBy))
@@ -79,6 +88,25 @@ export async function activeBootcamp(): Promise<ActiveBootcamp | null> {
     })
     .from(bootcamps)
     .where(eq(bootcamps.status, "active"));
+  return row ?? null;
+}
+
+/** One bootcamp, as its Scheduler page shows it, or null. */
+export async function getBootcamp(id: string): Promise<BootcampRow | null> {
+  const [row] = await db
+    .select({
+      id: bootcamps.id,
+      startDate: bootcamps.startDate,
+      btcDays: bootcamps.btcDays,
+      intDays: bootcamps.intDays,
+      status: bootcamps.status,
+      createdBy,
+      createdAt: bootcamps.createdAt,
+      judges,
+    })
+    .from(bootcamps)
+    .leftJoin(users, eq(users.id, bootcamps.createdBy))
+    .where(eq(bootcamps.id, id));
   return row ?? null;
 }
 
@@ -107,10 +135,14 @@ export type BootcampFailure = {
   active?: ActiveBootcamp;
 };
 
-const isUniqueViolation = (err: unknown): boolean => {
+const pgCode = (err: unknown): unknown => {
   const code = (e: unknown) => (e as { code?: unknown } | null)?.code;
-  return code(err) === "23505" || code((err as { cause?: unknown } | null)?.cause) === "23505";
+  return code(err) ?? code((err as { cause?: unknown } | null)?.cause);
 };
+
+const isUniqueViolation = (err: unknown): boolean => pgCode(err) === "23505";
+
+const isForeignKeyViolation = (err: unknown): boolean => pgCode(err) === "23503";
 
 /** The refusal for making a second bootcamp active, naming the first. */
 async function activeExists(): Promise<BootcampFailure> {
@@ -160,13 +192,30 @@ export async function updateBootcamp(id: string, patch: BootcampPatch): Promise<
   }
 }
 
-export async function deleteBootcamp(id: string): Promise<boolean> {
-  const deleted = await db
-    .delete(bootcamps)
-    .where(eq(bootcamps.id, id))
-    .returning({ id: bootcamps.id, startDate: bootcamps.startDate });
-  if (!deleted[0]) return false;
+/**
+ * Removes a bootcamp and its judges. One that attendees were scored at is
+ * kept, with `has_scores`: removing it would take their assessments with it.
+ */
+export async function deleteBootcamp(id: string): Promise<{ ok: true } | { ok: false; error: "not_found" | "has_scores" }> {
+  const [scored] = await db
+    .select({ id: evalsSubmissions.id })
+    .from(evalsSubmissions)
+    .where(eq(evalsSubmissions.bootcampId, id))
+    .limit(1);
+  if (scored) return { ok: false, error: "has_scores" };
+  let deleted: { id: string; startDate: string }[];
+  try {
+    deleted = await db
+      .delete(bootcamps)
+      .where(eq(bootcamps.id, id))
+      .returning({ id: bootcamps.id, startDate: bootcamps.startDate });
+  } catch (err) {
+    // Scored in between: the foreign key refuses it.
+    if (isForeignKeyViolation(err)) return { ok: false, error: "has_scores" };
+    throw err;
+  }
+  if (!deleted[0]) return { ok: false, error: "not_found" };
   noteAudit({ target: id, targetLabel: `Bootcamp starting ${deleted[0].startDate}` });
   await retrackOrg();
-  return true;
+  return { ok: true };
 }

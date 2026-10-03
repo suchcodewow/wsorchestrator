@@ -1,4 +1,5 @@
-import { AUDIT_LIST, BOOTCAMP_HISTORY_LIST, BOOTCAMP_LIST, CURRENT_COHORT_LIST, DOMAIN_LIST, EMPLOYEE_LIST, HIBOB_SYNC_LIST, HISTORY_STATUSES, ORGANIZATION_LIST, PREVIOUS_SESSION_LIST, SLACK_CONTACT_LIST, TITLE_LIST, USER_LIST } from "@/lib/list-specs";
+import { ASSESSMENT_ATTENDEE_LIST, ASSESSMENT_LIST, AUDIT_LIST, BOOTCAMP_HISTORY_LIST, BOOTCAMP_LIST, CURRENT_COHORT_LIST, DOMAIN_LIST, EMPLOYEE_LIST, HIBOB_SYNC_LIST, HISTORY_STATUSES, JUDGE_LIST, ORGANIZATION_LIST, PREVIOUS_SESSION_LIST, SLACK_CONTACT_LIST, TITLE_LIST, USER_LIST } from "@/lib/list-specs";
+import { EVALS_ASSESSMENT_LIMITS } from "@/db/schema";
 import { PAGE_SIZE } from "@/lib/paging";
 import { PAGE_FIELDS, listQuery } from "./paging";
 import type { EndpointGroup } from "./types";
@@ -252,7 +253,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         token: true,
         notes: "intDays is null for a bootcamp with no intermediate class. At most one bootcamp is active.",
         query: listQuery(BOOTCAMP_LIST.sorts, "the status, or who created it"),
-        returns: `{ bootcamps: { id, startDate: "YYYY-MM-DD", btcDays: number, intDays: number | null, status: "scheduled" | "active", createdBy: string | null, createdAt: ISO 8601 string }[], ${PAGE_FIELDS} }`,
+        returns: `{ bootcamps: { id, startDate: "YYYY-MM-DD", btcDays: number, intDays: number | null, status: "scheduled" | "active", createdBy: string | null, createdAt: ISO 8601 string, judges: number }[], ${PAGE_FIELDS} }`,
       },
       {
         method: "POST",
@@ -276,6 +277,16 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           { status: 400, error: "invalid", when: "the body is not that shape" },
           { status: 409, error: "active_exists", when: "status is active and another bootcamp already is; active names it" },
         ],
+      },
+      {
+        method: "GET",
+        path: "/api/scheduler/bootcamps/{id}",
+        summary: "Reads one bootcamp.",
+        access: "trainingViewer",
+        token: true,
+        params: [{ name: "id", type: "string", required: true, note: "the bootcamp's id" }],
+        returns: `{ id, startDate: "YYYY-MM-DD", btcDays: number, intDays: number | null, status: "scheduled" | "active", createdBy: string | null, createdAt: ISO 8601 string, judges: number }`,
+        errors: [{ status: 404, error: "not_found", when: "no such bootcamp" }],
       },
       {
         method: "PATCH",
@@ -307,9 +318,151 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         summary: "Removes a bootcamp.",
         access: "trainingAdmin",
         token: true,
+        notes: "Its guest judges go with it. A bootcamp anyone has been scored at is kept.",
         params: [{ name: "id", type: "string", required: true, note: "the bootcamp's id" }],
         returns: "{ ok: true }",
+        errors: [
+          { status: 404, error: "not_found", when: "no such bootcamp" },
+          { status: 409, error: "has_scores", when: "an assessment has been scored at it" },
+        ],
+      },
+      {
+        method: "GET",
+        path: "/api/scheduler/bootcamps/{id}/judges",
+        summary: "Lists one bootcamp's guest judges, a page at a time.",
+        access: "trainingViewer",
+        token: true,
+        notes:
+          "While the bootcamp is active, each judge can see and submit assessments on the eVals page, whatever other access they have. fullName is as the employee list had them when they were added. total counts every judge, whatever the search.",
+        params: [{ name: "id", type: "string", required: true, note: "the bootcamp's id" }],
+        query: listQuery(JUDGE_LIST.sorts, "the name, the email or who added them"),
+        returns: `{ judges: { id, email, fullName, addedAt, addedBy: string | null }[], ${PAGE_FIELDS}, total: number }`,
         errors: [{ status: 404, error: "not_found", when: "no such bootcamp" }],
+      },
+      {
+        method: "POST",
+        path: "/api/scheduler/bootcamps/{id}/judges",
+        summary: "Adds an employee as a guest judge on one bootcamp.",
+        access: "trainingAdmin",
+        token: true,
+        notes: "The email is lowercased and must belong to someone in the employee list from the last HiBob sync.",
+        params: [{ name: "id", type: "string", required: true, note: "the bootcamp's id" }],
+        body: {
+          kind: "json",
+          fields: [{ name: "email", type: "string", required: true, note: "up to 320 characters" }],
+        },
+        returns: "{ id, email, fullName }",
+        errors: [
+          { status: 400, error: "invalid", when: "the body does not parse, or email is not an email address" },
+          { status: 400, error: "not_employee", when: "nobody in the employee list has that email" },
+          { status: 404, error: "not_found", when: "no such bootcamp" },
+          { status: 409, error: "duplicate", when: "they are already a judge on it" },
+        ],
+      },
+      {
+        method: "DELETE",
+        path: "/api/scheduler/bootcamps/{id}/judges/{judgeId}",
+        summary: "Removes one guest judge from a bootcamp.",
+        access: "trainingAdmin",
+        token: true,
+        notes: "Scores they have already submitted are kept.",
+        params: [
+          { name: "id", type: "string", required: true, note: "the bootcamp's id" },
+          { name: "judgeId", type: "string", required: true, note: "UUID" },
+        ],
+        returns: "{ ok: true }",
+        errors: [{ status: 404, error: "not_found", when: "either id is not a UUID, or no such judge on that bootcamp" }],
+      },
+    ],
+  },
+  {
+    id: "evals-scoring",
+    title: "eVals scoring",
+    intro:
+      "Scoring attendees on the active assessments during the active bootcamp. Each attendee has one submission per assessment per bootcamp: anyone who can score may revise it, and whoever saves it last owns it. Undecided and deferred people are not in the training and never appear.",
+    endpoints: [
+      {
+        method: "GET",
+        path: "/api/evals/scoring",
+        summary: "Lists one stage's active assessments, a page at a time, and the bootcamp they would be scored at.",
+        access: "scorer",
+        token: true,
+        notes:
+          "bootcamp is the active one, or null when none is, or, for intermediate, when the active one holds no intermediate class; nothing can be scored then.",
+        query: [
+          { name: "stage", type: `"bootcamp" | "intermediate"`, required: true },
+          ...listQuery(ASSESSMENT_LIST.sorts, "the name"),
+        ],
+        returns: `{ stage, bootcamp: { id, startDate, btcDays, intDays } | null, assessments: { id, name, stage, audience, active: true, updatedAt, criteria: number, submissions: number }[], ${PAGE_FIELDS} }`,
+        errors: [{ status: 400, error: "invalid", when: "stage is missing or not one of those" }],
+      },
+      {
+        method: "GET",
+        path: "/api/evals/scoring/{assessmentId}",
+        summary: "Lists the attendees one active assessment applies to, a page at a time, with their scores at the active bootcamp.",
+        access: "scorer",
+        token: true,
+        notes:
+          "An attendee is a current candidate (see GET /api/evals/current-cohort) in the assessment's stage on the sales or engineer track, as its audience takes in. averageScore is to one decimal place, and null if they are not scored at the active bootcamp. needsRescoring is true for one scored before a criterion was added. attendees and scored count everyone it applies to, whatever the search.",
+        params: [{ name: "assessmentId", type: "string", required: true, note: "UUID" }],
+        query: listQuery(ASSESSMENT_ATTENDEE_LIST.sorts, "the name, email or title"),
+        returns: `{ assessment: { id, name, stage, audience }, bootcamp: { id, startDate, btcDays, intDays } | null, attendees: number, scored: number, people: { id, email, fullName, title, track: "sales" | "engineer", averageScore: number | null, needsRescoring: boolean }[], ${PAGE_FIELDS} }`,
+        errors: [{ status: 404, error: "not_found", when: "assessmentId is not a UUID, or no such active assessment" }],
+      },
+      {
+        method: "GET",
+        path: "/api/evals/scoring/{assessmentId}/{employeeId}",
+        summary: "Reads one attendee's scoring form: the criteria still asked, and their submission at the active bootcamp.",
+        access: "scorer",
+        token: true,
+        notes:
+          "submission is null until someone scores them. Its scores are keyed by criterion id; a criterion added since has none. ownerName is whoever saved it last. Send its updatedAt as revises when saving.",
+        params: [
+          { name: "assessmentId", type: "string", required: true, note: "UUID" },
+          { name: "employeeId", type: "string", required: true, note: "the employee's HiBob id" },
+        ],
+        returns: `{ assessment: { id, name, stage, audience }, criteria: { id, name, description }[], attendee: { id, email, fullName, title, track }, submission: { id, averageScore, positiveFeedback, constructiveFeedback, ownerId, ownerName, updatedAt, scores: Record<string, { score, comment }> } | null, bootcamp: { id, startDate, btcDays, intDays } | null }`,
+        errors: [{ status: 404, error: "not_found", when: "no such active assessment, or the attendee is not one it applies to" }],
+      },
+      {
+        method: "PUT",
+        path: "/api/evals/scoring/{assessmentId}/{employeeId}",
+        summary: "Saves one attendee's submission at the active bootcamp, making the caller its owner.",
+        access: "scorer",
+        token: true,
+        notes:
+          "Every criterion still asked needs a whole score from 1 to 4; comments are optional. averageScore is their mean to one decimal place. Rounded to a whole number, an average of 1 or 2 requires constructiveFeedback and an average of 4 requires positiveFeedback. A revision replaces the scores, dropping any for criteria since retired.",
+        params: [
+          { name: "assessmentId", type: "string", required: true, note: "UUID" },
+          { name: "employeeId", type: "string", required: true, note: "the employee's HiBob id" },
+        ],
+        body: {
+          kind: "json",
+          fields: [
+            {
+              name: "scores",
+              type: "{ criterionId: string, score: 1 | 2 | 3 | 4, comment?: string }[]",
+              required: true,
+              note: `one per criterion still asked; a comment up to ${EVALS_ASSESSMENT_LIMITS.comment} characters`,
+            },
+            { name: "positiveFeedback", type: "string", note: `up to ${EVALS_ASSESSMENT_LIMITS.feedback} characters` },
+            { name: "constructiveFeedback", type: "string", note: `up to ${EVALS_ASSESSMENT_LIMITS.feedback} characters` },
+            {
+              name: "revises",
+              type: "ISO 8601 string | null",
+              required: true,
+              note: "the updatedAt of the submission being revised, or null for the first",
+            },
+          ],
+        },
+        returns: "{ id, attendeeEmail, assessmentName, averageScore, updatedAt }",
+        errors: [
+          { status: 400, error: "invalid", when: "the body is not that shape, or the scores are not exactly the criteria still asked" },
+          { status: 400, error: "feedback_required", when: "the average requires feedback that is empty" },
+          { status: 404, error: "not_found", when: "no such active assessment, or the attendee is not one it applies to" },
+          { status: 409, error: "no_bootcamp", when: "no bootcamp is active, or for intermediate, the active one holds no intermediate class" },
+          { status: 409, error: "conflict", when: "someone else saved it since revises, or saved the first one first" },
+        ],
       },
     ],
   },
@@ -355,9 +508,10 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "GET",
         path: "/api/evals/employees",
         summary: "Lists the employees stored by the last HiBob sync, a page at a time.",
-        access: "evalsAdmin",
+        access: "employeeSearch",
         token: true,
-        notes: "total counts every stored employee, whatever the search.",
+        notes:
+          "Training administrators read it to pick a bootcamp's guest judges. total counts every stored employee, whatever the search.",
         query: listQuery(EMPLOYEE_LIST.sorts, "the name, email, title, department, site, or the manager's name or email"),
         returns: `{ people: { id, email, fullName, title, department, site, reportsToEmail, reportsToName, startDate, activeEffectiveDate }[], ${PAGE_FIELDS}, total: number, syncedAt: ISO 8601 string | null }`,
       },
@@ -433,6 +587,97 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         params: [{ name: "id", type: "string", required: true, note: "UUID" }],
         returns: "{ ok: true }",
         errors: [{ status: 404, error: "not_found", when: "id is not a UUID, or no such title" }],
+      },
+      {
+        method: "GET",
+        path: "/api/evals/assessments",
+        summary: "Lists the assessments attendees can be scored on, a page at a time.",
+        access: "evalsAdmin",
+        token: true,
+        notes:
+          "criteria counts those still asked; submissions counts the attendees scored on it at any bootcamp. total counts every assessment, whatever the search.",
+        query: listQuery(ASSESSMENT_LIST.sorts, "the name"),
+        returns: `{ assessments: { id, name, stage: "bootcamp" | "intermediate", audience: "sales" | "engineer" | "both", active: boolean, updatedAt, criteria: number, submissions: number }[], ${PAGE_FIELDS}, total: number }`,
+      },
+      {
+        method: "POST",
+        path: "/api/evals/assessments",
+        summary: "Creates an assessment and its criteria.",
+        access: "evalsAdmin",
+        token: true,
+        body: {
+          kind: "json",
+          fields: [
+            { name: "name", type: "string", required: true, note: `up to ${EVALS_ASSESSMENT_LIMITS.name} characters` },
+            { name: "stage", type: `"bootcamp" | "intermediate"`, required: true, note: "the session it scores" },
+            { name: "audience", type: `"sales" | "engineer" | "both"`, required: true, note: "the tracks it scores" },
+            { name: "active", type: "boolean", required: true, note: "whether the eVals page offers it" },
+            {
+              name: "criteria",
+              type: "{ id?: string, name: string, description?: string }[]",
+              required: true,
+              note: `1 to ${EVALS_ASSESSMENT_LIMITS.criteria}, in the order they are asked; a name up to ${EVALS_ASSESSMENT_LIMITS.criterionName} characters, a description up to ${EVALS_ASSESSMENT_LIMITS.description}`,
+            },
+          ],
+        },
+        returns: "{ id }",
+        errors: [{ status: 400, error: "invalid", when: "the body is not that shape, or a criterion has an id" }],
+      },
+      {
+        method: "GET",
+        path: "/api/evals/assessments/{id}",
+        summary: "Reads one assessment and the criteria it still asks, in order.",
+        access: "evalsAdmin",
+        token: true,
+        notes: "scored says some submission holds a score against that criterion, so removing it retires it rather than deleting it.",
+        params: [{ name: "id", type: "string", required: true, note: "UUID" }],
+        returns: `{ id, name, stage, audience, active, createdAt, updatedAt, submissions: number, criteria: { id, name, description, scored: boolean }[] }`,
+        errors: [{ status: 404, error: "not_found", when: "id is not a UUID, or no such assessment" }],
+      },
+      {
+        method: "PUT",
+        path: "/api/evals/assessments/{id}",
+        summary: "Replaces an assessment's fields and criteria.",
+        access: "evalsAdmin",
+        token: true,
+        notes:
+          "A criterion sent with its id is kept, renamed and moved as given; one sent without an id is added; one left out is deleted if nobody has been scored on it, or else retired, so it is no longer asked but the scores given against it remain. Submissions keep the names they were scored under. Once anyone has been scored on it, stage and audience cannot change. An attendee scored before a criterion was added shows as needing rescoring.",
+        params: [{ name: "id", type: "string", required: true, note: "UUID" }],
+        body: {
+          kind: "json",
+          fields: [
+            { name: "name", type: "string", required: true, note: `up to ${EVALS_ASSESSMENT_LIMITS.name} characters` },
+            { name: "stage", type: `"bootcamp" | "intermediate"`, required: true, note: "the session it scores" },
+            { name: "audience", type: `"sales" | "engineer" | "both"`, required: true, note: "the tracks it scores" },
+            { name: "active", type: "boolean", required: true, note: "whether the eVals page offers it" },
+            {
+              name: "criteria",
+              type: "{ id?: string, name: string, description?: string }[]",
+              required: true,
+              note: `1 to ${EVALS_ASSESSMENT_LIMITS.criteria}, in the order they are asked; a name up to ${EVALS_ASSESSMENT_LIMITS.criterionName} characters, a description up to ${EVALS_ASSESSMENT_LIMITS.description}`,
+            },
+          ],
+        },
+        returns: "{ ok: true }",
+        errors: [
+          { status: 400, error: "invalid", when: "the body is not that shape, or a criterion id is not one it still asks" },
+          { status: 404, error: "not_found", when: "id is not a UUID, or no such assessment" },
+          { status: 409, error: "locked", when: "stage or audience changes on an assessment someone has been scored on" },
+        ],
+      },
+      {
+        method: "DELETE",
+        path: "/api/evals/assessments/{id}",
+        summary: "Removes an assessment nobody has been scored on.",
+        access: "evalsAdmin",
+        token: true,
+        notes: "One with scores is kept; set active to false with PUT instead.",
+        params: [{ name: "id", type: "string", required: true, note: "UUID" }],
+        returns: "{ ok: true }",
+        errors: [
+          { status: 404, error: "not_found", when: "id is not a UUID, or no such assessment" },
+          { status: 409, error: "has_scores", when: "someone has been scored on it" },
+        ],
       },
       {
         method: "GET",

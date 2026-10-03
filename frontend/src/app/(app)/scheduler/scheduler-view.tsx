@@ -3,6 +3,7 @@
 /** The bootcamps, latest first, and for an administrator the means to schedule, change and remove them. */
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { CalendarPlus, Loader2, Pencil, Trash2 } from "lucide-react";
@@ -33,7 +34,8 @@ export function SchedulerView({
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const sortProps = { sort: query.sort, dir: query.dir };
-  const columns = canManage ? 6 : 5;
+  const columns = canManage ? 7 : 6;
+  const detailHref = (id: string) => `/scheduler/${id}`;
 
   function open(row: BootcampRow | null) {
     setEditing(row);
@@ -46,7 +48,12 @@ export function SchedulerView({
     setError(null);
     try {
       const res = await fetch(`/api/scheduler/bootcamps/${row.id}`, { method: "DELETE" });
-      if (!res.ok && res.status !== 404) setError(`Could not remove it (${res.status}).`);
+      const body = await res.json().catch(() => null);
+      if (body?.error === "has_scores") {
+        setError(`The bootcamp starting ${formatDate(row.startDate)} has assessments scored at it, so it is kept.`);
+      } else if (!res.ok && res.status !== 404) {
+        setError(`Could not remove it (${res.status}).`);
+      }
       router.refresh();
     } catch {
       setError("Could not reach the server.");
@@ -99,6 +106,7 @@ export function SchedulerView({
                 <SortHeader column="status" {...sortProps}>
                   Status
                 </SortHeader>
+                <PlainHeader>Judges</PlainHeader>
                 <SortHeader column="createdBy" {...sortProps}>
                   Scheduled by
                 </SortHeader>
@@ -108,11 +116,23 @@ export function SchedulerView({
             <tbody>
               {page.rows.map((row) => (
                 <tr key={row.id} className="border-b transition-colors last:border-b-0 hover:bg-muted/30">
-                  <td className="px-5 py-2.5 font-medium tabular-nums">{formatDate(row.startDate)}</td>
+                  <td className="px-5 py-2.5 font-medium tabular-nums">
+                    <Link href={detailHref(row.id)} className="underline-offset-4 hover:underline">
+                      {formatDate(row.startDate)}
+                    </Link>
+                  </td>
                   <td className="px-5 py-2.5 tabular-nums">{row.btcDays}</td>
                   <td className="px-5 py-2.5 tabular-nums">{row.intDays ?? "—"}</td>
                   <td className="px-5 py-2.5">
                     <Badge variant={row.status === "active" ? "default" : "secondary"}>{STATUS_LABELS[row.status]}</Badge>
+                  </td>
+                  <td className="px-5 py-2.5 tabular-nums">
+                    <Link
+                      href={detailHref(row.id)}
+                      className="text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+                    >
+                      {row.judges === 0 ? "None" : row.judges.toLocaleString()}
+                    </Link>
                   </td>
                   <td className="px-5 py-2.5 text-muted-foreground">{row.createdBy ?? "—"}</td>
                   {canManage && (

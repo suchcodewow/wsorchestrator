@@ -1022,8 +1022,8 @@ describe("bootcamps", () => {
     assert.deepEqual(await updateBootcamp(missing, { btcDays: 2 }), { ok: false, error: "not_found" });
     const made1 = await create({ startDate: "2031-12-01", btcDays: 4, intDays: 3, status: "scheduled" });
     assert.ok(made1.ok);
-    assert.equal(await deleteBootcamp(made1.id), true);
-    assert.equal(await deleteBootcamp(made1.id), false);
+    assert.deepEqual(await deleteBootcamp(made1.id), { ok: true });
+    assert.deepEqual(await deleteBootcamp(made1.id), { ok: false, error: "not_found" });
   });
 
   test("the form's values are checked", () => {

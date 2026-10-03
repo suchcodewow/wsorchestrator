@@ -23,6 +23,7 @@ import { recordAudit, requestIp } from "@/lib/audit";
 import { googlePhotoChosen, syncGoogleProfile } from "@/lib/google-profile";
 import { REQUEST_PATH_HEADER, returnPath } from "@/lib/request-path";
 import type { Access } from "@/lib/roles";
+import { isJudgingNow } from "@/lib/scheduler/judging";
 import { bootstrapAdminEmails, isBootstrapAdmin } from "@/lib/site-admins";
 
 /** The bootstrap administrators in SITE_ADMIN_EMAILS are platform administrators. */
@@ -124,6 +125,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         training: row.trainingRole ?? null,
         evals: row.evalsRole ?? null,
         platform: row.isPlatformAdmin ?? false,
+        judging: await isJudgingNow(session.user.email),
       };
 
       if (!access.platform && isBootstrapAdmin(session.user.email)) {

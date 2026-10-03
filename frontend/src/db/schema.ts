@@ -1116,6 +1116,176 @@ export const BOOTCAMP_DEFAULTS = { btcDays: 4, intDays: 3 } as const;
 export type Bootcamp = typeof bootcamps.$inferSelect;
 
 /**
+ * Guest judges for one bootcamp: anyone from the employee list, added in the
+ * Scheduler. While that bootcamp is active they can score its attendees on
+ * the eVals page, whatever other access they hold.
+ */
+export const bootcampJudges = pgTable(
+  "bootcamp_judges",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    bootcampId: uuid("bootcamp_id")
+      .notNull()
+      .references(() => bootcamps.id, { onDelete: "cascade" }),
+    /** Lowercased. */
+    email: text("email").notNull(),
+    /** As the employee list had it when they were added. */
+    fullName: text("full_name").notNull().default(""),
+    addedBy: text("added_by").references(() => users.id, { onDelete: "set null" }),
+    addedAt: timestamp("added_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("bootcamp_judges_bootcamp_email_idx").on(t.bootcampId, t.email),
+    index("bootcamp_judges_email_idx").on(t.email),
+  ],
+);
+
+export type BootcampJudge = typeof bootcampJudges.$inferSelect;
+
+/** The class an assessment scores, as a bootcamp holds them. */
+export const EVALS_ASSESSMENT_STAGES = ["bootcamp", "intermediate"] as const;
+export type EvalsAssessmentStage = (typeof EVALS_ASSESSMENT_STAGES)[number];
+
+/** Who an assessment scores: one track, or both. */
+export const EVALS_ASSESSMENT_AUDIENCES = ["sales", "engineer", "both"] as const;
+export type EvalsAssessmentAudience = (typeof EVALS_ASSESSMENT_AUDIENCES)[number];
+
+/**
+ * Something attendees are scored on during a bootcamp, defined in eVals
+ * Settings → Assessments. Its criteria are rows of their own, so an
+ * assessment can gain or lose one without a column changing anywhere.
+ */
+export const evalsAssessments = pgTable(
+  "evals_assessments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: text("name").notNull(),
+    stage: text("stage").$type<EvalsAssessmentStage>().notNull(),
+    audience: text("audience").$type<EvalsAssessmentAudience>().notNull(),
+    /** Inactive assessments are kept, with their scores, but not offered for scoring. */
+    active: boolean("active").notNull().default(true),
+    createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("evals_assessments_stage_idx").on(t.stage, t.active),
+    check("evals_assessments_stage_check", sql`${t.stage} in ('bootcamp', 'intermediate')`),
+    check("evals_assessments_audience_check", sql`${t.audience} in ('sales', 'engineer', 'both')`),
+  ],
+);
+
+export type EvalsAssessment = typeof evalsAssessments.$inferSelect;
+
+/**
+ * One thing an assessment scores from 1 to 4. A criterion that has been
+ * scored is retired rather than deleted, so the scores given against it keep
+ * pointing somewhere; a retired criterion is no longer asked.
+ */
+export const evalsAssessmentCriteria = pgTable(
+  "evals_assessment_criteria",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    assessmentId: uuid("assessment_id")
+      .notNull()
+      .references(() => evalsAssessments.id, { onDelete: "cascade" }),
+    /** Order on the form, from 0. */
+    position: integer("position").notNull(),
+    name: text("name").notNull(),
+    description: text("description").notNull().default(""),
+    retiredAt: timestamp("retired_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [index("evals_assessment_criteria_assessment_idx").on(t.assessmentId, t.position)],
+);
+
+export type EvalsAssessmentCriterion = typeof evalsAssessmentCriteria.$inferSelect;
+
+export const EVALS_ASSESSMENT_LIMITS = {
+  name: 200,
+  criterionName: 200,
+  description: 2000,
+  criteria: 50,
+  comment: 4000,
+  feedback: 8000,
+} as const;
+
+/**
+ * The one assessment of one attendee at one bootcamp. Anyone who can score
+ * may revise it; whoever saved it last owns it. The assessment's name and
+ * each criterion's are copied in, so renaming either later leaves what was
+ * scored readable.
+ */
+export const evalsSubmissions = pgTable(
+  "evals_submissions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    // Restrict: removing a bootcamp would take its scores with it.
+    bootcampId: uuid("bootcamp_id")
+      .notNull()
+      .references(() => bootcamps.id, { onDelete: "restrict" }),
+    assessmentId: uuid("assessment_id")
+      .notNull()
+      .references(() => evalsAssessments.id, { onDelete: "restrict" }),
+    /** The attendee, lowercased. */
+    attendeeEmail: text("attendee_email").notNull(),
+    assessmentName: text("assessment_name").notNull(),
+    /** The mean of the criterion scores, to one decimal place. */
+    averageScore: doublePrecision("average_score").notNull(),
+    positiveFeedback: text("positive_feedback").notNull().default(""),
+    constructiveFeedback: text("constructive_feedback").notNull().default(""),
+    /** Whoever saved it last. */
+    ownerId: text("owner_id").references(() => users.id, { onDelete: "set null" }),
+    submittedAt: timestamp("submitted_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    /** Also the version a revision must name, so two judges cannot silently overwrite each other. */
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("evals_submissions_one_idx").on(t.bootcampId, t.assessmentId, t.attendeeEmail),
+    index("evals_submissions_assessment_idx").on(t.assessmentId),
+    check("evals_submissions_average_check", sql`${t.averageScore} between 1 and 4`),
+  ],
+);
+
+export type EvalsSubmission = typeof evalsSubmissions.$inferSelect;
+
+/** One criterion's score in a submission. */
+export const evalsSubmissionScores = pgTable(
+  "evals_submission_scores",
+  {
+    submissionId: uuid("submission_id")
+      .notNull()
+      .references(() => evalsSubmissions.id, { onDelete: "cascade" }),
+    // Restrict: a scored criterion is retired, never deleted.
+    criterionId: uuid("criterion_id")
+      .notNull()
+      .references(() => evalsAssessmentCriteria.id, { onDelete: "restrict" }),
+    criterionName: text("criterion_name").notNull(),
+    score: integer("score").notNull(),
+    comment: text("comment").notNull().default(""),
+  },
+  (t) => [
+    primaryKey({ columns: [t.submissionId, t.criterionId] }),
+    index("evals_submission_scores_criterion_idx").on(t.criterionId),
+    check("evals_submission_scores_score_check", sql`${t.score} between 1 and 4`),
+  ],
+);
+
+export type EvalsSubmissionScore = typeof evalsSubmissionScores.$inferSelect;
+
+/**
  * How an audited action reached the app: a signed-in browser, a personal
  * access token, the app itself (the runner, Cloud Scheduler, Auth.js), or
  * someone with no account (an attendee claiming a workshop login).

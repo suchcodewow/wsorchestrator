@@ -115,6 +115,11 @@ add it to the table above.
 | My settings (theme, calendar scope) | `GET`/`PATCH /api/me` |
 | Users | `GET /api/users` |
 | Admin settings (sign-in domains) | `GET /api/settings/domains` |
+| Scheduler → a bootcamp and its guest judges | `GET /api/scheduler/bootcamps/[id]`, `GET /api/scheduler/bootcamps/[id]/judges` |
+| eVals → Bootcamp / Intermediate | `GET /api/evals/scoring?stage=bootcamp\|intermediate` |
+| eVals → an assessment's attendees | `GET /api/evals/scoring/[assessmentId]` |
+| eVals → an attendee's scoring form | `GET /api/evals/scoring/[assessmentId]/[employeeId]` |
+| eVals settings → Assessments | `GET /api/evals/assessments`, `GET /api/evals/assessments/[id]` |
 | Cohort Settings | `GET /api/evals/employees`, `GET /api/evals/organization`, `GET /api/evals/hibob/sync`, `GET /api/evals/titles?list=` |
 | Bootcamp History | `GET /api/evals/bootcamp-history` |
 | A person's bootcamp history | `GET /api/evals/bootcamp-history/[id]` |
