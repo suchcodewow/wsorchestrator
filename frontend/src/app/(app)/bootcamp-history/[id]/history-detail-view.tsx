@@ -1,6 +1,10 @@
 "use client";
 
-/** One person's bootcamp history row, laid out: who they are, then BTC and INT side by side. */
+/**
+ * One person's bootcamp history row, laid out: who they are, then BTC and INT
+ * side by side. Shown from Bootcamp History and from Cohorts → Previous, so
+ * the page that opened it says where its back link goes.
+ */
 
 import Link from "next/link";
 import { motion } from "framer-motion";
@@ -16,22 +20,35 @@ type Detail = Omit<HistoryDetail, "createdAt" | "updatedAt"> & { createdAt: stri
 
 const TRACK_LABELS = { sales: "Sales", engineer: "Engineer", ignored: "Ignored title", exempt: "Exempt", deferred: "Deferred" } as const;
 
-export function HistoryDetailView({ detail }: { detail: Detail }) {
+export function HistoryDetailView({
+  detail,
+  back,
+  nested = false,
+}: {
+  detail: Detail;
+  /** The list this was opened from, as it was left. */
+  back: { href: string; label: string };
+  /** Under a page that has its own `<h1>`, so the name is an `<h2>`. */
+  nested?: boolean;
+}) {
   const { employee } = detail;
+  const Heading = nested ? "h2" : "h1";
   const role = [employee?.title, employee?.department].filter(Boolean).join(" · ");
 
   return (
     <motion.div variants={staggerParent(0.05)} initial="hidden" animate="show" className="max-w-4xl space-y-8">
       <motion.div variants={riseChild} className="space-y-4">
         <Link
-          href="/bootcamp-history"
+          href={back.href}
           className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
         >
           <ArrowLeft className="size-3.5" />
-          Bootcamp History
+          {back.label}
         </Link>
         <div className="space-y-1.5">
-          <h1 className="text-3xl font-medium tracking-tight">{employee?.fullName ?? detail.email}</h1>
+          <Heading className={cn("font-medium tracking-tight", nested ? "text-xl" : "text-3xl")}>
+            {employee?.fullName ?? detail.email}
+          </Heading>
           <p className="text-sm text-muted-foreground">
             {employee ? (
               <>

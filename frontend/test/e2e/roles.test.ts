@@ -176,6 +176,12 @@ const PAGES: Record<string, PageCase> = {
   },
   "/cohorts/current": { path: () => "/cohorts/current", expect: gated(canUseTraining) },
   "/cohorts/previous": { path: () => "/cohorts/previous", expect: gated(canUseTraining) },
+  "/cohorts/previous?open=<a day>": { path: () => "/cohorts/previous?open=2026-09-14", expect: gated(canUseTraining) },
+  "/cohorts/previous/<a record>": {
+    path: () => `/cohorts/previous/${historyId}`,
+    expect: gated((a) => canUseTraining(a) && canUseEvals(a)),
+  },
+  "/cohorts/previous/<unknown>": { path: () => `/cohorts/previous/${MISSING}`, expect: () => 404 },
   "/cohort-settings": {
     path: () => "/cohort-settings",
     expect: (a) => (canManageTrainingSettings(a) ? { to: visibleCohortSettingsTabs(a)[0]!.href } : 404),

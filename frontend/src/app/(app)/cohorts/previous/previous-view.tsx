@@ -3,11 +3,14 @@
 /**
  * One row per day BTC or INT was held, with how many attended each. A row
  * opens in place to who attended: bootcamp on one side, intermediate on the
- * other, each fetched a page at a time the first time it is opened.
+ * other, each fetched a page at a time the first time it is opened. The open
+ * days are kept in the URL, and a person's page is opened under Cohorts with
+ * that URL's parameters, so its back link and Back both return here as it was.
  */
 
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import Link from "next/link";
+import { usePathname, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { ChevronRight, GraduationCap, Loader2, Users, type LucideIcon } from "lucide-react";
 import { HEADER_ROW, Pager, PlainHeader, SortHeader } from "@/components/data-table";
@@ -16,9 +19,10 @@ import { Button } from "@/components/ui/button";
 import type { PreviousSession, SessionAttendee, SessionDetail, SessionStage } from "@/lib/evals/bootcamp-history";
 import type { PreviousSessionSort } from "@/lib/list-specs";
 import { riseChild, staggerParent } from "@/lib/motion";
-import { listParam, type ListQuery, type Page } from "@/lib/paging";
+import { listParam, withParams, type ListQuery, type Page } from "@/lib/paging";
 import { cn } from "@/lib/utils";
 import { formatDate } from "../../cohort-settings/format";
+import { OPEN_PARAM, parseOpen } from "./open";
 
 /** `short` is the label on a phone, where both full ones would push Intermediate out of the card. */
 const COLUMNS: { column: PreviousSessionSort; label: string; short?: string }[] = [
@@ -51,6 +55,7 @@ export function PreviousView({
   page,
   total,
   first,
+  opened: preopened,
   canOpenHistory,
 }: {
   query: ListQuery<PreviousSessionSort>;
@@ -58,10 +63,24 @@ export function PreviousView({
   /** Every session, whatever page is shown. */
   total: number;
   first: string | null;
+  /** The days the URL named as open, already fetched. */
+  opened: SessionDetail[];
   /** Whether the viewer may open a person's Bootcamp History record. */
   canOpenHistory: boolean;
 }) {
-  const [opened, setOpened] = useState<Record<string, Opened>>({});
+  const [opened, setOpened] = useState<Record<string, Opened>>(() =>
+    Object.fromEntries(preopened.map((detail) => [detail.date, { detail, loading: null, error: null }])),
+  );
+  const pathname = usePathname();
+  const params = useSearchParams();
+
+  /** Records which days are open in the URL, without a navigation, so Back returns to them. */
+  function rememberOpen(dates: string[]) {
+    const next = new URLSearchParams(params.toString());
+    if (dates.length) next.set(OPEN_PARAM, dates.join(","));
+    else next.delete(OPEN_PARAM);
+    window.history.replaceState(null, "", withParams(pathname, next));
+  }
 
   /** Changes an opened day; a fetch that lands after its day was closed again changes nothing. */
   function patch(date: string, change: Partial<Opened>) {
@@ -69,7 +88,9 @@ export function PreviousView({
   }
 
   async function toggle(date: string) {
+    const others = Object.keys(opened).filter((d) => d !== date);
     if (opened[date]) {
+      rememberOpen(others);
       setOpened((all) => {
         const rest = { ...all };
         delete rest[date];
@@ -77,6 +98,12 @@ export function PreviousView({
       });
       return;
     }
+    rememberOpen([...others, date]);
+    await load(date);
+  }
+
+  /** Opens `date` and fetches the first page of each side. */
+  async function load(date: string) {
     setOpened((all) => ({ ...all, [date]: { detail: null, loading: "both", error: null } }));
     try {
       patch(date, { detail: await fetchSession(date), loading: null });
@@ -84,6 +111,17 @@ export function PreviousView({
       patch(date, { error: (e as Error).message, loading: null });
     }
   }
+
+  // Back restores this tab from the router's cache as it was first rendered,
+  // before any day was opened, so the days the URL has since named are fetched here.
+  useEffect(() => {
+    const loaded = new Set(preopened.map((d) => d.date));
+    for (const date of parseOpen(params.get(OPEN_PARAM) ?? undefined)) {
+      if (!loaded.has(date)) void load(date);
+    }
+    // Only on arrival: after that, the URL follows what is open rather than the other way round.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /** The next page of one side, added to what that side already shows. */
   async function more(date: string, stage: SessionStage) {
@@ -189,7 +227,7 @@ export function PreviousView({
                                   count={s[stage]}
                                   attendees={open.detail![stage]}
                                   loading={open.loading === stage}
-                                  canOpenHistory={canOpenHistory}
+                                  personHref={canOpenHistory ? (id) => withParams(`${pathname}/${id}`, params) : null}
                                   onMore={() => more(s.date, stage)}
                                 />
                               ))}
@@ -225,7 +263,7 @@ function AttendeeList({
   count,
   attendees,
   loading,
-  canOpenHistory,
+  personHref,
   onMore,
 }: {
   label: string;
@@ -233,7 +271,8 @@ function AttendeeList({
   count: number;
   attendees: Page<SessionAttendee>;
   loading: boolean;
-  canOpenHistory: boolean;
+  /** Where a person's record opens, or null when the viewer may not open one. */
+  personHref: ((id: string) => string) | null;
   onMore: () => void;
 }) {
   return (
@@ -251,9 +290,9 @@ function AttendeeList({
             <li key={a.id} className="flex items-center gap-2 px-4 py-2">
               <span className="min-w-0 flex-1">
                 <span className="block truncate font-medium">
-                  {canOpenHistory ? (
+                  {personHref ? (
                     <Link
-                      href={`/bootcamp-history/${a.id}`}
+                      href={personHref(a.id)}
                       className="underline-offset-2 outline-none hover:underline focus-visible:underline"
                     >
                       {a.fullName ?? a.email}

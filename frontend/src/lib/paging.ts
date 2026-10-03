@@ -90,6 +90,30 @@ export function parseListQuery<S extends string>(
   return { q, sort, dir, page };
 }
 
+/**
+ * `query` written back as URL parameters, leaving out whatever is already the
+ * default, so a link back to a list lands where it was left. The inverse of
+ * `parseListQuery`; `params` gets them, beside anything it already has.
+ */
+export function writeListQuery<S extends string>(
+  query: ListQuery<S>,
+  spec: ListSpec<S>,
+  params = new URLSearchParams(),
+  prefix = "",
+): URLSearchParams {
+  if (query.q) params.set(listParam("q", prefix), query.q);
+  if (query.sort !== spec.sort) params.set(listParam("sort", prefix), query.sort);
+  if (query.dir !== (query.sort === spec.sort ? spec.dir : "asc")) params.set(listParam("dir", prefix), query.dir);
+  if (query.page > 1) params.set(listParam("page", prefix), String(query.page));
+  return params;
+}
+
+/** `path` with `params`, or just `path` when there are none. */
+export function withParams(path: string, params: URLSearchParams): string {
+  const qs = params.toString();
+  return qs ? `${path}?${qs}` : path;
+}
+
 /** The LIMIT and OFFSET for `page`: one row past the page, to learn whether more follow. */
 export function pageWindow(page: number): { limit: number; offset: number } {
   return { limit: PAGE_SIZE + 1, offset: (page - 1) * PAGE_SIZE };

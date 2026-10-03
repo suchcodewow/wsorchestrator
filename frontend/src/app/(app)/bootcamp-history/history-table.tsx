@@ -65,6 +65,8 @@ export function HistoryTable({
   counts: HistoryCounts;
 }) {
   const { toggle, pending } = useStatusFilter();
+  // A record's page links back to the list as it is now: search, sort, page and status.
+  const listParams = useSearchParams().toString();
   const shown = page.rows;
 
   return (
@@ -128,7 +130,7 @@ export function HistoryTable({
             </thead>
             <tbody>
               {shown.map((h) => {
-                const href = `/bootcamp-history/${h.id}`;
+                const href = `/bootcamp-history/${h.id}${listParams ? `?${listParams}` : ""}`;
                 return (
                   <tr key={h.id} className="group border-b transition-colors last:border-b-0 hover:bg-muted/30">
                     <td className="p-0 font-medium">
