@@ -48,6 +48,7 @@ import {
   type Access,
 } from "@/lib/roles";
 import { visibleCohortSettingsTabs } from "@/app/(app)/cohort-settings/tabs";
+import { COHORTS_TABS } from "@/app/(app)/cohorts/tabs";
 import { visibleSettingsTabs } from "@/app/(app)/settings/tabs";
 import { PERSONAS, PERSONA_NAMES, type Persona } from "../support/access";
 import { createRun, createSession, readRoles, testScope, type TestUser } from "../support/seed";
@@ -166,7 +167,11 @@ const PAGES: Record<string, PageCase> = {
     path: () => "/scheduler-settings",
     expect: gated(canManageTrainingSettings),
   },
-  "/cohorts": { path: () => "/cohorts", expect: gated(canUseTraining) },
+  "/cohorts": {
+    path: () => "/cohorts",
+    expect: (a) => (canUseTraining(a) ? { to: COHORTS_TABS[0]!.href } : 404),
+  },
+  "/cohorts/current": { path: () => "/cohorts/current", expect: gated(canUseTraining) },
   "/cohort-settings": {
     path: () => "/cohort-settings",
     expect: (a) => (canManageTrainingSettings(a) ? { to: visibleCohortSettingsTabs(a)[0]!.href } : 404),
@@ -318,6 +323,9 @@ const ROUTES: RouteCase[] = [
   { method: "DELETE", path: `/api/settings/repos/${MISSING}`, allowed: canManageSettings },
   { method: "POST", path: `/api/me/harness-tokens/${MISSING}/deploy`, allowed: canManageSettings, body: () => ({}) },
   { method: "POST", path: `/api/me/harness-tokens/${MISSING}/scrub`, allowed: canManageSettings },
+
+  // Cohorts
+  { method: "GET", path: "/api/cohorts/current", allowed: canUseTraining },
 
   // eVals administration
   { method: "GET", path: "/api/evals/employees", allowed: canManageEvalsSettings },

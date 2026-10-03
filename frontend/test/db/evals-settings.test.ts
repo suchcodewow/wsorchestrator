@@ -156,7 +156,7 @@ describe("bootcamp history import", () => {
       admin.id,
       csv(
         "email,BTCDate,BTCScore,BTCIndividualScores\n" +
-          `${email("pat")},46182.125,4.5,"{""Score-Exams"":4}"\n` +
+          `${email("pat")},46182.125,4,"{""Score-Exams"":4.5}"\n` +
           `${email("lee")},2000-01-01,,\n`,
       ),
     );
@@ -175,8 +175,8 @@ describe("bootcamp history import", () => {
     const pat = mine.find((h) => h.email === email("pat"))!;
     // An INT-only sheet leaves the BTC results that were already stored.
     assert.equal(pat.btcDate, "2026-06-09");
-    assert.equal(pat.btcScore, 4.5);
-    assert.deepEqual(pat.btcIndividualScores, { "Score-Exams": 4 });
+    assert.equal(pat.btcScore, 4);
+    assert.deepEqual(pat.btcIndividualScores, { "Score-Exams": 4.5 });
     assert.equal(pat.intDate, "2026-08-04");
     assert.equal(pat.intScore, 3);
     assert.equal(mine.find((h) => h.email === email("lee"))!.btcDate, "2000-01-01");
@@ -221,12 +221,12 @@ describe("bootcamp history edits", () => {
     const row = (await listHistory()).find((h) => h.email === email("edited"))!;
 
     assert.deepEqual(
-      await updateHistory(admin.id, row.id, historyPatchSchema.parse({ intDate: EXEMPT_DATE, btcScore: 3.5 })),
+      await updateHistory(admin.id, row.id, historyPatchSchema.parse({ intDate: EXEMPT_DATE, btcScore: 2 })),
       { ok: true },
     );
     const after = (await listHistory()).find((h) => h.id === row.id)!;
     assert.equal(after.intDate, EXEMPT_DATE);
-    assert.equal(after.btcScore, 3.5);
+    assert.equal(after.btcScore, 2);
     assert.deepEqual(after.btcIndividualScores, { "Score-Lab": 3 });
   });
 
@@ -246,6 +246,9 @@ describe("bootcamp history edits", () => {
     assert.equal(historyInputSchema.safeParse({ ...blank, email: "nope" }).success, false);
     assert.equal(historyInputSchema.safeParse({ ...blank, email: email("a"), btcDate: "2026-02-30" }).success, false);
     assert.equal(historyInputSchema.safeParse({ ...blank, email: email("a"), intScore: "4" }).success, false);
+    for (const btcScore of [0, 5, 3.5]) {
+      assert.equal(historyInputSchema.safeParse({ ...blank, email: email("a"), btcScore }).success, false);
+    }
   });
 });
 

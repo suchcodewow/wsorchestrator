@@ -23,6 +23,10 @@ export const EMPLOYEE_LIST = spec([
   "reportsToName",
   "startDate",
   "activeEffectiveDate",
+  "btcDate",
+  "btcScore",
+  "intDate",
+  "intScore",
 ]);
 export type EmployeeSort = (typeof EMPLOYEE_LIST.sorts)[number];
 
@@ -32,8 +36,11 @@ export type UserSort = (typeof USER_LIST.sorts)[number];
 export const TITLE_LIST = spec(["title", "addedBy", "createdAt"]);
 export type TitleSort = (typeof TITLE_LIST.sorts)[number];
 
-export const ORGANIZATION_LIST = spec(["depth", "fullName", "email", "title", "department", "reportsToName"]);
+export const ORGANIZATION_LIST = spec(["depth", "fullName", "email", "title", "department", "reportsToName", "track"]);
 export type OrganizationSort = (typeof ORGANIZATION_LIST.sorts)[number];
+
+export const CURRENT_COHORT_LIST = spec(["fullName", "email", "title", "department", "reportsToName", "track"]);
+export type CurrentCohortSort = (typeof CURRENT_COHORT_LIST.sorts)[number];
 
 export const HIBOB_SYNC_LIST = spec(["startedAt", "triggeredBy", "status"], "desc");
 export type HibobSyncSort = (typeof HIBOB_SYNC_LIST.sorts)[number];

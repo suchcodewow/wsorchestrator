@@ -11,7 +11,7 @@ import "server-only";
 import { asc, eq, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
-import { BOOTCAMP_HISTORY_LIMITS, bootcampHistory, type BootcampHistory } from "@/db/schema";
+import { BOOTCAMP_HISTORY_LIMITS, BOOTCAMP_SCORE, bootcampHistory, type BootcampHistory } from "@/db/schema";
 import { parseHistorySheet, type HistoryField, type HistoryProblem } from "@/lib/evals/bootcamp-history-file";
 import { isIsoDay, normalEmail } from "@/lib/evals/history-values";
 import { readSpreadsheet } from "@/lib/spreadsheet-file";
@@ -48,7 +48,7 @@ const email = z
 
 const day = z.string().refine(isIsoDay).nullable();
 
-const score = z.number().finite().nullable();
+const score = z.number().int().min(BOOTCAMP_SCORE.min).max(BOOTCAMP_SCORE.max).nullable();
 
 /** One person's row as a form sets it. Individual scores come from grading, not the form. */
 export const historyInputSchema = z.object({

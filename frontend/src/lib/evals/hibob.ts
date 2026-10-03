@@ -25,6 +25,8 @@ import {
 import { hibobAuthorization, toEmployeeRow } from "@/lib/evals/hibob-record";
 import { orgUnder } from "@/lib/evals/org";
 import { getOrgLeaderEmail } from "@/lib/evals/settings";
+import { listForTitle } from "@/lib/evals/title-lists";
+import { titleListMap } from "@/lib/evals/titles";
 import type { HibobSyncSort } from "@/lib/list-specs";
 import { pageWindow, toPage, type ListQuery, type Page } from "@/lib/paging";
 import { orderFor, searchAny } from "@/lib/paging-sql";
@@ -192,6 +194,10 @@ export async function syncHibobEmployees(
     // whoever that was when this sync started, not when an admin next changes it.
     const leaderEmail = (await getOrgLeaderEmail()).toLowerCase();
     const orgDepth = new Map(orgUnder(unique, leaderEmail).map((p) => [p.id, p.chain.length]));
+    // Each of them gets the track their title's list gives, as the lists stand now.
+    const lists = await titleListMap();
+    const track = (r: (typeof unique)[number]) =>
+      orgDepth.has(r.id) ? listForTitle(r.title, lists) : null;
 
     await db.transaction(async (tx) => {
       // Two syncs are kept apart by the one-running index, but a revision from
@@ -201,7 +207,11 @@ export async function syncHibobEmployees(
       for (let i = 0; i < unique.length; i += BATCH) {
         await tx
           .insert(employees)
-          .values(unique.slice(i, i + BATCH).map((r) => ({ ...r, importedAt, orgDepth: orgDepth.get(r.id) ?? null })));
+          .values(
+            unique
+              .slice(i, i + BATCH)
+              .map((r) => ({ ...r, importedAt, orgDepth: orgDepth.get(r.id) ?? null, track: track(r) })),
+          );
       }
       await tx
         .update(hibobSyncRuns)

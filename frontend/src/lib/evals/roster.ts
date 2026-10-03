@@ -12,6 +12,7 @@ import {
   bootcampHistory,
   employees,
   hibobSyncRuns,
+  type BootcampHistory,
   type Employee,
   type EvalsTitleList,
 } from "@/db/schema";
@@ -53,7 +54,9 @@ export type Roster = {
   unlisted: UnlistedTitle[];
 };
 
-export type EmployeeListing = Omit<Employee, "raw" | "importedAt" | "orgDepth">;
+/** A stored employee, with their bootcamp history if they have one. */
+export type EmployeeListing = Omit<Employee, "raw" | "importedAt" | "orgDepth" | "track"> &
+  Pick<BootcampHistory, "btcDate" | "btcScore" | "intDate" | "intScore">;
 
 const EMPLOYEE_COLUMNS = {
   id: employees.id,
@@ -66,6 +69,10 @@ const EMPLOYEE_COLUMNS = {
   reportsToName: employees.reportsToName,
   startDate: employees.startDate,
   activeEffectiveDate: employees.activeEffectiveDate,
+  btcDate: bootcampHistory.btcDate,
+  btcScore: bootcampHistory.btcScore,
+  intDate: bootcampHistory.intDate,
+  intScore: bootcampHistory.intScore,
 };
 
 const EMPLOYEE_SORT_COLUMNS = {
@@ -77,17 +84,25 @@ const EMPLOYEE_SORT_COLUMNS = {
   reportsToName: sql`lower(coalesce(${blankAsNull(employees.reportsToName)}, ${blankAsNull(employees.reportsToEmail)}))`,
   startDate: employees.startDate,
   activeEffectiveDate: employees.activeEffectiveDate,
+  btcDate: bootcampHistory.btcDate,
+  btcScore: bootcampHistory.btcScore,
+  intDate: bootcampHistory.intDate,
+  intScore: bootcampHistory.intScore,
 } as const;
 
 /**
  * One page of stored employees, for the Employees tab and the Organization
- * Leader picker — everyone the sync stored, not only those under the root.
+ * Leader picker — everyone the sync stored, not only those under the root —
+ * each with their BTC and INT dates and scores from `bootcamp_history`, which
+ * the sync leaves alone.
  */
 export async function listEmployees(query: ListQuery<EmployeeSort>): Promise<Page<EmployeeListing>> {
   const { limit, offset } = pageWindow(query.page);
   const rows = await db
     .select(EMPLOYEE_COLUMNS)
     .from(employees)
+    // Both emails are stored lowercased.
+    .leftJoin(bootcampHistory, eq(bootcampHistory.email, employees.email))
     .where(
       searchAny(query.q, [
         employees.fullName,
@@ -140,7 +155,7 @@ export type OrganizationSummary = {
 /** Someone the last sync found under the Organization Leader, as the Organization tab lists them. */
 export type OrganizationMember = Pick<
   Employee,
-  "email" | "fullName" | "title" | "department" | "reportsToEmail" | "reportsToName"
+  "email" | "fullName" | "title" | "department" | "reportsToEmail" | "reportsToName" | "track"
 > & {
   /** Links between this person and the leader, counting the leader. */
   depth: number;
@@ -155,6 +170,7 @@ const ORGANIZATION_SORT_COLUMNS = {
   title: sql`lower(${blankAsNull(employees.title)})`,
   department: sql`lower(${blankAsNull(employees.department)})`,
   reportsToName: sql`lower(coalesce(${blankAsNull(employees.reportsToName)}, ${blankAsNull(employees.reportsToEmail)}))`,
+  track: employees.track,
 } as const;
 
 /** Whom the latest successful sync worked `employees.org_depth` out for, or null if none has. */
@@ -189,13 +205,14 @@ export async function listOrganizationMembers(
         department: e.department,
         reportsToEmail: e.reportsToEmail,
         reportsToName: e.reportsToName,
+        track: e.track,
         depth: sql<number>`${e.orgDepth}`,
       })
       .from(e)
       .where(
         and(
           isNotNull(e.orgDepth),
-          searchAny(query.q, [e.fullName, e.email, e.title, e.department, e.reportsToName, e.reportsToEmail]),
+          searchAny(query.q, [e.fullName, e.email, e.title, e.department, e.reportsToName, e.reportsToEmail, e.track]),
         ),
       )
       .orderBy(...orderFor(ORGANIZATION_SORT_COLUMNS[query.sort], query.dir, sql`lower(${e.fullName})`, e.id))
