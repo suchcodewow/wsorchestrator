@@ -47,8 +47,11 @@ export const ORGANIZATION_LIST = spec([
 ]);
 export type OrganizationSort = (typeof ORGANIZATION_LIST.sorts)[number];
 
-export const CURRENT_COHORT_LIST = spec(["fullName", "email", "title", "department", "reportsToName", "track"]);
+export const CURRENT_COHORT_LIST = spec(["fullName", "email", "title", "department", "reportsToName", "track", "btcDate"]);
 export type CurrentCohortSort = (typeof CURRENT_COHORT_LIST.sorts)[number];
+
+export const BOOTCAMP_LIST = spec(["startDate", "status", "createdBy"], "desc");
+export type BootcampSort = (typeof BOOTCAMP_LIST.sorts)[number];
 
 export const HIBOB_SYNC_LIST = spec(["startedAt", "triggeredBy", "status"], "desc");
 export type HibobSyncSort = (typeof HIBOB_SYNC_LIST.sorts)[number];

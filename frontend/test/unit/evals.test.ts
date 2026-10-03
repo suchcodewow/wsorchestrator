@@ -13,7 +13,8 @@ import assert from "node:assert/strict";
 
 import { parseHistorySheet } from "@/lib/evals/bootcamp-history-file";
 import { hibobAuthorization, toEmployeeRow } from "@/lib/evals/hibob-record";
-import { isIsoDay, normalEmail } from "@/lib/evals/history-values";
+import { inScoreRange, isIsoDay, normalEmail, roundScore } from "@/lib/evals/history-values";
+import { formatScore } from "@/app/(app)/cohort-settings/format";
 import { orgUnder, ORG_ROOT_EMAIL } from "@/lib/evals/org";
 import { cleanTitle, listForTitle, splitTitles, titleKey, trackFor } from "@/lib/evals/title-lists";
 import type { Cell } from "@/lib/spreadsheet-file";
@@ -176,6 +177,25 @@ describe("history values", () => {
     assert.equal(isIsoDay("2026-2-3"), false);
     assert.equal(isIsoDay("2026-02-28T00:00"), false);
   });
+
+  test("a score is kept to one decimal place and shown without a trailing zero", () => {
+    assert.equal(roundScore(3.25), 3.3);
+    assert.equal(roundScore(3.24), 3.2);
+    assert.equal(roundScore(2.0), 2);
+    assert.equal(roundScore((3 + 4 + 4) / 3), 3.7);
+    assert.equal(formatScore(3), "3");
+    assert.equal(formatScore(3.0), "3");
+    assert.equal(formatScore(3.333), "3.3");
+    assert.equal(formatScore(null), "—");
+  });
+
+  test("a score is from 1 to 4, before rounding", () => {
+    assert.equal(inScoreRange(1), true);
+    assert.equal(inScoreRange(4), true);
+    assert.equal(inScoreRange(0.99), false);
+    assert.equal(inScoreRange(4.01), false);
+    assert.equal(inScoreRange(Number.NaN), false);
+  });
 });
 
 describe("parseHistorySheet", () => {
@@ -266,23 +286,29 @@ describe("parseHistorySheet", () => {
     ]);
   });
 
-  test("takes a class score only as a whole number from 1 to 4", () => {
+  test("takes a class score from 1 to 4, to one decimal place", () => {
     const parsed = parseHistorySheet(
       sheet(
         ["a@x.com", null, null, 1, "4"],
         ["b@x.com", null, null, 0],
         ["c@x.com", null, null, 5],
-        ["d@x.com", null, null, 3.5],
+        ["d@x.com", null, null, 3.5, "3.25"],
+        ["e@x.com", null, null, 3.0, 4.01],
+        ["f@x.com", null, null, "3.0"],
       ),
     );
     assert.ok(parsed.ok);
     assert.deepEqual(
       parsed.rows.map((r) => [r.btcScore, r.intScore]),
-      [[1, 4]],
+      [
+        [1, 4],
+        [3.5, 3.3],
+        [3, null],
+      ],
     );
     assert.deepEqual(
       parsed.problems.map((p) => p.message),
-      ["b@x.com: unreadable BTCScore", "c@x.com: unreadable BTCScore", "d@x.com: unreadable BTCScore"],
+      ["b@x.com: unreadable BTCScore", "c@x.com: unreadable BTCScore", "e@x.com: unreadable INTScore"],
     );
   });
 

@@ -13,7 +13,7 @@ import { z } from "zod";
 import { db } from "@/db";
 import { BOOTCAMP_HISTORY_LIMITS, BOOTCAMP_SCORE, bootcampHistory, type BootcampHistory } from "@/db/schema";
 import { parseHistorySheet, type HistoryField, type HistoryProblem } from "@/lib/evals/bootcamp-history-file";
-import { isIsoDay, normalEmail } from "@/lib/evals/history-values";
+import { isIsoDay, normalEmail, roundScore } from "@/lib/evals/history-values";
 import { retrackEmployees } from "@/lib/evals/tracks";
 import { readSpreadsheet } from "@/lib/spreadsheet-file";
 
@@ -49,7 +49,7 @@ const email = z
 
 const day = z.string().refine(isIsoDay).nullable();
 
-const score = z.number().int().min(BOOTCAMP_SCORE.min).max(BOOTCAMP_SCORE.max).nullable();
+const score = z.number().min(BOOTCAMP_SCORE.min).max(BOOTCAMP_SCORE.max).transform(roundScore).nullable();
 
 /** One person's row as a form sets it. Individual scores come from grading, not the form. */
 export const historyInputSchema = z.object({

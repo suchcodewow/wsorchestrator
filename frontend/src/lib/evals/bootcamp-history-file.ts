@@ -8,8 +8,7 @@
  * unreadable is skipped and reported, so nothing is stored half-read.
  */
 
-import { BOOTCAMP_SCORE } from "@/db/schema";
-import { normalEmail, validIso } from "@/lib/evals/history-values";
+import { inScoreRange, normalEmail, roundScore, validIso } from "@/lib/evals/history-values";
 import { excelSerialToIsoDate, type Cell, type Sheet } from "@/lib/spreadsheet-file";
 
 export type HistoryInput = {
@@ -71,14 +70,14 @@ function readDate(cell: Cell, date1904: boolean): string | null | undefined {
   return undefined;
 }
 
-/** An overall score: a whole number from 1 (poor) to 4 (outstanding). */
+/** An overall score: from 1 (poor) to 4 (outstanding), kept to one decimal place. */
 function readScore(cell: Cell): number | null | undefined {
   if (blank(cell)) return null;
   const n = typeof cell === "number" ? cell : Number(cell!.trim());
-  return Number.isInteger(n) && n >= BOOTCAMP_SCORE.min && n <= BOOTCAMP_SCORE.max ? n : undefined;
+  return inScoreRange(n) ? roundScore(n) : undefined;
 }
 
-/** A JSON object of numbers, like `{"Score-Exams":4,"Score-Participation":3}`. */
+/** A JSON object of numbers, like `{"Score-Exams":4,"Score-Participation":3}`, each kept to one decimal place. */
 function readScores(cell: Cell): Record<string, number> | null | undefined {
   if (blank(cell)) return null;
   try {
@@ -86,7 +85,7 @@ function readScores(cell: Cell): Record<string, number> | null | undefined {
     if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
     const entries = Object.entries(value);
     if (!entries.every(([, v]) => typeof v === "number" && Number.isFinite(v))) return undefined;
-    return Object.fromEntries(entries) as Record<string, number>;
+    return Object.fromEntries(entries.map(([k, v]) => [k, roundScore(v as number)]));
   } catch {
     return undefined;
   }

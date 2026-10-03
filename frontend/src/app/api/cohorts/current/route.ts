@@ -1,20 +1,26 @@
-/** Everyone on the Sales or Engineer track as of the last HiBob sync, a page at a time. */
+/** One stage of the Current tab's candidates, a page at a time, with each stage's count and the active bootcamp. */
 
 import { NextResponse } from "next/server";
 import { requireCaller } from "@/lib/api-auth";
-import { currentCohortSummary, listCurrentCohort } from "@/lib/evals/current-cohort";
+import { currentCohortSummary, isCandidateStage, listCurrentCohort } from "@/lib/evals/current-cohort";
 import { CURRENT_COHORT_LIST } from "@/lib/list-specs";
 import { parseListQuery } from "@/lib/paging";
 import { canUseTraining } from "@/lib/roles";
+import { activeBootcamp } from "@/lib/scheduler/bootcamps";
 
 export async function GET(req: Request) {
   const { error } = await requireCaller(req, canUseTraining);
   if (error) return error;
 
-  const query = parseListQuery(new URL(req.url).searchParams, CURRENT_COHORT_LIST);
-  const [{ rows, page, hasMore }, { counts, syncedAt }] = await Promise.all([
-    listCurrentCohort(query),
+  const params = new URL(req.url).searchParams;
+  const asked = params.get("stage") ?? "bootcamp";
+  if (!isCandidateStage(asked)) return NextResponse.json({ error: "invalid_stage" }, { status: 400 });
+
+  const query = parseListQuery(params, CURRENT_COHORT_LIST);
+  const [{ rows, page, hasMore }, { counts, syncedAt }, bootcamp] = await Promise.all([
+    listCurrentCohort(asked, query),
     currentCohortSummary(),
+    activeBootcamp(),
   ]);
-  return NextResponse.json({ members: rows, page, hasMore, counts, syncedAt });
+  return NextResponse.json({ stage: asked, members: rows, page, hasMore, counts, syncedAt, activeBootcamp: bootcamp });
 }
