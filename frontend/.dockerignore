@@ -6,3 +6,6 @@ node_modules
 npm-debug.log
 .env
 .env*.local
+# Imports ../../runner, which is outside this context, so `next build`'s
+# typecheck cannot resolve it. It is a local-only tool; `npm run verify` checks it.
+scripts/import-production.ts
