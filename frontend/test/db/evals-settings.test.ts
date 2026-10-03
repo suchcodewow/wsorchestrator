@@ -35,6 +35,7 @@ import {
   createHistory,
   deleteHistory,
   getHistoryDetail,
+  historyCounts,
   historyInputSchema,
   historyPatchSchema,
   importHistory,
@@ -62,6 +63,7 @@ import {
   SLACK_CONTACT_LIST,
   TITLE_LIST,
   type BootcampHistorySort,
+  type HistoryStatus,
   type TitleSort,
 } from "@/lib/list-specs";
 import {
@@ -275,8 +277,8 @@ describe("bootcamp history import", () => {
 });
 
 describe("bootcamp history page", () => {
-  const page = (q: string, sort: BootcampHistorySort = "fullName") =>
-    listHistoryPage({ ...BOOTCAMP_HISTORY_LIST, sort, q, page: 1 });
+  const page = (q: string, sort: BootcampHistorySort = "fullName", status: HistoryStatus | null = null) =>
+    listHistoryPage({ ...BOOTCAMP_HISTORY_LIST, sort, dir: "asc", q, page: 1 }, status);
 
   test("lists each person by the employee list's name, sinking those it lacks, and finds them by either", async () => {
     await db.insert(employees).values({
@@ -296,6 +298,28 @@ describe("bootcamp history page", () => {
       [email("h-zed"), null],
     ]);
     assert.deepEqual(rows(await page("ann hist")), [[email("h-ann"), "Ann History"]]);
+  });
+
+  test("lists the newest bootcamp first by default, with no date last", async () => {
+    const newest = await listHistoryPage({ ...BOOTCAMP_HISTORY_LIST, q: "h-", page: 1 });
+    assert.equal(BOOTCAMP_HISTORY_LIST.sort, "btcDate");
+    assert.deepEqual(
+      newest.rows.map((h) => [h.email, h.btcDate]),
+      [
+        [email("h-ann"), "2026-03-02"],
+        [email("h-zed"), null],
+      ],
+    );
+  });
+
+  test("narrows to the people still in the employee list, or to those not, and counts both", async () => {
+    const emails = async (status: HistoryStatus) => (await page("h-", "email", status)).rows.map((h) => h.email);
+    assert.deepEqual(await emails("active"), [email("h-ann")]);
+    assert.deepEqual(await emails("inactive"), [email("h-zed")]);
+
+    const counts = await historyCounts();
+    assert.ok(counts.active >= 1 && counts.inactive >= 1);
+    assert.equal(counts.active + counts.inactive, counts.total);
   });
 
   test("a record holds its whole row, who changed it, and the employee behind it", async () => {

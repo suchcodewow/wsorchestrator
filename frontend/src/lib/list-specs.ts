@@ -35,8 +35,16 @@ export type TitleSort = (typeof TITLE_LIST.sorts)[number];
 export const SLACK_CONTACT_LIST = spec(["fullName", "email", "addedBy", "createdAt"]);
 export type SlackContactSort = (typeof SLACK_CONTACT_LIST.sorts)[number];
 
-export const BOOTCAMP_HISTORY_LIST = spec(["fullName", "email"]);
+export const BOOTCAMP_HISTORY_LIST = spec(["btcDate", "fullName", "email"], "desc");
 export type BootcampHistorySort = (typeof BOOTCAMP_HISTORY_LIST.sorts)[number];
+
+/** Bootcamp history narrowed to people still in the employee list, or to those not. */
+export const HISTORY_STATUSES = ["active", "inactive"] as const;
+export type HistoryStatus = (typeof HISTORY_STATUSES)[number];
+
+export function isHistoryStatus(value: unknown): value is HistoryStatus {
+  return HISTORY_STATUSES.includes(value as HistoryStatus);
+}
 
 export const ORGANIZATION_LIST = spec([
   "depth",

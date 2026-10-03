@@ -10,7 +10,7 @@
 
 import "server-only";
 
-import { asc, eq, sql, type SQL } from "drizzle-orm";
+import { and, asc, eq, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
 import {
@@ -25,7 +25,7 @@ import {
 import { parseHistorySheet, type HistoryField, type HistoryProblem } from "@/lib/evals/bootcamp-history-file";
 import { isIsoDay, normalEmail, roundScore } from "@/lib/evals/history-values";
 import { retrackEmployees } from "@/lib/evals/tracks";
-import type { BootcampHistorySort } from "@/lib/list-specs";
+import type { BootcampHistorySort, HistoryStatus } from "@/lib/list-specs";
 import { pageWindow, toPage, type ListQuery, type Page } from "@/lib/paging";
 import { orderFor, searchAny } from "@/lib/paging-sql";
 import { readSpreadsheet } from "@/lib/spreadsheet-file";
@@ -42,30 +42,60 @@ export async function listHistory(): Promise<BootcampHistory[]> {
 // query, and an unqualified `email` here would mean the employee's own.
 const historyName = sql<string | null>`(select n.full_name from ${employees} n where n.email = ${bootcampHistory}.email order by n.full_name limit 1)`;
 
+/** Still at Harness: the last HiBob sync stored someone with this email. */
+const isActive = sql<boolean>`exists (select 1 from ${employees} a where a.email = ${bootcampHistory}.email)`;
+
+const STATUS_FILTER: Record<HistoryStatus, SQL> = {
+  active: isActive,
+  inactive: sql`not ${isActive}`,
+};
+
 const HISTORY_SORT_COLUMNS = {
+  btcDate: bootcampHistory.btcDate,
   fullName: sql`lower(${historyName})`,
   email: bootcampHistory.email,
 } as const;
 
-export type HistoryListing = { id: string; email: string; fullName: string | null };
+export type HistoryListing = { id: string; email: string; fullName: string | null; btcDate: string | null };
 
-/** One page of history, a name and email each; the search matches either. */
-export async function listHistoryPage(query: ListQuery<BootcampHistorySort>): Promise<Page<HistoryListing>> {
+/**
+ * One page of history, a name, email and bootcamp date each; the search
+ * matches the name or email, and `status` keeps only the active or inactive.
+ */
+export async function listHistoryPage(
+  query: ListQuery<BootcampHistorySort>,
+  status: HistoryStatus | null = null,
+): Promise<Page<HistoryListing>> {
   const { limit, offset } = pageWindow(query.page);
   const rows = await db
-    .select({ id: bootcampHistory.id, email: bootcampHistory.email, fullName: historyName })
+    .select({
+      id: bootcampHistory.id,
+      email: bootcampHistory.email,
+      fullName: historyName,
+      btcDate: bootcampHistory.btcDate,
+    })
     .from(bootcampHistory)
-    .where(searchAny(query.q, [historyName, bootcampHistory.email]))
-    .orderBy(...orderFor(HISTORY_SORT_COLUMNS[query.sort], query.dir, bootcampHistory.email))
+    .where(and(searchAny(query.q, [historyName, bootcampHistory.email]), status ? STATUS_FILTER[status] : undefined))
+    // A bootcamp's class shares one date, so they fall back to name order.
+    .orderBy(...orderFor(HISTORY_SORT_COLUMNS[query.sort], query.dir, sql`${HISTORY_SORT_COLUMNS.fullName} asc nulls last`, bootcampHistory.email))
     .limit(limit)
     .offset(offset);
   return toPage(rows, query.page);
 }
 
-/** How many people have a history row. */
-export async function historyCount(): Promise<number> {
-  const [row] = await db.select({ count: sql<number>`count(*)::int` }).from(bootcampHistory);
-  return row?.count ?? 0;
+export type HistoryCounts = { total: number } & Record<HistoryStatus, number>;
+
+/** How many people have a history row, and how many of them are still at Harness, whatever the search. */
+export async function historyCounts(): Promise<HistoryCounts> {
+  const [row] = await db
+    .select({
+      total: sql<number>`count(*)::int`,
+      active: sql<number>`(count(*) filter (where ${isActive}))::int`,
+    })
+    .from(bootcampHistory);
+  const total = row?.total ?? 0;
+  const active = row?.active ?? 0;
+  return { total, active, inactive: total - active };
 }
 
 export type HistoryDetail = BootcampHistory & {

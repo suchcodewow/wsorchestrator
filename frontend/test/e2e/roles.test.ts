@@ -194,6 +194,7 @@ const PAGES: Record<string, PageCase> = {
   },
   "/evals": { path: () => "/evals", expect: gated(canUseEvals) },
   "/bootcamp-history": { path: () => "/bootcamp-history", expect: gated(canUseEvals) },
+  "/bootcamp-history?status=active": { path: () => "/bootcamp-history?status=active", expect: gated(canUseEvals) },
   "/bootcamp-history/<a record>": { path: () => `/bootcamp-history/${historyId}`, expect: gated(canUseEvals) },
   "/bootcamp-history/<unknown>": { path: () => `/bootcamp-history/${MISSING}`, expect: () => 404 },
   "/evals-settings": {

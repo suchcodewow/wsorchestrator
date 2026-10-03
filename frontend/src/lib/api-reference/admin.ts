@@ -1,4 +1,4 @@
-import { AUDIT_LIST, BOOTCAMP_HISTORY_LIST, BOOTCAMP_LIST, CURRENT_COHORT_LIST, DOMAIN_LIST, EMPLOYEE_LIST, HIBOB_SYNC_LIST, ORGANIZATION_LIST, SLACK_CONTACT_LIST, TITLE_LIST, USER_LIST } from "@/lib/list-specs";
+import { AUDIT_LIST, BOOTCAMP_HISTORY_LIST, BOOTCAMP_LIST, CURRENT_COHORT_LIST, DOMAIN_LIST, EMPLOYEE_LIST, HIBOB_SYNC_LIST, HISTORY_STATUSES, ORGANIZATION_LIST, SLACK_CONTACT_LIST, TITLE_LIST, USER_LIST } from "@/lib/list-specs";
 import { PAGE_FIELDS, listQuery } from "./paging";
 import type { EndpointGroup } from "./types";
 
@@ -260,13 +260,17 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       {
         method: "GET",
         path: "/api/evals/bootcamp-history",
-        summary: "Lists everyone with a bootcamp history row, by name and email, a page at a time.",
+        summary: "Lists everyone with a bootcamp history row, newest bootcamp first, a page at a time.",
         access: "evalsViewer",
         token: true,
         notes:
-          "fullName is the person's name in the employee list from the last HiBob sync, or null for an email not in it, such as someone who has left. total counts every row, whatever the search.",
-        query: listQuery(BOOTCAMP_HISTORY_LIST.sorts, "the name or email"),
-        returns: `{ history: { id, email, fullName: string | null }[], ${PAGE_FIELDS}, total: number }`,
+          "fullName is the person's name in the employee list from the last HiBob sync, or null for an email not in it, such as someone who has left. Someone is active while that list has their email, and inactive once it doesn't. btcDate is their bootcamp date; 2000-01-01 means they are exempt, which sorts as the oldest date. counts gives everyone, the active and the inactive, whatever the search or status.",
+        query: [
+          ...listQuery(BOOTCAMP_HISTORY_LIST.sorts, "the name or email", BOOTCAMP_HISTORY_LIST.dir),
+          { name: "status", type: HISTORY_STATUSES.map((s) => `"${s}"`).join(" | "), note: "only the active or only the inactive; everyone if omitted" },
+        ],
+        returns: `{ history: { id, email, fullName: string | null, btcDate: "YYYY-MM-DD" | null }[], ${PAGE_FIELDS}, status: "active" | "inactive" | null, counts: { total: number, active: number, inactive: number } }`,
+        errors: [{ status: 400, error: "invalid_status", when: "status is neither active nor inactive" }],
       },
       {
         method: "GET",
