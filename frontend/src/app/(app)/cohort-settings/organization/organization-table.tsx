@@ -16,6 +16,7 @@ const COLUMNS: { column: OrganizationSort; label: string }[] = [
   { column: "email", label: "Email" },
   { column: "title", label: "Title" },
   { column: "department", label: "Department" },
+  { column: "track", label: "Track" },
 ];
 
 export function OrganizationTable({
@@ -71,7 +72,7 @@ export function OrganizationTable({
       <motion.div variants={riseChild}>
         <TableSearch
           value={query.q}
-          placeholder="Search by name, email, title or manager"
+          placeholder="Search by name, email, title, manager or track"
           label="Search the organization"
         />
       </motion.div>
@@ -95,11 +96,12 @@ export function OrganizationTable({
                   <td className="px-5 py-2.5 text-muted-foreground">{m.email}</td>
                   <td className="px-5 py-2.5">{m.title || "—"}</td>
                   <td className="px-5 py-2.5 text-muted-foreground">{m.department || "—"}</td>
+                  <td className="px-5 py-2.5">{m.track ?? <span className="text-muted-foreground">—</span>}</td>
                 </tr>
               ))}
               {shown.length === 0 && (
                 <tr>
-                  <td colSpan={COLUMNS.length}className="px-5 py-8 text-center text-muted-foreground">
+                  <td colSpan={COLUMNS.length} className="px-5 py-8 text-center text-muted-foreground">
                     {count ? "No one matches." : "No one reports up to the leader yet."}
                   </td>
                 </tr>

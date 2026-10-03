@@ -8,6 +8,7 @@
  * unreadable is skipped and reported, so nothing is stored half-read.
  */
 
+import { BOOTCAMP_SCORE } from "@/db/schema";
 import { normalEmail, validIso } from "@/lib/evals/history-values";
 import { excelSerialToIsoDate, type Cell, type Sheet } from "@/lib/spreadsheet-file";
 
@@ -70,10 +71,11 @@ function readDate(cell: Cell, date1904: boolean): string | null | undefined {
   return undefined;
 }
 
+/** An overall score: a whole number from 1 (poor) to 4 (outstanding). */
 function readScore(cell: Cell): number | null | undefined {
   if (blank(cell)) return null;
   const n = typeof cell === "number" ? cell : Number(cell!.trim());
-  return Number.isFinite(n) ? n : undefined;
+  return Number.isInteger(n) && n >= BOOTCAMP_SCORE.min && n <= BOOTCAMP_SCORE.max ? n : undefined;
 }
 
 /** A JSON object of numbers, like `{"Score-Exams":4,"Score-Participation":3}`. */

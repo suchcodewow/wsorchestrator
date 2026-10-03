@@ -1,4 +1,4 @@
-import { AUDIT_LIST, DOMAIN_LIST, EMPLOYEE_LIST, HIBOB_SYNC_LIST, ORGANIZATION_LIST, TITLE_LIST, USER_LIST } from "@/lib/list-specs";
+import { AUDIT_LIST, CURRENT_COHORT_LIST, DOMAIN_LIST, EMPLOYEE_LIST, HIBOB_SYNC_LIST, ORGANIZATION_LIST, TITLE_LIST, USER_LIST } from "@/lib/list-specs";
 import { PAGE_FIELDS, listQuery } from "./paging";
 import type { EndpointGroup } from "./types";
 
@@ -137,6 +137,23 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
     ],
   },
   {
+    id: "cohorts",
+    title: "Cohorts",
+    endpoints: [
+      {
+        method: "GET",
+        path: "/api/cohorts/current",
+        summary: "Lists everyone the last HiBob sync put on the Sales or Engineer track, a page at a time.",
+        access: "trainingViewer",
+        token: true,
+        notes:
+          "A person's track is the title list their title was on when the sync ran, for everyone under the Organization Leader; changing a list takes effect at the next sync. counts gives everyone on each track, whatever the search.",
+        query: listQuery(CURRENT_COHORT_LIST.sorts, "the name, email, title, department, track, or the manager's name or email"),
+        returns: `{ members: { email, fullName, title, department, reportsToEmail, reportsToName, track: "sales" | "engineer" }[], ${PAGE_FIELDS}, counts: { sales: number, engineer: number }, syncedAt: ISO 8601 string | null }`,
+      },
+    ],
+  },
+  {
     id: "evals",
     title: "eVals settings",
     endpoints: [
@@ -146,9 +163,10 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         summary: "Lists the employees stored by the last HiBob sync, a page at a time.",
         access: "evalsAdmin",
         token: true,
-        notes: "total counts every stored employee, whatever the search.",
+        notes:
+          "btcDate, btcScore, intDate and intScore are from the person's bootcamp history, null where there is none; a date of 2000-01-01 means they are exempt from that class, and a score is a whole number from 1 (poor) to 4 (outstanding). total counts every stored employee, whatever the search.",
         query: listQuery(EMPLOYEE_LIST.sorts, "the name, email, title, department, site, or the manager's name or email"),
-        returns: `{ people: { id, email, fullName, title, department, site, reportsToEmail, reportsToName, startDate, activeEffectiveDate }[], ${PAGE_FIELDS}, total: number, syncedAt: ISO 8601 string | null }`,
+        returns: `{ people: { id, email, fullName, title, department, site, reportsToEmail, reportsToName, startDate, activeEffectiveDate, btcDate, btcScore, intDate, intScore }[], ${PAGE_FIELDS}, total: number, syncedAt: ISO 8601 string | null }`,
       },
       {
         method: "GET",
@@ -157,9 +175,9 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "evalsAdmin",
         token: true,
         notes:
-          "depth counts the links between a person and the leader, the leader included. The list is as of the last sync; current is false once a different leader has been set since, until the next sync runs. total counts everyone listed, whatever the search.",
-        query: listQuery(ORGANIZATION_LIST.sorts, "the name, email, title, department, or the manager's name or email"),
-        returns: `{ members: { email, fullName, title, department, reportsToEmail, reportsToName, depth, leaderEmail }[], ${PAGE_FIELDS}, total: number, leaderEmail: string | null, current: boolean }`,
+          "depth counts the links between a person and the leader, the leader included. track is the title list the person's title was on when the sync ran, or null for a title on no list. The list is as of the last sync; current is false once a different leader has been set since, until the next sync runs. total counts everyone listed, whatever the search.",
+        query: listQuery(ORGANIZATION_LIST.sorts, "the name, email, title, department, track, or the manager's name or email"),
+        returns: `{ members: { email, fullName, title, department, reportsToEmail, reportsToName, track: "sales" | "engineer" | "ignored" | null, depth, leaderEmail }[], ${PAGE_FIELDS}, total: number, leaderEmail: string | null, current: boolean }`,
       },
       {
         method: "GET",

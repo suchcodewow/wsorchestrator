@@ -36,6 +36,7 @@ export const GROUPS: EndpointGroup[] = [
   "my-org-secrets-templates",
   "event-settings",
   "cloud-status",
+  "cohorts",
   "evals",
   "users",
   "platform",

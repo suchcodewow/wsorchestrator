@@ -182,7 +182,7 @@ describe("parseHistorySheet", () => {
 
   test("reads every column of a real-looking row", () => {
     const parsed = parseHistorySheet(
-      sheet(["Pat.Doe@harness.io", 46182.125, "2026-08-04", 4.25, "3", '{"Score-Exams":4,"Score-Lab":4.5}', null]),
+      sheet(["Pat.Doe@harness.io", 46182.125, "2026-08-04", 4, "3", '{"Score-Exams":4,"Score-Lab":4.5}', null]),
     );
     assert.ok(parsed.ok);
     assert.deepEqual(parsed.rows, [
@@ -190,7 +190,7 @@ describe("parseHistorySheet", () => {
         email: "pat.doe@harness.io",
         btcDate: "2026-06-09",
         intDate: "2026-08-04",
-        btcScore: 4.25,
+        btcScore: 4,
         intScore: 3,
         btcIndividualScores: { "Score-Exams": 4, "Score-Lab": 4.5 },
         intIndividualScores: null,
@@ -254,6 +254,26 @@ describe("parseHistorySheet", () => {
       { row: 6, message: "c@x.com: unreadable BTCIndividualScores" },
       { row: 7, message: "d@x.com: unreadable BTCDate" },
     ]);
+  });
+
+  test("takes a class score only as a whole number from 1 to 4", () => {
+    const parsed = parseHistorySheet(
+      sheet(
+        ["a@x.com", null, null, 1, "4"],
+        ["b@x.com", null, null, 0],
+        ["c@x.com", null, null, 5],
+        ["d@x.com", null, null, 3.5],
+      ),
+    );
+    assert.ok(parsed.ok);
+    assert.deepEqual(
+      parsed.rows.map((r) => [r.btcScore, r.intScore]),
+      [[1, 4]],
+    );
+    assert.deepEqual(
+      parsed.problems.map((p) => p.message),
+      ["b@x.com: unreadable BTCScore", "c@x.com: unreadable BTCScore", "d@x.com: unreadable BTCScore"],
+    );
   });
 
   test("keeps the later of two rows for one email, and says so", () => {

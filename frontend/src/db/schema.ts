@@ -13,6 +13,7 @@ import {
   pgEnum,
   index,
   uniqueIndex,
+  check,
   customType,
   date,
   doublePrecision,
@@ -841,6 +842,13 @@ export const employees = pgTable(
      * under the leader. Who has one is who the Organization tab lists.
      */
     orgDepth: integer("org_depth"),
+    /**
+     * The title list this person's title was on when the sync that stored
+     * them ran — `sales`, `engineer` or `ignored` — or null for a title on no
+     * list and for anyone not under the leader. Who has `sales` or `engineer`
+     * is who the Cohorts page's Current tab lists.
+     */
+    track: text("track").$type<EvalsTitleList>(),
   },
   (t) => [
     index("employees_email_idx").on(t.email),
@@ -954,7 +962,9 @@ export const bootcampHistory = pgTable(
     email: text("email").notNull(),
     btcDate: date("btc_date", { mode: "string" }),
     intDate: date("int_date", { mode: "string" }),
+    /** The overall BTC result: a whole number from 1 (poor) to 4 (outstanding). */
     btcScore: doublePrecision("btc_score"),
+    /** The overall INT result, scored the same way. */
     intScore: doublePrecision("int_score"),
     /** Score per exercise, e.g. `{"Score-Exams": 4}`. */
     btcIndividualScores: jsonb("btc_individual_scores").$type<Record<string, number>>(),
@@ -969,8 +979,15 @@ export const bootcampHistory = pgTable(
       .notNull()
       .defaultNow(),
   },
-  (t) => [uniqueIndex("bootcamp_history_email_idx").on(t.email)],
+  (t) => [
+    uniqueIndex("bootcamp_history_email_idx").on(t.email),
+    check("bootcamp_history_btc_score_check", sql`${t.btcScore} in (1, 2, 3, 4)`),
+    check("bootcamp_history_int_score_check", sql`${t.intScore} in (1, 2, 3, 4)`),
+  ],
 );
+
+/** The overall scores a class can give, from poor to outstanding. */
+export const BOOTCAMP_SCORE = { min: 1, max: 4 } as const;
 
 export const EXEMPT_DATE = "2000-01-01";
 
