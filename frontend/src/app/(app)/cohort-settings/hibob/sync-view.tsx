@@ -184,7 +184,7 @@ export function HibobSyncView({
                     ) : (
                       <span className="flex items-start gap-1.5 text-destructive">
                         <XCircle className="mt-0.5 size-3.5 shrink-0" />
-                        <span className="break-words">{run.error ?? "Failed"}</span>
+                        <span className="wrap-break-word">{run.error ?? "Failed"}</span>
                       </span>
                     )}
                   </td>

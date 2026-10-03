@@ -99,6 +99,13 @@ first over the same OpenTofu workspace and database.
 
 ## Conventions
 
+**Use Tailwind v4's canonical utility names, not the v3 aliases.**
+`frontend` is on `tailwindcss: ^4.0.0`, which renamed several utilities and
+kept the old ones only as deprecated aliases (`break-words` →
+`wrap-break-word`, `flex-shrink-*` → `shrink-*`, `flex-grow-*` → `grow-*`,
+`overflow-ellipsis` → `text-ellipsis`). Write the v4 name in new or edited
+JSX; don't reintroduce the alias just because it still compiles.
+
 **A `schema.ts` change must be applied to the local database in the same
 turn.** Code reading a column the local database lacks fails at *runtime*;
 `npm run typecheck` passes and the developer finds out by hitting a broken page.

@@ -45,10 +45,7 @@ const STAGES: Stage[] = [
 export function EventTimeline({ className }: { className?: string }) {
   return (
     <ol className={cn("relative grid gap-6 lg:grid-cols-4 lg:gap-5", className)}>
-      <div
-        aria-hidden
-        className="absolute top-3 bottom-0 left-3 w-px -translate-x-1/2 lg:hidden"
-      >
+      <div aria-hidden className="absolute top-3 bottom-0 left-3 w-px -translate-x-1/2 lg:hidden">
         <div className="absolute inset-0 bg-border" />
         <div data-timeline="rail" className="absolute inset-0 origin-top bg-brand/70" />
       </div>
@@ -62,14 +59,12 @@ export function EventTimeline({ className }: { className?: string }) {
                 className="size-3 rounded-full border-2 border-brand bg-brand shadow-[0_0_0_4px_var(--background)]"
               />
             </span>
-            <span className="hidden font-mono text-[11px] tracking-wider text-muted-foreground uppercase lg:inline">
-              {when}
-            </span>
+            <span className="hidden font-mono text-[11px] tracking-wider text-muted-foreground uppercase lg:inline">{when}</span>
             <span
               aria-hidden
               className={cn(
                 "relative hidden h-px flex-1 lg:block",
-                i < STAGES.length - 1 ? "-mr-5" : "[mask-image:linear-gradient(to_right,black,transparent)]",
+                i < STAGES.length - 1 ? "-mr-5" : "mask-[linear-gradient(to_right,black,transparent)]",
               )}
             >
               <span className="absolute inset-0 bg-border" />
@@ -92,10 +87,7 @@ export function EventTimeline({ className }: { className?: string }) {
                 <h2 className="text-base font-medium">{title}</h2>
               </div>
               <p className="mt-3 mb-5 text-sm leading-relaxed text-pretty text-muted-foreground">{body}</p>
-              <div
-                aria-hidden
-                className="mt-auto rounded-xl border bg-background/70 p-3 text-xs select-none"
-              >
+              <div aria-hidden className="mt-auto rounded-xl border bg-background/70 p-3 text-xs select-none">
                 <Detail />
               </div>
             </article>
@@ -154,7 +146,7 @@ function SetUpDetail() {
       <div className="mt-2 overflow-hidden rounded-lg bg-muted/70 px-2.5 py-2 font-mono text-[10.5px] leading-relaxed">
         <span className="text-muted-foreground">$ </span>export PROJECT=
         <wbr />
-        <span className="inline-grid align-bottom [&>*]:col-start-1 [&>*]:row-start-1">
+        <span className="inline-grid align-bottom *:col-start-1 *:row-start-1">
           <span data-timeline="var-from" className="text-violet-600 opacity-0 dark:text-violet-300">
             {"{{project}}"}
           </span>
@@ -163,9 +155,7 @@ function SetUpDetail() {
           </span>
         </span>
       </div>
-      <p className="mt-2 font-mono text-[10px] text-muted-foreground">
-        {"{{project}}"}, for seat 7
-      </p>
+      <p className="mt-2 font-mono text-[10px] text-muted-foreground">{"{{project}}"}, for seat 7</p>
     </>
   );
 }
