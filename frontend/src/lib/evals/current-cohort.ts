@@ -75,10 +75,7 @@ const SORT_COLUMNS = {
   fullName: sql`lower(${e.fullName})`,
   email: e.email,
   title: sql`lower(${blankAsNull(e.title)})`,
-  department: sql`lower(${blankAsNull(e.department)})`,
-  reportsToName: sql`lower(coalesce(${blankAsNull(e.reportsToName)}, ${blankAsNull(e.reportsToEmail)}))`,
   track: candidateTrack,
-  stage: candidateStage,
   btcDate: h.btcDate,
 } as const;
 
@@ -107,8 +104,7 @@ function isCandidate({ startDateOnOrAfter, activeEffectiveDateAfter }: Candidate
 
 /**
  * One page of candidates, in one stage and on one track when the filter
- * names them. The search matches the name, email, title, department, manager
- * or track.
+ * names them. The search matches the name, email, title or track.
  */
 export async function listCurrentCohort(
   filter: CurrentCohortFilter,
@@ -137,7 +133,7 @@ export async function listCurrentCohort(
         isCandidate(cutoffs),
         filter.stage ? IN_STAGE[filter.stage] : undefined,
         filter.track ? ON_TRACK[filter.track] : undefined,
-        searchAny(query.q, [e.fullName, e.email, e.title, e.department, e.reportsToName, e.reportsToEmail, candidateTrack]),
+        searchAny(query.q, [e.fullName, e.email, e.title, candidateTrack]),
       ),
     )
     .orderBy(...orderFor(SORT_COLUMNS[query.sort], query.dir, sql`lower(${e.fullName})`, e.id))

@@ -151,7 +151,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         query: [
           { name: "stage", type: `"bootcamp" | "intermediate"`, note: "only that stage; both if omitted" },
           { name: "track", type: `"sales" | "engineer" | "undecided" | "deferred"`, note: "only that track; all four if omitted" },
-          ...listQuery(CURRENT_COHORT_LIST.sorts, "the name, email, title, department, track, or the manager's name or email"),
+          ...listQuery(CURRENT_COHORT_LIST.sorts, "the name, email, title or track"),
         ],
         returns: `{ stage: string | null, track: string | null, members: { email, fullName, title, department, reportsToEmail, reportsToName, track: "sales" | "engineer" | "undecided" | "deferred", overridden: boolean, stage: "bootcamp" | "intermediate", btcDate: "YYYY-MM-DD" | null }[], ${PAGE_FIELDS}, counts: Record<"bootcamp" | "intermediate", { sales: number, engineer: number, undecided: number, deferred: number }>, syncedAt: ISO 8601 string | null, cutoffs: { startDateOnOrAfter: "YYYY-MM-DD" | null, activeEffectiveDateAfter: "YYYY-MM-DD" | null }, deferral: { days: number, bootcampStart: "YYYY-MM-DD" | null }, activeBootcamp: { id, startDate, btcDays, intDays } | null }`,
         errors: [

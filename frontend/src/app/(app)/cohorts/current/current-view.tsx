@@ -56,8 +56,8 @@ import { cn } from "@/lib/utils";
 import { formatDate, formatWhen } from "../../cohort-settings/format";
 
 const STAGE_COUNTERS: { stage: CandidateStage; label: string; Icon: LucideIcon }[] = [
-  { stage: "bootcamp", label: "Bootcamp candidates", Icon: Users },
-  { stage: "intermediate", label: "Intermediate candidates", Icon: GraduationCap },
+  { stage: "bootcamp", label: "Bootcamp", Icon: Users },
+  { stage: "intermediate", label: "Intermediate", Icon: GraduationCap },
 ];
 
 const TRACK_COUNTERS: { track: CandidateTrack; label: string; Icon: LucideIcon }[] = [
@@ -71,14 +71,9 @@ const COLUMNS: { column: CurrentCohortSort; label: string }[] = [
   { column: "fullName", label: "Name" },
   { column: "email", label: "Email" },
   { column: "title", label: "Title" },
-  { column: "department", label: "Department" },
-  { column: "reportsToName", label: "Manager" },
   { column: "track", label: "Track" },
-  { column: "stage", label: "Stage" },
   { column: "btcDate", label: "BTC date" },
 ];
-
-const STAGE_LABELS: Record<CandidateStage, string> = { bootcamp: "Bootcamp", intermediate: "Intermediate" };
 
 /** Every track an administrator can give someone; the last two take them off this tab. */
 const TRACK_OPTIONS: { choice: Exclude<TrackChoice, "automatic">; label: string; leaves?: true }[] = [
@@ -240,7 +235,7 @@ export function CurrentCohortView({
         </p>
       </motion.div>
 
-      <motion.div variants={riseChild} role="group" aria-label="Stage" className="grid gap-3 sm:grid-cols-2 lg:max-w-4xl">
+      <motion.div variants={riseChild} role="group" aria-label="Stage" className={COUNTER_GRID}>
         {STAGE_COUNTERS.map(({ stage, label, Icon }) => (
           <Counter
             key={stage}
@@ -258,12 +253,11 @@ export function CurrentCohortView({
         variants={riseChild}
         role="group"
         aria-label="Track"
-        className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:max-w-4xl"
+        className={COUNTER_GRID}
       >
         {TRACK_COUNTERS.map(({ track, label, Icon }) => (
           <Counter
             key={track}
-            small
             label={label}
             Icon={Icon}
             count={trackCount(track)}
@@ -278,7 +272,7 @@ export function CurrentCohortView({
       <motion.div variants={riseChild} className="flex flex-wrap items-center gap-3 pt-2">
         <TableSearch
           value={query.q}
-          placeholder="Search by name, title, manager or track"
+          placeholder="Search by name, email, title or track"
           label="Search the candidates"
           className="min-w-56 flex-1"
         />
@@ -324,7 +318,7 @@ export function CurrentCohortView({
 
       <motion.div variants={riseChild} className="overflow-hidden rounded-2xl border bg-card shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-240 text-sm">
+          <table className="w-full min-w-180 text-sm">
             <thead>
               <tr className={HEADER_ROW}>
                 {COLUMNS.map((c) => (
@@ -340,8 +334,6 @@ export function CurrentCohortView({
                   <td className="px-5 py-2.5 font-medium">{m.fullName}</td>
                   <td className="px-5 py-2.5 text-muted-foreground">{m.email}</td>
                   <td className="px-5 py-2.5">{m.title || "—"}</td>
-                  <td className="px-5 py-2.5 text-muted-foreground">{m.department || "—"}</td>
-                  <td className="px-5 py-2.5 text-muted-foreground">{m.reportsToName || m.reportsToEmail || "—"}</td>
                   <td className="px-5 py-1.5">
                     {canSetTrack ? (
                       <TrackMenu
@@ -354,7 +346,6 @@ export function CurrentCohortView({
                       <TrackLabel member={m} />
                     )}
                   </td>
-                  <td className="px-5 py-2.5 text-muted-foreground">{STAGE_LABELS[m.stage]}</td>
                   <td className="whitespace-nowrap px-5 py-2.5 tabular-nums text-muted-foreground">
                     {formatDate(m.btcDate)}
                   </td>
@@ -382,13 +373,15 @@ export function CurrentCohortView({
   );
 }
 
+/** Both rows share four columns, so Bootcamp and Intermediate line up with the four tracks below. */
+const COUNTER_GRID = "grid grid-cols-2 gap-2 sm:grid-cols-4 lg:max-w-3xl";
+
 function Counter({
   label,
   Icon,
   count,
   on,
   disabled,
-  small,
   title,
   onClick,
 }: {
@@ -397,7 +390,6 @@ function Counter({
   count: number;
   on: boolean;
   disabled: boolean;
-  small?: boolean;
   title?: string;
   onClick: () => void;
 }) {
@@ -409,25 +401,21 @@ function Counter({
       disabled={disabled}
       onClick={onClick}
       className={cn(
-        "flex cursor-pointer items-center gap-4 rounded-2xl border px-5 text-left shadow-sm outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-wait",
-        small ? "gap-3 py-3" : "py-4",
+        "flex cursor-pointer items-center gap-2.5 rounded-xl border px-3 py-2 text-left shadow-sm outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-wait",
         on ? "border-brand-border bg-brand-subtle" : "bg-card hover:bg-muted/40",
       )}
     >
       <span
         className={cn(
-          "flex shrink-0 items-center justify-center rounded-full",
-          small ? "size-8" : "size-10",
+          "flex size-7 shrink-0 items-center justify-center rounded-full",
           on ? "bg-background" : "bg-muted",
         )}
       >
-        <Icon className={cn(small ? "size-4" : "size-5", on ? "text-brand" : "text-muted-foreground")} />
+        <Icon className={cn("size-3.5", on ? "text-brand" : "text-muted-foreground")} />
       </span>
-      <span>
-        <span className={cn("block font-medium tabular-nums", small ? "text-2xl" : "text-3xl")}>
-          {count.toLocaleString()}
-        </span>
-        <span className="block text-sm text-muted-foreground">{label}</span>
+      <span className="min-w-0">
+        <span className="block text-lg leading-tight font-medium tabular-nums">{count.toLocaleString()}</span>
+        <span className="block truncate text-xs text-muted-foreground">{label}</span>
       </span>
     </button>
   );
