@@ -175,6 +175,7 @@ const PAGES: Record<string, PageCase> = {
     expect: (a) => (canUseTraining(a) ? { to: COHORTS_TABS[0]!.href } : 404),
   },
   "/cohorts/current": { path: () => "/cohorts/current", expect: gated(canUseTraining) },
+  "/cohorts/previous": { path: () => "/cohorts/previous", expect: gated(canUseTraining) },
   "/cohort-settings": {
     path: () => "/cohort-settings",
     expect: (a) => (canManageTrainingSettings(a) ? { to: visibleCohortSettingsTabs(a)[0]!.href } : 404),
@@ -339,6 +340,8 @@ const ROUTES: RouteCase[] = [
   { method: "GET", path: "/api/cohorts/current", allowed: canUseTraining },
   { method: "POST", path: "/api/cohorts/current/track", allowed: canManageTrainingSettings, body: () => ({}) },
   { method: "PUT", path: "/api/cohorts/current/track", allowed: canManageTrainingSettings, body: () => ({}) },
+  { method: "GET", path: "/api/cohorts/previous", allowed: canUseTraining },
+  { method: "GET", path: "/api/cohorts/previous/2000-01-01", allowed: canUseTraining },
   { method: "GET", path: "/api/scheduler/bootcamps", allowed: canUseTraining },
   { method: "POST", path: "/api/scheduler/bootcamps", allowed: canManageTrainingSettings, body: () => ({}) },
   { method: "PATCH", path: `/api/scheduler/bootcamps/${MISSING}`, allowed: canManageTrainingSettings, body: () => ({}) },
