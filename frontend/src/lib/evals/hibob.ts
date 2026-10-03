@@ -27,7 +27,7 @@ import { orgUnder } from "@/lib/evals/org";
 import { getOrgLeaderEmail } from "@/lib/evals/settings";
 import { trackFor } from "@/lib/evals/title-lists";
 import { titleListMap } from "@/lib/evals/titles";
-import { exemptEmails } from "@/lib/evals/tracks";
+import { deferralRule, exemptEmails, trackOverrides } from "@/lib/evals/tracks";
 import type { HibobSyncSort } from "@/lib/list-specs";
 import { pageWindow, toPage, type ListQuery, type Page } from "@/lib/paging";
 import { orderFor, searchAny } from "@/lib/paging-sql";
@@ -194,12 +194,29 @@ export async function syncHibobEmployees(
     // Who the Automation tab's Organization Leader field names right now —
     // whoever that was when this sync started, not when an admin next changes it.
     const leaderEmail = (await getOrgLeaderEmail()).toLowerCase();
-    const orgDepth = new Map(orgUnder(unique, leaderEmail).map((p) => [p.id, p.chain.length]));
-    // Each of them gets the track their title's list gives, as the lists stand
-    // now, unless their bootcamp history makes them exempt.
-    const [lists, exempt] = await Promise.all([titleListMap(), exemptEmails()]);
+    const chainOf = new Map(orgUnder(unique, leaderEmail).map((p) => [p.id, p.chain]));
+    const orgDepth = new Map([...chainOf].map(([id, chain]) => [id, chain.length]));
+    // Each of them gets a track as things stand now: one set by hand first,
+    // then exempt by their history, then an ignored title, then deferred if
+    // they started too close to the next bootcamp, then their title's list.
+    const [lists, exempt, overrides, deferral] = await Promise.all([
+      titleListMap(),
+      exemptEmails(),
+      trackOverrides(),
+      deferralRule(),
+    ]);
     const track = (r: (typeof unique)[number]) =>
-      trackFor({ inOrg: orgDepth.has(r.id), title: r.title, exempt: exempt.has(r.email) }, lists);
+      trackFor(
+        {
+          inOrg: orgDepth.has(r.id),
+          title: r.title,
+          exempt: exempt.has(r.email),
+          startDate: r.startDate,
+          override: overrides.get(r.email),
+        },
+        lists,
+        deferral,
+      );
 
     await db.transaction(async (tx) => {
       // Two syncs are kept apart by the one-running index, but a revision from
@@ -212,7 +229,13 @@ export async function syncHibobEmployees(
           .values(
             unique
               .slice(i, i + BATCH)
-              .map((r) => ({ ...r, importedAt, orgDepth: orgDepth.get(r.id) ?? null, track: track(r) })),
+              .map((r) => ({
+                ...r,
+                importedAt,
+                orgDepth: orgDepth.get(r.id) ?? null,
+                managementChain: chainOf.get(r.id)?.join(";") ?? null,
+                track: track(r),
+              })),
           );
       }
       await tx

@@ -2,23 +2,138 @@
  * Bootcamp history: who attended BTC and INT, and how they scored.
  *
  * This table is the record — it replaces the Bootcamp_History sheet, which
- * was imported once to start it. People are added and edited here; an upload
- * is still accepted, and writes only the columns its file has.
+ * was imported once to start it. A bootcamp writes its scores here at the end
+ * of a session, and the app only ever shows them after that: nobody edits
+ * history in the UI. An upload, when one is used, writes only the columns its
+ * file has.
  */
 
 import "server-only";
 
-import { asc, eq, sql, type SQL } from "drizzle-orm";
+import { and, asc, eq, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
-import { BOOTCAMP_HISTORY_LIMITS, BOOTCAMP_SCORE, bootcampHistory, type BootcampHistory } from "@/db/schema";
+import {
+  BOOTCAMP_HISTORY_LIMITS,
+  BOOTCAMP_SCORE,
+  bootcampHistory,
+  employees,
+  users,
+  type BootcampHistory,
+  type Employee,
+} from "@/db/schema";
 import { parseHistorySheet, type HistoryField, type HistoryProblem } from "@/lib/evals/bootcamp-history-file";
 import { isIsoDay, normalEmail, roundScore } from "@/lib/evals/history-values";
 import { retrackEmployees } from "@/lib/evals/tracks";
+import type { BootcampHistorySort, HistoryStatus } from "@/lib/list-specs";
+import { pageWindow, toPage, type ListQuery, type Page } from "@/lib/paging";
+import { orderFor, searchAny } from "@/lib/paging-sql";
 import { readSpreadsheet } from "@/lib/spreadsheet-file";
 
 export async function listHistory(): Promise<BootcampHistory[]> {
   return db.select().from(bootcampHistory).orderBy(asc(bootcampHistory.email));
+}
+
+/**
+ * The person's name as the employee list has it. History outlives the sync,
+ * so someone who has left has none. Both emails are stored lowercased.
+ */
+// Spelled out, because Drizzle leaves the table off a column in a one-table
+// query, and an unqualified `email` here would mean the employee's own.
+const historyName = sql<string | null>`(select n.full_name from ${employees} n where n.email = ${bootcampHistory}.email order by n.full_name limit 1)`;
+
+/** Still at Harness: the last HiBob sync stored someone with this email. */
+const isActive = sql<boolean>`exists (select 1 from ${employees} a where a.email = ${bootcampHistory}.email)`;
+
+const STATUS_FILTER: Record<HistoryStatus, SQL> = {
+  active: isActive,
+  inactive: sql`not ${isActive}`,
+};
+
+const HISTORY_SORT_COLUMNS = {
+  btcDate: bootcampHistory.btcDate,
+  fullName: sql`lower(${historyName})`,
+  email: bootcampHistory.email,
+} as const;
+
+export type HistoryListing = { id: string; email: string; fullName: string | null; btcDate: string | null };
+
+/**
+ * One page of history, a name, email and bootcamp date each; the search
+ * matches the name or email, and `status` keeps only the active or inactive.
+ */
+export async function listHistoryPage(
+  query: ListQuery<BootcampHistorySort>,
+  status: HistoryStatus | null = null,
+): Promise<Page<HistoryListing>> {
+  const { limit, offset } = pageWindow(query.page);
+  const rows = await db
+    .select({
+      id: bootcampHistory.id,
+      email: bootcampHistory.email,
+      fullName: historyName,
+      btcDate: bootcampHistory.btcDate,
+    })
+    .from(bootcampHistory)
+    .where(and(searchAny(query.q, [historyName, bootcampHistory.email]), status ? STATUS_FILTER[status] : undefined))
+    // A bootcamp's class shares one date, so they fall back to name order.
+    .orderBy(...orderFor(HISTORY_SORT_COLUMNS[query.sort], query.dir, sql`${HISTORY_SORT_COLUMNS.fullName} asc nulls last`, bootcampHistory.email))
+    .limit(limit)
+    .offset(offset);
+  return toPage(rows, query.page);
+}
+
+export type HistoryCounts = { total: number } & Record<HistoryStatus, number>;
+
+/** How many people have a history row, and how many of them are still at Harness, whatever the search. */
+export async function historyCounts(): Promise<HistoryCounts> {
+  const [row] = await db
+    .select({
+      total: sql<number>`count(*)::int`,
+      active: sql<number>`(count(*) filter (where ${isActive}))::int`,
+    })
+    .from(bootcampHistory);
+  const total = row?.total ?? 0;
+  const active = row?.active ?? 0;
+  return { total, active, inactive: total - active };
+}
+
+export type HistoryDetail = BootcampHistory & {
+  /** Who last changed the row, by name or else email; null for an import with no account, or a deleted one. */
+  updatedByName: string | null;
+  /** The employee list's record for the email, or null for someone not in it. */
+  employee: Pick<Employee, "fullName" | "title" | "department" | "site" | "reportsToName" | "reportsToEmail" | "startDate" | "track"> | null;
+};
+
+/** One person's whole row, with who they are from the employee list. */
+export async function getHistoryDetail(id: string): Promise<HistoryDetail | null> {
+  const [row] = await db
+    .select({
+      history: bootcampHistory,
+      updatedByName: sql<string | null>`coalesce(nullif(${users.name}, ''), ${users.email})`,
+    })
+    .from(bootcampHistory)
+    .leftJoin(users, eq(users.id, bootcampHistory.updatedBy))
+    .where(eq(bootcampHistory.id, id));
+  if (!row) return null;
+
+  const [employee] = await db
+    .select({
+      fullName: employees.fullName,
+      title: employees.title,
+      department: employees.department,
+      site: employees.site,
+      reportsToName: employees.reportsToName,
+      reportsToEmail: employees.reportsToEmail,
+      startDate: employees.startDate,
+      track: employees.track,
+    })
+    .from(employees)
+    .where(eq(employees.email, row.history.email))
+    .orderBy(asc(employees.fullName))
+    .limit(1);
+
+  return { ...row.history, updatedByName: row.updatedByName, employee: employee ?? null };
 }
 
 export type ImportError = "no_file" | "too_large" | "unreadable" | "empty" | "no_email_column" | "too_many_rows";

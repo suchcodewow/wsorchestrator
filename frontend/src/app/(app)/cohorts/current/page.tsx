@@ -1,7 +1,7 @@
-/** The Current tab: the bootcamp and intermediate candidates, each a page at a time. */
+/** The Current tab: the bootcamp and intermediate candidates in one table, narrowed by stage and track, a page at a time. */
 
 import { auth } from "@/auth";
-import { CANDIDATE_STAGES, currentCohortSummary, listCurrentCohort } from "@/lib/evals/current-cohort";
+import { currentCohortSummary, isCandidateStage, isCandidateTrack, listCurrentCohort } from "@/lib/evals/current-cohort";
 import { CURRENT_COHORT_LIST } from "@/lib/list-specs";
 import { parseListQuery } from "@/lib/paging";
 import { canManageTrainingSettings } from "@/lib/roles";
@@ -14,26 +14,29 @@ export default async function CurrentCohortPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const params = await searchParams;
-  const [bootcampQuery, intermediateQuery] = CANDIDATE_STAGES.map((stage) =>
-    parseListQuery(params, CURRENT_COHORT_LIST, stage),
-  );
-  const [session, bootcampPage, intermediatePage, summary, active] = await Promise.all([
+  const query = parseListQuery(params, CURRENT_COHORT_LIST);
+  // A hand-typed filter that isn't one shows everyone, as a bad sort does.
+  const filter = {
+    stage: isCandidateStage(params.stage) ? params.stage : null,
+    track: isCandidateTrack(params.track) ? params.track : null,
+  };
+  const [session, page, summary, active] = await Promise.all([
     auth(),
-    listCurrentCohort("bootcamp", bootcampQuery!),
-    listCurrentCohort("intermediate", intermediateQuery!),
+    listCurrentCohort(filter, query),
     currentCohortSummary(),
     activeBootcamp(),
   ]);
   return (
     <CurrentCohortView
-      stages={{
-        bootcamp: { query: bootcampQuery!, page: bootcampPage },
-        intermediate: { query: intermediateQuery!, page: intermediatePage },
-      }}
+      query={query}
+      filter={filter}
+      page={page}
       counts={summary.counts}
       syncedAt={summary.syncedAt?.toISOString() ?? null}
+      cutoffs={summary.cutoffs}
+      deferral={summary.deferral}
       activeBootcamp={active}
-      canSort={session?.user ? canManageTrainingSettings(session.user.access) : false}
+      canSetTrack={session?.user ? canManageTrainingSettings(session.user.access) : false}
     />
   );
 }

@@ -843,11 +843,20 @@ export const employees = pgTable(
      */
     orgDepth: integer("org_depth"),
     /**
-     * `exempt` when this person's bootcamp history marks BTC or INT exempt;
-     * otherwise the title list their title was on when the sync that stored
-     * them ran — `sales`, `engineer` or `ignored`. Null for a title on no list
-     * and for anyone not under the leader. Who has `sales` or `engineer` is
-     * who the Cohorts page's Current tab lists. Set by `lib/evals/tracks.ts`.
+     * Lowercased emails from this person's manager up to and including the
+     * Organization Leader, joined with `;` as the Sheet's Management Chain
+     * column was. Set alongside `orgDepth`, and null wherever it is.
+     */
+    managementChain: text("management_chain"),
+    /**
+     * Null for anyone not under the leader. Otherwise, first that applies:
+     * the track an administrator set by hand (`employee_track_overrides`);
+     * `exempt` when their bootcamp history marks BTC or INT exempt; `ignored`
+     * for a title on the Ignored list; `deferred` for someone who started too
+     * close to the next bootcamp to attend it; then `sales` or `engineer` by
+     * their title's list. Null for a title on no list. Who has `sales`,
+     * `engineer`, `deferred` or none is who the Cohorts page's Current tab
+     * lists. Set by `lib/evals/tracks.ts`.
      */
     track: text("track").$type<EmployeeTrack>(),
   },
@@ -909,9 +918,35 @@ export type HibobSyncRun = typeof hibobSyncRuns.$inferSelect;
 export const EVALS_TITLE_LISTS = ["sales", "engineer", "ignored"] as const;
 export type EvalsTitleList = (typeof EVALS_TITLE_LISTS)[number];
 
-/** An employee's track: a title list's, or `exempt`, which outranks it. */
-export const EMPLOYEE_TRACKS = [...EVALS_TITLE_LISTS, "exempt"] as const;
+/** An employee's track: a title list's, `exempt`, or `deferred`; see `employees.track` for which wins. */
+export const EMPLOYEE_TRACKS = [...EVALS_TITLE_LISTS, "exempt", "deferred"] as const;
 export type EmployeeTrack = (typeof EMPLOYEE_TRACKS)[number];
+
+/**
+ * A track an administrator set for one person by hand, which outranks every
+ * rule and outlives the sync that rebuilds `employees`. A null track keeps
+ * them undecided. Keyed by lowercased email, since a sync replaces HiBob ids'
+ * rows wholesale.
+ */
+export const employeeTrackOverrides = pgTable(
+  "employee_track_overrides",
+  {
+    email: text("email").primaryKey(),
+    track: text("track").$type<EmployeeTrack>(),
+    updatedBy: text("updated_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    check(
+      "employee_track_overrides_track_check",
+      sql`${t.track} in ('sales', 'engineer', 'ignored', 'exempt', 'deferred')`,
+    ),
+  ],
+);
 
 /**
  * eVals-wide settings with exactly one value each, such as the organization
@@ -932,7 +967,15 @@ export const evalsSettings = pgTable("evals_settings", {
 
 export const EVALS_SETTINGS_KEYS = {
   orgLeaderEmail: "org_leader_email",
+  /** `YYYY-MM-DD`, or empty for no cutoff. See `getCandidateCutoffs`. */
+  startDateOnOrAfter: "candidate_start_date_on_or_after",
+  activeEffectiveDateAfter: "candidate_active_effective_date_after",
+  /** Whole days; see `getDeferralDays`. */
+  deferralDays: "deferral_days",
 } as const;
+
+/** The deferral window an administrator can set, in whole days; 0 turns deferral off. */
+export const DEFERRAL_DAYS_LIMITS = { min: 0, max: 365 } as const;
 
 export const evalsTitles = pgTable(
   "evals_titles",
@@ -953,6 +996,33 @@ export const evalsTitles = pgTable(
 export const EVALS_TITLE_LIMITS = { title: 200, perRequest: 500 } as const;
 
 export type EvalsTitle = typeof evalsTitles.$inferSelect;
+
+/**
+ * People added to the Slack messages sent to each attendee's team at the end
+ * of a bootcamp, alongside the attendee's management chain: the Sheet's
+ * "Add these email to any slack" Config column. One row per email.
+ */
+export const evalsSlackContacts = pgTable(
+  "evals_slack_contacts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** Lowercased. */
+    email: text("email").notNull(),
+    /** As the employee list had it when they were added; empty for someone not in it. */
+    fullName: text("full_name").notNull().default(""),
+    createdBy: text("created_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [uniqueIndex("evals_slack_contacts_email_idx").on(t.email)],
+);
+
+export const EVALS_SLACK_CONTACT_LIMITS = { email: 320 } as const;
+
+export type EvalsSlackContact = typeof evalsSlackContacts.$inferSelect;
 
 /**
  * Who has been through bootcamp (BTC) and the intermediate event (INT), and

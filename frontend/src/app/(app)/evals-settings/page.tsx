@@ -1,13 +1,14 @@
-/** eVals settings: no tabs live here now that HiBob/Employees/Automation moved to Cohort Settings. */
+/** Sends /evals-settings to its first tab. */
 
-import { Card, CardContent } from "@/components/ui/card";
+import { notFound, redirect } from "next/navigation";
+import { auth, signInPath } from "@/auth";
+import { canManageEvalsSettings } from "@/lib/roles";
+import { EVALS_SETTINGS_TABS } from "./tabs";
 
-export default function EvalsSettingsPage() {
-  return (
-    <Card>
-      <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
-        <p className="text-sm text-muted-foreground">Nothing here yet.</p>
-      </CardContent>
-    </Card>
-  );
+export default async function EvalsSettingsPage() {
+  const session = await auth();
+  if (!session?.user) redirect(await signInPath());
+  if (!canManageEvalsSettings(session.user.access)) notFound();
+
+  redirect(EVALS_SETTINGS_TABS[0]!.href);
 }

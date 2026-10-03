@@ -32,6 +32,20 @@ export type UserSort = (typeof USER_LIST.sorts)[number];
 export const TITLE_LIST = spec(["title", "addedBy", "createdAt"]);
 export type TitleSort = (typeof TITLE_LIST.sorts)[number];
 
+export const SLACK_CONTACT_LIST = spec(["fullName", "email", "addedBy", "createdAt"]);
+export type SlackContactSort = (typeof SLACK_CONTACT_LIST.sorts)[number];
+
+export const BOOTCAMP_HISTORY_LIST = spec(["btcDate", "fullName", "email"], "desc");
+export type BootcampHistorySort = (typeof BOOTCAMP_HISTORY_LIST.sorts)[number];
+
+/** Bootcamp history narrowed to people still in the employee list, or to those not. */
+export const HISTORY_STATUSES = ["active", "inactive"] as const;
+export type HistoryStatus = (typeof HISTORY_STATUSES)[number];
+
+export function isHistoryStatus(value: unknown): value is HistoryStatus {
+  return HISTORY_STATUSES.includes(value as HistoryStatus);
+}
+
 export const ORGANIZATION_LIST = spec([
   "depth",
   "fullName",
@@ -47,7 +61,7 @@ export const ORGANIZATION_LIST = spec([
 ]);
 export type OrganizationSort = (typeof ORGANIZATION_LIST.sorts)[number];
 
-export const CURRENT_COHORT_LIST = spec(["fullName", "email", "title", "department", "reportsToName", "track", "btcDate"]);
+export const CURRENT_COHORT_LIST = spec(["fullName", "email", "title", "track", "btcDate"]);
 export type CurrentCohortSort = (typeof CURRENT_COHORT_LIST.sorts)[number];
 
 export const BOOTCAMP_LIST = spec(["startDate", "status", "createdBy"], "desc");

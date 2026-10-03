@@ -55,13 +55,46 @@ export function listForTitle(
 }
 
 /**
- * An employee's track: none outside the org; `exempt` when their bootcamp
- * history says so, whatever their title; otherwise their title's list.
+ * Who is too new to attend the next bootcamp: anyone who started fewer than
+ * `days` days before it starts, or after. Null when there is no bootcamp
+ * coming, or the window is 0, which turns deferral off.
+ */
+export type DeferralRule = { bootcampStart: string; days: number };
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Whether someone who started on `startDate` (`YYYY-MM-DD`) sits out the bootcamp. A blank start date never does. */
+export function isDeferred(startDate: string | null, rule: DeferralRule | null): boolean {
+  if (!rule || rule.days <= 0 || !startDate) return false;
+  const lead = (Date.parse(rule.bootcampStart) - Date.parse(startDate)) / DAY_MS;
+  return Number.isFinite(lead) && lead < rule.days;
+}
+
+/** A track an administrator set by hand; a null track keeps the person undecided. */
+export type TrackOverride = { track: EmployeeTrack | null };
+
+/**
+ * An employee's track, first that applies: none outside the org; the one an
+ * administrator set by hand; `exempt` when their bootcamp history says so;
+ * `ignored` for a title on the Ignored list; `deferred` when they started
+ * too close to the next bootcamp; otherwise their title's list, or none.
  */
 export function trackFor(
-  person: { inOrg: boolean; title: string; exempt: boolean },
+  person: {
+    inOrg: boolean;
+    title: string;
+    exempt: boolean;
+    startDate?: string | null;
+    override?: TrackOverride | null;
+  },
   lists: ReadonlyMap<string, EvalsTitleList>,
+  deferral: DeferralRule | null = null,
 ): EmployeeTrack | null {
   if (!person.inOrg) return null;
-  return person.exempt ? "exempt" : listForTitle(person.title, lists);
+  if (person.override) return person.override.track;
+  if (person.exempt) return "exempt";
+  const list = listForTitle(person.title, lists);
+  if (list === "ignored") return list;
+  if (isDeferred(person.startDate ?? null, deferral)) return "deferred";
+  return list;
 }

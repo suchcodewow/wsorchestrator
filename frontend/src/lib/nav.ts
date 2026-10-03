@@ -7,6 +7,7 @@ import {
   Cloud,
   DatabaseBackup,
   FlaskConical,
+  History,
   Layers,
   ScrollText,
   Settings,
@@ -95,6 +96,7 @@ export const NAV_SECTIONS: NavSection[] = [
     heading: "eVals",
     items: [
       { href: "/evals", label: "eVals", Icon: FlaskConical, visible: canUseEvals },
+      { href: "/bootcamp-history", label: "Bootcamp History", Icon: History, visible: canUseEvals },
       {
         href: "/evals-settings",
         label: "eVals settings",

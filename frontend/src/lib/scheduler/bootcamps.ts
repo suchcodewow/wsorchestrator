@@ -1,7 +1,9 @@
 /**
  * The bootcamps the Scheduler plans: listed, created, changed and removed.
  * At most one is active — a partial unique index holds that, and a write
- * that would break it is refused with the bootcamp already active.
+ * that would break it is refused with the bootcamp already active. Every
+ * write retracks the org, since it can change which bootcamp is next and so
+ * who is deferred from it.
  */
 
 import "server-only";
@@ -18,6 +20,7 @@ import {
 } from "@/db/schema";
 import { noteAudit } from "@/lib/audit-context";
 import { isIsoDay } from "@/lib/evals/history-values";
+import { retrackOrg } from "@/lib/evals/tracks";
 import type { BootcampSort } from "@/lib/list-specs";
 import { pageWindow, toPage, type ListQuery, type Page } from "@/lib/paging";
 import { orderFor, searchAny } from "@/lib/paging-sql";
@@ -125,6 +128,7 @@ export async function createBootcamp(
       .values({ ...input, createdBy: actorId })
       .returning({ id: bootcamps.id });
     noteAudit({ target: row!.id, targetLabel: `Bootcamp starting ${input.startDate}` });
+    await retrackOrg();
     return { ok: true, id: row!.id };
   } catch (err) {
     // Another bootcamp made active in between.
@@ -147,7 +151,9 @@ export async function updateBootcamp(id: string, patch: BootcampPatch): Promise<
       .set({ ...patch, updatedAt: new Date() })
       .where(eq(bootcamps.id, id))
       .returning({ id: bootcamps.id });
-    return updated.length > 0 ? { ok: true } : { ok: false, error: "not_found" };
+    if (updated.length === 0) return { ok: false, error: "not_found" };
+    await retrackOrg();
+    return { ok: true };
   } catch (err) {
     if (isUniqueViolation(err)) return activeExists();
     throw err;
@@ -159,6 +165,8 @@ export async function deleteBootcamp(id: string): Promise<boolean> {
     .delete(bootcamps)
     .where(eq(bootcamps.id, id))
     .returning({ id: bootcamps.id, startDate: bootcamps.startDate });
-  if (deleted[0]) noteAudit({ target: id, targetLabel: `Bootcamp starting ${deleted[0].startDate}` });
-  return deleted.length > 0;
+  if (!deleted[0]) return false;
+  noteAudit({ target: id, targetLabel: `Bootcamp starting ${deleted[0].startDate}` });
+  await retrackOrg();
+  return true;
 }

@@ -48,6 +48,7 @@ import {
   type Access,
 } from "@/lib/roles";
 import { visibleCohortSettingsTabs } from "@/app/(app)/cohort-settings/tabs";
+import { EVALS_SETTINGS_TABS } from "@/app/(app)/evals-settings/tabs";
 import { COHORTS_TABS } from "@/app/(app)/cohorts/tabs";
 import { visibleSettingsTabs } from "@/app/(app)/settings/tabs";
 import { PERSONAS, PERSONA_NAMES, type Persona } from "../support/access";
@@ -67,6 +68,7 @@ const cookies = {} as Record<Persona, string>;
 const tokens = {} as Record<Persona, string>;
 const ownRun = {} as Record<Persona, string>;
 let aliceRun: string;
+let historyId: string;
 
 before(async () => {
   await scope.setUp();
@@ -74,6 +76,7 @@ before(async () => {
 
   const alice = await scope.createUser("alice", PERSONAS.operator);
   aliceRun = await createRun(alice.id, "Alice's workshop");
+  historyId = await scope.createHistory("history");
   for (const p of PERSONA_NAMES) {
     people[p] = await scope.createUser(p, PERSONAS[p]);
     cookies[p] = await createSession(people[p].id);
@@ -190,8 +193,16 @@ const PAGES: Record<string, PageCase> = {
     expect: gated(canManageTrainingSettings),
   },
   "/evals": { path: () => "/evals", expect: gated(canUseEvals) },
+  "/bootcamp-history": { path: () => "/bootcamp-history", expect: gated(canUseEvals) },
+  "/bootcamp-history?status=active": { path: () => "/bootcamp-history?status=active", expect: gated(canUseEvals) },
+  "/bootcamp-history/<a record>": { path: () => `/bootcamp-history/${historyId}`, expect: gated(canUseEvals) },
+  "/bootcamp-history/<unknown>": { path: () => `/bootcamp-history/${MISSING}`, expect: () => 404 },
   "/evals-settings": {
     path: () => "/evals-settings",
+    expect: (a) => (canManageEvalsSettings(a) ? { to: EVALS_SETTINGS_TABS[0]!.href } : 404),
+  },
+  "/evals-settings/slack-contacts": {
+    path: () => "/evals-settings/slack-contacts",
     expect: gated(canManageEvalsSettings),
   },
   "/welcome": {
@@ -327,20 +338,32 @@ const ROUTES: RouteCase[] = [
   // Cohorts
   { method: "GET", path: "/api/cohorts/current", allowed: canUseTraining },
   { method: "POST", path: "/api/cohorts/current/track", allowed: canManageTrainingSettings, body: () => ({}) },
+  { method: "PUT", path: "/api/cohorts/current/track", allowed: canManageTrainingSettings, body: () => ({}) },
   { method: "GET", path: "/api/scheduler/bootcamps", allowed: canUseTraining },
   { method: "POST", path: "/api/scheduler/bootcamps", allowed: canManageTrainingSettings, body: () => ({}) },
   { method: "PATCH", path: `/api/scheduler/bootcamps/${MISSING}`, allowed: canManageTrainingSettings, body: () => ({}) },
   { method: "DELETE", path: `/api/scheduler/bootcamps/${MISSING}`, allowed: canManageTrainingSettings },
 
+  // eVals
+  { method: "GET", path: "/api/evals/bootcamp-history", allowed: canUseEvals },
+  { method: "GET", path: `/api/evals/bootcamp-history/${MISSING}`, allowed: canUseEvals },
+
   // eVals administration
+  { method: "GET", path: "/api/evals/candidate-cutoffs", allowed: canManageEvalsSettings },
+  { method: "GET", path: "/api/evals/deferral-days", allowed: canManageEvalsSettings },
   { method: "GET", path: "/api/evals/employees", allowed: canManageEvalsSettings },
   { method: "GET", path: "/api/evals/hibob/sync", allowed: canManageEvalsSettings },
   { method: "GET", path: "/api/evals/organization", allowed: canManageEvalsSettings },
+  { method: "GET", path: "/api/evals/slack-contacts", allowed: canManageEvalsSettings },
   { method: "GET", path: "/api/evals/titles", allowed: canManageEvalsSettings },
   { method: "POST", path: "/api/evals/hibob/sync", allowed: canManageEvalsSettings, denyOnly: true },
+  { method: "POST", path: "/api/evals/slack-contacts", allowed: canManageEvalsSettings, body: () => ({}) },
   { method: "POST", path: "/api/evals/titles", allowed: canManageEvalsSettings, body: () => ({}) },
+  { method: "PUT", path: "/api/evals/candidate-cutoffs", allowed: canManageEvalsSettings, body: () => ({}) },
+  { method: "PUT", path: "/api/evals/deferral-days", allowed: canManageEvalsSettings, body: () => ({}) },
   { method: "PATCH", path: `/api/evals/titles/${MISSING}`, allowed: canManageEvalsSettings, body: () => ({}) },
   { method: "DELETE", path: `/api/evals/titles/${MISSING}`, allowed: canManageEvalsSettings },
+  { method: "DELETE", path: `/api/evals/slack-contacts/${MISSING}`, allowed: canManageEvalsSettings },
 
   // Users
   { method: "GET", path: "/api/users", allowed: canManageUsers },

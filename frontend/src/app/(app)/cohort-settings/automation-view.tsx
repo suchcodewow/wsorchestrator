@@ -13,12 +13,14 @@ import { Check, Loader2, Pencil, Plus, Search, Trash2, X } from "lucide-react";
 import { HEADER_ROW, Pager, PlainHeader, SortHeader, useListParams } from "@/components/data-table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { EVALS_TITLE_LIMITS, EVALS_TITLE_LISTS, type EvalsTitleList } from "@/db/schema";
+import { DEFERRAL_DAYS_LIMITS, EVALS_TITLE_LIMITS, EVALS_TITLE_LISTS, type EvalsTitleList } from "@/db/schema";
+import type { CandidateCutoffs } from "@/lib/evals/settings";
 import { cleanTitle, TITLE_LIST_LABELS, TITLE_LIST_SLUGS } from "@/lib/evals/title-lists";
 import type { TitleSort } from "@/lib/list-specs";
 import { riseChild, staggerParent } from "@/lib/motion";
 import type { ListQuery, Page } from "@/lib/paging";
 import { cn } from "@/lib/utils";
+import { formatDate } from "./format";
 
 export type ListedTitle = {
   id: string;
@@ -66,6 +68,12 @@ function describeExisting(existing: { title: string; list: EvalsTitleList }[]) {
 
 export type LeaderCandidate = { email: string; fullName: string };
 
+/** Who counts as a candidate on the Current tab, by HiBob's dates; see `getCandidateCutoffs`. */
+const CUTOFF_FIELDS: { field: keyof CandidateCutoffs; label: string }[] = [
+  { field: "startDateOnOrAfter", label: "Start date on or after" },
+  { field: "activeEffectiveDateAfter", label: "Active effective date after" },
+];
+
 export function AutomationView({
   q: searched,
   lists,
@@ -73,6 +81,8 @@ export function AutomationView({
   imported,
   orgLeaderEmail,
   orgLeader,
+  cutoffs,
+  deferral,
 }: {
   /** The search the lists were queried with. */
   q: string;
@@ -82,6 +92,9 @@ export function AutomationView({
   orgLeaderEmail: string;
   /** The Organization Leader as the employee list has them, if it does. */
   orgLeader: LeaderCandidate | null;
+  cutoffs: CandidateCutoffs;
+  /** The deferral window in days, and the start of the bootcamp it counts back from, if one is coming. */
+  deferral: { days: number; bootcampStart: string | null };
 }) {
   const router = useRouter();
   const { set: setList, pending: searching } = useListParams();
@@ -176,6 +189,42 @@ export function AutomationView({
               body: JSON.stringify({ email }),
             });
             if (ok) setNotice("Organization Leader saved.");
+          }}
+        />
+      </motion.div>
+
+      <motion.div variants={riseChild} className="flex flex-wrap gap-x-6 gap-y-4">
+        {CUTOFF_FIELDS.map(({ field, label }) => (
+          // Keyed on the saved day too, so a save starts the field afresh from it.
+          <CutoffField
+            key={`${field}:${cutoffs[field]}`}
+            id={`cutoff-${field}`}
+            label={label}
+            value={cutoffs[field]}
+            busy={busy === `cutoff:${field}`}
+            onSave={async (value) => {
+              const ok = await send(`cutoff:${field}`, "/api/evals/candidate-cutoffs", {
+                method: "PUT",
+                body: JSON.stringify({ [field]: value }),
+              });
+              if (ok) setNotice(`${label} ${value ? "saved" : "turned off"}.`);
+            }}
+          />
+        ))}
+        <DeferralField
+          key={deferral.days}
+          days={deferral.days}
+          bootcampStart={deferral.bootcampStart}
+          busy={busy === "deferral"}
+          onSave={async (days) => {
+            const body = await send("deferral", "/api/evals/deferral-days", {
+              method: "PUT",
+              body: JSON.stringify({ days }),
+            });
+            if (body) {
+              const people = `${body.retracked} ${body.retracked === 1 ? "person" : "people"}`;
+              setNotice(`${days ? `Deferral window set to ${days} days` : "Deferral turned off"}; ${people} retracked.`);
+            }
           }}
         />
       </motion.div>
@@ -444,6 +493,91 @@ function OrgLeaderField({
           Save
         </Button>
       </div>
+    </div>
+  );
+}
+
+/** A day, or blank for no cutoff. */
+function CutoffField({
+  id,
+  label,
+  value,
+  busy,
+  onSave,
+}: {
+  id: string;
+  label: string;
+  value: string | null;
+  busy: boolean;
+  onSave: (value: string | null) => Promise<void>;
+}) {
+  const [day, setDay] = useState(value ?? "");
+  const dirty = day !== (value ?? "");
+
+  return (
+    <div className="w-56 space-y-1.5">
+      <label htmlFor={id} className="text-sm font-medium">
+        {label}
+      </label>
+      <div className="flex items-start gap-2">
+        <Input id={id} type="date" value={day} onChange={(e) => setDay(e.target.value)} className="flex-1" />
+        <Button variant="brand" disabled={!dirty || busy} onClick={() => onSave(day || null)}>
+          {busy ? <Loader2 className="animate-spin" /> : <Check />}
+          Save
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/** Whole days before the next bootcamp; 0 turns deferral off. */
+function DeferralField({
+  days,
+  bootcampStart,
+  busy,
+  onSave,
+}: {
+  days: number;
+  bootcampStart: string | null;
+  busy: boolean;
+  onSave: (days: number) => Promise<void>;
+}) {
+  const [value, setValue] = useState(String(days));
+  const parsed = Number(value);
+  const valid =
+    value.trim() !== "" &&
+    Number.isInteger(parsed) &&
+    parsed >= DEFERRAL_DAYS_LIMITS.min &&
+    parsed <= DEFERRAL_DAYS_LIMITS.max;
+  const dirty = valid && parsed !== days;
+
+  return (
+    <div className="w-56 space-y-1.5">
+      <label htmlFor="deferral-days" className="text-sm font-medium">
+        Defer if started within (days)
+      </label>
+      <div className="flex items-start gap-2">
+        <Input
+          id="deferral-days"
+          type="number"
+          inputMode="numeric"
+          min={DEFERRAL_DAYS_LIMITS.min}
+          max={DEFERRAL_DAYS_LIMITS.max}
+          step={1}
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          aria-invalid={!valid}
+          aria-describedby="deferral-days-next"
+          className="flex-1"
+        />
+        <Button variant="brand" disabled={!dirty || busy} onClick={() => onSave(parsed)}>
+          {busy ? <Loader2 className="animate-spin" /> : <Check />}
+          Save
+        </Button>
+      </div>
+      <p id="deferral-days-next" className="text-xs text-muted-foreground">
+        {days <= 0 ? "Off" : bootcampStart ? `Of the bootcamp on ${formatDate(bootcampStart)}` : "No bootcamp coming"}
+      </p>
     </div>
   );
 }
