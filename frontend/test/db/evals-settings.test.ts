@@ -26,6 +26,7 @@ import {
   employees,
   EVALS_SETTINGS_KEYS,
   evalsSettings,
+  evalsSlackContacts,
   evalsTitles,
   EXEMPT_DATE,
   hibobSyncRuns,
@@ -47,6 +48,7 @@ import {
   getCandidateCutoffs,
   setCandidateCutoffs,
 } from "@/lib/evals/settings";
+import { addSlackContact, deleteSlackContact, listSlackContacts } from "@/lib/evals/slack-contacts";
 import { addTitles, deleteTitle, listTitles, updateTitle } from "@/lib/evals/titles";
 import { sortUndecidedTitle } from "@/lib/evals/tracks";
 import {
@@ -54,6 +56,7 @@ import {
   CURRENT_COHORT_LIST,
   HIBOB_SYNC_LIST,
   ORGANIZATION_LIST,
+  SLACK_CONTACT_LIST,
   TITLE_LIST,
   type TitleSort,
 } from "@/lib/list-specs";
@@ -89,6 +92,7 @@ const runIds: string[] = [];
 async function clearOwnRows() {
   await db.delete(evalsTitles).where(like(evalsTitles.title, `${TEST_PREFIX}%`));
   await db.delete(bootcampHistory).where(like(bootcampHistory.email, `%@${TEST_EMAIL_DOMAIN}`));
+  await db.delete(evalsSlackContacts).where(like(evalsSlackContacts.email, `%@${TEST_EMAIL_DOMAIN}`));
 }
 
 before(async () => {
@@ -177,6 +181,42 @@ describe("title lists", () => {
     const missing = "00000000-0000-4000-8000-000000000000";
     assert.deepEqual(await updateTitle(missing, { title: "x" }), { ok: false, error: "not_found" });
     assert.deepEqual(await deleteTitle(missing), { ok: false, error: "not_found" });
+  });
+});
+
+describe("Additional Slack Contacts", () => {
+  const mine = async () =>
+    (await listSlackContacts({ ...SLACK_CONTACT_LIST, q: TEST_EMAIL_DOMAIN, page: 1 })).rows.map((c) => [
+      c.email,
+      c.fullName,
+      c.addedBy,
+    ]);
+
+  test("an employee is named as the employee list has them; anyone else by email alone", async () => {
+    await db.insert(employees).values({ id: `${TEST_PREFIX}slack`, email: email("s-pat"), fullName: "Pat Slack", raw: {} });
+
+    const pat = await addSlackContact(admin.id, { email: `  ${email("S-Pat").toUpperCase()} ` });
+    assert.ok(pat.ok);
+    assert.deepEqual([pat.contact.email, pat.contact.fullName], [email("s-pat"), "Pat Slack"]);
+    assert.ok((await addSlackContact(admin.id, { email: email("s-outside") })).ok);
+
+    // By name, and by email for someone without one.
+    assert.deepEqual(await mine(), [
+      [email("s-pat"), "Pat Slack", "admin"],
+      [email("s-outside"), "", "admin"],
+    ]);
+  });
+
+  test("each email once, and nothing that isn't one", async () => {
+    assert.deepEqual(await addSlackContact(admin.id, { email: email("s-pat") }), { ok: false, error: "duplicate" });
+    assert.deepEqual(await addSlackContact(admin.id, { email: "Pat Slack" }), { ok: false, error: "invalid" });
+  });
+
+  test("removing one leaves the rest", async () => {
+    const { rows } = await listSlackContacts({ ...SLACK_CONTACT_LIST, q: email("s-outside"), page: 1 });
+    assert.deepEqual(await deleteSlackContact(rows[0]!.id), { ok: true, email: email("s-outside") });
+    assert.deepEqual(await deleteSlackContact(rows[0]!.id), { ok: false, error: "not_found" });
+    assert.deepEqual(await mine(), [[email("s-pat"), "Pat Slack", "admin"]]);
   });
 });
 

@@ -116,6 +116,7 @@ add it to the table above.
 | Users | `GET /api/users` |
 | Admin settings (sign-in domains) | `GET /api/settings/domains` |
 | Cohort Settings | `GET /api/evals/employees`, `GET /api/evals/organization`, `GET /api/evals/hibob/sync`, `GET /api/evals/titles?list=` |
+| eVals settings → Additional Slack Contacts | `GET /api/evals/slack-contacts` |
 | Audit Trail | `GET /api/audit` |
 | Labs | `GET /api/lab-workshops`, `GET /api/lab-workshops/[id or slug]`, `GET /api/lab-guides`, `GET /api/lab-guides/[id or slug]`, `GET /api/lab-images` |
 

@@ -9,6 +9,7 @@ import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { auth, signInPath } from "@/auth";
 import { canManageEvalsSettings } from "@/lib/roles";
+import { EvalsSettingsTabs } from "./evals-settings-tabs";
 
 export const metadata: Metadata = {
   title: "eVals settings",
@@ -27,6 +28,8 @@ export default async function EvalsSettingsLayout({
   return (
     <div className="space-y-8">
       <h1 className="text-3xl font-medium tracking-tight">eVals settings</h1>
+
+      <EvalsSettingsTabs />
 
       {children}
     </div>

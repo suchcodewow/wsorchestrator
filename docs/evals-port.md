@@ -33,7 +33,7 @@ Status means:
 | Deferred | Someone who started within 14 days of the event start is marked Deferred, sorted last and left out of the Slack messages | **Not ported** | |
 | Roster frozen once the event starts | The daily sync skips itself from the Event Start Date onward, so the attendee list stops changing | **Not ported.** The Current tab is recomputed from every sync | |
 | Roster kept per event | The attendee tabs only ever add people; nobody drops off mid-event | **Not ported.** There's no stored attendee list per bootcamp | |
-| Management chain on each attendee | Every manager's email up to the leader, plus the Config tab's "Add these email to any slack" addresses | **Partial.** Each sync stores `employees.management_chain`: every manager's email from the direct one up to the leader, joined with `;` as the Sheet did. `GET /api/evals/organization` returns it, but no page shows it yet. The Config tab's extra addresses aren't added | |
+| Management chain on each attendee | Every manager's email up to the leader, plus the Config tab's "Add these email to any slack" addresses | **Ported, stored apart.** Each sync stores `employees.management_chain`: every manager's email from the direct one up to the leader, joined with `;` as the Sheet did. `GET /api/evals/organization` returns it, but no page shows it yet. The extra addresses are eVals settings → Additional Slack Contacts, kept out of the chain; the Slack messages add them when they are sent | done |
 
 ## Running an event
 
@@ -60,7 +60,7 @@ Status means:
 
 | Feature | What the Sheet does | Status in harnessevents | Decision |
 | --- | --- | --- | --- |
-| Slack message builder | Fills the Feedback tab's template with each attendee's values and score lines; a 4 adds the positive comment, a 1–2 the constructive one. Copies the message and the management chain to paste into Slack | **Not ported** | |
+| Slack message builder | Fills the Feedback tab's template with each attendee's values and score lines; a 4 adds the positive comment, a 1–2 the constructive one. Copies the message and the management chain to paste into Slack | **Not ported.** When it is, each team's message goes to the management chain plus the Additional Slack Contacts | |
 | Slack channel creation | Creates or finds a private channel, invites attendees by email and makes some of them channel managers | **Not ported.** The script's function was never wired to a menu | |
 | Mindtickle assessments | Signs in to Mindtickle, looks up users and lists the Config tab's assessment series | **Not ported.** It only logged results; it was never finished | |
 | BigQuery | Upserts rows into `sales-209522.enablement.events` by email | **Not ported.** Only test functions called it | |

@@ -48,6 +48,7 @@ import {
   type Access,
 } from "@/lib/roles";
 import { visibleCohortSettingsTabs } from "@/app/(app)/cohort-settings/tabs";
+import { EVALS_SETTINGS_TABS } from "@/app/(app)/evals-settings/tabs";
 import { COHORTS_TABS } from "@/app/(app)/cohorts/tabs";
 import { visibleSettingsTabs } from "@/app/(app)/settings/tabs";
 import { PERSONAS, PERSONA_NAMES, type Persona } from "../support/access";
@@ -192,6 +193,10 @@ const PAGES: Record<string, PageCase> = {
   "/evals": { path: () => "/evals", expect: gated(canUseEvals) },
   "/evals-settings": {
     path: () => "/evals-settings",
+    expect: (a) => (canManageEvalsSettings(a) ? { to: EVALS_SETTINGS_TABS[0]!.href } : 404),
+  },
+  "/evals-settings/slack-contacts": {
+    path: () => "/evals-settings/slack-contacts",
     expect: gated(canManageEvalsSettings),
   },
   "/welcome": {
@@ -337,12 +342,15 @@ const ROUTES: RouteCase[] = [
   { method: "GET", path: "/api/evals/employees", allowed: canManageEvalsSettings },
   { method: "GET", path: "/api/evals/hibob/sync", allowed: canManageEvalsSettings },
   { method: "GET", path: "/api/evals/organization", allowed: canManageEvalsSettings },
+  { method: "GET", path: "/api/evals/slack-contacts", allowed: canManageEvalsSettings },
   { method: "GET", path: "/api/evals/titles", allowed: canManageEvalsSettings },
   { method: "POST", path: "/api/evals/hibob/sync", allowed: canManageEvalsSettings, denyOnly: true },
+  { method: "POST", path: "/api/evals/slack-contacts", allowed: canManageEvalsSettings, body: () => ({}) },
   { method: "POST", path: "/api/evals/titles", allowed: canManageEvalsSettings, body: () => ({}) },
   { method: "PUT", path: "/api/evals/candidate-cutoffs", allowed: canManageEvalsSettings, body: () => ({}) },
   { method: "PATCH", path: `/api/evals/titles/${MISSING}`, allowed: canManageEvalsSettings, body: () => ({}) },
   { method: "DELETE", path: `/api/evals/titles/${MISSING}`, allowed: canManageEvalsSettings },
+  { method: "DELETE", path: `/api/evals/slack-contacts/${MISSING}`, allowed: canManageEvalsSettings },
 
   // Users
   { method: "GET", path: "/api/users", allowed: canManageUsers },

@@ -1,4 +1,4 @@
-import { AUDIT_LIST, BOOTCAMP_LIST, CURRENT_COHORT_LIST, DOMAIN_LIST, EMPLOYEE_LIST, HIBOB_SYNC_LIST, ORGANIZATION_LIST, TITLE_LIST, USER_LIST } from "@/lib/list-specs";
+import { AUDIT_LIST, BOOTCAMP_LIST, CURRENT_COHORT_LIST, DOMAIN_LIST, EMPLOYEE_LIST, HIBOB_SYNC_LIST, ORGANIZATION_LIST, SLACK_CONTACT_LIST, TITLE_LIST, USER_LIST } from "@/lib/list-specs";
 import { PAGE_FIELDS, listQuery } from "./paging";
 import type { EndpointGroup } from "./types";
 
@@ -339,6 +339,45 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         params: [{ name: "id", type: "string", required: true, note: "UUID" }],
         returns: "{ ok: true }",
         errors: [{ status: 404, error: "not_found", when: "id is not a UUID, or no such title" }],
+      },
+      {
+        method: "GET",
+        path: "/api/evals/slack-contacts",
+        summary: "Lists the Additional Slack Contacts, a page at a time.",
+        access: "evalsAdmin",
+        token: true,
+        notes:
+          "These people are added to the Slack messages sent to each attendee's team at the end of a bootcamp, after the attendee's management chain. fullName is as the employee list had them when they were added, and empty for someone not in it. total counts every contact, whatever the search.",
+        query: listQuery(SLACK_CONTACT_LIST.sorts, "the name, the email or who added them"),
+        returns: `{ contacts: { id, email, fullName, createdAt, addedBy: string | null }[], ${PAGE_FIELDS}, total: number }`,
+      },
+      {
+        method: "POST",
+        path: "/api/evals/slack-contacts",
+        summary: "Adds one Additional Slack Contact.",
+        access: "evalsAdmin",
+        token: true,
+        notes:
+          "The email is lowercased. If it belongs to an imported employee, their name is stored with it; anyone else is added by email alone.",
+        body: {
+          kind: "json",
+          fields: [{ name: "email", type: "string", required: true, note: "up to 320 characters" }],
+        },
+        returns: "{ id, email, fullName }",
+        errors: [
+          { status: 400, error: "invalid", when: "the body does not parse, or email is not an email address" },
+          { status: 409, error: "duplicate", when: "that email is already a contact" },
+        ],
+      },
+      {
+        method: "DELETE",
+        path: "/api/evals/slack-contacts/{id}",
+        summary: "Removes one Additional Slack Contact.",
+        access: "evalsAdmin",
+        token: true,
+        params: [{ name: "id", type: "string", required: true, note: "UUID" }],
+        returns: "{ ok: true }",
+        errors: [{ status: 404, error: "not_found", when: "id is not a UUID, or no such contact" }],
       },
       {
         method: "GET",

@@ -964,6 +964,33 @@ export const EVALS_TITLE_LIMITS = { title: 200, perRequest: 500 } as const;
 export type EvalsTitle = typeof evalsTitles.$inferSelect;
 
 /**
+ * People added to the Slack messages sent to each attendee's team at the end
+ * of a bootcamp, alongside the attendee's management chain: the Sheet's
+ * "Add these email to any slack" Config column. One row per email.
+ */
+export const evalsSlackContacts = pgTable(
+  "evals_slack_contacts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** Lowercased. */
+    email: text("email").notNull(),
+    /** As the employee list had it when they were added; empty for someone not in it. */
+    fullName: text("full_name").notNull().default(""),
+    createdBy: text("created_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [uniqueIndex("evals_slack_contacts_email_idx").on(t.email)],
+);
+
+export const EVALS_SLACK_CONTACT_LIMITS = { email: 320 } as const;
+
+export type EvalsSlackContact = typeof evalsSlackContacts.$inferSelect;
+
+/**
  * Who has been through bootcamp (BTC) and the intermediate event (INT), and
  * how they scored. One row per email. A date of 2000-01-01 is the sheet's
  * marker for "exempt": someone who never needs to attend.

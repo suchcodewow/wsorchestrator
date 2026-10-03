@@ -32,6 +32,9 @@ export type UserSort = (typeof USER_LIST.sorts)[number];
 export const TITLE_LIST = spec(["title", "addedBy", "createdAt"]);
 export type TitleSort = (typeof TITLE_LIST.sorts)[number];
 
+export const SLACK_CONTACT_LIST = spec(["fullName", "email", "addedBy", "createdAt"]);
+export type SlackContactSort = (typeof SLACK_CONTACT_LIST.sorts)[number];
+
 export const ORGANIZATION_LIST = spec([
   "depth",
   "fullName",
