@@ -37,7 +37,12 @@ export async function SiteHeader({
         {environment && (
           <span
             title={`This is the ${environment} deployment, not production`}
-            className="rounded-full border border-amber-500/40 bg-amber-500/15 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300"
+            className={cn(
+              "rounded-full border px-2 py-0.5 text-xs font-semibold uppercase tracking-wide",
+              environment === "dev"
+                ? "border-gray-400/40 bg-gray-400/15 text-gray-600 dark:text-gray-400"
+                : "border-amber-500/40 bg-amber-500/15 text-amber-700 dark:text-amber-300",
+            )}
           >
             {environment}
           </span>
