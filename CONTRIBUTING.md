@@ -128,7 +128,7 @@ created by `npm run dev:setup`:
 
 | Database | What it is for |
 | --- | --- |
-| `workshops` | **Your real local work.** Long-lived, never recreated. Workshops and lab guides you author through your own dev server live here. |
+| `workshops` | **Your real local work.** Long-lived, never recreated. Workshops and lab guides you author through your own dev server live here. `npm run db:import-production` replaces it with production's data instead ([how](docs/environments.md#importing-production-into-a-local-database)). |
 | `workshops_agent` | **Scratch.** Carries the full schema and the baseline `harness_components` rows. Disposable — seed it, wreck it, reseed it. |
 
 Point tests, seed scripts, and scratch experiments at `workshops_agent`:

@@ -43,6 +43,8 @@ workshops and lab guides. Use **`workshops_agent`** for anything you seed,
 mutate, or clean up. Never run an unqualified `DELETE` or `TRUNCATE` against
 `workshops`; if a test must touch it, delete only rows by the ids that test
 created.
+`npm run db:import-production` replaces `workshops` with production's data
+and reads production to do it; run it only when the user asks.
 
 **Verify which database you are on rather than inferring it from `lsof`.** On a
 Colima machine the local Postgres shows up as an `ssh` process on `:5432` — that

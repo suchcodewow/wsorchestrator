@@ -19,6 +19,7 @@
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
+    "db:import-production": "tsx --conditions=react-server --env-file=.env scripts/import-production.ts",
     "db:up": "docker compose -f ../docker-compose.yml up -d",
     "db:down": "docker compose -f ../docker-compose.yml down",
     "dev:setup": "docker compose -f ../docker-compose.yml up -d --wait && node scripts/dev-setup.mjs"

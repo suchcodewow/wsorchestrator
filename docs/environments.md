@@ -131,8 +131,10 @@ The page starts a `tf-runner` execution with the args `import-production`
 
 `workshop_runs.environment` records which deployment created a run. The
 runner and the app both read their own from `DEPLOYMENT_ENVIRONMENT`, which
-is unset, and so `production`, on production. A run is local when the stamp is
-null or matches. On QA, every other run is:
+is unset, and so `production`, on production. Under a local `next dev`, unset
+reads `dev` instead (see
+[Importing production into a local database](#importing-production-into-a-local-database)).
+A run is local when the stamp is null or matches. On QA, every other run is:
 
 - invisible to the reaper, the scheduler, and `tf-runner`, which refuses to
   provision or destroy it (`runner/src/environment.ts`);
@@ -166,6 +168,86 @@ apply:
   or connect to production's instance. It reaches production only through
   `deploy_production` with `run_infra=true`.
 
+## Importing production into a local database
+
+```bash
+cd frontend && npm run db:import-production
+```
+
+This replaces the local database that `DATABASE_URL` in `frontend/.env` names
+(normally `workshops`) with a copy of production's. The copy is cleaned up the
+way QA's import cleans up. Use it to look at production's guides, events and
+people on a laptop. Nothing in the local database survives it except your own
+roles.
+
+It differs from QA's import in three ways:
+
+- **It dumps the live database instead of restoring a backup.** A Cloud SQL
+  backup can only be restored onto a Cloud SQL instance. Exporting one needs
+  a permission on production that nothing outside production holds.
+- **There is no reaper to pause.** Nothing runs the reaper or the provisioner
+  locally, and with `TF_RUNNER_JOB` unset the local app cannot start a runner
+  execution.
+- **There is no backup to undo it with.** Running it again is the way to get
+  a fresh copy.
+
+### What it does
+
+`frontend/scripts/import-production.ts`, in order:
+
+1. **Refuses** unless `DATABASE_URL` is the local container (not `:5433` or
+   `6543`+), and unless the deployment reads as something other than
+   production. When `DEPLOYMENT_ENVIRONMENT` is unset, the script uses `dev`.
+2. **Takes a snapshot** of the local users who have any access.
+3. **Dumps production.** It runs `pg_dump` through
+   [`with-db.sh`](../scripts/with-db.sh), using `PROJECT=administration-459416`
+   (`PRODUCTION_PROJECT` overrides it). `pg_dump` runs inside the local
+   Postgres container, because the host has none and the container's major
+   version matches production's. The container reaches the proxy as
+   `host.docker.internal`.
+4. **Restores** the dump into `<database>_import`, next to the local database.
+5. **Runs QA's clean-up on the copy:** the same quarantine
+   (`QUARANTINE_SQL` in `runner/src/import-policy.ts`), then the same finish
+   step (`finishProductionImport`). Together they apply this branch's
+   migrations, delete production's credentials, blank attendee passwords and
+   give your roles back. It also writes a `local.import-production` audit row.
+6. **Swaps it in:** it drops the local database (ending the dev server's
+   connections) and renames the copy into its place.
+
+Until step 6 the local database is untouched, so a failure earlier leaves it
+as it was. The dump file is deleted either way. On 2026-10-03 the dump was
+about 20 MB and the whole run took about ten seconds.
+
+### What it needs
+
+- `gcloud`, signed in to an identity that can read production's
+  `database-url` secret, and `cloud-sql-proxy`, whose Application Default
+  Credentials can connect to production's instance. A personal gcloud login
+  on a Harness laptop needs a browser re-sign-in every day. When it lapses,
+  the script stops before doing anything and shows gcloud's error. To avoid
+  that, name a key-based gcloud configuration as
+  `PRODUCTION_GCLOUD_CONFIGURATION` in `frontend/.env`. Only this script
+  reads it. If the proxy's credentials lapse as well, set
+  `GOOGLE_APPLICATION_CREDENTIALS` to a key file.
+- The VPN off, since a TLS-inspecting VPN breaks the proxy
+  ([operations.md](operations.md)).
+- The local Postgres container running (`npm run db:up`).
+
+### Afterwards
+
+- **Sign in again.** The import clears every session. Your roles come from
+  the snapshot, and `SITE_ADMIN_EMAILS` addresses regain platform admin on
+  sign-in as usual.
+- **Production's runs are read-only.** Every run is stamped `production`, and
+  `next dev` reads its own environment as `dev` (`lib/deployment.ts`), so the
+  app shows them as imported and refuses to change them. If you drive a runner
+  module against this database by hand, set `DEPLOYMENT_ENVIRONMENT=dev`.
+  The runner has no `next dev` fallback, so without it the runner treats
+  production's runs as its own, with credentials for production's accounts.
+- **Saved credentials are gone:** Harness tokens, org secrets, template
+  sources and API tokens. Production's were deleted, and the local ones were
+  in the database the import replaced. Add back any you need.
+
 ## Who can do what
 
 | Action | Who | Enforced by |
@@ -177,6 +259,7 @@ apply:
 | Deploy production | Anyone who can run `deploy_production` | Harness RBAC on the project |
 | Read QA's logs, database and secrets | `developer_members` in `qa_control_plane` | GCP IAM on `harnessevents-qa` |
 | Import a production backup into QA | Anyone who can manage backups on QA | `canManageBackups`, plus typing QA's instance name |
+| Import production into a local database | Anyone who can read production's `database-url` secret and connect to its instance (Shawn, as of 2026-10-03) | GCP IAM on production's project |
 
 **Where this is weaker than it looks.** These are the gaps as of 2026-09-30:
 

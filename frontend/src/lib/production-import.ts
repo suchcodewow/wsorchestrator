@@ -208,6 +208,8 @@ export type FinishResult = {
 
 /**
  * Bring an imported database up to this deployment's schema and make it QA's.
+ * A local import (`scripts/import-production.ts`) calls it too, with its own
+ * connection string, on the copy before it replaces the local database.
  *
  * A fresh client rather than the app's pool: the restore closed every
  * connection the pool had. Migrations first, because production's schema can
@@ -216,7 +218,7 @@ export type FinishResult = {
  * cleaned.
  */
 export async function finishProductionImport(
-  input: z.infer<typeof finishSchema>,
+  input: { snapshot: UserSnapshot[] },
   options: { migrationsDir?: string; connectionString?: string } = {},
 ): Promise<FinishResult> {
   const dir = options.migrationsDir ?? path.join(process.cwd(), "drizzle");

@@ -65,6 +65,26 @@ describe("deploymentEnvironment", () => {
     assert.equal(deploymentEnvironment(), "qa");
     assert.equal(isProduction(), false);
   });
+
+  // A local machine can hold an import of production's database, so `next
+  // dev` must not read as production, or production's runs would be its own.
+  test("unset under next dev is dev, and a configured value still wins", () => {
+    const env = process.env as Record<string, string | undefined>;
+    const nodeEnv = env.NODE_ENV;
+    try {
+      env.NODE_ENV = "development";
+      assert.equal(deploymentEnvironment(), "dev");
+      assert.equal(isImportedRun({ environment: "production" }), true);
+      process.env.DEPLOYMENT_ENVIRONMENT = "production";
+      assert.equal(isProduction(), true);
+      env.NODE_ENV = "production";
+      delete process.env.DEPLOYMENT_ENVIRONMENT;
+      assert.equal(isProduction(), true);
+    } finally {
+      if (nodeEnv === undefined) delete env.NODE_ENV;
+      else env.NODE_ENV = nodeEnv;
+    }
+  });
 });
 
 describe("isImportedRun", () => {

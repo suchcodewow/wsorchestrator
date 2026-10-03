@@ -166,8 +166,6 @@ describe("finishProductionImport", () => {
   test("leaves QA's users in charge and none of production's credentials", async () => {
     const result = await finishProductionImport(
       {
-        backupId: "1",
-        actor: "qa-admin@example.test",
         snapshot: [
           {
             // Has a row in production under another id: that row gets the roles.
@@ -240,7 +238,7 @@ describe("finishProductionImport", () => {
 
   test("is safe to run twice", async () => {
     await finishProductionImport(
-      { backupId: "1", actor: "x", snapshot: [] },
+      { snapshot: [] },
       { connectionString: url },
     );
     const admins = (await probe.query(`select count(*)::int as n from users where is_platform_admin`)).rows[0].n;
