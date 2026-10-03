@@ -13,6 +13,7 @@ import { noteCaller } from "@/lib/audit-context";
 import {
   canManageEvalsSettings,
   canManageSettings,
+  canUseEvals,
   type Access,
 } from "@/lib/roles";
 
@@ -76,6 +77,11 @@ export function requireUser(req: Request) {
 
 export function requireAdministrator(req: Request) {
   return requireCaller(req, canManageSettings);
+}
+
+/** An eVals Viewer or above, for what the eVals area shows. */
+export function requireEvalsViewer(req: Request) {
+  return requireCaller(req, canUseEvals);
 }
 
 /** An eVals administrator, for eVals settings. */

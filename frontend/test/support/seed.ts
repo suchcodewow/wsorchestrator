@@ -6,7 +6,7 @@
 import { randomBytes } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { db, pool } from "@/db";
-import { sessions, users, workshopRuns } from "@/db/schema";
+import { bootcampHistory, sessions, users, workshopRuns } from "@/db/schema";
 import type { Access } from "@/lib/roles";
 import { TEST_EMAIL_DOMAIN, TEST_PREFIX, assertScratchDatabase, deleteTestRows } from "./db";
 
@@ -32,10 +32,22 @@ export function testScope(name: string) {
     return { id, email: address, access };
   }
 
+  /** A bootcamp history row; its email carries the scope, so cleanup finds it. */
+  async function createHistory(key: string): Promise<string> {
+    const email = `${TEST_PREFIX}${scope}${key}@${TEST_EMAIL_DOMAIN}`.toLowerCase();
+    const [row] = await db
+      .insert(bootcampHistory)
+      .values({ email, btcDate: "2026-03-02", btcScore: 3.3, btcIndividualScores: { "Score-Exams": 4 } })
+      .onConflictDoUpdate({ target: bootcampHistory.email, set: { btcScore: 3.3 } })
+      .returning({ id: bootcampHistory.id });
+    return row!.id;
+  }
+
   const clear = () => deleteTestRows((sql, params) => pool.query(sql, params), scope);
 
   return {
     createUser,
+    createHistory,
     /** Refuses anything but a scratch database, then clears what a previous run left. */
     async setUp() {
       await assertScratchDatabase(process.env.DATABASE_URL);

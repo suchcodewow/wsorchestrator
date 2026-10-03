@@ -44,8 +44,8 @@ const EXPECTED_SIDEBAR: Record<Persona, string[]> = {
     "[Administration]",
     "Manage users",
   ],
-  evalsViewer: ["[eVals]", "eVals", ...ACCOUNT],
-  evalsAdmin: ["[eVals]", "eVals", "eVals settings", ...ACCOUNT, "[Administration]", "Manage users"],
+  evalsViewer: ["[eVals]", "eVals", "Bootcamp History", ...ACCOUNT],
+  evalsAdmin: ["[eVals]", "eVals", "Bootcamp History", "eVals settings", ...ACCOUNT, "[Administration]", "Manage users"],
   bothAdmins: [
     ...EVENTS_ADMIN,
     "[Training]",
@@ -66,6 +66,7 @@ const EXPECTED_SIDEBAR: Record<Persona, string[]> = {
     "Cohort Settings",
     "[eVals]",
     "eVals",
+    "Bootcamp History",
     "eVals settings",
     ...ACCOUNT,
     "[Administration]",

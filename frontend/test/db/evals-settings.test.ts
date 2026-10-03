@@ -34,10 +34,12 @@ import {
 import {
   createHistory,
   deleteHistory,
+  getHistoryDetail,
   historyInputSchema,
   historyPatchSchema,
   importHistory,
   listHistory,
+  listHistoryPage,
   updateHistory,
 } from "@/lib/evals/bootcamp-history";
 import { hibobServiceUser, listHibobSyncRuns, syncHibobEmployees } from "@/lib/evals/hibob";
@@ -52,12 +54,14 @@ import { addSlackContact, deleteSlackContact, listSlackContacts } from "@/lib/ev
 import { addTitles, deleteTitle, listTitles, updateTitle } from "@/lib/evals/titles";
 import { sortUndecidedTitle } from "@/lib/evals/tracks";
 import {
+  BOOTCAMP_HISTORY_LIST,
   BOOTCAMP_LIST,
   CURRENT_COHORT_LIST,
   HIBOB_SYNC_LIST,
   ORGANIZATION_LIST,
   SLACK_CONTACT_LIST,
   TITLE_LIST,
+  type BootcampHistorySort,
   type TitleSort,
 } from "@/lib/list-specs";
 import {
@@ -93,6 +97,7 @@ async function clearOwnRows() {
   await db.delete(evalsTitles).where(like(evalsTitles.title, `${TEST_PREFIX}%`));
   await db.delete(bootcampHistory).where(like(bootcampHistory.email, `%@${TEST_EMAIL_DOMAIN}`));
   await db.delete(evalsSlackContacts).where(like(evalsSlackContacts.email, `%@${TEST_EMAIL_DOMAIN}`));
+  await db.delete(employees).where(like(employees.id, `${TEST_PREFIX}%`));
 }
 
 before(async () => {
@@ -266,6 +271,44 @@ describe("bootcamp history import", () => {
   test("refuses an empty upload and a sheet with no email column", async () => {
     assert.deepEqual(await importHistory(admin.id, null), { ok: false, error: "no_file" });
     assert.deepEqual(await importHistory(admin.id, csv("name\nPat\n")), { ok: false, error: "no_email_column" });
+  });
+});
+
+describe("bootcamp history page", () => {
+  const page = (q: string, sort: BootcampHistorySort = "fullName") =>
+    listHistoryPage({ ...BOOTCAMP_HISTORY_LIST, sort, q, page: 1 });
+
+  test("lists each person by the employee list's name, sinking those it lacks, and finds them by either", async () => {
+    await db.insert(employees).values({
+      id: `${TEST_PREFIX}history`,
+      email: email("h-ann"),
+      fullName: "Ann History",
+      title: "Solutions Engineer",
+      raw: {},
+    });
+    const blank = { btcDate: null, intDate: null, btcScore: null, intScore: null };
+    assert.ok((await createHistory(admin.id, { ...blank, email: email("h-zed"), intScore: 2 })).ok);
+    assert.ok((await createHistory(admin.id, { ...blank, email: email("h-ann"), btcDate: "2026-03-02", btcScore: 3.3 })).ok);
+
+    const rows = (r: Awaited<ReturnType<typeof page>>) => r.rows.map((h) => [h.email, h.fullName]);
+    assert.deepEqual(rows(await page("h-")), [
+      [email("h-ann"), "Ann History"],
+      [email("h-zed"), null],
+    ]);
+    assert.deepEqual(rows(await page("ann hist")), [[email("h-ann"), "Ann History"]]);
+  });
+
+  test("a record holds its whole row, who changed it, and the employee behind it", async () => {
+    const [ann, zed] = (await page("h-", "email")).rows;
+    const detail = await getHistoryDetail(ann!.id);
+    assert.ok(detail);
+    assert.equal(detail.btcDate, "2026-03-02");
+    assert.equal(detail.btcScore, 3.3);
+    assert.equal(detail.updatedByName, "admin");
+    assert.equal(detail.employee?.title, "Solutions Engineer");
+
+    assert.equal((await getHistoryDetail(zed!.id))?.employee, null);
+    assert.equal(await getHistoryDetail("00000000-0000-4000-8000-000000000000"), null);
   });
 });
 

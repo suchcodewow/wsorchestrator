@@ -1,4 +1,4 @@
-import { AUDIT_LIST, BOOTCAMP_LIST, CURRENT_COHORT_LIST, DOMAIN_LIST, EMPLOYEE_LIST, HIBOB_SYNC_LIST, ORGANIZATION_LIST, SLACK_CONTACT_LIST, TITLE_LIST, USER_LIST } from "@/lib/list-specs";
+import { AUDIT_LIST, BOOTCAMP_HISTORY_LIST, BOOTCAMP_LIST, CURRENT_COHORT_LIST, DOMAIN_LIST, EMPLOYEE_LIST, HIBOB_SYNC_LIST, ORGANIZATION_LIST, SLACK_CONTACT_LIST, TITLE_LIST, USER_LIST } from "@/lib/list-specs";
 import { PAGE_FIELDS, listQuery } from "./paging";
 import type { EndpointGroup } from "./types";
 
@@ -250,6 +250,36 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         params: [{ name: "id", type: "string", required: true, note: "the bootcamp's id" }],
         returns: "{ ok: true }",
         errors: [{ status: 404, error: "not_found", when: "no such bootcamp" }],
+      },
+    ],
+  },
+  {
+    id: "bootcamp-history",
+    title: "Bootcamp history",
+    endpoints: [
+      {
+        method: "GET",
+        path: "/api/evals/bootcamp-history",
+        summary: "Lists everyone with a bootcamp history row, by name and email, a page at a time.",
+        access: "evalsViewer",
+        token: true,
+        notes:
+          "fullName is the person's name in the employee list from the last HiBob sync, or null for an email not in it, such as someone who has left. total counts every row, whatever the search.",
+        query: listQuery(BOOTCAMP_HISTORY_LIST.sorts, "the name or email"),
+        returns: `{ history: { id, email, fullName: string | null }[], ${PAGE_FIELDS}, total: number }`,
+      },
+      {
+        method: "GET",
+        path: "/api/evals/bootcamp-history/{id}",
+        summary: "Returns one person's bootcamp history row in full, with their employee record.",
+        access: "evalsViewer",
+        token: true,
+        notes:
+          "A date of 2000-01-01 means the person is exempt from that class. Scores run from 1 (poor) to 4 (outstanding), to one decimal place; btcIndividualScores and intIndividualScores map each exercise's column name to its score, or are null. updatedBy is the id of whoever last changed the row and updatedByName their name or email, both null when that account is gone. employee is null for an email not in the employee list.",
+        params: [{ name: "id", type: "string", required: true, note: "the row's id" }],
+        returns:
+          `{ id, email, btcDate: string | null, intDate: string | null, btcScore: number | null, intScore: number | null, btcIndividualScores: Record<string, number> | null, intIndividualScores: Record<string, number> | null, updatedBy: string | null, updatedByName: string | null, createdAt, updatedAt, employee: { fullName, title, department, site, reportsToName, reportsToEmail, startDate: string | null, track: "sales" | "engineer" | "ignored" | "exempt" | null } | null }`,
+        errors: [{ status: 404, error: "not_found", when: "`id` is not a UUID, or no row has it" }],
       },
     ],
   },

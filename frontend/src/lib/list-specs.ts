@@ -35,6 +35,9 @@ export type TitleSort = (typeof TITLE_LIST.sorts)[number];
 export const SLACK_CONTACT_LIST = spec(["fullName", "email", "addedBy", "createdAt"]);
 export type SlackContactSort = (typeof SLACK_CONTACT_LIST.sorts)[number];
 
+export const BOOTCAMP_HISTORY_LIST = spec(["fullName", "email"]);
+export type BootcampHistorySort = (typeof BOOTCAMP_HISTORY_LIST.sorts)[number];
+
 export const ORGANIZATION_LIST = spec([
   "depth",
   "fullName",

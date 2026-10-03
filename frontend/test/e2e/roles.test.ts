@@ -68,6 +68,7 @@ const cookies = {} as Record<Persona, string>;
 const tokens = {} as Record<Persona, string>;
 const ownRun = {} as Record<Persona, string>;
 let aliceRun: string;
+let historyId: string;
 
 before(async () => {
   await scope.setUp();
@@ -75,6 +76,7 @@ before(async () => {
 
   const alice = await scope.createUser("alice", PERSONAS.operator);
   aliceRun = await createRun(alice.id, "Alice's workshop");
+  historyId = await scope.createHistory("history");
   for (const p of PERSONA_NAMES) {
     people[p] = await scope.createUser(p, PERSONAS[p]);
     cookies[p] = await createSession(people[p].id);
@@ -191,6 +193,9 @@ const PAGES: Record<string, PageCase> = {
     expect: gated(canManageTrainingSettings),
   },
   "/evals": { path: () => "/evals", expect: gated(canUseEvals) },
+  "/bootcamp-history": { path: () => "/bootcamp-history", expect: gated(canUseEvals) },
+  "/bootcamp-history/<a record>": { path: () => `/bootcamp-history/${historyId}`, expect: gated(canUseEvals) },
+  "/bootcamp-history/<unknown>": { path: () => `/bootcamp-history/${MISSING}`, expect: () => 404 },
   "/evals-settings": {
     path: () => "/evals-settings",
     expect: (a) => (canManageEvalsSettings(a) ? { to: EVALS_SETTINGS_TABS[0]!.href } : 404),
@@ -336,6 +341,10 @@ const ROUTES: RouteCase[] = [
   { method: "POST", path: "/api/scheduler/bootcamps", allowed: canManageTrainingSettings, body: () => ({}) },
   { method: "PATCH", path: `/api/scheduler/bootcamps/${MISSING}`, allowed: canManageTrainingSettings, body: () => ({}) },
   { method: "DELETE", path: `/api/scheduler/bootcamps/${MISSING}`, allowed: canManageTrainingSettings },
+
+  // eVals
+  { method: "GET", path: "/api/evals/bootcamp-history", allowed: canUseEvals },
+  { method: "GET", path: `/api/evals/bootcamp-history/${MISSING}`, allowed: canUseEvals },
 
   // eVals administration
   { method: "GET", path: "/api/evals/candidate-cutoffs", allowed: canManageEvalsSettings },

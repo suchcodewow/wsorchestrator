@@ -68,6 +68,7 @@ export async function deleteTestRows(
     [like],
   );
   await query("delete from users where id like $1", [like]);
+  await query("delete from bootcamp_history where email like $1", [`${like}@${TEST_EMAIL_DOMAIN}`]);
 }
 
 function redact(url: string): string {
