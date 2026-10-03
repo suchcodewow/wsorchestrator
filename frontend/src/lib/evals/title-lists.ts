@@ -1,6 +1,6 @@
 /** The title lists, and what a title on each means for its holder. */
 
-import { EVALS_TITLE_LISTS, type EvalsTitleList } from "@/db/schema";
+import { EVALS_TITLE_LISTS, type EmployeeTrack, type EvalsTitleList } from "@/db/schema";
 
 export const TITLE_LIST_LABELS: Record<EvalsTitleList, string> = {
   sales: "Sales",
@@ -52,4 +52,16 @@ export function listForTitle(
 ): EvalsTitleList | null {
   const key = titleKey(title);
   return key ? (lists.get(key) ?? null) : null;
+}
+
+/**
+ * An employee's track: none outside the org; `exempt` when their bootcamp
+ * history says so, whatever their title; otherwise their title's list.
+ */
+export function trackFor(
+  person: { inOrg: boolean; title: string; exempt: boolean },
+  lists: ReadonlyMap<string, EvalsTitleList>,
+): EmployeeTrack | null {
+  if (!person.inOrg) return null;
+  return person.exempt ? "exempt" : listForTitle(person.title, lists);
 }

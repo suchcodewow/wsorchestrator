@@ -54,9 +54,7 @@ export type Roster = {
   unlisted: UnlistedTitle[];
 };
 
-/** A stored employee, with their bootcamp history if they have one. */
-export type EmployeeListing = Omit<Employee, "raw" | "importedAt" | "orgDepth" | "track"> &
-  Pick<BootcampHistory, "btcDate" | "btcScore" | "intDate" | "intScore">;
+export type EmployeeListing = Omit<Employee, "raw" | "importedAt" | "orgDepth" | "track">;
 
 const EMPLOYEE_COLUMNS = {
   id: employees.id,
@@ -69,10 +67,6 @@ const EMPLOYEE_COLUMNS = {
   reportsToName: employees.reportsToName,
   startDate: employees.startDate,
   activeEffectiveDate: employees.activeEffectiveDate,
-  btcDate: bootcampHistory.btcDate,
-  btcScore: bootcampHistory.btcScore,
-  intDate: bootcampHistory.intDate,
-  intScore: bootcampHistory.intScore,
 };
 
 const EMPLOYEE_SORT_COLUMNS = {
@@ -84,25 +78,17 @@ const EMPLOYEE_SORT_COLUMNS = {
   reportsToName: sql`lower(coalesce(${blankAsNull(employees.reportsToName)}, ${blankAsNull(employees.reportsToEmail)}))`,
   startDate: employees.startDate,
   activeEffectiveDate: employees.activeEffectiveDate,
-  btcDate: bootcampHistory.btcDate,
-  btcScore: bootcampHistory.btcScore,
-  intDate: bootcampHistory.intDate,
-  intScore: bootcampHistory.intScore,
 } as const;
 
 /**
  * One page of stored employees, for the Employees tab and the Organization
- * Leader picker — everyone the sync stored, not only those under the root —
- * each with their BTC and INT dates and scores from `bootcamp_history`, which
- * the sync leaves alone.
+ * Leader picker — everyone the sync stored, not only those under the root.
  */
 export async function listEmployees(query: ListQuery<EmployeeSort>): Promise<Page<EmployeeListing>> {
   const { limit, offset } = pageWindow(query.page);
   const rows = await db
     .select(EMPLOYEE_COLUMNS)
     .from(employees)
-    // Both emails are stored lowercased.
-    .leftJoin(bootcampHistory, eq(bootcampHistory.email, employees.email))
     .where(
       searchAny(query.q, [
         employees.fullName,
@@ -156,7 +142,8 @@ export type OrganizationSummary = {
 export type OrganizationMember = Pick<
   Employee,
   "email" | "fullName" | "title" | "department" | "reportsToEmail" | "reportsToName" | "track"
-> & {
+> &
+  Pick<BootcampHistory, "btcDate" | "btcScore" | "intDate" | "intScore"> & {
   /** Links between this person and the leader, counting the leader. */
   depth: number;
   /** Lowercased; whom the sync that stored them worked `depth` out for. */
@@ -171,6 +158,10 @@ const ORGANIZATION_SORT_COLUMNS = {
   department: sql`lower(${blankAsNull(employees.department)})`,
   reportsToName: sql`lower(coalesce(${blankAsNull(employees.reportsToName)}, ${blankAsNull(employees.reportsToEmail)}))`,
   track: employees.track,
+  btcDate: bootcampHistory.btcDate,
+  btcScore: bootcampHistory.btcScore,
+  intDate: bootcampHistory.intDate,
+  intScore: bootcampHistory.intScore,
 } as const;
 
 /** Whom the latest successful sync worked `employees.org_depth` out for, or null if none has. */
@@ -187,7 +178,7 @@ async function syncedLeaderEmail(): Promise<string | null> {
 /**
  * One page of the Organization tab: the employees the last HiBob sync found
  * reporting up to the Organization Leader, which is those it gave an
- * `org_depth`. Read from what the sync stored rather than recomputed here,
+ * `org_depth`, each with their BTC and INT dates and scores. Read from what the sync stored rather than recomputed here,
  * because the chain is only ever as fresh as the last sync — recomputing on
  * every page view would silently show a chain HiBob has not actually synced yet.
  */
@@ -207,8 +198,15 @@ export async function listOrganizationMembers(
         reportsToName: e.reportsToName,
         track: e.track,
         depth: sql<number>`${e.orgDepth}`,
+        btcDate: bootcampHistory.btcDate,
+        btcScore: bootcampHistory.btcScore,
+        intDate: bootcampHistory.intDate,
+        intScore: bootcampHistory.intScore,
       })
       .from(e)
+      // Both emails are stored lowercased. The sync rebuilds employees, so
+      // results are kept in bootcamp_history and joined here.
+      .leftJoin(bootcampHistory, eq(bootcampHistory.email, e.email))
       .where(
         and(
           isNotNull(e.orgDepth),

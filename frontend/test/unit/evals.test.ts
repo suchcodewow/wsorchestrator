@@ -15,7 +15,7 @@ import { parseHistorySheet } from "@/lib/evals/bootcamp-history-file";
 import { hibobAuthorization, toEmployeeRow } from "@/lib/evals/hibob-record";
 import { isIsoDay, normalEmail } from "@/lib/evals/history-values";
 import { orgUnder, ORG_ROOT_EMAIL } from "@/lib/evals/org";
-import { cleanTitle, listForTitle, splitTitles, titleKey } from "@/lib/evals/title-lists";
+import { cleanTitle, listForTitle, splitTitles, titleKey, trackFor } from "@/lib/evals/title-lists";
 import type { Cell } from "@/lib/spreadsheet-file";
 
 describe("toEmployeeRow", () => {
@@ -149,6 +149,16 @@ describe("title lists", () => {
     assert.equal(listForTitle(" Account  EXECUTIVE", lists), "sales");
     assert.equal(listForTitle("Engineer", lists), null);
     assert.equal(listForTitle("", lists), null);
+  });
+
+  test("give a track only in the org, and exempt over any list", () => {
+    const lists = new Map([["account executive", "sales" as const]]);
+    const ae = { inOrg: true, title: "Account Executive", exempt: false };
+    assert.equal(trackFor(ae, lists), "sales");
+    assert.equal(trackFor({ ...ae, exempt: true }, lists), "exempt");
+    assert.equal(trackFor({ ...ae, title: "Director", exempt: true }, lists), "exempt");
+    assert.equal(trackFor({ ...ae, title: "Director" }, lists), null);
+    assert.equal(trackFor({ ...ae, inOrg: false, exempt: true }, lists), null);
   });
 });
 

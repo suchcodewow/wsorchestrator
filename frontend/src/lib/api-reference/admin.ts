@@ -147,7 +147,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "trainingViewer",
         token: true,
         notes:
-          "A person's track is the title list their title was on when the sync ran, for everyone under the Organization Leader; changing a list takes effect at the next sync. counts gives everyone on each track, whatever the search.",
+          "A person's track is the title list their title was on when the sync ran, for everyone under the Organization Leader, unless their bootcamp history marks BTC or INT exempt, which makes it exempt and leaves them off this list. Changing a list takes effect at the next sync; changing someone's bootcamp history takes effect at once. counts gives everyone on each track, whatever the search.",
         query: listQuery(CURRENT_COHORT_LIST.sorts, "the name, email, title, department, track, or the manager's name or email"),
         returns: `{ members: { email, fullName, title, department, reportsToEmail, reportsToName, track: "sales" | "engineer" }[], ${PAGE_FIELDS}, counts: { sales: number, engineer: number }, syncedAt: ISO 8601 string | null }`,
       },
@@ -163,10 +163,9 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         summary: "Lists the employees stored by the last HiBob sync, a page at a time.",
         access: "evalsAdmin",
         token: true,
-        notes:
-          "btcDate, btcScore, intDate and intScore are from the person's bootcamp history, null where there is none; a date of 2000-01-01 means they are exempt from that class, and a score is a whole number from 1 (poor) to 4 (outstanding). total counts every stored employee, whatever the search.",
+        notes: "total counts every stored employee, whatever the search.",
         query: listQuery(EMPLOYEE_LIST.sorts, "the name, email, title, department, site, or the manager's name or email"),
-        returns: `{ people: { id, email, fullName, title, department, site, reportsToEmail, reportsToName, startDate, activeEffectiveDate, btcDate, btcScore, intDate, intScore }[], ${PAGE_FIELDS}, total: number, syncedAt: ISO 8601 string | null }`,
+        returns: `{ people: { id, email, fullName, title, department, site, reportsToEmail, reportsToName, startDate, activeEffectiveDate }[], ${PAGE_FIELDS}, total: number, syncedAt: ISO 8601 string | null }`,
       },
       {
         method: "GET",
@@ -175,9 +174,9 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "evalsAdmin",
         token: true,
         notes:
-          "depth counts the links between a person and the leader, the leader included. track is the title list the person's title was on when the sync ran, or null for a title on no list. The list is as of the last sync; current is false once a different leader has been set since, until the next sync runs. total counts everyone listed, whatever the search.",
+          "depth counts the links between a person and the leader, the leader included. track is exempt when the person's bootcamp history marks BTC or INT exempt, otherwise the title list their title was on when the sync ran, or null for a title on no list. btcDate, btcScore, intDate and intScore are from their bootcamp history, null where there is none; a date of 2000-01-01 means they are exempt from that class, and a score is a whole number from 1 (poor) to 4 (outstanding). The list is as of the last sync; current is false once a different leader has been set since, until the next sync runs. total counts everyone listed, whatever the search.",
         query: listQuery(ORGANIZATION_LIST.sorts, "the name, email, title, department, track, or the manager's name or email"),
-        returns: `{ members: { email, fullName, title, department, reportsToEmail, reportsToName, track: "sales" | "engineer" | "ignored" | null, depth, leaderEmail }[], ${PAGE_FIELDS}, total: number, leaderEmail: string | null, current: boolean }`,
+        returns: `{ members: { email, fullName, title, department, reportsToEmail, reportsToName, track: "sales" | "engineer" | "ignored" | "exempt" | null, depth, leaderEmail, btcDate, btcScore, intDate, intScore }[], ${PAGE_FIELDS}, total: number, leaderEmail: string | null, current: boolean }`,
       },
       {
         method: "GET",

@@ -9,7 +9,7 @@ import type { EmployeeListing } from "@/lib/evals/roster";
 import type { EmployeeSort } from "@/lib/list-specs";
 import { riseChild, staggerParent } from "@/lib/motion";
 import type { ListQuery, Page } from "@/lib/paging";
-import { formatDate, formatHistoryDate, formatScore, formatWhen } from "../format";
+import { formatDate, formatWhen } from "../format";
 
 const COLUMNS: { column: EmployeeSort; label: string }[] = [
   { column: "fullName", label: "Name" },
@@ -20,10 +20,6 @@ const COLUMNS: { column: EmployeeSort; label: string }[] = [
   { column: "reportsToName", label: "Manager" },
   { column: "startDate", label: "Started" },
   { column: "activeEffectiveDate", label: "In role since" },
-  { column: "btcDate", label: "BTC date" },
-  { column: "btcScore", label: "BTC score" },
-  { column: "intDate", label: "INT date" },
-  { column: "intScore", label: "INT score" },
 ];
 
 export function EmployeesTable({
@@ -71,7 +67,7 @@ export function EmployeesTable({
 
       <motion.div variants={riseChild} className="overflow-hidden rounded-2xl border bg-card shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-320 text-sm">
+          <table className="w-full min-w-240 text-sm">
             <thead>
               <tr className={HEADER_ROW}>
                 {COLUMNS.map(({ column, label }) => (
@@ -96,14 +92,6 @@ export function EmployeesTable({
                   <td className="whitespace-nowrap px-5 py-2.5 tabular-nums text-muted-foreground">
                     {formatDate(p.activeEffectiveDate)}
                   </td>
-                  <td className="whitespace-nowrap px-5 py-2.5 tabular-nums text-muted-foreground">
-                    {formatHistoryDate(p.btcDate)}
-                  </td>
-                  <td className="px-5 py-2.5 tabular-nums">{formatScore(p.btcScore)}</td>
-                  <td className="whitespace-nowrap px-5 py-2.5 tabular-nums text-muted-foreground">
-                    {formatHistoryDate(p.intDate)}
-                  </td>
-                  <td className="px-5 py-2.5 tabular-nums">{formatScore(p.intScore)}</td>
                 </tr>
               ))}
               {shown.length === 0 && (
