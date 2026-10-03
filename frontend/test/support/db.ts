@@ -54,7 +54,9 @@ export async function assertScratchDatabase(url = testDatabaseUrl()): Promise<vo
  * `TEST_PREFIX` + `scope` — children first: `workshop_runs.user_id` does not
  * cascade, and a run left behind would keep its owner alive. Sessions, tokens
  * and the rest cascade from the user. Audit rows outlive a deleted user by
- * design, so the suite's own are deleted by actor first.
+ * design, so the suite's own are deleted by actor first. Judges are found by
+ * email; a bootcamp or assessment the suite made, by its creator, along with
+ * any scores given at it or on it.
  */
 export async function deleteTestRows(
   query: (sql: string, params: unknown[]) => Promise<unknown>,
@@ -67,6 +69,13 @@ export async function deleteTestRows(
     "delete from workshop_runs where user_id in (select id from users where id like $1)",
     [like],
   );
+  const made = "select id from bootcamps where created_by like $1";
+  await query(`delete from evals_submissions where bootcamp_id in (${made})`, [like]);
+  const assessed = "select id from evals_assessments where created_by like $1";
+  await query(`delete from evals_submissions where assessment_id in (${assessed})`, [like]);
+  await query(`delete from evals_assessments where id in (${assessed})`, [like]);
+  await query(`delete from bootcamps where id in (${made})`, [like]);
+  await query("delete from bootcamp_judges where email like $1", [`${scope}%@${TEST_EMAIL_DOMAIN}`]);
   await query("delete from users where id like $1", [like]);
   await query("delete from bootcamp_history where email like $1", [`${like}@${TEST_EMAIL_DOMAIN}`]);
 }

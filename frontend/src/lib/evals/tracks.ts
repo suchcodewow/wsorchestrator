@@ -51,7 +51,12 @@ export async function nextBootcampStart(): Promise<string | null> {
   const [next] = await db
     .select({ startDate: bootcamps.startDate })
     .from(bootcamps)
-    .where(or(eq(bootcamps.status, "active"), gte(bootcamps.startDate, sql`current_date`)))
+    .where(
+      or(
+        eq(bootcamps.status, "active"),
+        and(eq(bootcamps.status, "scheduled"), gte(bootcamps.startDate, sql`current_date`)),
+      ),
+    )
     .orderBy(sql`(${bootcamps.status} = 'active') desc`, asc(bootcamps.startDate))
     .limit(1);
   return next?.startDate ?? null;

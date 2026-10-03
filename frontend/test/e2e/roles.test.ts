@@ -39,6 +39,8 @@ import {
   canManageSignInDomains,
   canManageUsers,
   canPublishComponents,
+  canScoreAssessments,
+  canSearchEmployees,
   canSeeAllEvents,
   canUseEvals,
   canUseEvents,
@@ -49,6 +51,7 @@ import {
 } from "@/lib/roles";
 import { visibleCohortSettingsTabs } from "@/app/(app)/cohort-settings/tabs";
 import { EVALS_SETTINGS_TABS } from "@/app/(app)/evals-settings/tabs";
+import { EVALS_TABS } from "@/app/(app)/evals/tabs";
 import { COHORTS_TABS } from "@/app/(app)/cohorts/tabs";
 import { visibleSettingsTabs } from "@/app/(app)/settings/tabs";
 import { PERSONAS, PERSONA_NAMES, type Persona } from "../support/access";
@@ -69,6 +72,7 @@ const tokens = {} as Record<Persona, string>;
 const ownRun = {} as Record<Persona, string>;
 let aliceRun: string;
 let historyId: string;
+let assessmentId: string;
 
 before(async () => {
   await scope.setUp();
@@ -77,6 +81,9 @@ before(async () => {
   const alice = await scope.createUser("alice", PERSONAS.operator);
   aliceRun = await createRun(alice.id, "Alice's workshop");
   historyId = await scope.createHistory("history");
+  assessmentId = await scope.createAssessment(alice.id, "e2e assessment");
+  // The scoring pages need an active bootcamp.
+  await scope.activeBootcamp(alice.id);
   for (const p of PERSONA_NAMES) {
     people[p] = await scope.createUser(p, PERSONAS[p]);
     cookies[p] = await createSession(people[p].id);
@@ -199,7 +206,25 @@ const PAGES: Record<string, PageCase> = {
     path: () => "/cohort-settings/organization",
     expect: gated(canManageTrainingSettings),
   },
-  "/evals": { path: () => "/evals", expect: gated(canUseEvals) },
+  "/evals": {
+    path: () => "/evals",
+    expect: (a) => (canScoreAssessments(a) ? { to: EVALS_TABS[0]!.href } : 404),
+  },
+  "/evals/bootcamp": { path: () => "/evals/bootcamp", expect: gated(canScoreAssessments) },
+  "/evals/intermediate": { path: () => "/evals/intermediate", expect: gated(canScoreAssessments) },
+  "/evals/<unknown stage>": { path: () => "/evals/nonsense", expect: () => 404 },
+  "/evals/bootcamp/<an assessment>": {
+    path: () => `/evals/bootcamp/${assessmentId}`,
+    expect: gated(canScoreAssessments),
+  },
+  "/evals/intermediate/<a bootcamp assessment>": {
+    path: () => `/evals/intermediate/${assessmentId}`,
+    expect: () => 404,
+  },
+  "/evals/bootcamp/<an assessment>/<not an attendee>": {
+    path: () => `/evals/bootcamp/${assessmentId}/0`,
+    expect: () => 404,
+  },
   "/bootcamp-history": { path: () => "/bootcamp-history", expect: gated(canUseEvals) },
   "/bootcamp-history?status=active": { path: () => "/bootcamp-history?status=active", expect: gated(canUseEvals) },
   "/bootcamp-history/<a record>": { path: () => `/bootcamp-history/${historyId}`, expect: gated(canUseEvals) },
@@ -207,6 +232,22 @@ const PAGES: Record<string, PageCase> = {
   "/evals-settings": {
     path: () => "/evals-settings",
     expect: (a) => (canManageEvalsSettings(a) ? { to: EVALS_SETTINGS_TABS[0]!.href } : 404),
+  },
+  "/evals-settings/assessments": {
+    path: () => "/evals-settings/assessments",
+    expect: gated(canManageEvalsSettings),
+  },
+  "/evals-settings/assessments/new": {
+    path: () => "/evals-settings/assessments/new",
+    expect: gated(canManageEvalsSettings),
+  },
+  "/evals-settings/assessments/<one>": {
+    path: () => `/evals-settings/assessments/${assessmentId}`,
+    expect: gated(canManageEvalsSettings),
+  },
+  "/evals-settings/assessments/<unknown>": {
+    path: () => `/evals-settings/assessments/${MISSING}`,
+    expect: () => 404,
   },
   "/evals-settings/slack-contacts": {
     path: () => "/evals-settings/slack-contacts",
@@ -351,7 +392,11 @@ const ROUTES: RouteCase[] = [
   { method: "GET", path: "/api/scheduler/bootcamps", allowed: canUseTraining },
   { method: "POST", path: "/api/scheduler/bootcamps", allowed: canManageTrainingSettings, body: () => ({}) },
   { method: "PATCH", path: `/api/scheduler/bootcamps/${MISSING}`, allowed: canManageTrainingSettings, body: () => ({}) },
+  { method: "GET", path: `/api/scheduler/bootcamps/${MISSING}`, allowed: canUseTraining },
   { method: "DELETE", path: `/api/scheduler/bootcamps/${MISSING}`, allowed: canManageTrainingSettings },
+  { method: "GET", path: `/api/scheduler/bootcamps/${MISSING}/judges`, allowed: canUseTraining },
+  { method: "POST", path: `/api/scheduler/bootcamps/${MISSING}/judges`, allowed: canManageTrainingSettings, body: () => ({}) },
+  { method: "DELETE", path: `/api/scheduler/bootcamps/${MISSING}/judges/${MISSING}`, allowed: canManageTrainingSettings },
 
   // eVals
   { method: "GET", path: "/api/evals/bootcamp-history", allowed: canUseEvals },
@@ -360,7 +405,7 @@ const ROUTES: RouteCase[] = [
   // eVals administration
   { method: "GET", path: "/api/evals/candidate-cutoffs", allowed: canManageEvalsSettings },
   { method: "GET", path: "/api/evals/deferral-days", allowed: canManageEvalsSettings },
-  { method: "GET", path: "/api/evals/employees", allowed: canManageEvalsSettings },
+  { method: "GET", path: "/api/evals/employees", allowed: canSearchEmployees },
   { method: "GET", path: "/api/evals/hibob/sync", allowed: canManageEvalsSettings },
   { method: "GET", path: "/api/evals/organization", allowed: canManageEvalsSettings },
   { method: "GET", path: "/api/evals/slack-contacts", allowed: canManageEvalsSettings },
@@ -373,6 +418,17 @@ const ROUTES: RouteCase[] = [
   { method: "PATCH", path: `/api/evals/titles/${MISSING}`, allowed: canManageEvalsSettings, body: () => ({}) },
   { method: "DELETE", path: `/api/evals/titles/${MISSING}`, allowed: canManageEvalsSettings },
   { method: "DELETE", path: `/api/evals/slack-contacts/${MISSING}`, allowed: canManageEvalsSettings },
+  { method: "GET", path: "/api/evals/assessments", allowed: canManageEvalsSettings },
+  { method: "POST", path: "/api/evals/assessments", allowed: canManageEvalsSettings, body: () => ({}) },
+  { method: "GET", path: `/api/evals/assessments/${MISSING}`, allowed: canManageEvalsSettings },
+  { method: "PUT", path: `/api/evals/assessments/${MISSING}`, allowed: canManageEvalsSettings, body: () => ({}) },
+  { method: "DELETE", path: `/api/evals/assessments/${MISSING}`, allowed: canManageEvalsSettings },
+
+  // eVals scoring
+  { method: "GET", path: "/api/evals/scoring?stage=bootcamp", allowed: canScoreAssessments },
+  { method: "GET", path: `/api/evals/scoring/${MISSING}`, allowed: canScoreAssessments },
+  { method: "GET", path: `/api/evals/scoring/${MISSING}/0`, allowed: canScoreAssessments },
+  { method: "PUT", path: `/api/evals/scoring/${MISSING}/0`, allowed: canScoreAssessments, body: () => ({}) },
 
   // Users
   { method: "GET", path: "/api/users", allowed: canManageUsers },
@@ -587,6 +643,7 @@ describe("PATCH /api/users/:id", () => {
       training: null,
       evals: null,
       platform: false,
+      judging: false,
     });
   });
 
@@ -600,6 +657,7 @@ describe("PATCH /api/users/:id", () => {
       training: "viewer",
       evals: null,
       platform: false,
+      judging: false,
     });
   });
 
@@ -613,6 +671,7 @@ describe("PATCH /api/users/:id", () => {
       training: null,
       evals: "viewer",
       platform: false,
+      judging: false,
     });
   });
 
@@ -631,6 +690,7 @@ describe("PATCH /api/users/:id", () => {
       training: "administrator",
       evals: "administrator",
       platform: true,
+      judging: false,
     });
   });
 
@@ -706,6 +766,7 @@ describe("invite links", () => {
       training: null,
       evals: null,
       platform: false,
+      judging: false,
     });
     assert.equal((await send({ cookie }, "GET", "/events")).status, 200);
   });
@@ -749,7 +810,7 @@ describe("invite links", () => {
     assert.equal(res.status, 200, res.body);
     assert.deepEqual(JSON.parse(res.body), { applied: true, home: "/evals" });
     assert.equal((await readRoles(newcomer.id))?.evals, "viewer");
-    assert.equal((await send({ cookie }, "GET", "/evals")).status, 200);
+    assert.equal((await send({ cookie }, "GET", EVALS_TABS[0]!.href)).status, 200);
   });
 
   test("a link that grants nothing, or platform administration, is not made", async () => {

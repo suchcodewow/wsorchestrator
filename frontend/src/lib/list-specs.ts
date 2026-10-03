@@ -73,7 +73,16 @@ export const SESSION_ATTENDEE_LIST = spec(["fullName"]);
 export const BOOTCAMP_LIST = spec(["startDate", "status", "createdBy"], "desc");
 export type BootcampSort = (typeof BOOTCAMP_LIST.sorts)[number];
 
-export const HIBOB_SYNC_LIST = spec(["startedAt", "triggeredBy", "status"], "desc");
+export const JUDGE_LIST = spec(["fullName", "email", "addedBy", "addedAt"]);
+export type JudgeSort = (typeof JUDGE_LIST.sorts)[number];
+
+export const ASSESSMENT_LIST = spec(["name", "stage", "audience", "active", "updatedAt"]);
+export type AssessmentSort = (typeof ASSESSMENT_LIST.sorts)[number];
+
+export const ASSESSMENT_ATTENDEE_LIST = spec(["fullName", "email", "title", "track", "averageScore"]);
+export type AssessmentAttendeeSort = (typeof ASSESSMENT_ATTENDEE_LIST.sorts)[number];
+
+export const HIBOB_SYNC_LIST =spec(["startedAt", "triggeredBy", "status"], "desc");
 export type HibobSyncSort = (typeof HIBOB_SYNC_LIST.sorts)[number];
 
 export const DOMAIN_LIST = spec(["domain", "note", "addedBy"]);

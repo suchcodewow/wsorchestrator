@@ -79,7 +79,8 @@ const SORT_COLUMNS = {
   btcDate: h.btcDate,
 } as const;
 
-const IN_STAGE: Record<CandidateStage, SQL> = {
+/** Which stage a candidate is in, read off `bootcamp_history` joined as on `employees.email`. */
+export const IN_STAGE: Record<CandidateStage, SQL> = {
   bootcamp: isNull(h.btcDate),
   intermediate: and(isNotNull(h.btcDate), isNull(h.intDate))!,
 };
@@ -91,8 +92,12 @@ const ON_TRACK: Record<CandidateTrack, SQL> = {
   deferred: eq(e.track, "deferred"),
 };
 
-/** In the org, in a stage, on a track still to train or none yet, and recent enough by the cutoffs. */
-function isCandidate({ startDateOnOrAfter, activeEffectiveDateAfter }: CandidateCutoffs) {
+/**
+ * In the org, in a stage, on a track still to train or none yet, and recent
+ * enough by the cutoffs. Reads `employees` and `bootcamp_history`, the latter
+ * left-joined on email; eVals scoring draws its attendees with it too.
+ */
+export function isCandidate({ startDateOnOrAfter, activeEffectiveDateAfter }: CandidateCutoffs) {
   return and(
     isNotNull(e.orgDepth),
     or(IN_STAGE.bootcamp, IN_STAGE.intermediate),

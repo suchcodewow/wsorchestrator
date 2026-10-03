@@ -134,6 +134,7 @@ export async function readInvite(
     training: row.creatorTraining,
     evals: row.creatorEvals,
     platform: row.creatorPlatform,
+    judging: false,
   };
   if (!mayGrant(creator, grant)) return { ok: false, error: "revoked" };
 

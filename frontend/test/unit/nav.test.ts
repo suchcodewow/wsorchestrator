@@ -46,6 +46,7 @@ const EXPECTED_SIDEBAR: Record<Persona, string[]> = {
   ],
   evalsViewer: ["[eVals]", "eVals", "Bootcamp History", ...ACCOUNT],
   evalsAdmin: ["[eVals]", "eVals", "Bootcamp History", "eVals settings", ...ACCOUNT, "[Administration]", "Manage users"],
+  guestJudge: ["[eVals]", "eVals", ...ACCOUNT],
   bothAdmins: [
     ...EVENTS_ADMIN,
     "[Training]",

@@ -20,6 +20,11 @@ export type Access = {
   training: TrainingRole | null;
   evals: EvalsRole | null;
   platform: boolean;
+  /**
+   * A guest judge on the active bootcamp. Not a role: the Scheduler grants it
+   * per bootcamp, and it lets them score assessments and nothing else.
+   */
+  judging: boolean;
 };
 
 /** An area whose roles are granted by that area's own administrators. */
@@ -137,6 +142,13 @@ export const canUseEvals = (access: Access) => evalsAtLeast(access, "viewer");
 export const canManageEvalsSettings = (access: Access) =>
   evalsAtLeast(access, "administrator");
 
+/** Sees and submits assessments on the eVals page: anyone in eVals, and the active bootcamp's guest judges. */
+export const canScoreAssessments = (access: Access) => canUseEvals(access) || access.judging;
+
+/** Searches the employee list: eVals administrators for their settings, Training administrators to add judges. */
+export const canSearchEmployees = (access: Access) =>
+  canManageEvalsSettings(access) || canManageTrainingSettings(access);
+
 // The platform: whatever reaches past a single area.
 
 export const canManageBackups = (access: Access) => access.platform;
@@ -180,7 +192,10 @@ export function accessBadges(access: Access): string[] {
   return badges;
 }
 
-/** No role in any area — someone who has signed in and been given nothing. */
+/**
+ * No role in any area — someone who has signed in and been given nothing. A
+ * guest judge may still have nothing by this measure: judging is not a role.
+ */
 export const hasNoAccess = (access: Access) =>
   !access.platform &&
   access.event === "none" &&
@@ -191,7 +206,7 @@ export const hasNoAccess = (access: Access) =>
 export function homePath(access: Access): string {
   if (canUseEvents(access)) return "/events";
   if (canUseTraining(access)) return "/scheduler";
-  if (canUseEvals(access)) return "/evals";
+  if (canScoreAssessments(access)) return "/evals";
   return "/welcome";
 }
 
