@@ -23,10 +23,6 @@ export const EMPLOYEE_LIST = spec([
   "reportsToName",
   "startDate",
   "activeEffectiveDate",
-  "btcDate",
-  "btcScore",
-  "intDate",
-  "intScore",
 ]);
 export type EmployeeSort = (typeof EMPLOYEE_LIST.sorts)[number];
 
@@ -36,7 +32,19 @@ export type UserSort = (typeof USER_LIST.sorts)[number];
 export const TITLE_LIST = spec(["title", "addedBy", "createdAt"]);
 export type TitleSort = (typeof TITLE_LIST.sorts)[number];
 
-export const ORGANIZATION_LIST = spec(["depth", "fullName", "email", "title", "department", "reportsToName", "track"]);
+export const ORGANIZATION_LIST = spec([
+  "depth",
+  "fullName",
+  "email",
+  "title",
+  "department",
+  "reportsToName",
+  "track",
+  "btcDate",
+  "btcScore",
+  "intDate",
+  "intScore",
+]);
 export type OrganizationSort = (typeof ORGANIZATION_LIST.sorts)[number];
 
 export const CURRENT_COHORT_LIST = spec(["fullName", "email", "title", "department", "reportsToName", "track"]);

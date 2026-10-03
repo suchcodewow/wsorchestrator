@@ -20,9 +20,18 @@ import { eq, inArray, like } from "drizzle-orm";
 process.env.AUTH_SECRET ||= "evals-settings-test-secret-evals-settings";
 
 import { db } from "@/db";
-import { bootcampHistory, employees, evalsTitles, EXEMPT_DATE, hibobSyncRuns } from "@/db/schema";
+import {
+  bootcampHistory,
+  employees,
+  EVALS_SETTINGS_KEYS,
+  evalsSettings,
+  evalsTitles,
+  EXEMPT_DATE,
+  hibobSyncRuns,
+} from "@/db/schema";
 import {
   createHistory,
+  deleteHistory,
   historyInputSchema,
   historyPatchSchema,
   importHistory,
@@ -375,5 +384,68 @@ describe("HiBob sync", () => {
     const cutOff = await run(running!.id);
     assert.equal(cutOff.status, "failed");
     assert.match(cutOff.error ?? "", /Did not finish/);
+  });
+
+  test("the sync gives each org member a track, exempt where their history says, and edits keep it", async () => {
+    configure();
+    // The sync walks down from the configured leader; put it back after.
+    const key = EVALS_SETTINGS_KEYS.orgLeaderEmail;
+    const [saved] = await db.select().from(evalsSettings).where(eq(evalsSettings.key, key));
+    await db
+      .insert(evalsSettings)
+      .values({ key, value: email("root"), updatedBy: admin.id })
+      .onConflictDoUpdate({ target: evalsSettings.key, set: { value: email("root") } });
+    try {
+      await addTitles(admin.id, "sales", [T("Track AE")]);
+      await addTitles(admin.id, "engineer", [T("Track SE")]);
+      await importHistory(
+        admin.id,
+        new File(
+          [`email,BTCDate,INTDate\n${email("t-btc")},2000-01-01,\n${email("t-int")},2026-03-01,2000-01-01\n`],
+          "h.csv",
+        ),
+      );
+      stubHibob(200, [
+        person("1", "root", ""),
+        person("2", "t-ae", "root", T("Track AE")),
+        person("3", "t-btc", "root", T("Track AE")),
+        person("4", "t-int", "root", T("Track SE")),
+        person("5", "t-out", "elsewhere", T("Track AE")),
+      ]);
+      assert.ok((await sync()).ok);
+      const tracks = async () =>
+        Object.fromEntries(
+          (await db.select({ email: employees.email, track: employees.track }).from(employees)).map((e) => [
+            e.email.split("@")[0],
+            e.track,
+          ]),
+        );
+      assert.deepEqual(await tracks(), {
+        root: null,
+        "t-ae": "sales",
+        "t-btc": "exempt",
+        "t-int": "exempt",
+        "t-out": null,
+      });
+
+      // An edit to someone's history moves their track at once, either way.
+      const history = await listHistory();
+      const btc = history.find((h) => h.email === email("t-btc"))!;
+      assert.deepEqual(await updateHistory(admin.id, btc.id, { btcDate: "2026-04-01" }), { ok: true });
+      const exempt = { email: email("t-ae"), btcDate: EXEMPT_DATE, intDate: null, btcScore: null, intScore: null };
+      assert.ok((await createHistory(admin.id, historyInputSchema.parse(exempt))).ok);
+      const int = history.find((h) => h.email === email("t-int"))!;
+      assert.equal(await deleteHistory(int.id), true);
+      assert.deepEqual(await tracks(), {
+        root: null,
+        "t-ae": "exempt",
+        "t-btc": "sales",
+        "t-int": "engineer",
+        "t-out": null,
+      });
+    } finally {
+      if (saved) await db.update(evalsSettings).set(saved).where(eq(evalsSettings.key, key));
+      else await db.delete(evalsSettings).where(eq(evalsSettings.key, key));
+    }
   });
 });

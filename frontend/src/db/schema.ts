@@ -843,12 +843,13 @@ export const employees = pgTable(
      */
     orgDepth: integer("org_depth"),
     /**
-     * The title list this person's title was on when the sync that stored
-     * them ran — `sales`, `engineer` or `ignored` — or null for a title on no
-     * list and for anyone not under the leader. Who has `sales` or `engineer`
-     * is who the Cohorts page's Current tab lists.
+     * `exempt` when this person's bootcamp history marks BTC or INT exempt;
+     * otherwise the title list their title was on when the sync that stored
+     * them ran — `sales`, `engineer` or `ignored`. Null for a title on no list
+     * and for anyone not under the leader. Who has `sales` or `engineer` is
+     * who the Cohorts page's Current tab lists. Set by `lib/evals/tracks.ts`.
      */
-    track: text("track").$type<EvalsTitleList>(),
+    track: text("track").$type<EmployeeTrack>(),
   },
   (t) => [
     index("employees_email_idx").on(t.email),
@@ -907,6 +908,10 @@ export type HibobSyncRun = typeof hibobSyncRuns.$inferSelect;
  */
 export const EVALS_TITLE_LISTS = ["sales", "engineer", "ignored"] as const;
 export type EvalsTitleList = (typeof EVALS_TITLE_LISTS)[number];
+
+/** An employee's track: a title list's, or `exempt`, which outranks it. */
+export const EMPLOYEE_TRACKS = [...EVALS_TITLE_LISTS, "exempt"] as const;
+export type EmployeeTrack = (typeof EMPLOYEE_TRACKS)[number];
 
 /**
  * eVals-wide settings with exactly one value each, such as the organization

@@ -14,6 +14,7 @@ import { db } from "@/db";
 import { BOOTCAMP_HISTORY_LIMITS, BOOTCAMP_SCORE, bootcampHistory, type BootcampHistory } from "@/db/schema";
 import { parseHistorySheet, type HistoryField, type HistoryProblem } from "@/lib/evals/bootcamp-history-file";
 import { isIsoDay, normalEmail } from "@/lib/evals/history-values";
+import { retrackEmployees } from "@/lib/evals/tracks";
 import { readSpreadsheet } from "@/lib/spreadsheet-file";
 
 export async function listHistory(): Promise<BootcampHistory[]> {
@@ -79,7 +80,9 @@ export async function createHistory(
     .values({ ...input, updatedBy: actorId })
     .onConflictDoNothing()
     .returning({ id: bootcampHistory.id });
-  return row ? { ok: true, id: row.id } : { ok: false, error: "duplicate" };
+  if (!row) return { ok: false, error: "duplicate" };
+  await retrackEmployees([input.email]);
+  return { ok: true, id: row.id };
 }
 
 export async function updateHistory(
@@ -87,13 +90,21 @@ export async function updateHistory(
   id: string,
   patch: HistoryPatch,
 ): Promise<{ ok: true } | { ok: false; error: HistoryError }> {
+  const [before] = await db
+    .select({ email: bootcampHistory.email })
+    .from(bootcampHistory)
+    .where(eq(bootcampHistory.id, id));
+  if (!before) return { ok: false, error: "not_found" };
   try {
     const updated = await db
       .update(bootcampHistory)
       .set({ ...patch, updatedBy: actorId, updatedAt: new Date() })
       .where(eq(bootcampHistory.id, id))
-      .returning({ id: bootcampHistory.id });
-    return updated.length > 0 ? { ok: true } : { ok: false, error: "not_found" };
+      .returning({ email: bootcampHistory.email });
+    if (updated.length === 0) return { ok: false, error: "not_found" };
+    // A new email moves the track with it.
+    await retrackEmployees([before.email, ...updated.map((u) => u.email)]);
+    return { ok: true };
   } catch (err) {
     // A new email that someone else already has.
     if (isUniqueViolation(err)) return { ok: false, error: "duplicate" };
@@ -105,7 +116,8 @@ export async function deleteHistory(id: string): Promise<boolean> {
   const deleted = await db
     .delete(bootcampHistory)
     .where(eq(bootcampHistory.id, id))
-    .returning({ id: bootcampHistory.id });
+    .returning({ email: bootcampHistory.email });
+  await retrackEmployees(deleted.map((d) => d.email));
   return deleted.length > 0;
 }
 
@@ -168,6 +180,7 @@ export async function importHistory(
       added += written.filter((w) => w.inserted).length;
     }
   });
+  await retrackEmployees(parsed.rows.map((r) => r.email));
 
   return {
     ok: true,

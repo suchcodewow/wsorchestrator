@@ -13,7 +13,7 @@ import type { CurrentCohortSort } from "@/lib/list-specs";
 import { pageWindow, toPage, type ListQuery, type Page } from "@/lib/paging";
 import { blankAsNull, orderFor, searchAny } from "@/lib/paging-sql";
 
-/** The tracks the Current tab lists; `ignored` is the other one. */
+/** The tracks the Current tab lists; `ignored` and `exempt` are the others. */
 export const CURRENT_TRACKS = ["sales", "engineer"] as const;
 export type CurrentTrack = (typeof CURRENT_TRACKS)[number];
 
