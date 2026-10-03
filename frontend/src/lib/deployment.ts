@@ -8,14 +8,24 @@
  * QA shares production's Workspace, Harness and cloud accounts. Rows that
  * predate the column are null and belong to the database they are in.
  *
- * The runner reads the same variable the same way (`runner/src/environment.ts`).
+ * A local machine can import production's database too
+ * (`scripts/import-production.ts`), so a local `npm run dev` reads "dev" when
+ * nothing is configured, as the header's badge does (`lib/build-info.ts`).
+ * Read as production, it would treat production's imported runs as its own.
+ * The fallback keys off `next dev` rather than the absence of a variable, so a
+ * production image that lost `DEPLOYMENT_ENVIRONMENT` still reads production.
+ *
+ * The runner reads the same variable (`runner/src/environment.ts`), without the
+ * `next dev` fallback: it never runs under it.
  */
 
 import { eq, isNull, or } from "drizzle-orm";
 import { workshopRuns } from "@/db/schema";
 
 export function deploymentEnvironment(): string {
-  return process.env.DEPLOYMENT_ENVIRONMENT?.trim() || "production";
+  const configured = process.env.DEPLOYMENT_ENVIRONMENT?.trim();
+  if (configured) return configured;
+  return process.env.NODE_ENV === "development" ? "dev" : "production";
 }
 
 export function isProduction(): boolean {

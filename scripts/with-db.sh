@@ -52,10 +52,19 @@ if [[ -z "${DB_CONN}" ]]; then
   # stops being true, say so rather than picking one. Kept to POSIX word
   # splitting rather than `mapfile`, because macOS ships bash 3.2 and this
   # script's whole job is to work on the machine in front of you.
-  INSTANCES="$(
+  # gcloud's error is kept rather than discarded: an expired login otherwise
+  # reads as "none found", which sends you looking for a missing instance.
+  GCLOUD_ERR="$(mktemp)"
+  if ! INSTANCES="$(
     gcloud sql instances list --project "${PROJECT}" \
-      --format='value(connectionName)' 2>/dev/null || true
-  )"
+      --format='value(connectionName)' 2>"${GCLOUD_ERR}"
+  )"; then
+    echo "!! gcloud could not list ${PROJECT}'s Cloud SQL instances:" >&2
+    sed 's/^/     /' "${GCLOUD_ERR}" >&2
+    rm -f "${GCLOUD_ERR}"
+    exit 1
+  fi
+  rm -f "${GCLOUD_ERR}"
   COUNT="$(printf '%s' "${INSTANCES}" | grep -c . || true)"
   if [[ "${COUNT}" -eq 1 ]]; then
     DB_CONN="${INSTANCES}"
