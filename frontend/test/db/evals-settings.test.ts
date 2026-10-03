@@ -75,6 +75,7 @@ import {
   bootcampInputSchema,
   createBootcamp,
   deleteBootcamp,
+  getBootcamp,
   listBootcamps,
   updateBootcamp,
 } from "@/lib/scheduler/bootcamps";
@@ -843,7 +844,7 @@ describe("HiBob sync", () => {
         assert.deepEqual(summary.deferral, { days: 14, bootcampStart: "2026-11-02" });
 
         // Moving the bootcamp later puts the 10-20 and 10-25 starters in time for it.
-        assert.deepEqual(await updateBootcamp(made.ok ? made.id : "", { startDate: "2026-11-10" }), { ok: true });
+        assert.deepEqual(await updateBootcamp(admin.id, made.ok ? made.id : "", { startDate: "2026-11-10" }), { ok: true });
         assert.deepEqual(await listed({ stage: null, track: "deferred" }), ["d-after"]);
         assert.deepEqual(await listed({ stage: null, track: "undecided" }), ["d-mystery"]);
 
@@ -997,14 +998,14 @@ describe("bootcamps", () => {
       error: "active_exists",
       active,
     });
-    assert.deepEqual(await updateBootcamp(first.id, { status: "active" }), {
+    assert.deepEqual(await updateBootcamp(admin.id, first.id, { status: "active" }), {
       ok: false,
       error: "active_exists",
       active,
     });
 
-    assert.deepEqual(await updateBootcamp(second.id, { status: "scheduled" }), { ok: true });
-    assert.deepEqual(await updateBootcamp(first.id, { status: "active", intDays: null }), { ok: true });
+    assert.deepEqual(await updateBootcamp(admin.id, second.id, { status: "scheduled" }), { ok: true });
+    assert.deepEqual(await updateBootcamp(admin.id, first.id, { status: "active", intDays: null }), { ok: true });
     assert.deepEqual(await activeBootcamp(), { id: first.id, startDate: "2031-03-03", btcDays: 4, intDays: null });
 
     const listed = (await listBootcamps({ ...BOOTCAMP_LIST, q: "", page: 1 })).rows.filter((b) => made.includes(b.id));
@@ -1015,11 +1016,83 @@ describe("bootcamps", () => {
         ["2031-03-03", "active", "admin"],
       ],
     );
+    // Leave none active, for the next test.
+    assert.deepEqual(await updateBootcamp(admin.id, first.id, { status: "scheduled" }), { ok: true });
+  });
+
+  test("making one active completes the active one only when the save names it", async (t) => {
+    if (await activeBootcamp()) return t.skip("another bootcamp is already active in this database");
+
+    const first = await create({ startDate: "2032-03-01", btcDays: 4, intDays: 3, status: "active" });
+    const second = await create({ startDate: "2032-06-07", btcDays: 4, intDays: 3, status: "scheduled" });
+    assert.ok(first.ok && second.ok);
+
+    // Naming a bootcamp that is not the active one is still refused.
+    const refused = await updateBootcamp(admin.id, second.id, { status: "active", completeActive: second.id });
+    assert.equal(refused.ok ? null : refused.error, "active_exists");
+
+    assert.deepEqual(await updateBootcamp(admin.id, second.id, { status: "active", completeActive: first.id }), {
+      ok: true,
+    });
+    const third = await create({
+      startDate: "2032-09-06",
+      btcDays: 4,
+      intDays: null,
+      status: "active",
+      completeActive: second.id,
+    });
+    assert.ok(third.ok);
+
+    const status = new Map(
+      (await listBootcamps({ ...BOOTCAMP_LIST, q: "", page: 1 })).rows.map((b) => [b.id, b.status]),
+    );
+    assert.deepEqual(
+      [status.get(first.id), status.get(second.id), status.get(third.id)],
+      ["complete", "complete", "active"],
+    );
+    assert.deepEqual(await updateBootcamp(admin.id, third.id, { status: "complete" }), { ok: true });
+    assert.equal(await activeBootcamp(), null);
+  });
+
+  test("judges are saved with the bootcamp, replaced as a set, and must be employees", async () => {
+    for (const key of ["j-ana", "j-ben"]) {
+      await db.insert(employees).values({ id: `${TEST_PREFIX}${key}`, email: email(key), fullName: `Judge ${key}`, raw: {} });
+    }
+    const made1 = await create({
+      startDate: "2032-12-06",
+      btcDays: 4,
+      intDays: 3,
+      status: "scheduled",
+      judges: [` ${email("J-Ana").toUpperCase()}`, email("j-ana")],
+    });
+    assert.ok(made1.ok);
+    const names = async () => (await getBootcamp(made1.id))!.judges.map((j) => [j.email, j.fullName]);
+    assert.deepEqual(await names(), [[email("j-ana"), "Judge j-ana"]]);
+
+    assert.deepEqual(await updateBootcamp(admin.id, made1.id, { judges: [email("j-ben")] }), { ok: true });
+    assert.deepEqual(await names(), [[email("j-ben"), "Judge j-ben"]]);
+    // Left out, they stay.
+    assert.deepEqual(await updateBootcamp(admin.id, made1.id, { btcDays: 5 }), { ok: true });
+    assert.deepEqual(await names(), [[email("j-ben"), "Judge j-ben"]]);
+
+    assert.deepEqual(await updateBootcamp(admin.id, made1.id, { judges: [email("j-ben"), email("j-nobody")] }), {
+      ok: false,
+      error: "not_employee",
+      email: email("j-nobody"),
+    });
+    assert.deepEqual(await updateBootcamp(admin.id, made1.id, { judges: ["not an email"] }), {
+      ok: false,
+      error: "invalid",
+    });
+    assert.deepEqual(await names(), [[email("j-ben"), "Judge j-ben"]]);
+
+    assert.deepEqual(await updateBootcamp(admin.id, made1.id, { judges: [] }), { ok: true });
+    assert.deepEqual(await names(), []);
   });
 
   test("a missing bootcamp is not found, and a removed one is gone", async () => {
     const missing = "00000000-0000-4000-8000-000000000000";
-    assert.deepEqual(await updateBootcamp(missing, { btcDays: 2 }), { ok: false, error: "not_found" });
+    assert.deepEqual(await updateBootcamp(admin.id, missing, { btcDays: 2 }), { ok: false, error: "not_found" });
     const made1 = await create({ startDate: "2031-12-01", btcDays: 4, intDays: 3, status: "scheduled" });
     assert.ok(made1.ok);
     assert.deepEqual(await deleteBootcamp(made1.id), { ok: true });
@@ -1036,6 +1109,8 @@ describe("bootcamps", () => {
       { btcDays: 2.5 },
       { intDays: 0 },
       { status: "completed" },
+      { judges: "a@b.co" },
+      { completeActive: "not-a-uuid" },
     ]) {
       assert.equal(bootcampInputSchema.safeParse({ ...ok, ...bad }).success, false, JSON.stringify(bad));
     }

@@ -42,7 +42,7 @@ Status means:
 | New event setup | "New Event Setup" asks for the start date, rebuilds the attendee tabs, deletes old responses and installs the trigger | **Partial.** The Scheduler creates bootcamps with a start date, BTC days and INT days, and one is active. Nothing is reset or rebuilt when a new one starts | |
 | Schedule tab formatting | Conditional formatting on the Schedule tab, color-coded for BTC, INT, SE and a fourth track | **Not ported** | |
 | Visual Schedule | Builds a card-style day-by-day view from the Schedule tab | **Not ported** | |
-| Exercises deck and judge assignment | `buildExercises` makes a Slides deck (one slide per exercise) in the Enablement shared drive and spreads attendees evenly across judges. It writes back the deck link and the time each exercise needs | **Partial.** A bootcamp's page in the Scheduler lists its guest judges, picked from the employee list; Training administrators add and remove them. While that bootcamp is active a judge can score on the eVals page, whatever other access they have. There is no deck, and attendees are not spread across judges | |
+| Exercises deck and judge assignment | `buildExercises` makes a Slides deck (one slide per exercise) in the Enablement shared drive and spreads attendees evenly across judges. It writes back the deck link and the time each exercise needs | **Partial.** Training administrators pick a bootcamp's guest judges from the employee list in the Scheduler's bootcamp dialog. While that bootcamp is active a judge can score on the eVals page, whatever other access they have. There is no deck, and attendees are not spread across judges | |
 
 ## Judging and scores
 

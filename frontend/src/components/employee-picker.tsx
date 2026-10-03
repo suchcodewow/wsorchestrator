@@ -4,7 +4,8 @@
  * A field that finds an employee by name and adds them. It asks the employee
  * list one page at a time rather than shipping everyone to the browser, so the
  * caller needs `canSearchEmployees`. With `allowAnyEmail`, a whole email typed
- * by hand is accepted too, for people who are not employees.
+ * by hand is accepted too, for people who are not employees. It is safe
+ * inside a form: neither Enter nor Add submits it.
  */
 
 import { useEffect, useState } from "react";
@@ -34,7 +35,8 @@ export function EmployeePicker({
   placeholder: string;
   busy: boolean;
   allowAnyEmail?: boolean;
-  onAdd: (email: string) => Promise<boolean>;
+  /** `fullName` is set when they were picked from the list. */
+  onAdd: (email: string, fullName?: string) => Promise<boolean>;
 }) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
@@ -71,7 +73,7 @@ export function EmployeePicker({
 
   async function submit() {
     if (!email || busy) return;
-    if (await onAdd(email)) {
+    if (await onAdd(email, selected?.fullName)) {
       setQuery("");
       setSelected(null);
       setMatches([]);
@@ -99,7 +101,10 @@ export function EmployeePicker({
             onFocus={() => setOpen(true)}
             onBlur={() => setOpen(false)}
             onKeyDown={(e) => {
-              if (e.key === "Enter") submit();
+              if (e.key === "Enter") {
+                e.preventDefault();
+                submit();
+              }
               if (e.key === "Escape") setOpen(false);
             }}
             placeholder={placeholder}
@@ -121,7 +126,7 @@ export function EmployeePicker({
             </div>
           )}
         </div>
-        <Button variant="brand" disabled={!email || busy} onClick={submit}>
+        <Button type="button" variant="brand" disabled={!email || busy} onClick={submit}>
           {busy ? <Loader2 className="animate-spin" /> : <Plus />}
           Add
         </Button>

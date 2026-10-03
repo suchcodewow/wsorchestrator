@@ -1,8 +1,34 @@
 import { ASSESSMENT_ATTENDEE_LIST, ASSESSMENT_LIST, AUDIT_LIST, BOOTCAMP_HISTORY_LIST, BOOTCAMP_LIST, CURRENT_COHORT_LIST, DOMAIN_LIST, EMPLOYEE_LIST, HIBOB_SYNC_LIST, HISTORY_STATUSES, JUDGE_LIST, ORGANIZATION_LIST, PREVIOUS_SESSION_LIST, SLACK_CONTACT_LIST, TITLE_LIST, USER_LIST } from "@/lib/list-specs";
-import { EVALS_ASSESSMENT_LIMITS } from "@/db/schema";
+import { BOOTCAMP_LIMITS, EVALS_ASSESSMENT_LIMITS } from "@/db/schema";
 import { PAGE_SIZE } from "@/lib/paging";
 import { PAGE_FIELDS, listQuery } from "./paging";
-import type { EndpointGroup } from "./types";
+import type { Endpoint, EndpointGroup, Field } from "./types";
+
+type EndpointError = NonNullable<Endpoint["errors"]>[number];
+
+const JUDGES_FIELD: Field = {
+  name: "judges",
+  type: "string[]",
+  note: `every guest judge's email, up to ${BOOTCAMP_LIMITS.judges}, each in the employee list; replaces the set, and left out keeps it`,
+};
+
+const COMPLETE_ACTIVE_FIELD: Field = {
+  name: "completeActive",
+  type: "string",
+  note: "with status active, the id of the bootcamp active now, to mark complete in the same write",
+};
+
+const NOT_EMPLOYEE_ERROR: EndpointError = {
+  status: 400,
+  error: "not_employee",
+  when: "a judge is not in the employee list; email names them",
+};
+
+const ACTIVE_EXISTS_ERROR: EndpointError = {
+  status: 409,
+  error: "active_exists",
+  when: "status is active, another bootcamp already is, and completeActive does not name it; active names it",
+};
 
 export const ADMIN_GROUPS: EndpointGroup[] = [
   {
@@ -251,50 +277,55 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         summary: "Lists the bootcamps the Scheduler has planned, a page at a time, latest first.",
         access: "trainingViewer",
         token: true,
-        notes: "intDays is null for a bootcamp with no intermediate class. At most one bootcamp is active.",
+        notes: "intDays is null for a bootcamp with no intermediate class. At most one bootcamp is active; complete is one that has run.",
         query: listQuery(BOOTCAMP_LIST.sorts, "the status, or who created it"),
-        returns: `{ bootcamps: { id, startDate: "YYYY-MM-DD", btcDays: number, intDays: number | null, status: "scheduled" | "active", createdBy: string | null, createdAt: ISO 8601 string, judges: number }[], ${PAGE_FIELDS} }`,
+        returns: `{ bootcamps: { id, startDate: "YYYY-MM-DD", btcDays: number, intDays: number | null, status: "scheduled" | "active" | "complete", createdBy: string | null, createdAt: ISO 8601 string }[], ${PAGE_FIELDS} }`,
       },
       {
         method: "POST",
         path: "/api/scheduler/bootcamps",
-        summary: "Schedules a bootcamp.",
+        summary: "Schedules a bootcamp, with its guest judges.",
         access: "trainingAdmin",
         token: true,
         notes:
-          "Only one bootcamp may be active; the active one's start date is the BTC and INT date its final scores are loaded with.",
+          "Only one bootcamp may be active; the active one's start date is the BTC and INT date its final scores are loaded with. To make a new one active while another is, name that other in completeActive: it is marked complete in the same write.",
         body: {
           kind: "json",
           fields: [
             { name: "startDate", type: `"YYYY-MM-DD"`, required: true },
             { name: "btcDays", type: "number", required: true, note: "a whole number from 1 to 30" },
             { name: "intDays", type: "number | null", required: true, note: "1 to 30, or null for no intermediate class" },
-            { name: "status", type: `"scheduled" | "active"`, required: true },
+            { name: "status", type: `"scheduled" | "active" | "complete"`, required: true },
+            JUDGES_FIELD,
+            COMPLETE_ACTIVE_FIELD,
           ],
         },
         returns: "201 { id }",
         errors: [
-          { status: 400, error: "invalid", when: "the body is not that shape" },
-          { status: 409, error: "active_exists", when: "status is active and another bootcamp already is; active names it" },
+          { status: 400, error: "invalid", when: "the body is not that shape, or a judge's email is not an email address" },
+          NOT_EMPLOYEE_ERROR,
+          ACTIVE_EXISTS_ERROR,
         ],
       },
       {
         method: "GET",
         path: "/api/scheduler/bootcamps/{id}",
-        summary: "Reads one bootcamp.",
+        summary: "Reads one bootcamp and its guest judges.",
         access: "trainingViewer",
         token: true,
+        notes: `judges is every guest judge by name, up to ${BOOTCAMP_LIMITS.judges}; fullName is as the employee list had them when they were added.`,
         params: [{ name: "id", type: "string", required: true, note: "the bootcamp's id" }],
-        returns: `{ id, startDate: "YYYY-MM-DD", btcDays: number, intDays: number | null, status: "scheduled" | "active", createdBy: string | null, createdAt: ISO 8601 string, judges: number }`,
+        returns: `{ id, startDate: "YYYY-MM-DD", btcDays: number, intDays: number | null, status: "scheduled" | "active" | "complete", createdBy: string | null, createdAt: ISO 8601 string, judges: { email, fullName }[] }`,
         errors: [{ status: 404, error: "not_found", when: "no such bootcamp" }],
       },
       {
         method: "PATCH",
         path: "/api/scheduler/bootcamps/{id}",
-        summary: "Changes a bootcamp's dates, length or status.",
+        summary: "Changes a bootcamp's dates, length, status or guest judges.",
         access: "trainingAdmin",
         token: true,
-        notes: "Takes any of POST's fields and changes only those.",
+        notes:
+          "Takes any of POST's fields and changes only those. judges replaces the whole set: anyone left out is removed, and anyone kept keeps when and by whom they were added.",
         params: [{ name: "id", type: "string", required: true, note: "the bootcamp's id" }],
         body: {
           kind: "json",
@@ -302,14 +333,17 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
             { name: "startDate", type: `"YYYY-MM-DD"` },
             { name: "btcDays", type: "number" },
             { name: "intDays", type: "number | null" },
-            { name: "status", type: `"scheduled" | "active"` },
+            { name: "status", type: `"scheduled" | "active" | "complete"` },
+            JUDGES_FIELD,
+            COMPLETE_ACTIVE_FIELD,
           ],
         },
         returns: "{ ok: true }",
         errors: [
-          { status: 400, error: "invalid", when: "the body is not that shape" },
+          { status: 400, error: "invalid", when: "the body is not that shape, or a judge's email is not an email address" },
+          NOT_EMPLOYEE_ERROR,
           { status: 404, error: "not_found", when: "no such bootcamp" },
-          { status: 409, error: "active_exists", when: "making it active while another is; active names it" },
+          ACTIVE_EXISTS_ERROR,
         ],
       },
       {

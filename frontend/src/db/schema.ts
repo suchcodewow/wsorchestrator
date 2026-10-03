@@ -1070,13 +1070,13 @@ export const BOOTCAMP_HISTORY_LIMITS = { bytes: 5 * 1024 * 1024, rows: 20_000, e
 
 export type BootcampHistory = typeof bootcampHistory.$inferSelect;
 
-export const BOOTCAMP_STATUSES = ["scheduled", "active"] as const;
+export const BOOTCAMP_STATUSES = ["scheduled", "active", "complete"] as const;
 export type BootcampStatus = (typeof BOOTCAMP_STATUSES)[number];
 
 /**
  * A bootcamp the Scheduler has planned: BTC over `btcDays` from `startDate`,
- * with INT alongside it unless `intDays` is null. At most one is `active`,
- * and its start date is the BTC or INT date that loading its final scores
+ * with INT alongside it unless `intDays` is null. `complete` once it has
+ * run. At most one is `active`, and its start date is the BTC or INT date that loading its final scores
  * writes to bootcamp history.
  */
 export const bootcamps = pgTable(
@@ -1104,13 +1104,14 @@ export const bootcamps = pgTable(
     uniqueIndex("bootcamps_one_active_idx")
       .on(t.status)
       .where(sql`${t.status} = 'active'`),
-    check("bootcamps_status_check", sql`${t.status} in ('scheduled', 'active')`),
+    check("bootcamps_status_check", sql`${t.status} in ('scheduled', 'active', 'complete')`),
     check("bootcamps_btc_days_check", sql`${t.btcDays} between 1 and 30`),
     check("bootcamps_int_days_check", sql`${t.intDays} between 1 and 30`),
   ],
 );
 
-export const BOOTCAMP_LIMITS = { minDays: 1, maxDays: 30 } as const;
+/** `judges` caps the guest judges one bootcamp's dialog sets at once; it is not a column. */
+export const BOOTCAMP_LIMITS = { minDays: 1, maxDays: 30, judges: 50 } as const;
 export const BOOTCAMP_DEFAULTS = { btcDays: 4, intDays: 3 } as const;
 
 export type Bootcamp = typeof bootcamps.$inferSelect;

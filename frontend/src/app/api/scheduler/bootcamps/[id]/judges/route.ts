@@ -7,7 +7,7 @@ import { audited, noteAudit } from "@/lib/audit";
 import { JUDGE_LIST } from "@/lib/list-specs";
 import { parseListQuery } from "@/lib/paging";
 import { canManageTrainingSettings, canUseTraining } from "@/lib/roles";
-import { getBootcamp } from "@/lib/scheduler/bootcamps";
+import { bootcampExists } from "@/lib/scheduler/bootcamps";
 import { addJudge, addJudgeSchema, JUDGE_STATUS_FOR, judgeCount, listJudges } from "@/lib/scheduler/judges";
 
 const idSchema = z.string().uuid();
@@ -19,7 +19,7 @@ export async function GET(req: Request, { params }: Params) {
   if (error) return error;
 
   const id = idSchema.safeParse((await params).id);
-  if (!id.success || !(await getBootcamp(id.data))) {
+  if (!id.success || !(await bootcampExists(id.data))) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 

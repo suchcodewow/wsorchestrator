@@ -73,7 +73,6 @@ const ownRun = {} as Record<Persona, string>;
 let aliceRun: string;
 let historyId: string;
 let assessmentId: string;
-let bootcampId: string;
 
 before(async () => {
   await scope.setUp();
@@ -83,7 +82,8 @@ before(async () => {
   aliceRun = await createRun(alice.id, "Alice's workshop");
   historyId = await scope.createHistory("history");
   assessmentId = await scope.createAssessment(alice.id, "e2e assessment");
-  bootcampId = await scope.activeBootcamp(alice.id);
+  // The scoring pages need an active bootcamp.
+  await scope.activeBootcamp(alice.id);
   for (const p of PERSONA_NAMES) {
     people[p] = await scope.createUser(p, PERSONAS[p]);
     cookies[p] = await createSession(people[p].id);
@@ -173,8 +173,6 @@ const PAGES: Record<string, PageCase> = {
   "/runs/<own event>": { path: () => "/runs/:own", expect: gated(canUseEvents) },
   "/runs/<someone else's>": { path: () => `/runs/${aliceRun}`, expect: gated(canSeeAllEvents) },
   "/scheduler": { path: () => "/scheduler", expect: gated(canUseTraining) },
-  "/scheduler/<a bootcamp>": { path: () => `/scheduler/${bootcampId}`, expect: gated(canUseTraining) },
-  "/scheduler/<unknown>": { path: () => `/scheduler/${MISSING}`, expect: () => 404 },
   "/scheduler-settings": {
     path: () => "/scheduler-settings",
     expect: gated(canManageTrainingSettings),

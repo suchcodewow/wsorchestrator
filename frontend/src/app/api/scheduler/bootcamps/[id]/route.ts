@@ -1,11 +1,11 @@
-/** One bootcamp: reading, changing or removing it. */
+/** One bootcamp and its judges: reading, changing or removing it. */
 
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireCaller } from "@/lib/api-auth";
 import { audited } from "@/lib/audit";
 import { canManageTrainingSettings, canUseTraining } from "@/lib/roles";
-import { bootcampPatchSchema, deleteBootcamp, getBootcamp, updateBootcamp } from "@/lib/scheduler/bootcamps";
+import { BOOTCAMP_STATUS_FOR, bootcampPatchSchema, deleteBootcamp, getBootcamp, updateBootcamp } from "@/lib/scheduler/bootcamps";
 
 const idSchema = z.string().uuid();
 
@@ -20,7 +20,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 }
 
 export const PATCH = audited(async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { error } = await requireCaller(req, canManageTrainingSettings);
+  const { error, user } = await requireCaller(req, canManageTrainingSettings);
   if (error) return error;
 
   const id = idSchema.safeParse((await params).id);
@@ -29,12 +29,10 @@ export const PATCH = audited(async function PATCH(req: Request, { params }: { pa
   const parsed = bootcampPatchSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "invalid" }, { status: 400 });
 
-  const result = await updateBootcamp(id.data, parsed.data);
+  const result = await updateBootcamp(user.id, id.data, parsed.data);
   if (!result.ok) {
-    return NextResponse.json(
-      { error: result.error, active: result.active },
-      { status: result.error === "not_found" ? 404 : 409 },
-    );
+    const { error, active, email } = result;
+    return NextResponse.json({ error, active, email }, { status: BOOTCAMP_STATUS_FOR[error] });
   }
   return NextResponse.json({ ok: true });
 });

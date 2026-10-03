@@ -1,20 +1,21 @@
 /**
  * The bootcamps the Scheduler plans: listed, created, changed and removed.
  * At most one is active — a partial unique index holds that, and a write
- * that would break it is refused with the bootcamp already active. Every
+ * that would break it is refused with the bootcamp already active, unless it
+ * names that one in `completeActive`, which marks it complete first. Every
  * write retracks the org, since it can change which bootcamp is next and so
  * who is deferred from it.
  */
 
 import "server-only";
 
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
 import {
   BOOTCAMP_LIMITS,
   BOOTCAMP_STATUSES,
-  bootcampJudges,
+  EVALS_SLACK_CONTACT_LIMITS,
   bootcamps,
   evalsSubmissions,
   users,
@@ -26,6 +27,7 @@ import { retrackOrg } from "@/lib/evals/tracks";
 import type { BootcampSort } from "@/lib/list-specs";
 import { pageWindow, toPage, type ListQuery, type Page } from "@/lib/paging";
 import { orderFor, searchAny } from "@/lib/paging-sql";
+import { judgePicks, resolveJudges, setJudges, type JudgePick } from "@/lib/scheduler/judges";
 
 export type BootcampRow = {
   id: string;
@@ -36,18 +38,15 @@ export type BootcampRow = {
   status: BootcampStatus;
   createdBy: string | null;
   createdAt: Date;
-  /** How many guest judges it has. */
-  judges: number;
 };
+
+/** One bootcamp with its guest judges, as its dialog edits it. */
+export type BootcampDetail = BootcampRow & { judges: JudgePick[] };
 
 /** The active bootcamp, as the Current tab shows it. */
 export type ActiveBootcamp = Pick<BootcampRow, "id" | "startDate" | "btcDays" | "intDays">;
 
 const createdBy = sql<string | null>`coalesce(nullif(${users.name}, ''), ${users.email})`;
-
-// Spelled out, because Drizzle leaves the table off a column in a one-table
-// query, and an unqualified `id` here would mean the judge's own.
-const judges = sql<number>`(select count(*)::int from ${bootcampJudges} j where j.bootcamp_id = ${bootcamps}.id)`;
 
 const SORT_COLUMNS = {
   startDate: bootcamps.startDate,
@@ -67,7 +66,6 @@ export async function listBootcamps(query: ListQuery<BootcampSort>): Promise<Pag
       status: bootcamps.status,
       createdBy,
       createdAt: bootcamps.createdAt,
-      judges,
     })
     .from(bootcamps)
     .leftJoin(users, eq(users.id, bootcamps.createdBy))
@@ -91,8 +89,8 @@ export async function activeBootcamp(): Promise<ActiveBootcamp | null> {
   return row ?? null;
 }
 
-/** One bootcamp, as its Scheduler page shows it, or null. */
-export async function getBootcamp(id: string): Promise<BootcampRow | null> {
+/** One bootcamp and its judges, or null. */
+export async function getBootcamp(id: string): Promise<BootcampDetail | null> {
   const [row] = await db
     .select({
       id: bootcamps.id,
@@ -102,12 +100,17 @@ export async function getBootcamp(id: string): Promise<BootcampRow | null> {
       status: bootcamps.status,
       createdBy,
       createdAt: bootcamps.createdAt,
-      judges,
     })
     .from(bootcamps)
     .leftJoin(users, eq(users.id, bootcamps.createdBy))
     .where(eq(bootcamps.id, id));
-  return row ?? null;
+  return row ? { ...row, judges: await judgePicks(id) } : null;
+}
+
+/** Whether a bootcamp with this id exists. */
+export async function bootcampExists(id: string): Promise<boolean> {
+  const [row] = await db.select({ id: bootcamps.id }).from(bootcamps).where(eq(bootcamps.id, id));
+  return Boolean(row);
 }
 
 const days = z.number().int().min(BOOTCAMP_LIMITS.minDays).max(BOOTCAMP_LIMITS.maxDays);
@@ -118,6 +121,13 @@ export const bootcampInputSchema = z.object({
   /** Null for a bootcamp with no intermediate class. */
   intDays: days.nullable(),
   status: z.enum(BOOTCAMP_STATUSES),
+  /** Every guest judge, by email; it replaces the set. Left out, the judges stay as they are. */
+  judges: z.array(z.string().max(EVALS_SLACK_CONTACT_LIMITS.email)).max(BOOTCAMP_LIMITS.judges).optional(),
+  /**
+   * With status active, the id of the bootcamp active now: it is marked
+   * complete in the same write. Naming any other is refused as active_exists.
+   */
+  completeActive: z.string().uuid().optional(),
 });
 
 /** An edit changes only the fields it names. */
@@ -126,14 +136,29 @@ export const bootcampPatchSchema = bootcampInputSchema.partial();
 type BootcampInput = z.infer<typeof bootcampInputSchema>;
 type BootcampPatch = z.infer<typeof bootcampPatchSchema>;
 
-export type BootcampError = "not_found" | "active_exists";
+export type BootcampError = "invalid" | "not_employee" | "not_found" | "active_exists";
+
+export const BOOTCAMP_STATUS_FOR: Record<BootcampError, number> = {
+  invalid: 400,
+  not_employee: 400,
+  not_found: 404,
+  active_exists: 409,
+};
 
 export type BootcampFailure = {
   ok: false;
   error: BootcampError;
   /** For `active_exists`: the bootcamp that is active already. */
   active?: ActiveBootcamp;
+  /** For `not_employee`: the judge's email the employee list does not have. */
+  email?: string;
 };
+
+/** The judges `emails` name, or the refusal; undefined leaves them alone. */
+async function judgesFor(emails: string[] | undefined) {
+  if (emails === undefined) return { ok: true as const, judges: undefined };
+  return resolveJudges(emails);
+}
 
 const pgCode = (err: unknown): unknown => {
   const code = (e: unknown) => (e as { code?: unknown } | null)?.code;
@@ -149,16 +174,48 @@ async function activeExists(): Promise<BootcampFailure> {
   return { ok: false, error: "active_exists", active: (await activeBootcamp()) ?? undefined };
 }
 
+/**
+ * The refusal for making bootcamp `selfId` (null for a new one) active while
+ * another is, unless `completeActive` names that other one.
+ */
+async function activeConflict(
+  selfId: string | null,
+  status: BootcampStatus | undefined,
+  completeActive: string | undefined,
+): Promise<BootcampFailure | null> {
+  if (status !== "active") return null;
+  const active = await activeBootcamp();
+  if (!active || active.id === selfId || active.id === completeActive) return null;
+  return { ok: false, error: "active_exists", active };
+}
+
+/** Marks the bootcamp `id` complete if it is still the active one. */
+async function completeIfActive(tx: Pick<typeof db, "update">, id: string): Promise<void> {
+  await tx
+    .update(bootcamps)
+    .set({ status: "complete", updatedAt: new Date() })
+    .where(and(eq(bootcamps.id, id), eq(bootcamps.status, "active")));
+}
+
 export async function createBootcamp(
   actorId: string,
   input: BootcampInput,
 ): Promise<{ ok: true; id: string } | BootcampFailure> {
-  if (input.status === "active" && (await activeBootcamp())) return activeExists();
+  const { judges: emails, completeActive, ...fields } = input;
+  const judges = await judgesFor(emails);
+  if (!judges.ok) return judges;
+  const conflict = await activeConflict(null, input.status, completeActive);
+  if (conflict) return conflict;
   try {
-    const [row] = await db
-      .insert(bootcamps)
-      .values({ ...input, createdBy: actorId })
-      .returning({ id: bootcamps.id });
+    const row = await db.transaction(async (tx) => {
+      if (input.status === "active" && completeActive) await completeIfActive(tx, completeActive);
+      const [made] = await tx
+        .insert(bootcamps)
+        .values({ ...fields, createdBy: actorId })
+        .returning({ id: bootcamps.id });
+      if (judges.judges) await setJudges(tx, actorId, made!.id, judges.judges);
+      return made;
+    });
     noteAudit({ target: row!.id, targetLabel: `Bootcamp starting ${input.startDate}` });
     await retrackOrg();
     return { ok: true, id: row!.id };
@@ -169,20 +226,30 @@ export async function createBootcamp(
   }
 }
 
-export async function updateBootcamp(id: string, patch: BootcampPatch): Promise<{ ok: true } | BootcampFailure> {
+export async function updateBootcamp(
+  actorId: string,
+  id: string,
+  patch: BootcampPatch,
+): Promise<{ ok: true } | BootcampFailure> {
   const [before] = await db.select().from(bootcamps).where(eq(bootcamps.id, id));
   if (!before) return { ok: false, error: "not_found" };
   noteAudit({ target: id, targetLabel: `Bootcamp starting ${patch.startDate ?? before.startDate}` });
-  if (patch.status === "active" && before.status !== "active") {
-    const active = await activeBootcamp();
-    if (active) return { ok: false, error: "active_exists", active };
-  }
+  const { judges: emails, completeActive, ...fields } = patch;
+  const conflict = await activeConflict(id, patch.status, completeActive);
+  if (conflict) return conflict;
+  const judges = await judgesFor(emails);
+  if (!judges.ok) return judges;
   try {
-    const updated = await db
-      .update(bootcamps)
-      .set({ ...patch, updatedAt: new Date() })
-      .where(eq(bootcamps.id, id))
-      .returning({ id: bootcamps.id });
+    const updated = await db.transaction(async (tx) => {
+      if (patch.status === "active" && completeActive && completeActive !== id) await completeIfActive(tx, completeActive);
+      const rows = await tx
+        .update(bootcamps)
+        .set({ ...fields, updatedAt: new Date() })
+        .where(eq(bootcamps.id, id))
+        .returning({ id: bootcamps.id });
+      if (rows.length > 0 && judges.judges) await setJudges(tx, actorId, id, judges.judges);
+      return rows;
+    });
     if (updated.length === 0) return { ok: false, error: "not_found" };
     await retrackOrg();
     return { ok: true };
