@@ -264,7 +264,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "evalsViewer",
         token: true,
         notes:
-          "fullName is the person's name in the employee list from the last HiBob sync, or null for an email not in it, such as someone who has left. Someone is active while that list has their email, and inactive once it doesn't. btcDate is their bootcamp date; 2000-01-01 means they are exempt, which sorts as the oldest date. counts gives everyone, the active and the inactive, whatever the search or status.",
+          "fullName is the person's name in the employee list from the last HiBob sync, or null for an email not in it, such as someone who has left. Someone is active while that list has their email, and inactive once it doesn't. btcDate is their bootcamp date; 2000-01-01 means they are exempt, which sorts as the oldest date. Rows that tie on the sort, such as one bootcamp's class, follow in name order, then email. counts gives everyone, the active and the inactive, whatever the search or status.",
         query: [
           ...listQuery(BOOTCAMP_HISTORY_LIST.sorts, "the name or email", BOOTCAMP_HISTORY_LIST.dir),
           { name: "status", type: HISTORY_STATUSES.map((s) => `"${s}"`).join(" | "), note: "only the active or only the inactive; everyone if omitted" },
