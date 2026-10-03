@@ -31,12 +31,13 @@ const inter = localFont({
 const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-mono", display: "swap" });
 
 /**
- * The header's gear, as a tab icon. QA and production run the same image, so
- * the choice is made per request: anything that is not production gets the
- * orange one, for the same reason the header carries an environment badge.
+ * The header's gear, as a tab icon. Production, QA and a local `npm run dev`
+ * each get their own color, for the same reason the header carries an
+ * environment badge: so the wrong tab is obvious before you edit it.
  */
 export async function generateMetadata(): Promise<Metadata> {
-  const icon = deploymentEnvironment() ? "favicon-qa" : "favicon";
+  const environment = deploymentEnvironment();
+  const icon = environment === "dev" ? "favicon-dev" : environment ? "favicon-qa" : "favicon";
 
   return {
     title: "Harness Events",
