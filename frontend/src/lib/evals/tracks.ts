@@ -15,6 +15,8 @@ import {
   bootcamps,
   employees,
   employeeTrackOverrides,
+  EVALS_TITLE_LISTS,
+  evalsTitles,
   EXEMPT_DATE,
   type EmployeeTrack,
   type EvalsTitleList,
@@ -127,17 +129,79 @@ export async function retrackOrg(): Promise<number> {
 export const TRACK_CHOICES = ["sales", "engineer", "undecided", "deferred", "ignored", "exempt", "automatic"] as const;
 export type TrackChoice = (typeof TRACK_CHOICES)[number];
 
+/** The title list a choice puts the person's title on, if it is one. */
+const LIST_CHOICES: readonly TrackChoice[] = EVALS_TITLE_LISTS;
+const isListChoice = (c: TrackChoice): c is EvalsTitleList => LIST_CHOICES.includes(c);
+
 export type SetTrackResult = {
   email: string;
   /** The track they have now; null for undecided. */
   track: EmployeeTrack | null;
   /** Whether that track was set by hand, rather than by the rules. */
   overridden: boolean;
+  /** The title a list choice put on that list, and the list it was on before; null when no list changed. */
+  title: { title: string; list: EvalsTitleList; from: EvalsTitleList | null } | null;
+  /** Org members whose track changed, this person included. */
+  retracked: number;
 };
 
+/** Everyone in the org who holds this title, compared as the lists compare titles. */
+async function holdersOf(title: string): Promise<string[]> {
+  const rows = await db
+    .select({ email: employees.email })
+    .from(employees)
+    .where(
+      and(
+        isNotNull(employees.orgDepth),
+        sql`lower(btrim(regexp_replace(${employees.title}, '\\s+', ' ', 'g'))) = ${titleKey(title)}`,
+      ),
+    );
+  return rows.map((r) => r.email);
+}
+
 /**
- * Sets one org member's track by hand, whatever the rules say, until someone
- * picks `automatic`. It lasts through every sync.
+ * Puts `title` on `list`, moving it off another list if it is on one.
+ * Returns the title as the list spells it and the list it was on before
+ * (null if none), or undefined when it was on `list` already.
+ */
+async function placeTitle(
+  actorId: string,
+  title: string,
+  list: EvalsTitleList,
+): Promise<{ title: string; from: EvalsTitleList | null } | undefined> {
+  const [row] = await db
+    .select({ id: evalsTitles.id, title: evalsTitles.title, list: evalsTitles.list })
+    .from(evalsTitles)
+    .where(sql`lower(${evalsTitles.title}) = ${titleKey(title)}`);
+  if (row?.list === list) return undefined;
+  if (row) {
+    await db.update(evalsTitles).set({ list }).where(eq(evalsTitles.id, row.id));
+    return { title: row.title, from: row.list as EvalsTitleList };
+  }
+  await db.insert(evalsTitles).values({ list, title, createdBy: actorId }).onConflictDoNothing();
+  return { title, from: null };
+}
+
+async function pin(actorId: string, email: string, track: EmployeeTrack | null) {
+  await db
+    .insert(employeeTrackOverrides)
+    .values({ email, track, updatedBy: actorId })
+    .onConflictDoUpdate({
+      target: employeeTrackOverrides.email,
+      set: { track, updatedBy: actorId, updatedAt: new Date() },
+    });
+}
+
+/**
+ * Sets one org member's track, whatever the rules say.
+ *
+ * Sales, Engineer and Ignored are title lists: picking one puts the person's
+ * title on it, moving it off another list if need be, and retracks everyone
+ * in the org who holds that title. The person themselves is pinned to the
+ * choice only where the rules still give them something else, such as exempt
+ * history or a late start; anyone else with the title who was set by hand
+ * keeps that. Undecided, Deferred and Exempt pin just this person, until
+ * someone picks `automatic`. A pin lasts through every sync.
  */
 export async function setTrack(
   actorId: string,
@@ -146,33 +210,55 @@ export async function setTrack(
 ): Promise<{ ok: true; result: SetTrackResult } | { ok: false; error: "not_found" }> {
   const lower = email.trim().toLowerCase();
   const [person] = await db
-    .select({ fullName: employees.fullName, track: employees.track })
+    .select({ fullName: employees.fullName, title: employees.title, track: employees.track })
     .from(employees)
     .where(and(isNotNull(employees.orgDepth), eq(employees.email, lower)));
   if (!person) return { ok: false, error: "not_found" };
   noteAudit({ target: lower, targetLabel: person.fullName });
 
-  if (choice === "automatic") {
+  const title = isListChoice(choice) ? cleanTitle(person.title) : "";
+  let moved: SetTrackResult["title"] = null;
+  let retracked: number;
+  if (isListChoice(choice) && title) {
+    const holders = await holdersOf(title);
+    if (!holders.includes(lower)) holders.push(lower);
+    const tracksOf = async () =>
+      new Map(
+        (await db.select({ email: employees.email, track: employees.track }).from(employees).where(inArray(employees.email, holders))).map(
+          (r) => [r.email, r.track],
+        ),
+      );
+    const before = await tracksOf();
     await db.delete(employeeTrackOverrides).where(eq(employeeTrackOverrides.email, lower));
+    const placed = await placeTitle(actorId, title, choice);
+    if (placed) moved = { ...placed, list: choice };
+    await retrackEmployees(holders);
+    const [after] = await db.select({ track: employees.track }).from(employees).where(eq(employees.email, lower));
+    if (after?.track !== choice) {
+      await pin(actorId, lower, choice);
+      await retrackEmployees([lower]);
+    }
+    const now = await tracksOf();
+    retracked = holders.filter((e) => before.get(e) !== now.get(e)).length;
+  } else if (choice === "automatic") {
+    await db.delete(employeeTrackOverrides).where(eq(employeeTrackOverrides.email, lower));
+    retracked = await retrackEmployees([lower]);
   } else {
-    const track = choice === "undecided" ? null : choice;
-    await db
-      .insert(employeeTrackOverrides)
-      .values({ email: lower, track, updatedBy: actorId })
-      .onConflictDoUpdate({
-        target: employeeTrackOverrides.email,
-        set: { track, updatedBy: actorId, updatedAt: new Date() },
-      });
+    await pin(actorId, lower, choice === "undecided" ? null : choice);
+    retracked = await retrackEmployees([lower]);
   }
-  await retrackEmployees([lower]);
 
   const [now] = await db
-    .select({ track: employees.track })
+    .select({ track: employees.track, overridden: employeeTrackOverrides.email })
     .from(employees)
+    .leftJoin(employeeTrackOverrides, eq(employeeTrackOverrides.email, employees.email))
     .where(and(isNotNull(employees.orgDepth), eq(employees.email, lower)));
   const track = now?.track ?? null;
-  noteAudit({ detail: { choice, from: person.track ?? "undecided", to: track ?? "undecided" } });
-  return { ok: true, result: { email: lower, track, overridden: choice !== "automatic" } };
+  const overridden = now?.overridden != null;
+  noteAudit({
+    detail: { choice, from: person.track ?? "undecided", to: track ?? "undecided", overridden, title: moved, retracked },
+  });
+  return { ok: true, result: { email: lower, track, overridden, title: moved, retracked } };
 }
 
 export type SortTitleError = "not_found" | "not_undecided" | "no_title";
@@ -210,16 +296,7 @@ export async function sortUndecidedTitle(
   const { added, existing } = await addTitles(actorId, list, [title]);
   const onList = added.length > 0 ? list : (existing[0]?.list ?? list);
 
-  const holders = await db
-    .select({ email: employees.email })
-    .from(employees)
-    .where(
-      and(
-        isNotNull(employees.orgDepth),
-        sql`lower(btrim(regexp_replace(${employees.title}, '\\s+', ' ', 'g'))) = ${titleKey(title)}`,
-      ),
-    );
-  const retracked = await retrackEmployees(holders.map((h) => h.email));
+  const retracked = await retrackEmployees(await holdersOf(title));
   noteAudit({ detail: { title, list: onList, added: added.length > 0, retracked } });
   return { ok: true, result: { title, list: onList, added: added.length > 0, retracked } };
 }

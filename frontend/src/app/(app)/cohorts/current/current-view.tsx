@@ -47,7 +47,7 @@ import type {
   CurrentCohortMember,
 } from "@/lib/evals/current-cohort";
 import type { CandidateCutoffs } from "@/lib/evals/settings";
-import type { TrackChoice } from "@/lib/evals/tracks";
+import type { SetTrackResult, TrackChoice } from "@/lib/evals/tracks";
 import type { CurrentCohortSort } from "@/lib/list-specs";
 import { riseChild, staggerParent } from "@/lib/motion";
 import type { ListQuery, Page } from "@/lib/paging";
@@ -76,12 +76,12 @@ const COLUMNS: { column: CurrentCohortSort; label: string }[] = [
 ];
 
 /** Every track an administrator can give someone; the last two take them off this tab. */
-const TRACK_OPTIONS: { choice: Exclude<TrackChoice, "automatic">; label: string; leaves?: true }[] = [
-  { choice: "sales", label: "Sales" },
-  { choice: "engineer", label: "Engineer" },
+const TRACK_OPTIONS: { choice: Exclude<TrackChoice, "automatic">; label: string; list?: true; leaves?: true }[] = [
+  { choice: "sales", label: "Sales", list: true },
+  { choice: "engineer", label: "Engineer", list: true },
   { choice: "undecided", label: "Undecided" },
   { choice: "deferred", label: "Deferred" },
-  { choice: "ignored", label: "Ignored", leaves: true },
+  { choice: "ignored", label: "Ignored", list: true, leaves: true },
   { choice: "exempt", label: "Exempt", leaves: true },
 ];
 
@@ -95,7 +95,8 @@ const ERRORS: Record<string, string> = {
   forbidden: "Your own role changed — reload the page.",
 };
 
-type Change = { member: CurrentCohortMember; undo: TrackChoice; message: string };
+/** undo is null when the change moved a title between lists, which Undo can't put back; the Automation tab can. */
+type Change = { member: CurrentCohortMember; undo: TrackChoice | null; message: string };
 
 /** Picks a stage or a track, or clears it when it is the one already picked; back to page 1 either way. */
 function useFilterParams() {
@@ -179,15 +180,23 @@ export function CurrentCohortView({
       if (undoing) {
         setChange(null);
       } else {
-        const now = (body.track ?? "undecided") as Exclude<TrackChoice, "automatic">;
+        const result = body as SetTrackResult;
+        const now = (result.track ?? "undecided") as Exclude<TrackChoice, "automatic">;
         const leaves = now === "ignored" || now === "exempt";
+        const moved = result.title;
+        const others = result.retracked - (now === member.track ? 0 : 1);
         setChange({
           member,
-          undo: member.overridden ? member.track : "automatic",
+          undo: moved ? null : member.overridden ? member.track : "automatic",
           message:
             choice === "automatic"
               ? `${member.fullName} is back on the rules: ${CHOICE_LABELS[now]}.`
-              : `${member.fullName} is now ${CHOICE_LABELS[now]}${leaves ? ", so they leave this tab" : ""}.`,
+              : `${member.fullName} is now ${CHOICE_LABELS[now]}${leaves ? ", so they leave this tab" : ""}.` +
+                (moved
+                  ? ` “${moved.title}” is on the ${CHOICE_LABELS[moved.list]} titles now` +
+                    (moved.from ? `, moved from ${CHOICE_LABELS[moved.from]}` : "") +
+                    (others > 0 ? `, which moved ${others} more ${others === 1 ? "person" : "people"}.` : ".")
+                  : ""),
         });
       }
       router.refresh();
@@ -301,15 +310,17 @@ export function CurrentCohortView({
                 <p role="status" className="text-muted-foreground">
                   {change.message}
                 </p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={busy !== null}
-                  onClick={() => setTrack(change.member, change.undo, true)}
-                >
-                  {busy === change.member.email && <Loader2 className="animate-spin" />}
-                  Undo
-                </Button>
+                {change.undo && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={busy !== null}
+                    onClick={() => setTrack(change.member, change.undo!, true)}
+                  >
+                    {busy === change.member.email && <Loader2 className="animate-spin" />}
+                    Undo
+                  </Button>
+                )}
               </>
             )
           )}
@@ -452,6 +463,14 @@ function TrackMenu({
   disabled: boolean;
   onPick: (choice: TrackChoice) => void;
 }) {
+  // A list choice moves everyone with the title, so say whose.
+  const title = member.title?.trim();
+  const hint = (o: (typeof TRACK_OPTIONS)[number]) =>
+    o.list && title
+      ? `Everyone titled “${title}”${o.leaves ? "; leaves the Current tab" : ""}`
+      : o.leaves
+        ? "Leaves the Current tab"
+        : null;
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -479,7 +498,7 @@ function TrackMenu({
             <DropdownMenuRadioItem key={o.choice} value={o.choice}>
               <span className="grid gap-0.5">
                 <span>{o.label}</span>
-                {o.leaves && <span className="text-xs text-muted-foreground">Leaves the Current tab</span>}
+                {hint(o) && <span className="max-w-64 text-xs text-muted-foreground">{hint(o)}</span>}
               </span>
             </DropdownMenuRadioItem>
           ))}

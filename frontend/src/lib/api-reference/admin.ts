@@ -162,11 +162,11 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       {
         method: "PUT",
         path: "/api/cohorts/current/track",
-        summary: "Sets one org member's track by hand, to any track, whatever the rules give them.",
+        summary: "Sets one org member's track by hand; sales, engineer and ignored put their title on that list.",
         access: "trainingAdmin",
         token: true,
         notes:
-          "The track holds through every later sync, title-list change and bootcamp change, until automatic hands the person back to the rules. undecided pins them to no track. ignored and exempt take them off the Current tab; exempt here does not change their bootcamp history. track in the response is the one they have now.",
+          "sales, engineer and ignored put the person's title on that list, moving it off another list if it is on one, and re-track everyone in the org who holds it, compared as the lists compare titles; title says where it went, and is null when it was on that list already or the person has no title. Anyone else with the title whose track was set by hand keeps it. The person is also pinned to the choice where the rules still give them something else, such as exempt history or a late start, and always when they have no title. undecided, deferred and exempt pin just this person. A pin holds through every later sync, title-list change and bootcamp change, until automatic hands the person back to the rules; exempt here does not change their bootcamp history. ignored and exempt take people off the Current tab. track in the response is the one the person has now, overridden whether they are pinned, and retracked how many people's tracks changed, the person included.",
         body: {
           kind: "json",
           fields: [
@@ -178,7 +178,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
             },
           ],
         },
-        returns: `{ email, track: "sales" | "engineer" | "deferred" | "ignored" | "exempt" | null, overridden: boolean }`,
+        returns: `{ email, track: "sales" | "engineer" | "deferred" | "ignored" | "exempt" | null, overridden: boolean, title: { title: string, list: "sales" | "engineer" | "ignored", from: "sales" | "engineer" | "ignored" | null } | null, retracked: number }`,
         errors: [
           { status: 400, error: "invalid", when: "the body is not that shape" },
           { status: 404, error: "not_found", when: "no one under the Organization Leader has that email" },
@@ -191,7 +191,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "trainingAdmin",
         token: true,
         notes:
-          "The Current tab no longer offers this; it sets one person's track with PUT instead. Everyone in the org who holds the same title, compared as the lists compare titles, has their track reset at once rather than at the next sync; on the ignored list, they leave the Current tab. A title already on a list stays where it is, and that list decides.",
+          "The Current tab uses PUT instead, which also moves a title that is already on another list. Everyone in the org who holds the same title, compared as the lists compare titles, has their track reset at once rather than at the next sync; on the ignored list, they leave the Current tab. A title already on a list stays where it is, and that list decides.",
         body: {
           kind: "json",
           fields: [

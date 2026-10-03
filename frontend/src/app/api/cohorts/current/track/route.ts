@@ -1,7 +1,7 @@
 /**
- * A candidate's track. PUT sets one person's by hand, any track at any time;
- * POST decides an undecided one by putting their title on a list, which
- * moves everyone with the title.
+ * A candidate's track. PUT sets one person's by hand, any track at any time,
+ * and for a list track moves their title, and everyone with it, onto that
+ * list; POST puts only an undecided one's title on a list, and never moves one.
  */
 
 import { NextResponse } from "next/server";

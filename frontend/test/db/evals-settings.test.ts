@@ -859,54 +859,100 @@ describe("HiBob sync", () => {
     });
   });
 
-  test("an administrator can set anyone's track by hand, and it outlasts the sync until handed back", async () => {
+  test("a list track moves the person's whole title, and the rest pin one person until handed back", async () => {
     configure();
-    await withSettings({ orgLeaderEmail: email("root"), ...SHEET_CUTOFFS }, async () => {
+    await withSettings({ orgLeaderEmail: email("root"), ...SHEET_CUTOFFS, deferralDays: "0" }, async () => {
       await addTitles(admin.id, "sales", [T("Hand AE")]);
       await addTitles(admin.id, "ignored", [T("Hand Ignored")]);
+      await importHistory(admin.id, new File([`email,BTCDate\n${email("h-exempt")},${EXEMPT_DATE}\n`], "h.csv"));
       const people = [
         person("1", "root", ""),
         person("2", "h-ae", "root", T("Hand AE")),
-        person("3", "h-ignored", "root", T("Hand Ignored")),
-        person("4", "h-mystery", "root", T("Hand Mystery")),
-        person("5", "h-out", "elsewhere", T("Hand AE")),
+        person("3", "h-ae2", "root", T("Hand AE")),
+        person("4", "h-ignored", "root", T("Hand Ignored")),
+        person("5", "h-mystery", "root", T("Hand Mystery")),
+        person("6", "h-mystery2", "root", `  ${T("hand  mystery")} `),
+        person("7", "h-exempt", "root", T("Hand Mystery")),
+        person("8", "h-blank", "root", ""),
+        person("9", "h-out", "elsewhere", T("Hand Mystery")),
       ];
       stubHibob(200, people);
       assert.ok((await sync()).ok);
+      const tracks = async () =>
+        Object.fromEntries(
+          (
+            await db
+              .select({ email: employees.email, track: employees.track, pinned: employeeTrackOverrides.email })
+              .from(employees)
+              .leftJoin(employeeTrackOverrides, eq(employeeTrackOverrides.email, employees.email))
+          )
+            .filter((e) => e.email !== email("root"))
+            .map((e) => [e.email.split("@")[0], `${e.track ?? "undecided"}${e.pinned ? " (pinned)" : ""}`]),
+        );
+      const listOf = async (title: string) =>
+        (await db.select({ list: evalsTitles.list }).from(evalsTitles).where(eq(evalsTitles.title, T(title))))[0]?.list;
 
-      assert.deepEqual(await setTrack(admin.id, email("h-ae"), "deferred"), {
+      // An undecided title goes on the list, and everyone holding it follows; exempt history still wins.
+      assert.deepEqual(await setTrack(admin.id, email("h-mystery"), "sales"), {
         ok: true,
-        result: { email: email("h-ae"), track: "deferred", overridden: true },
+        result: {
+          email: email("h-mystery"),
+          track: "sales",
+          overridden: false,
+          title: { title: T("Hand Mystery"), list: "sales", from: null },
+          retracked: 2,
+        },
       });
-      assert.ok((await setTrack(admin.id, email("h-ignored"), "engineer")).ok);
-      assert.ok((await setTrack(admin.id, email("H-Mystery"), "undecided")).ok);
+      assert.equal(await listOf("Hand Mystery"), "sales");
+
+      // A title already on another list moves.
+      const moved = await setTrack(admin.id, email("H-Mystery2"), "engineer");
+      assert.ok(moved.ok);
+      assert.deepEqual(moved.result.title, { title: T("Hand Mystery"), list: "engineer", from: "sales" });
+      assert.equal(moved.result.retracked, 2);
+      assert.equal(await listOf("Hand Mystery"), "engineer");
+
+      // Where the rules still disagree, the person is pinned to the choice as well.
+      const exempt = await setTrack(admin.id, email("h-exempt"), "sales");
+      assert.ok(exempt.ok);
+      assert.deepEqual([exempt.result.track, exempt.result.overridden, exempt.result.retracked], ["sales", true, 3]);
+
+      // A title on the list already moves nothing, and hands a pinned person back to it.
+      assert.ok((await setTrack(admin.id, email("h-ae"), "deferred")).ok);
+      assert.deepEqual(await setTrack(admin.id, email("h-ae"), "sales"), {
+        ok: true,
+        result: { email: email("h-ae"), track: "sales", overridden: false, title: null, retracked: 1 },
+      });
+
+      // Undecided, deferred and exempt pin one person; so does a list for someone with no title.
+      assert.ok((await setTrack(admin.id, email("h-ae2"), "undecided")).ok);
+      const blank = await setTrack(admin.id, email("h-blank"), "engineer");
+      assert.ok(blank.ok);
+      assert.deepEqual([blank.result.track, blank.result.overridden, blank.result.title], ["engineer", true, null]);
+      assert.ok((await setTrack(admin.id, email("h-ignored"), "sales")).ok);
+      assert.equal(await listOf("Hand Ignored"), "sales");
       assert.deepEqual(await setTrack(admin.id, email("h-out"), "sales"), { ok: false, error: "not_found" });
 
-      // Putting the undecided title on a list leaves the one set by hand alone.
-      await addTitles(admin.id, "engineer", [T("Hand Mystery")]);
+      const expected = {
+        "h-ae": "sales",
+        "h-ae2": "undecided (pinned)",
+        "h-ignored": "sales",
+        "h-mystery": "sales",
+        "h-mystery2": "sales",
+        "h-exempt": "sales (pinned)",
+        "h-blank": "engineer (pinned)",
+        "h-out": "undecided",
+      };
+      assert.deepEqual(await tracks(), expected);
+      // Every pin and every title move outlasts the sync.
       stubHibob(200, people);
       assert.ok((await sync()).ok);
-      const listed = async () =>
-        (
-          await listCurrentCohort({ stage: null, track: null }, { ...CURRENT_COHORT_LIST, q: "", page: 1, sort: "email", dir: "asc" })
-        ).rows.map((m) => [m.email.split("@")[0], m.track, m.overridden]);
-      assert.deepEqual(await listed(), [
-        ["h-ae", "deferred", true],
-        ["h-ignored", "engineer", true],
-        ["h-mystery", "undecided", true],
-      ]);
+      assert.deepEqual(await tracks(), expected);
 
-      // Handed back, the rules decide again; ignored and exempt leave the tab.
-      assert.deepEqual(await setTrack(admin.id, email("h-ae"), "automatic"), {
-        ok: true,
-        result: { email: email("h-ae"), track: "sales", overridden: false },
-      });
-      assert.ok((await setTrack(admin.id, email("h-mystery"), "automatic")).ok);
-      assert.ok((await setTrack(admin.id, email("h-ignored"), "exempt")).ok);
-      assert.deepEqual(await listed(), [
-        ["h-ae", "sales", false],
-        ["h-mystery", "engineer", false],
-      ]);
+      assert.ok((await setTrack(admin.id, email("h-ae2"), "automatic")).ok);
+      assert.ok((await setTrack(admin.id, email("h-exempt"), "automatic")).ok);
+      const after = await tracks();
+      assert.deepEqual([after["h-ae2"], after["h-exempt"]], ["sales", "exempt"]);
     });
   });
 
