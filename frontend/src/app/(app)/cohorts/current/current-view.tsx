@@ -9,23 +9,6 @@
  * the rules.
  */
 
-import { useState, useTransition } from "react";
-import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { motion } from "framer-motion";
-import {
-  ChevronDown,
-  CircleHelp,
-  Clock,
-  Code,
-  GraduationCap,
-  Handshake,
-  Loader2,
-  Pin,
-  Upload,
-  Users,
-  type LucideIcon,
-} from "lucide-react";
 import { HEADER_ROW, Pager, SortHeader, TableSearch } from "@/components/data-table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -53,6 +36,23 @@ import { riseChild, staggerParent } from "@/lib/motion";
 import type { ListQuery, Page } from "@/lib/paging";
 import type { ActiveBootcamp } from "@/lib/scheduler/bootcamps";
 import { cn } from "@/lib/utils";
+import { motion } from "framer-motion";
+import {
+  ChevronDown,
+  CircleHelp,
+  Clock,
+  Code,
+  GraduationCap,
+  Handshake,
+  Loader2,
+  Pin,
+  Upload,
+  Users,
+  type LucideIcon,
+} from "lucide-react";
+import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useState, useTransition } from "react";
 import { formatDate, formatWhen } from "../../cohort-settings/format";
 
 const STAGE_COUNTERS: { stage: CandidateStage; label: string; Icon: LucideIcon }[] = [
@@ -75,20 +75,23 @@ const COLUMNS: { column: CurrentCohortSort; label: string }[] = [
   { column: "btcDate", label: "BTC date" },
 ];
 
-/** Every track an administrator can give someone; the last two take them off this tab. */
-const TRACK_OPTIONS: { choice: Exclude<TrackChoice, "automatic">; label: string; list?: true; leaves?: true }[] = [
-  { choice: "sales", label: "Sales", list: true },
-  { choice: "engineer", label: "Engineer", list: true },
-  { choice: "undecided", label: "Undecided" },
-  { choice: "deferred", label: "Deferred" },
-  { choice: "ignored", label: "Ignored", list: true, leaves: true },
-  { choice: "exempt", label: "Exempt", leaves: true },
+/**
+ * The tracks an administrator can give someone, each with the hint under it;
+ * a list choice moves everyone with the title, so its hint says whose. No one
+ * is set to Undecided by hand; "Let the rules decide" is the way back to it.
+ */
+const TRACK_OPTIONS: { choice: Exclude<TrackChoice, "automatic" | "undecided">; label: string; hint: (title?: string) => string | undefined }[] = [
+  { choice: "sales", label: "Sales", hint: (t) => t && `All “${t}” will be automatically added to the Sales track` },
+  { choice: "engineer", label: "Engineer", hint: (t) => t && `All “${t}” will be automatically added to the Engineer track` },
+  { choice: "deferred", label: "Deferred", hint: () => "This person will be deferred until the next session" },
+  { choice: "ignored", label: "Ignored", hint: (t) => t && `All “${t}” will be ignored going forward` },
+  { choice: "exempt", label: "Exempt", hint: () => "Exempt this one person from Bootcamp" },
 ];
 
-const CHOICE_LABELS = Object.fromEntries(TRACK_OPTIONS.map((o) => [o.choice, o.label])) as Record<
-  Exclude<TrackChoice, "automatic">,
-  string
->;
+const CHOICE_LABELS: Record<Exclude<TrackChoice, "automatic">, string> = {
+  ...(Object.fromEntries(TRACK_OPTIONS.map((o) => [o.choice, o.label])) as Record<(typeof TRACK_OPTIONS)[number]["choice"], string>),
+  undecided: "Undecided",
+};
 
 const ERRORS: Record<string, string> = {
   not_found: "That person is no longer in the org — reload the page.",
@@ -213,8 +216,8 @@ export function CurrentCohortView({
         <h2 className="text-xl font-medium tracking-tight">Current</h2>
         {syncedAt && (
           <p className="text-sm leading-relaxed text-muted-foreground">
-            <span className="font-medium text-foreground">{total.toLocaleString()} people</span> still to train, as of
-            the HiBob sync on {formatWhen(syncedAt)}
+            <span className="font-medium text-foreground">{total.toLocaleString()} people</span> still to train, as of the HiBob
+            sync on {formatWhen(syncedAt)}
             {cutoffs.startDateOnOrAfter && <>, started on or after {formatDate(cutoffs.startDateOnOrAfter)}</>}
             {cutoffs.activeEffectiveDateAfter && (
               <>
@@ -228,8 +231,7 @@ export function CurrentCohortView({
         <p className="text-sm leading-relaxed text-muted-foreground">
           {activeBootcamp ? (
             <>
-              Active bootcamp:{" "}
-              <span className="font-medium text-foreground">{formatDate(activeBootcamp.startDate)}</span>,{" "}
+              Active bootcamp: <span className="font-medium text-foreground">{formatDate(activeBootcamp.startDate)}</span>,{" "}
               {activeBootcamp.btcDays} days
               {activeBootcamp.intDays !== null && `, with ${activeBootcamp.intDays} days of intermediate`}.
             </>
@@ -258,12 +260,7 @@ export function CurrentCohortView({
         ))}
       </motion.div>
 
-      <motion.div
-        variants={riseChild}
-        role="group"
-        aria-label="Track"
-        className={COUNTER_GRID}
-      >
+      <motion.div variants={riseChild} role="group" aria-label="Track" className={COUNTER_GRID}>
         {TRACK_COUNTERS.map(({ track, label, Icon }) => (
           <Counter
             key={track}
@@ -357,9 +354,7 @@ export function CurrentCohortView({
                       <TrackLabel member={m} />
                     )}
                   </td>
-                  <td className="whitespace-nowrap px-5 py-2.5 tabular-nums text-muted-foreground">
-                    {formatDate(m.btcDate)}
-                  </td>
+                  <td className="whitespace-nowrap px-5 py-2.5 tabular-nums text-muted-foreground">{formatDate(m.btcDate)}</td>
                 </tr>
               ))}
               {page.rows.length === 0 && (
@@ -416,12 +411,7 @@ function Counter({
         on ? "border-brand-border bg-brand-subtle" : "bg-card hover:bg-muted/40",
       )}
     >
-      <span
-        className={cn(
-          "flex size-7 shrink-0 items-center justify-center rounded-full",
-          on ? "bg-background" : "bg-muted",
-        )}
-      >
+      <span className={cn("flex size-7 shrink-0 items-center justify-center rounded-full", on ? "bg-background" : "bg-muted")}>
         <Icon className={cn("size-3.5", on ? "text-brand" : "text-muted-foreground")} />
       </span>
       <span className="min-w-0">
@@ -445,9 +435,7 @@ function TrackLabel({ member }: { member: CurrentCohortMember }) {
       ) : (
         label
       )}
-      {member.overridden && (
-        <Pin className="size-3 text-muted-foreground" aria-label="Set by an administrator" />
-      )}
+      {member.overridden && <Pin className="size-3 text-muted-foreground" aria-label="Set by an administrator" />}
     </span>
   );
 }
@@ -463,14 +451,7 @@ function TrackMenu({
   disabled: boolean;
   onPick: (choice: TrackChoice) => void;
 }) {
-  // A list choice moves everyone with the title, so say whose.
-  const title = member.title?.trim();
-  const hint = (o: (typeof TRACK_OPTIONS)[number]) =>
-    o.list && title
-      ? `Everyone titled “${title}”${o.leaves ? "; leaves the Current tab" : ""}`
-      : o.leaves
-        ? "Leaves the Current tab"
-        : null;
+  const title = member.title?.trim() || undefined;
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -490,18 +471,18 @@ function TrackMenu({
           {member.overridden ? "Set by an administrator" : "Set by the rules"}
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuRadioGroup
-          value={member.overridden ? member.track : ""}
-          onValueChange={(v) => onPick(v as TrackChoice)}
-        >
-          {TRACK_OPTIONS.map((o) => (
-            <DropdownMenuRadioItem key={o.choice} value={o.choice}>
-              <span className="grid gap-0.5">
-                <span>{o.label}</span>
-                {hint(o) && <span className="max-w-64 text-xs text-muted-foreground">{hint(o)}</span>}
-              </span>
-            </DropdownMenuRadioItem>
-          ))}
+        <DropdownMenuRadioGroup value={member.overridden ? member.track : ""} onValueChange={(v) => onPick(v as TrackChoice)}>
+          {TRACK_OPTIONS.map((o) => {
+            const hint = o.hint(title);
+            return (
+              <DropdownMenuRadioItem key={o.choice} value={o.choice}>
+                <span className="grid gap-0.5">
+                  <span>{o.label}</span>
+                  {hint && <span className="max-w-64 text-xs text-muted-foreground">{hint}</span>}
+                </span>
+              </DropdownMenuRadioItem>
+            );
+          })}
         </DropdownMenuRadioGroup>
         {member.overridden && (
           <>
