@@ -13,13 +13,14 @@ import { Check, Loader2, Pencil, Plus, Search, Trash2, X } from "lucide-react";
 import { HEADER_ROW, Pager, PlainHeader, SortHeader, useListParams } from "@/components/data-table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { EVALS_TITLE_LIMITS, EVALS_TITLE_LISTS, type EvalsTitleList } from "@/db/schema";
+import { DEFERRAL_DAYS_LIMITS, EVALS_TITLE_LIMITS, EVALS_TITLE_LISTS, type EvalsTitleList } from "@/db/schema";
 import type { CandidateCutoffs } from "@/lib/evals/settings";
 import { cleanTitle, TITLE_LIST_LABELS, TITLE_LIST_SLUGS } from "@/lib/evals/title-lists";
 import type { TitleSort } from "@/lib/list-specs";
 import { riseChild, staggerParent } from "@/lib/motion";
 import type { ListQuery, Page } from "@/lib/paging";
 import { cn } from "@/lib/utils";
+import { formatDate } from "./format";
 
 export type ListedTitle = {
   id: string;
@@ -81,6 +82,7 @@ export function AutomationView({
   orgLeaderEmail,
   orgLeader,
   cutoffs,
+  deferral,
 }: {
   /** The search the lists were queried with. */
   q: string;
@@ -91,6 +93,8 @@ export function AutomationView({
   /** The Organization Leader as the employee list has them, if it does. */
   orgLeader: LeaderCandidate | null;
   cutoffs: CandidateCutoffs;
+  /** The deferral window in days, and the start of the bootcamp it counts back from, if one is coming. */
+  deferral: { days: number; bootcampStart: string | null };
 }) {
   const router = useRouter();
   const { set: setList, pending: searching } = useListParams();
@@ -207,6 +211,22 @@ export function AutomationView({
             }}
           />
         ))}
+        <DeferralField
+          key={deferral.days}
+          days={deferral.days}
+          bootcampStart={deferral.bootcampStart}
+          busy={busy === "deferral"}
+          onSave={async (days) => {
+            const body = await send("deferral", "/api/evals/deferral-days", {
+              method: "PUT",
+              body: JSON.stringify({ days }),
+            });
+            if (body) {
+              const people = `${body.retracked} ${body.retracked === 1 ? "person" : "people"}`;
+              setNotice(`${days ? `Deferral window set to ${days} days` : "Deferral turned off"}; ${people} retracked.`);
+            }
+          }}
+        />
       </motion.div>
 
       <motion.div variants={riseChild} className="space-y-3">
@@ -506,6 +526,58 @@ function CutoffField({
           Save
         </Button>
       </div>
+    </div>
+  );
+}
+
+/** Whole days before the next bootcamp; 0 turns deferral off. */
+function DeferralField({
+  days,
+  bootcampStart,
+  busy,
+  onSave,
+}: {
+  days: number;
+  bootcampStart: string | null;
+  busy: boolean;
+  onSave: (days: number) => Promise<void>;
+}) {
+  const [value, setValue] = useState(String(days));
+  const parsed = Number(value);
+  const valid =
+    value.trim() !== "" &&
+    Number.isInteger(parsed) &&
+    parsed >= DEFERRAL_DAYS_LIMITS.min &&
+    parsed <= DEFERRAL_DAYS_LIMITS.max;
+  const dirty = valid && parsed !== days;
+
+  return (
+    <div className="w-56 space-y-1.5">
+      <label htmlFor="deferral-days" className="text-sm font-medium">
+        Defer if started within (days)
+      </label>
+      <div className="flex items-start gap-2">
+        <Input
+          id="deferral-days"
+          type="number"
+          inputMode="numeric"
+          min={DEFERRAL_DAYS_LIMITS.min}
+          max={DEFERRAL_DAYS_LIMITS.max}
+          step={1}
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          aria-invalid={!valid}
+          aria-describedby="deferral-days-next"
+          className="flex-1"
+        />
+        <Button variant="brand" disabled={!dirty || busy} onClick={() => onSave(parsed)}>
+          {busy ? <Loader2 className="animate-spin" /> : <Check />}
+          Save
+        </Button>
+      </div>
+      <p id="deferral-days-next" className="text-xs text-muted-foreground">
+        {days <= 0 ? "Off" : bootcampStart ? `Of the bootcamp on ${formatDate(bootcampStart)}` : "No bootcamp coming"}
+      </p>
     </div>
   );
 }

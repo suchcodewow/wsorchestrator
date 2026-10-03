@@ -338,6 +338,7 @@ const ROUTES: RouteCase[] = [
   // Cohorts
   { method: "GET", path: "/api/cohorts/current", allowed: canUseTraining },
   { method: "POST", path: "/api/cohorts/current/track", allowed: canManageTrainingSettings, body: () => ({}) },
+  { method: "PUT", path: "/api/cohorts/current/track", allowed: canManageTrainingSettings, body: () => ({}) },
   { method: "GET", path: "/api/scheduler/bootcamps", allowed: canUseTraining },
   { method: "POST", path: "/api/scheduler/bootcamps", allowed: canManageTrainingSettings, body: () => ({}) },
   { method: "PATCH", path: `/api/scheduler/bootcamps/${MISSING}`, allowed: canManageTrainingSettings, body: () => ({}) },
@@ -349,6 +350,7 @@ const ROUTES: RouteCase[] = [
 
   // eVals administration
   { method: "GET", path: "/api/evals/candidate-cutoffs", allowed: canManageEvalsSettings },
+  { method: "GET", path: "/api/evals/deferral-days", allowed: canManageEvalsSettings },
   { method: "GET", path: "/api/evals/employees", allowed: canManageEvalsSettings },
   { method: "GET", path: "/api/evals/hibob/sync", allowed: canManageEvalsSettings },
   { method: "GET", path: "/api/evals/organization", allowed: canManageEvalsSettings },
@@ -358,6 +360,7 @@ const ROUTES: RouteCase[] = [
   { method: "POST", path: "/api/evals/slack-contacts", allowed: canManageEvalsSettings, body: () => ({}) },
   { method: "POST", path: "/api/evals/titles", allowed: canManageEvalsSettings, body: () => ({}) },
   { method: "PUT", path: "/api/evals/candidate-cutoffs", allowed: canManageEvalsSettings, body: () => ({}) },
+  { method: "PUT", path: "/api/evals/deferral-days", allowed: canManageEvalsSettings, body: () => ({}) },
   { method: "PATCH", path: `/api/evals/titles/${MISSING}`, allowed: canManageEvalsSettings, body: () => ({}) },
   { method: "DELETE", path: `/api/evals/titles/${MISSING}`, allowed: canManageEvalsSettings },
   { method: "DELETE", path: `/api/evals/slack-contacts/${MISSING}`, allowed: canManageEvalsSettings },

@@ -14,7 +14,7 @@ import { formatDate, formatScore, formatWhen } from "../../cohort-settings/forma
 
 type Detail = Omit<HistoryDetail, "createdAt" | "updatedAt"> & { createdAt: string; updatedAt: string };
 
-const TRACK_LABELS = { sales: "Sales", engineer: "Engineer", ignored: "Ignored title", exempt: "Exempt" } as const;
+const TRACK_LABELS = { sales: "Sales", engineer: "Engineer", ignored: "Ignored title", exempt: "Exempt", deferred: "Deferred" } as const;
 
 export function HistoryDetailView({ detail }: { detail: Detail }) {
   const { employee } = detail;

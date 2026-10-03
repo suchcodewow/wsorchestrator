@@ -143,17 +143,46 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       {
         method: "GET",
         path: "/api/cohorts/current",
-        summary: "Lists one stage of the org members still to train — bootcamp or intermediate candidates — a page at a time.",
+        summary: "Lists the org members still to train — bootcamp and intermediate candidates — narrowed to a stage and a track, a page at a time.",
         access: "trainingViewer",
         token: true,
         notes:
-          "A bootcamp candidate is anyone under the Organization Leader, on the sales or engineer track or on none, with no BTC date in their bootcamp history; an intermediate candidate has a BTC date and no INT date. Either must also pass the date cutoffs in GET /api/evals/candidate-cutoffs, which cutoffs echoes. The ignored and exempt tracks are left out. A track is the title list the person's title was on when the HiBob sync ran, or exempt where their history says so; undecided is a title on no list, which POST /api/cohorts/current/track settles. counts gives each stage, and the undecided in both, whatever the search. activeBootcamp is the one active bootcamp, or null.",
+          "A bootcamp candidate is anyone under the Organization Leader, on the sales, engineer or deferred track or on none, with no BTC date in their bootcamp history; an intermediate candidate has a BTC date and no INT date. Either must also pass the date cutoffs in GET /api/evals/candidate-cutoffs, which cutoffs echoes. The ignored and exempt tracks are left out. A track is, first, one an administrator set by hand with PUT /api/cohorts/current/track, which overridden marks; then exempt where their history says so; then ignored for a title on the Ignored list; then deferred when their HiBob start date is fewer than deferral.days before deferral.bootcampStart, or after it; then the Sales or Engineer list their title is on. undecided is a title on no list. deferral echoes GET /api/evals/deferral-days. counts gives each stage on each track; each stage's counts ignore the track filter, each track's ignore the stage filter, and neither depends on the search. activeBootcamp is the one active bootcamp, or null.",
         query: [
-          { name: "stage", type: `"bootcamp" | "intermediate"`, note: "which candidates to list; bootcamp if omitted" },
+          { name: "stage", type: `"bootcamp" | "intermediate"`, note: "only that stage; both if omitted" },
+          { name: "track", type: `"sales" | "engineer" | "undecided" | "deferred"`, note: "only that track; all four if omitted" },
           ...listQuery(CURRENT_COHORT_LIST.sorts, "the name, email, title, department, track, or the manager's name or email"),
         ],
-        returns: `{ stage, members: { email, fullName, title, department, reportsToEmail, reportsToName, track: "sales" | "engineer" | "undecided", btcDate: "YYYY-MM-DD" | null }[], ${PAGE_FIELDS}, counts: { bootcamp: number, intermediate: number, undecided: number }, syncedAt: ISO 8601 string | null, cutoffs: { startDateOnOrAfter: "YYYY-MM-DD" | null, activeEffectiveDateAfter: "YYYY-MM-DD" | null }, activeBootcamp: { id, startDate, btcDays, intDays } | null }`,
-        errors: [{ status: 400, error: "invalid_stage", when: "stage is neither bootcamp nor intermediate" }],
+        returns: `{ stage: string | null, track: string | null, members: { email, fullName, title, department, reportsToEmail, reportsToName, track: "sales" | "engineer" | "undecided" | "deferred", overridden: boolean, stage: "bootcamp" | "intermediate", btcDate: "YYYY-MM-DD" | null }[], ${PAGE_FIELDS}, counts: Record<"bootcamp" | "intermediate", { sales: number, engineer: number, undecided: number, deferred: number }>, syncedAt: ISO 8601 string | null, cutoffs: { startDateOnOrAfter: "YYYY-MM-DD" | null, activeEffectiveDateAfter: "YYYY-MM-DD" | null }, deferral: { days: number, bootcampStart: "YYYY-MM-DD" | null }, activeBootcamp: { id, startDate, btcDays, intDays } | null }`,
+        errors: [
+          { status: 400, error: "invalid_stage", when: "stage is neither bootcamp nor intermediate" },
+          { status: 400, error: "invalid_track", when: "track is not sales, engineer, undecided or deferred" },
+        ],
+      },
+      {
+        method: "PUT",
+        path: "/api/cohorts/current/track",
+        summary: "Sets one org member's track by hand, to any track, whatever the rules give them.",
+        access: "trainingAdmin",
+        token: true,
+        notes:
+          "The track holds through every later sync, title-list change and bootcamp change, until automatic hands the person back to the rules. undecided pins them to no track. ignored and exempt take them off the Current tab; exempt here does not change their bootcamp history. track in the response is the one they have now.",
+        body: {
+          kind: "json",
+          fields: [
+            { name: "email", type: "string", required: true, note: "anyone under the Organization Leader" },
+            {
+              name: "track",
+              type: `"sales" | "engineer" | "undecided" | "deferred" | "ignored" | "exempt" | "automatic"`,
+              required: true,
+            },
+          ],
+        },
+        returns: `{ email, track: "sales" | "engineer" | "deferred" | "ignored" | "exempt" | null, overridden: boolean }`,
+        errors: [
+          { status: 400, error: "invalid", when: "the body is not that shape" },
+          { status: 404, error: "not_found", when: "no one under the Organization Leader has that email" },
+        ],
       },
       {
         method: "POST",
@@ -162,7 +191,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "trainingAdmin",
         token: true,
         notes:
-          "Everyone in the org who holds the same title, compared as the lists compare titles, has their track reset at once rather than at the next sync; on the ignored list, they leave the Current tab. A title already on a list stays where it is, and that list decides.",
+          "The Current tab no longer offers this; it sets one person's track with PUT instead. Everyone in the org who holds the same title, compared as the lists compare titles, has their track reset at once rather than at the next sync; on the ignored list, they leave the Current tab. A title already on a list stays where it is, and that list decides.",
         body: {
           kind: "json",
           fields: [
@@ -282,7 +311,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           "A date of 2000-01-01 means the person is exempt from that class. Scores run from 1 (poor) to 4 (outstanding), to one decimal place; btcIndividualScores and intIndividualScores map each exercise's column name to its score, or are null. updatedBy is the id of whoever last changed the row and updatedByName their name or email, both null when that account is gone. employee is null for an email not in the employee list.",
         params: [{ name: "id", type: "string", required: true, note: "the row's id" }],
         returns:
-          `{ id, email, btcDate: string | null, intDate: string | null, btcScore: number | null, intScore: number | null, btcIndividualScores: Record<string, number> | null, intIndividualScores: Record<string, number> | null, updatedBy: string | null, updatedByName: string | null, createdAt, updatedAt, employee: { fullName, title, department, site, reportsToName, reportsToEmail, startDate: string | null, track: "sales" | "engineer" | "ignored" | "exempt" | null } | null }`,
+          `{ id, email, btcDate: string | null, intDate: string | null, btcScore: number | null, intScore: number | null, btcIndividualScores: Record<string, number> | null, intIndividualScores: Record<string, number> | null, updatedBy: string | null, updatedByName: string | null, createdAt, updatedAt, employee: { fullName, title, department, site, reportsToName, reportsToEmail, startDate: string | null, track: "sales" | "engineer" | "ignored" | "exempt" | "deferred" | null } | null }`,
         errors: [{ status: 404, error: "not_found", when: "`id` is not a UUID, or no row has it" }],
       },
     ],
@@ -308,9 +337,9 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "evalsAdmin",
         token: true,
         notes:
-          "depth counts the links between a person and the leader, the leader included. managementChain is the emails of their managers, from the direct one up to and including the leader, joined with semicolons and no spaces. track is exempt when the person's bootcamp history marks BTC or INT exempt, otherwise the title list their title was on when the sync ran, or null for a title on no list. btcDate, btcScore, intDate and intScore are from their bootcamp history, null where there is none; a date of 2000-01-01 means they are exempt from that class, and a score runs from 1 (poor) to 4 (outstanding), to one decimal place. The list is as of the last sync; current is false once a different leader has been set since, until the next sync runs. total counts everyone listed, whatever the search.",
+          "depth counts the links between a person and the leader, the leader included. managementChain is the emails of their managers, from the direct one up to and including the leader, joined with semicolons and no spaces. track is the one an administrator set by hand, if any; otherwise exempt when the person's bootcamp history marks BTC or INT exempt, ignored for a title on the Ignored list, deferred when they started too close to the next bootcamp (see GET /api/evals/deferral-days), or else the Sales or Engineer list their title is on, or null for a title on no list. btcDate, btcScore, intDate and intScore are from their bootcamp history, null where there is none; a date of 2000-01-01 means they are exempt from that class, and a score runs from 1 (poor) to 4 (outstanding), to one decimal place. The list is as of the last sync; current is false once a different leader has been set since, until the next sync runs. total counts everyone listed, whatever the search.",
         query: listQuery(ORGANIZATION_LIST.sorts, "the name, email, title, department, track, or the manager's name or email"),
-        returns: `{ members: { email, fullName, title, department, reportsToEmail, reportsToName, track: "sales" | "engineer" | "ignored" | "exempt" | null, depth, leaderEmail, managementChain: string, btcDate, btcScore, intDate, intScore }[], ${PAGE_FIELDS}, total: number, leaderEmail: string | null, current: boolean }`,
+        returns: `{ members: { email, fullName, title, department, reportsToEmail, reportsToName, track: "sales" | "engineer" | "ignored" | "exempt" | "deferred" | null, depth, leaderEmail, managementChain: string, btcDate, btcScore, intDate, intScore }[], ${PAGE_FIELDS}, total: number, leaderEmail: string | null, current: boolean }`,
       },
       {
         method: "GET",
@@ -487,6 +516,30 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         errors: [
           { status: 400, error: "invalid", when: "neither field is given, a date is not a real YYYY-MM-DD day, or the body has another field" },
         ],
+      },
+      {
+        method: "GET",
+        path: "/api/evals/deferral-days",
+        summary: "Gets the deferral window: how close to the next bootcamp someone can start and still be put in it.",
+        access: "evalsAdmin",
+        token: true,
+        notes:
+          "Someone whose HiBob start date is fewer than days before bootcampStart, or after it, is on the deferred track rather than their title list's; an ignored title, exempt history or a track set by hand still comes first. A blank start date is never deferred. 0 turns deferral off. Until one is saved, days is the Google Sheet's 14. bootcampStart is the active bootcamp's start, else the soonest scheduled one starting today or later, or null when there is none, which also leaves no one deferred.",
+        returns: `{ days: number, bootcampStart: "YYYY-MM-DD" | null }`,
+      },
+      {
+        method: "PUT",
+        path: "/api/evals/deferral-days",
+        summary: "Sets the deferral window, and retracks the org by it at once.",
+        access: "evalsAdmin",
+        token: true,
+        notes: "Every org member's track is worked out again rather than at the next sync; retracked counts those whose track changed. Creating, editing or deleting a bootcamp does the same.",
+        body: {
+          kind: "json",
+          fields: [{ name: "days", type: "integer", required: true, note: "0 to 365; 0 turns deferral off" }],
+        },
+        returns: `{ days: number, bootcampStart: "YYYY-MM-DD" | null, retracked: number }`,
+        errors: [{ status: 400, error: "invalid", when: "days is missing, not a whole number from 0 to 365, or the body has another field" }],
       },
     ],
   },

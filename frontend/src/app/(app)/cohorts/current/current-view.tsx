@@ -1,127 +1,200 @@
 "use client";
 
 /**
- * How many candidates are in each stage, then a page of each: bootcamp
- * candidates, then intermediate ones. One search box serves both tables. An
- * undecided track opens a choice of list for the person's title.
+ * The candidates in one table, under two rows of counters: one by stage
+ * (bootcamp or intermediate) and one by track. A counter narrows the table to
+ * its stage or track, at most one from each row, and counts within whatever
+ * the other row has picked. An administrator sets anyone's track from the
+ * Track column, and it holds through every sync until they hand it back to
+ * the rules.
  */
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
-import { CircleHelp, GraduationCap, Loader2, Upload, Users, type LucideIcon } from "lucide-react";
+import {
+  ChevronDown,
+  CircleHelp,
+  Clock,
+  Code,
+  GraduationCap,
+  Handshake,
+  Loader2,
+  Pin,
+  Upload,
+  Users,
+  type LucideIcon,
+} from "lucide-react";
 import { HEADER_ROW, Pager, SortHeader, TableSearch } from "@/components/data-table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import type { EvalsTitleList } from "@/db/schema";
-import type { CandidateStage, CurrentCohortMember } from "@/lib/evals/current-cohort";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import type {
+  CandidateStage,
+  CandidateTrack,
+  CurrentCohortCounts,
+  CurrentCohortFilter,
+  CurrentCohortMember,
+} from "@/lib/evals/current-cohort";
 import type { CandidateCutoffs } from "@/lib/evals/settings";
-import { TITLE_LIST_LABELS } from "@/lib/evals/title-lists";
+import type { TrackChoice } from "@/lib/evals/tracks";
 import type { CurrentCohortSort } from "@/lib/list-specs";
 import { riseChild, staggerParent } from "@/lib/motion";
 import type { ListQuery, Page } from "@/lib/paging";
 import type { ActiveBootcamp } from "@/lib/scheduler/bootcamps";
+import { cn } from "@/lib/utils";
 import { formatDate, formatWhen } from "../../cohort-settings/format";
 
-type StageList = { query: ListQuery<CurrentCohortSort>; page: Page<CurrentCohortMember> };
-
-const CARDS: { key: CandidateStage | "undecided"; label: string; Icon: LucideIcon }[] = [
-  { key: "bootcamp", label: "Bootcamp candidates", Icon: Users },
-  { key: "intermediate", label: "Intermediate candidates", Icon: GraduationCap },
-  { key: "undecided", label: "Undecided", Icon: CircleHelp },
+const STAGE_COUNTERS: { stage: CandidateStage; label: string; Icon: LucideIcon }[] = [
+  { stage: "bootcamp", label: "Bootcamp candidates", Icon: Users },
+  { stage: "intermediate", label: "Intermediate candidates", Icon: GraduationCap },
 ];
 
-const STAGES: Record<CandidateStage, { heading: string; load: string; columns: { column: CurrentCohortSort; label: string }[] }> = {
-  bootcamp: {
-    heading: "Bootcamp candidates",
-    load: "Load Final Bootcamp Scores",
-    columns: [
-      { column: "fullName", label: "Name" },
-      { column: "email", label: "Email" },
-      { column: "title", label: "Title" },
-      { column: "department", label: "Department" },
-      { column: "reportsToName", label: "Manager" },
-      { column: "track", label: "Track" },
-    ],
-  },
-  intermediate: {
-    heading: "Intermediate candidates",
-    load: "Load Final Intermediate Scores",
-    columns: [
-      { column: "fullName", label: "Name" },
-      { column: "email", label: "Email" },
-      { column: "title", label: "Title" },
-      { column: "department", label: "Department" },
-      { column: "reportsToName", label: "Manager" },
-      { column: "track", label: "Track" },
-      { column: "btcDate", label: "BTC date" },
-    ],
-  },
-};
-
-const TRACK_LABELS = { sales: "Sales", engineer: "Engineer", undecided: "Undecided" } as const;
-
-const SORT_CHOICES: { list: EvalsTitleList; label: string }[] = [
-  { list: "sales", label: "Sales" },
-  { list: "engineer", label: "Engineer" },
-  { list: "ignored", label: "Ignore this title" },
+const TRACK_COUNTERS: { track: CandidateTrack; label: string; Icon: LucideIcon }[] = [
+  { track: "sales", label: "Sales", Icon: Handshake },
+  { track: "engineer", label: "Engineer", Icon: Code },
+  { track: "undecided", label: "Undecided", Icon: CircleHelp },
+  { track: "deferred", label: "Deferred", Icon: Clock },
 ];
+
+const COLUMNS: { column: CurrentCohortSort; label: string }[] = [
+  { column: "fullName", label: "Name" },
+  { column: "email", label: "Email" },
+  { column: "title", label: "Title" },
+  { column: "department", label: "Department" },
+  { column: "reportsToName", label: "Manager" },
+  { column: "track", label: "Track" },
+  { column: "stage", label: "Stage" },
+  { column: "btcDate", label: "BTC date" },
+];
+
+const STAGE_LABELS: Record<CandidateStage, string> = { bootcamp: "Bootcamp", intermediate: "Intermediate" };
+
+/** Every track an administrator can give someone; the last two take them off this tab. */
+const TRACK_OPTIONS: { choice: Exclude<TrackChoice, "automatic">; label: string; leaves?: true }[] = [
+  { choice: "sales", label: "Sales" },
+  { choice: "engineer", label: "Engineer" },
+  { choice: "undecided", label: "Undecided" },
+  { choice: "deferred", label: "Deferred" },
+  { choice: "ignored", label: "Ignored", leaves: true },
+  { choice: "exempt", label: "Exempt", leaves: true },
+];
+
+const CHOICE_LABELS = Object.fromEntries(TRACK_OPTIONS.map((o) => [o.choice, o.label])) as Record<
+  Exclude<TrackChoice, "automatic">,
+  string
+>;
 
 const ERRORS: Record<string, string> = {
   not_found: "That person is no longer in the org — reload the page.",
-  not_undecided: "Someone already gave that person a track — reload the page.",
-  no_title: "HiBob gives that person no title to sort.",
   forbidden: "Your own role changed — reload the page.",
 };
 
+type Change = { member: CurrentCohortMember; undo: TrackChoice; message: string };
+
+/** Picks a stage or a track, or clears it when it is the one already picked; back to page 1 either way. */
+function useFilterParams() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const params = useSearchParams();
+  const [pending, startTransition] = useTransition();
+
+  function toggle(name: "stage" | "track", value: string) {
+    const next = new URLSearchParams(params.toString());
+    if (next.get(name) === value) next.delete(name);
+    else next.set(name, value);
+    next.delete("page");
+    const qs = next.toString();
+    startTransition(() => router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false }));
+  }
+
+  return { toggle, pending };
+}
+
+function sum(values: Record<string, number>): number {
+  return Object.values(values).reduce((a, b) => a + b, 0);
+}
+
 export function CurrentCohortView({
-  stages,
+  query,
+  filter,
+  page,
   counts,
   syncedAt,
   cutoffs,
+  deferral,
   activeBootcamp,
-  canSort,
+  canSetTrack,
 }: {
-  stages: Record<CandidateStage, StageList>;
-  /** Everyone in each stage, and everyone undecided, whatever the search. */
-  counts: Record<CandidateStage | "undecided", number>;
+  query: ListQuery<CurrentCohortSort>;
+  filter: CurrentCohortFilter;
+  page: Page<CurrentCohortMember>;
+  /** Everyone in each stage on each track, whatever the search or filter. */
+  counts: CurrentCohortCounts;
   syncedAt: string | null;
   cutoffs: CandidateCutoffs;
+  deferral: { days: number; bootcampStart: string | null };
   activeBootcamp: ActiveBootcamp | null;
-  /** Whether the viewer may put an undecided title on a list. */
-  canSort: boolean;
+  /** Whether the viewer may set anyone's track. */
+  canSetTrack: boolean;
 }) {
   const router = useRouter();
-  const [sorting, setSorting] = useState<CurrentCohortMember | null>(null);
-  const [busy, setBusy] = useState<EvalsTitleList | null>(null);
+  const { toggle, pending } = useFilterParams();
+  const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
-  const total = counts.bootcamp + counts.intermediate;
+  const [change, setChange] = useState<Change | null>(null);
 
-  async function sortTitle(member: CurrentCohortMember, list: EvalsTitleList) {
-    setBusy(list);
+  const total = sum(counts.bootcamp) + sum(counts.intermediate);
+  // Each row counts within the other row's pick.
+  const stageCount = (stage: CandidateStage) => (filter.track ? counts[stage][filter.track] : sum(counts[stage]));
+  const trackCount = (track: CandidateTrack) =>
+    filter.stage ? counts[filter.stage][track] : counts.bootcamp[track] + counts.intermediate[track];
+
+  const deferralNote =
+    deferral.days <= 0
+      ? "Deferral is off on Cohort Settings → Automation"
+      : deferral.bootcampStart
+        ? `Started fewer than ${deferral.days} days before the bootcamp on ${formatDate(deferral.bootcampStart)}`
+        : "No bootcamp is coming, so no one is deferred";
+
+  async function setTrack(member: CurrentCohortMember, choice: TrackChoice, undoing = false) {
+    setBusy(member.email);
     setError(null);
     try {
       const res = await fetch("/api/cohorts/current/track", {
-        method: "POST",
+        method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: member.email, list }),
+        body: JSON.stringify({ email: member.email, track: choice }),
       });
       const body = await res.json().catch(() => null);
       if (!res.ok) {
         setError(ERRORS[body?.error ?? ""] ?? `Could not save (${res.status}).`);
         return;
       }
-      const label = TITLE_LIST_LABELS[body.list as EvalsTitleList];
-      const people = `${body.retracked} ${body.retracked === 1 ? "person" : "people"}`;
-      setNotice(
-        body.added
-          ? `Added “${body.title}” to ${label}; ${people} sorted.`
-          : `“${body.title}” was already on ${label}; ${people} sorted.`,
-      );
-      setSorting(null);
+      if (undoing) {
+        setChange(null);
+      } else {
+        const now = (body.track ?? "undecided") as Exclude<TrackChoice, "automatic">;
+        const leaves = now === "ignored" || now === "exempt";
+        setChange({
+          member,
+          undo: member.overridden ? member.track : "automatic",
+          message:
+            choice === "automatic"
+              ? `${member.fullName} is back on the rules: ${CHOICE_LABELS[now]}.`
+              : `${member.fullName} is now ${CHOICE_LABELS[now]}${leaves ? ", so they leave this tab" : ""}.`,
+        });
+      }
       router.refresh();
     } catch {
       setError("Could not reach the server.");
@@ -132,21 +205,7 @@ export function CurrentCohortView({
 
   return (
     <motion.div variants={staggerParent(0.05)} initial="hidden" animate="show" className="space-y-4">
-      <motion.div variants={riseChild} className="grid gap-4 sm:grid-cols-3 lg:max-w-4xl">
-        {CARDS.map(({ key, label, Icon }) => (
-          <div key={key} className="flex items-center gap-4 rounded-2xl border bg-card px-5 py-4 shadow-sm">
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-muted">
-              <Icon className="size-5 text-muted-foreground" />
-            </span>
-            <div>
-              <div className="text-3xl font-medium tabular-nums">{counts[key].toLocaleString()}</div>
-              <div className="text-sm text-muted-foreground">{label}</div>
-            </div>
-          </div>
-        ))}
-      </motion.div>
-
-      <motion.div variants={riseChild} className="space-y-1.5 pt-4">
+      <motion.div variants={riseChild} className="space-y-1.5">
         <h2 className="text-xl font-medium tracking-tight">Current</h2>
         {syncedAt && (
           <p className="text-sm leading-relaxed text-muted-foreground">
@@ -181,142 +240,269 @@ export function CurrentCohortView({
         </p>
       </motion.div>
 
-      <motion.div variants={riseChild}>
-        <TableSearch
-          value={stages.bootcamp.query.q}
-          placeholder="Search by name, title, manager or track"
-          label="Search the candidates"
-        />
+      <motion.div variants={riseChild} role="group" aria-label="Stage" className="grid gap-3 sm:grid-cols-2 lg:max-w-4xl">
+        {STAGE_COUNTERS.map(({ stage, label, Icon }) => (
+          <Counter
+            key={stage}
+            label={label}
+            Icon={Icon}
+            count={stageCount(stage)}
+            on={filter.stage === stage}
+            disabled={pending}
+            onClick={() => toggle("stage", stage)}
+          />
+        ))}
       </motion.div>
 
-      {notice && (
-        <motion.p variants={riseChild} role="status" className="text-sm text-muted-foreground">
-          {notice}
-        </motion.p>
-      )}
+      <motion.div
+        variants={riseChild}
+        role="group"
+        aria-label="Track"
+        className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:max-w-4xl"
+      >
+        {TRACK_COUNTERS.map(({ track, label, Icon }) => (
+          <Counter
+            key={track}
+            small
+            label={label}
+            Icon={Icon}
+            count={trackCount(track)}
+            on={filter.track === track}
+            disabled={pending}
+            title={track === "deferred" ? deferralNote : undefined}
+            onClick={() => toggle("track", track)}
+          />
+        ))}
+      </motion.div>
 
-      {(Object.keys(STAGES) as CandidateStage[]).map((stage) => {
-        const { heading, load, columns } = STAGES[stage];
-        const { query, page } = stages[stage];
-        const sortProps = { sort: query.sort, dir: query.dir, prefix: stage };
-        return (
-          <motion.div key={stage} variants={riseChild} className="space-y-3 pt-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <h3 className="text-lg font-medium tracking-tight">
-                {heading} · {counts[stage].toLocaleString()}
-              </h3>
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground">Waits for eVals judging</span>
-                <Button variant="secondary" disabled>
-                  <Upload />
-                  {load}
-                </Button>
-              </div>
-            </div>
+      <motion.div variants={riseChild} className="flex flex-wrap items-center gap-3 pt-2">
+        <TableSearch
+          value={query.q}
+          placeholder="Search by name, title, manager or track"
+          label="Search the candidates"
+          className="min-w-56 flex-1"
+        />
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs text-muted-foreground">Waits for eVals judging</span>
+          <Button variant="secondary" disabled>
+            <Upload />
+            Load Final Bootcamp Scores
+          </Button>
+          <Button variant="secondary" disabled>
+            <Upload />
+            Load Final Intermediate Scores
+          </Button>
+        </div>
+      </motion.div>
 
-            <div className="overflow-hidden rounded-2xl border bg-card shadow-sm">
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-200 text-sm">
-                  <thead>
-                    <tr className={HEADER_ROW}>
-                      {columns.map((c) => (
-                        <SortHeader key={c.column} column={c.column} {...sortProps}>
-                          {c.label}
-                        </SortHeader>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {page.rows.map((m) => (
-                      <tr key={m.email} className="border-b transition-colors last:border-b-0 hover:bg-muted/30">
-                        <td className="px-5 py-2.5 font-medium">{m.fullName}</td>
-                        <td className="px-5 py-2.5 text-muted-foreground">{m.email}</td>
-                        <td className="px-5 py-2.5">{m.title || "—"}</td>
-                        <td className="px-5 py-2.5 text-muted-foreground">{m.department || "—"}</td>
-                        <td className="px-5 py-2.5 text-muted-foreground">
-                          {m.reportsToName || m.reportsToEmail || "—"}
-                        </td>
-                        <td className="px-5 py-2.5">
-                          {m.track === "undecided" && canSort ? (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setError(null);
-                                setSorting(m);
-                              }}
-                              className="rounded-md outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                              aria-label={`Choose a track for ${m.fullName}`}
-                            >
-                              <Badge variant="outline" className="cursor-pointer border-dashed hover:bg-accent">
-                                Undecided
-                              </Badge>
-                            </button>
-                          ) : m.track === "undecided" ? (
-                            <Badge variant="outline" className="border-dashed">
-                              Undecided
-                            </Badge>
-                          ) : (
-                            TRACK_LABELS[m.track]
-                          )}
-                        </td>
-                        {stage === "intermediate" && (
-                          <td className="px-5 py-2.5 tabular-nums text-muted-foreground">{formatDate(m.btcDate)}</td>
-                        )}
-                      </tr>
-                    ))}
-                    {page.rows.length === 0 && (
-                      <tr>
-                        <td colSpan={columns.length} className="px-5 py-8 text-center text-muted-foreground">
-                          {counts[stage] ? "No one matches." : `No ${heading.toLowerCase()}.`}
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-              <div className="border-t empty:hidden">
-                <Pager page={page} noun="people" prefix={stage} />
-              </div>
-            </div>
-          </motion.div>
-        );
-      })}
-
-      <Dialog open={sorting !== null} onOpenChange={(open) => !open && busy === null && setSorting(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{sorting?.title ? `Sort “${sorting.title}”` : "No title to sort"}</DialogTitle>
-            <DialogDescription className="leading-relaxed">
-              {sorting?.title
-                ? `${sorting.fullName}, and everyone else in the org with this title, follows the list you pick.`
-                : `HiBob gives ${sorting?.fullName ?? "this person"} no title.`}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-2">
-            {SORT_CHOICES.map(({ list, label }) => (
-              <Button
-                key={list}
-                variant={list === "ignored" ? "outline" : "brand"}
-                disabled={!sorting?.title || busy !== null}
-                onClick={() => sorting && sortTitle(sorting, list)}
-              >
-                {busy === list && <Loader2 className="animate-spin" />}
-                {label}
-              </Button>
-            ))}
-          </div>
-          {error && (
-            <p role="alert" className="text-sm text-destructive">
+      {(change || error) && (
+        <motion.div variants={riseChild} className="flex flex-wrap items-center gap-3 text-sm">
+          {error ? (
+            <p role="alert" className="text-destructive">
               {error}
             </p>
+          ) : (
+            change && (
+              <>
+                <p role="status" className="text-muted-foreground">
+                  {change.message}
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={busy !== null}
+                  onClick={() => setTrack(change.member, change.undo, true)}
+                >
+                  {busy === change.member.email && <Loader2 className="animate-spin" />}
+                  Undo
+                </Button>
+              </>
+            )
           )}
-          <DialogFooter>
-            <Button variant="ghost" disabled={busy !== null} onClick={() => setSorting(null)}>
-              Cancel
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        </motion.div>
+      )}
+
+      <motion.div variants={riseChild} className="overflow-hidden rounded-2xl border bg-card shadow-sm">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-240 text-sm">
+            <thead>
+              <tr className={HEADER_ROW}>
+                {COLUMNS.map((c) => (
+                  <SortHeader key={c.column} column={c.column} sort={query.sort} dir={query.dir}>
+                    {c.label}
+                  </SortHeader>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {page.rows.map((m) => (
+                <tr key={m.email} className="border-b transition-colors last:border-b-0 hover:bg-muted/30">
+                  <td className="px-5 py-2.5 font-medium">{m.fullName}</td>
+                  <td className="px-5 py-2.5 text-muted-foreground">{m.email}</td>
+                  <td className="px-5 py-2.5">{m.title || "—"}</td>
+                  <td className="px-5 py-2.5 text-muted-foreground">{m.department || "—"}</td>
+                  <td className="px-5 py-2.5 text-muted-foreground">{m.reportsToName || m.reportsToEmail || "—"}</td>
+                  <td className="px-5 py-1.5">
+                    {canSetTrack ? (
+                      <TrackMenu
+                        member={m}
+                        busy={busy === m.email}
+                        disabled={busy !== null}
+                        onPick={(choice) => setTrack(m, choice)}
+                      />
+                    ) : (
+                      <TrackLabel member={m} />
+                    )}
+                  </td>
+                  <td className="px-5 py-2.5 text-muted-foreground">{STAGE_LABELS[m.stage]}</td>
+                  <td className="whitespace-nowrap px-5 py-2.5 tabular-nums text-muted-foreground">
+                    {formatDate(m.btcDate)}
+                  </td>
+                </tr>
+              ))}
+              {page.rows.length === 0 && (
+                <tr>
+                  <td colSpan={COLUMNS.length} className="px-5 py-8 text-center text-muted-foreground">
+                    {query.q || filter.stage || filter.track
+                      ? "No one matches."
+                      : page.page > 1
+                        ? "No one on this page."
+                        : "No candidates."}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+        <div className="border-t empty:hidden">
+          <Pager page={page} noun="people" />
+        </div>
+      </motion.div>
     </motion.div>
+  );
+}
+
+function Counter({
+  label,
+  Icon,
+  count,
+  on,
+  disabled,
+  small,
+  title,
+  onClick,
+}: {
+  label: string;
+  Icon: LucideIcon;
+  count: number;
+  on: boolean;
+  disabled: boolean;
+  small?: boolean;
+  title?: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={on}
+      title={title}
+      disabled={disabled}
+      onClick={onClick}
+      className={cn(
+        "flex cursor-pointer items-center gap-4 rounded-2xl border px-5 text-left shadow-sm outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-wait",
+        small ? "gap-3 py-3" : "py-4",
+        on ? "border-brand-border bg-brand-subtle" : "bg-card hover:bg-muted/40",
+      )}
+    >
+      <span
+        className={cn(
+          "flex shrink-0 items-center justify-center rounded-full",
+          small ? "size-8" : "size-10",
+          on ? "bg-background" : "bg-muted",
+        )}
+      >
+        <Icon className={cn(small ? "size-4" : "size-5", on ? "text-brand" : "text-muted-foreground")} />
+      </span>
+      <span>
+        <span className={cn("block font-medium tabular-nums", small ? "text-2xl" : "text-3xl")}>
+          {count.toLocaleString()}
+        </span>
+        <span className="block text-sm text-muted-foreground">{label}</span>
+      </span>
+    </button>
+  );
+}
+
+function TrackLabel({ member }: { member: CurrentCohortMember }) {
+  const label = CHOICE_LABELS[member.track];
+  return (
+    <span className="inline-flex items-center gap-1.5 py-1">
+      {member.track === "undecided" ? (
+        <Badge variant="outline" className="border-dashed">
+          {label}
+        </Badge>
+      ) : member.track === "deferred" ? (
+        <Badge variant="secondary">{label}</Badge>
+      ) : (
+        label
+      )}
+      {member.overridden && (
+        <Pin className="size-3 text-muted-foreground" aria-label="Set by an administrator" />
+      )}
+    </span>
+  );
+}
+
+function TrackMenu({
+  member,
+  busy,
+  disabled,
+  onPick,
+}: {
+  member: CurrentCohortMember;
+  busy: boolean;
+  disabled: boolean;
+  onPick: (choice: TrackChoice) => void;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        disabled={disabled}
+        aria-label={`Track for ${member.fullName}`}
+        className="-mx-2 flex cursor-pointer items-center gap-1 rounded-md px-2 outline-none transition-colors hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-wait"
+      >
+        <TrackLabel member={member} />
+        {busy ? (
+          <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
+        ) : (
+          <ChevronDown className="size-3.5 text-muted-foreground" />
+        )}
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="min-w-52">
+        <DropdownMenuLabel className="text-xs text-muted-foreground">
+          {member.overridden ? "Set by an administrator" : "Set by the rules"}
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuRadioGroup
+          value={member.overridden ? member.track : ""}
+          onValueChange={(v) => onPick(v as TrackChoice)}
+        >
+          {TRACK_OPTIONS.map((o) => (
+            <DropdownMenuRadioItem key={o.choice} value={o.choice}>
+              <span className="grid gap-0.5">
+                <span>{o.label}</span>
+                {o.leaves && <span className="text-xs text-muted-foreground">Leaves the Current tab</span>}
+              </span>
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+        {member.overridden && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={() => onPick("automatic")}>Let the rules decide</DropdownMenuItem>
+          </>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

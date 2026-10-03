@@ -1,4 +1,4 @@
-/** eVals-wide settings: the Organization Leader and the candidate date cutoffs. */
+/** eVals-wide settings: the Organization Leader, the candidate date cutoffs and the deferral window. */
 
 import "server-only";
 
@@ -90,5 +90,34 @@ export async function setCandidateCutoffs(actorId: string, changes: Partial<Cand
     .onConflictDoUpdate({
       target: evalsSettings.key,
       set: { value: sql`excluded.value`, updatedBy: actorId, updatedAt: new Date() },
+    });
+}
+
+/**
+ * The deferral window, in whole days: anyone who started fewer than this many
+ * days before the next bootcamp sits it out, as the Sheet's Deferred mark had
+ * it. 0 turns deferral off.
+ */
+export const DEFAULT_DEFERRAL_DAYS = 14;
+
+/** The saved window, or the Sheet's 14 days until someone saves one. */
+export async function getDeferralDays(): Promise<number> {
+  const [row] = await db
+    .select({ value: evalsSettings.value })
+    .from(evalsSettings)
+    .where(eq(evalsSettings.key, EVALS_SETTINGS_KEYS.deferralDays));
+  const days = row ? Number(row.value) : NaN;
+  return Number.isInteger(days) ? days : DEFAULT_DEFERRAL_DAYS;
+}
+
+/** Saves a validated whole number of days. Retracking the org is the caller's. */
+export async function setDeferralDays(actorId: string, days: number): Promise<void> {
+  const value = String(days);
+  await db
+    .insert(evalsSettings)
+    .values({ key: EVALS_SETTINGS_KEYS.deferralDays, value, updatedBy: actorId })
+    .onConflictDoUpdate({
+      target: evalsSettings.key,
+      set: { value, updatedBy: actorId, updatedAt: new Date() },
     });
 }
