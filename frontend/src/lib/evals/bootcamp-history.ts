@@ -10,12 +10,13 @@
 
 import "server-only";
 
-import { and, asc, eq, sql, type SQL } from "drizzle-orm";
+import { and, asc, eq, or, sql, type AnyColumn, type SQL } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
 import {
   BOOTCAMP_HISTORY_LIMITS,
   BOOTCAMP_SCORE,
+  EXEMPT_DATE,
   bootcampHistory,
   employees,
   users,
@@ -25,7 +26,7 @@ import {
 import { parseHistorySheet, type HistoryField, type HistoryProblem } from "@/lib/evals/bootcamp-history-file";
 import { isIsoDay, normalEmail, roundScore } from "@/lib/evals/history-values";
 import { retrackEmployees } from "@/lib/evals/tracks";
-import type { BootcampHistorySort, HistoryStatus } from "@/lib/list-specs";
+import type { BootcampHistorySort, HistoryStatus, PreviousSessionSort } from "@/lib/list-specs";
 import { pageWindow, toPage, type ListQuery, type Page } from "@/lib/paging";
 import { orderFor, searchAny } from "@/lib/paging-sql";
 import { readSpreadsheet } from "@/lib/spreadsheet-file";
@@ -96,6 +97,84 @@ export async function historyCounts(): Promise<HistoryCounts> {
   const total = row?.total ?? 0;
   const active = row?.active ?? 0;
   return { total, active, inactive: total - active };
+}
+
+/** A day someone attended BTC or INT on, and how many attended each; the exempt marker is no session. */
+export type PreviousSession = { date: string; bootcamp: number; intermediate: number };
+
+const SESSION_DAYS = sql`(
+  select btc_date as day, 1 as at_btc, 0 as at_int from ${bootcampHistory} where btc_date is not null and btc_date <> ${EXEMPT_DATE}
+  union all
+  select int_date, 0, 1 from ${bootcampHistory} where int_date is not null and int_date <> ${EXEMPT_DATE}
+)`;
+
+const SESSION_SORT_COLUMNS: Record<PreviousSessionSort, SQL> = {
+  date: sql`day`,
+  bootcamp: sql`bootcamp`,
+  intermediate: sql`intermediate`,
+};
+
+/** One page of the days BTC or INT was held, newest first by default, with each one's head count. */
+export async function listPreviousSessions(query: ListQuery<PreviousSessionSort>): Promise<Page<PreviousSession>> {
+  const { limit, offset } = pageWindow(query.page);
+  const order = orderFor(SESSION_SORT_COLUMNS[query.sort], query.dir, sql`day desc`);
+  const { rows } = await db.execute<PreviousSession>(sql`
+    select day::text as date, sum(at_btc)::int as bootcamp, sum(at_int)::int as intermediate
+      from ${SESSION_DAYS} d
+     group by day
+     order by ${sql.join(order, sql`, `)}
+     limit ${limit} offset ${offset}`);
+  return toPage(rows, query.page);
+}
+
+/** How many sessions there have been, and the first one's day, whatever page is shown. */
+export async function previousSessionsSummary(): Promise<{ sessions: number; first: string | null }> {
+  const { rows } = await db.execute<{ sessions: number; first: string | null }>(sql`
+    select count(distinct day)::int as sessions, min(day)::text as first from ${SESSION_DAYS} d`);
+  return rows[0] ?? { sessions: 0, first: null };
+}
+
+export type SessionStage = "bootcamp" | "intermediate";
+
+export type SessionAttendee = { id: string; email: string; fullName: string | null; active: boolean };
+
+const STAGE_DATE = {
+  bootcamp: bootcampHistory.btcDate,
+  intermediate: bootcampHistory.intDate,
+} satisfies Record<SessionStage, AnyColumn>;
+
+/** One page of who attended `stage` on `date`, by name, with whoever has left after them. */
+async function listSessionAttendees(stage: SessionStage, date: string, page: number): Promise<Page<SessionAttendee>> {
+  const { limit, offset } = pageWindow(page);
+  const rows = await db
+    .select({ id: bootcampHistory.id, email: bootcampHistory.email, fullName: historyName, active: isActive })
+    .from(bootcampHistory)
+    .where(eq(STAGE_DATE[stage], date))
+    .orderBy(sql`${HISTORY_SORT_COLUMNS.fullName} asc nulls last`, bootcampHistory.email)
+    .limit(limit)
+    .offset(offset);
+  return toPage(rows, page);
+}
+
+export type SessionDetail = { date: string } & Record<SessionStage, Page<SessionAttendee>>;
+
+/**
+ * Who attended BTC on `date` and who attended INT on it, each side a page at
+ * a time; null when no one attended either, which includes the exempt marker.
+ */
+export async function getSessionDetail(date: string, pages: Record<SessionStage, number>): Promise<SessionDetail | null> {
+  if (date === EXEMPT_DATE) return null;
+  const [bootcamp, intermediate, [held]] = await Promise.all([
+    listSessionAttendees("bootcamp", date, pages.bootcamp),
+    listSessionAttendees("intermediate", date, pages.intermediate),
+    db
+      .select({ id: bootcampHistory.id })
+      .from(bootcampHistory)
+      .where(or(eq(bootcampHistory.btcDate, date), eq(bootcampHistory.intDate, date)))
+      .limit(1),
+  ]);
+  if (!held) return null;
+  return { date, bootcamp, intermediate };
 }
 
 export type HistoryDetail = BootcampHistory & {

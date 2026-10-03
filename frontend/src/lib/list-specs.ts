@@ -64,6 +64,12 @@ export type OrganizationSort = (typeof ORGANIZATION_LIST.sorts)[number];
 export const CURRENT_COHORT_LIST = spec(["fullName", "email", "title", "track", "btcDate"]);
 export type CurrentCohortSort = (typeof CURRENT_COHORT_LIST.sorts)[number];
 
+export const PREVIOUS_SESSION_LIST = spec(["date", "bootcamp", "intermediate"], "desc");
+export type PreviousSessionSort = (typeof PREVIOUS_SESSION_LIST.sorts)[number];
+
+/** One side of a past session, by name; each side pages on its own, as `bootcamp.page` and `intermediate.page`. */
+export const SESSION_ATTENDEE_LIST = spec(["fullName"]);
+
 export const BOOTCAMP_LIST = spec(["startDate", "status", "createdBy"], "desc");
 export type BootcampSort = (typeof BOOTCAMP_LIST.sorts)[number];
 

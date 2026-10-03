@@ -1,4 +1,5 @@
-import { AUDIT_LIST, BOOTCAMP_HISTORY_LIST, BOOTCAMP_LIST, CURRENT_COHORT_LIST, DOMAIN_LIST, EMPLOYEE_LIST, HIBOB_SYNC_LIST, HISTORY_STATUSES, ORGANIZATION_LIST, SLACK_CONTACT_LIST, TITLE_LIST, USER_LIST } from "@/lib/list-specs";
+import { AUDIT_LIST, BOOTCAMP_HISTORY_LIST, BOOTCAMP_LIST, CURRENT_COHORT_LIST, DOMAIN_LIST, EMPLOYEE_LIST, HIBOB_SYNC_LIST, HISTORY_STATUSES, ORGANIZATION_LIST, PREVIOUS_SESSION_LIST, SLACK_CONTACT_LIST, TITLE_LIST, USER_LIST } from "@/lib/list-specs";
+import { PAGE_SIZE } from "@/lib/paging";
 import { PAGE_FIELDS, listQuery } from "./paging";
 import type { EndpointGroup } from "./types";
 
@@ -157,6 +158,36 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         errors: [
           { status: 400, error: "invalid_stage", when: "stage is neither bootcamp nor intermediate" },
           { status: 400, error: "invalid_track", when: "track is not sales, engineer, undecided or deferred" },
+        ],
+      },
+      {
+        method: "GET",
+        path: "/api/cohorts/previous",
+        summary: "Lists each day BTC or INT was held, with how many people attended each, a page at a time.",
+        access: "trainingViewer",
+        token: true,
+        notes:
+          "A day is a session when anyone's bootcamp history has it as their BTC or INT date; 2000-01-01, which marks someone exempt, is never one. bootcamp and intermediate count the people with that BTC date and that INT date. total and first count every session, whatever page is asked for; first is null when there are none.",
+        query: listQuery(PREVIOUS_SESSION_LIST.sorts, "nothing", "desc").filter((f) => f.name !== "q"),
+        returns: `{ sessions: { date: "YYYY-MM-DD", bootcamp: number, intermediate: number }[], ${PAGE_FIELDS}, total: number, first: "YYYY-MM-DD" | null }`,
+      },
+      {
+        method: "GET",
+        path: "/api/cohorts/previous/{date}",
+        summary: "Lists who attended BTC and who attended INT on one day, each side a page at a time.",
+        access: "trainingViewer",
+        token: true,
+        notes:
+          "Each side is ordered by name, from the employee list, with anyone not in it last by email; fullName is null for them, and active is false for anyone not in the employee list from the last HiBob sync. id is the person's bootcamp history record, for GET /api/evals/bootcamp-history/{id}.",
+        params: [{ name: "date", type: "string", required: true, note: "YYYY-MM-DD" }],
+        query: [
+          { name: "bootcamp.page", type: "integer", note: `The bootcamp side's page, from 1. Default 1. A page holds at most ${PAGE_SIZE}.` },
+          { name: "intermediate.page", type: "integer", note: `The intermediate side's page, the same way.` },
+        ],
+        returns: `{ date: "YYYY-MM-DD", bootcamp: { rows: { id, email, fullName: string | null, active: boolean }[], ${PAGE_FIELDS} }, intermediate: the same }`,
+        errors: [
+          { status: 400, error: "invalid_date", when: "date is not a real YYYY-MM-DD day" },
+          { status: 404, error: "not_found", when: "no one's BTC or INT date is that day, as for 2000-01-01" },
         ],
       },
       {
