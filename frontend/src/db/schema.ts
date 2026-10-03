@@ -932,6 +932,9 @@ export const evalsSettings = pgTable("evals_settings", {
 
 export const EVALS_SETTINGS_KEYS = {
   orgLeaderEmail: "org_leader_email",
+  /** `YYYY-MM-DD`, or empty for no cutoff. See `getCandidateCutoffs`. */
+  startDateOnOrAfter: "candidate_start_date_on_or_after",
+  activeEffectiveDateAfter: "candidate_active_effective_date_after",
 } as const;
 
 export const evalsTitles = pgTable(

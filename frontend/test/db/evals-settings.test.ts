@@ -42,6 +42,11 @@ import {
 import { hibobServiceUser, listHibobSyncRuns, syncHibobEmployees } from "@/lib/evals/hibob";
 import { currentCohortSummary, listCurrentCohort, type CandidateStage } from "@/lib/evals/current-cohort";
 import { loadRoster } from "@/lib/evals/roster";
+import {
+  DEFAULT_CANDIDATE_CUTOFFS,
+  getCandidateCutoffs,
+  setCandidateCutoffs,
+} from "@/lib/evals/settings";
 import { addTitles, deleteTitle, listTitles, updateTitle } from "@/lib/evals/titles";
 import { sortUndecidedTitle } from "@/lib/evals/tracks";
 import { BOOTCAMP_LIST, CURRENT_COHORT_LIST, HIBOB_SYNC_LIST, TITLE_LIST, type TitleSort } from "@/lib/list-specs";
@@ -276,13 +281,43 @@ describe("bootcamp history edits", () => {
 });
 
 describe("HiBob sync", () => {
-  const person = (id: string, name: string, manager: string, title = "") => ({
+  const person = (id: string, name: string, manager: string, title = "", dates: Record<string, string | null> = {}) => ({
     id,
     email: email(name),
     fullName: name,
-    work: { reportsTo: { email: manager && email(manager), displayName: manager }, startDate: "2025-06-02" },
+    work: {
+      reportsTo: { email: manager && email(manager), displayName: manager },
+      startDate: "2025-06-02",
+      activeEffectiveDate: "2026-02-02",
+      ...dates,
+    },
     humanReadable: { work: { title } },
   });
+
+  /** Runs `fn` with these settings saved, then puts back whatever was there. */
+  async function withSettings(values: Partial<Record<keyof typeof EVALS_SETTINGS_KEYS, string>>, fn: () => Promise<void>) {
+    const keys = Object.keys(values) as (keyof typeof EVALS_SETTINGS_KEYS)[];
+    const saved = await db
+      .select()
+      .from(evalsSettings)
+      .where(inArray(evalsSettings.key, keys.map((k) => EVALS_SETTINGS_KEYS[k])));
+    for (const k of keys) {
+      const row = { key: EVALS_SETTINGS_KEYS[k], value: values[k]!, updatedBy: admin.id };
+      await db.insert(evalsSettings).values(row).onConflictDoUpdate({ target: evalsSettings.key, set: row });
+    }
+    try {
+      await fn();
+    } finally {
+      for (const k of keys) {
+        const was = saved.find((r) => r.key === EVALS_SETTINGS_KEYS[k]);
+        if (was) await db.update(evalsSettings).set(was).where(eq(evalsSettings.key, was.key));
+        else await db.delete(evalsSettings).where(eq(evalsSettings.key, EVALS_SETTINGS_KEYS[k]));
+      }
+    }
+  }
+
+  /** The Google Sheet's cutoffs, whatever the scratch database has saved. */
+  const SHEET_CUTOFFS = { startDateOnOrAfter: "2025-04-01", activeEffectiveDateAfter: "2026-01-01" };
 
   function configure() {
     process.env.HIBOB_SERVICE_USER_ID = "SERVICE-TEST";
@@ -465,13 +500,7 @@ describe("HiBob sync", () => {
 
   test("the Current tab lists candidates by stage, and sorting an undecided title retracks everyone with it", async () => {
     configure();
-    const key = EVALS_SETTINGS_KEYS.orgLeaderEmail;
-    const [saved] = await db.select().from(evalsSettings).where(eq(evalsSettings.key, key));
-    await db
-      .insert(evalsSettings)
-      .values({ key, value: email("root"), updatedBy: admin.id })
-      .onConflictDoUpdate({ target: evalsSettings.key, set: { value: email("root") } });
-    try {
+    await withSettings({ orgLeaderEmail: email("root"), ...SHEET_CUTOFFS }, async () => {
       await addTitles(admin.id, "sales", [T("Cand AE")]);
       await importHistory(
         admin.id,
@@ -514,39 +543,93 @@ describe("HiBob sync", () => {
       assert.deepEqual(sorted, {
         ok: true,
         result: { title: T("Cand Mystery"), list: "engineer", added: true, retracked: 2 },
-      });
-      assert.equal((await myTitles("engineer")).find((t) => t.title === T("Cand Mystery"))?.addedBy, "admin");
-      assert.deepEqual(await sortUndecidedTitle(admin.id, email("c-new2"), "sales"), {
-        ok: false,
-        error: "not_undecided",
-      });
+    });
+    assert.equal((await myTitles("engineer")).find((t) => t.title === T("Cand Mystery"))?.addedBy, "admin");
+    assert.deepEqual(await sortUndecidedTitle(admin.id, email("c-new2"), "sales"), {
+      ok: false,
+      error: "not_undecided",
+    });
 
-      // A title someone listed since the sync stays on its list.
-      await addTitles(admin.id, "sales", [T("Cand Late")]);
-      const late = await sortUndecidedTitle(admin.id, email("c-late"), "engineer");
-      assert.ok(late.ok);
-      assert.deepEqual([late.result.list, late.result.added], ["sales", false]);
+    // A title someone listed since the sync stays on its list.
+    await addTitles(admin.id, "sales", [T("Cand Late")]);
+    const late = await sortUndecidedTitle(admin.id, email("c-late"), "engineer");
+    assert.ok(late.ok);
+    assert.deepEqual([late.result.list, late.result.added], ["sales", false]);
 
-      // Ignored takes them off the Current tab. No one outside the org can be sorted.
-      assert.ok((await sortUndecidedTitle(admin.id, email("c-odd"), "ignored")).ok);
-      assert.deepEqual(await sortUndecidedTitle(admin.id, email("c-out"), "ignored"), {
-        ok: false,
-        error: "not_found",
-      });
-      assert.deepEqual(await sortUndecidedTitle(admin.id, email("c-blank"), "sales"), { ok: false, error: "no_title" });
+    // Ignored takes them off the Current tab. No one outside the org can be sorted.
+    assert.ok((await sortUndecidedTitle(admin.id, email("c-odd"), "ignored")).ok);
+    assert.deepEqual(await sortUndecidedTitle(admin.id, email("c-out"), "ignored"), {
+      ok: false,
+      error: "not_found",
+    });
+    assert.deepEqual(await sortUndecidedTitle(admin.id, email("c-blank"), "sales"), { ok: false, error: "no_title" });
 
-      assert.deepEqual(await stage("bootcamp"), [
-        ["c-ae", "sales", null],
-        ["c-blank", "undecided", null],
-        ["c-late", "sales", null],
-        ["c-new1", "engineer", null],
-        ["c-new2", "engineer", null],
+    assert.deepEqual(await stage("bootcamp"), [
+      ["c-ae", "sales", null],
+      ["c-blank", "undecided", null],
+      ["c-late", "sales", null],
+      ["c-new1", "engineer", null],
+      ["c-new2", "engineer", null],
+    ]);
+    assert.deepEqual((await currentCohortSummary()).counts, { bootcamp: 5, intermediate: 1, undecided: 1 });
+    });
+  });
+
+  test("the candidate cutoffs leave out the long-hired and the long-placed, until turned off", async () => {
+    configure();
+    await withSettings({ orgLeaderEmail: email("root"), ...SHEET_CUTOFFS }, async () => {
+      await addTitles(admin.id, "sales", [T("Cut AE")]);
+      await importHistory(admin.id, new File([`email,BTCDate\n${email("k-int-old")},2026-03-01\n`], "h.csv"));
+      const ae = T("Cut AE");
+      stubHibob(200, [
+        person("1", "root", ""),
+        person("2", "k-new", "root", ae),
+        person("3", "k-cutoff-day", "root", ae, { startDate: "2025-04-01" }),
+        person("4", "k-hired-old", "root", ae, { startDate: "2025-03-31" }),
+        person("5", "k-no-start", "root", ae, { startDate: null }),
+        person("6", "k-placed-old", "root", ae, { activeEffectiveDate: "2026-01-01" }),
+        person("7", "k-no-effective", "root", ae, { activeEffectiveDate: null }),
+        person("8", "k-int-old", "root", ae, { startDate: "2024-01-08" }),
       ]);
-      assert.deepEqual((await currentCohortSummary()).counts, { bootcamp: 5, intermediate: 1, undecided: 1 });
-    } finally {
-      if (saved) await db.update(evalsSettings).set(saved).where(eq(evalsSettings.key, key));
-      else await db.delete(evalsSettings).where(eq(evalsSettings.key, key));
-    }
+      assert.ok((await sync()).ok);
+
+      const listed = async () => {
+        const rows = [];
+        for (const s of ["bootcamp", "intermediate"] as const) {
+          const page = await listCurrentCohort(s, { ...CURRENT_COHORT_LIST, q: "", page: 1, sort: "email", dir: "asc" });
+          rows.push(...page.rows.map((m) => `${s}:${m.email.split("@")[0]}`));
+        }
+        return rows;
+      };
+      // A blank start date passes, as it did in the Sheet; a blank active effective date does not.
+      assert.deepEqual(await listed(), ["bootcamp:k-cutoff-day", "bootcamp:k-new", "bootcamp:k-no-start"]);
+      assert.deepEqual((await currentCohortSummary()).cutoffs, SHEET_CUTOFFS);
+      assert.deepEqual((await currentCohortSummary()).counts, { bootcamp: 3, intermediate: 0, undecided: 0 });
+
+      // Saved empty, each is off; the next read sees it, with no sync between.
+      await setCandidateCutoffs(admin.id, { startDateOnOrAfter: null });
+      assert.deepEqual(await getCandidateCutoffs(), { startDateOnOrAfter: null, activeEffectiveDateAfter: "2026-01-01" });
+      assert.deepEqual(await listed(), [
+        "bootcamp:k-cutoff-day",
+        "bootcamp:k-hired-old",
+        "bootcamp:k-new",
+        "bootcamp:k-no-start",
+        "intermediate:k-int-old",
+      ]);
+      await setCandidateCutoffs(admin.id, { activeEffectiveDateAfter: null });
+      assert.equal((await currentCohortSummary()).counts.bootcamp, 6);
+
+      // A later day moves the line.
+      await setCandidateCutoffs(admin.id, { startDateOnOrAfter: "2025-06-02", activeEffectiveDateAfter: "2026-02-01" });
+      assert.deepEqual(await listed(), ["bootcamp:k-new", "bootcamp:k-no-start"]);
+    });
+  });
+
+  test("a never-saved cutoff takes the Sheet's day", async () => {
+    await withSettings({ startDateOnOrAfter: "" }, async () => {
+      await db.delete(evalsSettings).where(eq(evalsSettings.key, EVALS_SETTINGS_KEYS.startDateOnOrAfter));
+      assert.equal((await getCandidateCutoffs()).startDateOnOrAfter, DEFAULT_CANDIDATE_CUTOFFS.startDateOnOrAfter);
+    });
   });
 });
 

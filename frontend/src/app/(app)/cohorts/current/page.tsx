@@ -32,6 +32,7 @@ export default async function CurrentCohortPage({
       }}
       counts={summary.counts}
       syncedAt={summary.syncedAt?.toISOString() ?? null}
+      cutoffs={summary.cutoffs}
       activeBootcamp={active}
       canSort={session?.user ? canManageTrainingSettings(session.user.access) : false}
     />

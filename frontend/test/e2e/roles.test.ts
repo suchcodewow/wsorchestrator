@@ -333,12 +333,14 @@ const ROUTES: RouteCase[] = [
   { method: "DELETE", path: `/api/scheduler/bootcamps/${MISSING}`, allowed: canManageTrainingSettings },
 
   // eVals administration
+  { method: "GET", path: "/api/evals/candidate-cutoffs", allowed: canManageEvalsSettings },
   { method: "GET", path: "/api/evals/employees", allowed: canManageEvalsSettings },
   { method: "GET", path: "/api/evals/hibob/sync", allowed: canManageEvalsSettings },
   { method: "GET", path: "/api/evals/organization", allowed: canManageEvalsSettings },
   { method: "GET", path: "/api/evals/titles", allowed: canManageEvalsSettings },
   { method: "POST", path: "/api/evals/hibob/sync", allowed: canManageEvalsSettings, denyOnly: true },
   { method: "POST", path: "/api/evals/titles", allowed: canManageEvalsSettings, body: () => ({}) },
+  { method: "PUT", path: "/api/evals/candidate-cutoffs", allowed: canManageEvalsSettings, body: () => ({}) },
   { method: "PATCH", path: `/api/evals/titles/${MISSING}`, allowed: canManageEvalsSettings, body: () => ({}) },
   { method: "DELETE", path: `/api/evals/titles/${MISSING}`, allowed: canManageEvalsSettings },
 

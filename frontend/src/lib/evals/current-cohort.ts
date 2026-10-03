@@ -4,14 +4,16 @@
  * INT date is an intermediate candidate. Anyone on the ignored or exempt
  * track is left out; a title on no list is listed as undecided until someone
  * sorts it. Read from `employees.track`, so it is as fresh as the last sync
- * or the last title sorted, whichever came later.
+ * or the last title sorted, whichever came later. Only those recent enough
+ * by the candidate cutoffs count; see `getCandidateCutoffs`.
  */
 
 import "server-only";
 
-import { and, inArray, isNotNull, isNull, or, sql, type SQL } from "drizzle-orm";
+import { and, gt, gte, inArray, isNotNull, isNull, or, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import { bootcampHistory, employees, type Employee } from "@/db/schema";
+import { getCandidateCutoffs, type CandidateCutoffs } from "@/lib/evals/settings";
 import type { CurrentCohortSort } from "@/lib/list-specs";
 import { pageWindow, toPage, type ListQuery, type Page } from "@/lib/paging";
 import { blankAsNull, orderFor, searchAny } from "@/lib/paging-sql";
@@ -40,6 +42,8 @@ export type CurrentCohortSummary = {
   counts: Record<CandidateStage | "undecided", number>;
   /** When the sync that set those tracks ran; null if none has stored anyone. */
   syncedAt: Date | null;
+  /** The cutoffs the counts and lists were drawn with. */
+  cutoffs: CandidateCutoffs;
 };
 
 const e = employees;
@@ -57,8 +61,15 @@ const SORT_COLUMNS = {
   btcDate: h.btcDate,
 } as const;
 
-/** In the org, and on a track still to train or none yet. */
-const isCandidate = and(isNotNull(e.orgDepth), or(isNull(e.track), inArray(e.track, ["sales", "engineer"])));
+/** In the org, on a track still to train or none yet, and recent enough by the cutoffs. */
+function isCandidate({ startDateOnOrAfter, activeEffectiveDateAfter }: CandidateCutoffs) {
+  return and(
+    isNotNull(e.orgDepth),
+    or(isNull(e.track), inArray(e.track, ["sales", "engineer"])),
+    startDateOnOrAfter ? or(isNull(e.startDate), gte(e.startDate, startDateOnOrAfter)) : undefined,
+    activeEffectiveDateAfter ? gt(e.activeEffectiveDate, activeEffectiveDateAfter) : undefined,
+  );
+}
 
 const IN_STAGE: Record<CandidateStage, SQL> = {
   bootcamp: isNull(h.btcDate),
@@ -71,6 +82,7 @@ export async function listCurrentCohort(
   query: ListQuery<CurrentCohortSort>,
 ): Promise<Page<CurrentCohortMember>> {
   const { limit, offset } = pageWindow(query.page);
+  const cutoffs = await getCandidateCutoffs();
   const rows = await db
     .select({
       email: e.email,
@@ -86,7 +98,7 @@ export async function listCurrentCohort(
     .leftJoin(h, sql`${h.email} = ${e.email}`)
     .where(
       and(
-        isCandidate,
+        isCandidate(cutoffs),
         IN_STAGE[stage],
         searchAny(query.q, [e.fullName, e.email, e.title, e.department, e.reportsToName, e.reportsToEmail, candidateTrack]),
       ),
@@ -99,6 +111,7 @@ export async function listCurrentCohort(
 
 /** How many are in each stage and undecided, and as of which sync. */
 export async function currentCohortSummary(): Promise<CurrentCohortSummary> {
+  const cutoffs = await getCandidateCutoffs();
   const [[counts], [synced]] = await Promise.all([
     db
       .select({
@@ -108,7 +121,7 @@ export async function currentCohortSummary(): Promise<CurrentCohortSummary> {
       })
       .from(e)
       .leftJoin(h, sql`${h.email} = ${e.email}`)
-      .where(isCandidate),
+      .where(isCandidate(cutoffs)),
     // A sync stamps every row with the same time.
     db.select({ at: sql<string | null>`max(${e.importedAt})` }).from(e),
   ]);
@@ -119,5 +132,6 @@ export async function currentCohortSummary(): Promise<CurrentCohortSummary> {
       undecided: counts?.undecided ?? 0,
     },
     syncedAt: synced?.at ? new Date(synced.at) : null,
+    cutoffs,
   };
 }

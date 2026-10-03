@@ -17,10 +17,10 @@ export async function GET(req: Request) {
   if (!isCandidateStage(asked)) return NextResponse.json({ error: "invalid_stage" }, { status: 400 });
 
   const query = parseListQuery(params, CURRENT_COHORT_LIST);
-  const [{ rows, page, hasMore }, { counts, syncedAt }, bootcamp] = await Promise.all([
+  const [{ rows, page, hasMore }, { counts, syncedAt, cutoffs }, bootcamp] = await Promise.all([
     listCurrentCohort(asked, query),
     currentCohortSummary(),
     activeBootcamp(),
   ]);
-  return NextResponse.json({ stage: asked, members: rows, page, hasMore, counts, syncedAt, activeBootcamp: bootcamp });
+  return NextResponse.json({ stage: asked, members: rows, page, hasMore, counts, syncedAt, cutoffs, activeBootcamp: bootcamp });
 }

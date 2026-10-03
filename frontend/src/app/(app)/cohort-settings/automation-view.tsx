@@ -14,6 +14,7 @@ import { HEADER_ROW, Pager, PlainHeader, SortHeader, useListParams } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { EVALS_TITLE_LIMITS, EVALS_TITLE_LISTS, type EvalsTitleList } from "@/db/schema";
+import type { CandidateCutoffs } from "@/lib/evals/settings";
 import { cleanTitle, TITLE_LIST_LABELS, TITLE_LIST_SLUGS } from "@/lib/evals/title-lists";
 import type { TitleSort } from "@/lib/list-specs";
 import { riseChild, staggerParent } from "@/lib/motion";
@@ -66,6 +67,12 @@ function describeExisting(existing: { title: string; list: EvalsTitleList }[]) {
 
 export type LeaderCandidate = { email: string; fullName: string };
 
+/** Who counts as a candidate on the Current tab, by HiBob's dates; see `getCandidateCutoffs`. */
+const CUTOFF_FIELDS: { field: keyof CandidateCutoffs; label: string }[] = [
+  { field: "startDateOnOrAfter", label: "Start date on or after" },
+  { field: "activeEffectiveDateAfter", label: "Active effective date after" },
+];
+
 export function AutomationView({
   q: searched,
   lists,
@@ -73,6 +80,7 @@ export function AutomationView({
   imported,
   orgLeaderEmail,
   orgLeader,
+  cutoffs,
 }: {
   /** The search the lists were queried with. */
   q: string;
@@ -82,6 +90,7 @@ export function AutomationView({
   orgLeaderEmail: string;
   /** The Organization Leader as the employee list has them, if it does. */
   orgLeader: LeaderCandidate | null;
+  cutoffs: CandidateCutoffs;
 }) {
   const router = useRouter();
   const { set: setList, pending: searching } = useListParams();
@@ -178,6 +187,26 @@ export function AutomationView({
             if (ok) setNotice("Organization Leader saved.");
           }}
         />
+      </motion.div>
+
+      <motion.div variants={riseChild} className="flex flex-wrap gap-x-6 gap-y-4">
+        {CUTOFF_FIELDS.map(({ field, label }) => (
+          // Keyed on the saved day too, so a save starts the field afresh from it.
+          <CutoffField
+            key={`${field}:${cutoffs[field]}`}
+            id={`cutoff-${field}`}
+            label={label}
+            value={cutoffs[field]}
+            busy={busy === `cutoff:${field}`}
+            onSave={async (value) => {
+              const ok = await send(`cutoff:${field}`, "/api/evals/candidate-cutoffs", {
+                method: "PUT",
+                body: JSON.stringify({ [field]: value }),
+              });
+              if (ok) setNotice(`${label} ${value ? "saved" : "turned off"}.`);
+            }}
+          />
+        ))}
       </motion.div>
 
       <motion.div variants={riseChild} className="space-y-3">
@@ -440,6 +469,39 @@ function OrgLeaderField({
           disabled={!dirty || selected === "" || busy}
           onClick={() => onSave(selected)}
         >
+          {busy ? <Loader2 className="animate-spin" /> : <Check />}
+          Save
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/** A day, or blank for no cutoff. */
+function CutoffField({
+  id,
+  label,
+  value,
+  busy,
+  onSave,
+}: {
+  id: string;
+  label: string;
+  value: string | null;
+  busy: boolean;
+  onSave: (value: string | null) => Promise<void>;
+}) {
+  const [day, setDay] = useState(value ?? "");
+  const dirty = day !== (value ?? "");
+
+  return (
+    <div className="w-56 space-y-1.5">
+      <label htmlFor={id} className="text-sm font-medium">
+        {label}
+      </label>
+      <div className="flex items-start gap-2">
+        <Input id={id} type="date" value={day} onChange={(e) => setDay(e.target.value)} className="flex-1" />
+        <Button variant="brand" disabled={!dirty || busy} onClick={() => onSave(day || null)}>
           {busy ? <Loader2 className="animate-spin" /> : <Check />}
           Save
         </Button>

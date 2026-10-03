@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { EvalsTitleList } from "@/db/schema";
 import type { CandidateStage, CurrentCohortMember } from "@/lib/evals/current-cohort";
+import type { CandidateCutoffs } from "@/lib/evals/settings";
 import { TITLE_LIST_LABELS } from "@/lib/evals/title-lists";
 import type { CurrentCohortSort } from "@/lib/list-specs";
 import { riseChild, staggerParent } from "@/lib/motion";
@@ -79,6 +80,7 @@ export function CurrentCohortView({
   stages,
   counts,
   syncedAt,
+  cutoffs,
   activeBootcamp,
   canSort,
 }: {
@@ -86,6 +88,7 @@ export function CurrentCohortView({
   /** Everyone in each stage, and everyone undecided, whatever the search. */
   counts: Record<CandidateStage | "undecided", number>;
   syncedAt: string | null;
+  cutoffs: CandidateCutoffs;
   activeBootcamp: ActiveBootcamp | null;
   /** Whether the viewer may put an undecided title on a list. */
   canSort: boolean;
@@ -148,7 +151,15 @@ export function CurrentCohortView({
         {syncedAt && (
           <p className="text-sm leading-relaxed text-muted-foreground">
             <span className="font-medium text-foreground">{total.toLocaleString()} people</span> still to train, as of
-            the HiBob sync on {formatWhen(syncedAt)}.
+            the HiBob sync on {formatWhen(syncedAt)}
+            {cutoffs.startDateOnOrAfter && <>, started on or after {formatDate(cutoffs.startDateOnOrAfter)}</>}
+            {cutoffs.activeEffectiveDateAfter && (
+              <>
+                {cutoffs.startDateOnOrAfter ? " and" : ","} in their position since after{" "}
+                {formatDate(cutoffs.activeEffectiveDateAfter)}
+              </>
+            )}
+            .
           </p>
         )}
         <p className="text-sm leading-relaxed text-muted-foreground">

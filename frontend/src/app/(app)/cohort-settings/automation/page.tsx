@@ -1,12 +1,13 @@
 /**
- * The Automation tab: one search box, then the Sales, Engineer and Ignored
+ * The Automation tab: the Organization Leader and the candidate date cutoffs,
+ * then one search box, then the Sales, Engineer and Ignored
  * title lists. The search is shared; each list sorts and pages on its own,
  * under its own name in the URL (`sales.sort`, `engineer.page`).
  */
 
 import { EVALS_TITLE_LISTS, type EvalsTitleList } from "@/db/schema";
 import { employeeByEmail, loadRoster } from "@/lib/evals/roster";
-import { getOrgLeaderEmail } from "@/lib/evals/settings";
+import { getCandidateCutoffs, getOrgLeaderEmail } from "@/lib/evals/settings";
 import { titleKey } from "@/lib/evals/title-lists";
 import { listTitles, titleCounts } from "@/lib/evals/titles";
 import { TITLE_LIST, type TitleSort } from "@/lib/list-specs";
@@ -23,11 +24,12 @@ export default async function AutomationPage({
     EVALS_TITLE_LISTS.map((list) => [list, parseListQuery(params, TITLE_LIST, list)]),
   ) as Record<EvalsTitleList, ListQuery<TitleSort>>;
 
-  const [pages, counts, roster, orgLeaderEmail] = await Promise.all([
+  const [pages, counts, roster, orgLeaderEmail, cutoffs] = await Promise.all([
     Promise.all(EVALS_TITLE_LISTS.map((list) => listTitles({ ...queries[list], list }))),
     titleCounts(),
     loadRoster(),
     getOrgLeaderEmail(),
+    getCandidateCutoffs(),
   ]);
   const orgLeader = await employeeByEmail(orgLeaderEmail);
 
@@ -62,6 +64,7 @@ export default async function AutomationPage({
       imported={roster.employeeCount > 0}
       orgLeaderEmail={orgLeaderEmail}
       orgLeader={orgLeader}
+      cutoffs={cutoffs}
     />
   );
 }

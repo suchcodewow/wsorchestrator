@@ -147,12 +147,12 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "trainingViewer",
         token: true,
         notes:
-          "A bootcamp candidate is anyone under the Organization Leader, on the sales or engineer track or on none, with no BTC date in their bootcamp history; an intermediate candidate has a BTC date and no INT date. The ignored and exempt tracks are left out. A track is the title list the person's title was on when the HiBob sync ran, or exempt where their history says so; undecided is a title on no list, which POST /api/cohorts/current/track settles. counts gives each stage, and the undecided in both, whatever the search. activeBootcamp is the one active bootcamp, or null.",
+          "A bootcamp candidate is anyone under the Organization Leader, on the sales or engineer track or on none, with no BTC date in their bootcamp history; an intermediate candidate has a BTC date and no INT date. Either must also pass the date cutoffs in GET /api/evals/candidate-cutoffs, which cutoffs echoes. The ignored and exempt tracks are left out. A track is the title list the person's title was on when the HiBob sync ran, or exempt where their history says so; undecided is a title on no list, which POST /api/cohorts/current/track settles. counts gives each stage, and the undecided in both, whatever the search. activeBootcamp is the one active bootcamp, or null.",
         query: [
           { name: "stage", type: `"bootcamp" | "intermediate"`, note: "which candidates to list; bootcamp if omitted" },
           ...listQuery(CURRENT_COHORT_LIST.sorts, "the name, email, title, department, track, or the manager's name or email"),
         ],
-        returns: `{ stage, members: { email, fullName, title, department, reportsToEmail, reportsToName, track: "sales" | "engineer" | "undecided", btcDate: "YYYY-MM-DD" | null }[], ${PAGE_FIELDS}, counts: { bootcamp: number, intermediate: number, undecided: number }, syncedAt: ISO 8601 string | null, activeBootcamp: { id, startDate, btcDays, intDays } | null }`,
+        returns: `{ stage, members: { email, fullName, title, department, reportsToEmail, reportsToName, track: "sales" | "engineer" | "undecided", btcDate: "YYYY-MM-DD" | null }[], ${PAGE_FIELDS}, counts: { bootcamp: number, intermediate: number, undecided: number }, syncedAt: ISO 8601 string | null, cutoffs: { startDateOnOrAfter: "YYYY-MM-DD" | null, activeEffectiveDateAfter: "YYYY-MM-DD" | null }, activeBootcamp: { id, startDate, btcDays, intDays } | null }`,
         errors: [{ status: 400, error: "invalid_stage", when: "stage is neither bootcamp nor intermediate" }],
       },
       {
@@ -384,6 +384,35 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         errors: [
           { status: 400, error: "invalid", when: "email is missing or malformed" },
           { status: 400, error: "not_an_employee", when: "the last HiBob sync did not import that email" },
+        ],
+      },
+      {
+        method: "GET",
+        path: "/api/evals/candidate-cutoffs",
+        summary: "Gets the date cutoffs on who in the org counts as a bootcamp or intermediate candidate.",
+        access: "evalsAdmin",
+        token: true,
+        notes:
+          "A candidate's HiBob start date must be on or after startDateOnOrAfter, or blank; their HiBob active effective date must be after activeEffectiveDateAfter, and not blank. null means that cutoff is off. Until one is saved, each is the Google Sheet's: 2025-04-01 and 2026-01-01.",
+        returns: `{ startDateOnOrAfter: "YYYY-MM-DD" | null, activeEffectiveDateAfter: "YYYY-MM-DD" | null }`,
+      },
+      {
+        method: "PUT",
+        path: "/api/evals/candidate-cutoffs",
+        summary: "Sets either or both candidate date cutoffs.",
+        access: "evalsAdmin",
+        token: true,
+        notes: "A field left out keeps its value. The Current tab uses the new cutoffs at once; no sync is needed.",
+        body: {
+          kind: "json",
+          fields: [
+            { name: "startDateOnOrAfter", type: `"YYYY-MM-DD" | null`, note: "null turns the cutoff off" },
+            { name: "activeEffectiveDateAfter", type: `"YYYY-MM-DD" | null`, note: "null turns the cutoff off" },
+          ],
+        },
+        returns: `{ startDateOnOrAfter: "YYYY-MM-DD" | null, activeEffectiveDateAfter: "YYYY-MM-DD" | null }, as saved`,
+        errors: [
+          { status: 400, error: "invalid", when: "neither field is given, a date is not a real YYYY-MM-DD day, or the body has another field" },
         ],
       },
     ],
