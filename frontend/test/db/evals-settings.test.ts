@@ -41,7 +41,7 @@ import {
 } from "@/lib/evals/bootcamp-history";
 import { hibobServiceUser, listHibobSyncRuns, syncHibobEmployees } from "@/lib/evals/hibob";
 import { currentCohortSummary, listCurrentCohort, type CandidateStage } from "@/lib/evals/current-cohort";
-import { loadRoster } from "@/lib/evals/roster";
+import { listOrganizationMembers, loadRoster } from "@/lib/evals/roster";
 import {
   DEFAULT_CANDIDATE_CUTOFFS,
   getCandidateCutoffs,
@@ -49,7 +49,14 @@ import {
 } from "@/lib/evals/settings";
 import { addTitles, deleteTitle, listTitles, updateTitle } from "@/lib/evals/titles";
 import { sortUndecidedTitle } from "@/lib/evals/tracks";
-import { BOOTCAMP_LIST, CURRENT_COHORT_LIST, HIBOB_SYNC_LIST, TITLE_LIST, type TitleSort } from "@/lib/list-specs";
+import {
+  BOOTCAMP_LIST,
+  CURRENT_COHORT_LIST,
+  HIBOB_SYNC_LIST,
+  ORGANIZATION_LIST,
+  TITLE_LIST,
+  type TitleSort,
+} from "@/lib/list-specs";
 import {
   activeBootcamp,
   bootcampInputSchema,
@@ -496,6 +503,41 @@ describe("HiBob sync", () => {
       if (saved) await db.update(evalsSettings).set(saved).where(eq(evalsSettings.key, key));
       else await db.delete(evalsSettings).where(eq(evalsSettings.key, key));
     }
+  });
+
+  test("the sync stores each org member's management chain, from their manager up to the leader", async () => {
+    configure();
+    await withSettings({ orgLeaderEmail: email("root") }, async () => {
+      stubHibob(200, [
+        person("1", "ceo", ""),
+        person("2", "root", "ceo"),
+        person("3", "m-vp", "root"),
+        person("4", "m-mgr", "m-vp"),
+        person("5", "m-ic", "m-mgr"),
+        person("6", "m-out", "ceo"),
+      ]);
+      assert.ok((await sync()).ok);
+      const chains = Object.fromEntries(
+        (await db.select({ email: employees.email, chain: employees.managementChain }).from(employees)).map((e) => [
+          e.email.split("@")[0],
+          e.chain,
+        ]),
+      );
+      assert.deepEqual(chains, {
+        ceo: null,
+        root: null,
+        "m-vp": email("root"),
+        "m-mgr": [email("m-vp"), email("root")].join(";"),
+        "m-ic": [email("m-mgr"), email("m-vp"), email("root")].join(";"),
+        "m-out": null,
+      });
+
+      const { rows } = await listOrganizationMembers({ ...ORGANIZATION_LIST, q: email("m-ic"), page: 1 });
+      assert.deepEqual(
+        rows.map((m) => m.managementChain),
+        [[email("m-mgr"), email("m-vp"), email("root")].join(";")],
+      );
+    });
   });
 
   test("the Current tab lists candidates by stage, and sorting an undecided title retracks everyone with it", async () => {

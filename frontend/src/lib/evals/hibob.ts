@@ -194,7 +194,8 @@ export async function syncHibobEmployees(
     // Who the Automation tab's Organization Leader field names right now —
     // whoever that was when this sync started, not when an admin next changes it.
     const leaderEmail = (await getOrgLeaderEmail()).toLowerCase();
-    const orgDepth = new Map(orgUnder(unique, leaderEmail).map((p) => [p.id, p.chain.length]));
+    const chainOf = new Map(orgUnder(unique, leaderEmail).map((p) => [p.id, p.chain]));
+    const orgDepth = new Map([...chainOf].map(([id, chain]) => [id, chain.length]));
     // Each of them gets the track their title's list gives, as the lists stand
     // now, unless their bootcamp history makes them exempt.
     const [lists, exempt] = await Promise.all([titleListMap(), exemptEmails()]);
@@ -212,7 +213,13 @@ export async function syncHibobEmployees(
           .values(
             unique
               .slice(i, i + BATCH)
-              .map((r) => ({ ...r, importedAt, orgDepth: orgDepth.get(r.id) ?? null, track: track(r) })),
+              .map((r) => ({
+                ...r,
+                importedAt,
+                orgDepth: orgDepth.get(r.id) ?? null,
+                managementChain: chainOf.get(r.id)?.join(";") ?? null,
+                track: track(r),
+              })),
           );
       }
       await tx

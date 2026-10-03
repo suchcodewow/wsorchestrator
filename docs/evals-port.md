@@ -33,7 +33,7 @@ Status means:
 | Deferred | Someone who started within 14 days of the event start is marked Deferred, sorted last and left out of the Slack messages | **Not ported** | |
 | Roster frozen once the event starts | The daily sync skips itself from the Event Start Date onward, so the attendee list stops changing | **Not ported.** The Current tab is recomputed from every sync | |
 | Roster kept per event | The attendee tabs only ever add people; nobody drops off mid-event | **Not ported.** There's no stored attendee list per bootcamp | |
-| Management chain on each attendee | Every manager's email up to the leader, plus the Config tab's "Add these email to any slack" addresses | **Partial.** Only the direct manager is stored | |
+| Management chain on each attendee | Every manager's email up to the leader, plus the Config tab's "Add these email to any slack" addresses | **Partial.** Each sync stores `employees.management_chain`: every manager's email from the direct one up to the leader, joined with `;` as the Sheet did. `GET /api/evals/organization` returns it, but no page shows it yet. The Config tab's extra addresses aren't added | |
 
 ## Running an event
 

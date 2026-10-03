@@ -843,6 +843,12 @@ export const employees = pgTable(
      */
     orgDepth: integer("org_depth"),
     /**
+     * Lowercased emails from this person's manager up to and including the
+     * Organization Leader, joined with `;` as the Sheet's Management Chain
+     * column was. Set alongside `orgDepth`, and null wherever it is.
+     */
+    managementChain: text("management_chain"),
+    /**
      * `exempt` when this person's bootcamp history marks BTC or INT exempt;
      * otherwise the title list their title was on when the sync that stored
      * them ran — `sales`, `engineer` or `ignored`. Null for a title on no list

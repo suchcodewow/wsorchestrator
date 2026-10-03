@@ -54,7 +54,7 @@ export type Roster = {
   unlisted: UnlistedTitle[];
 };
 
-export type EmployeeListing = Omit<Employee, "raw" | "importedAt" | "orgDepth" | "track">;
+export type EmployeeListing = Omit<Employee, "raw" | "importedAt" | "orgDepth" | "managementChain" | "track">;
 
 const EMPLOYEE_COLUMNS = {
   id: employees.id,
@@ -148,6 +148,8 @@ export type OrganizationMember = Pick<
   depth: number;
   /** Lowercased; whom the sync that stored them worked `depth` out for. */
   leaderEmail: string;
+  /** Their managers' emails, the direct one first and the leader last, joined with `;`. */
+  managementChain: string;
 };
 
 const ORGANIZATION_SORT_COLUMNS = {
@@ -198,6 +200,7 @@ export async function listOrganizationMembers(
         reportsToName: e.reportsToName,
         track: e.track,
         depth: sql<number>`${e.orgDepth}`,
+        managementChain: sql<string>`coalesce(${e.managementChain}, '')`,
         btcDate: bootcampHistory.btcDate,
         btcScore: bootcampHistory.btcScore,
         intDate: bootcampHistory.intDate,
