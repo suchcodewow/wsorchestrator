@@ -2,8 +2,10 @@
  * Bootcamp history: who attended BTC and INT, and how they scored.
  *
  * This table is the record — it replaces the Bootcamp_History sheet, which
- * was imported once to start it. People are added and edited here; an upload
- * is still accepted, and writes only the columns its file has.
+ * was imported once to start it. A bootcamp writes its scores here at the end
+ * of a session, and the app only ever shows them after that: nobody edits
+ * history in the UI. An upload, when one is used, writes only the columns its
+ * file has.
  */
 
 import "server-only";
