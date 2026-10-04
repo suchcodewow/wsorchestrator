@@ -16,6 +16,7 @@ import type { FacilitySort } from "@/lib/list-specs";
 import { PAGE_SIZE, pageWindow, toPage, type ListQuery, type Page } from "@/lib/paging";
 import { orderFor, searchAny } from "@/lib/paging-sql";
 import { isUniqueViolation } from "@/lib/scheduler/pg-errors";
+import { repeatedRooms } from "@/lib/scheduler/room-names";
 
 export type FacilityRow = {
   id: string;
@@ -120,15 +121,10 @@ export const FACILITY_STATUS_FOR: Record<FacilityError, number> = {
 
 type Failure = { ok: false; error: FacilityError; room?: string };
 
-/** The room named twice, ignoring case, if any. */
+/** The first room named like an earlier one, if any. */
 function repeatedRoom(rooms: readonly { name: string }[]): string | null {
-  const seen = new Set<string>();
-  for (const r of rooms) {
-    const key = r.name.toLowerCase();
-    if (seen.has(key)) return r.name;
-    seen.add(key);
-  }
-  return null;
+  const [i] = repeatedRooms(rooms);
+  return i === undefined ? null : rooms[i]!.name;
 }
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];

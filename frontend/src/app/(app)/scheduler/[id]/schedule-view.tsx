@@ -27,8 +27,9 @@ import {
   type DragStartEvent,
   type KeyboardCoordinateGetter,
 } from "@dnd-kit/core";
-import { AlertTriangle, CalendarDays, Check, ChevronLeft, ChevronRight, FileUp, Loader2, Rows3, Rows4, UserX } from "lucide-react";
+import { AlertTriangle, CalendarDays, Check, ChevronLeft, ChevronRight, Copy, Loader2, Rows3, Rows4 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { SCHEDULE_LIMITS, SCHEDULE_TRACKS, type ScheduleTrack } from "@/db/schema";
 import { riseChild, staggerParent } from "@/lib/motion";
 import type { ChecklistDayCount } from "@/lib/scheduler/checklist";
@@ -39,16 +40,18 @@ import {
   dayDate,
   describeClash,
   findClashes,
+  formatClock,
   place,
   snapStart,
   trackDays,
   type Clash,
+  type Placed,
 } from "@/lib/scheduler/timeline";
 import { cn } from "@/lib/utils";
 import { Board, COLUMN_ATTR, SCALE, SessionFace, type BoardColumn, type Density } from "./board";
 import { useChecklistButtons } from "./checklist";
 import { dayOf, everyDay, keyOf, locate, moveTo, resize, type Days } from "./days";
-import { FillDialog } from "./fill-dialog";
+import { CopyDialog } from "./copy-dialog";
 import { SessionDialog, type SessionTarget } from "./session-dialog";
 
 type View = "detailed" | "condensed" | "week";
@@ -97,7 +100,7 @@ export function ScheduleView({
   const [save, setSave] = useState<SaveState>({ state: "idle" });
   const [activeId, setActiveId] = useState<string | null>(null);
   const [resizingId, setResizingId] = useState<string | null>(null);
-  const [showClashes, setShowClashes] = useState(false);
+  const [showIssues, setShowIssues] = useState(false);
   const checklistButton = useChecklistButtons({
     bootcampId: bootcamp.id,
     counts: checklist,
@@ -200,8 +203,7 @@ export function ScheduleView({
   const clashes = useMemo(() => findClashes(placed), [placed]);
   const roomNames = useMemo(() => new Map(schedule.rooms.map((r) => [r.id, r.name])), [schedule.rooms]);
   const sessionCount = placed.length;
-  const leaderless = placed.filter((s) => s.kind !== "unstructured" && s.staff.length === 0).length;
-  const pairs = useMemo(() => clashPairs(placed, clashes), [placed, clashes]);
+  const { issues, flagged } = useMemo(() => findIssues(placed, clashes, roomNames), [placed, clashes, roomNames]);
 
   // ── The columns on show ─────────────────────────────────────────────────
   const shownTrack = tracks.includes(track) ? track : tracks[0]!;
@@ -340,7 +342,7 @@ export function ScheduleView({
 
   return (
     <motion.div variants={staggerParent(0.05)} initial="hidden" animate="show" className="space-y-4">
-      <motion.div variants={riseChild} className="flex flex-wrap items-center justify-between gap-3">
+      <motion.div variants={riseChild} className="flex flex-wrap items-center justify-between gap-3 select-none">
         <div className="flex flex-wrap items-center gap-3">
           <div role="tablist" aria-label="View" className="inline-flex rounded-lg border bg-card p-0.5 shadow-xs">
             {VIEWS.map((v) => (
@@ -401,32 +403,41 @@ export function ScheduleView({
         </div>
 
         <div className="flex flex-wrap items-center gap-3 text-sm">
-          <span className="text-muted-foreground tabular-nums">
-            {sessionCount} session{sessionCount === 1 ? "" : "s"}
-          </span>
-          {leaderless > 0 && (
-            <span className="inline-flex items-center gap-1 text-amber-700 dark:text-amber-400" title="Main and breakout sessions with nobody leading them">
-              <UserX className="size-3.5" />
-              {leaderless} without a leader
-            </span>
-          )}
-          {pairs.length > 0 ? (
-            <button
-              onClick={() => setShowClashes(!showClashes)}
-              aria-expanded={showClashes}
-              className="inline-flex items-center gap-1 rounded-full bg-red-500/10 px-2.5 py-0.5 font-medium text-red-700 hover:bg-red-500/15 dark:text-red-400"
-            >
-              <AlertTriangle className="size-3.5" />
-              {pairs.length} clash{pairs.length === 1 ? "" : "es"}
-            </button>
-          ) : (
-            sessionCount > 0 && <span className="text-muted-foreground">No clashes</span>
+          {issues.length > 0 && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={() => setShowIssues(!showIssues)}
+                    aria-expanded={showIssues}
+                    aria-label={`${issues.length} issue${issues.length === 1 ? "" : "s"}`}
+                    className="inline-flex items-center gap-1 rounded-full bg-red-500/10 px-2 py-1 font-medium text-red-700 tabular-nums hover:bg-red-500/15 dark:text-red-400"
+                  >
+                    <AlertTriangle className="size-4" />
+                    {issues.length}
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent align="end" className="max-w-md">
+                  <div className="mb-1.5 border-b pb-1.5 font-medium text-red-700 dark:text-red-400">{tally(issues)}</div>
+                  <ul className="space-y-1">
+                    {issues.slice(0, ISSUES_IN_TOOLTIP).map((i) => (
+                      <li key={i.key}>
+                        <span className="font-medium">{i.lead}</span> {i.spots.map(describeClash).join(" and ")}
+                      </li>
+                    ))}
+                  </ul>
+                  {issues.length > ISSUES_IN_TOOLTIP && (
+                    <div className="mt-1.5 text-muted-foreground">{issues.length - ISSUES_IN_TOOLTIP} more; click to list them all</div>
+                  )}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           )}
           {canManage && <SaveBadge save={save} onRetry={() => void flush()} />}
-          {canManage && (
+          {canManage && sources.length > 0 && (
             <Button variant="outline" size="sm" onClick={() => setFilling(true)}>
-              <FileUp />
-              Import or copy
+              <Copy />
+              Copy a schedule
             </Button>
           )}
         </div>
@@ -441,34 +452,32 @@ export function ScheduleView({
         </motion.div>
       )}
 
-      {showClashes && pairs.length > 0 && (
+      {showIssues && issues.length > 0 && (
         <motion.ul variants={riseChild} className="divide-y rounded-xl border border-red-300/60 bg-red-50/60 text-sm dark:border-red-900/60 dark:bg-red-950/20">
-          {pairs.map((p) => (
-            <li key={p.key} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 px-4 py-2">
-              <span className="font-medium text-red-700 dark:text-red-400">
-                {p.what.kind === "person" ? p.what.fullName : (roomNames.get(p.what.roomId) ?? "A room")}
-              </span>
-              <span className="text-muted-foreground">is in both</span>
-              <button className="underline-offset-2 hover:underline" onClick={() => jump(p.a)}>
-                {describeClash(p.a)}
-              </button>
-              <span className="text-muted-foreground">and</span>
-              <button className="underline-offset-2 hover:underline" onClick={() => jump(p.b)}>
-                {describeClash(p.b)}
-              </button>
+          {issues.map((i) => (
+            <li key={i.key} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 px-4 py-2">
+              <span className="font-medium text-red-700 dark:text-red-400">{i.lead}</span>
+              {i.spots.map((spot, n) => (
+                <span key={spot.sessionId} className="contents">
+                  {n > 0 && <span className="text-muted-foreground">and</span>}
+                  <button className="underline-offset-2 hover:underline" onClick={() => jump(spot)}>
+                    {describeClash(spot)}
+                  </button>
+                </span>
+              ))}
             </li>
           ))}
         </motion.ul>
       )}
 
-      {sessionCount === 0 && canManage && (
+      {sessionCount === 0 && canManage && sources.length > 0 && (
         <motion.div variants={riseChild} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-dashed px-5 py-4">
           <p className="text-sm text-muted-foreground">
-            {sources.length > 0 ? `${sources.length} earlier bootcamp${sources.length === 1 ? " has a schedule" : "s have schedules"} to start from.` : "No sessions yet."}
+            {`${sources.length} earlier bootcamp${sources.length === 1 ? " has a schedule" : "s have schedules"} to start from.`}
           </p>
           <Button variant="brand" onClick={() => setFilling(true)}>
-            <FileUp />
-            Import or copy a schedule
+            <Copy />
+            Copy a schedule
           </Button>
         </motion.div>
       )}
@@ -488,7 +497,7 @@ export function ScheduleView({
             <Board
               columns={columns}
               density={boardDensity}
-              clashes={clashes}
+              issues={flagged}
               roomNames={roomNames}
               canManage={canManage}
               resizingId={resizingId}
@@ -506,7 +515,7 @@ export function ScheduleView({
                     start={active.start}
                     scale={SCALE[boardDensity]}
                     density={boardDensity}
-                    clashes={clashes}
+                    issues={flagged}
                     roomNames={roomNames}
                     canManage={false}
                     resizingId={null}
@@ -539,7 +548,7 @@ export function ScheduleView({
         onChanged={afterChange}
       />
       {canManage && (
-        <FillDialog
+        <CopyDialog
           open={filling}
           onClose={() => setFilling(false)}
           bootcampId={bootcamp.id}
@@ -552,8 +561,8 @@ export function ScheduleView({
     </motion.div>
   );
 
-  /** Shows the day a clashing session is on, and opens it. */
-  function jump(c: Clash) {
+  /** Shows the day a session with an issue is on, and opens it. */
+  function jump(c: Spot) {
     if (view === "week") setTrack(c.track);
     else setDay(c.day);
     const at = locate(days, c.sessionId);
@@ -568,21 +577,65 @@ const underPointer: CollisionDetection = (args) => {
   return hits.length > 0 ? hits : rectIntersection(args);
 };
 
-/** Each pair of sessions that clash, once, with what they share. */
-function clashPairs(placed: ReturnType<typeof place<SessionRow>>, clashes: Map<string, Clash[]>) {
-  const byId = new Map(placed.map((s) => [s.id, s]));
-  const out: { key: string; a: Clash; b: Clash; what: Clash["what"] }[] = [];
-  for (const [id, list] of clashes) {
-    const self = byId.get(id);
-    if (!self) continue;
-    for (const c of list) {
-      if (id > c.sessionId) continue;
+/** Where a session is, for naming it and going to it. */
+type Spot = Omit<Clash, "what">;
+
+/** Something wrong with the schedule: a sentence that starts with `lead` and names the sessions it is about. */
+type Issue = { kind: IssueKind; key: string; lead: string; spots: Spot[] };
+
+type IssueKind = "clash" | "leader" | "late";
+
+/** How many of each kind there are, for the top of the tooltip: "3 clashes · 12 with nobody leading". */
+function tally(issues: Issue[]): string {
+  const count = (k: IssueKind) => issues.filter((i) => i.kind === k).length;
+  const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+  const clashes = count("clash");
+  const leaders = count("leader");
+  const late = count("late");
+  return [
+    clashes > 0 && plural(clashes, "clash", "clashes"),
+    leaders > 0 && `${leaders} with nobody leading`,
+    late > 0 && `${late} ending after ${formatClock(SCHEDULE_LIMITS.dayEnd)}`,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+const ISSUES_IN_TOOLTIP = 8;
+
+/**
+ * Everything wrong with the schedule, in the order it happens: each pair of
+ * sessions that clash (once), each main or breakout session nobody leads, and
+ * each session that ends after the day does. `flagged` has what is wrong with
+ * each session, by id, for its card.
+ */
+function findIssues(placed: Placed<SessionRow>[], clashes: Map<string, Clash[]>, roomNames: Map<string, string>) {
+  const { dayEnd } = SCHEDULE_LIMITS;
+  const spotOf = (s: Placed<SessionRow>): Spot => ({ sessionId: s.id, name: s.name, track: s.track, day: s.day, start: s.start, end: s.end });
+  const nameOf = (what: Clash["what"]) => (what.kind === "person" ? what.fullName : (roomNames.get(what.roomId) ?? "A room"));
+  const issues: Issue[] = [];
+  const flagged = new Map<string, string[]>();
+  const flag = (id: string, why: string) => flagged.set(id, [...(flagged.get(id) ?? []), why]);
+
+  for (const s of placed) {
+    for (const c of clashes.get(s.id) ?? []) {
+      flag(s.id, `${nameOf(c.what)} is also in ${c.name}`);
+      if (s.id > c.sessionId) continue;
       const whatKey = c.what.kind === "person" ? c.what.email : c.what.roomId;
-      const a: Clash = { sessionId: self.id, name: self.name, track: self.track, day: self.day, start: self.start, end: self.end, what: c.what };
-      out.push({ key: `${id}:${c.sessionId}:${whatKey}`, a, b: c, what: c.what });
+      issues.push({ kind: "clash", key: `clash:${s.id}:${c.sessionId}:${whatKey}`, lead: `${nameOf(c.what)} is in both`, spots: [spotOf(s), c] });
+    }
+    if (s.kind !== "unstructured" && s.staff.length === 0) {
+      flag(s.id, "Nobody leads it");
+      issues.push({ kind: "leader", key: `leader:${s.id}`, lead: "Nobody leads", spots: [spotOf(s)] });
+    }
+    if (s.end > dayEnd) {
+      flag(s.id, `Ends after ${formatClock(dayEnd)}`);
+      issues.push({ kind: "late", key: `late:${s.id}`, lead: `Ends after ${formatClock(dayEnd)}:`, spots: [spotOf(s)] });
     }
   }
-  return out.sort((x, y) => x.a.day - y.a.day || x.a.start - y.a.start);
+  const first = (i: Issue) => i.spots[0]!;
+  issues.sort((x, y) => first(x).day - first(y).day || first(x).start - first(y).start);
+  return { issues, flagged };
 }
 
 function SaveBadge({ save, onRetry }: { save: SaveState; onRetry: () => void }) {

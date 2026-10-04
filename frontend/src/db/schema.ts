@@ -1238,7 +1238,6 @@ export const SCHEDULE_LIMITS = {
   /** The people one comment can tag. */
   mentions: 20,
   types: 50,
-  importBytes: 20 * 1024 * 1024,
 } as const;
 
 /**

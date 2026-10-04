@@ -10,12 +10,12 @@
 
 import { useRef, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
-import { AlertTriangle, MessageSquare, Plus, UserX } from "lucide-react";
+import { AlertTriangle, MessageSquare, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SCHEDULE_LIMITS, type ScheduleTrack } from "@/db/schema";
 import type { SessionRow } from "@/lib/scheduler/schedule";
 import { SESSION_STYLES } from "@/lib/scheduler/session-style";
-import { type Clash, dayTotal, formatClock, formatLength, gapsOf, snapMinutes } from "@/lib/scheduler/timeline";
+import { dayTotal, formatClock, formatLength, gapsOf, snapMinutes } from "@/lib/scheduler/timeline";
 import { cn } from "@/lib/utils";
 
 export type Density = "detailed" | "condensed";
@@ -37,8 +37,8 @@ const { dayStart, dayEnd } = SCHEDULE_LIMITS;
 export type BoardProps = {
   columns: BoardColumn[];
   density: Density;
-  /** Each session's clashes, by id; sessions with none are absent. */
-  clashes: Map<string, Clash[]>;
+  /** What is wrong with each session, by id; sessions with nothing wrong are absent. */
+  issues: Map<string, string[]>;
   roomNames: Map<string, string>;
   canManage: boolean;
   /** The session being resized, to label its new length as it changes. */
@@ -219,7 +219,7 @@ function Gap({ start, minutes, scale, onAdd }: { start: number; minutes: number;
   );
 }
 
-type CardProps = Pick<BoardProps, "density" | "clashes" | "roomNames" | "canManage" | "resizingId" | "onOpen" | "onResize" | "onResizeEnd"> & {
+type CardProps = Pick<BoardProps, "density" | "issues" | "roomNames" | "canManage" | "resizingId" | "onOpen" | "onResize" | "onResizeEnd"> & {
   session: SessionRow;
   start: number;
   scale: number;
@@ -256,7 +256,7 @@ export function SessionFace({
   start,
   scale,
   density,
-  clashes,
+  issues,
   roomNames,
   canManage,
   resizingId,
@@ -266,11 +266,10 @@ export function SessionFace({
   handle,
   lifted,
 }: CardProps & { handle?: Record<string, unknown>; lifted?: boolean }) {
-  const mine = clashes.get(s.id) ?? [];
+  const wrong = issues.get(s.id) ?? [];
   const height = s.minutes * scale - 2;
   const end = start + s.minutes;
   const leader = s.staff.find((p) => p.leader) ?? s.staff[0];
-  const leaderless = s.kind !== "unstructured" && s.staff.length === 0;
   const rooms =
     s.kind === "main"
       ? s.roomId
@@ -279,15 +278,13 @@ export function SessionFace({
       : s.kind === "breakout"
         ? s.staff.flatMap((p) => (p.roomId ? [roomNames.get(p.roomId) ?? "A removed room"] : []))
         : [];
-  const pastEnd = end > dayEnd;
 
   const title = [
     `${s.emoji ? `${s.emoji} ` : ""}${s.name}`,
     `${formatClock(start)}–${formatClock(end)} (${formatLength(s.minutes)})`,
     ...(leader ? [`Led by ${leader.fullName}${s.staff.length > 1 ? ` with ${s.staff.length - 1} more` : ""}`] : []),
     ...(rooms.length > 0 ? [rooms.join(", ")] : []),
-    ...(leaderless ? ["No leader yet"] : []),
-    ...mine.map((c) => `Clash: ${c.what.kind === "person" ? c.what.fullName : (roomNames.get(c.what.roomId) ?? "a room")} is also in ${c.name}`),
+    ...wrong.map((w) => `⚠ ${w}`),
   ].join("\n");
 
   return (
@@ -303,15 +300,15 @@ export function SessionFace({
         "focus-visible:ring-[3px] focus-visible:ring-ring/50",
         canManage ? "cursor-grab active:cursor-grabbing" : "cursor-pointer",
         SESSION_STYLES[s.color].card,
-        mine.length > 0 && "border-red-500 ring-1 ring-red-500 dark:border-red-500",
-        pastEnd && mine.length === 0 && "border-dashed",
+        // An issue outweighs the session's colour: a red edge, and a red halo clear of the card.
+        wrong.length > 0 && "border-red-600 ring-2 ring-red-600 ring-offset-1 ring-offset-card dark:border-red-500 dark:ring-red-500",
         lifted && "shadow-lg ring-2 ring-brand/50",
         density === "condensed" ? "justify-center px-1.5" : "px-2 py-1",
       )}
       style={{ height }}
     >
       <div className="flex min-w-0 items-center gap-1">
-        {mine.length > 0 && <AlertTriangle className="size-3 shrink-0 text-red-600 dark:text-red-400" aria-label="Clashes" />}
+        {wrong.length > 0 && <AlertTriangle className="size-3.5 shrink-0 text-red-600 dark:text-red-400" aria-label="Has issues" />}
         {s.emoji && (
           <span aria-hidden className="shrink-0 text-xs leading-none">
             {s.emoji}
@@ -323,7 +320,6 @@ export function SessionFace({
         {density === "detailed" && (
           <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">{formatLength(s.minutes)}</span>
         )}
-        {leaderless && density === "detailed" && <UserX className="size-3 shrink-0 text-amber-600" aria-label="No leader yet" />}
         {s.comments > 0 && density === "detailed" && (
           <span className="flex shrink-0 items-center gap-0.5 text-[11px] text-muted-foreground">
             <MessageSquare className="size-3" />
@@ -343,9 +339,9 @@ export function SessionFace({
             .join(" · ")}
         </div>
       )}
-      {density === "detailed" && height >= 76 && mine.length > 0 && (
+      {density === "detailed" && height >= 76 && wrong.length > 0 && (
         <div className="truncate text-[11px] font-medium text-red-700 dark:text-red-400">
-          {mine.length === 1 ? `Clashes with ${mine[0]!.name}` : `${mine.length} clashes`}
+          {wrong.length === 1 ? wrong[0] : `${wrong.length} issues`}
         </div>
       )}
       {resizingId === s.id && (

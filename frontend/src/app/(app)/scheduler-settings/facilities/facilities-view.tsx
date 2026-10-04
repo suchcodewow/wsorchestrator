@@ -18,6 +18,8 @@ import { FACILITY_LIMITS } from "@/db/schema";
 import type { FacilitySort } from "@/lib/list-specs";
 import { riseChild, staggerParent } from "@/lib/motion";
 import type { ListQuery, Page } from "@/lib/paging";
+import { repeatedRooms, sameRoomName } from "@/lib/scheduler/room-names";
+import { cn } from "@/lib/utils";
 import { formatWhen } from "../../cohort-settings/format";
 
 export type FacilityListing = {
@@ -203,6 +205,10 @@ function FacilityDialog({ editing, onClose }: { editing: FacilityListing | "new"
   }, [existingId]);
 
   const total = (rooms ?? []).reduce((sum, r) => sum + (Number(r.capacity) || 0), 0);
+  // A room named like one above it is marked, and the facility can't be saved until it is renamed or removed.
+  const repeats = new Set(repeatedRooms(rooms ?? []).map((i) => rooms![i]!.key));
+  const firstRepeat = rooms?.find((r) => repeats.has(r.key));
+  const repeated = firstRepeat && rooms?.find((r) => sameRoomName(r.name, firstRepeat.name));
 
   function edit(key: string, patch: Partial<RoomDraft>) {
     setRooms((rs) => rs && rs.map((r) => (r.key === key ? { ...r, ...patch } : r)));
@@ -229,6 +235,7 @@ function FacilityDialog({ editing, onClose }: { editing: FacilityListing | "new"
     if (body.rooms.some((r) => !r.name || !Number.isInteger(r.capacity) || r.capacity < 1)) {
       return setError("Give every room a name and a whole-number capacity of at least 1.");
     }
+    if (repeats.size > 0) return;
     setPending(true);
     setError(null);
     try {
@@ -306,7 +313,10 @@ function FacilityDialog({ editing, onClose }: { editing: FacilityListing | "new"
                       value={r.name}
                       maxLength={FACILITY_LIMITS.name}
                       placeholder="Room name"
+                      aria-invalid={repeats.has(r.key) || undefined}
+                      aria-describedby={repeats.has(r.key) ? "room-repeat" : undefined}
                       onChange={(e) => edit(r.key, { name: e.target.value })}
+                      className={cn(repeats.has(r.key) && "border-destructive focus-visible:ring-destructive/30")}
                     />
                     <Input
                       aria-label={`Room ${i + 1} capacity`}
@@ -349,6 +359,11 @@ function FacilityDialog({ editing, onClose }: { editing: FacilityListing | "new"
                 ))}
               </ul>
             )}
+            {repeated && (
+              <p id="room-repeat" role="alert" className="text-sm text-destructive">
+                There is already a room called {repeated.name.trim()}. Rename or remove one of them.
+              </p>
+            )}
             <Button
               type="button"
               variant="outline"
@@ -373,7 +388,7 @@ function FacilityDialog({ editing, onClose }: { editing: FacilityListing | "new"
             <Button type="button" variant="ghost" disabled={pending} onClick={onClose}>
               Cancel
             </Button>
-            <Button type="submit" variant="brand" disabled={pending || rooms === null}>
+            <Button type="submit" variant="brand" disabled={pending || rooms === null || repeats.size > 0}>
               {pending && <Loader2 className="animate-spin" />}
               {existing ? "Save" : "Add facility"}
             </Button>
