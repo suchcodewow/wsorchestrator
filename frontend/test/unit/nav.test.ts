@@ -25,7 +25,7 @@ function sidebar(a: Access): string[] {
 const EVENTS_USER = ["[Events]", "Event Guides", "Orchestrator"];
 const EVENTS_MANAGER = [...EVENTS_USER];
 const EVENTS_ADMIN = [...EVENTS_MANAGER, "Cloud Status", "Event Settings"];
-const ACCOUNT = ["[Account]", "My settings"];
+const ACCOUNT = ["[Account]", "My inbox", "My settings"];
 
 const EXPECTED_SIDEBAR: Record<Persona, string[]> = {
   nobody: ACCOUNT,
@@ -85,9 +85,11 @@ describe("sidebar", () => {
     });
   }
 
-  test("My settings is visible to everyone, including someone with no access", () => {
+  test("My settings and My inbox are visible to everyone, including someone with no access", () => {
     for (const a of EVERY_ACCESS) {
       assert.ok(sidebar(a).includes("My settings"), describeAccess(a));
+      // A guest judge with no Training role can still own checklist items and be tagged.
+      assert.ok(sidebar(a).includes("My inbox"), describeAccess(a));
     }
   });
 

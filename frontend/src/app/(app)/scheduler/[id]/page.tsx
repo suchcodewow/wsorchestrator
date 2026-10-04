@@ -7,6 +7,7 @@ import { ChevronLeft } from "lucide-react";
 import { z } from "zod";
 import { auth, signInPath } from "@/auth";
 import { canManageTrainingSettings, canUseTraining } from "@/lib/roles";
+import { checklistCounts } from "@/lib/scheduler/checklist";
 import { copySources, loadSchedule } from "@/lib/scheduler/schedule";
 import { allSessionTypes } from "@/lib/scheduler/session-types";
 import { formatDate } from "../../cohort-settings/format";
@@ -26,9 +27,10 @@ export default async function SchedulePage({ params }: { params: Promise<{ id: s
   if (!schedule) notFound();
 
   const canManage = canManageTrainingSettings(session.user.access);
-  const [types, sources] = await Promise.all([
+  const [types, sources, checklist] = await Promise.all([
     canManage ? allSessionTypes() : [],
     canManage ? copySources(schedule.bootcamp.id) : [],
+    checklistCounts(schedule.bootcamp.id),
   ]);
 
   const { bootcamp } = schedule;
@@ -51,7 +53,11 @@ export default async function SchedulePage({ params }: { params: Promise<{ id: s
         <h1 className="text-3xl font-medium tracking-tight">Bootcamp starting {formatDate(bootcamp.startDate)}</h1>
         <p className="text-sm text-muted-foreground">{facts.join(" · ")}</p>
       </div>
-      <ScheduleView initial={schedule} types={types} sources={sources} canManage={canManage} viewerId={session.user.id} />
+      <ScheduleView initial={schedule} types={types} sources={sources} canManage={canManage}
+        viewerId={session.user.id}
+        viewerEmail={session.user.email ?? ""}
+        checklist={checklist}
+      />
     </div>
   );
 }
