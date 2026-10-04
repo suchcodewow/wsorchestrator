@@ -415,7 +415,6 @@ const ROUTES: RouteCase[] = [
   { method: "PUT", path: `/api/scheduler/bootcamps/${MISSING}/schedule/layout`, allowed: canManageTrainingSettings, body: () => ({}) },
   { method: "GET", path: `/api/scheduler/bootcamps/${MISSING}/schedule/copy`, allowed: canUseTraining },
   { method: "POST", path: `/api/scheduler/bootcamps/${MISSING}/schedule/copy`, allowed: canManageTrainingSettings, body: () => ({}) },
-  { method: "POST", path: `/api/scheduler/bootcamps/${MISSING}/schedule/import`, allowed: canManageTrainingSettings, body: form },
   {
     method: "GET",
     path: `/api/scheduler/bootcamps/${MISSING}/availability?day=1&start=480&minutes=60`,

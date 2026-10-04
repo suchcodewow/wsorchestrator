@@ -23,7 +23,6 @@ import {
   SCHEDULE_LIMITS,
   SCHEDULE_TRACKS,
   bootcamps,
-  employees,
   facilities,
   facilityRooms,
   scheduleSessionComments,
@@ -40,16 +39,8 @@ import { normalEmail } from "@/lib/evals/history-values";
 import { roomsOf as facilityRoomsOf, type RoomRow } from "@/lib/scheduler/facilities";
 import { judgePicks } from "@/lib/scheduler/judges";
 import { isForeignKeyViolation } from "@/lib/scheduler/pg-errors";
-import { allSessionTypes, sessionLookSchema } from "@/lib/scheduler/session-types";
-import {
-  IMPORT_TYPES,
-  SheetImportError,
-  parseScheduleSheet,
-  type ImportPerson,
-  type ImportType,
-} from "@/lib/scheduler/sheet-import";
+import { sessionLookSchema } from "@/lib/scheduler/session-types";
 import { TRACK_LABELS, busyDuring, dropAt, fitsDay, nextStart, place, settle, trackDays, type Clash } from "@/lib/scheduler/timeline";
-import { readSpreadsheet } from "@/lib/spreadsheet-file";
 
 export type StaffRow = {
   email: string;
@@ -651,16 +642,12 @@ type NewSession = {
   staff: StaffRow[];
 };
 
-export type FillError = "not_found" | "has_sessions" | "same_bootcamp" | "no_file" | "too_large" | "unreadable" | "not_schedule";
+export type FillError = "not_found" | "has_sessions" | "same_bootcamp";
 
 export const FILL_STATUS_FOR: Record<FillError, number> = {
   not_found: 404,
   has_sessions: 409,
   same_bootcamp: 400,
-  no_file: 400,
-  too_large: 413,
-  unreadable: 400,
-  not_schedule: 400,
 };
 
 export type FillSummary = { sessions: number; notes: string[] };
@@ -763,117 +750,6 @@ export async function copySchedule(
   if (hadRooms && !keepRooms) notes.push("Rooms were left off: the two bootcamps are not at the same facility.");
   const outsiders = outsiderNote(sessions, await instructorPool(bootcampId));
   if (outsiders) notes.push(outsiders);
-
-  await writeSchedule(actorId, bootcampId, sessions);
-  return { ok: true, summary: { sessions: sessions.length, notes } };
-}
-
-/** At most this many distinct Team names are looked up in the employee list. */
-const MAX_NAMES = 2000;
-
-/** Employees by lowercased full name, for the names given, a hundred at a time. */
-async function employeesNamed(names: string[]): Promise<Map<string, ImportPerson>> {
-  const found = new Map<string, ImportPerson>();
-  const wanted = [...new Set(names.map((n) => n.trim().toLowerCase()).filter((n) => n.length > 0 && n.length <= 200))].slice(0, MAX_NAMES);
-  for (let i = 0; i < wanted.length; i += 100) {
-    const rows = await db
-      .select({ name: sql<string>`lower(${employees.fullName})`, fullName: employees.fullName, email: sql<string>`lower(${employees.email})` })
-      .from(employees)
-      .where(inArray(sql`lower(${employees.fullName})`, wanted.slice(i, i + 100)))
-      .limit(100);
-    for (const r of rows) if (!found.has(r.name)) found.set(r.name, { email: r.email, fullName: r.fullName });
-  }
-  return found;
-}
-
-/**
- * Who a Team name is: an instructor with that full name, an employee with it,
- * or the one instructor with that first name. Otherwise nobody.
- */
-function nameResolver(pool: Instructor[], employeesByName: Map<string, ImportPerson>) {
-  const byName = new Map(pool.map((p) => [p.fullName.toLowerCase(), p]));
-  const byFirst = new Map<string, Instructor | null>();
-  for (const p of pool) {
-    const first = p.fullName.split(/\s+/)[0]!.toLowerCase();
-    byFirst.set(first, byFirst.has(first) ? null : p);
-  }
-  return (raw: string): ImportPerson | null => {
-    const name = raw.trim().toLowerCase();
-    if (!name) return null;
-    const hit = byName.get(name) ?? employeesByName.get(name) ?? (/\s/.test(name) ? null : byFirst.get(name));
-    return hit ? { email: hit.email, fullName: hit.fullName } : null;
-  };
-}
-
-/**
- * Makes the bootcamp's schedule the one in an uploaded copy of the Google
- * Sheet's Schedule tab, as `.xlsx` (its first sheet) or `.csv`. Refused as
- * `has_sessions` if it has a schedule already, unless `replace`.
- */
-export async function importSchedule(
-  actorId: string,
-  bootcampId: string,
-  file: File | null,
-  replace: boolean,
-): Promise<{ ok: true; summary: FillSummary } | { ok: false; error: FillError }> {
-  const bootcamp = await scheduleBootcamp(bootcampId);
-  if (!bootcamp) return { ok: false, error: "not_found" };
-  noteAudit({ target: bootcampId, targetLabel: `Schedule of the bootcamp starting ${bootcamp.startDate}, imported` });
-  if (!file || file.size === 0) return { ok: false, error: "no_file" };
-  if (file.size > SCHEDULE_LIMITS.importBytes) return { ok: false, error: "too_large" };
-  if (!replace && (await hasSessions(bootcampId))) return { ok: false, error: "has_sessions" };
-
-  let rows;
-  try {
-    rows = readSpreadsheet(Buffer.from(await file.arrayBuffer())).rows;
-  } catch {
-    return { ok: false, error: "unreadable" };
-  }
-  const days = Object.fromEntries(SCHEDULE_TRACKS.map((t) => [t, trackDays(t, bootcamp)])) as Record<ScheduleTrack, number | null>;
-
-  let parsed;
-  try {
-    // Once to learn every name the Team columns hold, then again knowing who they are.
-    const asked: string[] = [];
-    parseScheduleSheet(rows, { days, resolve: (name) => (asked.push(name), null) });
-    const [pool, byName] = await Promise.all([instructorPool(bootcampId), employeesNamed(asked)]);
-    parsed = { pool, ...parseScheduleSheet(rows, { days, resolve: nameResolver(pool, byName) }) };
-  } catch (err) {
-    if (err instanceof SheetImportError) return { ok: false, error: err.code };
-    throw err;
-  }
-
-  const types = new Map((await allSessionTypes()).map((t) => [t.name.toLowerCase(), t]));
-  const look = (type: ImportType) => {
-    const fallback = IMPORT_TYPES[type];
-    const row = types.get(fallback.name.toLowerCase());
-    return row && row.kind === fallback.kind
-      ? { typeId: row.id, emoji: row.emoji, color: row.color, kind: row.kind }
-      : { typeId: null, emoji: fallback.emoji, color: fallback.color, kind: fallback.kind };
-  };
-  const sessions: NewSession[] = parsed.sessions.map((s) => {
-    const { typeId, emoji, color, kind } = look(s.type);
-    return {
-      track: s.track,
-      day: s.day,
-      start: s.start,
-      minutes: s.minutes,
-      kind,
-      typeId,
-      name: s.name,
-      description: s.description,
-      emoji,
-      color,
-      roomId: null,
-      staff: kind === "unstructured" ? [] : s.staff.map((p, i) => ({ ...p, leader: i === 0, roomId: null })),
-    };
-  });
-
-  const notes = [...parsed.notes];
-  const outsiders = outsiderNote(sessions, parsed.pool);
-  if (outsiders) notes.push(outsiders);
-  const leaderless = sessions.filter((s) => s.kind !== "unstructured" && s.staff.length === 0).length;
-  if (leaderless > 0) notes.push(`${leaderless} session${leaderless === 1 ? " has" : "s have"} no leader yet.`);
 
   await writeSchedule(actorId, bootcampId, sessions);
   return { ok: true, summary: { sessions: sessions.length, notes } };

@@ -27,7 +27,7 @@ import {
   type DragStartEvent,
   type KeyboardCoordinateGetter,
 } from "@dnd-kit/core";
-import { AlertTriangle, CalendarDays, Check, ChevronLeft, ChevronRight, FileUp, Loader2, Rows3, Rows4, UserX } from "lucide-react";
+import { AlertTriangle, CalendarDays, Check, ChevronLeft, ChevronRight, Copy, Loader2, Rows3, Rows4, UserX } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SCHEDULE_LIMITS, SCHEDULE_TRACKS, type ScheduleTrack } from "@/db/schema";
 import { riseChild, staggerParent } from "@/lib/motion";
@@ -48,7 +48,7 @@ import { cn } from "@/lib/utils";
 import { Board, COLUMN_ATTR, SCALE, SessionFace, type BoardColumn, type Density } from "./board";
 import { useChecklistButtons } from "./checklist";
 import { dayOf, everyDay, keyOf, locate, moveTo, resize, type Days } from "./days";
-import { FillDialog } from "./fill-dialog";
+import { CopyDialog } from "./copy-dialog";
 import { SessionDialog, type SessionTarget } from "./session-dialog";
 
 type View = "detailed" | "condensed" | "week";
@@ -423,10 +423,10 @@ export function ScheduleView({
             sessionCount > 0 && <span className="text-muted-foreground">No clashes</span>
           )}
           {canManage && <SaveBadge save={save} onRetry={() => void flush()} />}
-          {canManage && (
+          {canManage && sources.length > 0 && (
             <Button variant="outline" size="sm" onClick={() => setFilling(true)}>
-              <FileUp />
-              Import or copy
+              <Copy />
+              Copy a schedule
             </Button>
           )}
         </div>
@@ -461,14 +461,14 @@ export function ScheduleView({
         </motion.ul>
       )}
 
-      {sessionCount === 0 && canManage && (
+      {sessionCount === 0 && canManage && sources.length > 0 && (
         <motion.div variants={riseChild} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-dashed px-5 py-4">
           <p className="text-sm text-muted-foreground">
-            {sources.length > 0 ? `${sources.length} earlier bootcamp${sources.length === 1 ? " has a schedule" : "s have schedules"} to start from.` : "No sessions yet."}
+            {`${sources.length} earlier bootcamp${sources.length === 1 ? " has a schedule" : "s have schedules"} to start from.`}
           </p>
           <Button variant="brand" onClick={() => setFilling(true)}>
-            <FileUp />
-            Import or copy a schedule
+            <Copy />
+            Copy a schedule
           </Button>
         </motion.div>
       )}
@@ -539,7 +539,7 @@ export function ScheduleView({
         onChanged={afterChange}
       />
       {canManage && (
-        <FillDialog
+        <CopyDialog
           open={filling}
           onClose={() => setFilling(false)}
           bootcampId={bootcamp.id}

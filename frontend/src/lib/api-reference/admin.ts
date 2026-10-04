@@ -556,31 +556,6 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         ],
       },
       {
-        method: "POST",
-        path: "/api/scheduler/bootcamps/{id}/schedule/import",
-        summary: "Fills a bootcamp's schedule from the Google Sheet's Schedule tab.",
-        access: "trainingAdmin",
-        token: true,
-        notes:
-          "Upload the workbook as .xlsx with the Schedule tab first, or that tab as .csv. Every start and end is rounded to the quarter hour; a session rounding would shrink to nothing keeps 15 minutes. Each session keeps its start, and time between sessions stays unscheduled; a Team note in that time becomes an Unscheduled session holding it, and an SE track's time away is a With Bootcamp or With Intermediate session. The first person in a Team cell leads, the rest instruct, and anything that is not a name goes in the description. notes says what was moved, left out or not matched.",
-        params: [BOOTCAMP_ID],
-        body: {
-          kind: "multipart",
-          fields: [
-            { name: "file", type: "file", required: true, note: `.xlsx or .csv, up to ${SCHEDULE_LIMITS.importBytes / 1024 / 1024} MB` },
-            { name: "replace", type: `"true"`, note: "to replace the sessions it has" },
-          ],
-        },
-        returns: "{ sessions: number, notes: string[] }",
-        errors: [
-          { status: 400, error: "no_file", when: "no file, or an empty one" },
-          { status: 400, error: "unreadable", when: "the file is neither .xlsx nor .csv" },
-          { status: 400, error: "not_schedule", when: "its first row has no track's Topic header" },
-          { status: 413, error: "too_large", when: "the file is too big" },
-          ...FILL_ERRORS,
-        ],
-      },
-      {
         method: "GET",
         path: "/api/scheduler/bootcamps/{id}/availability",
         summary: "Says who and which rooms are busy during a stretch of one day, across the bootcamp's four tracks.",
