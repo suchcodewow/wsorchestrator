@@ -126,7 +126,7 @@ add it to the table above.
 | Scheduler, and a bootcamp's dialog with its guest judges | `GET /api/scheduler/bootcamps`, `GET /api/scheduler/bootcamps/[id]` |
 | A bootcamp's schedule, its sessions and their comments | `GET /api/scheduler/bootcamps/[id]/schedule`, `GET /api/scheduler/bootcamps/[id]/sessions/[sessionId]`, `GET /api/scheduler/bootcamps/[id]/sessions/[sessionId]/comments?page=`, `GET /api/scheduler/bootcamps/[id]/availability`, `GET /api/scheduler/bootcamps/[id]/schedule/copy` |
 | A bootcamp's day checklists | `GET /api/scheduler/bootcamps/[id]/checklist`, `GET /api/scheduler/bootcamps/[id]/checklist/[track]/[day]` |
-| My inbox (checklist items I own, comments that tag me) | `GET /api/me/checklist?status=open\|done\|all`, `GET /api/me/mentions` |
+| My inbox (checklist items I own, and everywhere I'm tagged) | `GET /api/me/checklist?status=open\|done\|all`, `GET /api/me/mentions` |
 | Scheduler settings → Facilities / Session types | `GET /api/scheduler/facilities`, `GET /api/scheduler/facilities/[id]`, `GET /api/scheduler/session-types` |
 | Audit Trail | `GET /api/audit` |
 | Labs | `GET /api/lab-workshops`, `GET /api/lab-workshops/[id or slug]`, `GET /api/lab-guides`, `GET /api/lab-guides/[id or slug]`, `GET /api/lab-images` |

@@ -1366,29 +1366,6 @@ export const scheduleSessionComments = pgTable(
   (t) => [index("schedule_session_comments_session_idx").on(t.sessionId, t.createdAt)],
 );
 
-/**
- * Someone a session comment tags with "@": an administrator or guest judge of
- * the bootcamp when it was written. Kept by email, since a guest judge may
- * have no account, and listed on that person's inbox.
- */
-export const scheduleCommentMentions = pgTable(
-  "schedule_comment_mentions",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    commentId: uuid("comment_id")
-      .notNull()
-      .references(() => scheduleSessionComments.id, { onDelete: "cascade" }),
-    /** Lowercased. */
-    email: text("email").notNull(),
-    /** As the instructor list had it when they were tagged; the comment's text spells it after an "@". */
-    fullName: text("full_name").notNull().default(""),
-  },
-  (t) => [
-    uniqueIndex("schedule_comment_mentions_comment_email_idx").on(t.commentId, t.email),
-    index("schedule_comment_mentions_email_idx").on(t.email),
-  ],
-);
-
 /** The two classes a bootcamp holds, each with a checklist per day; the SE tracks share their class's. */
 export const CHECKLIST_TRACKS = ["btc", "int"] as const;
 export type ChecklistTrack = (typeof CHECKLIST_TRACKS)[number];
@@ -1575,6 +1552,54 @@ export const evalsSubmissionScores = pgTable(
 );
 
 export type EvalsSubmissionScore = typeof evalsSubmissionScores.$inferSelect;
+
+/** What an "@" tag is in: a session comment, a checklist item, or the comment on one criterion of an eVals submission. */
+export const MENTION_KINDS = ["comment", "checklist", "score"] as const;
+export type MentionKind = (typeof MENTION_KINDS)[number];
+
+/**
+ * Someone tagged with "@", kept by email since a guest judge may have no
+ * account, and listed on that person's inbox. Exactly one of `commentId`,
+ * `checklistItemId` and `submissionId` is set. A score comment's tag names
+ * the submission and the criterion rather than the score row, because a
+ * revision replaces the scores; the save keeps the tags still in the text
+ * and drops the rest. Who tagged and when are copied in for the same reason:
+ * whoever saves an eVals submission last owns it.
+ */
+export const mentions = pgTable(
+  "mentions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    commentId: uuid("comment_id").references(() => scheduleSessionComments.id, { onDelete: "cascade" }),
+    checklistItemId: uuid("checklist_item_id").references(() => scheduleChecklistItems.id, { onDelete: "cascade" }),
+    submissionId: uuid("submission_id").references(() => evalsSubmissions.id, { onDelete: "cascade" }),
+    criterionId: uuid("criterion_id").references(() => evalsAssessmentCriteria.id, { onDelete: "cascade" }),
+    /** The bootcamp whose people could be tagged, and whose page it links to. */
+    bootcampId: uuid("bootcamp_id")
+      .notNull()
+      .references(() => bootcamps.id, { onDelete: "cascade" }),
+    /** Lowercased. */
+    email: text("email").notNull(),
+    /** As the list of who could be tagged had it; the text spells it after an "@". */
+    fullName: text("full_name").notNull().default(""),
+    taggedBy: text("tagged_by").references(() => users.id, { onDelete: "set null" }),
+    taggedByName: text("tagged_by_name").notNull().default(""),
+    taggedByEmail: text("tagged_by_email").notNull().default(""),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("mentions_comment_email_idx").on(t.commentId, t.email),
+    uniqueIndex("mentions_checklist_item_email_idx").on(t.checklistItemId, t.email),
+    uniqueIndex("mentions_score_email_idx").on(t.submissionId, t.criterionId, t.email),
+    index("mentions_email_idx").on(t.email),
+    check(
+      "mentions_one_source_check",
+      sql`num_nonnulls(${t.commentId}, ${t.checklistItemId}, ${t.submissionId}) = 1 and (${t.submissionId} is null) = (${t.criterionId} is null)`,
+    ),
+  ],
+);
 
 /**
  * How an audited action reached the app: a signed-in browser, a personal

@@ -16,13 +16,17 @@ import { db } from "@/db";
 import {
   CHECKLIST_LIMITS,
   CHECKLIST_TRACKS,
+  SCHEDULE_LIMITS,
   bootcamps,
+  mentions,
   scheduleChecklistItems,
   users,
   type ChecklistTrack,
 } from "@/db/schema";
 import { noteAudit } from "@/lib/audit-context";
 import type { ChecklistStatus, MyChecklistSort } from "@/lib/list-specs";
+import { pickMentions, taggerOf } from "@/lib/mention-store";
+import type { MentionPick } from "@/lib/mentions";
 import { pageWindow, toPage, type ListQuery, type Page } from "@/lib/paging";
 import { orderFor, searchAny } from "@/lib/paging-sql";
 import { instructorPool, scheduleBootcamp } from "@/lib/scheduler/schedule";
@@ -43,6 +47,8 @@ export type ChecklistItemRow = {
   createdByName: string;
   createdByEmail: string;
   createdAt: Date;
+  /** Whom its name tags with "@". */
+  mentions: MentionPick[];
 };
 
 /** One class-day's items, done and to do. */
@@ -64,6 +70,10 @@ const COLUMNS = {
   createdByName: t.createdByName,
   createdByEmail: t.createdByEmail,
   createdAt: t.createdAt,
+  mentions: sql<MentionPick[]>`coalesce((
+    select json_agg(json_build_object('email', m.email, 'fullName', m.full_name) order by m.full_name, m.email)
+    from ${mentions} m where m.checklist_item_id = ${t}.id
+  ), '[]'::json)`,
 };
 
 export const checklistTrackSchema = z.enum(CHECKLIST_TRACKS);
@@ -104,6 +114,8 @@ export const checklistItemSchema = z.object({
   name: z.string().trim().min(1).max(CHECKLIST_LIMITS.name),
   /** An administrator or guest judge of the bootcamp; blank or absent for nobody. */
   ownerEmail: z.string().trim().toLowerCase().max(320).nullish(),
+  /** The emails of the people its name tags. */
+  mentions: z.array(z.string().trim().toLowerCase().max(320)).max(SCHEDULE_LIMITS.mentions).optional(),
 });
 
 export type ChecklistError = "not_found" | "no_day" | "full" | "not_instructor" | "not_owner";
@@ -116,9 +128,9 @@ export const CHECKLIST_STATUS_FOR: Record<ChecklistError, number> = {
   not_owner: 403,
 };
 
-type Result<T> = { ok: true; value: T } | { ok: false; error: ChecklistError };
+type Result<T> = { ok: true; value: T } | { ok: false; error: ChecklistError; email?: string };
 
-/** Adds an item to one class-day, recording who wrote it. */
+/** Adds an item to one class-day, recording who wrote it and whom it tags. */
 export async function addChecklistItem(
   actorId: string,
   bootcampId: string,
@@ -131,13 +143,16 @@ export async function addChecklistItem(
   noteAudit({ target: bootcampId, targetLabel: `${checklistDayLabel(track, day)}: ${input.name.slice(0, 80)}` });
   if (day > (trackDays(track, bootcamp) ?? 0)) return { ok: false, error: "no_day" };
 
+  const pool = input.ownerEmail || input.mentions?.length ? await instructorPool(bootcampId) : [];
   let owner: { email: string; fullName: string } | null = null;
   if (input.ownerEmail) {
-    owner = (await instructorPool(bootcampId)).find((i) => i.email === input.ownerEmail) ?? null;
-    if (!owner) return { ok: false, error: "not_instructor" };
+    owner = pool.find((i) => i.email === input.ownerEmail) ?? null;
+    if (!owner) return { ok: false, error: "not_instructor", email: input.ownerEmail };
   }
+  const picked = pickMentions(pool, input.mentions);
+  if (!picked.ok) return { ok: false, error: "not_instructor", email: picked.email };
 
-  const [author] = await db.select({ name: users.name, email: users.email }).from(users).where(eq(users.id, actorId));
+  const tagger = await taggerOf(actorId);
   return db.transaction(async (tx) => {
     // Held until commit, so two adds at once cannot both take the last place.
     await tx.select({ id: bootcamps.id }).from(bootcamps).where(eq(bootcamps.id, bootcampId)).for("update");
@@ -157,12 +172,25 @@ export async function addChecklistItem(
         ownerEmail: owner?.email ?? null,
         ownerName: owner?.fullName ?? "",
         createdBy: actorId,
-        createdByName: author?.name ?? "",
-        createdByEmail: author?.email?.toLowerCase() ?? "",
+        createdByName: tagger.taggedByName,
+        createdByEmail: tagger.taggedByEmail,
       })
-      .returning(COLUMNS);
+      .returning({ id: t.id, createdAt: t.createdAt });
+    if (picked.tagged.length > 0) {
+      await tx.insert(mentions).values(
+        picked.tagged.map((m) => ({
+          checklistItemId: row!.id,
+          bootcampId,
+          email: m.email,
+          fullName: m.fullName,
+          ...tagger,
+          createdAt: row!.createdAt,
+        })),
+      );
+    }
+    const [full] = await tx.select(COLUMNS).from(t).where(eq(t.id, row!.id));
     noteAudit({ target: row!.id });
-    return { ok: true, value: row! } as const;
+    return { ok: true, value: full! } as const;
   });
 }
 

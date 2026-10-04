@@ -2,7 +2,8 @@
 
 /**
  * Two lists under one search: the checklist items this person owns, which
- * they tick here, and the comments that tag them. Each sorts and pages on its
+ * they tick here, and everywhere they are tagged — a session comment, a
+ * checklist item, or an eVals score's comment. Each sorts and pages on its
  * own (`items.*` and `mentions.*` in the URL); the Open, Done and All pills
  * narrow the checklist.
  */
@@ -15,10 +16,10 @@ import { ChevronRight } from "lucide-react";
 import { MentionText } from "@/components/mention-text";
 import { HEADER_ROW, Pager, PlainHeader, SortHeader, TableSearch } from "@/components/data-table";
 import { CHECKLIST_STATUSES, type ChecklistStatus, type MyChecklistSort, type MyMentionSort } from "@/lib/list-specs";
+import type { MyMentionRow } from "@/lib/mention-store";
 import { riseChild, staggerParent } from "@/lib/motion";
 import type { ListQuery, Page } from "@/lib/paging";
 import type { MyChecklistRow } from "@/lib/scheduler/checklist";
-import type { MyMentionRow } from "@/lib/scheduler/comments";
 import { TRACK_LABELS } from "@/lib/scheduler/timeline";
 import { cn } from "@/lib/utils";
 import { formatDate, formatWhen } from "../cohort-settings/format";
@@ -28,6 +29,18 @@ const STATUS_LABELS: Record<ChecklistStatus, string> = { open: "Open", done: "Do
 const WEEKDAY = new Intl.DateTimeFormat("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
 const dateLabel = (iso: string) => WEEKDAY.format(new Date(`${iso}T00:00:00Z`));
 const when = (at: Date | string) => formatWhen(new Date(at).toISOString());
+
+/** Where a tag was made: the session, checklist or eVals score, then the bootcamp. */
+function mentionContext(m: MyMentionRow): string {
+  const day = m.track && m.day !== null ? `${TRACK_LABELS[m.track]}, Day ${m.day}` : null;
+  const where =
+    m.kind === "comment"
+      ? [m.sessionName, day]
+      : m.kind === "checklist"
+        ? ["Checklist", day]
+        : [m.assessmentName, m.criterionName, m.attendeeName];
+  return [...where.filter(Boolean), `bootcamp starting ${formatDate(m.bootcampStartDate)}`].join(" · ");
+}
 
 /** Shows only `status`, from the checklist's first page. */
 function useStatusFilter() {
@@ -58,6 +71,7 @@ export function InboxView({
   mentionTotal,
   viewerEmail,
   canOpenSchedules,
+  scoringBootcampId,
 }: {
   itemQuery: ListQuery<MyChecklistSort>;
   mentionQuery: ListQuery<MyMentionSort>;
@@ -66,11 +80,13 @@ export function InboxView({
   /** Items still to do, whatever the search. */
   open: number;
   mentions: Page<MyMentionRow>;
-  /** Comments tagging this person, whatever the search. */
+  /** Tags of this person, whatever the search. */
   mentionTotal: number;
   viewerEmail: string;
   /** Whether the schedules these come from are open to this person. */
   canOpenSchedules: boolean;
+  /** The active bootcamp, if this person can score at it: only its eVals scores can still be opened. */
+  scoringBootcampId: string | null;
 }) {
   const router = useRouter();
   const { show, pending } = useStatusFilter();
@@ -104,6 +120,13 @@ export function InboxView({
       label
     );
 
+  /** Where a tag opens, if this person can open it. */
+  const mentionHref = (m: MyMentionRow): string | null => {
+    if (m.kind !== "score") return canOpenSchedules ? `/scheduler/${m.bootcampId}` : null;
+    if (m.bootcampId !== scoringBootcampId || !m.stage || !m.assessmentId || !m.employeeId) return null;
+    return `/evals/${m.stage}/${m.assessmentId}/${encodeURIComponent(m.employeeId)}`;
+  };
+
   return (
     <motion.div variants={staggerParent(0.05)} initial="hidden" animate="show" className="max-w-5xl space-y-8">
       <motion.div variants={riseChild} className="space-y-1.5">
@@ -111,13 +134,13 @@ export function InboxView({
         <p className="text-sm text-muted-foreground">
           <span className="font-medium text-foreground tabular-nums">{open.toLocaleString()}</span> checklist item
           {open === 1 ? "" : "s"} to do ·{" "}
-          <span className="font-medium text-foreground tabular-nums">{mentionTotal.toLocaleString()}</span> comment
-          {mentionTotal === 1 ? "" : "s"} tagging {viewerEmail || "you"}
+          <span className="font-medium text-foreground tabular-nums">{mentionTotal.toLocaleString()}</span> tag
+          {mentionTotal === 1 ? "" : "s"} of {viewerEmail || "you"}
         </p>
       </motion.div>
 
       <motion.div variants={riseChild}>
-        <TableSearch value={itemQuery.q} placeholder="Search items and comments" label="Search your inbox" />
+        <TableSearch value={itemQuery.q} placeholder="Search items and tags" label="Search your inbox" />
       </motion.div>
 
       <motion.section variants={riseChild} className="space-y-3">
@@ -180,7 +203,9 @@ export function InboxView({
                       />
                     </td>
                     <td className="px-5 py-2.5 align-top">
-                      <div className={cn("wrap-break-word", item.done && "text-muted-foreground line-through")}>{item.name}</div>
+                      <div className={cn("wrap-break-word", item.done && "text-muted-foreground line-through")}>
+                        <MentionText text={item.name} mentions={item.mentions} viewerEmail={viewerEmail} />
+                      </div>
                       {item.done && item.doneAt && (
                         <div className="text-xs text-muted-foreground">
                           Done by {item.doneByName || "someone"} {when(item.doneAt)}
@@ -234,40 +259,42 @@ export function InboxView({
                   <SortHeader column="author" sort={mentionQuery.sort} dir={mentionQuery.dir} prefix="mentions" className="w-44">
                     From
                   </SortHeader>
-                  <PlainHeader>Comment</PlainHeader>
+                  <PlainHeader>Where</PlainHeader>
                   <PlainHeader className="w-10" />
                 </tr>
               </thead>
               <tbody>
-                {mentions.rows.map((m) => (
-                  <tr key={m.mentionId} className="border-b last:border-b-0">
-                    <td className="px-5 py-2.5 align-top whitespace-nowrap text-muted-foreground">{when(m.createdAt)}</td>
-                    <td className="px-5 py-2.5 align-top">{m.authorName || m.authorEmail || "Someone removed"}</td>
-                    <td className="px-5 py-2.5 align-top">
-                      <p className="whitespace-pre-wrap wrap-break-word">
-                        <MentionText text={m.body} mentions={m.mentions} viewerEmail={viewerEmail} />
-                      </p>
-                      <div className="mt-1 text-xs text-muted-foreground">
-                        {m.sessionName} · {TRACK_LABELS[m.track]}, Day {m.day} · bootcamp starting {formatDate(m.bootcampStartDate)}
-                      </div>
-                    </td>
-                    <td className="px-3 py-2.5 align-top">
-                      {canOpenSchedules && (
-                        <Link
-                          href={`/scheduler/${m.bootcampId}`}
-                          aria-label={`Open the schedule for ${m.sessionName}`}
-                          className="flex justify-end text-muted-foreground hover:text-foreground"
-                        >
-                          <ChevronRight className="size-4" />
-                        </Link>
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                {mentions.rows.map((m) => {
+                  const href = mentionHref(m);
+                  const context = mentionContext(m);
+                  return (
+                    <tr key={m.mentionId} className="border-b last:border-b-0">
+                      <td className="px-5 py-2.5 align-top whitespace-nowrap text-muted-foreground">{when(m.createdAt)}</td>
+                      <td className="px-5 py-2.5 align-top">{m.taggedByName || m.taggedByEmail || "Someone removed"}</td>
+                      <td className="px-5 py-2.5 align-top">
+                        <p className="whitespace-pre-wrap wrap-break-word">
+                          <MentionText text={m.text} mentions={m.mentions} viewerEmail={viewerEmail} />
+                        </p>
+                        <div className="mt-1 text-xs text-muted-foreground">{context}</div>
+                      </td>
+                      <td className="px-3 py-2.5 align-top">
+                        {href && (
+                          <Link
+                            href={href}
+                            aria-label={`Open ${context}`}
+                            className="flex justify-end text-muted-foreground hover:text-foreground"
+                          >
+                            <ChevronRight className="size-4" />
+                          </Link>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
                 {mentions.rows.length === 0 && (
                   <tr>
                     <td colSpan={4} className="px-5 py-8 text-center text-muted-foreground">
-                      {mentionQuery.q ? "No comment matches." : mentions.page > 1 ? "No comments on this page." : "No one has tagged you yet."}
+                      {mentionQuery.q ? "No tag matches." : mentions.page > 1 ? "No tags on this page." : "No one has tagged you yet."}
                     </td>
                   </tr>
                 )}
@@ -275,7 +302,7 @@ export function InboxView({
             </table>
           </div>
           <div className="border-t empty:hidden">
-            <Pager page={mentions} noun="comments" prefix="mentions" />
+            <Pager page={mentions} noun="tags" prefix="mentions" />
           </div>
         </div>
       </motion.section>
