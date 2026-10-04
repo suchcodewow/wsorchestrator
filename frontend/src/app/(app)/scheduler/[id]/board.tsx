@@ -8,7 +8,7 @@
  * quarter hour at a time, and clicks unscheduled time to add a session there.
  */
 
-import { useRef, type KeyboardEvent, type PointerEvent } from "react";
+import { useRef, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { AlertTriangle, MessageSquare, Plus, UserX } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -48,6 +48,8 @@ export type BoardProps = {
   onAdd: (column: BoardColumn, start?: number) => void;
   onResize: (id: string, minutes: number) => void;
   onResizeEnd: (id: string) => void;
+  /** Anything more to show at the top of a column, beside its add button. */
+  headerAction?: (column: BoardColumn) => ReactNode;
 };
 
 export function Board(props: BoardProps) {
@@ -129,18 +131,21 @@ function Column({
                   .join(" · ")}
           </div>
         </div>
-        {props.canManage && (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-7 shrink-0"
-            aria-label={`Add a session to ${column.title}, ${column.subtitle}`}
-            disabled={column.sessions.length >= SCHEDULE_LIMITS.sessionsPerDay}
-            onClick={() => props.onAdd(column)}
-          >
-            <Plus className="size-4" />
-          </Button>
-        )}
+        <div className="flex shrink-0 items-center">
+          {props.headerAction?.(column)}
+          {props.canManage && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-7 shrink-0"
+              aria-label={`Add a session to ${column.title}, ${column.subtitle}`}
+              disabled={column.sessions.length >= SCHEDULE_LIMITS.sessionsPerDay}
+              onClick={() => props.onAdd(column)}
+            >
+              <Plus className="size-4" />
+            </Button>
+          )}
+        </div>
       </div>
       <div
         ref={setNodeRef}

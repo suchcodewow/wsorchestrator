@@ -8,6 +8,7 @@ import {
   DatabaseBackup,
   FlaskConical,
   History,
+  Inbox,
   Layers,
   ScrollText,
   Settings,
@@ -108,7 +109,10 @@ export const NAV_SECTIONS: NavSection[] = [
   },
   {
     heading: "Account",
-    items: [{ href: "/me", label: "My settings", Icon: UserCog }],
+    items: [
+      { href: "/inbox", label: "My inbox", Icon: Inbox },
+      { href: "/me", label: "My settings", Icon: UserCog },
+    ],
   },
   {
     heading: "Administration",

@@ -466,6 +466,7 @@ export function SessionDialog({
             sessionId={existing.id}
             canWrite={canManage}
             viewerId={viewerId}
+            people={instructors}
             onChange={() => setCommented(true)}
           />
         )}

@@ -2,14 +2,17 @@
 
 /**
  * A session's comments, newest first, each with who wrote it and when.
- * Loaded a page at a time; a manager can add one and remove their own.
+ * Loaded a page at a time; a manager can add one, tagging administrators and
+ * the bootcamp's guest judges with "@", and remove their own.
  */
 
 import { useEffect, useState } from "react";
 import { Loader2, Trash2 } from "lucide-react";
+import { MentionText } from "@/components/mention-text";
+import { MentionTextarea } from "@/components/mention-textarea";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { SCHEDULE_LIMITS } from "@/db/schema";
+import { mentionsIn, type MentionPick } from "@/lib/mentions";
 import type { CommentRow } from "@/lib/scheduler/comments";
 import { formatWhen } from "../../cohort-settings/format";
 
@@ -20,17 +23,21 @@ export function Comments({
   sessionId,
   canWrite,
   viewerId,
+  people,
   onChange,
 }: {
   bootcampId: string;
   sessionId: string;
   canWrite: boolean;
   viewerId: string;
+  /** Who a comment can tag. */
+  people: MentionPick[];
   onChange: () => void;
 }) {
   const base = `/api/scheduler/bootcamps/${bootcampId}/sessions/${sessionId}/comments`;
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [draft, setDraft] = useState("");
+  const [picks, setPicks] = useState<MentionPick[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -74,11 +81,23 @@ export function Comments({
     setBusy("post");
     setError(null);
     try {
-      const res = await fetch(base, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ body }) });
+      const mentions = mentionsIn(body, picks).map((p) => p.email);
+      const res = await fetch(base, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ body, mentions }),
+      });
       const out = await res.json().catch(() => null);
-      if (!res.ok) return setError(`Could not add it (${res.status}).`);
+      if (!res.ok) {
+        return setError(
+          out?.error === "not_instructor"
+            ? `${out.email} is no longer an administrator or guest judge here, so cannot be tagged.`
+            : `Could not add it (${res.status}).`,
+        );
+      }
       setLoaded((prev) => ({ rows: [out as CommentRow, ...(prev?.rows ?? [])], page: prev?.page ?? 1, hasMore: prev?.hasMore ?? false }));
       setDraft("");
+      setPicks([]);
       onChange();
     } catch {
       setError("Could not reach the server.");
@@ -117,12 +136,14 @@ export function Comments({
 
       {canWrite && (
         <div className="grid gap-2">
-          <Textarea
+          <MentionTextarea
             value={draft}
-            onChange={(e) => setDraft(e.target.value)}
+            onChange={setDraft}
+            people={people}
+            onPick={(p) => setPicks((prev) => [...prev, p])}
             maxLength={SCHEDULE_LIMITS.comment}
             rows={2}
-            placeholder="Add a comment"
+            placeholder="Add a comment — type @ to tag someone"
             aria-label="Add a comment"
             onKeyDown={(e) => {
               if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
@@ -171,7 +192,9 @@ export function Comments({
                   </button>
                 )}
               </div>
-              <p className="mt-1 text-sm whitespace-pre-wrap">{c.body}</p>
+              <p className="mt-1 text-sm whitespace-pre-wrap">
+                <MentionText text={c.body} mentions={c.mentions} />
+              </p>
             </li>
           ))}
         </ul>

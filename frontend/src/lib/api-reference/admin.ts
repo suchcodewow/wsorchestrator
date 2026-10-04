@@ -1,6 +1,7 @@
 import { ASSESSMENT_ATTENDEE_LIST, ASSESSMENT_LIST, AUDIT_LIST, BOOTCAMP_HISTORY_LIST, BOOTCAMP_LIST, CURRENT_COHORT_LIST, DOMAIN_LIST, EMPLOYEE_LIST, HIBOB_SYNC_LIST, HISTORY_STATUSES, JUDGE_LIST, ORGANIZATION_LIST, PREVIOUS_SESSION_LIST, SESSION_COMMENT_LIST, SESSION_TYPE_LIST, SLACK_CONTACT_LIST, TITLE_LIST, USER_LIST, FACILITY_LIST } from "@/lib/list-specs";
-import { BOOTCAMP_LIMITS, EVALS_ASSESSMENT_LIMITS, FACILITY_LIMITS, SCHEDULE_LIMITS } from "@/db/schema";
+import { BOOTCAMP_LIMITS, CHECKLIST_LIMITS, EVALS_ASSESSMENT_LIMITS, FACILITY_LIMITS, SCHEDULE_LIMITS } from "@/db/schema";
 import { PAGE_SIZE } from "@/lib/paging";
+import { CHECKLIST_ITEM_ROW } from "./account";
 import { PAGE_FIELDS, listQuery } from "./paging";
 import type { Endpoint, EndpointGroup, Field } from "./types";
 
@@ -32,6 +33,14 @@ const UNKNOWN_FACILITY_ERROR: EndpointError = {
 
 const BOOTCAMP_ID: Field = { name: "id", type: "string", required: true, note: "the bootcamp's id" };
 const SESSION_ID: Field = { name: "sessionId", type: "string", required: true, note: "the session's id" };
+const CHECKLIST_ITEM_ID: Field = { name: "itemId", type: "string", required: true, note: "the checklist item's id" };
+const CHECKLIST_DAY_PARAMS: Field[] = [
+  BOOTCAMP_ID,
+  { name: "track", type: `"btc" | "int"`, required: true, note: "the class" },
+  { name: "day", type: "number", required: true, note: "1-based, as a session's" },
+];
+
+const COMMENT_SHAPE = "{ id, body, authorId: string | null, authorName, authorEmail, createdAt, mentions: { email, fullName }[] }";
 
 const TRACK_TYPE = `"btc" | "int" | "btc_se" | "int_se"`;
 const KIND_TYPE = `"main" | "breakout" | "unstructured"`;
@@ -665,26 +674,36 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         summary: "Lists a session's comments, a page at a time, newest first.",
         access: "trainingViewer",
         token: true,
-        notes: "authorName and authorEmail are as they were when it was written.",
+        notes: "authorName and authorEmail are as they were when it was written. mentions are the people it tags; the body spells each as \"@\" and their fullName.",
         params: [BOOTCAMP_ID, SESSION_ID],
         query: listQuery(SESSION_COMMENT_LIST.sorts, "the text or the author"),
-        returns: `{ comments: { id, body, authorId: string | null, authorName, authorEmail, createdAt }[], ${PAGE_FIELDS} }`,
+        returns: `{ comments: ${COMMENT_SHAPE}[], ${PAGE_FIELDS} }`,
         errors: [{ status: 404, error: "not_found", when: "no such bootcamp or session" }],
       },
       {
         method: "POST",
         path: "/api/scheduler/bootcamps/{id}/sessions/{sessionId}/comments",
-        summary: "Comments on a session.",
+        summary: "Comments on a session, tagging anyone named in mentions.",
         access: "trainingAdmin",
         token: true,
+        notes:
+          "Each person tagged sees the comment in their inbox (GET /api/me/mentions). Write \"@\" and their name in the body where they are tagged, as the schedule page does; the body is not checked for it.",
         params: [BOOTCAMP_ID, SESSION_ID],
         body: {
           kind: "json",
-          fields: [{ name: "body", type: "string", required: true, note: `up to ${SCHEDULE_LIMITS.comment} characters` }],
+          fields: [
+            { name: "body", type: "string", required: true, note: `up to ${SCHEDULE_LIMITS.comment} characters` },
+            {
+              name: "mentions",
+              type: "string[]",
+              note: `emails of the bootcamp's Training administrators or guest judges to tag; up to ${SCHEDULE_LIMITS.mentions}, each once`,
+            },
+          ],
         },
-        returns: "201 { id, body, authorId, authorName, authorEmail, createdAt }",
+        returns: `201 ${COMMENT_SHAPE}`,
         errors: [
-          { status: 400, error: "invalid", when: "body is empty or too long" },
+          { status: 400, error: "invalid", when: `body is empty or too long, or more than ${SCHEDULE_LIMITS.mentions} mentions` },
+          { status: 400, error: "not_instructor", when: "a mention is not an administrator or guest judge of the bootcamp; email names it" },
           { status: 404, error: "not_found", when: "no such bootcamp or session" },
         ],
       },
@@ -700,6 +719,78 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           { status: 403, error: "not_author", when: "someone else wrote it" },
           { status: 404, error: "not_found", when: "no such bootcamp, session or comment" },
         ],
+      },
+      {
+        method: "GET",
+        path: "/api/scheduler/bootcamps/{id}/checklist",
+        summary: "Counts each class-day's checklist items, and how many are done.",
+        access: "trainingViewer",
+        token: true,
+        notes: "A day with no items is left out.",
+        params: [BOOTCAMP_ID],
+        returns: "{ days: { track: \"btc\" | \"int\", day: number, total: number, done: number }[] }",
+        errors: [{ status: 404, error: "not_found", when: "no such bootcamp" }],
+      },
+      {
+        method: "GET",
+        path: "/api/scheduler/bootcamps/{id}/checklist/{track}/{day}",
+        summary: "Lists what is to be done before one day of one class, oldest first.",
+        access: "trainingViewer",
+        token: true,
+        notes: `Whole: a class-day holds at most ${CHECKLIST_LIMITS.itemsPerDay} items. The SE tracks share their class's checklist.`,
+        params: CHECKLIST_DAY_PARAMS,
+        returns: `{ items: ${CHECKLIST_ITEM_ROW}[] }`,
+        errors: [{ status: 404, error: "not_found", when: "no such bootcamp, or track or day is not one" }],
+      },
+      {
+        method: "POST",
+        path: "/api/scheduler/bootcamps/{id}/checklist/{track}/{day}",
+        summary: "Adds an item to one class-day's checklist, recording you as who wrote it.",
+        access: "trainingAdmin",
+        token: true,
+        params: CHECKLIST_DAY_PARAMS,
+        body: {
+          kind: "json",
+          fields: [
+            { name: "name", type: "string", required: true, note: `up to ${CHECKLIST_LIMITS.name} characters` },
+            { name: "ownerEmail", type: "string | null", note: "a Training administrator or guest judge of the bootcamp; omit for nobody" },
+          ],
+        },
+        returns: `201 ${CHECKLIST_ITEM_ROW}`,
+        errors: [
+          { status: 400, error: "invalid", when: "name is empty or too long" },
+          { status: 400, error: "no_day", when: "the class does not run that many days at this bootcamp" },
+          { status: 400, error: "not_instructor", when: "ownerEmail is not an administrator or guest judge of the bootcamp" },
+          { status: 404, error: "not_found", when: "no such bootcamp, or track or day is not one" },
+          { status: 409, error: "full", when: `the day already has ${CHECKLIST_LIMITS.itemsPerDay} items` },
+        ],
+      },
+      {
+        method: "PATCH",
+        path: "/api/scheduler/bootcamps/{id}/checklist/items/{itemId}",
+        summary: "Ticks a checklist item done, or puts it back to do.",
+        access: "signedIn",
+        token: true,
+        notes:
+          "A Training Administrator can tick any item; anyone else only one they own, matched by their account's email. Ticking one already done keeps when it was first ticked.",
+        params: [BOOTCAMP_ID, CHECKLIST_ITEM_ID],
+        body: { kind: "json", fields: [{ name: "done", type: "boolean", required: true }] },
+        returns: CHECKLIST_ITEM_ROW,
+        errors: [
+          { status: 400, error: "invalid", when: "done is missing or not a boolean" },
+          { status: 403, error: "not_owner", when: "you are not a Training Administrator and it is not yours" },
+          { status: 404, error: "not_found", when: "no such bootcamp or item" },
+        ],
+      },
+      {
+        method: "DELETE",
+        path: "/api/scheduler/bootcamps/{id}/checklist/items/{itemId}",
+        summary: "Removes a checklist item.",
+        access: "trainingAdmin",
+        token: true,
+        params: [BOOTCAMP_ID, CHECKLIST_ITEM_ID],
+        returns: "{ ok: true }",
+        errors: [{ status: 404, error: "not_found", when: "no such bootcamp or item" }],
       },
       {
         method: "GET",

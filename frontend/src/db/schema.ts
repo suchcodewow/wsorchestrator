@@ -1235,6 +1235,8 @@ export const SCHEDULE_LIMITS = {
   description: 4000,
   emoji: 16,
   comment: 4000,
+  /** The people one comment can tag. */
+  mentions: 20,
   types: 50,
   importBytes: 20 * 1024 * 1024,
 } as const;
@@ -1364,6 +1366,75 @@ export const scheduleSessionComments = pgTable(
   },
   (t) => [index("schedule_session_comments_session_idx").on(t.sessionId, t.createdAt)],
 );
+
+/**
+ * Someone a session comment tags with "@": an administrator or guest judge of
+ * the bootcamp when it was written. Kept by email, since a guest judge may
+ * have no account, and listed on that person's inbox.
+ */
+export const scheduleCommentMentions = pgTable(
+  "schedule_comment_mentions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    commentId: uuid("comment_id")
+      .notNull()
+      .references(() => scheduleSessionComments.id, { onDelete: "cascade" }),
+    /** Lowercased. */
+    email: text("email").notNull(),
+    /** As the instructor list had it when they were tagged; the comment's text spells it after an "@". */
+    fullName: text("full_name").notNull().default(""),
+  },
+  (t) => [
+    uniqueIndex("schedule_comment_mentions_comment_email_idx").on(t.commentId, t.email),
+    index("schedule_comment_mentions_email_idx").on(t.email),
+  ],
+);
+
+/** The two classes a bootcamp holds, each with a checklist per day; the SE tracks share their class's. */
+export const CHECKLIST_TRACKS = ["btc", "int"] as const;
+export type ChecklistTrack = (typeof CHECKLIST_TRACKS)[number];
+
+/** `itemsPerDay` caps one class-day's checklist, so it is read whole. */
+export const CHECKLIST_LIMITS = { name: 200, itemsPerDay: 100 } as const;
+
+/**
+ * Something to do before one day of one class starts. Its owner, if any, is
+ * an administrator or guest judge of the bootcamp, kept by email; who wrote
+ * it and who ticked it are copied in, so they outlast the accounts.
+ */
+export const scheduleChecklistItems = pgTable(
+  "schedule_checklist_items",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    bootcampId: uuid("bootcamp_id")
+      .notNull()
+      .references(() => bootcamps.id, { onDelete: "cascade" }),
+    track: text("track").$type<ChecklistTrack>().notNull(),
+    /** 1-based, as a schedule session's. */
+    day: integer("day").notNull(),
+    name: text("name").notNull(),
+    /** Lowercased; null when nobody owns it. */
+    ownerEmail: text("owner_email"),
+    ownerName: text("owner_name").notNull().default(""),
+    doneAt: timestamp("done_at", { withTimezone: true }),
+    doneBy: text("done_by").references(() => users.id, { onDelete: "set null" }),
+    doneByName: text("done_by_name").notNull().default(""),
+    createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdByName: text("created_by_name").notNull().default(""),
+    createdByEmail: text("created_by_email").notNull().default(""),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("schedule_checklist_items_day_idx").on(t.bootcampId, t.track, t.day, t.createdAt),
+    index("schedule_checklist_items_owner_idx").on(t.ownerEmail),
+    check("schedule_checklist_items_track_check", sql`${t.track} in ('btc', 'int')`),
+    check("schedule_checklist_items_day_check", sql`${t.day} between 1 and 30`),
+  ],
+);
+
+export type ScheduleChecklistItem = typeof scheduleChecklistItems.$inferSelect;
 
 /** The class an assessment scores, as a bootcamp holds them. */
 export const EVALS_ASSESSMENT_STAGES = ["bootcamp", "intermediate"] as const;

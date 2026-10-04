@@ -31,6 +31,7 @@ import { AlertTriangle, CalendarDays, Check, ChevronLeft, ChevronRight, FileUp, 
 import { Button } from "@/components/ui/button";
 import { SCHEDULE_LIMITS, SCHEDULE_TRACKS, type ScheduleTrack } from "@/db/schema";
 import { riseChild, staggerParent } from "@/lib/motion";
+import type { ChecklistDayCount } from "@/lib/scheduler/checklist";
 import type { CopySource, Schedule, SessionRow } from "@/lib/scheduler/schedule";
 import type { SessionTypeRow } from "@/lib/scheduler/session-types";
 import {
@@ -45,6 +46,7 @@ import {
 } from "@/lib/scheduler/timeline";
 import { cn } from "@/lib/utils";
 import { Board, COLUMN_ATTR, SCALE, SessionFace, type BoardColumn, type Density } from "./board";
+import { useChecklistButtons } from "./checklist";
 import { dayOf, everyDay, keyOf, locate, moveTo, resize, type Days } from "./days";
 import { FillDialog } from "./fill-dialog";
 import { SessionDialog, type SessionTarget } from "./session-dialog";
@@ -70,12 +72,17 @@ export function ScheduleView({
   sources,
   canManage,
   viewerId,
+  viewerEmail,
+  checklist,
 }: {
   initial: Schedule;
   types: SessionTypeRow[];
   sources: CopySource[];
   canManage: boolean;
   viewerId: string;
+  viewerEmail: string;
+  /** How much of each class-day's checklist is done. */
+  checklist: ChecklistDayCount[];
 }) {
   const router = useRouter();
   const { bootcamp } = initial;
@@ -91,6 +98,13 @@ export function ScheduleView({
   const [activeId, setActiveId] = useState<string | null>(null);
   const [resizingId, setResizingId] = useState<string | null>(null);
   const [showClashes, setShowClashes] = useState(false);
+  const checklistButton = useChecklistButtons({
+    bootcampId: bootcamp.id,
+    counts: checklist,
+    canManage,
+    viewerEmail,
+    instructors: schedule.instructors,
+  });
 
   const tracks = SCHEDULE_TRACKS.filter((t) => (trackDays(t, bootcamp) ?? 0) > 0);
   const dayCount = Math.max(bootcamp.btcDays, bootcamp.intDays ?? 0);
@@ -482,6 +496,7 @@ export function ScheduleView({
               onAdd={(c, start) => setTarget({ mode: "new", track: c.track, day: c.day, start })}
               onResize={onResize}
               onResizeEnd={onResizeEnd}
+              headerAction={checklistButton}
             />
             <DragOverlay dropAnimation={null}>
               {active && (

@@ -26,6 +26,7 @@ const ALL = [...ACCOUNT_GROUPS, ...EVENT_GROUPS, ...CONTENT_GROUPS, ...ADMIN_GRO
 /** In reading order: yourself, then events, then content, then administration. */
 export const GROUPS: EndpointGroup[] = [
   "account",
+  "inbox",
   "events",
   "attendees",
   "components",

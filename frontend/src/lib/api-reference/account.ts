@@ -1,6 +1,10 @@
-import { ORG_SECRET_LIST, REPO_LIST } from "@/lib/list-specs";
+import { MY_CHECKLIST_LIST, MY_MENTION_LIST, ORG_SECRET_LIST, REPO_LIST } from "@/lib/list-specs";
 import { PAGE_FIELDS, listQuery } from "./paging";
 import type { EndpointGroup } from "./types";
+
+/** One checklist item, as the Scheduler's routes and the inbox return it. */
+export const CHECKLIST_ITEM_ROW =
+  "{ id, track: \"btc\" | \"int\", day: number, name, ownerEmail: string | null, ownerName, done: boolean, doneAt: string | null, doneByName, createdBy: string | null, createdByName, createdByEmail, createdAt }";
 
 const ORG_SECRET_SEARCH = "the id, the file name, the kind or who last stored it";
 
@@ -186,6 +190,38 @@ export const ACCOUNT_GROUPS: EndpointGroup[] = [
         errors: [
           { status: 404, error: "not_found", when: "no such token of yours, or it is already revoked" },
         ],
+      },
+    ],
+  },
+  {
+    id: "inbox",
+    title: "Your inbox",
+    intro:
+      "What the Scheduler has put on you: the checklist items you own, and the session comments that tag you with \"@\". Both match your account's email, so a guest judge sees theirs whatever role they hold. A token's own account's email is the one matched.",
+    endpoints: [
+      {
+        method: "GET",
+        path: "/api/me/checklist",
+        summary: "Lists the checklist items you own, across every bootcamp, a page at a time.",
+        access: "signedIn",
+        token: true,
+        notes:
+          "date is the day the item is for. open counts every item of yours still to do, whatever the search or status. Tick one with PATCH /api/scheduler/bootcamps/{id}/checklist/items/{itemId}.",
+        query: [
+          { name: "status", type: "\"open\" | \"done\" | \"all\"", note: "default open" },
+          ...listQuery(MY_CHECKLIST_LIST.sorts, "the name or who wrote it"),
+        ],
+        returns: `{ items: (${CHECKLIST_ITEM_ROW} & { bootcampId, bootcampStartDate, date })[], ${PAGE_FIELDS}, open: number }`,
+      },
+      {
+        method: "GET",
+        path: "/api/me/mentions",
+        summary: "Lists the session comments that tag you, across every bootcamp, a page at a time.",
+        access: "signedIn",
+        token: true,
+        notes: "One row per comment. total counts every comment that tags you, whatever the search.",
+        query: listQuery(MY_MENTION_LIST.sorts, "the text, the author or the session's name"),
+        returns: `{ mentions: { mentionId, id, body, authorId: string | null, authorName, authorEmail, createdAt, mentions: { email, fullName }[], bootcampId, bootcampStartDate, sessionId, sessionName, track, day: number }[], ${PAGE_FIELDS}, total: number }`,
       },
     ],
   },

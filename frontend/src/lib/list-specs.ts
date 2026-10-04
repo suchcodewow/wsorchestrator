@@ -86,6 +86,22 @@ export type SessionTypeSort = (typeof SESSION_TYPE_LIST.sorts)[number];
 export const SESSION_COMMENT_LIST = spec(["createdAt", "author"], "desc");
 export type SessionCommentSort = (typeof SESSION_COMMENT_LIST.sorts)[number];
 
+/** The checklist items a person owns, by the date of the day they are for. */
+export const MY_CHECKLIST_LIST = spec(["date", "name", "createdBy"]);
+export type MyChecklistSort = (typeof MY_CHECKLIST_LIST.sorts)[number];
+
+/** Checklist items narrowed to those still to do, those done, or neither. */
+export const CHECKLIST_STATUSES = ["open", "done", "all"] as const;
+export type ChecklistStatus = (typeof CHECKLIST_STATUSES)[number];
+
+export function isChecklistStatus(value: unknown): value is ChecklistStatus {
+  return CHECKLIST_STATUSES.includes(value as ChecklistStatus);
+}
+
+/** The comments that tag a person, newest first. */
+export const MY_MENTION_LIST = spec(["createdAt", "author"], "desc");
+export type MyMentionSort = (typeof MY_MENTION_LIST.sorts)[number];
+
 export const ASSESSMENT_LIST = spec(["name", "stage", "audience", "active", "updatedAt"]);
 export type AssessmentSort = (typeof ASSESSMENT_LIST.sorts)[number];
 
