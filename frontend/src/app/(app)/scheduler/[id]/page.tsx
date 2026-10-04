@@ -35,10 +35,10 @@ export default async function SchedulePage({ params }: { params: Promise<{ id: s
 
   const { bootcamp } = schedule;
   const facts = [
-    bootcamp.facilityName ?? "No facility picked",
+    bootcamp.facilityName,
     `Bootcamp ${bootcamp.btcDays} day${bootcamp.btcDays === 1 ? "" : "s"}`,
     bootcamp.intDays ? `Intermediate ${bootcamp.intDays} day${bootcamp.intDays === 1 ? "" : "s"}` : "No Intermediate",
-  ];
+  ].filter(Boolean);
 
   return (
     <div className="space-y-6">
