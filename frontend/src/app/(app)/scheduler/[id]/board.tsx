@@ -60,7 +60,8 @@ export function Board(props: BoardProps) {
   const hours = Array.from({ length: (bottom - dayStart) / 60 + 1 }, (_, i) => dayStart + i * 60);
 
   return (
-    <div className="overflow-x-auto rounded-2xl border bg-card shadow-sm">
+    // `overflow-x-auto` alone makes the board a vertical scroller too; it never scrolls that way, so the wheel moves the page.
+    <div className="overflow-x-auto overflow-y-hidden rounded-2xl border bg-card shadow-sm">
       {/* Columns share the width and scroll only below 12rem each; `min-w-fit` would size them to their longest name. */}
       <div className="flex" style={{ minWidth: `calc(4rem + ${columns.length} * 12rem)` }}>
         <div className="sticky left-0 z-20 w-16 shrink-0 border-r bg-card">
@@ -75,7 +76,8 @@ export function Board(props: BoardProps) {
                 )}
                 style={{ top: (m - dayStart) * scale }}
               >
-                {m === dayStart ? "" : formatClock(m).replace(":00", "")}
+                {/* The last line is the board's bottom edge; a label there would hang below it. */}
+                {m === dayStart || m === bottom ? "" : formatClock(m).replace(":00", "")}
               </div>
             ))}
           </div>
