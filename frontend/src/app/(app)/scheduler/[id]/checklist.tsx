@@ -10,9 +10,11 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { ListChecks, Loader2, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { MentionText } from "@/components/mention-text";
+import { MentionTextarea } from "@/components/mention-textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { CHECKLIST_LIMITS, CHECKLIST_TRACKS, type ChecklistTrack } from "@/db/schema";
+import { mentionsIn, type MentionPick } from "@/lib/mentions";
 import type { ChecklistDayCount, ChecklistItemRow } from "@/lib/scheduler/checklist";
 import type { Instructor } from "@/lib/scheduler/schedule";
 import { TRACK_LABELS } from "@/lib/scheduler/timeline";
@@ -25,7 +27,7 @@ const ERRORS: Record<string, string> = {
   not_found: "That item or bootcamp was removed — reload the page.",
   no_day: "That day is no longer part of the bootcamp — reload the page.",
   full: `A day holds at most ${CHECKLIST_LIMITS.itemsPerDay} items.`,
-  not_instructor: "That owner is no longer an administrator or guest judge here.",
+  not_instructor: "That person is no longer an administrator or guest judge here.",
   not_owner: "Only its owner or an administrator can tick that.",
   forbidden: "Your role changed — reload the page.",
 };
@@ -158,6 +160,7 @@ function ChecklistDialog({
   const [items, setItems] = useState<Item[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [name, setName] = useState("");
+  const [picks, setPicks] = useState<MentionPick[]>([]);
   const [owner, setOwner] = useState("");
   const [adding, setAdding] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
@@ -189,7 +192,11 @@ function ChecklistDialog({
       const res = await fetch(url, { ...init, headers: { "Content-Type": "application/json" } });
       const out = await res.json().catch(() => null);
       if (!res.ok) {
-        setError(ERRORS[out?.error ?? ""] ?? `That did not save (${res.status}).`);
+        setError(
+          out?.error === "not_instructor" && out.email
+            ? `${out.email} is no longer an administrator or guest judge here.`
+            : (ERRORS[out?.error ?? ""] ?? `That did not save (${res.status}).`),
+        );
         return null;
       }
       return out;
@@ -204,12 +211,13 @@ function ChecklistDialog({
     setAdding(true);
     const out = await send(`${base}/${track}/${day}`, {
       method: "POST",
-      body: JSON.stringify({ name, ownerEmail: owner || null }),
+      body: JSON.stringify({ name, ownerEmail: owner || null, mentions: mentionsIn(name, picks).map((p) => p.email) }),
     });
     setAdding(false);
     if (!out) return;
     show([...(items ?? []), out as Item]);
     setName("");
+    setPicks([]);
     setOwner("");
   }
 
@@ -268,7 +276,9 @@ function ChecklistDialog({
                       className="mt-0.5 size-4 shrink-0 accent-brand disabled:cursor-not-allowed"
                     />
                     <div className="min-w-0 flex-1">
-                      <div className={cn("text-sm wrap-break-word", item.done && "text-muted-foreground line-through")}>{item.name}</div>
+                      <div className={cn("text-sm wrap-break-word", item.done && "text-muted-foreground line-through")}>
+                        <MentionText text={item.name} mentions={item.mentions} viewerEmail={viewerEmail} />
+                      </div>
                       <div className="mt-0.5 text-xs text-muted-foreground">
                         {[
                           item.ownerEmail ? `Owner: ${item.ownerName || item.ownerEmail}${mine ? " (you)" : ""}` : "No owner",
@@ -306,11 +316,14 @@ function ChecklistDialog({
             }}
             className="grid gap-2 sm:grid-cols-[1fr_auto_auto]"
           >
-            <Input
+            <MentionTextarea
+              singleLine
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={setName}
+              people={instructors}
+              onPick={(p) => setPicks((prev) => [...prev, p])}
               maxLength={CHECKLIST_LIMITS.name}
-              placeholder="Add an item"
+              placeholder="Add an item — @ to tag"
               aria-label="New item"
             />
             <select value={owner} onChange={(e) => setOwner(e.target.value)} aria-label="Owner" className={SELECT}>

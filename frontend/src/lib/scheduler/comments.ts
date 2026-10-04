@@ -10,17 +10,10 @@ import "server-only";
 import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
-import {
-  SCHEDULE_LIMITS,
-  bootcamps,
-  scheduleCommentMentions,
-  scheduleSessionComments,
-  scheduleSessions,
-  users,
-  type ScheduleTrack,
-} from "@/db/schema";
+import { SCHEDULE_LIMITS, mentions, scheduleSessionComments } from "@/db/schema";
 import { noteAudit } from "@/lib/audit-context";
-import type { MyMentionSort, SessionCommentSort } from "@/lib/list-specs";
+import type { SessionCommentSort } from "@/lib/list-specs";
+import { pickMentions, taggerOf } from "@/lib/mention-store";
 import type { MentionPick } from "@/lib/mentions";
 import { pageWindow, toPage, type ListQuery, type Page } from "@/lib/paging";
 import { orderFor, searchAny } from "@/lib/paging-sql";
@@ -40,7 +33,7 @@ export type CommentRow = {
 // Spelled out, as `staffJson` in schedule.ts is: `id` alone would be the mention's own.
 const mentionsJson = sql<MentionPick[]>`coalesce((
   select json_agg(json_build_object('email', m.email, 'fullName', m.full_name) order by m.full_name, m.email)
-  from ${scheduleCommentMentions} m where m.comment_id = ${scheduleSessionComments}.id
+  from ${mentions} m where m.comment_id = ${scheduleSessionComments}.id
 ), '[]'::json)`;
 
 const COLUMNS = {
@@ -88,16 +81,10 @@ export async function addComment(
   sessionId: string,
   input: z.infer<typeof commentInputSchema>,
 ): Promise<{ ok: true; comment: CommentRow } | { ok: false; error: "not_instructor"; email: string }> {
-  const wanted = [...new Set(input.mentions ?? [])];
-  let tagged: MentionPick[] = [];
-  if (wanted.length > 0) {
-    const pool = new Map((await instructorPool(bootcampId)).map((i) => [i.email, i]));
-    const stranger = wanted.find((e) => !pool.has(e));
-    if (stranger) return { ok: false, error: "not_instructor", email: stranger };
-    tagged = wanted.map((e) => ({ email: e, fullName: pool.get(e)!.fullName }));
-  }
+  const picked = input.mentions?.length ? pickMentions(await instructorPool(bootcampId), input.mentions) : { ok: true as const, tagged: [] };
+  if (!picked.ok) return { ok: false, error: "not_instructor", email: picked.email };
 
-  const [author] = await db.select({ name: users.name, email: users.email }).from(users).where(eq(users.id, actorId));
+  const tagger = await taggerOf(actorId);
   const row = await db.transaction(async (tx) => {
     const [comment] = await tx
       .insert(scheduleSessionComments)
@@ -105,12 +92,21 @@ export async function addComment(
         sessionId,
         body: input.body,
         authorId: actorId,
-        authorName: author?.name ?? "",
-        authorEmail: author?.email?.toLowerCase() ?? "",
+        authorName: tagger.taggedByName,
+        authorEmail: tagger.taggedByEmail,
       })
-      .returning({ id: scheduleSessionComments.id });
-    if (tagged.length > 0) {
-      await tx.insert(scheduleCommentMentions).values(tagged.map((m) => ({ commentId: comment!.id, email: m.email, fullName: m.fullName })));
+      .returning({ id: scheduleSessionComments.id, createdAt: scheduleSessionComments.createdAt });
+    if (picked.tagged.length > 0) {
+      await tx.insert(mentions).values(
+        picked.tagged.map((m) => ({
+          commentId: comment!.id,
+          bootcampId,
+          email: m.email,
+          fullName: m.fullName,
+          ...tagger,
+          createdAt: comment!.createdAt,
+        })),
+      );
     }
     const [full] = await tx.select(COLUMNS).from(scheduleSessionComments).where(eq(scheduleSessionComments.id, comment!.id));
     return full!;
@@ -134,68 +130,4 @@ export async function deleteComment(
   if (row.authorId !== actorId) return { ok: false, error: "not_author" };
   await db.delete(scheduleSessionComments).where(eq(scheduleSessionComments.id, commentId));
   return { ok: true };
-}
-
-// ─── Where one person is tagged ────────────────────────────────────────────
-
-export type MyMentionRow = CommentRow & {
-  /** The mention's own id. */
-  mentionId: string;
-  bootcampId: string;
-  bootcampStartDate: string;
-  sessionId: string;
-  sessionName: string;
-  track: ScheduleTrack;
-  day: number;
-};
-
-const MY_SORT_COLUMNS = {
-  createdAt: scheduleSessionComments.createdAt,
-  author: SORT_COLUMNS.author,
-} as const;
-
-/** One page of the comments that tag `email`, across every bootcamp; the search matches the text, the author or the session. */
-export async function listMyMentions(email: string | null, query: ListQuery<MyMentionSort>): Promise<Page<MyMentionRow>> {
-  if (!email) return { rows: [], page: query.page, hasMore: false };
-  const { limit, offset } = pageWindow(query.page);
-  const rows = await db
-    .select({
-      ...COLUMNS,
-      mentionId: scheduleCommentMentions.id,
-      bootcampId: scheduleSessions.bootcampId,
-      bootcampStartDate: bootcamps.startDate,
-      sessionId: scheduleSessions.id,
-      sessionName: scheduleSessions.name,
-      track: scheduleSessions.track,
-      day: scheduleSessions.day,
-    })
-    .from(scheduleCommentMentions)
-    .innerJoin(scheduleSessionComments, eq(scheduleSessionComments.id, scheduleCommentMentions.commentId))
-    .innerJoin(scheduleSessions, eq(scheduleSessions.id, scheduleSessionComments.sessionId))
-    .innerJoin(bootcamps, eq(bootcamps.id, scheduleSessions.bootcampId))
-    .where(
-      and(
-        eq(scheduleCommentMentions.email, email.toLowerCase()),
-        searchAny(query.q, [
-          scheduleSessionComments.body,
-          scheduleSessionComments.authorName,
-          scheduleSessionComments.authorEmail,
-          scheduleSessions.name,
-        ]),
-      ),
-    )
-    .orderBy(...orderFor(MY_SORT_COLUMNS[query.sort], query.dir, sql`${scheduleSessionComments.createdAt} desc`, scheduleCommentMentions.id))
-    .limit(limit)
-    .offset(offset);
-  return toPage(rows, query.page);
-}
-
-/** How many comments tag `email` in all, for the inbox's heading. */
-export async function myMentionCount(email: string | null): Promise<number> {
-  if (!email) return 0;
-  const [row] = await db
-    .select({ n: sql<number>`count(*)::int` })
-    .from(scheduleCommentMentions)
-    .where(eq(scheduleCommentMentions.email, email.toLowerCase()));
-  return row?.n ?? 0;
 }

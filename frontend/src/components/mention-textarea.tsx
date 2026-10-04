@@ -6,9 +6,12 @@
  * move through the list, Enter or Tab picks, Escape closes it. Who was picked
  * is reported beside the text, since the text alone cannot tell two people
  * with one name apart.
+ *
+ * `singleLine` makes it a one-line field for a name: Enter submits its form
+ * rather than starting a new line.
  */
 
-import { useEffect, useLayoutEffect, useRef, useState, type ComponentProps, type KeyboardEvent } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, type ComponentProps, type KeyboardEvent } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { insertMention, matchesMention, mentionQueryAt, type MentionPick } from "@/lib/mentions";
 import { cn } from "@/lib/utils";
@@ -22,6 +25,7 @@ export function MentionTextarea({
   onPick,
   onKeyDown,
   className,
+  singleLine = false,
   ...props
 }: Omit<ComponentProps<"textarea">, "value" | "onChange"> & {
   value: string;
@@ -29,8 +33,11 @@ export function MentionTextarea({
   /** Who can be tagged. */
   people: MentionPick[];
   onPick: (pick: MentionPick) => void;
+  singleLine?: boolean;
 }) {
   const ref = useRef<HTMLTextAreaElement>(null);
+  // A page can hold many of these, as the scoring form does, so each list has its own ids.
+  const listId = useId();
   const [caret, setCaret] = useState(0);
   const [active, setActive] = useState(0);
   /** The "@" whose list was closed, by picking from it or by Escape: it stays closed until another "@". */
@@ -86,6 +93,11 @@ export function MentionTextarea({
         return pick(matches[current]!);
       }
     }
+    if (singleLine && e.key === "Enter" && !e.nativeEvent.isComposing) {
+      e.preventDefault();
+      e.currentTarget.form?.requestSubmit();
+      return;
+    }
     onKeyDown?.(e);
   };
 
@@ -95,7 +107,8 @@ export function MentionTextarea({
         ref={ref}
         value={value}
         onChange={(e) => {
-          onChange(e.target.value);
+          // A pasted newline in a one-line field becomes a space.
+          onChange(singleLine ? e.target.value.replace(/\n/g, " ") : e.target.value);
           setCaret(e.target.selectionStart);
           setActive(0);
         }}
@@ -105,14 +118,15 @@ export function MentionTextarea({
         role="combobox"
         aria-expanded={open}
         aria-autocomplete="list"
-        aria-controls={open ? "mention-list" : undefined}
-        aria-activedescendant={open ? `mention-${current}` : undefined}
-        className={className}
+        aria-controls={open ? listId : undefined}
+        aria-activedescendant={open ? `${listId}-${current}` : undefined}
+        rows={singleLine ? 1 : undefined}
+        className={cn(singleLine && "min-h-9 resize-none overflow-hidden py-1.5", className)}
         {...props}
       />
       {open && (
         <ul
-          id="mention-list"
+          id={listId}
           role="listbox"
           aria-label="People to tag"
           className="absolute inset-x-0 top-full z-50 mt-1 max-h-64 overflow-y-auto rounded-lg border bg-popover p-1 text-sm shadow-lg"
@@ -120,7 +134,7 @@ export function MentionTextarea({
           {matches.map((p, i) => (
             <li
               key={p.email}
-              id={`mention-${i}`}
+              id={`${listId}-${i}`}
               role="option"
               aria-selected={i === current}
               // Picked on press, before the textarea's blur closes the list.

@@ -4,7 +4,7 @@ import type { EndpointGroup } from "./types";
 
 /** One checklist item, as the Scheduler's routes and the inbox return it. */
 export const CHECKLIST_ITEM_ROW =
-  "{ id, track: \"btc\" | \"int\", day: number, name, ownerEmail: string | null, ownerName, done: boolean, doneAt: string | null, doneByName, createdBy: string | null, createdByName, createdByEmail, createdAt }";
+  "{ id, track: \"btc\" | \"int\", day: number, name, ownerEmail: string | null, ownerName, done: boolean, doneAt: string | null, doneByName, createdBy: string | null, createdByName, createdByEmail, createdAt, mentions: { email, fullName }[] }";
 
 const ORG_SECRET_SEARCH = "the id, the file name, the kind or who last stored it";
 
@@ -197,7 +197,7 @@ export const ACCOUNT_GROUPS: EndpointGroup[] = [
     id: "inbox",
     title: "Your inbox",
     intro:
-      "What the Scheduler has put on you: the checklist items you own, and the session comments that tag you with \"@\". Both match your account's email, so a guest judge sees theirs whatever role they hold. A token's own account's email is the one matched.",
+      "What has been put on you: the checklist items you own, and everywhere you are tagged with \"@\" — a session comment, a checklist item, or the comment on one criterion of an eVals score. Both match your account's email, so a guest judge sees theirs whatever role they hold. A token's own account's email is the one matched.",
     endpoints: [
       {
         method: "GET",
@@ -216,12 +216,13 @@ export const ACCOUNT_GROUPS: EndpointGroup[] = [
       {
         method: "GET",
         path: "/api/me/mentions",
-        summary: "Lists the session comments that tag you, across every bootcamp, a page at a time.",
+        summary: "Lists everywhere you are tagged, across every bootcamp, a page at a time.",
         access: "signedIn",
         token: true,
-        notes: "One row per comment. total counts every comment that tags you, whatever the search.",
-        query: listQuery(MY_MENTION_LIST.sorts, "the text, the author or the session's name"),
-        returns: `{ mentions: { mentionId, id, body, authorId: string | null, authorName, authorEmail, createdAt, mentions: { email, fullName }[], bootcampId, bootcampStartDate, sessionId, sessionName, track, day: number }[], ${PAGE_FIELDS}, total: number }`,
+        notes:
+          "One row per tag. text is the comment, or the checklist item's name; mentions is everyone it tags. kind says which: a comment and a checklist item carry track and day, a comment also its session, and a score its assessment, criterion and attendee, with employeeId null if the attendee has left the employee list. A score's tag is listed only while you can use eVals or judge that bootcamp. total counts every tag listed for you, whatever the search.",
+        query: listQuery(MY_MENTION_LIST.sorts, "the text, who tagged you, the session's or assessment's name, or the attendee"),
+        returns: `{ mentions: { mentionId, kind: "comment" | "checklist" | "score", text, mentions: { email, fullName }[], taggedByName, taggedByEmail, createdAt, bootcampId, bootcampStartDate, track: "btc" | "int" | "btc_se" | "int_se" | null, day: number | null, sessionId: string | null, sessionName: string | null, assessmentId: string | null, assessmentName: string | null, stage: string | null, criterionName: string | null, attendeeEmail: string | null, attendeeName: string | null, employeeId: string | null }[], ${PAGE_FIELDS}, total: number }`,
       },
     ],
   },

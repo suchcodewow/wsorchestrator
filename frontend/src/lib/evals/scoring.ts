@@ -18,12 +18,14 @@ import { z } from "zod";
 import { db } from "@/db";
 import {
   EVALS_ASSESSMENT_LIMITS,
+  SCHEDULE_LIMITS,
   bootcampHistory,
   employees,
   evalsAssessmentCriteria,
   evalsAssessments,
   evalsSubmissionScores,
   evalsSubmissions,
+  mentions,
   users,
   type EvalsAssessmentAudience,
   type EvalsAssessmentStage,
@@ -32,6 +34,8 @@ import { averageScore, requiredFeedback, tracksFor, wholeScore } from "@/lib/eva
 import { IN_STAGE, isCandidate } from "@/lib/evals/current-cohort";
 import { getCandidateCutoffs } from "@/lib/evals/settings";
 import type { AssessmentAttendeeSort } from "@/lib/list-specs";
+import { pickMentions, scorerPool, taggerOf } from "@/lib/mention-store";
+import type { MentionPick } from "@/lib/mentions";
 import { pageWindow, toPage, type ListQuery, type Page } from "@/lib/paging";
 import { blankAsNull, orderFor, searchAny } from "@/lib/paging-sql";
 import { activeBootcamp, type ActiveBootcamp } from "@/lib/scheduler/bootcamps";
@@ -177,8 +181,10 @@ export type ScoringForm = {
     ownerName: string | null;
     updatedAt: Date;
     /** By criterion id; a criterion added since it was saved has none. */
-    scores: Record<string, { score: number; comment: string }>;
+    scores: Record<string, { score: number; comment: string; mentions: MentionPick[] }>;
   } | null;
+  /** Whom a criterion's comment can tag: anyone in eVals, and the bootcamp's guest judges; none without a bootcamp. */
+  people: MentionPick[];
 };
 
 async function eligibleAttendee(assessment: ScoringAssessment, employeeId: string) {
@@ -204,7 +210,11 @@ export async function getScoringForm(
 ): Promise<ScoringForm | null> {
   const assessment = await scoringAssessment(assessmentId);
   if (!assessment) return null;
-  const [criteria, attendee] = await Promise.all([askedCriteria(assessmentId), eligibleAttendee(assessment, employeeId)]);
+  const [criteria, attendee, people] = await Promise.all([
+    askedCriteria(assessmentId),
+    eligibleAttendee(assessment, employeeId),
+    bootcampId ? scorerPool(bootcampId) : Promise.resolve([]),
+  ]);
   if (!attendee) return null;
 
   const [submission] = bootcampId
@@ -222,21 +232,34 @@ export async function getScoringForm(
         .leftJoin(users, eq(users.id, s.ownerId))
         .where(and(eq(s.bootcampId, bootcampId), eq(s.assessmentId, assessmentId), eq(s.attendeeEmail, attendee.email)))
     : [];
-  if (!submission) return { assessment, criteria, attendee, submission: null };
+  if (!submission) return { assessment, criteria, attendee, submission: null, people };
 
-  const scores = await db
-    .select({ criterionId: evalsSubmissionScores.criterionId, score: evalsSubmissionScores.score, comment: evalsSubmissionScores.comment })
-    .from(evalsSubmissionScores)
-    .where(eq(evalsSubmissionScores.submissionId, submission.id))
-    .limit(EVALS_ASSESSMENT_LIMITS.criteria * 2);
+  const [scores, tags] = await Promise.all([
+    db
+      .select({ criterionId: evalsSubmissionScores.criterionId, score: evalsSubmissionScores.score, comment: evalsSubmissionScores.comment })
+      .from(evalsSubmissionScores)
+      .where(eq(evalsSubmissionScores.submissionId, submission.id))
+      .limit(EVALS_ASSESSMENT_LIMITS.criteria * 2),
+    db
+      .select({ criterionId: mentions.criterionId, email: mentions.email, fullName: mentions.fullName })
+      .from(mentions)
+      .where(eq(mentions.submissionId, submission.id))
+      .orderBy(mentions.fullName, mentions.email)
+      .limit(EVALS_ASSESSMENT_LIMITS.criteria * SCHEDULE_LIMITS.mentions),
+  ]);
+  const tagsOf = (criterionId: string) =>
+    tags.filter((t) => t.criterionId === criterionId).map((t) => ({ email: t.email, fullName: t.fullName }));
   return {
     assessment,
     criteria,
     attendee,
     submission: {
       ...submission,
-      scores: Object.fromEntries(scores.map((sc) => [sc.criterionId, { score: sc.score, comment: sc.comment }])),
+      scores: Object.fromEntries(
+        scores.map((sc) => [sc.criterionId, { score: sc.score, comment: sc.comment, mentions: tagsOf(sc.criterionId) }]),
+      ),
     },
+    people,
   };
 }
 
@@ -249,6 +272,8 @@ export const submissionSchema = z.object({
         criterionId: z.string().uuid(),
         score: z.number().int().min(1).max(4),
         comment: z.string().trim().max(L.comment).default(""),
+        /** The emails of the people the comment tags. */
+        mentions: z.array(z.string().trim().toLowerCase().max(320)).max(SCHEDULE_LIMITS.mentions).optional(),
       }),
     )
     .min(1)
@@ -266,6 +291,7 @@ export type SubmissionError =
   | "not_found"
   | "no_bootcamp"
   | "feedback_required"
+  | "not_scorer"
   | "conflict";
 
 export const SUBMISSION_STATUS_FOR: Record<SubmissionError, number> = {
@@ -273,6 +299,7 @@ export const SUBMISSION_STATUS_FOR: Record<SubmissionError, number> = {
   not_found: 404,
   no_bootcamp: 409,
   feedback_required: 400,
+  not_scorer: 400,
   conflict: 409,
 };
 
@@ -290,7 +317,7 @@ export async function saveSubmission(
   assessmentId: string,
   employeeId: string,
   input: SubmissionInput,
-): Promise<{ ok: true; submission: SavedSubmission } | { ok: false; error: SubmissionError }> {
+): Promise<{ ok: true; submission: SavedSubmission } | { ok: false; error: SubmissionError; email?: string }> {
   const assessment = await scoringAssessment(assessmentId);
   if (!assessment) return { ok: false, error: "not_found" };
   const bootcamp = await scoringBootcamp(assessment.stage);
@@ -308,6 +335,22 @@ export async function saveSubmission(
   const needed = requiredFeedback(wholeScore(average));
   if (needed === "constructive" && !input.constructiveFeedback) return { ok: false, error: "feedback_required" };
   if (needed === "positive" && !input.positiveFeedback) return { ok: false, error: "feedback_required" };
+
+  // Whom each criterion's comment tags; only people who can score here can be.
+  const tagged = new Map<string, MentionPick>();
+  const wantedTags: { criterionId: string; email: string }[] = [];
+  if (input.scores.some((sc) => sc.mentions?.length)) {
+    const pool = await scorerPool(bootcamp.id);
+    for (const sc of input.scores) {
+      const picked = pickMentions(pool, sc.mentions);
+      if (!picked.ok) return { ok: false, error: "not_scorer", email: picked.email };
+      for (const p of picked.tagged) {
+        tagged.set(p.email, p);
+        wantedTags.push({ criterionId: sc.criterionId, email: p.email });
+      }
+    }
+  }
+  const tagger = await taggerOf(actorId);
 
   return db.transaction(async (tx) => {
     const now = new Date();
@@ -355,6 +398,32 @@ export async function saveSubmission(
         comment: given.get(c.id)!.comment,
       })),
     );
+
+    // A tag still given keeps who made it and when; one no longer given goes.
+    const key = (criterionId: string, email: string) => `${criterionId} ${email}`;
+    const existing = await tx
+      .select({ id: mentions.id, criterionId: mentions.criterionId, email: mentions.email })
+      .from(mentions)
+      .where(eq(mentions.submissionId, id))
+      .limit(L.criteria * SCHEDULE_LIMITS.mentions);
+    const want = new Set(wantedTags.map((w) => key(w.criterionId, w.email)));
+    const have = new Set(existing.map((m) => key(m.criterionId!, m.email)));
+    const gone = existing.filter((m) => !want.has(key(m.criterionId!, m.email))).map((m) => m.id);
+    if (gone.length > 0) await tx.delete(mentions).where(inArray(mentions.id, gone));
+    const added = wantedTags.filter((w) => !have.has(key(w.criterionId, w.email)));
+    if (added.length > 0) {
+      await tx.insert(mentions).values(
+        added.map((w) => ({
+          submissionId: id,
+          criterionId: w.criterionId,
+          bootcampId: bootcamp.id,
+          email: w.email,
+          fullName: tagged.get(w.email)!.fullName,
+          ...tagger,
+          createdAt: now,
+        })),
+      );
+    }
 
     return {
       ok: true as const,

@@ -4,6 +4,9 @@
  * Scores one attendee on each criterion from 1 to 4, with an optional comment
  * on each, then the overall feedback. The average shows as a whole number and
  * decides which feedback is required; it is saved to one decimal place.
+ *
+ * A criterion's comment can tag, with "@", anyone who can score here. The
+ * feedback cannot: it is what the attendee is sent, on Slack.
  */
 
 import { useState } from "react";
@@ -11,6 +14,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { ArrowLeft, Info, Loader2, Send } from "lucide-react";
+import { MentionTextarea } from "@/components/mention-textarea";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { EVALS_ASSESSMENT_LIMITS } from "@/db/schema";
@@ -23,6 +27,7 @@ import {
   wholeScore,
 } from "@/lib/evals/assessment-values";
 import type { ScoringForm } from "@/lib/evals/scoring";
+import { mentionsIn, type MentionPick } from "@/lib/mentions";
 import { riseChild, staggerParent } from "@/lib/motion";
 import type { ActiveBootcamp } from "@/lib/scheduler/bootcamps";
 import { cn } from "@/lib/utils";
@@ -32,11 +37,13 @@ type Form = Omit<ScoringForm, "submission"> & {
   submission: (Omit<NonNullable<ScoringForm["submission"]>, "updatedAt"> & { updatedAt: string }) | null;
 };
 
-type Entry = { score: number | null; comment: string };
+/** `picks` is everyone ever picked in the comment; those its text still names are the ones sent. */
+type Entry = { score: number | null; comment: string; picks: MentionPick[] };
 
 const ERRORS: Record<string, string> = {
   invalid: "Score every criterion from 1 to 4.",
   feedback_required: "This average needs the feedback marked required.",
+  not_scorer: "Someone tagged can no longer score here.",
   no_bootcamp: "No bootcamp is active, so nothing can be scored.",
   not_found: "This assessment or attendee can no longer be scored — go back to the list.",
   conflict: "Someone else saved this assessment while you had it open. Reload to see their version.",
@@ -60,7 +67,7 @@ export function ScoringFormView({
     Object.fromEntries(
       criteria.map((c) => {
         const saved = submission?.scores[c.id];
-        return [c.id, { score: saved?.score ?? null, comment: saved?.comment ?? "" }];
+        return [c.id, { score: saved?.score ?? null, comment: saved?.comment ?? "", picks: saved?.mentions ?? [] }];
       }),
     ),
   );
@@ -95,7 +102,15 @@ export function ScoringFormView({
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          scores: criteria.map((c) => ({ criterionId: c.id, score: entries[c.id]!.score, comment: entries[c.id]!.comment })),
+          scores: criteria.map((c) => {
+            const entry = entries[c.id]!;
+            return {
+              criterionId: c.id,
+              score: entry.score,
+              comment: entry.comment,
+              mentions: mentionsIn(entry.comment, entry.picks).map((p) => p.email),
+            };
+          }),
           positiveFeedback: positive,
           constructiveFeedback: constructive,
           revises: submission?.updatedAt ?? null,
@@ -103,7 +118,11 @@ export function ScoringFormView({
       });
       const body = await res.json().catch(() => null);
       if (!res.ok) {
-        setError(ERRORS[body?.error ?? ""] ?? `Could not save (${res.status}).`);
+        setError(
+          body?.error === "not_scorer" && body.email
+            ? `${body.email} can no longer score here, so cannot be tagged.`
+            : (ERRORS[body?.error ?? ""] ?? `Could not save (${res.status}).`),
+        );
         return;
       }
       router.push(back);
@@ -184,12 +203,14 @@ export function ScoringFormView({
                 </button>
               ))}
             </div>
-            <Textarea
+            <MentionTextarea
               aria-label={`Comment on ${c.name}`}
-              placeholder="Comment (optional)"
+              placeholder={form.people.length > 0 ? "Comment (optional) — type @ to tag someone" : "Comment (optional)"}
               value={entry.comment}
               maxLength={EVALS_ASSESSMENT_LIMITS.comment}
-              onChange={(e) => set(c.id, { comment: e.target.value })}
+              onChange={(comment) => set(c.id, { comment })}
+              people={form.people}
+              onPick={(p) => set(c.id, { picks: [...entry.picks, p] })}
               className="min-h-16"
             />
           </motion.section>

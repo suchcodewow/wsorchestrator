@@ -36,7 +36,8 @@ import {
   scoringAssessment,
   type SubmissionInput,
 } from "@/lib/evals/scoring";
-import { ASSESSMENT_ATTENDEE_LIST, ASSESSMENT_LIST } from "@/lib/list-specs";
+import { ASSESSMENT_ATTENDEE_LIST, ASSESSMENT_LIST, MY_MENTION_LIST } from "@/lib/list-specs";
+import { listMyMentions } from "@/lib/mention-store";
 import { PERSONAS } from "../support/access";
 import { TEST_EMAIL_DOMAIN, TEST_PREFIX } from "../support/db";
 import { testScope, type TestUser } from "../support/seed";
@@ -275,5 +276,62 @@ describe("submissions", () => {
     assert.deepEqual(Object.keys(after.submission!.scores).sort(), now.criteria.map((c) => c.id).sort());
     const again = await listAttendees(a, bootcampId, { ...ASSESSMENT_ATTENDEE_LIST, q: sales.email, page: 1 });
     assert.equal(again.rows[0]?.needsRescoring, false);
+  });
+});
+
+describe("tags in a criterion's comment", () => {
+  const tagsIn = async (viewer: TestUser, access = viewer.access, assessmentId?: string) =>
+    (await listMyMentions({ email: viewer.email, access }, { ...MY_MENTION_LIST, q: TEST_PREFIX, page: 1 })).rows.filter(
+      (r) => r.kind === "score" && r.assessmentId === assessmentId,
+    );
+
+  test("reach the inbox of whoever is tagged, and a revision keeps the ones still given", async () => {
+    const a = await made();
+    const [discovery, demo] = a.criteria;
+    const tagged = (people: TestUser[]): SubmissionInput["scores"] => [
+      { criterionId: discovery!.id, score: 3, comment: "Ask @them", mentions: people.map((p) => p.email) },
+      { criterionId: demo!.id, score: 3, comment: "" },
+    ];
+
+    const first = await saveSubmission(judge.id, a.id, engineer.id, submission({ scores: tagged([admin, judge]) }));
+    assert.ok(first.ok);
+    const form = (await getScoringForm(a.id, engineer.id, bootcampId))!;
+    assert.deepEqual(form.submission!.scores[discovery!.id]!.mentions.map((m) => m.email).sort(), [admin.email, judge.email].sort());
+    assert.deepEqual(form.submission!.scores[demo!.id]!.mentions, []);
+    assert.ok(form.people.some((p) => p.email === judge.email), "a guest judge of the bootcamp can be tagged");
+
+    const [mine] = await tagsIn(admin, admin.access, a.id);
+    assert.equal(mine?.text, "Ask @them");
+    assert.equal(mine?.criterionName, discovery!.name);
+    assert.equal(mine?.employeeId, engineer.id);
+    // A guest judge sees theirs while they judge the bootcamp; someone tagged who has since left eVals does not.
+    assert.equal((await tagsIn(judge, judge.access, a.id)).length, 1);
+    assert.deepEqual(await tagsIn(admin, PERSONAS.nobody, a.id), []);
+
+    const revised = await saveSubmission(
+      admin.id,
+      a.id,
+      engineer.id,
+      submission({ scores: tagged([admin]), revises: first.submission.updatedAt.toISOString() }),
+    );
+    assert.ok(revised.ok);
+    const [kept] = await tagsIn(admin, admin.access, a.id);
+    assert.equal(kept?.mentionId, mine?.mentionId, "the tag still given is the same one");
+    assert.equal(kept?.taggedByEmail, judge.email.toLowerCase(), "and is still from whoever made it");
+    assert.deepEqual(await tagsIn(judge, judge.access, a.id), []);
+  });
+
+  test("cannot name someone who can neither use eVals nor judge the bootcamp", async () => {
+    const a = await made();
+    const stranger = await scope.createUser("stranger", PERSONAS.nobody);
+    const saved = await saveSubmission(
+      judge.id,
+      a.id,
+      sales.id,
+      submission({
+        scores: a.criteria.map((c) => ({ criterionId: c.id, score: 3, comment: "", mentions: [stranger.email] })),
+      }),
+    );
+    assert.deepEqual(saved, { ok: false, error: "not_scorer", email: stranger.email.toLowerCase() });
   });
 });

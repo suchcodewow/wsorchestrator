@@ -729,13 +729,18 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           fields: [
             { name: "name", type: "string", required: true, note: `up to ${CHECKLIST_LIMITS.name} characters` },
             { name: "ownerEmail", type: "string | null", note: "a Training administrator or guest judge of the bootcamp; omit for nobody" },
+            {
+              name: "mentions",
+              type: "string[]",
+              note: `the emails of the people name tags with "@", up to ${SCHEDULE_LIMITS.mentions}; each an administrator or guest judge of the bootcamp`,
+            },
           ],
         },
         returns: `201 ${CHECKLIST_ITEM_ROW}`,
         errors: [
           { status: 400, error: "invalid", when: "name is empty or too long" },
           { status: 400, error: "no_day", when: "the class does not run that many days at this bootcamp" },
-          { status: 400, error: "not_instructor", when: "ownerEmail is not an administrator or guest judge of the bootcamp" },
+          { status: 400, error: "not_instructor", when: "ownerEmail or a mention is not an administrator or guest judge of the bootcamp; email names it" },
           { status: 404, error: "not_found", when: "no such bootcamp, or track or day is not one" },
           { status: 409, error: "full", when: `the day already has ${CHECKLIST_LIMITS.itemsPerDay} items` },
         ],
@@ -952,12 +957,12 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "scorer",
         token: true,
         notes:
-          "submission is null until someone scores them. Its scores are keyed by criterion id; a criterion added since has none. ownerName is whoever saved it last. Send its updatedAt as revises when saving.",
+          "submission is null until someone scores them. Its scores are keyed by criterion id; a criterion added since has none. ownerName is whoever saved it last. Send its updatedAt as revises when saving. people is whom a comment can tag: anyone who can use eVals, and the active bootcamp's guest judges; it is empty with no bootcamp.",
         params: [
           { name: "assessmentId", type: "string", required: true, note: "UUID" },
           { name: "employeeId", type: "string", required: true, note: "the employee's HiBob id" },
         ],
-        returns: `{ assessment: { id, name, stage, audience }, criteria: { id, name, description }[], attendee: { id, email, fullName, title, track }, submission: { id, averageScore, positiveFeedback, constructiveFeedback, ownerId, ownerName, updatedAt, scores: Record<string, { score, comment }> } | null, bootcamp: { id, startDate, btcDays, intDays } | null }`,
+        returns: `{ assessment: { id, name, stage, audience }, criteria: { id, name, description }[], attendee: { id, email, fullName, title, track }, submission: { id, averageScore, positiveFeedback, constructiveFeedback, ownerId, ownerName, updatedAt, scores: Record<string, { score, comment, mentions: { email, fullName }[] }> } | null, people: { email, fullName }[], bootcamp: { id, startDate, btcDays, intDays } | null }`,
         errors: [{ status: 404, error: "not_found", when: "no such active assessment, or the attendee is not one it applies to" }],
       },
       {
@@ -967,7 +972,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "scorer",
         token: true,
         notes:
-          "Every criterion still asked needs a whole score from 1 to 4; comments are optional. averageScore is their mean to one decimal place. Rounded to a whole number, an average of 1 or 2 requires constructiveFeedback and an average of 4 requires positiveFeedback. A revision replaces the scores, dropping any for criteria since retired.",
+          "Every criterion still asked needs a whole score from 1 to 4; comments are optional. averageScore is their mean to one decimal place. Rounded to a whole number, an average of 1 or 2 requires constructiveFeedback and an average of 4 requires positiveFeedback. A revision replaces the scores, dropping any for criteria since retired. A comment's mentions tag people with \"@\"; a revision keeps a tag still listed as it was made and drops one no longer listed. The feedback cannot tag anyone.",
         params: [
           { name: "assessmentId", type: "string", required: true, note: "UUID" },
           { name: "employeeId", type: "string", required: true, note: "the employee's HiBob id" },
@@ -977,9 +982,9 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           fields: [
             {
               name: "scores",
-              type: "{ criterionId: string, score: 1 | 2 | 3 | 4, comment?: string }[]",
+              type: "{ criterionId: string, score: 1 | 2 | 3 | 4, comment?: string, mentions?: string[] }[]",
               required: true,
-              note: `one per criterion still asked; a comment up to ${EVALS_ASSESSMENT_LIMITS.comment} characters`,
+              note: `one per criterion still asked; a comment up to ${EVALS_ASSESSMENT_LIMITS.comment} characters, tagging up to ${SCHEDULE_LIMITS.mentions} people by email`,
             },
             { name: "positiveFeedback", type: "string", note: `up to ${EVALS_ASSESSMENT_LIMITS.feedback} characters` },
             { name: "constructiveFeedback", type: "string", note: `up to ${EVALS_ASSESSMENT_LIMITS.feedback} characters` },
@@ -995,6 +1000,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         errors: [
           { status: 400, error: "invalid", when: "the body is not that shape, or the scores are not exactly the criteria still asked" },
           { status: 400, error: "feedback_required", when: "the average requires feedback that is empty" },
+          { status: 400, error: "not_scorer", when: "a mention can neither use eVals nor judge the active bootcamp; email names it" },
           { status: 404, error: "not_found", when: "no such active assessment, or the attendee is not one it applies to" },
           { status: 409, error: "no_bootcamp", when: "no bootcamp is active, or for intermediate, the active one holds no intermediate class" },
           { status: 409, error: "conflict", when: "someone else saved it since revises, or saved the first one first" },
