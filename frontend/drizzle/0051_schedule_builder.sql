@@ -3,6 +3,11 @@
 -- they use and comments on them. Bootcamps gain the facility they are held at.
 -- The session types start as the six the Google Sheet used.
 --
+-- Each session has its own start, in minutes after midnight. An earlier
+-- version of this file packed a day's sessions by a `position` instead; a
+-- database made by that one gets each session's start from it, so nothing
+-- moves, and loses the column.
+--
 -- Safe to run on any database:
 --   * fresh/empty      — skipped entirely; db:push creates the schema outright
 --   * before this      — tables created, the types seeded
@@ -63,7 +68,7 @@ begin
     bootcamp_id uuid not null references bootcamps (id) on delete cascade,
     track text not null,
     day integer not null,
-    position integer not null,
+    start_minute integer not null,
     minutes integer not null,
     kind text not null,
     type_id uuid references session_types (id) on delete set null,
@@ -78,9 +83,31 @@ begin
     constraint schedule_sessions_track_check check (track in ('btc', 'int', 'btc_se', 'int_se')),
     constraint schedule_sessions_kind_check check (kind in ('main', 'breakout', 'unstructured')),
     constraint schedule_sessions_day_check check (day between 1 and 30),
-    constraint schedule_sessions_minutes_check check (minutes between 15 and 600 and minutes % 15 = 0)
+    constraint schedule_sessions_minutes_check check (minutes between 15 and 600 and minutes % 15 = 0),
+    constraint schedule_sessions_start_check check (start_minute >= 0 and start_minute % 15 = 0 and start_minute + minutes <= 1440)
   );
-  create index if not exists schedule_sessions_day_idx on schedule_sessions (bootcamp_id, track, day, position);
+
+  if exists (select 1 from information_schema.columns where table_name = 'schedule_sessions' and column_name = 'position') then
+    alter table schedule_sessions add column if not exists start_minute integer;
+    -- 480 is 8:00 AM, where every packed day began.
+    update schedule_sessions s set start_minute = v.start_minute
+    from (
+      select id, 480 + coalesce(sum(minutes) over (
+        partition by bootcamp_id, track, day order by position, created_at, id
+        rows between unbounded preceding and 1 preceding
+      ), 0)::int as start_minute
+      from schedule_sessions
+    ) v
+    where s.id = v.id and s.start_minute is null;
+    alter table schedule_sessions alter column start_minute set not null;
+    drop index if exists schedule_sessions_day_idx;
+    alter table schedule_sessions drop column position;
+    if not exists (select 1 from pg_constraint where conname = 'schedule_sessions_start_check') then
+      alter table schedule_sessions add constraint schedule_sessions_start_check
+        check (start_minute >= 0 and start_minute % 15 = 0 and start_minute + minutes <= 1440);
+    end if;
+  end if;
+  create index if not exists schedule_sessions_day_idx on schedule_sessions (bootcamp_id, track, day, start_minute);
 
   create table if not exists schedule_session_staff (
     id uuid primary key default gen_random_uuid(),

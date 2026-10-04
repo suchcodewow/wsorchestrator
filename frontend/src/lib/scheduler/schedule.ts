@@ -1,12 +1,13 @@
 /**
  * One bootcamp's schedule: four tracks of days, each day a list of sessions
- * in order. A session has no start time; see `timeline.ts`. Read a track-day
+ * in start order, none overlapping; see `timeline.ts`. Read a track-day
  * at a time, so no query fetches more than `SCHEDULE_LIMITS.sessionsPerDay`.
  *
  * Who can run a session is the bootcamp's instructors: every Training
  * administrator and every guest judge of that bootcamp. Adding someone, or a
  * room, that is busy elsewhere at the time is refused as a clash. Moving or
- * resizing sessions is not: it saves, and the schedule shows what now clashes
+ * resizing sessions is not, nor is pushing the ones after a session later to
+ * make room for it: it saves, and the schedule shows what now clashes
  * in red, since a day is often rearranged through a clash on the way to a
  * plan that has none.
  */
@@ -47,7 +48,7 @@ import {
   type ImportPerson,
   type ImportType,
 } from "@/lib/scheduler/sheet-import";
-import { TRACK_LABELS, busyDuring, place, startsOf, trackDays, type Clash } from "@/lib/scheduler/timeline";
+import { TRACK_LABELS, busyDuring, dropAt, fitsDay, nextStart, place, settle, trackDays, type Clash } from "@/lib/scheduler/timeline";
 import { readSpreadsheet } from "@/lib/spreadsheet-file";
 
 export type StaffRow = {
@@ -62,7 +63,8 @@ export type SessionRow = {
   id: string;
   track: ScheduleTrack;
   day: number;
-  position: number;
+  /** Minutes after midnight. */
+  start: number;
   minutes: number;
   kind: SessionKind;
   typeId: string | null;
@@ -118,7 +120,7 @@ const SESSION_COLUMNS = {
   id: scheduleSessions.id,
   track: scheduleSessions.track,
   day: scheduleSessions.day,
-  position: scheduleSessions.position,
+  start: scheduleSessions.start,
   minutes: scheduleSessions.minutes,
   kind: scheduleSessions.kind,
   typeId: scheduleSessions.typeId,
@@ -135,17 +137,17 @@ const SESSION_COLUMNS = {
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 type Reader = Pick<typeof db, "select">;
 
-/** One track-day's sessions in order. */
+/** One track-day's sessions in start order. */
 async function loadDay(reader: Reader, bootcampId: string, track: ScheduleTrack, day: number): Promise<SessionRow[]> {
   return reader
     .select(SESSION_COLUMNS)
     .from(scheduleSessions)
     .where(and(eq(scheduleSessions.bootcampId, bootcampId), eq(scheduleSessions.track, track), eq(scheduleSessions.day, day)))
-    .orderBy(scheduleSessions.position, scheduleSessions.createdAt, scheduleSessions.id)
+    .orderBy(scheduleSessions.start, scheduleSessions.createdAt, scheduleSessions.id)
     .limit(SCHEDULE_LIMITS.sessionsPerDay);
 }
 
-/** Day `day` of every track the bootcamp holds then, each in order, for checking clashes. */
+/** Day `day` of every track the bootcamp holds then, for checking clashes. */
 async function loadDayAcrossTracks(reader: Reader, bootcamp: ScheduleBootcamp, day: number): Promise<SessionRow[][]> {
   const tracks = SCHEDULE_TRACKS.filter((t) => (trackDays(t, bootcamp) ?? 0) >= day);
   return Promise.all(tracks.map((t) => loadDay(reader, bootcamp.id, t, day)));
@@ -277,12 +279,12 @@ const sessionFields = {
 export const sessionInputSchema = z.object({
   track: z.enum(SCHEDULE_TRACKS),
   day: z.number().int().min(1).max(BOOTCAMP_LIMITS.maxDays),
-  /** Where in the day, from 0; left out, it goes last. */
-  position: z.number().int().min(0).max(SCHEDULE_LIMITS.sessionsPerDay).optional(),
+  /** Minutes after midnight; left out, straight after the day's last session. */
+  start: z.number().int().min(SCHEDULE_LIMITS.dayStart).max(SCHEDULE_LIMITS.latestEnd - SCHEDULE_LIMITS.slot).optional(),
   ...sessionFields,
 });
 
-/** An edit changes only the fields it names. Moving it to another time is the layout's job. */
+/** An edit changes only the fields it names. Moving it to another time or day is the layout's job. */
 export const sessionPatchSchema = z.object({
   kind: sessionLookSchema.kind,
   name: sessionLookSchema.name,
@@ -300,6 +302,7 @@ export type SessionError =
   | "not_found"
   | "no_day"
   | "day_full"
+  | "past_midnight"
   | "no_leader"
   | "not_instructor"
   | "unknown_room"
@@ -312,6 +315,7 @@ export const SESSION_STATUS_FOR: Record<SessionError, number> = {
   not_found: 404,
   no_day: 400,
   day_full: 409,
+  past_midnight: 409,
   no_leader: 400,
   not_instructor: 400,
   unknown_room: 400,
@@ -404,7 +408,11 @@ async function writeStaff(tx: Tx, sessionId: string, staff: StaffRow[]): Promise
 const label = (bootcamp: ScheduleBootcamp, s: { name: string; track: ScheduleTrack; day: number }) =>
   `${s.name} (bootcamp starting ${bootcamp.startDate}, ${s.track} day ${s.day})`;
 
-/** Adds a session to a track-day, at `position` or last; the sessions after it move along. */
+/**
+ * Adds a session to a track-day at `start`, or straight after its last
+ * session. Started inside another, it goes before or after that one as
+ * `dropAt` does; any it then runs into are pushed later.
+ */
 export async function createSession(
   actorId: string,
   bootcampId: string,
@@ -424,32 +432,25 @@ export async function createSession(
 
   const day = await loadDay(db, bootcampId, input.track, input.day);
   if (day.length >= SCHEDULE_LIMITS.sessionsPerDay) return { ok: false, error: "day_full" };
-  const position = Math.min(input.position ?? day.length, day.length);
-  const start = SCHEDULE_LIMITS.dayStart + day.slice(0, position).reduce((sum, s) => sum + s.minutes, 0);
+  const NEW = "new";
+  const timed = day.map(({ id, start, minutes }) => ({ id, start, minutes }));
+  const laid = dropAt(timed, { id: NEW, start: 0, minutes: input.minutes }, input.start ?? nextStart(day));
+  if (!fitsDay(laid)) return { ok: false, error: "past_midnight" };
+  const start = laid.find((s) => s.id === NEW)!.start;
   const clash = await newClashes(bootcamp, { day: input.day, start, minutes: input.minutes }, next, null);
   if (clash) return clash;
 
   let id: string;
   try {
     id = await db.transaction(async (tx) => {
-      await tx
-        .update(scheduleSessions)
-        .set({ position: sql`${scheduleSessions.position} + 1` })
-        .where(
-          and(
-            eq(scheduleSessions.bootcampId, bootcampId),
-            eq(scheduleSessions.track, input.track),
-            eq(scheduleSessions.day, input.day),
-            sql`${scheduleSessions.position} >= ${position}`,
-          ),
-        );
+      await writeStarts(tx, bootcampId, laid.filter((s) => s.id !== NEW), day);
       const [made] = await tx
         .insert(scheduleSessions)
         .values({
           bootcampId,
           track: input.track,
           day: input.day,
-          position,
+          start,
           minutes: input.minutes,
           kind: next.kind,
           typeId: input.typeId,
@@ -471,6 +472,20 @@ export async function createSession(
   }
   noteAudit({ target: id, targetLabel: label(bootcamp, input) });
   return { ok: true, session: (await getSession(bootcampId, id))! };
+}
+
+/** Saves the start of each session in `laid` that differs from `before`. */
+async function writeStarts(tx: Tx, bootcampId: string, laid: readonly { id: string; start: number }[], before: readonly SessionRow[]): Promise<void> {
+  const was = new Map(before.map((s) => [s.id, s.start]));
+  const moved = laid.filter((s) => was.get(s.id) !== s.start);
+  if (moved.length === 0) return;
+  const rows = moved.map((s) => sql`(${s.id}::uuid, ${s.start}::int)`);
+  await tx.execute(sql`
+    update ${scheduleSessions} s
+    set start_minute = v.start_minute, updated_at = now()
+    from (values ${sql.join(rows, sql`, `)}) as v(id, start_minute)
+    where s.id = v.id and s.bootcamp_id = ${bootcampId}
+  `);
 }
 
 export async function updateSession(
@@ -496,21 +511,20 @@ export async function updateSession(
   const oldRooms = new Set(roomIdsOf(before));
   if (!(await roomsKnown(bootcamp, roomIdsOf(next).filter((r) => !oldRooms.has(r))))) return { ok: false, error: "unknown_room" };
 
+  // Made longer, it pushes whatever it now runs into later.
+  const minutes = patch.minutes ?? before.minutes;
   const day = await loadDay(db, bootcampId, before.track, before.day);
-  const start = startsOf(day)[day.findIndex((s) => s.id === sessionId)] ?? SCHEDULE_LIMITS.dayStart;
-  const clash = await newClashes(
-    bootcamp,
-    { day: before.day, start, minutes: patch.minutes ?? before.minutes, excludeId: sessionId },
-    next,
-    before,
-  );
+  const laid = settle(day.map((s) => (s.id === sessionId ? { ...s, minutes } : s)), sessionId);
+  if (!fitsDay(laid)) return { ok: false, error: "past_midnight" };
+  const clash = await newClashes(bootcamp, { day: before.day, start: before.start, minutes, excludeId: sessionId }, next, before);
   if (clash) return clash;
 
   // Kind, room and staff come from `next`, which settled them together.
-  const { name, emoji, color, minutes, description, typeId } = patch;
-  const fields = { name, emoji, color, minutes, description, typeId };
+  const { name, emoji, color, description, typeId } = patch;
+  const fields = { name, emoji, color, minutes: patch.minutes, description, typeId };
   try {
     await db.transaction(async (tx) => {
+      await writeStarts(tx, bootcampId, laid, day);
       await tx
         .update(scheduleSessions)
         .set({ ...fields, kind: next.kind, roomId: next.roomId, updatedAt: new Date() })
@@ -525,29 +539,14 @@ export async function updateSession(
   return { ok: true, session: (await getSession(bootcampId, sessionId))! };
 }
 
-/** Removes a session; the rest of its day moves up to fill the time. */
+/** Removes a session; its time is unscheduled, and nothing else moves. */
 export async function deleteSession(bootcampId: string, sessionId: string): Promise<{ ok: true } | { ok: false; error: "not_found" }> {
   const bootcamp = await scheduleBootcamp(bootcampId);
   if (!bootcamp) return { ok: false, error: "not_found" };
-  const deleted = await db.transaction(async (tx) => {
-    const [row] = await tx
-      .delete(scheduleSessions)
-      .where(and(eq(scheduleSessions.id, sessionId), eq(scheduleSessions.bootcampId, bootcampId)))
-      .returning({ name: scheduleSessions.name, track: scheduleSessions.track, day: scheduleSessions.day, position: scheduleSessions.position });
-    if (!row) return null;
-    await tx
-      .update(scheduleSessions)
-      .set({ position: sql`${scheduleSessions.position} - 1` })
-      .where(
-        and(
-          eq(scheduleSessions.bootcampId, bootcampId),
-          eq(scheduleSessions.track, row.track),
-          eq(scheduleSessions.day, row.day),
-          sql`${scheduleSessions.position} > ${row.position}`,
-        ),
-      );
-    return row;
-  });
+  const [deleted] = await db
+    .delete(scheduleSessions)
+    .where(and(eq(scheduleSessions.id, sessionId), eq(scheduleSessions.bootcampId, bootcampId)))
+    .returning({ name: scheduleSessions.name, track: scheduleSessions.track, day: scheduleSessions.day });
   if (!deleted) return { ok: false, error: "not_found" };
   noteAudit({ target: sessionId, targetLabel: label(bootcamp, deleted) });
   return { ok: true };
@@ -556,14 +555,14 @@ export async function deleteSession(bootcampId: string, sessionId: string): Prom
 // ─── Rearranging ────────────────────────────────────────────────────────────
 
 export const layoutSchema = z.object({
-  /** Each track-day that changed, with every session it now holds, in order. */
+  /** Each track-day that changed, with every session it now holds and when each starts. */
   days: z
     .array(
       z.object({
         track: z.enum(SCHEDULE_TRACKS),
         day: z.number().int().min(1).max(BOOTCAMP_LIMITS.maxDays),
         sessions: z
-          .array(z.object({ id: z.string().uuid(), minutes: sessionLookSchema.minutes }))
+          .array(z.object({ id: z.string().uuid(), start: z.number().int().min(0).max(SCHEDULE_LIMITS.latestEnd), minutes: sessionLookSchema.minutes }))
           .max(SCHEDULE_LIMITS.sessionsPerDay),
       }),
     )
@@ -571,16 +570,18 @@ export const layoutSchema = z.object({
     .max(SCHEDULE_TRACKS.length * BOOTCAMP_LIMITS.maxDays),
 });
 
-export type LayoutError = "invalid" | "not_found" | "no_day" | "stale";
+export type LayoutError = "invalid" | "not_found" | "no_day" | "overlap" | "stale";
 
-export const LAYOUT_STATUS_FOR: Record<LayoutError, number> = { invalid: 400, not_found: 404, no_day: 400, stale: 409 };
+export const LAYOUT_STATUS_FOR: Record<LayoutError, number> = { invalid: 400, not_found: 404, no_day: 400, overlap: 400, stale: 409 };
 
 /**
- * Saves the order and length of every session on the track-days named. A
+ * Saves the start and length of every session on the track-days named. A
  * session moved between days is listed in its new day, and the day it left
- * must be listed too. Refused as `stale` unless the sessions named are
- * exactly the ones those days hold now, so two people rearranging at once
- * cannot lose or duplicate one.
+ * must be listed too. Refused as `overlap` if a day's sessions would run
+ * into one another, start off the quarter hour or before `dayStart`, or end
+ * after midnight, and as `stale` unless the sessions named are exactly the
+ * ones those days hold now, so two people rearranging at once cannot lose or
+ * duplicate one.
  */
 export async function saveLayout(
   bootcampId: string,
@@ -595,6 +596,7 @@ export async function saveLayout(
   if (input.days.some((d) => d.day > (trackDays(d.track, bootcamp) ?? 0))) return { ok: false, error: "no_day" };
   const ids = input.days.flatMap((d) => d.sessions.map((s) => s.id));
   if (new Set(ids).size !== ids.length) return { ok: false, error: "invalid" };
+  if (input.days.some((d) => !fitsDay(d.sessions))) return { ok: false, error: "overlap" };
 
   try {
     await db.transaction(async (tx) => {
@@ -613,12 +615,12 @@ export async function saveLayout(
       if (held.size !== ids.length || ids.some((id) => !held.has(id))) throw new Stale();
       if (ids.length === 0) return;
       const rows = input.days.flatMap((d) =>
-        d.sessions.map((s, position) => sql`(${s.id}::uuid, ${d.track}, ${d.day}::int, ${position}::int, ${s.minutes}::int)`),
+        d.sessions.map((s) => sql`(${s.id}::uuid, ${d.track}, ${d.day}::int, ${s.start}::int, ${s.minutes}::int)`),
       );
       await tx.execute(sql`
         update ${scheduleSessions} s
-        set track = v.track, day = v.day, position = v.position, minutes = v.minutes, updated_at = now()
-        from (values ${sql.join(rows, sql`, `)}) as v(id, track, day, position, minutes)
+        set track = v.track, day = v.day, start_minute = v.start_minute, minutes = v.minutes, updated_at = now()
+        from (values ${sql.join(rows, sql`, `)}) as v(id, track, day, start_minute, minutes)
         where s.id = v.id and s.bootcamp_id = ${bootcampId}
       `);
     });
@@ -637,7 +639,7 @@ class Stale extends Error {}
 type NewSession = {
   track: ScheduleTrack;
   day: number;
-  position: number;
+  start: number;
   minutes: number;
   kind: SessionKind;
   typeId: string | null;
@@ -732,12 +734,12 @@ export async function copySchedule(
     const to = trackDays(track, target) ?? 0;
     const days = await Promise.all(Array.from({ length: Math.min(from, to) }, (_, d) => loadDay(db, sourceId, track, d + 1)));
     for (const day of days) {
-      for (const [position, s] of day.entries()) {
+      for (const s of day) {
         if (s.roomId || s.staff.some((p) => p.roomId)) hadRooms = true;
         sessions.push({
           track: s.track,
           day: s.day,
-          position,
+          start: s.start,
           minutes: s.minutes,
           kind: s.kind,
           typeId: s.typeId,
@@ -854,7 +856,7 @@ export async function importSchedule(
     return {
       track: s.track,
       day: s.day,
-      position: s.position,
+      start: s.start,
       minutes: s.minutes,
       kind,
       typeId,

@@ -2,21 +2,20 @@
 
 /**
  * The schedule drawn to scale: a column per track-day, each session as tall
- * as it is long, packed from 8 AM. Past 5 PM is tinted red. A manager drags
- * a card to reorder it or move it to another column, and drags its bottom
- * edge to change its length a quarter hour at a time.
+ * as it is long and placed at its start, from 8 AM. Time nothing is scheduled
+ * in shows as Unscheduled; past 5 PM is tinted red. A manager drags a card to
+ * any time in any column, drags its bottom edge to change its length a
+ * quarter hour at a time, and clicks unscheduled time to add a session there.
  */
 
-import { useRef, type CSSProperties, type KeyboardEvent, type PointerEvent } from "react";
-import { useDroppable } from "@dnd-kit/core";
-import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
+import { useRef, type KeyboardEvent, type PointerEvent } from "react";
+import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { AlertTriangle, MessageSquare, Plus, UserX } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SCHEDULE_LIMITS, type ScheduleTrack } from "@/db/schema";
 import type { SessionRow } from "@/lib/scheduler/schedule";
 import { SESSION_STYLES } from "@/lib/scheduler/session-style";
-import { type Clash, dayTotal, formatClock, formatLength, snapMinutes, startsOf } from "@/lib/scheduler/timeline";
+import { type Clash, dayTotal, formatClock, formatLength, gapsOf, snapMinutes } from "@/lib/scheduler/timeline";
 import { cn } from "@/lib/utils";
 
 export type Density = "detailed" | "condensed";
@@ -45,7 +44,8 @@ export type BoardProps = {
   /** The session being resized, to label its new length as it changes. */
   resizingId: string | null;
   onOpen: (session: SessionRow) => void;
-  onAdd: (column: BoardColumn) => void;
+  /** Adds a session to a column, at `start` or after its last one. */
+  onAdd: (column: BoardColumn, start?: number) => void;
   onResize: (id: string, minutes: number) => void;
   onResizeEnd: (id: string) => void;
 };
@@ -90,6 +90,9 @@ export function Board(props: BoardProps) {
   );
 }
 
+/** The attribute naming the column a drop lands in, for measuring where in it. */
+export const COLUMN_ATTR = "data-board-column";
+
 function Column({
   column,
   height,
@@ -99,7 +102,7 @@ function Column({
 }: BoardProps & { column: BoardColumn; height: number; hours: number[]; scale: number }) {
   const { setNodeRef, isOver } = useDroppable({ id: `col:${column.key}` });
   const total = dayTotal(column.sessions);
-  const starts = startsOf(column.sessions);
+  const gaps = gapsOf(column.sessions);
 
   return (
     <div className="min-w-48 flex-1 border-r last:border-r-0">
@@ -115,10 +118,15 @@ function Column({
           >
             {column.sessions.length === 0
               ? "Nothing yet"
-              : // What is left or over leads, so a narrow column truncates the end time instead.
-                `${
-                  total.over > 0 ? `${formatLength(total.over)} over` : total.left > 0 ? `${formatLength(total.left)} left` : "Full day"
-                } · ends ${formatClock(total.end)}`}
+              : // What is unscheduled or over leads, so a narrow column truncates the end time instead.
+                [
+                  total.over > 0 && `${formatLength(total.over)} over`,
+                  total.left > 0 && `${formatLength(total.left)} unscheduled`,
+                  total.over === 0 && total.left === 0 && "Full day",
+                  `ends ${formatClock(total.end)}`,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
           </div>
         </div>
         {props.canManage && (
@@ -134,7 +142,12 @@ function Column({
           </Button>
         )}
       </div>
-      <div ref={setNodeRef} className={cn("relative transition-colors", isOver && "bg-brand/4")} style={{ height }}>
+      <div
+        ref={setNodeRef}
+        {...{ [COLUMN_ATTR]: column.key }}
+        className={cn("relative transition-colors", isOver && "bg-brand/4")}
+        style={{ height }}
+      >
         {hours.map((m) => (
           <div
             key={m}
@@ -151,15 +164,53 @@ function Column({
           className="absolute inset-x-0 bottom-0 bg-red-500/5 dark:bg-red-500/8"
           style={{ top: (dayEnd - dayStart) * scale }}
         />
-        <SortableContext id={column.key} items={column.sessions.map((s) => s.id)} strategy={verticalListSortingStrategy}>
-          <div className="relative">
-            {column.sessions.map((s, i) => (
-              <SortableSession key={s.id} session={s} start={starts[i]!} scale={scale} {...props} />
-            ))}
-          </div>
-        </SortableContext>
+        {gaps.map((g) => (
+          <Gap
+            key={g.start}
+            start={g.start}
+            minutes={g.minutes}
+            scale={scale}
+            onAdd={
+              props.canManage && column.sessions.length < SCHEDULE_LIMITS.sessionsPerDay
+                ? () => props.onAdd(column, g.start)
+                : undefined
+            }
+          />
+        ))}
+        {column.sessions.map((s) => (
+          <DraggableSession key={s.id} session={s} start={s.start} scale={scale} {...props} />
+        ))}
       </div>
     </div>
+  );
+}
+
+/** Time nothing is scheduled in; a manager clicks it to add a session there. */
+function Gap({ start, minutes, scale, onAdd }: { start: number; minutes: number; scale: number; onAdd?: () => void }) {
+  const label = `Unscheduled · ${formatLength(minutes)}`;
+  const className = cn(
+    "absolute inset-x-1.5 flex items-center justify-center overflow-hidden rounded-md border border-dashed border-border text-[11px] text-muted-foreground tabular-nums",
+    onAdd && "transition-colors hover:border-brand-border hover:bg-brand/5 hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none",
+  );
+  const style = { top: (start - dayStart) * scale, height: minutes * scale - 2 };
+  if (!onAdd) {
+    return (
+      <div className={className} style={style}>
+        <span className="truncate px-1">{label}</span>
+      </div>
+    );
+  }
+  return (
+    <button
+      type="button"
+      className={className}
+      style={style}
+      title={`${formatClock(start)}–${formatClock(start + minutes)}: click to add a session`}
+      aria-label={`${label} from ${formatClock(start)}: add a session`}
+      onClick={onAdd}
+    >
+      <span className="truncate px-1">{label}</span>
+    </button>
   );
 }
 
@@ -169,19 +220,16 @@ type CardProps = Pick<BoardProps, "density" | "clashes" | "roomNames" | "canMana
   scale: number;
 };
 
-function SortableSession(props: CardProps) {
+function DraggableSession(props: CardProps) {
   const { session, scale, canManage } = props;
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: session.id,
-    disabled: !canManage,
-  });
-  const style: CSSProperties = {
-    transform: CSS.Translate.toString(transform),
-    transition,
-    height: session.minutes * scale,
-  };
+  // The card stays put while a copy follows the pointer; where it would land is shown by moving the card itself.
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: session.id, disabled: !canManage });
   return (
-    <div ref={setNodeRef} style={style} className={cn("px-1.5 pb-0.5", isDragging && "opacity-30")}>
+    <div
+      ref={setNodeRef}
+      className={cn("absolute inset-x-0 z-10 px-1.5 pb-0.5", isDragging && "opacity-30")}
+      style={{ top: (session.start - dayStart) * scale, height: session.minutes * scale }}
+    >
       <SessionFace
         {...props}
         handle={{

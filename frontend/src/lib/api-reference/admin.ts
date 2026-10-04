@@ -38,7 +38,7 @@ const KIND_TYPE = `"main" | "breakout" | "unstructured"`;
 const COLOR_TYPE = `"slate" | "red" | "orange" | "amber" | "green" | "teal" | "blue" | "violet" | "pink"`;
 const MINUTES_NOTE = `a multiple of ${SCHEDULE_LIMITS.slot} from ${SCHEDULE_LIMITS.slot} to ${SCHEDULE_LIMITS.maxMinutes}`;
 
-const SESSION_SHAPE = `{ id, track: ${TRACK_TYPE}, day: number, position: number, minutes: number, kind, typeId: string | null, name, description, emoji, color, roomId: string | null, staff: { email, fullName, leader: boolean, roomId: string | null }[], comments: number, updatedAt }`;
+const SESSION_SHAPE = `{ id, track: ${TRACK_TYPE}, day: number, start: number, minutes: number, kind, typeId: string | null, name, description, emoji, color, roomId: string | null, staff: { email, fullName, leader: boolean, roomId: string | null }[], comments: number, updatedAt }`;
 
 const CLASH_SHAPE = `{ sessionId, name, track, day, start: number, end: number, what: { kind: "person", email, fullName } | { kind: "room", roomId } }`;
 
@@ -478,7 +478,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         summary: "Reads one bootcamp's whole schedule: every day of its four tracks, its rooms, and who can run a session.",
         access: "trainingViewer",
         token: true,
-        notes: `days.btc[0] is day 1 of Bootcamp; each day's sessions are in order, at most ${SCHEDULE_LIMITS.sessionsPerDay}. A session has no start time: each day starts at 8:00 AM and every session starts where the one before it ends. The SE tracks run as many days as the class they break out of, and a track the bootcamp does not hold has no days. Day N of every track is the same calendar day. instructors is every Training administrator and every guest judge of the bootcamp.`,
+        notes: `days.btc[0] is day 1 of Bootcamp; each day's sessions are in start order, at most ${SCHEDULE_LIMITS.sessionsPerDay}. start is minutes after midnight, on the quarter hour, from 480 (8:00 AM); a session ends by midnight, and no two on one track-day overlap. Time between them is unscheduled. The SE tracks run as many days as the class they break out of, and a track the bootcamp does not hold has no days. Day N of every track is the same calendar day. instructors is every Training administrator and every guest judge of the bootcamp.`,
         params: [BOOTCAMP_ID],
         returns: `{ bootcamp: { id, startDate, btcDays, intDays, status, facilityId, facilityName }, rooms: { id, name, capacity }[], instructors: { email, fullName, role: "administrator" | "judge" }[], days: { btc, int, btc_se, int_se: ${SESSION_SHAPE}[][] } }`,
         errors: [{ status: 404, error: "not_found", when: "no such bootcamp" }],
@@ -486,20 +486,20 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       {
         method: "PUT",
         path: "/api/scheduler/bootcamps/{id}/schedule/layout",
-        summary: "Saves the order and length of the sessions on the track-days that changed.",
+        summary: "Saves when the sessions on the track-days that changed start, and how long they run.",
         access: "trainingAdmin",
         token: true,
         notes:
-          "List each changed track-day with every session it now holds, in order. A session moved to another day is listed in its new one, and the day it left must be listed too. Clashes this creates are saved and shown in red; only adding someone or a room is refused for a clash.",
+          "List each changed track-day with every session it now holds. A session moved to another track or day is listed in its new one, and the one it left must be listed too. Clashes this creates are saved and shown in red; only adding someone or a room is refused for a clash.",
         params: [BOOTCAMP_ID],
         body: {
           kind: "json",
           fields: [
             {
               name: "days",
-              type: `{ track: ${TRACK_TYPE}, day: number, sessions: { id, minutes: number }[] }[]`,
+              type: `{ track: ${TRACK_TYPE}, day: number, sessions: { id, start: number, minutes: number }[] }[]`,
               required: true,
-              note: `minutes is ${MINUTES_NOTE}; at most ${SCHEDULE_LIMITS.sessionsPerDay} sessions a day`,
+              note: `start is minutes after midnight, on the quarter hour; minutes is ${MINUTES_NOTE}; at most ${SCHEDULE_LIMITS.sessionsPerDay} sessions a day`,
             },
           ],
         },
@@ -507,6 +507,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         errors: [
           { status: 400, error: "invalid", when: "the body is not that shape, or names a track-day or a session twice" },
           { status: 400, error: "no_day", when: "a day is past the end of its track, or the bootcamp does not hold the track" },
+          { status: 400, error: "overlap", when: "two sessions of a day overlap, or one starts before 8:00 AM, off the quarter hour, or runs past midnight" },
           { status: 404, error: "not_found", when: "no such bootcamp" },
           { status: 409, error: "stale", when: "the sessions named are not exactly the ones those days hold now; reload and try again" },
         ],
@@ -552,7 +553,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "trainingAdmin",
         token: true,
         notes:
-          "Upload the workbook as .xlsx with the Schedule tab first, or that tab as .csv. Every start and end is rounded to the quarter hour; a session rounding would shrink to nothing keeps 15 minutes. Time between sessions becomes Unscheduled. The first person in a Team cell leads, the rest instruct, and anything that is not a name goes in the description. notes says what was moved, left out or not matched.",
+          "Upload the workbook as .xlsx with the Schedule tab first, or that tab as .csv. Every start and end is rounded to the quarter hour; a session rounding would shrink to nothing keeps 15 minutes. Each session keeps its start, and time between sessions stays unscheduled; a Team note in that time becomes an Unscheduled session holding it, and an SE track's time away is a With Bootcamp or With Intermediate session. The first person in a Team cell leads, the rest instruct, and anything that is not a name goes in the description. notes says what was moved, left out or not matched.",
         params: [BOOTCAMP_ID],
         body: {
           kind: "multipart",
@@ -597,14 +598,18 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "trainingAdmin",
         token: true,
         notes:
-          "The sessions after it move along. An unstructured session keeps no staff or room; a main one keeps no rooms on its staff; a breakout keeps no room of its own.",
+          "If it runs into a session after it, that one and any it then runs into are pushed later; unscheduled time between them takes up the push first. An unstructured session keeps no staff or room; a main one keeps no rooms on its staff; a breakout keeps no room of its own.",
         params: [BOOTCAMP_ID],
         body: {
           kind: "json",
           fields: [
             { name: "track", type: TRACK_TYPE, required: true },
             { name: "day", type: "number", required: true, note: "from 1" },
-            { name: "position", type: "number", note: "where in the day, from 0; left out, it goes last" },
+            {
+              name: "start",
+              type: "number",
+              note: "minutes after midnight, rounded to the quarter hour; left out, straight after the day's last session. In the top half of another session it takes that one's place; in the bottom half, it goes after it",
+            },
             ...SESSION_LOOK_FIELDS,
             ...SESSION_STAFF_FIELDS,
           ],
@@ -614,6 +619,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           ...SESSION_ERRORS,
           { status: 400, error: "no_day", when: "the day is past the end of the track, or the bootcamp does not hold it" },
           { status: 409, error: "day_full", when: `the day has ${SCHEDULE_LIMITS.sessionsPerDay} sessions already` },
+          { status: 409, error: "past_midnight", when: "the push would run the day past midnight" },
         ],
       },
       {
@@ -633,19 +639,19 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "trainingAdmin",
         token: true,
         notes:
-          "Takes any of POST's fields but track, day and position; moving a session is the layout's job. staff replaces the whole set. Someone already on it stays even if no longer an instructor; only people and rooms new to it are checked for clashes.",
+          "Takes any of POST's fields but track, day and start; moving a session is the layout's job. Made longer, it pushes the sessions it runs into later, as POST does. staff replaces the whole set. Someone already on it stays even if no longer an instructor; only people and rooms new to it are checked for clashes.",
         params: [BOOTCAMP_ID, SESSION_ID],
         body: {
           kind: "json",
           fields: [...SESSION_LOOK_FIELDS.map((f) => ({ ...f, required: false })), ...SESSION_STAFF_FIELDS],
         },
         returns: SESSION_SHAPE,
-        errors: SESSION_ERRORS,
+        errors: [...SESSION_ERRORS, { status: 409, error: "past_midnight", when: "the push would run the day past midnight" }],
       },
       {
         method: "DELETE",
         path: "/api/scheduler/bootcamps/{id}/sessions/{sessionId}",
-        summary: "Removes a session; the rest of its day moves up.",
+        summary: "Removes a session; its time becomes unscheduled, and nothing else moves.",
         access: "trainingAdmin",
         token: true,
         notes: "Its comments go with it.",

@@ -3,8 +3,10 @@
 /**
  * A bootcamp's schedule, as a manager rearranges it. Three views: a day of
  * all four tracks in detail, the same with names only, and one track across
- * every day. Order and length changes are saved a moment after the last one,
- * a track-day at a time; what clashes is worked out here as things move.
+ * every day. A session is dragged to any time of any column — another track
+ * of the day, or in one track's view another day — and what it lands on is
+ * pushed later. Moves and length changes are saved a moment after the last
+ * one, a track-day at a time; what clashes is worked out here as things move.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -15,18 +17,19 @@ import {
   DragOverlay,
   KeyboardSensor,
   PointerSensor,
-  closestCorners,
+  pointerWithin,
+  rectIntersection,
   useSensor,
   useSensors,
+  type CollisionDetection,
   type DragEndEvent,
-  type DragOverEvent,
+  type DragMoveEvent,
   type DragStartEvent,
-  type UniqueIdentifier,
+  type KeyboardCoordinateGetter,
 } from "@dnd-kit/core";
-import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { AlertTriangle, CalendarDays, Check, ChevronLeft, ChevronRight, FileUp, Loader2, Rows3, Rows4, UserX } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { SCHEDULE_TRACKS, type ScheduleTrack } from "@/db/schema";
+import { SCHEDULE_LIMITS, SCHEDULE_TRACKS, type ScheduleTrack } from "@/db/schema";
 import { riseChild, staggerParent } from "@/lib/motion";
 import type { CopySource, Schedule, SessionRow } from "@/lib/scheduler/schedule";
 import type { SessionTypeRow } from "@/lib/scheduler/session-types";
@@ -36,11 +39,12 @@ import {
   describeClash,
   findClashes,
   place,
+  snapStart,
   trackDays,
   type Clash,
 } from "@/lib/scheduler/timeline";
 import { cn } from "@/lib/utils";
-import { Board, SCALE, SessionFace, type BoardColumn, type Density } from "./board";
+import { Board, COLUMN_ATTR, SCALE, SessionFace, type BoardColumn, type Density } from "./board";
 import { dayOf, everyDay, keyOf, locate, moveTo, resize, type Days } from "./days";
 import { FillDialog } from "./fill-dialog";
 import { SessionDialog, type SessionTarget } from "./session-dialog";
@@ -121,7 +125,11 @@ export function ScheduleView({
     const body = {
       days: keys.map((key) => {
         const [t, d] = key.split(":");
-        return { track: t, day: Number(d), sessions: dayOf(daysRef.current, key).map((s) => ({ id: s.id, minutes: s.minutes })) };
+        return {
+          track: t,
+          day: Number(d),
+          sessions: dayOf(daysRef.current, key).map((s) => ({ id: s.id, start: s.start, minutes: s.minutes })),
+        };
       }),
     };
     setSave({ state: "saving" });
@@ -206,59 +214,74 @@ export function ScheduleView({
   const boardDensity: Density = view === "condensed" ? "condensed" : "detailed";
 
   // ── Dragging ────────────────────────────────────────────────────────────
+  const scale = SCALE[boardDensity];
+  // An arrow key moves a dragged card a quarter hour, or a column across.
+  const keyboardCoordinates: KeyboardCoordinateGetter = (event, { currentCoordinates: at }) => {
+    const across = document.querySelector(`[${COLUMN_ATTR}]`)?.getBoundingClientRect().width ?? 192;
+    const by = SCHEDULE_LIMITS.slot * scale;
+    if (event.code === "ArrowDown") return { ...at, y: at.y + by };
+    if (event.code === "ArrowUp") return { ...at, y: at.y - by };
+    if (event.code === "ArrowRight") return { ...at, x: at.x + across };
+    if (event.code === "ArrowLeft") return { ...at, x: at.x - across };
+    return undefined;
+  };
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
+      coordinateGetter: keyboardCoordinates,
       keyboardCodes: { start: ["Space"], cancel: ["Escape"], end: ["Space", "Enter"] },
     }),
   );
-  const origin = useRef<{ key: string; index: number; days: Days } | null>(null);
+  /** Where the dragged session started, and the schedule before it moved: each preview is worked out from this. */
+  const origin = useRef<{ key: string; start: number; days: Days } | null>(null);
+  const dropping = useRef<string | null>(null);
   const droppedAt = useRef(0);
 
-  const containerOf = (id: UniqueIdentifier): string | null => {
-    const s = String(id);
-    if (s.startsWith("col:")) return s.slice(4);
-    return locate(days, s)?.key ?? null;
+  /** The column under the dragged card and the time its top edge is at, on the quarter hour. */
+  const dropPoint = ({ active, over }: DragMoveEvent | DragEndEvent): { key: string; start: number } | null => {
+    const rect = active.rect.current.translated;
+    if (!over || !rect || !String(over.id).startsWith("col:")) return null;
+    const key = String(over.id).slice(4);
+    const column = document.querySelector(`[${COLUMN_ATTR}="${key}"]`);
+    const session = origin.current && dayOf(origin.current.days, locate(origin.current.days, String(active.id))?.key ?? "");
+    const minutes = session?.find((s) => s.id === active.id)?.minutes ?? SCHEDULE_LIMITS.slot;
+    if (!column) return null;
+    return { key, start: snapStart(SCHEDULE_LIMITS.dayStart + (rect.top - column.getBoundingClientRect().top) / scale, minutes) };
   };
 
   const onDragStart = ({ active }: DragStartEvent) => {
     const at = locate(days, String(active.id));
     if (!at) return;
-    origin.current = { ...at, days };
+    origin.current = { key: at.key, start: dayOf(days, at.key)[at.index]!.start, days };
+    dropping.current = null;
     setActiveId(String(active.id));
   };
 
-  const onDragOver = ({ active, over }: DragOverEvent) => {
-    if (!over) return;
-    const from = containerOf(active.id);
-    const to = containerOf(over.id);
-    if (!from || !to || from === to) return;
-    const overIndex = dayOf(days, to).findIndex((s) => s.id === over.id);
-    const below =
-      active.rect.current.translated && active.rect.current.translated.top > over.rect.top + over.rect.height / 2;
-    setDays((prev) => moveTo(prev, String(active.id), to, overIndex >= 0 ? overIndex + (below ? 1 : 0) : null));
+  const onDragMove = (event: DragMoveEvent) => {
+    const from = origin.current;
+    const point = dropPoint(event);
+    if (!from || !point) return;
+    const at = `${point.key}@${point.start}`;
+    if (at === dropping.current) return;
+    dropping.current = at;
+    setDays(moveTo(from.days, String(event.active.id), point.key, point.start));
   };
 
-  const onDragEnd = ({ active, over }: DragEndEvent) => {
+  const onDragEnd = (event: DragEndEvent) => {
     setActiveId(null);
     droppedAt.current = Date.now();
-    const start = origin.current;
+    const from = origin.current;
     origin.current = null;
-    if (!start) return;
-    let next = days;
-    if (over) {
-      const key = containerOf(active.id);
-      const overKey = containerOf(over.id);
-      if (key && key === overKey && !String(over.id).startsWith("col:") && over.id !== active.id) {
-        const overIndex = dayOf(days, key).findIndex((s) => s.id === over.id);
-        next = moveTo(days, String(active.id), key, overIndex);
-        setDays(next);
-      }
-    }
-    const end = locate(next, String(active.id));
-    if (!end || (end.key === start.key && end.index === start.index)) return;
-    touch([start.key, end.key]);
+    if (!from) return;
+    const point = dropPoint(event);
+    // Let go outside every column: it goes back where it was.
+    if (!point) return setDays(from.days);
+    const next = moveTo(from.days, String(event.active.id), point.key, point.start);
+    setDays(next);
+    const end = locate(next, String(event.active.id));
+    if (!end) return;
+    const moved = end.key !== from.key || dayOf(next, end.key)[end.index]!.start !== from.start;
+    if (moved) touch([from.key, end.key]);
   };
 
   const onDragCancel = () => {
@@ -270,20 +293,24 @@ export function ScheduleView({
   const active = activeId ? placed.find((s) => s.id === activeId) : undefined;
 
   // ── Resizing ────────────────────────────────────────────────────────────
-  const resizeFrom = useRef<number | null>(null);
+  /** The schedule as the resize began: each step is worked out from it, so what was pushed comes back as it shrinks. */
+  const resizeFrom = useRef<{ minutes: number; days: Days } | null>(null);
   const onResize = (id: string, minutes: number) => {
-    if (resizingId !== id) {
+    if (resizingId !== id || !resizeFrom.current) {
       const at = locate(days, id);
-      resizeFrom.current = at ? dayOf(days, at.key)[at.index]!.minutes : null;
+      if (!at) return;
+      resizeFrom.current = { minutes: dayOf(days, at.key)[at.index]!.minutes, days };
       setResizingId(id);
     }
-    setDays((prev) => resize(prev, id, minutes));
+    setDays(resize(resizeFrom.current.days, id, minutes));
   };
   const onResizeEnd = (id: string) => {
     setResizingId(null);
     droppedAt.current = Date.now();
+    const from = resizeFrom.current;
+    resizeFrom.current = null;
     const at = locate(days, id);
-    if (!at || resizeFrom.current === dayOf(days, at.key)[at.index]!.minutes) return;
+    if (!at || !from || from.minutes === dayOf(days, at.key)[at.index]!.minutes) return;
     touch([at.key]);
   };
 
@@ -438,9 +465,9 @@ export function ScheduleView({
         ) : (
           <DndContext
             sensors={sensors}
-            collisionDetection={closestCorners}
+            collisionDetection={underPointer}
             onDragStart={onDragStart}
-            onDragOver={onDragOver}
+            onDragMove={onDragMove}
             onDragEnd={onDragEnd}
             onDragCancel={onDragCancel}
           >
@@ -452,7 +479,7 @@ export function ScheduleView({
               canManage={canManage}
               resizingId={resizingId}
               onOpen={open}
-              onAdd={(c) => setTarget({ mode: "new", track: c.track, day: c.day })}
+              onAdd={(c, start) => setTarget({ mode: "new", track: c.track, day: c.day, start })}
               onResize={onResize}
               onResizeEnd={onResizeEnd}
             />
@@ -519,6 +546,12 @@ export function ScheduleView({
     if (session) setTarget({ mode: "edit", session });
   }
 }
+
+/** The column under the pointer; for a card moved by keyboard, the one it overlaps most. */
+const underPointer: CollisionDetection = (args) => {
+  const hits = pointerWithin(args);
+  return hits.length > 0 ? hits : rectIntersection(args);
+};
 
 /** Each pair of sessions that clash, once, with what they share. */
 function clashPairs(placed: ReturnType<typeof place<SessionRow>>, clashes: Map<string, Clash[]>) {

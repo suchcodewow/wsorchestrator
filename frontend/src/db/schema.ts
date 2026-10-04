@@ -1225,6 +1225,8 @@ export type SessionColor = (typeof SESSION_COLORS)[number];
 export const SCHEDULE_LIMITS = {
   dayStart: 8 * 60,
   dayEnd: 17 * 60,
+  /** Nothing may run past midnight. */
+  latestEnd: 24 * 60,
   slot: 15,
   maxMinutes: 600,
   sessionsPerDay: 40,
@@ -1270,9 +1272,9 @@ export const sessionTypes = pgTable(
 export type SessionType = typeof sessionTypes.$inferSelect;
 
 /**
- * One session on one day of one track. It has no start time: it starts at
- * the day's start plus the minutes of every session before it by `position`,
- * so moving one moves the rest of the day with it.
+ * One session on one day of one track, from `start` for `minutes`. The
+ * sessions of one track-day never overlap; the time between them is
+ * unscheduled.
  */
 export const scheduleSessions = pgTable(
   "schedule_sessions",
@@ -1284,7 +1286,8 @@ export const scheduleSessions = pgTable(
     track: text("track").$type<ScheduleTrack>().notNull(),
     /** 1-based; day 1 of every track is the bootcamp's start date. */
     day: integer("day").notNull(),
-    position: integer("position").notNull(),
+    /** Minutes after midnight, on the quarter hour. */
+    start: integer("start_minute").notNull(),
     minutes: integer("minutes").notNull(),
     kind: text("kind").$type<SessionKind>().notNull(),
     /** The type it was started from, if any; nothing follows from it afterwards. */
@@ -1304,11 +1307,12 @@ export const scheduleSessions = pgTable(
       .defaultNow(),
   },
   (t) => [
-    index("schedule_sessions_day_idx").on(t.bootcampId, t.track, t.day, t.position),
+    index("schedule_sessions_day_idx").on(t.bootcampId, t.track, t.day, t.start),
     check("schedule_sessions_track_check", sql`${t.track} in ('btc', 'int', 'btc_se', 'int_se')`),
     check("schedule_sessions_kind_check", sql`${t.kind} in ('main', 'breakout', 'unstructured')`),
     check("schedule_sessions_day_check", sql`${t.day} between 1 and 30`),
     check("schedule_sessions_minutes_check", sql`${t.minutes} between 15 and 600 and ${t.minutes} % 15 = 0`),
+    check("schedule_sessions_start_check", sql`${t.start} >= 0 and ${t.start} % 15 = 0 and ${t.start} + ${t.minutes} <= 1440`),
   ],
 );
 

@@ -142,7 +142,7 @@ describe("rounding to the quarter hour", () => {
     );
   });
 
-  test("time between sessions becomes Unscheduled", () => {
+  test("time between sessions stays unscheduled, each session keeping its start", () => {
     const { sessions } = parse(
       sheet([
         {
@@ -151,11 +151,36 @@ describe("rounding to the quarter hour", () => {
       ]),
     );
     assert.deepEqual(
-      sessions.map((s) => [s.name, s.type, s.minutes, s.position]),
+      sessions.map((s) => [s.name, s.type, s.start, s.minutes]),
       [
-        ["Teach", "teach", 30, 0],
-        ["Unscheduled", "unscheduled", 30, 1],
-        ["More", "teach", 30, 2],
+        ["Teach", "teach", 480, 30],
+        ["More", "teach", 540, 30],
+      ],
+    );
+  });
+
+  test("a note in the time between sessions becomes an Unscheduled session holding it", () => {
+    const { sessions } = parse(
+      sheet([
+        {
+          btc: [
+            { length: "0:30", icon: "🧒", topic: "Teach" },
+            {},
+            {},
+            { team: "Set up the room" },
+            {},
+            {},
+            { length: "0:30", icon: "🧒", topic: "More" },
+          ],
+        },
+      ]),
+    );
+    assert.deepEqual(
+      sessions.map((s) => [s.name, s.type, s.start, s.minutes, s.description]),
+      [
+        ["Teach", "teach", 480, 30, ""],
+        ["Unscheduled", "unscheduled", 510, 30, "Set up the room"],
+        ["More", "teach", 540, 30, ""],
       ],
     );
   });

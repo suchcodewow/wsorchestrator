@@ -1,11 +1,12 @@
 /**
  * The schedule page's working copy of a schedule: each track's days, each a
- * list of sessions in order. Moving a session rewrites its track and day so
- * clashes are worked out from where it now is.
+ * list of sessions in start order. Moving a session rewrites its track, day
+ * and start so clashes are worked out from where it now is.
  */
 
 import { SCHEDULE_LIMITS, SCHEDULE_TRACKS, type ScheduleTrack } from "@/db/schema";
 import type { SessionRow } from "@/lib/scheduler/schedule";
+import { dropAt, settle } from "@/lib/scheduler/timeline";
 
 export type Days = Record<ScheduleTrack, SessionRow[][]>;
 
@@ -44,32 +45,27 @@ export function withDay(days: Days, key: string, sessions: SessionRow[]): Days {
   return { ...days, [track]: list };
 }
 
-/** Moves a session to `to` at `index`, or last; unchanged if `to` is full. */
-export function moveTo(days: Days, id: string, to: string, index: number | null): Days {
+/**
+ * Moves a session to track-day `to`, starting at `start` or as near it as
+ * fits; see `dropAt`. Unchanged if `to` is another day and already full.
+ */
+export function moveTo(days: Days, id: string, to: string, start: number): Days {
   const from = locate(days, id);
   if (!from) return days;
-  if (from.key === to) {
-    const list = [...dayOf(days, to)];
-    const [item] = list.splice(from.index, 1);
-    list.splice(Math.min(index ?? list.length, list.length), 0, item!);
-    return withDay(days, to, list);
-  }
-  const target = dayOf(days, to);
-  if (target.length >= SCHEDULE_LIMITS.sessionsPerDay) return days;
   const source = dayOf(days, from.key);
+  const target = from.key === to ? source : dayOf(days, to);
+  if (from.key !== to && target.length >= SCHEDULE_LIMITS.sessionsPerDay) return days;
   const { track, day } = parseKey(to);
   const moved = { ...source[from.index]!, track, day };
-  const next = withDay(days, from.key, source.filter((_, i) => i !== from.index));
-  const list = [...target];
-  list.splice(Math.min(index ?? list.length, list.length), 0, moved);
-  return withDay(next, to, list);
+  const next = from.key === to ? days : withDay(days, from.key, source.filter((_, i) => i !== from.index));
+  return withDay(next, to, dropAt(target, moved, start));
 }
 
-/** `days` with one session's minutes changed. */
+/** `days` with one session's minutes changed; made longer, it pushes what it runs into later. */
 export function resize(days: Days, id: string, minutes: number): Days {
   const at = locate(days, id);
   if (!at) return days;
   const list = dayOf(days, at.key);
   if (list[at.index]!.minutes === minutes) return days;
-  return withDay(days, at.key, list.map((s, i) => (i === at.index ? { ...s, minutes } : s)));
+  return withDay(days, at.key, settle(list.map((s, i) => (i === at.index ? { ...s, minutes } : s)), id));
 }

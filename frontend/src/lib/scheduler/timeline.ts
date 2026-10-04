@@ -1,12 +1,12 @@
 /**
- * When a schedule's sessions happen, and what clashes. A session has no start
- * time of its own: each day of each track begins at `dayStart`, and every
- * session starts where the one before it ends. Day N of every track is the
- * same calendar day, so two sessions clash when they share a day number,
+ * When a schedule's sessions happen, and what clashes. Each session has its
+ * own start, on the quarter hour; the sessions of one track-day never
+ * overlap, and the time between them is unscheduled. Day N of every track is
+ * the same calendar day, so two sessions clash when they share a day number,
  * overlap in time, and need the same person or the same room.
  *
  * Pure, so the schedule page recomputes it as a session is dragged and the
- * availability route answers from the same rules.
+ * server saves by the same rules.
  */
 
 import { SCHEDULE_LIMITS, type ScheduleTrack, type SessionKind } from "@/db/schema";
@@ -64,33 +64,89 @@ export function dayDate(startDate: string, day: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-/** What a day adds up to: when it ends, and how far that is from the end of the day. */
+/** What a day adds up to: when it ends, how much of it to `dayEnd` is unscheduled, and how far past `dayEnd` it runs. */
 export type DayTotal = {
   end: number;
-  /** Minutes before `dayEnd` that nothing is scheduled; 0 when over. */
+  /** Minutes between `dayStart` and `dayEnd` that nothing is scheduled. */
   left: number;
   /** Minutes past `dayEnd`; 0 when it fits. */
   over: number;
 };
 
-export function dayTotal(sessions: readonly { minutes: number }[]): DayTotal {
-  const end = SCHEDULE_LIMITS.dayStart + sessions.reduce((sum, s) => sum + s.minutes, 0);
-  return {
-    end,
-    left: Math.max(0, SCHEDULE_LIMITS.dayEnd - end),
-    over: Math.max(0, end - SCHEDULE_LIMITS.dayEnd),
-  };
+type Timed = { start: number; minutes: number };
+
+export function dayTotal(sessions: readonly Timed[]): DayTotal {
+  const { dayStart, dayEnd } = SCHEDULE_LIMITS;
+  const end = Math.max(dayStart, ...sessions.map((s) => s.start + s.minutes));
+  const covered = sessions.reduce(
+    (sum, s) => sum + Math.max(0, Math.min(dayEnd, s.start + s.minutes) - Math.max(dayStart, s.start)),
+    0,
+  );
+  return { end, left: dayEnd - dayStart - covered, over: Math.max(0, end - dayEnd) };
 }
 
-/** The start of each session, in order: `dayStart`, then each one's start plus its minutes. */
-export function startsOf(sessions: readonly { minutes: number }[]): number[] {
-  const starts: number[] = [];
+/** The unscheduled stretches of a day: before, between and after its sessions, the last one only as far as `dayEnd`. */
+export function gapsOf(sessions: readonly Timed[]): Timed[] {
+  const gaps: Timed[] = [];
   let at = SCHEDULE_LIMITS.dayStart;
-  for (const s of sessions) {
-    starts.push(at);
-    at += s.minutes;
+  for (const s of [...sessions].sort((a, b) => a.start - b.start)) {
+    if (s.start > at) gaps.push({ start: at, minutes: s.start - at });
+    at = Math.max(at, s.start + s.minutes);
   }
-  return starts;
+  if (at < SCHEDULE_LIMITS.dayEnd) gaps.push({ start: at, minutes: SCHEDULE_LIMITS.dayEnd - at });
+  return gaps;
+}
+
+/** Where a session after the last of `sessions` would start: the end of the day's last one, or `dayStart`. */
+export function nextStart(sessions: readonly Timed[]): number {
+  return Math.max(SCHEDULE_LIMITS.dayStart, ...sessions.map((s) => s.start + s.minutes));
+}
+
+/** A start brought to the quarter hour, no earlier than `dayStart`, and early enough to end by midnight. */
+export function snapStart(start: number, minutes: number): number {
+  const { slot, dayStart, latestEnd } = SCHEDULE_LIMITS;
+  return Math.min(latestEnd - minutes, Math.max(dayStart, Math.round(start / slot) * slot));
+}
+
+/**
+ * The day in start order with nothing overlapping: each session keeps its
+ * start unless the one before it runs into it, and is then pushed to that
+ * one's end, so a push uses up the unscheduled time before it moves anything
+ * further. Session `firstId` goes ahead of any that starts at the same time.
+ */
+export function settle<S extends Timed & { id: string }>(sessions: readonly S[], firstId?: string): S[] {
+  const ordered = [...sessions].sort((a, b) => a.start - b.start || Number(b.id === firstId) - Number(a.id === firstId));
+  let at = -Infinity;
+  return ordered.map((s) => {
+    const start = Math.max(s.start, at);
+    at = start + s.minutes;
+    return start === s.start ? s : { ...s, start };
+  });
+}
+
+/**
+ * The day with `moved` put at `start`, or as near it as fits. Dropped on the
+ * top half of another session, it takes that one's place and pushes it on;
+ * on the bottom half, it goes straight after it. Whatever it then runs into
+ * is pushed later.
+ */
+export function dropAt<S extends Timed & { id: string }>(sessions: readonly S[], moved: S, start: number): S[] {
+  const rest = sessions.filter((s) => s.id !== moved.id);
+  let at = snapStart(start, moved.minutes);
+  const under = rest.find((s) => s.start < at && at < s.start + s.minutes);
+  if (under) at = at - under.start < under.minutes / 2 ? under.start : under.start + under.minutes;
+  return settle([...rest, { ...moved, start: at }], moved.id);
+}
+
+/** Whether a day's sessions are each on the quarter hour, inside the day, and clear of one another. */
+export function fitsDay(sessions: readonly Timed[]): boolean {
+  const { slot, dayStart, latestEnd } = SCHEDULE_LIMITS;
+  let at = dayStart;
+  for (const s of [...sessions].sort((a, b) => a.start - b.start)) {
+    if (s.start % slot !== 0 || s.start < at || s.start + s.minutes > latestEnd) return false;
+    at = s.start + s.minutes;
+  }
+  return true;
 }
 
 /** What a session needs to be checked for clashes. */
@@ -98,6 +154,7 @@ export type ClashSession = {
   id: string;
   track: ScheduleTrack;
   day: number;
+  start: number;
   minutes: number;
   kind: SessionKind;
   name: string;
@@ -117,18 +174,12 @@ export function roomsOf(s: Pick<ClashSession, "kind" | "roomId" | "staff">): str
   return [];
 }
 
-/** A session placed in time. */
-export type Placed<S extends ClashSession = ClashSession> = S & { start: number; end: number };
+/** A session with its end. */
+export type Placed<S extends ClashSession = ClashSession> = S & { end: number };
 
-/**
- * Every session with its start and end. `days` is each track-day's sessions
- * in order; anything else about them is kept.
- */
+/** Every session of every track-day in `days`, with its end; anything else about them is kept. */
 export function place<S extends ClashSession>(days: readonly (readonly S[])[]): Placed<S>[] {
-  return days.flatMap((sessions) => {
-    const starts = startsOf(sessions);
-    return sessions.map((s, i) => ({ ...s, start: starts[i]!, end: starts[i]! + s.minutes }));
-  });
+  return days.flatMap((sessions) => sessions.map((s) => ({ ...s, end: s.start + s.minutes })));
 }
 
 /** Why someone or something cannot be in a session: the other one it would be in at the same time. */

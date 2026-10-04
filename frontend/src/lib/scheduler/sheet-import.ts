@@ -9,8 +9,10 @@
  * The sheet runs on ten minutes and the schedule on fifteen, so every start
  * and end is rounded to the nearest quarter hour. A session that rounding
  * would shrink to nothing keeps one slot, and pushes the next one along
- * rather than overlapping it. Time between sessions becomes an "Unscheduled"
- * session, or in an SE track one saying the class is with the main track.
+ * rather than overlapping it. Time between sessions stays unscheduled, except
+ * where the sheet wrote something there, which becomes an "Unscheduled"
+ * session holding it; in an SE track it is a session saying the class is with
+ * the main track.
  *
  * The Team column's first name on a session is its leader and later names
  * are its other instructors; anything that is not a name becomes a line of
@@ -38,8 +40,8 @@ export type ImportPerson = { email: string; fullName: string };
 export type ImportSession = {
   track: ScheduleTrack;
   day: number;
-  /** Order within the day, from 0. */
-  position: number;
+  /** Minutes after midnight, on the quarter hour. */
+  start: number;
   minutes: number;
   type: ImportType;
   name: string;
@@ -315,12 +317,14 @@ export function parseScheduleSheet(
         continue;
       }
 
-      const out: Omit<ImportSession, "position">[] = [];
+      const out: ImportSession[] = [];
       const fill = (from: number, to: number, lines: readonly string[]) => {
+        if (lines.length === 0 && !track.endsWith("_se")) return;
         for (let at = from; at < to; at += SCHEDULE_LIMITS.maxMinutes) {
           out.push({
             track,
             day,
+            start: at,
             minutes: Math.min(SCHEDULE_LIMITS.maxMinutes, to - at),
             type: "unscheduled",
             name: filler,
@@ -347,6 +351,7 @@ export function parseScheduleSheet(
           out.push({
             track,
             day,
+            start: from,
             minutes: Math.min(SCHEDULE_LIMITS.maxMinutes, end - from),
             type: d.type,
             name: from === start ? d.name : `${d.name} (continued)`.slice(0, SCHEDULE_LIMITS.name),
@@ -369,7 +374,7 @@ export function parseScheduleSheet(
           `${label} day ${day}: only the first ${SCHEDULE_LIMITS.sessionsPerDay} of its ${out.length} sessions were kept.`,
         );
       }
-      out.slice(0, SCHEDULE_LIMITS.sessionsPerDay).forEach((s, position) => sessions.push({ ...s, position }));
+      sessions.push(...out.slice(0, SCHEDULE_LIMITS.sessionsPerDay));
     }
   }
 

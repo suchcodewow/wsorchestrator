@@ -26,7 +26,7 @@ import {
   describeClash,
   formatClock,
   formatLength,
-  startsOf,
+  nextStart,
   type Clash,
   type Placed,
 } from "@/lib/scheduler/timeline";
@@ -35,13 +35,17 @@ import { formatDate } from "../../cohort-settings/format";
 import { Comments } from "./comments";
 import { dayOf, locate, type Days } from "./days";
 
-export type SessionTarget = { mode: "new"; track: ScheduleTrack; day: number } | { mode: "edit"; session: SessionRow };
+export type SessionTarget =
+  /** `start` is the unscheduled time it was added in; without one it goes after the last session of the day. */
+  | { mode: "new"; track: ScheduleTrack; day: number; start?: number }
+  | { mode: "edit"; session: SessionRow };
 
 const ERRORS: Record<string, string> = {
   invalid: "Give it a name, and a length in whole quarter hours.",
   not_found: "That session was removed — reload the page.",
   no_day: "That track does not run on that day.",
   day_full: `That day already holds ${SCHEDULE_LIMITS.sessionsPerDay} sessions.`,
+  past_midnight: "That would push the day past midnight.",
   no_leader: "Pick one leader.",
   unknown_room: "That room is not at this bootcamp's facility any more — reload the page.",
   shared_room: "Two instructors cannot share a breakout room.",
@@ -119,19 +123,17 @@ export function SessionDialog({
     }
   }
 
-  // Where it is, or would go: the end of its day when new.
+  // Where it is, or would go: when new, the time it was added in, or the end of its day.
   const where = useMemo(() => {
     if (!target) return null;
     if (target.mode === "new") {
       const list = days[target.track][target.day - 1] ?? [];
-      const start = SCHEDULE_LIMITS.dayStart + list.reduce((sum, s) => sum + s.minutes, 0);
-      return { track: target.track, day: target.day, start };
+      return { track: target.track, day: target.day, start: target.start ?? nextStart(list) };
     }
     const at = locate(days, target.session.id);
-    if (!at) return { track: target.session.track, day: target.session.day, start: SCHEDULE_LIMITS.dayStart };
-    const list = dayOf(days, at.key);
-    const s = list[at.index]!;
-    return { track: s.track, day: s.day, start: startsOf(list)[at.index]! };
+    if (!at) return { track: target.session.track, day: target.session.day, start: target.session.start };
+    const s = dayOf(days, at.key)[at.index]!;
+    return { track: s.track, day: s.day, start: s.start };
   }, [target, days]);
 
   const busy = useMemo(
@@ -205,7 +207,7 @@ export function SessionDialog({
         {
           method: existing ? "PATCH" : "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(existing ? fields : { track: where!.track, day: where!.day, ...fields }),
+          body: JSON.stringify(existing ? fields : { track: where!.track, day: where!.day, start: where!.start, ...fields }),
         },
       );
       const out = await res.json().catch(() => null);
@@ -227,7 +229,7 @@ export function SessionDialog({
   }
 
   async function remove() {
-    if (!existing || !window.confirm(`Remove ${existing.name}? The sessions after it move up.`)) return;
+    if (!existing || !window.confirm(`Remove ${existing.name}? Its time becomes unscheduled.`)) return;
     setPending(true);
     setError(null);
     try {
