@@ -7,13 +7,13 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { CalendarPlus, ChevronRight, Loader2, Pencil, Trash2 } from "lucide-react";
-import { HEADER_ROW, Pager, PlainHeader, SortHeader, TableSearch } from "@/components/data-table";
+import { HEADER_ROW, Pager, PlainHeader, SortHeader } from "@/components/data-table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { BootcampSort } from "@/lib/list-specs";
 import { riseChild, staggerParent } from "@/lib/motion";
 import type { ListQuery, Page } from "@/lib/paging";
-import type { ActiveBootcamp, BootcampRow } from "@/lib/scheduler/bootcamps";
+import type { BootcampRow } from "@/lib/scheduler/bootcamps";
 import type { CopySource } from "@/lib/scheduler/schedule";
 import { formatDate } from "../cohort-settings/format";
 import { BootcampDialog, STATUS_BADGES, STATUS_LABELS } from "./bootcamp-dialog";
@@ -21,14 +21,12 @@ import { BootcampDialog, STATUS_BADGES, STATUS_LABELS } from "./bootcamp-dialog"
 export function SchedulerView({
   query,
   page,
-  active,
   canManage,
   facilities,
   sources,
 }: {
   query: ListQuery<BootcampSort>;
   page: Page<BootcampRow>;
-  active: ActiveBootcamp | null;
   canManage: boolean;
   facilities: { id: string; name: string }[];
   /** Schedules a new bootcamp can start from. */
@@ -69,28 +67,14 @@ export function SchedulerView({
 
   return (
     <motion.div variants={staggerParent(0.05)} initial="hidden" animate="show" className="space-y-4">
-      <motion.div variants={riseChild} className="flex flex-wrap items-end justify-between gap-3">
-        <div className="space-y-1.5">
-          <h2 className="text-xl font-medium tracking-tight">Bootcamps</h2>
-          {active && (
-            <p className="text-sm leading-relaxed text-muted-foreground">
-              Active: <span className="font-medium text-foreground">{formatDate(active.startDate)}</span>,{" "}
-              {active.btcDays} days
-              {active.intDays !== null && `, with ${active.intDays} days of intermediate`}.
-            </p>
-          )}
-        </div>
-        {canManage && (
+      {canManage && (
+        <motion.div variants={riseChild} className="flex justify-end">
           <Button variant="brand" onClick={() => open(null)}>
             <CalendarPlus />
             Schedule Next Bootcamp
           </Button>
-        )}
-      </motion.div>
-
-      <motion.div variants={riseChild}>
-        <TableSearch value={query.q} placeholder="Search by status, facility or who scheduled it" label="Search bootcamps" />
-      </motion.div>
+        </motion.div>
+      )}
 
       {error && (
         <motion.p variants={riseChild} role="alert" className="text-sm text-destructive">
@@ -171,7 +155,7 @@ export function SchedulerView({
               {page.rows.length === 0 && (
                 <tr>
                   <td colSpan={columns} className="px-5 py-8 text-center text-muted-foreground">
-                    {query.q ? "No bootcamps match." : "No bootcamps scheduled yet."}
+                    No bootcamps scheduled yet.
                   </td>
                 </tr>
               )}

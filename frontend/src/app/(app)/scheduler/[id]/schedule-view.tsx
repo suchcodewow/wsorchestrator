@@ -1,9 +1,9 @@
 "use client";
 
 /**
- * A bootcamp's schedule, as a manager rearranges it. Three views: a day of
- * all four tracks in detail, the same with names only, and one track across
- * every day. A session is dragged to any time of any column — another track
+ * A bootcamp's schedule, as a manager rearranges it. Two views: a day of all
+ * four tracks, and one track across every day; either can be condensed to
+ * names only. A session is dragged to any time of any column — another track
  * of the day, or in one track's view another day — and what it lands on is
  * pushed later. Moves and length changes are saved a moment after the last
  * one, a track-day at a time; what clashes is worked out here as things move.
@@ -54,11 +54,10 @@ import { dayOf, everyDay, keyOf, locate, moveTo, resize, type Days } from "./day
 import { CopyDialog } from "./copy-dialog";
 import { SessionDialog, type SessionTarget } from "./session-dialog";
 
-type View = "detailed" | "condensed" | "week";
+type View = "day" | "week";
 
 const VIEWS: { id: View; label: string; icon: typeof Rows3 }[] = [
-  { id: "detailed", label: "Detailed", icon: Rows3 },
-  { id: "condensed", label: "Condensed", icon: Rows4 },
+  { id: "day", label: "All Tracks", icon: Rows3 },
   { id: "week", label: "One track", icon: CalendarDays },
 ];
 
@@ -91,7 +90,8 @@ export function ScheduleView({
   const { bootcamp } = initial;
   const [schedule, setSchedule] = useState(initial);
   const [days, setDays] = useState<Days>(initial.days);
-  const [view, setView] = useState<View>("detailed");
+  const [view, setView] = useState<View>("day");
+  const [condensed, setCondensed] = useState(false);
   const [day, setDay] = useState(1);
   const [track, setTrack] = useState<ScheduleTrack>("btc");
   const [target, setTarget] = useState<SessionTarget | null>(null);
@@ -223,11 +223,11 @@ export function ScheduleView({
             key: keyOf(t, day),
             track: t,
             day,
-            title: TRACK_LABELS[t],
-            subtitle: `Day ${day}`,
+            title: `Day ${day}`,
+            subtitle: TRACK_LABELS[t],
             sessions: days[t][day - 1] ?? [],
           }));
-  const boardDensity: Density = view === "condensed" ? "condensed" : "detailed";
+  const boardDensity: Density = condensed ? "condensed" : "detailed";
 
   // ── Dragging ────────────────────────────────────────────────────────────
   const scale = SCALE[boardDensity];
@@ -362,6 +362,33 @@ export function ScheduleView({
             ))}
           </div>
 
+          <button
+            type="button"
+            role="switch"
+            aria-checked={condensed}
+            onClick={() => setCondensed(!condensed)}
+            className={cn(
+              "flex h-8 cursor-pointer items-center gap-2 rounded-full border px-3 text-sm outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50",
+              condensed
+                ? "border-brand/30 bg-brand/10 font-medium text-foreground"
+                : "border-border text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+            )}
+          >
+            <Rows4 className="size-3.5 shrink-0" />
+            Condensed
+            <span
+              aria-hidden
+              className={cn("flex h-4 w-7 shrink-0 items-center rounded-full p-0.5 transition-colors", condensed ? "bg-brand" : "bg-input")}
+            >
+              <span
+                className={cn(
+                  "size-3 rounded-full bg-background shadow-xs transition-transform duration-200 ease-out",
+                  condensed && "translate-x-3",
+                )}
+              />
+            </span>
+          </button>
+
           {view === "week" ? (
             <div role="radiogroup" aria-label="Track" className="flex flex-wrap gap-1">
               {tracks.map((t) => (
@@ -380,8 +407,15 @@ export function ScheduleView({
               ))}
             </div>
           ) : (
-            <div className="flex items-center gap-1">
-              <Button variant="ghost" size="icon" className="size-8" aria-label="Previous day" disabled={day <= 1} onClick={() => setDay(day - 1)}>
+            <div className="inline-flex items-center rounded-full border bg-card p-0.5 shadow-xs">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-8 rounded-full"
+                aria-label="Previous day"
+                disabled={day <= 1}
+                onClick={() => setDay(day - 1)}
+              >
                 <ChevronLeft className="size-4" />
               </Button>
               <div className="min-w-36 text-center text-sm">
@@ -391,7 +425,7 @@ export function ScheduleView({
               <Button
                 variant="ghost"
                 size="icon"
-                className="size-8"
+                className="size-8 rounded-full"
                 aria-label="Next day"
                 disabled={day >= dayCount}
                 onClick={() => setDay(day + 1)}
