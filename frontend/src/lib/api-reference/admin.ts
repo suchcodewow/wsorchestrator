@@ -798,7 +798,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         returns: "201 { id }",
         errors: [
           { status: 400, error: "invalid", when: "the body is not that shape" },
-          { status: 400, error: "duplicate_room", when: "two rooms share a name, ignoring case; room names it" },
+          { status: 400, error: "duplicate_room", when: "two rooms share a name, ignoring case and spacing; room names it" },
           { status: 400, error: "unknown_room", when: "a room has an id" },
           { status: 409, error: "duplicate", when: "a facility has that name already" },
         ],
@@ -832,7 +832,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         returns: "{ ok: true }",
         errors: [
           { status: 400, error: "invalid", when: "the body is not that shape" },
-          { status: 400, error: "duplicate_room", when: "two rooms share a name, ignoring case; room names it" },
+          { status: 400, error: "duplicate_room", when: "two rooms share a name, ignoring case and spacing; room names it" },
           { status: 400, error: "unknown_room", when: "a room id is not one of this facility's" },
           { status: 404, error: "not_found", when: "no such facility" },
           { status: 409, error: "duplicate", when: "another facility has that name" },
