@@ -268,6 +268,6 @@ export function busyDuring(
 }
 
 /** "Command of the Message · Bootcamp, Day 2, 12:00 PM–2:00 PM". */
-export function describeClash(c: Clash): string {
+export function describeClash(c: Omit<Clash, "what">): string {
   return `${c.name} · ${TRACK_LABELS[c.track]}, Day ${c.day}, ${formatClock(c.start)}–${formatClock(c.end)}`;
 }
