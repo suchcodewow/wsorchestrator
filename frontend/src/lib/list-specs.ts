@@ -76,6 +76,16 @@ export type BootcampSort = (typeof BOOTCAMP_LIST.sorts)[number];
 export const JUDGE_LIST = spec(["fullName", "email", "addedBy", "addedAt"]);
 export type JudgeSort = (typeof JUDGE_LIST.sorts)[number];
 
+export const FACILITY_LIST = spec(["name", "rooms", "capacity", "updatedAt"]);
+export type FacilitySort = (typeof FACILITY_LIST.sorts)[number];
+
+/** `position` is the order the session dialog offers them in. */
+export const SESSION_TYPE_LIST = spec(["position", "name", "kind", "minutes"]);
+export type SessionTypeSort = (typeof SESSION_TYPE_LIST.sorts)[number];
+
+export const SESSION_COMMENT_LIST = spec(["createdAt", "author"], "desc");
+export type SessionCommentSort = (typeof SESSION_COMMENT_LIST.sorts)[number];
+
 export const ASSESSMENT_LIST = spec(["name", "stage", "audience", "active", "updatedAt"]);
 export type AssessmentSort = (typeof ASSESSMENT_LIST.sorts)[number];
 

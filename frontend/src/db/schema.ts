@@ -1088,6 +1088,10 @@ export const bootcamps = pgTable(
     /** Null when this bootcamp holds no intermediate class. */
     intDays: integer("int_days"),
     status: text("status").$type<BootcampStatus>().notNull().default("scheduled"),
+    /** Where it is held; its rooms are the ones its sessions can use. */
+    facilityId: uuid("facility_id").references((): AnyPgColumn => facilities.id, {
+      onDelete: "set null",
+    }),
     createdBy: text("created_by").references(() => users.id, {
       onDelete: "set null",
     }),
@@ -1144,6 +1148,222 @@ export const bootcampJudges = pgTable(
 );
 
 export type BootcampJudge = typeof bootcampJudges.$inferSelect;
+
+/**
+ * A place bootcamps are held, set up in Scheduler settings → Facilities. A
+ * bootcamp names one, and its sessions pick rooms from it.
+ */
+export const facilities = pgTable(
+  "facilities",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: text("name").notNull(),
+    createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [uniqueIndex("facilities_name_idx").on(sql`lower(${t.name})`)],
+);
+
+/** One room of a facility, and how many people it holds. Removing it takes it off every session that used it. */
+export const facilityRooms = pgTable(
+  "facility_rooms",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    facilityId: uuid("facility_id")
+      .notNull()
+      .references(() => facilities.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    capacity: integer("capacity").notNull(),
+    position: integer("position").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("facility_rooms_name_idx").on(t.facilityId, t.name),
+    index("facility_rooms_facility_idx").on(t.facilityId, t.position),
+    check("facility_rooms_capacity_check", sql`${t.capacity} between 1 and 10000`),
+  ],
+);
+
+export const FACILITY_LIMITS = { name: 120, rooms: 100, capacity: 10_000 } as const;
+
+export type Facility = typeof facilities.$inferSelect;
+export type FacilityRoom = typeof facilityRooms.$inferSelect;
+
+/**
+ * The four parallel schedules of one bootcamp. The SE tracks run on the same
+ * days as the class they break out of: `btc_se` beside `btc`, `int_se` beside `int`.
+ */
+export const SCHEDULE_TRACKS = ["btc", "int", "btc_se", "int_se"] as const;
+export type ScheduleTrack = (typeof SCHEDULE_TRACKS)[number];
+
+/**
+ * What a session needs, which is all its kind decides:
+ *   main          one leader, any number of other instructors, one room
+ *   breakout      one leader and other instructors, a room for each of them
+ *   unstructured  no one and no room: breaks, lunch, unscheduled time
+ */
+export const SESSION_KINDS = ["main", "breakout", "unstructured"] as const;
+export type SessionKind = (typeof SESSION_KINDS)[number];
+
+/** The colors a session can be drawn in; `session-style.ts` gives each its classes. */
+export const SESSION_COLORS = ["slate", "red", "orange", "amber", "green", "teal", "blue", "violet", "pink"] as const;
+export type SessionColor = (typeof SESSION_COLORS)[number];
+
+/**
+ * Every day of every track runs from `dayStart` to `dayEnd`, in minutes after
+ * midnight, and every session is a whole number of `slot`s long. A session
+ * starts where the one before it ends, so these together keep every start on
+ * the quarter hour.
+ */
+export const SCHEDULE_LIMITS = {
+  dayStart: 8 * 60,
+  dayEnd: 17 * 60,
+  /** Nothing may run past midnight. */
+  latestEnd: 24 * 60,
+  slot: 15,
+  maxMinutes: 600,
+  sessionsPerDay: 40,
+  staff: 12,
+  name: 200,
+  description: 4000,
+  emoji: 16,
+  comment: 4000,
+  types: 50,
+  importBytes: 20 * 1024 * 1024,
+} as const;
+
+/**
+ * A quick start for a session: picking one fills in a new session's kind,
+ * name, icon, color, length and description, which are then the session's own.
+ */
+export const sessionTypes = pgTable(
+  "session_types",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: text("name").notNull(),
+    kind: text("kind").$type<SessionKind>().notNull(),
+    emoji: text("emoji").notNull().default(""),
+    color: text("color").$type<SessionColor>().notNull().default("slate"),
+    minutes: integer("minutes").notNull().default(60),
+    description: text("description").notNull().default(""),
+    position: integer("position").notNull().default(0),
+    createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("session_types_name_idx").on(sql`lower(${t.name})`),
+    check("session_types_kind_check", sql`${t.kind} in ('main', 'breakout', 'unstructured')`),
+    check("session_types_minutes_check", sql`${t.minutes} between 15 and 600 and ${t.minutes} % 15 = 0`),
+  ],
+);
+
+export type SessionType = typeof sessionTypes.$inferSelect;
+
+/**
+ * One session on one day of one track, from `start` for `minutes`. The
+ * sessions of one track-day never overlap; the time between them is
+ * unscheduled.
+ */
+export const scheduleSessions = pgTable(
+  "schedule_sessions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    bootcampId: uuid("bootcamp_id")
+      .notNull()
+      .references(() => bootcamps.id, { onDelete: "cascade" }),
+    track: text("track").$type<ScheduleTrack>().notNull(),
+    /** 1-based; day 1 of every track is the bootcamp's start date. */
+    day: integer("day").notNull(),
+    /** Minutes after midnight, on the quarter hour. */
+    start: integer("start_minute").notNull(),
+    minutes: integer("minutes").notNull(),
+    kind: text("kind").$type<SessionKind>().notNull(),
+    /** The type it was started from, if any; nothing follows from it afterwards. */
+    typeId: uuid("type_id").references(() => sessionTypes.id, { onDelete: "set null" }),
+    name: text("name").notNull(),
+    description: text("description").notNull().default(""),
+    emoji: text("emoji").notNull().default(""),
+    color: text("color").$type<SessionColor>().notNull().default("slate"),
+    /** A main session's room. A breakout's rooms are on its staff. */
+    roomId: uuid("room_id").references(() => facilityRooms.id, { onDelete: "set null" }),
+    createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("schedule_sessions_day_idx").on(t.bootcampId, t.track, t.day, t.start),
+    check("schedule_sessions_track_check", sql`${t.track} in ('btc', 'int', 'btc_se', 'int_se')`),
+    check("schedule_sessions_kind_check", sql`${t.kind} in ('main', 'breakout', 'unstructured')`),
+    check("schedule_sessions_day_check", sql`${t.day} between 1 and 30`),
+    check("schedule_sessions_minutes_check", sql`${t.minutes} between 15 and 600 and ${t.minutes} % 15 = 0`),
+    check("schedule_sessions_start_check", sql`${t.start} >= 0 and ${t.start} % 15 = 0 and ${t.start} + ${t.minutes} <= 1440`),
+  ],
+);
+
+export type ScheduleSession = typeof scheduleSessions.$inferSelect;
+
+/**
+ * Who runs a session: exactly one leader, and any other instructors. Each is
+ * an administrator or a guest judge of the bootcamp when added. In a breakout
+ * each has their own room.
+ */
+export const scheduleSessionStaff = pgTable(
+  "schedule_session_staff",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    sessionId: uuid("session_id")
+      .notNull()
+      .references(() => scheduleSessions.id, { onDelete: "cascade" }),
+    /** Lowercased. */
+    email: text("email").notNull(),
+    fullName: text("full_name").notNull().default(""),
+    leader: boolean("leader").notNull().default(false),
+    roomId: uuid("room_id").references(() => facilityRooms.id, { onDelete: "set null" }),
+    position: integer("position").notNull().default(0),
+  },
+  (t) => [
+    uniqueIndex("schedule_session_staff_email_idx").on(t.sessionId, t.email),
+    uniqueIndex("schedule_session_staff_leader_idx")
+      .on(t.sessionId)
+      .where(sql`${t.leader}`),
+  ],
+);
+
+/** A note on a session, kept with who wrote it and when. */
+export const scheduleSessionComments = pgTable(
+  "schedule_session_comments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    sessionId: uuid("session_id")
+      .notNull()
+      .references(() => scheduleSessions.id, { onDelete: "cascade" }),
+    body: text("body").notNull(),
+    authorId: text("author_id").references(() => users.id, { onDelete: "set null" }),
+    /** Copied in, so the comment still says who wrote it after their account is gone. */
+    authorName: text("author_name").notNull().default(""),
+    authorEmail: text("author_email").notNull().default(""),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [index("schedule_session_comments_session_idx").on(t.sessionId, t.createdAt)],
+);
 
 /** The class an assessment scores, as a bootcamp holds them. */
 export const EVALS_ASSESSMENT_STAGES = ["bootcamp", "intermediate"] as const;

@@ -124,6 +124,8 @@ add it to the table above.
 | A person's bootcamp history | `GET /api/evals/bootcamp-history/[id]` |
 | eVals settings → Additional Slack Contacts | `GET /api/evals/slack-contacts` |
 | Scheduler, and a bootcamp's dialog with its guest judges | `GET /api/scheduler/bootcamps`, `GET /api/scheduler/bootcamps/[id]` |
+| A bootcamp's schedule, its sessions and their comments | `GET /api/scheduler/bootcamps/[id]/schedule`, `GET /api/scheduler/bootcamps/[id]/sessions/[sessionId]`, `GET /api/scheduler/bootcamps/[id]/sessions/[sessionId]/comments?page=`, `GET /api/scheduler/bootcamps/[id]/availability`, `GET /api/scheduler/bootcamps/[id]/schedule/copy` |
+| Scheduler settings → Facilities / Session types | `GET /api/scheduler/facilities`, `GET /api/scheduler/facilities/[id]`, `GET /api/scheduler/session-types` |
 | Audit Trail | `GET /api/audit` |
 | Labs | `GET /api/lab-workshops`, `GET /api/lab-workshops/[id or slug]`, `GET /api/lab-guides`, `GET /api/lab-guides/[id or slug]`, `GET /api/lab-images` |
 

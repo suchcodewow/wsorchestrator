@@ -51,6 +51,7 @@ import {
 } from "@/lib/roles";
 import { visibleCohortSettingsTabs } from "@/app/(app)/cohort-settings/tabs";
 import { EVALS_SETTINGS_TABS } from "@/app/(app)/evals-settings/tabs";
+import { SCHEDULER_SETTINGS_TABS } from "@/app/(app)/scheduler-settings/tabs";
 import { EVALS_TABS } from "@/app/(app)/evals/tabs";
 import { COHORTS_TABS } from "@/app/(app)/cohorts/tabs";
 import { visibleSettingsTabs } from "@/app/(app)/settings/tabs";
@@ -73,6 +74,7 @@ const ownRun = {} as Record<Persona, string>;
 let aliceRun: string;
 let historyId: string;
 let assessmentId: string;
+let bootcampId: string;
 
 before(async () => {
   await scope.setUp();
@@ -83,7 +85,7 @@ before(async () => {
   historyId = await scope.createHistory("history");
   assessmentId = await scope.createAssessment(alice.id, "e2e assessment");
   // The scoring pages need an active bootcamp.
-  await scope.activeBootcamp(alice.id);
+  bootcampId = await scope.activeBootcamp(alice.id);
   for (const p of PERSONA_NAMES) {
     people[p] = await scope.createUser(p, PERSONAS[p]);
     cookies[p] = await createSession(people[p].id);
@@ -173,8 +175,19 @@ const PAGES: Record<string, PageCase> = {
   "/runs/<own event>": { path: () => "/runs/:own", expect: gated(canUseEvents) },
   "/runs/<someone else's>": { path: () => `/runs/${aliceRun}`, expect: gated(canSeeAllEvents) },
   "/scheduler": { path: () => "/scheduler", expect: gated(canUseTraining) },
+  "/scheduler/<a bootcamp>": { path: () => `/scheduler/${bootcampId}`, expect: gated(canUseTraining) },
+  "/scheduler/<unknown>": { path: () => `/scheduler/${MISSING}`, expect: () => 404 },
+  "/scheduler/<not an id>": { path: () => "/scheduler/nonsense", expect: () => 404 },
   "/scheduler-settings": {
     path: () => "/scheduler-settings",
+    expect: (a) => (canManageTrainingSettings(a) ? { to: SCHEDULER_SETTINGS_TABS[0]!.href } : 404),
+  },
+  "/scheduler-settings/facilities": {
+    path: () => "/scheduler-settings/facilities",
+    expect: gated(canManageTrainingSettings),
+  },
+  "/scheduler-settings/session-types": {
+    path: () => "/scheduler-settings/session-types",
     expect: gated(canManageTrainingSettings),
   },
   "/cohorts": {
@@ -397,6 +410,46 @@ const ROUTES: RouteCase[] = [
   { method: "GET", path: `/api/scheduler/bootcamps/${MISSING}/judges`, allowed: canUseTraining },
   { method: "POST", path: `/api/scheduler/bootcamps/${MISSING}/judges`, allowed: canManageTrainingSettings, body: () => ({}) },
   { method: "DELETE", path: `/api/scheduler/bootcamps/${MISSING}/judges/${MISSING}`, allowed: canManageTrainingSettings },
+  { method: "GET", path: `/api/scheduler/bootcamps/${MISSING}/schedule`, allowed: canUseTraining },
+  { method: "PUT", path: `/api/scheduler/bootcamps/${MISSING}/schedule/layout`, allowed: canManageTrainingSettings, body: () => ({}) },
+  { method: "GET", path: `/api/scheduler/bootcamps/${MISSING}/schedule/copy`, allowed: canUseTraining },
+  { method: "POST", path: `/api/scheduler/bootcamps/${MISSING}/schedule/copy`, allowed: canManageTrainingSettings, body: () => ({}) },
+  { method: "POST", path: `/api/scheduler/bootcamps/${MISSING}/schedule/import`, allowed: canManageTrainingSettings, body: form },
+  {
+    method: "GET",
+    path: `/api/scheduler/bootcamps/${MISSING}/availability?day=1&start=480&minutes=60`,
+    allowed: canUseTraining,
+  },
+  { method: "POST", path: `/api/scheduler/bootcamps/${MISSING}/sessions`, allowed: canManageTrainingSettings, body: () => ({}) },
+  { method: "GET", path: `/api/scheduler/bootcamps/${MISSING}/sessions/${MISSING}`, allowed: canUseTraining },
+  {
+    method: "PATCH",
+    path: `/api/scheduler/bootcamps/${MISSING}/sessions/${MISSING}`,
+    allowed: canManageTrainingSettings,
+    body: () => ({ minutes: 7 }),
+  },
+  { method: "DELETE", path: `/api/scheduler/bootcamps/${MISSING}/sessions/${MISSING}`, allowed: canManageTrainingSettings },
+  { method: "GET", path: `/api/scheduler/bootcamps/${MISSING}/sessions/${MISSING}/comments`, allowed: canUseTraining },
+  {
+    method: "POST",
+    path: `/api/scheduler/bootcamps/${MISSING}/sessions/${MISSING}/comments`,
+    allowed: canManageTrainingSettings,
+    body: () => ({}),
+  },
+  {
+    method: "DELETE",
+    path: `/api/scheduler/bootcamps/${MISSING}/sessions/${MISSING}/comments/${MISSING}`,
+    allowed: canManageTrainingSettings,
+  },
+  { method: "GET", path: "/api/scheduler/facilities", allowed: canUseTraining },
+  { method: "POST", path: "/api/scheduler/facilities", allowed: canManageTrainingSettings, body: () => ({}) },
+  { method: "GET", path: `/api/scheduler/facilities/${MISSING}`, allowed: canUseTraining },
+  { method: "PATCH", path: `/api/scheduler/facilities/${MISSING}`, allowed: canManageTrainingSettings, body: () => ({ name: "" }) },
+  { method: "DELETE", path: `/api/scheduler/facilities/${MISSING}`, allowed: canManageTrainingSettings },
+  { method: "GET", path: "/api/scheduler/session-types", allowed: canUseTraining },
+  { method: "POST", path: "/api/scheduler/session-types", allowed: canManageTrainingSettings, body: () => ({}) },
+  { method: "PATCH", path: `/api/scheduler/session-types/${MISSING}`, allowed: canManageTrainingSettings, body: () => ({ minutes: 7 }) },
+  { method: "DELETE", path: `/api/scheduler/session-types/${MISSING}`, allowed: canManageTrainingSettings },
 
   // eVals
   { method: "GET", path: "/api/evals/bootcamp-history", allowed: canUseEvals },

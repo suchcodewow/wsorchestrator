@@ -7,6 +7,8 @@ import { BOOTCAMP_LIST } from "@/lib/list-specs";
 import { parseListQuery } from "@/lib/paging";
 import { canManageTrainingSettings, canUseTraining } from "@/lib/roles";
 import { activeBootcamp, listBootcamps } from "@/lib/scheduler/bootcamps";
+import { facilityPicks } from "@/lib/scheduler/facilities";
+import { copySources } from "@/lib/scheduler/schedule";
 import { SchedulerView } from "./scheduler-view";
 
 export const metadata: Metadata = { title: "Scheduler" };
@@ -21,7 +23,13 @@ export default async function SchedulerPage({
   if (!canUseTraining(session.user.access)) notFound();
 
   const query = parseListQuery(await searchParams, BOOTCAMP_LIST);
-  const [page, active] = await Promise.all([listBootcamps(query), activeBootcamp()]);
+  const canManage = canManageTrainingSettings(session.user.access);
+  const [page, active, facilities, sources] = await Promise.all([
+    listBootcamps(query),
+    activeBootcamp(),
+    canManage ? facilityPicks() : [],
+    canManage ? copySources(null) : [],
+  ]);
 
   return (
     <div className="space-y-8">
@@ -30,7 +38,9 @@ export default async function SchedulerPage({
         query={query}
         page={page}
         active={active}
-        canManage={canManageTrainingSettings(session.user.access)}
+        canManage={canManage}
+        facilities={facilities}
+        sources={sources}
       />
     </div>
   );

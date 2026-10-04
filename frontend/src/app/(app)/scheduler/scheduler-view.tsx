@@ -3,9 +3,10 @@
 /** The bootcamps, latest first, and for an administrator the means to schedule, change and remove them. */
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { CalendarPlus, Loader2, Pencil, Trash2 } from "lucide-react";
+import { CalendarPlus, ChevronRight, Loader2, Pencil, Trash2 } from "lucide-react";
 import { HEADER_ROW, Pager, PlainHeader, SortHeader, TableSearch } from "@/components/data-table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -13,6 +14,7 @@ import type { BootcampSort } from "@/lib/list-specs";
 import { riseChild, staggerParent } from "@/lib/motion";
 import type { ListQuery, Page } from "@/lib/paging";
 import type { ActiveBootcamp, BootcampRow } from "@/lib/scheduler/bootcamps";
+import type { CopySource } from "@/lib/scheduler/schedule";
 import { formatDate } from "../cohort-settings/format";
 import { BootcampDialog, STATUS_BADGES, STATUS_LABELS } from "./bootcamp-dialog";
 
@@ -21,11 +23,16 @@ export function SchedulerView({
   page,
   active,
   canManage,
+  facilities,
+  sources,
 }: {
   query: ListQuery<BootcampSort>;
   page: Page<BootcampRow>;
   active: ActiveBootcamp | null;
   canManage: boolean;
+  facilities: { id: string; name: string }[];
+  /** Schedules a new bootcamp can start from. */
+  sources: CopySource[];
 }) {
   const router = useRouter();
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -33,7 +40,7 @@ export function SchedulerView({
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const sortProps = { sort: query.sort, dir: query.dir };
-  const columns = canManage ? 6 : 5;
+  const columns = canManage ? 7 : 6;
 
   function open(row: BootcampRow | null) {
     setEditing(row);
@@ -82,7 +89,7 @@ export function SchedulerView({
       </motion.div>
 
       <motion.div variants={riseChild}>
-        <TableSearch value={query.q} placeholder="Search by status or who scheduled it" label="Search bootcamps" />
+        <TableSearch value={query.q} placeholder="Search by status, facility or who scheduled it" label="Search bootcamps" />
       </motion.div>
 
       {error && (
@@ -101,6 +108,7 @@ export function SchedulerView({
                 </SortHeader>
                 <PlainHeader>Bootcamp days</PlainHeader>
                 <PlainHeader>Intermediate days</PlainHeader>
+                <PlainHeader>Facility</PlainHeader>
                 <SortHeader column="status" {...sortProps}>
                   Status
                 </SortHeader>
@@ -112,10 +120,23 @@ export function SchedulerView({
             </thead>
             <tbody>
               {page.rows.map((row) => (
-                <tr key={row.id} className="border-b transition-colors last:border-b-0 hover:bg-muted/30">
-                  <td className="px-5 py-2.5 font-medium tabular-nums">{formatDate(row.startDate)}</td>
+                <tr
+                  key={row.id}
+                  className="group cursor-pointer border-b transition-colors last:border-b-0 hover:bg-muted/30"
+                  onClick={(e) => {
+                    if ((e.target as HTMLElement).closest("button, a")) return;
+                    router.push(`/scheduler/${row.id}`);
+                  }}
+                >
+                  <td className="px-5 py-2.5 font-medium tabular-nums">
+                    <Link href={`/scheduler/${row.id}`} className="inline-flex items-center gap-1 hover:underline">
+                      {formatDate(row.startDate)}
+                      <ChevronRight className="size-3.5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+                    </Link>
+                  </td>
                   <td className="px-5 py-2.5 tabular-nums">{row.btcDays}</td>
                   <td className="px-5 py-2.5 tabular-nums">{row.intDays ?? "—"}</td>
+                  <td className="px-5 py-2.5 text-muted-foreground">{row.facilityName ?? "—"}</td>
                   <td className="px-5 py-2.5">
                     <Badge variant={STATUS_BADGES[row.status]}>{STATUS_LABELS[row.status]}</Badge>
                   </td>
@@ -162,7 +183,9 @@ export function SchedulerView({
         </div>
       </motion.div>
 
-      {canManage && <BootcampDialog open={dialogOpen} onOpenChange={setDialogOpen} editing={editing} />}
+      {canManage && (
+        <BootcampDialog open={dialogOpen} onOpenChange={setDialogOpen} editing={editing} facilities={facilities} sources={sources} />
+      )}
     </motion.div>
   );
 }

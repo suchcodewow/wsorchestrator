@@ -4,7 +4,8 @@
  * The form that schedules a bootcamp, or changes one already scheduled, with
  * its guest judges. The judges are saved with the bootcamp, so Cancel leaves
  * them as they were. Making it active while another is asks first, and on yes
- * marks that other one complete in the same save.
+ * marks that other one complete in the same save. A new bootcamp can start
+ * its schedule as a copy of an earlier one's.
  */
 
 import { useEffect, useState } from "react";
@@ -19,6 +20,7 @@ import { BOOTCAMP_DEFAULTS, BOOTCAMP_LIMITS, BOOTCAMP_STATUSES, type BootcampSta
 import { SPRING_SNAPPY, riseChild, staggerParent } from "@/lib/motion";
 import type { ActiveBootcamp, BootcampRow } from "@/lib/scheduler/bootcamps";
 import type { JudgePick } from "@/lib/scheduler/judges";
+import type { CopySource } from "@/lib/scheduler/schedule";
 import { cn } from "@/lib/utils";
 import { formatDate } from "../cohort-settings/format";
 
@@ -38,8 +40,14 @@ const ERRORS: Record<string, string> = {
   invalid: "Check the start date, the number of days and the judges.",
   not_found: "That bootcamp was removed — reload the page.",
   active_exists: "Another bootcamp is active now — reload the page.",
+  unknown_facility: "That facility was removed — reload the page.",
   forbidden: "Your own role changed — reload the page.",
 };
+
+const SELECT_CLASS = cn(
+  "h-9 w-full rounded-md border border-input bg-transparent px-2 text-sm text-foreground shadow-xs outline-none",
+  "focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-input/30",
+);
 
 function validDays(text: string): number | null {
   const n = Number(text);
@@ -50,11 +58,16 @@ export function BootcampDialog({
   open,
   onOpenChange,
   editing,
+  facilities,
+  sources,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** The bootcamp to change; null to schedule a new one. */
   editing: BootcampRow | null;
+  facilities: { id: string; name: string }[];
+  /** Earlier schedules a new bootcamp can start from, latest first. */
+  sources: CopySource[];
 }) {
   const router = useRouter();
   const [startDate, setStartDate] = useState("");
@@ -62,6 +75,9 @@ export function BootcampDialog({
   const [includeInt, setIncludeInt] = useState(true);
   const [intDays, setIntDays] = useState(String(BOOTCAMP_DEFAULTS.intDays));
   const [status, setStatus] = useState<BootcampStatus>("scheduled");
+  const [facilityId, setFacilityId] = useState("");
+  /** For a new bootcamp: the schedule to copy, or "" to start empty. */
+  const [copyFrom, setCopyFrom] = useState("");
   /** Null while an edited bootcamp's judges load, or if they could not be. */
   const [judges, setJudges] = useState<JudgePick[] | null>([]);
   const [judgesError, setJudgesError] = useState<string | null>(null);
@@ -79,6 +95,8 @@ export function BootcampDialog({
       setIncludeInt(editing ? editing.intDays !== null : true);
       setIntDays(String(editing?.intDays ?? BOOTCAMP_DEFAULTS.intDays));
       setStatus(editing?.status ?? "scheduled");
+      setFacilityId(editing ? (editing.facilityId ?? "") : (facilities.length === 1 ? facilities[0]!.id : ""));
+      setCopyFrom(editing ? "" : (sources[0]?.id ?? ""));
       setJudges(editing ? null : []);
       setJudgesError(null);
       setConfirming(null);
@@ -134,6 +152,7 @@ export function BootcampDialog({
           btcDays: btc,
           intDays: int,
           status,
+          facilityId: facilityId || null,
           ...(judges && { judges: judges.map((j) => j.email) }),
           ...(completeActive && { completeActive }),
         }),
@@ -153,6 +172,17 @@ export function BootcampDialog({
         return;
       }
       setConfirming(null);
+      if (!editing && copyFrom && body?.id) {
+        // The bootcamp is made either way; if the copy fails its schedule page offers it again.
+        await fetch(`/api/scheduler/bootcamps/${body.id}/schedule/copy`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ from: copyFrom }),
+        }).catch(() => null);
+        onOpenChange(false);
+        router.push(`/scheduler/${body.id}`);
+        return;
+      }
       onOpenChange(false);
       router.refresh();
     } catch {
@@ -286,6 +316,40 @@ export function BootcampDialog({
                 </button>
               ))}
             </div>
+          </motion.div>
+
+          <motion.div variants={riseChild} className={cn("grid gap-4", !editing && "sm:grid-cols-2")}>
+            <div className="grid gap-1.5">
+              <label htmlFor="bc-facility" className="text-sm font-medium">
+                Facility
+              </label>
+              <select id="bc-facility" value={facilityId} onChange={(e) => setFacilityId(e.target.value)} className={SELECT_CLASS}>
+                <option value="">{facilities.length === 0 ? "None set up yet" : "Not picked yet"}</option>
+                {facilities.map((f) => (
+                  <option key={f.id} value={f.id}>
+                    {f.name}
+                  </option>
+                ))}
+              </select>
+              {editing && (editing.facilityId ?? "") !== facilityId && editing.facilityId && (
+                <p className="text-xs text-amber-700 dark:text-amber-400">Saving takes every room off its sessions.</p>
+              )}
+            </div>
+            {!editing && (
+              <div className="grid gap-1.5">
+                <label htmlFor="bc-copy" className="text-sm font-medium">
+                  Start its schedule from
+                </label>
+                <select id="bc-copy" value={copyFrom} onChange={(e) => setCopyFrom(e.target.value)} className={SELECT_CLASS}>
+                  <option value="">An empty schedule</option>
+                  {sources.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {formatDate(s.startDate)} ({s.sessions} sessions)
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </motion.div>
 
           <motion.div variants={riseChild} className="grid gap-2">
