@@ -362,6 +362,33 @@ export function ScheduleView({
             ))}
           </div>
 
+          <button
+            type="button"
+            role="switch"
+            aria-checked={condensed}
+            onClick={() => setCondensed(!condensed)}
+            className={cn(
+              "flex h-8 cursor-pointer items-center gap-2 rounded-full border px-3 text-sm outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50",
+              condensed
+                ? "border-brand/30 bg-brand/10 font-medium text-foreground"
+                : "border-border text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+            )}
+          >
+            <Rows4 className="size-3.5 shrink-0" />
+            Condensed
+            <span
+              aria-hidden
+              className={cn("flex h-4 w-7 shrink-0 items-center rounded-full p-0.5 transition-colors", condensed ? "bg-brand" : "bg-input")}
+            >
+              <span
+                className={cn(
+                  "size-3 rounded-full bg-background shadow-xs transition-transform duration-200 ease-out",
+                  condensed && "translate-x-3",
+                )}
+              />
+            </span>
+          </button>
+
           {view === "week" ? (
             <div role="radiogroup" aria-label="Track" className="flex flex-wrap gap-1">
               {tracks.map((t) => (
@@ -407,33 +434,6 @@ export function ScheduleView({
               </Button>
             </div>
           )}
-
-          <button
-            type="button"
-            role="switch"
-            aria-checked={condensed}
-            onClick={() => setCondensed(!condensed)}
-            className={cn(
-              "flex h-8 cursor-pointer items-center gap-2 rounded-full border px-3 text-sm outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50",
-              condensed
-                ? "border-brand/30 bg-brand/10 font-medium text-foreground"
-                : "border-border text-muted-foreground hover:bg-accent hover:text-accent-foreground",
-            )}
-          >
-            <Rows4 className="size-3.5 shrink-0" />
-            Condensed
-            <span
-              aria-hidden
-              className={cn("flex h-4 w-7 shrink-0 items-center rounded-full p-0.5 transition-colors", condensed ? "bg-brand" : "bg-input")}
-            >
-              <span
-                className={cn(
-                  "size-3 rounded-full bg-background shadow-xs transition-transform duration-200 ease-out",
-                  condensed && "translate-x-3",
-                )}
-              />
-            </span>
-          </button>
         </div>
 
         <div className="flex flex-wrap items-center gap-3 text-sm">

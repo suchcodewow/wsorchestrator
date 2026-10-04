@@ -67,7 +67,7 @@ export function Board(props: BoardProps) {
       {/* Columns share the width and scroll only below 12rem each; `min-w-fit` would size them to their longest name. */}
       <div className="flex" style={{ minWidth: `calc(4rem + ${columns.length} * 12rem)` }}>
         <div className="sticky left-0 z-20 w-16 shrink-0 border-r bg-card">
-          <div className="h-20 border-b" />
+          <div className="h-14 border-b" />
           <div className="relative" style={{ height }}>
             {hours.map((m) => (
               <div
@@ -103,33 +103,14 @@ function Column({
   ...props
 }: BoardProps & { column: BoardColumn; height: number; hours: number[]; scale: number }) {
   const { setNodeRef, isOver } = useDroppable({ id: `col:${column.key}` });
-  const total = dayTotal(column.sessions);
   const gaps = gapsOf(column.sessions);
 
   return (
     <div className="min-w-48 flex-1 border-r last:border-r-0">
-      <div className="flex h-20 items-start justify-between gap-2 border-b px-3 py-2.5">
+      <div className="flex h-14 items-start justify-between gap-2 border-b px-3 py-2.5">
         <div className="min-w-0">
           <div className="truncate text-sm font-medium">{column.title}</div>
           <div className="truncate text-xs text-muted-foreground">{column.subtitle}</div>
-          <div
-            className={cn(
-              "mt-1 truncate text-xs tabular-nums",
-              total.over > 0 ? "font-medium text-red-600 dark:text-red-400" : "text-muted-foreground",
-            )}
-          >
-            {column.sessions.length === 0
-              ? "Nothing yet"
-              : // What is unscheduled or over leads, so a narrow column truncates the end time instead.
-                [
-                  total.over > 0 && `${formatLength(total.over)} over`,
-                  total.left > 0 && `${formatLength(total.left)} unscheduled`,
-                  total.over === 0 && total.left === 0 && "Full day",
-                  `ends ${formatClock(total.end)}`,
-                ]
-                  .filter(Boolean)
-                  .join(" · ")}
-          </div>
         </div>
         <div className="flex shrink-0 items-center">
           {props.headerAction?.(column)}
