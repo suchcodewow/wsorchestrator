@@ -40,6 +40,7 @@ export const POST = audited(async function POST(req: Request) {
         training: result.grant.trainingRole,
         evals: result.grant.evalsRole,
         platform: false,
+        judging: session.user.access.judging,
       }
     : session.user.access;
   return NextResponse.json({ applied: result.applied, home: homePath(access) });

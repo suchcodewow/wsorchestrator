@@ -14,7 +14,7 @@ import { riseChild, staggerParent } from "@/lib/motion";
 import type { ListQuery, Page } from "@/lib/paging";
 import type { ActiveBootcamp, BootcampRow } from "@/lib/scheduler/bootcamps";
 import { formatDate } from "../cohort-settings/format";
-import { BootcampDialog, STATUS_LABELS } from "./bootcamp-dialog";
+import { BootcampDialog, STATUS_BADGES, STATUS_LABELS } from "./bootcamp-dialog";
 
 export function SchedulerView({
   query,
@@ -46,7 +46,12 @@ export function SchedulerView({
     setError(null);
     try {
       const res = await fetch(`/api/scheduler/bootcamps/${row.id}`, { method: "DELETE" });
-      if (!res.ok && res.status !== 404) setError(`Could not remove it (${res.status}).`);
+      const body = await res.json().catch(() => null);
+      if (body?.error === "has_scores") {
+        setError(`The bootcamp starting ${formatDate(row.startDate)} has assessments scored at it, so it is kept.`);
+      } else if (!res.ok && res.status !== 404) {
+        setError(`Could not remove it (${res.status}).`);
+      }
       router.refresh();
     } catch {
       setError("Could not reach the server.");
@@ -112,7 +117,7 @@ export function SchedulerView({
                   <td className="px-5 py-2.5 tabular-nums">{row.btcDays}</td>
                   <td className="px-5 py-2.5 tabular-nums">{row.intDays ?? "—"}</td>
                   <td className="px-5 py-2.5">
-                    <Badge variant={row.status === "active" ? "default" : "secondary"}>{STATUS_LABELS[row.status]}</Badge>
+                    <Badge variant={STATUS_BADGES[row.status]}>{STATUS_LABELS[row.status]}</Badge>
                   </td>
                   <td className="px-5 py-2.5 text-muted-foreground">{row.createdBy ?? "—"}</td>
                   {canManage && (

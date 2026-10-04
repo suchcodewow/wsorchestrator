@@ -115,10 +115,15 @@ add it to the table above.
 | My settings (theme, calendar scope) | `GET`/`PATCH /api/me` |
 | Users | `GET /api/users` |
 | Admin settings (sign-in domains) | `GET /api/settings/domains` |
+| eVals → Bootcamp / Intermediate | `GET /api/evals/scoring?stage=bootcamp\|intermediate` |
+| eVals → an assessment's attendees | `GET /api/evals/scoring/[assessmentId]` |
+| eVals → an attendee's scoring form | `GET /api/evals/scoring/[assessmentId]/[employeeId]` |
+| eVals settings → Assessments | `GET /api/evals/assessments`, `GET /api/evals/assessments/[id]` |
 | Cohort Settings | `GET /api/evals/employees`, `GET /api/evals/organization`, `GET /api/evals/hibob/sync`, `GET /api/evals/titles?list=` |
 | Bootcamp History | `GET /api/evals/bootcamp-history` |
 | A person's bootcamp history | `GET /api/evals/bootcamp-history/[id]` |
 | eVals settings → Additional Slack Contacts | `GET /api/evals/slack-contacts` |
+| Scheduler, and a bootcamp's dialog with its guest judges | `GET /api/scheduler/bootcamps`, `GET /api/scheduler/bootcamps/[id]` |
 | Audit Trail | `GET /api/audit` |
 | Labs | `GET /api/lab-workshops`, `GET /api/lab-workshops/[id or slug]`, `GET /api/lab-guides`, `GET /api/lab-guides/[id or slug]`, `GET /api/lab-images` |
 

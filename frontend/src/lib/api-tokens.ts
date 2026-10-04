@@ -10,6 +10,7 @@ import {
   MAX_TOKENS_PER_USER,
 } from "@/db/schema";
 import type { Access } from "@/lib/roles";
+import { isJudgingNow } from "@/lib/scheduler/judging";
 
 const TOKEN_PREFIX = "wo";
 
@@ -173,6 +174,7 @@ export async function resolveToken(
       training: row.trainingRole,
       evals: row.evalsRole,
       platform: row.isPlatformAdmin,
+      judging: await isJudgingNow(row.email),
     },
     email: row.email,
   };

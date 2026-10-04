@@ -27,6 +27,7 @@ import {
   canManageSignInDomains,
   canManageTrainingSettings,
   canManageUsers,
+  canScoreAssessments,
   canUseEvals,
   canUseEvents,
   canUseTraining,
@@ -95,7 +96,7 @@ export const NAV_SECTIONS: NavSection[] = [
   {
     heading: "eVals",
     items: [
-      { href: "/evals", label: "eVals", Icon: FlaskConical, visible: canUseEvals },
+      { href: "/evals", label: "eVals", Icon: FlaskConical, visible: canScoreAssessments },
       { href: "/bootcamp-history", label: "Bootcamp History", Icon: History, visible: canUseEvals },
       {
         href: "/evals-settings",

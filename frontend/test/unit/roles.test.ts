@@ -81,6 +81,11 @@ const POLICY: Record<string, { actual: Check; expected: Check }> = {
     actual: roles.canManageEvalsSettings,
     expected: evals("administrator"),
   },
+  canScoreAssessments: { actual: roles.canScoreAssessments, expected: (a) => evals("viewer")(a) || a.judging },
+  canSearchEmployees: {
+    actual: roles.canSearchEmployees,
+    expected: (a) => evals("administrator")(a) || training("administrator")(a),
+  },
 
   canManageBackups: { actual: roles.canManageBackups, expected: platformOnly },
   canManageSignInDomains: { actual: roles.canManageSignInDomains, expected: platformOnly },
@@ -111,10 +116,10 @@ const POLICY: Record<string, { actual: Check; expected: Check }> = {
 };
 
 test("the combinations cover every role", () => {
-  // 5 event × (none + 2 training) × (none + 2 eVals) × platform on/off.
+  // 5 event × (none + 2 training) × (none + 2 eVals) × platform on/off × judging or not.
   assert.equal(
     EVERY_ACCESS.length,
-    EVENT_ROLES.length * (TRAINING_ROLES.length + 1) * (EVALS_ROLES.length + 1) * 2,
+    EVENT_ROLES.length * (TRAINING_ROLES.length + 1) * (EVALS_ROLES.length + 1) * 2 * 2,
   );
   assert.equal(new Set(EVERY_ACCESS.map(describeAccess)).size, EVERY_ACCESS.length);
 });
@@ -209,7 +214,7 @@ describe("homePath", () => {
         ? "/events"
         : training("viewer")(a)
           ? "/scheduler"
-          : evals("viewer")(a)
+          : evals("viewer")(a) || a.judging
             ? "/evals"
             : "/welcome";
       assert.equal(roles.homePath(a), want, describeAccess(a));
@@ -218,6 +223,10 @@ describe("homePath", () => {
 
   test("sends someone with no access anywhere to the welcome page", () => {
     assert.equal(roles.homePath(PERSONAS.nobody), "/welcome");
+  });
+
+  test("sends a guest judge with no role to eVals, where they score", () => {
+    assert.equal(roles.homePath(PERSONAS.guestJudge), "/evals");
   });
 });
 
@@ -235,7 +244,7 @@ describe("accessBadges", () => {
 
   test("shows the event role, then the training role, then the eVals role", () => {
     assert.deepEqual(
-      roles.accessBadges({ event: "manager", training: "viewer", evals: "viewer", platform: false }),
+      roles.accessBadges({ event: "manager", training: "viewer", evals: "viewer", platform: false, judging: false }),
       ["Event Manager", "Training Viewer", "eVals Viewer"],
     );
     assert.deepEqual(roles.accessBadges(PERSONAS.trainingAdmin), ["Training Administrator"]);

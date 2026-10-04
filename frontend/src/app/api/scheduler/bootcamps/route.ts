@@ -1,4 +1,4 @@
-/** The bootcamps the Scheduler plans, a page at a time, and scheduling another. */
+/** The bootcamps the Scheduler plans, a page at a time, and scheduling another with its judges. */
 
 import { NextResponse } from "next/server";
 import { requireCaller } from "@/lib/api-auth";
@@ -6,7 +6,7 @@ import { audited } from "@/lib/audit";
 import { BOOTCAMP_LIST } from "@/lib/list-specs";
 import { parseListQuery } from "@/lib/paging";
 import { canManageTrainingSettings, canUseTraining } from "@/lib/roles";
-import { bootcampInputSchema, createBootcamp, listBootcamps } from "@/lib/scheduler/bootcamps";
+import { BOOTCAMP_STATUS_FOR, bootcampInputSchema, createBootcamp, listBootcamps } from "@/lib/scheduler/bootcamps";
 
 export async function GET(req: Request) {
   const { error } = await requireCaller(req, canUseTraining);
@@ -24,6 +24,9 @@ export const POST = audited(async function POST(req: Request) {
   if (!parsed.success) return NextResponse.json({ error: "invalid" }, { status: 400 });
 
   const created = await createBootcamp(user.id, parsed.data);
-  if (!created.ok) return NextResponse.json({ error: created.error, active: created.active }, { status: 409 });
+  if (!created.ok) {
+    const { error, active, email } = created;
+    return NextResponse.json({ error, active, email }, { status: BOOTCAMP_STATUS_FOR[error] });
+  }
   return NextResponse.json({ id: created.id }, { status: 201 });
 });

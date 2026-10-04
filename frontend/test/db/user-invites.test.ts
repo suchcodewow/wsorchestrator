@@ -130,6 +130,7 @@ describe("using a link", () => {
         training: grant.trainingRole,
         evals: grant.evalsRole,
         platform: false,
+        judging: false,
       }, describeGrant(grant));
     }
   });
@@ -149,7 +150,8 @@ describe("using a link", () => {
       trainingRole: "administrator",
       evalsRole: "administrator",
     });
-    for (const name of PERSONA_NAMES.filter((p) => p !== "nobody")) {
+    // A guest judge holds no stored role, so a link applies to them as to nobody.
+    for (const name of PERSONA_NAMES.filter((p) => p !== "nobody" && p !== "guestJudge")) {
       const existing = await scope.createUser(`keep_${name}`, PERSONAS[name]);
       const result = await acceptInvite(existing.id, token);
       assert.ok(result.ok && !result.applied, name);

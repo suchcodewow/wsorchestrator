@@ -1,25 +1,43 @@
 "use client";
 
-/** The form that schedules a bootcamp, or changes one already scheduled. */
+/**
+ * The form that schedules a bootcamp, or changes one already scheduled, with
+ * its guest judges. The judges are saved with the bootcamp, so Cancel leaves
+ * them as they were. Making it active while another is asks first, and on yes
+ * marks that other one complete in the same save.
+ */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Check, Loader2 } from "lucide-react";
+import { Check, Loader2, X } from "lucide-react";
+import { EmployeePicker } from "@/components/employee-picker";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { BOOTCAMP_DEFAULTS, BOOTCAMP_LIMITS, BOOTCAMP_STATUSES, type BootcampStatus } from "@/db/schema";
 import { SPRING_SNAPPY, riseChild, staggerParent } from "@/lib/motion";
-import type { BootcampRow } from "@/lib/scheduler/bootcamps";
+import type { ActiveBootcamp, BootcampRow } from "@/lib/scheduler/bootcamps";
+import type { JudgePick } from "@/lib/scheduler/judges";
 import { cn } from "@/lib/utils";
 import { formatDate } from "../cohort-settings/format";
 
-export const STATUS_LABELS: Record<BootcampStatus, string> = { scheduled: "Scheduled", active: "Active" };
+export const STATUS_LABELS: Record<BootcampStatus, string> = {
+  scheduled: "Scheduled",
+  active: "Active",
+  complete: "Complete",
+};
+
+export const STATUS_BADGES: Record<BootcampStatus, "default" | "secondary" | "outline"> = {
+  scheduled: "secondary",
+  active: "default",
+  complete: "outline",
+};
 
 const ERRORS: Record<string, string> = {
-  invalid: "Check the start date and the number of days.",
+  invalid: "Check the start date, the number of days and the judges.",
   not_found: "That bootcamp was removed — reload the page.",
+  active_exists: "Another bootcamp is active now — reload the page.",
   forbidden: "Your own role changed — reload the page.",
 };
 
@@ -44,6 +62,11 @@ export function BootcampDialog({
   const [includeInt, setIncludeInt] = useState(true);
   const [intDays, setIntDays] = useState(String(BOOTCAMP_DEFAULTS.intDays));
   const [status, setStatus] = useState<BootcampStatus>("scheduled");
+  /** Null while an edited bootcamp's judges load, or if they could not be. */
+  const [judges, setJudges] = useState<JudgePick[] | null>([]);
+  const [judgesError, setJudgesError] = useState<string | null>(null);
+  /** The bootcamp active now, while asking whether to complete it. */
+  const [confirming, setConfirming] = useState<ActiveBootcamp | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -56,11 +79,43 @@ export function BootcampDialog({
       setIncludeInt(editing ? editing.intDays !== null : true);
       setIntDays(String(editing?.intDays ?? BOOTCAMP_DEFAULTS.intDays));
       setStatus(editing?.status ?? "scheduled");
+      setJudges(editing ? null : []);
+      setJudgesError(null);
+      setConfirming(null);
       setError(null);
     }
   }
 
-  async function save() {
+  const editingId = editing?.id;
+  useEffect(() => {
+    if (!open || !editingId) return;
+    const ctrl = new AbortController();
+    (async () => {
+      try {
+        const res = await fetch(`/api/scheduler/bootcamps/${editingId}`, { signal: ctrl.signal });
+        const body = res.ok ? await res.json() : null;
+        if (body) setJudges(body.judges as JudgePick[]);
+        else setJudgesError(`Could not load its judges (${res.status}); saving leaves them as they are.`);
+      } catch {
+        if (!ctrl.signal.aborted) setJudgesError("Could not load its judges; saving leaves them as they are.");
+      }
+    })();
+    return () => ctrl.abort();
+  }, [open, editingId]);
+
+  async function addJudge(email: string, fullName?: string) {
+    if (!judges) return false;
+    if (judges.some((j) => j.email === email.toLowerCase())) {
+      setError("That person is already a judge at this bootcamp.");
+      return false;
+    }
+    setError(null);
+    setJudges([...judges, { email: email.toLowerCase(), fullName: fullName ?? "" }]);
+    return true;
+  }
+
+  /** Saves the form; `completeActive` is the active bootcamp the user agreed to complete. */
+  async function save(completeActive?: string) {
     const btc = validDays(btcDays);
     const int = includeInt ? validDays(intDays) : null;
     const range = `${BOOTCAMP_LIMITS.minDays} and ${BOOTCAMP_LIMITS.maxDays}`;
@@ -74,22 +129,34 @@ export function BootcampDialog({
       const res = await fetch(editing ? `/api/scheduler/bootcamps/${editing.id}` : "/api/scheduler/bootcamps", {
         method: editing ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ startDate, btcDays: btc, intDays: int, status }),
+        body: JSON.stringify({
+          startDate,
+          btcDays: btc,
+          intDays: int,
+          status,
+          ...(judges && { judges: judges.map((j) => j.email) }),
+          ...(completeActive && { completeActive }),
+        }),
       });
       const body = await res.json().catch(() => null);
       if (!res.ok) {
+        if (body?.error === "active_exists" && body.active) {
+          setConfirming(body.active as ActiveBootcamp);
+          return;
+        }
+        setConfirming(null);
         setError(
-          body?.error === "active_exists"
-            ? `Only one bootcamp can be active, and ${
-                body.active ? `the one starting ${formatDate(body.active.startDate)}` : "another"
-              } already is. Make that one scheduled first.`
+          body?.error === "not_employee"
+            ? `${body.email ?? "One of the judges"} is not in the employee list. Remove them and pick from the list.`
             : (ERRORS[body?.error ?? ""] ?? `Could not save (${res.status}).`),
         );
         return;
       }
+      setConfirming(null);
       onOpenChange(false);
       router.refresh();
     } catch {
+      setConfirming(null);
       setError("Could not reach the server.");
     } finally {
       setPending(false);
@@ -221,6 +288,47 @@ export function BootcampDialog({
             </div>
           </motion.div>
 
+          <motion.div variants={riseChild} className="grid gap-2">
+            <EmployeePicker
+              id="bc-judge"
+              label="Guest judges"
+              placeholder="Search employees by name"
+              busy={judges === null || judges.length >= BOOTCAMP_LIMITS.judges}
+              onAdd={addJudge}
+            />
+            {judgesError ? (
+              <p className="text-sm text-destructive">{judgesError}</p>
+            ) : judges === null ? (
+              <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="size-3.5 animate-spin" />
+                Loading judges…
+              </p>
+            ) : judges.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No guest judges.</p>
+            ) : (
+              <ul className="max-h-48 divide-y overflow-y-auto rounded-lg border">
+                {judges.map((j) => (
+                  <li key={j.email} className="flex items-center gap-3 px-3 py-1.5 text-sm">
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate font-medium">{j.fullName || j.email}</div>
+                      {j.fullName && <div className="truncate text-xs text-muted-foreground">{j.email}</div>}
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      aria-label={`Remove ${j.fullName || j.email}`}
+                      className="size-7 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                      onClick={() => setJudges(judges.filter((other) => other.email !== j.email))}
+                    >
+                      <X className="size-3.5" />
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </motion.div>
+
           {error && (
             <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} role="alert" className="text-sm text-destructive">
               {error}
@@ -231,12 +339,34 @@ export function BootcampDialog({
             <Button type="button" variant="ghost" disabled={pending} onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button type="submit" variant="brand" disabled={pending}>
-              {pending && <Loader2 className="animate-spin" />}
+            <Button type="submit" variant="brand" disabled={pending || (judges === null && !judgesError)}>
+              {pending && !confirming && <Loader2 className="animate-spin" />}
               {editing ? "Save" : "Schedule"}
             </Button>
           </DialogFooter>
         </motion.form>
+
+        <Dialog open={confirming !== null} onOpenChange={(next) => !next && !pending && setConfirming(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>
+                Bootcamp starting {confirming ? formatDate(confirming.startDate) : ""} is active
+              </DialogTitle>
+              <DialogDescription className="leading-relaxed">
+                Only one bootcamp can be active. Mark that one complete and make this one active?
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button type="button" variant="ghost" disabled={pending} onClick={() => setConfirming(null)}>
+                Cancel
+              </Button>
+              <Button type="button" variant="brand" disabled={pending} onClick={() => confirming && save(confirming.id)}>
+                {pending && <Loader2 className="animate-spin" />}
+                Complete it and make this one active
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </DialogContent>
     </Dialog>
   );
