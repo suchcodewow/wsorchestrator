@@ -223,8 +223,8 @@ export function ScheduleView({
             key: keyOf(t, day),
             track: t,
             day,
-            title: TRACK_LABELS[t],
-            subtitle: `Day ${day}`,
+            title: `Day ${day}`,
+            subtitle: TRACK_LABELS[t],
             sessions: days[t][day - 1] ?? [],
           }));
   const boardDensity: Density = condensed ? "condensed" : "detailed";
