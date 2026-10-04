@@ -9,7 +9,7 @@
 
 import "server-only";
 
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
 import {
@@ -18,6 +18,9 @@ import {
   EVALS_SLACK_CONTACT_LIMITS,
   bootcamps,
   evalsSubmissions,
+  facilities,
+  scheduleSessionStaff,
+  scheduleSessions,
   users,
   type BootcampStatus,
 } from "@/db/schema";
@@ -28,6 +31,7 @@ import type { BootcampSort } from "@/lib/list-specs";
 import { pageWindow, toPage, type ListQuery, type Page } from "@/lib/paging";
 import { orderFor, searchAny } from "@/lib/paging-sql";
 import { judgePicks, resolveJudges, setJudges, type JudgePick } from "@/lib/scheduler/judges";
+import { isForeignKeyViolation, isUniqueViolation } from "@/lib/scheduler/pg-errors";
 
 export type BootcampRow = {
   id: string;
@@ -36,6 +40,9 @@ export type BootcampRow = {
   /** Null when it holds no intermediate class. */
   intDays: number | null;
   status: BootcampStatus;
+  /** Where it is held, or null before one is picked. */
+  facilityId: string | null;
+  facilityName: string | null;
   createdBy: string | null;
   createdAt: Date;
 };
@@ -54,7 +61,7 @@ const SORT_COLUMNS = {
   createdBy: sql`lower(${createdBy})`,
 } as const;
 
-/** One page of bootcamps, latest first by default. The search matches the status or who created it. */
+/** One page of bootcamps, latest first by default. The search matches the status, the facility or who created it. */
 export async function listBootcamps(query: ListQuery<BootcampSort>): Promise<Page<BootcampRow>> {
   const { limit, offset } = pageWindow(query.page);
   const rows = await db
@@ -64,12 +71,15 @@ export async function listBootcamps(query: ListQuery<BootcampSort>): Promise<Pag
       btcDays: bootcamps.btcDays,
       intDays: bootcamps.intDays,
       status: bootcamps.status,
+      facilityId: bootcamps.facilityId,
+      facilityName: facilities.name,
       createdBy,
       createdAt: bootcamps.createdAt,
     })
     .from(bootcamps)
     .leftJoin(users, eq(users.id, bootcamps.createdBy))
-    .where(searchAny(query.q, [bootcamps.status, users.name, users.email]))
+    .leftJoin(facilities, eq(facilities.id, bootcamps.facilityId))
+    .where(searchAny(query.q, [bootcamps.status, users.name, users.email, facilities.name]))
     .orderBy(...orderFor(SORT_COLUMNS[query.sort], query.dir, sql`${bootcamps.startDate} desc`, bootcamps.id))
     .limit(limit)
     .offset(offset);
@@ -98,11 +108,14 @@ export async function getBootcamp(id: string): Promise<BootcampDetail | null> {
       btcDays: bootcamps.btcDays,
       intDays: bootcamps.intDays,
       status: bootcamps.status,
+      facilityId: bootcamps.facilityId,
+      facilityName: facilities.name,
       createdBy,
       createdAt: bootcamps.createdAt,
     })
     .from(bootcamps)
     .leftJoin(users, eq(users.id, bootcamps.createdBy))
+    .leftJoin(facilities, eq(facilities.id, bootcamps.facilityId))
     .where(eq(bootcamps.id, id));
   return row ? { ...row, judges: await judgePicks(id) } : null;
 }
@@ -121,6 +134,11 @@ export const bootcampInputSchema = z.object({
   /** Null for a bootcamp with no intermediate class. */
   intDays: days.nullable(),
   status: z.enum(BOOTCAMP_STATUSES),
+  /**
+   * Where it is held; null for nowhere yet. Changing it takes every room off
+   * the bootcamp's sessions, since the old facility's rooms are not the new one's.
+   */
+  facilityId: z.string().uuid().nullable().optional(),
   /** Every guest judge, by email; it replaces the set. Left out, the judges stay as they are. */
   judges: z.array(z.string().max(EVALS_SLACK_CONTACT_LIMITS.email)).max(BOOTCAMP_LIMITS.judges).optional(),
   /**
@@ -136,11 +154,12 @@ export const bootcampPatchSchema = bootcampInputSchema.partial();
 type BootcampInput = z.infer<typeof bootcampInputSchema>;
 type BootcampPatch = z.infer<typeof bootcampPatchSchema>;
 
-export type BootcampError = "invalid" | "not_employee" | "not_found" | "active_exists";
+export type BootcampError = "invalid" | "not_employee" | "unknown_facility" | "not_found" | "active_exists";
 
 export const BOOTCAMP_STATUS_FOR: Record<BootcampError, number> = {
   invalid: 400,
   not_employee: 400,
+  unknown_facility: 400,
   not_found: 404,
   active_exists: 409,
 };
@@ -160,14 +179,19 @@ async function judgesFor(emails: string[] | undefined) {
   return resolveJudges(emails);
 }
 
-const pgCode = (err: unknown): unknown => {
-  const code = (e: unknown) => (e as { code?: unknown } | null)?.code;
-  return code(err) ?? code((err as { cause?: unknown } | null)?.cause);
-};
+/** Whether `facilityId` names a facility; null and undefined need none. */
+async function facilityKnown(facilityId: string | null | undefined): Promise<boolean> {
+  if (!facilityId) return true;
+  const [row] = await db.select({ id: facilities.id }).from(facilities).where(eq(facilities.id, facilityId));
+  return Boolean(row);
+}
 
-const isUniqueViolation = (err: unknown): boolean => pgCode(err) === "23505";
-
-const isForeignKeyViolation = (err: unknown): boolean => pgCode(err) === "23503";
+/** Takes every room off a bootcamp's sessions, for when it moves to another facility. */
+async function clearRooms(tx: Pick<typeof db, "update" | "select">, bootcampId: string): Promise<void> {
+  const ofBootcamp = tx.select({ id: scheduleSessions.id }).from(scheduleSessions).where(eq(scheduleSessions.bootcampId, bootcampId));
+  await tx.update(scheduleSessions).set({ roomId: null }).where(eq(scheduleSessions.bootcampId, bootcampId));
+  await tx.update(scheduleSessionStaff).set({ roomId: null }).where(inArray(scheduleSessionStaff.sessionId, ofBootcamp));
+}
 
 /** The refusal for making a second bootcamp active, naming the first. */
 async function activeExists(): Promise<BootcampFailure> {
@@ -204,6 +228,7 @@ export async function createBootcamp(
   const { judges: emails, completeActive, ...fields } = input;
   const judges = await judgesFor(emails);
   if (!judges.ok) return judges;
+  if (!(await facilityKnown(input.facilityId))) return { ok: false, error: "unknown_facility" };
   const conflict = await activeConflict(null, input.status, completeActive);
   if (conflict) return conflict;
   try {
@@ -222,6 +247,8 @@ export async function createBootcamp(
   } catch (err) {
     // Another bootcamp made active in between.
     if (isUniqueViolation(err)) return activeExists();
+    // The facility removed in between.
+    if (isForeignKeyViolation(err)) return { ok: false, error: "unknown_facility" };
     throw err;
   }
 }
@@ -239,6 +266,8 @@ export async function updateBootcamp(
   if (conflict) return conflict;
   const judges = await judgesFor(emails);
   if (!judges.ok) return judges;
+  if (!(await facilityKnown(patch.facilityId))) return { ok: false, error: "unknown_facility" };
+  const moved = patch.facilityId !== undefined && patch.facilityId !== before.facilityId;
   try {
     const updated = await db.transaction(async (tx) => {
       if (patch.status === "active" && completeActive && completeActive !== id) await completeIfActive(tx, completeActive);
@@ -248,6 +277,7 @@ export async function updateBootcamp(
         .where(eq(bootcamps.id, id))
         .returning({ id: bootcamps.id });
       if (rows.length > 0 && judges.judges) await setJudges(tx, actorId, id, judges.judges);
+      if (rows.length > 0 && moved) await clearRooms(tx, id);
       return rows;
     });
     if (updated.length === 0) return { ok: false, error: "not_found" };
@@ -255,6 +285,7 @@ export async function updateBootcamp(
     return { ok: true };
   } catch (err) {
     if (isUniqueViolation(err)) return activeExists();
+    if (isForeignKeyViolation(err)) return { ok: false, error: "unknown_facility" };
     throw err;
   }
 }

@@ -1,5 +1,5 @@
-import { ASSESSMENT_ATTENDEE_LIST, ASSESSMENT_LIST, AUDIT_LIST, BOOTCAMP_HISTORY_LIST, BOOTCAMP_LIST, CURRENT_COHORT_LIST, DOMAIN_LIST, EMPLOYEE_LIST, HIBOB_SYNC_LIST, HISTORY_STATUSES, JUDGE_LIST, ORGANIZATION_LIST, PREVIOUS_SESSION_LIST, SLACK_CONTACT_LIST, TITLE_LIST, USER_LIST } from "@/lib/list-specs";
-import { BOOTCAMP_LIMITS, EVALS_ASSESSMENT_LIMITS } from "@/db/schema";
+import { ASSESSMENT_ATTENDEE_LIST, ASSESSMENT_LIST, AUDIT_LIST, BOOTCAMP_HISTORY_LIST, BOOTCAMP_LIST, CURRENT_COHORT_LIST, DOMAIN_LIST, EMPLOYEE_LIST, HIBOB_SYNC_LIST, HISTORY_STATUSES, JUDGE_LIST, ORGANIZATION_LIST, PREVIOUS_SESSION_LIST, SESSION_COMMENT_LIST, SESSION_TYPE_LIST, SLACK_CONTACT_LIST, TITLE_LIST, USER_LIST, FACILITY_LIST } from "@/lib/list-specs";
+import { BOOTCAMP_LIMITS, EVALS_ASSESSMENT_LIMITS, FACILITY_LIMITS, SCHEDULE_LIMITS } from "@/db/schema";
 import { PAGE_SIZE } from "@/lib/paging";
 import { PAGE_FIELDS, listQuery } from "./paging";
 import type { Endpoint, EndpointGroup, Field } from "./types";
@@ -17,6 +17,67 @@ const COMPLETE_ACTIVE_FIELD: Field = {
   type: "string",
   note: "with status active, the id of the bootcamp active now, to mark complete in the same write",
 };
+
+const FACILITY_FIELD: Field = {
+  name: "facilityId",
+  type: "string | null",
+  note: "the facility it is held at, or null for none yet; changing it takes every room off its sessions",
+};
+
+const UNKNOWN_FACILITY_ERROR: EndpointError = {
+  status: 400,
+  error: "unknown_facility",
+  when: "facilityId names no facility",
+};
+
+const BOOTCAMP_ID: Field = { name: "id", type: "string", required: true, note: "the bootcamp's id" };
+const SESSION_ID: Field = { name: "sessionId", type: "string", required: true, note: "the session's id" };
+
+const TRACK_TYPE = `"btc" | "int" | "btc_se" | "int_se"`;
+const KIND_TYPE = `"main" | "breakout" | "unstructured"`;
+const COLOR_TYPE = `"slate" | "red" | "orange" | "amber" | "green" | "teal" | "blue" | "violet" | "pink"`;
+const MINUTES_NOTE = `a multiple of ${SCHEDULE_LIMITS.slot} from ${SCHEDULE_LIMITS.slot} to ${SCHEDULE_LIMITS.maxMinutes}`;
+
+const SESSION_SHAPE = `{ id, track: ${TRACK_TYPE}, day: number, position: number, minutes: number, kind, typeId: string | null, name, description, emoji, color, roomId: string | null, staff: { email, fullName, leader: boolean, roomId: string | null }[], comments: number, updatedAt }`;
+
+const CLASH_SHAPE = `{ sessionId, name, track, day, start: number, end: number, what: { kind: "person", email, fullName } | { kind: "room", roomId } }`;
+
+const SESSION_TYPE_SHAPE = `{ id, name, kind: ${KIND_TYPE}, emoji, color, minutes: number, description, position: number }`;
+
+const SESSION_LOOK_FIELDS: Field[] = [
+  { name: "kind", type: KIND_TYPE, required: true, note: "main: one room; breakout: a room per instructor; unstructured: no one and no room" },
+  { name: "name", type: "string", required: true, note: `up to ${SCHEDULE_LIMITS.name} characters` },
+  { name: "minutes", type: "number", required: true, note: MINUTES_NOTE },
+  { name: "emoji", type: "string", note: `up to ${SCHEDULE_LIMITS.emoji} characters; default none` },
+  { name: "color", type: COLOR_TYPE, note: "default slate" },
+  { name: "description", type: "string", note: `up to ${SCHEDULE_LIMITS.description} characters` },
+];
+
+const SESSION_STAFF_FIELDS: Field[] = [
+  { name: "typeId", type: "string | null", note: "the session type it was started from" },
+  { name: "roomId", type: "string | null", note: "a main session's room, from the bootcamp's facility" },
+  {
+    name: "staff",
+    type: "{ email, leader?: boolean, roomId?: string | null }[]",
+    note: `up to ${SCHEDULE_LIMITS.staff}, exactly one the leader; each a Training administrator or a guest judge of the bootcamp; roomId is a breakout instructor's room`,
+  },
+];
+
+const SESSION_ERRORS: EndpointError[] = [
+  { status: 400, error: "invalid", when: "the body is not that shape" },
+  { status: 400, error: "no_leader", when: "staff is not empty and does not mark exactly one leader" },
+  { status: 400, error: "not_instructor", when: "someone added is neither a Training administrator nor a guest judge of the bootcamp; email names them" },
+  { status: 400, error: "unknown_room", when: "a room is not one of the bootcamp's facility's" },
+  { status: 400, error: "shared_room", when: "two breakout instructors are given the same room" },
+  { status: 400, error: "unknown_type", when: "typeId names no session type" },
+  { status: 404, error: "not_found", when: "no such bootcamp or session" },
+  { status: 409, error: "clash", when: "someone or a room added is in another session at the same time; clashes says which" },
+];
+
+const FILL_ERRORS: EndpointError[] = [
+  { status: 404, error: "not_found", when: "no such bootcamp" },
+  { status: 409, error: "has_sessions", when: "it has a schedule already and replace is not true" },
+];
 
 const NOT_EMPLOYEE_ERROR: EndpointError = {
   status: 400,
@@ -278,8 +339,8 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "trainingViewer",
         token: true,
         notes: "intDays is null for a bootcamp with no intermediate class. At most one bootcamp is active; complete is one that has run.",
-        query: listQuery(BOOTCAMP_LIST.sorts, "the status, or who created it"),
-        returns: `{ bootcamps: { id, startDate: "YYYY-MM-DD", btcDays: number, intDays: number | null, status: "scheduled" | "active" | "complete", createdBy: string | null, createdAt: ISO 8601 string }[], ${PAGE_FIELDS} }`,
+        query: listQuery(BOOTCAMP_LIST.sorts, "the status, the facility, or who created it"),
+        returns: `{ bootcamps: { id, startDate: "YYYY-MM-DD", btcDays: number, intDays: number | null, status: "scheduled" | "active" | "complete", facilityId: string | null, facilityName: string | null, createdBy: string | null, createdAt: ISO 8601 string }[], ${PAGE_FIELDS} }`,
       },
       {
         method: "POST",
@@ -296,6 +357,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
             { name: "btcDays", type: "number", required: true, note: "a whole number from 1 to 30" },
             { name: "intDays", type: "number | null", required: true, note: "1 to 30, or null for no intermediate class" },
             { name: "status", type: `"scheduled" | "active" | "complete"`, required: true },
+            FACILITY_FIELD,
             JUDGES_FIELD,
             COMPLETE_ACTIVE_FIELD,
           ],
@@ -304,6 +366,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         errors: [
           { status: 400, error: "invalid", when: "the body is not that shape, or a judge's email is not an email address" },
           NOT_EMPLOYEE_ERROR,
+          UNKNOWN_FACILITY_ERROR,
           ACTIVE_EXISTS_ERROR,
         ],
       },
@@ -315,13 +378,13 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         token: true,
         notes: `judges is every guest judge by name, up to ${BOOTCAMP_LIMITS.judges}; fullName is as the employee list had them when they were added.`,
         params: [{ name: "id", type: "string", required: true, note: "the bootcamp's id" }],
-        returns: `{ id, startDate: "YYYY-MM-DD", btcDays: number, intDays: number | null, status: "scheduled" | "active" | "complete", createdBy: string | null, createdAt: ISO 8601 string, judges: { email, fullName }[] }`,
+        returns: `{ id, startDate: "YYYY-MM-DD", btcDays: number, intDays: number | null, status: "scheduled" | "active" | "complete", facilityId: string | null, facilityName: string | null, createdBy: string | null, createdAt: ISO 8601 string, judges: { email, fullName }[] }`,
         errors: [{ status: 404, error: "not_found", when: "no such bootcamp" }],
       },
       {
         method: "PATCH",
         path: "/api/scheduler/bootcamps/{id}",
-        summary: "Changes a bootcamp's dates, length, status or guest judges.",
+        summary: "Changes a bootcamp's dates, length, status, facility or guest judges.",
         access: "trainingAdmin",
         token: true,
         notes:
@@ -334,6 +397,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
             { name: "btcDays", type: "number" },
             { name: "intDays", type: "number | null" },
             { name: "status", type: `"scheduled" | "active" | "complete"` },
+            FACILITY_FIELD,
             JUDGES_FIELD,
             COMPLETE_ACTIVE_FIELD,
           ],
@@ -342,6 +406,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         errors: [
           { status: 400, error: "invalid", when: "the body is not that shape, or a judge's email is not an email address" },
           NOT_EMPLOYEE_ERROR,
+          UNKNOWN_FACILITY_ERROR,
           { status: 404, error: "not_found", when: "no such bootcamp" },
           ACTIVE_EXISTS_ERROR,
         ],
@@ -352,7 +417,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         summary: "Removes a bootcamp.",
         access: "trainingAdmin",
         token: true,
-        notes: "Its guest judges go with it. A bootcamp anyone has been scored at is kept.",
+        notes: "Its guest judges and its schedule go with it. A bootcamp anyone has been scored at is kept.",
         params: [{ name: "id", type: "string", required: true, note: "the bootcamp's id" }],
         returns: "{ ok: true }",
         errors: [
@@ -406,6 +471,371 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         ],
         returns: "{ ok: true }",
         errors: [{ status: 404, error: "not_found", when: "either id is not a UUID, or no such judge on that bootcamp" }],
+      },
+      {
+        method: "GET",
+        path: "/api/scheduler/bootcamps/{id}/schedule",
+        summary: "Reads one bootcamp's whole schedule: every day of its four tracks, its rooms, and who can run a session.",
+        access: "trainingViewer",
+        token: true,
+        notes: `days.btc[0] is day 1 of Bootcamp; each day's sessions are in order, at most ${SCHEDULE_LIMITS.sessionsPerDay}. A session has no start time: each day starts at 8:00 AM and every session starts where the one before it ends. The SE tracks run as many days as the class they break out of, and a track the bootcamp does not hold has no days. Day N of every track is the same calendar day. instructors is every Training administrator and every guest judge of the bootcamp.`,
+        params: [BOOTCAMP_ID],
+        returns: `{ bootcamp: { id, startDate, btcDays, intDays, status, facilityId, facilityName }, rooms: { id, name, capacity }[], instructors: { email, fullName, role: "administrator" | "judge" }[], days: { btc, int, btc_se, int_se: ${SESSION_SHAPE}[][] } }`,
+        errors: [{ status: 404, error: "not_found", when: "no such bootcamp" }],
+      },
+      {
+        method: "PUT",
+        path: "/api/scheduler/bootcamps/{id}/schedule/layout",
+        summary: "Saves the order and length of the sessions on the track-days that changed.",
+        access: "trainingAdmin",
+        token: true,
+        notes:
+          "List each changed track-day with every session it now holds, in order. A session moved to another day is listed in its new one, and the day it left must be listed too. Clashes this creates are saved and shown in red; only adding someone or a room is refused for a clash.",
+        params: [BOOTCAMP_ID],
+        body: {
+          kind: "json",
+          fields: [
+            {
+              name: "days",
+              type: `{ track: ${TRACK_TYPE}, day: number, sessions: { id, minutes: number }[] }[]`,
+              required: true,
+              note: `minutes is ${MINUTES_NOTE}; at most ${SCHEDULE_LIMITS.sessionsPerDay} sessions a day`,
+            },
+          ],
+        },
+        returns: "{ ok: true }",
+        errors: [
+          { status: 400, error: "invalid", when: "the body is not that shape, or names a track-day or a session twice" },
+          { status: 400, error: "no_day", when: "a day is past the end of its track, or the bootcamp does not hold the track" },
+          { status: 404, error: "not_found", when: "no such bootcamp" },
+          { status: 409, error: "stale", when: "the sessions named are not exactly the ones those days hold now; reload and try again" },
+        ],
+      },
+      {
+        method: "GET",
+        path: "/api/scheduler/bootcamps/{id}/schedule/copy",
+        summary: "Lists the bootcamps whose schedule this one can be started from, latest first.",
+        access: "trainingViewer",
+        token: true,
+        notes: "Only bootcamps that have at least one session, up to 20.",
+        params: [BOOTCAMP_ID],
+        returns: `{ sources: { id, startDate: "YYYY-MM-DD", sessions: number }[] }`,
+        errors: [{ status: 404, error: "not_found", when: "no such bootcamp" }],
+      },
+      {
+        method: "POST",
+        path: "/api/scheduler/bootcamps/{id}/schedule/copy",
+        summary: "Makes a bootcamp's schedule a copy of another's.",
+        access: "trainingAdmin",
+        token: true,
+        notes:
+          "Copies every session and who runs it, but not comments. Rooms come too only when both bootcamps are at the same facility. Days past the end of a track here are left out; notes says what was.",
+        params: [BOOTCAMP_ID],
+        body: {
+          kind: "json",
+          fields: [
+            { name: "from", type: "string", required: true, note: "the bootcamp to copy" },
+            { name: "replace", type: "boolean", note: "true to replace the sessions it has" },
+          ],
+        },
+        returns: "{ sessions: number, notes: string[] }",
+        errors: [
+          { status: 400, error: "invalid", when: "the body is not that shape" },
+          { status: 400, error: "same_bootcamp", when: "from is this bootcamp" },
+          ...FILL_ERRORS,
+        ],
+      },
+      {
+        method: "POST",
+        path: "/api/scheduler/bootcamps/{id}/schedule/import",
+        summary: "Fills a bootcamp's schedule from the Google Sheet's Schedule tab.",
+        access: "trainingAdmin",
+        token: true,
+        notes:
+          "Upload the workbook as .xlsx with the Schedule tab first, or that tab as .csv. Every start and end is rounded to the quarter hour; a session rounding would shrink to nothing keeps 15 minutes. Time between sessions becomes Unscheduled. The first person in a Team cell leads, the rest instruct, and anything that is not a name goes in the description. notes says what was moved, left out or not matched.",
+        params: [BOOTCAMP_ID],
+        body: {
+          kind: "multipart",
+          fields: [
+            { name: "file", type: "file", required: true, note: `.xlsx or .csv, up to ${SCHEDULE_LIMITS.importBytes / 1024 / 1024} MB` },
+            { name: "replace", type: `"true"`, note: "to replace the sessions it has" },
+          ],
+        },
+        returns: "{ sessions: number, notes: string[] }",
+        errors: [
+          { status: 400, error: "no_file", when: "no file, or an empty one" },
+          { status: 400, error: "unreadable", when: "the file is neither .xlsx nor .csv" },
+          { status: 400, error: "not_schedule", when: "its first row has no track's Topic header" },
+          { status: 413, error: "too_large", when: "the file is too big" },
+          ...FILL_ERRORS,
+        ],
+      },
+      {
+        method: "GET",
+        path: "/api/scheduler/bootcamps/{id}/availability",
+        summary: "Says who and which rooms are busy during a stretch of one day, across the bootcamp's four tracks.",
+        access: "trainingViewer",
+        token: true,
+        notes: "Each person, by email, and each room, by id, that is in a session overlapping the stretch, with the sessions. Unstructured sessions take no one and no room.",
+        params: [BOOTCAMP_ID],
+        query: [
+          { name: "day", type: "number", required: true },
+          { name: "start", type: "number", required: true, note: "minutes after midnight; 480 is 8:00 AM" },
+          { name: "minutes", type: "number", required: true },
+          { name: "exclude", type: "string", note: "a session to leave out, such as the one being edited" },
+        ],
+        returns: `{ day, start, end, people: Record<email, ${CLASH_SHAPE}[]>, rooms: Record<roomId, Clash[]> }`,
+        errors: [
+          { status: 400, error: "invalid", when: "a query field is missing or out of range" },
+          { status: 404, error: "not_found", when: "no such bootcamp" },
+        ],
+      },
+      {
+        method: "POST",
+        path: "/api/scheduler/bootcamps/{id}/sessions",
+        summary: "Adds a session to one day of one of a bootcamp's tracks.",
+        access: "trainingAdmin",
+        token: true,
+        notes:
+          "The sessions after it move along. An unstructured session keeps no staff or room; a main one keeps no rooms on its staff; a breakout keeps no room of its own.",
+        params: [BOOTCAMP_ID],
+        body: {
+          kind: "json",
+          fields: [
+            { name: "track", type: TRACK_TYPE, required: true },
+            { name: "day", type: "number", required: true, note: "from 1" },
+            { name: "position", type: "number", note: "where in the day, from 0; left out, it goes last" },
+            ...SESSION_LOOK_FIELDS,
+            ...SESSION_STAFF_FIELDS,
+          ],
+        },
+        returns: `201 ${SESSION_SHAPE}`,
+        errors: [
+          ...SESSION_ERRORS,
+          { status: 400, error: "no_day", when: "the day is past the end of the track, or the bootcamp does not hold it" },
+          { status: 409, error: "day_full", when: `the day has ${SCHEDULE_LIMITS.sessionsPerDay} sessions already` },
+        ],
+      },
+      {
+        method: "GET",
+        path: "/api/scheduler/bootcamps/{id}/sessions/{sessionId}",
+        summary: "Reads one session, with what it clashes with.",
+        access: "trainingViewer",
+        token: true,
+        params: [BOOTCAMP_ID, SESSION_ID],
+        returns: `${SESSION_SHAPE} & { clashes: ${CLASH_SHAPE}[] }`,
+        errors: [{ status: 404, error: "not_found", when: "no such bootcamp or session" }],
+      },
+      {
+        method: "PATCH",
+        path: "/api/scheduler/bootcamps/{id}/sessions/{sessionId}",
+        summary: "Changes a session's details, length, staff or rooms.",
+        access: "trainingAdmin",
+        token: true,
+        notes:
+          "Takes any of POST's fields but track, day and position; moving a session is the layout's job. staff replaces the whole set. Someone already on it stays even if no longer an instructor; only people and rooms new to it are checked for clashes.",
+        params: [BOOTCAMP_ID, SESSION_ID],
+        body: {
+          kind: "json",
+          fields: [...SESSION_LOOK_FIELDS.map((f) => ({ ...f, required: false })), ...SESSION_STAFF_FIELDS],
+        },
+        returns: SESSION_SHAPE,
+        errors: SESSION_ERRORS,
+      },
+      {
+        method: "DELETE",
+        path: "/api/scheduler/bootcamps/{id}/sessions/{sessionId}",
+        summary: "Removes a session; the rest of its day moves up.",
+        access: "trainingAdmin",
+        token: true,
+        notes: "Its comments go with it.",
+        params: [BOOTCAMP_ID, SESSION_ID],
+        returns: "{ ok: true }",
+        errors: [{ status: 404, error: "not_found", when: "no such bootcamp or session" }],
+      },
+      {
+        method: "GET",
+        path: "/api/scheduler/bootcamps/{id}/sessions/{sessionId}/comments",
+        summary: "Lists a session's comments, a page at a time, newest first.",
+        access: "trainingViewer",
+        token: true,
+        notes: "authorName and authorEmail are as they were when it was written.",
+        params: [BOOTCAMP_ID, SESSION_ID],
+        query: listQuery(SESSION_COMMENT_LIST.sorts, "the text or the author"),
+        returns: `{ comments: { id, body, authorId: string | null, authorName, authorEmail, createdAt }[], ${PAGE_FIELDS} }`,
+        errors: [{ status: 404, error: "not_found", when: "no such bootcamp or session" }],
+      },
+      {
+        method: "POST",
+        path: "/api/scheduler/bootcamps/{id}/sessions/{sessionId}/comments",
+        summary: "Comments on a session.",
+        access: "trainingAdmin",
+        token: true,
+        params: [BOOTCAMP_ID, SESSION_ID],
+        body: {
+          kind: "json",
+          fields: [{ name: "body", type: "string", required: true, note: `up to ${SCHEDULE_LIMITS.comment} characters` }],
+        },
+        returns: "201 { id, body, authorId, authorName, authorEmail, createdAt }",
+        errors: [
+          { status: 400, error: "invalid", when: "body is empty or too long" },
+          { status: 404, error: "not_found", when: "no such bootcamp or session" },
+        ],
+      },
+      {
+        method: "DELETE",
+        path: "/api/scheduler/bootcamps/{id}/sessions/{sessionId}/comments/{commentId}",
+        summary: "Removes a comment you wrote.",
+        access: "trainingAdmin",
+        token: true,
+        params: [BOOTCAMP_ID, SESSION_ID, { name: "commentId", type: "string", required: true, note: "UUID" }],
+        returns: "{ ok: true }",
+        errors: [
+          { status: 403, error: "not_author", when: "someone else wrote it" },
+          { status: 404, error: "not_found", when: "no such bootcamp, session or comment" },
+        ],
+      },
+      {
+        method: "GET",
+        path: "/api/scheduler/facilities",
+        summary: "Lists the facilities bootcamps are held at, a page at a time.",
+        access: "trainingViewer",
+        token: true,
+        notes: "capacity is everyone its rooms hold together; bootcamps counts those held there.",
+        query: listQuery(FACILITY_LIST.sorts, "the name or a room's name"),
+        returns: `{ facilities: { id, name, rooms: number, capacity: number, bootcamps: number, updatedAt }[], ${PAGE_FIELDS} }`,
+      },
+      {
+        method: "POST",
+        path: "/api/scheduler/facilities",
+        summary: "Adds a facility, with its rooms.",
+        access: "trainingAdmin",
+        token: true,
+        body: {
+          kind: "json",
+          fields: [
+            { name: "name", type: "string", required: true, note: `up to ${FACILITY_LIMITS.name} characters, unique ignoring case` },
+            {
+              name: "rooms",
+              type: "{ name, capacity: number }[]",
+              required: true,
+              note: `up to ${FACILITY_LIMITS.rooms}, in order; capacity is how many people it holds, 1 to ${FACILITY_LIMITS.capacity}`,
+            },
+          ],
+        },
+        returns: "201 { id }",
+        errors: [
+          { status: 400, error: "invalid", when: "the body is not that shape" },
+          { status: 400, error: "duplicate_room", when: "two rooms share a name, ignoring case; room names it" },
+          { status: 400, error: "unknown_room", when: "a room has an id" },
+          { status: 409, error: "duplicate", when: "a facility has that name already" },
+        ],
+      },
+      {
+        method: "GET",
+        path: "/api/scheduler/facilities/{id}",
+        summary: "Reads one facility and its rooms.",
+        access: "trainingViewer",
+        token: true,
+        params: [{ name: "id", type: "string", required: true, note: "the facility's id" }],
+        returns: "{ id, name, rooms: { id, name, capacity: number }[] }",
+        errors: [{ status: 404, error: "not_found", when: "no such facility" }],
+      },
+      {
+        method: "PATCH",
+        path: "/api/scheduler/facilities/{id}",
+        summary: "Renames a facility or changes its rooms.",
+        access: "trainingAdmin",
+        token: true,
+        notes:
+          "rooms replaces the whole set, in order: give a room's id to keep it, and the sessions that use it, under a new name or capacity. A room left out is removed and taken off every session that used it.",
+        params: [{ name: "id", type: "string", required: true, note: "the facility's id" }],
+        body: {
+          kind: "json",
+          fields: [
+            { name: "name", type: "string" },
+            { name: "rooms", type: "{ id?: string, name, capacity: number }[]" },
+          ],
+        },
+        returns: "{ ok: true }",
+        errors: [
+          { status: 400, error: "invalid", when: "the body is not that shape" },
+          { status: 400, error: "duplicate_room", when: "two rooms share a name, ignoring case; room names it" },
+          { status: 400, error: "unknown_room", when: "a room id is not one of this facility's" },
+          { status: 404, error: "not_found", when: "no such facility" },
+          { status: 409, error: "duplicate", when: "another facility has that name" },
+        ],
+      },
+      {
+        method: "DELETE",
+        path: "/api/scheduler/facilities/{id}",
+        summary: "Removes a facility and its rooms.",
+        access: "trainingAdmin",
+        token: true,
+        notes: "Bootcamps held there keep their schedule, with no facility and no rooms.",
+        params: [{ name: "id", type: "string", required: true, note: "the facility's id" }],
+        returns: "{ ok: true }",
+        errors: [{ status: 404, error: "not_found", when: "no such facility" }],
+      },
+      {
+        method: "GET",
+        path: "/api/scheduler/session-types",
+        summary: "Lists the session types that start a new session, a page at a time, in the order the session dialog offers them.",
+        access: "trainingViewer",
+        token: true,
+        notes: "A type is a quick start: picking one fills in a new session's kind, name, icon, color, length and description, which are then the session's own.",
+        query: listQuery(SESSION_TYPE_LIST.sorts, "the name or the description"),
+        returns: `{ sessionTypes: ${SESSION_TYPE_SHAPE}[], ${PAGE_FIELDS} }`,
+      },
+      {
+        method: "POST",
+        path: "/api/scheduler/session-types",
+        summary: "Adds a session type.",
+        access: "trainingAdmin",
+        token: true,
+        body: {
+          kind: "json",
+          fields: [
+            ...SESSION_LOOK_FIELDS,
+            { name: "position", type: "number", note: "where the session dialog lists it, lower first; left out, last" },
+          ],
+        },
+        returns: `201 ${SESSION_TYPE_SHAPE}`,
+        errors: [
+          { status: 400, error: "invalid", when: "the body is not that shape" },
+          { status: 409, error: "duplicate", when: "a type has that name already, ignoring case" },
+          { status: 409, error: "too_many", when: `there are ${SCHEDULE_LIMITS.types} already` },
+        ],
+      },
+      {
+        method: "PATCH",
+        path: "/api/scheduler/session-types/{id}",
+        summary: "Changes a session type.",
+        access: "trainingAdmin",
+        token: true,
+        notes: "Takes any of POST's fields. Sessions already started from it are not changed.",
+        params: [{ name: "id", type: "string", required: true, note: "the type's id" }],
+        body: {
+          kind: "json",
+          fields: [...SESSION_LOOK_FIELDS.map((f) => ({ ...f, required: false })), { name: "position", type: "number" }],
+        },
+        returns: SESSION_TYPE_SHAPE,
+        errors: [
+          { status: 400, error: "invalid", when: "the body is not that shape" },
+          { status: 404, error: "not_found", when: "no such type" },
+          { status: 409, error: "duplicate", when: "another type has that name" },
+        ],
+      },
+      {
+        method: "DELETE",
+        path: "/api/scheduler/session-types/{id}",
+        summary: "Removes a session type.",
+        access: "trainingAdmin",
+        token: true,
+        notes: "Sessions started from it keep everything they took from it.",
+        params: [{ name: "id", type: "string", required: true, note: "the type's id" }],
+        returns: "{ ok: true }",
+        errors: [{ status: 404, error: "not_found", when: "no such type" }],
       },
     ],
   },

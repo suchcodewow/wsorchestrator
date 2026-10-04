@@ -40,8 +40,8 @@ Status means:
 | Feature | What the Sheet does | Status in harnessevents | Decision |
 | --- | --- | --- | --- |
 | New event setup | "New Event Setup" asks for the start date, rebuilds the attendee tabs, deletes old responses and installs the trigger | **Partial.** The Scheduler creates bootcamps with a start date, BTC days and INT days, and one is active. Nothing is reset or rebuilt when a new one starts | |
-| Schedule tab formatting | Conditional formatting on the Schedule tab, color-coded for BTC, INT, SE and a fourth track | **Not ported** | |
-| Visual Schedule | Builds a card-style day-by-day view from the Schedule tab | **Not ported** | |
+| Schedule tab formatting | Conditional formatting on the Schedule tab, color-coded for BTC, INT, SE and a fourth track | **Ported.** Opening a bootcamp in the Scheduler shows its schedule: Bootcamp, Intermediate, SE Bootcamp and SE Intermediate, each day packed from 8 AM in quarter hours. Sessions are dragged to reorder or move between tracks, and dragged at the bottom edge to change length; each column says how much of the day to 5 PM is left or over. A session is Main (one leader, other instructors, one room), Breakout (a room per instructor) or Unstructured (no one, no room), with its own name, description, icon, color and comments. Leaders and instructors are the training administrators and the bootcamp's guest judges; rooms come from the facility picked for the bootcamp (Scheduler settings → Facilities). A person or room booked twice at once across the four tracks is shown in red with the reason, and the server refuses to add one that is already busy. Session types (Scheduler settings → Session types) are starting points only. The Schedule tab imports as .xlsx or .csv, times rounded to the quarter hour with every session kept at 15 minutes or more; a new bootcamp can copy an earlier one's schedule | done |
+| Visual Schedule | Builds a card-style day-by-day view from the Schedule tab | **Ported.** The schedule page has a detailed view like the Sheet, a condensed view of names only, and a One track view that lays one track's days side by side | done |
 | Exercises deck and judge assignment | `buildExercises` makes a Slides deck (one slide per exercise) in the Enablement shared drive and spreads attendees evenly across judges. It writes back the deck link and the time each exercise needs | **Partial.** Training administrators pick a bootcamp's guest judges from the employee list in the Scheduler's bootcamp dialog. While that bootcamp is active a judge can score on the eVals page, whatever other access they have. There is no deck, and attendees are not spread across judges | |
 
 ## Judging and scores
@@ -78,6 +78,7 @@ These have no counterpart in the Sheet:
 - Stage and track counters on the Current tab that filter its one table.
 - A track set by hand: an administrator can put anyone on any track from the Current tab, and it holds through every sync until handed back to the rules.
 - Bootcamp scheduling.
+- A schedule builder that catches a person or room booked twice across the four tracks.
 - Roles that decide who can see and change each page.
 - An audit record of every change.
 - Paging on every table, and an API with personal access tokens.
