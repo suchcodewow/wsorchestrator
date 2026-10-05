@@ -40,10 +40,15 @@ and Cloud Run reads it from there as an environment variable
 
 1. Declare the variable in `infra/admin/variables.tf`, mark it `sensitive`,
    and wire it through `secrets.tf` and `app.tf` the way `hibob_token` is.
-2. Create the Harness secret `tf_<variable>` in project
-   `operations/orchestrator` (Project Settings → Secrets, a *Text* secret).
-3. Add a *secret*-type variable of the same name to each workspace that should
-   have it, pointing at that secret.
+2. Create the Harness secret in project `operations/orchestrator` (Project
+   Settings → Secrets, a *Text* secret). Name it `tf_<variable>` when both
+   environments share it. When each has its own value, create one per
+   environment, as Deepgram does with `deepgram_qa_token` and
+   `deepgram_production_token`.
+3. On each workspace that should have it, add a *secret*-type variable whose
+   **key is the Terraform variable's name exactly** (`deepgram_api_key`, not
+   `tf_deepgram_api_key`) and whose value names the secret. A key that matches
+   no variable is only a warning on apply, so the value silently goes nowhere.
 4. Do steps 2 and 3 before the PR merges. A variable with no default and no
    workspace value fails the apply. It reaches QA when the PR merges, and
    production when `deploy_production` runs with `run_infra=true`.
