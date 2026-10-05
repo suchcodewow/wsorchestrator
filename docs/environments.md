@@ -120,6 +120,7 @@ Only the GCP side is separate. The rest is shared:
 | Google Workspace `harnessevents.io` | QA attendees are real Workspace users, inside `/QA`. |
 | Google OAuth client | One client serves both environments. Each environment's callback URL is registered on it. |
 | HiBob credentials | Both run the nightly HiBob sync. It is read-only against HiBob. |
+| Mindtickle tenant | Reporting → Canary Wire pulls from Mindtickle every two hours, read-only. It is on wherever `mindtickle_company_id` is set, with the Harness secrets `tf_mindtickle_api_key` and `tf_mindtickle_secret_key`. Set it on production only: both environments pull at the same moment, and two pulls together exceed Mindtickle's 5 requests a second, so each slows the other with retries. |
 | Slack workspace | The cohort Slack channel sync (Cohort Settings → Slack) invites and removes real people. Only production's workspace sets `slack_bot_token` (Harness secret `tf_slack_bot_token`); leave it off `qa_control_plane`, and if QA ever has it, keep QA's sync in dry run. |
 
 Each environment's **Cloud Status** page lists everything in the shared

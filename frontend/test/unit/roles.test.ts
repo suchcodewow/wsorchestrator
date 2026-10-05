@@ -81,6 +81,7 @@ const POLICY: Record<string, { actual: Check; expected: Check }> = {
     actual: roles.canManageEvalsSettings,
     expected: evals("administrator"),
   },
+  canSeeCanaryWire: { actual: roles.canSeeCanaryWire, expected: evals("administrator") },
   canScoreAssessments: { actual: roles.canScoreAssessments, expected: (a) => evals("viewer")(a) || a.judging },
   canSearchEmployees: {
     actual: roles.canSearchEmployees,

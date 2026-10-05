@@ -17,7 +17,7 @@ export default async function ReportingLayout({ children }: { children: React.Re
     <div className="space-y-8">
       <h1 className="text-3xl font-medium tracking-tight">Reporting</h1>
 
-      <ReportingTabs />
+      <ReportingTabs access={session.user.access} />
 
       {children}
     </div>

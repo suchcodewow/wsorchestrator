@@ -13,6 +13,7 @@ import { noteCaller } from "@/lib/audit-context";
 import {
   canManageEvalsSettings,
   canManageSettings,
+  canSeeCanaryWire,
   canUseEvals,
   type Access,
 } from "@/lib/roles";
@@ -87,4 +88,9 @@ export function requireEvalsViewer(req: Request) {
 /** An eVals administrator, for eVals settings. */
 export function requireEvalsAdministrator(req: Request) {
   return requireCaller(req, canManageEvalsSettings);
+}
+
+/** An eVals administrator, for Reporting → Canary Wire. */
+export function requireCanaryWire(req: Request) {
+  return requireCaller(req, canSeeCanaryWire);
 }

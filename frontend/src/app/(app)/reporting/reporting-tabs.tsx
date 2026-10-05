@@ -3,8 +3,9 @@
 /** The tab row for Reporting. */
 
 import { TabNav } from "@/components/tab-nav";
-import { REPORTING_TABS } from "./tabs";
+import type { Access } from "@/lib/roles";
+import { visibleReportingTabs } from "./tabs";
 
-export function ReportingTabs() {
-  return <TabNav tabs={REPORTING_TABS} label="Reporting" />;
+export function ReportingTabs({ access }: { access: Access }) {
+  return <TabNav tabs={visibleReportingTabs(access)} label="Reporting" />;
 }

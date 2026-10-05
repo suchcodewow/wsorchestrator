@@ -1297,6 +1297,67 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
     ],
   },
   {
+    id: "canary-wire",
+    title: "Canary Wire",
+    intro:
+      "Monthly Canary Wire completion in Mindtickle, by manager, as Reporting → Canary Wire shows it. It names everyone in the three Canary Wire role groups and who is behind, so every route here is for eVals administrators only.",
+    endpoints: [
+      {
+        method: "GET",
+        path: "/api/evals/canary-wire",
+        summary: "Returns one Canary Wire month from the newest Mindtickle pull: every rep's progress per module, grouped by manager, with per-role and overall rates.",
+        access: "evalsAdmin",
+        token: true,
+        notes:
+          "Built from the newest pull and today's exemptions, so a past month counts whoever was accountable then. A rep is pre-bootcamp, and counted in no rate, until the month after their BTC date in bootcamp history; BTC marked exempt counts in every month. With no BTC date, someone whose HiBob start date is before the first real BTC date on record counts in every month, since bootcamp history doesn't go back far enough to have them; anyone else with none counts in none. None of this applies to SDRs, who never attend bootcamp: they count from their first full month at Harness by HiBob's start date (starting October 2 counts from November, October 1 from October), and in every month with no start date. Rates are percentages to one place, null when nothing is owed. A cell is keyed by module label: accountable cells are counted, exempt ones are pre-bootcamp work and off-role ones (neither) are another edition's module, shown but not counted. atPt is the event's moment in Pacific, empty when only the day is known. lastActivity is the newest completion in the month's content. hasSnapshot is false until the first pull from Mindtickle has finished, and every list is then empty. With format=csv, the same month as a CSV download, one row per rep.",
+        query: [
+          { name: "month", type: "string", note: 'a month the picker offers, "September 2026"; the newest month anybody has worked in if omitted' },
+          { name: "format", type: '"csv"', note: "a CSV download instead of JSON" },
+        ],
+        returns:
+          "{ month, months: string[], monthsWithData: string[], hasSnapshot, hasData, labels: string[], modules: { label, edition, name }[], teams: { manager, managerEmail, roles: string[], directs: Rep[], learners, exempt, assigned, completed, pct, fullyComplete, notActivated }[], roles: { role, learners, exempt, assigned, completed, pct, icLearners, icAssigned, icCompleted, icPct, modules: string[] }[], totals | null, lastActivity: { at, atPt, who, module, role }, fetchedAtPt, savedAt: string | null, notes: string[], seriesLinks: { edition, label, url }[], moduleUrlTemplate }, where Rep is { name, email, role, manager, managerEmail, title, notActivated, ic, exempt, exemptFrom, exemptSource: \"bootcamp\" | \"predates_history\" | \"no_bootcamp\" | \"first_month\" | \"edition\", cells: Record<label, { state, on, atPt, moduleId, seriesId, moduleType, accountable, exempt, also: { state, on, atPt, edition }[], edition? }>, assigned, completed, pct, offRole }; text/csv with format=csv",
+        errors: [
+          { status: 400, error: "invalid_month", when: "month is not one the picker offers" },
+          { status: 400, error: "invalid_format", when: "format is set to anything but csv" },
+        ],
+      },
+      {
+        method: "GET",
+        path: "/api/evals/canary-wire/pull",
+        summary: "Returns the newest pull from Mindtickle, running or not, and whether Mindtickle is configured.",
+        access: "evalsAdmin",
+        token: true,
+        notes:
+          "A pull takes about 15 minutes, so it goes in steps of up to four minutes (POST /api/evals/canary-wire/pull/step), each saving where it got to. done of total counts learners fetched, 0 of 0 until the rosters are in. working is true while a step holds the pull. A running pull nobody works on for 6 hours is given up as failed. configured is false when MT_API_KEY, MT_SECRET_KEY or the tenant is unset, and no pull can start.",
+        returns: "{ configured: boolean, pull: { id, trigger: \"manual\" | \"schedule\", status: \"running\" | \"succeeded\" | \"failed\", message, done: number, total: number, error: string | null, startedAt, updatedAt, finishedAt: string | null, startedByName: string | null, working: boolean } | null }",
+      },
+      {
+        method: "POST",
+        path: "/api/evals/canary-wire/pull",
+        summary: "Starts a pull from Mindtickle now (Refresh now), rather than waiting for the next two-hourly one.",
+        access: "evalsAdmin",
+        token: true,
+        notes:
+          "Fetches nothing itself: call POST /api/evals/canary-wire/pull/step until the pull ends, as the page does. When it succeeds it replaces the Canary Wire's data.",
+        returns: "{ pull: { id, trigger: \"manual\" | \"schedule\", status: \"running\" | \"succeeded\" | \"failed\", message, done: number, total: number, error: string | null, startedAt, updatedAt, finishedAt: string | null, startedByName: string | null, working: boolean } }",
+        errors: [
+          { status: 409, error: "running", when: "a pull is already running" },
+          { status: 409, error: "not_configured", when: "Mindtickle's key pair or tenant is unset" },
+        ],
+      },
+      {
+        method: "POST",
+        path: "/api/evals/canary-wire/pull/step",
+        summary: "Works on the running pull for up to four minutes, then returns how it stands.",
+        access: "evalsAdmin",
+        token: true,
+        notes:
+          "Answers at once, with the pull unchanged, when another step holds it, and with null when no pull is running. Each step fetches learners' histories in order and saves every ten, so a step cut short loses little. One learner's history failing is noted and costs that learner; Mindtickle refusing the key pair fails the pull. Allows 300 seconds.",
+        returns: "{ pull: { id, trigger: \"manual\" | \"schedule\", status: \"running\" | \"succeeded\" | \"failed\", message, done: number, total: number, error: string | null, startedAt, updatedAt, finishedAt: string | null, startedByName: string | null, working: boolean } | null }",
+      },
+    ],
+  },
+  {
     id: "evals",
     title: "eVals settings",
     endpoints: [
@@ -1863,6 +1924,20 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "internal",
         token: false,
         returns: "handled by Auth.js",
+      },
+      {
+        method: "POST",
+        path: "/api/evals/canary-wire/pull/scheduled",
+        summary: "Starts the Canary Wire's two-hourly pull, or takes it a step further, for Cloud Scheduler.",
+        access: "internal",
+        token: false,
+        notes:
+          "Called every five minutes for the first half hour of every even hour. Accepts only a Google-signed OIDC token for CANARY_WIRE_PULL_AUDIENCE from the CANARY_WIRE_PULL_INVOKER service account; either unset refuses every call. Works on a pull already running, including one a closed page left halfway; otherwise starts one unless one started in the last 90 minutes, whatever became of it, so a failure is retried two hours later rather than every five minutes. Allows 300 seconds.",
+        returns: "{ outcome: \"advanced\" | \"started\" | \"fresh\", pull: { id, trigger: \"manual\" | \"schedule\", status: \"running\" | \"succeeded\" | \"failed\", message, done: number, total: number, error: string | null, startedAt, updatedAt, finishedAt: string | null, startedByName: string | null, working: boolean } | null }",
+        errors: [
+          { status: 401, error: "unauthorized", when: "the OIDC token is missing, invalid or from someone else" },
+          { status: 409, error: "not_configured", when: "Mindtickle's key pair or tenant is unset" },
+        ],
       },
       {
         method: "POST",
