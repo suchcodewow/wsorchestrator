@@ -122,6 +122,7 @@ add it to the table above.
 | Cohort Settings | `GET /api/evals/employees`, `GET /api/evals/organization`, `GET /api/evals/hibob/sync`, `GET /api/evals/titles?list=` |
 | Bootcamp History | `GET /api/evals/bootcamp-history` |
 | A person's bootcamp history | `GET /api/evals/bootcamp-history/[id]` |
+| Reporting → Canary Wire | `GET /api/evals/canary-wire?month=…[&format=csv]`, `GET /api/evals/canary-wire/exemptions` |
 | eVals settings → Additional Slack Contacts | `GET /api/evals/slack-contacts` |
 | Scheduler, and a bootcamp's dialog with its guest judges | `GET /api/scheduler/bootcamps`, `GET /api/scheduler/bootcamps/[id]` |
 | A bootcamp's schedule, its sessions and their comments | `GET /api/scheduler/bootcamps/[id]/schedule`, `GET /api/scheduler/bootcamps/[id]/sessions/[sessionId]`, `GET /api/scheduler/bootcamps/[id]/sessions/[sessionId]/comments?page=`, `GET /api/scheduler/bootcamps/[id]/availability`, `GET /api/scheduler/bootcamps/[id]/schedule/copy` |

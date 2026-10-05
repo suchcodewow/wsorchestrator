@@ -1073,6 +1073,40 @@ export const BOOTCAMP_HISTORY_LIMITS = { bytes: 5 * 1024 * 1024, rows: 20_000, e
 
 export type BootcampHistory = typeof bootcampHistory.$inferSelect;
 
+/**
+ * The Canary Wire's Mindtickle data: one pull of every learner's whole
+ * history, which Reporting → Canary Wire slices a month at a time. Only the
+ * newest is kept, so saving one deletes the rest — it names ~300 people and
+ * who is behind on training, and an old pull answers nothing a new one
+ * doesn't. `data` is the `CanaryWireSnapshot` in `lib/canary-wire/snapshot.ts`.
+ */
+export const canaryWireSnapshots = pgTable("canary_wire_snapshots", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  /** When the pull started; Mindtickle computes state live, so this is how fresh it is. */
+  fetchedAt: timestamp("fetched_at", { withTimezone: true }).notNull(),
+  learners: integer("learners").notNull(),
+  data: jsonb("data").notNull(),
+  savedBy: text("saved_by").references(() => users.id, { onDelete: "set null" }),
+  savedAt: timestamp("saved_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const CANARY_WIRE_LIMITS = { bytes: 10 * 1024 * 1024, exemptions: 2_000, exemptionText: 200_000 } as const;
+
+/**
+ * Canary Wire exemptions set by hand. Bootcamp history decides who is
+ * accountable; a row here overrides it for one person. `accountableFrom` is
+ * the first month they count (`YYYY-MM`), or null for "not yet in any month".
+ */
+export const canaryWireExemptions = pgTable("canary_wire_exemptions", {
+  /** Lowercased. */
+  email: text("email").primaryKey(),
+  accountableFrom: text("accountable_from"),
+  updatedBy: text("updated_by").references(() => users.id, { onDelete: "set null" }),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type CanaryWireExemption = typeof canaryWireExemptions.$inferSelect;
+
 export const BOOTCAMP_STATUSES = ["scheduled", "active", "complete"] as const;
 export type BootcampStatus = (typeof BOOTCAMP_STATUSES)[number];
 

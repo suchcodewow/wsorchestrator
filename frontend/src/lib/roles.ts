@@ -142,6 +142,9 @@ export const canUseEvals = (access: Access) => evalsAtLeast(access, "viewer");
 export const canManageEvalsSettings = (access: Access) =>
   evalsAtLeast(access, "administrator");
 
+/** Reporting → Canary Wire names ~300 people and who is behind on training, so it is for eVals administrators only. */
+export const canSeeCanaryWire = (access: Access) => evalsAtLeast(access, "administrator");
+
 /** Sees and submits assessments on the eVals page: anyone in eVals, and the active bootcamp's guest judges. */
 export const canScoreAssessments = (access: Access) => canUseEvals(access) || access.judging;
 

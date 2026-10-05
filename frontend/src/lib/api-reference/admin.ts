@@ -1291,6 +1291,75 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
     ],
   },
   {
+    id: "canary-wire",
+    title: "Canary Wire",
+    intro:
+      "Monthly Canary Wire completion in Mindtickle, by manager, as Reporting → Canary Wire shows it. It names everyone in the three Canary Wire role groups and who is behind, so every route here is for eVals administrators only.",
+    endpoints: [
+      {
+        method: "GET",
+        path: "/api/evals/canary-wire",
+        summary: "Returns one Canary Wire month from the newest Mindtickle pull: every rep's progress per module, grouped by manager, with per-role and overall rates.",
+        access: "evalsAdmin",
+        token: true,
+        notes:
+          "Built from the newest pull and today's exemptions, so a past month counts whoever was accountable then. A rep is pre-bootcamp, and counted in no rate, until the month after their BTC date in bootcamp history; BTC marked exempt counts in every month, and no BTC date counts in none. A hand-set exemption overrides that. Rates are percentages to one place, null when nothing is owed. A cell is keyed by module label: accountable cells are counted, exempt ones are pre-bootcamp work and off-role ones (neither) are another edition's module, shown but not counted. atPt is the event's moment in Pacific, empty when only the day is known. lastActivity is the newest completion in the month's content. hasSnapshot is false until a pull has been uploaded, and every list is then empty. With format=csv, the same month as a CSV download, one row per rep.",
+        query: [
+          { name: "month", type: "string", note: 'a month the picker offers, "September 2026"; the newest month anybody has worked in if omitted' },
+          { name: "format", type: '"csv"', note: "a CSV download instead of JSON" },
+        ],
+        returns:
+          "{ month, months: string[], monthsWithData: string[], hasSnapshot, hasData, labels: string[], modules: { label, edition, name }[], teams: { manager, managerEmail, roles: string[], directs: Rep[], learners, exempt, assigned, completed, pct, fullyComplete, notActivated }[], roles: { role, learners, exempt, assigned, completed, pct, icLearners, icAssigned, icCompleted, icPct, modules: string[] }[], totals | null, lastActivity: { at, atPt, who, module, role }, fetchedAtPt, savedAt: string | null, notes: string[], seriesLinks: { edition, label, url }[], moduleUrlTemplate }, where Rep is { name, email, role, manager, managerEmail, title, notActivated, ic, exempt, exemptFrom, exemptSource: \"manual\" | \"bootcamp\" | \"no_bootcamp\", cells: Record<label, { state, on, atPt, moduleId, seriesId, moduleType, accountable, exempt, also: { state, on, atPt, edition }[], edition? }>, assigned, completed, pct, offRole }; text/csv with format=csv",
+        errors: [
+          { status: 400, error: "invalid_month", when: "month is not one the picker offers" },
+          { status: 400, error: "invalid_format", when: "format is set to anything but csv" },
+        ],
+      },
+      {
+        method: "POST",
+        path: "/api/evals/canary-wire/snapshot",
+        summary: "Replaces the Canary Wire's data with an uploaded Mindtickle pull.",
+        access: "evalsAdmin",
+        token: true,
+        notes:
+          "The file is the output/snapshot.json that canary-wire-reports writes. Only what the page uses is kept: departed staff, departments and Mindtickle ids in the file are dropped. Only the newest pull is stored, so this deletes the one before.",
+        body: { kind: "multipart", fields: [{ name: "file", type: "File", required: true, note: "snapshot.json, at most 10 MB" }] },
+        returns: "{ id, fetchedAt, learners: number, modules: number }",
+        errors: [
+          { status: 400, error: "no_file", when: "there is no file, or it is empty" },
+          { status: 400, error: "not_json", when: "the file isn't JSON" },
+          { status: 400, error: "invalid", when: "the file isn't a pull; detail names the first field that is wrong" },
+          { status: 413, error: "too_large", when: "the file is over 10 MB" },
+        ],
+      },
+      {
+        method: "GET",
+        path: "/api/evals/canary-wire/exemptions",
+        summary: "Lists the Canary Wire exemptions set by hand, and the text the dialog edits.",
+        access: "evalsAdmin",
+        token: true,
+        notes:
+          "Each overrides bootcamp history for one person. accountableFrom is the first month they count, YYYY-MM, or null for none yet. updatedByName is null when that account is gone.",
+        returns: "{ exemptions: { email, accountableFrom: string | null, updatedAt, updatedByName: string | null }[], text: string }",
+      },
+      {
+        method: "PUT",
+        path: "/api/evals/canary-wire/exemptions",
+        summary: "Replaces the Canary Wire exemptions set by hand.",
+        access: "evalsAdmin",
+        token: true,
+        notes:
+          "text is one email per line, optionally followed by the month they become accountable: \"dana@harness.io, August 2026\" (or Aug 2026, or 2026-08). A bare email is exempt in every month. Lines without an email are skipped, a month that can't be read means none yet, and the last line for an email wins. Anyone not listed falls back to bootcamp history. Takes effect on the next read; no new pull is needed.",
+        body: { kind: "json", fields: [{ name: "text", type: "string", required: true, note: "at most 200,000 characters and 2,000 emails" }] },
+        returns: "{ exemptions, text, added: number, changed: number, removed: number }",
+        errors: [
+          { status: 400, error: "invalid", when: "text is missing or too long" },
+          { status: 400, error: "too_many", when: "it lists more than 2,000 emails" },
+        ],
+      },
+    ],
+  },
+  {
     id: "evals",
     title: "eVals settings",
     endpoints: [
