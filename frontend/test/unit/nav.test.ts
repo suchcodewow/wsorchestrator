@@ -47,9 +47,9 @@ const EXPECTED_SIDEBAR: Record<Persona, string[]> = {
     "[Administration]",
     "Manage users",
   ],
-  evalsViewer: ["[eVals]", "Assessments", "Bootcamp History", ...ACCOUNT],
-  evalsAdmin: ["[eVals]", "Assessments", "Bootcamp History", "eVals settings", ...ACCOUNT, "[Administration]", "Manage users"],
-  guestJudge: ["[eVals]", "Assessments", ...ACCOUNT],
+  evalsViewer: ["[Assessments]", "eVals", "Iris", "Bootcamp History", ...ACCOUNT],
+  evalsAdmin: ["[Assessments]", "eVals", "Iris", "Bootcamp History", "eVals settings", ...ACCOUNT, "[Administration]", "Manage users"],
+  guestJudge: ["[Assessments]", "eVals", ...ACCOUNT],
   bothAdmins: [
     ...EVENTS_ADMIN,
     "[Training]",
@@ -68,8 +68,9 @@ const EXPECTED_SIDEBAR: Record<Persona, string[]> = {
     "Scheduler settings",
     "Cohorts",
     "Cohort Settings",
-    "[eVals]",
-    "Assessments",
+    "[Assessments]",
+    "eVals",
+    "Iris",
     "Bootcamp History",
     "eVals settings",
     ...ACCOUNT,
@@ -125,7 +126,7 @@ describe("isNavItemActive", () => {
   const orchestrator = link("Orchestrator");
   const scheduler = link("Scheduler");
   const schedulerSettings = link("Scheduler settings");
-  const evals = link("Assessments");
+  const evals = link("eVals");
   const evalsSettings = link("eVals settings");
 
   test("matches the page itself and anything beneath it", () => {
@@ -149,7 +150,7 @@ describe("isNavItemActive", () => {
     assert.equal(isNavItemActive("/scheduler-settings", schedulerSettings), true);
   });
 
-  test("eVals settings does not also light up the Assessments entry", () => {
+  test("eVals settings does not also light up the eVals entry", () => {
     assert.equal(isNavItemActive("/evals-settings", evals), false);
     assert.equal(isNavItemActive("/evals-settings", evalsSettings), true);
   });

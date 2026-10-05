@@ -251,6 +251,7 @@ const PAGES: Record<string, PageCase> = {
     path: () => `/evals/bootcamp/${assessmentId}/0`,
     expect: () => 404,
   },
+  "/iris": { path: () => "/iris", expect: gated(canUseEvals) },
   "/bootcamp-history": { path: () => "/bootcamp-history", expect: gated(canUseEvals) },
   "/bootcamp-history?status=active": { path: () => "/bootcamp-history?status=active", expect: gated(canUseEvals) },
   "/bootcamp-history/<a record>": { path: () => `/bootcamp-history/${historyId}`, expect: gated(canUseEvals) },

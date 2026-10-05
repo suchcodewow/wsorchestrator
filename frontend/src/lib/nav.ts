@@ -6,6 +6,7 @@ import {
   CalendarDays,
   Cloud,
   DatabaseBackup,
+  Eye,
   FlaskConical,
   History,
   Inbox,
@@ -95,9 +96,10 @@ export const NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
-    heading: "eVals",
+    heading: "Assessments",
     items: [
-      { href: "/evals", label: "Assessments", Icon: FlaskConical, visible: canScoreAssessments },
+      { href: "/evals", label: "eVals", Icon: FlaskConical, visible: canScoreAssessments },
+      { href: "/iris", label: "Iris", Icon: Eye, visible: canUseEvals },
       { href: "/bootcamp-history", label: "Bootcamp History", Icon: History, visible: canUseEvals },
       {
         href: "/evals-settings",
