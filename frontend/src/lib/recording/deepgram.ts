@@ -33,9 +33,9 @@ export function liveListenUrl(): string {
   return `wss://${HOST}/v1/listen?${listenQuery({ interim_results: "true" })}`;
 }
 
-/** One request with the whole recording as its body. */
+/** One request with the whole recording as its body, with each speaker's turns labelled. */
 export function prerecordedListenUrl(): string {
-  return `https://${HOST}/v1/listen?${listenQuery({})}`;
+  return `https://${HOST}/v1/listen?${listenQuery({ diarize: "true" })}`;
 }
 
 /** What one message on the live socket adds, or null for anything that isn't a transcript. */
@@ -63,12 +63,22 @@ type Alternative = { transcript?: unknown; paragraphs?: { transcript?: unknown }
  * The transcript in a pre-recorded response, or "" when Deepgram heard
  * nothing. `smart_format` also splits it into paragraphs, with a blank line
  * between each; that version is the one returned when it is there, since a
- * long recording is unreadable as one run of text.
+ * long recording is unreadable as one run of text. With `diarize`, each
+ * change of speaker starts a paragraph with "Speaker 0:"; they are numbered
+ * from 1 here, since a judge reads "Speaker 0" as a mistake, and dropped
+ * when only one voice was heard.
  */
 export function prerecordedTranscript(body: unknown): string {
   const alt = (body as { results?: { channels?: { alternatives?: Alternative[] }[] } } | null)
     ?.results?.channels?.[0]?.alternatives?.[0];
   const paragraphs = alt?.paragraphs?.transcript;
-  if (typeof paragraphs === "string" && paragraphs.trim()) return paragraphs.trim();
+  if (typeof paragraphs === "string" && paragraphs.trim()) {
+    const text = paragraphs.trim();
+    const label = /^Speaker (\d+): /gm;
+    const speakers = new Set([...text.matchAll(label)].map((m) => m[1]));
+    return speakers.size > 1
+      ? text.replace(label, (_, n: string) => `Speaker ${Number(n) + 1}: `)
+      : text.replace(label, "");
+  }
   return typeof alt?.transcript === "string" ? alt.transcript : "";
 }

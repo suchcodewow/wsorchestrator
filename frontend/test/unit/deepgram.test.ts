@@ -33,8 +33,10 @@ describe("listen URLs", () => {
     assert.equal(url.searchParams.get("interim_results"), "true");
   });
 
-  test("pre-recorded is plain HTTPS", () => {
-    assert.equal(new URL(prerecordedListenUrl()).protocol, "https:");
+  test("pre-recorded is plain HTTPS and labels speakers", () => {
+    const url = new URL(prerecordedListenUrl());
+    assert.equal(url.protocol, "https:");
+    assert.equal(url.searchParams.get("diarize"), "true");
   });
 });
 
@@ -107,6 +109,42 @@ describe("prerecordedTranscript", () => {
       prerecordedTranscript(body),
       "Thanks for joining. Can you walk me through how your team deploys to production today? Sure. We build with Jenkins.\n\nWhat happens when a deployment fails at three in the morning?",
     );
+  });
+
+  test("numbers diarized speakers from 1", () => {
+    // What nova-3 returned with diarize=true for a synthesized two-voice exchange (2026-10-05), trimmed.
+    const body = {
+      results: {
+        channels: [
+          {
+            alternatives: [
+              {
+                transcript: "Welcome. Can you walk me through it? Sure. First, I would create a build stage. Good. And a rollback?",
+                paragraphs: {
+                  transcript:
+                    "\nSpeaker 0: Welcome. Can you walk me through it?\n\nSpeaker 1: Sure. First, I would create a build stage.\n\nSpeaker 0: Good. And a rollback?",
+                },
+              },
+            ],
+          },
+        ],
+      },
+    };
+    assert.equal(
+      prerecordedTranscript(body),
+      "Speaker 1: Welcome. Can you walk me through it?\n\nSpeaker 2: Sure. First, I would create a build stage.\n\nSpeaker 1: Good. And a rollback?",
+    );
+  });
+
+  test("one diarized speaker is not labelled", () => {
+    const body = {
+      results: {
+        channels: [
+          { alternatives: [{ transcript: "Testing one, two, three.", paragraphs: { transcript: "\nSpeaker 0: Testing one, two, three." } }] },
+        ],
+      },
+    };
+    assert.equal(prerecordedTranscript(body), "Testing one, two, three.");
   });
 
   test("nothing heard, or an unexpected body, is empty", () => {

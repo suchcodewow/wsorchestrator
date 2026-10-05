@@ -1055,7 +1055,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         summary: "Transcribes one recording made while scoring an attendee, and files the transcript with their assessment at the active bootcamp.",
         access: "scorer",
         token: true,
-        notes: `Deepgram's nova-3 model, with punctuation, number formatting and a blank line between paragraphs; text is empty when nothing was heard. The audio is passed through and not kept. Sending the same recordingId again returns the transcript already filed, with 200, without transcribing it again. Up to ${PAGE_SIZE} are kept per attendee per assessment per bootcamp.`,
+        notes: `Deepgram's nova-3 model, with punctuation, number formatting and a blank line between paragraphs; when more than one voice is heard, each change of speaker starts a paragraph with "Speaker 1:", "Speaker 2:" and so on. text is empty when nothing was heard. The audio is passed through and not kept. Sending the same recordingId again returns the transcript already filed, with 200, without transcribing it again. Up to ${PAGE_SIZE} are kept per attendee per assessment per bootcamp.`,
         params: [
           { name: "assessmentId", type: "string", required: true, note: "UUID" },
           { name: "employeeId", type: "string", required: true, note: "the employee's HiBob id" },

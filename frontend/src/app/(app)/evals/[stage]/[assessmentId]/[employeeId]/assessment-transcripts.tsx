@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Transcripts on the scoring form. While the judge records, Deepgram's live
+ * Transcripts on the scoring form's second tab. While the judge records, Deepgram's live
  * transcript runs underneath; when the recording stops, the whole saved file
  * is sent once to be transcribed and filed with the attendee's assessment,
  * whether or not the scores are ever submitted. Everyone who opens the form
@@ -145,78 +145,85 @@ export function AssessmentTranscripts({
         (r) => r.status !== "recording" && !filed.has(r.id) && !jobs[r.id] && (since === null || r.startedAt >= since),
       )
     : [];
-  const showLive = recording || live.status === "connecting" || live.status === "finishing";
+  const showLive =
+    (recording || live.status === "connecting" || live.status === "finishing") &&
+    live.status !== "unavailable" &&
+    live.status !== "idle";
   const jobRows = Object.entries(jobs);
-
-  if (!showLive && transcripts.length === 0 && jobRows.length === 0 && unfiled.length === 0) {
-    return unavailable || live.status === "unavailable" ? <NotSetUp /> : null;
-  }
+  const notSetUp = unavailable || live.status === "unavailable";
+  const empty = !showLive && transcripts.length === 0 && jobRows.length === 0 && unfiled.length === 0;
 
   return (
-    <div className="space-y-3">
-      {showLive && <LiveBox live={live} />}
-      {(unavailable || live.status === "unavailable") && <NotSetUp />}
-
-      {(transcripts.length > 0 || jobRows.length > 0 || unfiled.length > 0) && (
-        <div className="space-y-1.5">
-          <h4 className="flex items-center gap-1.5 text-sm font-medium">
-            <FileText className="size-3.5 text-muted-foreground" />
-            Transcripts
-            {transcripts.length > 0 && <span className="font-normal text-muted-foreground">{transcripts.length}</span>}
-          </h4>
-          <ul className="divide-y rounded-lg border text-sm">
-            {transcripts.map((t) => (
-              <li key={t.id} className="space-y-1.5 px-3 py-2.5">
-                <p className="flex flex-wrap gap-x-2 text-muted-foreground">
-                  <span className="font-medium text-foreground">{recordedLabel(t.recordedAt)}</span>
-                  <span className="tabular-nums">{formatDuration(t.durationMs)}</span>
-                  {t.recordedByName && <span>· {t.recordedByName}</span>}
-                </p>
-                {t.text ? (
-                  <p className="max-h-60 overflow-y-auto whitespace-pre-line leading-relaxed">{t.text}</p>
-                ) : (
-                  <p className="text-muted-foreground">Nothing heard.</p>
-                )}
-              </li>
-            ))}
-            {jobRows.map(([id, job]) => (
-              <li key={id} className="space-y-1.5 px-3 py-2.5">
-                {job.status === "working" ? (
-                  <>
-                    <p className="flex items-center gap-1.5 text-muted-foreground" role="status">
-                      <Loader2 className="size-3.5 animate-spin" />
-                      Transcribing the full recording…
-                    </p>
-                    {job.live && live.finals.length > 0 && (
-                      <p className="max-h-60 overflow-y-auto leading-relaxed text-muted-foreground">{live.finals.join(" ")}</p>
-                    )}
-                  </>
-                ) : (
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                    <span role="alert" className="text-destructive">
-                      {job.error}
-                    </span>
-                    <Button variant="ghost" size="sm" className="ml-auto" onClick={() => void transcribe(id)}>
-                      <RotateCw />
-                      Retry
-                    </Button>
-                  </div>
-                )}
-              </li>
-            ))}
-            {unfiled.map((r) => (
-              <li key={r.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2.5">
-                <span className="font-medium">{recordedLabel(r.startedAt)}</span>
-                <span className="tabular-nums text-muted-foreground">{formatDuration(r.durationMs)} · not transcribed</span>
-                <Button variant="ghost" size="sm" className="ml-auto" onClick={() => void transcribe(r.id)}>
-                  <FileText />
-                  Transcribe
-                </Button>
-              </li>
-            ))}
-          </ul>
-        </div>
+    <ul className="divide-y overflow-hidden rounded-2xl border bg-card text-sm shadow-sm">
+      {showLive && (
+        <li className="px-5 py-4">
+          <LiveBox live={live} />
+        </li>
       )}
+      {notSetUp && <li className="px-5 py-4 text-muted-foreground">Transcription is not set up on this deployment.</li>}
+      {empty && !notSetUp && <li className="px-5 py-4 text-muted-foreground">Nothing recorded yet.</li>}
+      {transcripts.map((t) => (
+        <li key={t.id} className="space-y-2 px-5 py-4">
+          <p className="flex flex-wrap gap-x-2 text-muted-foreground">
+            <span className="font-medium text-foreground">{recordedLabel(t.recordedAt)}</span>
+            <span className="tabular-nums">{formatDuration(t.durationMs)}</span>
+            {t.recordedByName && <span>· {t.recordedByName}</span>}
+          </p>
+          {t.text ? <TranscriptText text={t.text} /> : <p className="text-muted-foreground">Nothing heard.</p>}
+        </li>
+      ))}
+      {jobRows.map(([id, job]) => (
+        <li key={id} className="space-y-2 px-5 py-4">
+          {job.status === "working" ? (
+            <>
+              <p className="flex items-center gap-1.5 text-muted-foreground" role="status">
+                <Loader2 className="size-3.5 animate-spin" />
+                Transcribing the full recording…
+              </p>
+              {job.live && live.finals.length > 0 && (
+                <p className="leading-relaxed text-muted-foreground">{live.finals.join(" ")}</p>
+              )}
+            </>
+          ) : (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <span role="alert" className="text-destructive">
+                {job.error}
+              </span>
+              <Button variant="ghost" size="sm" className="ml-auto" onClick={() => void transcribe(id)}>
+                <RotateCw />
+                Retry
+              </Button>
+            </div>
+          )}
+        </li>
+      ))}
+      {unfiled.map((r) => (
+        <li key={r.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-5 py-4">
+          <span className="font-medium">{recordedLabel(r.startedAt)}</span>
+          <span className="tabular-nums text-muted-foreground">{formatDuration(r.durationMs)} · not transcribed</span>
+          <Button variant="ghost" size="sm" className="ml-auto" onClick={() => void transcribe(r.id)}>
+            <FileText />
+            Transcribe
+          </Button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** A filed transcript, with the "Speaker N:" that opens a paragraph set in bold. */
+function TranscriptText({ text }: { text: string }) {
+  return (
+    <div className="space-y-3 leading-relaxed">
+      {text.split(/\n{2,}/).map((para, i) => {
+        const m = /^(Speaker \d+:)\s*/.exec(para);
+        return (
+          <p key={i} className="whitespace-pre-line">
+            {m && <span className="font-medium">{m[1]} </span>}
+            {m ? para.slice(m[0].length) : para}
+          </p>
+        );
+      })}
     </div>
   );
 }
@@ -228,15 +235,14 @@ function LiveBox({ live }: { live: LiveTranscript }) {
   useEffect(() => {
     if (box.current) box.current.scrollTop = box.current.scrollHeight;
   }, [text, live.interim]);
-  if (live.status === "unavailable" || live.status === "idle") return null;
 
   return (
-    <div className="space-y-1 rounded-lg border p-3 text-sm">
+    <div className="space-y-1">
       <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
         Live transcript
         {(live.status === "connecting" || live.status === "finishing") && <Loader2 className="size-3 animate-spin" />}
       </p>
-      <div ref={box} aria-live="polite" className="max-h-40 min-h-10 overflow-y-auto leading-relaxed">
+      <div ref={box} aria-live="polite" className="max-h-96 min-h-10 overflow-y-auto leading-relaxed">
         {live.error ? (
           <span className="text-destructive">{live.error}</span>
         ) : text || live.interim ? (
@@ -250,8 +256,4 @@ function LiveBox({ live }: { live: LiveTranscript }) {
       </div>
     </div>
   );
-}
-
-function NotSetUp() {
-  return <p className="text-sm text-muted-foreground">Transcription is not set up on this deployment.</p>;
 }
