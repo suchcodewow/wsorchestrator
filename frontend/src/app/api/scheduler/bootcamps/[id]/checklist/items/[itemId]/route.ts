@@ -1,7 +1,7 @@
 /**
  * Ticking one checklist item done or back to do, which a Training
- * administrator or the item's owner can, and removing it, which only an
- * administrator can.
+ * administrator or the item's owner can, and changing its name or owner or
+ * removing it, which only an administrator can.
  */
 
 import { NextResponse } from "next/server";
@@ -9,10 +9,12 @@ import { z } from "zod";
 import { requireCaller } from "@/lib/api-auth";
 import { audited } from "@/lib/audit";
 import { canManageTrainingSettings } from "@/lib/roles";
-import { CHECKLIST_STATUS_FOR, deleteChecklistItem, setChecklistItemDone } from "@/lib/scheduler/checklist";
+import { CHECKLIST_STATUS_FOR, checklistEditSchema, deleteChecklistItem, editChecklistItem, setChecklistItemDone } from "@/lib/scheduler/checklist";
 
 const paramsSchema = z.object({ id: z.string().uuid(), itemId: z.string().uuid() });
-const patchSchema = z.object({ done: z.boolean() });
+const patchSchema = checklistEditSchema
+  .extend({ done: z.boolean().optional() })
+  .refine((b) => b.done !== undefined || b.name !== undefined || b.ownerEmail !== undefined);
 
 type Params = { params: Promise<{ id: string; itemId: string }> };
 
@@ -27,13 +29,22 @@ export const PATCH = audited(async function PATCH(req: Request, { params }: Para
   const body = patchSchema.safeParse(await req.json().catch(() => null));
   if (!body.success) return NextResponse.json({ error: "invalid" }, { status: 400 });
 
-  const result = await setChecklistItemDone(
-    { id: user.id, email: user.email, canManage: canManageTrainingSettings(user.access) },
-    parsed.data.id,
-    parsed.data.itemId,
-    body.data.done,
-  );
-  if (!result.ok) return NextResponse.json({ error: result.error }, { status: CHECKLIST_STATUS_FOR[result.error] });
+  const canManage = canManageTrainingSettings(user.access);
+  const { done, ...edit } = body.data;
+  const editing = edit.name !== undefined || edit.ownerEmail !== undefined;
+  if (editing && !canManage) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+
+  const { id, itemId } = parsed.data;
+  const edited = editing ? await editChecklistItem(user.id, id, itemId, edit) : null;
+  const result =
+    done === undefined || (edited && !edited.ok)
+      ? edited!
+      : await setChecklistItemDone({ id: user.id, email: user.email, canManage }, id, itemId, done);
+  if (!result.ok) {
+    return NextResponse.json(result.email ? { error: result.error, email: result.email } : { error: result.error }, {
+      status: CHECKLIST_STATUS_FOR[result.error],
+    });
+  }
   return NextResponse.json(result.value);
 });
 

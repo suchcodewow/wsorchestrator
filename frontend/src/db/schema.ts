@@ -1410,15 +1410,15 @@ export const scheduleSessionComments = pgTable(
   (t) => [index("schedule_session_comments_session_idx").on(t.sessionId, t.createdAt)],
 );
 
-/** The two classes a bootcamp holds, each with a checklist per day; the SE tracks share their class's. */
-export const CHECKLIST_TRACKS = ["btc", "int"] as const;
-export type ChecklistTrack = (typeof CHECKLIST_TRACKS)[number];
+/** Every track keeps a checklist per day, the SE tracks their own. */
+export const CHECKLIST_TRACKS = SCHEDULE_TRACKS;
+export type ChecklistTrack = ScheduleTrack;
 
-/** `itemsPerDay` caps one class-day's checklist, so it is read whole. */
+/** `itemsPerDay` caps one track-day's checklist, so it is read whole. */
 export const CHECKLIST_LIMITS = { name: 200, itemsPerDay: 100 } as const;
 
 /**
- * Something to do before one day of one class starts. Its owner, if any, is
+ * Something to do before one day of one track starts. Its owner, if any, is
  * an administrator or guest judge of the bootcamp, kept by email; who wrote
  * it and who ticked it are copied in, so they outlast the accounts.
  */
@@ -1449,7 +1449,7 @@ export const scheduleChecklistItems = pgTable(
   (t) => [
     index("schedule_checklist_items_day_idx").on(t.bootcampId, t.track, t.day, t.createdAt),
     index("schedule_checklist_items_owner_idx").on(t.ownerEmail),
-    check("schedule_checklist_items_track_check", sql`${t.track} in ('btc', 'int')`),
+    check("schedule_checklist_items_track_check", sql`${t.track} in ('btc', 'int', 'btc_se', 'int_se')`),
     check("schedule_checklist_items_day_check", sql`${t.day} between 1 and 30`),
   ],
 );

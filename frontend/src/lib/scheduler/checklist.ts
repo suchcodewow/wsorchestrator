@@ -1,16 +1,17 @@
 /**
- * What is to be done before each day of a bootcamp's two classes starts. A
- * class-day's list holds at most `CHECKLIST_LIMITS.itemsPerDay`, so it is read
- * whole; what one person owns across every bootcamp is read a page at a time.
+ * What is to be done before each day of each of a bootcamp's tracks starts,
+ * the SE tracks included. A track-day's list holds at most
+ * `CHECKLIST_LIMITS.itemsPerDay`, so it is read whole; what one person owns
+ * across every bootcamp is read a page at a time.
  *
- * Any Training administrator adds, ticks and removes items. An item's owner,
+ * Any Training administrator adds, edits, ticks and removes items. An item's owner,
  * an administrator or guest judge of the bootcamp, can tick their own as well,
  * from their inbox, whatever other access they hold.
  */
 
 import "server-only";
 
-import { and, eq, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
 import {
@@ -51,7 +52,7 @@ export type ChecklistItemRow = {
   mentions: MentionPick[];
 };
 
-/** One class-day's items, done and to do. */
+/** One track-day's items, done and to do. */
 export type ChecklistDayCount = { track: ChecklistTrack; day: number; total: number; done: number };
 
 const t = scheduleChecklistItems;
@@ -84,9 +85,9 @@ export function checklistDayLabel(track: ChecklistTrack, day: number): string {
   return `${TRACK_LABELS[track]}, Day ${day}`;
 }
 
-/** How many items each class-day has, and how many are done; days with none are absent. */
+/** How many items each track-day has, and how many are done; days with none are absent. */
 export async function checklistCounts(bootcampId: string): Promise<ChecklistDayCount[]> {
-  // At most two classes of thirty days: sixty rows.
+  // At most four tracks of thirty days: 120 rows, all of them needed to label the board.
   return db
     .select({
       track: t.track,
@@ -100,7 +101,7 @@ export async function checklistCounts(bootcampId: string): Promise<ChecklistDayC
     .orderBy(t.track, t.day);
 }
 
-/** One class-day's items, oldest first. */
+/** One track-day's items, oldest first. */
 export async function listDayItems(bootcampId: string, track: ChecklistTrack, day: number): Promise<ChecklistItemRow[]> {
   return db
     .select(COLUMNS)
@@ -130,7 +131,7 @@ export const CHECKLIST_STATUS_FOR: Record<ChecklistError, number> = {
 
 type Result<T> = { ok: true; value: T } | { ok: false; error: ChecklistError; email?: string };
 
-/** Adds an item to one class-day, recording who wrote it and whom it tags. */
+/** Adds an item to one track-day, recording who wrote it and whom it tags. */
 export async function addChecklistItem(
   actorId: string,
   bootcampId: string,
@@ -190,6 +191,69 @@ export async function addChecklistItem(
     }
     const [full] = await tx.select(COLUMNS).from(t).where(eq(t.id, row!.id));
     noteAudit({ target: row!.id });
+    return { ok: true, value: full! } as const;
+  });
+}
+
+/** A change to an item: a field left out stays as it is; `mentions` goes with `name`. */
+export const checklistEditSchema = z.object({
+  name: checklistItemSchema.shape.name.optional(),
+  /** Null or blank for nobody. */
+  ownerEmail: checklistItemSchema.shape.ownerEmail,
+  mentions: checklistItemSchema.shape.mentions,
+});
+
+/**
+ * Changes an item's name, its owner, or both. A new name brings the tags it
+ * makes: anyone it no longer tags drops out of it, and anyone newly tagged
+ * finds it in their inbox. Whether it is done is left alone.
+ */
+export async function editChecklistItem(
+  actorId: string,
+  bootcampId: string,
+  itemId: string,
+  input: z.infer<typeof checklistEditSchema>,
+): Promise<Result<ChecklistItemRow>> {
+  const [item] = await db
+    .select({ name: t.name, track: t.track, day: t.day })
+    .from(t)
+    .where(and(eq(t.id, itemId), eq(t.bootcampId, bootcampId)));
+  if (!item) return { ok: false, error: "not_found" };
+  noteAudit({ target: itemId, targetLabel: `${checklistDayLabel(item.track, item.day)}: ${(input.name ?? item.name).slice(0, 80)}` });
+
+  const pool = input.ownerEmail || input.mentions?.length ? await instructorPool(bootcampId) : [];
+  let owner: { email: string; fullName: string } | null | undefined;
+  if (input.ownerEmail !== undefined) {
+    owner = input.ownerEmail ? (pool.find((i) => i.email === input.ownerEmail) ?? null) : null;
+    if (input.ownerEmail && !owner) return { ok: false, error: "not_instructor", email: input.ownerEmail };
+  }
+  const picked = pickMentions(pool, input.mentions);
+  if (!picked.ok) return { ok: false, error: "not_instructor", email: picked.email };
+
+  const tagger = input.name !== undefined ? await taggerOf(actorId) : null;
+  return db.transaction(async (tx) => {
+    const [row] = await tx
+      .update(t)
+      .set({
+        ...(input.name !== undefined && { name: input.name }),
+        ...(owner !== undefined && { ownerEmail: owner?.email ?? null, ownerName: owner?.fullName ?? "" }),
+      })
+      .where(eq(t.id, itemId))
+      .returning({ id: t.id });
+    if (!row) return { ok: false, error: "not_found" } as const;
+
+    if (tagger) {
+      // Tags it still makes keep when they were first made.
+      const have = await tx.select({ id: mentions.id, email: mentions.email }).from(mentions).where(eq(mentions.checklistItemId, itemId));
+      const want = new Set(picked.tagged.map((m) => m.email));
+      const gone = have.filter((m) => !want.has(m.email)).map((m) => m.id);
+      if (gone.length > 0) await tx.delete(mentions).where(inArray(mentions.id, gone));
+      const added = picked.tagged.filter((m) => !have.some((h) => h.email === m.email));
+      if (added.length > 0) {
+        await tx.insert(mentions).values(added.map((m) => ({ checklistItemId: itemId, bootcampId, email: m.email, fullName: m.fullName, ...tagger })));
+      }
+    }
+    const [full] = await tx.select(COLUMNS).from(t).where(eq(t.id, itemId));
     return { ok: true, value: full! } as const;
   });
 }
