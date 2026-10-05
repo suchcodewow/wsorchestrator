@@ -275,7 +275,7 @@ export function SessionFace({
       ? [{ key: "wrong", text: wrong.length === 1 ? wrong[0]! : `${wrong.length} issues`, className: "font-medium text-red-700 dark:text-red-400" }]
       : []),
   ];
-  const fits = Math.max(0, Math.floor((height - 22) / 18));
+  const fits = Math.max(0, Math.floor((height - 24) / 16));
 
   const title = [
     `${s.emoji ? `${s.emoji} ` : ""}${s.name}`,
@@ -313,14 +313,14 @@ export function SessionFace({
             {s.emoji}
           </span>
         )}
-        <span className={cn("min-w-0 flex-1 truncate leading-tight", density === "condensed" ? "text-[11px]" : "text-xs font-medium")}>
+        <span className={cn("min-w-0 flex-1 truncate leading-tight", density === "condensed" ? "text-[11px]" : "text-[13px] font-medium")}>
           {s.name}
         </span>
         {density === "detailed" && (
-          <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">{formatLength(s.minutes)}</span>
+          <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{formatLength(s.minutes)}</span>
         )}
         {s.comments > 0 && density === "detailed" && (
-          <span className="flex shrink-0 items-center gap-0.5 text-[11px] text-muted-foreground">
+          <span className="flex shrink-0 items-center gap-0.5 text-xs text-muted-foreground">
             <MessageSquare className="size-3" />
             {s.comments}
           </span>
@@ -328,7 +328,7 @@ export function SessionFace({
       </div>
       {density === "detailed" &&
         lines.slice(0, fits).map((l) => (
-          <div key={l.key} className={cn("truncate text-[11px] text-muted-foreground", l.className)}>
+          <div key={l.key} className={cn("truncate text-xs text-muted-foreground", l.className)}>
             {l.text}
           </div>
         ))}
