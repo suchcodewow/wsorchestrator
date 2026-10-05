@@ -2,8 +2,8 @@
 
 /**
  * The attendees one assessment applies to, each opening to their scoring
- * form. Assigned to me narrows them to the viewer's own breakout groups on
- * the active bootcamp's schedule.
+ * form. Assigned to me narrows them to the viewer's own groups in the active
+ * bootcamp's breakouts that are scored on this assessment.
  */
 
 import { useTransition } from "react";
@@ -51,7 +51,7 @@ export function AttendeesView({
   page: Page<AttendeeRow>;
   /** `mine` is how many are in the viewer's breakout groups, whatever is shown. */
   counts: { attendees: number; scored: number; mine: number };
-  /** The viewer's rooms in this stage's breakouts. */
+  /** The viewer's rooms in the breakouts scored on this assessment. */
   rooms: BreakoutRoom[];
 }) {
   const sortProps = { sort: query.sort, dir: query.dir };
@@ -113,7 +113,7 @@ export function AttendeesView({
         {bootcamp && (
           <button
             type="button"
-            title="Only the attendees in your groups in this stage's breakouts on the schedule"
+            title="Only the attendees in your groups in the breakouts on the schedule scored on this assessment"
             aria-pressed={mine}
             disabled={pending}
             onClick={toggleMine}
@@ -150,7 +150,7 @@ export function AttendeesView({
                     {query.q
                       ? "No attendees match that search."
                       : mine
-                        ? "Nobody is assigned to you in this stage's breakouts."
+                        ? "Nobody is assigned to you in a breakout scored on this assessment."
                         : "Nobody in the cohort fits this assessment."}
                   </td>
                 </tr>

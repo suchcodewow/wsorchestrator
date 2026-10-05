@@ -48,7 +48,7 @@ const AUDIENCE_TYPE = `"both" | "sales" | "engineers"`;
 const COLOR_TYPE = `"slate" | "red" | "orange" | "amber" | "green" | "teal" | "blue" | "violet" | "pink"`;
 const MINUTES_NOTE = `a multiple of ${SCHEDULE_LIMITS.slot} from ${SCHEDULE_LIMITS.slot} to ${SCHEDULE_LIMITS.maxMinutes}`;
 
-const SESSION_SHAPE = `{ id, track: ${TRACK_TYPE}, day: number, start: number, minutes: number, kind, audience: ${AUDIENCE_TYPE}, typeId: string | null, name, description, emoji, color, roomId: string | null, staff: { email, fullName, leader: boolean, roomId: string | null }[], comments: number, largestGroup: number, assigned: string[], updatedAt }`;
+const SESSION_SHAPE = `{ id, track: ${TRACK_TYPE}, day: number, start: number, minutes: number, kind, audience: ${AUDIENCE_TYPE}, typeId: string | null, name, description, emoji, color, roomId: string | null, assessmentId: string | null, staff: { email, fullName, leader: boolean, roomId: string | null }[], comments: number, largestGroup: number, assigned: string[], updatedAt }`;
 
 const CLASH_SHAPE = `{ sessionId, name, track, day, start: number, end: number, what: { kind: "person", email, fullName } | { kind: "room", roomId } | { kind: "audience", group: "sales" | "engineers" } }`;
 
@@ -76,6 +76,11 @@ const SESSION_STAFF_FIELDS: Field[] = [
   { name: "typeId", type: "string | null", note: "the session type it was started from" },
   { name: "roomId", type: "string | null", note: "a main session's room, from the bootcamp's facility" },
   {
+    name: "assessmentId",
+    type: "string | null",
+    note: "a breakout's eVals assessment, of the stage its track is taught to: its instructors score their groups on it, and each finds theirs under mine on GET /api/evals/scoring/{assessmentId}. Ignored for any other kind",
+  },
+  {
     name: "staff",
     type: "{ email, leader?: boolean, roomId?: string | null }[]",
     note: `up to ${SCHEDULE_LIMITS.staff}, exactly one the leader; each a Training administrator or a guest judge of the bootcamp; roomId is a breakout instructor's room`,
@@ -89,6 +94,7 @@ const SESSION_ERRORS: EndpointError[] = [
   { status: 400, error: "unknown_room", when: "a room is not one of the bootcamp's facility's" },
   { status: 400, error: "shared_room", when: "two breakout instructors are given the same room" },
   { status: 400, error: "unknown_type", when: "typeId names no session type" },
+  { status: 400, error: "unknown_assessment", when: "assessmentId names no assessment, or one of the other stage" },
   { status: 404, error: "not_found", when: "no such bootcamp or session" },
   { status: 409, error: "clash", when: "someone or a room added is in another session at the same time; clashes says which" },
 ];
@@ -614,12 +620,12 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       {
         method: "GET",
         path: "/api/scheduler/bootcamps/{id}/schedule",
-        summary: "Reads one bootcamp's whole schedule: every day of its four tracks, its rooms, and who can run a session.",
+        summary: "Reads one bootcamp's whole schedule: every day of its four tracks, its rooms, who can run a session, and the assessments a breakout can be scored on.",
         access: "trainingViewer",
         token: true,
-        notes: `days.btc[0] is day 1 of Bootcamp; each day's sessions are in start order, at most ${SCHEDULE_LIMITS.sessionsPerDay}. start is minutes after midnight, on the quarter hour, from 480 (8:00 AM); a session ends by midnight, and no two on one track-day overlap. Time between them is unscheduled. The SE tracks run as many days as the class they break out of, and a track the bootcamp does not hold has no days. Day N of every track is the same calendar day. instructors is every Training administrator and every guest judge of the bootcamp. classes lists, by email, who each class is now on each track (at most ${SCHEDULE_LIMITS.groupPeople} each), and a session's assigned is everyone in its breakout groups, so a breakout can be checked for anyone it leaves out.`,
+        notes: `days.btc[0] is day 1 of Bootcamp; each day's sessions are in start order, at most ${SCHEDULE_LIMITS.sessionsPerDay}. start is minutes after midnight, on the quarter hour, from 480 (8:00 AM); a session ends by midnight, and no two on one track-day overlap. Time between them is unscheduled. The SE tracks run as many days as the class they break out of, and a track the bootcamp does not hold has no days. Day N of every track is the same calendar day. instructors is every Training administrator and every guest judge of the bootcamp. assessments is every active assessment, and any inactive one a session here still names, at most 100. classes lists, by email, who each class is now on each track (at most ${SCHEDULE_LIMITS.groupPeople} each), and a session's assigned is everyone in its breakout groups, so a breakout can be checked for anyone it leaves out.`,
         params: [BOOTCAMP_ID],
-        returns: `{ bootcamp: { id, startDate, btcDays, intDays, status, facilityId, facilityName }, rooms: { id, name, capacity }[], instructors: { email, fullName, role: "administrator" | "judge" }[], days: { btc, int, btc_se, int_se: ${SESSION_SHAPE}[][] }, classes: { bootcamp, intermediate: { sales: string[], engineer: string[] } } }`,
+        returns: `{ bootcamp: { id, startDate, btcDays, intDays, status, facilityId, facilityName }, rooms: { id, name, capacity }[], instructors: { email, fullName, role: "administrator" | "judge" }[], assessments: { id, name, stage: "bootcamp" | "intermediate", active: boolean }[], days: { btc, int, btc_se, int_se: ${SESSION_SHAPE}[][] }, classes: { bootcamp, intermediate: { sales: string[], engineer: string[] } } }`,
         errors: [{ status: 404, error: "not_found", when: "no such bootcamp" }],
       },
       {
@@ -669,7 +675,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "trainingAdmin",
         token: true,
         notes:
-          "Copies every session and who runs it, but not comments or breakout groups. Rooms come too only when both bootcamps are at the same facility. Days past the end of a track here are left out; notes says what was. The checklists of the days it copies, and Prep Day's, are added to this bootcamp's, every item to do; replace leaves its own items alone, and an item whose day here already has one of the same name is not added again. An owner or a tag who is not an administrator or guest judge of this bootcamp is left off, and notes names them.",
+          "Copies every session, who runs it and the assessment a breakout is scored on, but not comments or breakout groups. Rooms come too only when both bootcamps are at the same facility. Days past the end of a track here are left out; notes says what was. The checklists of the days it copies, and Prep Day's, are added to this bootcamp's, every item to do; replace leaves its own items alone, and an item whose day here already has one of the same name is not added again. An owner or a tag who is not an administrator or guest judge of this bootcamp is left off, and notes names them.",
         params: [BOOTCAMP_ID],
         body: {
           kind: "json",
@@ -1148,7 +1154,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "scorer",
         token: true,
         notes:
-          "An attendee is a current candidate (see GET /api/evals/current-cohort) in the assessment's stage on the sales or engineer track, as its audience takes in. averageScore is to one decimal place, and null if they are not scored at the active bootcamp. needsRescoring is true for one scored before a criterion was added. attendees and scored count everyone it applies to, whatever the search or mine. mine counts those in the caller's own groups in any breakout of the assessment's stage on the active bootcamp's schedule; a breakout is not tied to one assessment, so every breakout of the stage counts. rooms are the rooms the caller is given in those same breakouts, in the order they happen; one without a room for them is left out. start is minutes after midnight.",
+          "An attendee is a current candidate (see GET /api/evals/current-cohort) in the assessment's stage on the sales or engineer track, as its audience takes in. averageScore is to one decimal place, and null if they are not scored at the active bootcamp. needsRescoring is true for one scored before a criterion was added. attendees and scored count everyone it applies to, whatever the search or mine. mine counts those in the caller's own groups in the active bootcamp's breakouts whose assessmentId is this assessment, as the schedule's Breakout Assignments tab sets it. rooms are the rooms the caller is given in those same breakouts, in the order they happen; one without a room for them is left out. start is minutes after midnight.",
         params: [{ name: "assessmentId", type: "string", required: true, note: "UUID" }],
         query: [
           ...listQuery(ASSESSMENT_ATTENDEE_LIST.sorts, "the name, email or title"),
@@ -1457,6 +1463,16 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           "criteria counts those still asked; submissions counts the attendees scored on it at any bootcamp. total counts every assessment, whatever the search.",
         query: listQuery(ASSESSMENT_LIST.sorts, "the name"),
         returns: `{ assessments: { id, name, stage: "bootcamp" | "intermediate", audience: "sales" | "engineer" | "both", active: boolean, updatedAt, criteria: number, submissions: number }[], ${PAGE_FIELDS}, total: number }`,
+      },
+      {
+        method: "GET",
+        path: "/api/evals/assessments/unassigned-breakouts",
+        summary: "Lists the breakouts at scheduled and active bootcamps that name no assessment.",
+        access: "evalsAdmin",
+        token: true,
+        notes:
+          "Ordered by the bootcamp's start date, then track, day and start; at most 100. total counts every such breakout. Their groups appear under no assessment's Assigned to me until one is picked on the session's Breakout Assignments.",
+        returns: `{ breakouts: { id, name, track: "btc" | "int" | "btc_se" | "int_se", day: number, start: number, bootcampId, bootcampStartDate, bootcampStatus: "scheduled" | "active" }[], total: number }`,
       },
       {
         method: "POST",
