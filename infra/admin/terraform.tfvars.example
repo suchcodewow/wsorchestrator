@@ -29,6 +29,8 @@ github_pat         = "ghp_xxxxxxxx"
 # The HiBob service user eVals syncs employees with, daily and on demand.
 # hibob_userid = "SERVICE-12345"
 # hibob_token  = "xxxxxxxx"
+# Deepgram speech-to-text for Check PC's transcripts. Empty leaves it off.
+# deepgram_api_key = "xxxxxxxx"
 # harness_base_url = "https://app.harness.io"
 # Organizations the Cloud Status page should treat as permanent fixtures. Rarely
 # needed: an organization the orchestrator never tagged is already reported as
