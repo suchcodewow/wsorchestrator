@@ -184,16 +184,6 @@ export function ScoringFormView({
         </motion.div>
       )}
 
-      <motion.div variants={riseChild}>
-        <RecordingPanel
-          recorder={recorder}
-          ownerId={viewerId}
-          subject={subject}
-          version={recordingsVersion}
-          onChanged={() => setRecordingsVersion((v) => v + 1)}
-        />
-      </motion.div>
-
       {unscored > 0 && (
         <motion.p variants={riseChild} role="status" className="text-sm text-amber-600 dark:text-amber-500">
           {unscored} {unscored === 1 ? "criterion was" : "criteria were"} added since this was scored. Score{" "}
@@ -201,77 +191,93 @@ export function ScoringFormView({
         </motion.p>
       )}
 
-      {criteria.map((c, i) => {
-        const entry = entries[c.id]!;
-        return (
-          <motion.section key={c.id} variants={riseChild} className="space-y-3 rounded-2xl border bg-card p-5 shadow-sm">
-            <div className="space-y-1">
-              <h3 className="font-medium">
-                {i + 1}. {c.name}
-              </h3>
-              {c.description && <p className="whitespace-pre-line text-sm text-muted-foreground">{c.description}</p>}
-            </div>
-            <div role="radiogroup" aria-label={`Score for ${c.name}`} className="flex gap-2">
-              {CRITERION_SCORES.map((n) => (
-                <button
-                  key={n}
-                  type="button"
-                  role="radio"
-                  aria-checked={entry.score === n}
-                  onClick={() => set(c.id, { score: n })}
-                  className={cn(
-                    "flex size-10 items-center justify-center rounded-md border text-sm font-medium transition-colors",
-                    entry.score === n
-                      ? "border-brand bg-brand text-brand-foreground"
-                      : "border-input bg-field hover:bg-muted/50",
-                  )}
-                >
-                  {n}
-                </button>
-              ))}
-            </div>
-            <MentionTextarea
-              aria-label={`Comment on ${c.name}`}
-              placeholder={form.people.length > 0 ? "Comment (optional) — type @ to tag someone" : "Comment (optional)"}
-              value={entry.comment}
-              maxLength={EVALS_ASSESSMENT_LIMITS.comment}
-              onChange={(comment) => set(c.id, { comment })}
-              people={form.people}
-              onPick={(p) => set(c.id, { picks: [...entry.picks, p] })}
-              className="min-h-16"
-            />
-          </motion.section>
-        );
-      })}
+      <motion.div
+        variants={staggerParent(0.04)}
+        className="divide-y overflow-hidden rounded-2xl border bg-card shadow-sm"
+      >
+        <motion.section variants={riseChild} className="space-y-3 px-5 py-4">
+          <h3 className="font-medium">Recording</h3>
+          <RecordingPanel
+            recorder={recorder}
+            ownerId={viewerId}
+            subject={subject}
+            version={recordingsVersion}
+            onChanged={() => setRecordingsVersion((v) => v + 1)}
+          />
+        </motion.section>
 
-      <motion.section variants={riseChild} className="space-y-5 rounded-2xl border bg-card p-5 shadow-sm">
-        <div className="flex items-baseline justify-between gap-3">
-          <h3 className="font-medium">Average score</h3>
-          <span className="text-3xl font-medium tabular-nums" aria-live="polite">
-            {whole ?? "—"}
-          </span>
-        </div>
-        {!complete && (
-          <p className="text-sm text-muted-foreground">
-            {scores.length} of {criteria.length} criteria scored
-          </p>
-        )}
+        {criteria.map((c, i) => {
+          const entry = entries[c.id]!;
+          return (
+            <motion.section key={c.id} variants={riseChild} className="space-y-3 px-5 py-4">
+              <div className="space-y-1">
+                <h3 className="font-medium">
+                  {i + 1}. {c.name}
+                </h3>
+                {c.description && <p className="whitespace-pre-line text-sm text-muted-foreground">{c.description}</p>}
+              </div>
+              <div role="radiogroup" aria-label={`Score for ${c.name}`} className="flex gap-2">
+                {CRITERION_SCORES.map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    role="radio"
+                    aria-checked={entry.score === n}
+                    onClick={() => set(c.id, { score: n })}
+                    className={cn(
+                      "flex size-10 items-center justify-center rounded-md border text-sm font-medium transition-colors",
+                      entry.score === n
+                        ? "border-brand bg-brand text-brand-foreground"
+                        : "border-input bg-field hover:bg-muted/50",
+                    )}
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
+              <MentionTextarea
+                aria-label={`Comment on ${c.name}`}
+                placeholder={form.people.length > 0 ? "Comment (optional) — type @ to tag someone" : "Comment (optional)"}
+                value={entry.comment}
+                maxLength={EVALS_ASSESSMENT_LIMITS.comment}
+                onChange={(comment) => set(c.id, { comment })}
+                people={form.people}
+                onPick={(p) => set(c.id, { picks: [...entry.picks, p] })}
+                className="min-h-16"
+              />
+            </motion.section>
+          );
+        })}
 
-        <FeedbackBox
-          id="positive-feedback"
-          label="Positive Feedback"
-          value={positive}
-          onChange={setPositive}
-          note={needed === "positive" ? POSITIVE_REQUIRED_NOTE : null}
-        />
-        <FeedbackBox
-          id="constructive-feedback"
-          label="Constructive Feedback"
-          value={constructive}
-          onChange={setConstructive}
-          note={needed === "constructive" ? CONSTRUCTIVE_REQUIRED_NOTE : null}
-        />
-      </motion.section>
+        <motion.section variants={riseChild} className="space-y-5 px-5 py-4">
+          <div className="flex items-baseline justify-between gap-3">
+            <h3 className="font-medium">Average score</h3>
+            <span className="text-3xl font-medium tabular-nums" aria-live="polite">
+              {whole ?? "—"}
+            </span>
+          </div>
+          {!complete && (
+            <p className="text-sm text-muted-foreground">
+              {scores.length} of {criteria.length} criteria scored
+            </p>
+          )}
+
+          <FeedbackBox
+            id="positive-feedback"
+            label="Positive Feedback"
+            value={positive}
+            onChange={setPositive}
+            note={needed === "positive" ? POSITIVE_REQUIRED_NOTE : null}
+          />
+          <FeedbackBox
+            id="constructive-feedback"
+            label="Constructive Feedback"
+            value={constructive}
+            onChange={setConstructive}
+            note={needed === "constructive" ? CONSTRUCTIVE_REQUIRED_NOTE : null}
+          />
+        </motion.section>
+      </motion.div>
 
       {error && (
         <motion.p variants={riseChild} role="alert" className="text-sm text-destructive">
