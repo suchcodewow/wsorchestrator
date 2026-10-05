@@ -27,11 +27,12 @@ import {
   type DragStartEvent,
   type KeyboardCoordinateGetter,
 } from "@dnd-kit/core";
-import { AlertTriangle, CalendarDays, Check, ChevronLeft, ChevronRight, Copy, Loader2, Pencil, Rows3, Rows4 } from "lucide-react";
+import { AlertTriangle, CalendarDays, Check, ChevronLeft, ChevronRight, Copy, Loader2, Pencil, Rows3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { SCHEDULE_LIMITS, SCHEDULE_TRACKS, type ScheduleTrack } from "@/db/schema";
+import { AUDIENCE_TRACKS, SCHEDULE_LIMITS, SCHEDULE_TRACKS, type ScheduleTrack } from "@/db/schema";
 import { riseChild, staggerParent } from "@/lib/motion";
+import type { ClassLists } from "@/lib/scheduler/attendees";
 import type { ChecklistDayCount } from "@/lib/scheduler/checklist";
 import type { CopySource, Schedule, SessionRow } from "@/lib/scheduler/schedule";
 import type { SessionTypeRow } from "@/lib/scheduler/session-types";
@@ -44,6 +45,7 @@ import {
   formatClock,
   place,
   snapStart,
+  stageOf,
   trackDays,
   type Clash,
   type Placed,
@@ -214,7 +216,10 @@ export function ScheduleView({
   const clashes = useMemo(() => findClashes(placed), [placed]);
   const roomNames = useMemo(() => new Map(schedule.rooms.map((r) => [r.id, r.name])), [schedule.rooms]);
   const sessionCount = placed.length;
-  const { issues, flagged } = useMemo(() => findIssues(placed, clashes, roomNames), [placed, clashes, roomNames]);
+  const { issues, flagged } = useMemo(
+    () => findIssues(placed, clashes, roomNames, schedule.classes, schedule.rooms.length > 0),
+    [placed, clashes, roomNames, schedule.classes, schedule.rooms.length],
+  );
 
   // ── The columns on show ─────────────────────────────────────────────────
   const shownTrack = tracks.includes(track) ? track : tracks[0]!;
@@ -376,36 +381,35 @@ export function ScheduleView({
             ))}
           </div>
 
-          <button
-            type="button"
-            role="switch"
-            aria-checked={condensed}
-            onClick={() => {
-              const next = !condensed;
-              setCondensed(next);
-              writeScheduleCondensedCookie(next);
-            }}
-            className={cn(
-              "flex h-8 cursor-pointer items-center gap-2 rounded-full border px-3 text-sm outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50",
-              condensed
-                ? "border-brand/30 bg-brand/10 font-medium text-foreground"
-                : "border-border text-muted-foreground hover:bg-accent hover:text-accent-foreground",
-            )}
-          >
-            <Rows4 className="size-3.5 shrink-0" />
-            Condensed
-            <span
-              aria-hidden
-              className={cn("flex h-4 w-7 shrink-0 items-center rounded-full p-0.5 transition-colors", condensed ? "bg-brand" : "bg-input")}
+          <div className="inline-flex rounded-lg border bg-card p-0.5 shadow-xs">
+            <button
+              type="button"
+              role="switch"
+              aria-checked={condensed}
+              onClick={() => {
+                const next = !condensed;
+                setCondensed(next);
+                writeScheduleCondensedCookie(next);
+              }}
+              className={cn(
+                "inline-flex cursor-pointer items-center gap-2 rounded-md px-3 py-1.5 text-sm outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50",
+                condensed ? "font-medium text-foreground" : "text-muted-foreground hover:text-foreground",
+              )}
             >
+              Mini
               <span
-                className={cn(
-                  "size-3 rounded-full bg-background shadow-xs transition-transform duration-200 ease-out",
-                  condensed && "translate-x-3",
-                )}
-              />
-            </span>
-          </button>
+                aria-hidden
+                className={cn("flex h-4 w-7 shrink-0 items-center rounded-full p-0.5 transition-colors", condensed ? "bg-brand" : "bg-input")}
+              >
+                <span
+                  className={cn(
+                    "size-3 rounded-full bg-background shadow-xs transition-transform duration-200 ease-out",
+                    condensed && "translate-x-3",
+                  )}
+                />
+              </span>
+            </button>
+          </div>
 
           {view === "week" ? (
             <div role="radiogroup" aria-label="Track" className="flex flex-wrap gap-1">
@@ -566,6 +570,7 @@ export function ScheduleView({
               onResize={onResize}
               onResizeEnd={onResizeEnd}
               headerAction={checklistButton}
+              date={view === "week" ? undefined : dayDate(bootcamp.startDate, day)}
             />
             <DragOverlay dropAnimation={null}>
               {active && (
@@ -653,7 +658,7 @@ type Spot = Omit<Clash, "what">;
 /** Something wrong with the schedule: a sentence that starts with `lead` and names the sessions it is about. */
 type Issue = { kind: IssueKind; key: string; lead: string; spots: Spot[] };
 
-type IssueKind = "clash" | "leader" | "late";
+type IssueKind = "clash" | "leader" | "late" | "breakout";
 
 /** How many of each kind there are, for the top of the tooltip: "3 clashes · 12 with nobody leading". */
 function tally(issues: Issue[]): string {
@@ -662,10 +667,12 @@ function tally(issues: Issue[]): string {
   const clashes = count("clash");
   const leaders = count("leader");
   const late = count("late");
+  const breakouts = count("breakout");
   return [
     clashes > 0 && plural(clashes, "clash", "clashes"),
     leaders > 0 && `${leaders} with nobody leading`,
     late > 0 && `${late} ending after ${formatClock(SCHEDULE_LIMITS.dayEnd)}`,
+    breakouts > 0 && `${plural(breakouts, "breakout", "breakouts")} not fully assigned`,
   ]
     .filter(Boolean)
     .join(" · ");
@@ -675,11 +682,19 @@ const ISSUES_IN_TOOLTIP = 8;
 
 /**
  * Everything wrong with the schedule, in the order it happens: each pair of
- * sessions that clash (once), each main or breakout session nobody leads, and
- * each session that ends after the day does. `flagged` has what is wrong with
- * each session, by id, for its card.
+ * sessions that clash (once), each main or breakout session nobody leads,
+ * each session that ends after the day does, and each breakout that leaves
+ * someone in its class out of every group or, when the facility has rooms, an
+ * instructor without one. `flagged` has what is wrong with each session, by
+ * id, for its card.
  */
-function findIssues(placed: Placed<SessionRow>[], clashes: Map<string, Clash[]>, roomNames: Map<string, string>) {
+function findIssues(
+  placed: Placed<SessionRow>[],
+  clashes: Map<string, Clash[]>,
+  roomNames: Map<string, string>,
+  classes: ClassLists,
+  hasRooms: boolean,
+) {
   const { dayEnd } = SCHEDULE_LIMITS;
   const spotOf = (s: Placed<SessionRow>): Spot => ({ sessionId: s.id, name: s.name, track: s.track, day: s.day, start: s.start, end: s.end });
   const nameOf = (what: Clash["what"]) =>
@@ -703,6 +718,17 @@ function findIssues(placed: Placed<SessionRow>[], clashes: Map<string, Clash[]>,
     if (s.end > dayEnd) {
       flag(s.id, `Ends after ${formatClock(dayEnd)}`);
       issues.push({ kind: "late", key: `late:${s.id}`, lead: `Ends after ${formatClock(dayEnd)}:`, spots: [spotOf(s)] });
+    }
+    if (s.kind === "breakout") {
+      const assigned = new Set(s.assigned);
+      const unassigned = AUDIENCE_TRACKS[s.audience].flatMap((t) => classes[stageOf(s.track)][t]).filter((e) => !assigned.has(e)).length;
+      const roomless = hasRooms ? s.staff.filter((p) => !p.roomId).length : 0;
+      const gaps = [
+        unassigned > 0 && `${unassigned} ${unassigned === 1 ? "attendee" : "attendees"} not assigned`,
+        roomless > 0 && `${roomless} ${roomless === 1 ? "instructor" : "instructors"} without a room`,
+      ].filter((g): g is string => Boolean(g));
+      for (const g of gaps) flag(s.id, g);
+      if (gaps.length > 0) issues.push({ kind: "breakout", key: `breakout:${s.id}`, lead: `${gaps.join(" and ")}:`, spots: [spotOf(s)] });
     }
   }
   const first = (i: Issue) => i.spots[0]!;

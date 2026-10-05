@@ -41,6 +41,7 @@ import {
 } from "@/db/schema";
 import { noteAudit } from "@/lib/audit-context";
 import { normalEmail } from "@/lib/evals/history-values";
+import { classLists, type ClassLists } from "@/lib/scheduler/attendees";
 import { roomsOf as facilityRoomsOf, type RoomRow } from "@/lib/scheduler/facilities";
 import { judgePicks } from "@/lib/scheduler/judges";
 import { isForeignKeyViolation } from "@/lib/scheduler/pg-errors";
@@ -88,6 +89,8 @@ export type SessionRow = {
   comments: number;
   /** The most attendees any one instructor's breakout group holds; 0 when nobody is assigned. */
   largestGroup: number;
+  /** Everyone in its breakout groups, by email. */
+  assigned: string[];
   updatedAt: Date;
 };
 
@@ -115,6 +118,8 @@ export type Schedule = {
   instructors: Instructor[];
   /** Each track's days, in order: `days[track][d]` is day d + 1. A track the bootcamp does not hold has none. */
   days: Record<ScheduleTrack, SessionRow[][]>;
+  /** Who each class is now, so a breakout can say who it has left out. */
+  classes: ClassLists;
 };
 
 // Spelled out, because Drizzle leaves the table off a column in a one-table
@@ -134,6 +139,10 @@ const largestGroup = sql<number>`coalesce((
   ) sizes
 ), 0)`;
 
+const assignedJson = sql<string[]>`coalesce((
+  select json_agg(g.email order by g.email) from ${scheduleSessionGroups} g where g.session_id = ${scheduleSessions}.id
+), '[]'::json)`;
+
 const SESSION_COLUMNS = {
   id: scheduleSessions.id,
   track: scheduleSessions.track,
@@ -151,6 +160,7 @@ const SESSION_COLUMNS = {
   staff: staffJson,
   comments: commentCount,
   largestGroup,
+  assigned: assignedJson,
   updatedAt: scheduleSessions.updatedAt,
 };
 
@@ -217,9 +227,10 @@ export async function loadSchedule(bootcampId: string): Promise<Schedule | null>
     const count = trackDays(track, bootcamp) ?? 0;
     return Promise.all(Array.from({ length: count }, (_, d) => loadDay(db, bootcampId, track, d + 1)));
   });
-  const [rooms, instructors, ...days] = await Promise.all([
+  const [rooms, instructors, classes, ...days] = await Promise.all([
     bootcamp.facilityId ? facilityRoomsOf(bootcamp.facilityId) : Promise.resolve([]),
     instructorPool(bootcampId),
+    classLists(bootcamp.intDays !== null),
     ...perTrack,
   ]);
   return {
@@ -227,6 +238,7 @@ export async function loadSchedule(bootcampId: string): Promise<Schedule | null>
     rooms,
     instructors,
     days: Object.fromEntries(SCHEDULE_TRACKS.map((t, i) => [t, days[i]!])) as Record<ScheduleTrack, SessionRow[][]>,
+    classes,
   };
 }
 

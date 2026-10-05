@@ -1,19 +1,19 @@
 "use client";
 
 /**
- * What has to be done before a day of Bootcamp or Intermediate starts: a
+ * What has to be done before a day of a track starts, each track its own: a
  * button at the top of the day showing how much of it is ticked, opening the
- * list. A Training administrator adds and removes items and ticks any of
- * them; an item's owner ticks their own.
+ * list. A Training administrator adds, edits and removes items and ticks any
+ * of them; an item's owner ticks their own.
  */
 
 import { useEffect, useEffectEvent, useState, type ReactNode } from "react";
-import { ListChecks, Loader2, Trash2 } from "lucide-react";
+import { ListChecks, Loader2, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MentionText } from "@/components/mention-text";
 import { MentionTextarea } from "@/components/mention-textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { CHECKLIST_LIMITS, CHECKLIST_TRACKS, type ChecklistTrack } from "@/db/schema";
+import { CHECKLIST_LIMITS, type ChecklistTrack } from "@/db/schema";
 import { mentionsIn, type MentionPick } from "@/lib/mentions";
 import type { ChecklistDayCount, ChecklistItemRow } from "@/lib/scheduler/checklist";
 import type { Instructor } from "@/lib/scheduler/schedule";
@@ -38,12 +38,9 @@ type Item = Omit<ChecklistItemRow, "doneAt" | "createdAt"> & { doneAt: string | 
 type Count = Pick<ChecklistDayCount, "total" | "done">;
 
 const SELECT =
-  "h-9 rounded-md border border-input bg-transparent px-2 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-input/30";
+  "h-9 cursor-pointer appearance-none rounded-md border border-input bg-transparent px-3 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-input/30";
 
-/**
- * The board's `headerAction`: a checklist button atop each Bootcamp and
- * Intermediate day, and nothing atop the SE tracks, which share their class's.
- */
+/** The board's `headerAction`: a checklist button atop each day of each track. */
 export function useChecklistButtons({
   bootcampId,
   counts,
@@ -60,8 +57,7 @@ export function useChecklistButtons({
   const [checks, setChecks] = useState(() => new Map(counts.map((c) => [`${c.track}:${c.day}`, c])));
 
   return function ChecklistAction(column) {
-    const track = CHECKLIST_TRACKS.find((t) => t === column.track);
-    if (!track) return null;
+    const track = column.track;
     const key = `${track}:${column.day}`;
     return (
       <ChecklistButton
@@ -159,11 +155,9 @@ function ChecklistDialog({
   const base = `/api/scheduler/bootcamps/${bootcampId}/checklist`;
   const [items, setItems] = useState<Item[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [name, setName] = useState("");
-  const [picks, setPicks] = useState<MentionPick[]>([]);
-  const [owner, setOwner] = useState("");
-  const [adding, setAdding] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
+  /** The item being edited, in place of its row. */
+  const [editing, setEditing] = useState<string | null>(null);
 
   const show = (next: Item[]) => {
     setItems(next);
@@ -208,19 +202,19 @@ function ChecklistDialog({
     }
   }
 
-  async function add() {
-    if (!name.trim() || adding) return;
-    setAdding(true);
-    const out = await send(`${base}/${track}/${day}`, {
-      method: "POST",
-      body: JSON.stringify({ name, ownerEmail: owner || null, mentions: mentionsIn(name, picks).map((p) => p.email) }),
-    });
-    setAdding(false);
-    if (!out) return;
+  async function add(fields: ItemFields): Promise<boolean> {
+    const out = await send(`${base}/${track}/${day}`, { method: "POST", body: JSON.stringify(fields) });
+    if (!out) return false;
     show([...(items ?? []), out as Item]);
-    setName("");
-    setPicks([]);
-    setOwner("");
+    return true;
+  }
+
+  async function edit(item: Item, fields: ItemFields): Promise<boolean> {
+    const out = await send(`${base}/items/${item.id}`, { method: "PATCH", body: JSON.stringify(fields) });
+    if (!out) return false;
+    show((items ?? []).map((i) => (i.id === item.id ? (out as Item) : i)));
+    setEditing(null);
+    return true;
   }
 
   async function tick(item: Item) {
@@ -239,12 +233,18 @@ function ChecklistDialog({
   }
 
   const done = items?.filter((i) => i.done).length ?? 0;
-  const admins = instructors.filter((i) => i.role === "administrator");
-  const judges = instructors.filter((i) => i.role === "judge");
 
   return (
     <Dialog open onOpenChange={(next) => !next && onClose()}>
-      <DialogContent className="max-w-xl">
+      <DialogContent
+        className="max-w-xl"
+        onEscapeKeyDown={(e) => {
+          // Escape leaves an item being changed as it was, rather than closing the whole checklist.
+          if (editing === null) return;
+          e.preventDefault();
+          setEditing(null);
+        }}
+      >
         <DialogHeader>
           <DialogTitle>{label} checklist</DialogTitle>
           {items && (
@@ -266,6 +266,19 @@ function ChecklistDialog({
               {items.map((item) => {
                 const mine = item.ownerEmail !== null && item.ownerEmail === viewerEmail.toLowerCase();
                 const canTick = canManage || mine;
+                if (editing === item.id) {
+                  return (
+                    <li key={item.id} className="px-3 py-2.5">
+                      <ItemForm
+                        instructors={instructors}
+                        initial={{ name: item.name, picks: item.mentions, owner: item.ownerEmail ?? "" }}
+                        submitLabel="Save"
+                        onSubmit={(fields) => edit(item, fields)}
+                        onCancel={() => setEditing(null)}
+                      />
+                    </li>
+                  );
+                }
                 return (
                   <li key={item.id} className="flex items-start gap-3 px-3 py-2.5">
                     <input
@@ -292,16 +305,28 @@ function ChecklistDialog({
                       </div>
                     </div>
                     {canManage && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="size-7 shrink-0 text-muted-foreground hover:text-destructive"
-                        aria-label={`Delete ${item.name}`}
-                        disabled={busy === item.id}
-                        onClick={() => void remove(item)}
-                      >
-                        <Trash2 className="size-4" />
-                      </Button>
+                      <div className="flex shrink-0">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="size-7 text-muted-foreground"
+                          aria-label={`Edit ${item.name}`}
+                          disabled={busy === item.id}
+                          onClick={() => setEditing(item.id)}
+                        >
+                          <Pencil className="size-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="size-7 text-muted-foreground hover:text-destructive"
+                          aria-label={`Delete ${item.name}`}
+                          disabled={busy === item.id}
+                          onClick={() => void remove(item)}
+                        >
+                          <Trash2 className="size-4" />
+                        </Button>
+                      </div>
                     )}
                   </li>
                 );
@@ -311,49 +336,13 @@ function ChecklistDialog({
         )}
 
         {canManage && items !== null && (
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              void add();
-            }}
-            className="grid gap-2 sm:grid-cols-[1fr_auto_auto]"
-          >
-            <MentionTextarea
-              singleLine
-              value={name}
-              onChange={setName}
-              people={instructors}
-              onPick={(p) => setPicks((prev) => [...prev, p])}
-              maxLength={CHECKLIST_LIMITS.name}
-              placeholder="Add an item — @ to tag"
-              aria-label="New item"
-            />
-            <select value={owner} onChange={(e) => setOwner(e.target.value)} aria-label="Owner" className={SELECT}>
-              <option value="">No owner</option>
-              {admins.length > 0 && (
-                <optgroup label="Administrators">
-                  {admins.map((i) => (
-                    <option key={i.email} value={i.email}>
-                      {i.fullName || i.email}
-                    </option>
-                  ))}
-                </optgroup>
-              )}
-              {judges.length > 0 && (
-                <optgroup label="Guest judges">
-                  {judges.map((i) => (
-                    <option key={i.email} value={i.email}>
-                      {i.fullName || i.email}
-                    </option>
-                  ))}
-                </optgroup>
-              )}
-            </select>
-            <Button type="submit" variant="brand" disabled={adding || !name.trim() || (items?.length ?? 0) >= CHECKLIST_LIMITS.itemsPerDay}>
-              {adding && <Loader2 className="animate-spin" />}
-              Add
-            </Button>
-          </form>
+          <ItemForm
+            instructors={instructors}
+            initial={{ name: "", picks: [], owner: "" }}
+            submitLabel="Add"
+            full={items.length >= CHECKLIST_LIMITS.itemsPerDay}
+            onSubmit={add}
+          />
         )}
 
         {error && (
@@ -363,5 +352,106 @@ function ChecklistDialog({
         )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** What the API takes to add an item, or to change one. */
+type ItemFields = { name: string; ownerEmail: string | null; mentions: string[] };
+
+/**
+ * An item's name, with "@" tags, and its owner: blank for adding one, which
+ * empties again once added, or holding an item's own to change it.
+ */
+function ItemForm({
+  instructors,
+  initial,
+  submitLabel,
+  full = false,
+  onSubmit,
+  onCancel,
+}: {
+  instructors: Instructor[];
+  initial: { name: string; picks: MentionPick[]; owner: string };
+  submitLabel: string;
+  full?: boolean;
+  onSubmit: (fields: ItemFields) => Promise<boolean>;
+  /** Shown when changing an item, to leave it as it was. */
+  onCancel?: () => void;
+}) {
+  const [name, setName] = useState(initial.name);
+  const [picks, setPicks] = useState<MentionPick[]>(initial.picks);
+  const [owner, setOwner] = useState(initial.owner);
+  const [pending, setPending] = useState(false);
+  const admins = instructors.filter((i) => i.role === "administrator");
+  const judges = instructors.filter((i) => i.role === "judge");
+  // Someone who owns it but is no longer an administrator or guest judge here stays pickable, as they are.
+  const formerOwner = owner && !instructors.some((i) => i.email === owner) ? owner : null;
+
+  async function submit() {
+    if (!name.trim() || pending) return;
+    setPending(true);
+    const ok = await onSubmit({ name, ownerEmail: owner || null, mentions: mentionsIn(name, picks).map((p) => p.email) });
+    setPending(false);
+    if (ok && !onCancel) {
+      setName("");
+      setPicks([]);
+      setOwner("");
+    }
+  }
+
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        void submit();
+      }}
+      className="space-y-2"
+    >
+      <MentionTextarea
+        singleLine
+        value={name}
+        onChange={setName}
+        people={instructors}
+        onPick={(p) => setPicks((prev) => [...prev, p])}
+        maxLength={CHECKLIST_LIMITS.name}
+        placeholder="Add an Item"
+        aria-label={onCancel ? "Item" : "New item"}
+        autoFocus={Boolean(onCancel)}
+      />
+      {/* The name across the whole line; who owns it, and the buttons, under it. */}
+      <div className="flex items-center gap-2">
+        <select value={owner} onChange={(e) => setOwner(e.target.value)} aria-label="Owner" className={cn(SELECT, "mr-auto min-w-0")}>
+          <option value="">No owner</option>
+          {formerOwner && <option value={formerOwner}>{formerOwner}</option>}
+          {admins.length > 0 && (
+            <optgroup label="Administrators">
+              {admins.map((i) => (
+                <option key={i.email} value={i.email}>
+                  {i.fullName || i.email}
+                </option>
+              ))}
+            </optgroup>
+          )}
+          {judges.length > 0 && (
+            <optgroup label="Guest judges">
+              {judges.map((i) => (
+                <option key={i.email} value={i.email}>
+                  {i.fullName || i.email}
+                </option>
+              ))}
+            </optgroup>
+          )}
+        </select>
+        {onCancel && (
+          <Button type="button" variant="ghost" disabled={pending} onClick={onCancel}>
+            Cancel
+          </Button>
+        )}
+        <Button type="submit" variant="brand" disabled={pending || !name.trim() || full}>
+          {pending && <Loader2 className="animate-spin" />}
+          {submitLabel}
+        </Button>
+      </div>
+    </form>
   );
 }

@@ -6,6 +6,7 @@
  * the schedule's session dialog.
  */
 
+import type { ReactNode } from "react";
 import { ChevronDown, Minus, Plus } from "lucide-react";
 import {
   DropdownMenu,
@@ -42,12 +43,15 @@ export function SessionLookFields({
   value,
   onChange,
   autoFocus,
+  afterLength,
 }: {
   /** Prefixes the inputs' ids. */
   id: string;
   value: SessionLook;
   onChange: (next: SessionLook) => void;
   autoFocus?: boolean;
+  /** Fields of the caller's own, shown under the length. */
+  afterLength?: ReactNode;
 }) {
   const set = <K extends keyof SessionLook>(key: K, v: SessionLook[K]) => onChange({ ...value, [key]: v });
   const step = (by: number) => set("minutes", snapMinutes(value.minutes + by));
@@ -115,6 +119,8 @@ export function SessionLookFields({
           </button>
         </div>
       </div>
+
+      {afterLength}
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="grid gap-1.5">

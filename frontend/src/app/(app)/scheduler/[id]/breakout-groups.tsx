@@ -1,14 +1,15 @@
 "use client";
 
 /**
- * A breakout's groups: a box for each of its instructors, and the attendees
- * it is taught to dragged into them. Each instructor takes their group to
- * their room and evaluates it on the exercise. Anyone in no box, in the box of
- * someone since taken off the session, or on a track it no longer teaches, is
- * not assigned.
+ * A breakout's groups: a box for each of its instructors, with the room they
+ * take it to, and the attendees it is taught to dragged into them. Each
+ * instructor evaluates their group there on the exercise. Anyone in no box, in
+ * the box of someone since taken off the session, or on a track it no longer
+ * teaches, is not assigned. Auto-assign shares out whoever is left and gives
+ * each instructor without a room the smallest free one that seats their group.
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import {
   DndContext,
@@ -22,11 +23,13 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
-import { Crown, DoorOpen, Loader2, Shuffle } from "lucide-react";
+import { Crown, DoorOpen, Eraser, Loader2, WandSparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AUDIENCE_TRACKS, SCHEDULE_LIMITS, type ScheduleTrack, type SessionAudience } from "@/db/schema";
+import type { RoomRow } from "@/lib/scheduler/facilities";
 import type { GroupAttendee, GroupRow } from "@/lib/scheduler/groups";
 import type { StaffRow } from "@/lib/scheduler/schedule";
+import { describeClash, type Clash } from "@/lib/scheduler/timeline";
 import { cn } from "@/lib/utils";
 
 type Person = { email: string; fullName: string; title: string; track: GroupAttendee["track"] | null; inClass: boolean };
@@ -47,9 +50,14 @@ export function BreakoutGroups({
   track,
   audience,
   staff,
+  rooms,
+  busyRooms,
+  beforeRooms,
+  hasFacility,
   roomName,
   value,
   onChange,
+  onRooms,
   editable,
 }: {
   bootcampId: string;
@@ -58,16 +66,27 @@ export function BreakoutGroups({
   track: ScheduleTrack;
   audience: SessionAudience;
   staff: StaffRow[];
+  /** The facility's rooms. */
+  rooms: RoomRow[];
+  /** What each room is busy with during the session. */
+  busyRooms: Map<string, Clash[]>;
+  /** The rooms the session held when opened, which stay pickable though busy. */
+  beforeRooms: Set<string | null>;
+  hasFacility: boolean;
   roomName: (id: string) => string;
   /** The groups as changed here; null until they are. */
   value: GroupRow[] | null;
   onChange: (groups: GroupRow[]) => void;
+  /** Sets the rooms of the instructors named, by email; null for none. */
+  onRooms: (rooms: Record<string, string | null>) => void;
   editable: boolean;
 }) {
   const [saved, setSaved] = useState<GroupRow[] | null>(sessionId ? null : []);
   const [cls, setCls] = useState<{ key: string; attendees: GroupAttendee[]; hasMore: boolean } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [dragging, setDragging] = useState<string | null>(null);
+  /** What auto-assign could not do, until the next change. */
+  const [note, setNote] = useState<string | null>(null);
 
   useEffect(() => {
     if (!sessionId) return;
@@ -128,10 +147,7 @@ export function BreakoutGroups({
   const total = new Set([...cls.attendees.map((a) => a.email), ...placed.map((g) => g.email)]).size;
 
   if (staff.length === 0) {
-    return <p className="text-sm text-muted-foreground">Add instructors on the Session tab to give each of them a group.</p>;
-  }
-  if (total === 0) {
-    return <p className="text-sm text-muted-foreground">No one is in this class right now, so there is no one to assign.</p>;
+    return <p className="text-sm text-muted-foreground">Add instructors on the Session tab to give each of them a group and a room.</p>;
   }
 
   const move = (email: string, to: string) => {
@@ -139,11 +155,23 @@ export function BreakoutGroups({
     const rest = placed.filter((g) => g.email !== email);
     const who = people.get(email);
     const track = who?.track ?? groups.find((g) => g.email === email)?.track ?? null;
+    setNote(null);
     onChange(to === POOL || !who ? rest : [...rest, { email, fullName: who.fullName, instructorEmail: to, track }]);
   };
 
-  /** Shares out everyone not assigned, each to whichever group is smallest then. */
-  const splitEvenly = () => {
+  /** Rooms nobody else on the session has, and not busy then unless the session already held them. */
+  const freeRooms = (except: string) => {
+    const taken = new Set(staff.flatMap((s) => (s.email !== except && s.roomId ? [s.roomId] : [])));
+    return rooms.filter((r) => !taken.has(r.id) && !((busyRooms.get(r.id)?.length ?? 0) > 0 && !beforeRooms.has(r.id)));
+  };
+  const roomless = rooms.length > 0 ? staff.filter((s) => !s.roomId) : [];
+
+  /**
+   * Shares out everyone not assigned, each to whichever group is smallest
+   * then; then gives each instructor without a room the smallest free one
+   * that seats their group and them, the largest group choosing first.
+   */
+  const autoAssign = () => {
     const next = [...placed];
     const sizes = new Map(staff.map((s) => [s.email, next.filter((g) => g.instructorEmail === s.email).length]));
     for (const p of pool) {
@@ -152,7 +180,30 @@ export function BreakoutGroups({
       sizes.set(to, sizes.get(to)! + 1);
     }
     onChange(next.slice(0, SCHEDULE_LIMITS.groupPeople));
+
+    let free = freeRooms("").sort((a, b) => a.capacity - b.capacity || a.name.localeCompare(b.name));
+    const picks: Record<string, string | null> = {};
+    const unseated: string[] = [];
+    for (const s of [...roomless].sort((a, b) => sizes.get(b.email)! - sizes.get(a.email)!)) {
+      const room = free.find((r) => r.capacity >= sizes.get(s.email)! + 1);
+      if (!room) {
+        unseated.push(`${s.fullName} (${sizes.get(s.email)! + 1} with them)`);
+        continue;
+      }
+      picks[s.email] = room.id;
+      free = free.filter((r) => r !== room);
+    }
+    if (Object.keys(picks).length > 0) onRooms(picks);
+    setNote(unseated.length > 0 ? `No free room seats the group of ${unseated.join(", ")}.` : null);
   };
+
+  /** Everyone back to not assigned, and every instructor's room to none. */
+  const removeAll = () => {
+    onChange([]);
+    onRooms(Object.fromEntries(staff.map((s) => [s.email, null])));
+    setNote(null);
+  };
+  const anyAssigned = placed.length > 0 || staff.some((s) => s.roomId);
 
   const onDragStart = (e: DragStartEvent) => setDragging(String(e.active.id));
   const onDragEnd = (e: DragEndEvent) => {
@@ -169,15 +220,33 @@ export function BreakoutGroups({
             {placed.length} of {total} assigned
             {cls.hasMore && <span className="text-muted-foreground"> · showing the first {SCHEDULE_LIMITS.groupPeople} in the class</span>}
           </p>
-          {editable && pool.length > 0 && (
-            <Button type="button" size="sm" variant="outline" onClick={splitEvenly}>
-              <Shuffle />
-              Split evenly
-            </Button>
+          {editable && (
+            <div className="flex flex-wrap gap-2">
+              {anyAssigned && (
+                <Button type="button" size="sm" variant="ghost" onClick={removeAll}>
+                  <Eraser />
+                  Remove all assignments
+                </Button>
+              )}
+              {(pool.length > 0 || roomless.length > 0) && (
+                <Button type="button" size="sm" variant="outline" onClick={autoAssign}>
+                  <WandSparkles />
+                  Auto-assign
+                </Button>
+              )}
+            </div>
           )}
         </div>
+        {note && <p className="-mt-2 text-xs text-red-700 dark:text-red-400">{note}</p>}
+        {!hasFacility && (
+          <p className="-mt-2 text-xs text-muted-foreground">Pick a facility for this bootcamp on the Scheduler to give each instructor a room.</p>
+        )}
 
-        <Box id={POOL} title="Not assigned" count={pool.length} people={pool} editable={editable} empty="Everyone is in a group." />
+        {total === 0 ? (
+          <p className="text-sm text-muted-foreground">No one is in this class right now, so there is no one to assign.</p>
+        ) : (
+          <Box id={POOL} title="Not assigned" count={pool.length} people={pool} editable={editable} empty="Everyone is in a group." />
+        )}
 
         <div className="grid gap-3 sm:grid-cols-2">
           {staff.map((s) => (
@@ -186,7 +255,26 @@ export function BreakoutGroups({
               id={s.email}
               title={s.fullName}
               leader={s.leader}
-              room={s.roomId ? roomName(s.roomId) : null}
+              room={
+                editable && rooms.length > 0 ? (
+                  <RoomSelect
+                    label={`${s.fullName}'s room`}
+                    value={s.roomId}
+                    rooms={rooms}
+                    free={new Set(freeRooms(s.email).map((r) => r.id))}
+                    busy={busyRooms}
+                    onChange={(r) => {
+                      setNote(null);
+                      onRooms({ [s.email]: r });
+                    }}
+                  />
+                ) : s.roomId ? (
+                  <span className="inline-flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
+                    <DoorOpen className="size-3 shrink-0" />
+                    <span className="truncate">{roomName(s.roomId)}</span>
+                  </span>
+                ) : null
+              }
               count={boxOf(s.email).length}
               people={boxOf(s.email)}
               editable={editable}
@@ -220,7 +308,8 @@ function Box({
   id: string;
   title: string;
   leader?: boolean;
-  room?: string | null;
+  /** Where the instructor takes the group, or a control to pick it. */
+  room?: ReactNode;
   count: number;
   people: Person[];
   editable: boolean;
@@ -241,12 +330,7 @@ function Box({
         {leader && <Crown aria-label="Leader" className="size-3.5 shrink-0 text-amber-600 dark:text-amber-400" />}
         <span className="min-w-0 truncate font-medium">{title}</span>
         <span className="text-muted-foreground tabular-nums">{count}</span>
-        {room && (
-          <span className="ml-auto inline-flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
-            <DoorOpen className="size-3 shrink-0" />
-            <span className="truncate">{room}</span>
-          </span>
-        )}
+        {room && <div className="ml-auto flex min-w-0">{room}</div>}
       </div>
       {people.length === 0 ? (
         <p className="text-xs text-muted-foreground">{empty}</p>
@@ -285,5 +369,50 @@ function Chip({ person: p, lifted }: { person: Person; lifted?: boolean }) {
       <span className="truncate">{p.fullName || p.email}</span>
       {p.track ? <span className="shrink-0 rounded bg-muted px-1 text-[10px] text-muted-foreground">{TRACK_BADGES[p.track]}</span> : <span className="shrink-0 text-[10px]">Left</span>}
     </span>
+  );
+}
+
+/**
+ * A breakout instructor's room. Rooms another instructor has, or busy then,
+ * are listed with why and cannot be picked; the one they have always can.
+ */
+function RoomSelect({
+  label,
+  value,
+  rooms,
+  free,
+  busy,
+  onChange,
+}: {
+  label: string;
+  value: string | null;
+  rooms: RoomRow[];
+  free: Set<string>;
+  busy: Map<string, Clash[]>;
+  onChange: (room: string | null) => void;
+}) {
+  const mine = value ? (busy.get(value) ?? []) : [];
+  return (
+    <select
+      aria-label={label}
+      value={value ?? ""}
+      onChange={(e) => onChange(e.target.value || null)}
+      className={cn(
+        "h-7 max-w-44 min-w-0 cursor-pointer appearance-none truncate rounded-md border border-input bg-transparent px-2 text-xs shadow-xs outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-input/30",
+        !value && "text-muted-foreground",
+        mine.length > 0 && "border-red-400 text-red-700 dark:text-red-400",
+      )}
+    >
+      <option value="">No room</option>
+      {rooms.map((r) => {
+        const theirs = busy.get(r.id) ?? [];
+        const why = free.has(r.id) ? `holds ${r.capacity}` : theirs.length > 0 ? `busy: ${describeClash(theirs[0]!)}` : "another instructor's";
+        return (
+          <option key={r.id} value={r.id} disabled={r.id !== value && !free.has(r.id)}>
+            {r.name} ({why})
+          </option>
+        );
+      })}
+    </select>
   );
 }
