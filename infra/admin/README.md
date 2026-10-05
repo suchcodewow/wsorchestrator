@@ -76,12 +76,17 @@ Two things worth knowing:
   `gcloud --configuration=workshop-orchestrator …`.
 - The key is a standing secret holding owner on the admin project plus folder
   and billing admin. It lives outside the repo by design; treat it like the
-  cloud credentials in `terraform.tfvars`. If `iam.disableServiceAccountKeyCreation`
+  cloud credentials. If `iam.disableServiceAccountKeyCreation`
   is enforced org-wide the script will fail and say so, and the alternative is
   relaxing Google Cloud session control in the Admin console instead
   (**Security → Access and data control → Google Cloud session control**).
 
 ## Deploy
+
+Both environments are applied by Harness IaCM (`qa_control_plane` from
+`deploy_qa`, `admin_control_plane` from `deploy_production`), and each reads its
+values from its workspace's variables. What follows is the first apply of a new
+deployment, done from a laptop before the workspace has any:
 
 ```bash
 cd infra/admin
@@ -108,9 +113,13 @@ them to the Artifact Registry repo (see the `artifact_registry` output), set
 
 ## Configuration
 
-Every variable lives in `terraform.tfvars` (copy `terraform.tfvars.example`).
-This section is the reference for what each group needs; the example file
-carries only the shape of the values.
+Every variable is set on the environment's IaCM workspace: a setting as a
+string variable, a secret as a `tf_*` Harness secret that the variable names.
+See [Where secrets and settings live](../../docs/environments.md#where-secrets-and-settings-live).
+For a first apply from a laptop, `terraform.tfvars` (copy
+`terraform.tfvars.example`) holds the same set. This section is the reference
+for what each group needs; the example file carries only the shape of the
+values.
 
 ### Control plane
 

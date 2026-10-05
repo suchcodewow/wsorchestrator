@@ -9,13 +9,21 @@ ids, regions, or registry paths.
 - `gcloud` authenticated with rights to the admin project + workshops folder +
   billing account (see [infra/admin/README.md](infra/admin/README.md)).
 - `terraform` **or** `tofu` (auto-detected), and `cloud-sql-proxy` (v2) on PATH.
-- Google OAuth client created; `google_oauth_client_id/secret` set in
-  `infra/admin/terraform.tfvars`.
+- Google OAuth client created; `google_oauth_client_id/secret` set on the
+  environment's IaCM workspace, as the Harness secrets
+  `tf_google_oauth_client_id` and `tf_google_oauth_client_secret`.
+
+Every deployed value lives on the IaCM workspace; see
+[Where secrets and settings live](docs/environments.md#where-secrets-and-settings-live).
 
 ## First deploy
 
+A brand-new deployment starts from a laptop, before its workspace has any
+variables:
+
 ```bash
-# 0. Fill in infra/admin/terraform.tfvars (copy from the .example)
+# 0. Fill in infra/admin/terraform.tfvars (copy from the .example). For this
+#    first apply only; afterwards the values move onto the IaCM workspace.
 
 # 1. Create the admin config's own state bucket + init the backend
 make bootstrap ADMIN_PROJECT=<admin> STATE_BUCKET=<admin>-infra-tfstate

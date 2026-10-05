@@ -284,5 +284,8 @@ own policy overrides both (a tenant that mandates single-use passes wins).
 REPO=us-central1-docker.pkg.dev/<admin-project>/workshop-orchestrator
 docker build -t $REPO/runner:latest .
 docker push $REPO/runner:latest
-# then set runner_image in infra/admin/terraform.tfvars and re-apply
 ```
+
+The deploy pipelines build the runner image and roll the jobs onto it. The
+apply ignores `runner_image` once a job exists, so a manual push only matters
+for a first deploy.
