@@ -28,11 +28,17 @@ export type BoardColumn = {
   title: string;
   /** What follows it on the same line: the track, or in one track's view the date. */
   subtitle: string;
+  /** Who attends that day, in brackets after the subtitle: "Day 1 · Bootcamp (11)". */
+  attendees?: { count: string; noun: string };
   sessions: SessionRow[];
 };
 
 /** Pixels per minute in each density: a quarter hour is 28px detailed, 16px condensed. */
 export const SCALE: Record<Density, number> = { detailed: 28 / 15, condensed: 16 / 15 };
+
+/** Each column's header, two lines tall, and the gutter's blank corner beside it; the line marking now is offset by it. */
+const HEADER_HEIGHT = "h-17";
+const HEADER_REM = 4.25;
 
 const { dayStart, dayEnd } = SCHEDULE_LIMITS;
 
@@ -50,7 +56,7 @@ export type BoardProps = {
   onAdd: (column: BoardColumn, start: number) => void;
   onResize: (id: string, minutes: number) => void;
   onResizeEnd: (id: string) => void;
-  /** Anything more to show at the top of a column. */
+  /** Anything more to show at the top of a column, on a line of its own under its title. */
   headerAction?: (column: BoardColumn) => ReactNode;
   /** The date every column shows, as "2026-09-14", when they all show one: on that day, the time now is drawn across them. */
   date?: string;
@@ -76,7 +82,7 @@ export function Board(props: BoardProps) {
       {/* Columns share the width and scroll only below 12rem each; `min-w-fit` would size them to their longest name. */}
       <div className="relative flex" style={{ minWidth: `calc(4rem + ${columns.length} * 12rem)` }}>
         <div className="sticky left-0 z-20 w-16 shrink-0 border-r bg-card">
-          <div className="h-11 border-b" />
+          <div className={cn(HEADER_HEIGHT, "border-b")} />
           <div className="relative" style={{ height }}>
             {hours.map((m) => (
               <div
@@ -108,7 +114,7 @@ export function Board(props: BoardProps) {
           <div
             aria-hidden
             className="pointer-events-none absolute right-0 left-16 z-30 h-0.5 -translate-y-1/2 bg-emerald-500"
-            style={{ top: `calc(2.75rem + ${now.top}px)` }}
+            style={{ top: `calc(${HEADER_REM}rem + ${now.top}px)` }}
           >
             <div className="absolute top-1/2 -left-1 size-2.5 -translate-y-1/2 rounded-full bg-emerald-500" />
           </div>
@@ -153,12 +159,18 @@ function Column({
 
   return (
     <div className="min-w-48 flex-1 border-r last:border-r-0">
-      <div className="flex h-11 items-center justify-between gap-2 border-b px-3">
+      <div className={cn(HEADER_HEIGHT, "flex flex-col justify-center gap-1 border-b px-3")}>
         <div className="min-w-0 truncate text-sm">
           <span className="font-medium">{column.title}</span>
           <span className="text-muted-foreground"> · {column.subtitle}</span>
+          {column.attendees && (
+            <span className="text-muted-foreground tabular-nums" title={`${column.attendees.count} ${column.attendees.noun}`}>
+              {" "}
+              ({column.attendees.count})
+            </span>
+          )}
         </div>
-        <div className="flex shrink-0 items-center">{props.headerAction?.(column)}</div>
+        {props.headerAction && <div className="flex items-center">{props.headerAction(column)}</div>}
       </div>
       <div
         ref={setNodeRef}

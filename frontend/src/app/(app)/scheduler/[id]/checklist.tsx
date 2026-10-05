@@ -104,15 +104,27 @@ export function ChecklistButton({
   return (
     <>
       <Button
-        variant="ghost"
+        variant="outline"
         size="sm"
-        className={cn("h-7 shrink-0 gap-1 px-1.5 text-xs tabular-nums", allDone && "text-emerald-700 dark:text-emerald-400")}
+        className={cn(
+          "h-7 shrink-0 gap-1.5 px-2 text-xs",
+          allDone && "border-emerald-500/50 bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/15 dark:text-emerald-400",
+        )}
         aria-label={`Checklist for ${label}: ${count.done} of ${count.total} done`}
-        title="Checklist"
         onClick={() => setOpen(true)}
       >
-        <ListChecks className="size-4" />
-        {count.total > 0 && `${count.done}/${count.total}`}
+        <ListChecks className="size-3.5" />
+        Checklist
+        {count.total > 0 && (
+          <span
+            className={cn(
+              "rounded-full px-1.5 py-px text-[11px] font-medium tabular-nums",
+              allDone ? "bg-emerald-500/15" : "bg-muted text-muted-foreground",
+            )}
+          >
+            {count.done}/{count.total}
+          </span>
+        )}
       </Button>
       {open && (
         <ChecklistDialog

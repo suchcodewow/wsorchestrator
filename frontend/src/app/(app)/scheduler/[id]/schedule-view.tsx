@@ -231,6 +231,7 @@ export function ScheduleView({
           day: i + 1,
           title: `Day ${i + 1}`,
           subtitle: dateLabel(dayDate(bootcamp.startDate, i + 1)),
+          attendees: attendeeCount(schedule.classes, shownTrack),
           sessions: days[shownTrack][i] ?? [],
         }))
       : tracks
@@ -241,6 +242,7 @@ export function ScheduleView({
             day,
             title: `Day ${day}`,
             subtitle: TRACK_LABELS[t],
+            attendees: attendeeCount(schedule.classes, t),
             sessions: days[t][day - 1] ?? [],
           }));
   const boardDensity: Density = condensed ? "condensed" : "detailed";
@@ -644,6 +646,19 @@ export function ScheduleView({
     const session = at ? dayOf(days, at.key)[at.index] : undefined;
     if (session) setTarget({ mode: "edit", session });
   }
+}
+
+/**
+ * Who a track's day is taught to: a class has its sales attendees and its
+ * engineers, an SE track its engineers alone. The class lists stop at
+ * `SCHEDULE_LIMITS.groupPeople` each, so a full one reads as "100+".
+ */
+function attendeeCount(classes: ClassLists, track: ScheduleTrack): { count: string; noun: string } {
+  const se = track === "btc_se" || track === "int_se";
+  const lists = AUDIENCE_TRACKS[se ? "engineers" : "both"].map((t) => classes[stageOf(track)][t]);
+  const n = lists.reduce((sum, l) => sum + l.length, 0);
+  const capped = lists.some((l) => l.length >= SCHEDULE_LIMITS.groupPeople);
+  return { count: `${n}${capped ? "+" : ""}`, noun: se ? (n === 1 ? "engineer" : "engineers") : n === 1 ? "attendee" : "attendees" };
 }
 
 /** The column under the pointer; for a card moved by keyboard, the one it overlaps most. */

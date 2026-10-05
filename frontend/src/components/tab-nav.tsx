@@ -11,6 +11,8 @@ export type TabItem = {
   href: string;
   label: string;
   Icon: LucideIcon;
+  /** How many the tab holds, shown after its label. */
+  count?: number;
 };
 
 export function TabNav({
@@ -24,7 +26,7 @@ export function TabNav({
 
   return (
     <nav className="flex flex-wrap gap-1 border-b" aria-label={label}>
-      {tabs.map(({ href, label: text, Icon }) => {
+      {tabs.map(({ href, label: text, Icon, count }) => {
         const active = pathname === href || pathname.startsWith(`${href}/`);
         return (
           <Link
@@ -40,6 +42,16 @@ export function TabNav({
           >
             <Icon className="size-4" />
             {text}
+            {count !== undefined && (
+              <span
+                className={cn(
+                  "rounded-full px-1.5 py-px text-xs font-medium tabular-nums",
+                  active ? "bg-brand-subtle text-brand" : "bg-muted text-muted-foreground",
+                )}
+              >
+                {count.toLocaleString()}
+              </span>
+            )}
           </Link>
         );
       })}
