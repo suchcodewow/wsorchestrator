@@ -7,6 +7,10 @@
  *
  * A criterion's comment can tag, with "@", anyone who can score here. The
  * feedback cannot: it is what the attendee is sent, on Slack.
+ *
+ * The judge can record the attendee while scoring. The audio stays in this
+ * browser; Submit stops the recording, and waits for its last second to be
+ * saved, before it sends the scores.
  */
 
 import { useState } from "react";
@@ -15,6 +19,8 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { ArrowLeft, Info, Loader2, Send } from "lucide-react";
 import { MentionTextarea } from "@/components/mention-textarea";
+import { RecordingPanel } from "@/components/recording/recording-panel";
+import { useRecorder } from "@/components/recording/use-recorder";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { EVALS_ASSESSMENT_LIMITS } from "@/db/schema";
@@ -28,6 +34,7 @@ import {
 } from "@/lib/evals/assessment-values";
 import type { ScoringForm } from "@/lib/evals/scoring";
 import { mentionsIn, type MentionPick } from "@/lib/mentions";
+import { evalSubject } from "@/lib/recording/store";
 import { riseChild, staggerParent } from "@/lib/motion";
 import type { ActiveBootcamp } from "@/lib/scheduler/bootcamps";
 import { cn } from "@/lib/utils";
@@ -75,6 +82,14 @@ export function ScoringFormView({
   const [constructive, setConstructive] = useState(submission?.constructiveFeedback ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const subject = evalSubject(assessment.id, attendee.id);
+  const [recordingsVersion, setRecordingsVersion] = useState(0);
+  const recorder = useRecorder({
+    ownerId: viewerId,
+    subject,
+    label: `${attendee.fullName} - ${assessment.name}`,
+    onSaved: () => setRecordingsVersion((v) => v + 1),
+  });
 
   const scores = criteria.flatMap((c) => (entries[c.id]?.score != null ? [entries[c.id]!.score!] : []));
   const complete = scores.length === criteria.length;
@@ -98,6 +113,7 @@ export function ScoringFormView({
     setBusy(true);
     setError(null);
     try {
+      await recorder.stop();
       const res = await fetch(`/api/evals/scoring/${assessment.id}/${encodeURIComponent(attendee.id)}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -167,6 +183,17 @@ export function ScoringFormView({
           </span>
         </motion.div>
       )}
+
+      <motion.div variants={riseChild}>
+        <RecordingPanel
+          recorder={recorder}
+          ownerId={viewerId}
+          subject={subject}
+          version={recordingsVersion}
+          onChanged={() => setRecordingsVersion((v) => v + 1)}
+        />
+      </motion.div>
+
       {unscored > 0 && (
         <motion.p variants={riseChild} role="status" className="text-sm text-amber-600 dark:text-amber-500">
           {unscored} {unscored === 1 ? "criterion was" : "criteria were"} added since this was scored. Score{" "}

@@ -55,6 +55,7 @@ import { SCHEDULER_SETTINGS_TABS } from "@/app/(app)/scheduler-settings/tabs";
 import { EVALS_TABS } from "@/app/(app)/evals/tabs";
 import { COHORTS_TABS } from "@/app/(app)/cohorts/tabs";
 import { visibleSettingsTabs } from "@/app/(app)/settings/tabs";
+import { visibleMySettingsTabs } from "@/app/(app)/me/tabs";
 import { PERSONAS, PERSONA_NAMES, type Persona } from "../support/access";
 import { createRun, createSession, readRoles, testScope, type TestUser } from "../support/seed";
 import { E2E_BOOTSTRAP_EMAILS, startServer, type Server } from "./server";
@@ -287,9 +288,11 @@ const PAGES: Record<string, PageCase> = {
   "/settings/org-secrets": { path: () => "/settings/org-secrets", expect: gated(canManageSettings) },
   "/settings/templates": { path: () => "/settings/templates", expect: gated(canManageSettings) },
   "/settings/repos": { path: () => "/settings/repos", expect: gated(canManageSettings) },
-  "/me/tokens": { path: () => "/me/tokens", expect: () => 200 },
-  "/me/org-secrets": { path: () => "/me/org-secrets", expect: () => 200 },
-  "/me/templates": { path: () => "/me/templates", expect: () => 200 },
+  "/me": { path: () => "/me", expect: (a) => ({ to: visibleMySettingsTabs(a)[0]!.href }) },
+  "/me/tokens": { path: () => "/me/tokens", expect: gated(canUseEvents) },
+  "/me/org-secrets": { path: () => "/me/org-secrets", expect: gated(canUseEvents) },
+  "/me/templates": { path: () => "/me/templates", expect: gated(canUseEvents) },
+  "/me/check-pc": { path: () => "/me/check-pc", expect: () => 200 },
   "/me/api-tokens": { path: () => "/me/api-tokens", expect: () => 200 },
   "/inbox": { path: () => "/inbox", expect: () => 200 },
   "/labs": { path: () => "/labs", expect: () => 200, signedOut: 200 },
@@ -330,7 +333,7 @@ describe("the sidebar", () => {
 
   for (const p of PERSONA_NAMES) {
     test(p, async () => {
-      const { status, body } = await send(p, "GET", "/me/tokens");
+      const { status, body } = await send(p, "GET", "/me/check-pc");
       assert.equal(status, 200);
       const shown = new Set(visibleSections(PERSONAS[p]).flatMap((s) => s.items.map((i) => i.href)));
       const wrong = HREFS.filter((href) => body.includes(`href="${href}"`) !== shown.has(href)).map(

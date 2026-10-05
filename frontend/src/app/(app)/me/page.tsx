@@ -1,8 +1,12 @@
-/** Sends /me to its first tab. */
+/** Sends /me to the first tab the viewer can see. */
 
 import { redirect } from "next/navigation";
-import { MY_SETTINGS_TABS } from "./tabs";
+import { auth, signInPath } from "@/auth";
+import { visibleMySettingsTabs } from "./tabs";
 
-export default function MySettingsPage() {
-  redirect(MY_SETTINGS_TABS[0]!.href);
+export default async function MySettingsPage() {
+  const session = await auth();
+  if (!session?.user) redirect(await signInPath());
+
+  redirect(visibleMySettingsTabs(session.user.access)[0]!.href);
 }

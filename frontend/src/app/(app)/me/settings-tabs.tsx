@@ -3,8 +3,9 @@
 /** The tab row for My settings. */
 
 import { TabNav } from "@/components/tab-nav";
-import { MY_SETTINGS_TABS } from "./tabs";
+import type { Access } from "@/lib/roles";
+import { visibleMySettingsTabs } from "./tabs";
 
-export function MySettingsTabs() {
-  return <TabNav tabs={MY_SETTINGS_TABS} label="My settings" />;
+export function MySettingsTabs({ access }: { access: Access }) {
+  return <TabNav tabs={visibleMySettingsTabs(access)} label="My settings" />;
 }

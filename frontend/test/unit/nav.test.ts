@@ -1,5 +1,6 @@
 /**
- * What each person sees in the sidebar and across the top of event settings.
+ * What each person sees in the sidebar, and across the top of event settings
+ * and My settings.
  *
  * The sidebar is the only place most people learn a feature exists, so these
  * pin the exact entries per role rather than "at least these": a platform
@@ -14,6 +15,8 @@ import assert from "node:assert/strict";
 
 import { NAV_SECTIONS, isNavItemActive, visibleSections, type NavItem } from "@/lib/nav";
 import { SITE_SETTINGS_TABS, visibleSettingsTabs } from "@/app/(app)/settings/tabs";
+import { MY_SETTINGS_TABS, visibleMySettingsTabs } from "@/app/(app)/me/tabs";
+import { canUseEvents } from "@/lib/roles";
 import type { Access } from "@/lib/roles";
 import { EVERY_ACCESS, PERSONAS, describeAccess, type Persona } from "../support/access";
 
@@ -168,5 +171,32 @@ describe("event settings tabs", () => {
 
   test("every tab lives under /settings", () => {
     for (const t of SITE_SETTINGS_TABS) assert.match(t.href, /^\/settings\//);
+  });
+});
+
+describe("My settings tabs", () => {
+  const labels = (a: Access) => visibleMySettingsTabs(a).map((t) => t.label);
+  const EVENT_TABS = ["My Harness tokens", "My org secrets", "My templates"];
+  const EVERYONE = ["Check PC", "My API tokens"];
+
+  test("anyone in the event area gets the event tabs, then the rest", () => {
+    for (const a of EVERY_ACCESS.filter(canUseEvents)) {
+      assert.deepEqual(labels(a), [...EVENT_TABS, ...EVERYONE], describeAccess(a));
+    }
+  });
+
+  test("anyone else gets only Check PC and their API tokens", () => {
+    // A guest judge, a Training or eVals-only user, or someone given nothing.
+    for (const a of EVERY_ACCESS.filter((a) => !canUseEvents(a))) {
+      assert.deepEqual(labels(a), EVERYONE, describeAccess(a));
+    }
+  });
+
+  test("a guest judge lands on Check PC", () => {
+    assert.equal(visibleMySettingsTabs(PERSONAS.guestJudge)[0]!.href, "/me/check-pc");
+  });
+
+  test("every tab lives under /me", () => {
+    for (const t of MY_SETTINGS_TABS) assert.match(t.href, /^\/me\//);
   });
 });
