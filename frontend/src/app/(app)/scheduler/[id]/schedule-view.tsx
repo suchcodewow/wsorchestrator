@@ -34,7 +34,7 @@ import { AUDIENCE_TRACKS, SCHEDULE_LIMITS, SCHEDULE_TRACKS, type ScheduleTrack }
 import { riseChild, staggerParent } from "@/lib/motion";
 import type { ClassLists } from "@/lib/scheduler/attendees";
 import type { ChecklistDayCount } from "@/lib/scheduler/checklist";
-import type { CopySource, Schedule, SessionRow } from "@/lib/scheduler/schedule";
+import type { CopySource, Instructor, Schedule, SessionRow } from "@/lib/scheduler/schedule";
 import type { SessionTypeRow } from "@/lib/scheduler/session-types";
 import {
   GROUP_NAMES,
@@ -115,6 +115,7 @@ export function ScheduleView({
   const [activeId, setActiveId] = useState<string | null>(null);
   const [resizingId, setResizingId] = useState<string | null>(null);
   const [showIssues, setShowIssues] = useState(false);
+  const [mine, setMine] = useState(false);
   const checklistButtons = useChecklistButtons({
     bootcampId: bootcamp.id,
     counts: checklist,
@@ -218,9 +219,16 @@ export function ScheduleView({
   const roomNames = useMemo(() => new Map(schedule.rooms.map((r) => [r.id, r.name])), [schedule.rooms]);
   const sessionCount = placed.length;
   const { issues, flagged } = useMemo(
-    () => findIssues(placed, clashes, roomNames, schedule.classes, schedule.rooms.length > 0),
-    [placed, clashes, roomNames, schedule.classes, schedule.rooms.length],
+    () => findIssues(placed, clashes, roomNames, schedule.classes, schedule.rooms.length > 0, schedule.instructors),
+    [placed, clashes, roomNames, schedule.classes, schedule.rooms.length, schedule.instructors],
   );
+
+  // With Me on, every session the viewer neither leads nor instructs in is dimmed.
+  const notMine = useMemo(() => {
+    if (!mine) return undefined;
+    const me = viewerEmail.toLowerCase();
+    return new Set(placed.filter((s) => !s.staff.some((p) => p.email.toLowerCase() === me)).map((s) => s.id));
+  }, [mine, placed, viewerEmail]);
 
   // ── The columns on show ─────────────────────────────────────────────────
   const shownTrack = tracks.includes(track) ? track : tracks[0]!;
@@ -230,6 +238,7 @@ export function ScheduleView({
           key: keyOf(shownTrack, i + 1),
           track: shownTrack,
           day: i + 1,
+          date: dayDate(bootcamp.startDate, i + 1),
           title: `Day ${i + 1}`,
           subtitle: dateLabel(dayDate(bootcamp.startDate, i + 1)),
           attendees: attendeeCount(schedule.classes, shownTrack),
@@ -241,6 +250,7 @@ export function ScheduleView({
             key: keyOf(t, day),
             track: t,
             day,
+            date: dayDate(bootcamp.startDate, day),
             title: `Day ${day}`,
             subtitle: TRACK_LABELS[t],
             attendees: attendeeCount(schedule.classes, t),
@@ -394,35 +404,14 @@ export function ScheduleView({
             ))}
           </div>
 
-          <div className="inline-flex rounded-lg border bg-card p-0.5 shadow-xs">
-            <button
-              type="button"
-              role="switch"
-              aria-checked={condensed}
-              onClick={() => {
-                const next = !condensed;
-                setCondensed(next);
-                writeScheduleCondensedCookie(next);
-              }}
-              className={cn(
-                "inline-flex cursor-pointer items-center gap-2 rounded-md px-3 py-1.5 text-sm outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50",
-                condensed ? "font-medium text-foreground" : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              Mini
-              <span
-                aria-hidden
-                className={cn("flex h-4 w-7 shrink-0 items-center rounded-full p-0.5 transition-colors", condensed ? "bg-brand" : "bg-input")}
-              >
-                <span
-                  className={cn(
-                    "size-3 rounded-full bg-background shadow-xs transition-transform duration-200 ease-out",
-                    condensed && "translate-x-3",
-                  )}
-                />
-              </span>
-            </button>
-          </div>
+          <PillSwitch
+            label="Mini"
+            on={condensed}
+            onChange={(next) => {
+              setCondensed(next);
+              writeScheduleCondensedCookie(next);
+            }}
+          />
 
           {view === "week" ? (
             <div role="radiogroup" aria-label="Track" className="flex flex-wrap gap-1">
@@ -469,6 +458,8 @@ export function ScheduleView({
               </Button>
             </div>
           )}
+
+          <PillSwitch label="Me" title="Dim every session you are not leading or instructing in" on={mine} onChange={setMine} />
 
           {canManage && (
             <Button variant="outline" size="sm" className="rounded-full" onClick={() => void flush().then(() => setEditingBootcamp(true))}>
@@ -585,6 +576,7 @@ export function ScheduleView({
               columns={columns}
               density={boardDensity}
               issues={flagged}
+              dimmed={notMine}
               roomNames={roomNames}
               canManage={canManage}
               resizingId={resizingId}
@@ -594,7 +586,6 @@ export function ScheduleView({
               onResizeEnd={onResizeEnd}
               headerAction={checklistButtons.dayButton}
               corner={checklistButtons.prepDayButton}
-              date={view === "week" ? undefined : dayDate(bootcamp.startDate, day)}
             />
             <DragOverlay dropAnimation={null}>
               {active && (
@@ -682,7 +673,7 @@ type Spot = Omit<Clash, "what">;
 /** Something wrong with the schedule: a sentence that starts with `lead` and names the sessions it is about. */
 type Issue = { kind: IssueKind; key: string; lead: string; spots: Spot[] };
 
-type IssueKind = "clash" | "leader" | "late" | "breakout";
+type IssueKind = "clash" | "leader" | "outsider" | "late" | "breakout";
 
 /** How many of each kind there are, for the top of the tooltip: "3 clashes · 12 with nobody leading". */
 function tally(issues: Issue[]): string {
@@ -690,11 +681,13 @@ function tally(issues: Issue[]): string {
   const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
   const clashes = count("clash");
   const leaders = count("leader");
+  const outsiders = count("outsider");
   const late = count("late");
   const breakouts = count("breakout");
   return [
     clashes > 0 && plural(clashes, "clash", "clashes"),
     leaders > 0 && `${leaders} with nobody leading`,
+    outsiders > 0 && `${plural(outsiders, "person", "people")} not an administrator or guest judge`,
     late > 0 && `${late} ending after ${formatClock(SCHEDULE_LIMITS.dayEnd)}`,
     breakouts > 0 && `${plural(breakouts, "breakout", "breakouts")} not fully assigned`,
   ]
@@ -707,7 +700,10 @@ const ISSUES_IN_TOOLTIP = 8;
 /**
  * Everything wrong with the schedule, in the order it happens: each pair of
  * sessions that clash (once), each main or breakout session nobody leads,
- * each session that ends after the day does, and each breakout that leaves
+ * each person on a session who is not a Training administrator or a guest
+ * judge of this bootcamp (once, with all their sessions; a copied schedule
+ * can bring them in), each session that ends after the day does, and each
+ * breakout that leaves
  * someone in its class out of every group or, when the facility has rooms, an
  * instructor without one. `flagged` has what is wrong with each session, by
  * id, for its card.
@@ -718,6 +714,7 @@ function findIssues(
   roomNames: Map<string, string>,
   classes: ClassLists,
   hasRooms: boolean,
+  instructors: Instructor[],
 ) {
   const { dayEnd } = SCHEDULE_LIMITS;
   const spotOf = (s: Placed<SessionRow>): Spot => ({ sessionId: s.id, name: s.name, track: s.track, day: s.day, start: s.start, end: s.end });
@@ -727,6 +724,8 @@ function findIssues(
   const issues: Issue[] = [];
   const flagged = new Map<string, string[]>();
   const flag = (id: string, why: string) => flagged.set(id, [...(flagged.get(id) ?? []), why]);
+  const pool = new Set(instructors.map((i) => i.email.toLowerCase()));
+  const outsiders = new Map<string, { fullName: string; spots: Spot[] }>();
 
   for (const s of placed) {
     for (const c of clashes.get(s.id) ?? []) {
@@ -738,6 +737,14 @@ function findIssues(
     if (s.kind !== "unstructured" && s.staff.length === 0) {
       flag(s.id, "Nobody leads it");
       issues.push({ kind: "leader", key: `leader:${s.id}`, lead: "Nobody leads", spots: [spotOf(s)] });
+    }
+    for (const p of s.staff) {
+      const email = p.email.toLowerCase();
+      if (pool.has(email)) continue;
+      flag(s.id, `${p.fullName} is not an administrator or guest judge here`);
+      const o = outsiders.get(email) ?? { fullName: p.fullName, spots: [] };
+      o.spots.push(spotOf(s));
+      outsiders.set(email, o);
     }
     if (s.end > dayEnd) {
       flag(s.id, `Ends after ${formatClock(dayEnd)}`);
@@ -755,9 +762,42 @@ function findIssues(
       if (gaps.length > 0) issues.push({ kind: "breakout", key: `breakout:${s.id}`, lead: `${gaps.join(" and ")}:`, spots: [spotOf(s)] });
     }
   }
+  const bySpot = (x: Spot, y: Spot) => x.day - y.day || x.start - y.start;
+  for (const [email, o] of outsiders) {
+    issues.push({
+      kind: "outsider",
+      key: `outsider:${email}`,
+      lead: `${o.fullName} is not an administrator or guest judge here:`,
+      spots: o.spots.sort(bySpot),
+    });
+  }
   const first = (i: Issue) => i.spots[0]!;
-  issues.sort((x, y) => first(x).day - first(y).day || first(x).start - first(y).start);
+  issues.sort((x, y) => bySpot(first(x), first(y)));
   return { issues, flagged };
+}
+
+/** A labelled on/off switch, in the bordered pill the toolbar's other controls sit in. */
+function PillSwitch({ label, title, on, onChange }: { label: string; title?: string; on: boolean; onChange: (on: boolean) => void }) {
+  return (
+    <div className="inline-flex rounded-lg border bg-card p-0.5 shadow-xs">
+      <button
+        type="button"
+        role="switch"
+        aria-checked={on}
+        title={title}
+        onClick={() => onChange(!on)}
+        className={cn(
+          "inline-flex cursor-pointer items-center gap-2 rounded-md px-3 py-1.5 text-sm outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50",
+          on ? "font-medium text-foreground" : "text-muted-foreground hover:text-foreground",
+        )}
+      >
+        {label}
+        <span aria-hidden className={cn("flex h-4 w-7 shrink-0 items-center rounded-full p-0.5 transition-colors", on ? "bg-brand" : "bg-input")}>
+          <span className={cn("size-3 rounded-full bg-background shadow-xs transition-transform duration-200 ease-out", on && "translate-x-3")} />
+        </span>
+      </button>
+    </div>
+  );
 }
 
 function SaveBadge({ save, onRetry }: { save: SaveState; onRetry: () => void }) {

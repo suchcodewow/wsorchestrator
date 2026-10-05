@@ -3,8 +3,9 @@
 /**
  * The schedule drawn to scale: a column per track-day, each session as tall
  * as it is long and placed at its start, from 8 AM. Time nothing is scheduled
- * in shows as Unscheduled; past 5 PM is tinted red. A day on show that is
- * today has a green line across it at the current time. A manager drags a card to
+ * in shows as Unscheduled; past 5 PM is tinted red. A column whose date is
+ * today has a green line across it at the current time, moving as the clock
+ * does, in either view. A manager drags a card to
  * any time in any column, drags its bottom edge to change its length a
  * quarter hour at a time, and clicks unscheduled time to add a session there.
  */
@@ -24,6 +25,8 @@ export type BoardColumn = {
   key: string;
   track: ScheduleTrack;
   day: number;
+  /** The date it falls on, as "2026-09-14"; on that day the time now is drawn across it. */
+  date: string;
   /** "Day 3", leading the header. */
   title: string;
   /** What follows it on the same line: the track, or in one track's view the date. */
@@ -36,9 +39,8 @@ export type BoardColumn = {
 /** Pixels per minute in each density: a quarter hour is 28px detailed, 16px condensed. */
 export const SCALE: Record<Density, number> = { detailed: 28 / 15, condensed: 16 / 15 };
 
-/** Each column's header, two lines tall, and the gutter's blank corner beside it; the line marking now is offset by it. */
+/** Each column's header, two lines tall, and the gutter's blank corner beside it. */
 const HEADER_HEIGHT = "h-17";
-const HEADER_REM = 4.25;
 
 const { dayStart, dayEnd } = SCHEDULE_LIMITS;
 
@@ -47,6 +49,8 @@ export type BoardProps = {
   density: Density;
   /** What is wrong with each session, by id; sessions with nothing wrong are absent. */
   issues: Map<string, string[]>;
+  /** Sessions to fade back, by id, so the rest stand out. */
+  dimmed?: Set<string>;
   roomNames: Map<string, string>;
   canManage: boolean;
   /** The session being resized, to label its new length as it changes. */
@@ -60,8 +64,6 @@ export type BoardProps = {
   headerAction?: (column: BoardColumn) => ReactNode;
   /** Anything to show in the top-left corner, above the hours, level with each column's `headerAction`. */
   corner?: ReactNode;
-  /** The date every column shows, as "2026-09-14", when they all show one: on that day, the time now is drawn across them. */
-  date?: string;
 };
 
 export function Board(props: BoardProps) {
@@ -72,11 +74,14 @@ export function Board(props: BoardProps) {
   const bottom = Math.ceil((lastEnd + 60) / 60) * 60;
   const height = (bottom - dayStart) * scale;
   const hours = Array.from({ length: (bottom - dayStart) / 60 + 1 }, (_, i) => dayStart + i * 60);
-  const minute = useMinuteOn(props.date);
+  const clock = useClock();
+  const today = clock !== null && clock.minute >= dayStart && clock.minute <= bottom ? clock.date : null;
   const now =
-    minute !== null && minute >= dayStart && minute <= bottom
-      ? { top: (minute - dayStart) * scale, label: formatClock(Math.floor(minute)).replace(" ", "\u00a0") }
+    clock !== null && columns.some((c) => c.date === today)
+      ? { top: (clock.minute - dayStart) * scale, label: formatClock(Math.floor(clock.minute)).replace(" ", "\u00a0") }
       : null;
+  // The line's dot sits at the left end of the first column it crosses.
+  const firstToday = columns.findIndex((c) => c.date === today);
 
   return (
     // `overflow-x-auto` alone makes the board a vertical scroller too; it never scrolls that way, so the wheel moves the page.
@@ -109,18 +114,17 @@ export function Board(props: BoardProps) {
             )}
           </div>
         </div>
-        {columns.map((c) => (
-          <Column key={c.key} column={c} height={height} hours={hours} scale={scale} {...props} />
+        {columns.map((c, i) => (
+          <Column
+            key={c.key}
+            column={c}
+            height={height}
+            hours={hours}
+            scale={scale}
+            now={now !== null && c.date === today ? { top: now.top, dot: i === firstToday } : null}
+            {...props}
+          />
         ))}
-        {now !== null && (
-          <div
-            aria-hidden
-            className="pointer-events-none absolute right-0 left-16 z-30 h-0.5 -translate-y-1/2 bg-emerald-500"
-            style={{ top: `calc(${HEADER_REM}rem + ${now.top}px)` }}
-          >
-            <div className="absolute top-1/2 -left-1 size-2.5 -translate-y-1/2 rounded-full bg-emerald-500" />
-          </div>
-        )}
       </div>
     </div>
   );
@@ -135,15 +139,17 @@ const everyTick = (onTick: () => void) => {
 const tickNow = () => Math.floor(Date.now() / TICK);
 
 /**
- * The minute of the day it is now on the viewer's clock, when today is `date`;
- * null on any other day, and while rendering on the server.
+ * Today's date, as "2026-09-14", and the minute of the day it is now, both on
+ * the viewer's clock; null while rendering on the server.
  */
-function useMinuteOn(date: string | undefined): number | null {
+function useClock(): { date: string; minute: number } | null {
   const tick = useSyncExternalStore(everyTick, tickNow, () => null);
-  if (tick === null || !date) return null;
+  if (tick === null) return null;
   const now = new Date(tick * TICK);
-  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-  return today === date ? now.getHours() * 60 + now.getMinutes() + now.getSeconds() / 60 : null;
+  return {
+    date: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`,
+    minute: now.getHours() * 60 + now.getMinutes() + now.getSeconds() / 60,
+  };
 }
 
 /** The attribute naming the column a drop lands in, for measuring where in it. */
@@ -154,8 +160,16 @@ function Column({
   height,
   hours,
   scale,
+  now,
   ...props
-}: BoardProps & { column: BoardColumn; height: number; hours: number[]; scale: number }) {
+}: BoardProps & {
+  column: BoardColumn;
+  height: number;
+  hours: number[];
+  scale: number;
+  /** Where the line marking the time now crosses this column, when it is today; `dot` on the first such column. */
+  now: { top: number; dot: boolean } | null;
+}) {
   const { setNodeRef, isOver } = useDroppable({ id: `col:${column.key}` });
   const gaps = gapsOf(column.sessions);
 
@@ -212,6 +226,15 @@ function Column({
         {column.sessions.map((s) => (
           <DraggableSession key={s.id} session={s} start={s.start} scale={scale} {...props} />
         ))}
+        {now !== null && (
+          <div
+            aria-hidden
+            className="pointer-events-none absolute -right-px left-0 z-30 h-0.5 -translate-y-1/2 bg-emerald-500"
+            style={{ top: now.top }}
+          >
+            {now.dot && <div className="absolute top-1/2 -left-1 size-2.5 -translate-y-1/2 rounded-full bg-emerald-500" />}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -246,7 +269,7 @@ function Gap({ start, minutes, scale, onAdd }: { start: number; minutes: number;
   );
 }
 
-type CardProps = Pick<BoardProps, "density" | "issues" | "roomNames" | "canManage" | "resizingId" | "onOpen" | "onResize" | "onResizeEnd"> & {
+type CardProps = Pick<BoardProps, "density" | "issues" | "dimmed" | "roomNames" | "canManage" | "resizingId" | "onOpen" | "onResize" | "onResizeEnd"> & {
   session: SessionRow;
   start: number;
   scale: number;
@@ -259,7 +282,10 @@ function DraggableSession(props: CardProps) {
   return (
     <div
       ref={setNodeRef}
-      className={cn("absolute inset-x-0 z-10 px-1.5 pb-0.5", isDragging && "opacity-30")}
+      className={cn(
+        "absolute inset-x-0 z-10 px-1.5 pb-0.5 transition-opacity",
+        isDragging ? "opacity-30" : props.dimmed?.has(session.id) && "opacity-30 hover:opacity-100",
+      )}
       style={{ top: (session.start - dayStart) * scale, height: session.minutes * scale }}
     >
       <SessionFace

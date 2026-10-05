@@ -19,13 +19,18 @@ import { db } from "@/db";
 import {
   EVALS_ASSESSMENT_LIMITS,
   SCHEDULE_LIMITS,
+  SCHEDULE_TRACKS,
   bootcampHistory,
   employees,
   evalsAssessmentCriteria,
   evalsAssessments,
   evalsSubmissionScores,
   evalsSubmissions,
+  facilityRooms,
   mentions,
+  scheduleSessionGroups,
+  scheduleSessionStaff,
+  scheduleSessions,
   users,
   type EvalsAssessmentAudience,
   type EvalsAssessmentStage,
@@ -40,6 +45,7 @@ import type { MentionPick } from "@/lib/mentions";
 import { pageWindow, toPage, type ListQuery, type Page } from "@/lib/paging";
 import { blankAsNull, orderFor, searchAny } from "@/lib/paging-sql";
 import { activeBootcamp, type ActiveBootcamp } from "@/lib/scheduler/bootcamps";
+import { stageOf } from "@/lib/scheduler/timeline";
 
 const e = employees;
 const h = bootcampHistory;
@@ -121,11 +127,66 @@ function submissionJoin(assessmentId: string, bootcampId: string | null) {
   );
 }
 
-/** One page of the attendees an assessment applies to, with their score at the active bootcamp. */
+/**
+ * Whether an attendee is in `instructorEmail`'s group in any breakout of the
+ * assessment's stage at the bootcamp, as the schedule's Breakout tab assigns
+ * them. A breakout is not tied to one assessment, so every breakout of the
+ * stage counts.
+ */
+function assignedTo(assessment: ScoringAssessment, bootcampId: string | null, instructorEmail: string) {
+  if (!bootcampId) return sql`false`;
+  const tracks = SCHEDULE_TRACKS.filter((t) => stageOf(t) === assessment.stage);
+  return sql`exists (
+    select 1 from ${scheduleSessionGroups} g
+    join ${scheduleSessions} ss on ss.id = g.session_id
+    where g.email = ${e.email} and g.instructor_email = ${instructorEmail.toLowerCase()}
+      and ss.bootcamp_id = ${bootcampId} and ss.kind = 'breakout'
+      and ss.track in (${sql.join(tracks.map((t) => sql`${t}`), sql`, `)})
+  )`;
+}
+
+/** A room someone takes in a breakout, and which breakout it is. */
+export type BreakoutRoom = { roomName: string; sessionName: string; track: (typeof SCHEDULE_TRACKS)[number]; day: number; start: number };
+
+/**
+ * The rooms `instructorEmail` is given in the breakouts of the assessment's
+ * stage at the bootcamp, as the schedule's Breakout tab assigns them, in the
+ * order they happen. A breakout without a room for them is left out.
+ */
+export async function breakoutRooms(
+  assessment: ScoringAssessment,
+  bootcampId: string | null,
+  instructorEmail: string | null,
+): Promise<BreakoutRoom[]> {
+  if (!bootcampId || !instructorEmail) return [];
+  const tracks = SCHEDULE_TRACKS.filter((t) => stageOf(t) === assessment.stage);
+  const ss = scheduleSessions;
+  return db
+    .select({ roomName: facilityRooms.name, sessionName: ss.name, track: ss.track, day: ss.day, start: ss.start })
+    .from(scheduleSessionStaff)
+    .innerJoin(ss, eq(ss.id, scheduleSessionStaff.sessionId))
+    .innerJoin(facilityRooms, eq(facilityRooms.id, scheduleSessionStaff.roomId))
+    .where(
+      and(
+        eq(scheduleSessionStaff.email, instructorEmail.toLowerCase()),
+        eq(ss.bootcampId, bootcampId),
+        eq(ss.kind, "breakout"),
+        inArray(ss.track, tracks),
+      ),
+    )
+    .orderBy(asc(ss.day), asc(ss.start), asc(ss.track))
+    .limit(100);
+}
+
+/**
+ * One page of the attendees an assessment applies to, with their score at the
+ * active bootcamp; with `mine`, only those in that instructor's breakout groups.
+ */
 export async function listAttendees(
   assessment: ScoringAssessment,
   bootcampId: string | null,
   query: ListQuery<AssessmentAttendeeSort>,
+  mine: string | null = null,
 ): Promise<Page<AttendeeRow>> {
   const { limit, offset } = pageWindow(query.page);
   const rows = await db
@@ -148,25 +209,41 @@ export async function listAttendees(
     .from(e)
     .leftJoin(h, sql`${h.email} = ${e.email}`)
     .leftJoin(s, submissionJoin(assessment.id, bootcampId))
-    .where(and(await attendeeCondition(assessment), searchAny(query.q, [e.fullName, e.email, e.title])))
+    .where(
+      and(
+        await attendeeCondition(assessment),
+        mine ? assignedTo(assessment, bootcampId, mine) : undefined,
+        searchAny(query.q, [e.fullName, e.email, e.title]),
+      ),
+    )
     .orderBy(...orderFor(SORT_COLUMNS[query.sort], query.dir, sql`lower(${e.fullName})`, e.id))
     .limit(limit)
     .offset(offset);
   return toPage(rows, query.page);
 }
 
-/** How many attendees an assessment applies to, and how many of them are scored at the active bootcamp. */
+/**
+ * How many attendees an assessment applies to, how many of them are scored at
+ * the active bootcamp, and how many are in `viewerEmail`'s breakout groups.
+ */
 export async function attendeeCounts(
   assessment: ScoringAssessment,
   bootcampId: string | null,
-): Promise<{ attendees: number; scored: number }> {
+  viewerEmail: string | null = null,
+): Promise<{ attendees: number; scored: number; mine: number }> {
   const [row] = await db
-    .select({ attendees: sql<number>`count(*)::int`, scored: sql<number>`count(${s.id})::int` })
+    .select({
+      attendees: sql<number>`count(*)::int`,
+      scored: sql<number>`count(${s.id})::int`,
+      mine: viewerEmail
+        ? sql<number>`(count(*) filter (where ${assignedTo(assessment, bootcampId, viewerEmail)}))::int`
+        : sql<number>`0`,
+    })
     .from(e)
     .leftJoin(h, sql`${h.email} = ${e.email}`)
     .leftJoin(s, submissionJoin(assessment.id, bootcampId))
     .where(await attendeeCondition(assessment));
-  return { attendees: row?.attendees ?? 0, scored: row?.scored ?? 0 };
+  return { attendees: row?.attendees ?? 0, scored: row?.scored ?? 0, mine: row?.mine ?? 0 };
 }
 
 export type ScoringForm = {

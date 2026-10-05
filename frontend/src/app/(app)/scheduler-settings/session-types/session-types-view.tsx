@@ -10,7 +10,15 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Loader2, Pencil, Plus, Trash2 } from "lucide-react";
-import { HEADER_ROW, Pager, PlainHeader, SortHeader, TableSearch } from "@/components/data-table";
+import {
+  HEADER_ROW,
+  LINK_ROW,
+  Pager,
+  PlainHeader,
+  SortHeader,
+  TableSearch,
+  useRowLink,
+} from "@/components/data-table";
 import { SessionLookFields, type SessionLook } from "@/components/session-look-fields";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -36,6 +44,7 @@ export function SessionTypesView({ query, page }: { query: ListQuery<SessionType
   const router = useRouter();
   const [editing, setEditing] = useState<SessionTypeRow | "new" | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const rowLink = useRowLink();
   const [error, setError] = useState<string | null>(null);
   const sortProps = { sort: query.sort, dir: query.dir };
 
@@ -140,7 +149,7 @@ export function SessionTypesView({ query, page }: { query: ListQuery<SessionType
                 </tr>
               )}
               {page.rows.map((t, i) => (
-                <tr key={t.id} className="border-b transition-colors last:border-b-0 hover:bg-muted/30">
+                <tr key={t.id} className={LINK_ROW} onClick={rowLink(() => setEditing(t))}>
                   <td className="px-5 py-2">
                     {ordered ? (
                       <div className="flex">

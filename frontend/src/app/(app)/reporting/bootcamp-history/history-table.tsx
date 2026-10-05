@@ -12,7 +12,15 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { ChevronRight, UserCheck, UserX, type LucideIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { HEADER_ROW, Pager, PlainHeader, SortHeader, TableSearch } from "@/components/data-table";
+import {
+  HEADER_ROW,
+  LINK_ROW,
+  Pager,
+  PlainHeader,
+  SortHeader,
+  TableSearch,
+  useRowLink,
+} from "@/components/data-table";
 import { EXEMPT_DATE } from "@/db/schema";
 import type { HistoryCounts, HistoryListing } from "@/lib/evals/bootcamp-history";
 import type { BootcampHistorySort, HistoryStatus } from "@/lib/list-specs";
@@ -68,6 +76,7 @@ export function HistoryTable({
   // A record's page links back to the list as it is now: search, sort, page and status.
   const listParams = useSearchParams().toString();
   const shown = page.rows;
+  const rowLink = useRowLink();
 
   return (
     <motion.div variants={staggerParent(0.05)} initial="hidden" animate="show" className="max-w-3xl space-y-6">
@@ -132,26 +141,18 @@ export function HistoryTable({
               {shown.map((h) => {
                 const href = `/reporting/bootcamp-history/${h.id}${listParams ? `?${listParams}` : ""}`;
                 return (
-                  <tr key={h.id} className="group border-b transition-colors last:border-b-0 hover:bg-muted/30">
-                    <td className="p-0 font-medium">
-                      <Link href={href} className="block px-5 py-2.5 outline-none focus-visible:bg-muted/50">
+                  <tr key={h.id} className={LINK_ROW} onClick={rowLink(href)}>
+                    <td className="px-5 py-2.5 font-medium">
+                      <Link href={href} className="outline-none group-hover:underline focus-visible:underline">
                         {h.fullName ?? <span className="font-normal text-muted-foreground">—</span>}
                       </Link>
                     </td>
-                    <td className="p-0 text-muted-foreground">
-                      <Link href={href} tabIndex={-1} className="block px-5 py-2.5">
-                        {h.email}
-                      </Link>
+                    <td className="px-5 py-2.5 text-muted-foreground">{h.email}</td>
+                    <td className="px-5 py-2.5 whitespace-nowrap tabular-nums text-muted-foreground">
+                      {h.btcDate === EXEMPT_DATE ? <Badge variant="secondary">Exempt</Badge> : formatDate(h.btcDate)}
                     </td>
-                    <td className="p-0 whitespace-nowrap tabular-nums text-muted-foreground">
-                      <Link href={href} tabIndex={-1} className="block px-5 py-2.5">
-                        {h.btcDate === EXEMPT_DATE ? <Badge variant="secondary">Exempt</Badge> : formatDate(h.btcDate)}
-                      </Link>
-                    </td>
-                    <td className="p-0">
-                      <Link href={href} tabIndex={-1} aria-hidden className="flex justify-end px-3 py-2.5">
-                        <ChevronRight className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
-                      </Link>
+                    <td className="px-3 py-2.5">
+                      <ChevronRight className="ml-auto size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
                     </td>
                   </tr>
                 );
