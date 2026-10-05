@@ -3,7 +3,8 @@
 /**
  * What has to be done before a day of a track starts, each track its own: a
  * button at the top of the day showing how much of it is ticked, opening the
- * list. A Training administrator adds, edits and removes items and ticks any
+ * list. Prep Day's, for before the bootcamp starts, sits in the board's corner
+ * and counts down what is left. A Training administrator adds, edits and removes items and ticks any
  * of them; an item's owner ticks their own.
  */
 
@@ -13,11 +14,11 @@ import { Button } from "@/components/ui/button";
 import { MentionText } from "@/components/mention-text";
 import { MentionTextarea } from "@/components/mention-textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { CHECKLIST_LIMITS, type ChecklistTrack } from "@/db/schema";
+import { CHECKLIST_LIMITS, CHECKLIST_PREP_DAY, type ChecklistTrack } from "@/db/schema";
 import { mentionsIn, type MentionPick } from "@/lib/mentions";
 import type { ChecklistDayCount, ChecklistItemRow } from "@/lib/scheduler/checklist";
 import type { Instructor } from "@/lib/scheduler/schedule";
-import { TRACK_LABELS } from "@/lib/scheduler/timeline";
+import { checklistDayLabel } from "@/lib/scheduler/timeline";
 import { cn } from "@/lib/utils";
 import { formatWhen } from "../../cohort-settings/format";
 import type { BoardColumn } from "./board";
@@ -40,7 +41,10 @@ type Count = Pick<ChecklistDayCount, "total" | "done">;
 const SELECT =
   "h-9 cursor-pointer appearance-none rounded-md border border-input bg-transparent px-3 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-input/30";
 
-/** The board's `headerAction`: a checklist button atop each day of each track. */
+/**
+ * The board's checklist buttons: `dayButton` is its `headerAction`, atop each
+ * day of each track; `prepDayButton` sits in its corner, before Day 1.
+ */
 export function useChecklistButtons({
   bootcampId,
   counts,
@@ -53,26 +57,38 @@ export function useChecklistButtons({
   canManage: boolean;
   viewerEmail: string;
   instructors: Instructor[];
-}): (column: BoardColumn) => ReactNode {
-  const [checks, setChecks] = useState(() => new Map(counts.map((c) => [`${c.track}:${c.day}`, c])));
+}): { dayButton: (column: BoardColumn) => ReactNode; prepDayButton: ReactNode } {
+  const byKey = (list: ChecklistDayCount[]) => new Map(list.map((c) => [`${c.track}:${c.day}`, c]));
+  const [checks, setChecks] = useState(() => byKey(counts));
+  // A refresh of the page, as after copying a schedule, brings counts that replace what was kept here.
+  const [seen, setSeen] = useState(counts);
+  if (seen !== counts) {
+    setSeen(counts);
+    setChecks(byKey(counts));
+  }
 
-  return function ChecklistAction(column) {
-    const track = column.track;
-    const key = `${track}:${column.day}`;
+  const button = (track: ChecklistTrack, day: number, compact = false) => {
+    const key = `${track}:${day}`;
     return (
       <ChecklistButton
         key={key}
         bootcampId={bootcampId}
         track={track}
-        day={column.day}
-        label={`${TRACK_LABELS[track]}, Day ${column.day}`}
+        day={day}
+        label={checklistDayLabel(track, day)}
+        compact={compact}
         count={checks.get(key) ?? { total: 0, done: 0 }}
         canManage={canManage}
         viewerEmail={viewerEmail}
         instructors={instructors}
-        onCount={(n) => setChecks((prev) => new Map(prev).set(key, { track, day: column.day, ...n }))}
+        onCount={(n) => setChecks((prev) => new Map(prev).set(key, { track, day, ...n }))}
       />
     );
+  };
+
+  return {
+    dayButton: (column) => button(column.track, column.day),
+    prepDayButton: button(CHECKLIST_PREP_DAY.track, CHECKLIST_PREP_DAY.day, true),
   };
 }
 
@@ -81,6 +97,7 @@ export function ChecklistButton({
   track,
   day,
   label,
+  compact = false,
   count,
   canManage,
   viewerEmail,
@@ -92,6 +109,8 @@ export function ChecklistButton({
   day: number;
   /** "Bootcamp, Day 2", for the dialog's title and the button's name. */
   label: string;
+  /** The icon alone, and how many are still to do out of how many, rather than done. */
+  compact?: boolean;
   count: Count;
   canManage: boolean;
   viewerEmail: string;
@@ -100,6 +119,7 @@ export function ChecklistButton({
 }) {
   const [open, setOpen] = useState(false);
   const allDone = count.total > 0 && count.done === count.total;
+  const toDo = count.total - count.done;
 
   return (
     <>
@@ -108,21 +128,28 @@ export function ChecklistButton({
         size="sm"
         className={cn(
           "h-7 shrink-0 gap-1.5 px-2 text-xs",
+          compact && "gap-1 px-1 has-[>svg]:px-1",
           allDone && "border-emerald-500/50 bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/15 dark:text-emerald-400",
         )}
-        aria-label={`Checklist for ${label}: ${count.done} of ${count.total} done`}
+        aria-label={
+          compact
+            ? `${label} checklist: ${toDo} of ${count.total} to do`
+            : `Checklist for ${label}: ${count.done} of ${count.total} done`
+        }
+        title={compact ? `${label} checklist` : undefined}
         onClick={() => setOpen(true)}
       >
         <ListChecks className="size-3.5" />
-        Checklist
+        {!compact && "Checklist"}
         {count.total > 0 && (
           <span
             className={cn(
-              "rounded-full px-1.5 py-px text-[11px] font-medium tabular-nums",
+              "rounded-full py-px text-[11px] font-medium tabular-nums",
+              compact ? "px-1" : "px-1.5",
               allDone ? "bg-emerald-500/15" : "bg-muted text-muted-foreground",
             )}
           >
-            {count.done}/{count.total}
+            {compact ? toDo : count.done}/{count.total}
           </span>
         )}
       </Button>

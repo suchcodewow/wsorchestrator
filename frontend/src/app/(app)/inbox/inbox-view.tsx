@@ -20,7 +20,7 @@ import type { MyMentionRow } from "@/lib/mention-store";
 import { riseChild, staggerParent } from "@/lib/motion";
 import type { ListQuery, Page } from "@/lib/paging";
 import type { MyChecklistRow } from "@/lib/scheduler/checklist";
-import { TRACK_LABELS } from "@/lib/scheduler/timeline";
+import { checklistDayLabel } from "@/lib/scheduler/timeline";
 import { cn } from "@/lib/utils";
 import { formatDate, formatWhen } from "../cohort-settings/format";
 
@@ -32,7 +32,7 @@ const when = (at: Date | string) => formatWhen(new Date(at).toISOString());
 
 /** Where a tag was made: the session, checklist or eVals score, then the bootcamp. */
 function mentionContext(m: MyMentionRow): string {
-  const day = m.track && m.day !== null ? `${TRACK_LABELS[m.track]}, Day ${m.day}` : null;
+  const day = m.track && m.day !== null ? checklistDayLabel(m.track, m.day) : null;
   const where =
     m.kind === "comment"
       ? [m.sessionName, day]
@@ -213,7 +213,7 @@ export function InboxView({
                       )}
                     </td>
                     <td className="px-5 py-2.5 align-top whitespace-nowrap">
-                      <div>{schedule(item.bootcampId, `${TRACK_LABELS[item.track]}, Day ${item.day}`)}</div>
+                      <div>{schedule(item.bootcampId, checklistDayLabel(item.track, item.day))}</div>
                       <div className="text-xs text-muted-foreground tabular-nums">{dateLabel(item.date)}</div>
                     </td>
                     <td className="px-5 py-2.5 align-top text-muted-foreground">

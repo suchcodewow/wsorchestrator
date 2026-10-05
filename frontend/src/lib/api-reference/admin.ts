@@ -37,7 +37,7 @@ const CHECKLIST_ITEM_ID: Field = { name: "itemId", type: "string", required: tru
 const CHECKLIST_DAY_PARAMS: Field[] = [
   BOOTCAMP_ID,
   { name: "track", type: `"btc" | "int" | "btc_se" | "int_se"`, required: true, note: "the track; each keeps its own checklist" },
-  { name: "day", type: "number", required: true, note: "1-based, as a session's" },
+  { name: "day", type: "number", required: true, note: "1-based, as a session's; 0 is Prep Day, before the bootcamp starts, on btc only" },
 ];
 
 const COMMENT_SHAPE = "{ id, body, authorId: string | null, authorName, authorEmail, createdAt, mentions: { email, fullName }[] }";
@@ -669,7 +669,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "trainingAdmin",
         token: true,
         notes:
-          "Copies every session and who runs it, but not comments or breakout groups. Rooms come too only when both bootcamps are at the same facility. Days past the end of a track here are left out; notes says what was.",
+          "Copies every session and who runs it, but not comments or breakout groups. Rooms come too only when both bootcamps are at the same facility. Days past the end of a track here are left out; notes says what was. The checklists of the days it copies, and Prep Day's, are added to this bootcamp's, every item to do; replace leaves its own items alone, and an item whose day here already has one of the same name is not added again. An owner or a tag who is not an administrator or guest judge of this bootcamp is left off, and notes names them.",
         params: [BOOTCAMP_ID],
         body: {
           kind: "json",
@@ -678,7 +678,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
             { name: "replace", type: "boolean", note: "true to replace the sessions it has" },
           ],
         },
-        returns: "{ sessions: number, notes: string[] }",
+        returns: "{ sessions: number, checklistItems: number, notes: string[] }",
         errors: [
           { status: 400, error: "invalid", when: "the body is not that shape" },
           { status: 400, error: "same_bootcamp", when: "from is this bootcamp" },
@@ -929,7 +929,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         returns: `201 ${CHECKLIST_ITEM_ROW}`,
         errors: [
           { status: 400, error: "invalid", when: "name is empty or too long" },
-          { status: 400, error: "no_day", when: "the track does not run that many days at this bootcamp" },
+          { status: 400, error: "no_day", when: "the track does not run that many days at this bootcamp, or day is 0 on a track other than btc" },
           { status: 400, error: "not_instructor", when: "ownerEmail or a mention is not an administrator or guest judge of the bootcamp; email names it" },
           { status: 404, error: "not_found", when: "no such bootcamp, or track or day is not one" },
           { status: 409, error: "full", when: `the day already has ${CHECKLIST_LIMITS.itemsPerDay} items` },

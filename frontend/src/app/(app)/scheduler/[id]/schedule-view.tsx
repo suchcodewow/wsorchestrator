@@ -114,7 +114,7 @@ export function ScheduleView({
   const [activeId, setActiveId] = useState<string | null>(null);
   const [resizingId, setResizingId] = useState<string | null>(null);
   const [showIssues, setShowIssues] = useState(false);
-  const checklistButton = useChecklistButtons({
+  const checklistButtons = useChecklistButtons({
     bootcampId: bootcamp.id,
     counts: checklist,
     canManage,
@@ -571,7 +571,8 @@ export function ScheduleView({
               onAdd={(c, start) => setTarget({ mode: "new", track: c.track, day: c.day, start })}
               onResize={onResize}
               onResizeEnd={onResizeEnd}
-              headerAction={checklistButton}
+              headerAction={checklistButtons.dayButton}
+              corner={checklistButtons.prepDayButton}
               date={view === "week" ? undefined : dayDate(bootcamp.startDate, day)}
             />
             <DragOverlay dropAnimation={null}>

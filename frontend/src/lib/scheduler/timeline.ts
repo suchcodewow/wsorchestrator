@@ -11,7 +11,7 @@
  * server saves by the same rules.
  */
 
-import { SCHEDULE_LIMITS, type ScheduleTrack, type SessionAudience, type SessionKind } from "@/db/schema";
+import { CHECKLIST_PREP_DAY, SCHEDULE_LIMITS, type ScheduleTrack, type SessionAudience, type SessionKind } from "@/db/schema";
 
 export const TRACK_LABELS: Record<ScheduleTrack, string> = {
   btc: "Bootcamp",
@@ -63,6 +63,17 @@ export function stageOf(track: ScheduleTrack): "bootcamp" | "intermediate" {
 /** How many days a track runs: the SE tracks follow the class they break out of. Null when the bootcamp has no such class. */
 export function trackDays(track: ScheduleTrack, bootcamp: { btcDays: number; intDays: number | null }): number | null {
   return track === "btc" || track === "btc_se" ? bootcamp.btcDays : bootcamp.intDays;
+}
+
+/** Whether a track-day can hold checklist items: one the track runs, or Bootcamp's Prep Day. */
+export function checklistDayExists(track: ScheduleTrack, day: number, bootcamp: { btcDays: number; intDays: number | null }): boolean {
+  if (day === CHECKLIST_PREP_DAY.day) return track === CHECKLIST_PREP_DAY.track;
+  return day >= 1 && day <= (trackDays(track, bootcamp) ?? 0);
+}
+
+/** "Bootcamp, Day 2", or "Prep Day", for a checklist's title, the audit trail and the inbox. */
+export function checklistDayLabel(track: ScheduleTrack, day: number): string {
+  return day === CHECKLIST_PREP_DAY.day ? "Prep Day" : `${TRACK_LABELS[track]}, Day ${day}`;
 }
 
 /** "8:00 AM", for minutes after midnight. */

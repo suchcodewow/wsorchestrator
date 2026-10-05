@@ -58,6 +58,8 @@ export type BoardProps = {
   onResizeEnd: (id: string) => void;
   /** Anything more to show at the top of a column, on a line of its own under its title. */
   headerAction?: (column: BoardColumn) => ReactNode;
+  /** Anything to show in the top-left corner, above the hours, level with each column's `headerAction`. */
+  corner?: ReactNode;
   /** The date every column shows, as "2026-09-14", when they all show one: on that day, the time now is drawn across them. */
   date?: string;
 };
@@ -82,7 +84,7 @@ export function Board(props: BoardProps) {
       {/* Columns share the width and scroll only below 12rem each; `min-w-fit` would size them to their longest name. */}
       <div className="relative flex" style={{ minWidth: `calc(4rem + ${columns.length} * 12rem)` }}>
         <div className="sticky left-0 z-20 w-16 shrink-0 border-r bg-card">
-          <div className={cn(HEADER_HEIGHT, "border-b")} />
+          <div className={cn(HEADER_HEIGHT, "flex items-end justify-center border-b px-1 pb-2")}>{props.corner}</div>
           <div className="relative" style={{ height }}>
             {hours.map((m) => (
               <div
