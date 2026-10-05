@@ -5,7 +5,15 @@
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { ClipboardPlus } from "lucide-react";
-import { HEADER_ROW, Pager, PlainHeader, SortHeader, TableSearch } from "@/components/data-table";
+import {
+  HEADER_ROW,
+  LINK_ROW,
+  Pager,
+  PlainHeader,
+  SortHeader,
+  TableSearch,
+  useRowLink,
+} from "@/components/data-table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { AUDIENCE_LABELS, STAGE_LABELS } from "@/lib/evals/assessment-values";
@@ -34,6 +42,7 @@ export function AssessmentsView({
   count: number;
 }) {
   const sortProps = { sort: query.sort, dir: query.dir };
+  const rowLink = useRowLink();
 
   return (
     <motion.div variants={staggerParent(0.05)} initial="hidden" animate="show" className="space-y-6">
@@ -84,9 +93,9 @@ export function AssessmentsView({
                 </tr>
               )}
               {page.rows.map((a) => (
-                <tr key={a.id} className="border-b transition-colors last:border-b-0 hover:bg-muted/30">
+                <tr key={a.id} className={LINK_ROW} onClick={rowLink(`/evals-settings/assessments/${a.id}`)}>
                   <td className="px-5 py-3 font-medium">
-                    <Link href={`/evals-settings/assessments/${a.id}`} className="hover:underline">
+                    <Link href={`/evals-settings/assessments/${a.id}`} className="group-hover:underline">
                       {a.name}
                     </Link>
                   </td>

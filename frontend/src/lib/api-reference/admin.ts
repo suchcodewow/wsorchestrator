@@ -1148,11 +1148,17 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "scorer",
         token: true,
         notes:
-          "An attendee is a current candidate (see GET /api/evals/current-cohort) in the assessment's stage on the sales or engineer track, as its audience takes in. averageScore is to one decimal place, and null if they are not scored at the active bootcamp. needsRescoring is true for one scored before a criterion was added. attendees and scored count everyone it applies to, whatever the search.",
+          "An attendee is a current candidate (see GET /api/evals/current-cohort) in the assessment's stage on the sales or engineer track, as its audience takes in. averageScore is to one decimal place, and null if they are not scored at the active bootcamp. needsRescoring is true for one scored before a criterion was added. attendees and scored count everyone it applies to, whatever the search or mine. mine counts those in the caller's own groups in any breakout of the assessment's stage on the active bootcamp's schedule; a breakout is not tied to one assessment, so every breakout of the stage counts. rooms are the rooms the caller is given in those same breakouts, in the order they happen; one without a room for them is left out. start is minutes after midnight.",
         params: [{ name: "assessmentId", type: "string", required: true, note: "UUID" }],
-        query: listQuery(ASSESSMENT_ATTENDEE_LIST.sorts, "the name, email or title"),
-        returns: `{ assessment: { id, name, stage, audience }, bootcamp: { id, startDate, btcDays, intDays } | null, attendees: number, scored: number, people: { id, email, fullName, title, track: "sales" | "engineer", averageScore: number | null, needsRescoring: boolean }[], ${PAGE_FIELDS} }`,
-        errors: [{ status: 404, error: "not_found", when: "assessmentId is not a UUID, or no such active assessment" }],
+        query: [
+          ...listQuery(ASSESSMENT_ATTENDEE_LIST.sorts, "the name, email or title"),
+          { name: "mine", type: `"1"`, note: "only the attendees the caller is assigned in a breakout, as mine counts them" },
+        ],
+        returns: `{ assessment: { id, name, stage, audience }, bootcamp: { id, startDate, btcDays, intDays } | null, attendees: number, scored: number, mine: number, rooms: { roomName, sessionName, track, day, start }[], people: { id, email, fullName, title, track: "sales" | "engineer", averageScore: number | null, needsRescoring: boolean }[], ${PAGE_FIELDS} }`,
+        errors: [
+          { status: 400, error: "invalid", when: "mine is anything but 1" },
+          { status: 404, error: "not_found", when: "assessmentId is not a UUID, or no such active assessment" },
+        ],
       },
       {
         method: "GET",
@@ -1296,8 +1302,16 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         token: true,
         notes:
           "Training administrators read it to pick a bootcamp's guest judges. fullName and reportsToName are first and last name as the person's email spells them (first.last@), using HiBob's spelling of each word it has; HiBob's full name is kept only for an email that is not first.last. total counts every stored employee, whatever the search.",
-        query: listQuery(EMPLOYEE_LIST.sorts, "the name, email, title, department, site, or the manager's name or email"),
+        query: [
+          {
+            name: "match",
+            type: `"all" | "person"`,
+            note: "What q searches. person: only the name and email, as the people pickers search. Default all.",
+          },
+          ...listQuery(EMPLOYEE_LIST.sorts, "the name, email, title, department, site, or the manager's name or email"),
+        ],
         returns: `{ people: { id, email, fullName, title, department, site, reportsToEmail, reportsToName, startDate, activeEffectiveDate }[], ${PAGE_FIELDS}, total: number, syncedAt: ISO 8601 string | null }`,
+        errors: [{ status: 400, error: "invalid_match", when: "match is not all or person" }],
       },
       {
         method: "GET",

@@ -176,6 +176,16 @@ the page. `frontend/src/app/(app)/me/check-pc/check-pc-view.tsx` is the shape
 to copy. Separate cards are for things that really are separate, such as a
 status banner above the list.
 
+**A table row that opens something is clickable across its whole width.**
+If a row's name links to a detail page or opens an edit dialog, a click
+anywhere on the row must do the same, not just on the name. Give the `<tr>`
+`LINK_ROW` and `onClick={rowLink(href)}` from `useRowLink`
+(`frontend/src/components/data-table.tsx`); pass a function instead of an href
+for a dialog. Keep the `<Link>` in the first cell for keyboard and
+middle-click, styled `group-hover:underline`. Buttons, checkboxes and other
+links in the row keep their own behaviour without any extra work.
+`frontend/src/app/(app)/scheduler/scheduler-view.tsx` is the shape to copy.
+
 ## Before saying you are done
 
 ```bash

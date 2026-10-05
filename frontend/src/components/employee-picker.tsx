@@ -37,7 +37,10 @@ export function useEmployeeSearch(q: string, enabled: boolean) {
     const ctrl = new AbortController();
     const t = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/evals/employees?${new URLSearchParams({ q })}`, { signal: ctrl.signal });
+        // Name and email only: a manager's name would otherwise bring up their whole team.
+        const res = await fetch(`/api/evals/employees?${new URLSearchParams({ q, match: "person" })}`, {
+          signal: ctrl.signal,
+        });
         const body = res.ok ? ((await res.json()) as { people?: EmployeeCandidate[] }) : null;
         setMatches((body?.people ?? []).map(({ email, fullName }) => ({ email, fullName })));
       } catch {

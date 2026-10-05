@@ -1,18 +1,26 @@
 "use client";
 
-/** The attendees one assessment applies to, each opening to their scoring form. */
+/**
+ * The attendees one assessment applies to, each opening to their scoring
+ * form. Assigned to me narrows them to the viewer's own breakout groups on
+ * the active bootcamp's schedule.
+ */
 
+import { useTransition } from "react";
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
-import { ArrowLeft } from "lucide-react";
-import { HEADER_ROW, Pager, SortHeader, TableSearch } from "@/components/data-table";
+import { ArrowLeft, DoorOpen, UserCheck } from "lucide-react";
+import { HEADER_ROW, LINK_ROW, Pager, SortHeader, TableSearch, useRowLink } from "@/components/data-table";
 import { Badge } from "@/components/ui/badge";
 import { AUDIENCE_LABELS, STAGE_LABELS } from "@/lib/evals/assessment-values";
-import type { AttendeeRow, ScoringAssessment } from "@/lib/evals/scoring";
+import type { AttendeeRow, BreakoutRoom, ScoringAssessment } from "@/lib/evals/scoring";
 import type { AssessmentAttendeeSort } from "@/lib/list-specs";
 import { riseChild, staggerParent } from "@/lib/motion";
 import type { ListQuery, Page } from "@/lib/paging";
 import type { ActiveBootcamp } from "@/lib/scheduler/bootcamps";
+import { formatClock } from "@/lib/scheduler/timeline";
+import { cn } from "@/lib/utils";
 import { formatScore } from "../../../cohort-settings/format";
 import { BootcampNotice } from "../../bootcamp-notice";
 
@@ -30,17 +38,39 @@ export function AttendeesView({
   assessment,
   bootcamp,
   query,
+  mine,
   page,
   counts,
+  rooms,
 }: {
   assessment: ScoringAssessment;
   bootcamp: ActiveBootcamp | null;
   query: ListQuery<AssessmentAttendeeSort>;
+  /** Whether only the viewer's own breakout groups are shown. */
+  mine: boolean;
   page: Page<AttendeeRow>;
-  counts: { attendees: number; scored: number };
+  /** `mine` is how many are in the viewer's breakout groups, whatever is shown. */
+  counts: { attendees: number; scored: number; mine: number };
+  /** The viewer's rooms in this stage's breakouts. */
+  rooms: BreakoutRoom[];
 }) {
   const sortProps = { sort: query.sort, dir: query.dir };
   const base = `/evals/${assessment.stage}/${assessment.id}`;
+  const rowLink = useRowLink();
+  const router = useRouter();
+  const pathname = usePathname();
+  const params = useSearchParams();
+  const [pending, startTransition] = useTransition();
+
+  /** Shows only the viewer's groups, or everyone again; back to page 1 either way. */
+  function toggleMine() {
+    const next = new URLSearchParams(params.toString());
+    if (mine) next.delete("mine");
+    else next.set("mine", "1");
+    next.delete("page");
+    const qs = next.toString();
+    startTransition(() => router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false }));
+  }
 
   return (
     <motion.div variants={staggerParent(0.05)} initial="hidden" animate="show" className="space-y-6">
@@ -61,11 +91,44 @@ export function AttendeesView({
             {AUDIENCE_LABELS[assessment.audience].toLowerCase()} {counts.attendees === 1 ? "attendee" : "attendees"} scored
           </p>
           <BootcampNotice stage={assessment.stage} bootcamp={bootcamp} />
+          {rooms.map((r) => (
+            <p key={`${r.track}:${r.day}:${r.start}`} className="flex items-center gap-2 text-sm text-muted-foreground">
+              <DoorOpen className="size-4 shrink-0" />
+              <span>
+                Your room is <span className="font-medium text-foreground">{r.roomName}</span> for {r.sessionName}, Day{" "}
+                {r.day} at {formatClock(r.start)}
+              </span>
+            </p>
+          ))}
         </div>
       </motion.div>
 
-      <motion.div variants={riseChild}>
-        <TableSearch value={query.q} placeholder="Search by name, email or title" label="Search attendees" />
+      <motion.div variants={riseChild} className="flex flex-wrap items-center gap-3">
+        <TableSearch
+          value={query.q}
+          placeholder="Search by name, email or title"
+          label="Search attendees"
+          className="min-w-56 flex-1"
+        />
+        {bootcamp && (
+          <button
+            type="button"
+            title="Only the attendees in your groups in this stage's breakouts on the schedule"
+            aria-pressed={mine}
+            disabled={pending}
+            onClick={toggleMine}
+            className={cn(
+              "inline-flex h-9 cursor-pointer items-center gap-2 rounded-full border px-3.5 text-sm shadow-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/50 disabled:cursor-wait",
+              mine
+                ? "border-brand-border bg-brand-subtle text-foreground"
+                : "bg-card text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+            )}
+          >
+            <UserCheck className={cn("size-4", mine && "text-brand")} />
+            Assigned to me
+            <span className="font-medium tabular-nums text-foreground">{counts.mine.toLocaleString()}</span>
+          </button>
+        )}
       </motion.div>
 
       <motion.div variants={riseChild} className="overflow-hidden rounded-2xl border bg-card shadow-sm">
@@ -84,14 +147,18 @@ export function AttendeesView({
               {page.rows.length === 0 && (
                 <tr>
                   <td colSpan={COLUMNS.length} className="px-5 py-8 text-center text-muted-foreground">
-                    {query.q ? "No attendees match that search." : "Nobody in the cohort fits this assessment."}
+                    {query.q
+                      ? "No attendees match that search."
+                      : mine
+                        ? "Nobody is assigned to you in this stage's breakouts."
+                        : "Nobody in the cohort fits this assessment."}
                   </td>
                 </tr>
               )}
               {page.rows.map((p) => (
-                <tr key={p.id} className="border-b transition-colors last:border-b-0 hover:bg-muted/30">
+                <tr key={p.id} className={LINK_ROW} onClick={rowLink(`${base}/${encodeURIComponent(p.id)}`)}>
                   <td className="px-5 py-3 font-medium">
-                    <Link href={`${base}/${encodeURIComponent(p.id)}`} className="hover:underline">
+                    <Link href={`${base}/${encodeURIComponent(p.id)}`} className="group-hover:underline">
                       {p.fullName}
                     </Link>
                   </td>

@@ -22,7 +22,15 @@ import {
   User,
   XCircle,
 } from "lucide-react";
-import { HEADER_ROW, Pager, PlainHeader, SortHeader, TableSearch } from "@/components/data-table";
+import {
+  HEADER_ROW,
+  LINK_ROW,
+  Pager,
+  PlainHeader,
+  SortHeader,
+  TableSearch,
+  useRowLink,
+} from "@/components/data-table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { SlackSyncStatus, SlackSyncTrigger } from "@/db/schema";
@@ -99,6 +107,7 @@ export function SlackSyncView({
   const runs = page.rows;
   const sortProps = { sort: query.sort, dir: query.dir };
   const router = useRouter();
+  const rowLink = useRowLink();
   const [busy, setBusy] = useState<"sync" | "mode" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -252,9 +261,13 @@ export function SlackSyncView({
             </thead>
             <tbody>
               {runs.map((run) => (
-                <tr key={run.id} className="border-b align-top transition-colors last:border-b-0 hover:bg-muted/30">
+                <tr
+                  key={run.id}
+                  className={`${LINK_ROW} align-top`}
+                  onClick={rowLink(`/cohort-settings/slack/${run.id}`)}
+                >
                   <td className="whitespace-nowrap px-5 py-2.5 tabular-nums">
-                    <Link href={`/cohort-settings/slack/${run.id}`} className="hover:underline">
+                    <Link href={`/cohort-settings/slack/${run.id}`} className="group-hover:underline">
                       {formatWhen(run.startedAt)}
                     </Link>
                   </td>

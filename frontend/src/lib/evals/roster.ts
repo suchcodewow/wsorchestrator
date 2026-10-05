@@ -81,25 +81,38 @@ const EMPLOYEE_SORT_COLUMNS = {
 } as const;
 
 /**
- * One page of stored employees, for the Employees tab and the Organization
- * Leader picker — everyone the sync stored, not only those under the root.
+ * What an employee search looks in: `all` is every column the Employees tab
+ * shows, manager included; `person` is only the name and email, for a picker
+ * finding one person, where a search for a manager would list their reports.
  */
-export async function listEmployees(query: ListQuery<EmployeeSort>): Promise<Page<EmployeeListing>> {
+export const EMPLOYEE_MATCHES = ["all", "person"] as const;
+export type EmployeeMatch = (typeof EMPLOYEE_MATCHES)[number];
+
+/**
+ * One page of stored employees, for the Employees tab and the people pickers
+ * — everyone the sync stored, not only those under the root.
+ */
+export async function listEmployees(
+  query: ListQuery<EmployeeSort>,
+  match: EmployeeMatch = "all",
+): Promise<Page<EmployeeListing>> {
   const { limit, offset } = pageWindow(query.page);
+  const searched =
+    match === "person"
+      ? [employees.fullName, employees.email]
+      : [
+          employees.fullName,
+          employees.email,
+          employees.title,
+          employees.department,
+          employees.site,
+          employees.reportsToName,
+          employees.reportsToEmail,
+        ];
   const rows = await db
     .select(EMPLOYEE_COLUMNS)
     .from(employees)
-    .where(
-      searchAny(query.q, [
-        employees.fullName,
-        employees.email,
-        employees.title,
-        employees.department,
-        employees.site,
-        employees.reportsToName,
-        employees.reportsToEmail,
-      ]),
-    )
+    .where(searchAny(query.q, searched))
     .orderBy(...orderFor(EMPLOYEE_SORT_COLUMNS[query.sort], query.dir, employees.fullName, employees.id))
     .limit(limit)
     .offset(offset);

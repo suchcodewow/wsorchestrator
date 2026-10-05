@@ -9,7 +9,7 @@
  * everything the browser was sent. See `src/lib/paging.ts`.
  */
 
-import { useTransition, type ReactNode } from "react";
+import { useTransition, type MouseEvent, type ReactNode } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, ChevronsUpDown, Loader2, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -133,6 +133,31 @@ export function PlainHeader({ children, className }: { children?: ReactNode; cla
 
 /** The row class every sortable table's header row uses. */
 export const HEADER_ROW = "border-b bg-muted/30 text-left text-[11px] text-muted-foreground";
+
+/** The row class for a body row that opens something wherever it is clicked; pair it with `useRowLink`. */
+export const LINK_ROW = "group cursor-pointer border-b transition-colors last:border-b-0 hover:bg-muted/30";
+
+/** What a click inside a link row handles itself, rather than opening the row. */
+const ROW_CONTROLS = "a, button, input, select, textarea, label, [role=button], [role=checkbox], [role=menuitem]";
+
+/**
+ * Makes a whole table row act like the link in its first cell: give the `<tr>`
+ * `LINK_ROW` and `onClick={rowLink(href)}`. The `<Link>` stays, so the row is
+ * still reachable by keyboard and middle-click. A click on a control in the row
+ * (a button, a checkbox, another link) does that control's job instead; so does
+ * a drag that selects text. Cmd- or Ctrl-click opens a new tab, as it would on
+ * the link. Pass a function instead of an href to open a dialog.
+ */
+export function useRowLink() {
+  const router = useRouter();
+  return (target: string | (() => void)) => (e: MouseEvent<HTMLTableRowElement>) => {
+    if ((e.target as HTMLElement).closest(ROW_CONTROLS)) return;
+    if (window.getSelection()?.toString()) return;
+    if (typeof target === "function") target();
+    else if (e.metaKey || e.ctrlKey) window.open(target, "_blank", "noopener");
+    else router.push(target);
+  };
+}
 
 /**
  * "101–200", with Previous and Next. Renders nothing when everything fits on

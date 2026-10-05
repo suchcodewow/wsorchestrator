@@ -14,7 +14,15 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { ChevronRight } from "lucide-react";
 import { MentionText } from "@/components/mention-text";
-import { HEADER_ROW, Pager, PlainHeader, SortHeader, TableSearch } from "@/components/data-table";
+import {
+  HEADER_ROW,
+  LINK_ROW,
+  Pager,
+  PlainHeader,
+  SortHeader,
+  TableSearch,
+  useRowLink,
+} from "@/components/data-table";
 import { CHECKLIST_STATUSES, type ChecklistStatus, type MyChecklistSort, type MyMentionSort } from "@/lib/list-specs";
 import type { MyMentionRow } from "@/lib/mention-store";
 import { riseChild, staggerParent } from "@/lib/motion";
@@ -119,6 +127,8 @@ export function InboxView({
     ) : (
       label
     );
+
+  const rowLink = useRowLink();
 
   /** Where a tag opens, if this person can open it. */
   const mentionHref = (m: MyMentionRow): string | null => {
@@ -268,7 +278,11 @@ export function InboxView({
                   const href = mentionHref(m);
                   const context = mentionContext(m);
                   return (
-                    <tr key={m.mentionId} className="border-b last:border-b-0">
+                    <tr
+                      key={m.mentionId}
+                      className={href ? LINK_ROW : "border-b last:border-b-0"}
+                      onClick={href ? rowLink(href) : undefined}
+                    >
                       <td className="px-5 py-2.5 align-top whitespace-nowrap text-muted-foreground">{when(m.createdAt)}</td>
                       <td className="px-5 py-2.5 align-top">{m.taggedByName || m.taggedByEmail || "Someone removed"}</td>
                       <td className="px-5 py-2.5 align-top">
@@ -282,7 +296,7 @@ export function InboxView({
                           <Link
                             href={href}
                             aria-label={`Open ${context}`}
-                            className="flex justify-end text-muted-foreground hover:text-foreground"
+                            className="flex justify-end text-muted-foreground group-hover:text-foreground"
                           >
                             <ChevronRight className="size-4" />
                           </Link>

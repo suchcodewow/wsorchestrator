@@ -10,7 +10,15 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { ArrowDown, ArrowUp, Building2, Loader2, Pencil, Plus, Trash2, X } from "lucide-react";
-import { HEADER_ROW, Pager, PlainHeader, SortHeader, TableSearch } from "@/components/data-table";
+import {
+  HEADER_ROW,
+  LINK_ROW,
+  Pager,
+  PlainHeader,
+  SortHeader,
+  TableSearch,
+  useRowLink,
+} from "@/components/data-table";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -48,6 +56,7 @@ export function FacilitiesView({ query, page }: { query: ListQuery<FacilitySort>
   const router = useRouter();
   const [editing, setEditing] = useState<FacilityListing | "new" | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const rowLink = useRowLink();
   const [error, setError] = useState<string | null>(null);
   const sortProps = { sort: query.sort, dir: query.dir };
 
@@ -117,7 +126,7 @@ export function FacilitiesView({ query, page }: { query: ListQuery<FacilitySort>
                 </tr>
               )}
               {page.rows.map((f) => (
-                <tr key={f.id} className="border-b transition-colors last:border-b-0 hover:bg-muted/30">
+                <tr key={f.id} className={LINK_ROW} onClick={rowLink(() => setEditing(f))}>
                   <td className="px-5 py-3 font-medium">
                     <span className="flex items-center gap-2">
                       <Building2 className="size-3.5 text-muted-foreground" />

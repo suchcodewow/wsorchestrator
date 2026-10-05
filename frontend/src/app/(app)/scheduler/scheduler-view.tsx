@@ -7,7 +7,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { CalendarPlus, ChevronRight, Loader2, Pencil, Trash2 } from "lucide-react";
-import { HEADER_ROW, Pager, PlainHeader, SortHeader } from "@/components/data-table";
+import { HEADER_ROW, LINK_ROW, Pager, PlainHeader, SortHeader, useRowLink } from "@/components/data-table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { BootcampSort } from "@/lib/list-specs";
@@ -33,6 +33,7 @@ export function SchedulerView({
   sources: CopySource[];
 }) {
   const router = useRouter();
+  const rowLink = useRowLink();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<BootcampRow | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -104,14 +105,7 @@ export function SchedulerView({
             </thead>
             <tbody>
               {page.rows.map((row) => (
-                <tr
-                  key={row.id}
-                  className="group cursor-pointer border-b transition-colors last:border-b-0 hover:bg-muted/30"
-                  onClick={(e) => {
-                    if ((e.target as HTMLElement).closest("button, a")) return;
-                    router.push(`/scheduler/${row.id}`);
-                  }}
-                >
+                <tr key={row.id} className={LINK_ROW} onClick={rowLink(`/scheduler/${row.id}`)}>
                   <td className="px-5 py-2.5 font-medium tabular-nums">
                     <Link href={`/scheduler/${row.id}`} className="inline-flex items-center gap-1 hover:underline">
                       {formatDate(row.startDate)}
