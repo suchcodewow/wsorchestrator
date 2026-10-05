@@ -9,16 +9,14 @@
  * everything the browser was sent. See `src/lib/paging.ts`.
  */
 
-import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
+import { useTransition, type ReactNode } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, ChevronsUpDown, Loader2, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useDebouncedSearch } from "@/components/use-debounced-search";
 import { listParam, pageRange, type Page, type SortDir } from "@/lib/paging";
 import { cn } from "@/lib/utils";
-
-/** How long the search box waits after the last keystroke before it queries. */
-const SEARCH_DEBOUNCE_MS = 300;
 
 type ListChange = Partial<Record<"q" | "sort" | "dir" | "page", string | null>>;
 
@@ -66,28 +64,7 @@ export function TableSearch({
   className?: string;
 }) {
   const { set, pending } = useListParams();
-  const [text, setText] = useState(value);
-  const sent = useRef(value);
-
-  // Follow the URL when it changes underneath us (back button, a link).
-  useEffect(() => {
-    if (value !== sent.current) {
-      sent.current = value;
-      setText(value);
-    }
-  }, [value]);
-
-  useEffect(() => {
-    const q = text.trim();
-    if (q === sent.current) return;
-    const t = setTimeout(() => {
-      sent.current = q;
-      set({ q });
-    }, SEARCH_DEBOUNCE_MS);
-    return () => clearTimeout(t);
-    // `set` changes identity every render; the text is what drives this.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [text]);
+  const [text, setText] = useDebouncedSearch(value, (q) => set({ q }));
 
   return (
     <div className={cn("relative w-full max-w-sm", className)}>

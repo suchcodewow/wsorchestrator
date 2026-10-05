@@ -84,9 +84,7 @@ export function BreakoutGroups({
     return () => {
       live = false;
     };
-    // The dialog remounts this for another session.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId]);
+  }, [bootcampId, sessionId]);
 
   const classKey = `${track}|${audience}`;
   useEffect(() => {
@@ -102,8 +100,7 @@ export function BreakoutGroups({
     return () => {
       live = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [classKey]);
+  }, [bootcampId, track, audience, classKey]);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }), useSensor(KeyboardSensor));
 

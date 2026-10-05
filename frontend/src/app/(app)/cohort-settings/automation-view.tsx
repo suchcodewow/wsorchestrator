@@ -6,11 +6,13 @@
  * matching; see `components/data-table.tsx`.
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Check, Loader2, Pencil, Plus, Search, Trash2, X } from "lucide-react";
 import { HEADER_ROW, Pager, PlainHeader, SortHeader, useListParams } from "@/components/data-table";
+import { EmployeeMatches, useEmployeeSearch, type EmployeeCandidate } from "@/components/employee-picker";
+import { useDebouncedSearch } from "@/components/use-debounced-search";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DEFERRAL_DAYS_LIMITS, EVALS_TITLE_LIMITS, EVALS_TITLE_LISTS, type EvalsTitleList } from "@/db/schema";
@@ -36,9 +38,6 @@ export type ListedTitles = {
   page: Page<ListedTitle>;
   count: number;
 };
-
-/** How long the search box waits after the last keystroke before it queries. */
-const SEARCH_DEBOUNCE_MS = 300;
 
 const INTRO: Record<EvalsTitleList, { heading: string; button: string }> = {
   sales: {
@@ -66,7 +65,7 @@ function describeExisting(existing: { title: string; list: EvalsTitleList }[]) {
   return existing.map((e) => `${e.title} (${TITLE_LIST_LABELS[e.list]})`).join(", ");
 }
 
-export type LeaderCandidate = { email: string; fullName: string };
+export type LeaderCandidate = EmployeeCandidate;
 
 /** Who counts as a candidate on the Current tab, by HiBob's dates; see `getCandidateCutoffs`. */
 const CUTOFF_FIELDS: { field: keyof CandidateCutoffs; label: string }[] = [
@@ -98,33 +97,12 @@ export function AutomationView({
 }) {
   const router = useRouter();
   const { set: setList, pending: searching } = useListParams();
-  const [query, setQuery] = useState(searched);
-  const sent = useRef(searched);
+  const [query, setQuery] = useDebouncedSearch(searched, (q) => setList({ q }));
   const [searchOpen, setSearchOpen] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-
-  // Follow the URL when it changes underneath us (back button, a link).
-  useEffect(() => {
-    if (searched !== sent.current) {
-      sent.current = searched;
-      setQuery(searched);
-    }
-  }, [searched]);
-
-  useEffect(() => {
-    const next = query.trim();
-    if (next === sent.current) return;
-    const t = setTimeout(() => {
-      sent.current = next;
-      setList({ q: next });
-    }, SEARCH_DEBOUNCE_MS);
-    return () => clearTimeout(t);
-    // `setList` changes identity every render; the text is what drives this.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query]);
 
   const q = query.trim().toLowerCase();
   const shownSuggestions = useMemo(
@@ -415,30 +393,10 @@ function OrgLeaderField({
   const [query, setQuery] = useState(shown);
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState(orgLeaderEmail);
-  const [matches, setMatches] = useState<LeaderCandidate[]>([]);
 
-  // Ask the employee list, one page of it, rather than shipping everyone here.
   const q = query.trim();
   const searching = q.length > 0 && q !== shown && !selected;
-  useEffect(() => {
-    if (!searching) return;
-    const ctrl = new AbortController();
-    const t = setTimeout(async () => {
-      try {
-        const res = await fetch(`/api/evals/employees?${new URLSearchParams({ q })}`, { signal: ctrl.signal });
-        const body = res.ok ? await res.json() : null;
-        setMatches(
-          ((body?.people ?? []) as LeaderCandidate[]).map((e) => ({ email: e.email, fullName: e.fullName })),
-        );
-      } catch {
-        // Aborted by the next keystroke, or offline: the list just stays as it was.
-      }
-    }, SEARCH_DEBOUNCE_MS);
-    return () => {
-      clearTimeout(t);
-      ctrl.abort();
-    };
-  }, [q, searching]);
+  const { matches } = useEmployeeSearch(q, searching);
 
   const dirty = selected.toLowerCase() !== orgLeaderEmail.toLowerCase();
 
@@ -467,22 +425,7 @@ function OrgLeaderField({
             placeholder="Search employees by name or email"
             aria-label="Organization Leader"
           />
-          {open && searching && matches.length > 0 && (
-            <div className="absolute inset-x-0 top-full z-20 mt-1 max-h-64 overflow-y-auto rounded-md border bg-popover shadow-md">
-              {matches.slice(0, 8).map((e) => (
-                <button
-                  key={e.email}
-                  type="button"
-                  onMouseDown={(ev) => ev.preventDefault()}
-                  onClick={() => choose(e)}
-                  className="flex w-full flex-col items-start gap-0.5 px-3 py-2 text-left text-sm transition-colors hover:bg-muted/50"
-                >
-                  <span>{e.fullName}</span>
-                  <span className="text-xs text-muted-foreground">{e.email}</span>
-                </button>
-              ))}
-            </div>
-          )}
+          {open && searching && <EmployeeMatches matches={matches} onChoose={choose} />}
         </div>
         <Button
           variant="brand"

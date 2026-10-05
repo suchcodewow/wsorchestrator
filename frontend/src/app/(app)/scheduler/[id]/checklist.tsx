@@ -7,7 +7,7 @@
  * them; an item's owner ticks their own.
  */
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useEffectEvent, useState, type ReactNode } from "react";
 import { ListChecks, Loader2, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MentionText } from "@/components/mention-text";
@@ -170,6 +170,10 @@ function ChecklistDialog({
     onCount({ total: next.length, done: next.filter((i) => i.done).length });
   };
 
+  // `onCount` is the parent's and need not be stable; reporting a load should not refetch.
+  const showLoaded = useEffectEvent(show);
+
+  // The dialog is mounted only while open, so this runs once each time it opens.
   useEffect(() => {
     let live = true;
     void (async () => {
@@ -177,13 +181,11 @@ function ChecklistDialog({
       const out = await res?.json().catch(() => null);
       if (!live) return;
       if (!res?.ok) return setError(ERRORS[out?.error ?? ""] ?? "Could not load the checklist.");
-      show(out.items as Item[]);
+      showLoaded(out.items as Item[]);
     })();
     return () => {
       live = false;
     };
-    // The dialog is mounted only while open, so this runs once each time it opens.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [base, track, day]);
 
   async function send(url: string, init: RequestInit): Promise<unknown | null> {

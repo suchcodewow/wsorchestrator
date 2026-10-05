@@ -8,7 +8,7 @@
  * that URL's parameters, so its back link and Back both return here as it was.
  */
 
-import { Fragment, useEffect, useState } from "react";
+import { Fragment, useEffect, useEffectEvent, useState } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
@@ -114,14 +114,14 @@ export function PreviousView({
 
   // Back restores this tab from the router's cache as it was first rendered,
   // before any day was opened, so the days the URL has since named are fetched here.
-  useEffect(() => {
+  const restoreOpenDays = useEffectEvent(() => {
     const loaded = new Set(preopened.map((d) => d.date));
     for (const date of parseOpen(params.get(OPEN_PARAM) ?? undefined)) {
       if (!loaded.has(date)) void load(date);
     }
-    // Only on arrival: after that, the URL follows what is open rather than the other way round.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  });
+  // Only on arrival: after that, the URL follows what is open rather than the other way round.
+  useEffect(() => restoreOpenDays(), []);
 
   /** The next page of one side, added to what that side already shows. */
   async function more(date: string, stage: SessionStage) {
