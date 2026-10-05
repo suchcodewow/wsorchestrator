@@ -167,6 +167,15 @@ make obvious. `frontend/src/app/(app)/cohort-settings/employees/employees-table.
 a page like the old `frontend/src/app/(app)/settings/layout.tsx` ("Configuration
 for running events, visible only to administrators.") is the shape to avoid.
 
+**Group related items in one card with separators, not a stack of cards.**
+A run of checks, settings or steps that belong together goes in a single
+bordered card whose rows are split by `divide-y`, each row padded on its own
+(`px-5 py-4`). Don't give each item its own `rounded-2xl border` card with
+`space-y-*` between them: the gaps and repeated borders spread one task across
+the page. `frontend/src/app/(app)/me/check-pc/check-pc-view.tsx` is the shape
+to copy. Separate cards are for things that really are separate, such as a
+status banner above the list.
+
 ## Before saying you are done
 
 ```bash

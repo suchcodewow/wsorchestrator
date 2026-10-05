@@ -550,6 +550,8 @@ const ROUTES: RouteCase[] = [
   { method: "GET", path: "/api/me/harness-tokens", allowed: true },
   { method: "GET", path: "/api/me/checklist", allowed: true },
   { method: "GET", path: "/api/me/mentions", allowed: true },
+  { method: "POST", path: "/api/transcription/token", allowed: true, unconfigured: true },
+  { method: "POST", path: "/api/transcription/transcribe", allowed: true, body: form },
   { method: "GET", path: "/api/tokens", allowed: true, sessionOnly: true },
   { method: "POST", path: "/api/tokens", allowed: true, body: () => ({}), sessionOnly: true },
   { method: "DELETE", path: `/api/tokens/${MISSING}`, allowed: true, sessionOnly: true },

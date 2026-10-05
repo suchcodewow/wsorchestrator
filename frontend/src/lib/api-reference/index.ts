@@ -40,6 +40,7 @@ export const GROUPS: EndpointGroup[] = [
   "scheduler",
   "cohorts",
   "evals-scoring",
+  "transcription",
   "bootcamp-history",
   "evals",
   "users",
