@@ -4,7 +4,7 @@
  * What has to be done before a day of a track starts, each track its own: a
  * button at the top of the day showing how much of it is ticked, opening the
  * list. Prep Day's, for before the bootcamp starts, sits in the board's corner
- * and counts down what is left. A Training administrator adds, edits and removes items and ticks any
+ * as the icon and its count alone. A Training administrator adds, edits and removes items and ticks any
  * of them; an item's owner ticks their own.
  */
 
@@ -109,7 +109,7 @@ export function ChecklistButton({
   day: number;
   /** "Bootcamp, Day 2", for the dialog's title and the button's name. */
   label: string;
-  /** The icon alone, and how many are still to do out of how many, rather than done. */
+  /** The icon alone, without the word "Checklist". */
   compact?: boolean;
   count: Count;
   canManage: boolean;
@@ -119,7 +119,6 @@ export function ChecklistButton({
 }) {
   const [open, setOpen] = useState(false);
   const allDone = count.total > 0 && count.done === count.total;
-  const toDo = count.total - count.done;
 
   return (
     <>
@@ -131,11 +130,7 @@ export function ChecklistButton({
           compact && "gap-1 px-1 has-[>svg]:px-1",
           allDone && "border-emerald-500/50 bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/15 dark:text-emerald-400",
         )}
-        aria-label={
-          compact
-            ? `${label} checklist: ${toDo} of ${count.total} to do`
-            : `Checklist for ${label}: ${count.done} of ${count.total} done`
-        }
+        aria-label={`Checklist for ${label}: ${count.done} of ${count.total} done`}
         title={compact ? `${label} checklist` : undefined}
         onClick={() => setOpen(true)}
       >
@@ -149,7 +144,7 @@ export function ChecklistButton({
               allDone ? "bg-emerald-500/15" : "bg-muted text-muted-foreground",
             )}
           >
-            {compact ? toDo : count.done}/{count.total}
+            {count.done}/{count.total}
           </span>
         )}
       </Button>
