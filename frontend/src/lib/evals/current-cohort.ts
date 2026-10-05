@@ -1,10 +1,10 @@
 /**
- * The Cohorts page's Current tab: the org members still to train. Someone
- * with no BTC date is a bootcamp candidate; someone with a BTC date and no
- * INT date is an intermediate candidate. Anyone on the ignored or exempt
- * track is left out; a title on no list is listed as undecided until someone
- * sorts it, and someone who started too close to the next bootcamp is listed
- * as deferred. Read from `employees.track`, so it is as fresh as the last
+ * The Cohorts page's Current and Deferred tabs: the org members still to
+ * train. Someone with no BTC date is a bootcamp candidate; someone with a BTC
+ * date and no INT date is an intermediate candidate. Anyone on the ignored or
+ * exempt track is left out; a title on no list is listed as undecided until
+ * someone sorts it, and someone who started too close to the next bootcamp is
+ * deferred, which puts them on the Deferred tab rather than Current. Read from `employees.track`, so it is as fresh as the last
  * sync or the last change that retracked anyone, whichever came later. Only
  * those recent enough by the candidate cutoffs count; see
  * `getCandidateCutoffs`.
@@ -44,7 +44,15 @@ export function isCandidateTrack(value: unknown): value is CandidateTrack {
   return CANDIDATE_TRACKS.includes(value as CandidateTrack);
 }
 
-/** At most one stage and one track; null for either shows them all. */
+/** The tracks on the Current tab; the deferred have a tab of their own. */
+export const CURRENT_TRACKS = ["sales", "engineer", "undecided"] as const;
+export type CurrentTrack = (typeof CURRENT_TRACKS)[number];
+
+export function isCurrentTrack(value: unknown): value is CurrentTrack {
+  return CURRENT_TRACKS.includes(value as CurrentTrack);
+}
+
+/** At most one stage and one track; null for the stage shows both, and for the track every one but deferred. */
 export type CurrentCohortFilter = { stage: CandidateStage | null; track: CandidateTrack | null };
 
 export type CurrentCohortMember = Pick<
@@ -170,7 +178,7 @@ function scoredSubmissions({ bootcampId, assessments }: CohortScoring) {
 
 /**
  * One page of candidates, in one stage and on one track when the filter
- * names them. The search matches the name, email, title or track. Scores are
+ * names them; without a track, everyone not deferred. The search matches the name, email, title or track. Scores are
  * eVals' to show: `evals` is set only for a caller in eVals, and without it
  * `btcScore` is null and `scores` empty; its `scoring` fills `scores` and
  * `averageScore`.
@@ -217,7 +225,7 @@ export async function listCurrentCohort(
       and(
         isCandidate(cutoffs),
         filter.stage ? IN_STAGE[filter.stage] : undefined,
-        filter.track ? ON_TRACK[filter.track] : undefined,
+        filter.track ? ON_TRACK[filter.track] : or(isNull(e.track), inArray(e.track, ["sales", "engineer"])),
         searchAny(query.q, [e.fullName, e.email, e.title, candidateTrack]),
       ),
     )

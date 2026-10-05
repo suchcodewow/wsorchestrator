@@ -1,20 +1,12 @@
 /**
- * The Current tab's candidates, a page at a time, narrowed to a stage and a
- * track, with each one's count and the active bootcamp. The deferred are on
- * GET /api/cohorts/deferred instead. A caller in eVals
- * also gets the scores, and the assessments they are for when the filter
- * names a stage and Sales or Engineer.
+ * The Deferred tab's candidates, a page at a time, narrowed to a stage, with
+ * each stage's count, the deferral window and the active bootcamp. A caller
+ * in eVals also gets each one's BTC score.
  */
 
 import { NextResponse } from "next/server";
 import { requireCaller } from "@/lib/api-auth";
-import {
-  cohortScoring,
-  currentCohortSummary,
-  isCandidateStage,
-  isCurrentTrack,
-  listCurrentCohort,
-} from "@/lib/evals/current-cohort";
+import { currentCohortSummary, isCandidateStage, listCurrentCohort } from "@/lib/evals/current-cohort";
 import { CURRENT_COHORT_LIST } from "@/lib/list-specs";
 import { parseListQuery } from "@/lib/paging";
 import { canUseEvals, canUseTraining } from "@/lib/roles";
@@ -27,24 +19,21 @@ export async function GET(req: Request) {
   const params = new URL(req.url).searchParams;
   const stage = params.get("stage");
   if (stage !== null && !isCandidateStage(stage)) return NextResponse.json({ error: "invalid_stage" }, { status: 400 });
-  const track = params.get("track");
-  if (track !== null && !isCurrentTrack(track)) return NextResponse.json({ error: "invalid_track" }, { status: 400 });
 
   const query = parseListQuery(params, CURRENT_COHORT_LIST);
-  const scoring = canUseEvals(user.access) ? { scoring: await cohortScoring({ stage, track }) } : undefined;
+  // No assessment is set for the deferred track, so there are never score columns.
+  const scoring = canUseEvals(user.access) ? { scoring: null } : undefined;
   const [{ rows, page, hasMore }, { counts, syncedAt, cutoffs, deferral }, bootcamp] = await Promise.all([
-    listCurrentCohort({ stage, track }, query, scoring),
+    listCurrentCohort({ stage, track: "deferred" }, query, scoring),
     currentCohortSummary(),
     activeBootcamp(),
   ]);
   return NextResponse.json({
     stage,
-    track,
-    assessments: scoring?.scoring?.assessments ?? null,
     members: rows,
     page,
     hasMore,
-    counts,
+    counts: { bootcamp: counts.bootcamp.deferred, intermediate: counts.intermediate.deferred },
     syncedAt,
     cutoffs,
     deferral,

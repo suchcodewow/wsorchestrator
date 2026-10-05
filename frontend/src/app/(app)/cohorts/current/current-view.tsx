@@ -4,9 +4,10 @@
  * The candidates in one table, under two rows of counters: one by stage
  * (bootcamp or intermediate) and one by track. A counter narrows the table to
  * its stage or track, at most one from each row, and counts within whatever
- * the other row has picked. An administrator sets anyone's track from the
- * Track column, and it holds through every sync until they hand it back to
- * the rules. A row opens to show the rest of what the sync knows about them.
+ * the other row has picked. The Deferred tab shows the same table for the
+ * deferred, under the stage row alone, and the Current tab everyone else.
+ * An administrator sets anyone's track from the Track column, and it holds
+ * through every sync until they hand it back to the rules. A row opens to show the rest of what the sync knows about them.
  * With one stage and Sales or Engineer picked, an eVals viewer also sees a
  * column per assessment for that stage and track, after their average.
  */
@@ -31,6 +32,7 @@ import type {
   CurrentCohortCounts,
   CurrentCohortFilter,
   CurrentCohortMember,
+  CurrentTrack,
 } from "@/lib/evals/current-cohort";
 import type { SetTrackResult, TrackChoice } from "@/lib/evals/tracks";
 import type { CurrentCohortSort } from "@/lib/list-specs";
@@ -43,7 +45,6 @@ import {
   ChevronDown,
   ChevronRight,
   CircleHelp,
-  Clock,
   Code,
   GraduationCap,
   Handshake,
@@ -63,11 +64,10 @@ const STAGE_COUNTERS: { stage: CandidateStage; label: string; Icon: LucideIcon }
   { stage: "intermediate", label: "Intermediate", Icon: GraduationCap },
 ];
 
-const TRACK_COUNTERS: { track: CandidateTrack; label: string; Icon: LucideIcon }[] = [
+const TRACK_COUNTERS: { track: CurrentTrack; label: string; Icon: LucideIcon }[] = [
   { track: "sales", label: "Sales", Icon: Handshake },
   { track: "engineer", label: "Engineer", Icon: Code },
   { track: "undecided", label: "Undecided", Icon: CircleHelp },
-  { track: "deferred", label: "Deferred", Icon: Clock },
 ];
 
 const COLUMNS: { column: CurrentCohortSort; label: string }[] = [
@@ -121,11 +121,8 @@ function useFilterParams() {
   return { toggle, pending };
 }
 
-function sum(values: Record<string, number>): number {
-  return Object.values(values).reduce((a, b) => a + b, 0);
-}
-
 export function CurrentCohortView({
+  tab,
   query,
   filter,
   page,
@@ -136,6 +133,8 @@ export function CurrentCohortView({
   canSetTrack,
   canSeeScores,
 }: {
+  /** Current shows everyone but the deferred, by stage and track; Deferred the deferred alone, by stage. */
+  tab: "current" | "deferred";
   query: ListQuery<CurrentCohortSort>;
   filter: CurrentCohortFilter;
   page: Page<CurrentCohortMember>;
@@ -170,17 +169,18 @@ export function CurrentCohortView({
   const showBtcDate = filter.stage !== "bootcamp";
   const columns = showBtcDate ? COLUMNS : COLUMNS.filter((c) => c.column !== "btcDate");
   const columnCount = columns.length + (scoreColumns ? scoreColumns.length + 1 : 0);
-  // Each row counts within the other row's pick.
-  const stageCount = (stage: CandidateStage) => (filter.track ? counts[stage][filter.track] : sum(counts[stage]));
+  // Each row counts within the other row's pick; the Deferred tab has only the deferred to count.
+  const stageCount = (stage: CandidateStage) =>
+    tab === "deferred"
+      ? counts[stage].deferred
+      : filter.track
+        ? counts[stage][filter.track]
+        : TRACK_COUNTERS.reduce((n, c) => n + counts[stage][c.track], 0);
   const trackCount = (track: CandidateTrack) =>
     filter.stage ? counts[filter.stage][track] : counts.bootcamp[track] + counts.intermediate[track];
-
-  const deferralNote =
-    deferral.days <= 0
-      ? "Deferral is off on Cohort Settings → Automation"
-      : deferral.bootcampStart
-        ? `Started fewer than ${deferral.days} days before the bootcamp on ${formatDate(deferral.bootcampStart)}`
-        : "No bootcamp is coming, so no one is deferred";
+  // A track that isn't this tab's takes them off it.
+  const leavesTab = (track: CandidateTrack | "ignored" | "exempt") =>
+    tab === "deferred" ? track !== "deferred" : track === "deferred" || track === "ignored" || track === "exempt";
 
   async function setTrack(member: CurrentCohortMember, choice: TrackChoice, undoing = false) {
     setBusy(member.email);
@@ -201,7 +201,7 @@ export function CurrentCohortView({
       } else {
         const result = body as SetTrackResult;
         const now = (result.track ?? "undecided") as Exclude<TrackChoice, "automatic">;
-        const leaves = now === "ignored" || now === "exempt";
+        const leaves = leavesTab(now);
         const moved = result.title;
         const others = result.retracked - (now === member.track ? 0 : 1);
         setChange({
@@ -230,7 +230,19 @@ export function CurrentCohortView({
     <motion.div variants={staggerParent(0.05)} initial="hidden" animate="show" className="space-y-4">
       <motion.div variants={riseChild}>
         <p className="text-sm leading-relaxed text-muted-foreground">
-          {activeBootcamp ? (
+          {tab === "deferred" ? (
+            deferral.days <= 0 ? (
+              "Deferral is off on Cohort Settings → Automation, so only those an administrator deferred are here."
+            ) : deferral.bootcampStart ? (
+              <>
+                Deferred from the bootcamp on{" "}
+                <span className="font-medium text-foreground">{formatDate(deferral.bootcampStart)}</span>: anyone who started
+                fewer than {deferral.days} days before it or since, and anyone an administrator deferred.
+              </>
+            ) : (
+              "No bootcamp is coming, so only those an administrator deferred are here."
+            )
+          ) : activeBootcamp ? (
             <>
               Active bootcamp: <span className="font-medium text-foreground">{formatDate(activeBootcamp.startDate)}</span>,{" "}
               {activeBootcamp.btcDays} days
@@ -261,39 +273,42 @@ export function CurrentCohortView({
         ))}
       </motion.div>
 
-      <motion.div variants={riseChild} role="group" aria-label="Track" className={COUNTER_GRID}>
-        {TRACK_COUNTERS.map(({ track, label, Icon }) => (
-          <Counter
-            key={track}
-            label={label}
-            Icon={Icon}
-            count={trackCount(track)}
-            on={filter.track === track}
-            disabled={pending}
-            title={track === "deferred" ? deferralNote : undefined}
-            onClick={() => toggle("track", track)}
-          />
-        ))}
-      </motion.div>
+      {tab === "current" && (
+        <motion.div variants={riseChild} role="group" aria-label="Track" className={COUNTER_GRID}>
+          {TRACK_COUNTERS.map(({ track, label, Icon }) => (
+            <Counter
+              key={track}
+              label={label}
+              Icon={Icon}
+              count={trackCount(track)}
+              on={filter.track === track}
+              disabled={pending}
+              onClick={() => toggle("track", track)}
+            />
+          ))}
+        </motion.div>
+      )}
 
       <motion.div variants={riseChild} className="flex flex-wrap items-center gap-3 pt-2">
         <TableSearch
           value={query.q}
-          placeholder="Search by name, email, title or track"
-          label="Search the candidates"
+          placeholder={tab === "deferred" ? "Search by name, email or title" : "Search by name, email, title or track"}
+          label={tab === "deferred" ? "Search the deferred" : "Search the candidates"}
           className="min-w-56 flex-1"
         />
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs text-muted-foreground">Waits for eVals judging</span>
-          <Button variant="secondary" disabled>
-            <Upload />
-            Load Final Bootcamp Scores
-          </Button>
-          <Button variant="secondary" disabled>
-            <Upload />
-            Load Final Intermediate Scores
-          </Button>
-        </div>
+        {tab === "current" && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs text-muted-foreground">Waits for eVals judging</span>
+            <Button variant="secondary" disabled>
+              <Upload />
+              Load Final Bootcamp Scores
+            </Button>
+            <Button variant="secondary" disabled>
+              <Upload />
+              Load Final Intermediate Scores
+            </Button>
+          </div>
+        )}
       </motion.div>
 
       {(change || error) && (
@@ -420,11 +435,13 @@ export function CurrentCohortView({
               {page.rows.length === 0 && (
                 <tr>
                   <td colSpan={columnCount} className="px-5 py-8 text-center text-muted-foreground">
-                    {query.q || filter.stage || filter.track
+                    {query.q || filter.stage || (tab === "current" && filter.track)
                       ? "No one matches."
                       : page.page > 1
                         ? "No one on this page."
-                        : "No candidates."}
+                        : tab === "deferred"
+                          ? "No one is deferred."
+                          : "No candidates."}
                   </td>
                 </tr>
               )}
@@ -439,8 +456,8 @@ export function CurrentCohortView({
   );
 }
 
-/** Both rows share four columns, so Bootcamp and Intermediate line up with the four tracks below. */
-const COUNTER_GRID = "grid grid-cols-2 gap-2 sm:grid-cols-4 lg:max-w-3xl";
+/** Both rows share three columns, so Bootcamp and Intermediate line up with the three tracks below. */
+const COUNTER_GRID = "grid grid-cols-2 gap-2 sm:grid-cols-3 lg:max-w-2xl";
 
 function Counter({
   label,
@@ -448,7 +465,6 @@ function Counter({
   count,
   on,
   disabled,
-  title,
   onClick,
 }: {
   label: string;
@@ -456,14 +472,12 @@ function Counter({
   count: number;
   on: boolean;
   disabled: boolean;
-  title?: string;
   onClick: () => void;
 }) {
   return (
     <button
       type="button"
       aria-pressed={on}
-      title={title}
       disabled={disabled}
       onClick={onClick}
       className={cn(

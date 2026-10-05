@@ -1,47 +1,37 @@
-/** The Current tab: the bootcamp and intermediate candidates not deferred, in one table, narrowed by stage and track, a page at a time. */
+/** The Deferred tab: the bootcamp and intermediate candidates deferred to a later bootcamp, narrowed by stage, a page at a time. */
 
 import { auth } from "@/auth";
-import {
-  cohortScoring,
-  currentCohortSummary,
-  isCandidateStage,
-  isCurrentTrack,
-  listCurrentCohort,
-} from "@/lib/evals/current-cohort";
+import { currentCohortSummary, isCandidateStage, listCurrentCohort } from "@/lib/evals/current-cohort";
 import { CURRENT_COHORT_LIST } from "@/lib/list-specs";
 import { parseListQuery } from "@/lib/paging";
 import { canManageTrainingSettings, canUseEvals } from "@/lib/roles";
 import { activeBootcamp } from "@/lib/scheduler/bootcamps";
-import { CurrentCohortView } from "./current-view";
+import { CurrentCohortView } from "../current/current-view";
 
-export default async function CurrentCohortPage({
+export default async function DeferredCohortPage({
   searchParams,
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const params = await searchParams;
   const query = parseListQuery(params, CURRENT_COHORT_LIST);
-  // A hand-typed filter that isn't one shows everyone, as a bad sort does.
-  const filter = {
-    stage: isCandidateStage(params.stage) ? params.stage : null,
-    track: isCurrentTrack(params.track) ? params.track : null,
-  };
+  // A hand-typed stage that isn't one shows both, as a bad sort does.
+  const filter = { stage: isCandidateStage(params.stage) ? params.stage : null, track: "deferred" as const };
   const session = await auth();
   const canSeeScores = session?.user ? canUseEvals(session.user.access) : false;
-  const scoring = canSeeScores ? { scoring: await cohortScoring(filter) } : undefined;
   const [page, summary, active] = await Promise.all([
-    listCurrentCohort(filter, query, scoring),
+    listCurrentCohort(filter, query, canSeeScores ? { scoring: null } : undefined),
     currentCohortSummary(),
     activeBootcamp(),
   ]);
   return (
     <CurrentCohortView
-      tab="current"
+      tab="deferred"
       query={query}
       filter={filter}
       page={page}
       counts={summary.counts}
-      assessments={scoring?.scoring?.assessments ?? null}
+      assessments={null}
       deferral={summary.deferral}
       activeBootcamp={active}
       canSetTrack={session?.user ? canManageTrainingSettings(session.user.access) : false}
