@@ -16,8 +16,14 @@ import "server-only";
 import { and, desc, eq, lt, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
+  bootcampJudges,
+  cohortChannelContacts,
   employees,
+  evalsSlackContacts,
   hibobSyncRuns,
+  scheduleSessionGroups,
+  scheduleSessions,
+  scheduleSessionStaff,
   users,
   type HibobSyncStatus,
   type HibobSyncTrigger,
@@ -161,6 +167,34 @@ export type SyncResult =
   | { ok: true; runId: string; count: number; skipped: number }
   | { ok: false; runId: string | null; error: HibobError; detail?: string };
 
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+/**
+ * Brings the names kept with judges, contacts and breakout groups up to date
+ * with the employee list just stored, for everyone still on it, so a name
+ * HiBob or `nameFromEmail` changes reads the same everywhere. A session's
+ * staff follow their judge's name; an administrator on it keeps the name from
+ * their account, which is the one the instructor list offers. Mentions keep
+ * theirs: the text of what tagged them spells it.
+ */
+async function refreshNameCopies(tx: Tx): Promise<void> {
+  for (const table of [bootcampJudges, scheduleSessionGroups, evalsSlackContacts, cohortChannelContacts]) {
+    await tx.execute(sql`
+      update ${table} t set full_name = e.full_name
+      from ${employees} e
+      where e.email = t.email and t.full_name is distinct from e.full_name`);
+  }
+  await tx.execute(sql`
+    update ${scheduleSessionStaff} st set full_name = j.full_name
+    from ${scheduleSessions} s, ${bootcampJudges} j
+    where s.id = st.session_id and j.bootcamp_id = s.bootcamp_id and j.email = st.email
+      and j.full_name <> '' and st.full_name is distinct from j.full_name
+      and not exists (
+        select 1 from ${users} u
+        where lower(u.email) = st.email and (u.training_role = 'administrator' or u.is_platform_admin)
+      )`);
+}
+
 /**
  * Replaces every stored employee with HiBob's current list, logging the run.
  * `actorId` is whoever pressed the button, or null for the schedule.
@@ -238,6 +272,7 @@ export async function syncHibobEmployees(
               })),
           );
       }
+      await refreshNameCopies(tx);
       await tx
         .update(hibobSyncRuns)
         .set({

@@ -819,6 +819,7 @@ export const employees = pgTable(
     id: text("id").primaryKey(),
     /** Lowercased. */
     email: text("email").notNull(),
+    /** First and last name as the email has them (`nameFromEmail`), not HiBob's full name. */
     fullName: text("full_name").notNull(),
     /** The readable title, not HiBob's numeric code for it. */
     title: text("title").notNull().default(""),
@@ -1010,7 +1011,7 @@ export const evalsSlackContacts = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     /** Lowercased. */
     email: text("email").notNull(),
-    /** As the employee list had it when they were added; empty for someone not in it. */
+    /** As the employee list had it when they were added or at the last HiBob sync since; empty for someone not in it. */
     fullName: text("full_name").notNull().default(""),
     createdBy: text("created_by").references(() => users.id, {
       onDelete: "set null",
@@ -1137,7 +1138,7 @@ export const cohortChannelContacts = pgTable(
     kind: text("kind").$type<ChannelContactKind>().notNull(),
     /** Lowercased. */
     email: text("email").notNull(),
-    /** As the employee list had it when they were added; empty for someone not in it. */
+    /** As the employee list had it when they were added or at the last HiBob sync since; empty for someone not in it. */
     fullName: text("full_name").notNull().default(""),
     createdBy: text("created_by").references(() => users.id, {
       onDelete: "set null",
@@ -1286,7 +1287,7 @@ export const bootcampJudges = pgTable(
       .references(() => bootcamps.id, { onDelete: "cascade" }),
     /** Lowercased. */
     email: text("email").notNull(),
-    /** As the employee list had it when they were added. */
+    /** As the employee list had it when they were added or at the last HiBob sync since. */
     fullName: text("full_name").notNull().default(""),
     addedBy: text("added_by").references(() => users.id, { onDelete: "set null" }),
     addedAt: timestamp("added_at", { withTimezone: true })
@@ -1533,7 +1534,7 @@ export const scheduleSessionGroups = pgTable(
       .references(() => scheduleSessions.id, { onDelete: "cascade" }),
     /** Lowercased. */
     email: text("email").notNull(),
-    /** As the employee list had it when they were assigned. */
+    /** As the employee list had it when they were assigned or at the last HiBob sync since. */
     fullName: text("full_name").notNull().default(""),
     /** Lowercased; one of the session's staff. */
     instructorEmail: text("instructor_email").notNull(),

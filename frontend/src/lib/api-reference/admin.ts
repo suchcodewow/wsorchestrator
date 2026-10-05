@@ -367,7 +367,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "trainingAdmin",
         token: true,
         notes:
-          "Bootcamp Contacts (kind sales) are added to the active bootcamp's sales- Slack channels and Engineer Contacts (kind se) to its se- ones, beside the cohort. fullName is as the employee list had them when they were added, and empty for someone not in it. total counts every contact of that kind, whatever the search.",
+          "Bootcamp Contacts (kind sales) are added to the active bootcamp's sales- Slack channels and Engineer Contacts (kind se) to its se- ones, beside the cohort. fullName is their name in the employee list, as of when they were added or the last HiBob sync since, and empty for someone not in it. total counts every contact of that kind, whatever the search.",
         query: [
           { name: "kind", type: `"sales" | "se"`, required: true, note: "which list" },
           ...listQuery(CHANNEL_CONTACT_LIST.sorts, "the name, the email or who added them"),
@@ -515,7 +515,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         summary: "Reads one bootcamp and its guest judges.",
         access: "trainingViewer",
         token: true,
-        notes: `judges is every guest judge by name, up to ${BOOTCAMP_LIMITS.judges}; fullName is as the employee list had them when they were added.`,
+        notes: `judges is every guest judge by name, up to ${BOOTCAMP_LIMITS.judges}; fullName is their name in the employee list, as of when they were added or the last HiBob sync since.`,
         params: [{ name: "id", type: "string", required: true, note: "the bootcamp's id" }],
         returns: `{ id, startDate: "YYYY-MM-DD", btcDays: number, intDays: number | null, status: "scheduled" | "active" | "complete", facilityId: string | null, facilityName: string | null, createdBy: string | null, createdAt: ISO 8601 string, judges: { email, fullName }[] }`,
         errors: [{ status: 404, error: "not_found", when: "no such bootcamp" }],
@@ -571,7 +571,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "trainingViewer",
         token: true,
         notes:
-          "While the bootcamp is active, each judge can see and submit assessments on the eVals page, whatever other access they have. fullName is as the employee list had them when they were added. total counts every judge, whatever the search.",
+          "While the bootcamp is active, each judge can see and submit assessments on the eVals page, whatever other access they have. fullName is their name in the employee list, as of when they were added or the last HiBob sync since. total counts every judge, whatever the search.",
         params: [{ name: "id", type: "string", required: true, note: "the bootcamp's id" }],
         query: listQuery(JUDGE_LIST.sorts, "the name, the email or who added them"),
         returns: `{ judges: { id, email, fullName, addedAt, addedBy: string | null }[], ${PAGE_FIELDS}, total: number }`,
@@ -1295,7 +1295,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "employeeSearch",
         token: true,
         notes:
-          "Training administrators read it to pick a bootcamp's guest judges. total counts every stored employee, whatever the search.",
+          "Training administrators read it to pick a bootcamp's guest judges. fullName and reportsToName are first and last name as the person's email spells them (first.last@), using HiBob's spelling of each word it has; HiBob's full name is kept only for an email that is not first.last. total counts every stored employee, whatever the search.",
         query: listQuery(EMPLOYEE_LIST.sorts, "the name, email, title, department, site, or the manager's name or email"),
         returns: `{ people: { id, email, fullName, title, department, site, reportsToEmail, reportsToName, startDate, activeEffectiveDate }[], ${PAGE_FIELDS}, total: number, syncedAt: ISO 8601 string | null }`,
       },
@@ -1470,7 +1470,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "evalsAdmin",
         token: true,
         notes:
-          "These people are added to the Slack messages sent to each attendee's team at the end of a bootcamp, after the attendee's management chain. fullName is as the employee list had them when they were added, and empty for someone not in it. total counts every contact, whatever the search.",
+          "These people are added to the Slack messages sent to each attendee's team at the end of a bootcamp, after the attendee's management chain. fullName is their name in the employee list, as of when they were added or the last HiBob sync since, and empty for someone not in it. total counts every contact, whatever the search.",
         query: listQuery(SLACK_CONTACT_LIST.sorts, "the name, the email or who added them"),
         returns: `{ contacts: { id, email, fullName, createdAt, addedBy: string | null }[], ${PAGE_FIELDS}, total: number }`,
       },
