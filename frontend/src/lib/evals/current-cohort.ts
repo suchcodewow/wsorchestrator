@@ -41,14 +41,26 @@ export type CurrentCohortFilter = { stage: CandidateStage | null; track: Candida
 
 export type CurrentCohortMember = Pick<
   Employee,
-  "email" | "fullName" | "title" | "department" | "reportsToEmail" | "reportsToName"
+  | "email"
+  | "fullName"
+  | "title"
+  | "department"
+  | "site"
+  | "reportsToEmail"
+  | "reportsToName"
+  | "startDate"
+  | "activeEffectiveDate"
 > & {
   track: CandidateTrack;
   /** Whether an administrator set that track by hand. */
   overridden: boolean;
   stage: CandidateStage;
+  /** Their bootcamp history record; null for someone with none. */
+  historyId: string | null;
   /** When they passed bootcamp; null for a bootcamp candidate. */
   btcDate: string | null;
+  /** Their overall BTC result; null until scored. */
+  btcScore: number | null;
 };
 
 /** How many candidates are in each stage on each track, whatever the search or filter. */
@@ -123,12 +135,17 @@ export async function listCurrentCohort(
       fullName: e.fullName,
       title: e.title,
       department: e.department,
+      site: e.site,
       reportsToEmail: e.reportsToEmail,
       reportsToName: e.reportsToName,
+      startDate: e.startDate,
+      activeEffectiveDate: e.activeEffectiveDate,
       track: candidateTrack,
       overridden: sql<boolean>`(${o.email} is not null)`,
       stage: candidateStage,
+      historyId: h.id,
       btcDate: h.btcDate,
+      btcScore: h.btcScore,
     })
     .from(e)
     .leftJoin(h, sql`${h.email} = ${e.email}`)

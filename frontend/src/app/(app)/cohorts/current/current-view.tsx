@@ -6,7 +6,7 @@
  * its stage or track, at most one from each row, and counts within whatever
  * the other row has picked. An administrator sets anyone's track from the
  * Track column, and it holds through every sync until they hand it back to
- * the rules.
+ * the rules. A row opens to show the rest of what the sync knows about them.
  */
 
 import { HEADER_ROW, Pager, SortHeader, TableSearch } from "@/components/data-table";
@@ -39,6 +39,7 @@ import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 import {
   ChevronDown,
+  ChevronRight,
   CircleHelp,
   Clock,
   Code,
@@ -52,7 +53,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useState, useTransition } from "react";
+import { Fragment, useState, useTransition } from "react";
 import { formatDate, formatWhen } from "../../cohort-settings/format";
 
 const STAGE_COUNTERS: { stage: CandidateStage; label: string; Icon: LucideIcon }[] = [
@@ -69,8 +70,6 @@ const TRACK_COUNTERS: { track: CandidateTrack; label: string; Icon: LucideIcon }
 
 const COLUMNS: { column: CurrentCohortSort; label: string }[] = [
   { column: "fullName", label: "Name" },
-  { column: "email", label: "Email" },
-  { column: "title", label: "Title" },
   { column: "track", label: "Track" },
   { column: "btcDate", label: "BTC date" },
 ];
@@ -134,6 +133,7 @@ export function CurrentCohortView({
   deferral,
   activeBootcamp,
   canSetTrack,
+  canOpenHistory,
 }: {
   query: ListQuery<CurrentCohortSort>;
   filter: CurrentCohortFilter;
@@ -146,12 +146,23 @@ export function CurrentCohortView({
   activeBootcamp: ActiveBootcamp | null;
   /** Whether the viewer may set anyone's track. */
   canSetTrack: boolean;
+  /** Whether the viewer may open a bootcamp history record, which is eVals', not training's. */
+  canOpenHistory: boolean;
 }) {
   const router = useRouter();
   const { toggle, pending } = useFilterParams();
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [change, setChange] = useState<Change | null>(null);
+  const [open, setOpen] = useState<ReadonlySet<string>>(new Set());
+
+  function toggleOpen(email: string) {
+    setOpen((was) => {
+      const next = new Set(was);
+      if (!next.delete(email)) next.add(email);
+      return next;
+    });
+  }
 
   const total = sum(counts.bootcamp) + sum(counts.intermediate);
   // Each row counts within the other row's pick.
@@ -326,7 +337,7 @@ export function CurrentCohortView({
 
       <motion.div variants={riseChild} className="overflow-hidden rounded-2xl border bg-card shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-180 text-sm">
+          <table className="w-full min-w-120 text-sm">
             <thead>
               <tr className={HEADER_ROW}>
                 {COLUMNS.map((c) => (
@@ -337,26 +348,59 @@ export function CurrentCohortView({
               </tr>
             </thead>
             <tbody>
-              {page.rows.map((m) => (
-                <tr key={m.email} className="border-b transition-colors last:border-b-0 hover:bg-muted/30">
-                  <td className="px-5 py-2.5 font-medium">{m.fullName}</td>
-                  <td className="px-5 py-2.5 text-muted-foreground">{m.email}</td>
-                  <td className="px-5 py-2.5">{m.title || "—"}</td>
-                  <td className="px-5 py-1.5">
-                    {canSetTrack ? (
-                      <TrackMenu
-                        member={m}
-                        busy={busy === m.email}
-                        disabled={busy !== null}
-                        onPick={(choice) => setTrack(m, choice)}
-                      />
-                    ) : (
-                      <TrackLabel member={m} />
+              {page.rows.map((m) => {
+                const expanded = open.has(m.email);
+                return (
+                  <Fragment key={m.email}>
+                    <tr
+                      onClick={() => toggleOpen(m.email)}
+                      className={cn(
+                        "cursor-pointer border-b transition-colors hover:bg-muted/30",
+                        expanded ? "border-b-0 bg-muted/30" : "last:border-b-0",
+                      )}
+                    >
+                      <td className="px-5 py-2.5 font-medium">
+                        <button
+                          type="button"
+                          aria-expanded={expanded}
+                          aria-controls={`person-${m.email}`}
+                          onClick={(ev) => {
+                            ev.stopPropagation();
+                            toggleOpen(m.email);
+                          }}
+                          className="-mx-1 flex cursor-pointer items-center gap-1.5 rounded-md px-1 text-left outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                        >
+                          <ChevronRight
+                            className={cn("size-3.5 shrink-0 text-muted-foreground transition-transform", expanded && "rotate-90")}
+                          />
+                          {m.fullName}
+                        </button>
+                      </td>
+                      {/* React bubbles the menu's clicks through its portal, so they stop here rather than toggling the row. */}
+                      <td className="px-5 py-1.5" onClick={(ev) => ev.stopPropagation()}>
+                        {canSetTrack ? (
+                          <TrackMenu
+                            member={m}
+                            busy={busy === m.email}
+                            disabled={busy !== null}
+                            onPick={(choice) => setTrack(m, choice)}
+                          />
+                        ) : (
+                          <TrackLabel member={m} />
+                        )}
+                      </td>
+                      <td className="whitespace-nowrap px-5 py-2.5 tabular-nums text-muted-foreground">{formatDate(m.btcDate)}</td>
+                    </tr>
+                    {expanded && (
+                      <tr id={`person-${m.email}`} className="border-b bg-muted/30 last:border-b-0">
+                        <td colSpan={COLUMNS.length} className="px-5 pt-1 pb-4 pl-10">
+                          <PersonDetails member={m} canOpenHistory={canOpenHistory} />
+                        </td>
+                      </tr>
                     )}
-                  </td>
-                  <td className="whitespace-nowrap px-5 py-2.5 tabular-nums text-muted-foreground">{formatDate(m.btcDate)}</td>
-                </tr>
-              ))}
+                  </Fragment>
+                );
+              })}
               {page.rows.length === 0 && (
                 <tr>
                   <td colSpan={COLUMNS.length} className="px-5 py-8 text-center text-muted-foreground">
@@ -426,17 +470,60 @@ function TrackLabel({ member }: { member: CurrentCohortMember }) {
   const label = CHOICE_LABELS[member.track];
   return (
     <span className="inline-flex items-center gap-1.5 py-1">
-      {member.track === "undecided" ? (
-        <Badge variant="outline" className="border-dashed">
-          {label}
-        </Badge>
-      ) : member.track === "deferred" ? (
+      {member.track === "deferred" ? (
         <Badge variant="secondary">{label}</Badge>
       ) : (
         label
       )}
       {member.overridden && <Pin className="size-3 text-muted-foreground" aria-label="Set by an administrator" />}
     </span>
+  );
+}
+
+/** Everything the row leaves out, from the last HiBob sync and their bootcamp history. */
+function PersonDetails({ member: m, canOpenHistory }: { member: CurrentCohortMember; canOpenHistory: boolean }) {
+  return (
+    <dl className="grid grid-cols-2 gap-x-8 gap-y-3 lg:grid-cols-4">
+      <Field label="Email">{m.email}</Field>
+      <Field label="Title">{m.title || "—"}</Field>
+      <Field label="Department">{m.department || "—"}</Field>
+      <Field label="Site">{m.site || "—"}</Field>
+      <Field label="Manager">
+        {m.reportsToName || m.reportsToEmail || "—"}
+        {m.reportsToName && m.reportsToEmail && (
+          <span className="block text-xs text-muted-foreground">{m.reportsToEmail}</span>
+        )}
+      </Field>
+      <Field label="Started">{formatDate(m.startDate)}</Field>
+      <Field label="In position since">{formatDate(m.activeEffectiveDate)}</Field>
+      <Field label="Stage">{m.stage === "bootcamp" ? "Bootcamp" : "Intermediate"}</Field>
+      <Field label="Track set by">{m.overridden ? "An administrator" : "The rules"}</Field>
+      <Field label="BTC score">{m.btcScore === null ? "—" : m.btcScore.toFixed(1)}</Field>
+      <Field label="Bootcamp history">
+        {!m.historyId ? (
+          "None yet"
+        ) : canOpenHistory ? (
+          <Link
+            href={`/bootcamp-history/${m.historyId}`}
+            onClick={(ev) => ev.stopPropagation()}
+            className="underline underline-offset-2 hover:text-foreground"
+          >
+            Open record
+          </Link>
+        ) : (
+          "On file"
+        )}
+      </Field>
+    </dl>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="min-w-0 space-y-0.5">
+      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dd className="wrap-break-word">{children}</dd>
+    </div>
   );
 }
 

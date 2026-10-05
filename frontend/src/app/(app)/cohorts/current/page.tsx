@@ -4,7 +4,7 @@ import { auth } from "@/auth";
 import { currentCohortSummary, isCandidateStage, isCandidateTrack, listCurrentCohort } from "@/lib/evals/current-cohort";
 import { CURRENT_COHORT_LIST } from "@/lib/list-specs";
 import { parseListQuery } from "@/lib/paging";
-import { canManageTrainingSettings } from "@/lib/roles";
+import { canManageTrainingSettings, canUseEvals } from "@/lib/roles";
 import { activeBootcamp } from "@/lib/scheduler/bootcamps";
 import { CurrentCohortView } from "./current-view";
 
@@ -37,6 +37,7 @@ export default async function CurrentCohortPage({
       deferral={summary.deferral}
       activeBootcamp={active}
       canSetTrack={session?.user ? canManageTrainingSettings(session.user.access) : false}
+      canOpenHistory={session?.user ? canUseEvals(session.user.access) : false}
     />
   );
 }
