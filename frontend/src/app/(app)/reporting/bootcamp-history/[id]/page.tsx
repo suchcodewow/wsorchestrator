@@ -37,7 +37,8 @@ export default async function HistoryDetailPage({
   return (
     <HistoryDetailView
       detail={{ ...detail, createdAt: detail.createdAt.toISOString(), updatedAt: detail.updatedAt.toISOString() }}
-      back={{ href: withParams("/bootcamp-history", back), label: "Bootcamp History" }}
+      back={{ href: withParams("/reporting/bootcamp-history", back), label: "Bootcamp History" }}
+      nested
     />
   );
 }

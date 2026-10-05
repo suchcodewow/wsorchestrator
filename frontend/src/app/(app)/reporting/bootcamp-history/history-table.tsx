@@ -19,7 +19,7 @@ import type { BootcampHistorySort, HistoryStatus } from "@/lib/list-specs";
 import { riseChild, staggerParent } from "@/lib/motion";
 import type { ListQuery, Page } from "@/lib/paging";
 import { cn } from "@/lib/utils";
-import { formatDate } from "../cohort-settings/format";
+import { formatDate } from "../../cohort-settings/format";
 
 const COLUMNS: { column: BootcampHistorySort; label: string; className?: string }[] = [
   { column: "fullName", label: "Name" },
@@ -72,7 +72,7 @@ export function HistoryTable({
   return (
     <motion.div variants={staggerParent(0.05)} initial="hidden" animate="show" className="max-w-3xl space-y-6">
       <motion.div variants={riseChild} className="space-y-1.5">
-        <h1 className="text-3xl font-medium tracking-tight">Bootcamp History</h1>
+        <h2 className="text-xl font-medium tracking-tight">Bootcamp History</h2>
         <p className="text-sm leading-relaxed text-muted-foreground">
           <span className="font-medium text-foreground">
             {counts.total.toLocaleString()} {counts.total === 1 ? "person" : "people"}
@@ -130,7 +130,7 @@ export function HistoryTable({
             </thead>
             <tbody>
               {shown.map((h) => {
-                const href = `/bootcamp-history/${h.id}${listParams ? `?${listParams}` : ""}`;
+                const href = `/reporting/bootcamp-history/${h.id}${listParams ? `?${listParams}` : ""}`;
                 return (
                   <tr key={h.id} className="group border-b transition-colors last:border-b-0 hover:bg-muted/30">
                     <td className="p-0 font-medium">

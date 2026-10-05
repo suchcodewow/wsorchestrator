@@ -10,7 +10,7 @@ import { z } from "zod";
 import { auth } from "@/auth";
 import { getHistoryDetail } from "@/lib/evals/bootcamp-history";
 import { canUseEvals } from "@/lib/roles";
-import { HistoryDetailView } from "../../../bootcamp-history/[id]/history-detail-view";
+import { HistoryDetailView } from "../../../reporting/bootcamp-history/[id]/history-detail-view";
 import { previousHref } from "../open";
 
 const idSchema = z.string().uuid();

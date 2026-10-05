@@ -15,7 +15,7 @@ import { BOOTCAMP_SCORE, EXEMPT_DATE } from "@/db/schema";
 import type { HistoryDetail } from "@/lib/evals/bootcamp-history";
 import { riseChild, staggerParent } from "@/lib/motion";
 import { cn } from "@/lib/utils";
-import { formatDate, formatScore, formatWhen } from "../../cohort-settings/format";
+import { formatDate, formatScore, formatWhen } from "../../../cohort-settings/format";
 
 type Detail = Omit<HistoryDetail, "createdAt" | "updatedAt"> & { createdAt: string; updatedAt: string };
 
