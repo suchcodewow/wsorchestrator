@@ -36,6 +36,7 @@ import type { ChecklistDayCount } from "@/lib/scheduler/checklist";
 import type { CopySource, Schedule, SessionRow } from "@/lib/scheduler/schedule";
 import type { SessionTypeRow } from "@/lib/scheduler/session-types";
 import {
+  GROUP_NAMES,
   TRACK_LABELS,
   dayDate,
   describeClash,
@@ -681,17 +682,19 @@ const ISSUES_IN_TOOLTIP = 8;
 function findIssues(placed: Placed<SessionRow>[], clashes: Map<string, Clash[]>, roomNames: Map<string, string>) {
   const { dayEnd } = SCHEDULE_LIMITS;
   const spotOf = (s: Placed<SessionRow>): Spot => ({ sessionId: s.id, name: s.name, track: s.track, day: s.day, start: s.start, end: s.end });
-  const nameOf = (what: Clash["what"]) => (what.kind === "person" ? what.fullName : (roomNames.get(what.roomId) ?? "A room"));
+  const nameOf = (what: Clash["what"]) =>
+    what.kind === "person" ? what.fullName : what.kind === "room" ? (roomNames.get(what.roomId) ?? "A room") : GROUP_NAMES[what.group];
+  const verb = (what: Clash["what"]) => (what.kind === "audience" ? "are" : "is");
   const issues: Issue[] = [];
   const flagged = new Map<string, string[]>();
   const flag = (id: string, why: string) => flagged.set(id, [...(flagged.get(id) ?? []), why]);
 
   for (const s of placed) {
     for (const c of clashes.get(s.id) ?? []) {
-      flag(s.id, `${nameOf(c.what)} is also in ${c.name}`);
+      flag(s.id, `${nameOf(c.what)} ${verb(c.what)} also in ${c.name}`);
       if (s.id > c.sessionId) continue;
-      const whatKey = c.what.kind === "person" ? c.what.email : c.what.roomId;
-      issues.push({ kind: "clash", key: `clash:${s.id}:${c.sessionId}:${whatKey}`, lead: `${nameOf(c.what)} is in both`, spots: [spotOf(s), c] });
+      const whatKey = c.what.kind === "person" ? c.what.email : c.what.kind === "room" ? c.what.roomId : c.what.group;
+      issues.push({ kind: "clash", key: `clash:${s.id}:${c.sessionId}:${whatKey}`, lead: `${nameOf(c.what)} ${verb(c.what)} in both`, spots: [spotOf(s), c] });
     }
     if (s.kind !== "unstructured" && s.staff.length === 0) {
       flag(s.id, "Nobody leads it");

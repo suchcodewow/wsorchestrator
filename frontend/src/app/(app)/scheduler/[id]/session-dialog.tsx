@@ -1,28 +1,36 @@
 "use client";
 
 /**
- * Adding or changing one session: what it is, who leads it and who else
- * teaches, and which rooms it takes. Anyone or any room already busy at that
- * time is shown in red with what they are busy with, and cannot be added.
- * A viewer sees the same, without the controls.
+ * Adding or changing one session: what it is, who it is taught to, who leads
+ * it and who else teaches, and which rooms it takes. Anyone or any room
+ * already busy at that time is shown in red with what they are busy with, and
+ * cannot be added. Attendees taught something else beside it on their class
+ * or SE track are shown in red too, but it still saves, as a moved session
+ * does. Its comments are on a tab of their own, and a breakout's groups on a
+ * third. A viewer sees the same, without the controls.
  */
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type KeyboardEvent } from "react";
 import { Crown, Loader2, Trash2 } from "lucide-react";
 import { SessionLookFields, type SessionLook } from "@/components/session-look-fields";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { SCHEDULE_LIMITS, type ScheduleTrack } from "@/db/schema";
+import { SCHEDULE_LIMITS, SESSION_AUDIENCES, type ScheduleTrack, type SessionAudience } from "@/db/schema";
 import type { RoomRow } from "@/lib/scheduler/facilities";
+import type { GroupRow } from "@/lib/scheduler/groups";
 import type { Instructor, SessionRow, StaffRow } from "@/lib/scheduler/schedule";
 import { SESSION_STYLES } from "@/lib/scheduler/session-style";
 import type { SessionTypeRow } from "@/lib/scheduler/session-types";
 import {
+  AUDIENCE_LABELS,
+  GROUP_NAMES,
   KIND_LABELS,
   TRACK_LABELS,
+  audienceClashes,
   busyDuring,
   dayDate,
+  defaultAudience,
   describeClash,
   formatClock,
   formatLength,
@@ -32,6 +40,7 @@ import {
 } from "@/lib/scheduler/timeline";
 import { cn } from "@/lib/utils";
 import { formatDate } from "../../cohort-settings/format";
+import { BreakoutGroups, keptGroups } from "./breakout-groups";
 import { Comments } from "./comments";
 import { dayOf, locate, type Days } from "./days";
 
@@ -52,6 +61,16 @@ const ERRORS: Record<string, string> = {
   unknown_type: "That session type was removed — pick another.",
   forbidden: "Your role changed — reload the page.",
 };
+
+const GROUP_ERRORS: Record<string, string> = {
+  not_breakout: "it is no longer a breakout",
+  not_staff: "someone in them is no longer one of its instructors",
+  not_attendee: "someone in them is no longer in the class",
+  not_found: "the session was removed",
+};
+
+type Tab = "session" | "comments" | "groups";
+const TAB_LABELS: Record<Tab, string> = { session: "Session", comments: "Comments", groups: "Breakout Assignments" };
 
 const BLANK: SessionLook = { kind: "main", name: "", emoji: "", color: "slate", minutes: 60, description: "" };
 
@@ -99,6 +118,7 @@ export function SessionDialog({
   const existing = target?.mode === "edit" ? target.session : null;
   const [look, setLook] = useState<SessionLook>(BLANK);
   const [typeId, setTypeId] = useState<string | null>(null);
+  const [audience, setAudience] = useState<SessionAudience>("both");
   const [staff, setStaff] = useState<StaffRow[]>([]);
   const [roomId, setRoomId] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -106,6 +126,10 @@ export function SessionDialog({
   const [clashes, setClashes] = useState<Clash[]>([]);
   const [filter, setFilter] = useState("");
   const [commented, setCommented] = useState(false);
+  const [commentDelta, setCommentDelta] = useState(0);
+  const [tab, setTab] = useState<Tab>("session");
+  /** The breakout's groups as changed on their tab; null until they are. */
+  const [groups, setGroups] = useState<GroupRow[] | null>(null);
 
   const [was, setWas] = useState(target);
   if (target !== was) {
@@ -114,12 +138,16 @@ export function SessionDialog({
       const s = target.mode === "edit" ? target.session : null;
       setLook(s ? lookOf(s) : BLANK);
       setTypeId(s?.typeId ?? null);
+      setAudience(s?.audience ?? defaultAudience(target.mode === "new" ? target.track : target.session.track));
       setStaff(s?.staff ?? []);
       setRoomId(s?.roomId ?? null);
       setError(null);
       setClashes([]);
       setFilter("");
       setCommented(false);
+      setCommentDelta(0);
+      setTab("session");
+      setGroups(null);
     }
   }
 
@@ -142,6 +170,14 @@ export function SessionDialog({
         ? busyDuring(placed, { day: where.day, start: where.start, end: where.start + look.minutes, excludeId: existing?.id })
         : { people: new Map<string, Clash[]>(), rooms: new Map<string, Clash[]>() },
     [placed, where, look.minutes, existing?.id],
+  );
+
+  const taughtBeside = useMemo(
+    () =>
+      where
+        ? audienceClashes(placed, { track: where.track, kind: look.kind, audience }, { day: where.day, start: where.start, end: where.start + look.minutes, excludeId: existing?.id })
+        : [],
+    [placed, where, look.kind, look.minutes, audience, existing?.id],
   );
 
   const before = useMemo(() => {
@@ -184,8 +220,22 @@ export function SessionDialog({
   const roomName = (id: string) => rooms.find((r) => r.id === id)?.name ?? "A removed room";
   const end = where.start + look.minutes;
 
+  const tabs: Tab[] = ["session", ...(existing ? (["comments"] as const) : []), ...(look.kind === "breakout" ? (["groups"] as const) : [])];
+  const shown: Tab = tabs.includes(tab) ? tab : "session";
+  const onTabKey = (e: KeyboardEvent) => {
+    const by = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
+    if (!by) return;
+    e.preventDefault();
+    const next = tabs[(tabs.indexOf(shown) + by + tabs.length) % tabs.length]!;
+    setTab(next);
+    document.getElementById(`session-tab-${next}`)?.focus();
+  };
+
   async function save() {
-    if (!look.name.trim()) return setError("Give it a name.");
+    if (!look.name.trim()) {
+      setTab("session");
+      return setError("Give it a name.");
+    }
     setPending(true);
     setError(null);
     setClashes([]);
@@ -193,6 +243,7 @@ export function SessionDialog({
       await flush();
       const fields = {
         kind: look.kind,
+        audience,
         name: look.name.trim(),
         emoji: look.emoji.trim(),
         color: look.color,
@@ -219,13 +270,34 @@ export function SessionDialog({
         if (out?.error === "not_instructor") return setError(`${out.email} is not a Training administrator or a guest judge of this bootcamp.`);
         return setError(ERRORS[out?.error ?? ""] ?? `Could not save (${res.status}).`);
       }
+      const grouped = look.kind === "breakout" && groups ? await saveGroups(out.id, groups) : null;
       await onChanged();
+      if (grouped) {
+        // A new session is added either way; saving again would add it twice.
+        if (!existing) window.alert(`${look.name.trim()} was added, but not its groups: ${grouped}. Open it to assign them again.`);
+        else return setError(`Saved the session, but not its groups: ${grouped}.`);
+      }
       onClose();
     } catch {
       setError("Could not reach the server.");
     } finally {
       setPending(false);
     }
+  }
+
+  /** Replaces the breakout's groups, leaving out any it can no longer keep; an error to show, or null. */
+  async function saveGroups(sessionId: string, rows: GroupRow[]): Promise<string | null> {
+    const res = await fetch(`/api/scheduler/bootcamps/${bootcampId}/sessions/${sessionId}/groups`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ groups: keptGroups(rows, staff, audience).map((g) => ({ email: g.email, instructorEmail: g.instructorEmail })) }),
+    });
+    if (res.ok) {
+      setGroups(null);
+      return null;
+    }
+    const out = await res.json().catch(() => null);
+    return GROUP_ERRORS[out?.error ?? ""] ?? `the server said ${res.status}`;
   }
 
   async function remove() {
@@ -267,8 +339,39 @@ export function SessionDialog({
           </p>
         </DialogHeader>
 
+        {tabs.length > 1 && (
+          <div role="tablist" aria-label="Session" onKeyDown={onTabKey} className="-mt-1 flex gap-1 border-b">
+            {tabs.map((t) => (
+              <button
+                key={t}
+                id={`session-tab-${t}`}
+                type="button"
+                role="tab"
+                aria-selected={shown === t}
+                aria-controls={t === "session" && editable ? "session-form" : `session-panel-${t}`}
+                tabIndex={shown === t ? 0 : -1}
+                onClick={() => setTab(t)}
+                className={cn(
+                  "-mb-px border-b-2 px-3 py-2 text-sm transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
+                  shown === t ? "border-brand font-medium text-foreground" : "border-transparent text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {TAB_LABELS[t]}
+                {t === "comments" && existing && (
+                  <span className="ml-1.5 font-normal text-muted-foreground tabular-nums">{Math.max(0, existing.comments + commentDelta)}</span>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
+
         {editable ? (
           <form
+            id="session-form"
+            role="tabpanel"
+            aria-labelledby="session-tab-session"
+            hidden={shown !== "session"}
+            noValidate
             onSubmit={(e) => {
               e.preventDefault();
               void save();
@@ -304,6 +407,36 @@ export function SessionDialog({
             )}
 
             <SessionLookFields id="session" value={look} onChange={setLook} autoFocus={!existing} />
+
+            {look.kind !== "unstructured" && (
+              <section className="grid gap-1.5">
+                <span id="session-audience" className="text-sm font-medium">
+                  Taught to
+                </span>
+                <div role="radiogroup" aria-labelledby="session-audience" className="inline-flex w-fit rounded-lg border p-0.5">
+                  {SESSION_AUDIENCES.map((a) => (
+                    <button
+                      key={a}
+                      type="button"
+                      role="radio"
+                      aria-checked={audience === a}
+                      onClick={() => setAudience(a)}
+                      className={cn(
+                        "rounded-md px-3 py-1 text-sm transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
+                        audience === a ? "bg-brand/10 font-medium text-foreground" : "text-muted-foreground hover:text-foreground",
+                      )}
+                    >
+                      {AUDIENCE_LABELS[a]}
+                    </button>
+                  ))}
+                </div>
+                {taughtBeside.map((c, i) => (
+                  <p key={i} className="text-xs text-red-700 dark:text-red-400">
+                    {c.what.kind === "audience" && GROUP_NAMES[c.what.group]} are also in {describeClash(c)}
+                  </p>
+                ))}
+              </section>
+            )}
 
             {look.kind !== "unstructured" && (
               <section className="grid gap-2">
@@ -419,7 +552,51 @@ export function SessionDialog({
                 )}
               </section>
             )}
+          </form>
+        ) : (
+          existing && (
+            <div role="tabpanel" id="session-panel-session" aria-labelledby="session-tab-session" hidden={shown !== "session"}>
+              <ReadOnly session={existing} roomName={roomName} />
+            </div>
+          )
+        )}
 
+        {existing && (
+          <div role="tabpanel" id="session-panel-comments" aria-labelledby="session-tab-comments" hidden={shown !== "comments"}>
+            <Comments
+              key={existing.id}
+              bootcampId={bootcampId}
+              sessionId={existing.id}
+              canWrite={canManage}
+              viewerId={viewerId}
+              people={instructors}
+              onChange={(delta) => {
+                setCommented(true);
+                setCommentDelta((d) => d + delta);
+              }}
+            />
+          </div>
+        )}
+
+        {look.kind === "breakout" && (
+          <div role="tabpanel" id="session-panel-groups" aria-labelledby="session-tab-groups" hidden={shown !== "groups"}>
+            <BreakoutGroups
+              key={existing?.id ?? "new"}
+              bootcampId={bootcampId}
+              sessionId={existing?.id ?? null}
+              track={where.track}
+              audience={audience}
+              staff={staff}
+              roomName={roomName}
+              value={groups}
+              onChange={setGroups}
+              editable={editable}
+            />
+          </div>
+        )}
+
+        {editable && (
+          <>
             {error && (
               <div role="alert" className="text-sm text-destructive">
                 <p>{error}</p>
@@ -427,7 +604,7 @@ export function SessionDialog({
                   <ul className="mt-1 list-disc pl-5">
                     {clashes.map((c, i) => (
                       <li key={i}>
-                        {c.what.kind === "person" ? c.what.fullName : roomName(c.what.roomId)}: {describeClash(c)}
+                        {c.what.kind === "person" ? c.what.fullName : c.what.kind === "room" ? roomName(c.what.roomId) : GROUP_NAMES[c.what.group]}: {describeClash(c)}
                       </li>
                     ))}
                   </ul>
@@ -448,27 +625,13 @@ export function SessionDialog({
                 <Button type="button" variant="ghost" disabled={pending} onClick={close}>
                   Cancel
                 </Button>
-                <Button type="submit" variant="brand" disabled={pending}>
+                <Button type="submit" form="session-form" variant="brand" disabled={pending}>
                   {pending && <Loader2 className="animate-spin" />}
                   {existing ? "Save" : "Add session"}
                 </Button>
               </div>
             </DialogFooter>
-          </form>
-        ) : (
-          existing && <ReadOnly session={existing} roomName={roomName} />
-        )}
-
-        {existing && (
-          <Comments
-            key={existing.id}
-            bootcampId={bootcampId}
-            sessionId={existing.id}
-            canWrite={canManage}
-            viewerId={viewerId}
-            people={instructors}
-            onChange={() => setCommented(true)}
-          />
+          </>
         )}
       </DialogContent>
     </Dialog>
@@ -571,6 +734,8 @@ function ReadOnly({ session: s, roomName }: { session: SessionRow; roomName: (id
       <dd>{formatLength(s.minutes)}</dd>
       {s.kind !== "unstructured" && (
         <>
+          <dt className="text-muted-foreground">Taught to</dt>
+          <dd>{AUDIENCE_LABELS[s.audience]}</dd>
           <dt className="text-muted-foreground">Instructors</dt>
           <dd>{s.staff.length === 0 ? "No leader yet" : s.staff.map((p) => `${p.fullName}${p.leader ? " (leader)" : ""}`).join(", ")}</dd>
           <dt className="text-muted-foreground">Rooms</dt>

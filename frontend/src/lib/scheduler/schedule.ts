@@ -14,23 +14,28 @@
 
 import "server-only";
 
-import { and, eq, inArray, or, sql } from "drizzle-orm";
+import { and, eq, inArray, notInArray, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
 import {
+  AUDIENCE_TRACKS,
   BOOTCAMP_LIMITS,
   EVALS_SLACK_CONTACT_LIMITS,
   SCHEDULE_LIMITS,
   SCHEDULE_TRACKS,
   bootcamps,
+  employees,
   facilities,
   facilityRooms,
   scheduleSessionComments,
+  scheduleSessionGroups,
   scheduleSessionStaff,
   scheduleSessions,
   users,
   type BootcampStatus,
+  SESSION_AUDIENCES,
   type ScheduleTrack,
+  type SessionAudience,
   type SessionColor,
   type SessionKind,
 } from "@/db/schema";
@@ -40,7 +45,19 @@ import { roomsOf as facilityRoomsOf, type RoomRow } from "@/lib/scheduler/facili
 import { judgePicks } from "@/lib/scheduler/judges";
 import { isForeignKeyViolation } from "@/lib/scheduler/pg-errors";
 import { sessionLookSchema } from "@/lib/scheduler/session-types";
-import { TRACK_LABELS, busyDuring, dropAt, fitsDay, nextStart, place, settle, trackDays, type Clash } from "@/lib/scheduler/timeline";
+import {
+  TRACK_LABELS,
+  audienceClashes,
+  busyDuring,
+  defaultAudience,
+  dropAt,
+  fitsDay,
+  nextStart,
+  place,
+  settle,
+  trackDays,
+  type Clash,
+} from "@/lib/scheduler/timeline";
 
 export type StaffRow = {
   email: string;
@@ -58,6 +75,8 @@ export type SessionRow = {
   start: number;
   minutes: number;
   kind: SessionKind;
+  /** Who it is taught to; an unstructured session teaches no one, whatever this says. */
+  audience: SessionAudience;
   typeId: string | null;
   name: string;
   description: string;
@@ -114,6 +133,7 @@ const SESSION_COLUMNS = {
   start: scheduleSessions.start,
   minutes: scheduleSessions.minutes,
   kind: scheduleSessions.kind,
+  audience: scheduleSessions.audience,
   typeId: scheduleSessions.typeId,
   name: scheduleSessions.name,
   description: scheduleSessions.description,
@@ -242,6 +262,7 @@ export async function clashesOf(bootcamp: ScheduleBootcamp, session: SessionRow)
   return [
     ...[...busy.people].filter(([email]) => mine.has(email)).flatMap(([, c]) => c),
     ...[...busy.rooms].filter(([room]) => rooms.has(room)).flatMap(([, c]) => c),
+    ...audienceClashes(placed, self, { day: self.day, start: self.start, end: self.end, excludeId: self.id }),
   ];
 }
 
@@ -259,6 +280,8 @@ const sessionFields = {
   emoji: sessionLookSchema.emoji.default(""),
   color: sessionLookSchema.color.default("slate"),
   description: sessionLookSchema.description.default(""),
+  /** Left out, engineers on an SE track and both on a class. */
+  audience: z.enum(SESSION_AUDIENCES).optional(),
   /** The session type it was started from, if any. */
   typeId: z.string().uuid().nullable().default(null),
   /** A main session's room. */
@@ -278,6 +301,7 @@ export const sessionInputSchema = z.object({
 /** An edit changes only the fields it names. Moving it to another time or day is the layout's job. */
 export const sessionPatchSchema = z.object({
   kind: sessionLookSchema.kind,
+  audience: z.enum(SESSION_AUDIENCES),
   name: sessionLookSchema.name,
   emoji: sessionLookSchema.emoji,
   color: sessionLookSchema.color,
@@ -390,6 +414,30 @@ async function newClashes(
   return clashes.length > 0 ? { ok: false, error: "clash", clashes } : null;
 }
 
+/**
+ * Drops the breakout groups a session can no longer keep: every one unless it
+ * is a breakout, else those of anyone off its staff, and anyone on a track its
+ * audience no longer takes in.
+ */
+async function pruneGroups(tx: Tx, sessionId: string, next: Staffing, audience: SessionAudience): Promise<void> {
+  const kept = next.kind === "breakout" ? next.staff.map((s) => s.email) : [];
+  const untaught = (["sales", "engineer"] as const).filter((t) => !AUDIENCE_TRACKS[audience].includes(t));
+  const g = scheduleSessionGroups;
+  await tx
+    .delete(g)
+    .where(
+      and(
+        eq(g.sessionId, sessionId),
+        kept.length > 0
+          ? or(
+              notInArray(g.instructorEmail, kept),
+              untaught.length > 0 ? inArray(g.email, tx.select({ email: employees.email }).from(employees).where(inArray(employees.track, untaught))) : undefined,
+            )
+          : undefined,
+      ),
+    );
+}
+
 async function writeStaff(tx: Tx, sessionId: string, staff: StaffRow[]): Promise<void> {
   await tx.delete(scheduleSessionStaff).where(eq(scheduleSessionStaff.sessionId, sessionId));
   if (staff.length === 0) return;
@@ -444,6 +492,7 @@ export async function createSession(
           start,
           minutes: input.minutes,
           kind: next.kind,
+          audience: input.audience ?? defaultAudience(input.track),
           typeId: input.typeId,
           name: input.name,
           description: input.description,
@@ -511,8 +560,8 @@ export async function updateSession(
   if (clash) return clash;
 
   // Kind, room and staff come from `next`, which settled them together.
-  const { name, emoji, color, description, typeId } = patch;
-  const fields = { name, emoji, color, minutes: patch.minutes, description, typeId };
+  const { name, emoji, color, description, typeId, audience } = patch;
+  const fields = { name, emoji, color, minutes: patch.minutes, description, typeId, audience };
   try {
     await db.transaction(async (tx) => {
       await writeStarts(tx, bootcampId, laid, day);
@@ -522,6 +571,8 @@ export async function updateSession(
         .where(eq(scheduleSessions.id, sessionId));
       const sameStaff = JSON.stringify(next.staff) === JSON.stringify(before.staff);
       if (!sameStaff) await writeStaff(tx, sessionId, next.staff);
+      const audienceNow = audience ?? before.audience;
+      if (!sameStaff || next.kind !== before.kind || audienceNow !== before.audience) await pruneGroups(tx, sessionId, next, audienceNow);
     });
   } catch (err) {
     if (isForeignKeyViolation(err)) return { ok: false, error: patch.typeId ? "unknown_type" : "unknown_room" };
@@ -633,6 +684,7 @@ type NewSession = {
   start: number;
   minutes: number;
   kind: SessionKind;
+  audience: SessionAudience;
   typeId: string | null;
   name: string;
   description: string;
@@ -729,6 +781,7 @@ export async function copySchedule(
           start: s.start,
           minutes: s.minutes,
           kind: s.kind,
+          audience: s.audience,
           typeId: s.typeId,
           name: s.name,
           description: s.description,

@@ -44,12 +44,17 @@ const COMMENT_SHAPE = "{ id, body, authorId: string | null, authorName, authorEm
 
 const TRACK_TYPE = `"btc" | "int" | "btc_se" | "int_se"`;
 const KIND_TYPE = `"main" | "breakout" | "unstructured"`;
+const AUDIENCE_TYPE = `"both" | "sales" | "engineers"`;
 const COLOR_TYPE = `"slate" | "red" | "orange" | "amber" | "green" | "teal" | "blue" | "violet" | "pink"`;
 const MINUTES_NOTE = `a multiple of ${SCHEDULE_LIMITS.slot} from ${SCHEDULE_LIMITS.slot} to ${SCHEDULE_LIMITS.maxMinutes}`;
 
-const SESSION_SHAPE = `{ id, track: ${TRACK_TYPE}, day: number, start: number, minutes: number, kind, typeId: string | null, name, description, emoji, color, roomId: string | null, staff: { email, fullName, leader: boolean, roomId: string | null }[], comments: number, updatedAt }`;
+const SESSION_SHAPE = `{ id, track: ${TRACK_TYPE}, day: number, start: number, minutes: number, kind, audience: ${AUDIENCE_TYPE}, typeId: string | null, name, description, emoji, color, roomId: string | null, staff: { email, fullName, leader: boolean, roomId: string | null }[], comments: number, updatedAt }`;
 
-const CLASH_SHAPE = `{ sessionId, name, track, day, start: number, end: number, what: { kind: "person", email, fullName } | { kind: "room", roomId } }`;
+const CLASH_SHAPE = `{ sessionId, name, track, day, start: number, end: number, what: { kind: "person", email, fullName } | { kind: "room", roomId } | { kind: "audience", group: "sales" | "engineers" } }`;
+
+const GROUP_ATTENDEE_SHAPE = `{ email, fullName, title, track: "sales" | "engineer" }`;
+
+const GROUP_SHAPE = "{ email, fullName, instructorEmail, track: string | null }";
 
 const SESSION_TYPE_SHAPE = `{ id, name, kind: ${KIND_TYPE}, emoji, color, minutes: number, description, position: number }`;
 
@@ -63,6 +68,11 @@ const SESSION_LOOK_FIELDS: Field[] = [
 ];
 
 const SESSION_STAFF_FIELDS: Field[] = [
+  {
+    name: "audience",
+    type: AUDIENCE_TYPE,
+    note: "who it is taught to; left out of a new session, engineers on an SE track and both on a class. Ignored for an unstructured session",
+  },
   { name: "typeId", type: "string | null", note: "the session type it was started from" },
   { name: "roomId", type: "string | null", note: "a main session's room, from the bootcamp's facility" },
   {
@@ -539,7 +549,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "trainingAdmin",
         token: true,
         notes:
-          "Copies every session and who runs it, but not comments. Rooms come too only when both bootcamps are at the same facility. Days past the end of a track here are left out; notes says what was.",
+          "Copies every session and who runs it, but not comments or breakout groups. Rooms come too only when both bootcamps are at the same facility. Days past the end of a track here are left out; notes says what was.",
         params: [BOOTCAMP_ID],
         body: {
           kind: "json",
@@ -572,6 +582,24 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         returns: `{ day, start, end, people: Record<email, ${CLASH_SHAPE}[]>, rooms: Record<roomId, Clash[]> }`,
         errors: [
           { status: 400, error: "invalid", when: "a query field is missing or out of range" },
+          { status: 404, error: "not_found", when: "no such bootcamp" },
+        ],
+      },
+      {
+        method: "GET",
+        path: "/api/scheduler/bootcamps/{id}/attendees",
+        summary: "Lists the attendees a session on one track is taught to, for one audience.",
+        access: "trainingViewer",
+        token: true,
+        notes: `The class's current candidates, as eVals scores them: bootcamp candidates for btc and btc_se, intermediate ones for int and int_se, on the sales track, the engineer track or both. Undecided and deferred people are left out. Attendees are not kept per bootcamp, so this is the same for every bootcamp. Sorted by name; at most ${SCHEDULE_LIMITS.groupPeople}, with hasMore when there are more.`,
+        params: [BOOTCAMP_ID],
+        query: [
+          { name: "track", type: TRACK_TYPE, required: true },
+          { name: "audience", type: AUDIENCE_TYPE, note: "left out, both" },
+        ],
+        returns: `{ track, audience, stage: "bootcamp" | "intermediate", attendees: ${GROUP_ATTENDEE_SHAPE}[], hasMore: boolean }`,
+        errors: [
+          { status: 400, error: "invalid", when: "track is missing, or track or audience is not one of the values" },
           { status: 404, error: "not_found", when: "no such bootcamp" },
         ],
       },
@@ -612,6 +640,8 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         summary: "Reads one session, with what it clashes with.",
         access: "trainingViewer",
         token: true,
+        notes:
+          "A clash is a person or room it shares with an overlapping session on any track that day, or the attendees it shares with an overlapping session beside it: Bootcamp and SE Bootcamp are the same people, as are Intermediate and SE Intermediate. A session for both shares sales and engineers with anything taught beside it; an unstructured one teaches no one.",
         params: [BOOTCAMP_ID, SESSION_ID],
         returns: `${SESSION_SHAPE} & { clashes: ${CLASH_SHAPE}[] }`,
         errors: [{ status: 404, error: "not_found", when: "no such bootcamp or session" }],
@@ -623,7 +653,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "trainingAdmin",
         token: true,
         notes:
-          "Takes any of POST's fields but track, day and start; moving a session is the layout's job. Made longer, it pushes the sessions it runs into later, as POST does. staff replaces the whole set. Someone already on it stays even if no longer an instructor; only people and rooms new to it are checked for clashes.",
+          "Takes any of POST's fields but track, day and start; moving a session is the layout's job. Made longer, it pushes the sessions it runs into later, as POST does. staff replaces the whole set. Someone already on it stays even if no longer an instructor; only people and rooms new to it are checked for clashes. Anyone taken off the staff takes their breakout group with them, an audience narrowed to one track drops the attendees on the other, and a session that stops being a breakout loses all its groups; the attendees are then unassigned.",
         params: [BOOTCAMP_ID, SESSION_ID],
         body: {
           kind: "json",
@@ -638,7 +668,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         summary: "Removes a session; its time becomes unscheduled, and nothing else moves.",
         access: "trainingAdmin",
         token: true,
-        notes: "Its comments go with it.",
+        notes: "Its comments and breakout groups go with it.",
         params: [BOOTCAMP_ID, SESSION_ID],
         returns: "{ ok: true }",
         errors: [{ status: 404, error: "not_found", when: "no such bootcamp or session" }],
@@ -693,6 +723,46 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         errors: [
           { status: 403, error: "not_author", when: "someone else wrote it" },
           { status: 404, error: "not_found", when: "no such bootcamp, session or comment" },
+        ],
+      },
+      {
+        method: "GET",
+        path: "/api/scheduler/bootcamps/{id}/sessions/{sessionId}/groups",
+        summary: "Reads a breakout's groups: which instructor each attendee goes with.",
+        access: "trainingViewer",
+        token: true,
+        notes: `Each instructor's people in the order they were put there; anyone not listed is not assigned. track is their HiBob track now, null when HiBob no longer lists them. Only a breakout has any. At most ${SCHEDULE_LIMITS.groupPeople}.`,
+        params: [BOOTCAMP_ID, SESSION_ID],
+        returns: `{ groups: ${GROUP_SHAPE}[] }`,
+        errors: [{ status: 404, error: "not_found", when: "no such bootcamp or session" }],
+      },
+      {
+        method: "PUT",
+        path: "/api/scheduler/bootcamps/{id}/sessions/{sessionId}/groups",
+        summary: "Replaces a breakout's groups.",
+        access: "trainingAdmin",
+        token: true,
+        notes:
+          "groups is every attendee assigned, in order; anyone left out is not assigned. Each instructorEmail must be on the session's staff, and each email an attendee it is taught to (GET /api/scheduler/bootcamps/{id}/attendees with its track and audience) or already in one of its groups.",
+        params: [BOOTCAMP_ID, SESSION_ID],
+        body: {
+          kind: "json",
+          fields: [
+            {
+              name: "groups",
+              type: "{ email, instructorEmail }[]",
+              required: true,
+              note: `up to ${SCHEDULE_LIMITS.groupPeople}, each attendee once`,
+            },
+          ],
+        },
+        returns: `{ groups: ${GROUP_SHAPE}[] }`,
+        errors: [
+          { status: 400, error: "invalid", when: "groups is missing or too long, an email is not one, or an attendee is named twice" },
+          { status: 400, error: "not_staff", when: "an instructorEmail is not on the session's staff; email names it" },
+          { status: 400, error: "not_attendee", when: "an attendee is not taught this session and was not in its groups; email names them" },
+          { status: 404, error: "not_found", when: "no such bootcamp or session" },
+          { status: 409, error: "not_breakout", when: "the session is not a breakout" },
         ],
       },
       {

@@ -32,7 +32,8 @@ export function Comments({
   viewerId: string;
   /** Who a comment can tag. */
   people: MentionPick[];
-  onChange: () => void;
+  /** After one is added (1) or removed (-1). */
+  onChange: (delta: number) => void;
 }) {
   const base = `/api/scheduler/bootcamps/${bootcampId}/sessions/${sessionId}/comments`;
   const [loaded, setLoaded] = useState<Loaded | null>(null);
@@ -98,7 +99,7 @@ export function Comments({
       setLoaded((prev) => ({ rows: [out as CommentRow, ...(prev?.rows ?? [])], page: prev?.page ?? 1, hasMore: prev?.hasMore ?? false }));
       setDraft("");
       setPicks([]);
-      onChange();
+      onChange(1);
     } catch {
       setError("Could not reach the server.");
     } finally {
@@ -114,7 +115,7 @@ export function Comments({
       const res = await fetch(`${base}/${c.id}`, { method: "DELETE" });
       if (!res.ok && res.status !== 404) return setError(`Could not remove it (${res.status}).`);
       setLoaded((prev) => prev && { ...prev, rows: prev.rows.filter((r) => r.id !== c.id) });
-      onChange();
+      onChange(-1);
     } catch {
       setError("Could not reach the server.");
     } finally {
@@ -123,17 +124,7 @@ export function Comments({
   }
 
   return (
-    <section className="grid gap-3 border-t pt-5">
-      <h3 className="text-sm font-medium">
-        Comments
-        {loaded && (
-          <span className="ml-2 font-normal text-muted-foreground tabular-nums">
-            {loaded.rows.length}
-            {loaded.hasMore ? "+" : ""}
-          </span>
-        )}
-      </h3>
-
+    <section aria-label="Comments" className="grid gap-3">
       {canWrite && (
         <div className="grid gap-2">
           <MentionTextarea
