@@ -246,6 +246,48 @@ async function breakoutAssessments(bootcampId: string): Promise<BreakoutAssessme
     .limit(100);
 }
 
+/** A breakout that names no assessment, so nobody finds its groups under Assigned to me. */
+export type UnassignedBreakout = {
+  id: string;
+  name: string;
+  track: ScheduleTrack;
+  day: number;
+  start: number;
+  bootcampId: string;
+  bootcampStartDate: string;
+  bootcampStatus: BootcampStatus;
+};
+
+/**
+ * The breakouts at bootcamps still to run, or running now, that name no
+ * assessment: the first 100 by bootcamp, then track, day and start, and how
+ * many there are in all.
+ */
+export async function unassignedBreakouts(): Promise<{ rows: UnassignedBreakout[]; total: number }> {
+  const s = scheduleSessions;
+  const where = and(eq(s.kind, "breakout"), sql`${s.assessmentId} is null`, inArray(bootcamps.status, ["scheduled", "active"]));
+  const [rows, [count]] = await Promise.all([
+    db
+      .select({
+        id: s.id,
+        name: s.name,
+        track: s.track,
+        day: s.day,
+        start: s.start,
+        bootcampId: s.bootcampId,
+        bootcampStartDate: bootcamps.startDate,
+        bootcampStatus: bootcamps.status,
+      })
+      .from(s)
+      .innerJoin(bootcamps, eq(bootcamps.id, s.bootcampId))
+      .where(where)
+      .orderBy(bootcamps.startDate, bootcamps.id, s.track, s.day, s.start, s.id)
+      .limit(100),
+    db.select({ total: sql<number>`count(*)::int` }).from(s).innerJoin(bootcamps, eq(bootcamps.id, s.bootcampId)).where(where),
+  ]);
+  return { rows, total: count?.total ?? 0 };
+}
+
 /** The whole schedule, as the schedule page draws it. */
 export async function loadSchedule(bootcampId: string): Promise<Schedule | null> {
   const bootcamp = await scheduleBootcamp(bootcampId);

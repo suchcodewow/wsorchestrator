@@ -1404,6 +1404,16 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         returns: `{ assessments: { id, name, stage: "bootcamp" | "intermediate", audience: "sales" | "engineer" | "both", active: boolean, updatedAt, criteria: number, submissions: number }[], ${PAGE_FIELDS}, total: number }`,
       },
       {
+        method: "GET",
+        path: "/api/evals/assessments/unassigned-breakouts",
+        summary: "Lists the breakouts at scheduled and active bootcamps that name no assessment.",
+        access: "evalsAdmin",
+        token: true,
+        notes:
+          "Ordered by the bootcamp's start date, then track, day and start; at most 100. total counts every such breakout. Their groups appear under no assessment's Assigned to me until one is picked on the session's Breakout Assignments.",
+        returns: `{ breakouts: { id, name, track: "btc" | "int" | "btc_se" | "int_se", day: number, start: number, bootcampId, bootcampStartDate, bootcampStatus: "scheduled" | "active" }[], total: number }`,
+      },
+      {
         method: "POST",
         path: "/api/evals/assessments",
         summary: "Creates an assessment and its criteria.",

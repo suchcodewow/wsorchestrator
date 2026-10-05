@@ -1,6 +1,9 @@
 "use client";
 
-/** The assessments, a page at a time, each opening to its editor. */
+/**
+ * The assessments, a page at a time, each opening to its editor; and below
+ * them, the breakouts that name none, each opening on its schedule.
+ */
 
 import Link from "next/link";
 import { motion } from "framer-motion";
@@ -21,9 +24,13 @@ import type { AssessmentRow } from "@/lib/evals/assessments";
 import type { AssessmentSort } from "@/lib/list-specs";
 import { riseChild, staggerParent } from "@/lib/motion";
 import type { ListQuery, Page } from "@/lib/paging";
+import type { UnassignedBreakout } from "@/lib/scheduler/schedule";
+import { TRACK_LABELS, formatClock } from "@/lib/scheduler/timeline";
 import { formatWhen } from "../../cohort-settings/format";
 
 export type AssessmentListing = Omit<AssessmentRow, "updatedAt"> & { updatedAt: string };
+
+const START_DATE = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
 
 const COLUMNS: { column: AssessmentSort; label: string }[] = [
   { column: "name", label: "Name" },
@@ -36,10 +43,12 @@ export function AssessmentsView({
   query,
   page,
   count,
+  unassigned,
 }: {
   query: ListQuery<AssessmentSort>;
   page: Page<AssessmentListing>;
   count: number;
+  unassigned: { rows: UnassignedBreakout[]; total: number };
 }) {
   const sortProps = { sort: query.sort, dir: query.dir };
   const rowLink = useRowLink();
@@ -116,6 +125,65 @@ export function AssessmentsView({
           <Pager page={page} noun="assessments" />
         </div>
       </motion.div>
+
+      <motion.div variants={riseChild}>
+        <UnassignedBreakouts {...unassigned} />
+      </motion.div>
     </motion.div>
+  );
+}
+
+/** The breakouts at upcoming and running bootcamps whose groups no assessment's Assigned to me finds. */
+function UnassignedBreakouts({ rows, total }: { rows: UnassignedBreakout[]; total: number }) {
+  const rowLink = useRowLink();
+  const href = (b: UnassignedBreakout) => `/scheduler/${b.bootcampId}?session=${b.id}`;
+
+  return (
+    <div className="overflow-hidden rounded-2xl border bg-card shadow-sm">
+      <div className="space-y-1 border-b px-5 py-4">
+        <h3 className="font-medium">Breakouts without an assessment</h3>
+        <p className="text-sm text-muted-foreground">
+          <span className="font-medium text-foreground">{total.toLocaleString()}</span> at scheduled and active bootcamps
+          {total > rows.length && `, the first ${rows.length} shown`}
+        </p>
+      </div>
+      {rows.length === 0 ? (
+        <p className="px-5 py-6 text-center text-sm text-muted-foreground">Every breakout names an assessment.</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-160 text-sm">
+            <thead>
+              <tr className={HEADER_ROW}>
+                <PlainHeader>Session</PlainHeader>
+                <PlainHeader>Track</PlainHeader>
+                <PlainHeader>When</PlainHeader>
+                <PlainHeader>Bootcamp</PlainHeader>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((b) => (
+                <tr key={b.id} className={LINK_ROW} onClick={rowLink(href(b))}>
+                  <td className="px-5 py-3 font-medium">
+                    <Link href={href(b)} className="group-hover:underline">
+                      {b.name}
+                    </Link>
+                  </td>
+                  <td className="px-5 py-3 text-muted-foreground">{TRACK_LABELS[b.track]}</td>
+                  <td className="px-5 py-3 text-muted-foreground">
+                    Day {b.day}, {formatClock(b.start)}
+                  </td>
+                  <td className="px-5 py-3 text-muted-foreground">
+                    <span className="inline-flex items-center gap-2">
+                      {START_DATE.format(new Date(`${b.bootcampStartDate}T00:00:00Z`))}
+                      {b.bootcampStatus === "active" && <Badge>Active</Badge>}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
   );
 }

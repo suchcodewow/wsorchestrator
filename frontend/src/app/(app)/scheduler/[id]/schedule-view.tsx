@@ -10,7 +10,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   DndContext,
@@ -105,9 +105,15 @@ export function ScheduleView({
   const [days, setDays] = useState<Days>(initial.days);
   const [view, setView] = useState<View>(initialView);
   const [condensed, setCondensed] = useState(initialCondensed);
-  const [day, setDay] = useState(1);
-  const [track, setTrack] = useState<ScheduleTrack>("btc");
-  const [target, setTarget] = useState<SessionTarget | null>(null);
+  // ?session={id}, as eVals settings links a breakout, opens on that session.
+  const searchParams = useSearchParams();
+  const [linked] = useState(() => {
+    const at = locate(initial.days, searchParams.get("session") ?? "");
+    return at ? dayOf(initial.days, at.key)[at.index] : undefined;
+  });
+  const [day, setDay] = useState(linked?.day ?? 1);
+  const [track, setTrack] = useState<ScheduleTrack>(linked?.track ?? "btc");
+  const [target, setTarget] = useState<SessionTarget | null>(linked ? { mode: "edit", session: linked } : null);
   const [filling, setFilling] = useState(false);
   const [editingBootcamp, setEditingBootcamp] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
