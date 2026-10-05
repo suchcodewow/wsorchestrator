@@ -3,12 +3,13 @@
 /**
  * The schedule drawn to scale: a column per track-day, each session as tall
  * as it is long and placed at its start, from 8 AM. Time nothing is scheduled
- * in shows as Unscheduled; past 5 PM is tinted red. A manager drags a card to
+ * in shows as Unscheduled; past 5 PM is tinted red. A day on show that is
+ * today has a green line across it at the current time. A manager drags a card to
  * any time in any column, drags its bottom edge to change its length a
  * quarter hour at a time, and clicks unscheduled time to add a session there.
  */
 
-import { useRef, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
+import { useRef, useSyncExternalStore, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { AlertTriangle, MessageSquare } from "lucide-react";
 import { SCHEDULE_LIMITS, type ScheduleTrack } from "@/db/schema";
@@ -51,6 +52,8 @@ export type BoardProps = {
   onResizeEnd: (id: string) => void;
   /** Anything more to show at the top of a column. */
   headerAction?: (column: BoardColumn) => ReactNode;
+  /** The date every column shows, as "2026-09-14", when they all show one: on that day, the time now is drawn across them. */
+  date?: string;
 };
 
 export function Board(props: BoardProps) {
@@ -61,12 +64,17 @@ export function Board(props: BoardProps) {
   const bottom = Math.ceil((lastEnd + 60) / 60) * 60;
   const height = (bottom - dayStart) * scale;
   const hours = Array.from({ length: (bottom - dayStart) / 60 + 1 }, (_, i) => dayStart + i * 60);
+  const minute = useMinuteOn(props.date);
+  const now =
+    minute !== null && minute >= dayStart && minute <= bottom
+      ? { top: (minute - dayStart) * scale, label: formatClock(Math.floor(minute)).replace(" ", "\u00a0") }
+      : null;
 
   return (
     // `overflow-x-auto` alone makes the board a vertical scroller too; it never scrolls that way, so the wheel moves the page.
     <div className="overflow-x-auto overflow-y-hidden rounded-2xl border bg-card shadow-sm">
       {/* Columns share the width and scroll only below 12rem each; `min-w-fit` would size them to their longest name. */}
-      <div className="flex" style={{ minWidth: `calc(4rem + ${columns.length} * 12rem)` }}>
+      <div className="relative flex" style={{ minWidth: `calc(4rem + ${columns.length} * 12rem)` }}>
         <div className="sticky left-0 z-20 w-16 shrink-0 border-r bg-card">
           <div className="h-11 border-b" />
           <div className="relative" style={{ height }}>
@@ -83,14 +91,51 @@ export function Board(props: BoardProps) {
                 {m === dayStart || m === bottom ? "" : formatClock(m).replace(":00", "")}
               </div>
             ))}
+            {now !== null && (
+              <div
+                className="absolute right-1 z-10 -translate-y-1/2 rounded bg-card px-1 text-[11px] font-medium text-emerald-600 tabular-nums dark:text-emerald-400"
+                style={{ top: now.top }}
+              >
+                {now.label}
+              </div>
+            )}
           </div>
         </div>
         {columns.map((c) => (
           <Column key={c.key} column={c} height={height} hours={hours} scale={scale} {...props} />
         ))}
+        {now !== null && (
+          <div
+            aria-hidden
+            className="pointer-events-none absolute right-0 left-16 z-30 h-0.5 -translate-y-1/2 bg-emerald-500"
+            style={{ top: `calc(2.75rem + ${now.top}px)` }}
+          >
+            <div className="absolute top-1/2 -left-1 size-2.5 -translate-y-1/2 rounded-full bg-emerald-500" />
+          </div>
+        )}
       </div>
     </div>
   );
+}
+
+/** How often the line marking the time now moves: under a pixel at the detailed scale. */
+const TICK = 30_000;
+const everyTick = (onTick: () => void) => {
+  const id = setInterval(onTick, TICK);
+  return () => clearInterval(id);
+};
+const tickNow = () => Math.floor(Date.now() / TICK);
+
+/**
+ * The minute of the day it is now on the viewer's clock, when today is `date`;
+ * null on any other day, and while rendering on the server.
+ */
+function useMinuteOn(date: string | undefined): number | null {
+  const tick = useSyncExternalStore(everyTick, tickNow, () => null);
+  if (tick === null || !date) return null;
+  const now = new Date(tick * TICK);
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  return today === date ? now.getHours() * 60 + now.getMinutes() + now.getSeconds() / 60 : null;
 }
 
 /** The attribute naming the column a drop lands in, for measuring where in it. */

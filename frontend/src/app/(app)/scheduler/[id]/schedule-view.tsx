@@ -570,6 +570,7 @@ export function ScheduleView({
               onResize={onResize}
               onResizeEnd={onResizeEnd}
               headerAction={checklistButton}
+              date={view === "week" ? undefined : dayDate(bootcamp.startDate, day)}
             />
             <DragOverlay dropAnimation={null}>
               {active && (
