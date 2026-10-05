@@ -105,6 +105,7 @@ const s = evalsSubmissions;
 const candidateTrack = sql<CandidateTrack>`coalesce(${e.track}, 'undecided')`;
 const candidateStage = sql<CandidateStage>`(case when ${h.btcDate} is null then 'bootcamp' else 'intermediate' end)`;
 
+/** Every sort but `averageScore`, which depends on the score columns and is added per query. */
 const SORT_COLUMNS = {
   fullName: sql`lower(${e.fullName})`,
   email: e.email,
@@ -182,6 +183,11 @@ export async function listCurrentCohort(
   const { limit, offset } = pageWindow(query.page);
   const cutoffs = await getCandidateCutoffs();
   const scoring = evals?.scoring?.bootcampId && evals.scoring.assessments.length > 0 ? evals.scoring : null;
+  // Without score columns every average is null, so sorting by it falls through to the name.
+  const average = scoring
+    ? sql<number | null>`(select round(avg(${s.averageScore})::numeric, 1)::float8 ${scoredSubmissions(scoring)})`
+    : sql<number | null>`null::float8`;
+  const sortColumns = { ...SORT_COLUMNS, averageScore: average };
   const rows = await db
     .select({
       email: e.email,
@@ -202,9 +208,7 @@ export async function listCurrentCohort(
       scores: scoring
         ? sql<Record<string, number>>`coalesce((select jsonb_object_agg(${s.assessmentId}, ${s.averageScore}) ${scoredSubmissions(scoring)}), '{}'::jsonb)`
         : sql<Record<string, number>>`'{}'::jsonb`,
-      averageScore: scoring
-        ? sql<number | null>`(select round(avg(${s.averageScore})::numeric, 1)::float8 ${scoredSubmissions(scoring)})`
-        : sql<number | null>`null::float8`,
+      averageScore: average,
     })
     .from(e)
     .leftJoin(h, sql`${h.email} = ${e.email}`)
@@ -217,7 +221,7 @@ export async function listCurrentCohort(
         searchAny(query.q, [e.fullName, e.email, e.title, candidateTrack]),
       ),
     )
-    .orderBy(...orderFor(SORT_COLUMNS[query.sort], query.dir, sql`lower(${e.fullName})`, e.id))
+    .orderBy(...orderFor(sortColumns[query.sort], query.dir, sql`lower(${e.fullName})`, e.id))
     .limit(limit)
     .offset(offset);
   return toPage(rows, query.page);

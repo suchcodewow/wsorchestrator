@@ -332,6 +332,18 @@ describe("the Current tab's score columns", () => {
     assert.deepEqual(scored.scores, { [forSales.id]: 3, [forBoth.id]: 2.5 });
     assert.equal(scored.averageScore, 2.8);
 
+    // Sorting by the average puts the unscored last either way.
+    const second = await candidate("a_sales_second", "sales");
+    const third = await candidate("a_sales_third", "sales");
+    const low = await saveSubmission(judge.id, forSales.id, second.id, submission({ scores: scores(forSales.criteria, 3, 2) }));
+    assert.ok(low.ok);
+    const order = async (dir: "asc" | "desc") =>
+      (await listCurrentCohort(filter, { ...query, sort: "averageScore", dir }, { scoring })).rows
+        .map((m) => m.email)
+        .filter((x) => [sales.email, second.email, third.email].includes(x));
+    assert.deepEqual(await order("desc"), [sales.email, second.email, third.email]);
+    assert.deepEqual(await order("asc"), [second.email, sales.email, third.email]);
+
     // Outside eVals, no scores at all.
     const hidden = await row();
     assert.deepEqual(hidden.scores, {});

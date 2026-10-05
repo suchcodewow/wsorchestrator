@@ -166,7 +166,10 @@ export function CurrentCohortView({
   }
 
   const scoreColumns = assessments && assessments.length > 0 ? assessments : null;
-  const columnCount = COLUMNS.length + (scoreColumns ? scoreColumns.length + 1 : 0);
+  // No bootcamp candidate has a BTC date yet.
+  const showBtcDate = filter.stage !== "bootcamp";
+  const columns = showBtcDate ? COLUMNS : COLUMNS.filter((c) => c.column !== "btcDate");
+  const columnCount = columns.length + (scoreColumns ? scoreColumns.length + 1 : 0);
   // Each row counts within the other row's pick.
   const stageCount = (stage: CandidateStage) => (filter.track ? counts[stage][filter.track] : sum(counts[stage]));
   const trackCount = (track: CandidateTrack) =>
@@ -327,14 +330,16 @@ export function CurrentCohortView({
           <table className="w-full min-w-120 text-sm">
             <thead>
               <tr className={HEADER_ROW}>
-                {COLUMNS.map((c) => (
+                {columns.map((c) => (
                   <SortHeader key={c.column} column={c.column} sort={query.sort} dir={query.dir}>
                     {c.label}
                   </SortHeader>
                 ))}
                 {scoreColumns && (
                   <>
-                    <PlainHeader className="text-right">Average</PlainHeader>
+                    <SortHeader column="averageScore" sort={query.sort} dir={query.dir} className="text-right">
+                      Average
+                    </SortHeader>
                     {scoreColumns.map((a) => (
                       <PlainHeader key={a.id} className="min-w-24 text-right">
                         {a.name}
@@ -386,7 +391,11 @@ export function CurrentCohortView({
                           <TrackLabel member={m} />
                         )}
                       </td>
-                      <td className="whitespace-nowrap px-5 py-2.5 tabular-nums text-muted-foreground">{formatDate(m.btcDate)}</td>
+                      {showBtcDate && (
+                        <td className="whitespace-nowrap px-5 py-2.5 tabular-nums text-muted-foreground">
+                          {formatDate(m.btcDate)}
+                        </td>
+                      )}
                       {scoreColumns && (
                         <>
                           <td className="px-5 py-2.5 text-right font-medium tabular-nums">{score(m.averageScore)}</td>
