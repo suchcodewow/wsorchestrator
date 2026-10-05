@@ -97,7 +97,7 @@ export const NAV_SECTIONS: NavSection[] = [
   {
     heading: "eVals",
     items: [
-      { href: "/evals", label: "eVals", Icon: FlaskConical, visible: canScoreAssessments },
+      { href: "/evals", label: "Assessments", Icon: FlaskConical, visible: canScoreAssessments },
       { href: "/bootcamp-history", label: "Bootcamp History", Icon: History, visible: canUseEvals },
       {
         href: "/evals-settings",
