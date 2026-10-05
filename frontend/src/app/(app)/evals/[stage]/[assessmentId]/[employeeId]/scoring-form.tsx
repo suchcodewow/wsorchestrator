@@ -10,7 +10,8 @@
  *
  * The judge can record the attendee while scoring, with a live transcript
  * as it goes. The audio stays in this browser; each recording's transcript is
- * filed with the assessment when it stops. Submit stops the recording and
+ * filed with the assessment when it stops, and read on the Transcripts tab so
+ * it does not push the scores down the page. Submit stops the recording and
  * waits for its transcript before it sends the scores.
  */
 
@@ -18,7 +19,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { ArrowLeft, Info, Loader2, Send } from "lucide-react";
+import { ArrowLeft, ClipboardList, FileText, Info, Loader2, Send } from "lucide-react";
 import { MentionTextarea } from "@/components/mention-textarea";
 import { RecordingPanel } from "@/components/recording/recording-panel";
 import { useLiveTranscript } from "@/components/recording/use-live-transcript";
@@ -88,6 +89,7 @@ export function ScoringFormView({
   const [error, setError] = useState<string | null>(null);
   // Set once Submit has said a transcript is missing; the next Submit saves the scores anyway.
   const [warned, setWarned] = useState(false);
+  const [tab, setTab] = useState<"scoring" | "transcripts">("scoring");
   const subject = evalSubject(assessment.id, attendee.id);
   const [recordingsVersion, setRecordingsVersion] = useState(0);
   const transcripts = useAssessmentTranscripts({
@@ -121,6 +123,8 @@ export function ScoringFormView({
   const needed = complete && whole !== null ? requiredFeedback(whole) : null;
   const unscored = submission ? criteria.filter((c) => !submission.scores[c.id]).length : 0;
   const ownedByOther = submission !== null && submission.ownerId !== viewerId;
+  const transcribing = Object.values(transcripts.jobs).some((j) => j.status === "working");
+  const transcriptFailed = Object.values(transcripts.jobs).some((j) => j.status === "failed");
 
   const canSubmit =
     bootcamp !== null &&
@@ -142,7 +146,10 @@ export function ScoringFormView({
       const allFiled = await transcripts.settle();
       if (!allFiled && !warned) {
         setWarned(true);
-        setError("A recording's transcript could not be saved. Retry it above, or Submit again to save the scores without it.");
+        setTab("transcripts");
+        setError(
+          "A recording's transcript could not be saved. Retry it on the Transcripts tab, or Submit again to save the scores without it.",
+        );
         return;
       }
       setBusy("saving");
@@ -223,8 +230,69 @@ export function ScoringFormView({
         </motion.p>
       )}
 
+      <motion.div variants={riseChild}>
+        <div role="tablist" aria-label="Assessment" className="inline-flex rounded-lg border bg-card p-0.5 shadow-xs">
+          {(
+            [
+              { id: "scoring", label: "Scoring", icon: ClipboardList },
+              { id: "transcripts", label: "Transcripts", icon: FileText },
+            ] as const
+          ).map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              role="tab"
+              id={`tab-${t.id}`}
+              aria-controls={`panel-${t.id}`}
+              aria-selected={tab === t.id}
+              onClick={() => setTab(t.id)}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm transition-colors",
+                tab === t.id ? "bg-brand/10 font-medium text-foreground" : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              <t.icon className="size-3.5" />
+              {t.label}
+              {t.id === "transcripts" && (
+                <>
+                  {transcripts.transcripts.length > 0 && (
+                    <span className="font-normal text-muted-foreground tabular-nums">{transcripts.transcripts.length}</span>
+                  )}
+                  {transcribing && <Loader2 className="size-3.5 animate-spin text-muted-foreground" />}
+                  {transcriptFailed && !transcribing && (
+                    <span aria-label="a transcript failed" className="size-1.5 rounded-full bg-destructive" />
+                  )}
+                </>
+              )}
+            </button>
+          ))}
+        </div>
+      </motion.div>
+
+      <motion.div
+        variants={riseChild}
+        id="panel-transcripts"
+        role="tabpanel"
+        aria-labelledby="tab-transcripts"
+        hidden={tab !== "transcripts"}
+      >
+        <AssessmentTranscripts
+          state={transcripts}
+          live={live}
+          recording={recorder.recording}
+          ownerId={viewerId}
+          subject={subject}
+          version={recordingsVersion}
+          since={bootcamp ? new Date(`${bootcamp.startDate}T00:00`).getTime() : null}
+        />
+      </motion.div>
+
       <motion.div
         variants={staggerParent(0.04)}
+        id="panel-scoring"
+        role="tabpanel"
+        aria-labelledby="tab-scoring"
+        hidden={tab !== "scoring"}
         className="divide-y overflow-hidden rounded-2xl border bg-card shadow-sm"
       >
         <motion.section variants={riseChild} className="space-y-3 px-5 py-4">
@@ -235,17 +303,7 @@ export function ScoringFormView({
             subject={subject}
             version={recordingsVersion}
             onChanged={() => setRecordingsVersion((v) => v + 1)}
-          >
-            <AssessmentTranscripts
-              state={transcripts}
-              live={live}
-              recording={recorder.recording}
-              ownerId={viewerId}
-              subject={subject}
-              version={recordingsVersion}
-              since={bootcamp ? new Date(`${bootcamp.startDate}T00:00`).getTime() : null}
-            />
-          </RecordingPanel>
+          />
         </motion.section>
 
         {criteria.map((c, i) => {
