@@ -1,9 +1,10 @@
 "use client";
 
 /**
- * One person's bootcamp history row, laid out: who they are, then BTC and INT
- * side by side. Shown from Bootcamp History and from Cohorts → Previous, so
- * the page that opened it says where its back link goes.
+ * One person's bootcamp history row, laid out in one card: who they are, then
+ * BTC and INT side by side, then when the row was last changed. Shown from
+ * Bootcamp History and from Cohorts → Previous, so the page that opened it
+ * says where its back link goes.
  */
 
 import Link from "next/link";
@@ -62,50 +63,55 @@ export function HistoryDetailView({
         </div>
       </motion.div>
 
-      {employee && (
-        <motion.section variants={riseChild} className="rounded-2xl border bg-card p-6 shadow-sm">
-          <h2 className="mb-4 text-sm font-medium text-muted-foreground">Employee</h2>
-          <dl className="grid gap-x-8 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
-            <Field label="Title">{employee.title || "—"}</Field>
-            <Field label="Department">{employee.department || "—"}</Field>
-            <Field label="Site">{employee.site || "—"}</Field>
-            <Field label="Manager">
-              {employee.reportsToName || employee.reportsToEmail || "—"}
-              {employee.reportsToName && employee.reportsToEmail && (
-                <span className="block text-xs text-muted-foreground">{employee.reportsToEmail}</span>
-              )}
-            </Field>
-            <Field label="Started">{formatDate(employee.startDate)}</Field>
-            <Field label="Track">{employee.track ? TRACK_LABELS[employee.track] : "—"}</Field>
+      <motion.div
+        variants={staggerParent(0.04)}
+        className="divide-y overflow-hidden rounded-2xl border bg-card shadow-sm"
+      >
+        {employee && (
+          <motion.section variants={riseChild} className="px-5 py-4">
+            <h2 className="mb-4 text-sm font-medium text-muted-foreground">Employee</h2>
+            <dl className="grid gap-x-8 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
+              <Field label="Title">{employee.title || "—"}</Field>
+              <Field label="Department">{employee.department || "—"}</Field>
+              <Field label="Site">{employee.site || "—"}</Field>
+              <Field label="Manager">
+                {employee.reportsToName || employee.reportsToEmail || "—"}
+                {employee.reportsToName && employee.reportsToEmail && (
+                  <span className="block text-xs text-muted-foreground">{employee.reportsToEmail}</span>
+                )}
+              </Field>
+              <Field label="Started">{formatDate(employee.startDate)}</Field>
+              <Field label="Track">{employee.track ? TRACK_LABELS[employee.track] : "—"}</Field>
+            </dl>
+          </motion.section>
+        )}
+
+        <motion.div variants={riseChild} className="grid divide-y md:grid-cols-2 md:divide-x md:divide-y-0">
+          <ClassCard
+            name="Bootcamp"
+            code="BTC"
+            date={detail.btcDate}
+            score={detail.btcScore}
+            individual={detail.btcIndividualScores}
+          />
+          <ClassCard
+            name="Intermediate"
+            code="INT"
+            date={detail.intDate}
+            score={detail.intScore}
+            individual={detail.intIndividualScores}
+          />
+        </motion.div>
+
+        <motion.section variants={riseChild} className="px-5 py-4">
+          <h2 className="mb-4 text-sm font-medium text-muted-foreground">Record</h2>
+          <dl className="grid gap-x-8 gap-y-4 sm:grid-cols-3">
+            <Field label="Created">{formatWhen(detail.createdAt)}</Field>
+            <Field label="Last changed">{formatWhen(detail.updatedAt)}</Field>
+            <Field label="Last changed by">{detail.updatedByName ?? "—"}</Field>
           </dl>
         </motion.section>
-      )}
-
-      <motion.div variants={riseChild} className="grid gap-6 md:grid-cols-2">
-        <ClassCard
-          name="Bootcamp"
-          code="BTC"
-          date={detail.btcDate}
-          score={detail.btcScore}
-          individual={detail.btcIndividualScores}
-        />
-        <ClassCard
-          name="Intermediate"
-          code="INT"
-          date={detail.intDate}
-          score={detail.intScore}
-          individual={detail.intIndividualScores}
-        />
       </motion.div>
-
-      <motion.section variants={riseChild} className="rounded-2xl border bg-card p-6 shadow-sm">
-        <h2 className="mb-4 text-sm font-medium text-muted-foreground">Record</h2>
-        <dl className="grid gap-x-8 gap-y-4 sm:grid-cols-3">
-          <Field label="Created">{formatWhen(detail.createdAt)}</Field>
-          <Field label="Last changed">{formatWhen(detail.updatedAt)}</Field>
-          <Field label="Last changed by">{detail.updatedByName ?? "—"}</Field>
-        </dl>
-      </motion.section>
     </motion.div>
   );
 }
@@ -136,7 +142,7 @@ function ClassCard({
   const scores = Object.entries(individual ?? {});
 
   return (
-    <section className="flex flex-col gap-5 rounded-2xl border bg-card p-6 shadow-sm">
+    <section className="flex flex-col gap-5 px-5 py-4">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h2 className="text-lg font-medium tracking-tight">{name}</h2>

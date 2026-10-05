@@ -154,73 +154,73 @@ export function AssessmentEditor({ assessment }: { assessment: Detail | null }) 
         </div>
       </motion.div>
 
-      <motion.section variants={riseChild} className="space-y-4 rounded-2xl border bg-card p-6 shadow-sm">
-        <div className="space-y-1.5">
-          <label htmlFor="assessment-name" className="text-sm font-medium">
-            Name
+      <motion.div
+        variants={staggerParent(0.04)}
+        className="divide-y overflow-hidden rounded-2xl border bg-card shadow-sm"
+      >
+        <motion.section variants={riseChild} className="space-y-4 px-5 py-4">
+          <div className="space-y-1.5">
+            <label htmlFor="assessment-name" className="text-sm font-medium">
+              Name
+            </label>
+            <Input
+              id="assessment-name"
+              value={name}
+              maxLength={EVALS_ASSESSMENT_LIMITS.name}
+              onChange={(e) => setName(e.target.value)}
+            />
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <label htmlFor="assessment-stage" className="text-sm font-medium">
+                Session
+              </label>
+              <select
+                id="assessment-stage"
+                value={stage}
+                disabled={locked}
+                onChange={(e) => setStage(e.target.value as EvalsAssessmentStage)}
+                className={SELECT}
+              >
+                {EVALS_ASSESSMENT_STAGES.map((s) => (
+                  <option key={s} value={s}>
+                    {STAGE_LABELS[s]}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <label htmlFor="assessment-audience" className="text-sm font-medium">
+                Group
+              </label>
+              <select
+                id="assessment-audience"
+                value={audience}
+                disabled={locked}
+                onChange={(e) => setAudience(e.target.value as EvalsAssessmentAudience)}
+                className={SELECT}
+              >
+                {EVALS_ASSESSMENT_AUDIENCES.map((a) => (
+                  <option key={a} value={a}>
+                    {AUDIENCE_LABELS[a]}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={active}
+              onChange={(e) => setActive(e.target.checked)}
+              className="size-3.5 shrink-0 accent-brand"
+            />
+            Active — offered for scoring on the eVals page
           </label>
-          <Input
-            id="assessment-name"
-            value={name}
-            maxLength={EVALS_ASSESSMENT_LIMITS.name}
-            onChange={(e) => setName(e.target.value)}
-          />
-        </div>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-1.5">
-            <label htmlFor="assessment-stage" className="text-sm font-medium">
-              Session
-            </label>
-            <select
-              id="assessment-stage"
-              value={stage}
-              disabled={locked}
-              onChange={(e) => setStage(e.target.value as EvalsAssessmentStage)}
-              className={SELECT}
-            >
-              {EVALS_ASSESSMENT_STAGES.map((s) => (
-                <option key={s} value={s}>
-                  {STAGE_LABELS[s]}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="space-y-1.5">
-            <label htmlFor="assessment-audience" className="text-sm font-medium">
-              Group
-            </label>
-            <select
-              id="assessment-audience"
-              value={audience}
-              disabled={locked}
-              onChange={(e) => setAudience(e.target.value as EvalsAssessmentAudience)}
-              className={SELECT}
-            >
-              {EVALS_ASSESSMENT_AUDIENCES.map((a) => (
-                <option key={a} value={a}>
-                  {AUDIENCE_LABELS[a]}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-        <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={active}
-            onChange={(e) => setActive(e.target.checked)}
-            className="size-3.5 shrink-0 accent-brand"
-          />
-          Active — offered for scoring on the eVals page
-        </label>
-      </motion.section>
+        </motion.section>
 
-      <motion.section variants={riseChild} className="space-y-4">
-        <h3 className="text-sm font-medium text-muted-foreground">
-          {criteria.length} {criteria.length === 1 ? "criterion" : "criteria"}, each scored 1 to 4
-        </h3>
         {criteria.map((c, i) => (
-          <div key={c.key} className="space-y-3 rounded-2xl border bg-card p-5 shadow-sm">
+          <motion.div key={c.key} variants={riseChild} className="px-5 py-4">
             <div className="flex items-start gap-2">
               <span className="mt-2 w-6 shrink-0 text-sm text-muted-foreground">{i + 1}.</span>
               <div className="flex-1 space-y-3">
@@ -275,17 +275,22 @@ export function AssessmentEditor({ assessment }: { assessment: Detail | null }) 
                 </Button>
               </div>
             </div>
-          </div>
+          </motion.div>
         ))}
-        <Button
-          variant="outline"
-          disabled={criteria.length >= EVALS_ASSESSMENT_LIMITS.criteria}
-          onClick={() => setCriteria((list) => [...list, { key: newKey(), name: "", description: "", scored: false }])}
-        >
-          <Plus />
-          Add criterion
-        </Button>
-      </motion.section>
+        <motion.div variants={riseChild} className="flex flex-wrap items-center gap-3 px-5 py-4">
+          <Button
+            variant="outline"
+            disabled={criteria.length >= EVALS_ASSESSMENT_LIMITS.criteria}
+            onClick={() => setCriteria((list) => [...list, { key: newKey(), name: "", description: "", scored: false }])}
+          >
+            <Plus />
+            Add criterion
+          </Button>
+          <span className="text-sm text-muted-foreground">
+            {criteria.length} {criteria.length === 1 ? "criterion" : "criteria"}, each scored 1 to 4
+          </span>
+        </motion.div>
+      </motion.div>
 
       {error && (
         <motion.p variants={riseChild} role="alert" className="text-sm text-destructive">

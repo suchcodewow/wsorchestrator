@@ -3,13 +3,7 @@
 /** One event: its status, credentials, resources and log. */
 
 import { StatusBadge } from "@/components/status-badge";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   CLOUD_LABELS,
   editabilityOf,
@@ -308,28 +302,20 @@ export function RunView({
         </motion.div>
       )}
 
-      {accounts.length > 0 && (
-        <motion.div variants={riseChild}>
-          <AttendeeLink runId={run.id} mode={run.mode} />
-        </motion.div>
-      )}
+      <motion.div
+        variants={staggerParent(0.04)}
+        className="divide-y overflow-hidden rounded-2xl border bg-card text-card-foreground shadow-sm"
+      >
+        {accounts.length > 0 && <AttendeeLink runId={run.id} mode={run.mode} />}
 
-      {(resources.length > 0 || ACTIVE.has(run.status)) && (
-        <motion.div variants={riseChild}>
+        {(resources.length > 0 || ACTIVE.has(run.status)) && (
           <BuiltPanel run={run} resources={resources} />
-        </motion.div>
-      )}
+        )}
 
-      {outputs && Object.keys(outputs).length > 0 && (
-        <motion.div variants={riseChild}>
-          <Card>
-            <CardHeader className="flex-row items-start justify-between gap-4">
-              <div className="grid gap-1.5">
-                <CardTitle>Raw outputs</CardTitle>
-                <CardDescription>
-                  Every value Terraform returned, as it returned it.
-                </CardDescription>
-              </div>
+        {outputs && Object.keys(outputs).length > 0 && (
+          <Panel
+            title="Raw outputs"
+            action={
               <Button
                 variant="outline"
                 size="sm"
@@ -344,9 +330,10 @@ export function RunView({
                   )}
                 />
               </Button>
-            </CardHeader>
+            }
+          >
             {showOutputs && (
-              <CardContent className="grid gap-2.5 text-sm">
+              <div className="grid gap-2.5 text-sm">
                 {Object.entries(outputs).map(([k, v]) => (
                   <div key={k} className="flex gap-3">
                     <span className="w-40 shrink-0 text-muted-foreground">
@@ -355,130 +342,125 @@ export function RunView({
                     <OutputValue value={v} />
                   </div>
                 ))}
-              </CardContent>
+              </div>
             )}
-          </Card>
-        </motion.div>
-      )}
+          </Panel>
+        )}
 
-      <motion.div variants={riseChild}>
-        <RunConfig
-          run={run}
-          editability={imported ? "locked" : editabilityOf(run.status)}
-          onSaved={refresh}
-        />
-      </motion.div>
+        <Panel title="Configuration">
+          <RunConfig
+            run={run}
+            editability={imported ? "locked" : editabilityOf(run.status)}
+            onSaved={refresh}
+          />
+        </Panel>
 
-      {accounts.length > 0 && (
-        <motion.div variants={riseChild}>
-        <Card>
-          <CardHeader className="flex-row items-start justify-between gap-4">
-            <div className="grid gap-1.5">
-              <CardTitle>
-                {run.mode === "challenge" ? "Competitor" : "Attendee"} accounts
-              </CardTitle>
-              <CardDescription>
+        {accounts.length > 0 && (
+          <Panel
+            title={`${run.mode === "challenge" ? "Competitor" : "Attendee"} accounts`}
+            description={
+              <>
                 {accounts.length} of {run.userCount} created
                 {claimed > 0 && ` · ${claimed} claimed`}
-              </CardDescription>
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowCredentials((on) => !on)}
-              aria-expanded={showCredentials}
-            >
-              {showCredentials ? "Hide" : "Show"} credentials
-              <ChevronDown
-                className={cn(
-                  "transition-transform duration-200",
-                  showCredentials && "rotate-180",
-                )}
-              />
-            </Button>
-          </CardHeader>
-          {showCredentials && (
-          <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-[11px] uppercase tracking-wider text-muted-foreground">
-                    <th className="pb-2 font-medium">Email</th>
-                    <th className="pb-2 font-medium">Temporary password</th>
-                    {hasAccessPass && (
-                      <th className="pb-2 font-medium">Azure access pass</th>
-                    )}
-                    <th className="pb-2 font-medium">Claimed by</th>
-                  </tr>
-                </thead>
-                <tbody className="font-mono">
-                  {accounts.map((a) => (
-                    <tr
-                      key={a.id}
-                      className="border-t transition-colors hover:bg-muted/40"
-                    >
-                      <td className="py-2 pr-4 break-all">{a.email}</td>
-                      <td className="py-2 pr-4">{a.tempPassword}</td>
-                      {hasAccessPass && (
-                        <td className="py-2 pr-4">
-                          {a.azureAccessPass ?? (
-                            <span className="font-sans text-muted-foreground">
-                              none
-                            </span>
-                          )}
-                        </td>
-                      )}
-                      <td className="py-2 font-sans">
-                        {a.claimedName ?? (
-                          <span className="text-muted-foreground">
-                            unclaimed
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <p className="mt-3 text-xs text-muted-foreground">
-              This password works in every cloud except AWS, which generates its
-              own on the attendee page
-              {hasAccessPass && ", and Azure, which asks for the access pass"}.
-            </p>
-          </CardContent>
-          )}
-        </Card>
-        </motion.div>
-      )}
-
-      <motion.div variants={riseChild}>
-      <Card>
-        <CardHeader className="flex-row items-center justify-between">
-          <CardTitle>Build log</CardTitle>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={tail}
-            onClick={() => setTail((on) => !on)}
-            className="group inline-flex cursor-pointer items-center gap-2 text-xs text-muted-foreground transition-colors hover:text-foreground"
+              </>
+            }
+            action={
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowCredentials((on) => !on)}
+                aria-expanded={showCredentials}
+              >
+                {showCredentials ? "Hide" : "Show"} credentials
+                <ChevronDown
+                  className={cn(
+                    "transition-transform duration-200",
+                    showCredentials && "rotate-180",
+                  )}
+                />
+              </Button>
+            }
           >
-            Follow
-            <span
-              className={cn(
-                "relative h-5 w-9 rounded-full transition-colors",
-                tail ? "bg-brand" : "bg-input",
-              )}
+            {showCredentials && (
+              <div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-[11px] uppercase tracking-wider text-muted-foreground">
+                        <th className="pb-2 font-medium">Email</th>
+                        <th className="pb-2 font-medium">Temporary password</th>
+                        {hasAccessPass && (
+                          <th className="pb-2 font-medium">Azure access pass</th>
+                        )}
+                        <th className="pb-2 font-medium">Claimed by</th>
+                      </tr>
+                    </thead>
+                    <tbody className="font-mono">
+                      {accounts.map((a) => (
+                        <tr
+                          key={a.id}
+                          className="border-t transition-colors hover:bg-muted/40"
+                        >
+                          <td className="py-2 pr-4 break-all">{a.email}</td>
+                          <td className="py-2 pr-4">{a.tempPassword}</td>
+                          {hasAccessPass && (
+                            <td className="py-2 pr-4">
+                              {a.azureAccessPass ?? (
+                                <span className="font-sans text-muted-foreground">
+                                  none
+                                </span>
+                              )}
+                            </td>
+                          )}
+                          <td className="py-2 font-sans">
+                            {a.claimedName ?? (
+                              <span className="text-muted-foreground">
+                                unclaimed
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="mt-3 text-xs text-muted-foreground">
+                  This password works in every cloud except AWS, which generates
+                  its own on the attendee page
+                  {hasAccessPass && ", and Azure, which asks for the access pass"}.
+                </p>
+              </div>
+            )}
+          </Panel>
+        )}
+
+        <Panel
+          title="Build log"
+          action={
+            <button
+              type="button"
+              role="switch"
+              aria-checked={tail}
+              onClick={() => setTail((on) => !on)}
+              className="group inline-flex cursor-pointer items-center gap-2 text-xs text-muted-foreground transition-colors hover:text-foreground"
             >
+              Follow
               <span
                 className={cn(
-                  "absolute top-0.5 size-4 rounded-full bg-white shadow-xs transition-all",
-                  tail ? "left-4.5" : "left-0.5",
+                  "relative h-5 w-9 rounded-full transition-colors",
+                  tail ? "bg-brand" : "bg-input",
                 )}
-              />
-            </span>
-          </button>
-        </CardHeader>
-        <CardContent>
+              >
+                <span
+                  className={cn(
+                    "absolute top-0.5 size-4 rounded-full bg-white shadow-xs transition-all",
+                    tail ? "left-4.5" : "left-0.5",
+                  )}
+                />
+              </span>
+            </button>
+          }
+        >
           <div
             ref={logBoxRef}
             className="scrollbar-on-dark max-h-112 overflow-auto rounded-lg border border-slate-800 bg-slate-950 p-4 font-mono text-xs leading-relaxed text-slate-200"
@@ -508,8 +490,7 @@ export function RunView({
               </motion.div>
             ))}
           </div>
-        </CardContent>
-      </Card>
+        </Panel>
       </motion.div>
     </motion.div>
   );
@@ -549,35 +530,32 @@ function BuiltPanel({
     !teardownGaveUp && (run.status === "destroying" || run.deleteRequested);
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{building ? "Building" : "Environment"}</CardTitle>
-        <CardDescription>
-          {teardownGaveUp
-            ? "Teardown stopped early, so anything listed here may still exist."
-            : tearingDown
-              ? "Being torn down — these disappear as they are removed."
-              : building
-                ? "Each item appears here as soon as it exists."
-                : `Everything this ${run.mode} created.`}
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        {resources.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            Nothing built yet — the first items appear within a minute.
-          </p>
-        ) : (
-          <ul className="grid gap-2">
-            <AnimatePresence initial={false}>
-              {resources.map((r) => (
-                <ResourceRow key={r.id} resource={r} />
-              ))}
-            </AnimatePresence>
-          </ul>
-        )}
-      </CardContent>
-    </Card>
+    <Panel
+      title={building ? "Building" : "Environment"}
+      description={
+        teardownGaveUp
+          ? "Teardown stopped early, so anything listed here may still exist."
+          : tearingDown
+            ? "Being torn down — these disappear as they are removed."
+            : building
+              ? "Each item appears here as soon as it exists."
+              : `Everything this ${run.mode} created.`
+      }
+    >
+      {resources.length === 0 ? (
+        <p className="text-sm text-muted-foreground">
+          Nothing built yet — the first items appear within a minute.
+        </p>
+      ) : (
+        <ul className="grid gap-2">
+          <AnimatePresence initial={false}>
+            {resources.map((r) => (
+              <ResourceRow key={r.id} resource={r} />
+            ))}
+          </AnimatePresence>
+        </ul>
+      )}
+    </Panel>
   );
 }
 
@@ -654,11 +632,8 @@ function AttendeeLink({ runId, mode }: { runId: string; mode: string }) {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Attendee page</CardTitle>
-      </CardHeader>
-      <CardContent>
+    <Panel title="Attendee page">
+      <div>
         <p className="text-sm text-muted-foreground">
           Share this link with the room to let attendees claim an account.
         </p>
@@ -681,8 +656,41 @@ function AttendeeLink({ runId, mode }: { runId: string; mode: string }) {
           This link is available to anyone and will be removed when the {mode}{" "}
           ends.
         </p>
-      </CardContent>
-    </Card>
+      </div>
+    </Panel>
+  );
+}
+
+/** One row of the run's card: a heading, an optional control beside it, then its body. */
+function Panel({
+  title,
+  description,
+  action,
+  children,
+}: {
+  title: React.ReactNode;
+  description?: React.ReactNode;
+  action?: React.ReactNode;
+  children?: React.ReactNode;
+}) {
+  return (
+    <motion.section variants={riseChild} className="space-y-4 px-5 py-4">
+      <div
+        className={cn(
+          "flex justify-between gap-4",
+          description ? "items-start" : "items-center",
+        )}
+      >
+        <div className="grid gap-1.5">
+          <h2 className="font-medium leading-none tracking-tight">{title}</h2>
+          {description && (
+            <p className="text-sm text-muted-foreground">{description}</p>
+          )}
+        </div>
+        {action}
+      </div>
+      {children}
+    </motion.section>
   );
 }
 

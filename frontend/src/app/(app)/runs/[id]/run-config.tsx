@@ -1,12 +1,14 @@
 "use client";
 
-/** The form for changing an event's users and clouds. */
+/**
+ * The form for changing an event's users and clouds. The run page gives it
+ * its heading and its row in the page's card.
+ */
 
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { Check, Loader2, Lock, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { SPRING_SNAPPY } from "@/lib/motion";
@@ -125,133 +127,128 @@ export function RunConfig({
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Configuration</CardTitle>
-      </CardHeader>
-      <CardContent className="grid gap-4">
-        {locked ? (
-          <p className="text-sm text-muted-foreground">
-            {run.status === "destroyed" || run.status === "failed"
-              ? `This ${run.mode} has finished — its configuration is fixed.`
-              : "Configuration can be changed once provisioning is ready."}
-          </p>
-        ) : (
-          <p className="text-sm text-muted-foreground">
-            {growOnly
-              ? `This ${run.mode} is live, so you can add users${
-                  singleCloud ? "" : " and clouds"
-                } but not remove them.`
-              : `This ${run.mode} hasn't been provisioned yet, so anything can change.`}
-          </p>
-        )}
+    <div className="grid gap-4">
+      {locked ? (
+        <p className="text-sm text-muted-foreground">
+          {run.status === "destroyed" || run.status === "failed"
+            ? `This ${run.mode} has finished — its configuration is fixed.`
+            : "Configuration can be changed once provisioning is ready."}
+        </p>
+      ) : (
+        <p className="text-sm text-muted-foreground">
+          {growOnly
+            ? `This ${run.mode} is live, so you can add users${
+                singleCloud ? "" : " and clouds"
+              } but not remove them.`
+            : `This ${run.mode} hasn't been provisioned yet, so anything can change.`}
+        </p>
+      )}
 
-        <div className="grid gap-1.5">
-          <label htmlFor="cfg-users" className="text-sm font-medium">
-            Users
-          </label>
-          <Input
-            id="cfg-users"
-            type="number"
-            inputMode="numeric"
-            min={growOnly ? run.userCount : 1}
-            max={limits.maxUsers}
-            step={1}
-            value={userCount}
-            disabled={locked || pending}
-            onChange={(e) => setUserCount(e.target.value)}
-            className="max-w-32 tnum"
-          />
-        </div>
+      <div className="grid gap-1.5">
+        <label htmlFor="cfg-users" className="text-sm font-medium">
+          Users
+        </label>
+        <Input
+          id="cfg-users"
+          type="number"
+          inputMode="numeric"
+          min={growOnly ? run.userCount : 1}
+          max={limits.maxUsers}
+          step={1}
+          value={userCount}
+          disabled={locked || pending}
+          onChange={(e) => setUserCount(e.target.value)}
+          className="max-w-32 tnum"
+        />
+      </div>
 
-        <fieldset className="grid gap-2">
-          <legend className="mb-2 text-sm font-medium">
-            {singleCloud ? "Cloud" : "Clouds"}
-          </legend>
-          <div className="grid gap-2">
-            {CLOUDS.map((cloud) => {
-              const provisioned = growOnly && run.clouds.includes(cloud);
-              const selected = clouds.includes(cloud);
-              const disabled = locked || pending || provisioned;
+      <fieldset className="grid gap-2">
+        <legend className="mb-2 text-sm font-medium">
+          {singleCloud ? "Cloud" : "Clouds"}
+        </legend>
+        <div className="grid gap-2">
+          {CLOUDS.map((cloud) => {
+            const provisioned = growOnly && run.clouds.includes(cloud);
+            const selected = clouds.includes(cloud);
+            const disabled = locked || pending || provisioned;
 
-              return (
-                <motion.button
-                  key={cloud}
-                  type="button"
-                  role={singleCloud ? "radio" : "checkbox"}
-                  aria-checked={selected}
-                  disabled={disabled}
-                  onClick={() => toggleCloud(cloud)}
-                  whileTap={disabled ? undefined : { scale: 0.99 }}
-                  transition={SPRING_SNAPPY}
+            return (
+              <motion.button
+                key={cloud}
+                type="button"
+                role={singleCloud ? "radio" : "checkbox"}
+                aria-checked={selected}
+                disabled={disabled}
+                onClick={() => toggleCloud(cloud)}
+                whileTap={disabled ? undefined : { scale: 0.99 }}
+                transition={SPRING_SNAPPY}
+                className={cn(
+                  "flex items-center gap-3 rounded-lg border p-3 text-left text-sm transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
+                  selected ? "border-brand-border bg-brand/8" : "",
+                  disabled
+                    ? "cursor-not-allowed opacity-70"
+                    : cn(
+                        "cursor-pointer",
+                        !selected && "hover:border-brand-border/60 hover:bg-accent/40",
+                      ),
+                )}
+              >
+                <span
                   className={cn(
-                    "flex items-center gap-3 rounded-lg border p-3 text-left text-sm transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
-                    selected ? "border-brand-border bg-brand/8" : "",
-                    disabled
-                      ? "cursor-not-allowed opacity-70"
-                      : cn(
-                          "cursor-pointer",
-                          !selected && "hover:border-brand-border/60 hover:bg-accent/40",
-                        ),
+                    "flex size-4.5 shrink-0 items-center justify-center border transition-colors",
+                    singleCloud ? "rounded-full" : "rounded-[5px]",
+                    selected
+                      ? "border-brand bg-brand text-brand-foreground"
+                      : "border-input",
                   )}
                 >
-                  <span
-                    className={cn(
-                      "flex size-4.5 shrink-0 items-center justify-center border transition-colors",
-                      singleCloud ? "rounded-full" : "rounded-[5px]",
-                      selected
-                        ? "border-brand bg-brand text-brand-foreground"
-                        : "border-input",
-                    )}
-                  >
-                    {selected && <Check className="size-3" strokeWidth={3} />}
+                  {selected && <Check className="size-3" strokeWidth={3} />}
+                </span>
+                <span className="font-medium">{CLOUD_LABELS[cloud]}</span>
+                {provisioned && (
+                  <span className="ml-auto inline-flex items-center gap-1 text-xs text-muted-foreground">
+                    <Lock className="size-3" /> provisioned
                   </span>
-                  <span className="font-medium">{CLOUD_LABELS[cloud]}</span>
-                  {provisioned && (
-                    <span className="ml-auto inline-flex items-center gap-1 text-xs text-muted-foreground">
-                      <Lock className="size-3" /> provisioned
-                    </span>
-                  )}
-                </motion.button>
-              );
-            })}
-          </div>
-        </fieldset>
+                )}
+              </motion.button>
+            );
+          })}
+        </div>
+      </fieldset>
 
-        {run.mode === "challenge" && (
-          <ScenarioPicker
-            clouds={clouds}
-            selected={scenarios}
-            onToggle={toggleScenario}
-            disabled={locked || pending}
-            hint={
-              growOnly
-                ? "Unlike a cloud, a scenario can be turned off again — saving removes just that scenario's resources. The competitors' clusters stay up either way."
-                : undefined
-            }
-          />
-        )}
+      {run.mode === "challenge" && (
+        <ScenarioPicker
+          clouds={clouds}
+          selected={scenarios}
+          onToggle={toggleScenario}
+          disabled={locked || pending}
+          hint={
+            growOnly
+              ? "Unlike a cloud, a scenario can be turned off again — saving removes just that scenario's resources. The competitors' clusters stay up either way."
+              : undefined
+          }
+        />
+      )}
 
-        {error && <p className="text-sm text-destructive">{error}</p>}
-        {saved && !dirty && !error && (
-          <p className="text-sm text-emerald-600">Saved.</p>
-        )}
+      {error && <p className="text-sm text-destructive">{error}</p>}
+      {saved && !dirty && !error && (
+        <p className="text-sm text-emerald-600">Saved.</p>
+      )}
 
-        {!locked && (
-          <div>
-            <Button variant="brand" onClick={save} disabled={!dirty || pending}>
-              {pending ? <Loader2 className="animate-spin" /> : <Save />}
-              {pending ? "Saving…" : "Save changes"}
-            </Button>
-            {growOnly && dirty && (
-              <p className="mt-2 text-xs text-muted-foreground">
-                Saving creates the additions; existing accounts keep their
-                credentials.
-              </p>
-            )}
-          </div>
-        )}
-      </CardContent>
-    </Card>
+      {!locked && (
+        <div>
+          <Button variant="brand" onClick={save} disabled={!dirty || pending}>
+            {pending ? <Loader2 className="animate-spin" /> : <Save />}
+            {pending ? "Saving…" : "Save changes"}
+          </Button>
+          {growOnly && dirty && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              Saving creates the additions; existing accounts keep their
+              credentials.
+            </p>
+          )}
+        </div>
+      )}
+    </div>
   );
 }

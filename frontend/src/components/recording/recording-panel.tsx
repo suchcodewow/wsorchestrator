@@ -3,7 +3,8 @@
 /**
  * Record and Stop for one subject, with what this browser already holds for
  * it underneath. The recorder is passed in rather than owned, so the page can
- * stop it too — the scoring form does, on Submit.
+ * stop it too — the scoring form does, on Submit. It draws no card of its
+ * own: the page puts it in one, as a row beside whatever it records.
  */
 
 import Link from "next/link";
@@ -33,7 +34,7 @@ export function RecordingPanel({
   const saved = (recordings ?? []).filter((r) => r.status !== "recording");
 
   return (
-    <div className="space-y-3 rounded-2xl border bg-card p-5 shadow-sm">
+    <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-3">
         {recorder.recording ? (
           <>
