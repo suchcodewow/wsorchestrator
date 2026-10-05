@@ -1,9 +1,10 @@
 "use client";
 
 /**
- * A breakout's groups: a box for each of its instructors, with the room they
- * take it to, and the attendees it is taught to dragged into them. Each
- * instructor evaluates their group there on the exercise. Anyone in no box, in
+ * A breakout's assessment and groups: a box for each of its instructors, with
+ * the room they take it to, and the attendees it is taught to dragged into
+ * them. Each instructor evaluates their group there on the assessment picked,
+ * and finds them under Assigned to me on it in eVals. Anyone in no box, in
  * the box of someone since taken off the session, or on a track it no longer
  * teaches, is not assigned. Auto-assign shares out whoever is left and gives
  * each instructor without a room the smallest free one that seats their group.
@@ -26,10 +27,11 @@ import {
 import { Crown, DoorOpen, Eraser, Loader2, WandSparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AUDIENCE_TRACKS, SCHEDULE_LIMITS, type ScheduleTrack, type SessionAudience } from "@/db/schema";
+import { STAGE_LABELS } from "@/lib/evals/assessment-values";
 import type { RoomRow } from "@/lib/scheduler/facilities";
 import type { GroupAttendee, GroupRow } from "@/lib/scheduler/groups";
-import type { StaffRow } from "@/lib/scheduler/schedule";
-import { describeClash, type Clash } from "@/lib/scheduler/timeline";
+import type { BreakoutAssessment, StaffRow } from "@/lib/scheduler/schedule";
+import { describeClash, stageOf, type Clash } from "@/lib/scheduler/timeline";
 import { cn } from "@/lib/utils";
 
 type Person = { email: string; fullName: string; title: string; track: GroupAttendee["track"] | null; inClass: boolean };
@@ -44,22 +46,7 @@ export function keptGroups(groups: GroupRow[], staff: StaffRow[], audience: Sess
   return groups.filter((g) => onStaff.has(g.instructorEmail) && taught(g.track));
 }
 
-export function BreakoutGroups({
-  bootcampId,
-  sessionId,
-  track,
-  audience,
-  staff,
-  rooms,
-  busyRooms,
-  beforeRooms,
-  hasFacility,
-  roomName,
-  value,
-  onChange,
-  onRooms,
-  editable,
-}: {
+type GroupsProps = {
   bootcampId: string;
   /** Unset for a session not added yet, which has no groups. */
   sessionId: string | null;
@@ -80,7 +67,102 @@ export function BreakoutGroups({
   /** Sets the rooms of the instructors named, by email; null for none. */
   onRooms: (rooms: Record<string, string | null>) => void;
   editable: boolean;
+};
+
+export function BreakoutGroups({
+  assessments,
+  assessmentId,
+  onAssessment,
+  ...rest
+}: GroupsProps & {
+  assessments: BreakoutAssessment[];
+  assessmentId: string | null;
+  onAssessment: (id: string | null) => void;
 }) {
+  return (
+    <div className="grid gap-5">
+      <AssessmentPick
+        stage={stageOf(rest.track)}
+        assessments={assessments}
+        value={assessmentId}
+        onChange={onAssessment}
+        editable={rest.editable}
+      />
+      <Groups {...rest} />
+    </div>
+  );
+}
+
+/** The assessment the instructors score their groups on, of the stage the track is taught to. */
+function AssessmentPick({
+  stage,
+  assessments,
+  value,
+  onChange,
+  editable,
+}: {
+  stage: BreakoutAssessment["stage"];
+  assessments: BreakoutAssessment[];
+  value: string | null;
+  onChange: (id: string | null) => void;
+  editable: boolean;
+}) {
+  const offered = assessments.filter((a) => a.stage === stage && (a.active || a.id === value));
+  const picked = assessments.find((a) => a.id === value) ?? null;
+  const name = (a: BreakoutAssessment) => (a.active ? a.name : `${a.name} (inactive)`);
+
+  if (!editable) {
+    return (
+      <p className="text-sm">
+        <span className="font-medium">Assessment:</span>{" "}
+        {picked ? name(picked) : <span className="text-muted-foreground">None</span>}
+      </p>
+    );
+  }
+  return (
+    <div className="grid gap-1.5">
+      <label htmlFor="breakout-assessment" className="text-sm font-medium">
+        Assessment
+      </label>
+      <select
+        id="breakout-assessment"
+        value={value ?? ""}
+        onChange={(e) => onChange(e.target.value || null)}
+        className={cn(
+          "h-9 w-full rounded-md border border-input bg-transparent px-2 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-input/30",
+          !value && "text-muted-foreground",
+        )}
+      >
+        <option value="">{offered.length === 0 ? `No active ${STAGE_LABELS[stage]} assessments` : "None"}</option>
+        {offered.map((a) => (
+          <option key={a.id} value={a.id}>
+            {name(a)}
+          </option>
+        ))}
+      </select>
+      {!value && offered.length > 0 && (
+        <p className="text-xs text-amber-700 dark:text-amber-400">Pick one so each instructor finds their group under Assigned to me in eVals.</p>
+      )}
+    </div>
+  );
+}
+
+function Groups({
+  bootcampId,
+  sessionId,
+  track,
+  audience,
+  staff,
+  rooms,
+  busyRooms,
+  beforeRooms,
+  hasFacility,
+  roomName,
+  value,
+  onChange,
+  onRooms,
+  editable,
+}: GroupsProps) {
   const [saved, setSaved] = useState<GroupRow[] | null>(sessionId ? null : []);
   const [cls, setCls] = useState<{ key: string; attendees: GroupAttendee[]; hasMore: boolean } | null>(null);
   const [error, setError] = useState<string | null>(null);

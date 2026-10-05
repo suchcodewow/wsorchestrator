@@ -1471,6 +1471,8 @@ export const scheduleSessions = pgTable(
     color: text("color").$type<SessionColor>().notNull().default("slate"),
     /** A main session's room. A breakout's rooms are on its staff. */
     roomId: uuid("room_id").references(() => facilityRooms.id, { onDelete: "set null" }),
+    /** The eVals assessment a breakout's instructors score their groups on; null on any other kind. */
+    assessmentId: uuid("assessment_id").references(() => evalsAssessments.id, { onDelete: "set null" }),
     createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()

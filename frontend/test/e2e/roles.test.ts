@@ -543,6 +543,7 @@ const ROUTES: RouteCase[] = [
   { method: "DELETE", path: `/api/evals/slack-contacts/${MISSING}`, allowed: canManageEvalsSettings },
   { method: "GET", path: "/api/evals/assessments", allowed: canManageEvalsSettings },
   { method: "POST", path: "/api/evals/assessments", allowed: canManageEvalsSettings, body: () => ({}) },
+  { method: "GET", path: "/api/evals/assessments/unassigned-breakouts", allowed: canManageEvalsSettings },
   { method: "GET", path: `/api/evals/assessments/${MISSING}`, allowed: canManageEvalsSettings },
   { method: "PUT", path: `/api/evals/assessments/${MISSING}`, allowed: canManageEvalsSettings, body: () => ({}) },
   { method: "DELETE", path: `/api/evals/assessments/${MISSING}`, allowed: canManageEvalsSettings },
