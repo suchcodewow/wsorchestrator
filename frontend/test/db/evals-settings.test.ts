@@ -22,6 +22,7 @@ process.env.AUTH_SECRET ||= "evals-settings-test-secret-evals-settings";
 import { db } from "@/db";
 import {
   bootcampHistory,
+  bootcampJudges,
   bootcamps,
   employees,
   employeeTrackOverrides,
@@ -31,6 +32,9 @@ import {
   evalsTitles,
   EXEMPT_DATE,
   hibobSyncRuns,
+  scheduleSessionGroups,
+  scheduleSessions,
+  scheduleSessionStaff,
 } from "@/db/schema";
 import {
   createHistory,
@@ -553,6 +557,71 @@ describe("HiBob sync", () => {
     const cutOff = await run(running!.id);
     assert.equal(cutOff.status, "failed");
     assert.match(cutOff.error ?? "", /Did not finish/);
+  });
+
+  test("names come from emails, and the copies kept with judges, staff, groups and contacts follow", async () => {
+    configure();
+    const judge = email("jo.judge");
+    const trainer = await scope.createUser("trainer", PERSONAS.trainingAdmin, email("ann.trainer"));
+    const [camp] = await db
+      .insert(bootcamps)
+      .values({ startDate: "2031-03-03", btcDays: 3, status: "scheduled", createdBy: admin.id })
+      .returning({ id: bootcamps.id });
+    try {
+      await db.insert(bootcampJudges).values([
+        { bootcampId: camp!.id, email: judge, fullName: "Josephine Mary Judge" },
+        { bootcampId: camp!.id, email: trainer.email, fullName: "Ann Elizabeth Trainer" },
+      ]);
+      const [session] = await db
+        .insert(scheduleSessions)
+        .values({ bootcampId: camp!.id, track: "btc", day: 1, start: 540, minutes: 60, kind: "breakout", name: "Demo" })
+        .returning({ id: scheduleSessions.id });
+      await db.insert(scheduleSessionStaff).values([
+        { sessionId: session!.id, email: judge, fullName: "Josephine Mary Judge", leader: true },
+        { sessionId: session!.id, email: trainer.email, fullName: "Ann (her account)" },
+      ]);
+      await db.insert(scheduleSessionGroups).values({
+        sessionId: session!.id,
+        email: email("sam.attendee"),
+        fullName: "Samuel Peter Attendee",
+        instructorEmail: judge,
+      });
+      await db.insert(evalsSlackContacts).values({ email: judge, fullName: "Josephine Mary Judge" });
+
+      stubHibob(200, [
+        { id: `${TEST_PREFIX}jo`, email: judge, fullName: "Josephine Mary Judge" },
+        { id: `${TEST_PREFIX}ann`, email: trainer.email, fullName: "Ann Elizabeth Trainer" },
+        {
+          id: `${TEST_PREFIX}sam`,
+          email: email("sam.attendee"),
+          fullName: "Samuel Peter Attendee",
+          work: { reportsTo: { email: judge, displayName: "Josephine Mary Judge" } },
+        },
+      ]);
+      const synced = await sync();
+      assert.ok(synced.ok, JSON.stringify(synced));
+
+      const stored = await db.select({ email: employees.email, fullName: employees.fullName, reportsToName: employees.reportsToName }).from(employees);
+      assert.deepEqual(stored.find((e) => e.email === email("sam.attendee")), {
+        email: email("sam.attendee"),
+        fullName: "Sam Attendee",
+        reportsToName: "Jo Judge",
+      });
+      const judges = await db.select().from(bootcampJudges).where(eq(bootcampJudges.bootcampId, camp!.id));
+      assert.deepEqual(judges.map((j) => j.fullName).sort(), ["Ann Trainer", "Jo Judge"]);
+      const staff = await db.select().from(scheduleSessionStaff).where(eq(scheduleSessionStaff.sessionId, session!.id));
+      // The administrator keeps the name the instructor list gives them, from their account.
+      assert.deepEqual(Object.fromEntries(staff.map((s) => [s.email, s.fullName])), {
+        [judge]: "Jo Judge",
+        [trainer.email]: "Ann (her account)",
+      });
+      const [group] = await db.select().from(scheduleSessionGroups).where(eq(scheduleSessionGroups.sessionId, session!.id));
+      assert.equal(group!.fullName, "Sam Attendee");
+      const [contact] = await db.select().from(evalsSlackContacts).where(eq(evalsSlackContacts.email, judge));
+      assert.equal(contact!.fullName, "Jo Judge");
+    } finally {
+      await db.delete(bootcamps).where(eq(bootcamps.id, camp!.id));
+    }
   });
 
   test("the sync gives each org member a track, exempt where their history says, and edits keep it", async () => {
