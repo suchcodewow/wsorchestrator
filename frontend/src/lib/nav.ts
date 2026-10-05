@@ -4,10 +4,11 @@ import {
   CalendarClock,
   CalendarCog,
   CalendarDays,
+  ChartColumn,
   Cloud,
   DatabaseBackup,
+  Eye,
   FlaskConical,
-  History,
   Inbox,
   Layers,
   ScrollText,
@@ -95,10 +96,11 @@ export const NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
-    heading: "eVals",
+    heading: "Assessments",
     items: [
       { href: "/evals", label: "eVals", Icon: FlaskConical, visible: canScoreAssessments },
-      { href: "/bootcamp-history", label: "Bootcamp History", Icon: History, visible: canUseEvals },
+      { href: "/iris", label: "Iris", Icon: Eye, visible: canUseEvals },
+      { href: "/reporting", label: "Reporting", Icon: ChartColumn, visible: canUseEvals },
       {
         href: "/evals-settings",
         label: "eVals settings",

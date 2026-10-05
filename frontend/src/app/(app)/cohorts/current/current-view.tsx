@@ -545,7 +545,7 @@ function PersonDetails({ member: m, canSeeScores }: { member: CurrentCohortMembe
           "None yet"
         ) : canSeeScores ? (
           <Link
-            href={`/bootcamp-history/${m.historyId}`}
+            href={`/reporting/bootcamp-history/${m.historyId}`}
             onClick={(ev) => ev.stopPropagation()}
             className="underline underline-offset-2 hover:text-foreground"
           >

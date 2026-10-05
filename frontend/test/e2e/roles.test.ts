@@ -53,6 +53,7 @@ import { visibleCohortSettingsTabs } from "@/app/(app)/cohort-settings/tabs";
 import { EVALS_SETTINGS_TABS } from "@/app/(app)/evals-settings/tabs";
 import { SCHEDULER_SETTINGS_TABS } from "@/app/(app)/scheduler-settings/tabs";
 import { EVALS_TABS } from "@/app/(app)/evals/tabs";
+import { REPORTING_TABS } from "@/app/(app)/reporting/tabs";
 import { COHORTS_TABS } from "@/app/(app)/cohorts/tabs";
 import { visibleSettingsTabs } from "@/app/(app)/settings/tabs";
 import { visibleMySettingsTabs } from "@/app/(app)/me/tabs";
@@ -251,10 +252,36 @@ const PAGES: Record<string, PageCase> = {
     path: () => `/evals/bootcamp/${assessmentId}/0`,
     expect: () => 404,
   },
-  "/bootcamp-history": { path: () => "/bootcamp-history", expect: gated(canUseEvals) },
-  "/bootcamp-history?status=active": { path: () => "/bootcamp-history?status=active", expect: gated(canUseEvals) },
-  "/bootcamp-history/<a record>": { path: () => `/bootcamp-history/${historyId}`, expect: gated(canUseEvals) },
-  "/bootcamp-history/<unknown>": { path: () => `/bootcamp-history/${MISSING}`, expect: () => 404 },
+  "/iris": { path: () => "/iris", expect: gated(canUseEvals) },
+  "/reporting": {
+    path: () => "/reporting",
+    expect: (a) => (canUseEvals(a) ? { to: REPORTING_TABS[0]!.href } : 404),
+  },
+  "/reporting/canary-wire": { path: () => "/reporting/canary-wire", expect: gated(canUseEvals) },
+  "/reporting/bootcamp-history": { path: () => "/reporting/bootcamp-history", expect: gated(canUseEvals) },
+  "/reporting/bootcamp-history?status=active": {
+    path: () => "/reporting/bootcamp-history?status=active",
+    expect: gated(canUseEvals),
+  },
+  "/reporting/bootcamp-history/<a record>": {
+    path: () => `/reporting/bootcamp-history/${historyId}`,
+    expect: gated(canUseEvals),
+  },
+  "/reporting/bootcamp-history/<unknown>": {
+    path: () => `/reporting/bootcamp-history/${MISSING}`,
+    expect: () => 404,
+  },
+  // The old path, before Bootcamp History moved under Reporting, redirects for everyone.
+  "/bootcamp-history": {
+    path: () => "/bootcamp-history",
+    expect: () => ({ to: "/reporting/bootcamp-history" }),
+    signedOut: { to: "/reporting/bootcamp-history" },
+  },
+  "/bootcamp-history/<id>": {
+    path: () => `/bootcamp-history/${MISSING}`,
+    expect: () => ({ to: `/reporting/bootcamp-history/${MISSING}` }),
+    signedOut: { to: `/reporting/bootcamp-history/${MISSING}` },
+  },
   "/evals-settings": {
     path: () => "/evals-settings",
     expect: (a) => (canManageEvalsSettings(a) ? { to: EVALS_SETTINGS_TABS[0]!.href } : 404),
