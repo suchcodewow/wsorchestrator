@@ -61,7 +61,7 @@ export const ORGANIZATION_LIST = spec([
 ]);
 export type OrganizationSort = (typeof ORGANIZATION_LIST.sorts)[number];
 
-export const CURRENT_COHORT_LIST = spec(["fullName", "email", "title", "track", "btcDate"]);
+export const CURRENT_COHORT_LIST = spec(["fullName", "email", "title", "track", "btcDate", "averageScore"]);
 export type CurrentCohortSort = (typeof CURRENT_COHORT_LIST.sorts)[number];
 
 export const PREVIOUS_SESSION_LIST = spec(["date", "bootcamp", "intermediate"], "desc");

@@ -28,6 +28,7 @@ import {
   updateAssessment,
   type AssessmentInput,
 } from "@/lib/evals/assessments";
+import { cohortScoring, listCurrentCohort } from "@/lib/evals/current-cohort";
 import {
   getScoringForm,
   listAttendees,
@@ -36,7 +37,7 @@ import {
   scoringAssessment,
   type SubmissionInput,
 } from "@/lib/evals/scoring";
-import { ASSESSMENT_ATTENDEE_LIST, ASSESSMENT_LIST, MY_MENTION_LIST } from "@/lib/list-specs";
+import { ASSESSMENT_ATTENDEE_LIST, ASSESSMENT_LIST, CURRENT_COHORT_LIST, MY_MENTION_LIST } from "@/lib/list-specs";
 import { listMyMentions } from "@/lib/mention-store";
 import { PERSONAS } from "../support/access";
 import { TEST_EMAIL_DOMAIN, TEST_PREFIX } from "../support/db";
@@ -276,6 +277,78 @@ describe("submissions", () => {
     assert.deepEqual(Object.keys(after.submission!.scores).sort(), now.criteria.map((c) => c.id).sort());
     const again = await listAttendees(a, bootcampId, { ...ASSESSMENT_ATTENDEE_LIST, q: sales.email, page: 1 });
     assert.equal(again.rows[0]?.needsRescoring, false);
+  });
+});
+
+describe("the Current tab's score columns", () => {
+  test("are the stage's active assessments for the track, with each score at the active bootcamp and their mean", async () => {
+    const forSales = await made({ name: `${TEST_PREFIX}Cohort A`, audience: "sales" });
+    const forBoth = await made({ name: `${TEST_PREFIX}Cohort B`, audience: "both" });
+    const forEngineers = await made({ name: `${TEST_PREFIX}Cohort C`, audience: "engineer" });
+    const intermediate = await made({ name: `${TEST_PREFIX}Cohort D`, stage: "intermediate", audience: "sales" });
+    const inactive = await made({ name: `${TEST_PREFIX}Cohort E`, audience: "sales", active: false });
+    const ours = new Set([forSales, forBoth, forEngineers, intermediate, inactive].map((a) => a.id));
+
+    // The scratch database may hold other suites' assessments; only ours are asserted on.
+    const columns = async (filter: Parameters<typeof cohortScoring>[0]) => {
+      const scoring = await cohortScoring(filter);
+      return scoring && { ...scoring, assessments: scoring.assessments.filter((a) => ours.has(a.id)).map((a) => a.name) };
+    };
+    assert.deepEqual(await columns({ stage: "bootcamp", track: "sales" }), {
+      bootcampId,
+      assessments: [`${TEST_PREFIX}Cohort A`, `${TEST_PREFIX}Cohort B`],
+    });
+    assert.deepEqual((await columns({ stage: "bootcamp", track: "engineer" }))?.assessments, [
+      `${TEST_PREFIX}Cohort B`,
+      `${TEST_PREFIX}Cohort C`,
+    ]);
+    for (const filter of [
+      { stage: "bootcamp", track: null },
+      { stage: "bootcamp", track: "undecided" },
+      { stage: "bootcamp", track: "deferred" },
+      { stage: null, track: "sales" },
+    ] as const) {
+      assert.equal(await cohortScoring(filter), null, JSON.stringify(filter));
+    }
+
+    for (const [a, values] of [
+      [forSales, [3, 3]],
+      [forBoth, [2, 3]],
+    ] as const) {
+      const saved = await saveSubmission(judge.id, a.id, sales.id, submission({ scores: scores(a.criteria, ...values) }));
+      assert.ok(saved.ok);
+    }
+
+    const filter = { stage: "bootcamp", track: "sales" } as const;
+    // Earlier tests scored the same person on assessments of their own, so the columns are narrowed to ours.
+    const all = (await cohortScoring(filter))!;
+    const scoring = { ...all, assessments: all.assessments.filter((x) => ours.has(x.id)) };
+    const query = { ...CURRENT_COHORT_LIST, q: TEST_PREFIX, page: 1, sort: "email" as const, dir: "asc" as const };
+    const row = async (evals?: Parameters<typeof listCurrentCohort>[2]) =>
+      (await listCurrentCohort(filter, query, evals)).rows.find((m) => m.email === sales.email)!;
+
+    // 3.0 and 2.5 average 2.75, which rounds up.
+    const scored = await row({ scoring });
+    assert.deepEqual(scored.scores, { [forSales.id]: 3, [forBoth.id]: 2.5 });
+    assert.equal(scored.averageScore, 2.8);
+
+    // Sorting by the average puts the unscored last either way.
+    const second = await candidate("a_sales_second", "sales");
+    const third = await candidate("a_sales_third", "sales");
+    const low = await saveSubmission(judge.id, forSales.id, second.id, submission({ scores: scores(forSales.criteria, 3, 2) }));
+    assert.ok(low.ok);
+    const order = async (dir: "asc" | "desc") =>
+      (await listCurrentCohort(filter, { ...query, sort: "averageScore", dir }, { scoring })).rows
+        .map((m) => m.email)
+        .filter((x) => [sales.email, second.email, third.email].includes(x));
+    assert.deepEqual(await order("desc"), [sales.email, second.email, third.email]);
+    assert.deepEqual(await order("asc"), [second.email, sales.email, third.email]);
+
+    // Outside eVals, no scores at all.
+    const hidden = await row();
+    assert.deepEqual(hidden.scores, {});
+    assert.equal(hidden.averageScore, null);
+    assert.equal(hidden.btcScore, null);
   });
 });
 
