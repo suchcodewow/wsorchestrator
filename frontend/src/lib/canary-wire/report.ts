@@ -153,7 +153,11 @@ export function slackReport(
     // pre-bootcamp work would invite chasing someone for what was never theirs.
     const owed = labels.filter((l) => d.cells[l]?.accountable);
     if (!owed.length) {
-      const none = d.exempt ? "Pre-bootcamp — nothing owed this month" : "No modules assigned this month";
+      const none = !d.exempt
+        ? "No modules assigned this month"
+        : d.exemptSource === "first_month"
+          ? `New hire — counts from ${d.exemptFrom}`
+          : "Pre-bootcamp — nothing owed this month";
       push(`  • ${none}`, `<div>${IND}• ${esc(none)}</div>`);
     }
     for (const label of owed) {

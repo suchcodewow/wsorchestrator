@@ -6,76 +6,63 @@
  * else on the page filters the month already loaded.
  */
 
-import { useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { Download, Loader2, Upload } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { formatPct } from "@/lib/canary-wire/report";
+import { motion } from "framer-motion";
+import { Download, ExternalLink } from "lucide-react";
+import { HEADER_ROW, PlainHeader } from "@/components/data-table";
+import type { PullSummary } from "@/lib/canary-wire/pull";
 import type { CanaryWireView } from "@/lib/canary-wire/view";
-import { cn } from "@/lib/utils";
+import { riseChild, staggerParent } from "@/lib/motion";
 import { HeatMap } from "./heat-map";
+import { RefreshControl } from "./refresh-control";
+import { Meter, PILL, SELECT_PILL } from "./ui";
+import { formatPct } from "@/lib/canary-wire/report";
 
-const SELECT_CLASS = cn(
-  "h-9 rounded-md border border-input bg-transparent px-2 text-sm text-foreground shadow-xs outline-none",
-  "focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-input/30",
-);
-
-const UPLOAD_ERRORS: Record<string, string> = {
-  no_file: "Choose the snapshot.json file to upload.",
-  not_json: "That file isn't JSON. Upload the output/snapshot.json the Canary Wire tool writes.",
-  invalid: "That file isn't a Canary Wire pull.",
-  too_large: "That file is over 10 MB.",
-  forbidden: "Your own role changed — reload the page.",
-};
-
-export function CanaryWireReport({ view }: { view: CanaryWireView }) {
+export function CanaryWireReport({ view, pull, configured }: { view: CanaryWireView; pull: PullSummary | null; configured: boolean }) {
   const router = useRouter();
   const pathname = usePathname();
-  const file = useRef<HTMLInputElement>(null);
-  const [uploading, setUploading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const withData = new Set(view.monthsWithData);
   const csv = `/api/evals/canary-wire?month=${encodeURIComponent(view.month)}&format=csv`;
-
-  async function upload(chosen: File) {
-    setUploading(true);
-    setError(null);
-    try {
-      const body = new FormData();
-      body.set("file", chosen);
-      const res = await fetch("/api/evals/canary-wire/snapshot", { method: "POST", body });
-      if (!res.ok) {
-        const out = (await res.json().catch(() => ({}))) as { error?: string; detail?: string };
-        const message = UPLOAD_ERRORS[out.error ?? ""] ?? `Could not upload it (${res.status}).`;
-        setError(out.detail ? `${message} (${out.detail})` : message);
-        return;
-      }
-      // The newest month with activity may have moved, so open the default.
-      router.push(pathname);
-      router.refresh();
-    } catch {
-      setError("Could not reach the server.");
-    } finally {
-      setUploading(false);
-      if (file.current) file.current.value = "";
-    }
-  }
+  const t = view.totals;
 
   const notes = [...view.notes];
   if (!view.hasSnapshot) {
-    notes.unshift("No Mindtickle data yet. Upload the output/snapshot.json from the Canary Wire tool to fill this in.");
+    notes.unshift(
+      configured
+        ? "No Mindtickle data yet. It is pulled every two hours, or use Refresh now; a pull takes about 15 minutes."
+        : "No Mindtickle data yet, and Mindtickle isn't configured on this server: MT_API_KEY, MT_SECRET_KEY and MT_COMPANY_ID are unset.",
+    );
   } else if (!view.hasData) {
     notes.unshift(`No modules found for ${view.month}. Either it wasn't run, or its module names don't start with "${view.month} - ".`);
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center gap-3">
+    <motion.div variants={staggerParent(0.05)} initial="hidden" animate="show" className="space-y-6">
+      <motion.div variants={riseChild} className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
+        <div className="space-y-1.5">
+          <h2 className="text-xl font-medium tracking-tight">Canary Wire</h2>
+          <p className="text-sm leading-relaxed text-muted-foreground">
+            {t && view.hasData ? (
+              <>
+                <span className="font-medium text-foreground">{formatPct(t.pct)} complete</span> in {view.month}, across{" "}
+                {t.learners.toLocaleString()} accountable {t.learners === 1 ? "learner" : "learners"}.
+              </>
+            ) : view.hasSnapshot ? (
+              <>Nothing assigned in {view.month}.</>
+            ) : (
+              <>No pull from Mindtickle yet.</>
+            )}
+          </p>
+        </div>
+        <Freshness view={view} />
+      </motion.div>
+
+      <motion.div variants={riseChild} className="flex flex-wrap items-center gap-2">
         <select
           aria-label="Month"
           value={view.month}
           onChange={(e) => router.push(`${pathname}?month=${encodeURIComponent(e.target.value)}`)}
-          className={SELECT_CLASS}
+          className={SELECT_PILL}
         >
           {view.months.map((m) => (
             <option key={m} value={m}>
@@ -83,125 +70,117 @@ export function CanaryWireReport({ view }: { view: CanaryWireView }) {
             </option>
           ))}
         </select>
-        <Button variant="outline" size="sm" asChild>
-          <a href={csv} download>
-            <Download />
-            Export CSV
+        <a href={csv} download className={PILL}>
+          <Download />
+          Export CSV
+        </a>
+        {view.seriesLinks.map((s) => (
+          <a
+            key={s.edition}
+            href={s.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            title={`Open the ${s.edition} series in Mindtickle`}
+            className={PILL}
+          >
+            {s.label} series
+            <ExternalLink />
           </a>
-        </Button>
-        <input
-          ref={file}
-          type="file"
-          accept=".json,application/json"
-          className="hidden"
-          onChange={(e) => {
-            const chosen = e.target.files?.[0];
-            if (chosen) void upload(chosen);
-          }}
-        />
-        <Button variant="outline" size="sm" disabled={uploading} onClick={() => file.current?.click()}>
-          {uploading ? <Loader2 className="animate-spin" /> : <Upload />}
-          Upload pull
-        </Button>
-        {view.seriesLinks.length > 0 && (
-          <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            Series
-            {view.seriesLinks.map((s) => (
-              <a
-                key={s.edition}
-                href={s.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                title={`Open the ${s.edition} series in Mindtickle`}
-                className="rounded-md border px-2 py-0.5 font-medium text-foreground transition-colors hover:bg-muted"
-              >
-                {s.label}
-              </a>
-            ))}
-          </span>
-        )}
+        ))}
         <span className="grow" />
-        <Freshness view={view} />
-      </div>
-
-      {error && (
-        <p role="alert" className="text-sm text-destructive">
-          {error}
-        </p>
-      )}
+        <RefreshControl configured={configured} initial={pull} />
+      </motion.div>
 
       {notes.length > 0 && (
-        <div className="rounded-2xl border border-amber-300/60 bg-amber-50 px-5 py-4 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
+        <motion.div
+          variants={riseChild}
+          className="rounded-2xl border border-amber-300/70 bg-amber-50 px-5 py-4 text-sm text-amber-900 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-200"
+        >
           <ul className="list-disc space-y-1 pl-5">
             {notes.map((n) => (
               <li key={n}>{n}</li>
             ))}
           </ul>
-        </div>
+        </motion.div>
       )}
 
-      {view.totals && <Scores view={view} />}
-      {view.roles.length > 0 && <Roles view={view} />}
-      {view.hasSnapshot && <HeatMap view={view} />}
-    </div>
+      {t && view.hasData && (
+        <motion.div variants={riseChild}>
+          <Scores view={view} />
+        </motion.div>
+      )}
+      {view.hasData && view.roles.length > 0 && (
+        <motion.div variants={riseChild}>
+          <Roles view={view} />
+        </motion.div>
+      )}
+      {view.hasSnapshot && (
+        <motion.div variants={riseChild}>
+          <HeatMap view={view} />
+        </motion.div>
+      )}
+    </motion.div>
   );
 }
 
 /**
- * The newest completion Mindtickle recorded in this month's content: if
- * someone finished a module at 10:30, the numbers are demonstrably right as of
- * 10:30. It can't tell a quiet week from a stale pull, so the pull time rides
- * in the tooltip, first.
+ * When the last completion in this month's content was logged, with the pull
+ * time on hover. Mindtickle's API lags behind what learners have done, so a
+ * pull at 2 PM may not hold everything done by 2 PM; the last completion is
+ * what shows how current the numbers really are.
  */
 function Freshness({ view }: { view: CanaryWireView }) {
-  if (!view.hasSnapshot) return <span className="text-xs text-muted-foreground">No data pulled yet</span>;
-  const pulled =
-    `Data pulled at ${view.fetchedAtPt}\n\n` +
-    "Mindtickle calculates completion state when asked, so the numbers are current as of the pull — there is no reporting lag behind it.";
+  if (!view.hasSnapshot) return null;
+  const pulled = `Data last pulled ${view.fetchedAtPt}`;
   const la = view.lastActivity;
-  if (!la.atPt) {
-    return (
-      <span className="text-xs text-muted-foreground" title={pulled}>
-        {view.hasData ? "No completions recorded yet" : "Nothing assigned this month"}
-      </span>
-    );
-  }
-  const title =
-    `${pulled}\n\nShowing when the last completion was recorded: ${la.who} finished "${la.module}" then` +
-    (la.role ? ` (${la.role})` : "") +
-    ". It is a floor, not a freshness field: a quiet stretch looks the same as a stale pull, which is what the pull time is for.";
   return (
-    <span className="text-xs text-muted-foreground" title={title}>
-      Data last updated <b className="font-semibold text-foreground">{la.atPt}</b>
-    </span>
+    <p className="cursor-help text-xs text-muted-foreground" title={pulled}>
+      {la.atPt ? (
+        <>
+          Last completion logged <span className="font-medium text-foreground">{la.atPt}</span>
+        </>
+      ) : view.hasData ? (
+        "No completions logged yet"
+      ) : (
+        "Nothing assigned this month"
+      )}
+    </p>
   );
 }
 
 function Scores({ view }: { view: CanaryWireView }) {
   const t = view.totals!;
   const nMods = view.labels.length;
-  const cards: [string, string, string][] = [
-    [
-      "Canary Wire complete",
-      formatPct(t.pct),
+  const tiles: { label: string; value: string; sub: string }[] = [
+    {
+      label: "Complete",
+      value: formatPct(t.pct),
       // The IC rate is what most people mean by "are the reps doing it", so it rides along here.
-      `${t.completed} of ${t.assigned} module assignments` + (t.icAssigned ? ` · ${formatPct(t.icPct)} among ICs` : ""),
-    ],
-    [
-      "Accountable learners",
-      String(t.learners),
-      `${nMods} module${nMods === 1 ? "" : "s"} this month` + (t.exempt ? ` · ${t.exempt} pre-bootcamp, not counted` : ""),
-    ],
-    ["Finished everything", String(t.fullyComplete), t.learners ? `${((t.fullyComplete / t.learners) * 100).toFixed(1)}% of learners` : ""],
-    ["Managers", String(view.teams.length), t.notActivated ? `${t.notActivated} never activated Mindtickle` : "with someone accountable"],
+      sub: `${t.completed.toLocaleString()} of ${t.assigned.toLocaleString()} assignments` + (t.icAssigned ? ` · ${formatPct(t.icPct)} among ICs` : ""),
+    },
+    {
+      label: "Accountable learners",
+      value: t.learners.toLocaleString(),
+      sub: `${nMods} module${nMods === 1 ? "" : "s"} this month` + (t.exempt ? ` · ${t.exempt} not yet accountable` : ""),
+    },
+    {
+      label: "Finished everything",
+      value: t.fullyComplete.toLocaleString(),
+      sub: t.learners ? `${((t.fullyComplete / t.learners) * 100).toFixed(1)}% of learners` : "",
+    },
+    {
+      label: "Managers",
+      value: view.teams.length.toLocaleString(),
+      sub: t.notActivated ? `${t.notActivated} ${t.notActivated === 1 ? "rep has" : "reps have"} never activated Mindtickle` : "with someone accountable",
+    },
   ];
   return (
-    <div className="grid overflow-hidden rounded-2xl border bg-card shadow-sm sm:grid-cols-2 lg:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x">
-      {cards.map(([k, v, sub]) => (
-        <div key={k} className="px-5 py-4">
-          <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">{k}</p>
-          <p className="mt-1 text-2xl font-semibold tabular-nums tracking-tight">{v}</p>
-          {sub && <p className="text-xs text-muted-foreground">{sub}</p>}
+    <div className="grid divide-y overflow-hidden rounded-2xl border bg-card shadow-sm sm:grid-cols-2 sm:divide-y-0 lg:grid-cols-4 lg:divide-x">
+      {tiles.map((tile) => (
+        <div key={tile.label} className="px-5 py-4">
+          <div className="text-2xl font-medium tabular-nums">{tile.value}</div>
+          <div className="text-xs text-muted-foreground">{tile.label}</div>
+          {tile.sub && <div className="mt-1.5 text-xs text-muted-foreground/80">{tile.sub}</div>}
         </div>
       ))}
     </div>
@@ -212,48 +191,42 @@ const IC_TIP =
   "The same rate over individual contributors only — people nobody reports to. Worked out from who is named as someone else's manager, so a manager whose reports all sit outside the Canary Wire groups counts as an IC here.";
 
 function Roles({ view }: { view: CanaryWireView }) {
-  const th = "px-5 py-2.5 font-medium uppercase tracking-wider";
   return (
     <div className="overflow-hidden rounded-2xl border bg-card shadow-sm">
-      <h2 className="border-b px-5 py-3 text-sm font-medium">By role</h2>
       <div className="overflow-x-auto">
         <table className="w-full min-w-160 text-sm">
           <thead>
-            <tr className="border-b bg-muted/30 text-left text-[11px] text-muted-foreground">
-              <th className={th}>Role</th>
-              <th className={cn(th, "text-right")} title="People in this role group who owe the training this month.">
-                Learners
-              </th>
-              <th className={cn(th, "text-right")}>Assigned</th>
-              <th className={cn(th, "text-right")}>Completed</th>
-              <th className={cn(th, "text-right")} title="Everyone in the role, managers included.">
-                Completion
-              </th>
-              <th className={cn(th, "text-right")} title={IC_TIP}>
-                IC completion
-              </th>
-              <th className={th}>Modules</th>
+            <tr className={HEADER_ROW}>
+              <PlainHeader>Role</PlainHeader>
+              <PlainHeader className="text-right">Learners</PlainHeader>
+              <PlainHeader className="text-right">Done</PlainHeader>
+              <PlainHeader className="w-36 text-right">Completion</PlainHeader>
+              <PlainHeader className="w-36 text-right">
+                <span title={IC_TIP} className="cursor-help underline decoration-dotted underline-offset-2">
+                  IC completion
+                </span>
+              </PlainHeader>
+              <PlainHeader>Modules</PlainHeader>
             </tr>
           </thead>
           <tbody>
             {view.roles.map((r) => (
               <tr key={r.role} className="border-b last:border-b-0">
-                <td className="px-5 py-3 font-medium">{r.role}</td>
-                <td className="px-5 py-3 text-right tabular-nums">{r.learners}</td>
-                <td className="px-5 py-3 text-right tabular-nums">{r.assigned}</td>
-                <td className="px-5 py-3 text-right tabular-nums">{r.completed}</td>
-                <td className="px-5 py-3 text-right tabular-nums">{formatPct(r.pct)}</td>
-                <td
-                  className="px-5 py-3 text-right tabular-nums"
-                  title={
-                    r.icAssigned
-                      ? `${r.icCompleted} of ${r.icAssigned} modules, ${r.icLearners} ICs`
-                      : "No individual contributors owe modules in this role this month"
-                  }
-                >
-                  {formatPct(r.icPct)}
+                <td className="px-5 py-3 font-medium whitespace-nowrap">{r.role}</td>
+                <td className="px-5 py-3 text-right tabular-nums" title={r.exempt ? `${r.exempt} not yet accountable, not counted` : undefined}>
+                  {r.learners}
                 </td>
-                <td className="px-5 py-3 text-muted-foreground">{r.modules.join(", ")}</td>
+                <td className="px-5 py-3 text-right tabular-nums text-muted-foreground">{`${r.completed}/${r.assigned}`}</td>
+                <td className="px-5 py-3">
+                  <Meter value={r.pct} />
+                </td>
+                <td
+                  className="px-5 py-3"
+                  title={r.icAssigned ? `${r.icCompleted} of ${r.icAssigned} modules, ${r.icLearners} ICs` : "No individual contributors owe modules in this role this month"}
+                >
+                  <Meter value={r.icPct} />
+                </td>
+                <td className="px-5 py-3 text-xs text-muted-foreground">{r.modules.join(" · ")}</td>
               </tr>
             ))}
           </tbody>

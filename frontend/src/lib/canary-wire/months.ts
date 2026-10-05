@@ -63,6 +63,16 @@ export function monthAfterDay(day: string): string | null {
   return labelForKey(+m[1]! * 12 + +m[2]! + 1);
 }
 
+/**
+ * The first whole month from a day on: that month when it is the 1st, the
+ * next otherwise. "2026-10-02" → "November 2026"; "2026-10-01" → "October 2026".
+ */
+export function firstFullMonth(day: string): string | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day);
+  if (!m) return null;
+  return labelForKey(+m[1]! * 12 + +m[2]! + (m[3] === "01" ? 0 : 1));
+}
+
 const PACIFIC = new Intl.DateTimeFormat("en-US", {
   timeZone: "America/Los_Angeles",
   month: "short",

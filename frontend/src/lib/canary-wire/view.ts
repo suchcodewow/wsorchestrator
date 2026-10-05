@@ -5,7 +5,7 @@
  * same exemptions.
  */
 
-import { MODULE_URL_TEMPLATE, SERIES_LINKS, type SeriesLink } from "@/lib/canary-wire/config";
+import { COLUMN_ORDER, MODULE_URL_TEMPLATE, SERIES_LINKS, type SeriesLink } from "@/lib/canary-wire/config";
 import type { Accountability, ExemptionSource } from "@/lib/canary-wire/exemptions";
 import { FIRST_MONTH, LAST_MONTH, byMonth, monthRange, toPacific } from "@/lib/canary-wire/months";
 import {
@@ -185,6 +185,19 @@ function lastActivity(snap: CanaryWireSnapshot, labels: Map<string, string>): La
   return best;
 }
 
+/** A month's module labels in `COLUMN_ORDER`: AE's own, then AE and SE's shared, then SE's own. */
+export function columnOrder(modules: Pick<SnapshotModule, "label" | "edition">[]): string[] {
+  const editions = new Map<string, Set<string>>();
+  for (const m of modules) editions.set(m.label, (editions.get(m.label) ?? new Set()).add(m.edition));
+  const group = (label: string) => {
+    const e = editions.get(label)!;
+    const a = e.has(COLUMN_ORDER.first);
+    const b = e.has(COLUMN_ORDER.second);
+    return a && !b ? 0 : a && b ? 1 : b ? 2 : 3;
+  };
+  return [...editions.keys()].sort((x, y) => group(x) - group(y) || cmp(x, y));
+}
+
 export function emptyView(month: string): CanaryWireView {
   return {
     month,
@@ -214,7 +227,7 @@ export function monthView(snap: CanaryWireSnapshot, month: string, standing: Acc
   }
 
   // One column per label, so a module shared by two editions is one column.
-  const labels = [...new Set(modules.map((m) => m.label))].sort(cmp);
+  const labels = columnOrder(modules);
 
   // The editions share content rather than copying it — most module ids sit
   // under more than one series — so whose a module is gets decided by id.
@@ -237,7 +250,7 @@ export function monthView(snap: CanaryWireSnapshot, month: string, standing: Acc
     !(managers.has(email.trim().toLowerCase()) || managers.has(name.trim().toLowerCase()));
 
   const reps: Rep[] = snap.learners.map((learner) => {
-    const s = standing(learner.email, month);
+    const s = standing(learner.email, month, learner.role);
     const own = [...new Map((byEdition.get(learner.role) ?? []).map((m) => [m.module_id, m])).values()];
     const states = snap.progress[learner.email] ?? {};
     const cells: Record<string, Cell> = {};
@@ -426,12 +439,16 @@ export function monthCsv(view: CanaryWireView): string {
         let text = cell.accountable
           ? cell.state
           : cell.exempt
-            ? `${cell.state} (pre-bootcamp, not counted)`
+            ? `${cell.state} (${rep.exemptSource === "first_month" ? "new hire" : "pre-bootcamp"}, not counted)`
             : `${cell.state} (off-role)`;
         for (const other of cell.also) text += ` [also ${other.state.toLowerCase()} ${other.edition} copy, off-role]`;
         line.push(text);
       }
-      const account = rep.exempt ? "Pre-bootcamp — not accountable this month" : rep.notActivated ? "Never activated Mindtickle" : "Active";
+      const account = rep.exempt
+        ? rep.exemptSource === "first_month"
+          ? `New hire — counts from ${rep.exemptFrom}`
+          : "Pre-bootcamp — not accountable this month"
+        : rep.notActivated ? "Never activated Mindtickle" : "Active";
       line.push(String(rep.assigned), String(rep.completed), rep.pct === null ? "" : rep.pct.toFixed(1), account);
       rows.push(line);
     }

@@ -1082,7 +1082,7 @@ export type BootcampHistory = typeof bootcampHistory.$inferSelect;
  */
 export const canaryWireSnapshots = pgTable("canary_wire_snapshots", {
   id: uuid("id").primaryKey().defaultRandom(),
-  /** When the pull started; Mindtickle computes state live, so this is how fresh it is. */
+  /** When the pull started. Mindtickle's API lags, so the newest completion in it says more about how current it is. */
   fetchedAt: timestamp("fetched_at", { withTimezone: true }).notNull(),
   learners: integer("learners").notNull(),
   data: jsonb("data").notNull(),
@@ -1090,22 +1090,51 @@ export const canaryWireSnapshots = pgTable("canary_wire_snapshots", {
   savedAt: timestamp("saved_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const CANARY_WIRE_LIMITS = { bytes: 10 * 1024 * 1024, exemptions: 2_000, exemptionText: 200_000 } as const;
+export const CANARY_WIRE_PULL_TRIGGERS = ["manual", "schedule"] as const;
+export type CanaryWirePullTrigger = (typeof CANARY_WIRE_PULL_TRIGGERS)[number];
+export const CANARY_WIRE_PULL_STATUSES = ["running", "succeeded", "failed"] as const;
+export type CanaryWirePullStatus = (typeof CANARY_WIRE_PULL_STATUSES)[number];
 
 /**
- * Canary Wire exemptions set by hand. Bootcamp history decides who is
- * accountable; a row here overrides it for one person. `accountableFrom` is
- * the first month they count (`YYYY-MM`), or null for "not yet in any month".
+ * A pull from Mindtickle into `canary_wire_snapshots`. One takes ~15 minutes,
+ * longer than a request may run, so it goes in steps (`lib/canary-wire/pull.ts`)
+ * that each work for a few minutes and save `state` for the next; a step holds
+ * the lease while it runs so two never work at once. `state` names everyone
+ * being pulled, so it is cleared when the pull ends either way.
  */
-export const canaryWireExemptions = pgTable("canary_wire_exemptions", {
-  /** Lowercased. */
-  email: text("email").primaryKey(),
-  accountableFrom: text("accountable_from"),
-  updatedBy: text("updated_by").references(() => users.id, { onDelete: "set null" }),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const canaryWirePulls = pgTable(
+  "canary_wire_pulls",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    trigger: text("trigger").$type<CanaryWirePullTrigger>().notNull(),
+    /** Who pressed Refresh; null for a scheduled pull. */
+    startedBy: text("started_by").references(() => users.id, { onDelete: "set null" }),
+    status: text("status").$type<CanaryWirePullStatus>().notNull().default("running"),
+    /** What the pull is doing, as the page shows it. */
+    message: text("message").notNull().default(""),
+    /** Learners fetched so far, of `total`; 0 of 0 until the rosters are in. */
+    done: integer("done").notNull().default(0),
+    total: integer("total").notNull().default(0),
+    state: jsonb("state"),
+    /** Until when a step is working on it; past, any step may take it up. */
+    leasedUntil: timestamp("leased_until", { withTimezone: true }),
+    error: text("error"),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+  },
+  (t) => [
+    index("canary_wire_pulls_started_at_idx").on(t.startedAt),
+    // One pull at a time: a second insert while one runs is a conflict.
+    uniqueIndex("canary_wire_pulls_one_running_idx")
+      .on(t.status)
+      .where(sql`${t.status} = 'running'`),
+    check("canary_wire_pulls_trigger_check", sql`${t.trigger} in ('manual', 'schedule')`),
+    check("canary_wire_pulls_status_check", sql`${t.status} in ('running', 'succeeded', 'failed')`),
+  ],
+);
 
-export type CanaryWireExemption = typeof canaryWireExemptions.$inferSelect;
+export type CanaryWirePull = typeof canaryWirePulls.$inferSelect;
 
 export const BOOTCAMP_STATUSES = ["scheduled", "active", "complete"] as const;
 export type BootcampStatus = (typeof BOOTCAMP_STATUSES)[number];

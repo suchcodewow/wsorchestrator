@@ -1,7 +1,7 @@
 /**
  * One Mindtickle pull for the Canary Wire, in the shape the canary-wire-reports
- * tool writes to `output/snapshot.json`, so a file from it can be uploaded as
- * is. xAPI hands back a learner's whole history in one call, so a single pull
+ * tool writes to `output/snapshot.json`, so the two can be compared directly.
+ * xAPI hands back a learner's whole history in one call, so a single pull
  * fills every month and the page slices it rather than fetching again.
  */
 
@@ -66,38 +66,6 @@ export type CanaryWireSnapshot = z.infer<typeof canaryWireSnapshotSchema>;
 export type SnapshotLearner = CanaryWireSnapshot["learners"][number];
 export type SnapshotModule = CanaryWireSnapshot["modules"][number];
 export type ProgressEntry = z.infer<typeof progressEntry>;
-
-/**
- * Notes the tool used to write and has since retired. A pull is read for
- * weeks, so they are dropped on the way in rather than waiting for the next.
- */
-const RETIRED_NOTES = ["left out of every rate", "departed staff still sitting", "appear under no month"];
-
-export type SnapshotProblem = "not_json" | "invalid";
-
-/**
- * Reads an uploaded `snapshot.json`. Only the fields the page uses are kept:
- * the file also lists departed staff (`excluded`) and every learner's
- * department and Mindtickle id, none of which this needs to hold.
- */
-export function parseSnapshot(raw: string): { ok: true; snapshot: CanaryWireSnapshot } | { ok: false; error: SnapshotProblem; detail?: string } {
-  let json: unknown;
-  try {
-    json = JSON.parse(raw);
-  } catch {
-    return { ok: false, error: "not_json" };
-  }
-  const parsed = canaryWireSnapshotSchema.safeParse(json);
-  if (!parsed.success) {
-    const issue = parsed.error.issues[0];
-    return { ok: false, error: "invalid", detail: issue ? `${issue.path.join(".") || "file"}: ${issue.message}` : undefined };
-  }
-  if (Number.isNaN(Date.parse(parsed.data.fetched_at))) {
-    return { ok: false, error: "invalid", detail: "fetched_at: not a date" };
-  }
-  const snapshot = parsed.data;
-  return { ok: true, snapshot: { ...snapshot, notes: snapshot.notes.filter((n) => n && !RETIRED_NOTES.some((r) => n.includes(r))) } };
-}
 
 /** Months somebody started or finished something in, oldest first. */
 export function monthsWithProgress(snap: CanaryWireSnapshot): Set<string> {

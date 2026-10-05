@@ -3,6 +3,8 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { auth, signInPath } from "@/auth";
+import { mindtickleConfig } from "@/lib/canary-wire/mindtickle";
+import { latestPull } from "@/lib/canary-wire/pull";
 import { canaryWireView } from "@/lib/canary-wire/store";
 import { canSeeCanaryWire } from "@/lib/roles";
 import { CanaryWireReport } from "./canary-wire-report";
@@ -19,8 +21,8 @@ export default async function CanaryWirePage({
   if (!canSeeCanaryWire(session.user.access)) notFound();
 
   const { month } = await searchParams;
-  const view = await canaryWireView(typeof month === "string" ? month : null);
+  const [view, pull] = await Promise.all([canaryWireView(typeof month === "string" ? month : null), latestPull()]);
   // A hand-typed month the picker doesn't offer opens the default one, as a bad sort does.
   if (!view) redirect("/reporting/canary-wire");
-  return <CanaryWireReport view={view} />;
+  return <CanaryWireReport view={view} pull={pull} configured={mindtickleConfig() !== null} />;
 }

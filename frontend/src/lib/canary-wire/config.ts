@@ -17,6 +17,51 @@ export const SERIES_LINKS: SeriesLink[] = [
   { edition: "SDR", label: "SDR", url: "https://deeplinks.mindtickle.com/zIdgXJsLC3b" },
 ];
 
+export type Edition = {
+  edition: string;
+  /** Every one of these must appear in the series' name, so exactly one series matches. */
+  match: string[];
+  /**
+   * The role group whose members owe this edition. Accountability comes from
+   * the group, not from enrollment in the series: opening another edition's
+   * module enrolls you in it. Matched exactly, as Mindtickle offers no way to
+   * list groups and correct a near miss.
+   */
+  group: string;
+};
+
+/** In order: someone in two groups is counted once, under the first. */
+export const EDITIONS: Edition[] = [
+  { edition: "AE and Supporting Orgs", match: ["canary wire", "ae/supporting"], group: "Canary Wire - AE and Supporting Roles" },
+  { edition: "SE", match: ["canary wire", "se edition"], group: "Canary Wire - SE" },
+  { edition: "SDR", match: ["canary wire", "sdr edition"], group: "Canary Wire - SDR" },
+];
+
+/**
+ * The order a month's columns run in: AE's own modules, then those AE and SE
+ * share, then SE's own, each group by name. SDR's lineup is drawn from the
+ * same content, so it rarely adds a column; one only SDR has goes last.
+ */
+export const COLUMN_ORDER = { first: "AE and Supporting Orgs", second: "SE" } as const;
+
+/**
+ * Editions whose reps never attend bootcamp, so they owe the Canary Wire from
+ * their first month whatever bootcamp history says. SDRs don't go to bootcamp
+ * at all (Preston, 2026-10-05), which is why only 4 of 14 had a record.
+ */
+export const NO_BOOTCAMP_EDITIONS = ["SDR"];
+
+/** Modules whose name contains any of these are left out entirely. */
+export const EXCLUDE_MODULES = ["survey"];
+
+/**
+ * The `userState`s that count as a current learner. Departed staff stay in
+ * their role group as `DEACTIVATED` — a quarter of it — and never complete
+ * anything, so they would drag every rate down. `ADDED` stays: those are
+ * current employees who have never activated Mindtickle, and the page labels them.
+ */
+export const INCLUDE_USER_STATES = ["ACTIVE", "ADDED"];
+
 /**
  * A module's learner URL. The API publishes none, so the pattern was worked
  * out from one real learner URL and confirmed against the live tenant on

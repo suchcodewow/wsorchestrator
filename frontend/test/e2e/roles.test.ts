@@ -526,9 +526,10 @@ const ROUTES: RouteCase[] = [
   { method: "GET", path: "/api/evals/bootcamp-history", allowed: canUseEvals },
   { method: "GET", path: `/api/evals/bootcamp-history/${MISSING}`, allowed: canUseEvals },
   { method: "GET", path: "/api/evals/canary-wire", allowed: canSeeCanaryWire },
-  { method: "GET", path: "/api/evals/canary-wire/exemptions", allowed: canSeeCanaryWire },
-  { method: "PUT", path: "/api/evals/canary-wire/exemptions", allowed: canSeeCanaryWire, body: () => ({}) },
-  { method: "POST", path: "/api/evals/canary-wire/snapshot", allowed: canSeeCanaryWire, body: form },
+  // No Mindtickle key on the e2e server: starting is refused as not_configured, and a step finds no pull.
+  { method: "GET", path: "/api/evals/canary-wire/pull", allowed: canSeeCanaryWire },
+  { method: "POST", path: "/api/evals/canary-wire/pull", allowed: canSeeCanaryWire },
+  { method: "POST", path: "/api/evals/canary-wire/pull/step", allowed: canSeeCanaryWire },
 
   // eVals administration
   { method: "GET", path: "/api/evals/candidate-cutoffs", allowed: canManageEvalsSettings },
@@ -658,6 +659,18 @@ describe("the scheduled HiBob sync", () => {
     const forged = { bearer: "not-a-google-token" };
     for (const who of [SIGNED_OUT, ...PERSONA_NAMES, forged]) {
       const { status } = await send(who, "POST", "/api/evals/hibob/sync/scheduled");
+      if (status !== 401) wrong.push(`${who === forged ? "forged token" : label(who as Who)}: got ${status}`);
+    }
+    assert.deepEqual(wrong, []);
+  });
+});
+
+describe("the scheduled Canary Wire pull", () => {
+  test("refuses every session and a forged token", async () => {
+    const wrong: string[] = [];
+    const forged = { bearer: "not-a-google-token" };
+    for (const who of [SIGNED_OUT, ...PERSONA_NAMES, forged]) {
+      const { status } = await send(who, "POST", "/api/evals/canary-wire/pull/scheduled");
       if (status !== 401) wrong.push(`${who === forged ? "forged token" : label(who as Who)}: got ${status}`);
     }
     assert.deepEqual(wrong, []);

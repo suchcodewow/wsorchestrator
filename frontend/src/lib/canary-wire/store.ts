@@ -1,15 +1,15 @@
 /**
- * The Canary Wire's stored pull and hand-set exemptions, and the month view
- * built from them with bootcamp history. Reporting → Canary Wire and
+ * The Canary Wire's stored pull, and the month view built from it with
+ * bootcamp history and HiBob's start dates. Reporting → Canary Wire and
  * `GET /api/evals/canary-wire` both read through `canaryWireView`.
  */
 
 import "server-only";
 
-import { asc, desc, eq, isNotNull, ne } from "drizzle-orm";
+import { desc, isNotNull, ne } from "drizzle-orm";
 import { db } from "@/db";
-import { bootcampHistory, canaryWireExemptions, canaryWireSnapshots, users } from "@/db/schema";
-import { accountability, type ParsedExemption } from "@/lib/canary-wire/exemptions";
+import { EXEMPT_DATE, bootcampHistory, canaryWireSnapshots, employees } from "@/db/schema";
+import { accountability, type History } from "@/lib/canary-wire/exemptions";
 import { canaryWireSnapshotSchema, type CanaryWireSnapshot } from "@/lib/canary-wire/snapshot";
 import { defaultMonth, emptyView, monthView, offeredMonths, type CanaryWireView } from "@/lib/canary-wire/view";
 
@@ -40,60 +40,21 @@ export async function saveSnapshot(snapshot: CanaryWireSnapshot, savedBy: string
   });
 }
 
-export async function listExemptions(): Promise<(ParsedExemption & { updatedAt: Date; updatedByName: string | null })[]> {
-  return db
-    .select({
-      email: canaryWireExemptions.email,
-      accountableFrom: canaryWireExemptions.accountableFrom,
-      updatedAt: canaryWireExemptions.updatedAt,
-      updatedByName: users.name,
-    })
-    .from(canaryWireExemptions)
-    .leftJoin(users, eq(users.id, canaryWireExemptions.updatedBy))
-    .orderBy(asc(canaryWireExemptions.email));
-}
-
-/**
- * Replaces the whole list, as the dialog saves it. A person whose line is
- * unchanged keeps their row's date and author, so the list says who last
- * changed each one rather than who last pressed Save.
- */
-export async function replaceExemptions(rows: ParsedExemption[], updatedBy: string | null): Promise<{ added: number; changed: number; removed: number }> {
-  return db.transaction(async (tx) => {
-    const before = new Map(
-      (await tx.select().from(canaryWireExemptions)).map((r) => [r.email, r.accountableFrom]),
-    );
-    const wanted = new Map(rows.map((r) => [r.email, r.accountableFrom]));
-    let added = 0;
-    let changed = 0;
-    let removed = 0;
-    for (const email of before.keys()) {
-      if (wanted.has(email)) continue;
-      await tx.delete(canaryWireExemptions).where(eq(canaryWireExemptions.email, email));
-      removed++;
-    }
-    for (const [email, accountableFrom] of wanted) {
-      if (!before.has(email)) {
-        await tx.insert(canaryWireExemptions).values({ email, accountableFrom, updatedBy });
-        added++;
-      } else if (before.get(email) !== accountableFrom) {
-        await tx
-          .update(canaryWireExemptions)
-          .set({ accountableFrom, updatedBy, updatedAt: new Date() })
-          .where(eq(canaryWireExemptions.email, email));
-        changed++;
-      }
-    }
-    return { added, changed, removed };
-  });
-}
-
-async function btcDates(): Promise<Map<string, string>> {
-  const rows = await db
-    .select({ email: bootcampHistory.email, btcDate: bootcampHistory.btcDate })
-    .from(bootcampHistory)
-    .where(isNotNull(bootcampHistory.btcDate));
-  return new Map(rows.map((r) => [r.email, r.btcDate!]));
+/** What bootcamp history and HiBob say about who has been through bootcamp. */
+async function history(): Promise<History> {
+  const [btc, starts] = await Promise.all([
+    db
+      .select({ email: bootcampHistory.email, btcDate: bootcampHistory.btcDate })
+      .from(bootcampHistory)
+      .where(isNotNull(bootcampHistory.btcDate)),
+    db.select({ email: employees.email, startDate: employees.startDate }).from(employees).where(isNotNull(employees.startDate)),
+  ]);
+  const real = btc.map((r) => r.btcDate!).filter((d) => d !== EXEMPT_DATE).sort();
+  return {
+    btcDates: new Map(btc.map((r) => [r.email, r.btcDate!])),
+    startDates: new Map(starts.map((r) => [r.email, r.startDate!])),
+    historyBegins: real[0] ?? null,
+  };
 }
 
 /**
@@ -101,11 +62,10 @@ async function btcDates(): Promise<Map<string, string>> {
  * `month` is null. Null for a month the picker doesn't offer.
  */
 export async function canaryWireView(month: string | null): Promise<CanaryWireView | null> {
-  const [stored, overrides, dates] = await Promise.all([latestSnapshot(), listExemptions(), btcDates()]);
+  const [stored, known] = await Promise.all([latestSnapshot(), history()]);
   const snap = stored?.snapshot ?? null;
   const chosen = month ?? defaultMonth(snap);
   if (!offeredMonths(snap).includes(chosen)) return null;
   if (!stored) return emptyView(chosen);
-  const standing = accountability(new Map(overrides.map((o) => [o.email, o.accountableFrom])), dates);
-  return monthView(stored.snapshot, chosen, standing, stored.savedAt);
+  return monthView(stored.snapshot, chosen, accountability(known), stored.savedAt);
 }

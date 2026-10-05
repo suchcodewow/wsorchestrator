@@ -15,11 +15,11 @@ import assert from "node:assert/strict";
 
 import { EXEMPT_DATE } from "@/db/schema";
 import { MODULE_URL_TEMPLATE, SERIES_LINKS } from "@/lib/canary-wire/config";
-import { accountability, formatExemptionText, parseExemptionText, parseMonth } from "@/lib/canary-wire/exemptions";
-import { monthAfterDay, monthKey, monthRange, toPacific } from "@/lib/canary-wire/months";
+import { accountability } from "@/lib/canary-wire/exemptions";
+import { firstFullMonth, monthAfterDay, monthKey, monthRange, toPacific } from "@/lib/canary-wire/months";
 import { dayOnly, moduleUrl, slackReport, stateClass, when } from "@/lib/canary-wire/report";
-import { parseSnapshot, type CanaryWireSnapshot } from "@/lib/canary-wire/snapshot";
-import { defaultMonth, monthCsv, monthView, offeredMonths, type Cell } from "@/lib/canary-wire/view";
+import type { CanaryWireSnapshot } from "@/lib/canary-wire/snapshot";
+import { columnOrder, defaultMonth, monthCsv, monthView, offeredMonths, type Cell } from "@/lib/canary-wire/view";
 
 const AE = "AE and Supporting Orgs";
 const SE = "SE";
@@ -67,9 +67,22 @@ function pull(): CanaryWireSnapshot {
   };
 }
 
-const everyoneAccountable = accountability(new Map(), new Map(pull().learners.map((l) => [l.email, EXEMPT_DATE])));
+/** Bootcamp history and HiBob as `accountability` reads them. */
+const known = (btc: [string, string][], starts: [string, string][] = [], historyBegins: string | null = null) => ({
+  btcDates: new Map(btc),
+  startDates: new Map(starts),
+  historyBegins,
+});
+
+const everyoneAccountable = accountability(known(pull().learners.map((l) => [l.email, EXEMPT_DATE])));
 
 describe("months", () => {
+  test("a first full month is the next one, unless the day is the 1st", () => {
+    assert.equal(firstFullMonth("2026-10-02"), "November 2026");
+    assert.equal(firstFullMonth("2026-10-01"), "October 2026");
+    assert.equal(firstFullMonth("2026-12-15"), "January 2027");
+  });
+
   test("a bootcamp counts from the month after, across a year end", () => {
     assert.equal(monthAfterDay("2026-08-12"), "September 2026");
     assert.equal(monthAfterDay("2026-12-31"), "January 2027");
@@ -95,99 +108,79 @@ describe("months", () => {
 });
 
 describe("accountability", () => {
-  const overrides = new Map<string, string | null>([
-    ["never@harness.io", null],
-    ["later@harness.io", "2026-11"],
-    // A hand-set line beats bootcamp history either way.
-    ["attended@harness.io", null],
-  ]);
-  const btc = new Map([
-    ["attended@harness.io", "2026-08-12"],
-    ["aug@harness.io", "2026-08-12"],
-    ["veteran@harness.io", EXEMPT_DATE],
-  ]);
-  const who = accountability(overrides, btc);
+  const who = accountability(
+    known(
+      [
+        ["aug@harness.io", "2026-08-12"],
+        ["veteran@harness.io", EXEMPT_DATE],
+        ["first@harness.io", "2025-04-01"],
+      ],
+      [
+        ["old@harness.io", "2019-06-03"],
+        ["new@harness.io", "2026-07-01"],
+        ["aug@harness.io", "2018-01-01"],
+      ],
+      "2025-04-01",
+    ),
+  );
 
   test("a BTC date counts from the month after it, never the month of", () => {
-    assert.equal(who("aug@harness.io", "August 2026").exempt, true);
-    assert.deepEqual(who("AUG@harness.io", "September 2026"), { exempt: false, from: "September 2026", source: "bootcamp" });
+    assert.equal(who("aug@harness.io", "August 2026", AE).exempt, true);
+    assert.deepEqual(who("AUG@harness.io", "September 2026", AE), { exempt: false, from: "September 2026", source: "bootcamp" });
   });
 
   test("BTC marked exempt counts in every month", () => {
-    assert.deepEqual(who("veteran@harness.io", "June 2026"), { exempt: false, from: "", source: "bootcamp" });
+    assert.deepEqual(who("veteran@harness.io", "June 2026", AE), { exempt: false, from: "", source: "bootcamp" });
   });
 
-  test("no bootcamp on record is pre-bootcamp in every month", () => {
-    assert.deepEqual(who("new@harness.io", "June 2027"), { exempt: true, from: "", source: "no_bootcamp" });
+  test("no record, but at Harness since before bootcamp history begins, counts in every month", () => {
+    assert.deepEqual(who("old@harness.io", "June 2026", AE), { exempt: false, from: "", source: "predates_history" });
   });
 
-  test("a hand-set exemption overrides history, and a month ends it", () => {
-    assert.equal(who("attended@harness.io", "December 2026").exempt, true);
-    assert.equal(who("never@harness.io", "June 2027").exempt, true);
-    assert.equal(who("later@harness.io", "October 2026").exempt, true);
-    assert.deepEqual(who("later@harness.io", "November 2026"), { exempt: false, from: "November 2026", source: "manual" });
+  test("no record and joined since, or not in HiBob, is pre-bootcamp in every month", () => {
+    assert.deepEqual(who("new@harness.io", "June 2027", AE), { exempt: true, from: "", source: "no_bootcamp" });
+    assert.deepEqual(who("nobody@harness.io", "June 2027", AE), { exempt: true, from: "", source: "no_bootcamp" });
+  });
+
+  test("SDRs never attend bootcamp, so they count from their first full month, record or not", () => {
+    const sdr = accountability(known([["oct2@harness.io", "2026-08-12"]], [["oct2@harness.io", "2026-10-02"], ["oct1@harness.io", "2026-10-01"]], "2025-04-01"));
+    // Starting October 2nd: not October, from November.
+    assert.deepEqual(sdr("oct2@harness.io", "October 2026", "SDR"), { exempt: true, from: "November 2026", source: "first_month" });
+    assert.deepEqual(sdr("oct2@harness.io", "November 2026", "SDR"), { exempt: false, from: "November 2026", source: "first_month" });
+    // Starting on the 1st, that month is a full one.
+    assert.equal(sdr("oct1@harness.io", "October 2026", "SDR").exempt, false);
+    // No start date to go on: counted.
+    assert.deepEqual(sdr("unknown@harness.io", "June 2026", "SDR"), { exempt: false, from: "", source: "edition" });
+  });
+
+  test("with no bootcamp history at all, nobody predates it", () => {
+    const empty = accountability(known([], [["old@harness.io", "2019-06-03"]]));
+    assert.equal(empty("old@harness.io", "June 2026", AE).exempt, true);
   });
 });
 
-describe("parseExemptionText", () => {
-  test("takes a messy spreadsheet paste, skipping what isn't an email", () => {
-    const text = [
-      "# a comment",
-      '"Dana Rep" <Dana@Harness.io>\tAugust 2026',
-      "",
-      "lee@harness.io, Aug 2027",
-      "kim@harness.io; 2026-11",
-      "pat@harness.io, sometime soon",
-      "no email on this line",
-      "lee@harness.io",
-    ].join("\n");
-    assert.deepEqual(parseExemptionText(text), [
-      { email: "dana@harness.io", accountableFrom: "2026-08" },
-      // The last line for an email wins.
-      { email: "lee@harness.io", accountableFrom: null },
-      { email: "kim@harness.io", accountableFrom: "2026-11" },
-      // A month that can't be read is "not yet", the safer reading.
-      { email: "pat@harness.io", accountableFrom: null },
-    ]);
-  });
-
-  test("months in the forms people type", () => {
-    assert.equal(parseMonth(", August 2026"), "2026-08");
-    assert.equal(parseMonth("sept 2026"), "2026-09");
-    assert.equal(parseMonth("2026/3"), "2026-03");
-    assert.equal(parseMonth("2026-13"), null);
-    assert.equal(parseMonth("Ma 2026"), null);
-  });
-
-  test("the dialog's text reads back as the same list", () => {
-    const rows = [
-      { email: "dana@harness.io", accountableFrom: "2026-08" },
-      { email: "lee@harness.io", accountableFrom: null },
+describe("columnOrder", () => {
+  test("AE's own modules, then the ones AE and SE share, then SE's own, each by name", () => {
+    // October 2026, as it was published, plus an AE-only and an SDR-only module.
+    const m = (label: string, ...editions: string[]) => editions.map((edition) => ({ label, edition }));
+    const october = [
+      ...m("Engineering Efficiency Enablement - Certification Exam", SE),
+      ...m("SDA Differentiators", AE, SE, "SDR"),
+      ...m("Harness Code Repo & AI Code Review", AE, SE, "SDR"),
+      ...m("Engineering Efficiency Enablement", SE),
+      ...m("Reverse Demo Training Part 1", AE, SE),
+      ...m("Pipeline Hygiene", AE),
+      ...m("Cold Calling", "SDR"),
     ];
-    assert.equal(formatExemptionText(rows), "dana@harness.io, August 2026\nlee@harness.io");
-    assert.deepEqual(parseExemptionText(formatExemptionText(rows)), rows);
-  });
-});
-
-describe("parseSnapshot", () => {
-  test("keeps only what the page uses: no departed staff, departments or Mindtickle ids", () => {
-    const raw = { ...pull(), excluded: [{ email: "gone@harness.io" }], notes: ["kept", "12 departed staff still sitting in groups"] };
-    raw.learners[0] = { ...raw.learners[0]!, department: "Sales", user_id: "123" } as never;
-    const out = parseSnapshot(JSON.stringify(raw));
-    assert.ok(out.ok);
-    assert.equal("excluded" in out.snapshot, false);
-    assert.equal("department" in out.snapshot.learners[0]!, false);
-    assert.equal("user_id" in out.snapshot.learners[0]!, false);
-    // A note the tool has retired is dropped from an old pull on the way in.
-    assert.deepEqual(out.snapshot.notes, ["kept"]);
-  });
-
-  test("says what is wrong with a file that isn't a pull", () => {
-    assert.deepEqual(parseSnapshot("{not json"), { ok: false, error: "not_json" });
-    const missing = parseSnapshot(JSON.stringify({ ...pull(), learners: undefined }));
-    assert.equal(missing.ok, false);
-    assert.match(!missing.ok ? (missing.detail ?? "") : "", /^learners/);
-    assert.equal(parseSnapshot(JSON.stringify({ ...pull(), fetched_at: "yesterday-ish" })).ok, false);
+    assert.deepEqual(columnOrder(october), [
+      "Pipeline Hygiene",
+      "Harness Code Repo & AI Code Review",
+      "Reverse Demo Training Part 1",
+      "SDA Differentiators",
+      "Engineering Efficiency Enablement",
+      "Engineering Efficiency Enablement - Certification Exam",
+      "Cold Calling",
+    ]);
   });
 });
 
@@ -196,7 +189,7 @@ describe("monthView", () => {
   const rep = (email: string) => view.teams.flatMap((t) => t.directs).find((d) => d.email === email)!;
 
   test("a module shared by two editions is one column, and nobody's off-role work", () => {
-    assert.deepEqual(view.labels, ["Demo Day", "Flex Pricing", "Objections"]);
+    assert.deepEqual(view.labels, ["Objections", "Flex Pricing", "Demo Day"]);
     assert.equal(rep("di@harness.io").cells["Flex Pricing"]!.accountable, true);
     assert.equal(rep("di@harness.io").cells["Flex Pricing"]!.seriesId, "s-se");
     assert.equal(rep("bo@harness.io").cells["Flex Pricing"]!.seriesId, "s-ae");
@@ -213,7 +206,8 @@ describe("monthView", () => {
   });
 
   test("pre-bootcamp: unstarted work leaves the lineup, finished work stays uncounted", () => {
-    const pre = accountability(new Map([["bo@harness.io", null]]), new Map(pull().learners.map((l) => [l.email, EXEMPT_DATE])));
+    // Bo has no bootcamp on record; everyone else is exempt from it.
+    const pre = accountability(known(pull().learners.filter((l) => l.email !== "bo@harness.io").map((l) => [l.email, EXEMPT_DATE])));
     const v = monthView(pull(), "September 2026", pre);
     const bo = v.teams.flatMap((t) => t.directs).find((d) => d.email === "bo@harness.io")!;
     assert.deepEqual([bo.exempt, bo.assigned, bo.pct], [true, 0, null]);
@@ -242,7 +236,8 @@ describe("monthView", () => {
   });
 
   test("a team that owes nothing sorts last rather than as 0%", () => {
-    const v = monthView(pull(), "September 2026", accountability(new Map([["ada@harness.io", null]]), new Map()));
+    // Nobody has a bootcamp on record, so nobody owes anything.
+    const v = monthView(pull(), "September 2026", accountability(known([])));
     assert.equal(v.teams.at(-1)!.pct, null);
   });
 
@@ -258,9 +253,9 @@ describe("monthView", () => {
 
   test("the CSV says why a square isn't counted, and quotes what needs it", () => {
     const csv = monthCsv(view).split("\r\n");
-    assert.equal(csv[0], "Name,Email,Role,Manager,Manager Email,Demo Day,Flex Pricing,Objections,Modules Assigned,Modules Completed,Completion %,Account");
+    assert.equal(csv[0], "Name,Email,Role,Manager,Manager Email,Objections,Flex Pricing,Demo Day,Modules Assigned,Modules Completed,Completion %,Account");
     const bo = csv.find((l) => l.startsWith("Bo,"))!;
-    assert.match(bo, /Completed \(off-role\),Completed,In Progress,2,1,50\.0,Active$/);
+    assert.match(bo, /In Progress,Completed,Completed \(off-role\),2,1,50\.0,Active$/);
     assert.match(csv.find((l) => l.startsWith("Cy,"))!, /Never activated Mindtickle$/);
     const quoted = monthView({ ...pull(), learners: pull().learners.map((l) => ({ ...l, name: `${l.name}, "Jr"` })) }, "September 2026", everyoneAccountable);
     assert.ok(monthCsv(quoted).includes('"Bo, ""Jr"""'));

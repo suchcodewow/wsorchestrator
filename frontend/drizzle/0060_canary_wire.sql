@@ -1,5 +1,4 @@
--- Canary Wire: the newest Mindtickle pull, and the exemptions set by hand
--- that override bootcamp history for one person.
+-- Canary Wire: the newest Mindtickle pull, and the pulls in progress.
 --
 -- Safe to run on any database:
 --   * fresh/empty      — skipped entirely; db:push creates the schema outright
@@ -24,12 +23,26 @@ begin
     saved_at timestamptz not null default now()
   );
 
-  create table if not exists canary_wire_exemptions (
-    email text primary key,
-    accountable_from text,
-    updated_by text constraint canary_wire_exemptions_updated_by_users_id_fk references users (id) on delete set null,
-    updated_at timestamptz not null default now()
+  create table if not exists canary_wire_pulls (
+    id uuid primary key default gen_random_uuid(),
+    trigger text not null,
+    started_by text constraint canary_wire_pulls_started_by_users_id_fk references users (id) on delete set null,
+    status text not null default 'running',
+    message text not null default '',
+    done integer not null default 0,
+    total integer not null default 0,
+    state jsonb,
+    leased_until timestamptz,
+    error text,
+    started_at timestamptz not null default now(),
+    updated_at timestamptz not null default now(),
+    finished_at timestamptz,
+    constraint canary_wire_pulls_trigger_check check (trigger in ('manual', 'schedule')),
+    constraint canary_wire_pulls_status_check check (status in ('running', 'succeeded', 'failed'))
   );
+  create index if not exists canary_wire_pulls_started_at_idx on canary_wire_pulls (started_at);
+  create unique index if not exists canary_wire_pulls_one_running_idx
+    on canary_wire_pulls (status) where status = 'running';
 end $$;
 
 commit;
