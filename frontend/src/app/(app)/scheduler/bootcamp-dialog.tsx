@@ -60,14 +60,17 @@ export function BootcampDialog({
   editing,
   facilities,
   sources,
+  onSaved,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** The bootcamp to change; null to schedule a new one. */
-  editing: BootcampRow | null;
+  editing: Pick<BootcampRow, "id" | "startDate" | "btcDays" | "intDays" | "status" | "facilityId"> | null;
   facilities: { id: string; name: string }[];
   /** Earlier schedules a new bootcamp can start from, latest first. */
   sources: CopySource[];
+  /** Runs after a change is saved, in place of refreshing the page. */
+  onSaved?: () => void;
 }) {
   const router = useRouter();
   const [startDate, setStartDate] = useState("");
@@ -184,7 +187,8 @@ export function BootcampDialog({
         return;
       }
       onOpenChange(false);
-      router.refresh();
+      if (onSaved) onSaved();
+      else router.refresh();
     } catch {
       setConfirming(null);
       setError("Could not reach the server.");

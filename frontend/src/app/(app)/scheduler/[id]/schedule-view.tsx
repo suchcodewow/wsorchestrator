@@ -27,7 +27,7 @@ import {
   type DragStartEvent,
   type KeyboardCoordinateGetter,
 } from "@dnd-kit/core";
-import { AlertTriangle, CalendarDays, Check, ChevronLeft, ChevronRight, Copy, Loader2, Rows3, Rows4 } from "lucide-react";
+import { AlertTriangle, CalendarDays, Check, ChevronLeft, ChevronRight, Copy, Loader2, Pencil, Rows3, Rows4 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { SCHEDULE_LIMITS, SCHEDULE_TRACKS, type ScheduleTrack } from "@/db/schema";
@@ -47,14 +47,16 @@ import {
   type Clash,
   type Placed,
 } from "@/lib/scheduler/timeline";
+import { type ScheduleViewMode, writeScheduleCondensedCookie, writeScheduleViewCookie } from "@/lib/scheduler/schedule-prefs";
 import { cn } from "@/lib/utils";
+import { BootcampDialog } from "../bootcamp-dialog";
 import { Board, COLUMN_ATTR, SCALE, SessionFace, type BoardColumn, type Density } from "./board";
 import { useChecklistButtons } from "./checklist";
 import { dayOf, everyDay, keyOf, locate, moveTo, resize, type Days } from "./days";
 import { CopyDialog } from "./copy-dialog";
 import { SessionDialog, type SessionTarget } from "./session-dialog";
 
-type View = "day" | "week";
+type View = ScheduleViewMode;
 
 const VIEWS: { id: View; label: string; icon: typeof Rows3 }[] = [
   { id: "day", label: "All Tracks", icon: Rows3 },
@@ -72,30 +74,38 @@ export function ScheduleView({
   initial,
   types,
   sources,
+  facilities,
   canManage,
   viewerId,
   viewerEmail,
   checklist,
+  initialView,
+  initialCondensed,
 }: {
   initial: Schedule;
   types: SessionTypeRow[];
   sources: CopySource[];
+  facilities: { id: string; name: string }[];
   canManage: boolean;
   viewerId: string;
   viewerEmail: string;
   /** How much of each class-day's checklist is done. */
   checklist: ChecklistDayCount[];
+  /** The manager's last-chosen view and density, from a cookie read on the server. */
+  initialView: View;
+  initialCondensed: boolean;
 }) {
   const router = useRouter();
   const { bootcamp } = initial;
   const [schedule, setSchedule] = useState(initial);
   const [days, setDays] = useState<Days>(initial.days);
-  const [view, setView] = useState<View>("day");
-  const [condensed, setCondensed] = useState(false);
+  const [view, setView] = useState<View>(initialView);
+  const [condensed, setCondensed] = useState(initialCondensed);
   const [day, setDay] = useState(1);
   const [track, setTrack] = useState<ScheduleTrack>("btc");
   const [target, setTarget] = useState<SessionTarget | null>(null);
   const [filling, setFilling] = useState(false);
+  const [editingBootcamp, setEditingBootcamp] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [save, setSave] = useState<SaveState>({ state: "idle" });
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -350,7 +360,10 @@ export function ScheduleView({
                 key={v.id}
                 role="tab"
                 aria-selected={view === v.id}
-                onClick={() => setView(v.id)}
+                onClick={() => {
+                  setView(v.id);
+                  writeScheduleViewCookie(v.id);
+                }}
                 className={cn(
                   "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm transition-colors",
                   view === v.id ? "bg-brand/10 font-medium text-foreground" : "text-muted-foreground hover:text-foreground",
@@ -366,7 +379,11 @@ export function ScheduleView({
             type="button"
             role="switch"
             aria-checked={condensed}
-            onClick={() => setCondensed(!condensed)}
+            onClick={() => {
+              const next = !condensed;
+              setCondensed(next);
+              writeScheduleCondensedCookie(next);
+            }}
             className={cn(
               "flex h-8 cursor-pointer items-center gap-2 rounded-full border px-3 text-sm outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50",
               condensed
@@ -433,6 +450,13 @@ export function ScheduleView({
                 <ChevronRight className="size-4" />
               </Button>
             </div>
+          )}
+
+          {canManage && (
+            <Button variant="outline" size="sm" className="rounded-full" onClick={() => void flush().then(() => setEditingBootcamp(true))}>
+              <Pencil />
+              Edit
+            </Button>
           )}
         </div>
 
@@ -521,6 +545,7 @@ export function ScheduleView({
           <p className="rounded-xl border px-5 py-8 text-center text-sm text-muted-foreground">No track runs on day {day}.</p>
         ) : (
           <DndContext
+            id={`schedule-${bootcamp.id}`}
             sensors={sensors}
             collisionDetection={underPointer}
             onDragStart={onDragStart}
@@ -590,6 +615,16 @@ export function ScheduleView({
           sources={sources}
           flush={flush}
           onDone={afterChange}
+        />
+      )}
+      {canManage && (
+        <BootcampDialog
+          open={editingBootcamp}
+          onOpenChange={setEditingBootcamp}
+          editing={schedule.bootcamp}
+          facilities={facilities}
+          sources={sources}
+          onSaved={() => void reload()}
         />
       )}
     </motion.div>
