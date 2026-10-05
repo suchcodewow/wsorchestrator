@@ -412,10 +412,10 @@ to QA on merge. It reaches production only when `deploy_production` runs with
 promoted, so preflight refuses that combination when the two differ in
 `infra/admin/*.tf`.
 
-> **Environment variables do not ship this way.** The pipeline's infrastructure
-> stage applies them, but a value that lives only in the git-ignored
-> `infra/admin/terraform.tfvars` exists solely on the machine that applies. See
-> [docs/operations.md](docs/operations.md).
+> **A new variable's value does not ship in the PR.** The apply reads every
+> value from the environment's IaCM workspace in Harness, and a secret from a
+> `tf_*` Harness secret. Add it there before merging. See
+> [Where secrets and settings live](docs/environments.md#where-secrets-and-settings-live).
 
 ---
 

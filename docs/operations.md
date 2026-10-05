@@ -64,14 +64,10 @@ tiers.
 `make ship` and the deploy pipeline's build stage run `gcloud run services
 update --image`, which swaps the image and leaves the environment untouched. So
 a new or changed `SITE_ADMIN_EMAILS` — or any env var — needs the OpenTofu
-apply, not a rebuild. `terraform.tfvars` is git-ignored, so the value lives only
-on the machine that applies it.
-
-```bash
-make infra     # prompts for yes
-# non-interactively:
-tofu -chdir=infra/admin apply -var-file=terraform.tfvars -auto-approve
-```
+apply, not a rebuild. The value lives on the environment's IaCM workspace in
+Harness, a secret as a `tf_*` Harness secret; change it there, then run
+`deploy_qa` for QA or `deploy_production` with `run_infra=true` for production.
+See [Where secrets and settings live](environments.md#where-secrets-and-settings-live).
 
 Terraform declares `ignore_changes` on the app image, so an apply does **not**
 revert a pipeline-deployed image. Verified: revisions share the same digest.
@@ -132,8 +128,10 @@ session policy expires — see
 The laptop's `aws` CLI is normally logged in as the management account **root**,
 which can read IAM and Organizations but **cannot assume roles** ("Roles may not
 be assumed by root accounts"). Inspecting a workshop's member account needs the
-`workshop-orchestrator` user's static keys, which live only in the git-ignored
-`infra/admin/terraform.tfvars`.
+`workshop-orchestrator` user's static keys. Deploys read them from the Harness
+secrets `tf_aws_access_key_id` and `tf_aws_secret_access_key`, but Harness never
+shows a secret's value again, so the only readable copy is the owner's
+git-ignored `infra/admin/terraform.tfvars`.
 
 That login is the CLI-v2 root-session flow (`login_session = arn:...:root` in
 `~/.aws/config`, cache under `~/.aws/login`), and **the OpenTofu AWS provider

@@ -201,7 +201,7 @@ docker exec workshoporchestrator-postgres-1 psql -U postgres -d workshops_agent 
 | Document | Covers |
 | --- | --- |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Clone to running locally; schema changes; how a change ships |
-| [docs/environments.md](docs/environments.md) | QA vs production: what is separate, what is shared, who can release |
+| [docs/environments.md](docs/environments.md) | QA vs production: what is separate, what is shared, who can release; where secrets and settings live (Harness, not `terraform.tfvars`) |
 | [README.md](README.md) | What the product does, architecture, standing up a new deployment |
 | [DEPLOY.md](DEPLOY.md) | Makefile targets, the deploy pipeline, rollback |
 | [TESTING.md](TESTING.md) | Why the runner's tests exist; exercising code without deploying |
