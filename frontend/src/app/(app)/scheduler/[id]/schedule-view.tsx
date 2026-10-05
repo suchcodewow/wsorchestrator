@@ -621,6 +621,7 @@ export function ScheduleView({
         rooms={schedule.rooms}
         hasFacility={Boolean(bootcamp.facilityId)}
         instructors={schedule.instructors}
+        assessments={schedule.assessments}
         types={types}
         canManage={canManage}
         viewerId={viewerId}
@@ -704,8 +705,8 @@ const ISSUES_IN_TOOLTIP = 8;
  * judge of this bootcamp (once, with all their sessions; a copied schedule
  * can bring them in), each session that ends after the day does, and each
  * breakout that leaves
- * someone in its class out of every group or, when the facility has rooms, an
- * instructor without one. `flagged` has what is wrong with each session, by
+ * someone in its class out of every group, has no assessment to score them on,
+ * or, when the facility has rooms, leaves an instructor without one. `flagged` has what is wrong with each session, by
  * id, for its card.
  */
 function findIssues(
@@ -757,9 +758,11 @@ function findIssues(
       const gaps = [
         unassigned > 0 && `${unassigned} ${unassigned === 1 ? "attendee" : "attendees"} not assigned`,
         roomless > 0 && `${roomless} ${roomless === 1 ? "instructor" : "instructors"} without a room`,
+        !s.assessmentId && "no assessment",
       ].filter((g): g is string => Boolean(g));
-      for (const g of gaps) flag(s.id, g);
-      if (gaps.length > 0) issues.push({ kind: "breakout", key: `breakout:${s.id}`, lead: `${gaps.join(" and ")}:`, spots: [spotOf(s)] });
+      const upper = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
+      for (const g of gaps) flag(s.id, upper(g));
+      if (gaps.length > 0) issues.push({ kind: "breakout", key: `breakout:${s.id}`, lead: `${upper(gaps.join(" and "))}:`, spots: [spotOf(s)] });
     }
   }
   const bySpot = (x: Spot, y: Spot) => x.day - y.day || x.start - y.start;

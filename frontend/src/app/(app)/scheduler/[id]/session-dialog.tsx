@@ -6,8 +6,8 @@
  * already busy at that time is shown in red with what they are busy with, and
  * cannot be added. Attendees taught something else beside it on their class
  * or SE track are shown in red too, but it still saves, as a moved session
- * does. Its comments are on a tab of their own, and a breakout's groups and
- * each instructor's room on a third. A viewer sees the same, without the
+ * does. Its comments are on a tab of their own, and a breakout's assessment,
+ * its groups and each instructor's room on a third. A viewer sees the same, without the
  * controls.
  */
 
@@ -30,7 +30,7 @@ import { Input } from "@/components/ui/input";
 import { SCHEDULE_LIMITS, SESSION_AUDIENCES, type ScheduleTrack, type SessionAudience } from "@/db/schema";
 import type { RoomRow } from "@/lib/scheduler/facilities";
 import type { GroupRow } from "@/lib/scheduler/groups";
-import type { Instructor, SessionRow, StaffRow } from "@/lib/scheduler/schedule";
+import type { BreakoutAssessment, Instructor, SessionRow, StaffRow } from "@/lib/scheduler/schedule";
 import { SESSION_STYLES } from "@/lib/scheduler/session-style";
 import type { SessionTypeRow } from "@/lib/scheduler/session-types";
 import {
@@ -70,6 +70,7 @@ const ERRORS: Record<string, string> = {
   unknown_room: "That room is not at this bootcamp's facility any more — reload the page.",
   shared_room: "Two instructors cannot share a breakout room.",
   unknown_type: "That session type was removed — pick another.",
+  unknown_assessment: "That assessment was removed, or is for the other stage — pick another on Breakout Assignments.",
   forbidden: "Your role changed — reload the page.",
 };
 
@@ -104,6 +105,7 @@ export function SessionDialog({
   rooms,
   hasFacility,
   instructors,
+  assessments,
   types,
   canManage,
   viewerId,
@@ -119,6 +121,7 @@ export function SessionDialog({
   rooms: RoomRow[];
   hasFacility: boolean;
   instructors: Instructor[];
+  assessments: BreakoutAssessment[];
   types: SessionTypeRow[];
   canManage: boolean;
   viewerId: string;
@@ -132,6 +135,7 @@ export function SessionDialog({
   const [audience, setAudience] = useState<SessionAudience>("both");
   const [staff, setStaff] = useState<StaffRow[]>([]);
   const [roomId, setRoomId] = useState<string | null>(null);
+  const [assessmentId, setAssessmentId] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [clashes, setClashes] = useState<Clash[]>([]);
@@ -151,6 +155,7 @@ export function SessionDialog({
       setAudience(s?.audience ?? defaultAudience(target.mode === "new" ? target.track : target.session.track));
       setStaff(s?.staff ?? []);
       setRoomId(s?.roomId ?? null);
+      setAssessmentId(s?.assessmentId ?? null);
       setError(null);
       setClashes([]);
       setCommented(false);
@@ -256,6 +261,7 @@ export function SessionDialog({
         description: look.description,
         typeId,
         roomId: look.kind === "main" ? roomId : null,
+        assessmentId: look.kind === "breakout" ? assessmentId : null,
         staff: look.kind === "unstructured" ? [] : staff.map((s) => ({ email: s.email, leader: s.leader, roomId: look.kind === "breakout" ? s.roomId : null })),
       };
       const res = await fetch(
@@ -525,6 +531,9 @@ export function SessionDialog({
               sessionId={existing?.id ?? null}
               track={where.track}
               audience={audience}
+              assessments={assessments}
+              assessmentId={assessmentId}
+              onAssessment={setAssessmentId}
               staff={staff}
               rooms={rooms}
               busyRooms={busy.rooms}

@@ -19,7 +19,6 @@ import { db } from "@/db";
 import {
   EVALS_ASSESSMENT_LIMITS,
   SCHEDULE_LIMITS,
-  SCHEDULE_TRACKS,
   bootcampHistory,
   employees,
   evalsAssessmentCriteria,
@@ -34,6 +33,7 @@ import {
   users,
   type EvalsAssessmentAudience,
   type EvalsAssessmentStage,
+  type ScheduleTrack,
 } from "@/db/schema";
 import { averageScore, requiredFeedback, tracksFor, wholeScore } from "@/lib/evals/assessment-values";
 import { IN_STAGE, isCandidate } from "@/lib/evals/current-cohort";
@@ -45,7 +45,6 @@ import type { MentionPick } from "@/lib/mentions";
 import { pageWindow, toPage, type ListQuery, type Page } from "@/lib/paging";
 import { blankAsNull, orderFor, searchAny } from "@/lib/paging-sql";
 import { activeBootcamp, type ActiveBootcamp } from "@/lib/scheduler/bootcamps";
-import { stageOf } from "@/lib/scheduler/timeline";
 
 const e = employees;
 const h = bootcampHistory;
@@ -128,30 +127,27 @@ function submissionJoin(assessmentId: string, bootcampId: string | null) {
 }
 
 /**
- * Whether an attendee is in `instructorEmail`'s group in any breakout of the
- * assessment's stage at the bootcamp, as the schedule's Breakout tab assigns
- * them. A breakout is not tied to one assessment, so every breakout of the
- * stage counts.
+ * Whether an attendee is in `instructorEmail`'s group in a breakout at the
+ * bootcamp that is scored on this assessment, as the schedule's Breakout
+ * Assignments tab assigns them.
  */
 function assignedTo(assessment: ScoringAssessment, bootcampId: string | null, instructorEmail: string) {
   if (!bootcampId) return sql`false`;
-  const tracks = SCHEDULE_TRACKS.filter((t) => stageOf(t) === assessment.stage);
   return sql`exists (
     select 1 from ${scheduleSessionGroups} g
     join ${scheduleSessions} ss on ss.id = g.session_id
     where g.email = ${e.email} and g.instructor_email = ${instructorEmail.toLowerCase()}
-      and ss.bootcamp_id = ${bootcampId} and ss.kind = 'breakout'
-      and ss.track in (${sql.join(tracks.map((t) => sql`${t}`), sql`, `)})
+      and ss.bootcamp_id = ${bootcampId} and ss.kind = 'breakout' and ss.assessment_id = ${assessment.id}
   )`;
 }
 
 /** A room someone takes in a breakout, and which breakout it is. */
-export type BreakoutRoom = { roomName: string; sessionName: string; track: (typeof SCHEDULE_TRACKS)[number]; day: number; start: number };
+export type BreakoutRoom = { roomName: string; sessionName: string; track: ScheduleTrack; day: number; start: number };
 
 /**
- * The rooms `instructorEmail` is given in the breakouts of the assessment's
- * stage at the bootcamp, as the schedule's Breakout tab assigns them, in the
- * order they happen. A breakout without a room for them is left out.
+ * The rooms `instructorEmail` is given in the bootcamp's breakouts scored on
+ * this assessment, in the order they happen. A breakout without a room for
+ * them is left out.
  */
 export async function breakoutRooms(
   assessment: ScoringAssessment,
@@ -159,7 +155,6 @@ export async function breakoutRooms(
   instructorEmail: string | null,
 ): Promise<BreakoutRoom[]> {
   if (!bootcampId || !instructorEmail) return [];
-  const tracks = SCHEDULE_TRACKS.filter((t) => stageOf(t) === assessment.stage);
   const ss = scheduleSessions;
   return db
     .select({ roomName: facilityRooms.name, sessionName: ss.name, track: ss.track, day: ss.day, start: ss.start })
@@ -171,7 +166,7 @@ export async function breakoutRooms(
         eq(scheduleSessionStaff.email, instructorEmail.toLowerCase()),
         eq(ss.bootcampId, bootcampId),
         eq(ss.kind, "breakout"),
-        inArray(ss.track, tracks),
+        eq(ss.assessmentId, assessment.id),
       ),
     )
     .orderBy(asc(ss.day), asc(ss.start), asc(ss.track))
