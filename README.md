@@ -94,7 +94,7 @@ generated — a fresh clone needs exactly one file to deploy:
 
 | File                            | When                | Why it isn't in the repo                                              |
 | ------------------------------- | ------------------- | --------------------------------------------------------------------- |
-| `infra/admin/terraform.tfvars`  | Step 2 — **required** | Holds the Harness key and OAuth secret; `*.tfvars` is git-ignored     |
+| `infra/admin/terraform.tfvars`  | Step 2, first apply only | Holds the Harness key and OAuth secret; `*.tfvars` is git-ignored. Once the IaCM workspace exists, its variables replace this file |
 | `frontend/.env`                 | Local dev only      | The deployed app reads Secret Manager and Terraform-set env vars instead |
 
 Terraform's own working directory (`infra/admin/.terraform/`, `.terraform.lock.hcl`)
@@ -230,7 +230,11 @@ service exists, in step 5. Everything else is optional; see
 [`terraform.tfvars.example`](infra/admin/terraform.tfvars.example) for the full
 set, including custom domains and CI/CD.
 
-> `terraform.tfvars` holds secrets and is git-ignored — never commit it.
+> `terraform.tfvars` holds secrets and is git-ignored — never commit it. It is
+> for this first apply only. Every value in it becomes a variable on the
+> environment's Harness IaCM workspace, each secret as a `tf_*` Harness secret,
+> and from then on the workspace is what deploys read. See
+> [Where secrets and settings live](docs/environments.md#where-secrets-and-settings-live).
 
 ## 3. Bootstrap state + stand up the control plane
 
@@ -258,7 +262,7 @@ make infra
 > `make backend-local` writes the git-ignored `infra/admin/backend_local.tf`
 > pointing at the same state.
 >
-> Don't confuse that with `tfstate_bucket` in `terraform.tfvars`: that bucket is
+> Don't confuse that with the `tfstate_bucket` variable: that bucket is
 > created *by* the apply and holds per-run workshop state, one prefix per run.
 >
 > There used to be a third thing here, a GCS bucket holding this config's state
@@ -310,8 +314,8 @@ redirect URI:
 <APP_URL>/api/auth/callback/google
 ```
 
-Also set `app_url = "<APP_URL>"` in `infra/admin/terraform.tfvars` and re-apply
-(`make infra`) so Auth.js pins `AUTH_URL`. Without it, host-guessing behind
+Also set `app_url = "<APP_URL>"` on the IaCM workspace and apply, so Auth.js
+pins `AUTH_URL`. Without it, host-guessing behind
 Cloud Run can produce a `0.0.0.0:8080` redirect that Google rejects with a
 "doesn't comply with OAuth 2.0 policy" error.
 
@@ -347,7 +351,7 @@ Neither is needed to run the app; both are off by default.
 
 ## Serving on your own domain
 
-Set `custom_domains` in `terraform.tfvars` and re-apply. Each hostname gets a
+Set `custom_domains` on the IaCM workspace and apply. Each hostname gets a
 Cloud Run domain mapping and a managed TLS certificate:
 
 ```hcl
@@ -495,8 +499,8 @@ placeholder; **eVals settings** holds what it will draw on:
   the previous sync, every day at 3:00 AM Eastern and whenever **Sync HiBob
   Now** is pressed. Every run, scheduled or manual, is logged on the tab with
   its count or error. The service user comes from the deployment, not the page:
-  `hibob_userid` and `hibob_token` in `terraform.tfvars` (and the IaCM
-  workspace, the token as the `tf_hibob_token` secret), which reach Cloud Run
+  `hibob_userid` and `hibob_token` on the IaCM workspace (the token as the
+  Harness secret `tf_hibob_token`), which reach Cloud Run
   as `HIBOB_SERVICE_USER_ID` and `HIBOB_TOKEN`. Cloud Scheduler job
   `hibob-sync-trigger` calls `/api/evals/hibob/sync/scheduled` with an OIDC
   token for the scheduler service account; nothing else gets past that route.
@@ -527,7 +531,7 @@ making other people platform administrators. Only a platform administrator can
 change another platform administrator's roles.
 
 The first platform administrator has to come from outside the app: any address
-in `SITE_ADMIN_EMAILS` (`site_admin_emails` in `terraform.tfvars`,
+in `SITE_ADMIN_EMAILS` (`site_admin_emails` on the IaCM workspace,
 comma-separated in `.env` locally) is made one when it signs in, and again on
 every sign-in after — so the flag can't be removed from those addresses in the
 app, and the page refuses to try. Nobody can change their own roles — that
@@ -575,20 +579,14 @@ Three things keep the page from being a foot-gun:
 - **`SITE_ADMIN_EMAILS` addresses are always allowed**, whatever their domain.
   The same list that bootstraps the first administrator is the way back in.
 - **`AUTH_ALLOWED_EMAIL_DOMAINS` still works and is always in force**, unioned
-  with the table. Set it from Terraform:
-
-  ```hcl
-  # infra/admin/terraform.tfvars
-  allowed_email_domains = ["example.com"]
-  ```
-
-  or in `frontend/.env` locally. These appear on the settings page as locked
+  with the table. Set it as the `allowed_email_domains` variable on the IaCM
+  workspace (a list, such as `["example.com"]`), or in `frontend/.env` locally. These appear on the settings page as locked
   rows: in force, but changed in the deployment's configuration rather than in
   the app. Nothing is copied from it into the table — two editable copies of
   one rule would only drift apart.
 
 If the table is ever wrong and nobody can get in, set `site_admin_emails` (or
-`allowed_email_domains`) in `terraform.tfvars` and redeploy. That is what the
+`allowed_email_domains`) on the IaCM workspace and apply. That is what the
 environment is for.
 
 **With exactly one domain in force**, the sign-in page asks Google for it (the

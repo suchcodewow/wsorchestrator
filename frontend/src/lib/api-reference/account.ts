@@ -194,6 +194,55 @@ export const ACCOUNT_GROUPS: EndpointGroup[] = [
     ],
   },
   {
+    id: "transcription",
+    title: "Transcription",
+    intro:
+      "Speech-to-text through Deepgram, as Check PC's test recording uses it. Every request to Deepgram sends mip_opt_out=true, so Deepgram keeps neither the audio nor the transcript. Nothing is stored here either; the audit row records only the size of what was sent.",
+    endpoints: [
+      {
+        method: "POST",
+        path: "/api/transcription/token",
+        summary: "Mints a short-lived Deepgram token for one live-transcription socket.",
+        access: "signedIn",
+        token: true,
+        notes:
+          "Open wss://api.deepgram.com/v1/listen?model=nova-3&smart_format=true&interim_results=true&mip_opt_out=true with the WebSocket subprotocols [\"bearer\", token]. The token need only be valid while the socket opens; an open socket outlives it. No body.",
+        returns: "{ token, expiresIn: number }",
+        errors: [
+          { status: 502, error: "upstream", when: "Deepgram refused the key or could not be reached" },
+          { status: 503, error: "unconfigured", when: "no DEEPGRAM_API_KEY is set on this deployment" },
+        ],
+      },
+      {
+        method: "POST",
+        path: "/api/transcription/transcribe",
+        summary: "Returns the transcript of a whole recording.",
+        access: "signedIn",
+        token: true,
+        notes: "Deepgram's nova-3 model, with punctuation and number formatting. The audio is passed through and not kept.",
+        body: {
+          kind: "multipart",
+          fields: [
+            {
+              name: "audio",
+              type: "file",
+              required: true,
+              note: "a recording in any container Deepgram reads (webm, ogg, mp4, wav, mp3…); 25 MiB at most",
+            },
+          ],
+        },
+        returns: "{ transcript: string } — empty when nothing was heard",
+        errors: [
+          { status: 400, error: "malformed", when: "the body is not form data, or has no audio file" },
+          { status: 400, error: "empty", when: "the audio file is empty" },
+          { status: 413, error: "too_large", when: "the audio file is over 25 MiB" },
+          { status: 502, error: "upstream", when: "Deepgram refused the request or could not be reached" },
+          { status: 503, error: "unconfigured", when: "no DEEPGRAM_API_KEY is set on this deployment" },
+        ],
+      },
+    ],
+  },
+  {
     id: "inbox",
     title: "Your inbox",
     intro:

@@ -1,4 +1,9 @@
 # Copy to terraform.tfvars and fill in. Do NOT commit the real file.
+#
+# This is for the first apply of a new deployment, from a laptop. Deployed
+# environments read their Harness IaCM workspace's variables, never this file;
+# secrets there are `tf_*` Harness secrets. See
+# docs/environments.md#where-secrets-and-settings-live.
 
 # Control plane — see README.md#control-plane
 admin_project_id    = "my-admin-project"
@@ -24,6 +29,8 @@ github_pat         = "ghp_xxxxxxxx"
 # The HiBob service user eVals syncs employees with, daily and on demand.
 # hibob_userid = "SERVICE-12345"
 # hibob_token  = "xxxxxxxx"
+# Deepgram speech-to-text for Check PC's transcripts. Empty leaves it off.
+# deepgram_api_key = "xxxxxxxx"
 # harness_base_url = "https://app.harness.io"
 # Organizations the Cloud Status page should treat as permanent fixtures. Rarely
 # needed: an organization the orchestrator never tagged is already reported as

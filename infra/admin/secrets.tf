@@ -27,6 +27,9 @@ locals {
     var.aws_access_key_id != "" ? ["aws-access-key-id", "aws-secret-access-key"] : [],
     # Gated on the service user id, not the token, for the reason above.
     var.hibob_userid != "" ? ["hibob-token"] : [],
+    # Deepgram has no non-secret half to gate on. Whether a key was given is
+    # not itself a secret, so nonsensitive() lifts the taint off the test.
+    nonsensitive(var.deepgram_api_key != "") ? ["deepgram-api-key"] : [],
   )
 
   # id -> value, holding the (mostly sensitive) payloads. Only ever looked up by
@@ -43,6 +46,7 @@ locals {
     "aws-access-key-id"          = var.aws_access_key_id
     "aws-secret-access-key"      = var.aws_secret_access_key
     "hibob-token"                = var.hibob_token
+    "deepgram-api-key"           = var.deepgram_api_key
   }
 
   # Secrets the runner/reaper/scheduler jobs read. The runner has no use for the

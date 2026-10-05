@@ -100,6 +100,13 @@ variable "hibob_token" {
   default     = ""
 }
 
+variable "deepgram_api_key" {
+  description = "Deepgram API key (Member role or above) for speech-to-text. Stored in Secret Manager as deepgram-api-key and read by the app alone. Empty leaves transcription off: Check PC records and plays back but shows no transcript."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
 variable "hibob_sync_schedule" {
   description = "Cron for the daily HiBob employee sync, in America/New_York."
   type        = string

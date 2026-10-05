@@ -16,6 +16,54 @@ database, secrets and identities.
 | Workspace OU for attendees | `/` (one OU per run under it) | `/QA` |
 | Header badge | none | amber `qa` |
 
+## Where secrets and settings live
+
+**In Harness, on each environment's IaCM workspace.** Every value the apply
+needs is a variable on `admin_control_plane` or `qa_control_plane`. Neither
+workspace has a var file, so a deploy never reads `terraform.tfvars`.
+
+- **A setting** (`site_admin_emails`, `app_url`, `hibob_userid`, …) is a
+  plain string variable on the workspace.
+- **A secret** is a Harness secret in project `operations/orchestrator`,
+  held by Harness's built-in secret manager and named `tf_<variable>`
+  (`tf_harness_api_key`, `tf_hibob_token`, `tf_google_oauth_client_secret`,
+  …). The workspace variable has type *secret* and names it. The two
+  workspaces reference the **same** `tf_*` secrets, so QA and production get
+  the same value unless you create a separate secret for one of them.
+
+From there the apply carries the value the rest of the way. OpenTofu writes
+each secret into the environment's GCP Secret Manager (`infra/admin/secrets.tf`),
+and Cloud Run reads it from there as an environment variable
+(`infra/admin/app.tf`, `runner.tf`). Nothing in the app reads Harness directly.
+
+**To add one**, for example a new API key:
+
+1. Declare the variable in `infra/admin/variables.tf`, mark it `sensitive`,
+   and wire it through `secrets.tf` and `app.tf` the way `hibob_token` is.
+2. Create the Harness secret in project `operations/orchestrator` (Project
+   Settings → Secrets, a *Text* secret). Name it `tf_<variable>` when both
+   environments share it. When each has its own value, create one per
+   environment, as Deepgram does with `deepgram_qa_token` and
+   `deepgram_production_token`.
+3. On each workspace that should have it, add a *secret*-type variable whose
+   **key is the Terraform variable's name exactly** (`deepgram_api_key`, not
+   `tf_deepgram_api_key`) and whose value names the secret. A key that matches
+   no variable is only a warning on apply, so the value silently goes nowhere.
+4. Do steps 2 and 3 before the PR merges. A variable with no default and no
+   workspace value fails the apply. It reaches QA when the PR merges, and
+   production when `deploy_production` runs with `run_infra=true`.
+
+**To change one**, edit the Harness secret or the workspace variable, then
+apply: any `deploy_qa` run for QA, `deploy_production` with `run_infra=true`
+for production. A rebuild alone does not do it, because the deploy swaps the
+image and leaves the environment alone.
+
+Harness never shows a stored secret's value again, so keep the original
+wherever you keep credentials. A `terraform.tfvars` on a laptop is only for
+a first, from-scratch apply (see the [README](../README.md#initial-setup)). It
+is not kept in step with the workspaces. Applying from a laptop with a stale
+one would overwrite what the workspace set.
+
 ## How a change moves
 
 ```

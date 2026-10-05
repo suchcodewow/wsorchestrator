@@ -160,8 +160,9 @@ step's `plannedChanges.*` output variables are all `0`. That, not the HTTP 200,
 is the evidence the copy was faithful.
 
 **Secrets cannot be copied.** Harness never returns a stored secret's value, so
-each has to be recreated from its original source. For this project: `tf_*`
-values are in `infra/admin/terraform.tfvars`, the GitHub PAT mirrors GCP Secret
+each has to be recreated from its original source. For this project: the `tf_*`
+secrets, which the IaCM workspaces read, have a readable copy only in the
+owner's git-ignored `infra/admin/terraform.tfvars`, the GitHub PAT mirrors GCP Secret
 Manager `github-pat`, tf-admin's key is
 `~/.config/gcloud/workshop-tf-admin.json`, and **build-sa's key exists nowhere on
 disk** — mint a fresh one with `gcloud iam service-accounts keys create` and
