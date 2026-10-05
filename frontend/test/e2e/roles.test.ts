@@ -201,6 +201,7 @@ const PAGES: Record<string, PageCase> = {
   },
   "/cohorts/current": { path: () => "/cohorts/current", expect: gated(canUseTraining) },
   "/cohorts/deferred": { path: () => "/cohorts/deferred", expect: gated(canUseTraining) },
+  "/cohorts/name-cards": { path: () => "/cohorts/name-cards", expect: gated(canUseTraining) },
   "/cohorts/previous": { path: () => "/cohorts/previous", expect: gated(canUseTraining) },
   "/cohorts/previous?open=<a day>": { path: () => "/cohorts/previous?open=2026-09-14", expect: gated(canUseTraining) },
   "/cohorts/previous/<a record>": {

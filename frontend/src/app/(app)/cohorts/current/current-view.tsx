@@ -50,6 +50,7 @@ import {
   Handshake,
   Loader2,
   Pin,
+  Printer,
   Upload,
   Users,
   type LucideIcon,
@@ -306,6 +307,12 @@ export function CurrentCohortView({
             <Button variant="secondary" disabled>
               <Upload />
               Load Final Intermediate Scores
+            </Button>
+            <Button variant="secondary" asChild>
+              <a href="/cohorts/name-cards" target="_blank" rel="noopener">
+                <Printer />
+                Print Name Cards
+              </a>
             </Button>
           </div>
         )}

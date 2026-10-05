@@ -16,7 +16,7 @@ import { loadSchedule, type SessionRow } from "@/lib/scheduler/schedule";
 import { PRINT_STRIPES } from "@/lib/scheduler/session-style";
 import { TRACK_LABELS, attendeeCount, dayDate, formatClock, trackDays } from "@/lib/scheduler/timeline";
 import { cn } from "@/lib/utils";
-import { PrintButton } from "./print-button";
+import { PrintButton } from "@/components/print-button";
 
 export const metadata: Metadata = { title: "Print schedule" };
 
