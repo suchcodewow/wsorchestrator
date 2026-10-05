@@ -12,10 +12,20 @@
  */
 
 import { useMemo, useState, type KeyboardEvent } from "react";
-import { Crown, Loader2, Trash2 } from "lucide-react";
+import { ChevronDown, Crown, Loader2, Trash2 } from "lucide-react";
 import { SessionLookFields, type SessionLook } from "@/components/session-look-fields";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { SCHEDULE_LIMITS, SESSION_AUDIENCES, type ScheduleTrack, type SessionAudience } from "@/db/schema";
 import type { RoomRow } from "@/lib/scheduler/facilities";
@@ -125,7 +135,6 @@ export function SessionDialog({
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [clashes, setClashes] = useState<Clash[]>([]);
-  const [filter, setFilter] = useState("");
   const [commented, setCommented] = useState(false);
   const [commentDelta, setCommentDelta] = useState(0);
   const [tab, setTab] = useState<Tab>("session");
@@ -144,7 +153,6 @@ export function SessionDialog({
       setRoomId(s?.roomId ?? null);
       setError(null);
       setClashes([]);
-      setFilter("");
       setCommented(false);
       setCommentDelta(0);
       setTab("session");
@@ -192,15 +200,11 @@ export function SessionDialog({
   if (!target || !where) return <Dialog open={false} />;
 
   const editable = canManage;
-  const leader = staff.find((p) => p.leader);
-  const pool = [
+  const pool: PoolPerson[] = [
     ...instructors,
     // Someone kept on the session who is no longer an instructor of this bootcamp.
     ...staff.filter((p) => !instructors.some((i) => i.email === p.email)).map((p) => ({ email: p.email, fullName: p.fullName, role: "former" as const })),
   ];
-  const shownPool = filter.trim()
-    ? pool.filter((p) => `${p.fullName} ${p.email}`.toLowerCase().includes(filter.trim().toLowerCase()))
-    : pool;
 
   const toggle = (p: { email: string; fullName: string }) => {
     const on = staff.some((s) => s.email === p.email);
@@ -407,7 +411,24 @@ export function SessionDialog({
               </div>
             )}
 
-            <SessionLookFields id="session" value={look} onChange={setLook} autoFocus={!existing} />
+            <SessionLookFields
+              id="session"
+              value={look}
+              onChange={setLook}
+              autoFocus={!existing}
+              afterLength={
+                look.kind !== "unstructured" && (
+                  <InstructorPicker
+                    pool={pool}
+                    staff={staff}
+                    busy={busy.people}
+                    before={before.people}
+                    onToggle={toggle}
+                    onLeader={makeLeader}
+                  />
+                )
+              }
+            />
 
             {look.kind !== "unstructured" && (
               <section className="grid gap-1.5">
@@ -436,75 +457,6 @@ export function SessionDialog({
                     {c.what.kind === "audience" && GROUP_NAMES[c.what.group]} are also in {describeClash(c)}
                   </p>
                 ))}
-              </section>
-            )}
-
-            {look.kind !== "unstructured" && (
-              <section className="grid gap-2">
-                <div className="flex flex-wrap items-baseline justify-between gap-2">
-                  <h3 className="text-sm font-medium">
-                    Instructors
-                    <span className="ml-2 font-normal text-muted-foreground">
-                      {staff.length === 0 ? "No leader yet" : `${leader?.fullName ?? "—"} leading${staff.length > 1 ? `, ${staff.length - 1} more` : ""}`}
-                    </span>
-                  </h3>
-                  {pool.length > 8 && (
-                    <Input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Find someone" className="h-8 w-48" aria-label="Find an instructor" />
-                  )}
-                </div>
-                {pool.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No Training administrators or guest judges yet.</p>
-                ) : (
-                  <ul className="max-h-72 divide-y overflow-y-auto rounded-lg border">
-                    {shownPool.map((p) => {
-                      const on = staff.find((s) => s.email === p.email);
-                      const theirs = busy.people.get(p.email) ?? [];
-                      const blocked = theirs.length > 0 && !before.people.has(p.email);
-                      return (
-                        <li key={p.email} className={cn("flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2", theirs.length > 0 && "bg-red-50/70 dark:bg-red-950/20")}>
-                          <label className={cn("flex min-w-0 flex-1 items-center gap-2.5", blocked && !on ? "cursor-not-allowed" : "cursor-pointer")}>
-                            <input
-                              type="checkbox"
-                              checked={Boolean(on)}
-                              disabled={blocked && !on}
-                              onChange={() => toggle(p)}
-                              className="size-4 accent-brand"
-                            />
-                            <span className="min-w-0">
-                              <span className={cn("block truncate text-sm", theirs.length > 0 && "font-medium text-red-700 dark:text-red-400")}>
-                                {p.fullName}
-                                <span className="ml-1.5 text-xs font-normal text-muted-foreground">
-                                  {p.role === "administrator" ? "Admin" : p.role === "judge" ? "Guest judge" : "No longer an instructor"}
-                                </span>
-                              </span>
-                              {theirs.map((c) => (
-                                <span key={c.sessionId} className="block truncate text-xs text-red-700 dark:text-red-400">
-                                  Busy: {describeClash(c)}
-                                </span>
-                              ))}
-                            </span>
-                          </label>
-                          {on && (
-                            <div className="flex items-center gap-2">
-                              <button
-                                type="button"
-                                onClick={() => makeLeader(p.email)}
-                                aria-pressed={on.leader}
-                                className={cn(
-                                  "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition-colors",
-                                  on.leader ? "border-amber-400 bg-amber-100 font-medium text-amber-900 dark:bg-amber-900/40 dark:text-amber-200" : "text-muted-foreground hover:bg-accent",
-                                )}
-                              >
-                                <Crown className="size-3" />
-                                {on.leader ? "Leader" : "Make leader"}
-                              </button>
-                            </div>
-                          )}
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
               </section>
             )}
 
@@ -627,6 +579,137 @@ export function SessionDialog({
         )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+type PoolPerson = { email: string; fullName: string; role: Instructor["role"] | "former" };
+
+const ROLE_LABELS: Record<PoolPerson["role"], string> = { administrator: "Admin", judge: "Guest judge", former: "No longer an instructor" };
+
+/** A dropdown's button, drawn as an input, as `SessionLookFields` draws its own. */
+const TRIGGER =
+  "flex h-9 w-full items-center gap-2 rounded-md border border-input bg-transparent px-3 text-sm shadow-xs outline-none transition-colors hover:bg-accent/40 focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-input/30";
+
+/**
+ * Who teaches it, as one dropdown: tick anyone in, and pick the leader among
+ * those ticked. Someone busy then cannot be ticked in unless the session
+ * already had them; anyone ticked who is busy is named under it in red.
+ */
+function InstructorPicker({
+  pool,
+  staff,
+  busy,
+  before,
+  onToggle,
+  onLeader,
+}: {
+  pool: PoolPerson[];
+  staff: StaffRow[];
+  busy: Map<string, Clash[]>;
+  before: Set<string>;
+  onToggle: (p: PoolPerson) => void;
+  onLeader: (email: string) => void;
+}) {
+  const [filter, setFilter] = useState("");
+  const needle = filter.trim().toLowerCase();
+  const shown = needle ? pool.filter((p) => `${p.fullName} ${p.email}`.toLowerCase().includes(needle)) : pool;
+  const leader = staff.find((s) => s.leader);
+  const clashing = staff.filter((s) => (busy.get(s.email) ?? []).length > 0);
+  // Held open while ticking, so several can be picked in one go.
+  const keepOpen = (e: Event) => e.preventDefault();
+
+  return (
+    <div className="grid gap-1.5">
+      <span id="session-instructors" className="text-sm font-medium">
+        Instructors
+      </span>
+      <DropdownMenu onOpenChange={(open) => !open && setFilter("")}>
+        <DropdownMenuTrigger aria-labelledby="session-instructors" disabled={pool.length === 0} className={TRIGGER}>
+          {pool.length === 0 ? (
+            <span className="text-muted-foreground">No Training administrators or guest judges yet</span>
+          ) : staff.length === 0 ? (
+            <span className="text-muted-foreground">No leader yet</span>
+          ) : (
+            <span className={cn("flex min-w-0 items-center gap-1.5", clashing.length > 0 && "text-red-700 dark:text-red-400")}>
+              <Crown aria-label="Leader" className="size-3.5 shrink-0 text-amber-500" />
+              <span className="truncate">
+                {[leader, ...staff.filter((s) => !s.leader)]
+                  .filter((s): s is StaffRow => Boolean(s))
+                  .map((s) => s.fullName)
+                  .join(", ")}
+              </span>
+            </span>
+          )}
+          <ChevronDown className="ml-auto size-4 shrink-0 text-muted-foreground" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="w-(--radix-dropdown-menu-trigger-width) min-w-72">
+          {pool.length > 8 && (
+            <>
+              {/* Keys typed here are the search's, not the menu's: no typeahead, no arrow-key moves. */}
+              <Input
+                aria-label="Find an instructor"
+                value={filter}
+                placeholder="Find someone"
+                onChange={(e) => setFilter(e.target.value)}
+                onKeyDown={(e) => e.key !== "Escape" && e.stopPropagation()}
+                className="h-8"
+              />
+              <DropdownMenuSeparator />
+            </>
+          )}
+          <div className="max-h-72 overflow-y-auto">
+            {shown.length === 0 && <p className="px-2 py-1.5 text-sm text-muted-foreground">No one matches.</p>}
+            {shown.map((p) => {
+              const on = staff.some((s) => s.email === p.email);
+              const theirs = busy.get(p.email) ?? [];
+              return (
+                <DropdownMenuCheckboxItem
+                  key={p.email}
+                  checked={on}
+                  disabled={theirs.length > 0 && !before.has(p.email) && !on}
+                  onSelect={keepOpen}
+                  onCheckedChange={() => onToggle(p)}
+                  className="items-start"
+                >
+                  <span className="min-w-0">
+                    <span className={cn("block truncate", theirs.length > 0 && "font-medium text-red-700 dark:text-red-400")}>
+                      {p.fullName}
+                      <span className="ml-1.5 text-xs font-normal text-muted-foreground">{ROLE_LABELS[p.role]}</span>
+                    </span>
+                    {theirs.map((c) => (
+                      <span key={c.sessionId} className="block truncate text-xs text-red-700 dark:text-red-400">
+                        Busy: {describeClash(c)}
+                      </span>
+                    ))}
+                  </span>
+                </DropdownMenuCheckboxItem>
+              );
+            })}
+          </div>
+          {staff.length > 1 && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel className="text-xs text-muted-foreground">Leader</DropdownMenuLabel>
+              <DropdownMenuRadioGroup value={leader?.email ?? ""} onValueChange={onLeader}>
+                {staff.map((s) => (
+                  <DropdownMenuRadioItem key={s.email} value={s.email} onSelect={keepOpen}>
+                    <Crown className={cn("size-3.5", s.leader ? "text-amber-500" : "text-muted-foreground/50")} />
+                    {s.fullName}
+                  </DropdownMenuRadioItem>
+                ))}
+              </DropdownMenuRadioGroup>
+            </>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {clashing.map((s) =>
+        (busy.get(s.email) ?? []).map((c) => (
+          <p key={`${s.email}-${c.sessionId}`} className="text-xs text-red-700 dark:text-red-400">
+            {s.fullName} is also in {describeClash(c)}
+          </p>
+        )),
+      )}
+    </div>
   );
 }
 

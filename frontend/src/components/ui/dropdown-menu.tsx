@@ -90,6 +90,26 @@ function DropdownMenuRadioItem({
   );
 }
 
+function DropdownMenuCheckboxItem({
+  className,
+  children,
+  ...props
+}: React.ComponentProps<typeof DropdownMenuPrimitive.CheckboxItem>) {
+  return (
+    <DropdownMenuPrimitive.CheckboxItem
+      className={cn(itemClasses, "pr-8", className)}
+      {...props}
+    >
+      {children}
+      <span className="absolute right-2 flex size-3.5 items-center justify-center">
+        <DropdownMenuPrimitive.ItemIndicator>
+          <Check className="size-4" />
+        </DropdownMenuPrimitive.ItemIndicator>
+      </span>
+    </DropdownMenuPrimitive.CheckboxItem>
+  );
+}
+
 function DropdownMenuRadioIconItem({
   className,
   ...props
@@ -139,6 +159,7 @@ export {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuItem,
+  DropdownMenuCheckboxItem,
   DropdownMenuSwitchItem,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
