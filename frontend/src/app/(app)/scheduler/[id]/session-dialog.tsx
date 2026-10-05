@@ -6,8 +6,9 @@
  * already busy at that time is shown in red with what they are busy with, and
  * cannot be added. Attendees taught something else beside it on their class
  * or SE track are shown in red too, but it still saves, as a moved session
- * does. Its comments are on a tab of their own, and a breakout's groups on a
- * third. A viewer sees the same, without the controls.
+ * does. Its comments are on a tab of their own, and a breakout's groups and
+ * each instructor's room on a third. A viewer sees the same, without the
+ * controls.
  */
 
 import { useMemo, useState, type KeyboardEvent } from "react";
@@ -214,8 +215,8 @@ export function SessionDialog({
     const next = staff.map((s) => ({ ...s, leader: s.email === email }));
     setStaff([...next.filter((s) => s.leader), ...next.filter((s) => !s.leader)]);
   };
-  const setStaffRoom = (email: string, room: string | null) =>
-    setStaff(staff.map((s) => (s.email === email ? { ...s, roomId: room } : s)));
+  const setStaffRooms = (picks: Record<string, string | null>) =>
+    setStaff((now) => now.map((s) => (s.email in picks ? { ...s, roomId: picks[s.email]! } : s)));
 
   const roomName = (id: string) => rooms.find((r) => r.id === id)?.name ?? "A removed room";
   const end = where.start + look.minutes;
@@ -485,17 +486,6 @@ export function SessionDialog({
                           </label>
                           {on && (
                             <div className="flex items-center gap-2">
-                              {look.kind === "breakout" && (
-                                <RoomSelect
-                                  label={`${p.fullName}'s room`}
-                                  value={on.roomId}
-                                  rooms={rooms}
-                                  busy={busy.rooms}
-                                  before={before.rooms}
-                                  taken={new Set(staff.filter((s) => s.email !== p.email).flatMap((s) => (s.roomId ? [s.roomId] : [])))}
-                                  onChange={(r) => setStaffRoom(p.email, r)}
-                                />
-                              )}
                               <button
                                 type="button"
                                 onClick={() => makeLeader(p.email)}
@@ -514,9 +504,6 @@ export function SessionDialog({
                       );
                     })}
                   </ul>
-                )}
-                {look.kind === "breakout" && !hasFacility && (
-                  <p className="text-xs text-muted-foreground">Pick a facility for this bootcamp on the Scheduler to give each instructor a room.</p>
                 )}
               </section>
             )}
@@ -587,9 +574,14 @@ export function SessionDialog({
               track={where.track}
               audience={audience}
               staff={staff}
+              rooms={rooms}
+              busyRooms={busy.rooms}
+              beforeRooms={before.rooms}
+              hasFacility={hasFacility}
               roomName={roomName}
               value={groups}
               onChange={setGroups}
+              onRooms={setStaffRooms}
               editable={editable}
             />
           </div>
@@ -676,51 +668,6 @@ function RoomOption({
         </div>
       ))}
     </button>
-  );
-}
-
-/** A breakout instructor's room. Busy rooms are listed with what they are busy with, and cannot be picked. */
-function RoomSelect({
-  label,
-  value,
-  rooms,
-  busy,
-  before,
-  taken,
-  onChange,
-}: {
-  label: string;
-  value: string | null;
-  rooms: RoomRow[];
-  busy: Map<string, Clash[]>;
-  before: Set<string | null>;
-  taken: Set<string>;
-  onChange: (room: string | null) => void;
-}) {
-  if (rooms.length === 0) return null;
-  const mine = value ? (busy.get(value) ?? []) : [];
-  return (
-    <select
-      aria-label={label}
-      value={value ?? ""}
-      onChange={(e) => onChange(e.target.value || null)}
-      className={cn(
-        "h-8 max-w-56 rounded-md border border-input bg-transparent px-2 text-xs shadow-xs outline-none dark:bg-input/30",
-        mine.length > 0 && "border-red-400 text-red-700 dark:text-red-400",
-      )}
-    >
-      <option value="">No room</option>
-      {rooms.map((r) => {
-        const theirs = busy.get(r.id) ?? [];
-        const why = taken.has(r.id) ? "another instructor's" : theirs.length > 0 ? `busy: ${describeClash(theirs[0]!)}` : "";
-        return (
-          <option key={r.id} value={r.id} disabled={r.id !== value && (taken.has(r.id) || (theirs.length > 0 && !before.has(r.id)))}>
-            {r.name}
-            {why ? ` (${why})` : ` (holds ${r.capacity})`}
-          </option>
-        );
-      })}
-    </select>
   );
 }
 

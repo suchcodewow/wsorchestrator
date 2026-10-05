@@ -5,8 +5,9 @@ import { z } from "zod";
 import { SCHEDULE_TRACKS, SESSION_AUDIENCES } from "@/db/schema";
 import { requireCaller } from "@/lib/api-auth";
 import { canUseTraining } from "@/lib/roles";
-import { classAttendees, stageOf } from "@/lib/scheduler/groups";
+import { classAttendees } from "@/lib/scheduler/attendees";
 import { scheduleBootcamp } from "@/lib/scheduler/schedule";
+import { stageOf } from "@/lib/scheduler/timeline";
 
 const idSchema = z.string().uuid();
 

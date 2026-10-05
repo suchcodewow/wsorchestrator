@@ -55,6 +55,11 @@ export function defaultAudience(track: ScheduleTrack): SessionAudience {
 /** The class a track's attendees belong to: an SE track, the class it breaks out of. */
 const classOf = (track: ScheduleTrack): ScheduleTrack => (track === "btc_se" ? "btc" : track === "int_se" ? "int" : track);
 
+/** The candidates a track's sessions are taught to, as eVals stages them. */
+export function stageOf(track: ScheduleTrack): "bootcamp" | "intermediate" {
+  return track === "btc" || track === "btc_se" ? "bootcamp" : "intermediate";
+}
+
 /** How many days a track runs: the SE tracks follow the class they break out of. Null when the bootcamp has no such class. */
 export function trackDays(track: ScheduleTrack, bootcamp: { btcDays: number; intDays: number | null }): number | null {
   return track === "btc" || track === "btc_se" ? bootcamp.btcDays : bootcamp.intDays;

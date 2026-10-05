@@ -48,7 +48,7 @@ const AUDIENCE_TYPE = `"both" | "sales" | "engineers"`;
 const COLOR_TYPE = `"slate" | "red" | "orange" | "amber" | "green" | "teal" | "blue" | "violet" | "pink"`;
 const MINUTES_NOTE = `a multiple of ${SCHEDULE_LIMITS.slot} from ${SCHEDULE_LIMITS.slot} to ${SCHEDULE_LIMITS.maxMinutes}`;
 
-const SESSION_SHAPE = `{ id, track: ${TRACK_TYPE}, day: number, start: number, minutes: number, kind, audience: ${AUDIENCE_TYPE}, typeId: string | null, name, description, emoji, color, roomId: string | null, staff: { email, fullName, leader: boolean, roomId: string | null }[], comments: number, largestGroup: number, updatedAt }`;
+const SESSION_SHAPE = `{ id, track: ${TRACK_TYPE}, day: number, start: number, minutes: number, kind, audience: ${AUDIENCE_TYPE}, typeId: string | null, name, description, emoji, color, roomId: string | null, staff: { email, fullName, leader: boolean, roomId: string | null }[], comments: number, largestGroup: number, assigned: string[], updatedAt }`;
 
 const CLASH_SHAPE = `{ sessionId, name, track, day, start: number, end: number, what: { kind: "person", email, fullName } | { kind: "room", roomId } | { kind: "audience", group: "sales" | "engineers" } }`;
 
@@ -497,9 +497,9 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         summary: "Reads one bootcamp's whole schedule: every day of its four tracks, its rooms, and who can run a session.",
         access: "trainingViewer",
         token: true,
-        notes: `days.btc[0] is day 1 of Bootcamp; each day's sessions are in start order, at most ${SCHEDULE_LIMITS.sessionsPerDay}. start is minutes after midnight, on the quarter hour, from 480 (8:00 AM); a session ends by midnight, and no two on one track-day overlap. Time between them is unscheduled. The SE tracks run as many days as the class they break out of, and a track the bootcamp does not hold has no days. Day N of every track is the same calendar day. instructors is every Training administrator and every guest judge of the bootcamp.`,
+        notes: `days.btc[0] is day 1 of Bootcamp; each day's sessions are in start order, at most ${SCHEDULE_LIMITS.sessionsPerDay}. start is minutes after midnight, on the quarter hour, from 480 (8:00 AM); a session ends by midnight, and no two on one track-day overlap. Time between them is unscheduled. The SE tracks run as many days as the class they break out of, and a track the bootcamp does not hold has no days. Day N of every track is the same calendar day. instructors is every Training administrator and every guest judge of the bootcamp. classes lists, by email, who each class is now on each track (at most ${SCHEDULE_LIMITS.groupPeople} each), and a session's assigned is everyone in its breakout groups, so a breakout can be checked for anyone it leaves out.`,
         params: [BOOTCAMP_ID],
-        returns: `{ bootcamp: { id, startDate, btcDays, intDays, status, facilityId, facilityName }, rooms: { id, name, capacity }[], instructors: { email, fullName, role: "administrator" | "judge" }[], days: { btc, int, btc_se, int_se: ${SESSION_SHAPE}[][] } }`,
+        returns: `{ bootcamp: { id, startDate, btcDays, intDays, status, facilityId, facilityName }, rooms: { id, name, capacity }[], instructors: { email, fullName, role: "administrator" | "judge" }[], days: { btc, int, btc_se, int_se: ${SESSION_SHAPE}[][] }, classes: { bootcamp, intermediate: { sales: string[], engineer: string[] } } }`,
         errors: [{ status: 404, error: "not_found", when: "no such bootcamp" }],
       },
       {

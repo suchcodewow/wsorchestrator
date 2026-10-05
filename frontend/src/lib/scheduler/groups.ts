@@ -1,44 +1,24 @@
 /**
  * Breakout groups: in a breakout, each attendee goes with one of its
  * instructors to that instructor's room, to be evaluated there with the rest
- * of their group.
- *
- * A session's attendees are its class's current candidates on the tracks its
- * audience takes in, as eVals scores them (see `scoring.ts`): Bootcamp and SE
- * Bootcamp draw on bootcamp candidates, Intermediate and SE Intermediate on
- * intermediate ones. Undecided and deferred people are not in the training.
- * Someone already in a group stays in it after leaving the class, as an
- * instructor stays on a session after leaving the pool, so a past bootcamp's
- * groups survive the next sync.
+ * of their group. Who can be in one is in `attendees.ts`. Someone already in
+ * a group stays in it after leaving the class, as an instructor stays on a
+ * session after leaving the pool, so a past bootcamp's groups survive the
+ * next sync.
  */
 
 import "server-only";
 
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { asc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
-import {
-  AUDIENCE_TRACKS,
-  EVALS_SLACK_CONTACT_LIMITS,
-  SCHEDULE_LIMITS,
-  bootcampHistory,
-  employees,
-  scheduleSessionGroups,
-  type ScheduleTrack,
-  type SessionAudience,
-} from "@/db/schema";
+import { EVALS_SLACK_CONTACT_LIMITS, SCHEDULE_LIMITS, scheduleSessionGroups } from "@/db/schema";
 import { noteAudit } from "@/lib/audit-context";
-import { IN_STAGE, isCandidate, type CandidateStage } from "@/lib/evals/current-cohort";
 import { normalEmail } from "@/lib/evals/history-values";
-import { getCandidateCutoffs } from "@/lib/evals/settings";
+import { classAttendees } from "@/lib/scheduler/attendees";
 import { getSession } from "@/lib/scheduler/schedule";
 
-export type GroupAttendee = {
-  email: string;
-  fullName: string;
-  title: string;
-  track: "sales" | "engineer";
-};
+export type { GroupAttendee } from "@/lib/scheduler/attendees";
 
 export type GroupRow = {
   email: string;
@@ -48,37 +28,6 @@ export type GroupRow = {
   /** Their `employees.track` now; null when HiBob no longer lists them. */
   track: string | null;
 };
-
-/** The candidates a track's sessions are taught to. */
-export function stageOf(track: ScheduleTrack): CandidateStage {
-  return track === "btc" || track === "btc_se" ? "bootcamp" : "intermediate";
-}
-
-const e = employees;
-const h = bootcampHistory;
-
-/**
- * The attendees a session on `track` for `audience` is taught to, by name,
- * at most `SCHEDULE_LIMITS.groupPeople` of them; `hasMore` when there are more.
- */
-export async function classAttendees(
-  track: ScheduleTrack,
-  audience: SessionAudience,
-): Promise<{ attendees: GroupAttendee[]; hasMore: boolean }> {
-  const cutoffs = await getCandidateCutoffs();
-  const rows = await db
-    .select({ email: e.email, fullName: e.fullName, title: e.title, track: sql<"sales" | "engineer">`${e.track}` })
-    .from(e)
-    .leftJoin(h, sql`${h.email} = ${e.email}`)
-    .where(and(isCandidate(cutoffs), IN_STAGE[stageOf(track)], inArray(e.track, [...AUDIENCE_TRACKS[audience]])))
-    .orderBy(sql`lower(${e.fullName})`, e.email)
-    .limit(SCHEDULE_LIMITS.groupPeople + 1);
-  // HiBob can list one email twice; the first by name wins.
-  const byEmail = new Map<string, GroupAttendee>();
-  for (const r of rows) if (!byEmail.has(r.email)) byEmail.set(r.email, r);
-  const attendees = [...byEmail.values()];
-  return { attendees: attendees.slice(0, SCHEDULE_LIMITS.groupPeople), hasMore: rows.length > SCHEDULE_LIMITS.groupPeople };
-}
 
 /** A session's groups, each instructor's people in the order they were put there. */
 export async function groupsOf(sessionId: string): Promise<GroupRow[]> {
