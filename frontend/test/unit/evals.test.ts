@@ -12,7 +12,7 @@ import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 
 import { parseHistorySheet } from "@/lib/evals/bootcamp-history-file";
-import { hibobAuthorization, toEmployeeRow } from "@/lib/evals/hibob-record";
+import { hibobAuthorization, nameFromEmail, toEmployeeRow } from "@/lib/evals/hibob-record";
 import { inScoreRange, isIsoDay, normalEmail, roundScore } from "@/lib/evals/history-values";
 import { formatScore } from "@/app/(app)/cohort-settings/format";
 import { orgUnder, ORG_ROOT_EMAIL } from "@/lib/evals/org";
@@ -88,9 +88,46 @@ describe("toEmployeeRow", () => {
     assert.equal(toEmployeeRow("nope"), null);
   });
 
+  test("names the person, and whom they report to, as their emails do", () => {
+    const row = toEmployeeRow({
+      ...record,
+      fullName: "Patricia Anne Doe",
+      work: { ...record.work, reportsTo: { email: "lee.boss@harness.io", displayName: "Leland James Boss Jr" } },
+    })!;
+    assert.equal(row.fullName, "Pat Doe");
+    assert.equal(row.reportsToName, "Lee Boss");
+  });
+
   test("builds HiBob's Basic authorization", () => {
     assert.equal(hibobAuthorization("SERVICE-1", "tok"), `Basic ${Buffer.from("SERVICE-1:tok").toString("base64")}`);
   });
+});
+
+describe("nameFromEmail", () => {
+  const cases: [email: string, hibob: string, shown: string][] = [
+    ["geoffrey.lochausen@harness.io", "Geoffrey Marshall Lochausen", "Geoffrey Lochausen"],
+    // The email's first name is the one they go by.
+    ["trey.suter@harness.io", "Carl William Suter III", "Trey Suter"],
+    // HiBob's spelling where it has the word: capitals, hyphens, accents.
+    ["sam.mcbride@harness.io", "Samuel McBride", "Sam McBride"],
+    ["bilal.al-hassan@harness.io", "Bilal Al-Hassan", "Bilal Al-Hassan"],
+    ["ana.mohseni-ejiyeh@harness.io", "Ana Mohseni Ejiyeh", "Ana Mohseni Ejiyeh"],
+    ["jose.nunez@harness.io", "José Núñez", "José Núñez"],
+    // A word HiBob does not have is capitalised from the email.
+    ["mary-jane.watson@harness.io", "Mary Watson", "Mary-Jane Watson"],
+    // A contractor's prefix, a number telling namesakes apart, a middle part.
+    ["c_ajay.p@harness.io", "Ajay P", "Ajay P"],
+    ["abhinav.singh3@harness.io", "Abhinav Kumar Singh", "Abhinav Singh"],
+    ["santiago.martinez.binelli@harness.io", "Santiago Binelli", "Santiago Binelli"],
+    // Not first.last: HiBob's name, less what stands in for a missing one.
+    ["jyoti@harness.io", "Jyoti Bansal", "Jyoti Bansal"],
+    ["mehak@harness.io", "Mehak LNU", "Mehak"],
+    ["anshul@harness.io", "FNU Anshul", "Anshul"],
+    ["dhruv@harness.io", "Dhruv .", "Dhruv"],
+  ];
+  for (const [email, hibob, shown] of cases) {
+    test(`${hibob} <${email}> is ${shown}`, () => assert.equal(nameFromEmail(email, hibob), shown));
+  }
 });
 
 describe("orgUnder", () => {

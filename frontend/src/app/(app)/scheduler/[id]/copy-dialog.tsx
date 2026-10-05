@@ -81,7 +81,7 @@ export function CopyDialog({
     <Dialog open={open} onOpenChange={(next) => !next && !pending && onClose()}>
       <DialogContent className="max-w-xl">
         <DialogHeader>
-          <DialogTitle>{summary ? `Added ${summary.sessions} session${summary.sessions === 1 ? "" : "s"}` : "Copy a schedule"}</DialogTitle>
+          <DialogTitle>{summary ? addedTitle(summary) : "Copy a schedule"}</DialogTitle>
         </DialogHeader>
 
         {summary ? (
@@ -131,7 +131,7 @@ export function CopyDialog({
               <label className="flex items-start gap-2.5 rounded-lg border border-amber-300/60 bg-amber-50 px-3 py-2.5 text-sm dark:border-amber-800/60 dark:bg-amber-950/30">
                 <input type="checkbox" checked={replace} onChange={(e) => setReplace(e.target.checked)} className="mt-0.5 size-4 accent-brand" />
                 <span>
-                  Replace its {sessionCount} session{sessionCount === 1 ? "" : "s"}, and their comments
+                  Replace its {sessionCount} session{sessionCount === 1 ? "" : "s"}, and their comments; its checklists are kept
                 </span>
               </label>
             )}
@@ -156,4 +156,11 @@ export function CopyDialog({
       </DialogContent>
     </Dialog>
   );
+}
+
+/** "Added 24 sessions and 9 checklist items, all to do". */
+function addedTitle(summary: FillSummary): string {
+  const sessions = `${summary.sessions} session${summary.sessions === 1 ? "" : "s"}`;
+  if (summary.checklistItems === 0) return `Added ${sessions}`;
+  return `Added ${sessions} and ${summary.checklistItems} checklist item${summary.checklistItems === 1 ? "" : "s"}, all to do`;
 }

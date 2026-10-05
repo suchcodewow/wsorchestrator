@@ -63,3 +63,16 @@ export const SESSION_STYLES: Record<SessionColor, SessionStyle> = {
 
 /** The emoji offered beside a free-text one, in the session and session-type dialogs. */
 export const SESSION_EMOJI = ["🧑‍🏫", "📝", "🎭", "🕰️", "🍔", "⏳", "☕", "💬", "🧠", "🎯", "🏆", "🛠️", "📊", "🎤", "🤝", "🚀"];
+
+/** A session's left stripe alone, for the printed schedule, which spends ink on nothing else. */
+export const PRINT_STRIPES: Record<SessionColor, string> = {
+  slate: "border-l-slate-400",
+  red: "border-l-red-500",
+  orange: "border-l-orange-500",
+  amber: "border-l-amber-500",
+  green: "border-l-green-500",
+  teal: "border-l-teal-500",
+  blue: "border-l-blue-500",
+  violet: "border-l-violet-500",
+  pink: "border-l-pink-500",
+};

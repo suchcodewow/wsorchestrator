@@ -27,7 +27,7 @@ import {
   type DragStartEvent,
   type KeyboardCoordinateGetter,
 } from "@dnd-kit/core";
-import { AlertTriangle, CalendarDays, Check, ChevronLeft, ChevronRight, Copy, Loader2, Pencil, Rows3 } from "lucide-react";
+import { AlertTriangle, CalendarDays, Check, ChevronLeft, ChevronRight, Copy, Loader2, Pencil, Printer, Rows3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { AUDIENCE_TRACKS, SCHEDULE_LIMITS, SCHEDULE_TRACKS, type ScheduleTrack } from "@/db/schema";
@@ -39,6 +39,7 @@ import type { SessionTypeRow } from "@/lib/scheduler/session-types";
 import {
   GROUP_NAMES,
   TRACK_LABELS,
+  attendeeCount,
   dayDate,
   describeClash,
   findClashes,
@@ -63,7 +64,7 @@ type View = ScheduleViewMode;
 
 const VIEWS: { id: View; label: string; icon: typeof Rows3 }[] = [
   { id: "day", label: "All Tracks", icon: Rows3 },
-  { id: "week", label: "One track", icon: CalendarDays },
+  { id: "week", label: "One Track", icon: CalendarDays },
 ];
 
 const SAVE_DELAY = 700;
@@ -114,7 +115,7 @@ export function ScheduleView({
   const [activeId, setActiveId] = useState<string | null>(null);
   const [resizingId, setResizingId] = useState<string | null>(null);
   const [showIssues, setShowIssues] = useState(false);
-  const checklistButton = useChecklistButtons({
+  const checklistButtons = useChecklistButtons({
     bootcampId: bootcamp.id,
     counts: checklist,
     canManage,
@@ -231,6 +232,7 @@ export function ScheduleView({
           day: i + 1,
           title: `Day ${i + 1}`,
           subtitle: dateLabel(dayDate(bootcamp.startDate, i + 1)),
+          attendees: attendeeCount(schedule.classes, shownTrack),
           sessions: days[shownTrack][i] ?? [],
         }))
       : tracks
@@ -241,6 +243,7 @@ export function ScheduleView({
             day,
             title: `Day ${day}`,
             subtitle: TRACK_LABELS[t],
+            attendees: attendeeCount(schedule.classes, t),
             sessions: days[t][day - 1] ?? [],
           }));
   const boardDensity: Density = condensed ? "condensed" : "detailed";
@@ -356,6 +359,16 @@ export function ScheduleView({
     await reload();
   };
 
+  /** Opens the print page in a tab of its own, once what is waiting to save has saved, so it prints the board as it is. */
+  const printView = async (query: string) => {
+    // Opened now, while the click still counts, so a popup blocker lets it through.
+    const tab = window.open("", "_blank");
+    await flush();
+    const url = `/scheduler/${bootcamp.id}/print?${query}`;
+    if (tab) tab.location.href = url;
+    else window.open(url, "_blank");
+  };
+
   return (
     <motion.div variants={staggerParent(0.05)} initial="hidden" animate="show" className="space-y-4">
       <motion.div variants={riseChild} className="flex flex-wrap items-center justify-between gap-3 select-none">
@@ -463,6 +476,16 @@ export function ScheduleView({
               Edit
             </Button>
           )}
+          <Button
+            variant="outline"
+            size="icon"
+            className="size-8 rounded-full"
+            aria-label={view === "week" ? `Print ${TRACK_LABELS[shownTrack]}, every day` : `Print Day ${day}, every track`}
+            title={view === "week" ? `Print ${TRACK_LABELS[shownTrack]}, every day` : `Print Day ${day}, every track`}
+            onClick={() => void printView(view === "week" ? `track=${shownTrack}` : `day=${day}`)}
+          >
+            <Printer />
+          </Button>
         </div>
 
         <div className="flex flex-wrap items-center gap-3 text-sm">
@@ -569,7 +592,8 @@ export function ScheduleView({
               onAdd={(c, start) => setTarget({ mode: "new", track: c.track, day: c.day, start })}
               onResize={onResize}
               onResizeEnd={onResizeEnd}
-              headerAction={checklistButton}
+              headerAction={checklistButtons.dayButton}
+              corner={checklistButtons.prepDayButton}
               date={view === "week" ? undefined : dayDate(bootcamp.startDate, day)}
             />
             <DragOverlay dropAnimation={null}>

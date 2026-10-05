@@ -255,6 +255,21 @@ export async function currentCohortEmails(): Promise<
     .where(and(isCandidate(cutoffs), inArray(e.track, ["sales", "engineer"])));
 }
 
+/**
+ * Everyone on the Current tab, whatever its filter, for their name cards:
+ * bootcamp first, then intermediate, by name within each. Not a page, since
+ * every one of them gets a card; it is one name per candidate.
+ */
+export async function currentCohortNames(): Promise<{ fullName: string; stage: CandidateStage }[]> {
+  const cutoffs = await getCandidateCutoffs();
+  return db
+    .select({ fullName: e.fullName, stage: candidateStage })
+    .from(e)
+    .leftJoin(h, sql`${h.email} = ${e.email}`)
+    .where(and(isCandidate(cutoffs), or(isNull(e.track), inArray(e.track, ["sales", "engineer"]))))
+    .orderBy(candidateStage, sql`lower(${e.fullName})`, e.id);
+}
+
 /** How many are in each stage on each track, as of which sync, and the rules that drew them. */
 export async function currentCohortSummary(): Promise<CurrentCohortSummary> {
   const cutoffs = await getCandidateCutoffs();

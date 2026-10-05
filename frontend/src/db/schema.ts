@@ -819,6 +819,7 @@ export const employees = pgTable(
     id: text("id").primaryKey(),
     /** Lowercased. */
     email: text("email").notNull(),
+    /** First and last name as the email has them (`nameFromEmail`), not HiBob's full name. */
     fullName: text("full_name").notNull(),
     /** The readable title, not HiBob's numeric code for it. */
     title: text("title").notNull().default(""),
@@ -1010,7 +1011,7 @@ export const evalsSlackContacts = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     /** Lowercased. */
     email: text("email").notNull(),
-    /** As the employee list had it when they were added; empty for someone not in it. */
+    /** As the employee list had it when they were added or at the last HiBob sync since; empty for someone not in it. */
     fullName: text("full_name").notNull().default(""),
     createdBy: text("created_by").references(() => users.id, {
       onDelete: "set null",
@@ -1137,7 +1138,7 @@ export const cohortChannelContacts = pgTable(
     kind: text("kind").$type<ChannelContactKind>().notNull(),
     /** Lowercased. */
     email: text("email").notNull(),
-    /** As the employee list had it when they were added; empty for someone not in it. */
+    /** As the employee list had it when they were added or at the last HiBob sync since; empty for someone not in it. */
     fullName: text("full_name").notNull().default(""),
     createdBy: text("created_by").references(() => users.id, {
       onDelete: "set null",
@@ -1286,7 +1287,7 @@ export const bootcampJudges = pgTable(
       .references(() => bootcamps.id, { onDelete: "cascade" }),
     /** Lowercased. */
     email: text("email").notNull(),
-    /** As the employee list had it when they were added. */
+    /** As the employee list had it when they were added or at the last HiBob sync since. */
     fullName: text("full_name").notNull().default(""),
     addedBy: text("added_by").references(() => users.id, { onDelete: "set null" }),
     addedAt: timestamp("added_at", { withTimezone: true })
@@ -1533,7 +1534,7 @@ export const scheduleSessionGroups = pgTable(
       .references(() => scheduleSessions.id, { onDelete: "cascade" }),
     /** Lowercased. */
     email: text("email").notNull(),
-    /** As the employee list had it when they were assigned. */
+    /** As the employee list had it when they were assigned or at the last HiBob sync since. */
     fullName: text("full_name").notNull().default(""),
     /** Lowercased; one of the session's staff. */
     instructorEmail: text("instructor_email").notNull(),
@@ -1569,8 +1570,12 @@ export type ChecklistTrack = ScheduleTrack;
 /** `itemsPerDay` caps one track-day's checklist, so it is read whole. */
 export const CHECKLIST_LIMITS = { name: 200, itemsPerDay: 100 } as const;
 
+/** The Prep Day checklist, for before the bootcamp starts: day 0 of Bootcamp, the only track with a day 0. */
+export const CHECKLIST_PREP_DAY = { track: "btc", day: 0 } as const;
+
 /**
- * Something to do before one day of one track starts. Its owner, if any, is
+ * Something to do before one day of one track starts, or on Bootcamp's day 0
+ * before the bootcamp does (`CHECKLIST_PREP_DAY`). Its owner, if any, is
  * an administrator or guest judge of the bootcamp, kept by email; who wrote
  * it and who ticked it are copied in, so they outlast the accounts.
  */
@@ -1582,7 +1587,7 @@ export const scheduleChecklistItems = pgTable(
       .notNull()
       .references(() => bootcamps.id, { onDelete: "cascade" }),
     track: text("track").$type<ChecklistTrack>().notNull(),
-    /** 1-based, as a schedule session's. */
+    /** 1-based, as a schedule session's; 0 is Bootcamp's Prep Day. */
     day: integer("day").notNull(),
     name: text("name").notNull(),
     /** Lowercased; null when nobody owns it. */
@@ -1602,7 +1607,7 @@ export const scheduleChecklistItems = pgTable(
     index("schedule_checklist_items_day_idx").on(t.bootcampId, t.track, t.day, t.createdAt),
     index("schedule_checklist_items_owner_idx").on(t.ownerEmail),
     check("schedule_checklist_items_track_check", sql`${t.track} in ('btc', 'int', 'btc_se', 'int_se')`),
-    check("schedule_checklist_items_day_check", sql`${t.day} between 1 and 30`),
+    check("schedule_checklist_items_day_check", sql`${t.day} between 0 and 30 and (${t.day} > 0 or ${t.track} = 'btc')`),
   ],
 );
 

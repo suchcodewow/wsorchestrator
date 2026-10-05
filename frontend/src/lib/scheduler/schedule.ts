@@ -20,6 +20,8 @@ import { db } from "@/db";
 import {
   AUDIENCE_TRACKS,
   BOOTCAMP_LIMITS,
+  CHECKLIST_LIMITS,
+  CHECKLIST_PREP_DAY,
   EVALS_SLACK_CONTACT_LIMITS,
   SCHEDULE_LIMITS,
   SCHEDULE_TRACKS,
@@ -27,6 +29,8 @@ import {
   employees,
   facilities,
   facilityRooms,
+  mentions,
+  scheduleChecklistItems,
   scheduleSessionComments,
   scheduleSessionGroups,
   scheduleSessionStaff,
@@ -41,6 +45,7 @@ import {
 } from "@/db/schema";
 import { noteAudit } from "@/lib/audit-context";
 import { normalEmail } from "@/lib/evals/history-values";
+import { taggerOf } from "@/lib/mention-store";
 import { classLists, type ClassLists } from "@/lib/scheduler/attendees";
 import { roomsOf as facilityRoomsOf, type RoomRow } from "@/lib/scheduler/facilities";
 import { judgePicks } from "@/lib/scheduler/judges";
@@ -723,7 +728,17 @@ export const FILL_STATUS_FOR: Record<FillError, number> = {
   same_bootcamp: 400,
 };
 
-export type FillSummary = { sessions: number; notes: string[] };
+/** A checklist item to copy, to do again, with whom its name tags. */
+type NewChecklistItem = {
+  track: ScheduleTrack;
+  day: number;
+  name: string;
+  ownerEmail: string | null;
+  ownerName: string;
+  mentions: { email: string; fullName: string }[];
+};
+
+export type FillSummary = { sessions: number; checklistItems: number; notes: string[] };
 
 async function hasSessions(bootcampId: string): Promise<boolean> {
   const [row] = await db
@@ -736,9 +751,40 @@ async function hasSessions(bootcampId: string): Promise<boolean> {
 
 const INSERT_BATCH = 100;
 
-/** Replaces every session of the bootcamp with `sessions`. */
-async function writeSchedule(actorId: string, bootcampId: string, sessions: NewSession[]): Promise<void> {
-  await db.transaction(async (tx) => {
+/** One track-day of the source's checklist, oldest first, with whom each item tags. */
+async function loadChecklistDay(bootcampId: string, track: ScheduleTrack, day: number): Promise<NewChecklistItem[]> {
+  const c = scheduleChecklistItems;
+  return db
+    .select({
+      track: c.track,
+      day: c.day,
+      name: c.name,
+      ownerEmail: c.ownerEmail,
+      ownerName: c.ownerName,
+      mentions: sql<{ email: string; fullName: string }[]>`coalesce((
+        select json_agg(json_build_object('email', m.email, 'fullName', m.full_name))
+        from ${mentions} m where m.checklist_item_id = ${c}.id
+      ), '[]'::json)`,
+    })
+    .from(c)
+    .where(and(eq(c.bootcampId, bootcampId), eq(c.track, track), eq(c.day, day)))
+    .orderBy(c.createdAt, c.id)
+    .limit(CHECKLIST_LIMITS.itemsPerDay);
+}
+
+/**
+ * Replaces every session of the bootcamp with `sessions`, and adds `items` to
+ * its checklists, all to do. Its own items stay: one whose day already has an
+ * item of the same name is not added again, nor one past a day's limit.
+ */
+async function writeSchedule(
+  actorId: string,
+  bootcampId: string,
+  sessions: NewSession[],
+  items: NewChecklistItem[],
+): Promise<{ added: number; had: number; full: number }> {
+  const tagger = items.length > 0 ? await taggerOf(actorId) : null;
+  return db.transaction(async (tx) => {
     await tx.delete(scheduleSessions).where(eq(scheduleSessions.bootcampId, bootcampId));
     for (let i = 0; i < sessions.length; i += INSERT_BATCH) {
       const batch = sessions.slice(i, i + INSERT_BATCH);
@@ -749,6 +795,59 @@ async function writeSchedule(actorId: string, bootcampId: string, sessions: NewS
       const staff = batch.flatMap((s, j) => s.staff.map((p, position) => ({ sessionId: made[j]!.id, ...p, position })));
       if (staff.length > 0) await tx.insert(scheduleSessionStaff).values(staff);
     }
+
+    const tally = { added: 0, had: 0, full: 0 };
+    if (!tagger) return tally;
+    // Held until commit, as adding one item holds it, so no add at once takes a day past its limit.
+    await tx.select({ id: bootcamps.id }).from(bootcamps).where(eq(bootcamps.id, bootcampId)).for("update");
+    const byDay = new Map<string, NewChecklistItem[]>();
+    for (const i of items) {
+      const key = `${i.track}:${i.day}`;
+      byDay.set(key, [...(byDay.get(key) ?? []), i]);
+    }
+    // Each a millisecond apart, by the database's clock, so the copies keep the source's order rather than share the transaction's time.
+    let at = 0;
+    for (const dayItems of byDay.values()) {
+      const { track, day } = dayItems[0]!;
+      const c = scheduleChecklistItems;
+      const existing = await tx
+        .select({ name: sql<string>`lower(${c.name})` })
+        .from(c)
+        .where(and(eq(c.bootcampId, bootcampId), eq(c.track, track), eq(c.day, day)))
+        .limit(CHECKLIST_LIMITS.itemsPerDay);
+      const names = new Set(existing.map((e) => e.name));
+      const fresh = dayItems.filter((i) => !names.has(i.name.toLowerCase()));
+      const room = Math.max(0, CHECKLIST_LIMITS.itemsPerDay - existing.length);
+      const adding = fresh.slice(0, room);
+      tally.had += dayItems.length - fresh.length;
+      tally.full += fresh.length - adding.length;
+      if (adding.length === 0) continue;
+
+      const made = await tx
+        .insert(c)
+        .values(
+          adding.map((i, j) => ({
+            bootcampId,
+            track,
+            day,
+            name: i.name,
+            ownerEmail: i.ownerEmail,
+            ownerName: i.ownerName,
+            createdBy: actorId,
+            createdByName: tagger.taggedByName,
+            createdByEmail: tagger.taggedByEmail,
+            createdAt: sql`now() + ${at + j} * interval '1 millisecond'`,
+          })),
+        )
+        .returning({ id: c.id, createdAt: c.createdAt });
+      at += adding.length;
+      const tags = adding.flatMap((i, j) =>
+        i.mentions.map((m) => ({ checklistItemId: made[j]!.id, bootcampId, ...m, ...tagger, createdAt: made[j]!.createdAt })),
+      );
+      if (tags.length > 0) await tx.insert(mentions).values(tags);
+      tally.added += adding.length;
+    }
+    return tally;
   });
 }
 
@@ -772,6 +871,10 @@ function outsiderNote(sessions: NewSession[], pool: Instructor[]): string | null
  * runs it, without comments. Rooms come too when both are at the same
  * facility. Days the bootcamp does not run are left out and said so.
  * Refused as `has_sessions` if it has a schedule already, unless `replace`.
+ *
+ * The checklists of the days it keeps, and Prep Day's, are added to its own,
+ * every item to do. An owner or a tag that is not an instructor of this
+ * bootcamp is left off, and said so.
  */
 export async function copySchedule(
   actorId: string,
@@ -788,10 +891,12 @@ export async function copySchedule(
   const keepRooms = Boolean(target.facilityId) && target.facilityId === source.facilityId;
   const notes: string[] = [];
   const sessions: NewSession[] = [];
+  const checklistDays: { track: ScheduleTrack; day: number }[] = [CHECKLIST_PREP_DAY];
   let hadRooms = false;
   for (const track of SCHEDULE_TRACKS) {
     const from = trackDays(track, source) ?? 0;
     const to = trackDays(track, target) ?? 0;
+    for (let d = 1; d <= Math.min(from, to); d++) checklistDays.push({ track, day: d });
     const days = await Promise.all(Array.from({ length: Math.min(from, to) }, (_, d) => loadDay(db, sourceId, track, d + 1)));
     for (const day of days) {
       for (const s of day) {
@@ -822,11 +927,37 @@ export async function copySchedule(
     }
   }
   if (hadRooms && !keepRooms) notes.push("Rooms were left off: the two bootcamps are not at the same facility.");
-  const outsiders = outsiderNote(sessions, await instructorPool(bootcampId));
+  const pool = await instructorPool(bootcampId);
+  const outsiders = outsiderNote(sessions, pool);
   if (outsiders) notes.push(outsiders);
 
-  await writeSchedule(actorId, bootcampId, sessions);
-  return { ok: true, summary: { sessions: sessions.length, notes } };
+  const inPool = new Set(pool.map((p) => p.email));
+  const leftOff = new Map<string, string>();
+  const items = (await Promise.all(checklistDays.map((d) => loadChecklistDay(sourceId, d.track, d.day)))).flat().map((i) => {
+    if (i.ownerEmail && !inPool.has(i.ownerEmail)) leftOff.set(i.ownerEmail, i.ownerName || i.ownerEmail);
+    for (const m of i.mentions) if (!inPool.has(m.email)) leftOff.set(m.email, m.fullName || m.email);
+    const owned = !i.ownerEmail || inPool.has(i.ownerEmail);
+    return {
+      ...i,
+      ownerEmail: owned ? i.ownerEmail : null,
+      ownerName: owned ? i.ownerName : "",
+      mentions: i.mentions.filter((m) => inPool.has(m.email)),
+    };
+  });
+  if (leftOff.size > 0) {
+    notes.push(
+      `Left ${leftOff.size} ${leftOff.size === 1 ? "person" : "people"} off checklist items, as owner or tag, who ${leftOff.size === 1 ? "is" : "are"} not a Training administrator or a guest judge of this bootcamp: ${someNames([...leftOff.values()])}.`,
+    );
+  }
+
+  const copied = await writeSchedule(actorId, bootcampId, sessions, items);
+  if (copied.had > 0) {
+    notes.push(`Left out ${copied.had} checklist item${copied.had === 1 ? "" : "s"} this bootcamp already has on the same day.`);
+  }
+  if (copied.full > 0) {
+    notes.push(`Left out ${copied.full} checklist item${copied.full === 1 ? "" : "s"}: a day holds at most ${CHECKLIST_LIMITS.itemsPerDay}.`);
+  }
+  return { ok: true, summary: { sessions: sessions.length, checklistItems: copied.added, notes } };
 }
 
 export type CopySource = { id: string; startDate: string; sessions: number };

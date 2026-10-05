@@ -178,6 +178,9 @@ const PAGES: Record<string, PageCase> = {
   "/scheduler": { path: () => "/scheduler", expect: gated(canUseTraining) },
   "/scheduler/<a bootcamp>": { path: () => `/scheduler/${bootcampId}`, expect: gated(canUseTraining) },
   "/scheduler/active": { path: () => "/scheduler/active", expect: gated(canUseTraining) },
+  "/scheduler/<a bootcamp>/print": { path: () => `/scheduler/${bootcampId}/print?day=1`, expect: gated(canUseTraining) },
+  "/scheduler/<a bootcamp>/print?track": { path: () => `/scheduler/${bootcampId}/print?track=btc`, expect: gated(canUseTraining) },
+  "/scheduler/<unknown>/print": { path: () => `/scheduler/${MISSING}/print`, expect: () => 404 },
   "/scheduler/<unknown>": { path: () => `/scheduler/${MISSING}`, expect: () => 404 },
   "/scheduler/<not an id>": { path: () => "/scheduler/nonsense", expect: () => 404 },
   "/scheduler-settings": {
@@ -198,6 +201,7 @@ const PAGES: Record<string, PageCase> = {
   },
   "/cohorts/current": { path: () => "/cohorts/current", expect: gated(canUseTraining) },
   "/cohorts/deferred": { path: () => "/cohorts/deferred", expect: gated(canUseTraining) },
+  "/cohorts/name-cards": { path: () => "/cohorts/name-cards", expect: gated(canUseTraining) },
   "/cohorts/previous": { path: () => "/cohorts/previous", expect: gated(canUseTraining) },
   "/cohorts/previous?open=<a day>": { path: () => "/cohorts/previous?open=2026-09-14", expect: gated(canUseTraining) },
   "/cohorts/previous/<a record>": {

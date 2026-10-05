@@ -1,6 +1,7 @@
 /**
  * What is to be done before each day of each of a bootcamp's tracks starts,
- * the SE tracks included. A track-day's list holds at most
+ * the SE tracks included, and on Prep Day, before the bootcamp does (day 0
+ * of Bootcamp, `CHECKLIST_PREP_DAY`). A track-day's list holds at most
  * `CHECKLIST_LIMITS.itemsPerDay`, so it is read whole; what one person owns
  * across every bootcamp is read a page at a time.
  *
@@ -31,7 +32,7 @@ import type { MentionPick } from "@/lib/mentions";
 import { pageWindow, toPage, type ListQuery, type Page } from "@/lib/paging";
 import { orderFor, searchAny } from "@/lib/paging-sql";
 import { instructorPool, scheduleBootcamp } from "@/lib/scheduler/schedule";
-import { TRACK_LABELS, trackDays } from "@/lib/scheduler/timeline";
+import { checklistDayExists, checklistDayLabel } from "@/lib/scheduler/timeline";
 
 export type ChecklistItemRow = {
   id: string;
@@ -78,12 +79,8 @@ const COLUMNS = {
 };
 
 export const checklistTrackSchema = z.enum(CHECKLIST_TRACKS);
-export const checklistDaySchema = z.coerce.number().int().min(1).max(30);
-
-/** "Bootcamp, Day 2", for the audit trail and the inbox. */
-export function checklistDayLabel(track: ChecklistTrack, day: number): string {
-  return `${TRACK_LABELS[track]}, Day ${day}`;
-}
+/** 1-based; 0 is Bootcamp's Prep Day. */
+export const checklistDaySchema = z.coerce.number().int().min(0).max(30);
 
 /** How many items each track-day has, and how many are done; days with none are absent. */
 export async function checklistCounts(bootcampId: string): Promise<ChecklistDayCount[]> {
@@ -142,7 +139,7 @@ export async function addChecklistItem(
   const bootcamp = await scheduleBootcamp(bootcampId);
   if (!bootcamp) return { ok: false, error: "not_found" };
   noteAudit({ target: bootcampId, targetLabel: `${checklistDayLabel(track, day)}: ${input.name.slice(0, 80)}` });
-  if (day > (trackDays(track, bootcamp) ?? 0)) return { ok: false, error: "no_day" };
+  if (!checklistDayExists(track, day, bootcamp)) return { ok: false, error: "no_day" };
 
   const pool = input.ownerEmail || input.mentions?.length ? await instructorPool(bootcampId) : [];
   let owner: { email: string; fullName: string } | null = null;

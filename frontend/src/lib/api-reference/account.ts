@@ -4,7 +4,7 @@ import type { EndpointGroup } from "./types";
 
 /** One checklist item, as the Scheduler's routes and the inbox return it. */
 export const CHECKLIST_ITEM_ROW =
-  "{ id, track: \"btc\" | \"int\", day: number, name, ownerEmail: string | null, ownerName, done: boolean, doneAt: string | null, doneByName, createdBy: string | null, createdByName, createdByEmail, createdAt, mentions: { email, fullName }[] }";
+  "{ id, track: \"btc\" | \"int\" | \"btc_se\" | \"int_se\", day: number, name, ownerEmail: string | null, ownerName, done: boolean, doneAt: string | null, doneByName, createdBy: string | null, createdByName, createdByEmail, createdAt, mentions: { email, fullName }[] }";
 
 const ORG_SECRET_SEARCH = "the id, the file name, the kind or who last stored it";
 
@@ -255,7 +255,7 @@ export const ACCOUNT_GROUPS: EndpointGroup[] = [
         access: "signedIn",
         token: true,
         notes:
-          "date is the day the item is for. open counts every item of yours still to do, whatever the search or status. Tick one with PATCH /api/scheduler/bootcamps/{id}/checklist/items/{itemId}.",
+          "date is the day the item is for; for Prep Day (btc, day 0), the day before the bootcamp starts. open counts every item of yours still to do, whatever the search or status. Tick one with PATCH /api/scheduler/bootcamps/{id}/checklist/items/{itemId}.",
         query: [
           { name: "status", type: "\"open\" | \"done\" | \"all\"", note: "default open" },
           ...listQuery(MY_CHECKLIST_LIST.sorts, "the name or who wrote it"),
