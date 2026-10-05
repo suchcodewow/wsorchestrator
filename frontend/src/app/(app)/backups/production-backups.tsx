@@ -7,6 +7,7 @@
  */
 
 import { useState } from "react";
+import Link from "next/link";
 import { motion } from "framer-motion";
 import { AlertTriangle, DatabaseZap, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -286,9 +287,9 @@ function ImportDialog({
                 <ul className="mt-2 grid gap-1 text-xs">
                   {holding.map((run) => (
                     <li key={run.id} className="flex items-center gap-2">
-                      <a href={`/runs/${run.id}`} className="font-medium underline">
+                      <Link href={`/runs/${run.id}`} className="font-medium underline">
                         {run.name}
-                      </a>
+                      </Link>
                       <span className="text-muted-foreground">{run.status}</span>
                     </li>
                   ))}

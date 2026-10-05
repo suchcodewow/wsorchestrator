@@ -12,15 +12,75 @@ import { useEffect, useState } from "react";
 import { Loader2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SEARCH_DEBOUNCE_MS } from "@/components/use-debounced-search";
 import { EVALS_SLACK_CONTACT_LIMITS } from "@/db/schema";
 
-type Candidate = { email: string; fullName: string };
+/** An employee as a picker offers them. */
+export type EmployeeCandidate = { email: string; fullName: string };
 
-/** How long the field waits after the last keystroke before it searches. */
-const SEARCH_DEBOUNCE_MS = 300;
+/** How many matches the dropdown lists; the rest are a sharper search away. */
+const SHOWN_MATCHES = 8;
 
 /** Close enough to an email to send as one; the server has the final word. */
 const LOOKS_LIKE_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/**
+ * The employees matching `q`, fetched once typing pauses while `enabled`.
+ * Each keystroke aborts the request before it, so a slow answer never
+ * overwrites a newer one.
+ */
+export function useEmployeeSearch(q: string, enabled: boolean) {
+  const [matches, setMatches] = useState<EmployeeCandidate[]>([]);
+
+  useEffect(() => {
+    if (!enabled) return;
+    const ctrl = new AbortController();
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/evals/employees?${new URLSearchParams({ q })}`, { signal: ctrl.signal });
+        const body = res.ok ? ((await res.json()) as { people?: EmployeeCandidate[] }) : null;
+        setMatches((body?.people ?? []).map(({ email, fullName }) => ({ email, fullName })));
+      } catch {
+        // Aborted by the next keystroke, or offline: the list just stays as it was.
+      }
+    }, SEARCH_DEBOUNCE_MS);
+    return () => {
+      clearTimeout(t);
+      ctrl.abort();
+    };
+  }, [q, enabled]);
+
+  return { matches, clear: () => setMatches([]) };
+}
+
+/** The dropdown under a picker's field. Choosing keeps focus in the field. */
+export function EmployeeMatches({
+  matches,
+  onChoose,
+}: {
+  matches: EmployeeCandidate[];
+  onChoose: (employee: EmployeeCandidate) => void;
+}) {
+  if (matches.length === 0) return null;
+
+  return (
+    <ul className="absolute inset-x-0 top-full z-20 mt-1 max-h-64 overflow-y-auto rounded-md border bg-popover shadow-md">
+      {matches.slice(0, SHOWN_MATCHES).map((e) => (
+        <li key={e.email}>
+          <button
+            type="button"
+            onMouseDown={(ev) => ev.preventDefault()}
+            onClick={() => onChoose(e)}
+            className="flex w-full flex-col items-start gap-0.5 px-3 py-2 text-left text-sm transition-colors hover:bg-muted/50"
+          >
+            <span>{e.fullName}</span>
+            <span className="text-xs text-muted-foreground">{e.email}</span>
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 export function EmployeePicker({
   id,
@@ -40,32 +100,15 @@ export function EmployeePicker({
 }) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
-  const [selected, setSelected] = useState<Candidate | null>(null);
-  const [matches, setMatches] = useState<Candidate[]>([]);
+  const [selected, setSelected] = useState<EmployeeCandidate | null>(null);
 
   const q = query.trim();
   const searching = q.length > 0 && !selected;
-  useEffect(() => {
-    if (!searching) return;
-    const ctrl = new AbortController();
-    const t = setTimeout(async () => {
-      try {
-        const res = await fetch(`/api/evals/employees?${new URLSearchParams({ q })}`, { signal: ctrl.signal });
-        const body = res.ok ? await res.json() : null;
-        setMatches(((body?.people ?? []) as Candidate[]).map((e) => ({ email: e.email, fullName: e.fullName })));
-      } catch {
-        // Aborted by the next keystroke, or offline: the list just stays as it was.
-      }
-    }, SEARCH_DEBOUNCE_MS);
-    return () => {
-      clearTimeout(t);
-      ctrl.abort();
-    };
-  }, [q, searching]);
+  const { matches, clear } = useEmployeeSearch(q, searching);
 
   const email = selected?.email ?? (allowAnyEmail && LOOKS_LIKE_EMAIL.test(q) ? q : "");
 
-  function choose(e: Candidate) {
+  function choose(e: EmployeeCandidate) {
     setQuery(`${e.fullName} <${e.email}>`);
     setSelected(e);
     setOpen(false);
@@ -76,7 +119,7 @@ export function EmployeePicker({
     if (await onAdd(email, selected?.fullName)) {
       setQuery("");
       setSelected(null);
-      setMatches([]);
+      clear();
     }
   }
 
@@ -103,28 +146,13 @@ export function EmployeePicker({
             onKeyDown={(e) => {
               if (e.key === "Enter") {
                 e.preventDefault();
-                submit();
+                void submit();
               }
               if (e.key === "Escape") setOpen(false);
             }}
             placeholder={placeholder}
           />
-          {open && searching && matches.length > 0 && (
-            <div className="absolute inset-x-0 top-full z-20 mt-1 max-h-64 overflow-y-auto rounded-md border bg-popover shadow-md">
-              {matches.slice(0, 8).map((e) => (
-                <button
-                  key={e.email}
-                  type="button"
-                  onMouseDown={(ev) => ev.preventDefault()}
-                  onClick={() => choose(e)}
-                  className="flex w-full flex-col items-start gap-0.5 px-3 py-2 text-left text-sm transition-colors hover:bg-muted/50"
-                >
-                  <span>{e.fullName}</span>
-                  <span className="text-xs text-muted-foreground">{e.email}</span>
-                </button>
-              ))}
-            </div>
-          )}
+          {open && searching && <EmployeeMatches matches={matches} onChoose={choose} />}
         </div>
         <Button type="button" variant="brand" disabled={!email || busy} onClick={submit}>
           {busy ? <Loader2 className="animate-spin" /> : <Plus />}

@@ -17,6 +17,19 @@ import type { CommentRow } from "@/lib/scheduler/comments";
 import { formatWhen } from "../../cohort-settings/format";
 
 type Loaded = { rows: CommentRow[]; page: number; hasMore: boolean };
+type CommentsPage = { comments: CommentRow[]; hasMore: boolean };
+
+/** Page `page` of the comments at `base`, or an error to show. */
+async function fetchPage(base: string, page: number): Promise<Loaded | string> {
+  try {
+    const res = await fetch(`${base}?page=${page}`, { cache: "no-store" });
+    if (!res.ok) return `Could not load the comments (${res.status}).`;
+    const out = (await res.json()) as CommentsPage;
+    return { rows: out.comments, page, hasMore: out.hasMore };
+  } catch {
+    return "Could not reach the server.";
+  }
+}
 
 export function Comments({
   bootcampId,
@@ -42,21 +55,9 @@ export function Comments({
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  /** Page `page`, or an error to show. */
-  const fetchPage = async (page: number): Promise<Loaded | string> => {
-    try {
-      const res = await fetch(`${base}?page=${page}`, { cache: "no-store" });
-      const out = await res.json().catch(() => null);
-      if (!res.ok) return `Could not load the comments (${res.status}).`;
-      return { rows: out.comments, page, hasMore: out.hasMore };
-    } catch {
-      return "Could not reach the server.";
-    }
-  };
-
   useEffect(() => {
     let live = true;
-    void fetchPage(1).then((got) => {
+    void fetchPage(base, 1).then((got) => {
       if (!live) return;
       if (typeof got === "string") setError(got);
       else setLoaded(got);
@@ -64,13 +65,11 @@ export function Comments({
     return () => {
       live = false;
     };
-    // The dialog remounts this for another session.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [base]);
 
   async function older(page: number) {
     setBusy("load");
-    const got = await fetchPage(page);
+    const got = await fetchPage(base, page);
     setBusy(null);
     if (typeof got === "string") return setError(got);
     setLoaded((prev) => ({ ...got, rows: [...(prev?.rows ?? []), ...got.rows] }));

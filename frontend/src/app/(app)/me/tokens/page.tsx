@@ -15,10 +15,15 @@ export default async function MyTokensPage() {
   if (!session?.user) redirect(await signInPath());
   if (!canSeeMySettingsTab(session.user.access, "/me/tokens")) notFound();
 
+  const [tokens, choices] = await Promise.all([
+    listHarnessTokens(session.user.id),
+    deployChoices(session.user.id),
+  ]);
+
   return (
     <HarnessTokensView
-      tokens={await listHarnessTokens(session.user.id)}
-      choices={await deployChoices(session.user.id)}
+      tokens={tokens}
+      choices={choices}
       configured={secretsConfigured()}
       canDeploy={canManageSettings(session.user.access)}
       scrubDays={scrubWindowDays()}
