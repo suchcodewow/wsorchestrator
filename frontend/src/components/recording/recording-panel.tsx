@@ -7,6 +7,7 @@
  * own: the page puts it in one, as a row beside whatever it records.
  */
 
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { Loader2, Mic, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -21,6 +22,7 @@ export function RecordingPanel({
   subject,
   version,
   onChanged,
+  children,
 }: {
   recorder: ReturnType<typeof useRecorder>;
   ownerId: string;
@@ -28,6 +30,8 @@ export function RecordingPanel({
   /** Bumped by the page whenever a recording is saved, to list it. */
   version: number;
   onChanged: () => void;
+  /** Shown between the controls and the recordings, such as their transcripts. */
+  children?: ReactNode;
 }) {
   const level = useAudioLevel(recorder.stream);
   const { recordings, error: listError } = useRecordings(ownerId, subject, version);
@@ -83,6 +87,7 @@ export function RecordingPanel({
         </p>
       )}
 
+      {children}
       <RecordingList recordings={saved} onDeleted={onChanged} />
     </div>
   );

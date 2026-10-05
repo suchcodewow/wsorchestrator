@@ -28,6 +28,7 @@ export default async function ScoringPage({
       form={{
         ...form,
         submission: form.submission && { ...form.submission, updatedAt: form.submission.updatedAt.toISOString() },
+        transcripts: form.transcripts.map((t) => ({ ...t, recordedAt: t.recordedAt.toISOString() })),
       }}
       bootcamp={bootcamp}
       viewerId={session.user.id}

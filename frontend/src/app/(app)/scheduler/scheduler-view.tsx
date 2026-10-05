@@ -53,7 +53,7 @@ export function SchedulerView({
       const res = await fetch(`/api/scheduler/bootcamps/${row.id}`, { method: "DELETE" });
       const body = await res.json().catch(() => null);
       if (body?.error === "has_scores") {
-        setError(`The bootcamp starting ${formatDate(row.startDate)} has assessments scored at it, so it is kept.`);
+        setError(`The bootcamp starting ${formatDate(row.startDate)} has assessments scored or recorded at it, so it is kept.`);
       } else if (!res.ok && res.status !== 404) {
         setError(`Could not remove it (${res.status}).`);
       }

@@ -219,7 +219,7 @@ export const ACCOUNT_GROUPS: EndpointGroup[] = [
         summary: "Returns the transcript of a whole recording.",
         access: "signedIn",
         token: true,
-        notes: "Deepgram's nova-3 model, with punctuation and number formatting. The audio is passed through and not kept.",
+        notes: "Deepgram's nova-3 model, with punctuation, number formatting and a blank line between paragraphs. The audio is passed through and not kept.",
         body: {
           kind: "multipart",
           fields: [

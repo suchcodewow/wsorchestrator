@@ -56,7 +56,7 @@ export async function assertScratchDatabase(url = testDatabaseUrl()): Promise<vo
  * and the rest cascade from the user. Audit rows outlive a deleted user by
  * design, so the suite's own are deleted by actor first. Judges are found by
  * email; a bootcamp or assessment the suite made, by its creator, along with
- * any scores given at it or on it.
+ * any scores given or transcripts filed at it or on it.
  */
 export async function deleteTestRows(
   query: (sql: string, params: unknown[]) => Promise<unknown>,
@@ -69,10 +69,13 @@ export async function deleteTestRows(
     "delete from workshop_runs where user_id in (select id from users where id like $1)",
     [like],
   );
+  await query("delete from evals_transcripts where recorded_by_id like $1", [like]);
   const made = "select id from bootcamps where created_by like $1";
   await query(`delete from evals_submissions where bootcamp_id in (${made})`, [like]);
+  await query(`delete from evals_transcripts where bootcamp_id in (${made})`, [like]);
   const assessed = "select id from evals_assessments where created_by like $1";
   await query(`delete from evals_submissions where assessment_id in (${assessed})`, [like]);
+  await query(`delete from evals_transcripts where assessment_id in (${assessed})`, [like]);
   await query(`delete from evals_assessments where id in (${assessed})`, [like]);
   await query(`delete from bootcamps where id in (${made})`, [like]);
   await query("delete from bootcamp_judges where email like $1", [`${scope}%@${TEST_EMAIL_DOMAIN}`]);

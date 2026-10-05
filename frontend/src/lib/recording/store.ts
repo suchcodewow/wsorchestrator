@@ -186,6 +186,14 @@ export async function listRecordings(ownerId: string, subject?: string): Promise
   return rows.map((r) => withStaleness(r, now)).sort((a, b) => b.startedAt - a.startedAt);
 }
 
+/** One recording's details, without its audio; null if it is gone. */
+export async function getRecording(id: string): Promise<StoredRecording | null> {
+  const db = await open();
+  const tx = db.transaction(RECORDINGS, "readonly");
+  const recording = (await result(tx.objectStore(RECORDINGS).get(id))) as StoredRecording | undefined;
+  return recording ? withStaleness(recording, Date.now()) : null;
+}
+
 /** The whole recording as one playable file, its chunks in order. */
 export async function readRecording(id: string): Promise<Blob | null> {
   const db = await open();

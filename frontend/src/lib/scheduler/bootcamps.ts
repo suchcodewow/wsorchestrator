@@ -18,6 +18,7 @@ import {
   EVALS_SLACK_CONTACT_LIMITS,
   bootcamps,
   evalsSubmissions,
+  evalsTranscripts,
   facilities,
   scheduleSessionStaff,
   scheduleSessions,
@@ -291,16 +292,16 @@ export async function updateBootcamp(
 }
 
 /**
- * Removes a bootcamp and its judges. One that attendees were scored at is
- * kept, with `has_scores`: removing it would take their assessments with it.
+ * Removes a bootcamp and its judges. One that attendees were scored or
+ * recorded at is kept, with `has_scores`: removing it would take their
+ * assessments and transcripts with it.
  */
 export async function deleteBootcamp(id: string): Promise<{ ok: true } | { ok: false; error: "not_found" | "has_scores" }> {
-  const [scored] = await db
-    .select({ id: evalsSubmissions.id })
-    .from(evalsSubmissions)
-    .where(eq(evalsSubmissions.bootcampId, id))
-    .limit(1);
-  if (scored) return { ok: false, error: "has_scores" };
+  const [[scored], [recorded]] = await Promise.all([
+    db.select({ id: evalsSubmissions.id }).from(evalsSubmissions).where(eq(evalsSubmissions.bootcampId, id)).limit(1),
+    db.select({ id: evalsTranscripts.id }).from(evalsTranscripts).where(eq(evalsTranscripts.bootcampId, id)).limit(1),
+  ]);
+  if (scored || recorded) return { ok: false, error: "has_scores" };
   let deleted: { id: string; startDate: string }[];
   try {
     deleted = await db
@@ -308,7 +309,7 @@ export async function deleteBootcamp(id: string): Promise<{ ok: true } | { ok: f
       .where(eq(bootcamps.id, id))
       .returning({ id: bootcamps.id, startDate: bootcamps.startDate });
   } catch (err) {
-    // Scored in between: the foreign key refuses it.
+    // Scored or recorded in between: the foreign key refuses it.
     if (isForeignKeyViolation(err)) return { ok: false, error: "has_scores" };
     throw err;
   }

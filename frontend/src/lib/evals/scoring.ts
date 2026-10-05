@@ -33,6 +33,7 @@ import {
 import { averageScore, requiredFeedback, tracksFor, wholeScore } from "@/lib/evals/assessment-values";
 import { IN_STAGE, isCandidate } from "@/lib/evals/current-cohort";
 import { getCandidateCutoffs } from "@/lib/evals/settings";
+import { listTranscripts, type Transcript } from "@/lib/evals/transcripts";
 import type { AssessmentAttendeeSort } from "@/lib/list-specs";
 import { pickMentions, scorerPool, taggerOf } from "@/lib/mention-store";
 import type { MentionPick } from "@/lib/mentions";
@@ -185,6 +186,8 @@ export type ScoringForm = {
   } | null;
   /** Whom a criterion's comment can tag: anyone in eVals, and the bootcamp's guest judges; none without a bootcamp. */
   people: MentionPick[];
+  /** Of every recording made of this attendee on this assessment at the bootcamp, oldest first; none without a bootcamp. */
+  transcripts: Transcript[];
 };
 
 async function eligibleAttendee(assessment: ScoringAssessment, employeeId: string) {
@@ -216,6 +219,9 @@ export async function getScoringForm(
     bootcampId ? scorerPool(bootcampId) : Promise.resolve([]),
   ]);
   if (!attendee) return null;
+  const transcripts = bootcampId
+    ? await listTranscripts({ bootcampId, assessmentId, attendeeEmail: attendee.email })
+    : [];
 
   const [submission] = bootcampId
     ? await db
@@ -232,7 +238,7 @@ export async function getScoringForm(
         .leftJoin(users, eq(users.id, s.ownerId))
         .where(and(eq(s.bootcampId, bootcampId), eq(s.assessmentId, assessmentId), eq(s.attendeeEmail, attendee.email)))
     : [];
-  if (!submission) return { assessment, criteria, attendee, submission: null, people };
+  if (!submission) return { assessment, criteria, attendee, submission: null, people, transcripts };
 
   const [scores, tags] = await Promise.all([
     db
@@ -260,7 +266,28 @@ export async function getScoringForm(
       ),
     },
     people,
+    transcripts,
   };
+}
+
+/**
+ * Who and where a recording made on the scoring form is filed under: the
+ * active assessment, the active bootcamp holding its class, and an attendee
+ * it applies to.
+ */
+export async function scoringTarget(
+  assessmentId: string,
+  employeeId: string,
+): Promise<
+  | { ok: true; assessment: ScoringAssessment; bootcamp: ActiveBootcamp; attendee: { id: string; email: string } }
+  | { ok: false; error: "not_found" | "no_bootcamp" }
+> {
+  const assessment = await scoringAssessment(assessmentId);
+  if (!assessment) return { ok: false, error: "not_found" };
+  const [bootcamp, attendee] = await Promise.all([scoringBootcamp(assessment.stage), eligibleAttendee(assessment, employeeId)]);
+  if (!attendee) return { ok: false, error: "not_found" };
+  if (!bootcamp) return { ok: false, error: "no_bootcamp" };
+  return { ok: true, assessment, bootcamp, attendee: { id: attendee.id, email: attendee.email } };
 }
 
 const L = EVALS_ASSESSMENT_LIMITS;
