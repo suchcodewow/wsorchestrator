@@ -177,6 +177,7 @@ const PAGES: Record<string, PageCase> = {
   "/runs/<someone else's>": { path: () => `/runs/${aliceRun}`, expect: gated(canSeeAllEvents) },
   "/scheduler": { path: () => "/scheduler", expect: gated(canUseTraining) },
   "/scheduler/<a bootcamp>": { path: () => `/scheduler/${bootcampId}`, expect: gated(canUseTraining) },
+  "/scheduler/active": { path: () => "/scheduler/active", expect: gated(canUseTraining) },
   "/scheduler/<unknown>": { path: () => `/scheduler/${MISSING}`, expect: () => 404 },
   "/scheduler/<not an id>": { path: () => "/scheduler/nonsense", expect: () => 404 },
   "/scheduler-settings": {
