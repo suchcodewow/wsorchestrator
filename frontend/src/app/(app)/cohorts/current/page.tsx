@@ -1,7 +1,13 @@
 /** The Current tab: the bootcamp and intermediate candidates in one table, narrowed by stage and track, a page at a time. */
 
 import { auth } from "@/auth";
-import { currentCohortSummary, isCandidateStage, isCandidateTrack, listCurrentCohort } from "@/lib/evals/current-cohort";
+import {
+  cohortScoring,
+  currentCohortSummary,
+  isCandidateStage,
+  isCandidateTrack,
+  listCurrentCohort,
+} from "@/lib/evals/current-cohort";
 import { CURRENT_COHORT_LIST } from "@/lib/list-specs";
 import { parseListQuery } from "@/lib/paging";
 import { canManageTrainingSettings, canUseEvals } from "@/lib/roles";
@@ -20,9 +26,11 @@ export default async function CurrentCohortPage({
     stage: isCandidateStage(params.stage) ? params.stage : null,
     track: isCandidateTrack(params.track) ? params.track : null,
   };
-  const [session, page, summary, active] = await Promise.all([
-    auth(),
-    listCurrentCohort(filter, query),
+  const session = await auth();
+  const canSeeScores = session?.user ? canUseEvals(session.user.access) : false;
+  const scoring = canSeeScores ? { scoring: await cohortScoring(filter) } : undefined;
+  const [page, summary, active] = await Promise.all([
+    listCurrentCohort(filter, query, scoring),
     currentCohortSummary(),
     activeBootcamp(),
   ]);
@@ -32,12 +40,11 @@ export default async function CurrentCohortPage({
       filter={filter}
       page={page}
       counts={summary.counts}
-      syncedAt={summary.syncedAt?.toISOString() ?? null}
-      cutoffs={summary.cutoffs}
+      assessments={scoring?.scoring?.assessments ?? null}
       deferral={summary.deferral}
       activeBootcamp={active}
       canSetTrack={session?.user ? canManageTrainingSettings(session.user.access) : false}
-      canOpenHistory={session?.user ? canUseEvals(session.user.access) : false}
+      canSeeScores={canSeeScores}
     />
   );
 }

@@ -7,9 +7,11 @@
  * the other row has picked. An administrator sets anyone's track from the
  * Track column, and it holds through every sync until they hand it back to
  * the rules. A row opens to show the rest of what the sync knows about them.
+ * With one stage and Sales or Engineer picked, an eVals viewer also sees a
+ * column per assessment for that stage and track, after their average.
  */
 
-import { HEADER_ROW, Pager, SortHeader, TableSearch } from "@/components/data-table";
+import { HEADER_ROW, Pager, PlainHeader, SortHeader, TableSearch } from "@/components/data-table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -25,11 +27,11 @@ import {
 import type {
   CandidateStage,
   CandidateTrack,
+  CohortScoring,
   CurrentCohortCounts,
   CurrentCohortFilter,
   CurrentCohortMember,
 } from "@/lib/evals/current-cohort";
-import type { CandidateCutoffs } from "@/lib/evals/settings";
 import type { SetTrackResult, TrackChoice } from "@/lib/evals/tracks";
 import type { CurrentCohortSort } from "@/lib/list-specs";
 import { riseChild, staggerParent } from "@/lib/motion";
@@ -54,7 +56,7 @@ import {
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Fragment, useState, useTransition } from "react";
-import { formatDate, formatWhen } from "../../cohort-settings/format";
+import { formatDate } from "../../cohort-settings/format";
 
 const STAGE_COUNTERS: { stage: CandidateStage; label: string; Icon: LucideIcon }[] = [
   { stage: "bootcamp", label: "Bootcamp", Icon: Users },
@@ -128,26 +130,25 @@ export function CurrentCohortView({
   filter,
   page,
   counts,
-  syncedAt,
-  cutoffs,
+  assessments,
   deferral,
   activeBootcamp,
   canSetTrack,
-  canOpenHistory,
+  canSeeScores,
 }: {
   query: ListQuery<CurrentCohortSort>;
   filter: CurrentCohortFilter;
   page: Page<CurrentCohortMember>;
   /** Everyone in each stage on each track, whatever the search or filter. */
   counts: CurrentCohortCounts;
-  syncedAt: string | null;
-  cutoffs: CandidateCutoffs;
+  /** A column each, after the average; null for none, as for a viewer outside eVals or a filter without one stage and Sales or Engineer. */
+  assessments: CohortScoring["assessments"] | null;
   deferral: { days: number; bootcampStart: string | null };
   activeBootcamp: ActiveBootcamp | null;
   /** Whether the viewer may set anyone's track. */
   canSetTrack: boolean;
-  /** Whether the viewer may open a bootcamp history record, which is eVals', not training's. */
-  canOpenHistory: boolean;
+  /** Whether the viewer is in eVals, whose scores and bootcamp history records these are. */
+  canSeeScores: boolean;
 }) {
   const router = useRouter();
   const { toggle, pending } = useFilterParams();
@@ -164,7 +165,8 @@ export function CurrentCohortView({
     });
   }
 
-  const total = sum(counts.bootcamp) + sum(counts.intermediate);
+  const scoreColumns = assessments && assessments.length > 0 ? assessments : null;
+  const columnCount = COLUMNS.length + (scoreColumns ? scoreColumns.length + 1 : 0);
   // Each row counts within the other row's pick.
   const stageCount = (stage: CandidateStage) => (filter.track ? counts[stage][filter.track] : sum(counts[stage]));
   const trackCount = (track: CandidateTrack) =>
@@ -223,22 +225,7 @@ export function CurrentCohortView({
 
   return (
     <motion.div variants={staggerParent(0.05)} initial="hidden" animate="show" className="space-y-4">
-      <motion.div variants={riseChild} className="space-y-1.5">
-        <h2 className="text-xl font-medium tracking-tight">Current</h2>
-        {syncedAt && (
-          <p className="text-sm leading-relaxed text-muted-foreground">
-            <span className="font-medium text-foreground">{total.toLocaleString()} people</span> still to train, as of the HiBob
-            sync on {formatWhen(syncedAt)}
-            {cutoffs.startDateOnOrAfter && <>, started on or after {formatDate(cutoffs.startDateOnOrAfter)}</>}
-            {cutoffs.activeEffectiveDateAfter && (
-              <>
-                {cutoffs.startDateOnOrAfter ? " and" : ","} in their position since after{" "}
-                {formatDate(cutoffs.activeEffectiveDateAfter)}
-              </>
-            )}
-            .
-          </p>
-        )}
+      <motion.div variants={riseChild}>
         <p className="text-sm leading-relaxed text-muted-foreground">
           {activeBootcamp ? (
             <>
@@ -345,6 +332,16 @@ export function CurrentCohortView({
                     {c.label}
                   </SortHeader>
                 ))}
+                {scoreColumns && (
+                  <>
+                    <PlainHeader className="text-right">Average</PlainHeader>
+                    {scoreColumns.map((a) => (
+                      <PlainHeader key={a.id} className="min-w-24 text-right">
+                        {a.name}
+                      </PlainHeader>
+                    ))}
+                  </>
+                )}
               </tr>
             </thead>
             <tbody>
@@ -390,11 +387,21 @@ export function CurrentCohortView({
                         )}
                       </td>
                       <td className="whitespace-nowrap px-5 py-2.5 tabular-nums text-muted-foreground">{formatDate(m.btcDate)}</td>
+                      {scoreColumns && (
+                        <>
+                          <td className="px-5 py-2.5 text-right font-medium tabular-nums">{score(m.averageScore)}</td>
+                          {scoreColumns.map((a) => (
+                            <td key={a.id} className="px-5 py-2.5 text-right tabular-nums text-muted-foreground">
+                              {score(m.scores[a.id])}
+                            </td>
+                          ))}
+                        </>
+                      )}
                     </tr>
                     {expanded && (
                       <tr id={`person-${m.email}`} className="border-b bg-muted/30 last:border-b-0">
-                        <td colSpan={COLUMNS.length} className="px-5 pt-1 pb-4 pl-10">
-                          <PersonDetails member={m} canOpenHistory={canOpenHistory} />
+                        <td colSpan={columnCount} className="px-5 pt-1 pb-4 pl-10">
+                          <PersonDetails member={m} canSeeScores={canSeeScores} />
                         </td>
                       </tr>
                     )}
@@ -403,7 +410,7 @@ export function CurrentCohortView({
               })}
               {page.rows.length === 0 && (
                 <tr>
-                  <td colSpan={COLUMNS.length} className="px-5 py-8 text-center text-muted-foreground">
+                  <td colSpan={columnCount} className="px-5 py-8 text-center text-muted-foreground">
                     {query.q || filter.stage || filter.track
                       ? "No one matches."
                       : page.page > 1
@@ -481,7 +488,11 @@ function TrackLabel({ member }: { member: CurrentCohortMember }) {
 }
 
 /** Everything the row leaves out, from the last HiBob sync and their bootcamp history. */
-function PersonDetails({ member: m, canOpenHistory }: { member: CurrentCohortMember; canOpenHistory: boolean }) {
+function score(value: number | null | undefined): string {
+  return value == null ? "—" : value.toFixed(1);
+}
+
+function PersonDetails({ member: m, canSeeScores }: { member: CurrentCohortMember; canSeeScores: boolean }) {
   return (
     <dl className="grid grid-cols-2 gap-x-8 gap-y-3 lg:grid-cols-4">
       <Field label="Email">{m.email}</Field>
@@ -498,11 +509,11 @@ function PersonDetails({ member: m, canOpenHistory }: { member: CurrentCohortMem
       <Field label="In position since">{formatDate(m.activeEffectiveDate)}</Field>
       <Field label="Stage">{m.stage === "bootcamp" ? "Bootcamp" : "Intermediate"}</Field>
       <Field label="Track set by">{m.overridden ? "An administrator" : "The rules"}</Field>
-      <Field label="BTC score">{m.btcScore === null ? "—" : m.btcScore.toFixed(1)}</Field>
+      {canSeeScores && <Field label="BTC score">{score(m.btcScore)}</Field>}
       <Field label="Bootcamp history">
         {!m.historyId ? (
           "None yet"
-        ) : canOpenHistory ? (
+        ) : canSeeScores ? (
           <Link
             href={`/bootcamp-history/${m.historyId}`}
             onClick={(ev) => ev.stopPropagation()}
