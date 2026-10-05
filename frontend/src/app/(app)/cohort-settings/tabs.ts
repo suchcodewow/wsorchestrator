@@ -1,6 +1,6 @@
 /** The tabs across the top of Cohort Settings. */
 
-import { Network, Settings2, Users, Workflow, type LucideIcon } from "lucide-react";
+import { Contact, Hash, Network, Settings2, Users, Workflow, type LucideIcon } from "lucide-react";
 import type { Access } from "@/lib/roles";
 
 export type CohortSettingsTab = {
@@ -16,6 +16,8 @@ export const COHORT_SETTINGS_TABS: CohortSettingsTab[] = [
   { href: "/cohort-settings/employees", label: "Employees", Icon: Users },
   { href: "/cohort-settings/automation", label: "Automation", Icon: Settings2 },
   { href: "/cohort-settings/organization", label: "Organization", Icon: Workflow },
+  { href: "/cohort-settings/channel-contacts", label: "Additional Channel Contacts", Icon: Contact },
+  { href: "/cohort-settings/slack", label: "Slack", Icon: Hash },
 ];
 
 export function visibleCohortSettingsTabs(access: Access): CohortSettingsTab[] {

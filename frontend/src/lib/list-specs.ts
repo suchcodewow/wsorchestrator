@@ -35,7 +35,16 @@ export type TitleSort = (typeof TITLE_LIST.sorts)[number];
 export const SLACK_CONTACT_LIST = spec(["fullName", "email", "addedBy", "createdAt"]);
 export type SlackContactSort = (typeof SLACK_CONTACT_LIST.sorts)[number];
 
-export const BOOTCAMP_HISTORY_LIST = spec(["btcDate", "fullName", "email"], "desc");
+export const CHANNEL_CONTACT_LIST = spec(["fullName", "email", "addedBy", "createdAt"]);
+export type ChannelContactSort = (typeof CHANNEL_CONTACT_LIST.sorts)[number];
+
+export const SLACK_SYNC_LIST = spec(["startedAt", "triggeredBy", "status"], "desc");
+export type SlackSyncSort = (typeof SLACK_SYNC_LIST.sorts)[number];
+
+export const SLACK_SYNC_CHANGE_LIST = spec(["at", "channelName", "action", "email"]);
+export type SlackSyncChangeSort = (typeof SLACK_SYNC_CHANGE_LIST.sorts)[number];
+
+export const BOOTCAMP_HISTORY_LIST =spec(["btcDate", "fullName", "email"], "desc");
 export type BootcampHistorySort = (typeof BOOTCAMP_HISTORY_LIST.sorts)[number];
 
 /** Bootcamp history narrowed to people still in the employee list, or to those not. */

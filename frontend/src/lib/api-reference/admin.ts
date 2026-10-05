@@ -1,4 +1,4 @@
-import { ASSESSMENT_ATTENDEE_LIST, ASSESSMENT_LIST, AUDIT_LIST, BOOTCAMP_HISTORY_LIST, BOOTCAMP_LIST, CURRENT_COHORT_LIST, DOMAIN_LIST, EMPLOYEE_LIST, HIBOB_SYNC_LIST, HISTORY_STATUSES, JUDGE_LIST, ORGANIZATION_LIST, PREVIOUS_SESSION_LIST, SESSION_COMMENT_LIST, SESSION_TYPE_LIST, SLACK_CONTACT_LIST, TITLE_LIST, USER_LIST, FACILITY_LIST } from "@/lib/list-specs";
+import { ASSESSMENT_ATTENDEE_LIST, ASSESSMENT_LIST, AUDIT_LIST, BOOTCAMP_HISTORY_LIST, BOOTCAMP_LIST, CURRENT_COHORT_LIST, DOMAIN_LIST, EMPLOYEE_LIST, HIBOB_SYNC_LIST, HISTORY_STATUSES, JUDGE_LIST, ORGANIZATION_LIST, PREVIOUS_SESSION_LIST, SESSION_COMMENT_LIST, SESSION_TYPE_LIST, SLACK_CONTACT_LIST, SLACK_SYNC_CHANGE_LIST, SLACK_SYNC_LIST, CHANNEL_CONTACT_LIST, TITLE_LIST, USER_LIST, FACILITY_LIST } from "@/lib/list-specs";
 import { BOOTCAMP_LIMITS, CHECKLIST_LIMITS, EVALS_ASSESSMENT_LIMITS, FACILITY_LIMITS, SCHEDULE_LIMITS } from "@/db/schema";
 import { PAGE_SIZE } from "@/lib/paging";
 import { CHECKLIST_ITEM_ROW } from "./account";
@@ -359,6 +359,111 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           { status: 404, error: "not_found", when: "no one under the Organization Leader has that email" },
           { status: 409, error: "not_undecided", when: "the person already has a track" },
         ],
+      },
+      {
+        method: "GET",
+        path: "/api/cohorts/channel-contacts",
+        summary: "Lists one kind of Additional Channel Contact, a page at a time.",
+        access: "trainingAdmin",
+        token: true,
+        notes:
+          "Bootcamp Contacts (kind sales) are added to the active bootcamp's sales- Slack channels and Engineer Contacts (kind se) to its se- ones, beside the cohort. fullName is as the employee list had them when they were added, and empty for someone not in it. total counts every contact of that kind, whatever the search.",
+        query: [
+          { name: "kind", type: `"sales" | "se"`, required: true, note: "which list" },
+          ...listQuery(CHANNEL_CONTACT_LIST.sorts, "the name, the email or who added them"),
+        ],
+        returns: `{ contacts: { id, kind: "sales" | "se", email, fullName, createdAt, addedBy: string | null }[], ${PAGE_FIELDS}, total: number }`,
+        errors: [{ status: 400, error: "invalid", when: "kind is missing or not sales or se" }],
+      },
+      {
+        method: "POST",
+        path: "/api/cohorts/channel-contacts",
+        summary: "Adds one Additional Channel Contact.",
+        access: "trainingAdmin",
+        token: true,
+        notes:
+          "The email is lowercased. If it belongs to an imported employee, their name is stored with it; anyone else is added by email alone. The next Slack sync invites them.",
+        body: {
+          kind: "json",
+          fields: [
+            { name: "kind", type: `"sales" | "se"`, required: true, note: "sales for a Bootcamp Contact, se for an Engineer Contact" },
+            { name: "email", type: "string", required: true, note: "up to 320 characters" },
+          ],
+        },
+        returns: `{ id, kind: "sales" | "se", email, fullName }`,
+        errors: [
+          { status: 400, error: "invalid", when: "the body does not parse, or email is not an email address" },
+          { status: 409, error: "duplicate", when: "that email is already a contact of that kind" },
+        ],
+      },
+      {
+        method: "DELETE",
+        path: "/api/cohorts/channel-contacts/{id}",
+        summary: "Removes one Additional Channel Contact.",
+        access: "trainingAdmin",
+        token: true,
+        notes: "If the Slack sync invited them as a contact, its next run removes them from those channels unless they still belong there.",
+        params: [{ name: "id", type: "string", required: true, note: "UUID" }],
+        returns: "{ ok: true }",
+        errors: [{ status: 404, error: "not_found", when: "id is not a UUID, or no such contact" }],
+      },
+      {
+        method: "GET",
+        path: "/api/cohorts/slack/sync",
+        summary: "Lists the cohort Slack channel sync's log a page at a time, newest first, with the active bootcamp's channels.",
+        access: "trainingAdmin",
+        token: true,
+        notes:
+          "A run that has said running for over 10 minutes is shown as failed. running says whether a sync is under way, whichever page is asked for; live whether syncs change Slack or are dry runs; configured whether the deployment has a Slack bot token, which is never returned. active is null when no bootcamp is active; a channel's slackChannelId is null until a live sync has found or created it.",
+        query: listQuery(SLACK_SYNC_LIST.sorts, "who started it, the trigger, the status or the error", "desc"),
+        returns: `{ runs: { id, trigger: "schedule" | "manual", triggeredBy: string | null, status: "running" | "succeeded" | "skipped" | "failed", dryRun: boolean, startedAt, finishedAt, invited, removed, notInSlack, failures: number, unfinished: boolean, error: string | null }[], ${PAGE_FIELDS}, running: boolean, live: boolean, configured: boolean, active: { bootcampId, startDate: "YYYY-MM-DD", channels: { kind: "sales_bootcamp" | "se_bootcamp" | "sales_intermediate" | "se_intermediate", name, slackChannelId: string | null, created: boolean }[] } | null }`,
+      },
+      {
+        method: "POST",
+        path: "/api/cohorts/slack/sync",
+        summary: "Syncs the active bootcamp's Slack channels with the Current tab now.",
+        access: "trainingAdmin",
+        token: true,
+        notes:
+          "Also runs after each scheduled HiBob sync. With no bootcamp active the run is skipped. Otherwise it finds or creates the public channels sales-bootcamp-{mon}-{yyyy} and se-bootcamp-{mon}-{yyyy}, and the -intermediate- pair when the bootcamp holds an intermediate class, from its start date; joins each; invites the Current tab's Sales and Engineers at that stage, and the Bootcamp Contacts, to the sales- channel, and its Engineers and the Engineer Contacts to the se- one; and removes anyone it invited earlier who no longer belongs. Undecided people are left out, and no one it did not invite is ever removed. In dry run (see PUT /api/cohorts/slack/settings) it changes nothing and the counts say what it would do. Slack's rate limits can stop a run part-way, when unfinished is true and the next run carries on. Allows 300 seconds; every attempt is logged.",
+        returns: `{ ok: true, runId, status: "succeeded" | "skipped", dryRun: boolean, invited, removed, notInSlack, failures: number, unfinished: boolean }`,
+        errors: [
+          { status: 409, error: "already_running", when: "another sync is running" },
+          { status: 409, error: "not_configured", when: "the deployment has no Slack bot token" },
+          { status: 502, error: "slack_error", when: "Slack refused the token or a call every member would need, such as a missing scope; detail says which" },
+        ],
+      },
+      {
+        method: "GET",
+        path: "/api/cohorts/slack/sync/{id}",
+        summary: "One Slack sync run, and a page of what it did.",
+        access: "trainingAdmin",
+        token: true,
+        notes:
+          "One change per channel created or joined, per person invited, removed or refused, and per email with no Slack account (with an empty channelName). In a dry run each says what would have happened. fullName is the employee list's name for the email now, or null.",
+        params: [{ name: "id", type: "string", required: true, note: "UUID" }],
+        query: listQuery(SLACK_SYNC_CHANGE_LIST.sorts, "the channel, the action, the email, the name or the detail"),
+        returns: `{ run: <as in GET /api/cohorts/slack/sync>, changes: { id, channelName, action: "created" | "joined" | "invited" | "removed" | "not_in_slack" | "failed", email, fullName: string | null, detail: string | null, at }[], ${PAGE_FIELDS} }`,
+        errors: [{ status: 404, error: "not_found", when: "id is not a UUID, or no such run" }],
+      },
+      {
+        method: "GET",
+        path: "/api/cohorts/slack/settings",
+        summary: "Whether the cohort Slack sync is live or a dry run.",
+        access: "trainingAdmin",
+        token: true,
+        returns: "{ live: boolean }",
+      },
+      {
+        method: "PUT",
+        path: "/api/cohorts/slack/settings",
+        summary: "Turns the cohort Slack sync live, or back to a dry run.",
+        access: "trainingAdmin",
+        token: true,
+        notes: "It starts as a dry run. QA shares production's Slack workspace, so leave QA in dry run.",
+        body: { kind: "json", fields: [{ name: "live", type: "boolean", required: true }] },
+        returns: "{ live: boolean }",
+        errors: [{ status: 400, error: "invalid", when: "the body is not that shape" }],
       },
     ],
   },
@@ -1736,8 +1841,8 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "internal",
         token: false,
         notes:
-          "Accepts only a Google-signed OIDC token for HIBOB_SYNC_AUDIENCE from the HIBOB_SYNC_INVOKER service account; either unset refuses every call. Same sync as the manual one.",
-        returns: "{ count: number, skipped: number }",
+          "Accepts only a Google-signed OIDC token for HIBOB_SYNC_AUDIENCE from the HIBOB_SYNC_INVOKER service account; either unset refuses every call. Same sync as the manual one. A successful sync is followed by the cohort Slack channel sync, as POST /api/cohorts/slack/sync does it; its result is slack, and its failure does not fail this call. Allows 300 seconds.",
+        returns: "{ count: number, skipped: number, slack: <as POST /api/cohorts/slack/sync answers, or { ok: false, error, detail }> }",
         errors: [
           { status: 401, error: "unauthorized", when: "the OIDC token is missing, invalid or from someone else" },
           { status: 409, error: "already_running", when: "another sync is running" },

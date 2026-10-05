@@ -107,6 +107,13 @@ variable "deepgram_api_key" {
   default     = ""
 }
 
+variable "slack_bot_token" {
+  description = "Bot token (xoxb-) for the Slack app that keeps each active bootcamp's cohort channels in step with the Cohorts page; it needs users:read, users:read.email, channels:read, channels:join and channels:manage. Stored in Secret Manager as slack-bot-token and read by the app alone. Empty leaves the channel sync off: every run is logged as not configured. QA shares production's Slack workspace, so leave it empty there or keep QA's sync in dry run."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
 variable "hibob_sync_schedule" {
   description = "Cron for the daily HiBob employee sync, in America/New_York."
   type        = string

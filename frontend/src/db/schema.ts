@@ -972,6 +972,8 @@ export const EVALS_SETTINGS_KEYS = {
   activeEffectiveDateAfter: "candidate_active_effective_date_after",
   /** Whole days; see `getDeferralDays`. */
   deferralDays: "deferral_days",
+  /** `true` to let the Slack channel sync change Slack; anything else is a dry run. */
+  slackSyncLive: "slack_sync_live",
 } as const;
 
 /** The deferral window an administrator can set, in whole days; 0 turns deferral off. */
@@ -1119,6 +1121,156 @@ export const BOOTCAMP_LIMITS = { minDays: 1, maxDays: 30, judges: 50 } as const;
 export const BOOTCAMP_DEFAULTS = { btcDays: 4, intDays: 3 } as const;
 
 export type Bootcamp = typeof bootcamps.$inferSelect;
+
+/**
+ * Who is added to the active bootcamp's Slack channels beyond its cohort:
+ * Bootcamp Contacts to the `sales-` channels, Engineer Contacts to the `se-`
+ * ones. One row per email per kind. See `lib/cohorts/slack-sync.ts`.
+ */
+export const CHANNEL_CONTACT_KINDS = ["sales", "se"] as const;
+export type ChannelContactKind = (typeof CHANNEL_CONTACT_KINDS)[number];
+
+export const cohortChannelContacts = pgTable(
+  "cohort_channel_contacts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    kind: text("kind").$type<ChannelContactKind>().notNull(),
+    /** Lowercased. */
+    email: text("email").notNull(),
+    /** As the employee list had it when they were added; empty for someone not in it. */
+    fullName: text("full_name").notNull().default(""),
+    createdBy: text("created_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("cohort_channel_contacts_kind_email_idx").on(t.kind, t.email),
+    check("cohort_channel_contacts_kind_check", sql`${t.kind} in ('sales', 'se')`),
+  ],
+);
+
+export const CHANNEL_CONTACT_LIMITS = { email: 320 } as const;
+
+/**
+ * Each email's Slack user, as `users.lookupByEmail` last answered; a null id
+ * is someone Slack has no account for, asked again after a day. Slack ids
+ * never change, so one found is not asked again.
+ */
+export const slackUsers = pgTable("slack_users", {
+  /** Lowercased. */
+  email: text("email").primaryKey(),
+  slackUserId: text("slack_user_id"),
+  lookedUpAt: timestamp("looked_up_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+/** The Slack channel id behind each cohort channel name, found or created once. */
+export const slackChannels = pgTable("slack_channels", {
+  name: text("name").primaryKey(),
+  slackChannelId: text("slack_channel_id").notNull(),
+  /** Whether the app created it, rather than finding it already there. */
+  created: boolean("created").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+/**
+ * The people the channel sync invited, and so the only ones it may remove:
+ * someone added by hand, or already in the channel, is never touched. A row
+ * goes when the sync removes them or sees they have left.
+ */
+export const slackChannelMembers = pgTable(
+  "slack_channel_members",
+  {
+    slackChannelId: text("slack_channel_id").notNull(),
+    slackUserId: text("slack_user_id").notNull(),
+    /** Lowercased; who they were invited as. */
+    email: text("email").notNull(),
+    addedAt: timestamp("added_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.slackChannelId, t.slackUserId] })],
+);
+
+export const SLACK_SYNC_TRIGGERS = ["schedule", "manual"] as const;
+export type SlackSyncTrigger = (typeof SLACK_SYNC_TRIGGERS)[number];
+
+/** `skipped` is a run with no active bootcamp to sync. */
+export const SLACK_SYNC_STATUSES = ["running", "succeeded", "skipped", "failed"] as const;
+export type SlackSyncStatus = (typeof SLACK_SYNC_STATUSES)[number];
+
+/** One run of the cohort channel sync and how it ended. */
+export const slackSyncRuns = pgTable(
+  "slack_sync_runs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    trigger: text("trigger").$type<SlackSyncTrigger>().notNull(),
+    /** Who pressed the button; null for a scheduled run. */
+    triggeredBy: text("triggered_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    status: text("status").$type<SlackSyncStatus>().notNull().default("running"),
+    /** A dry run reads Slack and logs what it would do, but changes nothing. */
+    dryRun: boolean("dry_run").notNull(),
+    bootcampId: uuid("bootcamp_id").references(() => bootcamps.id, {
+      onDelete: "set null",
+    }),
+    startedAt: timestamp("started_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+    invited: integer("invited").notNull().default(0),
+    removed: integer("removed").notNull().default(0),
+    /** Emails Slack has no account for. */
+    notInSlack: integer("not_in_slack").notNull().default(0),
+    /** Changes Slack refused. */
+    failures: integer("failures").notNull().default(0),
+    /** Stopped before its time ran out; the next run picks up where it left off. */
+    unfinished: boolean("unfinished").notNull().default(false),
+    /** Why it failed, or why it was skipped. */
+    error: text("error"),
+  },
+  (t) => [
+    index("slack_sync_runs_started_at_idx").on(t.startedAt),
+    // One sync at a time: a second insert while one runs is a conflict.
+    uniqueIndex("slack_sync_runs_one_running_idx")
+      .on(t.status)
+      .where(sql`${t.status} = 'running'`),
+    check("slack_sync_runs_trigger_check", sql`${t.trigger} in ('schedule', 'manual')`),
+    check(
+      "slack_sync_runs_status_check",
+      sql`${t.status} in ('running', 'succeeded', 'skipped', 'failed')`,
+    ),
+  ],
+);
+
+export const SLACK_SYNC_ACTIONS = ["created", "joined", "invited", "removed", "not_in_slack", "failed"] as const;
+export type SlackSyncAction = (typeof SLACK_SYNC_ACTIONS)[number];
+
+/** What one run did, or in a dry run would have done, to each channel and person. */
+export const slackSyncChanges = pgTable(
+  "slack_sync_changes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    runId: uuid("run_id")
+      .notNull()
+      .references(() => slackSyncRuns.id, { onDelete: "cascade" }),
+    channelName: text("channel_name").notNull(),
+    action: text("action").$type<SlackSyncAction>().notNull(),
+    /** Lowercased; empty for a change to the channel itself. */
+    email: text("email").notNull().default(""),
+    /** Slack's error, for a failure. */
+    detail: text("detail"),
+    at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("slack_sync_changes_run_idx").on(t.runId, t.at)],
+);
 
 /**
  * Guest judges for one bootcamp: anyone from the employee list, added in the

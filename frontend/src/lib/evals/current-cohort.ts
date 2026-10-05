@@ -235,6 +235,26 @@ export async function listCurrentCohort(
   return toPage(rows, query.page);
 }
 
+/**
+ * Everyone on the Current tab on the Sales or Engineer track, by stage, for
+ * the Slack channel sync: the undecided and the deferred are left out. Not a
+ * page, since the sync needs all of them; it is one email per candidate.
+ */
+export async function currentCohortEmails(): Promise<
+  { email: string; stage: CandidateStage; track: "sales" | "engineer" }[]
+> {
+  const cutoffs = await getCandidateCutoffs();
+  return db
+    .select({
+      email: sql<string>`lower(${e.email})`,
+      stage: candidateStage,
+      track: sql<"sales" | "engineer">`${e.track}`,
+    })
+    .from(e)
+    .leftJoin(h, sql`${h.email} = ${e.email}`)
+    .where(and(isCandidate(cutoffs), inArray(e.track, ["sales", "engineer"])));
+}
+
 /** How many are in each stage on each track, as of which sync, and the rules that drew them. */
 export async function currentCohortSummary(): Promise<CurrentCohortSummary> {
   const cutoffs = await getCandidateCutoffs();

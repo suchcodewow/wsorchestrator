@@ -72,6 +72,25 @@ See [Where secrets and settings live](environments.md#where-secrets-and-settings
 Terraform declares `ignore_changes` on the app image, so an apply does **not**
 revert a pipeline-deployed image. Verified: revisions share the same digest.
 
+**The cohort Slack channel sync starts in dry run, and its bot needs more
+scopes than the Sheet's had.** After each scheduled HiBob sync, and only while
+a bootcamp is active, `lib/cohorts/slack-sync.ts` keeps
+`sales-bootcamp-{mon}-{yyyy}`, `se-bootcamp-…` and the `-intermediate-` pair
+in step with Cohorts → Current and Cohort Settings → Additional Channel
+Contacts. It removes only people it invited itself (`slack_channel_members`),
+never anyone added by hand. Every run is a dry run until someone presses
+*Go live* on Cohort Settings → Slack. The token is `SLACK_BOT_TOKEN`, from
+`slack_bot_token` / `tf_slack_bot_token`, set on production's workspace only
+(see [What the two share](environments.md#what-the-two-share-and-why-that-matters)).
+The bot needs `users:read`, `users:read.email`, `channels:read`,
+`channels:manage` and `channels:join`. The Sheet's old bot
+(`sheets_to_slack_conne`) has only the first two and `channels:manage`, so on
+that token a run fails with `conversations.list answered missing_scope (needs
+channels:read)`. A Slack admin must grant the rest and reinstall. Sending a DM
+would also need `chat:write` and `im:write`. Slack keeps an archived channel's
+name taken. A run that meets one logs a failure for that channel and leaves
+it alone; unarchive it or rename it.
+
 **This machine class has `tofu`, not `terraform`.** The Makefile and bootstrap
 script auto-detect which is present.
 

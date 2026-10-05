@@ -30,6 +30,8 @@ locals {
     # Deepgram has no non-secret half to gate on. Whether a key was given is
     # not itself a secret, so nonsensitive() lifts the taint off the test.
     nonsensitive(var.deepgram_api_key != "") ? ["deepgram-api-key"] : [],
+    # Likewise the Slack bot token.
+    nonsensitive(var.slack_bot_token != "") ? ["slack-bot-token"] : [],
   )
 
   # id -> value, holding the (mostly sensitive) payloads. Only ever looked up by
@@ -47,6 +49,7 @@ locals {
     "aws-secret-access-key"      = var.aws_secret_access_key
     "hibob-token"                = var.hibob_token
     "deepgram-api-key"           = var.deepgram_api_key
+    "slack-bot-token"            = var.slack_bot_token
   }
 
   # Secrets the runner/reaper/scheduler jobs read. The runner has no use for the
