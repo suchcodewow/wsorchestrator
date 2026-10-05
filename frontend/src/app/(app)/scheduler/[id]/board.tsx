@@ -10,8 +10,7 @@
 
 import { useRef, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
-import { AlertTriangle, MessageSquare, Plus } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { AlertTriangle, MessageSquare } from "lucide-react";
 import { SCHEDULE_LIMITS, type ScheduleTrack } from "@/db/schema";
 import type { SessionRow } from "@/lib/scheduler/schedule";
 import { SESSION_STYLES } from "@/lib/scheduler/session-style";
@@ -46,11 +45,11 @@ export type BoardProps = {
   /** The session being resized, to label its new length as it changes. */
   resizingId: string | null;
   onOpen: (session: SessionRow) => void;
-  /** Adds a session to a column, at `start` or after its last one. */
-  onAdd: (column: BoardColumn, start?: number) => void;
+  /** Adds a session to a column at `start`. */
+  onAdd: (column: BoardColumn, start: number) => void;
   onResize: (id: string, minutes: number) => void;
   onResizeEnd: (id: string) => void;
-  /** Anything more to show at the top of a column, beside its add button. */
+  /** Anything more to show at the top of a column. */
   headerAction?: (column: BoardColumn) => ReactNode;
 };
 
@@ -114,21 +113,7 @@ function Column({
           <span className="font-medium">{column.title}</span>
           <span className="text-muted-foreground"> · {column.subtitle}</span>
         </div>
-        <div className="flex shrink-0 items-center">
-          {props.headerAction?.(column)}
-          {props.canManage && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-7 shrink-0"
-              aria-label={`Add a session to ${column.title}, ${column.subtitle}`}
-              disabled={column.sessions.length >= SCHEDULE_LIMITS.sessionsPerDay}
-              onClick={() => props.onAdd(column)}
-            >
-              <Plus className="size-4" />
-            </Button>
-          )}
-        </div>
+        <div className="flex shrink-0 items-center">{props.headerAction?.(column)}</div>
       </div>
       <div
         ref={setNodeRef}
