@@ -11,7 +11,8 @@
  * server saves by the same rules.
  */
 
-import { CHECKLIST_PREP_DAY, SCHEDULE_LIMITS, type ScheduleTrack, type SessionAudience, type SessionKind } from "@/db/schema";
+import { AUDIENCE_TRACKS, CHECKLIST_PREP_DAY, SCHEDULE_LIMITS, type ScheduleTrack, type SessionAudience, type SessionKind } from "@/db/schema";
+import type { ClassLists } from "@/lib/scheduler/attendees";
 
 export const TRACK_LABELS: Record<ScheduleTrack, string> = {
   btc: "Bootcamp",
@@ -63,6 +64,19 @@ export function stageOf(track: ScheduleTrack): "bootcamp" | "intermediate" {
 /** How many days a track runs: the SE tracks follow the class they break out of. Null when the bootcamp has no such class. */
 export function trackDays(track: ScheduleTrack, bootcamp: { btcDays: number; intDays: number | null }): number | null {
   return track === "btc" || track === "btc_se" ? bootcamp.btcDays : bootcamp.intDays;
+}
+
+/**
+ * Who a track's day is taught to: a class has its sales attendees and its
+ * engineers, an SE track its engineers alone. The class lists stop at
+ * `SCHEDULE_LIMITS.groupPeople` each, so a full one reads as "100+".
+ */
+export function attendeeCount(classes: ClassLists, track: ScheduleTrack): { count: string; noun: string } {
+  const se = track === "btc_se" || track === "int_se";
+  const lists = AUDIENCE_TRACKS[se ? "engineers" : "both"].map((t) => classes[stageOf(track)][t]);
+  const n = lists.reduce((sum, l) => sum + l.length, 0);
+  const capped = lists.some((l) => l.length >= SCHEDULE_LIMITS.groupPeople);
+  return { count: `${n}${capped ? "+" : ""}`, noun: se ? (n === 1 ? "engineer" : "engineers") : n === 1 ? "attendee" : "attendees" };
 }
 
 /** Whether a track-day can hold checklist items: one the track runs, or Bootcamp's Prep Day. */

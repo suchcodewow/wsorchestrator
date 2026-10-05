@@ -27,7 +27,7 @@ import {
   type DragStartEvent,
   type KeyboardCoordinateGetter,
 } from "@dnd-kit/core";
-import { AlertTriangle, CalendarDays, Check, ChevronLeft, ChevronRight, Copy, Loader2, Pencil, Rows3 } from "lucide-react";
+import { AlertTriangle, CalendarDays, Check, ChevronLeft, ChevronRight, Copy, Loader2, Pencil, Printer, Rows3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { AUDIENCE_TRACKS, SCHEDULE_LIMITS, SCHEDULE_TRACKS, type ScheduleTrack } from "@/db/schema";
@@ -39,6 +39,7 @@ import type { SessionTypeRow } from "@/lib/scheduler/session-types";
 import {
   GROUP_NAMES,
   TRACK_LABELS,
+  attendeeCount,
   dayDate,
   describeClash,
   findClashes,
@@ -63,7 +64,7 @@ type View = ScheduleViewMode;
 
 const VIEWS: { id: View; label: string; icon: typeof Rows3 }[] = [
   { id: "day", label: "All Tracks", icon: Rows3 },
-  { id: "week", label: "One track", icon: CalendarDays },
+  { id: "week", label: "One Track", icon: CalendarDays },
 ];
 
 const SAVE_DELAY = 700;
@@ -358,6 +359,16 @@ export function ScheduleView({
     await reload();
   };
 
+  /** Opens the print page in a tab of its own, once what is waiting to save has saved, so it prints the board as it is. */
+  const printView = async (query: string) => {
+    // Opened now, while the click still counts, so a popup blocker lets it through.
+    const tab = window.open("", "_blank");
+    await flush();
+    const url = `/scheduler/${bootcamp.id}/print?${query}`;
+    if (tab) tab.location.href = url;
+    else window.open(url, "_blank");
+  };
+
   return (
     <motion.div variants={staggerParent(0.05)} initial="hidden" animate="show" className="space-y-4">
       <motion.div variants={riseChild} className="flex flex-wrap items-center justify-between gap-3 select-none">
@@ -465,6 +476,16 @@ export function ScheduleView({
               Edit
             </Button>
           )}
+          <Button
+            variant="outline"
+            size="icon"
+            className="size-8 rounded-full"
+            aria-label={view === "week" ? `Print ${TRACK_LABELS[shownTrack]}, every day` : `Print Day ${day}, every track`}
+            title={view === "week" ? `Print ${TRACK_LABELS[shownTrack]}, every day` : `Print Day ${day}, every track`}
+            onClick={() => void printView(view === "week" ? `track=${shownTrack}` : `day=${day}`)}
+          >
+            <Printer />
+          </Button>
         </div>
 
         <div className="flex flex-wrap items-center gap-3 text-sm">
@@ -647,19 +668,6 @@ export function ScheduleView({
     const session = at ? dayOf(days, at.key)[at.index] : undefined;
     if (session) setTarget({ mode: "edit", session });
   }
-}
-
-/**
- * Who a track's day is taught to: a class has its sales attendees and its
- * engineers, an SE track its engineers alone. The class lists stop at
- * `SCHEDULE_LIMITS.groupPeople` each, so a full one reads as "100+".
- */
-function attendeeCount(classes: ClassLists, track: ScheduleTrack): { count: string; noun: string } {
-  const se = track === "btc_se" || track === "int_se";
-  const lists = AUDIENCE_TRACKS[se ? "engineers" : "both"].map((t) => classes[stageOf(track)][t]);
-  const n = lists.reduce((sum, l) => sum + l.length, 0);
-  const capped = lists.some((l) => l.length >= SCHEDULE_LIMITS.groupPeople);
-  return { count: `${n}${capped ? "+" : ""}`, noun: se ? (n === 1 ? "engineer" : "engineers") : n === 1 ? "attendee" : "attendees" };
 }
 
 /** The column under the pointer; for a card moved by keyboard, the one it overlaps most. */
