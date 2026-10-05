@@ -1,13 +1,15 @@
 /**
  * When sessions happen, where a moved one lands, and what clashes. Day N of
  * every track is the same day, so a person or room in two overlapping
- * sessions across tracks clashes.
+ * sessions across tracks clashes, and so do the attendees of a class and its
+ * SE track taught two things at once.
  */
 
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  audienceClashes,
   busyDuring,
   dayTotal,
   dropAt,
@@ -28,7 +30,7 @@ const john = { email: "john@example.com", fullName: "John Doe", roomId: null };
 const jane = { email: "jane@example.com", fullName: "Jane Roe", roomId: null };
 
 function session(id: string, over: Partial<ClashSession> = {}): ClashSession {
-  return { id, track: "btc", day: 1, start: 480, minutes: 60, kind: "main", name: id, roomId: null, staff: [], ...over };
+  return { id, track: "btc", day: 1, start: 480, minutes: 60, kind: "main", audience: "both", name: id, roomId: null, staff: [], ...over };
 }
 
 /** A day as `id@start` in start order. */
@@ -207,5 +209,54 @@ describe("clashes", () => {
     assert.deepEqual([...busy.rooms.keys()], ["stanford"]);
     const self = busyDuring(placed, { day: 1, start: 480, end: 540, excludeId: "teach" });
     assert.equal(self.people.size + self.rooms.size, 0);
+  });
+});
+
+describe("audience clashes", () => {
+  test("a Bootcamp session for both clashes with an SE Bootcamp session for engineers beside it", () => {
+    const placed = place([
+      [session("overview")],
+      [session("demo", { track: "btc_se", audience: "engineers", start: 510 })],
+    ]);
+    const clashes = findClashes(placed);
+    assert.deepEqual(clashes.get("overview")?.map((c) => [c.sessionId, c.what]), [["demo", { kind: "audience", group: "engineers" }]]);
+    assert.deepEqual(clashes.get("demo")?.map((c) => [c.sessionId, c.what]), [["overview", { kind: "audience", group: "engineers" }]]);
+  });
+
+  test("sales on Bootcamp while engineers break out is the plan, not a clash", () => {
+    const placed = place([[session("discovery", { audience: "sales" })], [session("demo", { track: "btc_se", audience: "engineers" })]]);
+    assert.equal(findClashes(placed).size, 0);
+  });
+
+  test("two sessions for both clash once for each group", () => {
+    const placed = place([[session("a")], [session("b", { track: "btc_se" })]]);
+    assert.deepEqual(
+      findClashes(placed).get("a")?.map((c) => c.what),
+      [
+        { kind: "audience", group: "sales" },
+        { kind: "audience", group: "engineers" },
+      ],
+    );
+  });
+
+  test("Bootcamp and SE Intermediate are different people", () => {
+    const placed = place([[session("a")], [session("b", { track: "int_se", audience: "engineers" })]]);
+    assert.equal(findClashes(placed).size, 0);
+  });
+
+  test("an unstructured session teaches no one: SE's \"With Bootcamp\" does not clash with what it points at", () => {
+    const placed = place([
+      [session("exam"), session("lunch", { start: 540, kind: "unstructured" })],
+      [session("with", { track: "btc_se", kind: "unstructured", audience: "engineers" }), session("demo", { track: "btc_se", start: 540, audience: "engineers" })],
+    ]);
+    assert.equal(findClashes(placed).size, 0);
+  });
+
+  test("the dialog sees the same clash for a session not yet saved, and leaves out the one being edited", () => {
+    const placed = place([[session("overview")], [session("demo", { track: "btc_se", audience: "engineers" })]]);
+    const slot = { day: 1, start: 480, end: 540 };
+    assert.deepEqual(audienceClashes(placed, { track: "btc", kind: "main", audience: "both" }, slot).map((c) => c.sessionId), ["demo"]);
+    assert.deepEqual(audienceClashes(placed, { track: "btc", kind: "main", audience: "sales" }, slot), []);
+    assert.deepEqual(audienceClashes(placed, { track: "btc_se", kind: "main", audience: "engineers" }, { ...slot, excludeId: "demo" }).map((c) => c.sessionId), ["overview"]);
   });
 });

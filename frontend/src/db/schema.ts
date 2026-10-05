@@ -1212,6 +1212,21 @@ export type ScheduleTrack = (typeof SCHEDULE_TRACKS)[number];
 export const SESSION_KINDS = ["main", "breakout", "unstructured"] as const;
 export type SessionKind = (typeof SESSION_KINDS)[number];
 
+/**
+ * Who a session is taught to. A class and its SE track are the same people,
+ * so a session for engineers clashes with one beside it for engineers or
+ * both, and likewise for sales; see `timeline.ts`.
+ */
+export const SESSION_AUDIENCES = ["both", "sales", "engineers"] as const;
+export type SessionAudience = (typeof SESSION_AUDIENCES)[number];
+
+/** The `employees.track`s each audience is taught to. */
+export const AUDIENCE_TRACKS: Record<SessionAudience, readonly ("sales" | "engineer")[]> = {
+  both: ["sales", "engineer"],
+  sales: ["sales"],
+  engineers: ["engineer"],
+};
+
 /** The colors a session can be drawn in; `session-style.ts` gives each its classes. */
 export const SESSION_COLORS = ["slate", "red", "orange", "amber", "green", "teal", "blue", "violet", "pink"] as const;
 export type SessionColor = (typeof SESSION_COLORS)[number];
@@ -1238,6 +1253,8 @@ export const SCHEDULE_LIMITS = {
   /** The people one comment can tag. */
   mentions: 20,
   types: 50,
+  /** The attendees one breakout's groups hold, and the most its class lists for them. */
+  groupPeople: 100,
 } as const;
 
 /**
@@ -1291,6 +1308,8 @@ export const scheduleSessions = pgTable(
     start: integer("start_minute").notNull(),
     minutes: integer("minutes").notNull(),
     kind: text("kind").$type<SessionKind>().notNull(),
+    /** Ignored for an unstructured session, which teaches no one. */
+    audience: text("audience").$type<SessionAudience>().notNull().default("both"),
     /** The type it was started from, if any; nothing follows from it afterwards. */
     typeId: uuid("type_id").references(() => sessionTypes.id, { onDelete: "set null" }),
     name: text("name").notNull(),
@@ -1311,6 +1330,7 @@ export const scheduleSessions = pgTable(
     index("schedule_sessions_day_idx").on(t.bootcampId, t.track, t.day, t.start),
     check("schedule_sessions_track_check", sql`${t.track} in ('btc', 'int', 'btc_se', 'int_se')`),
     check("schedule_sessions_kind_check", sql`${t.kind} in ('main', 'breakout', 'unstructured')`),
+    check("schedule_sessions_audience_check", sql`${t.audience} in ('both', 'sales', 'engineers')`),
     check("schedule_sessions_day_check", sql`${t.day} between 1 and 30`),
     check("schedule_sessions_minutes_check", sql`${t.minutes} between 15 and 600 and ${t.minutes} % 15 = 0`),
     check("schedule_sessions_start_check", sql`${t.start} >= 0 and ${t.start} % 15 = 0 and ${t.start} + ${t.minutes} <= 1440`),
@@ -1344,6 +1364,30 @@ export const scheduleSessionStaff = pgTable(
       .on(t.sessionId)
       .where(sql`${t.leader}`),
   ],
+);
+
+/**
+ * Who goes with whom in a breakout: each attendee taught it, by email, and
+ * the instructor whose room they go to to be evaluated. An attendee is in one
+ * group at most; one in none is not yet assigned. Only a breakout keeps any,
+ * and only with instructors still on its staff.
+ */
+export const scheduleSessionGroups = pgTable(
+  "schedule_session_groups",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    sessionId: uuid("session_id")
+      .notNull()
+      .references(() => scheduleSessions.id, { onDelete: "cascade" }),
+    /** Lowercased. */
+    email: text("email").notNull(),
+    /** As the employee list had it when they were assigned. */
+    fullName: text("full_name").notNull().default(""),
+    /** Lowercased; one of the session's staff. */
+    instructorEmail: text("instructor_email").notNull(),
+    position: integer("position").notNull().default(0),
+  },
+  (t) => [uniqueIndex("schedule_session_groups_email_idx").on(t.sessionId, t.email)],
 );
 
 /** A note on a session, kept with who wrote it and when. */

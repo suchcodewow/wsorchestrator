@@ -429,6 +429,14 @@ const ROUTES: RouteCase[] = [
     body: () => ({ minutes: 7 }),
   },
   { method: "DELETE", path: `/api/scheduler/bootcamps/${MISSING}/sessions/${MISSING}`, allowed: canManageTrainingSettings },
+  { method: "GET", path: `/api/scheduler/bootcamps/${MISSING}/attendees?track=btc`, allowed: canUseTraining },
+  { method: "GET", path: `/api/scheduler/bootcamps/${MISSING}/sessions/${MISSING}/groups`, allowed: canUseTraining },
+  {
+    method: "PUT",
+    path: `/api/scheduler/bootcamps/${MISSING}/sessions/${MISSING}/groups`,
+    allowed: canManageTrainingSettings,
+    body: () => ({ groups: [] }),
+  },
   { method: "GET", path: `/api/scheduler/bootcamps/${MISSING}/sessions/${MISSING}/comments`, allowed: canUseTraining },
   {
     method: "POST",

@@ -3,13 +3,15 @@
  * own start, on the quarter hour; the sessions of one track-day never
  * overlap, and the time between them is unscheduled. Day N of every track is
  * the same calendar day, so two sessions clash when they share a day number,
- * overlap in time, and need the same person or the same room.
+ * overlap in time, and need the same person or the same room. A class and
+ * its SE track are taught to the same people, so two sessions on them also
+ * clash when both are taught to engineers, or both to sales.
  *
  * Pure, so the schedule page recomputes it as a session is dragged and the
  * server saves by the same rules.
  */
 
-import { SCHEDULE_LIMITS, type ScheduleTrack, type SessionKind } from "@/db/schema";
+import { SCHEDULE_LIMITS, type ScheduleTrack, type SessionAudience, type SessionKind } from "@/db/schema";
 
 export const TRACK_LABELS: Record<ScheduleTrack, string> = {
   btc: "Bootcamp",
@@ -25,10 +27,33 @@ export const KIND_LABELS: Record<SessionKind, string> = {
 };
 
 export const KIND_HINTS: Record<SessionKind, string> = {
-  main: "One leader, any other instructors, one room",
-  breakout: "One leader and other instructors, a room for each",
-  unstructured: "No instructors and no room",
+  main: "One room",
+  breakout: "Multi-room",
+  unstructured: "No rooms",
 };
+
+export const AUDIENCE_LABELS: Record<SessionAudience, string> = {
+  both: "Both",
+  sales: "Sales",
+  engineers: "Engineers",
+};
+
+/** The groups of attendees a session can be taught to; "both" is each of them. */
+export type AudienceGroup = Exclude<SessionAudience, "both">;
+
+/** Who is in two sessions at once, as the subject of a sentence. */
+export const GROUP_NAMES: Record<AudienceGroup, string> = {
+  sales: "Sales attendees",
+  engineers: "Engineers",
+};
+
+/** Who a new session on `track` is for, until it is changed: engineers on an SE track, both on a class. */
+export function defaultAudience(track: ScheduleTrack): SessionAudience {
+  return track === "btc_se" || track === "int_se" ? "engineers" : "both";
+}
+
+/** The class a track's attendees belong to: an SE track, the class it breaks out of. */
+const classOf = (track: ScheduleTrack): ScheduleTrack => (track === "btc_se" ? "btc" : track === "int_se" ? "int" : track);
 
 /** How many days a track runs: the SE tracks follow the class they break out of. Null when the bootcamp has no such class. */
 export function trackDays(track: ScheduleTrack, bootcamp: { btcDays: number; intDays: number | null }): number | null {
@@ -157,10 +182,17 @@ export type ClashSession = {
   start: number;
   minutes: number;
   kind: SessionKind;
+  audience: SessionAudience;
   name: string;
   roomId: string | null;
   staff: readonly { email: string; fullName: string; roomId: string | null }[];
 };
+
+/** The groups a session is taught to. An unstructured one teaches no one, whatever it was saved with. */
+export function groupsOf(s: Pick<ClashSession, "kind" | "audience">): AudienceGroup[] {
+  if (s.kind === "unstructured") return [];
+  return s.audience === "both" ? ["sales", "engineers"] : [s.audience];
+}
 
 /** The emails a session takes up. An unstructured one takes none, whatever it was saved with. */
 export function peopleOf(s: Pick<ClashSession, "kind" | "staff">): string[] {
@@ -190,8 +222,11 @@ export type Clash = {
   day: number;
   start: number;
   end: number;
-  /** The person or room the two share. */
-  what: { kind: "person"; email: string; fullName: string } | { kind: "room"; roomId: string };
+  /** The person, room or attendees the two share. */
+  what:
+    | { kind: "person"; email: string; fullName: string }
+    | { kind: "room"; roomId: string }
+    | { kind: "audience"; group: AudienceGroup };
 };
 
 const overlaps = (a: { start: number; end: number }, b: { start: number; end: number }) =>
@@ -210,8 +245,19 @@ function clashOf(other: Placed, what: Clash["what"]): Clash {
 }
 
 /**
+ * The groups both sessions teach, when they are on a class and its SE track:
+ * those attendees cannot be in both. Two on one track-day never overlap.
+ */
+function sharedGroups(a: Pick<ClashSession, "track" | "kind" | "audience">, b: Pick<ClashSession, "track" | "kind" | "audience">): AudienceGroup[] {
+  if (a.track === b.track || classOf(a.track) !== classOf(b.track)) return [];
+  const theirs = new Set(groupsOf(b));
+  return groupsOf(a).filter((g) => theirs.has(g));
+}
+
+/**
  * The clashes of every session that has any, by its id: each other session
- * that overlaps it on the same day and shares a person or a room.
+ * that overlaps it on the same day and shares a person, a room, or the
+ * attendees it is taught to.
  */
 export function findClashes(placed: readonly Placed[]): Map<string, Clash[]> {
   const byDay = new Map<number, Placed[]>();
@@ -238,10 +284,32 @@ export function findClashes(placed: readonly Placed[]): Map<string, Clash[]> {
           found.set(a.id, [...(found.get(a.id) ?? []), clashOf(b, what)]);
           found.set(b.id, [...(found.get(b.id) ?? []), clashOf(a, what)]);
         }
+        for (const group of sharedGroups(a, b)) {
+          const what = { kind: "audience" as const, group };
+          found.set(a.id, [...(found.get(a.id) ?? []), clashOf(b, what)]);
+          found.set(b.id, [...(found.get(b.id) ?? []), clashOf(a, what)]);
+        }
       }
     }
   }
   return found;
+}
+
+/**
+ * The sessions beside `session` on its class or SE track, during `slot`, that
+ * teach any of the same attendees. For the session dialog, as its audience,
+ * kind or length is changed.
+ */
+export function audienceClashes(
+  placed: readonly Placed[],
+  session: Pick<ClashSession, "track" | "kind" | "audience">,
+  slot: Slot,
+): Clash[] {
+  return placed.flatMap((s) =>
+    s.id === slot.excludeId || s.day !== slot.day || !overlaps(s, slot)
+      ? []
+      : sharedGroups(session, s).map((group) => clashOf(s, { kind: "audience", group })),
+  );
 }
 
 /** A time a session would take: day, start and end, leaving out the session itself if it is one being edited. */

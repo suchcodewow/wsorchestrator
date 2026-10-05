@@ -6,7 +6,17 @@
  * the schedule's session dialog.
  */
 
-import { Minus, Plus } from "lucide-react";
+import { ChevronDown, Minus, Plus } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioIconItem,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { SCHEDULE_LIMITS, SESSION_COLORS, SESSION_KINDS, type SessionColor, type SessionKind } from "@/db/schema";
@@ -23,7 +33,9 @@ export type SessionLook = {
   description: string;
 };
 
-const LENGTH_PRESETS = [15, 30, 45, 60, 90, 120, 180];
+/** A dropdown's button, drawn as an input. */
+const TRIGGER =
+  "flex h-9 w-full items-center gap-2 rounded-md border border-input bg-transparent px-3 text-sm shadow-xs outline-none transition-colors hover:bg-accent/40 focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-input/30";
 
 export function SessionLookFields({
   id,
@@ -42,28 +54,23 @@ export function SessionLookFields({
 
   return (
     <div className="grid gap-4">
-      <div className="grid gap-1.5">
-        <span id={`${id}-kind`} className="text-sm font-medium">
-          Kind
-        </span>
-        <div role="radiogroup" aria-labelledby={`${id}-kind`} className="grid gap-2 sm:grid-cols-3">
-          {SESSION_KINDS.map((k) => (
-            <button
-              key={k}
-              type="button"
-              role="radio"
-              aria-checked={value.kind === k}
-              onClick={() => set("kind", k)}
-              className={cn(
-                "rounded-lg border px-3 py-2 text-left transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
-                value.kind === k ? "border-brand-border bg-brand/8" : "hover:border-brand-border/60 hover:bg-accent/40",
-              )}
-            >
-              <div className="text-sm font-medium">{KIND_LABELS[k]}</div>
-              <div className="text-xs leading-snug text-muted-foreground">{KIND_HINTS[k]}</div>
-            </button>
-          ))}
-        </div>
+      <div role="radiogroup" aria-label="Kind" className="grid gap-2 sm:grid-cols-3">
+        {SESSION_KINDS.map((k) => (
+          <button
+            key={k}
+            type="button"
+            role="radio"
+            aria-checked={value.kind === k}
+            onClick={() => set("kind", k)}
+            className={cn(
+              "rounded-lg border px-3 py-2 text-left transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
+              value.kind === k ? "border-brand-border bg-brand/8" : "hover:border-brand-border/60 hover:bg-accent/40",
+            )}
+          >
+            <div className="text-sm font-medium">{KIND_LABELS[k]}</div>
+            <div className="text-xs leading-snug text-muted-foreground">{KIND_HINTS[k]}</div>
+          </button>
+        ))}
       </div>
 
       <div className="grid gap-1.5">
@@ -80,105 +87,95 @@ export function SessionLookFields({
         />
       </div>
 
-      <div className="grid gap-1.5">
+      <div className="flex items-center gap-3">
         <span id={`${id}-length`} className="text-sm font-medium">
           Length
         </span>
-        <div className="flex flex-wrap items-center gap-2" aria-labelledby={`${id}-length`}>
-          <div className="flex items-center rounded-md border">
-            <button
-              type="button"
-              aria-label="15 minutes shorter"
-              disabled={value.minutes <= SCHEDULE_LIMITS.slot}
-              onClick={() => step(-SCHEDULE_LIMITS.slot)}
-              className="flex size-9 items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-40"
-            >
-              <Minus className="size-3.5" />
-            </button>
-            <span className="tnum w-20 text-center text-sm font-medium" aria-live="polite">
-              {formatLength(value.minutes)}
-            </span>
-            <button
-              type="button"
-              aria-label="15 minutes longer"
-              disabled={value.minutes >= SCHEDULE_LIMITS.maxMinutes}
-              onClick={() => step(SCHEDULE_LIMITS.slot)}
-              className="flex size-9 items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-40"
-            >
-              <Plus className="size-3.5" />
-            </button>
-          </div>
-          {LENGTH_PRESETS.map((m) => (
-            <button
-              key={m}
-              type="button"
-              onClick={() => set("minutes", m)}
-              className={cn(
-                "rounded-md border px-2 py-1 text-xs tabular-nums transition-colors",
-                value.minutes === m ? "border-brand-border bg-brand/8 text-foreground" : "text-muted-foreground hover:bg-accent",
-              )}
-            >
-              {formatLength(m)}
-            </button>
-          ))}
+        <div role="group" aria-labelledby={`${id}-length`} className="flex items-center rounded-md border">
+          <button
+            type="button"
+            aria-label="15 minutes shorter"
+            disabled={value.minutes <= SCHEDULE_LIMITS.slot}
+            onClick={() => step(-SCHEDULE_LIMITS.slot)}
+            className="flex size-9 items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-40"
+          >
+            <Minus className="size-3.5" />
+          </button>
+          <span className="tnum w-20 text-center text-sm font-medium" aria-live="polite">
+            {formatLength(value.minutes)}
+          </span>
+          <button
+            type="button"
+            aria-label="15 minutes longer"
+            disabled={value.minutes >= SCHEDULE_LIMITS.maxMinutes}
+            onClick={() => step(SCHEDULE_LIMITS.slot)}
+            className="flex size-9 items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-40"
+          >
+            <Plus className="size-3.5" />
+          </button>
         </div>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="grid gap-1.5">
-          <label htmlFor={`${id}-emoji`} className="text-sm font-medium">
+          <span id={`${id}-emoji`} className="text-sm font-medium">
             Icon
-          </label>
-          <div className="flex flex-wrap gap-1">
-            {SESSION_EMOJI.map((e) => (
-              <button
-                key={e}
-                type="button"
-                aria-label={`Icon ${e}`}
-                aria-pressed={value.emoji === e}
-                onClick={() => set("emoji", value.emoji === e ? "" : e)}
-                className={cn(
-                  "flex size-8 items-center justify-center rounded-md border text-base transition-colors",
-                  value.emoji === e ? "border-brand-border bg-brand/8" : "border-transparent hover:bg-accent",
-                )}
-              >
-                {e}
-              </button>
-            ))}
-          </div>
-          <Input
-            id={`${id}-emoji`}
-            value={value.emoji}
-            maxLength={SCHEDULE_LIMITS.emoji}
-            placeholder="Or type or paste any emoji"
-            onChange={(e) => set("emoji", e.target.value)}
-            className="w-56"
-          />
+          </span>
+          <DropdownMenu>
+            <DropdownMenuTrigger aria-labelledby={`${id}-emoji`} className={TRIGGER}>
+              {value.emoji ? <span className="text-base leading-none">{value.emoji}</span> : <span className="text-muted-foreground">No icon</span>}
+              <ChevronDown className="ml-auto size-4 text-muted-foreground" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-(--radix-dropdown-menu-trigger-width) min-w-64">
+              <DropdownMenuRadioGroup value={value.emoji} onValueChange={(e) => set("emoji", e)} className="grid grid-cols-8 gap-0.5">
+                {SESSION_EMOJI.map((e) => (
+                  <DropdownMenuRadioIconItem key={e} value={e} aria-label={`Icon ${e}`} className="size-8 text-base data-[state=checked]:bg-brand/10 data-[state=checked]:ring-1 data-[state=checked]:ring-brand-border">
+                    {e}
+                  </DropdownMenuRadioIconItem>
+                ))}
+              </DropdownMenuRadioGroup>
+              <DropdownMenuSeparator />
+              {/* Keys typed here are the emoji's, not the menu's: no typeahead, no arrow-key moves. */}
+              <Input
+                aria-label="Any other emoji"
+                value={SESSION_EMOJI.includes(value.emoji) ? "" : value.emoji}
+                maxLength={SCHEDULE_LIMITS.emoji}
+                placeholder="Or type or paste any emoji"
+                onChange={(e) => set("emoji", e.target.value)}
+                onKeyDown={(e) => e.key !== "Escape" && e.stopPropagation()}
+                className="h-8"
+              />
+              {value.emoji && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onSelect={() => set("emoji", "")}>No icon</DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
-        <div className="grid content-start gap-1.5">
+        <div className="grid gap-1.5">
           <span id={`${id}-color`} className="text-sm font-medium">
             Color
           </span>
-          <div role="radiogroup" aria-labelledby={`${id}-color`} className="flex flex-wrap gap-1.5">
-            {SESSION_COLORS.map((c) => (
-              <button
-                key={c}
-                type="button"
-                role="radio"
-                aria-checked={value.color === c}
-                aria-label={SESSION_STYLES[c].label}
-                title={SESSION_STYLES[c].label}
-                onClick={() => set("color", c)}
-                className={cn(
-                  "flex size-8 items-center justify-center rounded-full border-2 transition-colors",
-                  value.color === c ? "border-foreground" : "border-transparent hover:border-border",
-                )}
-              >
-                <span className={cn("size-5 rounded-full", SESSION_STYLES[c].dot)} />
-              </button>
-            ))}
-          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger aria-labelledby={`${id}-color`} className={TRIGGER}>
+              <span className={cn("size-4 rounded-full", SESSION_STYLES[value.color].dot)} />
+              {SESSION_STYLES[value.color].label}
+              <ChevronDown className="ml-auto size-4 text-muted-foreground" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-(--radix-dropdown-menu-trigger-width)">
+              <DropdownMenuRadioGroup value={value.color} onValueChange={(c) => set("color", c as SessionColor)}>
+                {SESSION_COLORS.map((c) => (
+                  <DropdownMenuRadioItem key={c} value={c}>
+                    <span className={cn("size-4 rounded-full", SESSION_STYLES[c].dot)} />
+                    {SESSION_STYLES[c].label}
+                  </DropdownMenuRadioItem>
+                ))}
+              </DropdownMenuRadioGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
