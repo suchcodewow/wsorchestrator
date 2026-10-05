@@ -195,6 +195,7 @@ resource "google_cloud_run_v2_service" "app" {
           } : {},
           var.hibob_userid != "" ? { HIBOB_TOKEN = "hibob-token" } : {},
           nonsensitive(var.deepgram_api_key != "") ? { DEEPGRAM_API_KEY = "deepgram-api-key" } : {},
+          nonsensitive(var.slack_bot_token != "") ? { SLACK_BOT_TOKEN = "slack-bot-token" } : {},
         )
         content {
           name = env.key

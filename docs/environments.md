@@ -120,6 +120,7 @@ Only the GCP side is separate. The rest is shared:
 | Google Workspace `harnessevents.io` | QA attendees are real Workspace users, inside `/QA`. |
 | Google OAuth client | One client serves both environments. Each environment's callback URL is registered on it. |
 | HiBob credentials | Both run the nightly HiBob sync. It is read-only against HiBob. |
+| Slack workspace | The cohort Slack channel sync (Cohort Settings → Slack) invites and removes real people. Only production's workspace sets `slack_bot_token` (Harness secret `tf_slack_bot_token`); leave it off `qa_control_plane`, and if QA ever has it, keep QA's sync in dry run. |
 
 Each environment's **Cloud Status** page lists everything in the shared
 accounts, so QA shows production's resources as orphans and production shows
