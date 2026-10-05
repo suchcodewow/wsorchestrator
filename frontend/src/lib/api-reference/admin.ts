@@ -48,7 +48,7 @@ const AUDIENCE_TYPE = `"both" | "sales" | "engineers"`;
 const COLOR_TYPE = `"slate" | "red" | "orange" | "amber" | "green" | "teal" | "blue" | "violet" | "pink"`;
 const MINUTES_NOTE = `a multiple of ${SCHEDULE_LIMITS.slot} from ${SCHEDULE_LIMITS.slot} to ${SCHEDULE_LIMITS.maxMinutes}`;
 
-const SESSION_SHAPE = `{ id, track: ${TRACK_TYPE}, day: number, start: number, minutes: number, kind, audience: ${AUDIENCE_TYPE}, typeId: string | null, name, description, emoji, color, roomId: string | null, staff: { email, fullName, leader: boolean, roomId: string | null }[], comments: number, updatedAt }`;
+const SESSION_SHAPE = `{ id, track: ${TRACK_TYPE}, day: number, start: number, minutes: number, kind, audience: ${AUDIENCE_TYPE}, typeId: string | null, name, description, emoji, color, roomId: string | null, staff: { email, fullName, leader: boolean, roomId: string | null }[], comments: number, largestGroup: number, updatedAt }`;
 
 const CLASH_SHAPE = `{ sessionId, name, track, day, start: number, end: number, what: { kind: "person", email, fullName } | { kind: "room", roomId } | { kind: "audience", group: "sales" | "engineers" } }`;
 

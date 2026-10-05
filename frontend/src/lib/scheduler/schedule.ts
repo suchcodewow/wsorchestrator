@@ -86,6 +86,8 @@ export type SessionRow = {
   /** The leader first, then the other instructors in order. */
   staff: StaffRow[];
   comments: number;
+  /** The most attendees any one instructor's breakout group holds; 0 when nobody is assigned. */
+  largestGroup: number;
   updatedAt: Date;
 };
 
@@ -126,6 +128,12 @@ const staffJson = sql<StaffRow[]>`coalesce((
 
 const commentCount = sql<number>`(select count(*)::int from ${scheduleSessionComments} c where c.session_id = ${scheduleSessions}.id)`;
 
+const largestGroup = sql<number>`coalesce((
+  select max(n) from (
+    select count(*)::int n from ${scheduleSessionGroups} g where g.session_id = ${scheduleSessions}.id group by g.instructor_email
+  ) sizes
+), 0)`;
+
 const SESSION_COLUMNS = {
   id: scheduleSessions.id,
   track: scheduleSessions.track,
@@ -142,6 +150,7 @@ const SESSION_COLUMNS = {
   roomId: scheduleSessions.roomId,
   staff: staffJson,
   comments: commentCount,
+  largestGroup,
   updatedAt: scheduleSessions.updatedAt,
 };
 

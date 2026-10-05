@@ -10,8 +10,7 @@
 
 import { useRef, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
-import { AlertTriangle, MessageSquare, Plus } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { AlertTriangle, MessageSquare } from "lucide-react";
 import { SCHEDULE_LIMITS, type ScheduleTrack } from "@/db/schema";
 import type { SessionRow } from "@/lib/scheduler/schedule";
 import { SESSION_STYLES } from "@/lib/scheduler/session-style";
@@ -46,11 +45,11 @@ export type BoardProps = {
   /** The session being resized, to label its new length as it changes. */
   resizingId: string | null;
   onOpen: (session: SessionRow) => void;
-  /** Adds a session to a column, at `start` or after its last one. */
-  onAdd: (column: BoardColumn, start?: number) => void;
+  /** Adds a session to a column at `start`. */
+  onAdd: (column: BoardColumn, start: number) => void;
   onResize: (id: string, minutes: number) => void;
   onResizeEnd: (id: string) => void;
-  /** Anything more to show at the top of a column, beside its add button. */
+  /** Anything more to show at the top of a column. */
   headerAction?: (column: BoardColumn) => ReactNode;
 };
 
@@ -114,21 +113,7 @@ function Column({
           <span className="font-medium">{column.title}</span>
           <span className="text-muted-foreground"> · {column.subtitle}</span>
         </div>
-        <div className="flex shrink-0 items-center">
-          {props.headerAction?.(column)}
-          {props.canManage && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-7 shrink-0"
-              aria-label={`Add a session to ${column.title}, ${column.subtitle}`}
-              disabled={column.sessions.length >= SCHEDULE_LIMITS.sessionsPerDay}
-              onClick={() => props.onAdd(column)}
-            >
-              <Plus className="size-4" />
-            </Button>
-          )}
-        </div>
+        <div className="flex shrink-0 items-center">{props.headerAction?.(column)}</div>
       </div>
       <div
         ref={setNodeRef}
@@ -261,10 +246,26 @@ export function SessionFace({
       : s.kind === "breakout"
         ? s.staff.flatMap((p) => (p.roomId ? [roomNames.get(p.roomId) ?? "A removed room"] : []))
         : [];
+  const pace = s.kind === "breakout" ? paceOf(s.minutes, s.largestGroup) : null;
+  const people = [leader && `${leader.fullName}${s.staff.length > 1 ? ` +${s.staff.length - 1}` : ""}`, rooms.join(", ")]
+    .filter(Boolean)
+    .join(" · ");
+
+  // The lines under the name, each shown only when the card is tall enough for it and those above it.
+  const lines: { key: string; text: string; className?: string }[] = [
+    { key: "time", text: `${formatClock(start)}–${formatClock(end)}`, className: "tabular-nums" },
+    ...(pace ? [{ key: "pace", text: pace, className: "tabular-nums" }] : []),
+    ...(people ? [{ key: "people", text: people }] : []),
+    ...(wrong.length > 0
+      ? [{ key: "wrong", text: wrong.length === 1 ? wrong[0]! : `${wrong.length} issues`, className: "font-medium text-red-700 dark:text-red-400" }]
+      : []),
+  ];
+  const fits = Math.max(0, Math.floor((height - 24) / 16));
 
   const title = [
     `${s.emoji ? `${s.emoji} ` : ""}${s.name}`,
     `${formatClock(start)}–${formatClock(end)} (${formatLength(s.minutes)})`,
+    ...(pace ? [`${pace}, for the largest group of ${s.largestGroup}`] : []),
     ...(leader ? [`Led by ${leader.fullName}${s.staff.length > 1 ? ` with ${s.staff.length - 1} more` : ""}`] : []),
     ...(rooms.length > 0 ? [rooms.join(", ")] : []),
     ...wrong.map((w) => `⚠ ${w}`),
@@ -297,36 +298,25 @@ export function SessionFace({
             {s.emoji}
           </span>
         )}
-        <span className={cn("min-w-0 flex-1 truncate leading-tight", density === "condensed" ? "text-[11px]" : "text-xs font-medium")}>
+        <span className={cn("min-w-0 flex-1 truncate leading-tight", density === "condensed" ? "text-[11px]" : "text-[13px] font-medium")}>
           {s.name}
         </span>
         {density === "detailed" && (
-          <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">{formatLength(s.minutes)}</span>
+          <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{formatLength(s.minutes)}</span>
         )}
         {s.comments > 0 && density === "detailed" && (
-          <span className="flex shrink-0 items-center gap-0.5 text-[11px] text-muted-foreground">
+          <span className="flex shrink-0 items-center gap-0.5 text-xs text-muted-foreground">
             <MessageSquare className="size-3" />
             {s.comments}
           </span>
         )}
       </div>
-      {density === "detailed" && height >= 40 && (
-        <div className="truncate text-[11px] tabular-nums text-muted-foreground">
-          {formatClock(start)}–{formatClock(end)}
-        </div>
-      )}
-      {density === "detailed" && height >= 58 && (leader || rooms.length > 0) && (
-        <div className="truncate text-[11px] text-muted-foreground">
-          {[leader && `${leader.fullName}${s.staff.length > 1 ? ` +${s.staff.length - 1}` : ""}`, rooms.join(", ")]
-            .filter(Boolean)
-            .join(" · ")}
-        </div>
-      )}
-      {density === "detailed" && height >= 76 && wrong.length > 0 && (
-        <div className="truncate text-[11px] font-medium text-red-700 dark:text-red-400">
-          {wrong.length === 1 ? wrong[0] : `${wrong.length} issues`}
-        </div>
-      )}
+      {density === "detailed" &&
+        lines.slice(0, fits).map((l) => (
+          <div key={l.key} className={cn("truncate text-xs text-muted-foreground", l.className)}>
+            {l.text}
+          </div>
+        ))}
       {resizingId === s.id && (
         <div className="pointer-events-none absolute right-1 bottom-1.5 rounded bg-foreground px-1.5 py-0.5 text-[11px] font-medium text-background tabular-nums">
           {formatLength(s.minutes)} · ends {formatClock(end)}
@@ -337,6 +327,13 @@ export function SessionFace({
       )}
     </div>
   );
+}
+
+/** "14m/attendee": a breakout's length shared among its largest group, to the nearest minute; null before anyone is assigned. */
+function paceOf(minutes: number, largestGroup: number): string | null {
+  if (largestGroup <= 0) return null;
+  const each = Math.round(minutes / largestGroup);
+  return each > 0 ? `${each}m/attendee` : "<1m/attendee";
 }
 
 /** The bottom edge of a card: drag it to make the session longer or shorter, a quarter hour at a time. */
