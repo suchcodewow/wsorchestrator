@@ -1597,6 +1597,47 @@ export const evalsSubmissionScores = pgTable(
 
 export type EvalsSubmissionScore = typeof evalsSubmissionScores.$inferSelect;
 
+/**
+ * The transcript of one recording a judge made while scoring an attendee,
+ * filed as their submission is — by bootcamp, assessment and attendee — so it
+ * is kept whether or not the scores are saved yet, and stays with them after.
+ * The audio itself never leaves the judge's browser; only this text does.
+ */
+export const evalsTranscripts = pgTable(
+  "evals_transcripts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    // Restrict, as for submissions: removing either would take the transcripts with it.
+    bootcampId: uuid("bootcamp_id")
+      .notNull()
+      .references(() => bootcamps.id, { onDelete: "restrict" }),
+    assessmentId: uuid("assessment_id")
+      .notNull()
+      .references(() => evalsAssessments.id, { onDelete: "restrict" }),
+    /** The attendee, lowercased. */
+    attendeeEmail: text("attendee_email").notNull(),
+    /** The recording's id in the judge's browser; sending it again returns this row rather than a second. */
+    recordingId: uuid("recording_id").notNull(),
+    recordedById: text("recorded_by_id").references(() => users.id, { onDelete: "set null" }),
+    /** Copied in, so the transcript still says who recorded it after they leave. */
+    recordedByName: text("recorded_by_name").notNull().default(""),
+    recordedAt: timestamp("recorded_at", { withTimezone: true }).notNull(),
+    durationMs: integer("duration_ms").notNull(),
+    /** Deepgram's transcript of the whole recording, paragraphs split by blank lines. */
+    text: text("text").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("evals_transcripts_recording_idx").on(t.recordingId),
+    index("evals_transcripts_attendee_idx").on(t.bootcampId, t.assessmentId, t.attendeeEmail, t.recordedAt),
+    index("evals_transcripts_assessment_idx").on(t.assessmentId),
+  ],
+);
+
+export type EvalsTranscript = typeof evalsTranscripts.$inferSelect;
+
 /** What an "@" tag is in: a session comment, a checklist item, or the comment on one criterion of an eVals submission. */
 export const MENTION_KINDS = ["comment", "checklist", "score"] as const;
 export type MentionKind = (typeof MENTION_KINDS)[number];

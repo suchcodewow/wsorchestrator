@@ -43,7 +43,7 @@ const ERRORS: Record<string, string> = {
   invalid: "Give the assessment a name and every criterion a name.",
   not_found: "That assessment was removed — go back to the list.",
   locked: "Someone has been scored on this assessment, so its session and group can no longer change.",
-  has_scores: "Someone has been scored on this assessment, so it is kept. Make it inactive instead.",
+  has_scores: "Someone has been scored or recorded on this assessment, so it is kept. Make it inactive instead.",
   forbidden: "Your own role changed — reload the page.",
 };
 

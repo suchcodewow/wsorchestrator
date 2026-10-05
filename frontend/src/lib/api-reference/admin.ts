@@ -441,7 +441,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         returns: "{ ok: true }",
         errors: [
           { status: 404, error: "not_found", when: "no such bootcamp" },
-          { status: 409, error: "has_scores", when: "an assessment has been scored at it" },
+          { status: 409, error: "has_scores", when: "an assessment has been scored or recorded at it" },
         ],
       },
       {
@@ -1027,13 +1027,51 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "scorer",
         token: true,
         notes:
-          "submission is null until someone scores them. Its scores are keyed by criterion id; a criterion added since has none. ownerName is whoever saved it last. Send its updatedAt as revises when saving. people is whom a comment can tag: anyone who can use eVals, and the active bootcamp's guest judges; it is empty with no bootcamp.",
+          "submission is null until someone scores them. Its scores are keyed by criterion id; a criterion added since has none. ownerName is whoever saved it last. Send its updatedAt as revises when saving. people is whom a comment can tag: anyone who can use eVals, and the active bootcamp's guest judges; it is empty with no bootcamp. transcripts holds every recording anyone filed of this attendee on this assessment at the active bootcamp, oldest first, whether or not the submission has been saved; it is empty with no bootcamp.",
         params: [
           { name: "assessmentId", type: "string", required: true, note: "UUID" },
           { name: "employeeId", type: "string", required: true, note: "the employee's HiBob id" },
         ],
-        returns: `{ assessment: { id, name, stage, audience }, criteria: { id, name, description }[], attendee: { id, email, fullName, title, track }, submission: { id, averageScore, positiveFeedback, constructiveFeedback, ownerId, ownerName, updatedAt, scores: Record<string, { score, comment, mentions: { email, fullName }[] }> } | null, people: { email, fullName }[], bootcamp: { id, startDate, btcDays, intDays } | null }`,
+        returns: `{ assessment: { id, name, stage, audience }, criteria: { id, name, description }[], attendee: { id, email, fullName, title, track }, submission: { id, averageScore, positiveFeedback, constructiveFeedback, ownerId, ownerName, updatedAt, scores: Record<string, { score, comment, mentions: { email, fullName }[] }> } | null, people: { email, fullName }[], transcripts: { id, recordingId, recordedAt, durationMs, recordedByName: string | null, text }[], bootcamp: { id, startDate, btcDays, intDays } | null }`,
         errors: [{ status: 404, error: "not_found", when: "no such active assessment, or the attendee is not one it applies to" }],
+      },
+      {
+        method: "POST",
+        path: "/api/evals/scoring/{assessmentId}/{employeeId}/transcripts",
+        summary: "Transcribes one recording made while scoring an attendee, and files the transcript with their assessment at the active bootcamp.",
+        access: "scorer",
+        token: true,
+        notes: `Deepgram's nova-3 model, with punctuation, number formatting and a blank line between paragraphs; text is empty when nothing was heard. The audio is passed through and not kept. Sending the same recordingId again returns the transcript already filed, with 200, without transcribing it again. Up to ${PAGE_SIZE} are kept per attendee per assessment per bootcamp.`,
+        params: [
+          { name: "assessmentId", type: "string", required: true, note: "UUID" },
+          { name: "employeeId", type: "string", required: true, note: "the employee's HiBob id" },
+        ],
+        body: {
+          kind: "multipart",
+          fields: [
+            {
+              name: "audio",
+              type: "file",
+              required: true,
+              note: "a recording in any container Deepgram reads (webm, ogg, mp4, wav, mp3…); 25 MiB at most",
+            },
+            { name: "recordingId", type: "string", required: true, note: "UUID; names the recording, so a retry is not filed twice" },
+            { name: "recordedAt", type: "number", required: true, note: "when it started, in milliseconds since the epoch" },
+            { name: "durationMs", type: "number", required: true, note: "how long it is, in milliseconds" },
+          ],
+        },
+        returns: "{ id, recordingId, recordedAt, durationMs, recordedByName: string | null, text } — 201 when filed, 200 when it already was",
+        errors: [
+          { status: 400, error: "invalid", when: "the body is not form data, or a field is missing or not that shape" },
+          { status: 400, error: "empty", when: "the audio file is empty" },
+          { status: 404, error: "not_found", when: "assessmentId is not a UUID, no such active assessment, or the attendee is not one it applies to" },
+          { status: 409, error: "no_bootcamp", when: "no bootcamp is active, or for intermediate, the active one holds no intermediate class" },
+          { status: 409, error: "too_many", when: `${PAGE_SIZE} transcripts are already filed for them` },
+          { status: 409, error: "conflict", when: "that recordingId is filed for another attendee, assessment or bootcamp" },
+          { status: 413, error: "too_large", when: "the audio file is over 25 MiB" },
+          { status: 502, error: "upstream", when: "Deepgram refused the request or could not be reached" },
+          { status: 503, error: "unconfigured", when: "no DEEPGRAM_API_KEY is set on this deployment" },
+        ],
       },
       {
         method: "PUT",
@@ -1288,7 +1326,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         returns: "{ ok: true }",
         errors: [
           { status: 404, error: "not_found", when: "id is not a UUID, or no such assessment" },
-          { status: 409, error: "has_scores", when: "someone has been scored on it" },
+          { status: 409, error: "has_scores", when: "someone has been scored or recorded on it" },
         ],
       },
       {

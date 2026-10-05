@@ -8,9 +8,10 @@
  * A criterion's comment can tag, with "@", anyone who can score here. The
  * feedback cannot: it is what the attendee is sent, on Slack.
  *
- * The judge can record the attendee while scoring. The audio stays in this
- * browser; Submit stops the recording, and waits for its last second to be
- * saved, before it sends the scores.
+ * The judge can record the attendee while scoring, with a live transcript
+ * as it goes. The audio stays in this browser; each recording's transcript is
+ * filed with the assessment when it stops. Submit stops the recording and
+ * waits for its transcript before it sends the scores.
  */
 
 import { useState } from "react";
@@ -20,6 +21,7 @@ import { motion } from "framer-motion";
 import { ArrowLeft, Info, Loader2, Send } from "lucide-react";
 import { MentionTextarea } from "@/components/mention-textarea";
 import { RecordingPanel } from "@/components/recording/recording-panel";
+import { useLiveTranscript } from "@/components/recording/use-live-transcript";
 import { useRecorder } from "@/components/recording/use-recorder";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -39,9 +41,11 @@ import { riseChild, staggerParent } from "@/lib/motion";
 import type { ActiveBootcamp } from "@/lib/scheduler/bootcamps";
 import { cn } from "@/lib/utils";
 import { BootcampNotice } from "../../../bootcamp-notice";
+import { AssessmentTranscripts, useAssessmentTranscripts, type ClientTranscript } from "./assessment-transcripts";
 
-type Form = Omit<ScoringForm, "submission"> & {
+type Form = Omit<ScoringForm, "submission" | "transcripts"> & {
   submission: (Omit<NonNullable<ScoringForm["submission"]>, "updatedAt"> & { updatedAt: string }) | null;
+  transcripts: ClientTranscript[];
 };
 
 /** `picks` is everyone ever picked in the comment; those its text still names are the ones sent. */
@@ -80,16 +84,35 @@ export function ScoringFormView({
   );
   const [positive, setPositive] = useState(submission?.positiveFeedback ?? "");
   const [constructive, setConstructive] = useState(submission?.constructiveFeedback ?? "");
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<"saving" | "transcribing" | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Set once Submit has said a transcript is missing; the next Submit saves the scores anyway.
+  const [warned, setWarned] = useState(false);
   const subject = evalSubject(assessment.id, attendee.id);
   const [recordingsVersion, setRecordingsVersion] = useState(0);
+  const transcripts = useAssessmentTranscripts({
+    assessmentId: assessment.id,
+    employeeId: attendee.id,
+    initial: form.transcripts,
+    enabled: bootcamp !== null,
+  });
   const recorder = useRecorder({
     ownerId: viewerId,
     subject,
     label: `${attendee.fullName} - ${assessment.name}`,
-    onSaved: () => setRecordingsVersion((v) => v + 1),
+    onSaved: (recordingId) => {
+      setRecordingsVersion((v) => v + 1);
+      void transcripts.transcribe(recordingId, true);
+    },
   });
+  const live = useLiveTranscript(recorder.stream);
+  const recordWithLive = {
+    ...recorder,
+    start: async () => {
+      live.begin();
+      await recorder.start();
+    },
+  };
 
   const scores = criteria.flatMap((c) => (entries[c.id]?.score != null ? [entries[c.id]!.score!] : []));
   const complete = scores.length === criteria.length;
@@ -110,10 +133,19 @@ export function ScoringFormView({
   }
 
   async function submit() {
-    setBusy(true);
+    setBusy("saving");
     setError(null);
     try {
+      const wasRecording = recorder.recording;
       await recorder.stop();
+      if (wasRecording) setBusy("transcribing");
+      const allFiled = await transcripts.settle();
+      if (!allFiled && !warned) {
+        setWarned(true);
+        setError("A recording's transcript could not be saved. Retry it above, or Submit again to save the scores without it.");
+        return;
+      }
+      setBusy("saving");
       const res = await fetch(`/api/evals/scoring/${assessment.id}/${encodeURIComponent(attendee.id)}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -146,7 +178,7 @@ export function ScoringFormView({
     } catch {
       setError("Could not reach the server.");
     } finally {
-      setBusy(false);
+      setBusy(null);
     }
   }
 
@@ -198,12 +230,22 @@ export function ScoringFormView({
         <motion.section variants={riseChild} className="space-y-3 px-5 py-4">
           <h3 className="font-medium">Recording</h3>
           <RecordingPanel
-            recorder={recorder}
+            recorder={recordWithLive}
             ownerId={viewerId}
             subject={subject}
             version={recordingsVersion}
             onChanged={() => setRecordingsVersion((v) => v + 1)}
-          />
+          >
+            <AssessmentTranscripts
+              state={transcripts}
+              live={live}
+              recording={recorder.recording}
+              ownerId={viewerId}
+              subject={subject}
+              version={recordingsVersion}
+              since={bootcamp ? new Date(`${bootcamp.startDate}T00:00`).getTime() : null}
+            />
+          </RecordingPanel>
         </motion.section>
 
         {criteria.map((c, i) => {
@@ -286,10 +328,17 @@ export function ScoringFormView({
       )}
 
       <motion.div variants={riseChild}>
-        <Button variant="brand" disabled={!canSubmit || busy} onClick={submit}>
-          {busy ? <Loader2 className="animate-spin" /> : <Send />}
-          Submit
-        </Button>
+        <div className="flex items-center gap-3">
+          <Button variant="brand" disabled={!canSubmit || busy !== null} onClick={submit}>
+            {busy ? <Loader2 className="animate-spin" /> : <Send />}
+            Submit
+          </Button>
+          {busy === "transcribing" && (
+            <span role="status" className="text-sm text-muted-foreground">
+              Transcribing the recording…
+            </span>
+          )}
+        </div>
       </motion.div>
     </motion.div>
   );

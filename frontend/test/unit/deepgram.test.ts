@@ -82,6 +82,33 @@ describe("prerecordedTranscript", () => {
     assert.equal(prerecordedTranscript(body), "The quick brown fox.");
   });
 
+  test("prefers the paragraphs smart_format splits it into", () => {
+    // What nova-3 returned for a synthesized two-voice exchange (2026-10-04), trimmed to the fields read.
+    const body = {
+      results: {
+        channels: [
+          {
+            alternatives: [
+              {
+                transcript:
+                  "Thanks for joining. Can you walk me through how your team deploys to production today? Sure. We build with Jenkins. What happens when a deployment fails at three in the morning?",
+                paragraphs: {
+                  transcript:
+                    "\nThanks for joining. Can you walk me through how your team deploys to production today? Sure. We build with Jenkins.\n\nWhat happens when a deployment fails at three in the morning?",
+                  paragraphs: [],
+                },
+              },
+            ],
+          },
+        ],
+      },
+    };
+    assert.equal(
+      prerecordedTranscript(body),
+      "Thanks for joining. Can you walk me through how your team deploys to production today? Sure. We build with Jenkins.\n\nWhat happens when a deployment fails at three in the morning?",
+    );
+  });
+
   test("nothing heard, or an unexpected body, is empty", () => {
     assert.equal(prerecordedTranscript({ results: { channels: [] } }), "");
     assert.equal(prerecordedTranscript(null), "");

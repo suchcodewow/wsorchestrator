@@ -57,9 +57,18 @@ export function parseLiveMessage(data: unknown): LiveResult | null {
   return { text, isFinal: m.is_final === true };
 }
 
-/** The transcript in a pre-recorded response, or "" when Deepgram heard nothing. */
+type Alternative = { transcript?: unknown; paragraphs?: { transcript?: unknown } };
+
+/**
+ * The transcript in a pre-recorded response, or "" when Deepgram heard
+ * nothing. `smart_format` also splits it into paragraphs, with a blank line
+ * between each; that version is the one returned when it is there, since a
+ * long recording is unreadable as one run of text.
+ */
 export function prerecordedTranscript(body: unknown): string {
-  const t = (body as { results?: { channels?: { alternatives?: { transcript?: unknown }[] }[] } } | null)
-    ?.results?.channels?.[0]?.alternatives?.[0]?.transcript;
-  return typeof t === "string" ? t : "";
+  const alt = (body as { results?: { channels?: { alternatives?: Alternative[] }[] } } | null)
+    ?.results?.channels?.[0]?.alternatives?.[0];
+  const paragraphs = alt?.paragraphs?.transcript;
+  if (typeof paragraphs === "string" && paragraphs.trim()) return paragraphs.trim();
+  return typeof alt?.transcript === "string" ? alt.transcript : "";
 }

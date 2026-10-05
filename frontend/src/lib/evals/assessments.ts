@@ -22,12 +22,14 @@ import {
   evalsAssessments,
   evalsSubmissionScores,
   evalsSubmissions,
+  evalsTranscripts,
   type EvalsAssessmentAudience,
   type EvalsAssessmentStage,
 } from "@/db/schema";
 import type { AssessmentSort } from "@/lib/list-specs";
 import { pageWindow, toPage, type ListQuery, type Page } from "@/lib/paging";
 import { orderFor, searchAny } from "@/lib/paging-sql";
+import { isForeignKeyViolation } from "@/lib/scheduler/pg-errors";
 
 export type AssessmentRow = {
   id: string;
@@ -289,20 +291,30 @@ export async function updateAssessment(id: string, input: AssessmentInput): Prom
   });
 }
 
-/** Removes an assessment nobody has been scored on; one with scores is made inactive instead. */
+/**
+ * Removes an assessment nobody has been scored or recorded on; one with
+ * either is made inactive instead.
+ */
 export async function deleteAssessment(id: string): Promise<{ ok: true; name: string } | { ok: false; error: AssessmentError }> {
-  const [scored] = await db
-    .select({ id: evalsSubmissions.id })
-    .from(evalsSubmissions)
-    .where(eq(evalsSubmissions.assessmentId, id))
-    .limit(1);
-  if (scored) {
+  const [[scored], [recorded]] = await Promise.all([
+    db.select({ id: evalsSubmissions.id }).from(evalsSubmissions).where(eq(evalsSubmissions.assessmentId, id)).limit(1),
+    db.select({ id: evalsTranscripts.id }).from(evalsTranscripts).where(eq(evalsTranscripts.assessmentId, id)).limit(1),
+  ]);
+  const hasScores = async () => {
     const [exists] = await db.select({ id: evalsAssessments.id }).from(evalsAssessments).where(eq(evalsAssessments.id, id));
-    return { ok: false, error: exists ? "has_scores" : "not_found" };
+    return { ok: false as const, error: exists ? ("has_scores" as const) : ("not_found" as const) };
+  };
+  if (scored || recorded) return hasScores();
+  let deleted: { name: string } | undefined;
+  try {
+    [deleted] = await db
+      .delete(evalsAssessments)
+      .where(eq(evalsAssessments.id, id))
+      .returning({ name: evalsAssessments.name });
+  } catch (err) {
+    // Scored or recorded in between: the foreign key refuses it.
+    if (isForeignKeyViolation(err)) return hasScores();
+    throw err;
   }
-  const [deleted] = await db
-    .delete(evalsAssessments)
-    .where(eq(evalsAssessments.id, id))
-    .returning({ name: evalsAssessments.name });
   return deleted ? { ok: true, name: deleted.name } : { ok: false, error: "not_found" };
 }

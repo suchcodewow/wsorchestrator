@@ -504,6 +504,7 @@ const ROUTES: RouteCase[] = [
   { method: "GET", path: `/api/evals/scoring/${MISSING}`, allowed: canScoreAssessments },
   { method: "GET", path: `/api/evals/scoring/${MISSING}/0`, allowed: canScoreAssessments },
   { method: "PUT", path: `/api/evals/scoring/${MISSING}/0`, allowed: canScoreAssessments, body: () => ({}) },
+  { method: "POST", path: `/api/evals/scoring/${MISSING}/0/transcripts`, allowed: canScoreAssessments, body: form },
 
   // Users
   { method: "GET", path: "/api/users", allowed: canManageUsers },
