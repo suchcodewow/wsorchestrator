@@ -20,9 +20,11 @@ import { Card, CardContent } from "@/components/ui/card";
 import {
   EVALS_ROLES,
   EVENT_ROLES,
+  IRIS_ROLES,
   TRAINING_ROLES,
   type EvalsRole,
   type EventRole,
+  type IrisRole,
   type TrainingRole,
 } from "@/db/schema";
 import {
@@ -30,13 +32,17 @@ import {
   EVALS_ROLE_LABELS,
   EVENT_ROLE_DESCRIPTIONS,
   EVENT_ROLE_LABELS,
+  IRIS_ROLE_DESCRIPTIONS,
+  IRIS_ROLE_LABELS,
   NO_EVALS_ACCESS_LABEL,
+  NO_IRIS_ACCESS_LABEL,
   NO_TRAINING_ACCESS_LABEL,
   PLATFORM_ADMIN_LABEL,
   TRAINING_ROLE_DESCRIPTIONS,
   TRAINING_ROLE_LABELS,
   asEvalsRole,
   asEventRole,
+  asIrisRole,
   asTrainingRole,
   canDeleteUsers,
   canManageRoles,
@@ -57,17 +63,19 @@ type SiteUser = {
   eventRole: EventRole;
   trainingRole: TrainingRole | null;
   evalsRole: EvalsRole | null;
+  irisRole: IrisRole | null;
   isPlatformAdmin: boolean;
   isBootstrapAdmin: boolean;
   eventCount: number;
 };
 
-type Roles = Pick<SiteUser, "eventRole" | "trainingRole" | "evalsRole" | "isPlatformAdmin">;
+type Roles = Pick<SiteUser, "eventRole" | "trainingRole" | "evalsRole" | "irisRole" | "isPlatformAdmin">;
 
 type Change =
   | { area: "event"; role: EventRole }
   | { area: "training"; role: TrainingRole | null }
   | { area: "evals"; role: EvalsRole | null }
+  | { area: "iris"; role: IrisRole | null }
   | { area: "platform"; value: boolean };
 
 const ERRORS: Record<string, string> = {
@@ -79,9 +87,10 @@ const ERRORS: Record<string, string> = {
     "That address is in SITE_ADMIN_EMAILS, which makes it a platform administrator on every sign-in.",
 };
 
-/** The training area's and eVals' radio value for "no role", which a radio group can't hold as null. */
+/** The training, eVals and Iris areas' radio value for "no role", which a radio group can't hold as null. */
 const NO_TRAINING = "none";
 const NO_EVALS = "none";
+const NO_IRIS = "none";
 
 const EVENT_CHIP: Record<EventRole, string> = {
   none: "text-muted-foreground/70",
@@ -115,6 +124,7 @@ export function UsersTable({
     eventRole: u.eventRole,
     trainingRole: u.trainingRole,
     evalsRole: u.evalsRole,
+    irisRole: u.irisRole,
     isPlatformAdmin: u.isPlatformAdmin,
     ...edits[u.id],
   });
@@ -147,7 +157,9 @@ export function UsersTable({
           ? { trainingRole: next.role }
           : next.area === "evals"
             ? { evalsRole: next.role }
-            : { isPlatformAdmin: next.value };
+            : next.area === "iris"
+              ? { irisRole: next.role }
+              : { isPlatformAdmin: next.value };
 
     const previous = edits[user.id];
     setEdits((e) => ({ ...e, [user.id]: { ...e[user.id], ...patch } }));
@@ -217,7 +229,7 @@ export function UsersTable({
 
         <div className="overflow-hidden rounded-2xl border bg-card shadow-sm">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-220 text-sm">
+            <table className="w-full min-w-240 text-sm">
               <thead>
                 <tr className={HEADER_ROW}>
                   <SortHeader column="user" {...sortProps}>User</SortHeader>
@@ -225,6 +237,7 @@ export function UsersTable({
                   <SortHeader column="eventRole" {...sortProps}>Event role</SortHeader>
                   <SortHeader column="trainingRole" {...sortProps}>Training role</SortHeader>
                   <SortHeader column="evalsRole" {...sortProps}>eVals role</SortHeader>
+                  <SortHeader column="irisRole" {...sortProps}>Iris role</SortHeader>
                   <SortHeader column="platform" {...sortProps}>Platform admin</SortHeader>
                   {viewerDeletes && (
                     <PlainHeader className="w-px">
@@ -237,7 +250,7 @@ export function UsersTable({
                 {shown.length === 0 && (
                   <tr>
                     <td
-                      colSpan={viewerDeletes ? 7 : 6}
+                      colSpan={viewerDeletes ? 8 : 7}
                       className="px-5 py-8 text-center text-muted-foreground"
                     >
                       {query.q ? <>No one matches “{query.q}”.</> : "No one on this page."}
@@ -400,6 +413,55 @@ export function UsersTable({
                             {roles.evalsRole
                               ? EVALS_ROLE_LABELS[roles.evalsRole]
                               : NO_EVALS_ACCESS_LABEL}
+                          </ReadOnly>
+                        )}
+                      </td>
+
+                      <td className="px-5 py-3">
+                        {roles.isPlatformAdmin ? (
+                          <ViaPlatform />
+                        ) : editable(u, "iris") ? (
+                          <RoleMenu
+                            heading="Iris role"
+                            value={roles.irisRole ?? NO_IRIS}
+                            label={
+                              roles.irisRole
+                                ? IRIS_ROLE_LABELS[roles.irisRole]
+                                : NO_IRIS_ACCESS_LABEL
+                            }
+                            chip={
+                              roles.irisRole === "administrator"
+                                ? "text-brand"
+                                : roles.irisRole
+                                  ? "text-muted-foreground"
+                                  : "text-muted-foreground/70"
+                            }
+                            saving={saving === `${u.id}:iris`}
+                            options={[
+                              {
+                                value: NO_IRIS,
+                                label: NO_IRIS_ACCESS_LABEL,
+                                description: "Cannot see Iris.",
+                              },
+                              ...IRIS_ROLES.map((r) => ({
+                                value: r,
+                                label: IRIS_ROLE_LABELS[r],
+                                description: IRIS_ROLE_DESCRIPTIONS[r],
+                              })),
+                            ]}
+                            onChange={(v) => {
+                              const role = v === NO_IRIS ? null : asIrisRole(v);
+                              if (v !== NO_IRIS && !role) return;
+                              if (role !== roles.irisRole) {
+                                void change(u, { area: "iris", role });
+                              }
+                            }}
+                          />
+                        ) : (
+                          <ReadOnly title={readOnlyTitle}>
+                            {roles.irisRole
+                              ? IRIS_ROLE_LABELS[roles.irisRole]
+                              : NO_IRIS_ACCESS_LABEL}
                           </ReadOnly>
                         )}
                       </td>

@@ -30,6 +30,7 @@ import {
   canManageTrainingSettings,
   canManageUsers,
   canScoreAssessments,
+  canTakeIris,
   canUseEvals,
   canUseEvents,
   canUseTraining,
@@ -99,7 +100,7 @@ export const NAV_SECTIONS: NavSection[] = [
     heading: "Assessments",
     items: [
       { href: "/evals", label: "eVals", Icon: FlaskConical, visible: canScoreAssessments },
-      { href: "/iris", label: "Iris", Icon: Eye, visible: canUseEvals },
+      { href: "/iris", label: "Iris", Icon: Eye, visible: canTakeIris },
       { href: "/reporting", label: "Reporting", Icon: ChartColumn, visible: canUseEvals },
       {
         href: "/evals-settings",

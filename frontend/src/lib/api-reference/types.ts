@@ -3,6 +3,7 @@
 import {
   EVALS_ROLE_LABELS,
   EVENT_ROLE_LABELS,
+  IRIS_ROLE_LABELS,
   PLATFORM_ADMIN_LABEL,
   TRAINING_ROLE_LABELS,
 } from "@/lib/roles";
@@ -24,6 +25,8 @@ export type Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
  *   evalsAdmin   eVals Administrator                   (canManageEvalsSettings)
  *   employeeSearch eVals or Training Administrator     (canSearchEmployees)
  *   scorer       eVals Viewer or above, or a guest judge on the active bootcamp (canScoreAssessments)
+ *   irisTaker    Iris Taker or above                   (canTakeIris)
+ *   irisAdmin    Iris Administrator                    (canManageIris)
  *   userAdmin    an administrator in any area          (canManageUsers)
  *   platform     Platform Administrator                (canManageBackups, canManageSignInDomains, canDeleteUsers)
  *   internal     not for people: Cloud Scheduler or runner OIDC, or Auth.js
@@ -43,6 +46,8 @@ export type AccessKey =
   | "evalsAdmin"
   | "employeeSearch"
   | "scorer"
+  | "irisTaker"
+  | "irisAdmin"
   | "userAdmin"
   | "platform"
   | "internal";
@@ -61,6 +66,8 @@ export const ACCESS_LABELS: Record<AccessKey, string> = {
   evalsAdmin: EVALS_ROLE_LABELS.administrator,
   employeeSearch: `${EVALS_ROLE_LABELS.administrator} or ${TRAINING_ROLE_LABELS.administrator}`,
   scorer: `${EVALS_ROLE_LABELS.viewer} or above, or a guest judge on the active bootcamp`,
+  irisTaker: `${IRIS_ROLE_LABELS.taker} or above`,
+  irisAdmin: IRIS_ROLE_LABELS.administrator,
   userAdmin: "An administrator in any area",
   platform: PLATFORM_ADMIN_LABEL,
   internal: "Internal",

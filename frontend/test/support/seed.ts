@@ -50,6 +50,7 @@ export function testScope(name: string) {
       eventRole: access.event,
       trainingRole: access.training,
       evalsRole: access.evals,
+      irisRole: access.iris,
       isPlatformAdmin: access.platform,
     };
     await db
@@ -143,6 +144,7 @@ export async function readRoles(id: string) {
       event: users.eventRole,
       training: users.trainingRole,
       evals: users.evalsRole,
+      iris: users.irisRole,
       platform: users.isPlatformAdmin,
       // Spelled out: Drizzle leaves the table off a column in a one-table query.
       judging: sql<boolean>`exists (

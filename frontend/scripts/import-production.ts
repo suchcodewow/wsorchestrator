@@ -141,6 +141,7 @@ async function main() {
                   u.site_role::text        as "eventRole",
                   u.training_role::text    as "trainingRole",
                   u.evals_role::text       as "evalsRole",
+                  u.iris_role::text        as "irisRole",
                   u.is_platform_admin      as "isPlatformAdmin",
                   u.calendar_scope::text   as "calendarScope",
                   coalesce(
@@ -157,7 +158,8 @@ async function main() {
               and (u.is_platform_admin
                    or u.site_role <> 'none'
                    or u.training_role is not null
-                   or u.evals_role is not null)
+                   or u.evals_role is not null
+                   or u.iris_role is not null)
             group by u.id
             order by u.email`,
         );

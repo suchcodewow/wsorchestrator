@@ -13,6 +13,7 @@ import {
   verificationTokens,
   type EvalsRole,
   type EventRole,
+  type IrisRole,
   type TrainingRole,
 } from "@/db/schema";
 import {
@@ -40,6 +41,7 @@ type UserRow = {
   eventRole?: EventRole;
   trainingRole?: TrainingRole | null;
   evalsRole?: EvalsRole | null;
+  irisRole?: IrisRole | null;
   isPlatformAdmin?: boolean;
 };
 
@@ -124,6 +126,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         event: row.eventRole ?? "none",
         training: row.trainingRole ?? null,
         evals: row.evalsRole ?? null,
+        iris: row.irisRole ?? null,
         platform: row.isPlatformAdmin ?? false,
         judging: await isJudgingNow(session.user.email),
       };

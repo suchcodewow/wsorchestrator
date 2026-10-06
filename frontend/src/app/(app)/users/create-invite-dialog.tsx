@@ -17,13 +17,16 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { EVALS_ROLES, EVENT_ROLES, INVITE_TTL_MINUTES, TRAINING_ROLES } from "@/db/schema";
+import { EVALS_ROLES, EVENT_ROLES, INVITE_TTL_MINUTES, IRIS_ROLES, TRAINING_ROLES } from "@/db/schema";
 import {
   EVALS_ROLE_DESCRIPTIONS,
   EVALS_ROLE_LABELS,
   EVENT_ROLE_DESCRIPTIONS,
   EVENT_ROLE_LABELS,
+  IRIS_ROLE_DESCRIPTIONS,
+  IRIS_ROLE_LABELS,
   NO_EVALS_ACCESS_LABEL,
+  NO_IRIS_ACCESS_LABEL,
   NO_TRAINING_ACCESS_LABEL,
   TRAINING_ROLE_DESCRIPTIONS,
   TRAINING_ROLE_LABELS,
@@ -46,11 +49,13 @@ export function CreateInviteDialog({ viewerAccess }: { viewerAccess: Access }) {
   const offersEvent = canManageRoles(viewerAccess, "event");
   const offersTraining = canManageRoles(viewerAccess, "training");
   const offersEvals = canManageRoles(viewerAccess, "evals");
+  const offersIris = canManageRoles(viewerAccess, "iris");
 
   const [open, setOpen] = useState(false);
   const [eventRole, setEventRole] = useState<string>(offersEvent ? "operator" : NONE);
   const [trainingRole, setTrainingRole] = useState<string>(NONE);
   const [evalsRole, setEvalsRole] = useState<string>(NONE);
+  const [irisRole, setIrisRole] = useState<string>(NONE);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<Created | null>(null);
@@ -60,6 +65,7 @@ export function CreateInviteDialog({ viewerAccess }: { viewerAccess: Access }) {
     setEventRole(offersEvent ? "operator" : NONE);
     setTrainingRole(NONE);
     setEvalsRole(NONE);
+    setIrisRole(NONE);
     setError(null);
     setCreated(null);
     setCopied(false);
@@ -76,6 +82,7 @@ export function CreateInviteDialog({ viewerAccess }: { viewerAccess: Access }) {
           eventRole: eventRole === NONE ? null : eventRole,
           trainingRole: trainingRole === NONE ? null : trainingRole,
           evalsRole: evalsRole === NONE ? null : evalsRole,
+          irisRole: irisRole === NONE ? null : irisRole,
         }),
       });
       const body = await res.json().catch(() => null);
@@ -102,7 +109,8 @@ export function CreateInviteDialog({ viewerAccess }: { viewerAccess: Access }) {
     }
   }
 
-  const grantsSomething = eventRole !== NONE || trainingRole !== NONE || evalsRole !== NONE;
+  const grantsSomething =
+    eventRole !== NONE || trainingRole !== NONE || evalsRole !== NONE || irisRole !== NONE;
 
   return (
     <>
@@ -201,6 +209,26 @@ export function CreateInviteDialog({ viewerAccess }: { viewerAccess: Access }) {
                       value: r,
                       label: EVALS_ROLE_LABELS[r],
                       description: EVALS_ROLE_DESCRIPTIONS[r],
+                    })),
+                  ]}
+                />
+              )}
+              {offersIris && (
+                <RoleChoice
+                  legend="Iris role"
+                  name="invite-iris-role"
+                  value={irisRole}
+                  onChange={setIrisRole}
+                  options={[
+                    {
+                      value: NONE,
+                      label: NO_IRIS_ACCESS_LABEL,
+                      description: "Cannot see Iris.",
+                    },
+                    ...IRIS_ROLES.map((r) => ({
+                      value: r,
+                      label: IRIS_ROLE_LABELS[r],
+                      description: IRIS_ROLE_DESCRIPTIONS[r],
                     })),
                   ]}
                 />
