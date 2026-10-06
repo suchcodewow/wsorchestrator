@@ -112,7 +112,9 @@ let requests: string[] = [];
 function useMindtickle(handler = mindtickle) {
   process.env.MT_API_KEY = "key";
   process.env.MT_SECRET_KEY = "secret";
-  process.env.MT_LS_URL = "harness.mindtickle.test";
+  // MT_LS_URL is left to the built-in learning site, as a deployment leaves it.
+  delete process.env.MT_LS_URL;
+  process.env.MT_COMPANY_ID = "harness";
   process.env.MT_REGION = "us";
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
@@ -223,13 +225,8 @@ describe("a Canary Wire pull", () => {
     assert.match(pull.error ?? "", /refused the key pair/);
   });
 
-  test("without a key pair or the learning site, nothing starts", async () => {
+  test("without a key pair, nothing starts", async () => {
     useMindtickle();
-    process.env.MT_LS_URL = "";
-    // A company id alone is no tenant Mindtickle will sign in to.
-    process.env.MT_COMPANY_ID = "harness";
-    assert.deepEqual(await startPull("manual", null), { ok: false, error: "not_configured" });
-    process.env.MT_LS_URL = "harness.mindtickle.test";
     delete process.env.MT_API_KEY;
     assert.deepEqual(await startPull("manual", null), { ok: false, error: "not_configured" });
     assert.equal((await scheduledStep(0)).outcome, "not_configured");

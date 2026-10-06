@@ -114,20 +114,14 @@ variable "slack_bot_token" {
   default     = ""
 }
 
-variable "mindtickle_ls_url" {
-  description = "Harness's Mindtickle learning site (its ls_url), which Reporting → Canary Wire pulls from: the MT_LS_URL the canary-wire-reports tool uses. Required to sign in — Mindtickle refuses the company id alone as \"missing parameter ls_url\". Not secret: it grants nothing without the key pair. Empty leaves the pull off: no secrets, no env vars, no scheduler job, and the page says Mindtickle isn't configured."
-  type        = string
-  default     = ""
-}
-
 variable "mindtickle_company_id" {
-  description = "Harness's Mindtickle company id, sent alongside mindtickle_ls_url when set. Optional: the learning site alone identifies the tenant."
+  description = "Harness's Mindtickle tenant, which Reporting → Canary Wire pulls from. Not secret: it grants nothing without the key pair. Empty leaves the pull off: no secrets, no env vars, no scheduler job, and the page says Mindtickle isn't configured."
   type        = string
   default     = ""
 }
 
 variable "mindtickle_region" {
-  description = "The Mindtickle API region for mindtickle_ls_url. Harness's tenant is \"us\"; the wrong one shows up as \"404 Learning Site not found!\", not as an auth error."
+  description = "The Mindtickle API region for mindtickle_company_id. Harness's tenant is \"us\"; the wrong one shows up as \"404 Learning Site not found!\", not as an auth error."
   type        = string
   default     = "us"
 }

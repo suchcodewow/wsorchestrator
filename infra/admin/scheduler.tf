@@ -87,10 +87,10 @@ locals {
 # Pull Reporting → Canary Wire from Mindtickle every two hours. A pull takes
 # ~15 minutes and a call may run five, so the job fires in a burst: the first
 # call starts the pull and each after it takes a step, each saving where it
-# got to. Calls once it has finished do nothing. Only with a Mindtickle
-# learning site set, like the secrets it needs.
+# got to. Calls once it has finished do nothing. Only with a Mindtickle tenant
+# set, like the secrets it needs.
 resource "google_cloud_scheduler_job" "canary_wire_pull" {
-  count   = var.mindtickle_ls_url != "" ? 1 : 0
+  count   = var.mindtickle_company_id != "" ? 1 : 0
   name    = "canary-wire-pull-trigger"
   project = var.admin_project_id
   region  = var.region

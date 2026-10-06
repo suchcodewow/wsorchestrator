@@ -268,7 +268,7 @@ export async function advancePull(budgetMs = STEP_MS): Promise<PullSummary | nul
   if (!claimed) return latestPull();
   const config = mindtickleConfig();
   if (!config) {
-    await finish(claimed.id, { status: "failed", error: "Mindtickle isn't configured: MT_API_KEY, MT_SECRET_KEY or MT_LS_URL is unset." });
+    await finish(claimed.id, { status: "failed", error: "Mindtickle isn't configured: MT_API_KEY or MT_SECRET_KEY is unset." });
     return latestPull();
   }
 

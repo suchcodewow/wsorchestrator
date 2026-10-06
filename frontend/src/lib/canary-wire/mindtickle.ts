@@ -6,6 +6,7 @@
 
 import "server-only";
 
+import { MINDTICKLE_LS_URL } from "@/lib/canary-wire/config";
 import type { MtRecord } from "@/lib/canary-wire/records";
 
 const API_HOSTS = { global: "https://api.mindtickle.com", us: "https://api.prod-us.mindtickle.com" } as const;
@@ -28,21 +29,19 @@ export class MindtickleAuthError extends MindtickleError {}
 export type MindtickleConfig = { apiKey: string; secretKey: string; lsUrl: string; companyId: string; region: Region };
 
 /**
- * The key pair and tenant from the environment, or null when they aren't set.
- * Only the key pair is secret: the tenant names Harness's site and grants
- * nothing. `MT_LS_URL` is the one Mindtickle requires — a sign-in with only
- * the company id is refused as "missing parameter ls_url" — so without it
- * nothing is configured, rather than every pull failing at sign-in. Values
+ * The key pair from the environment, or null when it isn't set. Only the key
+ * pair is secret; the tenant is Harness's learning site (`MINDTICKLE_LS_URL`),
+ * which `MT_LS_URL` overrides, plus the company id when one is set. Values
  * are trimmed, since one pasted into a secret can carry a trailing newline.
  */
 export function mindtickleConfig(): MindtickleConfig | null {
   const env = (name: string) => (process.env[name] ?? "").trim();
   const apiKey = env("MT_API_KEY");
   const secretKey = env("MT_SECRET_KEY");
-  const lsUrl = env("MT_LS_URL");
+  const lsUrl = env("MT_LS_URL") || MINDTICKLE_LS_URL;
   const companyId = env("MT_COMPANY_ID");
   const region = (env("MT_REGION") || "us") as Region;
-  if (!apiKey || !secretKey || !lsUrl || !(region in API_HOSTS)) return null;
+  if (!apiKey || !secretKey || !(region in API_HOSTS)) return null;
   return { apiKey, secretKey, lsUrl, companyId, region };
 }
 
@@ -104,7 +103,7 @@ export class Mindtickle {
       );
     }
     if (res.status === 400) {
-      throw new MindtickleAuthError(`Mindtickle refused the sign-in (400: ${await reason(res)}). Check MT_LS_URL and MT_REGION as well as the key pair.`);
+      throw new MindtickleAuthError(`Mindtickle refused the sign-in (400: ${await reason(res)}). Check the key pair, and MT_REGION.`);
     }
     if (!res.ok) throw new MindtickleError(`Signing in to Mindtickle returned ${res.status}.`);
     const payload = (await res.json().catch(() => ({}))) as { token?: string; access_token?: string; expires_in?: number };

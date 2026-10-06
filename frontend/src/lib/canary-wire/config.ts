@@ -17,6 +17,14 @@ export const SERIES_LINKS: SeriesLink[] = [
   { edition: "SDR", label: "SDR", url: "https://deeplinks.mindtickle.com/zIdgXJsLC3b" },
 ];
 
+/**
+ * Harness's Mindtickle learning site. Mindtickle requires it to sign in — a
+ * sign-in with the company id alone is refused as "missing parameter ls_url" —
+ * and it never changes, so it lives here rather than in every environment's
+ * settings. `MT_LS_URL` overrides it, for a tenant other than Harness's.
+ */
+export const MINDTICKLE_LS_URL = "flightdeck.harness.io";
+
 export type Edition = {
   edition: string;
   /** Every one of these must appear in the series' name, so exactly one series matches. */
