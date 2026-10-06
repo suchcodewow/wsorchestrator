@@ -114,6 +114,38 @@ variable "slack_bot_token" {
   default     = ""
 }
 
+variable "mindtickle_company_id" {
+  description = "Harness's Mindtickle tenant, which Reporting → Canary Wire pulls from. Not secret: it grants nothing without the key pair. Empty leaves the pull off: no secrets, no env vars, no scheduler job, and the page says Mindtickle isn't configured."
+  type        = string
+  default     = ""
+}
+
+variable "mindtickle_region" {
+  description = "The Mindtickle API region for mindtickle_company_id. Harness's tenant is \"us\"; the wrong one shows up as \"404 Learning Site not found!\", not as an auth error."
+  type        = string
+  default     = "us"
+}
+
+variable "mindtickle_api_key" {
+  description = "API key of a Mindtickle key pair (Account → Settings → Security and Integrations) for the Canary Wire pull. Read-only use. Stored in Secret Manager as mindtickle-api-key and read by the app alone. Give the deployment its own pair, not a person's."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "mindtickle_secret_key" {
+  description = "Secret key of the same Mindtickle key pair. Stored in Secret Manager as mindtickle-secret-key and read by the app alone."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "canary_wire_pull_schedule" {
+  description = "Cron for the Canary Wire's Mindtickle pull, in America/New_York. Every five minutes for the first half hour of every even hour: the first call starts a pull and the rest take its steps, ~15 minutes in all; the app starts no second pull within 90 minutes of one."
+  type        = string
+  default     = "0,5,10,15,20,25,30 */2 * * *"
+}
+
 variable "hibob_sync_schedule" {
   description = "Cron for the daily HiBob employee sync, in America/New_York."
   type        = string

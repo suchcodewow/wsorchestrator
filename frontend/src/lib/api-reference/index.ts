@@ -43,6 +43,7 @@ export const GROUPS: EndpointGroup[] = [
   "evals-scoring",
   "transcription",
   "bootcamp-history",
+  "canary-wire",
   "evals",
   "iris",
   "users",

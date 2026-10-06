@@ -27,6 +27,7 @@ import {
   SCHEDULE_TRACKS,
   bootcamps,
   employees,
+  evalsAssessments,
   facilities,
   facilityRooms,
   mentions,
@@ -37,6 +38,7 @@ import {
   scheduleSessions,
   users,
   type BootcampStatus,
+  type EvalsAssessmentStage,
   SESSION_AUDIENCES,
   type ScheduleTrack,
   type SessionAudience,
@@ -61,6 +63,7 @@ import {
   nextStart,
   place,
   settle,
+  stageOf,
   trackDays,
   type Clash,
 } from "@/lib/scheduler/timeline";
@@ -89,6 +92,8 @@ export type SessionRow = {
   emoji: string;
   color: SessionColor;
   roomId: string | null;
+  /** The assessment a breakout's groups are scored on; null on any other kind. */
+  assessmentId: string | null;
   /** The leader first, then the other instructors in order. */
   staff: StaffRow[];
   comments: number;
@@ -116,11 +121,16 @@ export type Instructor = {
   role: "administrator" | "judge";
 };
 
+/** An assessment a breakout can be scored on. */
+export type BreakoutAssessment = { id: string; name: string; stage: EvalsAssessmentStage; active: boolean };
+
 export type Schedule = {
   bootcamp: ScheduleBootcamp;
   /** The facility's rooms, in order; none before a facility is picked. */
   rooms: RoomRow[];
   instructors: Instructor[];
+  /** Every active assessment, and any inactive one a breakout here still names. */
+  assessments: BreakoutAssessment[];
   /** Each track's days, in order: `days[track][d]` is day d + 1. A track the bootcamp does not hold has none. */
   days: Record<ScheduleTrack, SessionRow[][]>;
   /** Who each class is now, so a breakout can say who it has left out. */
@@ -162,6 +172,7 @@ const SESSION_COLUMNS = {
   emoji: scheduleSessions.emoji,
   color: scheduleSessions.color,
   roomId: scheduleSessions.roomId,
+  assessmentId: scheduleSessions.assessmentId,
   staff: staffJson,
   comments: commentCount,
   largestGroup,
@@ -224,6 +235,59 @@ export async function instructorPool(bootcampId: string): Promise<Instructor[]> 
   return [...pool.values()];
 }
 
+async function breakoutAssessments(bootcampId: string): Promise<BreakoutAssessment[]> {
+  const a = evalsAssessments;
+  const named = sql`${a.id} in (select s.assessment_id from ${scheduleSessions} s where s.bootcamp_id = ${bootcampId})`;
+  return db
+    .select({ id: a.id, name: a.name, stage: a.stage, active: a.active })
+    .from(a)
+    .where(or(eq(a.active, true), named))
+    .orderBy(sql`lower(${a.name})`, a.id)
+    .limit(100);
+}
+
+/** A breakout that names no assessment, so nobody finds its groups under Assigned to me. */
+export type UnassignedBreakout = {
+  id: string;
+  name: string;
+  track: ScheduleTrack;
+  day: number;
+  start: number;
+  bootcampId: string;
+  bootcampStartDate: string;
+  bootcampStatus: BootcampStatus;
+};
+
+/**
+ * The breakouts at bootcamps still to run, or running now, that name no
+ * assessment: the first 100 by bootcamp, then track, day and start, and how
+ * many there are in all.
+ */
+export async function unassignedBreakouts(): Promise<{ rows: UnassignedBreakout[]; total: number }> {
+  const s = scheduleSessions;
+  const where = and(eq(s.kind, "breakout"), sql`${s.assessmentId} is null`, inArray(bootcamps.status, ["scheduled", "active"]));
+  const [rows, [count]] = await Promise.all([
+    db
+      .select({
+        id: s.id,
+        name: s.name,
+        track: s.track,
+        day: s.day,
+        start: s.start,
+        bootcampId: s.bootcampId,
+        bootcampStartDate: bootcamps.startDate,
+        bootcampStatus: bootcamps.status,
+      })
+      .from(s)
+      .innerJoin(bootcamps, eq(bootcamps.id, s.bootcampId))
+      .where(where)
+      .orderBy(bootcamps.startDate, bootcamps.id, s.track, s.day, s.start, s.id)
+      .limit(100),
+    db.select({ total: sql<number>`count(*)::int` }).from(s).innerJoin(bootcamps, eq(bootcamps.id, s.bootcampId)).where(where),
+  ]);
+  return { rows, total: count?.total ?? 0 };
+}
+
 /** The whole schedule, as the schedule page draws it. */
 export async function loadSchedule(bootcampId: string): Promise<Schedule | null> {
   const bootcamp = await scheduleBootcamp(bootcampId);
@@ -232,9 +296,10 @@ export async function loadSchedule(bootcampId: string): Promise<Schedule | null>
     const count = trackDays(track, bootcamp) ?? 0;
     return Promise.all(Array.from({ length: count }, (_, d) => loadDay(db, bootcampId, track, d + 1)));
   });
-  const [rooms, instructors, classes, ...days] = await Promise.all([
+  const [rooms, instructors, assessments, classes, ...days] = await Promise.all([
     bootcamp.facilityId ? facilityRoomsOf(bootcamp.facilityId) : Promise.resolve([]),
     instructorPool(bootcampId),
+    breakoutAssessments(bootcampId),
     classLists(bootcamp.intDays !== null),
     ...perTrack,
   ]);
@@ -242,6 +307,7 @@ export async function loadSchedule(bootcampId: string): Promise<Schedule | null>
     bootcamp,
     rooms,
     instructors,
+    assessments,
     days: Object.fromEntries(SCHEDULE_TRACKS.map((t, i) => [t, days[i]!])) as Record<ScheduleTrack, SessionRow[][]>,
     classes,
   };
@@ -312,6 +378,8 @@ const sessionFields = {
   typeId: z.string().uuid().nullable().default(null),
   /** A main session's room. */
   roomId: z.string().uuid().nullable().default(null),
+  /** A breakout's assessment, of its track's stage; ignored in any other kind. */
+  assessmentId: z.string().uuid().nullable().default(null),
   /** The leader and the other instructors: exactly one marked leader when there are any. */
   staff: z.array(staffSchema).max(SCHEDULE_LIMITS.staff).default([]),
 };
@@ -335,6 +403,7 @@ export const sessionPatchSchema = z.object({
   description: sessionLookSchema.description,
   typeId: z.string().uuid().nullable(),
   roomId: z.string().uuid().nullable(),
+  assessmentId: z.string().uuid().nullable(),
   staff: z.array(staffSchema).max(SCHEDULE_LIMITS.staff),
 }).partial();
 
@@ -349,6 +418,7 @@ export type SessionError =
   | "unknown_room"
   | "shared_room"
   | "unknown_type"
+  | "unknown_assessment"
   | "clash";
 
 export const SESSION_STATUS_FOR: Record<SessionError, number> = {
@@ -362,6 +432,7 @@ export const SESSION_STATUS_FOR: Record<SessionError, number> = {
   unknown_room: 400,
   shared_room: 400,
   unknown_type: 400,
+  unknown_assessment: 400,
   clash: 409,
 };
 
@@ -419,6 +490,16 @@ async function roomsKnown(bootcamp: ScheduleBootcamp, ids: string[]): Promise<bo
     .where(and(eq(facilityRooms.facilityId, bootcamp.facilityId), inArray(facilityRooms.id, [...new Set(ids)])));
   return found.length === new Set(ids).size;
 }
+
+/** Whether the assessment exists and scores the candidates `track` is taught to. */
+async function assessmentFits(track: ScheduleTrack, id: string): Promise<boolean> {
+  const [row] = await db.select({ stage: evalsAssessments.stage }).from(evalsAssessments).where(eq(evalsAssessments.id, id));
+  return row?.stage === stageOf(track);
+}
+
+/** What a foreign key refused: something named here that was removed in between. */
+const missing = (asked: { typeId?: string | null; assessmentId?: string | null }): SessionError =>
+  asked.typeId ? "unknown_type" : asked.assessmentId ? "unknown_assessment" : "unknown_room";
 
 /**
  * Refuses the people and rooms that are new to the session — not in `before` —
@@ -494,6 +575,8 @@ export async function createSession(
   const outsider = next.staff.find((s) => !names.has(s.email));
   if (outsider) return { ok: false, error: "not_instructor", email: outsider.email };
   if (!(await roomsKnown(bootcamp, roomIdsOf(next)))) return { ok: false, error: "unknown_room" };
+  const assessmentId = next.kind === "breakout" ? input.assessmentId : null;
+  if (assessmentId && !(await assessmentFits(input.track, assessmentId))) return { ok: false, error: "unknown_assessment" };
 
   const day = await loadDay(db, bootcampId, input.track, input.day);
   if (day.length >= SCHEDULE_LIMITS.sessionsPerDay) return { ok: false, error: "day_full" };
@@ -525,6 +608,7 @@ export async function createSession(
           emoji: input.emoji,
           color: input.color,
           roomId: next.roomId,
+          assessmentId,
           createdBy: actorId,
         })
         .returning({ id: scheduleSessions.id });
@@ -532,8 +616,7 @@ export async function createSession(
       return made!.id;
     });
   } catch (err) {
-    // A type or room removed in between.
-    if (isForeignKeyViolation(err)) return { ok: false, error: input.typeId ? "unknown_type" : "unknown_room" };
+    if (isForeignKeyViolation(err)) return { ok: false, error: missing({ typeId: input.typeId, assessmentId }) };
     throw err;
   }
   noteAudit({ target: id, targetLabel: label(bootcamp, input) });
@@ -576,6 +659,10 @@ export async function updateSession(
   if (outsider) return { ok: false, error: "not_instructor", email: outsider.email };
   const oldRooms = new Set(roomIdsOf(before));
   if (!(await roomsKnown(bootcamp, roomIdsOf(next).filter((r) => !oldRooms.has(r))))) return { ok: false, error: "unknown_room" };
+  const assessmentId = next.kind === "breakout" ? (patch.assessmentId !== undefined ? patch.assessmentId : before.assessmentId) : null;
+  if (assessmentId && assessmentId !== before.assessmentId && !(await assessmentFits(before.track, assessmentId))) {
+    return { ok: false, error: "unknown_assessment" };
+  }
 
   // Made longer, it pushes whatever it now runs into later.
   const minutes = patch.minutes ?? before.minutes;
@@ -593,7 +680,7 @@ export async function updateSession(
       await writeStarts(tx, bootcampId, laid, day);
       await tx
         .update(scheduleSessions)
-        .set({ ...fields, kind: next.kind, roomId: next.roomId, updatedAt: new Date() })
+        .set({ ...fields, kind: next.kind, roomId: next.roomId, assessmentId, updatedAt: new Date() })
         .where(eq(scheduleSessions.id, sessionId));
       const sameStaff = JSON.stringify(next.staff) === JSON.stringify(before.staff);
       if (!sameStaff) await writeStaff(tx, sessionId, next.staff);
@@ -601,7 +688,7 @@ export async function updateSession(
       if (!sameStaff || next.kind !== before.kind || audienceNow !== before.audience) await pruneGroups(tx, sessionId, next, audienceNow);
     });
   } catch (err) {
-    if (isForeignKeyViolation(err)) return { ok: false, error: patch.typeId ? "unknown_type" : "unknown_room" };
+    if (isForeignKeyViolation(err)) return { ok: false, error: missing({ typeId: patch.typeId, assessmentId }) };
     throw err;
   }
   return { ok: true, session: (await getSession(bootcampId, sessionId))! };
@@ -717,6 +804,7 @@ type NewSession = {
   emoji: string;
   color: SessionColor;
   roomId: string | null;
+  assessmentId: string | null;
   staff: StaffRow[];
 };
 
@@ -914,6 +1002,7 @@ export async function copySchedule(
           emoji: s.emoji,
           color: s.color,
           roomId: keepRooms ? s.roomId : null,
+          assessmentId: s.assessmentId,
           staff: s.staff.map((p) => ({ ...p, roomId: keepRooms ? p.roomId : null })),
         });
       }

@@ -10,7 +10,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   DndContext,
@@ -105,9 +105,15 @@ export function ScheduleView({
   const [days, setDays] = useState<Days>(initial.days);
   const [view, setView] = useState<View>(initialView);
   const [condensed, setCondensed] = useState(initialCondensed);
-  const [day, setDay] = useState(1);
-  const [track, setTrack] = useState<ScheduleTrack>("btc");
-  const [target, setTarget] = useState<SessionTarget | null>(null);
+  // ?session={id}, as eVals settings links a breakout, opens on that session.
+  const searchParams = useSearchParams();
+  const [linked] = useState(() => {
+    const at = locate(initial.days, searchParams.get("session") ?? "");
+    return at ? dayOf(initial.days, at.key)[at.index] : undefined;
+  });
+  const [day, setDay] = useState(linked?.day ?? 1);
+  const [track, setTrack] = useState<ScheduleTrack>(linked?.track ?? "btc");
+  const [target, setTarget] = useState<SessionTarget | null>(linked ? { mode: "edit", session: linked } : null);
   const [filling, setFilling] = useState(false);
   const [editingBootcamp, setEditingBootcamp] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -621,6 +627,7 @@ export function ScheduleView({
         rooms={schedule.rooms}
         hasFacility={Boolean(bootcamp.facilityId)}
         instructors={schedule.instructors}
+        assessments={schedule.assessments}
         types={types}
         canManage={canManage}
         viewerId={viewerId}
@@ -704,8 +711,8 @@ const ISSUES_IN_TOOLTIP = 8;
  * judge of this bootcamp (once, with all their sessions; a copied schedule
  * can bring them in), each session that ends after the day does, and each
  * breakout that leaves
- * someone in its class out of every group or, when the facility has rooms, an
- * instructor without one. `flagged` has what is wrong with each session, by
+ * someone in its class out of every group, has no assessment to score them on,
+ * or, when the facility has rooms, leaves an instructor without one. `flagged` has what is wrong with each session, by
  * id, for its card.
  */
 function findIssues(
@@ -757,9 +764,11 @@ function findIssues(
       const gaps = [
         unassigned > 0 && `${unassigned} ${unassigned === 1 ? "attendee" : "attendees"} not assigned`,
         roomless > 0 && `${roomless} ${roomless === 1 ? "instructor" : "instructors"} without a room`,
+        !s.assessmentId && "no assessment",
       ].filter((g): g is string => Boolean(g));
-      for (const g of gaps) flag(s.id, g);
-      if (gaps.length > 0) issues.push({ kind: "breakout", key: `breakout:${s.id}`, lead: `${gaps.join(" and ")}:`, spots: [spotOf(s)] });
+      const upper = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
+      for (const g of gaps) flag(s.id, upper(g));
+      if (gaps.length > 0) issues.push({ kind: "breakout", key: `breakout:${s.id}`, lead: `${upper(gaps.join(" and "))}:`, spots: [spotOf(s)] });
     }
   }
   const bySpot = (x: Spot, y: Spot) => x.day - y.day || x.start - y.start;

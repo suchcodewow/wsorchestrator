@@ -38,10 +38,24 @@ const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-mono", disp
 export async function generateMetadata(): Promise<Metadata> {
   const environment = deploymentEnvironment();
   const icon = environment === "dev" ? "favicon-dev" : environment ? "favicon-qa" : "favicon";
+  const baseUrl =
+    environment === "qa" ? "https://qa.harnessevents.io" : "https://harnessevents.io";
 
   return {
     title: "Harness Events",
     description: "Event Orchestration for Harness.",
+    metadataBase: new URL(baseUrl),
+    openGraph: {
+      title: "Harness Events",
+      description: "Event Orchestration for Harness.",
+      images: [{ url: "/wsgear.png", width: 128, height: 128 }],
+    },
+    twitter: {
+      card: "summary",
+      title: "Harness Events",
+      description: "Event Orchestration for Harness.",
+      images: ["/wsgear.png"],
+    },
     icons: {
       icon: { url: `/${icon}.svg`, type: "image/svg+xml" },
       apple: `/${icon}-apple.png`,

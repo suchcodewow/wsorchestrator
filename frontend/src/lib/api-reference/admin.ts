@@ -48,7 +48,7 @@ const AUDIENCE_TYPE = `"both" | "sales" | "engineers"`;
 const COLOR_TYPE = `"slate" | "red" | "orange" | "amber" | "green" | "teal" | "blue" | "violet" | "pink"`;
 const MINUTES_NOTE = `a multiple of ${SCHEDULE_LIMITS.slot} from ${SCHEDULE_LIMITS.slot} to ${SCHEDULE_LIMITS.maxMinutes}`;
 
-const SESSION_SHAPE = `{ id, track: ${TRACK_TYPE}, day: number, start: number, minutes: number, kind, audience: ${AUDIENCE_TYPE}, typeId: string | null, name, description, emoji, color, roomId: string | null, staff: { email, fullName, leader: boolean, roomId: string | null }[], comments: number, largestGroup: number, assigned: string[], updatedAt }`;
+const SESSION_SHAPE = `{ id, track: ${TRACK_TYPE}, day: number, start: number, minutes: number, kind, audience: ${AUDIENCE_TYPE}, typeId: string | null, name, description, emoji, color, roomId: string | null, assessmentId: string | null, staff: { email, fullName, leader: boolean, roomId: string | null }[], comments: number, largestGroup: number, assigned: string[], updatedAt }`;
 
 const CLASH_SHAPE = `{ sessionId, name, track, day, start: number, end: number, what: { kind: "person", email, fullName } | { kind: "room", roomId } | { kind: "audience", group: "sales" | "engineers" } }`;
 
@@ -76,6 +76,11 @@ const SESSION_STAFF_FIELDS: Field[] = [
   { name: "typeId", type: "string | null", note: "the session type it was started from" },
   { name: "roomId", type: "string | null", note: "a main session's room, from the bootcamp's facility" },
   {
+    name: "assessmentId",
+    type: "string | null",
+    note: "a breakout's eVals assessment, of the stage its track is taught to: its instructors score their groups on it, and each finds theirs under mine on GET /api/evals/scoring/{assessmentId}. Ignored for any other kind",
+  },
+  {
     name: "staff",
     type: "{ email, leader?: boolean, roomId?: string | null }[]",
     note: `up to ${SCHEDULE_LIMITS.staff}, exactly one the leader; each a Training administrator or a guest judge of the bootcamp; roomId is a breakout instructor's room`,
@@ -89,6 +94,7 @@ const SESSION_ERRORS: EndpointError[] = [
   { status: 400, error: "unknown_room", when: "a room is not one of the bootcamp's facility's" },
   { status: 400, error: "shared_room", when: "two breakout instructors are given the same room" },
   { status: 400, error: "unknown_type", when: "typeId names no session type" },
+  { status: 400, error: "unknown_assessment", when: "assessmentId names no assessment, or one of the other stage" },
   { status: 404, error: "not_found", when: "no such bootcamp or session" },
   { status: 409, error: "clash", when: "someone or a room added is in another session at the same time; clashes says which" },
 ];
@@ -624,12 +630,12 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       {
         method: "GET",
         path: "/api/scheduler/bootcamps/{id}/schedule",
-        summary: "Reads one bootcamp's whole schedule: every day of its four tracks, its rooms, and who can run a session.",
+        summary: "Reads one bootcamp's whole schedule: every day of its four tracks, its rooms, who can run a session, and the assessments a breakout can be scored on.",
         access: "trainingViewer",
         token: true,
-        notes: `days.btc[0] is day 1 of Bootcamp; each day's sessions are in start order, at most ${SCHEDULE_LIMITS.sessionsPerDay}. start is minutes after midnight, on the quarter hour, from 480 (8:00 AM); a session ends by midnight, and no two on one track-day overlap. Time between them is unscheduled. The SE tracks run as many days as the class they break out of, and a track the bootcamp does not hold has no days. Day N of every track is the same calendar day. instructors is every Training administrator and every guest judge of the bootcamp. classes lists, by email, who each class is now on each track (at most ${SCHEDULE_LIMITS.groupPeople} each), and a session's assigned is everyone in its breakout groups, so a breakout can be checked for anyone it leaves out.`,
+        notes: `days.btc[0] is day 1 of Bootcamp; each day's sessions are in start order, at most ${SCHEDULE_LIMITS.sessionsPerDay}. start is minutes after midnight, on the quarter hour, from 480 (8:00 AM); a session ends by midnight, and no two on one track-day overlap. Time between them is unscheduled. The SE tracks run as many days as the class they break out of, and a track the bootcamp does not hold has no days. Day N of every track is the same calendar day. instructors is every Training administrator and every guest judge of the bootcamp. assessments is every active assessment, and any inactive one a session here still names, at most 100. classes lists, by email, who each class is now on each track (at most ${SCHEDULE_LIMITS.groupPeople} each), and a session's assigned is everyone in its breakout groups, so a breakout can be checked for anyone it leaves out.`,
         params: [BOOTCAMP_ID],
-        returns: `{ bootcamp: { id, startDate, btcDays, intDays, status, facilityId, facilityName }, rooms: { id, name, capacity }[], instructors: { email, fullName, role: "administrator" | "judge" }[], days: { btc, int, btc_se, int_se: ${SESSION_SHAPE}[][] }, classes: { bootcamp, intermediate: { sales: string[], engineer: string[] } } }`,
+        returns: `{ bootcamp: { id, startDate, btcDays, intDays, status, facilityId, facilityName }, rooms: { id, name, capacity }[], instructors: { email, fullName, role: "administrator" | "judge" }[], assessments: { id, name, stage: "bootcamp" | "intermediate", active: boolean }[], days: { btc, int, btc_se, int_se: ${SESSION_SHAPE}[][] }, classes: { bootcamp, intermediate: { sales: string[], engineer: string[] } } }`,
         errors: [{ status: 404, error: "not_found", when: "no such bootcamp" }],
       },
       {
@@ -679,7 +685,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "trainingAdmin",
         token: true,
         notes:
-          "Copies every session and who runs it, but not comments or breakout groups. Rooms come too only when both bootcamps are at the same facility. Days past the end of a track here are left out; notes says what was. The checklists of the days it copies, and Prep Day's, are added to this bootcamp's, every item to do; replace leaves its own items alone, and an item whose day here already has one of the same name is not added again. An owner or a tag who is not an administrator or guest judge of this bootcamp is left off, and notes names them.",
+          "Copies every session, who runs it and the assessment a breakout is scored on, but not comments or breakout groups. Rooms come too only when both bootcamps are at the same facility. Days past the end of a track here are left out; notes says what was. The checklists of the days it copies, and Prep Day's, are added to this bootcamp's, every item to do; replace leaves its own items alone, and an item whose day here already has one of the same name is not added again. An owner or a tag who is not an administrator or guest judge of this bootcamp is left off, and notes names them.",
         params: [BOOTCAMP_ID],
         body: {
           kind: "json",
@@ -1158,7 +1164,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "scorer",
         token: true,
         notes:
-          "An attendee is a current candidate (see GET /api/evals/current-cohort) in the assessment's stage on the sales or engineer track, as its audience takes in. averageScore is to one decimal place, and null if they are not scored at the active bootcamp. needsRescoring is true for one scored before a criterion was added. attendees and scored count everyone it applies to, whatever the search or mine. mine counts those in the caller's own groups in any breakout of the assessment's stage on the active bootcamp's schedule; a breakout is not tied to one assessment, so every breakout of the stage counts. rooms are the rooms the caller is given in those same breakouts, in the order they happen; one without a room for them is left out. start is minutes after midnight.",
+          "An attendee is a current candidate (see GET /api/evals/current-cohort) in the assessment's stage on the sales or engineer track, as its audience takes in. averageScore is to one decimal place, and null if they are not scored at the active bootcamp. needsRescoring is true for one scored before a criterion was added. attendees and scored count everyone it applies to, whatever the search or mine. mine counts those in the caller's own groups in the active bootcamp's breakouts whose assessmentId is this assessment, as the schedule's Breakout Assignments tab sets it. rooms are the rooms the caller is given in those same breakouts, in the order they happen; one without a room for them is left out. start is minutes after midnight.",
         params: [{ name: "assessmentId", type: "string", required: true, note: "UUID" }],
         query: [
           ...listQuery(ASSESSMENT_ATTENDEE_LIST.sorts, "the name, email or title"),
@@ -1301,6 +1307,67 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
     ],
   },
   {
+    id: "canary-wire",
+    title: "Canary Wire",
+    intro:
+      "Monthly Canary Wire completion in Mindtickle, by manager, as Reporting → Canary Wire shows it. It names everyone in the three Canary Wire role groups and who is behind, so every route here is for eVals administrators only.",
+    endpoints: [
+      {
+        method: "GET",
+        path: "/api/evals/canary-wire",
+        summary: "Returns one Canary Wire month from the newest Mindtickle pull: every rep's progress per module, grouped by manager, with per-role and overall rates.",
+        access: "evalsAdmin",
+        token: true,
+        notes:
+          "Built from the newest pull and today's exemptions, so a past month counts whoever was accountable then. A rep is pre-bootcamp, and counted in no rate, until the month after their BTC date in bootcamp history; BTC marked exempt counts in every month. With no BTC date, someone whose HiBob start date is before the first real BTC date on record counts in every month, since bootcamp history doesn't go back far enough to have them; anyone else with none counts in none. None of this applies to SDRs, who never attend bootcamp: they count from their first full month at Harness by HiBob's start date (starting October 2 counts from November, October 1 from October), and in every month with no start date. Rates are percentages to one place, null when nothing is owed. A cell is keyed by module label: accountable cells are counted, exempt ones are pre-bootcamp work and off-role ones (neither) are another edition's module, shown but not counted. atPt is the event's moment in Pacific, empty when only the day is known. lastActivity is the newest completion in the month's content. hasSnapshot is false until the first pull from Mindtickle has finished, and every list is then empty. With format=csv, the same month as a CSV download, one row per rep.",
+        query: [
+          { name: "month", type: "string", note: 'a month the picker offers, "September 2026"; the newest month anybody has worked in if omitted' },
+          { name: "format", type: '"csv"', note: "a CSV download instead of JSON" },
+        ],
+        returns:
+          "{ month, months: string[], monthsWithData: string[], hasSnapshot, hasData, labels: string[], modules: { label, edition, name }[], teams: { manager, managerEmail, roles: string[], directs: Rep[], learners, exempt, assigned, completed, pct, fullyComplete, notActivated }[], roles: { role, learners, exempt, assigned, completed, pct, icLearners, icAssigned, icCompleted, icPct, modules: string[] }[], totals | null, lastActivity: { at, atPt, who, module, role }, fetchedAtPt, savedAt: string | null, notes: string[], seriesLinks: { edition, label, url }[], moduleUrlTemplate }, where Rep is { name, email, role, manager, managerEmail, title, notActivated, ic, exempt, exemptFrom, exemptSource: \"bootcamp\" | \"predates_history\" | \"no_bootcamp\" | \"first_month\" | \"edition\", cells: Record<label, { state, on, atPt, moduleId, seriesId, moduleType, accountable, exempt, also: { state, on, atPt, edition }[], edition? }>, assigned, completed, pct, offRole }; text/csv with format=csv",
+        errors: [
+          { status: 400, error: "invalid_month", when: "month is not one the picker offers" },
+          { status: 400, error: "invalid_format", when: "format is set to anything but csv" },
+        ],
+      },
+      {
+        method: "GET",
+        path: "/api/evals/canary-wire/pull",
+        summary: "Returns the newest pull from Mindtickle, running or not, and whether Mindtickle is configured.",
+        access: "evalsAdmin",
+        token: true,
+        notes:
+          "A pull takes about 15 minutes, so it goes in steps of up to four minutes (POST /api/evals/canary-wire/pull/step), each saving where it got to. done of total counts learners fetched, 0 of 0 until the rosters are in. working is true while a step holds the pull. A running pull nobody works on for 6 hours is given up as failed. configured is false when MT_API_KEY or MT_SECRET_KEY is unset, and no pull can start.",
+        returns: "{ configured: boolean, pull: { id, trigger: \"manual\" | \"schedule\", status: \"running\" | \"succeeded\" | \"failed\", message, done: number, total: number, error: string | null, startedAt, updatedAt, finishedAt: string | null, startedByName: string | null, working: boolean } | null }",
+      },
+      {
+        method: "POST",
+        path: "/api/evals/canary-wire/pull",
+        summary: "Starts a pull from Mindtickle now (Refresh now), rather than waiting for the next two-hourly one.",
+        access: "evalsAdmin",
+        token: true,
+        notes:
+          "Fetches nothing itself: call POST /api/evals/canary-wire/pull/step until the pull ends, as the page does. When it succeeds it replaces the Canary Wire's data.",
+        returns: "{ pull: { id, trigger: \"manual\" | \"schedule\", status: \"running\" | \"succeeded\" | \"failed\", message, done: number, total: number, error: string | null, startedAt, updatedAt, finishedAt: string | null, startedByName: string | null, working: boolean } }",
+        errors: [
+          { status: 409, error: "running", when: "a pull is already running" },
+          { status: 409, error: "not_configured", when: "Mindtickle's key pair or tenant is unset" },
+        ],
+      },
+      {
+        method: "POST",
+        path: "/api/evals/canary-wire/pull/step",
+        summary: "Works on the running pull for up to four minutes, then returns how it stands.",
+        access: "evalsAdmin",
+        token: true,
+        notes:
+          "Answers at once, with the pull unchanged, when another step holds it, and with null when no pull is running. Each step fetches learners' histories in order and saves every ten, so a step cut short loses little. One learner's history failing is noted and costs that learner; Mindtickle refusing the key pair fails the pull. Allows 300 seconds.",
+        returns: "{ pull: { id, trigger: \"manual\" | \"schedule\", status: \"running\" | \"succeeded\" | \"failed\", message, done: number, total: number, error: string | null, startedAt, updatedAt, finishedAt: string | null, startedByName: string | null, working: boolean } | null }",
+      },
+    ],
+  },
+  {
     id: "evals",
     title: "eVals settings",
     endpoints: [
@@ -1406,6 +1473,16 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           "criteria counts those still asked; submissions counts the attendees scored on it at any bootcamp. total counts every assessment, whatever the search.",
         query: listQuery(ASSESSMENT_LIST.sorts, "the name"),
         returns: `{ assessments: { id, name, stage: "bootcamp" | "intermediate", audience: "sales" | "engineer" | "both", active: boolean, updatedAt, criteria: number, submissions: number }[], ${PAGE_FIELDS}, total: number }`,
+      },
+      {
+        method: "GET",
+        path: "/api/evals/assessments/unassigned-breakouts",
+        summary: "Lists the breakouts at scheduled and active bootcamps that name no assessment.",
+        access: "evalsAdmin",
+        token: true,
+        notes:
+          "Ordered by the bootcamp's start date, then track, day and start; at most 100. total counts every such breakout. Their groups appear under no assessment's Assigned to me until one is picked on the session's Breakout Assignments.",
+        returns: `{ breakouts: { id, name, track: "btc" | "int" | "btc_se" | "int_se", day: number, start: number, bootcampId, bootcampStartDate, bootcampStatus: "scheduled" | "active" }[], total: number }`,
       },
       {
         method: "POST",
@@ -1857,6 +1934,20 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "internal",
         token: false,
         returns: "handled by Auth.js",
+      },
+      {
+        method: "POST",
+        path: "/api/evals/canary-wire/pull/scheduled",
+        summary: "Starts the Canary Wire's two-hourly pull, or takes it a step further, for Cloud Scheduler.",
+        access: "internal",
+        token: false,
+        notes:
+          "Called every five minutes for the first half hour of every even hour. Accepts only a Google-signed OIDC token for CANARY_WIRE_PULL_AUDIENCE from the CANARY_WIRE_PULL_INVOKER service account; either unset refuses every call. Works on a pull already running, including one a closed page left halfway; otherwise starts one unless one started in the last 90 minutes, whatever became of it, so a failure is retried two hours later rather than every five minutes. Allows 300 seconds.",
+        returns: "{ outcome: \"advanced\" | \"started\" | \"fresh\", pull: { id, trigger: \"manual\" | \"schedule\", status: \"running\" | \"succeeded\" | \"failed\", message, done: number, total: number, error: string | null, startedAt, updatedAt, finishedAt: string | null, startedByName: string | null, working: boolean } | null }",
+        errors: [
+          { status: 401, error: "unauthorized", when: "the OIDC token is missing, invalid or from someone else" },
+          { status: 409, error: "not_configured", when: "Mindtickle's key pair or tenant is unset" },
+        ],
       },
       {
         method: "POST",

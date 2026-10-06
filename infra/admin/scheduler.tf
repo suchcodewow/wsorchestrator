@@ -76,6 +76,44 @@ resource "google_cloud_scheduler_job" "hibob_sync" {
   depends_on = [google_project_service.admin]
 }
 
+locals {
+  canary_wire_pull_audience = "workshop-orchestrator/canary-wire-pull"
+  canary_wire_pull_url = format(
+    "%s/api/evals/canary-wire/pull/scheduled",
+    trimsuffix(var.app_url != "" ? var.app_url : google_cloud_run_v2_service.app.uri, "/"),
+  )
+}
+
+# Pull Reporting → Canary Wire from Mindtickle every two hours. A pull takes
+# ~15 minutes and a call may run five, so the job fires in a burst: the first
+# call starts the pull and each after it takes a step, each saving where it
+# got to. Calls once it has finished do nothing. Only with a Mindtickle tenant
+# set, like the secrets it needs.
+resource "google_cloud_scheduler_job" "canary_wire_pull" {
+  count   = var.mindtickle_company_id != "" ? 1 : 0
+  name    = "canary-wire-pull-trigger"
+  project = var.admin_project_id
+  region  = var.region
+
+  schedule  = var.canary_wire_pull_schedule
+  time_zone = "America/New_York"
+
+  # The route allows 300 seconds and works for 240 of them.
+  attempt_deadline = "300s"
+
+  http_target {
+    http_method = "POST"
+    uri         = local.canary_wire_pull_url
+
+    oidc_token {
+      service_account_email = google_service_account.scheduler.email
+      audience              = local.canary_wire_pull_audience
+    }
+  }
+
+  depends_on = [google_project_service.admin]
+}
+
 # Let the scheduler SA execute the provisioner job.
 resource "google_cloud_run_v2_job_iam_member" "scheduler_runs_provisioner" {
   name     = google_cloud_run_v2_job.scheduler.name

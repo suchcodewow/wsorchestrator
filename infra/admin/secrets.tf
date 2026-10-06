@@ -32,6 +32,8 @@ locals {
     nonsensitive(var.deepgram_api_key != "") ? ["deepgram-api-key"] : [],
     # Likewise the Slack bot token.
     nonsensitive(var.slack_bot_token != "") ? ["slack-bot-token"] : [],
+    # Gated on the tenant, not the key pair, as HiBob's is on its service user.
+    var.mindtickle_company_id != "" ? ["mindtickle-api-key", "mindtickle-secret-key"] : [],
   )
 
   # id -> value, holding the (mostly sensitive) payloads. Only ever looked up by
@@ -50,6 +52,8 @@ locals {
     "hibob-token"                = var.hibob_token
     "deepgram-api-key"           = var.deepgram_api_key
     "slack-bot-token"            = var.slack_bot_token
+    "mindtickle-api-key"         = var.mindtickle_api_key
+    "mindtickle-secret-key"      = var.mindtickle_secret_key
   }
 
   # Secrets the runner/reaper/scheduler jobs read. The runner has no use for the

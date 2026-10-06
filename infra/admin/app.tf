@@ -142,6 +142,14 @@ resource "google_cloud_run_v2_service" "app" {
             HIBOB_SYNC_AUDIENCE = local.hibob_sync_audience
             HIBOB_SYNC_INVOKER  = google_service_account.scheduler.email
           },
+          # The Canary Wire's Mindtickle tenant, and who may call its scheduled
+          # pull (see scheduler.tf). The key pair is secret-backed, below.
+          var.mindtickle_company_id != "" ? {
+            MT_COMPANY_ID             = var.mindtickle_company_id
+            MT_REGION                 = var.mindtickle_region
+            CANARY_WIRE_PULL_AUDIENCE = local.canary_wire_pull_audience
+            CANARY_WIRE_PULL_INVOKER  = google_service_account.scheduler.email
+          } : {},
           # QA's production import: the job calls the app back to finish, with
           # an OIDC token that must carry this audience and runner-sa's email.
           # Unset (production) refuses every call. See production-import.tf.
@@ -196,6 +204,10 @@ resource "google_cloud_run_v2_service" "app" {
           var.hibob_userid != "" ? { HIBOB_TOKEN = "hibob-token" } : {},
           nonsensitive(var.deepgram_api_key != "") ? { DEEPGRAM_API_KEY = "deepgram-api-key" } : {},
           nonsensitive(var.slack_bot_token != "") ? { SLACK_BOT_TOKEN = "slack-bot-token" } : {},
+          var.mindtickle_company_id != "" ? {
+            MT_API_KEY    = "mindtickle-api-key"
+            MT_SECRET_KEY = "mindtickle-secret-key"
+          } : {},
         )
         content {
           name = env.key

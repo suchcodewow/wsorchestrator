@@ -42,6 +42,7 @@ import {
   canPublishComponents,
   canScoreAssessments,
   canSearchEmployees,
+  canSeeCanaryWire,
   canSeeAllEvents,
   canTakeIris,
   canUseEvals,
@@ -55,7 +56,7 @@ import { visibleCohortSettingsTabs } from "@/app/(app)/cohort-settings/tabs";
 import { EVALS_SETTINGS_TABS } from "@/app/(app)/evals-settings/tabs";
 import { SCHEDULER_SETTINGS_TABS } from "@/app/(app)/scheduler-settings/tabs";
 import { EVALS_TABS } from "@/app/(app)/evals/tabs";
-import { REPORTING_TABS } from "@/app/(app)/reporting/tabs";
+import { visibleReportingTabs } from "@/app/(app)/reporting/tabs";
 import { COHORTS_TABS } from "@/app/(app)/cohorts/tabs";
 import { visibleSettingsTabs } from "@/app/(app)/settings/tabs";
 import { visibleMySettingsTabs } from "@/app/(app)/me/tabs";
@@ -272,9 +273,9 @@ const PAGES: Record<string, PageCase> = {
   "/iris/questions?subject": { path: () => "/iris/questions?subject=compete&level=3&status=draft", expect: gated(canManageIris) },
   "/reporting": {
     path: () => "/reporting",
-    expect: (a) => (canUseEvals(a) ? { to: REPORTING_TABS[0]!.href } : 404),
+    expect: (a) => (canUseEvals(a) ? { to: visibleReportingTabs(a)[0]!.href } : 404),
   },
-  "/reporting/canary-wire": { path: () => "/reporting/canary-wire", expect: gated(canUseEvals) },
+  "/reporting/canary-wire": { path: () => "/reporting/canary-wire", expect: gated(canSeeCanaryWire) },
   "/reporting/bootcamp-history": { path: () => "/reporting/bootcamp-history", expect: gated(canUseEvals) },
   "/reporting/bootcamp-history?status=active": {
     path: () => "/reporting/bootcamp-history?status=active",
@@ -562,6 +563,11 @@ const ROUTES: RouteCase[] = [
   // eVals
   { method: "GET", path: "/api/evals/bootcamp-history", allowed: canUseEvals },
   { method: "GET", path: `/api/evals/bootcamp-history/${MISSING}`, allowed: canUseEvals },
+  { method: "GET", path: "/api/evals/canary-wire", allowed: canSeeCanaryWire },
+  // No Mindtickle key on the e2e server: starting is refused as not_configured, and a step finds no pull.
+  { method: "GET", path: "/api/evals/canary-wire/pull", allowed: canSeeCanaryWire },
+  { method: "POST", path: "/api/evals/canary-wire/pull", allowed: canSeeCanaryWire },
+  { method: "POST", path: "/api/evals/canary-wire/pull/step", allowed: canSeeCanaryWire },
 
   // eVals administration
   { method: "GET", path: "/api/evals/candidate-cutoffs", allowed: canManageEvalsSettings },
@@ -581,6 +587,7 @@ const ROUTES: RouteCase[] = [
   { method: "DELETE", path: `/api/evals/slack-contacts/${MISSING}`, allowed: canManageEvalsSettings },
   { method: "GET", path: "/api/evals/assessments", allowed: canManageEvalsSettings },
   { method: "POST", path: "/api/evals/assessments", allowed: canManageEvalsSettings, body: () => ({}) },
+  { method: "GET", path: "/api/evals/assessments/unassigned-breakouts", allowed: canManageEvalsSettings },
   { method: "GET", path: `/api/evals/assessments/${MISSING}`, allowed: canManageEvalsSettings },
   { method: "PUT", path: `/api/evals/assessments/${MISSING}`, allowed: canManageEvalsSettings, body: () => ({}) },
   { method: "DELETE", path: `/api/evals/assessments/${MISSING}`, allowed: canManageEvalsSettings },
@@ -691,6 +698,18 @@ describe("the scheduled HiBob sync", () => {
     const forged = { bearer: "not-a-google-token" };
     for (const who of [SIGNED_OUT, ...PERSONA_NAMES, forged]) {
       const { status } = await send(who, "POST", "/api/evals/hibob/sync/scheduled");
+      if (status !== 401) wrong.push(`${who === forged ? "forged token" : label(who as Who)}: got ${status}`);
+    }
+    assert.deepEqual(wrong, []);
+  });
+});
+
+describe("the scheduled Canary Wire pull", () => {
+  test("refuses every session and a forged token", async () => {
+    const wrong: string[] = [];
+    const forged = { bearer: "not-a-google-token" };
+    for (const who of [SIGNED_OUT, ...PERSONA_NAMES, forged]) {
+      const { status } = await send(who, "POST", "/api/evals/canary-wire/pull/scheduled");
       if (status !== 401) wrong.push(`${who === forged ? "forged token" : label(who as Who)}: got ${status}`);
     }
     assert.deepEqual(wrong, []);
