@@ -26,8 +26,11 @@ export const EMPLOYEE_LIST = spec([
 ]);
 export type EmployeeSort = (typeof EMPLOYEE_LIST.sorts)[number];
 
-export const USER_LIST = spec(["user", "events", "eventRole", "trainingRole", "evalsRole", "platform"]);
+export const USER_LIST = spec(["user", "events", "eventRole", "trainingRole", "evalsRole", "irisRole", "platform"]);
 export type UserSort = (typeof USER_LIST.sorts)[number];
+
+export const IRIS_COHORT_LIST = spec(["finishedAt", "person", "track", "completed"], "desc");
+export type IrisCohortSort = (typeof IRIS_COHORT_LIST.sorts)[number];
 
 export const TITLE_LIST = spec(["title", "addedBy", "createdAt"]);
 export type TitleSort = (typeof TITLE_LIST.sorts)[number];

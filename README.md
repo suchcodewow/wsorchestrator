@@ -523,6 +523,17 @@ placeholder; **eVals settings** holds what it will draw on:
 | **eVals Viewer**        | The **eVals** page.                                             |
 | **eVals Administrator** | Sets everyone's eVals role on **Manage users**, and **eVals settings**. |
 
+**Iris** — adaptive placement tests for new GTM hires: eight subjects, each
+taken once per form, which place someone Beginner, Intermediate or Advanced so
+enablement can route their training. Takers never see their own level.
+Independent of eVals: an eVals role gives no Iris access, and the reverse.
+
+| Role                     | Adds                                                            |
+| ------------------------ | --------------------------------------------------------------- |
+| *(none)*                 | Nothing. What everyone starts as.                               |
+| **Iris Taker**           | The **Iris** page: takes the tests.                             |
+| **Iris Administrator**   | Sets everyone's Iris role on **Manage users**; everyone's results and the answer key; approves and rejects questions. |
+
 **Platform Administrator** is a flag rather than a role in an area. It counts
 as administrator in every area, and adds what reaches past any single one:
 [who may sign in at all](#restricting-sign-in) on **Admin Settings**, the [**Backups**](#backups)

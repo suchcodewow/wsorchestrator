@@ -47,8 +47,10 @@ const EXPECTED_SIDEBAR: Record<Persona, string[]> = {
     "[Administration]",
     "Manage users",
   ],
-  evalsViewer: ["[Assessments]", "eVals", "Iris", "Reporting", ...ACCOUNT],
-  evalsAdmin: ["[Assessments]", "eVals", "Iris", "Reporting", "eVals settings", ...ACCOUNT, "[Administration]", "Manage users"],
+  evalsViewer: ["[Assessments]", "eVals", "Reporting", ...ACCOUNT],
+  evalsAdmin: ["[Assessments]", "eVals", "Reporting", "eVals settings", ...ACCOUNT, "[Administration]", "Manage users"],
+  irisTaker: ["[Assessments]", "Iris", ...ACCOUNT],
+  irisAdmin: ["[Assessments]", "Iris", ...ACCOUNT, "[Administration]", "Manage users"],
   guestJudge: ["[Assessments]", "eVals", ...ACCOUNT],
   bothAdmins: [
     ...EVENTS_ADMIN,

@@ -1104,6 +1104,7 @@ export type UserSnapshot = {
   eventRole: string;
   trainingRole: string | null;
   evalsRole: string | null;
+  irisRole: string | null;
   isPlatformAdmin: boolean;
   calendarScope: string;
   accounts: { type: string; provider: string; providerAccountId: string }[];
@@ -1118,6 +1119,7 @@ export async function snapshotUsers(): Promise<UserSnapshot[]> {
             u.site_role::text        as "eventRole",
             u.training_role::text    as "trainingRole",
             u.evals_role::text       as "evalsRole",
+            u.iris_role::text        as "irisRole",
             u.is_platform_admin      as "isPlatformAdmin",
             u.calendar_scope::text   as "calendarScope",
             coalesce(
@@ -1134,7 +1136,8 @@ export async function snapshotUsers(): Promise<UserSnapshot[]> {
         and (u.is_platform_admin
              or u.site_role <> 'none'
              or u.training_role is not null
-             or u.evals_role is not null)
+             or u.evals_role is not null
+             or u.iris_role is not null)
       group by u.id
       order by u.email`,
   );

@@ -60,6 +60,12 @@ export type EvalsRole = (typeof EVALS_ROLES)[number];
 
 export const evalsRole = pgEnum("evals_role", EVALS_ROLES);
 
+/** The Iris area's roles, lowest first. No role at all is no access. */
+export const IRIS_ROLES = ["taker", "administrator"] as const;
+export type IrisRole = (typeof IRIS_ROLES)[number];
+
+export const irisRole = pgEnum("iris_role", IRIS_ROLES);
+
 export const CALENDAR_SCOPES = ["own", "all"] as const;
 export type CalendarScope = (typeof CALENDAR_SCOPES)[number];
 
@@ -79,6 +85,7 @@ export const users = pgTable("users", {
   eventRole: eventRole("site_role").notNull().default("none"),
   trainingRole: trainingRole("training_role"),
   evalsRole: evalsRole("evals_role"),
+  irisRole: irisRole("iris_role"),
   isPlatformAdmin: boolean("is_platform_admin").notNull().default(false),
   calendarScope: calendarScope("calendar_scope").notNull().default("own"),
 });
@@ -380,6 +387,7 @@ export const userInvites = pgTable(
     eventRole: eventRole("event_role"),
     trainingRole: trainingRole("training_role"),
     evalsRole: evalsRole("evals_role"),
+    irisRole: irisRole("iris_role"),
     createdBy: text("created_by")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
@@ -1906,3 +1914,115 @@ export type WorkshopAccount = typeof workshopAccounts.$inferSelect;
 export type RunLog = typeof runLogs.$inferSelect;
 export type RunResource = typeof runResources.$inferSelect;
 export type RunStatus = (typeof runStatus.enumValues)[number];
+
+// ─── Iris ───────────────────────────────────────────────────────────────────
+// Adaptive placement tests. The questions live in code (lib/iris/items.ts);
+// these tables hold who takes them, what they answered, and which questions
+// are approved.
+
+/** The track a taker sells in, which weights their overall score. */
+export const irisTakers = pgTable(
+  "iris_takers",
+  {
+    userId: text("user_id")
+      .primaryKey()
+      .references(() => users.id, { onDelete: "cascade" }),
+    track: text("track").notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [check("iris_takers_track_check", sql`${t.track} in ('AE', 'SE', 'SDR')`)],
+);
+
+/**
+ * One sitting of one subject. A live sitting is the record, and there is one
+ * per person, subject and form; a preview is an administrator trying the
+ * questions out, and is never reported. Between answers it holds where the
+ * engine is and which question is on screen.
+ */
+export const irisAttempts = pgTable(
+  "iris_attempts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    subject: text("subject").notNull(),
+    form: text("form").notNull(),
+    mode: text("mode").notNull(),
+    level: integer("level").notNull(),
+    up: integer("up").notNull().default(0),
+    down: integer("down").notNull().default(0),
+    phase: text("phase").notNull().default("main"),
+    tieLeft: integer("tie_left").notNull().default(0),
+    /** The question on screen; null once the sitting is over. */
+    currentItemId: text("current_item_id"),
+    shownAt: timestamp("shown_at", { withTimezone: true }),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+    placement: integer("placement"),
+    confidence: text("confidence"),
+    questions: integer("questions").notNull().default(0),
+  },
+  (t) => [
+    uniqueIndex("iris_attempts_one_live_idx")
+      .on(t.userId, t.subject, t.form)
+      .where(sql`${t.mode} = 'live'`),
+    index("iris_attempts_finished_idx").on(t.form, t.finishedAt),
+    check("iris_attempts_form_check", sql`${t.form} in ('A', 'B')`),
+    check("iris_attempts_mode_check", sql`${t.mode} in ('live', 'preview')`),
+    check("iris_attempts_level_check", sql`${t.level} between 1 and 3`),
+    check("iris_attempts_phase_check", sql`${t.phase} in ('main', 'tiebreak')`),
+    check("iris_attempts_placement_check", sql`${t.placement} is null or ${t.placement} between 1 and 3`),
+  ],
+);
+
+export type IrisAttempt = typeof irisAttempts.$inferSelect;
+
+/** One answered question, in order. `choice` is the option's index, or -1 for "I don't know". */
+export const irisResponses = pgTable(
+  "iris_responses",
+  {
+    attemptId: uuid("attempt_id")
+      .notNull()
+      .references(() => irisAttempts.id, { onDelete: "cascade" }),
+    seq: integer("seq").notNull(),
+    itemId: text("item_id").notNull(),
+    /** Statistics are per version, so a reworded question starts over. */
+    itemVersion: text("item_version").notNull(),
+    level: integer("level").notNull(),
+    subtopic: text("subtopic").notNull(),
+    choice: integer("choice").notNull(),
+    correct: boolean("correct").notNull(),
+    ms: integer("ms").notNull(),
+    phase: text("phase").notNull(),
+    answeredAt: timestamp("answered_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.attemptId, t.seq] }),
+    index("iris_responses_item_idx").on(t.itemId, t.itemVersion),
+    check("iris_responses_choice_check", sql`${t.choice} between -1 and 3`),
+  ],
+);
+
+export const IRIS_REVIEW_STATUSES = ["approved", "rejected", "draft"] as const;
+export type IrisReviewStatus = (typeof IRIS_REVIEW_STATUSES)[number];
+
+/**
+ * A reviewer's decision on one version of one question. A question with no
+ * row for its current version is a draft, and only an approved question is
+ * served in a live sitting.
+ */
+export const irisItemReviews = pgTable(
+  "iris_item_reviews",
+  {
+    itemId: text("item_id").primaryKey(),
+    itemVersion: text("item_version").notNull(),
+    status: text("status").notNull(),
+    note: text("note").notNull().default(""),
+    reviewerId: text("reviewer_id").references(() => users.id, { onDelete: "set null" }),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [check("iris_item_reviews_status_check", sql`${t.status} in ('approved', 'rejected', 'draft')`)],
+);
+
+export const IRIS_NOTE_MAX = 2000;

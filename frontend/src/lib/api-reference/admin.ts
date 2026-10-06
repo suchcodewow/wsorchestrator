@@ -124,7 +124,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         notes:
           "pendingAdmins lists the SITE_ADMIN_EMAILS addresses that have not signed in yet, whichever page is asked for.",
         query: listQuery(USER_LIST.sorts, "the name or email"),
-        returns: `{ users: { id, name, email, eventRole, trainingRole, evalsRole, isPlatformAdmin, isBootstrapAdmin, eventCount }[], ${PAGE_FIELDS}, pendingAdmins: string[] }`,
+        returns: `{ users: { id, name, email, eventRole, trainingRole, evalsRole, irisRole, isPlatformAdmin, isBootstrapAdmin, eventCount }[], ${PAGE_FIELDS}, pendingAdmins: string[] }`,
       },
       {
         method: "PATCH",
@@ -140,7 +140,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           fields: [
             {
               name: "area",
-              type: `"event" | "training" | "evals" | "platform"`,
+              type: `"event" | "training" | "evals" | "iris" | "platform"`,
               required: true,
               note: "picks which of the fields below applies",
             },
@@ -154,12 +154,17 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
               type: `"viewer" | "administrator" | null`,
               note: "required when area is training or evals; null removes access",
             },
+            {
+              name: "role",
+              type: `"taker" | "administrator" | null`,
+              note: "required when area is iris; null removes access",
+            },
             { name: "value", type: "boolean", note: "required when area is platform" },
           ],
         },
         returns: "{ ok: true, area, role } or { ok: true, area: \"platform\", value }",
         errors: [
-          { status: 400, error: "invalid_body", when: "the body does not match one of the four shapes" },
+          { status: 400, error: "invalid_body", when: "the body does not match one of the five shapes" },
           { status: 403, error: "forbidden", when: "you do not administer that area" },
           { status: 403, error: "platform_target", when: "the target is a platform administrator and you are not" },
           { status: 404, error: "not_found", when: "no such user" },
@@ -209,6 +214,11 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
             {
               name: "evalsRole",
               type: `"viewer" | "administrator" | null`,
+              note: "defaults to null",
+            },
+            {
+              name: "irisRole",
+              type: `"taker" | "administrator" | null`,
               note: "defaults to null",
             },
           ],
@@ -1883,7 +1893,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
               name: "snapshot[]",
               type: "object[]",
               required: true,
-              note: "QA's users before the restore: id, email, name, image, eventRole, trainingRole, evalsRole, isPlatformAdmin, calendarScope, accounts[]",
+              note: "QA's users before the restore: id, email, name, image, eventRole, trainingRole, evalsRole, irisRole, isPlatformAdmin, calendarScope, accounts[]",
             },
           ],
         },

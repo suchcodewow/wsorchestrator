@@ -155,6 +155,8 @@ export const userSnapshotSchema = z.object({
   eventRole: z.string(),
   trainingRole: z.string().nullable(),
   evalsRole: z.string().nullable(),
+  // Optional, so a snapshot taken before Iris existed still restores.
+  irisRole: z.string().nullable().default(null),
   isPlatformAdmin: z.boolean(),
   calendarScope: z.string(),
   accounts: z.array(
@@ -197,7 +199,7 @@ const STRIP_CREDENTIALS = [
 /** Nobody has access until the snapshot gives it back. */
 const REVOKE_ACCESS = `update users
     set site_role = 'none', training_role = null, evals_role = null,
-        is_platform_admin = false, calendar_scope = 'own'`;
+        iris_role = null, is_platform_admin = false, calendar_scope = 'own'`;
 
 export type FinishResult = {
   migrations: string[];
@@ -258,14 +260,15 @@ export async function finishProductionImport(
           user.eventRole,
           user.trainingRole,
           user.evalsRole,
+          user.irisRole,
           user.isPlatformAdmin,
           user.calendarScope,
         ];
         const existing = await client.query<{ id: string }>(
           `update users
               set site_role = $2::site_role, training_role = $3::training_role,
-                  evals_role = $4::evals_role, is_platform_admin = $5,
-                  calendar_scope = $6::calendar_scope
+                  evals_role = $4::evals_role, iris_role = $5::iris_role,
+                  is_platform_admin = $6, calendar_scope = $7::calendar_scope
             where lower(email) = lower($1)
             returning id`,
           [user.email, ...roles],
@@ -280,9 +283,9 @@ export async function finishProductionImport(
           userId = taken.rowCount ? crypto.randomUUID() : user.id;
           await client.query(
             `insert into users (id, email, name, image, site_role, training_role,
-                                evals_role, is_platform_admin, calendar_scope)
+                                evals_role, iris_role, is_platform_admin, calendar_scope)
              values ($1, $2, $3, $4, $5::site_role, $6::training_role,
-                     $7::evals_role, $8, $9::calendar_scope)`,
+                     $7::evals_role, $8::iris_role, $9, $10::calendar_scope)`,
             [userId, user.email, user.name, user.image, ...roles],
           );
           usersAdded++;

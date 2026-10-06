@@ -33,6 +33,7 @@ import {
   canDeleteUsers,
   canManageBackups,
   canManageEvalsSettings,
+  canManageIris,
   canManageLabGuides,
   canManageTrainingSettings,
   canManageSettings,
@@ -42,6 +43,7 @@ import {
   canScoreAssessments,
   canSearchEmployees,
   canSeeAllEvents,
+  canTakeIris,
   canUseEvals,
   canUseEvents,
   canUseTraining,
@@ -252,7 +254,22 @@ const PAGES: Record<string, PageCase> = {
     path: () => `/evals/bootcamp/${assessmentId}/0`,
     expect: () => 404,
   },
-  "/iris": { path: () => "/iris", expect: gated(canUseEvals) },
+  "/iris": {
+    path: () => "/iris",
+    expect: (a) => (canTakeIris(a) ? { to: "/iris/tests" } : 404),
+  },
+  "/iris/tests": { path: () => "/iris/tests", expect: gated(canTakeIris) },
+  "/iris/tests/<a subject>": { path: () => "/iris/tests/sdlc", expect: gated(canTakeIris) },
+  "/iris/tests/<a subject>?mode=preview": {
+    path: () => "/iris/tests/sdlc?mode=preview",
+    expect: gated(canManageIris),
+  },
+  "/iris/tests/<unknown>": { path: () => "/iris/tests/nonsense", expect: () => 404 },
+  "/iris/cohort": { path: () => "/iris/cohort", expect: gated(canManageIris) },
+  "/iris/cohort/<a person>": { path: () => `/iris/cohort/${people.irisTaker.id}`, expect: gated(canManageIris) },
+  "/iris/cohort/<unknown>": { path: () => `/iris/cohort/${MISSING}`, expect: () => 404 },
+  "/iris/questions": { path: () => "/iris/questions", expect: gated(canManageIris) },
+  "/iris/questions?subject": { path: () => "/iris/questions?subject=compete&level=3&status=draft", expect: gated(canManageIris) },
   "/reporting": {
     path: () => "/reporting",
     expect: (a) => (canUseEvals(a) ? { to: REPORTING_TABS[0]!.href } : 404),
@@ -438,6 +455,27 @@ const ROUTES: RouteCase[] = [
   { method: "DELETE", path: `/api/settings/repos/${MISSING}`, allowed: canManageSettings },
   { method: "POST", path: `/api/me/harness-tokens/${MISSING}/deploy`, allowed: canManageSettings, body: () => ({}) },
   { method: "POST", path: `/api/me/harness-tokens/${MISSING}/scrub`, allowed: canManageSettings },
+
+  // Iris
+  { method: "GET", path: "/api/iris/me", allowed: canTakeIris },
+  { method: "PUT", path: "/api/iris/me/track", allowed: canTakeIris, body: () => ({}) },
+  { method: "POST", path: "/api/iris/sittings", allowed: canTakeIris, body: () => ({}) },
+  // A taker gets past the gate but not into a preview, which is the console's.
+  {
+    method: "POST",
+    path: "/api/iris/sittings",
+    allowed: canManageIris,
+    body: () => ({ subject: "sdlc", mode: "preview" }),
+    denyOnly: true,
+  },
+  { method: "GET", path: `/api/iris/sittings/${MISSING}`, allowed: canTakeIris },
+  { method: "POST", path: `/api/iris/sittings/${MISSING}/answers`, allowed: canTakeIris, body: () => ({}) },
+  { method: "GET", path: "/api/iris/cohort", allowed: canManageIris },
+  { method: "GET", path: `/api/iris/cohort/${MISSING}`, allowed: canManageIris },
+  { method: "DELETE", path: `/api/iris/cohort/${MISSING}`, allowed: canManageIris },
+  { method: "GET", path: "/api/iris/questions?subject=sdlc", allowed: canManageIris },
+  { method: "PUT", path: "/api/iris/questions/no-such-item/review", allowed: canManageIris, body: () => ({}) },
+  { method: "POST", path: "/api/iris/questions/approve-drafts", allowed: canManageIris, body: () => ({}) },
 
   // Cohorts
   { method: "GET", path: "/api/cohorts/current", allowed: canUseTraining },
@@ -770,6 +808,7 @@ describe("PATCH /api/users/:id", () => {
       event: "manager",
       training: null,
       evals: null,
+      iris: null,
       platform: false,
       judging: false,
     });
@@ -784,6 +823,7 @@ describe("PATCH /api/users/:id", () => {
       event: "operator",
       training: "viewer",
       evals: null,
+      iris: null,
       platform: false,
       judging: false,
     });
@@ -798,6 +838,23 @@ describe("PATCH /api/users/:id", () => {
       event: "operator",
       training: null,
       evals: "viewer",
+      iris: null,
+      platform: false,
+      judging: false,
+    });
+  });
+
+  test("an Iris administrator sets Iris roles, and only Iris roles", async () => {
+    const target = await scope.createUser("u_target7", PERSONAS.operator);
+    assert.equal((await patch("irisAdmin", target.id, { area: "iris", role: "taker" })).status, 200);
+    assert.equal((await patch("irisAdmin", target.id, { area: "evals", role: "viewer" })).status, 403);
+    assert.equal((await patch("irisAdmin", target.id, { area: "event", role: "manager" })).status, 403);
+    assert.equal((await patch("evalsAdmin", target.id, { area: "iris", role: "administrator" })).status, 403);
+    assert.deepEqual(await readRoles(target.id), {
+      event: "operator",
+      training: null,
+      evals: null,
+      iris: "taker",
       platform: false,
       judging: false,
     });
@@ -809,6 +866,7 @@ describe("PATCH /api/users/:id", () => {
       { area: "event", role: "administrator" },
       { area: "training", role: "administrator" },
       { area: "evals", role: "administrator" },
+      { area: "iris", role: "administrator" },
       { area: "platform", value: true },
     ]) {
       assert.equal((await patch("platform", target.id, body)).status, 200, JSON.stringify(body));
@@ -817,6 +875,7 @@ describe("PATCH /api/users/:id", () => {
       event: "administrator",
       training: "administrator",
       evals: "administrator",
+      iris: "administrator",
       platform: true,
       judging: false,
     });
@@ -827,17 +886,20 @@ describe("PATCH /api/users/:id", () => {
     assert.equal((await patch("eventAdmin", target.id, { area: "event", role: "none" })).status, 403);
     assert.equal((await patch("trainingAdmin", target.id, { area: "training", role: null })).status, 403);
     assert.equal((await patch("evalsAdmin", target.id, { area: "evals", role: null })).status, 403);
+    assert.equal((await patch("irisAdmin", target.id, { area: "iris", role: null })).status, 403);
     assert.deepEqual(await readRoles(target.id), PERSONAS.platform);
   });
 
   test("nobody changes their own roles", async () => {
-    for (const p of ["eventAdmin", "trainingAdmin", "evalsAdmin", "platform"] as const) {
+    for (const p of ["eventAdmin", "trainingAdmin", "evalsAdmin", "irisAdmin", "platform"] as const) {
       const body =
         p === "trainingAdmin"
           ? { area: "training", role: null }
           : p === "evalsAdmin"
             ? { area: "evals", role: null }
-            : { area: "event", role: "none" };
+            : p === "irisAdmin"
+              ? { area: "iris", role: null }
+              : { area: "event", role: "none" };
       assert.equal((await patch(p, people[p].id, body)).status, 409, p);
       assert.deepEqual(await readRoles(people[p].id), PERSONAS[p]);
     }
@@ -855,12 +917,53 @@ describe("PATCH /api/users/:id", () => {
     for (const body of [
       { area: "event", role: "owner" },
       { area: "evals", role: "manager" },
+      { area: "iris", role: "viewer" },
       { area: "platform" },
       { role: "manager" },
       null,
     ]) {
       assert.equal((await patch("platform", target.id, body)).status, 400, JSON.stringify(body));
     }
+  });
+});
+
+describe("an Iris sitting, over HTTP", () => {
+  // Grading is on the server, and only an Iris administrator is told the level.
+  async function sit(who: Persona) {
+    assert.equal((await send(who, "PUT", "/api/iris/me/track", { track: "AE" })).status, 200);
+    const started = await send(who, "POST", "/api/iris/sittings", { subject: "pipegen" });
+    assert.equal(started.status, 201, started.body);
+    let sitting = JSON.parse(started.body).sitting as { attemptId: string; question: Record<string, unknown> };
+    for (let guard = 0; guard < 20; guard++) {
+      assert.deepEqual(Object.keys(sitting.question).sort(), ["id", "options", "stem"], "no answer is sent");
+      const res = await send(who, "POST", `/api/iris/sittings/${sitting.attemptId}/answers`, {
+        itemId: sitting.question.id,
+        choice: -1,
+      });
+      assert.equal(res.status, 200, res.body);
+      const body = JSON.parse(res.body);
+      if (body.done) return body as Record<string, unknown>;
+      sitting = body.sitting;
+    }
+    throw new Error("the sitting never finished");
+  }
+
+  const pipegen = async (who: Persona) =>
+    (JSON.parse((await send(who, "GET", "/api/iris/me")).body).subjects as { key: string; placement?: number }[]).find(
+      (s) => s.key === "pipegen",
+    );
+
+  test("a taker is told the sitting is over, never their level", async () => {
+    assert.equal((await send("irisAdmin", "POST", "/api/iris/questions/approve-drafts", { subject: "pipegen" })).status, 200);
+    const done = await sit("irisTaker");
+    assert.ok(!("placement" in done) && !("confidence" in done), JSON.stringify(done));
+    assert.ok(!("placement" in (await pipegen("irisTaker"))!));
+  });
+
+  test("an Iris administrator sees their own level", async () => {
+    const done = await sit("irisAdmin");
+    assert.equal(done.placement, 1, "\"I don't know\" throughout places Beginner");
+    assert.equal((await pipegen("irisAdmin"))?.placement, 1);
   });
 });
 
@@ -893,6 +996,7 @@ describe("invite links", () => {
       event: "manager",
       training: null,
       evals: null,
+      iris: null,
       platform: false,
       judging: false,
     });
@@ -941,11 +1045,23 @@ describe("invite links", () => {
     assert.equal((await send({ cookie }, "GET", EVALS_TABS[0]!.href)).status, 200);
   });
 
+  test("an Iris link lands its newcomer on Iris", async () => {
+    const path = await link("irisAdmin", { eventRole: null, trainingRole: null, irisRole: "taker" });
+    const newcomer = await scope.createUser("inv_iris", PERSONAS.nobody);
+    const cookie = await createSession(newcomer.id);
+    const res = await accept(cookie, path.split("/").pop()!);
+    assert.equal(res.status, 200, res.body);
+    assert.deepEqual(JSON.parse(res.body), { applied: true, home: "/iris" });
+    assert.equal((await readRoles(newcomer.id))?.iris, "taker");
+    assert.equal((await send({ cookie }, "GET", "/iris/tests")).status, 200);
+  });
+
   test("a link that grants nothing, or platform administration, is not made", async () => {
     for (const body of [
       { eventRole: "none", trainingRole: null },
       { eventRole: null, trainingRole: null },
       { eventRole: null, trainingRole: null, evalsRole: null },
+      { eventRole: null, trainingRole: null, evalsRole: null, irisRole: null },
       { eventRole: "operator", trainingRole: null, platform: true },
     ]) {
       const res = await create("platform", body);
