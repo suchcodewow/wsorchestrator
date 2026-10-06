@@ -30,7 +30,7 @@ export function CanaryWireReport({ view, pull, configured }: { view: CanaryWireV
     notes.unshift(
       configured
         ? "No Mindtickle data yet. It is pulled every two hours, or use Refresh now; a pull takes about 15 minutes."
-        : "No Mindtickle data yet, and Mindtickle isn't configured on this server: MT_API_KEY, MT_SECRET_KEY and MT_COMPANY_ID are unset.",
+        : "No Mindtickle data yet, and Mindtickle isn't configured on this server: MT_API_KEY, MT_SECRET_KEY or MT_LS_URL is unset.",
     );
   } else if (!view.hasData) {
     notes.unshift(`No modules found for ${view.month}. Either it wasn't run, or its module names don't start with "${view.month} - ".`);

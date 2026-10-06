@@ -29,16 +29,34 @@ export type MindtickleConfig = { apiKey: string; secretKey: string; lsUrl: strin
 
 /**
  * The key pair and tenant from the environment, or null when they aren't set.
- * Only the key pair is secret: the tenant names Harness's site and grants nothing.
+ * Only the key pair is secret: the tenant names Harness's site and grants
+ * nothing. `MT_LS_URL` is the one Mindtickle requires — a sign-in with only
+ * the company id is refused as "missing parameter ls_url" — so without it
+ * nothing is configured, rather than every pull failing at sign-in. Values
+ * are trimmed, since one pasted into a secret can carry a trailing newline.
  */
 export function mindtickleConfig(): MindtickleConfig | null {
-  const apiKey = process.env.MT_API_KEY ?? "";
-  const secretKey = process.env.MT_SECRET_KEY ?? "";
-  const lsUrl = process.env.MT_LS_URL ?? "";
-  const companyId = process.env.MT_COMPANY_ID ?? "";
-  const region = (process.env.MT_REGION || "us") as Region;
-  if (!apiKey || !secretKey || (!lsUrl && !companyId) || !(region in API_HOSTS)) return null;
+  const env = (name: string) => (process.env[name] ?? "").trim();
+  const apiKey = env("MT_API_KEY");
+  const secretKey = env("MT_SECRET_KEY");
+  const lsUrl = env("MT_LS_URL");
+  const companyId = env("MT_COMPANY_ID");
+  const region = (env("MT_REGION") || "us") as Region;
+  if (!apiKey || !secretKey || !lsUrl || !(region in API_HOSTS)) return null;
   return { apiKey, secretKey, lsUrl, companyId, region };
+}
+
+/** Mindtickle's own reason for refusing, short; it names a parameter, never a value. */
+async function reason(res: Response): Promise<string> {
+  const text = (await res.text().catch(() => "")).trim();
+  try {
+    const json = JSON.parse(text) as { error?: unknown; message?: unknown };
+    const said = json.error ?? json.message;
+    if (typeof said === "string" && said) return said.slice(0, 200);
+  } catch {
+    // not JSON
+  }
+  return text.slice(0, 200) || `status ${res.status}`;
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -59,10 +77,9 @@ export class Mindtickle {
   }
 
   private async authenticate() {
-    // The console hands out a company id and the docs name the tenant ls_url;
-    // both name the same tenant, so whichever is set is sent.
-    const body: Record<string, string> = { api_key: this.config.apiKey, secret_key: this.config.secretKey };
-    if (this.config.lsUrl) body.ls_url = this.config.lsUrl;
+    // ls_url is required; the company id is sent too when it is set, as the
+    // canary-wire-reports tool always sent both.
+    const body: Record<string, string> = { api_key: this.config.apiKey, secret_key: this.config.secretKey, ls_url: this.config.lsUrl };
     if (this.config.companyId) body.company_id = this.config.companyId;
     await this.throttle();
     let res: Response;
@@ -78,10 +95,16 @@ export class Mindtickle {
     } finally {
       this.last = Date.now();
     }
-    if ([400, 401, 403].includes(res.status)) {
+    // Mindtickle's reason is passed on: a 400 is as likely a missing parameter
+    // as a bad key, and saying "key pair" for both sent the first fix of the
+    // first deploy after the wrong one.
+    if (res.status === 401 || res.status === 403) {
       throw new MindtickleAuthError(
-        `Mindtickle refused the key pair (${res.status}). Check MT_API_KEY, MT_SECRET_KEY and the tenant, and that the pair is active in Account → Settings → Security and Integrations.`,
+        `Mindtickle refused the key pair (${res.status}: ${await reason(res)}). Check that MT_API_KEY and MT_SECRET_KEY are a pair still active in Account → Settings → Security and Integrations.`,
       );
+    }
+    if (res.status === 400) {
+      throw new MindtickleAuthError(`Mindtickle refused the sign-in (400: ${await reason(res)}). Check MT_LS_URL and MT_REGION as well as the key pair.`);
     }
     if (!res.ok) throw new MindtickleError(`Signing in to Mindtickle returned ${res.status}.`);
     const payload = (await res.json().catch(() => ({}))) as { token?: string; access_token?: string; expires_in?: number };

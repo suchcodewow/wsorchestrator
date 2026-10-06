@@ -117,7 +117,7 @@ export function RefreshControl({ configured, initial }: { configured: boolean; i
           title={
             configured
               ? "The Canary Wire pulls from Mindtickle every two hours. This pulls now instead; it takes about 15 minutes."
-              : "Mindtickle isn't configured on this server: MT_API_KEY, MT_SECRET_KEY and MT_COMPANY_ID are unset."
+              : "Mindtickle isn't configured on this server: MT_API_KEY, MT_SECRET_KEY or MT_LS_URL is unset."
           }
         >
           <RefreshCw />

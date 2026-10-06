@@ -33,7 +33,7 @@ locals {
     # Likewise the Slack bot token.
     nonsensitive(var.slack_bot_token != "") ? ["slack-bot-token"] : [],
     # Gated on the tenant, not the key pair, as HiBob's is on its service user.
-    var.mindtickle_company_id != "" ? ["mindtickle-api-key", "mindtickle-secret-key"] : [],
+    var.mindtickle_ls_url != "" ? ["mindtickle-api-key", "mindtickle-secret-key"] : [],
   )
 
   # id -> value, holding the (mostly sensitive) payloads. Only ever looked up by

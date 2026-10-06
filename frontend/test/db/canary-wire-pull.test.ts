@@ -48,7 +48,11 @@ function mindtickle(url: string, body: unknown): { status: number; json?: unknow
   if (url.startsWith(GLOBAL)) return { status: 500 };
   const path = url.slice(HOST.length);
   const ids = (body as { groupIds?: string[] } | undefined)?.groupIds ?? [];
-  if (path === "/services/data/auth_token") return { status: 200, json: { token: "t", expires_in: 3600 } };
+  if (path === "/services/data/auth_token") {
+    // As the live API does: the company id alone is not enough.
+    if (!(body as { ls_url?: string }).ls_url) return { status: 400, json: { error: "missing parameter ls_url" } };
+    return { status: 200, json: { token: "t", expires_in: 3600 } };
+  }
   if (path === "/api/v2/series/list") {
     return {
       status: 200,
@@ -108,7 +112,7 @@ let requests: string[] = [];
 function useMindtickle(handler = mindtickle) {
   process.env.MT_API_KEY = "key";
   process.env.MT_SECRET_KEY = "secret";
-  process.env.MT_COMPANY_ID = "harness";
+  process.env.MT_LS_URL = "harness.mindtickle.test";
   process.env.MT_REGION = "us";
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
@@ -135,7 +139,7 @@ before(async () => {
 
 afterEach(async () => {
   globalThis.fetch = realFetch;
-  for (const key of ["MT_API_KEY", "MT_SECRET_KEY", "MT_COMPANY_ID", "MT_REGION"]) {
+  for (const key of ["MT_API_KEY", "MT_SECRET_KEY", "MT_LS_URL", "MT_COMPANY_ID", "MT_REGION"]) {
     if (realEnv[key] === undefined) delete process.env[key];
     else process.env[key] = realEnv[key];
   }
@@ -203,6 +207,14 @@ describe("a Canary Wire pull", () => {
     assert.deepEqual(await startPull("manual", null), { ok: false, error: "running" });
   });
 
+  test("a sign-in Mindtickle turns down fails the pull with Mindtickle's reason", async () => {
+    useMindtickle((url, body) => (url.endsWith("/auth_token") ? { status: 400, json: { error: "missing parameter ls_url" } } : mindtickle(url, body)));
+    await start();
+    const pull = (await advancePull(0))!;
+    assert.equal(pull.status, "failed");
+    assert.match(pull.error ?? "", /400: missing parameter ls_url/);
+  });
+
   test("a refused key pair fails the pull and says why", async () => {
     useMindtickle((url, body) => (url.endsWith("/auth_token") ? { status: 401 } : mindtickle(url, body)));
     await start();
@@ -211,7 +223,13 @@ describe("a Canary Wire pull", () => {
     assert.match(pull.error ?? "", /refused the key pair/);
   });
 
-  test("without a key pair, nothing starts", async () => {
+  test("without a key pair or the learning site, nothing starts", async () => {
+    useMindtickle();
+    process.env.MT_LS_URL = "";
+    // A company id alone is no tenant Mindtickle will sign in to.
+    process.env.MT_COMPANY_ID = "harness";
+    assert.deepEqual(await startPull("manual", null), { ok: false, error: "not_configured" });
+    process.env.MT_LS_URL = "harness.mindtickle.test";
     delete process.env.MT_API_KEY;
     assert.deepEqual(await startPull("manual", null), { ok: false, error: "not_configured" });
     assert.equal((await scheduledStep(0)).outcome, "not_configured");
