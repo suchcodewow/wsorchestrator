@@ -28,6 +28,11 @@ export type Access = {
    * per bootcamp, and it lets them score assessments and nothing else.
    */
   judging: boolean;
+  /**
+   * Someone the HiBob sync has anyone reporting to. Not a role either: HiBob
+   * decides it (`lib/evals/managers.ts`), and it opens Reporting → Canary Wire.
+   */
+  manager: boolean;
 };
 
 /** An area whose roles are granted by that area's own administrators. */
@@ -166,8 +171,18 @@ export const canUseEvals = (access: Access) => evalsAtLeast(access, "viewer");
 export const canManageEvalsSettings = (access: Access) =>
   evalsAtLeast(access, "administrator");
 
-/** Reporting → Canary Wire names ~300 people and who is behind on training, so it is for eVals administrators only. */
-export const canSeeCanaryWire = (access: Access) => evalsAtLeast(access, "administrator");
+/**
+ * Reporting → Canary Wire names ~300 people and who is behind on training:
+ * for people managers, who use it to follow up with their org, and platform
+ * administrators. A manager opens on their own org and can switch to everyone.
+ */
+export const canSeeCanaryWire = (access: Access) => access.platform || access.manager;
+
+/** Starts a Canary Wire pull by hand. It pulls every two hours on its own; this is for testing. */
+export const canRefreshCanaryWire = (access: Access) => access.platform;
+
+/** The Reporting section: anyone who can see one of its tabs. */
+export const canSeeReporting = (access: Access) => canUseEvals(access) || canSeeCanaryWire(access);
 
 /** Sees and submits assessments on the eVals page: anyone in eVals, and the active bootcamp's guest judges. */
 export const canScoreAssessments = (access: Access) => canUseEvals(access) || access.judging;
@@ -247,6 +262,7 @@ export function homePath(access: Access): string {
   if (canUseTraining(access)) return "/scheduler";
   if (canScoreAssessments(access)) return "/evals";
   if (canTakeIris(access)) return "/iris";
+  if (canSeeCanaryWire(access)) return "/reporting/canary-wire";
   return "/welcome";
 }
 

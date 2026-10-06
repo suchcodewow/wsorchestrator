@@ -561,6 +561,14 @@ The rules live in [`frontend/src/lib/roles.ts`](frontend/src/lib/roles.ts) and
 are enforced server-side on every read and write; the menu only decides what is
 worth showing.
 
+**Reporting → Canary Wire** is granted by HiBob, not a role: anyone the last
+HiBob sync has reporting to them sees it, as do platform administrators. It
+is read on every request, so a reorg reaches it with the next sync. A manager
+opens on their own org — themselves and everyone under them, every level down —
+and an **Everyone** switch shows the whole Canary Wire. **Refresh now**, which
+pulls Mindtickle by hand rather than waiting for the two-hourly pull, is for
+platform administrators.
+
 ## Restricting sign-in
 
 By default anyone with a Google account can sign in, arriving with no access to

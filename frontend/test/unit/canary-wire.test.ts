@@ -16,6 +16,9 @@ import assert from "node:assert/strict";
 import { EXEMPT_DATE } from "@/db/schema";
 import { MODULE_URL_TEMPLATE, SERIES_LINKS } from "@/lib/canary-wire/config";
 import { accountability } from "@/lib/canary-wire/exemptions";
+import { managersOf, onlyOrg, orgOf, withHiBob, type Person } from "@/lib/canary-wire/people";
+import { scopeFor } from "@/lib/canary-wire/scope";
+import type { Access } from "@/lib/roles";
 import { firstFullMonth, monthAfterDay, monthKey, monthRange, toPacific } from "@/lib/canary-wire/months";
 import { dayOnly, moduleUrl, slackReport, stateClass, when } from "@/lib/canary-wire/report";
 import type { CanaryWireSnapshot } from "@/lib/canary-wire/snapshot";
@@ -156,6 +159,85 @@ describe("accountability", () => {
   test("with no bootcamp history at all, nobody predates it", () => {
     const empty = accountability(known([], [["old@harness.io", "2019-06-03"]]));
     assert.equal(empty("old@harness.io", "June 2026", AE).exempt, true);
+  });
+});
+
+describe("completion by learner", () => {
+  test("a role's and the totals' rate is people who finished everything, not modules", () => {
+    const view = monthView(pull(), "September 2026", everyoneAccountable);
+    const ae = view.roles.find((r) => r.role === AE)!;
+    // The AE lineup is Flex Pricing and Objections. Ada and Bo finished Flex
+    // only and Cy nothing, so none of the three finished everything.
+    assert.deepEqual([ae.learners, ae.finished, ae.pct], [3, 0, 0]);
+    const se = view.roles.find((r) => r.role === SE)!;
+    // Eve finished Demo Day but not Flex; Di finished Flex but not Demo Day.
+    assert.deepEqual([se.learners, se.finished], [2, 0]);
+    assert.deepEqual([view.totals!.learners, view.totals!.finished, view.totals!.pct], [5, 0, 0]);
+  });
+
+  test("someone who owes nothing this month is not a learner in the rate", () => {
+    const snap = pull();
+    // Give Ada both AE modules done; Bo keeps one of two.
+    snap.progress["ada@harness.io"]!["m-obj"] = { state: "Completed", on: "2026-09-11", at: "2026-09-11T10:00:00Z" };
+    const view = monthView(snap, "September 2026", accountability(known(snap.learners.filter((l) => l.email !== "cy@harness.io").map((l) => [l.email, EXEMPT_DATE]))));
+    const ae = view.roles.find((r) => r.role === AE)!;
+    // Cy is pre-bootcamp: out of the rate, counted as exempt.
+    assert.deepEqual([ae.learners, ae.finished, ae.pct, ae.exempt], [2, 1, 50, 1]);
+    // Ada manages Bo, Cy and Di, so she isn't an IC; Bo is.
+    assert.deepEqual([ae.icLearners, ae.icFinished], [1, 0]);
+  });
+});
+
+describe("withHiBob", () => {
+  const people = new Map<string, Person>([
+    ["bo@harness.io", { email: "bo@harness.io", fullName: "Bo Hibob", title: "Senior AE", reportsToEmail: "zed@harness.io", reportsToName: "Zed (HiBob)" }],
+    ["zed@harness.io", { email: "zed@harness.io", fullName: "Zed Manager", title: "RVP", reportsToEmail: "", reportsToName: "" }],
+    ["cy@harness.io", { email: "cy@harness.io", fullName: "Cy Hibob", title: "", reportsToEmail: "gone@harness.io", reportsToName: "Gone Person" }],
+  ]);
+
+  test("HiBob's name, title and manager win, and the manager is named as the employee list names them", () => {
+    const snap = withHiBob(pull(), people);
+    const bo = snap.learners.find((l) => l.email === "bo@harness.io")!;
+    assert.deepEqual([bo.name, bo.title, bo.manager, bo.manager_email], ["Bo Hibob", "Senior AE", "Zed Manager", "zed@harness.io"]);
+    // A manager HiBob no longer lists keeps the name HiBob gave; a blank title keeps Mindtickle's.
+    const cy = snap.learners.find((l) => l.email === "cy@harness.io")!;
+    assert.deepEqual([cy.manager, cy.title], ["Gone Person", "Account Executive"]);
+    // Someone HiBob doesn't have keeps Mindtickle's details.
+    assert.equal(snap.learners.find((l) => l.email === "di@harness.io")!.manager, "Ada");
+  });
+
+  test("an IC is someone nobody in HiBob reports to, org-wide", () => {
+    // Eve manages nobody in the Canary Wire groups, but HiBob has someone reporting to her.
+    const org = managersOf(new Map([...people, ["x@harness.io", { email: "x@harness.io", fullName: "X", title: "", reportsToEmail: "eve@harness.io", reportsToName: "Eve" }]]));
+    const view = monthView(pull(), "September 2026", everyoneAccountable, null, org);
+    assert.equal(view.teams.flatMap((t) => t.directs).find((r) => r.email === "eve@harness.io")!.ic, false);
+  });
+});
+
+describe("scope", () => {
+  const access = (over: Partial<Access>): Access => ({ event: "none", training: null, evals: null, iris: null, platform: false, judging: false, manager: false, ...over });
+  const boss = { access: access({ manager: true }), email: "zed@harness.io" };
+  const admin = { access: access({ platform: true }), email: "root@harness.io" };
+
+  test("a manager opens on their own org, and may ask for everyone", () => {
+    assert.deepEqual(scopeFor(boss, null), { ok: true, scope: { kind: "org", email: "zed@harness.io" } });
+    assert.deepEqual(scopeFor(boss, "everyone"), { ok: true, scope: { kind: "everyone" } });
+  });
+
+  test("anyone else sees everyone, and has no org to ask for", () => {
+    assert.deepEqual(scopeFor(admin, null), { ok: true, scope: { kind: "everyone" } });
+    assert.deepEqual(scopeFor(admin, "org"), { ok: false, error: "not_a_manager" });
+    assert.deepEqual(scopeFor(boss, "team"), { ok: false, error: "invalid_scope" });
+  });
+
+  test("my org is me and everyone under me, every level down, and nobody beside me", () => {
+    const p = (email: string, reportsToEmail: string): Person => ({ email, fullName: email, title: "", reportsToEmail, reportsToName: "" });
+    const people = new Map(
+      [p("ceo@harness.io", ""), p("zed@harness.io", "ceo@harness.io"), p("bo@harness.io", "zed@harness.io"), p("cy@harness.io", "bo@harness.io"), p("peer@harness.io", "ceo@harness.io")].map((x) => [x.email, x]),
+    );
+    assert.deepEqual([...orgOf(people, "Zed@Harness.io")].sort(), ["bo@harness.io", "cy@harness.io", "zed@harness.io"]);
+    const mine = onlyOrg(pull(), new Set(["bo@harness.io", "cy@harness.io"]));
+    assert.deepEqual(mine.learners.map((l) => l.email), ["bo@harness.io", "cy@harness.io"]);
   });
 });
 

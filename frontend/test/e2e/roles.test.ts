@@ -42,7 +42,9 @@ import {
   canPublishComponents,
   canScoreAssessments,
   canSearchEmployees,
+  canRefreshCanaryWire,
   canSeeCanaryWire,
+  canSeeReporting,
   canSeeAllEvents,
   canTakeIris,
   canUseEvals,
@@ -273,7 +275,7 @@ const PAGES: Record<string, PageCase> = {
   "/iris/questions?subject": { path: () => "/iris/questions?subject=compete&level=3&status=draft", expect: gated(canManageIris) },
   "/reporting": {
     path: () => "/reporting",
-    expect: (a) => (canUseEvals(a) ? { to: visibleReportingTabs(a)[0]!.href } : 404),
+    expect: (a) => (canSeeReporting(a) ? { to: visibleReportingTabs(a)[0]!.href } : 404),
   },
   "/reporting/canary-wire": { path: () => "/reporting/canary-wire", expect: gated(canSeeCanaryWire) },
   "/reporting/bootcamp-history": { path: () => "/reporting/bootcamp-history", expect: gated(canUseEvals) },
@@ -566,8 +568,8 @@ const ROUTES: RouteCase[] = [
   { method: "GET", path: "/api/evals/canary-wire", allowed: canSeeCanaryWire },
   // No Mindtickle key on the e2e server: starting is refused as not_configured, and a step finds no pull.
   { method: "GET", path: "/api/evals/canary-wire/pull", allowed: canSeeCanaryWire },
-  { method: "POST", path: "/api/evals/canary-wire/pull", allowed: canSeeCanaryWire },
-  { method: "POST", path: "/api/evals/canary-wire/pull/step", allowed: canSeeCanaryWire },
+  { method: "POST", path: "/api/evals/canary-wire/pull", allowed: canRefreshCanaryWire },
+  { method: "POST", path: "/api/evals/canary-wire/pull/step", allowed: canRefreshCanaryWire },
 
   // eVals administration
   { method: "GET", path: "/api/evals/candidate-cutoffs", allowed: canManageEvalsSettings },
@@ -830,6 +832,7 @@ describe("PATCH /api/users/:id", () => {
       iris: null,
       platform: false,
       judging: false,
+      manager: false,
     });
   });
 
@@ -845,6 +848,7 @@ describe("PATCH /api/users/:id", () => {
       iris: null,
       platform: false,
       judging: false,
+      manager: false,
     });
   });
 
@@ -860,6 +864,7 @@ describe("PATCH /api/users/:id", () => {
       iris: null,
       platform: false,
       judging: false,
+      manager: false,
     });
   });
 
@@ -876,6 +881,7 @@ describe("PATCH /api/users/:id", () => {
       iris: "taker",
       platform: false,
       judging: false,
+      manager: false,
     });
   });
 
@@ -897,6 +903,7 @@ describe("PATCH /api/users/:id", () => {
       iris: "administrator",
       platform: true,
       judging: false,
+      manager: false,
     });
   });
 
@@ -1018,6 +1025,7 @@ describe("invite links", () => {
       iris: null,
       platform: false,
       judging: false,
+      manager: false,
     });
     assert.equal((await send({ cookie }, "GET", "/events")).status, 200);
   });

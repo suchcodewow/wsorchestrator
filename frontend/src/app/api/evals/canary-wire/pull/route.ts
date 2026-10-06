@@ -5,7 +5,7 @@
  */
 
 import { NextResponse } from "next/server";
-import { requireCanaryWire } from "@/lib/api-auth";
+import { requireCanaryWire, requireCanaryWireRefresh } from "@/lib/api-auth";
 import { audited, noteAudit } from "@/lib/audit";
 import { mindtickleConfig } from "@/lib/canary-wire/mindtickle";
 import { latestPull, startPull } from "@/lib/canary-wire/pull";
@@ -19,7 +19,7 @@ export async function GET(req: Request) {
 const STATUS = { not_configured: 409, running: 409 } as const;
 
 export const POST = audited(async function POST(req: Request) {
-  const { error, user } = await requireCanaryWire(req);
+  const { error, user } = await requireCanaryWireRefresh(req);
   if (error) return error;
   const started = await startPull("manual", user.id);
   if (!started.ok) return NextResponse.json({ error: started.error }, { status: STATUS[started.error] });

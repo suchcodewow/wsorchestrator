@@ -52,6 +52,8 @@ const EXPECTED_SIDEBAR: Record<Persona, string[]> = {
   irisTaker: ["[Assessments]", "Iris", ...ACCOUNT],
   irisAdmin: ["[Assessments]", "Iris", ...ACCOUNT, "[Administration]", "Manage users"],
   guestJudge: ["[Assessments]", "eVals", ...ACCOUNT],
+  // HiBob has people reporting to them: Reporting, for the Canary Wire, and nothing else.
+  peopleManager: ["[Assessments]", "Reporting", ...ACCOUNT],
   bothAdmins: [
     ...EVENTS_ADMIN,
     "[Training]",

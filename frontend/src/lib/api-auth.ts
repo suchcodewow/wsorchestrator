@@ -13,6 +13,7 @@ import { noteCaller } from "@/lib/audit-context";
 import {
   canManageEvalsSettings,
   canManageSettings,
+  canRefreshCanaryWire,
   canSeeCanaryWire,
   canUseEvals,
   type Access,
@@ -90,7 +91,12 @@ export function requireEvalsAdministrator(req: Request) {
   return requireCaller(req, canManageEvalsSettings);
 }
 
-/** An eVals administrator, for Reporting → Canary Wire. */
+/** A people manager or platform administrator, for Reporting → Canary Wire. */
 export function requireCanaryWire(req: Request) {
   return requireCaller(req, canSeeCanaryWire);
+}
+
+/** A platform administrator, to start or step a Canary Wire pull by hand. */
+export function requireCanaryWireRefresh(req: Request) {
+  return requireCaller(req, canRefreshCanaryWire);
 }

@@ -42,6 +42,7 @@ export const POST = audited(async function POST(req: Request) {
         iris: result.grant.irisRole,
         platform: false,
         judging: session.user.access.judging,
+        manager: session.user.access.manager,
       }
     : session.user.access;
   return NextResponse.json({ applied: result.applied, home: homePath(access) });

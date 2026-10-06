@@ -197,6 +197,7 @@ describe("the edges", () => {
       iris: null,
       platform: true,
       judging: false,
+      manager: false,
     });
   });
 
@@ -210,6 +211,7 @@ describe("the edges", () => {
       iris: null,
       platform: true,
       judging: false,
+      manager: false,
     });
     await setUserRole(admin, target.id, { area: "platform", value: false });
     assert.deepEqual(await readRoles(target.id), {
@@ -219,6 +221,7 @@ describe("the edges", () => {
       iris: null,
       platform: false,
       judging: false,
+      manager: false,
     });
   });
 
@@ -244,6 +247,7 @@ describe("listSiteUsers", () => {
       iris: null,
       platform: false,
       judging: false,
+      manager: false,
     });
     const boot = await scope.createUser("list_boot", PERSONAS.platform, MORE_BOOTSTRAP[1]);
     await createRun(plain.id, "one");

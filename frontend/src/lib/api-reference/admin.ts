@@ -1310,32 +1310,35 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
     id: "canary-wire",
     title: "Canary Wire",
     intro:
-      "Monthly Canary Wire completion in Mindtickle, by manager, as Reporting → Canary Wire shows it. It names everyone in the three Canary Wire role groups and who is behind, so every route here is for eVals administrators only.",
+      "Monthly Canary Wire completion in Mindtickle, by manager, as Reporting → Canary Wire shows it. It names everyone in the three Canary Wire role groups and who is behind, so it is for people managers — anyone HiBob has reporting to them — and platform administrators. A manager sees their own org by default: themselves and everyone under them, every level down.",
     endpoints: [
       {
         method: "GET",
         path: "/api/evals/canary-wire",
         summary: "Returns one Canary Wire month from the newest Mindtickle pull: every rep's progress per module, grouped by manager, with per-role and overall rates.",
-        access: "evalsAdmin",
+        access: "canaryWire",
         token: true,
         notes:
-          "Built from the newest pull and today's exemptions, so a past month counts whoever was accountable then. A rep is pre-bootcamp, and counted in no rate, until the month after their BTC date in bootcamp history; BTC marked exempt counts in every month. With no BTC date, someone whose HiBob start date is before the first real BTC date on record counts in every month, since bootcamp history doesn't go back far enough to have them; anyone else with none counts in none. None of this applies to SDRs, who never attend bootcamp: they count from their first full month at Harness by HiBob's start date (starting October 2 counts from November, October 1 from October), and in every month with no start date. Rates are percentages to one place, null when nothing is owed. A cell is keyed by module label: accountable cells are counted, exempt ones are pre-bootcamp work and off-role ones (neither) are another edition's module, shown but not counted. atPt is the event's moment in Pacific, empty when only the day is known. lastActivity is the newest completion in the month's content. hasSnapshot is false until the first pull from Mindtickle has finished, and every list is then empty. With format=csv, the same month as a CSV download, one row per rep.",
+          "Built from the newest pull and today's exemptions, so a past month counts whoever was accountable then. A rep is pre-bootcamp, and counted in no rate, until the month after their BTC date in bootcamp history; BTC marked exempt counts in every month. With no BTC date, someone whose HiBob start date is before the first real BTC date on record counts in every month, since bootcamp history doesn't go back far enough to have them; anyone else with none counts in none. None of this applies to SDRs, who never attend bootcamp: they count from their first full month at Harness by HiBob's start date (starting October 2 counts from November, October 1 from October), and in every month with no start date. Names, titles and managers are the HiBob sync's (the employee list), matched by email, with Mindtickle's for anyone HiBob doesn't have; an IC is someone nobody in HiBob reports to. Rates are percentages to one place, null when nothing is owed. A role's and the totals' rates are in people: of the learners who owe something this month, the share who finished everything they owe. A team's and a rep's are in modules. A cell is keyed by module label: accountable cells are counted, exempt ones are pre-bootcamp work and off-role ones (neither) are another edition's module, shown but not counted. atPt is the event's moment in Pacific, empty when only the day is known. lastActivity is the newest completion in the month's content. hasSnapshot is false until the first pull from Mindtickle has finished, and every list is then empty. With format=csv, the same month as a CSV download, one row per rep.",
         query: [
           { name: "month", type: "string", note: 'a month the picker offers, "September 2026"; the newest month anybody has worked in if omitted' },
           { name: "format", type: '"csv"', note: "a CSV download instead of JSON" },
+          { name: "scope", type: '"org" | "everyone"', note: "org: the caller and everyone under them in HiBob, for a manager; everyone: the whole Canary Wire. Defaults to org for a manager and everyone otherwise" },
         ],
         returns:
-          "{ month, months: string[], monthsWithData: string[], hasSnapshot, hasData, labels: string[], modules: { label, edition, name }[], teams: { manager, managerEmail, roles: string[], directs: Rep[], learners, exempt, assigned, completed, pct, fullyComplete, notActivated }[], roles: { role, learners, exempt, assigned, completed, pct, icLearners, icAssigned, icCompleted, icPct, modules: string[] }[], totals | null, lastActivity: { at, atPt, who, module, role }, fetchedAtPt, savedAt: string | null, notes: string[], seriesLinks: { edition, label, url }[], moduleUrlTemplate }, where Rep is { name, email, role, manager, managerEmail, title, notActivated, ic, exempt, exemptFrom, exemptSource: \"bootcamp\" | \"predates_history\" | \"no_bootcamp\" | \"first_month\" | \"edition\", cells: Record<label, { state, on, atPt, moduleId, seriesId, moduleType, accountable, exempt, also: { state, on, atPt, edition }[], edition? }>, assigned, completed, pct, offRole }; text/csv with format=csv",
+          "{ month, scope: \"org\" | \"everyone\", months: string[], monthsWithData: string[], hasSnapshot, hasData, labels: string[], modules: { label, edition, name }[], teams: { manager, managerEmail, roles: string[], directs: Rep[], learners, exempt, assigned, completed, pct, fullyComplete, notActivated }[], roles: { role, learners, finished, pct, icLearners, icFinished, icPct, exempt, modules: string[] }[], totals: { learners, finished, pct, icLearners, icFinished, icPct, exempt, rostered, notActivated } | null, lastActivity: { at, atPt, who, module, role }, fetchedAtPt, savedAt: string | null, notes: string[], seriesLinks: { edition, label, url }[], moduleUrlTemplate }, where Rep is { name, email, role, manager, managerEmail, title, notActivated, ic, exempt, exemptFrom, exemptSource: \"bootcamp\" | \"predates_history\" | \"no_bootcamp\" | \"first_month\" | \"edition\", cells: Record<label, { state, on, atPt, moduleId, seriesId, moduleType, accountable, exempt, also: { state, on, atPt, edition }[], edition? }>, assigned, completed, pct, offRole }; text/csv with format=csv",
         errors: [
           { status: 400, error: "invalid_month", when: "month is not one the picker offers" },
           { status: 400, error: "invalid_format", when: "format is set to anything but csv" },
+          { status: 400, error: "invalid_scope", when: "scope is neither org nor everyone" },
+          { status: 400, error: "not_a_manager", when: "scope is org and nobody reports to the caller" },
         ],
       },
       {
         method: "GET",
         path: "/api/evals/canary-wire/pull",
         summary: "Returns the newest pull from Mindtickle, running or not, and whether Mindtickle is configured.",
-        access: "evalsAdmin",
+        access: "canaryWire",
         token: true,
         notes:
           "A pull takes about 15 minutes, so it goes in steps of up to four minutes (POST /api/evals/canary-wire/pull/step), each saving where it got to. done of total counts learners fetched, 0 of 0 until the rosters are in. working is true while a step holds the pull. A running pull nobody works on for 6 hours is given up as failed. configured is false when MT_API_KEY or MT_SECRET_KEY is unset, and no pull can start.",
@@ -1345,7 +1348,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "POST",
         path: "/api/evals/canary-wire/pull",
         summary: "Starts a pull from Mindtickle now (Refresh now), rather than waiting for the next two-hourly one.",
-        access: "evalsAdmin",
+        access: "platform",
         token: true,
         notes:
           "Fetches nothing itself: call POST /api/evals/canary-wire/pull/step until the pull ends, as the page does. When it succeeds it replaces the Canary Wire's data.",
@@ -1359,7 +1362,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "POST",
         path: "/api/evals/canary-wire/pull/step",
         summary: "Works on the running pull for up to four minutes, then returns how it stands.",
-        access: "evalsAdmin",
+        access: "platform",
         token: true,
         notes:
           "Answers at once, with the pull unchanged, when another step holds it, and with null when no pull is running. Each step fetches learners' histories in order and saves every ten, so a step cut short loses little. One learner's history failing is noted and costs that learner; Mindtickle refusing the key pair fails the pull. Allows 300 seconds.",

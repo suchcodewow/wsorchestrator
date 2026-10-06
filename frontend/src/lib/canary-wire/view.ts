@@ -76,32 +76,33 @@ export type Team = {
   notActivated: number;
 };
 
-export type RoleRow = {
-  role: string;
+/**
+ * A group's completion counted in people, not modules: of the learners who
+ * owe something this month, how many have finished everything they owe.
+ * A rep halfway through is not half done; they still owe the rest.
+ */
+export type Completion = {
+  /** Accountable this month and owing at least one module. */
   learners: number;
-  exempt: number;
-  assigned: number;
-  completed: number;
+  /** Of those, finished everything they owe. */
+  finished: number;
   pct: number | null;
+  /** The same over individual contributors only. */
   icLearners: number;
-  icAssigned: number;
-  icCompleted: number;
+  icFinished: number;
   icPct: number | null;
+};
+
+export type RoleRow = Completion & {
+  role: string;
+  /** Not yet accountable: pre-bootcamp, or an SDR before their first full month. */
+  exempt: number;
   modules: string[];
 };
 
-export type Totals = {
-  learners: number;
+export type Totals = Completion & {
   exempt: number;
   rostered: number;
-  assigned: number;
-  completed: number;
-  pct: number | null;
-  icLearners: number;
-  icAssigned: number;
-  icCompleted: number;
-  icPct: number | null;
-  fullyComplete: number;
   notActivated: number;
 };
 
@@ -109,6 +110,8 @@ export type LastActivity = { at: string; atPt: string; who: string; module: stri
 
 export type CanaryWireView = {
   month: string;
+  /** Whose: everyone in the Canary Wire, or a manager's own org (them and everyone under them). */
+  scope: "everyone" | "org";
   /** Every month the picker offers. */
   months: string[];
   /** Months with any content, for the picker's "(no data)" marks. */
@@ -167,6 +170,15 @@ export function defaultMonth(snap: CanaryWireSnapshot | null): string {
   return offered[offered.length - 1] ?? "";
 }
 
+/**
+ * The newest completion in `month`'s content, over everyone in the pull.
+ * Never a manager's org alone: it says how current Mindtickle's data is,
+ * which a quiet team would otherwise make look stale.
+ */
+export function monthLastActivity(snap: CanaryWireSnapshot, month: string): LastActivity {
+  return lastActivity(snap, new Map(snap.modules.filter((m) => m.month === month).map((m) => [m.module_id, m.label])));
+}
+
 function lastActivity(snap: CanaryWireSnapshot, labels: Map<string, string>): LastActivity {
   const learners = new Map(snap.learners.map((l) => [l.email, l]));
   let best: LastActivity = { at: "", atPt: "", who: "", module: "", role: "" };
@@ -201,6 +213,7 @@ export function columnOrder(modules: Pick<SnapshotModule, "label" | "edition">[]
 export function emptyView(month: string): CanaryWireView {
   return {
     month,
+    scope: "everyone",
     months: offeredMonths(null),
     monthsWithData: [],
     hasSnapshot: false,
@@ -219,7 +232,35 @@ export function emptyView(month: string): CanaryWireView {
   };
 }
 
-export function monthView(snap: CanaryWireSnapshot, month: string, standing: Accountability, savedAt: Date | null = null): CanaryWireView {
+/** Completion in people over `reps`: who owes something, and who has finished it all. */
+function completion(reps: Rep[]): Completion {
+  const owing = reps.filter((r) => !r.exempt && r.assigned > 0);
+  const finished = owing.filter((r) => r.completed >= r.assigned);
+  const ics = owing.filter((r) => r.ic);
+  const icFinished = ics.filter((r) => r.completed >= r.assigned);
+  return {
+    learners: owing.length,
+    finished: finished.length,
+    pct: rate(finished.length, owing.length),
+    icLearners: ics.length,
+    icFinished: icFinished.length,
+    icPct: rate(icFinished.length, ics.length),
+  };
+}
+
+/**
+ * @param orgManagers lowercased emails of everyone with someone reporting to
+ *   them, org-wide, from HiBob: who is not an IC. Mindtickle's own manager
+ *   fields only see the Canary Wire groups, so a manager whose reports all sit
+ *   outside them would otherwise read as an IC.
+ */
+export function monthView(
+  snap: CanaryWireSnapshot,
+  month: string,
+  standing: Accountability,
+  savedAt: Date | null = null,
+  orgManagers: Set<string> = new Set(),
+): CanaryWireView {
   const modules = snap.modules.filter((m) => m.month === month);
   const byEdition = new Map<string, SnapshotModule[]>();
   for (const m of [...modules].sort((a, b) => cmp(a.label, b.label))) {
@@ -236,12 +277,11 @@ export function monthView(snap: CanaryWireSnapshot, month: string, standing: Acc
   const owners = new Map<string, Set<string>>();
   for (const m of modules) owners.set(m.module_id, (owners.get(m.module_id) ?? new Set()).add(m.edition));
 
-  // Mindtickle has no "direct reports" field, only each user's manager, so a
-  // people manager is anyone named as somebody's manager, by email or by name
-  // since the field isn't always filled both ways. Built from the whole
-  // roster so the answer doesn't change with the month. A manager whose
-  // reports all sit outside the Canary Wire groups reads as an IC.
-  const managers = new Set<string>();
+  // A people manager is anyone with someone reporting to them: HiBob's view
+  // of the whole org, plus anyone a learner names as their manager, by email
+  // or by name, for the learners HiBob doesn't have. Built from the whole
+  // roster so the answer doesn't change with the month.
+  const managers = new Set<string>(orgManagers);
   for (const l of snap.learners) {
     if (l.manager_email) managers.add(l.manager_email.trim().toLowerCase());
     if (l.manager) managers.add(l.manager.trim().toLowerCase());
@@ -362,25 +402,17 @@ export function monthView(snap: CanaryWireSnapshot, month: string, standing: Acc
 
   const roles: RoleRow[] = [...new Set(reps.map((r) => r.role))].sort(cmp).map((role) => {
     const crew = reps.filter((r) => r.role === role);
-    const ics = crew.filter((r) => r.ic);
     return {
       role,
-      learners: crew.filter((r) => !r.exempt).length,
+      ...completion(crew),
       exempt: crew.filter((r) => r.exempt).length,
-      assigned: sum(crew, (r) => r.assigned),
-      completed: sum(crew, (r) => r.completed),
-      pct: rate(sum(crew, (r) => r.completed), sum(crew, (r) => r.assigned)),
-      icLearners: ics.filter((r) => !r.exempt).length,
-      icAssigned: sum(ics, (r) => r.assigned),
-      icCompleted: sum(ics, (r) => r.completed),
-      icPct: rate(sum(ics, (r) => r.completed), sum(ics, (r) => r.assigned)),
-      modules: [...new Set((byEdition.get(role) ?? []).map((m) => m.label))].sort(cmp),
+      modules: columnOrder(byEdition.get(role) ?? []),
     };
   });
 
-  const ics = reps.filter((r) => r.ic);
   return {
     month,
+    scope: "everyone",
     months: offeredMonths(snap),
     monthsWithData: contentMonths(snap),
     hasSnapshot: true,
@@ -392,17 +424,9 @@ export function monthView(snap: CanaryWireSnapshot, month: string, standing: Acc
     teams,
     roles,
     totals: {
-      learners: reps.filter((r) => !r.exempt).length,
+      ...completion(reps),
       exempt: reps.filter((r) => r.exempt).length,
       rostered: reps.length,
-      assigned: sum(reps, (r) => r.assigned),
-      completed: sum(reps, (r) => r.completed),
-      pct: rate(sum(reps, (r) => r.completed), sum(reps, (r) => r.assigned)),
-      icLearners: ics.filter((r) => !r.exempt).length,
-      icAssigned: sum(ics, (r) => r.assigned),
-      icCompleted: sum(ics, (r) => r.completed),
-      icPct: rate(sum(ics, (r) => r.completed), sum(ics, (r) => r.assigned)),
-      fullyComplete: reps.filter((r) => r.assigned && r.completed >= r.assigned).length,
       notActivated: reps.filter((r) => r.notActivated && !r.exempt).length,
     },
     lastActivity: lastActivity(snap, new Map(modules.map((m) => [m.module_id, m.label]))),

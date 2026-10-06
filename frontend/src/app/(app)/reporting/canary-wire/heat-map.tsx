@@ -12,7 +12,7 @@
  * would show through them.
  */
 
-import { useDeferredValue, useMemo, useState } from "react";
+import { useDeferredValue, useMemo, useRef, useState } from "react";
 import { Check, ChevronDown, ChevronRight, Copy, ListChecks, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { moduleUrl, slackReport, stateClass, when } from "@/lib/canary-wire/report";
@@ -42,7 +42,24 @@ const ROW_BG = "bg-card group-hover:bg-[color-mix(in_oklab,var(--muted)_55%,var(
 const PIN_LEFT = "sticky left-0 z-10 w-72 max-w-72 min-w-72 shadow-[inset_-1px_0_0_var(--border)]";
 const PIN_DONE = "sticky right-32 z-10 w-16 min-w-16 shadow-[inset_1px_0_0_var(--border)]";
 const PIN_RATE = "sticky right-0 z-10 w-32 min-w-32";
-const HEAD = "sticky top-0 bg-card px-3 py-2.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground";
+const HEAD = "bg-card px-3 py-2.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground";
+const TABLE = "w-full table-fixed border-separate border-spacing-0 text-[13px]";
+
+/** The widths both tables share, so the header strip and the rows line up. */
+const COL = { name: 288, module: 112, done: 64, rate: 128 };
+
+function Columns({ labels }: { labels: string[] }) {
+  return (
+    <colgroup>
+      <col style={{ width: COL.name }} />
+      {labels.map((l) => (
+        <col key={l} style={{ width: COL.module }} />
+      ))}
+      <col style={{ width: COL.done }} />
+      <col style={{ width: COL.rate }} />
+    </colgroup>
+  );
+}
 const AMBER_CHIP = cn(CHIP, "bg-amber-100 text-amber-800 dark:bg-amber-400/15 dark:text-amber-300");
 
 function exemptTitle(rep: Rep): string {
@@ -126,6 +143,8 @@ export function HeatMap({ view }: { view: CanaryWireView }) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const needle = useDeferredValue(search).trim().toLowerCase();
   const labels = view.labels;
+  const headStrip = useRef<HTMLDivElement>(null);
+  const minWidth = COL.name + COL.module * labels.length + COL.done + COL.rate;
   // The series' short label, "AE", beside a name; the full edition is the tooltip.
   const short = (edition: string) => view.seriesLinks.find((s) => s.edition === edition)?.label ?? edition;
 
@@ -204,7 +223,9 @@ export function HeatMap({ view }: { view: CanaryWireView }) {
         </button>
       </div>
 
-      <div className="overflow-hidden rounded-2xl border bg-card shadow-sm">
+      {/* Clipped rather than hidden: an overflow-hidden card would be a
+          scroll box of its own, and the header strip could never stick. */}
+      <div className="overflow-clip rounded-2xl border bg-card shadow-sm">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b px-5 py-3 text-xs text-muted-foreground">
           {/* Always every entry, even in a month where nothing is uncounted: a
               legend that comes and goes teaches nobody what a pale dashed
@@ -229,12 +250,17 @@ export function HeatMap({ view }: { view: CanaryWireView }) {
             {view.teams.length ? "Nothing matches those filters." : `No one to show for ${view.month}.`}
           </p>
         ) : (
-          // Its own scroll box, so the headers can stick inside it. Sideways
-          // overscroll is contained, so a trackpad swipe across the module
-          // columns doesn't navigate back.
-          <div className="max-h-[75vh] overflow-auto overscroll-x-contain">
-            <table className="w-full border-separate border-spacing-0 text-[13px]">
-              <thead>
+          <>
+            {/* The rows scroll with the page, never in a box of their own: a
+                box takes the wheel and keeps it at its last row, so the page
+                never moved on and the bottom rows stayed under the window's
+                edge. The headers sit in a strip pinned under the app's top
+                bar, following the rows sideways, and both tables lay out the
+                same fixed columns so they line up. */}
+            <div ref={headStrip} className="sticky top-[57px] z-30 overflow-hidden lg:top-0" aria-hidden="true">
+              <table className={TABLE} style={{ minWidth }}>
+                <Columns labels={labels} />
+                <thead>
                 <tr className="text-left">
                   <th className={cn(HEAD, PIN_LEFT, "z-30 pl-5 shadow-[inset_-1px_-1px_0_var(--border)]")}>Manager / direct</th>
                   {labels.map((l) => (
@@ -250,7 +276,22 @@ export function HeatMap({ view }: { view: CanaryWireView }) {
                   <th className={cn(HEAD, PIN_DONE, "z-30 text-right shadow-[inset_1px_-1px_0_var(--border)]")}>Done</th>
                   <th className={cn(HEAD, PIN_RATE, "z-30 pr-5 text-right shadow-[inset_0_-1px_0_var(--border)]")}>Complete</th>
                 </tr>
-              </thead>
+                </thead>
+              </table>
+            </div>
+            {/* Sideways overscroll is contained, so a trackpad swipe across the
+                module columns doesn't navigate back. */}
+            <div
+              className="overflow-x-auto overscroll-x-contain"
+              onScroll={(e) => {
+                if (headStrip.current) headStrip.current.scrollLeft = e.currentTarget.scrollLeft;
+              }}
+            >
+              <table className={TABLE} style={{ minWidth }}>
+                <Columns labels={labels} />
+                <caption className="sr-only">
+                  {`Canary Wire completion by manager for ${view.month}: Manager / direct, ${labels.join(", ")}, Done, Complete`}
+                </caption>
               {shown.map(({ team, directs }) => {
                 const closed = collapsed.has(team.manager);
                 const tAssigned = directs.reduce((n, d) => n + d.assigned, 0);
@@ -335,8 +376,9 @@ export function HeatMap({ view }: { view: CanaryWireView }) {
                   </tbody>
                 );
               })}
-            </table>
-          </div>
+              </table>
+            </div>
+          </>
         )}
       </div>
     </div>

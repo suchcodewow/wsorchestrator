@@ -89,7 +89,9 @@ const POLICY: Record<string, { actual: Check; expected: Check }> = {
     actual: roles.canManageEvalsSettings,
     expected: evals("administrator"),
   },
-  canSeeCanaryWire: { actual: roles.canSeeCanaryWire, expected: evals("administrator") },
+  canSeeCanaryWire: { actual: roles.canSeeCanaryWire, expected: (a) => a.platform || a.manager },
+  canRefreshCanaryWire: { actual: roles.canRefreshCanaryWire, expected: platformOnly },
+  canSeeReporting: { actual: roles.canSeeReporting, expected: (a) => evals("viewer")(a) || a.platform || a.manager },
   canScoreAssessments: { actual: roles.canScoreAssessments, expected: (a) => evals("viewer")(a) || a.judging },
   canSearchEmployees: {
     actual: roles.canSearchEmployees,
@@ -142,6 +144,7 @@ test("the combinations cover every role", () => {
       (TRAINING_ROLES.length + 1) *
       (EVALS_ROLES.length + 1) *
       (IRIS_ROLES.length + 1) *
+      2 *
       2 *
       2,
   );
@@ -261,7 +264,9 @@ describe("homePath", () => {
             ? "/evals"
             : iris("taker")(a)
               ? "/iris"
-              : "/welcome";
+              : a.manager
+                ? "/reporting/canary-wire"
+                : "/welcome";
       assert.equal(roles.homePath(a), want, describeAccess(a));
     }
   });
@@ -293,7 +298,7 @@ describe("accessBadges", () => {
 
   test("shows the event role, then the training role, then the eVals role, then the Iris role", () => {
     assert.deepEqual(
-      roles.accessBadges({ event: "manager", training: "viewer", evals: "viewer", iris: "taker", platform: false, judging: false }),
+      roles.accessBadges({ event: "manager", training: "viewer", evals: "viewer", iris: "taker", platform: false, judging: false, manager: false }),
       ["Event Manager", "Training Viewer", "eVals Viewer", "Iris Taker"],
     );
     assert.deepEqual(roles.accessBadges(PERSONAS.trainingAdmin), ["Training Administrator"]);
