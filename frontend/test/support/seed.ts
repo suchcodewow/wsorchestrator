@@ -10,6 +10,7 @@ import {
   bootcampHistory,
   bootcampJudges,
   bootcamps,
+  employees,
   evalsAssessmentCriteria,
   evalsAssessments,
   sessions,
@@ -62,6 +63,17 @@ export function testScope(name: string) {
       await db.insert(bootcampJudges).values({ bootcampId, email: address, fullName: key }).onConflictDoNothing();
     } else {
       await db.delete(bootcampJudges).where(eq(bootcampJudges.email, address));
+    }
+    // Managing people isn't stored on the user either: HiBob decides it, so a
+    // manager is given one employee who reports to them.
+    const reportId = `${id}_report`;
+    if (access.manager) {
+      await db
+        .insert(employees)
+        .values({ id: reportId, email: `${reportId}@${TEST_EMAIL_DOMAIN}`, fullName: `${key} report`, reportsToEmail: address, raw: {} })
+        .onConflictDoUpdate({ target: employees.id, set: { reportsToEmail: address } });
+    } else {
+      await db.delete(employees).where(eq(employees.id, reportId));
     }
     return { id, email: address, access };
   }
@@ -137,7 +149,7 @@ export async function createRun(userId: string, name: string): Promise<string> {
   return row!.id;
 }
 
-/** What `id` holds now: their stored roles, and whether they judge the active bootcamp. */
+/** What `id` holds now: their stored roles, whether they judge the active bootcamp, and whether anyone reports to them. */
 export async function readRoles(id: string) {
   const [row] = await db
     .select({
@@ -151,6 +163,7 @@ export async function readRoles(id: string) {
         select 1 from ${bootcampJudges} j join ${bootcamps} b on b.id = j.bootcamp_id
         where j.email = ${users}.email and b.status = 'active'
       )`,
+      manager: sql<boolean>`exists (select 1 from ${employees} e where e.reports_to_email = lower(${users}.email))`,
     })
     .from(users)
     .where(eq(users.id, id));

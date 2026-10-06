@@ -53,6 +53,7 @@ import {
 } from "@/lib/scheduler/timeline";
 import { type ScheduleViewMode, writeScheduleCondensedCookie, writeScheduleViewCookie } from "@/lib/scheduler/schedule-prefs";
 import { cn } from "@/lib/utils";
+import { PillSwitch } from "@/components/pill-switch";
 import { BootcampDialog } from "../bootcamp-dialog";
 import { Board, COLUMN_ATTR, SCALE, SessionFace, type BoardColumn, type Density } from "./board";
 import { useChecklistButtons } from "./checklist";
@@ -783,30 +784,6 @@ function findIssues(
   const first = (i: Issue) => i.spots[0]!;
   issues.sort((x, y) => bySpot(first(x), first(y)));
   return { issues, flagged };
-}
-
-/** A labelled on/off switch, in the bordered pill the toolbar's other controls sit in. */
-function PillSwitch({ label, title, on, onChange }: { label: string; title?: string; on: boolean; onChange: (on: boolean) => void }) {
-  return (
-    <div className="inline-flex rounded-lg border bg-card p-0.5 shadow-xs">
-      <button
-        type="button"
-        role="switch"
-        aria-checked={on}
-        title={title}
-        onClick={() => onChange(!on)}
-        className={cn(
-          "inline-flex cursor-pointer items-center gap-2 rounded-md px-3 py-1.5 text-sm outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50",
-          on ? "font-medium text-foreground" : "text-muted-foreground hover:text-foreground",
-        )}
-      >
-        {label}
-        <span aria-hidden className={cn("flex h-4 w-7 shrink-0 items-center rounded-full p-0.5 transition-colors", on ? "bg-brand" : "bg-input")}>
-          <span className={cn("size-3 rounded-full bg-background shadow-xs transition-transform duration-200 ease-out", on && "translate-x-3")} />
-        </span>
-      </button>
-    </div>
-  );
 }
 
 function SaveBadge({ save, onRetry }: { save: SaveState; onRetry: () => void }) {

@@ -143,6 +143,7 @@ describe("using a link", () => {
         iris: grant.irisRole,
         platform: false,
         judging: false,
+        manager: false,
       }, describeGrant(grant));
     }
   });
@@ -163,8 +164,9 @@ describe("using a link", () => {
       evalsRole: "administrator",
       irisRole: "administrator",
     });
-    // A guest judge holds no stored role, so a link applies to them as to nobody.
-    for (const name of PERSONA_NAMES.filter((p) => p !== "nobody" && p !== "guestJudge")) {
+    // A guest judge and a people manager hold no stored role, so a link
+    // applies to them as to nobody.
+    for (const name of PERSONA_NAMES.filter((p) => p !== "nobody" && p !== "guestJudge" && p !== "peopleManager")) {
       const existing = await scope.createUser(`keep_${name}`, PERSONAS[name]);
       const result = await acceptInvite(existing.id, token);
       assert.ok(result.ok && !result.applied, name);

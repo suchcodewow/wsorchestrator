@@ -1,6 +1,7 @@
 /**
  * The Canary Wire's stored pull, and the month view built from it with
- * bootcamp history and HiBob's start dates. Reporting → Canary Wire and
+ * bootcamp history and the HiBob sync: who people are and whom they report
+ * to, and when they started. Reporting → Canary Wire and
  * `GET /api/evals/canary-wire` both read through `canaryWireView`.
  */
 
@@ -10,8 +11,10 @@ import { desc, isNotNull, ne } from "drizzle-orm";
 import { db } from "@/db";
 import { EXEMPT_DATE, bootcampHistory, canaryWireSnapshots, employees } from "@/db/schema";
 import { accountability, type History } from "@/lib/canary-wire/exemptions";
+import { managersOf, onlyOrg, orgOf, withHiBob, type Person } from "@/lib/canary-wire/people";
+import type { CanaryWireScope } from "@/lib/canary-wire/scope";
 import { canaryWireSnapshotSchema, type CanaryWireSnapshot } from "@/lib/canary-wire/snapshot";
-import { defaultMonth, emptyView, monthView, offeredMonths, type CanaryWireView } from "@/lib/canary-wire/view";
+import { defaultMonth, emptyView, monthLastActivity, monthView, offeredMonths, type CanaryWireView } from "@/lib/canary-wire/view";
 
 export type StoredSnapshot = { snapshot: CanaryWireSnapshot; savedAt: Date };
 
@@ -40,6 +43,20 @@ export async function saveSnapshot(snapshot: CanaryWireSnapshot, savedBy: string
   });
 }
 
+/** Everyone in the last HiBob sync, by lowercased email. */
+async function peopleByEmail(): Promise<Map<string, Person>> {
+  const rows = await db
+    .select({
+      email: employees.email,
+      fullName: employees.fullName,
+      title: employees.title,
+      reportsToEmail: employees.reportsToEmail,
+      reportsToName: employees.reportsToName,
+    })
+    .from(employees);
+  return new Map(rows.map((r) => [r.email, r]));
+}
+
 /** What bootcamp history and HiBob say about who has been through bootcamp. */
 async function history(): Promise<History> {
   const [btc, starts] = await Promise.all([
@@ -61,11 +78,22 @@ async function history(): Promise<History> {
  * One month of the Canary Wire, or the newest month anybody worked in when
  * `month` is null. Null for a month the picker doesn't offer.
  */
-export async function canaryWireView(month: string | null): Promise<CanaryWireView | null> {
+/**
+ * One month of the Canary Wire for `scope`. Reps are filtered before anything
+ * is counted, so every rate on the page is over the people shown.
+ */
+export async function canaryWireView(month: string | null, scope: CanaryWireScope = { kind: "everyone" }): Promise<CanaryWireView | null> {
   const [stored, known] = await Promise.all([latestSnapshot(), history()]);
   const snap = stored?.snapshot ?? null;
   const chosen = month ?? defaultMonth(snap);
   if (!offeredMonths(snap).includes(chosen)) return null;
-  if (!stored) return emptyView(chosen);
-  return monthView(stored.snapshot, chosen, accountability(known), stored.savedAt);
+  if (!stored) return { ...emptyView(chosen), scope: scope.kind };
+  const people = await peopleByEmail();
+  const named = withHiBob(stored.snapshot, people);
+  const shown = scope.kind === "org" ? onlyOrg(named, orgOf(people, scope.email)) : named;
+  return {
+    ...monthView(shown, chosen, accountability(known), stored.savedAt, managersOf(people)),
+    lastActivity: monthLastActivity(named, chosen),
+    scope: scope.kind,
+  };
 }

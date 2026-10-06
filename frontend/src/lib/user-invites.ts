@@ -148,6 +148,7 @@ export async function readInvite(
     iris: row.creatorIris,
     platform: row.creatorPlatform,
     judging: false,
+    manager: false,
   };
   if (!mayGrant(creator, grant)) return { ok: false, error: "revoked" };
 

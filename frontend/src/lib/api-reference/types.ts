@@ -27,6 +27,7 @@ export type Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
  *   scorer       eVals Viewer or above, or a guest judge on the active bootcamp (canScoreAssessments)
  *   irisTaker    Iris Taker or above                   (canTakeIris)
  *   irisAdmin    Iris Administrator                    (canManageIris)
+ *   canaryWire   a people manager (by HiBob), or Platform Administrator (canSeeCanaryWire)
  *   userAdmin    an administrator in any area          (canManageUsers)
  *   platform     Platform Administrator                (canManageBackups, canManageSignInDomains, canDeleteUsers)
  *   internal     not for people: Cloud Scheduler or runner OIDC, or Auth.js
@@ -48,6 +49,7 @@ export type AccessKey =
   | "scorer"
   | "irisTaker"
   | "irisAdmin"
+  | "canaryWire"
   | "userAdmin"
   | "platform"
   | "internal";
@@ -68,6 +70,7 @@ export const ACCESS_LABELS: Record<AccessKey, string> = {
   scorer: `${EVALS_ROLE_LABELS.viewer} or above, or a guest judge on the active bootcamp`,
   irisTaker: `${IRIS_ROLE_LABELS.taker} or above`,
   irisAdmin: IRIS_ROLE_LABELS.administrator,
+  canaryWire: `A people manager (someone HiBob has reporting to them), or ${PLATFORM_ADMIN_LABEL}`,
   userAdmin: "An administrator in any area",
   platform: PLATFORM_ADMIN_LABEL,
   internal: "Internal",
