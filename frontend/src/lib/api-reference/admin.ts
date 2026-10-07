@@ -685,7 +685,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "trainingAdmin",
         token: true,
         notes:
-          "Copies every session, who runs it and the assessment a breakout is scored on, but not comments or breakout groups. Rooms come too only when both bootcamps are at the same facility. Days past the end of a track here are left out; notes says what was. The checklists of the days it copies, and Prep Day's, are added to this bootcamp's, every item to do; replace leaves its own items alone, and an item whose day here already has one of the same name is not added again. An owner or a tag who is not an administrator or guest judge of this bootcamp is left off, and notes names them.",
+          "Copies every session, who runs it and the assessment a breakout is scored on, but not comments or breakout groups. Rooms come too only when both bootcamps are at the same facility. Days past the end of a track here are left out; notes says what was. The checklists of the days it copies, and Prep Day's, are added to this bootcamp's, every item to do; replace leaves its own items alone, and an item whose half-day (AM or PM) here already has one of the same name is not added again. An owner or a tag who is not an administrator or guest judge of this bootcamp is left off, and notes names them.",
         params: [BOOTCAMP_ID],
         body: {
           kind: "json",
@@ -904,21 +904,21 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       {
         method: "GET",
         path: "/api/scheduler/bootcamps/{id}/checklist",
-        summary: "Counts each track-day's checklist items, and how many are done.",
+        summary: "Counts the checklist items of each half of each track-day, and how many are done.",
         access: "trainingViewer",
         token: true,
-        notes: "A day with no items is left out.",
+        notes: "One entry per track, day and period (AM or PM); a half-day with no items is left out.",
         params: [BOOTCAMP_ID],
-        returns: "{ days: { track: \"btc\" | \"int\" | \"btc_se\" | \"int_se\", day: number, total: number, done: number }[] }",
+        returns: "{ days: { track: \"btc\" | \"int\" | \"btc_se\" | \"int_se\", day: number, period: \"am\" | \"pm\", total: number, done: number }[] }",
         errors: [{ status: 404, error: "not_found", when: "no such bootcamp" }],
       },
       {
         method: "GET",
         path: "/api/scheduler/bootcamps/{id}/checklist/{track}/{day}",
-        summary: "Lists what is to be done before one day of one track, oldest first.",
+        summary: "Lists what is to be done before one day of one track, AM and PM together, oldest first.",
         access: "trainingViewer",
         token: true,
-        notes: `Whole: a track-day holds at most ${CHECKLIST_LIMITS.itemsPerDay} items.`,
+        notes: `Whole: a track-day holds at most ${CHECKLIST_LIMITS.itemsPerDay} items, both halves together. Each item's period says which half it is in.`,
         params: CHECKLIST_DAY_PARAMS,
         returns: `{ items: ${CHECKLIST_ITEM_ROW}[] }`,
         errors: [{ status: 404, error: "not_found", when: "no such bootcamp, or track or day is not one" }],
@@ -926,7 +926,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       {
         method: "POST",
         path: "/api/scheduler/bootcamps/{id}/checklist/{track}/{day}",
-        summary: "Adds an item to one track-day's checklist, recording you as who wrote it.",
+        summary: "Adds an item to the AM or PM half of one track-day's checklist, recording you as who wrote it.",
         access: "trainingAdmin",
         token: true,
         params: CHECKLIST_DAY_PARAMS,
@@ -934,6 +934,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           kind: "json",
           fields: [
             { name: "name", type: "string", required: true, note: `up to ${CHECKLIST_LIMITS.name} characters` },
+            { name: "period", type: `"am" | "pm"`, note: "which half of the day; am when omitted" },
             { name: "ownerEmail", type: "string | null", note: "a Training administrator or guest judge of the bootcamp; omit for nobody" },
             {
               name: "mentions",
@@ -944,7 +945,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         },
         returns: `201 ${CHECKLIST_ITEM_ROW}`,
         errors: [
-          { status: 400, error: "invalid", when: "name is empty or too long" },
+          { status: 400, error: "invalid", when: "name is empty or too long, or period is neither am nor pm" },
           { status: 400, error: "no_day", when: "the track does not run that many days at this bootcamp, or day is 0 on a track other than btc" },
           { status: 400, error: "not_instructor", when: "ownerEmail or a mention is not an administrator or guest judge of the bootcamp; email names it" },
           { status: 404, error: "not_found", when: "no such bootcamp, or track or day is not one" },
@@ -954,16 +955,19 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       {
         method: "PATCH",
         path: "/api/scheduler/bootcamps/{id}/checklist/items/{itemId}",
-        summary: "Ticks a checklist item done or back to do, or changes its name or owner.",
+        summary: "Ticks a checklist item done or back to do, changes its name or owner, or moves it to another half-day.",
         access: "signedIn",
         token: true,
         notes:
-          "A Training Administrator can tick any item; anyone else only one they own, matched by their account's email. Ticking one already done keeps when it was first ticked. Only a Training Administrator can change the name or owner; a field left out stays as it is. A new name replaces whom the item tags with mentions: anyone no longer named drops out, and anyone newly named finds it in their inbox.",
+          "A Training Administrator can tick any item; anyone else only one they own, matched by their account's email. Ticking one already done keeps when it was first ticked. Only a Training Administrator can change the name or owner, or move it; a field left out stays as it is. A new name replaces whom the item tags with mentions: anyone no longer named drops out, and anyone newly named finds it in their inbox. A move keeps who wrote it, whom it tags and whether it is done. Given together, the name and owner are changed first, then the item moved, then ticked; the first step that fails stops the rest, and steps before it stay saved.",
         params: [BOOTCAMP_ID, CHECKLIST_ITEM_ID],
         body: {
           kind: "json",
           fields: [
             { name: "done", type: "boolean" },
+            { name: "track", type: TRACK_TYPE, note: "to move it to another track" },
+            { name: "day", type: "number", note: "to move it to another day: 1-based; 0 is Prep Day, on btc only" },
+            { name: "period", type: `"am" | "pm"`, note: "to move it to the other half of the day" },
             { name: "name", type: "string", note: `up to ${CHECKLIST_LIMITS.name} characters` },
             { name: "ownerEmail", type: "string | null", note: "a Training administrator or guest judge of the bootcamp; null or blank for nobody" },
             {
@@ -975,11 +979,13 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         },
         returns: CHECKLIST_ITEM_ROW,
         errors: [
-          { status: 400, error: "invalid", when: "none of done, name or ownerEmail is given, or one is the wrong type, or name is empty or too long" },
+          { status: 400, error: "invalid", when: "none of done, name, ownerEmail, track, day or period is given, or one is the wrong type, or name is empty or too long" },
+          { status: 400, error: "no_day", when: "the track does not run that day at this bootcamp, or day is 0 on a track other than btc" },
           { status: 400, error: "not_instructor", when: "ownerEmail or a mention is not an administrator or guest judge of the bootcamp; email names it" },
-          { status: 403, error: "forbidden", when: "you are not a Training Administrator and name or ownerEmail is given" },
+          { status: 403, error: "forbidden", when: "you are not a Training Administrator and name, ownerEmail, track, day or period is given" },
           { status: 403, error: "not_owner", when: "you are not a Training Administrator and it is not yours" },
           { status: 404, error: "not_found", when: "no such bootcamp or item" },
+          { status: 409, error: "full", when: `the day it is moved to already has ${CHECKLIST_LIMITS.itemsPerDay} items` },
         ],
       },
       {

@@ -11,7 +11,7 @@
  * server saves by the same rules.
  */
 
-import { AUDIENCE_TRACKS, CHECKLIST_PREP_DAY, SCHEDULE_LIMITS, type ScheduleTrack, type SessionAudience, type SessionKind } from "@/db/schema";
+import { AUDIENCE_TRACKS, CHECKLIST_PREP_DAY, SCHEDULE_LIMITS, type ChecklistPeriod, type ScheduleTrack, type SessionAudience, type SessionKind } from "@/db/schema";
 import type { ClassLists } from "@/lib/scheduler/attendees";
 
 export const TRACK_LABELS: Record<ScheduleTrack, string> = {
@@ -85,9 +85,10 @@ export function checklistDayExists(track: ScheduleTrack, day: number, bootcamp: 
   return day >= 1 && day <= (trackDays(track, bootcamp) ?? 0);
 }
 
-/** "Bootcamp, Day 2", or "Prep Day", for a checklist's title, the audit trail and the inbox. */
-export function checklistDayLabel(track: ScheduleTrack, day: number): string {
-  return day === CHECKLIST_PREP_DAY.day ? "Prep Day" : `${TRACK_LABELS[track]}, Day ${day}`;
+/** "Bootcamp, Day 2", or "Prep Day", with " AM" or " PM" when given, for a checklist's title, the audit trail and the inbox. */
+export function checklistDayLabel(track: ScheduleTrack, day: number, period?: ChecklistPeriod): string {
+  const label = day === CHECKLIST_PREP_DAY.day ? "Prep Day" : `${TRACK_LABELS[track]}, Day ${day}`;
+  return period ? `${label} ${period.toUpperCase()}` : label;
 }
 
 /** "8:00 AM", for minutes after midnight. */
