@@ -18,29 +18,29 @@ import {
 import { HEADER_ROW, Pager, PlainHeader, SortHeader, TableSearch } from "@/components/data-table";
 import { Card, CardContent } from "@/components/ui/card";
 import {
-  EVALS_ROLES,
+  ASSESSMENTS_ROLES,
   EVENT_ROLES,
   IRIS_ROLES,
   TRAINING_ROLES,
-  type EvalsRole,
+  type AssessmentsRole,
   type EventRole,
   type IrisRole,
   type TrainingRole,
 } from "@/db/schema";
 import {
-  EVALS_ROLE_DESCRIPTIONS,
-  EVALS_ROLE_LABELS,
+  ASSESSMENTS_ROLE_DESCRIPTIONS,
+  ASSESSMENTS_ROLE_LABELS,
   EVENT_ROLE_DESCRIPTIONS,
   EVENT_ROLE_LABELS,
   IRIS_ROLE_DESCRIPTIONS,
   IRIS_ROLE_LABELS,
-  NO_EVALS_ACCESS_LABEL,
+  NO_ASSESSMENTS_ACCESS_LABEL,
   NO_IRIS_ACCESS_LABEL,
   NO_TRAINING_ACCESS_LABEL,
   PLATFORM_ADMIN_LABEL,
   TRAINING_ROLE_DESCRIPTIONS,
   TRAINING_ROLE_LABELS,
-  asEvalsRole,
+  asAssessmentsRole,
   asEventRole,
   asIrisRole,
   asTrainingRole,
@@ -62,19 +62,19 @@ type SiteUser = {
   email: string | null;
   eventRole: EventRole;
   trainingRole: TrainingRole | null;
-  evalsRole: EvalsRole | null;
+  assessmentsRole: AssessmentsRole | null;
   irisRole: IrisRole | null;
   isPlatformAdmin: boolean;
   isBootstrapAdmin: boolean;
   eventCount: number;
 };
 
-type Roles = Pick<SiteUser, "eventRole" | "trainingRole" | "evalsRole" | "irisRole" | "isPlatformAdmin">;
+type Roles = Pick<SiteUser, "eventRole" | "trainingRole" | "assessmentsRole" | "irisRole" | "isPlatformAdmin">;
 
 type Change =
   | { area: "event"; role: EventRole }
   | { area: "training"; role: TrainingRole | null }
-  | { area: "evals"; role: EvalsRole | null }
+  | { area: "assessments"; role: AssessmentsRole | null }
   | { area: "iris"; role: IrisRole | null }
   | { area: "platform"; value: boolean };
 
@@ -89,7 +89,7 @@ const ERRORS: Record<string, string> = {
 
 /** The training, eVals and Iris areas' radio value for "no role", which a radio group can't hold as null. */
 const NO_TRAINING = "none";
-const NO_EVALS = "none";
+const NO_ASSESSMENTS = "none";
 const NO_IRIS = "none";
 
 const EVENT_CHIP: Record<EventRole, string> = {
@@ -123,7 +123,7 @@ export function UsersTable({
   const rolesOf = (u: SiteUser): Roles => ({
     eventRole: u.eventRole,
     trainingRole: u.trainingRole,
-    evalsRole: u.evalsRole,
+    assessmentsRole: u.assessmentsRole,
     irisRole: u.irisRole,
     isPlatformAdmin: u.isPlatformAdmin,
     ...edits[u.id],
@@ -155,8 +155,8 @@ export function UsersTable({
         ? { eventRole: next.role }
         : next.area === "training"
           ? { trainingRole: next.role }
-          : next.area === "evals"
-            ? { evalsRole: next.role }
+          : next.area === "assessments"
+            ? { assessmentsRole: next.role }
             : next.area === "iris"
               ? { irisRole: next.role }
               : { isPlatformAdmin: next.value };
@@ -233,10 +233,9 @@ export function UsersTable({
               <thead>
                 <tr className={HEADER_ROW}>
                   <SortHeader column="user" {...sortProps}>User</SortHeader>
-                  <SortHeader column="events" {...sortProps}>Events</SortHeader>
                   <SortHeader column="eventRole" {...sortProps}>Event role</SortHeader>
                   <SortHeader column="trainingRole" {...sortProps}>Training role</SortHeader>
-                  <SortHeader column="evalsRole" {...sortProps}>eVals role</SortHeader>
+                  <SortHeader column="assessmentsRole" {...sortProps}>Assessments role</SortHeader>
                   <SortHeader column="irisRole" {...sortProps}>Iris role</SortHeader>
                   <SortHeader column="platform" {...sortProps}>Platform admin</SortHeader>
                   {viewerDeletes && (
@@ -250,7 +249,7 @@ export function UsersTable({
                 {shown.length === 0 && (
                   <tr>
                     <td
-                      colSpan={viewerDeletes ? 8 : 7}
+                      colSpan={viewerDeletes ? 7 : 6}
                       className="px-5 py-8 text-center text-muted-foreground"
                     >
                       {query.q ? <>No one matches “{query.q}”.</> : "No one on this page."}
@@ -286,10 +285,6 @@ export function UsersTable({
                           </span>
                         )}
                       </td>
-                      <td className="px-5 py-3 text-muted-foreground tnum">
-                        {u.eventCount}
-                      </td>
-
                       <td className="px-5 py-3">
                         {roles.isPlatformAdmin ? (
                           <ViaPlatform />
@@ -371,48 +366,48 @@ export function UsersTable({
                       <td className="px-5 py-3">
                         {roles.isPlatformAdmin ? (
                           <ViaPlatform />
-                        ) : editable(u, "evals") ? (
+                        ) : editable(u, "assessments") ? (
                           <RoleMenu
-                            heading="eVals role"
-                            value={roles.evalsRole ?? NO_EVALS}
+                            heading="Assessments role"
+                            value={roles.assessmentsRole ?? NO_ASSESSMENTS}
                             label={
-                              roles.evalsRole
-                                ? EVALS_ROLE_LABELS[roles.evalsRole]
-                                : NO_EVALS_ACCESS_LABEL
+                              roles.assessmentsRole
+                                ? ASSESSMENTS_ROLE_LABELS[roles.assessmentsRole]
+                                : NO_ASSESSMENTS_ACCESS_LABEL
                             }
                             chip={
-                              roles.evalsRole === "administrator"
+                              roles.assessmentsRole === "administrator"
                                 ? "text-brand"
-                                : roles.evalsRole
+                                : roles.assessmentsRole
                                   ? "text-muted-foreground"
                                   : "text-muted-foreground/70"
                             }
-                            saving={saving === `${u.id}:evals`}
+                            saving={saving === `${u.id}:assessments`}
                             options={[
                               {
-                                value: NO_EVALS,
-                                label: NO_EVALS_ACCESS_LABEL,
-                                description: "Cannot see eVals.",
+                                value: NO_ASSESSMENTS,
+                                label: NO_ASSESSMENTS_ACCESS_LABEL,
+                                description: "Cannot see assessments.",
                               },
-                              ...EVALS_ROLES.map((r) => ({
+                              ...ASSESSMENTS_ROLES.map((r) => ({
                                 value: r,
-                                label: EVALS_ROLE_LABELS[r],
-                                description: EVALS_ROLE_DESCRIPTIONS[r],
+                                label: ASSESSMENTS_ROLE_LABELS[r],
+                                description: ASSESSMENTS_ROLE_DESCRIPTIONS[r],
                               })),
                             ]}
                             onChange={(v) => {
-                              const role = v === NO_EVALS ? null : asEvalsRole(v);
-                              if (v !== NO_EVALS && !role) return;
-                              if (role !== roles.evalsRole) {
-                                void change(u, { area: "evals", role });
+                              const role = v === NO_ASSESSMENTS ? null : asAssessmentsRole(v);
+                              if (v !== NO_ASSESSMENTS && !role) return;
+                              if (role !== roles.assessmentsRole) {
+                                void change(u, { area: "assessments", role });
                               }
                             }}
                           />
                         ) : (
                           <ReadOnly title={readOnlyTitle}>
-                            {roles.evalsRole
-                              ? EVALS_ROLE_LABELS[roles.evalsRole]
-                              : NO_EVALS_ACCESS_LABEL}
+                            {roles.assessmentsRole
+                              ? ASSESSMENTS_ROLE_LABELS[roles.assessmentsRole]
+                              : NO_ASSESSMENTS_ACCESS_LABEL}
                           </ReadOnly>
                         )}
                       </td>

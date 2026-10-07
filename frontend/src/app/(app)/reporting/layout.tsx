@@ -1,4 +1,4 @@
-/** The layout for Reporting: open to eVals Viewers and above, and to whoever may see the Canary Wire. */
+/** The layout for Reporting: open to Assessments Viewers and above, and to whoever may see the Canary Wire. */
 
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";

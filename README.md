@@ -492,9 +492,20 @@ role does everything the one before it does.
 | **Scheduler Viewer**        | The **Scheduler** page.                                     |
 | **Scheduler Administrator** | Sets everyone's scheduler role on **Manage users**, and **Scheduler settings**. |
 
-**eVals** — the same roles as the scheduler. The **eVals** page is still a
+**Assessments** — eVals is one part of it; the same roles as the scheduler. The **eVals** page is still a
 placeholder; **eVals settings** holds what it will draw on:
 
+- **Google Meetings**: meetings with a title, a start, a length (15m, 30m or
+  1 hour) and the Current-tab groups they invite (Bootcamp Sales, Bootcamp
+  Engineers, Intermediate Sales, Intermediate Engineers). Saving one sends
+  nothing. **Sync Now** creates or updates each upcoming meeting's Google
+  Calendar invite, as the Google account an Assessments Administrator
+  connected on the tab. Each invite goes to its groups and to every
+  Assessments Administrator. It carries a Zoom link whose alternative hosts
+  are those administrators. The invites sit on an "eVals Meetings" calendar
+  the sync makes on that account and shares with the administrators, so they
+  can edit them and the cohort cannot. Setting it up is in
+  [docs/operations.md](docs/operations.md#google-meetings).
 - **HiBob**: syncs HiBob's active employees into the `employees` table, replacing
   the previous sync, every day at 3:00 AM Eastern and whenever **Sync HiBob
   Now** is pressed. Every run, scheduled or manual, is logged on the tab with
@@ -517,16 +528,16 @@ placeholder; **eVals settings** holds what it will draw on:
   `2000-01-01` marker. The old sheet can still be uploaded: rows are matched
   by email and only the file's own columns are written.
 
-| Role                    | Adds                                                            |
-| ----------------------- | --------------------------------------------------------------- |
-| *(none)*                | Nothing. What everyone starts as.                               |
-| **eVals Viewer**        | The **eVals** page.                                             |
-| **eVals Administrator** | Sets everyone's eVals role on **Manage users**, and **eVals settings**. |
+| Role                          | Adds                                                            |
+| ----------------------------- | --------------------------------------------------------------- |
+| *(none)*                      | Nothing. What everyone starts as.                               |
+| **Assessments Viewer**        | The **eVals** page.                                             |
+| **Assessments Administrator** | Sets everyone's Assessments role on **Manage users**, and **eVals settings**, including **Google Meetings**. |
 
 **Iris** — adaptive placement tests for new GTM hires: eight subjects, each
 taken once per form, which place someone Beginner, Intermediate or Advanced so
 enablement can route their training. Takers never see their own level.
-Independent of eVals: an eVals role gives no Iris access, and the reverse.
+Independent of eVals: an Assessments role gives no Iris access, and the reverse.
 
 | Role                     | Adds                                                            |
 | ------------------------ | --------------------------------------------------------------- |

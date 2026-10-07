@@ -101,6 +101,49 @@ it alone; unarchive it or rename it.
 **This machine class has `tofu`, not `terraform`.** The Makefile and bootstrap
 script auto-detect which is present.
 
+### Google Meetings
+
+eVals Settings → Google Meetings sends Google Calendar invites as one Google
+account, and puts a Zoom meeting on each. Google's APIs take no password, so
+the account is connected once in the browser, and the app keeps the refresh
+token that returns (`google_connections`, sealed like the Harness tokens).
+Setting it up in an environment:
+
+1. **Register the callback** on the shared OAuth client (the one in
+   `AUTH_GOOGLE_ID`): add `{AUTH_URL}/api/evals/google-meetings/callback` as an
+   authorized redirect URI, for each environment that connects, and
+   `http://localhost:3000/api/evals/google-meetings/callback` for local work.
+   Until it is there, Google answers *redirect_uri_mismatch*.
+2. **Enable the Calendar API** (`calendar-json.googleapis.com`) on the project
+   that owns that OAuth client. `infra/admin/apis.tf` does this on apply.
+3. **Connect the account.** An Assessments Administrator presses *Connect
+   Google account* on the tab and signs in as the account the invites should
+   come from, allowing calendar access. `google_meetings_account` (env
+   `GOOGLE_USER`) only pre-fills that sign-in. The consent screen shows the
+   app as unverified to an account outside the OAuth client's Workspace; the
+   account's own Workspace admin may have to allow the app.
+4. **Zoom.** Create a Server-to-Server OAuth app on the Zoom account the
+   Google account belongs to, with `meeting:write:admin`, `meeting:read:admin`
+   and `user:read:admin`. Set `zoom_account_id` and `zoom_client_id` on the
+   workspace, and `zoom_client_secret` as a secret (`tf_zoom_client_secret`).
+   Without them, invites go out with no Zoom link and Sync Now says so. Zoom
+   takes as an alternative host only someone with an active user on that
+   account. Sync Now lists the administrators it left out, and still invites
+   them.
+
+The first sync makes an "eVals Meetings" calendar on the account and gives
+each Assessments Administrator edit access to it, which emails them the
+share. That is how they edit a meeting: Google Calendar cannot let only some
+guests edit an invite. Connecting a different account is refused while any
+meeting has an invite, because the first account's calendar holds them.
+Delete those meetings first, which cancels their invites. Sharing outside a
+Workspace domain may be blocked by its admin. The sync then notes each
+administrator it could not share with, and still invites them.
+
+Connect an account on **production only**. QA shares the Workspace and the
+people. A QA sync would send real invites to the real cohort, and QA's
+production import deletes the connection and the meetings for that reason.
+
 ---
 
 ## Reaching the production database

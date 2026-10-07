@@ -65,7 +65,7 @@ export async function scorerPool(bootcampId: string): Promise<MentionPick[]> {
     db
       .select({ email: sql<string>`lower(${users.email})`, name: users.name })
       .from(users)
-      .where(and(sql`${users.email} is not null`, or(sql`${users.evalsRole} is not null`, eq(users.isPlatformAdmin, true))))
+      .where(and(sql`${users.email} is not null`, or(sql`${users.assessmentsRole} is not null`, eq(users.isPlatformAdmin, true))))
       .orderBy(sql`lower(coalesce(nullif(${users.name}, ''), ${users.email}))`)
       .limit(100),
     judgePicks(bootcampId),

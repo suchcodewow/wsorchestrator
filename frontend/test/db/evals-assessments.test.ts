@@ -104,7 +104,7 @@ let undecided: { id: string; email: string };
 before(async () => {
   await scope.setUp();
   await db.delete(employees).where(like(employees.id, `${TEST_PREFIX}%`));
-  admin = await scope.createUser("admin", PERSONAS.evalsAdmin);
+  admin = await scope.createUser("admin", PERSONAS.assessmentsAdmin);
   judge = await scope.createUser("judge", PERSONAS.guestJudge);
   bootcampId = await scope.activeBootcamp(admin.id);
   sales = await candidate("a_sales", "sales");

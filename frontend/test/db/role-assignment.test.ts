@@ -24,7 +24,7 @@ import "../support/test-env";
 import { after, before, describe, test } from "node:test";
 import assert from "node:assert/strict";
 
-import { EVALS_ROLES, EVENT_ROLES, IRIS_ROLES, TRAINING_ROLES } from "@/db/schema";
+import { ASSESSMENTS_ROLES, EVENT_ROLES, IRIS_ROLES, TRAINING_ROLES } from "@/db/schema";
 import type { Access } from "@/lib/roles";
 import { USER_LIST } from "@/lib/list-specs";
 import { setUserRole, listSiteUsers, type RoleChange, type SetRoleError } from "@/lib/site-users";
@@ -41,7 +41,7 @@ const ALL_BOOTSTRAP = [BOOTSTRAP_EMAIL, ...MORE_BOOTSTRAP].join(",");
 const CHANGES: RoleChange[] = [
   ...EVENT_ROLES.map((role) => ({ area: "event" as const, role })),
   ...[null, ...TRAINING_ROLES].map((role) => ({ area: "training" as const, role })),
-  ...[null, ...EVALS_ROLES].map((role) => ({ area: "evals" as const, role })),
+  ...[null, ...ASSESSMENTS_ROLES].map((role) => ({ area: "assessments" as const, role })),
   ...[null, ...IRIS_ROLES].map((role) => ({ area: "iris" as const, role })),
   { area: "platform", value: true },
   { area: "platform", value: false },
@@ -62,8 +62,8 @@ function expected(
         ? actor.platform || actor.event === "administrator"
         : change.area === "training"
           ? actor.platform || actor.training === "administrator"
-          : change.area === "evals"
-            ? actor.platform || actor.evals === "administrator"
+          : change.area === "assessments"
+            ? actor.platform || actor.assessments === "administrator"
             : actor.platform || actor.iris === "administrator";
   if (!administers) return "forbidden";
   if (target.platform && !actor.platform) return "platform_target";
@@ -74,7 +74,7 @@ function expected(
 function applied(change: RoleChange, before: Access): Access {
   if (change.area === "event") return { ...before, event: change.role };
   if (change.area === "training") return { ...before, training: change.role };
-  if (change.area === "evals") return { ...before, evals: change.role };
+  if (change.area === "assessments") return { ...before, assessments: change.role };
   if (change.area === "iris") return { ...before, iris: change.role };
   return { ...before, platform: change.value };
 }
@@ -187,13 +187,13 @@ describe("the edges", () => {
     assert.deepEqual(await setUserRole(admin, target.id, { area: "training", role: "viewer" }), {
       ok: true,
     });
-    assert.deepEqual(await setUserRole(admin, target.id, { area: "evals", role: "viewer" }), {
+    assert.deepEqual(await setUserRole(admin, target.id, { area: "assessments", role: "viewer" }), {
       ok: true,
     });
     assert.deepEqual(await readRoles(target.id), {
       event: "operator",
       training: "viewer",
-      evals: "viewer",
+      assessments: "viewer",
       iris: null,
       platform: true,
       judging: false,
@@ -207,7 +207,7 @@ describe("the edges", () => {
     const target = await scope.createUser("fall_target", {
       event: "manager",
       training: "viewer",
-      evals: null,
+      assessments: null,
       iris: null,
       platform: true,
       judging: false,
@@ -217,7 +217,7 @@ describe("the edges", () => {
     assert.deepEqual(await readRoles(target.id), {
       event: "manager",
       training: "viewer",
-      evals: null,
+      assessments: null,
       iris: null,
       platform: false,
       judging: false,
@@ -243,7 +243,7 @@ describe("listSiteUsers", () => {
     const plain = await scope.createUser("list_plain", {
       event: "manager",
       training: "viewer",
-      evals: "administrator",
+      assessments: "administrator",
       iris: null,
       platform: false,
       judging: false,
@@ -260,7 +260,7 @@ describe("listSiteUsers", () => {
       {
         eventRole: listed.get(plain.id)?.eventRole,
         trainingRole: listed.get(plain.id)?.trainingRole,
-        evalsRole: listed.get(plain.id)?.evalsRole,
+        assessmentsRole: listed.get(plain.id)?.assessmentsRole,
         isPlatformAdmin: listed.get(plain.id)?.isPlatformAdmin,
         isBootstrapAdmin: listed.get(plain.id)?.isBootstrapAdmin,
         eventCount: listed.get(plain.id)?.eventCount,
@@ -268,7 +268,7 @@ describe("listSiteUsers", () => {
       {
         eventRole: "manager",
         trainingRole: "viewer",
-        evalsRole: "administrator",
+        assessmentsRole: "administrator",
         isPlatformAdmin: false,
         isBootstrapAdmin: false,
         eventCount: 2,
@@ -279,13 +279,12 @@ describe("listSiteUsers", () => {
   });
 
   test("sorts by any column in the database, and pages", async () => {
-    const busy = await scope.createUser("sort_busy", PERSONAS.nobody);
-    const idle = await scope.createUser("sort_idle", PERSONAS.nobody);
-    await createRun(busy.id, "one");
+    const manager = await scope.createUser("sort_manager", PERSONAS.manager);
+    const nobody = await scope.createUser("sort_nobody", PERSONAS.nobody);
     const ids = async (dir: "asc" | "desc") =>
-      (await listSiteUsers({ q: "sort_", sort: "events", dir, page: 1 })).rows.map((u) => u.id);
-    assert.deepEqual(await ids("desc"), [busy.id, idle.id]);
-    assert.deepEqual(await ids("asc"), [idle.id, busy.id]);
+      (await listSiteUsers({ q: "sort_", sort: "eventRole", dir, page: 1 })).rows.map((u) => u.id);
+    assert.deepEqual(await ids("desc"), [manager.id, nobody.id]);
+    assert.deepEqual(await ids("asc"), [nobody.id, manager.id]);
 
     const beyond = await listSiteUsers({ q: "sort_", sort: "user", dir: "asc", page: 2 });
     assert.deepEqual([beyond.rows, beyond.hasMore], [[], false]);

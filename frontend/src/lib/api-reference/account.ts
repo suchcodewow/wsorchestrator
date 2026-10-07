@@ -124,7 +124,7 @@ export const ACCOUNT_GROUPS: EndpointGroup[] = [
         access: "signedIn",
         token: true,
         returns:
-          "{ id, email: string | null, access: { event, training: string | null, evals: string | null, platform: boolean }, preferences: { themePreference: \"light\" | \"dark\" | \"system\", calendarScope: \"own\" | \"all\" } }",
+          "{ id, email: string | null, access: { event, training: string | null, assessments: string | null, iris: string | null, platform: boolean, judging: boolean, manager: boolean }, preferences: { themePreference: \"light\" | \"dark\" | \"system\", calendarScope: \"own\" | \"all\" } }",
       },
       {
         method: "PATCH",

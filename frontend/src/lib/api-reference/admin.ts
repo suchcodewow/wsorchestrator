@@ -1,5 +1,5 @@
-import { ASSESSMENT_ATTENDEE_LIST, ASSESSMENT_LIST, AUDIT_LIST, BOOTCAMP_HISTORY_LIST, BOOTCAMP_LIST, CURRENT_COHORT_LIST, DOMAIN_LIST, EMPLOYEE_LIST, HIBOB_SYNC_LIST, HISTORY_STATUSES, JUDGE_LIST, ORGANIZATION_LIST, PREVIOUS_SESSION_LIST, SESSION_COMMENT_LIST, SESSION_TYPE_LIST, SLACK_CONTACT_LIST, SLACK_SYNC_CHANGE_LIST, SLACK_SYNC_LIST, CHANNEL_CONTACT_LIST, TITLE_LIST, USER_LIST, FACILITY_LIST } from "@/lib/list-specs";
-import { BOOTCAMP_LIMITS, CHECKLIST_LIMITS, EVALS_ASSESSMENT_LIMITS, FACILITY_LIMITS, SCHEDULE_LIMITS } from "@/db/schema";
+import { ASSESSMENT_ATTENDEE_LIST, ASSESSMENT_LIST, AUDIT_LIST, BOOTCAMP_HISTORY_LIST, BOOTCAMP_LIST, CURRENT_COHORT_LIST, DOMAIN_LIST, EMPLOYEE_LIST, HIBOB_SYNC_LIST, HISTORY_STATUSES, JUDGE_LIST, ORGANIZATION_LIST, PREVIOUS_SESSION_LIST, SESSION_COMMENT_LIST, SESSION_TYPE_LIST, GOOGLE_MEETING_LIST, SLACK_CONTACT_LIST, SLACK_SYNC_CHANGE_LIST, SLACK_SYNC_LIST, CHANNEL_CONTACT_LIST, TITLE_LIST, USER_LIST, FACILITY_LIST } from "@/lib/list-specs";
+import { BOOTCAMP_LIMITS, CHECKLIST_LIMITS, EVALS_ASSESSMENT_LIMITS, FACILITY_LIMITS, GOOGLE_MEETING_LIMITS, SCHEDULE_LIMITS } from "@/db/schema";
 import { PAGE_SIZE } from "@/lib/paging";
 import { CHECKLIST_ITEM_ROW } from "./account";
 import { PAGE_FIELDS, listQuery } from "./paging";
@@ -130,7 +130,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         notes:
           "pendingAdmins lists the SITE_ADMIN_EMAILS addresses that have not signed in yet, whichever page is asked for.",
         query: listQuery(USER_LIST.sorts, "the name or email"),
-        returns: `{ users: { id, name, email, eventRole, trainingRole, evalsRole, irisRole, isPlatformAdmin, isBootstrapAdmin, eventCount }[], ${PAGE_FIELDS}, pendingAdmins: string[] }`,
+        returns: `{ users: { id, name, email, eventRole, trainingRole, assessmentsRole, irisRole, isPlatformAdmin, isBootstrapAdmin, eventCount }[], ${PAGE_FIELDS}, pendingAdmins: string[] }`,
       },
       {
         method: "PATCH",
@@ -146,7 +146,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           fields: [
             {
               name: "area",
-              type: `"event" | "training" | "evals" | "iris" | "platform"`,
+              type: `"event" | "training" | "assessments" | "iris" | "platform"`,
               required: true,
               note: "picks which of the fields below applies",
             },
@@ -218,7 +218,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
               required: true,
             },
             {
-              name: "evalsRole",
+              name: "assessmentsRole",
               type: `"viewer" | "administrator" | null`,
               note: "defaults to null",
             },
@@ -422,6 +422,134 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         params: [{ name: "id", type: "string", required: true, note: "UUID" }],
         returns: "{ ok: true }",
         errors: [{ status: 404, error: "not_found", when: "id is not a UUID, or no such contact" }],
+      },
+      {
+        method: "GET",
+        path: "/api/evals/google-meetings",
+        summary: "Lists the Google meetings, a page at a time, with the connected Google account and who is on every invite.",
+        access: "assessmentsAdmin",
+        token: true,
+        notes:
+          "A meeting is upcoming until it ends. groups are the Current-tab groups it invites: bootcamp_sales is the bootcamp stage on the Sales track, and so on. status is not_synced until a sync sends its invite, synced once one has, changed when it was edited since, and failed when the last sync of it failed, with syncError saying why. invited counts the guests the last sync put on the invite. connection is null until an Assessments Administrator connects a Google account, and never includes its token; running says whether a sync is under way. administrators are the Assessments Administrators, on every invite and able to edit it. groupSizes counts whom each group would invite now. counts are every upcoming and past meeting, whatever the search.",
+        query: [
+          { name: "when", type: `"upcoming" | "past"`, note: "Default upcoming." },
+          ...listQuery(GOOGLE_MEETING_LIST.sorts, "the title"),
+        ],
+        returns: `{ meetings: { id, title, startsAt, durationMinutes: 15 | 30 | 60, groups: ("bootcamp_sales" | "bootcamp_engineer" | "intermediate_sales" | "intermediate_engineer")[], zoomJoinUrl: string | null, status: "not_synced" | "synced" | "changed" | "failed", syncError: string | null, syncedAt: string | null, invited: number, addedBy: string | null }[], ${PAGE_FIELDS}, connection: { email, connectedAt, connectedBy: string | null, calendarId: string | null, lastSyncAt: string | null, lastSyncError: string | null, running: boolean } | null, zoomConfigured: boolean, administrators: string[], counts: { upcoming: number, past: number }, groupSizes: { bootcamp_sales, bootcamp_engineer, intermediate_sales, intermediate_engineer: number } }`,
+        errors: [{ status: 400, error: "invalid_when", when: "when is not upcoming or past" }],
+      },
+      {
+        method: "POST",
+        path: "/api/evals/google-meetings",
+        summary: "Adds a Google meeting. Nothing is sent until a sync.",
+        access: "assessmentsAdmin",
+        token: true,
+        body: {
+          kind: "json",
+          fields: [
+            { name: "title", type: "string", required: true, note: `1 to ${GOOGLE_MEETING_LIMITS.title} characters, trimmed` },
+            { name: "startsAt", type: "string", required: true, note: "ISO 8601 with an offset, not in the past" },
+            { name: "durationMinutes", type: "15 | 30 | 60", required: true },
+            {
+              name: "groups",
+              type: `("bootcamp_sales" | "bootcamp_engineer" | "intermediate_sales" | "intermediate_engineer")[]`,
+              note: "whom it invites besides the Assessments Administrators; defaults to none",
+            },
+          ],
+        },
+        returns: "{ id, title }",
+        errors: [
+          { status: 400, error: "invalid", when: "the body does not parse, or a field is out of range" },
+          { status: 400, error: "in_past", when: "startsAt has passed" },
+        ],
+      },
+      {
+        method: "PATCH",
+        path: "/api/evals/google-meetings/{id}",
+        summary: "Changes a Google meeting. The next sync sends the change.",
+        access: "assessmentsAdmin",
+        token: true,
+        params: [{ name: "id", type: "string", required: true, note: "UUID" }],
+        notes: "Any field left out is kept. A meeting can be renamed after it has ended, but not moved into the past.",
+        body: {
+          kind: "json",
+          fields: [
+            { name: "title", type: "string", note: `1 to ${GOOGLE_MEETING_LIMITS.title} characters, trimmed` },
+            { name: "startsAt", type: "string", note: "ISO 8601 with an offset" },
+            { name: "durationMinutes", type: "15 | 30 | 60" },
+            {
+              name: "groups",
+              type: `("bootcamp_sales" | "bootcamp_engineer" | "intermediate_sales" | "intermediate_engineer")[]`,
+              note: "replaces the set",
+            },
+          ],
+        },
+        returns: "{ id, title }",
+        errors: [
+          { status: 400, error: "invalid", when: "the body does not parse, or a field is out of range" },
+          { status: 400, error: "in_past", when: "startsAt changes to a time that has passed" },
+          { status: 404, error: "not_found", when: "id is not a UUID, or no such meeting" },
+        ],
+      },
+      {
+        method: "DELETE",
+        path: "/api/evals/google-meetings/{id}",
+        summary: "Deletes a Google meeting, first cancelling its invite and Zoom meeting.",
+        access: "assessmentsAdmin",
+        token: true,
+        params: [{ name: "id", type: "string", required: true, note: "UUID" }],
+        notes:
+          "A meeting still to end that a sync sent is cancelled in Google Calendar, which emails every guest, and its Zoom meeting is deleted; the row goes only once both are gone. A meeting that has ended, or was never synced, is deleted with nothing sent. Allows 60 seconds.",
+        returns: "{ ok: true }",
+        errors: [
+          { status: 404, error: "not_found", when: "id is not a UUID, or no such meeting" },
+          { status: 409, error: "not_connected", when: "its invite needs cancelling and no working Google account is connected; detail says why" },
+          { status: 502, error: "remote_failed", when: "Google or Zoom refused to cancel it; detail has their answer" },
+        ],
+      },
+      {
+        method: "POST",
+        path: "/api/evals/google-meetings/sync",
+        summary: "Creates and updates the Google Calendar invite and Zoom meeting of every meeting still to end.",
+        access: "assessmentsAdmin",
+        token: true,
+        notes:
+          "Runs as the connected Google account. The invites are on a calendar of its own, eVals Meetings, made on the first sync; every Assessments Administrator is given edit access to it, and is a guest on every invite. Each invite's guests are its groups' people on the Cohorts page's Current tab and the administrators; the sync takes off only guests it added itself. With Zoom set up, each meeting gets a Zoom meeting under the connected account, with every administrator who has an active Zoom user on that account as an alternative host. An invite or Zoom meeting already right is left alone, since a change emails every guest. One meeting failing is reported in its outcome and the sync carries on. notes lists what was skipped, such as an administrator Zoom does not know. Allows 300 seconds.",
+        returns:
+          '{ ok: true, account: string, meetings: { id, title, outcome: "created" | "updated" | "unchanged" | "failed", invited: number, error?: string }[], notes: string[] }',
+        errors: [
+          { status: 409, error: "not_connected", when: "no Google account is connected" },
+          { status: 409, error: "running", when: "another sync is under way" },
+          { status: 409, error: "revoked", when: "Google no longer accepts the account's token; connect it again" },
+          { status: 502, error: "failed", when: "Google refused before any meeting was synced; detail has its answer" },
+          { status: 503, error: "not_configured", when: "AUTH_GOOGLE_ID or AUTH_GOOGLE_SECRET is unset" },
+        ],
+      },
+      {
+        method: "GET",
+        path: "/api/evals/google-meetings/connect",
+        summary: "Sends the browser to Google to connect the account Google Meetings sends invites from.",
+        access: "assessmentsAdmin",
+        token: false,
+        notes:
+          "A browser link, not an API call: it redirects to Google's consent screen, asking for calendar access and a refresh token, with GOOGLE_USER as the sign-in hint when it is set. Google then sends the browser to /api/evals/google-meetings/callback, which must be registered as a redirect URI on the OAuth client for each environment.",
+        returns: "a redirect to accounts.google.com",
+        errors: [{ status: 503, error: "not_configured", when: "AUTH_GOOGLE_ID or AUTH_GOOGLE_SECRET is unset" }],
+      },
+      {
+        method: "GET",
+        path: "/api/evals/google-meetings/callback",
+        summary: "Where Google returns the browser after connecting; stores the account's token.",
+        access: "assessmentsAdmin",
+        token: false,
+        notes:
+          "Checks the state cookie connect set, trades the code for a refresh token, seals it, and stores it with the account's email. Reconnecting the same account replaces its token; a different one is refused while any meeting has an invite, because those invites are on the first account's calendar. Always redirects to the Google Meetings tab with ?google= connected, denied, expired, failed, scope or different_account (with ?current= naming the account already connected). Writes an audit record either way.",
+        query: [
+          { name: "code", type: "string", note: "from Google" },
+          { name: "state", type: "string", note: "from Google; must match the cookie" },
+          { name: "error", type: "string", note: "from Google, when the account refused" },
+        ],
+        returns: "a redirect to /evals-settings/google-meetings",
       },
       {
         method: "GET",
@@ -1335,7 +1463,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "GET",
         path: "/api/evals/bootcamp-history",
         summary: "Lists everyone with a bootcamp history row, newest bootcamp first, a page at a time.",
-        access: "evalsViewer",
+        access: "assessmentsViewer",
         token: true,
         notes:
           "fullName is the person's name in the employee list from the last HiBob sync, or null for an email not in it, such as someone who has left. Someone is active while that list has their email, and inactive once it doesn't. btcDate is their bootcamp date; 2000-01-01 means they are exempt, which sorts as the oldest date. Rows that tie on the sort, such as one bootcamp's class, follow in name order, then email. counts gives everyone, the active and the inactive, whatever the search or status.",
@@ -1350,7 +1478,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "GET",
         path: "/api/evals/bootcamp-history/{id}",
         summary: "Returns one person's bootcamp history row in full, with their employee record.",
-        access: "evalsViewer",
+        access: "assessmentsViewer",
         token: true,
         notes:
           "A date of 2000-01-01 means the person is exempt from that class. Scores run from 1 (poor) to 4 (outstanding), to one decimal place; btcIndividualScores and intIndividualScores map each exercise's column name to its score, or are null. updatedBy is the id of whoever last changed the row and updatedByName their name or email, both null when that account is gone. employee is null for an email not in the employee list.",
@@ -1452,7 +1580,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "GET",
         path: "/api/evals/organization",
         summary: "Lists who the last HiBob sync found reporting up to the Organization Leader, a page at a time.",
-        access: "evalsAdmin",
+        access: "assessmentsAdmin",
         token: true,
         notes:
           "depth counts the links between a person and the leader, the leader included. managementChain is the emails of their managers, from the direct one up to and including the leader, joined with semicolons and no spaces. track is the one an administrator set by hand, if any; otherwise exempt when the person's bootcamp history marks BTC or INT exempt, ignored for a title on the Ignored list, deferred when they started too close to the next bootcamp (see GET /api/evals/deferral-days), or else the Sales or Engineer list their title is on, or null for a title on no list. btcDate, btcScore, intDate and intScore are from their bootcamp history, null where there is none; a date of 2000-01-01 means they are exempt from that class, and a score runs from 1 (poor) to 4 (outstanding), to one decimal place. The list is as of the last sync; current is false once a different leader has been set since, until the next sync runs. total counts everyone listed, whatever the search.",
@@ -1463,7 +1591,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "GET",
         path: "/api/evals/titles",
         summary: "Lists the titles on the Sales, Engineer and Ignored lists, a page at a time.",
-        access: "evalsAdmin",
+        access: "assessmentsAdmin",
         token: true,
         query: [
           { name: "list", type: `"sales" | "engineer" | "ignored"`, note: "One list only. Default every list." },
@@ -1476,7 +1604,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "POST",
         path: "/api/evals/titles",
         summary: "Adds titles to one list.",
-        access: "evalsAdmin",
+        access: "assessmentsAdmin",
         token: true,
         notes:
           "Titles are compared case-insensitively after collapsing whitespace. A title already on any list is reported in existing and not moved. Blank titles are dropped.",
@@ -1494,7 +1622,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "PATCH",
         path: "/api/evals/titles/{id}",
         summary: "Renames a listed title, or moves it to another list.",
-        access: "evalsAdmin",
+        access: "assessmentsAdmin",
         token: true,
         params: [{ name: "id", type: "string", required: true, note: "UUID" }],
         body: {
@@ -1515,7 +1643,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "DELETE",
         path: "/api/evals/titles/{id}",
         summary: "Removes a title from its list.",
-        access: "evalsAdmin",
+        access: "assessmentsAdmin",
         token: true,
         params: [{ name: "id", type: "string", required: true, note: "UUID" }],
         returns: "{ ok: true }",
@@ -1525,7 +1653,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "GET",
         path: "/api/evals/assessments",
         summary: "Lists the assessments attendees can be scored on, a page at a time.",
-        access: "evalsAdmin",
+        access: "assessmentsAdmin",
         token: true,
         notes:
           "criteria counts those still asked; submissions counts the attendees scored on it at any bootcamp. total counts every assessment, whatever the search.",
@@ -1536,7 +1664,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "GET",
         path: "/api/evals/assessments/unassigned-breakouts",
         summary: "Lists the breakouts at scheduled and active bootcamps that name no assessment.",
-        access: "evalsAdmin",
+        access: "assessmentsAdmin",
         token: true,
         notes:
           "Ordered by the bootcamp's start date, then track, day and start; at most 100. total counts every such breakout. Their groups appear under no assessment's Assigned to me until one is picked on the session's Breakout Assignments.",
@@ -1546,7 +1674,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "POST",
         path: "/api/evals/assessments",
         summary: "Creates an assessment and its criteria.",
-        access: "evalsAdmin",
+        access: "assessmentsAdmin",
         token: true,
         body: {
           kind: "json",
@@ -1570,7 +1698,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "GET",
         path: "/api/evals/assessments/{id}",
         summary: "Reads one assessment and the criteria it still asks, in order.",
-        access: "evalsAdmin",
+        access: "assessmentsAdmin",
         token: true,
         notes: "scored says some submission holds a score against that criterion, so removing it retires it rather than deleting it.",
         params: [{ name: "id", type: "string", required: true, note: "UUID" }],
@@ -1581,7 +1709,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "PUT",
         path: "/api/evals/assessments/{id}",
         summary: "Replaces an assessment's fields and criteria.",
-        access: "evalsAdmin",
+        access: "assessmentsAdmin",
         token: true,
         notes:
           "A criterion sent with its id is kept, renamed and moved as given; one sent without an id is added; one left out is deleted if nobody has been scored on it, or else retired, so it is no longer asked but the scores given against it remain. Submissions keep the names they were scored under. Once anyone has been scored on it, stage and audience cannot change. An attendee scored before a criterion was added shows as needing rescoring.",
@@ -1612,7 +1740,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "DELETE",
         path: "/api/evals/assessments/{id}",
         summary: "Removes an assessment nobody has been scored on.",
-        access: "evalsAdmin",
+        access: "assessmentsAdmin",
         token: true,
         notes: "One with scores is kept; set active to false with PUT instead.",
         params: [{ name: "id", type: "string", required: true, note: "UUID" }],
@@ -1626,7 +1754,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "GET",
         path: "/api/evals/slack-contacts",
         summary: "Lists the Additional Slack Contacts, a page at a time.",
-        access: "evalsAdmin",
+        access: "assessmentsAdmin",
         token: true,
         notes:
           "These people are added to the Slack messages sent to each attendee's team at the end of a bootcamp, after the attendee's management chain. fullName is their name in the employee list, as of when they were added or the last HiBob sync since, and empty for someone not in it. total counts every contact, whatever the search.",
@@ -1637,7 +1765,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "POST",
         path: "/api/evals/slack-contacts",
         summary: "Adds one Additional Slack Contact.",
-        access: "evalsAdmin",
+        access: "assessmentsAdmin",
         token: true,
         notes:
           "The email is lowercased. If it belongs to an imported employee, their name is stored with it; anyone else is added by email alone.",
@@ -1655,7 +1783,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "DELETE",
         path: "/api/evals/slack-contacts/{id}",
         summary: "Removes one Additional Slack Contact.",
-        access: "evalsAdmin",
+        access: "assessmentsAdmin",
         token: true,
         params: [{ name: "id", type: "string", required: true, note: "UUID" }],
         returns: "{ ok: true }",
@@ -1665,7 +1793,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "GET",
         path: "/api/evals/hibob/sync",
         summary: "Lists the HiBob sync log a page at a time, newest first.",
-        access: "evalsAdmin",
+        access: "assessmentsAdmin",
         token: true,
         notes:
           "A run that has said running for over 10 minutes is shown as failed, and running is false for it. running says whether a sync is under way, whichever page is asked for. The HiBob token itself is never returned.",
@@ -1676,7 +1804,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "POST",
         path: "/api/evals/hibob/sync",
         summary: "Syncs every active employee from HiBob now.",
-        access: "evalsAdmin",
+        access: "assessmentsAdmin",
         token: true,
         notes:
           "Calls HiBob and replaces the whole employees table in one transaction, so a failed sync leaves the previous one in place. Can take several seconds; the route allows 180. Every attempt, failed or not, is logged in the sync history.",
@@ -1693,7 +1821,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "PUT",
         path: "/api/evals/org-leader",
         summary: "Sets the Organization Leader whose reports eVals draws attendees from.",
-        access: "evalsAdmin",
+        access: "assessmentsAdmin",
         token: true,
         body: {
           kind: "json",
@@ -1711,7 +1839,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "GET",
         path: "/api/evals/candidate-cutoffs",
         summary: "Gets the date cutoffs on who in the org counts as a bootcamp or intermediate candidate.",
-        access: "evalsAdmin",
+        access: "assessmentsAdmin",
         token: true,
         notes:
           "A candidate's HiBob start date must be on or after startDateOnOrAfter, or blank; their HiBob active effective date must be after activeEffectiveDateAfter, and not blank. null means that cutoff is off. Until one is saved, each is the Google Sheet's: 2025-04-01 and 2026-01-01.",
@@ -1721,7 +1849,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "PUT",
         path: "/api/evals/candidate-cutoffs",
         summary: "Sets either or both candidate date cutoffs.",
-        access: "evalsAdmin",
+        access: "assessmentsAdmin",
         token: true,
         notes: "A field left out keeps its value. The Current tab uses the new cutoffs at once; no sync is needed.",
         body: {
@@ -1740,7 +1868,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "GET",
         path: "/api/evals/deferral-days",
         summary: "Gets the deferral window: how close to the next bootcamp someone can start and still be put in it.",
-        access: "evalsAdmin",
+        access: "assessmentsAdmin",
         token: true,
         notes:
           "Someone whose HiBob start date is fewer than days before bootcampStart, or after it, is on the deferred track rather than their title list's; an ignored title, exempt history or a track set by hand still comes first. A blank start date is never deferred. 0 turns deferral off. Until one is saved, days is the Google Sheet's 14. bootcampStart is the active bootcamp's start, else the soonest scheduled one starting today or later, or null when there is none, which also leaves no one deferred.",
@@ -1750,7 +1878,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "PUT",
         path: "/api/evals/deferral-days",
         summary: "Sets the deferral window, and retracks the org by it at once.",
-        access: "evalsAdmin",
+        access: "assessmentsAdmin",
         token: true,
         notes: "Every org member's track is worked out again rather than at the next sync; retracked counts those whose track changed. Creating, editing or deleting a bootcamp does the same.",
         body: {
@@ -2042,7 +2170,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
               name: "snapshot[]",
               type: "object[]",
               required: true,
-              note: "QA's users before the restore: id, email, name, image, eventRole, trainingRole, evalsRole, irisRole, isPlatformAdmin, calendarScope, accounts[]",
+              note: "QA's users before the restore: id, email, name, image, eventRole, trainingRole, assessmentsRole, irisRole, isPlatformAdmin, calendarScope, accounts[]",
             },
           ],
         },
