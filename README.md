@@ -492,9 +492,20 @@ role does everything the one before it does.
 | **Scheduler Viewer**        | The **Scheduler** page.                                     |
 | **Scheduler Administrator** | Sets everyone's scheduler role on **Manage users**, and **Scheduler settings**. |
 
-**eVals** — the same roles as the scheduler. The **eVals** page is still a
+**Assessments** — eVals is one part of it; the same roles as the scheduler. The **eVals** page is still a
 placeholder; **eVals settings** holds what it will draw on:
 
+- **Google Meetings**: meetings with a title, a start, a length (15m, 30m or
+  1 hour) and the Current-tab groups they invite (Bootcamp Sales, Bootcamp
+  Engineers, Intermediate Sales, Intermediate Engineers). Saving one sends
+  nothing. **Sync Now** creates or updates each upcoming meeting's Google
+  Calendar invite, as the Google account an Assessments Administrator
+  connected on the tab. Each invite goes to its groups and to every
+  Assessments Administrator. It carries a Zoom link whose alternative hosts
+  are those administrators. The invites sit on an "eVals Meetings" calendar
+  the sync makes on that account and shares with the administrators, so they
+  can edit them and the cohort cannot. Setting it up is in
+  [docs/operations.md](docs/operations.md#google-meetings).
 - **HiBob**: syncs HiBob's active employees into the `employees` table, replacing
   the previous sync, every day at 3:00 AM Eastern and whenever **Sync HiBob
   Now** is pressed. Every run, scheduled or manual, is logged on the tab with

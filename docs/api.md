@@ -91,6 +91,7 @@ escalate itself:
 | `PATCH`/`DELETE /api/users/[id]`, `POST /api/users/invites`, `POST /api/invites/accept` | Granting roles and creating accounts |
 | `POST /api/settings/domains`, `PATCH`/`DELETE /api/settings/domains/[id]` | Who can sign in at all |
 | `/api/tokens/**` | Minting tokens (a token must not be able to mint its own replacement) |
+| `GET /api/evals/google-meetings/connect`, `GET /api/evals/google-meetings/callback` | Connecting the Google account every meeting invite is sent from: a browser sign-in, and a standing token for the app |
 
 You can still *read* users (`GET /api/users`) and sign-in domains
 (`GET /api/settings/domains`) with a token.
@@ -118,6 +119,7 @@ add it to the table above.
 | eVals → Bootcamp / Intermediate | `GET /api/evals/scoring?stage=bootcamp\|intermediate` |
 | eVals → an assessment's attendees | `GET /api/evals/scoring/[assessmentId]` |
 | eVals → an attendee's scoring form | `GET /api/evals/scoring/[assessmentId]/[employeeId]` |
+| eVals settings → Google Meetings | `GET /api/evals/google-meetings?when=upcoming\|past` |
 | eVals settings → Assessments | `GET /api/evals/assessments`, `GET /api/evals/assessments/[id]` |
 | Cohort Settings | `GET /api/evals/employees`, `GET /api/evals/organization`, `GET /api/evals/hibob/sync`, `GET /api/evals/titles?list=` |
 | Bootcamp History | `GET /api/evals/bootcamp-history` |

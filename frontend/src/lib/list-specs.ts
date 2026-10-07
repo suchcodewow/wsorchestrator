@@ -38,6 +38,9 @@ export type TitleSort = (typeof TITLE_LIST.sorts)[number];
 export const SLACK_CONTACT_LIST = spec(["fullName", "email", "addedBy", "createdAt"]);
 export type SlackContactSort = (typeof SLACK_CONTACT_LIST.sorts)[number];
 
+export const GOOGLE_MEETING_LIST = spec(["startsAt", "title", "durationMinutes"]);
+export type GoogleMeetingSort = (typeof GOOGLE_MEETING_LIST.sorts)[number];
+
 export const CHANNEL_CONTACT_LIST = spec(["fullName", "email", "addedBy", "createdAt"]);
 export type ChannelContactSort = (typeof CHANNEL_CONTACT_LIST.sorts)[number];
 

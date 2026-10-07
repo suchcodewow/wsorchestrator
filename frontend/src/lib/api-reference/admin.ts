@@ -1,5 +1,5 @@
-import { ASSESSMENT_ATTENDEE_LIST, ASSESSMENT_LIST, AUDIT_LIST, BOOTCAMP_HISTORY_LIST, BOOTCAMP_LIST, CURRENT_COHORT_LIST, DOMAIN_LIST, EMPLOYEE_LIST, HIBOB_SYNC_LIST, HISTORY_STATUSES, JUDGE_LIST, ORGANIZATION_LIST, PREVIOUS_SESSION_LIST, SESSION_COMMENT_LIST, SESSION_TYPE_LIST, SLACK_CONTACT_LIST, SLACK_SYNC_CHANGE_LIST, SLACK_SYNC_LIST, CHANNEL_CONTACT_LIST, TITLE_LIST, USER_LIST, FACILITY_LIST } from "@/lib/list-specs";
-import { BOOTCAMP_LIMITS, CHECKLIST_LIMITS, EVALS_ASSESSMENT_LIMITS, FACILITY_LIMITS, SCHEDULE_LIMITS } from "@/db/schema";
+import { ASSESSMENT_ATTENDEE_LIST, ASSESSMENT_LIST, AUDIT_LIST, BOOTCAMP_HISTORY_LIST, BOOTCAMP_LIST, CURRENT_COHORT_LIST, DOMAIN_LIST, EMPLOYEE_LIST, HIBOB_SYNC_LIST, HISTORY_STATUSES, JUDGE_LIST, ORGANIZATION_LIST, PREVIOUS_SESSION_LIST, SESSION_COMMENT_LIST, SESSION_TYPE_LIST, GOOGLE_MEETING_LIST, SLACK_CONTACT_LIST, SLACK_SYNC_CHANGE_LIST, SLACK_SYNC_LIST, CHANNEL_CONTACT_LIST, TITLE_LIST, USER_LIST, FACILITY_LIST } from "@/lib/list-specs";
+import { BOOTCAMP_LIMITS, CHECKLIST_LIMITS, EVALS_ASSESSMENT_LIMITS, FACILITY_LIMITS, GOOGLE_MEETING_LIMITS, SCHEDULE_LIMITS } from "@/db/schema";
 import { PAGE_SIZE } from "@/lib/paging";
 import { CHECKLIST_ITEM_ROW } from "./account";
 import { PAGE_FIELDS, listQuery } from "./paging";
@@ -422,6 +422,134 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         params: [{ name: "id", type: "string", required: true, note: "UUID" }],
         returns: "{ ok: true }",
         errors: [{ status: 404, error: "not_found", when: "id is not a UUID, or no such contact" }],
+      },
+      {
+        method: "GET",
+        path: "/api/evals/google-meetings",
+        summary: "Lists the Google meetings, a page at a time, with the connected Google account and who is on every invite.",
+        access: "assessmentsAdmin",
+        token: true,
+        notes:
+          "A meeting is upcoming until it ends. groups are the Current-tab groups it invites: bootcamp_sales is the bootcamp stage on the Sales track, and so on. status is not_synced until a sync sends its invite, synced once one has, changed when it was edited since, and failed when the last sync of it failed, with syncError saying why. invited counts the guests the last sync put on the invite. connection is null until an Assessments Administrator connects a Google account, and never includes its token; running says whether a sync is under way. administrators are the Assessments Administrators, on every invite and able to edit it. groupSizes counts whom each group would invite now. counts are every upcoming and past meeting, whatever the search.",
+        query: [
+          { name: "when", type: `"upcoming" | "past"`, note: "Default upcoming." },
+          ...listQuery(GOOGLE_MEETING_LIST.sorts, "the title"),
+        ],
+        returns: `{ meetings: { id, title, startsAt, durationMinutes: 15 | 30 | 60, groups: ("bootcamp_sales" | "bootcamp_engineer" | "intermediate_sales" | "intermediate_engineer")[], zoomJoinUrl: string | null, status: "not_synced" | "synced" | "changed" | "failed", syncError: string | null, syncedAt: string | null, invited: number, addedBy: string | null }[], ${PAGE_FIELDS}, connection: { email, connectedAt, connectedBy: string | null, calendarId: string | null, lastSyncAt: string | null, lastSyncError: string | null, running: boolean } | null, zoomConfigured: boolean, administrators: string[], counts: { upcoming: number, past: number }, groupSizes: { bootcamp_sales, bootcamp_engineer, intermediate_sales, intermediate_engineer: number } }`,
+        errors: [{ status: 400, error: "invalid_when", when: "when is not upcoming or past" }],
+      },
+      {
+        method: "POST",
+        path: "/api/evals/google-meetings",
+        summary: "Adds a Google meeting. Nothing is sent until a sync.",
+        access: "assessmentsAdmin",
+        token: true,
+        body: {
+          kind: "json",
+          fields: [
+            { name: "title", type: "string", required: true, note: `1 to ${GOOGLE_MEETING_LIMITS.title} characters, trimmed` },
+            { name: "startsAt", type: "string", required: true, note: "ISO 8601 with an offset, not in the past" },
+            { name: "durationMinutes", type: "15 | 30 | 60", required: true },
+            {
+              name: "groups",
+              type: `("bootcamp_sales" | "bootcamp_engineer" | "intermediate_sales" | "intermediate_engineer")[]`,
+              note: "whom it invites besides the Assessments Administrators; defaults to none",
+            },
+          ],
+        },
+        returns: "{ id, title }",
+        errors: [
+          { status: 400, error: "invalid", when: "the body does not parse, or a field is out of range" },
+          { status: 400, error: "in_past", when: "startsAt has passed" },
+        ],
+      },
+      {
+        method: "PATCH",
+        path: "/api/evals/google-meetings/{id}",
+        summary: "Changes a Google meeting. The next sync sends the change.",
+        access: "assessmentsAdmin",
+        token: true,
+        params: [{ name: "id", type: "string", required: true, note: "UUID" }],
+        notes: "Any field left out is kept. A meeting can be renamed after it has ended, but not moved into the past.",
+        body: {
+          kind: "json",
+          fields: [
+            { name: "title", type: "string", note: `1 to ${GOOGLE_MEETING_LIMITS.title} characters, trimmed` },
+            { name: "startsAt", type: "string", note: "ISO 8601 with an offset" },
+            { name: "durationMinutes", type: "15 | 30 | 60" },
+            {
+              name: "groups",
+              type: `("bootcamp_sales" | "bootcamp_engineer" | "intermediate_sales" | "intermediate_engineer")[]`,
+              note: "replaces the set",
+            },
+          ],
+        },
+        returns: "{ id, title }",
+        errors: [
+          { status: 400, error: "invalid", when: "the body does not parse, or a field is out of range" },
+          { status: 400, error: "in_past", when: "startsAt changes to a time that has passed" },
+          { status: 404, error: "not_found", when: "id is not a UUID, or no such meeting" },
+        ],
+      },
+      {
+        method: "DELETE",
+        path: "/api/evals/google-meetings/{id}",
+        summary: "Deletes a Google meeting, first cancelling its invite and Zoom meeting.",
+        access: "assessmentsAdmin",
+        token: true,
+        params: [{ name: "id", type: "string", required: true, note: "UUID" }],
+        notes:
+          "A meeting still to end that a sync sent is cancelled in Google Calendar, which emails every guest, and its Zoom meeting is deleted; the row goes only once both are gone. A meeting that has ended, or was never synced, is deleted with nothing sent. Allows 60 seconds.",
+        returns: "{ ok: true }",
+        errors: [
+          { status: 404, error: "not_found", when: "id is not a UUID, or no such meeting" },
+          { status: 409, error: "not_connected", when: "its invite needs cancelling and no working Google account is connected; detail says why" },
+          { status: 502, error: "remote_failed", when: "Google or Zoom refused to cancel it; detail has their answer" },
+        ],
+      },
+      {
+        method: "POST",
+        path: "/api/evals/google-meetings/sync",
+        summary: "Creates and updates the Google Calendar invite and Zoom meeting of every meeting still to end.",
+        access: "assessmentsAdmin",
+        token: true,
+        notes:
+          "Runs as the connected Google account. The invites are on a calendar of its own, eVals Meetings, made on the first sync; every Assessments Administrator is given edit access to it, and is a guest on every invite. Each invite's guests are its groups' people on the Cohorts page's Current tab and the administrators; the sync takes off only guests it added itself. With Zoom set up, each meeting gets a Zoom meeting under the connected account, with every administrator who has an active Zoom user on that account as an alternative host. An invite or Zoom meeting already right is left alone, since a change emails every guest. One meeting failing is reported in its outcome and the sync carries on. notes lists what was skipped, such as an administrator Zoom does not know. Allows 300 seconds.",
+        returns:
+          '{ ok: true, account: string, meetings: { id, title, outcome: "created" | "updated" | "unchanged" | "failed", invited: number, error?: string }[], notes: string[] }',
+        errors: [
+          { status: 409, error: "not_connected", when: "no Google account is connected" },
+          { status: 409, error: "running", when: "another sync is under way" },
+          { status: 409, error: "revoked", when: "Google no longer accepts the account's token; connect it again" },
+          { status: 502, error: "failed", when: "Google refused before any meeting was synced; detail has its answer" },
+          { status: 503, error: "not_configured", when: "AUTH_GOOGLE_ID or AUTH_GOOGLE_SECRET is unset" },
+        ],
+      },
+      {
+        method: "GET",
+        path: "/api/evals/google-meetings/connect",
+        summary: "Sends the browser to Google to connect the account Google Meetings sends invites from.",
+        access: "assessmentsAdmin",
+        token: false,
+        notes:
+          "A browser link, not an API call: it redirects to Google's consent screen, asking for calendar access and a refresh token, with GOOGLE_USER as the sign-in hint when it is set. Google then sends the browser to /api/evals/google-meetings/callback, which must be registered as a redirect URI on the OAuth client for each environment.",
+        returns: "a redirect to accounts.google.com",
+        errors: [{ status: 503, error: "not_configured", when: "AUTH_GOOGLE_ID or AUTH_GOOGLE_SECRET is unset" }],
+      },
+      {
+        method: "GET",
+        path: "/api/evals/google-meetings/callback",
+        summary: "Where Google returns the browser after connecting; stores the account's token.",
+        access: "assessmentsAdmin",
+        token: false,
+        notes:
+          "Checks the state cookie connect set, trades the code for a refresh token, seals it, and stores it with the account's email. Reconnecting the same account replaces its token; a different one is refused while any meeting has an invite, because those invites are on the first account's calendar. Always redirects to the Google Meetings tab with ?google= connected, denied, expired, failed, scope or different_account (with ?current= naming the account already connected). Writes an audit record either way.",
+        query: [
+          { name: "code", type: "string", note: "from Google" },
+          { name: "state", type: "string", note: "from Google; must match the cookie" },
+          { name: "error", type: "string", note: "from Google, when the account refused" },
+        ],
+        returns: "a redirect to /evals-settings/google-meetings",
       },
       {
         method: "GET",

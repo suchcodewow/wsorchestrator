@@ -150,6 +150,13 @@ resource "google_cloud_run_v2_service" "app" {
             CANARY_WIRE_PULL_AUDIENCE = local.canary_wire_pull_audience
             CANARY_WIRE_PULL_INVOKER  = google_service_account.scheduler.email
           } : {},
+          # Google Meetings: the account to offer at sign-in, and the Zoom
+          # account its meetings go on. The Zoom secret is secret-backed, below.
+          var.google_meetings_account != "" ? { GOOGLE_USER = var.google_meetings_account } : {},
+          var.zoom_account_id != "" ? {
+            ZOOM_ACCOUNT_ID = var.zoom_account_id
+            ZOOM_CLIENT_ID  = var.zoom_client_id
+          } : {},
           # QA's production import: the job calls the app back to finish, with
           # an OIDC token that must carry this audience and runner-sa's email.
           # Unset (production) refuses every call. See production-import.tf.
@@ -208,6 +215,7 @@ resource "google_cloud_run_v2_service" "app" {
             MT_API_KEY    = "mindtickle-api-key"
             MT_SECRET_KEY = "mindtickle-secret-key"
           } : {},
+          var.zoom_account_id != "" ? { ZOOM_CLIENT_SECRET = "zoom-client-secret" } : {},
         )
         content {
           name = env.key

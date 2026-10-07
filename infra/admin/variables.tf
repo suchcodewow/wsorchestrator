@@ -114,6 +114,31 @@ variable "slack_bot_token" {
   default     = ""
 }
 
+variable "google_meetings_account" {
+  description = "The Google account eVals Settings → Google Meetings sends its invites from, offered as the sign-in hint when an Assessments Administrator connects it. Not secret, and only a hint: the account is whichever one signs in, and its refresh token is stored in the database. Reaches the app as GOOGLE_USER. Never put the account's password anywhere in Terraform."
+  type        = string
+  default     = ""
+}
+
+variable "zoom_account_id" {
+  description = "The Zoom account Google Meetings schedules its Zoom meetings on, through a Server-to-Server OAuth app with the meeting:write:admin, meeting:read:admin and user:read:admin scopes. Not secret: it grants nothing without zoom_client_secret. Empty leaves Zoom off, and invites go out with no Zoom link. QA shares production's Google Workspace, so leave it empty there."
+  type        = string
+  default     = ""
+}
+
+variable "zoom_client_id" {
+  description = "The client id of the Server-to-Server OAuth app for zoom_account_id. Not secret."
+  type        = string
+  default     = ""
+}
+
+variable "zoom_client_secret" {
+  description = "The client secret of the Server-to-Server OAuth app for zoom_account_id. Stored in Secret Manager as zoom-client-secret and read by the app alone."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
 variable "mindtickle_company_id" {
   description = "Harness's Mindtickle tenant, which Reporting → Canary Wire pulls from. Not secret: it grants nothing without the key pair. Empty leaves the pull off: no secrets, no env vars, no scheduler job, and the page says Mindtickle isn't configured."
   type        = string

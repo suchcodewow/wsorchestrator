@@ -326,6 +326,14 @@ const PAGES: Record<string, PageCase> = {
     path: () => "/evals-settings/slack-contacts",
     expect: gated(canManageEvalsSettings),
   },
+  "/evals-settings/google-meetings": {
+    path: () => "/evals-settings/google-meetings",
+    expect: gated(canManageEvalsSettings),
+  },
+  "/evals-settings/google-meetings?when=past": {
+    path: () => "/evals-settings/google-meetings?when=past",
+    expect: gated(canManageEvalsSettings),
+  },
   "/welcome": {
     path: () => "/welcome",
     expect: (a) => (homePath(a) === "/welcome" ? 200 : { to: homePath(a) }),
@@ -587,6 +595,15 @@ const ROUTES: RouteCase[] = [
   { method: "PATCH", path: `/api/evals/titles/${MISSING}`, allowed: canManageEvalsSettings, body: () => ({}) },
   { method: "DELETE", path: `/api/evals/titles/${MISSING}`, allowed: canManageEvalsSettings },
   { method: "DELETE", path: `/api/evals/slack-contacts/${MISSING}`, allowed: canManageEvalsSettings },
+  { method: "GET", path: "/api/evals/google-meetings", allowed: canManageEvalsSettings },
+  { method: "POST", path: "/api/evals/google-meetings", allowed: canManageEvalsSettings, body: () => ({}) },
+  { method: "PATCH", path: `/api/evals/google-meetings/${MISSING}`, allowed: canManageEvalsSettings, body: () => ({}) },
+  { method: "DELETE", path: `/api/evals/google-meetings/${MISSING}`, allowed: canManageEvalsSettings },
+  // An allowed sync would call Google for real, were an account connected.
+  { method: "POST", path: "/api/evals/google-meetings/sync", allowed: canManageEvalsSettings, denyOnly: true },
+  // A redirect to Google, or 503 without an OAuth client; the callback sends a stale state back to the tab.
+  { method: "GET", path: "/api/evals/google-meetings/connect", allowed: canManageEvalsSettings, unconfigured: true, sessionOnly: true },
+  { method: "GET", path: "/api/evals/google-meetings/callback?state=stale&code=x", allowed: canManageEvalsSettings, sessionOnly: true },
   { method: "GET", path: "/api/evals/assessments", allowed: canManageEvalsSettings },
   { method: "POST", path: "/api/evals/assessments", allowed: canManageEvalsSettings, body: () => ({}) },
   { method: "GET", path: "/api/evals/assessments/unassigned-breakouts", allowed: canManageEvalsSettings },
