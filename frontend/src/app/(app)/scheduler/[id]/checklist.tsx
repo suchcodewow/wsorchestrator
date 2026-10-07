@@ -170,25 +170,25 @@ export function useChecklistButtons({
   const count = (track: ChecklistTrack, day: number, period: ChecklistPeriod): Count =>
     checks.get(countKey(track, day, period)) ?? { total: 0, done: 0 };
 
-  const half = (track: ChecklistTrack, day: number, period: ChecklistPeriod, compact = false) => (
+  const half = (track: ChecklistTrack, day: number, period: ChecklistPeriod) => (
     <HalfButton
       key={period}
       period={period}
       label={checklistDayLabel(track, day, period)}
       count={count(track, day, period)}
-      compact={compact}
       onClick={() => setFocus({ track, day, period })}
     />
   );
 
+  // AM above PM, in the corner for Prep Day and beside each day's title.
+  const halves = (track: ChecklistTrack, day: number) => (
+    <div className="flex shrink-0 flex-col gap-1">{CHECKLIST_PERIODS.map((p) => half(track, day, p))}</div>
+  );
+
   const { track: prepTrack, day: prepDay } = CHECKLIST_PREP_DAY;
   return {
-    dayButton: (column) => (
-      <div className="flex w-full items-center justify-between gap-2">
-        {CHECKLIST_PERIODS.map((p) => half(column.track, column.day, p))}
-      </div>
-    ),
-    prepDayButton: <div className="flex flex-col gap-1">{CHECKLIST_PERIODS.map((p) => half(prepTrack, prepDay, p, true))}</div>,
+    dayButton: (column) => halves(column.track, column.day),
+    prepDayButton: halves(prepTrack, prepDay),
     board: focus && (
       <ChecklistBoard
         key={`${focus.track}:${focus.day}:${focus.period}`}
@@ -215,15 +215,12 @@ function HalfButton({
   period,
   label,
   count,
-  compact,
   onClick,
 }: {
   period: ChecklistPeriod;
   /** "Bootcamp, Day 2 AM", for the button's name. */
   label: string;
   count: Count;
-  /** Tighter, for the corner. */
-  compact: boolean;
   onClick: () => void;
 }) {
   const look = HALVES[period];
@@ -234,8 +231,7 @@ function HalfButton({
       variant="outline"
       size="sm"
       className={cn(
-        "h-7 shrink-0 gap-1.5 px-2 text-xs",
-        compact && "h-6 justify-start gap-1 px-1 has-[>svg]:px-1",
+        "h-6 shrink-0 justify-start gap-1 px-1 text-xs has-[>svg]:px-1",
         allDone ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/15 dark:text-emerald-400" : look.button,
       )}
       aria-label={`${label}: ${count.done} of ${count.total} done`}
@@ -246,8 +242,7 @@ function HalfButton({
       {count.total > 0 && (
         <span
           className={cn(
-            "rounded-full py-px text-[11px] font-medium tabular-nums",
-            compact ? "px-1" : "px-1.5",
+            "rounded-full px-1 py-px text-[11px] font-medium tabular-nums",
             allDone ? "bg-emerald-500/15" : look.badge,
           )}
         >
@@ -358,7 +353,7 @@ function ChecklistBoard({
     const key = sectionKey(focus.day, focus.period);
     sections.current.get(key)?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
     const on = setTimeout(() => setLit(key), 150);
-    const off = setTimeout(() => setLit(null), 1900);
+    const off = setTimeout(() => setLit(null), 1100);
     return () => {
       clearTimeout(on);
       clearTimeout(off);
@@ -680,7 +675,7 @@ function HalfSection({
     if (composing) list.current?.scrollTo({ top: list.current.scrollHeight, behavior: "smooth" });
   }, [composing]);
 
-  // Lit, it pulses twice in its own colour and settles; the glow is a shadow, which `overflow-hidden` would clip from anything inside.
+  // Lit, it pulses once in its own colour and settles; the glow is a shadow, which `overflow-hidden` would clip from anything inside.
   const shine = (ring: number, glow: number, alpha: number) =>
     `0 0 0 ${ring}px rgba(${look.light}, ${alpha}), 0 0 ${glow}px ${glow / 4}px rgba(${look.light}, ${alpha * 0.6})`;
   return (
@@ -691,10 +686,10 @@ function HalfSection({
       }}
       animate={
         lit
-          ? { boxShadow: [shine(0, 0, 0), shine(4, 28, 1), shine(2, 12, 0.5), shine(4, 28, 1), shine(0, 0, 0)], scale: [1, 1.025, 1, 1.025, 1] }
+          ? { boxShadow: [shine(0, 0, 0), shine(4, 28, 1), shine(0, 0, 0)], scale: [1, 1.025, 1] }
           : undefined
       }
-      transition={{ duration: 1.7, ease: "easeInOut" }}
+      transition={{ duration: 0.9, ease: "easeInOut" }}
       className={cn(
         "relative flex min-h-0 flex-1 basis-0 flex-col overflow-hidden rounded-xl border",
         look.section,
@@ -724,21 +719,6 @@ function HalfSection({
           <span className={cn("rounded-full px-1.5 py-px text-[11px] font-medium tabular-nums", look.badge)}>
             {done}/{items.length}
           </span>
-        )}
-        {canManage && (
-          <motion.button
-            type="button"
-            whileHover={{ scale: 1.12, rotate: 90 }}
-            whileTap={{ scale: 0.9 }}
-            transition={{ type: "spring", stiffness: 500, damping: 18 }}
-            disabled={full}
-            onClick={() => setEditing(`new:${sectionKey(day, period)}`)}
-            aria-label={`Add to ${look.label}`}
-            title={full ? `A day holds at most ${CHECKLIST_LIMITS.itemsPerDay} items` : `Add to ${look.label}`}
-            className="ml-auto flex size-7 items-center justify-center rounded-full bg-background/70 text-foreground/70 shadow-xs backdrop-blur-sm hover:bg-background hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            <Plus className="size-4" />
-          </motion.button>
         )}
       </div>
 
@@ -789,8 +769,26 @@ function HalfSection({
             </motion.li>
           )}
         </AnimatePresence>
-        {items.length === 0 && !composing && (
-          <li className="flex flex-1 items-center justify-center py-3 text-xs text-foreground/40">{canManage ? "Nothing yet — press +" : "Nothing yet"}</li>
+        {canManage && !composing && (
+          <li>
+            <motion.button
+              type="button"
+              whileHover="hover"
+              whileTap={{ scale: 0.97 }}
+              disabled={full}
+              onClick={() => setEditing(`new:${sectionKey(day, period)}`)}
+              aria-label={`Add to ${look.label}`}
+              title={full ? `A day holds at most ${CHECKLIST_LIMITS.itemsPerDay} items` : `Add to ${look.label}`}
+              className="flex h-9 w-full items-center justify-center rounded-lg border border-dashed border-foreground/25 bg-background/30 text-foreground/50 transition-colors hover:border-foreground/45 hover:bg-background/60 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <motion.span variants={{ hover: { scale: 1.12, rotate: 90 } }} transition={{ type: "spring", stiffness: 500, damping: 18 }}>
+                <Plus className="size-4" />
+              </motion.span>
+            </motion.button>
+          </li>
+        )}
+        {!canManage && items.length === 0 && (
+          <li className="flex flex-1 items-center justify-center py-3 text-xs text-foreground/40">Nothing yet</li>
         )}
       </ul>
     </motion.div>
@@ -930,7 +928,12 @@ function ChecklistCard({
   );
 }
 
-/** What a card shows: its name, whom it is on, and who ticked it. */
+/**
+ * What a card shows: its name, and whom it is on. A done card is its name alone,
+ * struck through on one line, with who ticked it in its tooltip. An open one is
+ * at least two lines tall, so the tick sliding in on hover, which narrows the
+ * name, never makes it grow or shrink.
+ */
 function CardFace({
   item,
   viewerEmail,
@@ -949,7 +952,12 @@ function CardFace({
   const mine = item.ownerEmail !== null && item.ownerEmail === viewerEmail.toLowerCase();
   return (
     <div
-      title={`Added by ${item.createdByName || item.createdByEmail || "someone removed"} ${formatWhen(item.createdAt)}`}
+      title={[
+        `Added by ${item.createdByName || item.createdByEmail || "someone removed"} ${formatWhen(item.createdAt)}`,
+        item.done && item.doneAt ? `Ticked by ${item.doneByName || "someone"} ${formatWhen(item.doneAt)}` : null,
+      ]
+        .filter(Boolean)
+        .join("\n")}
       className={cn(
         "relative rounded-lg border bg-card px-2.5 py-2 pr-8 text-left shadow-xs transition-shadow group-hover:shadow-md group-hover:ring-1 group-hover:ring-brand/30",
         item.done && "border-emerald-500/30 bg-emerald-50/70 dark:bg-emerald-950/30",
@@ -963,33 +971,26 @@ function CardFace({
       )}
       <div className="flex items-start gap-1.5">
         {tick && <div className="mt-0.5 flex">{tick}</div>}
-        <div className={cn("min-w-0 text-sm wrap-break-word", item.done && "text-muted-foreground line-through")}>
+        <div className={cn("min-w-0 text-sm", item.done ? "truncate text-muted-foreground line-through" : "min-h-[2lh] wrap-break-word")}>
           <MentionText text={item.name} mentions={item.mentions} viewerEmail={viewerEmail} />
         </div>
       </div>
-      {(item.ownerEmail || (item.done && item.doneAt)) && (
-        <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-          {item.ownerEmail && (
-            <span className={cn("inline-flex min-w-0 items-center gap-1", mine && "font-medium text-foreground")}>
-              <span
-                className={cn(
-                  "flex size-5 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold",
-                  mine ? "bg-brand text-brand-foreground" : "bg-foreground/10",
-                )}
-              >
-                {initials(item.ownerName || item.ownerEmail)}
-              </span>
-              <span className="truncate">
-                {item.ownerName || item.ownerEmail}
-                {mine && " (you)"}
-              </span>
+      {!item.done && item.ownerEmail && (
+        <div className="mt-1.5 flex items-center text-xs text-muted-foreground">
+          <span className={cn("inline-flex min-w-0 items-center gap-1", mine && "font-medium text-foreground")}>
+            <span
+              className={cn(
+                "flex size-5 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold",
+                mine ? "bg-brand text-brand-foreground" : "bg-foreground/10",
+              )}
+            >
+              {initials(item.ownerName || item.ownerEmail)}
             </span>
-          )}
-          {item.done && item.doneAt && (
-            <span className="text-emerald-700 dark:text-emerald-400">
-              ✓ {item.doneByName || "someone"} {formatWhen(item.doneAt)}
+            <span className="truncate">
+              {item.ownerName || item.ownerEmail}
+              {mine && " (you)"}
             </span>
-          )}
+          </span>
         </div>
       )}
     </div>

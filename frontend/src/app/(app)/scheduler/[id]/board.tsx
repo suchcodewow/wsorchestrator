@@ -60,7 +60,7 @@ export type BoardProps = {
   onAdd: (column: BoardColumn, start: number) => void;
   onResize: (id: string, minutes: number) => void;
   onResizeEnd: (id: string) => void;
-  /** Anything more to show at the top of a column, on a line of its own under its title. */
+  /** Anything more to show at the top of a column, to the right of its title and level with `corner`. */
   headerAction?: (column: BoardColumn) => ReactNode;
   /** Anything to show in the top-left corner, above the hours, level with each column's `headerAction`. */
   corner?: ReactNode;
@@ -175,18 +175,21 @@ function Column({
 
   return (
     <div className="min-w-48 flex-1 border-r last:border-r-0">
-      <div className={cn(HEADER_HEIGHT, "flex flex-col justify-center gap-1 border-b px-3")}>
-        <div className="min-w-0 truncate text-sm">
-          <span className="font-medium">{column.title}</span>
-          <span className="text-muted-foreground"> · {column.subtitle}</span>
-          {column.attendees && (
-            <span className="text-muted-foreground tabular-nums" title={`${column.attendees.count} ${column.attendees.noun}`}>
-              {" "}
-              ({column.attendees.count})
-            </span>
-          )}
+      {/* With an action, both sit at the foot of the header as the corner does, the title level with the action's first line. */}
+      <div className={cn(HEADER_HEIGHT, "flex border-b px-3", props.headerAction ? "items-end pb-2" : "flex-col justify-center")}>
+        <div className="flex w-full items-start gap-2">
+          <div className="line-clamp-2 min-w-0 flex-1 text-sm leading-6">
+            <span className="font-medium">{column.title}</span>
+            <span className="text-muted-foreground"> · {column.subtitle}</span>
+            {column.attendees && (
+              <span className="text-muted-foreground tabular-nums" title={`${column.attendees.count} ${column.attendees.noun}`}>
+                {" "}
+                ({column.attendees.count})
+              </span>
+            )}
+          </div>
+          {props.headerAction?.(column)}
         </div>
-        {props.headerAction && <div className="flex items-center">{props.headerAction(column)}</div>}
       </div>
       <div
         ref={setNodeRef}
