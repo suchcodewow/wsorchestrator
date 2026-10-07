@@ -86,6 +86,71 @@ export async function listCohort(query: ListQuery<IrisCohortSort>, form: Form): 
   );
 }
 
+export type SubjectSummary = {
+  /** The middle placement of everyone who finished it; null when nobody has. */
+  median: Level | null;
+  placed: number;
+  /** How many placed at each level. */
+  levels: Record<Level, number>;
+};
+
+export type CohortSummary = {
+  people: number;
+  subjects: Record<SubjectKey, SubjectSummary>;
+  /** The subjects with the lowest median, where the cohort as a whole is weakest. */
+  weakest: SubjectKey[];
+};
+
+/**
+ * How the whole cohort on `form` placed in each subject, everyone the search
+ * `q` matches rather than one page of them: one row per subject, at most eight.
+ */
+export async function cohortSummary(form: Form, q = ""): Promise<CohortSummary> {
+  const scope = and(
+    eq(irisAttempts.mode, "live"),
+    eq(irisAttempts.form, form),
+    isNotNull(irisAttempts.finishedAt),
+    searchAny(q, [users.name, users.email]),
+  );
+  const rows = await db
+    .select({
+      subject: irisAttempts.subject,
+      median: sql<number | null>`percentile_disc(0.5) within group (order by ${irisAttempts.placement})`,
+      placed: sql<number>`count(*)::int`,
+      beginner: sql<number>`count(*) filter (where ${irisAttempts.placement} = 1)::int`,
+      intermediate: sql<number>`count(*) filter (where ${irisAttempts.placement} = 2)::int`,
+      advanced: sql<number>`count(*) filter (where ${irisAttempts.placement} = 3)::int`,
+    })
+    .from(irisAttempts)
+    .innerJoin(users, eq(users.id, irisAttempts.userId))
+    .where(scope)
+    .groupBy(irisAttempts.subject);
+  const [{ people } = { people: 0 }] = await db
+    .select({ people: sql<number>`count(distinct ${irisAttempts.userId})::int` })
+    .from(irisAttempts)
+    .innerJoin(users, eq(users.id, irisAttempts.userId))
+    .where(scope);
+
+  const subjects = Object.fromEntries(
+    SUBJECT_KEYS.map((k) => [k, { median: null, placed: 0, levels: { 1: 0, 2: 0, 3: 0 } }]),
+  ) as Record<SubjectKey, SubjectSummary>;
+  for (const r of rows) {
+    if (!isSubjectKey(r.subject)) continue;
+    subjects[r.subject] = {
+      median: r.median === null ? null : (Number(r.median) as Level),
+      placed: r.placed,
+      levels: { 1: r.beginner, 2: r.intermediate, 3: r.advanced },
+    };
+  }
+  const medians = SUBJECT_KEYS.map((k) => subjects[k].median).filter((m): m is Level => m !== null);
+  const lowest = medians.length ? Math.min(...medians) : null;
+  return {
+    people,
+    subjects,
+    weakest: lowest === null ? [] : SUBJECT_KEYS.filter((k) => subjects[k].median === lowest),
+  };
+}
+
 function placementsOf(raw: Record<string, number> | null): Partial<Record<SubjectKey, Level>> {
   const out: Partial<Record<SubjectKey, Level>> = {};
   for (const [k, v] of Object.entries(raw ?? {})) if (isSubjectKey(k) && v) out[k] = v as Level;

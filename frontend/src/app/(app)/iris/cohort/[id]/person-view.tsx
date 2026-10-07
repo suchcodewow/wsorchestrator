@@ -6,12 +6,13 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { ArrowLeft } from "lucide-react";
 import { HEADER_ROW, PlainHeader } from "@/components/data-table";
-import type { DetailAnswer, DetailSitting, PersonDetail } from "@/lib/iris/cohort";
+import type { CohortSummary, DetailAnswer, DetailSitting, PersonDetail } from "@/lib/iris/cohort";
 import { ENGINE, LEVELS, type Level } from "@/lib/iris/engine";
 import { LEVEL_LABELS, SUBJECTS, SUBJECT_KEYS, TRACK_LABELS, TRAINING, bandOf } from "@/lib/iris/subjects";
 import { riseChild, staggerParent } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { LevelBadge } from "../../level-badge";
+import { Radar } from "../../radar";
 import { ClearResultsButton } from "./clear-results-button";
 
 type Sitting = Omit<DetailSitting, "startedAt" | "finishedAt"> & { startedAt: string; finishedAt: string | null };
@@ -19,7 +20,7 @@ type Detail = Omit<PersonDetail, "sittings"> & { sittings: Sitting[] };
 
 const LETTERS = "ABCD";
 
-export function PersonView({ detail }: { detail: Detail }) {
+export function PersonView({ detail, summary }: { detail: Detail; summary: CohortSummary }) {
   const who = detail.name || detail.email || "This person";
   const finished = detail.sittings.filter((s) => s.finishedAt).length;
 
@@ -49,6 +50,12 @@ export function PersonView({ detail }: { detail: Detail }) {
         <ClearResultsButton userId={detail.userId} who={who} sittings={detail.sittings.length} />
       </motion.div>
 
+      {finished > 0 && (
+        <motion.div variants={riseChild}>
+          <ShapeCard detail={detail} summary={summary} />
+        </motion.div>
+      )}
+
       {detail.sittings.length === 0 && (
         <motion.p variants={riseChild} className="text-sm text-muted-foreground">
           No sittings on this form.
@@ -61,6 +68,59 @@ export function PersonView({ detail }: { detail: Detail }) {
         </motion.div>
       ))}
     </motion.div>
+  );
+}
+
+/** Where this person sits in every subject, against the middle of the whole cohort. */
+function ShapeCard({ detail, summary }: { detail: Detail; summary: CohortSummary }) {
+  const placed = new Map(
+    detail.sittings.filter((s) => s.finishedAt && s.placement).map((s) => [s.subject, s.placement as Level]),
+  );
+  const values = SUBJECT_KEYS.map((k) => placed.get(k) ?? null);
+  const medians = SUBJECT_KEYS.map((k) => summary.subjects[k].median);
+
+  return (
+    <div className="grid gap-6 overflow-hidden rounded-2xl border bg-card p-5 text-sm shadow-sm md:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] md:items-center">
+      <div className="mx-auto w-full max-w-md px-6">
+        <Radar
+          axes={SUBJECT_KEYS.map((k) => SUBJECTS[k].short)}
+          series={[
+            { values: medians, variant: "median" },
+            { values, variant: "person" },
+          ]}
+          showRingLabels
+          label={`${detail.name || "This person"}'s placement in each subject, against the cohort median`}
+        />
+      </div>
+      <div className="space-y-3">
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+          <span className="inline-flex items-center gap-1.5">
+            <span className="size-2.5 rounded-sm bg-brand" /> This person
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="w-3.5 border-t-2 border-dashed border-muted-foreground" /> Cohort median, {summary.people}{" "}
+            {summary.people === 1 ? "person" : "people"}
+          </span>
+        </div>
+        <div className="divide-y rounded-lg border">
+          {SUBJECT_KEYS.map((k) => {
+            const mine = placed.get(k);
+            const median = summary.subjects[k].median;
+            return (
+              <div key={k} className="flex items-center justify-between gap-3 px-3 py-1.5">
+                <span className={mine ? "" : "text-muted-foreground"}>{SUBJECTS[k].short}</span>
+                <span className="flex items-center gap-2">
+                  {mine ? <LevelBadge level={mine} /> : <span className="text-xs text-muted-foreground">Not taken</span>}
+                  <span className="w-32 text-right text-xs whitespace-nowrap text-muted-foreground">
+                    {median ? `cohort ${LEVEL_LABELS[median]}` : "—"}
+                  </span>
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
   );
 }
 

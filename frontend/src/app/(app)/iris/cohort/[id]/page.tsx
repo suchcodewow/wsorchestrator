@@ -2,7 +2,7 @@
 
 import { notFound, redirect } from "next/navigation";
 import { auth, signInPath } from "@/auth";
-import { personDetail } from "@/lib/iris/cohort";
+import { cohortSummary, personDetail } from "@/lib/iris/cohort";
 import { canManageIris } from "@/lib/roles";
 import { PersonView } from "./person-view";
 
@@ -11,10 +11,14 @@ export default async function IrisPersonPage({ params }: { params: Promise<{ id:
   if (!session?.user) redirect(await signInPath());
   if (!canManageIris(session.user.access)) notFound();
 
-  const detail = await personDetail(decodeURIComponent((await params).id), "A");
+  const [detail, summary] = await Promise.all([
+    personDetail(decodeURIComponent((await params).id), "A"),
+    cohortSummary("A"),
+  ]);
   if (!detail) notFound();
   return (
     <PersonView
+      summary={summary}
       detail={{
         ...detail,
         sittings: detail.sittings.map((s) => ({

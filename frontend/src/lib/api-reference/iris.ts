@@ -8,7 +8,7 @@ import type { EndpointGroup, Field } from "./types";
 const SUBJECT_TYPE = `"sdlc" | "industry" | "sales" | "dealmech" | "cotm" | "techai" | "pipegen" | "compete"`;
 const FORM_QUERY: Field = { name: "form", type: `"A" | "B"`, note: "Default A." };
 const FORM_ERROR = { status: 400, error: "invalid_form", when: "form is neither A nor B" };
-const SITTING_SHAPE = `{ attemptId, subject, form: "A" | "B", mode: "live" | "preview", number, progress, question: { id, stem, options: string[] } }`;
+const SITTING_SHAPE = `{ attemptId, subject, form: "A" | "B", mode: "live" | "preview", number, progress, question: { stem, options: string[] } }`;
 const SITTING_ID: Field = { name: "id", type: "string", required: true, note: "the sitting's attemptId" };
 
 export const IRIS_GROUPS: EndpointGroup[] = [
@@ -82,12 +82,12 @@ export const IRIS_GROUPS: EndpointGroup[] = [
         access: "irisTaker",
         token: true,
         notes:
-          "choice is the option's index from 0, or -1 for \"I don't know\", which is graded as wrong. A sitting ends after 10 to 14 questions plus up to 3 tiebreak questions; the last answer returns done: true, and the placement and confidence only to an Iris Administrator.",
+          "A question is sent as its wording and options only, never its id or level. choice is the option's index from 0, or -1 for \"I don't know\", which is graded as wrong. A sitting ends after 10 to 14 questions plus up to 3 tiebreak questions; the last answer returns done: true, and the placement and confidence only to an Iris Administrator.",
         params: [SITTING_ID],
         body: {
           kind: "json",
           fields: [
-            { name: "itemId", type: "string", required: true, note: "the id of the question being answered" },
+            { name: "number", type: "integer", required: true, note: "the sitting's number for the question being answered" },
             { name: "choice", type: "-1 | 0 | 1 | 2 | 3", required: true },
           ],
         },
@@ -97,7 +97,7 @@ export const IRIS_GROUPS: EndpointGroup[] = [
           { status: 400, error: "invalid_choice", when: "choice is not -1 to 3" },
           { status: 404, error: "not_found", when: "no sitting of yours has that id" },
           { status: 409, error: "finished", when: "the sitting is over" },
-          { status: 409, error: "stale", when: "itemId is not the question on screen; the body carries the current sitting" },
+          { status: 409, error: "stale", when: "number is not the question on screen; the body carries the current sitting" },
         ],
       },
       {
