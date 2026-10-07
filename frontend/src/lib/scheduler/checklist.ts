@@ -1,11 +1,12 @@
 /**
  * What is to be done before each day of each of a bootcamp's tracks starts,
  * the SE tracks included, and on Prep Day, before the bootcamp does (day 0
- * of Bootcamp, `CHECKLIST_PREP_DAY`). A track-day's list holds at most
+ * of Bootcamp, `CHECKLIST_PREP_DAY`). Each day is in two halves, AM and PM.
+ * A track-day's list, both halves together, holds at most
  * `CHECKLIST_LIMITS.itemsPerDay`, so it is read whole; what one person owns
  * across every bootcamp is read a page at a time.
  *
- * Any Training administrator adds, edits, ticks and removes items. An item's owner,
+ * Any Training administrator adds, edits, moves, ticks and removes items. An item's owner,
  * an administrator or guest judge of the bootcamp, can tick their own as well,
  * from their inbox, whatever other access they hold.
  */
@@ -17,12 +18,14 @@ import { z } from "zod";
 import { db } from "@/db";
 import {
   CHECKLIST_LIMITS,
+  CHECKLIST_PERIODS,
   CHECKLIST_TRACKS,
   SCHEDULE_LIMITS,
   bootcamps,
   mentions,
   scheduleChecklistItems,
   users,
+  type ChecklistPeriod,
   type ChecklistTrack,
 } from "@/db/schema";
 import { noteAudit } from "@/lib/audit-context";
@@ -38,6 +41,7 @@ export type ChecklistItemRow = {
   id: string;
   track: ChecklistTrack;
   day: number;
+  period: ChecklistPeriod;
   name: string;
   /** Null when nobody owns it. */
   ownerEmail: string | null;
@@ -53,8 +57,8 @@ export type ChecklistItemRow = {
   mentions: MentionPick[];
 };
 
-/** One track-day's items, done and to do. */
-export type ChecklistDayCount = { track: ChecklistTrack; day: number; total: number; done: number };
+/** One half of one track-day's items, done and to do. */
+export type ChecklistDayCount = { track: ChecklistTrack; day: number; period: ChecklistPeriod; total: number; done: number };
 
 const t = scheduleChecklistItems;
 
@@ -62,6 +66,7 @@ const COLUMNS = {
   id: t.id,
   track: t.track,
   day: t.day,
+  period: t.period,
   name: t.name,
   ownerEmail: t.ownerEmail,
   ownerName: t.ownerName,
@@ -81,24 +86,26 @@ const COLUMNS = {
 export const checklistTrackSchema = z.enum(CHECKLIST_TRACKS);
 /** 1-based; 0 is Bootcamp's Prep Day. */
 export const checklistDaySchema = z.coerce.number().int().min(0).max(30);
+export const checklistPeriodSchema = z.enum(CHECKLIST_PERIODS);
 
-/** How many items each track-day has, and how many are done; days with none are absent. */
+/** How many items each half of each track-day has, and how many are done; halves with none are absent. */
 export async function checklistCounts(bootcampId: string): Promise<ChecklistDayCount[]> {
-  // At most four tracks of thirty days: 120 rows, all of them needed to label the board.
+  // At most four tracks of thirty days, in two halves: 240 rows, all of them needed to label the board.
   return db
     .select({
       track: t.track,
       day: t.day,
+      period: t.period,
       total: sql<number>`count(*)::int`,
       done: sql<number>`(count(*) filter (where ${t.doneAt} is not null))::int`,
     })
     .from(t)
     .where(eq(t.bootcampId, bootcampId))
-    .groupBy(t.track, t.day)
-    .orderBy(t.track, t.day);
+    .groupBy(t.track, t.day, t.period)
+    .orderBy(t.track, t.day, t.period);
 }
 
-/** One track-day's items, oldest first. */
+/** One track-day's items, both halves, oldest first. */
 export async function listDayItems(bootcampId: string, track: ChecklistTrack, day: number): Promise<ChecklistItemRow[]> {
   return db
     .select(COLUMNS)
@@ -110,6 +117,8 @@ export async function listDayItems(bootcampId: string, track: ChecklistTrack, da
 
 export const checklistItemSchema = z.object({
   name: z.string().trim().min(1).max(CHECKLIST_LIMITS.name),
+  /** Which half of the day; AM when left out. */
+  period: checklistPeriodSchema.optional(),
   /** An administrator or guest judge of the bootcamp; blank or absent for nobody. */
   ownerEmail: z.string().trim().toLowerCase().max(320).nullish(),
   /** The emails of the people its name tags. */
@@ -128,7 +137,7 @@ export const CHECKLIST_STATUS_FOR: Record<ChecklistError, number> = {
 
 type Result<T> = { ok: true; value: T } | { ok: false; error: ChecklistError; email?: string };
 
-/** Adds an item to one track-day, recording who wrote it and whom it tags. */
+/** Adds an item to one half of one track-day, recording who wrote it and whom it tags. */
 export async function addChecklistItem(
   actorId: string,
   bootcampId: string,
@@ -138,7 +147,8 @@ export async function addChecklistItem(
 ): Promise<Result<ChecklistItemRow>> {
   const bootcamp = await scheduleBootcamp(bootcampId);
   if (!bootcamp) return { ok: false, error: "not_found" };
-  noteAudit({ target: bootcampId, targetLabel: `${checklistDayLabel(track, day)}: ${input.name.slice(0, 80)}` });
+  const period = input.period ?? "am";
+  noteAudit({ target: bootcampId, targetLabel: `${checklistDayLabel(track, day, period)}: ${input.name.slice(0, 80)}` });
   if (!checklistDayExists(track, day, bootcamp)) return { ok: false, error: "no_day" };
 
   const pool = input.ownerEmail || input.mentions?.length ? await instructorPool(bootcampId) : [];
@@ -166,6 +176,7 @@ export async function addChecklistItem(
         bootcampId,
         track,
         day,
+        period,
         name: input.name,
         ownerEmail: owner?.email ?? null,
         ownerName: owner?.fullName ?? "",
@@ -194,6 +205,9 @@ export async function addChecklistItem(
 
 /** A change to an item: a field left out stays as it is; `mentions` goes with `name`. */
 export const checklistEditSchema = z.object({
+  track: checklistTrackSchema.optional(),
+  day: checklistDaySchema.optional(),
+  period: checklistPeriodSchema.optional(),
   name: checklistItemSchema.shape.name.optional(),
   /** Null or blank for nobody. */
   ownerEmail: checklistItemSchema.shape.ownerEmail,
@@ -212,11 +226,11 @@ export async function editChecklistItem(
   input: z.infer<typeof checklistEditSchema>,
 ): Promise<Result<ChecklistItemRow>> {
   const [item] = await db
-    .select({ name: t.name, track: t.track, day: t.day })
+    .select({ name: t.name, track: t.track, day: t.day, period: t.period })
     .from(t)
     .where(and(eq(t.id, itemId), eq(t.bootcampId, bootcampId)));
   if (!item) return { ok: false, error: "not_found" };
-  noteAudit({ target: itemId, targetLabel: `${checklistDayLabel(item.track, item.day)}: ${(input.name ?? item.name).slice(0, 80)}` });
+  noteAudit({ target: itemId, targetLabel: `${checklistDayLabel(item.track, item.day, item.period)}: ${(input.name ?? item.name).slice(0, 80)}` });
 
   const pool = input.ownerEmail || input.mentions?.length ? await instructorPool(bootcampId) : [];
   let owner: { email: string; fullName: string } | null | undefined;
@@ -255,6 +269,55 @@ export async function editChecklistItem(
   });
 }
 
+/**
+ * Moves an item to another half-day: the other half of its own day, or
+ * either half of another day of any track the bootcamp runs. A field left
+ * out stays as it is. It keeps who wrote it, whom it tags, and whether it is
+ * done; a day it joins must have room for it.
+ */
+export async function moveChecklistItem(
+  bootcampId: string,
+  itemId: string,
+  to: { track?: ChecklistTrack; day?: number; period?: ChecklistPeriod },
+): Promise<Result<ChecklistItemRow>> {
+  const [item] = await db
+    .select({ name: t.name, track: t.track, day: t.day, period: t.period })
+    .from(t)
+    .where(and(eq(t.id, itemId), eq(t.bootcampId, bootcampId)));
+  if (!item) return { ok: false, error: "not_found" };
+  const track = to.track ?? item.track;
+  const day = to.day ?? item.day;
+  const period = to.period ?? item.period;
+  noteAudit({
+    target: itemId,
+    targetLabel: `${checklistDayLabel(item.track, item.day, item.period)} → ${checklistDayLabel(track, day, period)}: ${item.name.slice(0, 80)}`,
+  });
+  const otherDay = track !== item.track || day !== item.day;
+  if (otherDay) {
+    const bootcamp = await scheduleBootcamp(bootcampId);
+    if (!bootcamp) return { ok: false, error: "not_found" };
+    if (!checklistDayExists(track, day, bootcamp)) return { ok: false, error: "no_day" };
+  }
+
+  return db.transaction(async (tx) => {
+    if (otherDay) {
+      // Held until commit, as adding one holds it, so a move and an add cannot both take the last place.
+      await tx.select({ id: bootcamps.id }).from(bootcamps).where(eq(bootcamps.id, bootcampId)).for("update");
+      const [count] = await tx
+        .select({ n: sql<number>`count(*)::int` })
+        .from(t)
+        .where(and(eq(t.bootcampId, bootcampId), eq(t.track, track), eq(t.day, day)));
+      if ((count?.n ?? 0) >= CHECKLIST_LIMITS.itemsPerDay) return { ok: false, error: "full" } as const;
+    }
+    const [row] = await tx
+      .update(t)
+      .set({ track, day, period })
+      .where(and(eq(t.id, itemId), eq(t.bootcampId, bootcampId)))
+      .returning(COLUMNS);
+    return row ? ({ ok: true, value: row } as const) : ({ ok: false, error: "not_found" } as const);
+  });
+}
+
 /** Who is ticking an item: any Training administrator, or the person who owns it. */
 export type Ticker = { id: string; email: string | null; canManage: boolean };
 
@@ -266,11 +329,11 @@ export async function setChecklistItemDone(
   done: boolean,
 ): Promise<Result<ChecklistItemRow>> {
   const [item] = await db
-    .select({ name: t.name, ownerEmail: t.ownerEmail, track: t.track, day: t.day })
+    .select({ name: t.name, ownerEmail: t.ownerEmail, track: t.track, day: t.day, period: t.period })
     .from(t)
     .where(and(eq(t.id, itemId), eq(t.bootcampId, bootcampId)));
   if (!item) return { ok: false, error: "not_found" };
-  noteAudit({ target: itemId, targetLabel: `${checklistDayLabel(item.track, item.day)}: ${item.name.slice(0, 80)}` });
+  noteAudit({ target: itemId, targetLabel: `${checklistDayLabel(item.track, item.day, item.period)}: ${item.name.slice(0, 80)}` });
   const owns = Boolean(actor.email && item.ownerEmail === actor.email.toLowerCase());
   if (!actor.canManage && !owns) return { ok: false, error: "not_owner" };
 
@@ -291,9 +354,9 @@ export async function deleteChecklistItem(bootcampId: string, itemId: string): P
   const [row] = await db
     .delete(t)
     .where(and(eq(t.id, itemId), eq(t.bootcampId, bootcampId)))
-    .returning({ name: t.name, track: t.track, day: t.day });
+    .returning({ name: t.name, track: t.track, day: t.day, period: t.period });
   if (!row) return { ok: false, error: "not_found" };
-  noteAudit({ target: itemId, targetLabel: `${checklistDayLabel(row.track, row.day)}: ${row.name.slice(0, 80)}` });
+  noteAudit({ target: itemId, targetLabel: `${checklistDayLabel(row.track, row.day, row.period)}: ${row.name.slice(0, 80)}` });
   return { ok: true, value: null };
 }
 

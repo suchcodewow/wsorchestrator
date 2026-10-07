@@ -223,7 +223,7 @@ export function InboxView({
                       )}
                     </td>
                     <td className="px-5 py-2.5 align-top whitespace-nowrap">
-                      <div>{schedule(item.bootcampId, checklistDayLabel(item.track, item.day))}</div>
+                      <div>{schedule(item.bootcampId, checklistDayLabel(item.track, item.day, item.period))}</div>
                       <div className="text-xs text-muted-foreground tabular-nums">{dateLabel(item.date)}</div>
                     </td>
                     <td className="px-5 py-2.5 align-top text-muted-foreground">

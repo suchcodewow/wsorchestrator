@@ -94,7 +94,7 @@ export function ScheduleView({
   canManage: boolean;
   viewerId: string;
   viewerEmail: string;
-  /** How much of each class-day's checklist is done. */
+  /** How much of each half of each class-day's checklist is done. */
   checklist: ChecklistDayCount[];
   /** The manager's last-chosen view and density, from a cookie read on the server. */
   initialView: View;
@@ -125,6 +125,7 @@ export function ScheduleView({
   const [mine, setMine] = useState(false);
   const checklistButtons = useChecklistButtons({
     bootcampId: bootcamp.id,
+    bootcamp,
     counts: checklist,
     canManage,
     viewerEmail,
@@ -635,6 +636,7 @@ export function ScheduleView({
         flush={flush}
         onChanged={afterChange}
       />
+      {checklistButtons.board}
       {canManage && (
         <CopyDialog
           open={filling}

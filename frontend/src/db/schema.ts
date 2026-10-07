@@ -1674,9 +1674,14 @@ export const CHECKLIST_LIMITS = { name: 200, itemsPerDay: 100 } as const;
 /** The Prep Day checklist, for before the bootcamp starts: day 0 of Bootcamp, the only track with a day 0. */
 export const CHECKLIST_PREP_DAY = { track: "btc", day: 0 } as const;
 
+/** Each track-day's checklist is in two halves: before the morning, and before the afternoon. */
+export const CHECKLIST_PERIODS = ["am", "pm"] as const;
+export type ChecklistPeriod = (typeof CHECKLIST_PERIODS)[number];
+
 /**
- * Something to do before one day of one track starts, or on Bootcamp's day 0
- * before the bootcamp does (`CHECKLIST_PREP_DAY`). Its owner, if any, is
+ * Something to do before one half of one day of one track starts, or on
+ * Bootcamp's day 0 before the bootcamp does (`CHECKLIST_PREP_DAY`). The day's
+ * limit counts both halves together. Its owner, if any, is
  * an administrator or guest judge of the bootcamp, kept by email; who wrote
  * it and who ticked it are copied in, so they outlast the accounts.
  */
@@ -1690,6 +1695,7 @@ export const scheduleChecklistItems = pgTable(
     track: text("track").$type<ChecklistTrack>().notNull(),
     /** 1-based, as a schedule session's; 0 is Bootcamp's Prep Day. */
     day: integer("day").notNull(),
+    period: text("period").$type<ChecklistPeriod>().notNull().default("am"),
     name: text("name").notNull(),
     /** Lowercased; null when nobody owns it. */
     ownerEmail: text("owner_email"),
@@ -1709,6 +1715,7 @@ export const scheduleChecklistItems = pgTable(
     index("schedule_checklist_items_owner_idx").on(t.ownerEmail),
     check("schedule_checklist_items_track_check", sql`${t.track} in ('btc', 'int', 'btc_se', 'int_se')`),
     check("schedule_checklist_items_day_check", sql`${t.day} between 0 and 30 and (${t.day} > 0 or ${t.track} = 'btc')`),
+    check("schedule_checklist_items_period_check", sql`${t.period} in ('am', 'pm')`),
   ],
 );
 
