@@ -61,7 +61,7 @@ describe("tags in a checklist item", () => {
   });
 
   test("cannot name someone who is neither an administrator nor a guest judge of the bootcamp", async () => {
-    const stranger = await scope.createUser("stranger", PERSONAS.evalsAdmin);
+    const stranger = await scope.createUser("stranger", PERSONAS.assessmentsAdmin);
     const saved = await addChecklistItem(admin.id, bootcampId, "btc", 1, { name: "Book the room", mentions: [stranger.email] });
     if (saved.ok) added.push(saved.value.id);
     assert.deepEqual(saved, { ok: false, error: "not_instructor", email: stranger.email });
@@ -106,7 +106,7 @@ describe("changing a checklist item", () => {
     assert.equal(cleared.value.ownerEmail, null);
     assert.equal(cleared.value.ownerName, "");
 
-    const stranger = await scope.createUser("stranger2", PERSONAS.evalsAdmin);
+    const stranger = await scope.createUser("stranger2", PERSONAS.assessmentsAdmin);
     assert.deepEqual(await editChecklistItem(admin.id, bootcampId, saved.value.id, { ownerEmail: stranger.email }), {
       ok: false,
       error: "not_instructor",

@@ -115,7 +115,7 @@ async function clearOwnRows() {
 before(async () => {
   await scope.setUp();
   await clearOwnRows();
-  admin = await scope.createUser("admin", PERSONAS.evalsAdmin);
+  admin = await scope.createUser("admin", PERSONAS.assessmentsAdmin);
   savedEmployees = await db.select().from(employees);
 });
 

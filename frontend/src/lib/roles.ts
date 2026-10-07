@@ -1,11 +1,11 @@
 /** The functional areas, the roles within each, and what each one may do. */
 
 import {
-  EVALS_ROLES,
+  ASSESSMENTS_ROLES,
   EVENT_ROLES,
   IRIS_ROLES,
   TRAINING_ROLES,
-  type EvalsRole,
+  type AssessmentsRole,
   type EventRole,
   type IrisRole,
   type TrainingRole,
@@ -15,12 +15,12 @@ import {
  * Everything a signed-in user may do, one entry per functional area. A
  * platform administrator counts as an administrator in every area, whatever
  * their stored per-area roles say — so read roles through `eventRoleOf`,
- * `trainingRoleOf`, `evalsRoleOf` and `irisRoleOf`, never off this object directly.
+ * `trainingRoleOf`, `assessmentsRoleOf` and `irisRoleOf`, never off this object directly.
  */
 export type Access = {
   event: EventRole;
   training: TrainingRole | null;
-  evals: EvalsRole | null;
+  assessments: AssessmentsRole | null;
   iris: IrisRole | null;
   platform: boolean;
   /**
@@ -36,7 +36,7 @@ export type Access = {
 };
 
 /** An area whose roles are granted by that area's own administrators. */
-export type Area = "event" | "training" | "evals" | "iris";
+export type Area = "event" | "training" | "assessments" | "iris";
 
 export const EVENT_ROLE_LABELS: Record<EventRole, string> = {
   none: "No event access",
@@ -67,17 +67,17 @@ export const TRAINING_ROLE_DESCRIPTIONS: Record<TrainingRole, string> = {
 
 export const NO_TRAINING_ACCESS_LABEL = "No training access";
 
-export const EVALS_ROLE_LABELS: Record<EvalsRole, string> = {
-  viewer: "eVals Viewer",
-  administrator: "eVals Administrator",
+export const ASSESSMENTS_ROLE_LABELS: Record<AssessmentsRole, string> = {
+  viewer: "Assessments Viewer",
+  administrator: "Assessments Administrator",
 };
 
-export const EVALS_ROLE_DESCRIPTIONS: Record<EvalsRole, string> = {
-  viewer: "Sees eVals.",
-  administrator: "Also manages eVals settings and everyone's eVals role.",
+export const ASSESSMENTS_ROLE_DESCRIPTIONS: Record<AssessmentsRole, string> = {
+  viewer: "Sees and scores assessments, eVals among them.",
+  administrator: "Also manages eVals settings, Google meetings and everyone's assessments role.",
 };
 
-export const NO_EVALS_ACCESS_LABEL = "No eVals access";
+export const NO_ASSESSMENTS_ACCESS_LABEL = "No assessments access";
 
 export const IRIS_ROLE_LABELS: Record<IrisRole, string> = {
   taker: "Iris Taker",
@@ -104,8 +104,8 @@ export function trainingRoleOf(access: Access): TrainingRole | null {
   return access.platform ? "administrator" : access.training;
 }
 
-export function evalsRoleOf(access: Access): EvalsRole | null {
-  return access.platform ? "administrator" : access.evals;
+export function assessmentsRoleOf(access: Access): AssessmentsRole | null {
+  return access.platform ? "administrator" : access.assessments;
 }
 
 export function irisRoleOf(access: Access): IrisRole | null {
@@ -121,9 +121,9 @@ function trainingAtLeast(access: Access, minimum: TrainingRole): boolean {
   return role !== null && TRAINING_ROLES.indexOf(role) >= TRAINING_ROLES.indexOf(minimum);
 }
 
-function evalsAtLeast(access: Access, minimum: EvalsRole): boolean {
-  const role = evalsRoleOf(access);
-  return role !== null && EVALS_ROLES.indexOf(role) >= EVALS_ROLES.indexOf(minimum);
+function assessmentsAtLeast(access: Access, minimum: AssessmentsRole): boolean {
+  const role = assessmentsRoleOf(access);
+  return role !== null && ASSESSMENTS_ROLES.indexOf(role) >= ASSESSMENTS_ROLES.indexOf(minimum);
 }
 
 function irisAtLeast(access: Access, minimum: IrisRole): boolean {
@@ -164,12 +164,12 @@ export const canUseTraining = (access: Access) => trainingAtLeast(access, "viewe
 export const canManageTrainingSettings = (access: Access) =>
   trainingAtLeast(access, "administrator");
 
-// The eVals area.
+// The assessments area, of which eVals is a part.
 
-export const canUseEvals = (access: Access) => evalsAtLeast(access, "viewer");
+export const canUseEvals = (access: Access) => assessmentsAtLeast(access, "viewer");
 
 export const canManageEvalsSettings = (access: Access) =>
-  evalsAtLeast(access, "administrator");
+  assessmentsAtLeast(access, "administrator");
 
 /**
  * Reporting → Canary Wire names ~300 people and who is behind on training:
@@ -214,8 +214,8 @@ export function canManageRoles(access: Access, area: Area | "platform"): boolean
       return eventAtLeast(access, "administrator");
     case "training":
       return trainingAtLeast(access, "administrator");
-    case "evals":
-      return evalsAtLeast(access, "administrator");
+    case "assessments":
+      return assessmentsAtLeast(access, "administrator");
     case "iris":
       return irisAtLeast(access, "administrator");
     case "platform":
@@ -226,7 +226,7 @@ export function canManageRoles(access: Access, area: Area | "platform"): boolean
 export const canManageUsers = (access: Access) =>
   canManageRoles(access, "event") ||
   canManageRoles(access, "training") ||
-  canManageRoles(access, "evals") ||
+  canManageRoles(access, "assessments") ||
   canManageRoles(access, "iris");
 
 export const canDeleteUsers = (access: Access) => access.platform;
@@ -240,7 +240,7 @@ export function accessBadges(access: Access): string[] {
     badges.push(EVENT_ROLE_LABELS[access.event]);
   }
   if (access.training) badges.push(TRAINING_ROLE_LABELS[access.training]);
-  if (access.evals) badges.push(EVALS_ROLE_LABELS[access.evals]);
+  if (access.assessments) badges.push(ASSESSMENTS_ROLE_LABELS[access.assessments]);
   if (access.iris) badges.push(IRIS_ROLE_LABELS[access.iris]);
   return badges;
 }
@@ -253,7 +253,7 @@ export const hasNoAccess = (access: Access) =>
   !access.platform &&
   access.event === "none" &&
   access.training === null &&
-  access.evals === null &&
+  access.assessments === null &&
   access.iris === null;
 
 /** Where a signed-in user lands: the first area they can use. */
@@ -276,8 +276,8 @@ export function asTrainingRole(value: unknown): TrainingRole | null {
     : null;
 }
 
-export function asEvalsRole(value: unknown): EvalsRole | null {
-  return EVALS_ROLES.includes(value as EvalsRole) ? (value as EvalsRole) : null;
+export function asAssessmentsRole(value: unknown): AssessmentsRole | null {
+  return ASSESSMENTS_ROLES.includes(value as AssessmentsRole) ? (value as AssessmentsRole) : null;
 }
 
 export function asIrisRole(value: unknown): IrisRole | null {

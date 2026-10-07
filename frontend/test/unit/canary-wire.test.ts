@@ -215,7 +215,7 @@ describe("withHiBob", () => {
 });
 
 describe("scope", () => {
-  const access = (over: Partial<Access>): Access => ({ event: "none", training: null, evals: null, iris: null, platform: false, judging: false, manager: false, ...over });
+  const access = (over: Partial<Access>): Access => ({ event: "none", training: null, assessments: null, iris: null, platform: false, judging: false, manager: false, ...over });
   const boss = { access: access({ manager: true }), email: "zed@harness.io" };
   const admin = { access: access({ platform: true }), email: "root@harness.io" };
 

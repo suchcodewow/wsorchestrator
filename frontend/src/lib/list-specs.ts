@@ -26,7 +26,7 @@ export const EMPLOYEE_LIST = spec([
 ]);
 export type EmployeeSort = (typeof EMPLOYEE_LIST.sorts)[number];
 
-export const USER_LIST = spec(["user", "events", "eventRole", "trainingRole", "evalsRole", "irisRole", "platform"]);
+export const USER_LIST = spec(["user", "eventRole", "trainingRole", "assessmentsRole", "irisRole", "platform"]);
 export type UserSort = (typeof USER_LIST.sorts)[number];
 
 export const IRIS_COHORT_LIST = spec(["finishedAt", "person", "track", "completed"], "desc");

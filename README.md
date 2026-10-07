@@ -517,16 +517,16 @@ placeholder; **eVals settings** holds what it will draw on:
   `2000-01-01` marker. The old sheet can still be uploaded: rows are matched
   by email and only the file's own columns are written.
 
-| Role                    | Adds                                                            |
-| ----------------------- | --------------------------------------------------------------- |
-| *(none)*                | Nothing. What everyone starts as.                               |
-| **eVals Viewer**        | The **eVals** page.                                             |
-| **eVals Administrator** | Sets everyone's eVals role on **Manage users**, and **eVals settings**. |
+| Role                          | Adds                                                            |
+| ----------------------------- | --------------------------------------------------------------- |
+| *(none)*                      | Nothing. What everyone starts as.                               |
+| **Assessments Viewer**        | The **eVals** page.                                             |
+| **Assessments Administrator** | Sets everyone's Assessments role on **Manage users**, and **eVals settings**, including **Google Meetings**. |
 
 **Iris** — adaptive placement tests for new GTM hires: eight subjects, each
 taken once per form, which place someone Beginner, Intermediate or Advanced so
 enablement can route their training. Takers never see their own level.
-Independent of eVals: an eVals role gives no Iris access, and the reverse.
+Independent of eVals: an Assessments role gives no Iris access, and the reverse.
 
 | Role                     | Adds                                                            |
 | ------------------------ | --------------------------------------------------------------- |

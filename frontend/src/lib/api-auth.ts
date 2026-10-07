@@ -81,12 +81,12 @@ export function requireAdministrator(req: Request) {
   return requireCaller(req, canManageSettings);
 }
 
-/** An eVals Viewer or above, for what the eVals area shows. */
+/** An Assessments Viewer or above, for what eVals shows. */
 export function requireEvalsViewer(req: Request) {
   return requireCaller(req, canUseEvals);
 }
 
-/** An eVals administrator, for eVals settings. */
+/** An Assessments Administrator, for eVals settings. */
 export function requireEvalsAdministrator(req: Request) {
   return requireCaller(req, canManageEvalsSettings);
 }

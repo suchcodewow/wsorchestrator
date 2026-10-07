@@ -22,7 +22,7 @@ import {
   INVITE_TTL_MINUTES,
   userInvites,
   users,
-  type EvalsRole,
+  type AssessmentsRole,
   type EventRole,
   type IrisRole,
   type TrainingRole,
@@ -33,7 +33,7 @@ import { canManageRoles, type Access } from "@/lib/roles";
 export type InviteGrant = {
   eventRole: Exclude<EventRole, "none"> | null;
   trainingRole: TrainingRole | null;
-  evalsRole: EvalsRole | null;
+  assessmentsRole: AssessmentsRole | null;
   irisRole: IrisRole | null;
 };
 
@@ -49,7 +49,7 @@ export function mayGrant(access: Access, grant: InviteGrant): boolean {
   return (
     (grant.eventRole === null || canManageRoles(access, "event")) &&
     (grant.trainingRole === null || canManageRoles(access, "training")) &&
-    (grant.evalsRole === null || canManageRoles(access, "evals")) &&
+    (grant.assessmentsRole === null || canManageRoles(access, "assessments")) &&
     (grant.irisRole === null || canManageRoles(access, "iris"))
   );
 }
@@ -70,7 +70,7 @@ export async function createInvite(
   if (
     grant.eventRole === null &&
     grant.trainingRole === null &&
-    grant.evalsRole === null &&
+    grant.assessmentsRole === null &&
     grant.irisRole === null
   ) {
     return { ok: false, error: "empty" };
@@ -84,7 +84,7 @@ export async function createInvite(
     tokenHash: sha256(token),
     eventRole: grant.eventRole,
     trainingRole: grant.trainingRole,
-    evalsRole: grant.evalsRole,
+    assessmentsRole: grant.assessmentsRole,
     irisRole: grant.irisRole,
     createdBy: actor.id,
     expiresAt,
@@ -117,14 +117,14 @@ export async function readInvite(
       id: userInvites.id,
       eventRole: userInvites.eventRole,
       trainingRole: userInvites.trainingRole,
-      evalsRole: userInvites.evalsRole,
+      assessmentsRole: userInvites.assessmentsRole,
       irisRole: userInvites.irisRole,
       expiresAt: userInvites.expiresAt,
       creatorName: users.name,
       creatorEmail: users.email,
       creatorEvent: users.eventRole,
       creatorTraining: users.trainingRole,
-      creatorEvals: users.evalsRole,
+      creatorAssessments: users.assessmentsRole,
       creatorIris: users.irisRole,
       creatorPlatform: users.isPlatformAdmin,
     })
@@ -138,13 +138,13 @@ export async function readInvite(
   const grant: InviteGrant = {
     eventRole: row.eventRole === "none" ? null : row.eventRole,
     trainingRole: row.trainingRole,
-    evalsRole: row.evalsRole,
+    assessmentsRole: row.assessmentsRole,
     irisRole: row.irisRole,
   };
   const creator: Access = {
     event: row.creatorEvent,
     training: row.creatorTraining,
-    evals: row.creatorEvals,
+    assessments: row.creatorAssessments,
     iris: row.creatorIris,
     platform: row.creatorPlatform,
     judging: false,
@@ -186,7 +186,7 @@ export async function acceptInvite(
       .set({
         eventRole: invite.grant.eventRole ?? "none",
         trainingRole: invite.grant.trainingRole,
-        evalsRole: invite.grant.evalsRole,
+        assessmentsRole: invite.grant.assessmentsRole,
         irisRole: invite.grant.irisRole,
       })
       .where(
@@ -194,7 +194,7 @@ export async function acceptInvite(
           eq(users.id, userId),
           eq(users.eventRole, "none"),
           isNull(users.trainingRole),
-          isNull(users.evalsRole),
+          isNull(users.assessmentsRole),
           isNull(users.irisRole),
           eq(users.isPlatformAdmin, false),
         ),

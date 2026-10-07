@@ -130,7 +130,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         notes:
           "pendingAdmins lists the SITE_ADMIN_EMAILS addresses that have not signed in yet, whichever page is asked for.",
         query: listQuery(USER_LIST.sorts, "the name or email"),
-        returns: `{ users: { id, name, email, eventRole, trainingRole, evalsRole, irisRole, isPlatformAdmin, isBootstrapAdmin, eventCount }[], ${PAGE_FIELDS}, pendingAdmins: string[] }`,
+        returns: `{ users: { id, name, email, eventRole, trainingRole, assessmentsRole, irisRole, isPlatformAdmin, isBootstrapAdmin, eventCount }[], ${PAGE_FIELDS}, pendingAdmins: string[] }`,
       },
       {
         method: "PATCH",
@@ -146,7 +146,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           fields: [
             {
               name: "area",
-              type: `"event" | "training" | "evals" | "iris" | "platform"`,
+              type: `"event" | "training" | "assessments" | "iris" | "platform"`,
               required: true,
               note: "picks which of the fields below applies",
             },
@@ -218,7 +218,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
               required: true,
             },
             {
-              name: "evalsRole",
+              name: "assessmentsRole",
               type: `"viewer" | "administrator" | null`,
               note: "defaults to null",
             },
@@ -1280,7 +1280,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "GET",
         path: "/api/evals/bootcamp-history",
         summary: "Lists everyone with a bootcamp history row, newest bootcamp first, a page at a time.",
-        access: "evalsViewer",
+        access: "assessmentsViewer",
         token: true,
         notes:
           "fullName is the person's name in the employee list from the last HiBob sync, or null for an email not in it, such as someone who has left. Someone is active while that list has their email, and inactive once it doesn't. btcDate is their bootcamp date; 2000-01-01 means they are exempt, which sorts as the oldest date. Rows that tie on the sort, such as one bootcamp's class, follow in name order, then email. counts gives everyone, the active and the inactive, whatever the search or status.",
@@ -1295,7 +1295,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "GET",
         path: "/api/evals/bootcamp-history/{id}",
         summary: "Returns one person's bootcamp history row in full, with their employee record.",
-        access: "evalsViewer",
+        access: "assessmentsViewer",
         token: true,
         notes:
           "A date of 2000-01-01 means the person is exempt from that class. Scores run from 1 (poor) to 4 (outstanding), to one decimal place; btcIndividualScores and intIndividualScores map each exercise's column name to its score, or are null. updatedBy is the id of whoever last changed the row and updatedByName their name or email, both null when that account is gone. employee is null for an email not in the employee list.",
@@ -1397,7 +1397,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "GET",
         path: "/api/evals/organization",
         summary: "Lists who the last HiBob sync found reporting up to the Organization Leader, a page at a time.",
-        access: "evalsAdmin",
+        access: "assessmentsAdmin",
         token: true,
         notes:
           "depth counts the links between a person and the leader, the leader included. managementChain is the emails of their managers, from the direct one up to and including the leader, joined with semicolons and no spaces. track is the one an administrator set by hand, if any; otherwise exempt when the person's bootcamp history marks BTC or INT exempt, ignored for a title on the Ignored list, deferred when they started too close to the next bootcamp (see GET /api/evals/deferral-days), or else the Sales or Engineer list their title is on, or null for a title on no list. btcDate, btcScore, intDate and intScore are from their bootcamp history, null where there is none; a date of 2000-01-01 means they are exempt from that class, and a score runs from 1 (poor) to 4 (outstanding), to one decimal place. The list is as of the last sync; current is false once a different leader has been set since, until the next sync runs. total counts everyone listed, whatever the search.",
@@ -1408,7 +1408,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "GET",
         path: "/api/evals/titles",
         summary: "Lists the titles on the Sales, Engineer and Ignored lists, a page at a time.",
-        access: "evalsAdmin",
+        access: "assessmentsAdmin",
         token: true,
         query: [
           { name: "list", type: `"sales" | "engineer" | "ignored"`, note: "One list only. Default every list." },
@@ -1421,7 +1421,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "POST",
         path: "/api/evals/titles",
         summary: "Adds titles to one list.",
-        access: "evalsAdmin",
+        access: "assessmentsAdmin",
         token: true,
         notes:
           "Titles are compared case-insensitively after collapsing whitespace. A title already on any list is reported in existing and not moved. Blank titles are dropped.",
@@ -1439,7 +1439,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "PATCH",
         path: "/api/evals/titles/{id}",
         summary: "Renames a listed title, or moves it to another list.",
-        access: "evalsAdmin",
+        access: "assessmentsAdmin",
         token: true,
         params: [{ name: "id", type: "string", required: true, note: "UUID" }],
         body: {
@@ -1460,7 +1460,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "DELETE",
         path: "/api/evals/titles/{id}",
         summary: "Removes a title from its list.",
-        access: "evalsAdmin",
+        access: "assessmentsAdmin",
         token: true,
         params: [{ name: "id", type: "string", required: true, note: "UUID" }],
         returns: "{ ok: true }",
@@ -1470,7 +1470,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "GET",
         path: "/api/evals/assessments",
         summary: "Lists the assessments attendees can be scored on, a page at a time.",
-        access: "evalsAdmin",
+        access: "assessmentsAdmin",
         token: true,
         notes:
           "criteria counts those still asked; submissions counts the attendees scored on it at any bootcamp. total counts every assessment, whatever the search.",
@@ -1481,7 +1481,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "GET",
         path: "/api/evals/assessments/unassigned-breakouts",
         summary: "Lists the breakouts at scheduled and active bootcamps that name no assessment.",
-        access: "evalsAdmin",
+        access: "assessmentsAdmin",
         token: true,
         notes:
           "Ordered by the bootcamp's start date, then track, day and start; at most 100. total counts every such breakout. Their groups appear under no assessment's Assigned to me until one is picked on the session's Breakout Assignments.",
@@ -1491,7 +1491,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "POST",
         path: "/api/evals/assessments",
         summary: "Creates an assessment and its criteria.",
-        access: "evalsAdmin",
+        access: "assessmentsAdmin",
         token: true,
         body: {
           kind: "json",
@@ -1515,7 +1515,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "GET",
         path: "/api/evals/assessments/{id}",
         summary: "Reads one assessment and the criteria it still asks, in order.",
-        access: "evalsAdmin",
+        access: "assessmentsAdmin",
         token: true,
         notes: "scored says some submission holds a score against that criterion, so removing it retires it rather than deleting it.",
         params: [{ name: "id", type: "string", required: true, note: "UUID" }],
@@ -1526,7 +1526,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "PUT",
         path: "/api/evals/assessments/{id}",
         summary: "Replaces an assessment's fields and criteria.",
-        access: "evalsAdmin",
+        access: "assessmentsAdmin",
         token: true,
         notes:
           "A criterion sent with its id is kept, renamed and moved as given; one sent without an id is added; one left out is deleted if nobody has been scored on it, or else retired, so it is no longer asked but the scores given against it remain. Submissions keep the names they were scored under. Once anyone has been scored on it, stage and audience cannot change. An attendee scored before a criterion was added shows as needing rescoring.",
@@ -1557,7 +1557,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "DELETE",
         path: "/api/evals/assessments/{id}",
         summary: "Removes an assessment nobody has been scored on.",
-        access: "evalsAdmin",
+        access: "assessmentsAdmin",
         token: true,
         notes: "One with scores is kept; set active to false with PUT instead.",
         params: [{ name: "id", type: "string", required: true, note: "UUID" }],
@@ -1571,7 +1571,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "GET",
         path: "/api/evals/slack-contacts",
         summary: "Lists the Additional Slack Contacts, a page at a time.",
-        access: "evalsAdmin",
+        access: "assessmentsAdmin",
         token: true,
         notes:
           "These people are added to the Slack messages sent to each attendee's team at the end of a bootcamp, after the attendee's management chain. fullName is their name in the employee list, as of when they were added or the last HiBob sync since, and empty for someone not in it. total counts every contact, whatever the search.",
@@ -1582,7 +1582,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "POST",
         path: "/api/evals/slack-contacts",
         summary: "Adds one Additional Slack Contact.",
-        access: "evalsAdmin",
+        access: "assessmentsAdmin",
         token: true,
         notes:
           "The email is lowercased. If it belongs to an imported employee, their name is stored with it; anyone else is added by email alone.",
@@ -1600,7 +1600,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "DELETE",
         path: "/api/evals/slack-contacts/{id}",
         summary: "Removes one Additional Slack Contact.",
-        access: "evalsAdmin",
+        access: "assessmentsAdmin",
         token: true,
         params: [{ name: "id", type: "string", required: true, note: "UUID" }],
         returns: "{ ok: true }",
@@ -1610,7 +1610,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "GET",
         path: "/api/evals/hibob/sync",
         summary: "Lists the HiBob sync log a page at a time, newest first.",
-        access: "evalsAdmin",
+        access: "assessmentsAdmin",
         token: true,
         notes:
           "A run that has said running for over 10 minutes is shown as failed, and running is false for it. running says whether a sync is under way, whichever page is asked for. The HiBob token itself is never returned.",
@@ -1621,7 +1621,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "POST",
         path: "/api/evals/hibob/sync",
         summary: "Syncs every active employee from HiBob now.",
-        access: "evalsAdmin",
+        access: "assessmentsAdmin",
         token: true,
         notes:
           "Calls HiBob and replaces the whole employees table in one transaction, so a failed sync leaves the previous one in place. Can take several seconds; the route allows 180. Every attempt, failed or not, is logged in the sync history.",
@@ -1638,7 +1638,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "PUT",
         path: "/api/evals/org-leader",
         summary: "Sets the Organization Leader whose reports eVals draws attendees from.",
-        access: "evalsAdmin",
+        access: "assessmentsAdmin",
         token: true,
         body: {
           kind: "json",
@@ -1656,7 +1656,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "GET",
         path: "/api/evals/candidate-cutoffs",
         summary: "Gets the date cutoffs on who in the org counts as a bootcamp or intermediate candidate.",
-        access: "evalsAdmin",
+        access: "assessmentsAdmin",
         token: true,
         notes:
           "A candidate's HiBob start date must be on or after startDateOnOrAfter, or blank; their HiBob active effective date must be after activeEffectiveDateAfter, and not blank. null means that cutoff is off. Until one is saved, each is the Google Sheet's: 2025-04-01 and 2026-01-01.",
@@ -1666,7 +1666,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "PUT",
         path: "/api/evals/candidate-cutoffs",
         summary: "Sets either or both candidate date cutoffs.",
-        access: "evalsAdmin",
+        access: "assessmentsAdmin",
         token: true,
         notes: "A field left out keeps its value. The Current tab uses the new cutoffs at once; no sync is needed.",
         body: {
@@ -1685,7 +1685,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "GET",
         path: "/api/evals/deferral-days",
         summary: "Gets the deferral window: how close to the next bootcamp someone can start and still be put in it.",
-        access: "evalsAdmin",
+        access: "assessmentsAdmin",
         token: true,
         notes:
           "Someone whose HiBob start date is fewer than days before bootcampStart, or after it, is on the deferred track rather than their title list's; an ignored title, exempt history or a track set by hand still comes first. A blank start date is never deferred. 0 turns deferral off. Until one is saved, days is the Google Sheet's 14. bootcampStart is the active bootcamp's start, else the soonest scheduled one starting today or later, or null when there is none, which also leaves no one deferred.",
@@ -1695,7 +1695,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "PUT",
         path: "/api/evals/deferral-days",
         summary: "Sets the deferral window, and retracks the org by it at once.",
-        access: "evalsAdmin",
+        access: "assessmentsAdmin",
         token: true,
         notes: "Every org member's track is worked out again rather than at the next sync; retracked counts those whose track changed. Creating, editing or deleting a bootcamp does the same.",
         body: {
@@ -1987,7 +1987,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
               name: "snapshot[]",
               type: "object[]",
               required: true,
-              note: "QA's users before the restore: id, email, name, image, eventRole, trainingRole, evalsRole, irisRole, isPlatformAdmin, calendarScope, accounts[]",
+              note: "QA's users before the restore: id, email, name, image, eventRole, trainingRole, assessmentsRole, irisRole, isPlatformAdmin, calendarScope, accounts[]",
             },
           ],
         },

@@ -1,4 +1,4 @@
-/** The layout for eVals: open to eVals Viewers and above, and to the active bootcamp's guest judges. */
+/** The layout for eVals: open to Assessments Viewers and above, and to the active bootcamp's guest judges. */
 
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";

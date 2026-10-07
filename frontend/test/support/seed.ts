@@ -50,7 +50,7 @@ export function testScope(name: string) {
     const roles = {
       eventRole: access.event,
       trainingRole: access.training,
-      evalsRole: access.evals,
+      assessmentsRole: access.assessments,
       irisRole: access.iris,
       isPlatformAdmin: access.platform,
     };
@@ -155,7 +155,7 @@ export async function readRoles(id: string) {
     .select({
       event: users.eventRole,
       training: users.trainingRole,
-      evals: users.evalsRole,
+      assessments: users.assessmentsRole,
       iris: users.irisRole,
       platform: users.isPlatformAdmin,
       // Spelled out: Drizzle leaves the table off a column in a one-table query.

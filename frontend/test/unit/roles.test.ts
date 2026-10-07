@@ -24,11 +24,11 @@ import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  EVALS_ROLES,
+  ASSESSMENTS_ROLES,
   EVENT_ROLES,
   IRIS_ROLES,
   TRAINING_ROLES,
-  type EvalsRole,
+  type AssessmentsRole,
   type EventRole,
   type IrisRole,
   type TrainingRole,
@@ -47,7 +47,7 @@ const EVENT_RANK: Record<EventRole, number> = {
 
 const TRAINING_RANK: Record<TrainingRole, number> = { viewer: 1, administrator: 2 };
 
-const EVALS_RANK: Record<EvalsRole, number> = { viewer: 1, administrator: 2 };
+const EVALS_RANK: Record<AssessmentsRole, number> = { viewer: 1, administrator: 2 };
 
 const IRIS_RANK: Record<IrisRole, number> = { taker: 1, administrator: 2 };
 
@@ -57,8 +57,8 @@ const event = (min: EventRole) => (a: Access) =>
 const training = (min: TrainingRole) => (a: Access) =>
   a.platform || (a.training !== null && TRAINING_RANK[a.training] >= TRAINING_RANK[min]);
 
-const evals = (min: EvalsRole) => (a: Access) =>
-  a.platform || (a.evals !== null && EVALS_RANK[a.evals] >= EVALS_RANK[min]);
+const evals = (min: AssessmentsRole) => (a: Access) =>
+  a.platform || (a.assessments !== null && EVALS_RANK[a.assessments] >= EVALS_RANK[min]);
 
 const iris = (min: IrisRole) => (a: Access) =>
   a.platform || (a.iris !== null && IRIS_RANK[a.iris] >= IRIS_RANK[min]);
@@ -113,8 +113,8 @@ const POLICY: Record<string, { actual: Check; expected: Check }> = {
     actual: (a) => roles.canManageRoles(a, "training"),
     expected: training("administrator"),
   },
-  "canManageRoles(evals)": {
-    actual: (a) => roles.canManageRoles(a, "evals"),
+  "canManageRoles(assessments)": {
+    actual: (a) => roles.canManageRoles(a, "assessments"),
     expected: evals("administrator"),
   },
   "canManageRoles(iris)": {
@@ -142,7 +142,7 @@ test("the combinations cover every role", () => {
     EVERY_ACCESS.length,
     EVENT_ROLES.length *
       (TRAINING_ROLES.length + 1) *
-      (EVALS_ROLES.length + 1) *
+      (ASSESSMENTS_ROLES.length + 1) *
       (IRIS_ROLES.length + 1) *
       2 *
       2 *
@@ -197,13 +197,13 @@ describe("the areas are independent", () => {
 
   test("a training administrator has no eVals access, and an eVals administrator no training access", () => {
     assert.equal(roles.canUseEvals(PERSONAS.trainingAdmin), false);
-    assert.equal(roles.canManageRoles(PERSONAS.trainingAdmin, "evals"), false);
-    assert.equal(roles.canUseTraining(PERSONAS.evalsAdmin), false);
-    assert.equal(roles.canManageRoles(PERSONAS.evalsAdmin, "training"), false);
+    assert.equal(roles.canManageRoles(PERSONAS.trainingAdmin, "assessments"), false);
+    assert.equal(roles.canUseTraining(PERSONAS.assessmentsAdmin), false);
+    assert.equal(roles.canManageRoles(PERSONAS.assessmentsAdmin, "training"), false);
   });
 
   test("an eVals administrator has no event access", () => {
-    const a = PERSONAS.evalsAdmin;
+    const a = PERSONAS.assessmentsAdmin;
     assert.equal(roles.canUseEvents(a), false);
     assert.equal(roles.canManageRoles(a, "event"), false);
     assert.equal(roles.canManageUsers(a), true);
@@ -215,8 +215,8 @@ describe("the areas are independent", () => {
     assert.equal(roles.canUseTraining(a), false);
     assert.equal(roles.canUseEvents(a), false);
     assert.equal(roles.canManageUsers(a), true);
-    assert.equal(roles.canTakeIris(PERSONAS.evalsAdmin), false);
-    assert.equal(roles.canManageRoles(PERSONAS.evalsAdmin, "iris"), false);
+    assert.equal(roles.canTakeIris(PERSONAS.assessmentsAdmin), false);
+    assert.equal(roles.canManageRoles(PERSONAS.assessmentsAdmin, "iris"), false);
   });
 
   test("an Iris taker takes the tests but cannot see the console or manage anyone", () => {
@@ -233,12 +233,12 @@ describe("the areas are independent", () => {
   });
 });
 
-describe("eventRoleOf / trainingRoleOf / evalsRoleOf / irisRoleOf", () => {
+describe("eventRoleOf / trainingRoleOf / assessmentsRoleOf / irisRoleOf", () => {
   test("return the stored role for everyone but a platform administrator", () => {
     for (const a of EVERY_ACCESS.filter((a) => !a.platform)) {
       assert.equal(roles.eventRoleOf(a), a.event, describeAccess(a));
       assert.equal(roles.trainingRoleOf(a), a.training, describeAccess(a));
-      assert.equal(roles.evalsRoleOf(a), a.evals, describeAccess(a));
+      assert.equal(roles.assessmentsRoleOf(a), a.assessments, describeAccess(a));
       assert.equal(roles.irisRoleOf(a), a.iris, describeAccess(a));
     }
   });
@@ -247,7 +247,7 @@ describe("eventRoleOf / trainingRoleOf / evalsRoleOf / irisRoleOf", () => {
     for (const a of EVERY_ACCESS.filter((a) => a.platform)) {
       assert.equal(roles.eventRoleOf(a), "administrator", describeAccess(a));
       assert.equal(roles.trainingRoleOf(a), "administrator", describeAccess(a));
-      assert.equal(roles.evalsRoleOf(a), "administrator", describeAccess(a));
+      assert.equal(roles.assessmentsRoleOf(a), "administrator", describeAccess(a));
       assert.equal(roles.irisRoleOf(a), "administrator", describeAccess(a));
     }
   });
@@ -296,19 +296,19 @@ describe("accessBadges", () => {
     assert.deepEqual(roles.accessBadges(PERSONAS.nobody), []);
   });
 
-  test("shows the event role, then the training role, then the eVals role, then the Iris role", () => {
+  test("shows the event role, then the training role, then the assessments role, then the Iris role", () => {
     assert.deepEqual(
-      roles.accessBadges({ event: "manager", training: "viewer", evals: "viewer", iris: "taker", platform: false, judging: false, manager: false }),
-      ["Event Manager", "Training Viewer", "eVals Viewer", "Iris Taker"],
+      roles.accessBadges({ event: "manager", training: "viewer", assessments: "viewer", iris: "taker", platform: false, judging: false, manager: false }),
+      ["Event Manager", "Training Viewer", "Assessments Viewer", "Iris Taker"],
     );
     assert.deepEqual(roles.accessBadges(PERSONAS.trainingAdmin), ["Training Administrator"]);
-    assert.deepEqual(roles.accessBadges(PERSONAS.evalsAdmin), ["eVals Administrator"]);
+    assert.deepEqual(roles.accessBadges(PERSONAS.assessmentsAdmin), ["Assessments Administrator"]);
     assert.deepEqual(roles.accessBadges(PERSONAS.contributor), ["Event Contributor"]);
   });
 });
 
 describe("labels", () => {
-  test("every event, training, eVals and Iris role has a label and a description", () => {
+  test("every event, training, assessments and Iris role has a label and a description", () => {
     for (const r of EVENT_ROLES) {
       assert.ok(roles.EVENT_ROLE_LABELS[r], r);
       assert.ok(roles.EVENT_ROLE_DESCRIPTIONS[r], r);
@@ -317,9 +317,9 @@ describe("labels", () => {
       assert.ok(roles.TRAINING_ROLE_LABELS[r], r);
       assert.ok(roles.TRAINING_ROLE_DESCRIPTIONS[r], r);
     }
-    for (const r of EVALS_ROLES) {
-      assert.ok(roles.EVALS_ROLE_LABELS[r], r);
-      assert.ok(roles.EVALS_ROLE_DESCRIPTIONS[r], r);
+    for (const r of ASSESSMENTS_ROLES) {
+      assert.ok(roles.ASSESSMENTS_ROLE_LABELS[r], r);
+      assert.ok(roles.ASSESSMENTS_ROLE_DESCRIPTIONS[r], r);
     }
     for (const r of IRIS_ROLES) {
       assert.ok(roles.IRIS_ROLE_LABELS[r], r);
@@ -327,14 +327,18 @@ describe("labels", () => {
     }
   });
 
-  test("eVals is spelled eVals wherever it is shown", () => {
+  test("the assessments role is named for assessments, and eVals is spelled eVals wherever it is shown", () => {
+    for (const label of Object.values(roles.ASSESSMENTS_ROLE_LABELS)) {
+      assert.match(label, /^Assessments /, label);
+    }
+    assert.equal(roles.NO_ASSESSMENTS_ACCESS_LABEL, "No assessments access");
+
     const shown = [
-      ...Object.values(roles.EVALS_ROLE_LABELS),
-      ...Object.values(roles.EVALS_ROLE_DESCRIPTIONS),
-      roles.NO_EVALS_ACCESS_LABEL,
+      ...Object.values(roles.ASSESSMENTS_ROLE_LABELS),
+      ...Object.values(roles.ASSESSMENTS_ROLE_DESCRIPTIONS),
+      roles.NO_ASSESSMENTS_ACCESS_LABEL,
     ];
     for (const text of shown) {
-      assert.match(text, /eVals/, text);
       assert.doesNotMatch(text, /\b(?!eVals)[eE][vV][aA][lL][sS]\b/, text);
     }
   });
@@ -344,11 +348,11 @@ describe("labels", () => {
   });
 });
 
-describe("asEventRole / asTrainingRole / asEvalsRole", () => {
+describe("asEventRole / asTrainingRole / asAssessmentsRole", () => {
   test("accept exactly the stored values", () => {
     for (const r of EVENT_ROLES) assert.equal(roles.asEventRole(r), r);
     for (const r of TRAINING_ROLES) assert.equal(roles.asTrainingRole(r), r);
-    for (const r of EVALS_ROLES) assert.equal(roles.asEvalsRole(r), r);
+    for (const r of ASSESSMENTS_ROLES) assert.equal(roles.asAssessmentsRole(r), r);
   });
 
   test("reject anything else", () => {
@@ -357,7 +361,7 @@ describe("asEventRole / asTrainingRole / asEvalsRole", () => {
     }
     for (const bad of ["", "none", "Viewer", "manager", null, undefined, 1]) {
       assert.equal(roles.asTrainingRole(bad), null, JSON.stringify(bad));
-      assert.equal(roles.asEvalsRole(bad), null, JSON.stringify(bad));
+      assert.equal(roles.asAssessmentsRole(bad), null, JSON.stringify(bad));
     }
   });
 

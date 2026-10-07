@@ -54,11 +54,15 @@ export type TrainingRole = (typeof TRAINING_ROLES)[number];
 
 export const trainingRole = pgEnum("training_role", TRAINING_ROLES);
 
-/** The eVals area's roles, lowest first. No role at all is no access. */
-export const EVALS_ROLES = ["viewer", "administrator"] as const;
-export type EvalsRole = (typeof EVALS_ROLES)[number];
+/**
+ * The assessments area's roles, lowest first. No role at all is no access.
+ * eVals is one part of the area. The database type and its columns keep their
+ * original name, `evals_role`, from before the area covered more than eVals.
+ */
+export const ASSESSMENTS_ROLES = ["viewer", "administrator"] as const;
+export type AssessmentsRole = (typeof ASSESSMENTS_ROLES)[number];
 
-export const evalsRole = pgEnum("evals_role", EVALS_ROLES);
+export const assessmentsRole = pgEnum("evals_role", ASSESSMENTS_ROLES);
 
 /** The Iris area's roles, lowest first. No role at all is no access. */
 export const IRIS_ROLES = ["taker", "administrator"] as const;
@@ -84,7 +88,7 @@ export const users = pgTable("users", {
     .default("system"),
   eventRole: eventRole("site_role").notNull().default("none"),
   trainingRole: trainingRole("training_role"),
-  evalsRole: evalsRole("evals_role"),
+  assessmentsRole: assessmentsRole("evals_role"),
   irisRole: irisRole("iris_role"),
   isPlatformAdmin: boolean("is_platform_admin").notNull().default(false),
   calendarScope: calendarScope("calendar_scope").notNull().default("own"),
@@ -386,7 +390,7 @@ export const userInvites = pgTable(
     tokenHash: text("token_hash").notNull().unique(),
     eventRole: eventRole("event_role"),
     trainingRole: trainingRole("training_role"),
-    evalsRole: evalsRole("evals_role"),
+    assessmentsRole: assessmentsRole("evals_role"),
     irisRole: irisRole("iris_role"),
     createdBy: text("created_by")
       .notNull()

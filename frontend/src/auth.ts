@@ -11,7 +11,7 @@ import {
   sessions,
   users,
   verificationTokens,
-  type EvalsRole,
+  type AssessmentsRole,
   type EventRole,
   type IrisRole,
   type TrainingRole,
@@ -41,7 +41,7 @@ async function applyBootstrapAdmin(email: string | null | undefined) {
 type UserRow = {
   eventRole?: EventRole;
   trainingRole?: TrainingRole | null;
-  evalsRole?: EvalsRole | null;
+  assessmentsRole?: AssessmentsRole | null;
   irisRole?: IrisRole | null;
   isPlatformAdmin?: boolean;
 };
@@ -126,7 +126,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       const access: Access = {
         event: row.eventRole ?? "none",
         training: row.trainingRole ?? null,
-        evals: row.evalsRole ?? null,
+        assessments: row.assessmentsRole ?? null,
         iris: row.irisRole ?? null,
         platform: row.isPlatformAdmin ?? false,
         judging: await isJudgingNow(session.user.email),
