@@ -928,7 +928,12 @@ function ChecklistCard({
   );
 }
 
-/** What a card shows: its name, whom it is on, and who ticked it. */
+/**
+ * What a card shows: its name, and whom it is on. A done card is its name alone,
+ * struck through on one line, with who ticked it in its tooltip. An open one is
+ * at least two lines tall, so the tick sliding in on hover, which narrows the
+ * name, never makes it grow or shrink.
+ */
 function CardFace({
   item,
   viewerEmail,
@@ -947,7 +952,12 @@ function CardFace({
   const mine = item.ownerEmail !== null && item.ownerEmail === viewerEmail.toLowerCase();
   return (
     <div
-      title={`Added by ${item.createdByName || item.createdByEmail || "someone removed"} ${formatWhen(item.createdAt)}`}
+      title={[
+        `Added by ${item.createdByName || item.createdByEmail || "someone removed"} ${formatWhen(item.createdAt)}`,
+        item.done && item.doneAt ? `Ticked by ${item.doneByName || "someone"} ${formatWhen(item.doneAt)}` : null,
+      ]
+        .filter(Boolean)
+        .join("\n")}
       className={cn(
         "relative rounded-lg border bg-card px-2.5 py-2 pr-8 text-left shadow-xs transition-shadow group-hover:shadow-md group-hover:ring-1 group-hover:ring-brand/30",
         item.done && "border-emerald-500/30 bg-emerald-50/70 dark:bg-emerald-950/30",
@@ -961,33 +971,26 @@ function CardFace({
       )}
       <div className="flex items-start gap-1.5">
         {tick && <div className="mt-0.5 flex">{tick}</div>}
-        <div className={cn("min-w-0 text-sm wrap-break-word", item.done && "text-muted-foreground line-through")}>
+        <div className={cn("min-w-0 text-sm", item.done ? "truncate text-muted-foreground line-through" : "min-h-[2lh] wrap-break-word")}>
           <MentionText text={item.name} mentions={item.mentions} viewerEmail={viewerEmail} />
         </div>
       </div>
-      {(item.ownerEmail || (item.done && item.doneAt)) && (
-        <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-          {item.ownerEmail && (
-            <span className={cn("inline-flex min-w-0 items-center gap-1", mine && "font-medium text-foreground")}>
-              <span
-                className={cn(
-                  "flex size-5 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold",
-                  mine ? "bg-brand text-brand-foreground" : "bg-foreground/10",
-                )}
-              >
-                {initials(item.ownerName || item.ownerEmail)}
-              </span>
-              <span className="truncate">
-                {item.ownerName || item.ownerEmail}
-                {mine && " (you)"}
-              </span>
+      {!item.done && item.ownerEmail && (
+        <div className="mt-1.5 flex items-center text-xs text-muted-foreground">
+          <span className={cn("inline-flex min-w-0 items-center gap-1", mine && "font-medium text-foreground")}>
+            <span
+              className={cn(
+                "flex size-5 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold",
+                mine ? "bg-brand text-brand-foreground" : "bg-foreground/10",
+              )}
+            >
+              {initials(item.ownerName || item.ownerEmail)}
             </span>
-          )}
-          {item.done && item.doneAt && (
-            <span className="text-emerald-700 dark:text-emerald-400">
-              ✓ {item.doneByName || "someone"} {formatWhen(item.doneAt)}
+            <span className="truncate">
+              {item.ownerName || item.ownerEmail}
+              {mine && " (you)"}
             </span>
-          )}
+          </span>
         </div>
       )}
     </div>
