@@ -17,15 +17,15 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { EVALS_ROLES, EVENT_ROLES, INVITE_TTL_MINUTES, IRIS_ROLES, TRAINING_ROLES } from "@/db/schema";
+import { ASSESSMENTS_ROLES, EVENT_ROLES, INVITE_TTL_MINUTES, IRIS_ROLES, TRAINING_ROLES } from "@/db/schema";
 import {
-  EVALS_ROLE_DESCRIPTIONS,
-  EVALS_ROLE_LABELS,
+  ASSESSMENTS_ROLE_DESCRIPTIONS,
+  ASSESSMENTS_ROLE_LABELS,
   EVENT_ROLE_DESCRIPTIONS,
   EVENT_ROLE_LABELS,
   IRIS_ROLE_DESCRIPTIONS,
   IRIS_ROLE_LABELS,
-  NO_EVALS_ACCESS_LABEL,
+  NO_ASSESSMENTS_ACCESS_LABEL,
   NO_IRIS_ACCESS_LABEL,
   NO_TRAINING_ACCESS_LABEL,
   TRAINING_ROLE_DESCRIPTIONS,
@@ -48,13 +48,13 @@ type Created = { url: string; expiresAt: Date };
 export function CreateInviteDialog({ viewerAccess }: { viewerAccess: Access }) {
   const offersEvent = canManageRoles(viewerAccess, "event");
   const offersTraining = canManageRoles(viewerAccess, "training");
-  const offersEvals = canManageRoles(viewerAccess, "evals");
+  const offersAssessments = canManageRoles(viewerAccess, "assessments");
   const offersIris = canManageRoles(viewerAccess, "iris");
 
   const [open, setOpen] = useState(false);
   const [eventRole, setEventRole] = useState<string>(offersEvent ? "operator" : NONE);
   const [trainingRole, setTrainingRole] = useState<string>(NONE);
-  const [evalsRole, setEvalsRole] = useState<string>(NONE);
+  const [assessmentsRole, setAssessmentsRole] = useState<string>(NONE);
   const [irisRole, setIrisRole] = useState<string>(NONE);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -64,7 +64,7 @@ export function CreateInviteDialog({ viewerAccess }: { viewerAccess: Access }) {
   function reset() {
     setEventRole(offersEvent ? "operator" : NONE);
     setTrainingRole(NONE);
-    setEvalsRole(NONE);
+    setAssessmentsRole(NONE);
     setIrisRole(NONE);
     setError(null);
     setCreated(null);
@@ -81,7 +81,7 @@ export function CreateInviteDialog({ viewerAccess }: { viewerAccess: Access }) {
         body: JSON.stringify({
           eventRole: eventRole === NONE ? null : eventRole,
           trainingRole: trainingRole === NONE ? null : trainingRole,
-          evalsRole: evalsRole === NONE ? null : evalsRole,
+          assessmentsRole: assessmentsRole === NONE ? null : assessmentsRole,
           irisRole: irisRole === NONE ? null : irisRole,
         }),
       });
@@ -110,7 +110,7 @@ export function CreateInviteDialog({ viewerAccess }: { viewerAccess: Access }) {
   }
 
   const grantsSomething =
-    eventRole !== NONE || trainingRole !== NONE || evalsRole !== NONE || irisRole !== NONE;
+    eventRole !== NONE || trainingRole !== NONE || assessmentsRole !== NONE || irisRole !== NONE;
 
   return (
     <>
@@ -193,22 +193,22 @@ export function CreateInviteDialog({ viewerAccess }: { viewerAccess: Access }) {
                   ]}
                 />
               )}
-              {offersEvals && (
+              {offersAssessments && (
                 <RoleChoice
-                  legend="eVals role"
-                  name="invite-evals-role"
-                  value={evalsRole}
-                  onChange={setEvalsRole}
+                  legend="Assessments role"
+                  name="invite-assessments-role"
+                  value={assessmentsRole}
+                  onChange={setAssessmentsRole}
                   options={[
                     {
                       value: NONE,
-                      label: NO_EVALS_ACCESS_LABEL,
+                      label: NO_ASSESSMENTS_ACCESS_LABEL,
                       description: "Cannot see eVals.",
                     },
-                    ...EVALS_ROLES.map((r) => ({
+                    ...ASSESSMENTS_ROLES.map((r) => ({
                       value: r,
-                      label: EVALS_ROLE_LABELS[r],
-                      description: EVALS_ROLE_DESCRIPTIONS[r],
+                      label: ASSESSMENTS_ROLE_LABELS[r],
+                      description: ASSESSMENTS_ROLE_DESCRIPTIONS[r],
                     })),
                   ]}
                 />

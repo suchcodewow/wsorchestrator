@@ -1,7 +1,7 @@
 /**
  * One attendee's bootcamp history, opened from the Previous tab: the same
  * record as Bootcamp History's, but kept under Cohorts, with its back link to
- * the tab as it was left. Scores are eVals data, so it needs an eVals Viewer
+ * the tab as it was left. Scores are eVals data, so it needs an Assessments Viewer
  * as well as the Cohorts layout's Training Viewer.
  */
 

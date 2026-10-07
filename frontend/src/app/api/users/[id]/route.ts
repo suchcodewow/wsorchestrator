@@ -3,7 +3,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/auth";
-import { EVALS_ROLES, EVENT_ROLES, IRIS_ROLES, TRAINING_ROLES } from "@/db/schema";
+import { ASSESSMENTS_ROLES, EVENT_ROLES, IRIS_ROLES, TRAINING_ROLES } from "@/db/schema";
 import { canDeleteUsers, canManageUsers } from "@/lib/roles";
 import {
   deleteUser,
@@ -16,7 +16,7 @@ import { audited } from "@/lib/audit";
 const patchSchema = z.discriminatedUnion("area", [
   z.object({ area: z.literal("event"), role: z.enum(EVENT_ROLES) }),
   z.object({ area: z.literal("training"), role: z.enum(TRAINING_ROLES).nullable() }),
-  z.object({ area: z.literal("evals"), role: z.enum(EVALS_ROLES).nullable() }),
+  z.object({ area: z.literal("assessments"), role: z.enum(ASSESSMENTS_ROLES).nullable() }),
   z.object({ area: z.literal("iris"), role: z.enum(IRIS_ROLES).nullable() }),
   z.object({ area: z.literal("platform"), value: z.boolean() }),
 ]);

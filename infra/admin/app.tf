@@ -142,6 +142,12 @@ resource "google_cloud_run_v2_service" "app" {
             HIBOB_SYNC_AUDIENCE = local.hibob_sync_audience
             HIBOB_SYNC_INVOKER  = google_service_account.scheduler.email
           },
+          # The Slack app behind Add to Slack. Its client secret is
+          # secret-backed, below.
+          var.slack_app_client_id != "" ? {
+            SLACK_APP_CLIENT_ID = var.slack_app_client_id
+            SLACK_APP_ID        = var.slack_app_id
+          } : {},
           # The Canary Wire's Mindtickle tenant, and who may call its scheduled
           # pull (see scheduler.tf). The key pair is secret-backed, below.
           var.mindtickle_company_id != "" ? {
@@ -149,6 +155,13 @@ resource "google_cloud_run_v2_service" "app" {
             MT_REGION                 = var.mindtickle_region
             CANARY_WIRE_PULL_AUDIENCE = local.canary_wire_pull_audience
             CANARY_WIRE_PULL_INVOKER  = google_service_account.scheduler.email
+          } : {},
+          # Google Meetings: the account to offer at sign-in, and the Zoom
+          # account its meetings go on. The Zoom secret is secret-backed, below.
+          var.google_meetings_account != "" ? { GOOGLE_USER = var.google_meetings_account } : {},
+          var.zoom_account_id != "" ? {
+            ZOOM_ACCOUNT_ID = var.zoom_account_id
+            ZOOM_CLIENT_ID  = var.zoom_client_id
           } : {},
           # QA's production import: the job calls the app back to finish, with
           # an OIDC token that must carry this audience and runner-sa's email.
@@ -204,10 +217,12 @@ resource "google_cloud_run_v2_service" "app" {
           var.hibob_userid != "" ? { HIBOB_TOKEN = "hibob-token" } : {},
           nonsensitive(var.deepgram_api_key != "") ? { DEEPGRAM_API_KEY = "deepgram-api-key" } : {},
           nonsensitive(var.slack_bot_token != "") ? { SLACK_BOT_TOKEN = "slack-bot-token" } : {},
+          var.slack_app_client_id != "" ? { SLACK_APP_CLIENT_SECRET = "slack-app-client-secret" } : {},
           var.mindtickle_company_id != "" ? {
             MT_API_KEY    = "mindtickle-api-key"
             MT_SECRET_KEY = "mindtickle-secret-key"
           } : {},
+          var.zoom_account_id != "" ? { ZOOM_CLIENT_SECRET = "zoom-client-secret" } : {},
         )
         content {
           name = env.key

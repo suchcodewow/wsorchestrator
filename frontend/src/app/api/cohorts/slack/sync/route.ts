@@ -25,11 +25,12 @@ export async function GET(req: Request) {
   if (error) return error;
 
   const query = parseListQuery(new URL(req.url).searchParams, SLACK_SYNC_LIST);
-  const [{ rows, page, hasMore }, running, live, active] = await Promise.all([
+  const [{ rows, page, hasMore }, running, live, active, token] = await Promise.all([
     listSlackSyncRuns(query),
     slackSyncInProgress(),
     getSlackSyncLive(),
     activeCohortChannels(),
+    slackToken(),
   ]);
   return NextResponse.json({
     runs: rows,
@@ -37,7 +38,7 @@ export async function GET(req: Request) {
     hasMore,
     running,
     live,
-    configured: Boolean(slackToken()),
+    configured: Boolean(token),
     active,
   });
 }

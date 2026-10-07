@@ -26,7 +26,7 @@ export const EMPLOYEE_LIST = spec([
 ]);
 export type EmployeeSort = (typeof EMPLOYEE_LIST.sorts)[number];
 
-export const USER_LIST = spec(["user", "events", "eventRole", "trainingRole", "evalsRole", "irisRole", "platform"]);
+export const USER_LIST = spec(["user", "eventRole", "trainingRole", "assessmentsRole", "irisRole", "platform"]);
 export type UserSort = (typeof USER_LIST.sorts)[number];
 
 export const IRIS_COHORT_LIST = spec(["finishedAt", "person", "track", "completed"], "desc");
@@ -37,6 +37,9 @@ export type TitleSort = (typeof TITLE_LIST.sorts)[number];
 
 export const SLACK_CONTACT_LIST = spec(["fullName", "email", "addedBy", "createdAt"]);
 export type SlackContactSort = (typeof SLACK_CONTACT_LIST.sorts)[number];
+
+export const GOOGLE_MEETING_LIST = spec(["startsAt", "title", "durationMinutes"]);
+export type GoogleMeetingSort = (typeof GOOGLE_MEETING_LIST.sorts)[number];
 
 export const CHANNEL_CONTACT_LIST = spec(["fullName", "email", "addedBy", "createdAt"]);
 export type ChannelContactSort = (typeof CHANNEL_CONTACT_LIST.sorts)[number];

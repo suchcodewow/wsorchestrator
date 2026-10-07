@@ -88,7 +88,7 @@ const filing = (who = sales): TranscriptFiling => ({ bootcampId, assessmentId, a
 before(async () => {
   await scope.setUp();
   await db.delete(employees).where(like(employees.id, `${TEST_PREFIX}t_%`));
-  admin = await scope.createUser("admin", PERSONAS.evalsAdmin);
+  admin = await scope.createUser("admin", PERSONAS.assessmentsAdmin);
   judge = await scope.createUser("judge", PERSONAS.guestJudge);
   bootcampId = await scope.activeBootcamp(admin.id);
   assessmentId = await scope.createAssessment(admin.id, `${TEST_PREFIX}Discovery call`);

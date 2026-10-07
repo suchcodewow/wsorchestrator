@@ -1,12 +1,12 @@
 "use client";
 
 /**
- * The active bootcamp's Slack channels, whether the sync is live or a dry
- * run, the Sync Slack Now button, and every run's result, each linking to
- * what it did.
+ * The Slack app's install, the active bootcamp's Slack channels, whether the
+ * sync is live or a dry run, the Sync Slack Now button, and every run's
+ * result, each linking to what it did.
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
@@ -18,7 +18,9 @@ import {
   Hash,
   Loader2,
   MinusCircle,
+  Plug,
   RefreshCw,
+  Unplug,
   User,
   XCircle,
 } from "lucide-react";
@@ -61,12 +63,42 @@ export type ActiveChannels = {
   channels: { kind: string; name: string; slackChannelId: string | null; created: boolean }[];
 } | null;
 
+export type SlackConnection = {
+  /** Whether this deployment has the app's Client ID and secret, and so can offer Add to Slack. */
+  appConfigured: boolean;
+  /** Whether the deployment also sets SLACK_BOT_TOKEN, used while nothing is installed. */
+  envToken: boolean;
+  installation: {
+    teamId: string;
+    teamName: string | null;
+    scopes: string[];
+    missingScopes: string[];
+    readable: boolean;
+    installedBy: string | null;
+    installedAt: string;
+  } | null;
+};
+
 const ERRORS: Record<string, string> = {
-  not_configured: "No Slack bot token is configured. Set slack_bot_token on the Harness workspace and redeploy.",
+  not_configured: "Slack is not connected. Add the app to Slack above.",
   already_running: "A sync is already running — its result will appear below.",
   slack_error: "Slack refused the sync.",
+  not_found: "Slack was already disconnected.",
   forbidden: "Your own role changed — reload the page.",
 };
+
+/** What `oauth/callback` said about an Add to Slack, as `?slack=`. */
+const INSTALL_ERRORS: Record<string, string> = {
+  cancelled: "Add to Slack was cancelled; nothing changed.",
+  bad_state: "That Add to Slack expired or was started in another browser. Start it again.",
+  slack_error: "Slack refused the install.",
+};
+
+function installMessage({ result, detail }: { result: string; detail: string | null }) {
+  if (result === "installed") return { notice: "Slack is connected. The next sync uses the app's bot." };
+  const text = INSTALL_ERRORS[result] ?? "Add to Slack did not finish.";
+  return { error: detail ? `${text} Slack answered ${detail}.` : text };
+}
 
 function message(body: { error?: string; detail?: string } | null, status: number) {
   const text = ERRORS[body?.error ?? ""] ?? `Something went wrong (${status}).`;
@@ -90,6 +122,8 @@ export function runCounts(run: Pick<SlackRun, "invited" | "removed" | "notInSlac
 
 export function SlackSyncView({
   configured,
+  connection,
+  installResult,
   live,
   active,
   query,
@@ -97,6 +131,9 @@ export function SlackSyncView({
   running: syncing,
 }: {
   configured: boolean;
+  connection: SlackConnection;
+  /** How an Add to Slack that just returned here went. */
+  installResult: { result: string; detail: string | null } | null;
   live: boolean;
   active: ActiveChannels;
   query: ListQuery<SlackSyncSort>;
@@ -108,9 +145,38 @@ export function SlackSyncView({
   const sortProps = { sort: query.sort, dir: query.dir };
   const router = useRouter();
   const rowLink = useRowLink();
-  const [busy, setBusy] = useState<"sync" | "mode" | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [busy, setBusy] = useState<"sync" | "mode" | "disconnect" | null>(null);
+  const installed = installResult ? installMessage(installResult) : null;
+  const [error, setError] = useState<string | null>(installed?.error ?? null);
+  const [notice, setNotice] = useState<string | null>(installed?.notice ?? null);
+
+  // Said once: a reload should not say it again.
+  useEffect(() => {
+    if (!installResult) return;
+    const url = new URL(window.location.href);
+    url.searchParams.delete("slack");
+    url.searchParams.delete("detail");
+    window.history.replaceState(null, "", url);
+  }, [installResult]);
+
+  async function disconnect() {
+    if (!window.confirm("Disconnect Slack? Syncs stop until the app is added again. The app stays installed in Slack itself.")) {
+      return;
+    }
+    setBusy("disconnect");
+    setError(null);
+    setNotice(null);
+    try {
+      const res = await fetch("/api/cohorts/slack/installation", { method: "DELETE" });
+      const body = await res.json().catch(() => null);
+      if (!res.ok) setError(message(body, res.status));
+      else router.refresh();
+    } catch {
+      setError("Could not reach the server.");
+    } finally {
+      setBusy(null);
+    }
+  }
 
   async function syncNow() {
     setBusy("sync");
@@ -173,10 +239,11 @@ export function SlackSyncView({
         </Button>
       </motion.div>
 
-      {!configured && (
+      {!configured && !connection.appConfigured && (
         <motion.p variants={riseChild} className="flex items-center gap-1.5 text-sm text-destructive">
           <AlertTriangle className="size-3.5 shrink-0" />
-          No Slack bot token is configured. Set <code>slack_bot_token</code> on the Harness workspace, then redeploy.
+          No Slack app is configured. Set <code>slack_app_client_id</code> and <code>slack_app_client_secret</code> on
+          the Harness workspace, then redeploy.
         </motion.p>
       )}
 
@@ -192,6 +259,7 @@ export function SlackSyncView({
       )}
 
       <motion.div variants={riseChild} className="divide-y overflow-hidden rounded-2xl border bg-card shadow-sm">
+        <ConnectionRow connection={connection} disconnecting={busy === "disconnect"} onDisconnect={disconnect} />
         <div className="flex flex-wrap items-center justify-between gap-4 px-5 py-4">
           <div className="space-y-0.5">
             <p className="flex items-center gap-2 text-sm font-medium">
@@ -309,6 +377,69 @@ export function SlackSyncView({
         </div>
       </motion.div>
     </motion.div>
+  );
+}
+
+/** Which bot the sync acts as: the installed app, the deployment's token, or none yet. */
+function ConnectionRow({
+  connection: { appConfigured, envToken, installation },
+  disconnecting,
+  onDisconnect,
+}: {
+  connection: SlackConnection;
+  disconnecting: boolean;
+  onDisconnect: () => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-4 px-5 py-4">
+      <div className="space-y-0.5">
+        <p className="flex items-center gap-2 text-sm font-medium">
+          Slack app
+          {installation?.readable ? (
+            <Badge>Connected</Badge>
+          ) : installation ? (
+            <Badge variant="destructive">Add again</Badge>
+          ) : (
+            <Badge variant="secondary">{envToken ? "Deployment token" : "Not connected"}</Badge>
+          )}
+        </p>
+        <p className="text-sm text-muted-foreground">
+          {installation
+            ? `${installation.teamName ?? installation.teamId}, added by ${installation.installedBy ?? "someone since removed"} on ${formatWhen(installation.installedAt)}`
+            : envToken
+              ? "The sync uses the deployment's SLACK_BOT_TOKEN until the app is added."
+              : "Add the app so the sync can read and change the cohort channels."}
+        </p>
+        {installation && !installation.readable && (
+          <p className="text-sm text-destructive">
+            This deployment cannot open the saved token, which another deployment sealed. Add the app again.
+          </p>
+        )}
+        {installation?.readable && installation.missingScopes.length > 0 && (
+          <p className="flex items-center gap-1.5 text-sm text-amber-700 dark:text-amber-400">
+            <AlertTriangle className="size-3.5 shrink-0" />
+            Missing {installation.missingScopes.join(", ")}. Add it again to grant them.
+          </p>
+        )}
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {appConfigured && (
+          <Button asChild variant={installation?.readable ? "outline" : "brand"}>
+            {/* A plain link: the install leaves for slack.com and comes back through the callback. */}
+            <a href="/api/cohorts/slack/install">
+              <Plug />
+              {installation ? "Add again" : "Add to Slack"}
+            </a>
+          </Button>
+        )}
+        {installation && (
+          <Button variant="outline" disabled={disconnecting} onClick={onDisconnect}>
+            {disconnecting ? <Loader2 className="animate-spin" /> : <Unplug />}
+            Disconnect
+          </Button>
+        )}
+      </div>
+    </div>
   );
 }
 

@@ -107,8 +107,52 @@ variable "deepgram_api_key" {
   default     = ""
 }
 
+variable "slack_app_client_id" {
+  description = "Client ID of the Slack app the cohort channel sync acts as (api.slack.com → the app → Basic Information). Not secret. With slack_app_client_secret it puts Add to Slack on Cohort Settings → Slack, whose install saves the bot token in the database, so slack_bot_token is no longer needed. The app's Redirect URLs must include {app_url}/api/cohorts/slack/oauth/callback. Empty leaves Add to Slack off. QA shares production's Slack workspace, so leave it empty there or keep QA's sync in dry run."
+  type        = string
+  default     = ""
+}
+
+variable "slack_app_id" {
+  description = "App ID of that Slack app. Not secret. When set, an install that names any other app is refused."
+  type        = string
+  default     = ""
+}
+
+variable "slack_app_client_secret" {
+  description = "Client Secret of that Slack app, for trading Add to Slack's code for the bot token. Stored in Secret Manager as slack-app-client-secret and read by the app alone; created only when slack_app_client_id is set."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
 variable "slack_bot_token" {
   description = "Bot token (xoxb-) for the Slack app that keeps each active bootcamp's cohort channels in step with the Cohorts page; it needs users:read, users:read.email, channels:read, channels:join and channels:manage. Stored in Secret Manager as slack-bot-token and read by the app alone. Empty leaves the channel sync off: every run is logged as not configured. QA shares production's Slack workspace, so leave it empty there or keep QA's sync in dry run."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "google_meetings_account" {
+  description = "The Google account eVals Settings → Google Meetings sends its invites from, offered as the sign-in hint when an Assessments Administrator connects it. Not secret, and only a hint: the account is whichever one signs in, and its refresh token is stored in the database. Reaches the app as GOOGLE_USER. Never put the account's password anywhere in Terraform."
+  type        = string
+  default     = ""
+}
+
+variable "zoom_account_id" {
+  description = "The Zoom account Google Meetings schedules its Zoom meetings on, through a Server-to-Server OAuth app with the meeting:write:admin, meeting:read:admin and user:read:admin scopes. Not secret: it grants nothing without zoom_client_secret. Empty leaves Zoom off, and invites go out with no Zoom link. QA shares production's Google Workspace, so leave it empty there."
+  type        = string
+  default     = ""
+}
+
+variable "zoom_client_id" {
+  description = "The client id of the Server-to-Server OAuth app for zoom_account_id. Not secret."
+  type        = string
+  default     = ""
+}
+
+variable "zoom_client_secret" {
+  description = "The client secret of the Server-to-Server OAuth app for zoom_account_id. Stored in Secret Manager as zoom-client-secret and read by the app alone."
   type        = string
   sensitive   = true
   default     = ""

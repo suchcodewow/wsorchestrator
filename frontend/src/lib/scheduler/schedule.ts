@@ -38,6 +38,7 @@ import {
   scheduleSessions,
   users,
   type BootcampStatus,
+  type ChecklistPeriod,
   type EvalsAssessmentStage,
   SESSION_AUDIENCES,
   type ScheduleTrack,
@@ -820,6 +821,7 @@ export const FILL_STATUS_FOR: Record<FillError, number> = {
 type NewChecklistItem = {
   track: ScheduleTrack;
   day: number;
+  period: ChecklistPeriod;
   name: string;
   ownerEmail: string | null;
   ownerName: string;
@@ -846,6 +848,7 @@ async function loadChecklistDay(bootcampId: string, track: ScheduleTrack, day: n
     .select({
       track: c.track,
       day: c.day,
+      period: c.period,
       name: c.name,
       ownerEmail: c.ownerEmail,
       ownerName: c.ownerName,
@@ -862,8 +865,9 @@ async function loadChecklistDay(bootcampId: string, track: ScheduleTrack, day: n
 
 /**
  * Replaces every session of the bootcamp with `sessions`, and adds `items` to
- * its checklists, all to do. Its own items stay: one whose day already has an
- * item of the same name is not added again, nor one past a day's limit.
+ * its checklists, all to do, each in the same half of its day. Its own items
+ * stay: one whose half-day already has an item of the same name is not added
+ * again, nor one past a day's limit.
  */
 async function writeSchedule(
   actorId: string,
@@ -899,12 +903,12 @@ async function writeSchedule(
       const { track, day } = dayItems[0]!;
       const c = scheduleChecklistItems;
       const existing = await tx
-        .select({ name: sql<string>`lower(${c.name})` })
+        .select({ name: sql<string>`${c.period} || ':' || lower(${c.name})` })
         .from(c)
         .where(and(eq(c.bootcampId, bootcampId), eq(c.track, track), eq(c.day, day)))
         .limit(CHECKLIST_LIMITS.itemsPerDay);
       const names = new Set(existing.map((e) => e.name));
-      const fresh = dayItems.filter((i) => !names.has(i.name.toLowerCase()));
+      const fresh = dayItems.filter((i) => !names.has(`${i.period}:${i.name.toLowerCase()}`));
       const room = Math.max(0, CHECKLIST_LIMITS.itemsPerDay - existing.length);
       const adding = fresh.slice(0, room);
       tally.had += dayItems.length - fresh.length;
@@ -918,6 +922,7 @@ async function writeSchedule(
             bootcampId,
             track,
             day,
+            period: i.period,
             name: i.name,
             ownerEmail: i.ownerEmail,
             ownerName: i.ownerName,
@@ -1041,7 +1046,7 @@ export async function copySchedule(
 
   const copied = await writeSchedule(actorId, bootcampId, sessions, items);
   if (copied.had > 0) {
-    notes.push(`Left out ${copied.had} checklist item${copied.had === 1 ? "" : "s"} this bootcamp already has on the same day.`);
+    notes.push(`Left out ${copied.had} checklist item${copied.had === 1 ? "" : "s"} this bootcamp already has on the same half-day.`);
   }
   if (copied.full > 0) {
     notes.push(`Left out ${copied.full} checklist item${copied.full === 1 ? "" : "s"}: a day holds at most ${CHECKLIST_LIMITS.itemsPerDay}.`);

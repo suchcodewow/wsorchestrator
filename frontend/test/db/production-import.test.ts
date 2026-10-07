@@ -155,6 +155,10 @@ describe("finishProductionImport", () => {
         values ('00000000-0000-0000-0000-000000000001', 'prod-admin', 'live', 'live', 1, 'p/live', 'ready', 'production');
       insert into workshop_accounts (run_id, email, temp_password)
         values ('00000000-0000-0000-0000-000000000001', 'attendee@example.test', 'hunter2');
+      insert into google_connections (key, email, refresh_token, scope)
+        values ('meetings', 'invites@example.test', '\\x00', 'calendar');
+      insert into google_meetings (title, starts_at, duration_minutes, google_event_id)
+        values ('Kickoff', now() + interval '1 day', 30, 'prod-event');
     `);
   });
 
@@ -229,7 +233,7 @@ describe("finishProductionImport", () => {
       [{ refresh_token: null, access_token: null, id_token: null }],
     );
 
-    for (const table of ["sessions", "api_tokens", "harness_tokens", "user_invites"]) {
+    for (const table of ["sessions", "api_tokens", "harness_tokens", "user_invites", "google_connections", "google_meetings"]) {
       assert.equal((await q(`select count(*)::int as n from ${table}`))[0].n, 0, table);
     }
     assert.deepEqual(await q(`select temp_password from workshop_accounts`), [{ temp_password: "" }]);

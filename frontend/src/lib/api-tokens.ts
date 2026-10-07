@@ -11,6 +11,7 @@ import {
 } from "@/db/schema";
 import type { Access } from "@/lib/roles";
 import { isJudgingNow } from "@/lib/scheduler/judging";
+import { isManagerNow } from "@/lib/evals/managers";
 
 const TOKEN_PREFIX = "wo";
 
@@ -143,7 +144,7 @@ export async function resolveToken(
       revokedAt: apiTokens.revokedAt,
       eventRole: users.eventRole,
       trainingRole: users.trainingRole,
-      evalsRole: users.evalsRole,
+      assessmentsRole: users.assessmentsRole,
       irisRole: users.irisRole,
       isPlatformAdmin: users.isPlatformAdmin,
       email: users.email,
@@ -173,10 +174,11 @@ export async function resolveToken(
     access: {
       event: row.eventRole,
       training: row.trainingRole,
-      evals: row.evalsRole,
+      assessments: row.assessmentsRole,
       iris: row.irisRole,
       platform: row.isPlatformAdmin,
       judging: await isJudgingNow(row.email),
+      manager: await isManagerNow(row.email),
     },
     email: row.email,
   };

@@ -1,4 +1,4 @@
-/** One day of one class's checklist, whole, and adding to it. */
+/** One day of one class's checklist, whole, both AM and PM, and adding to either half. */
 
 import { NextResponse } from "next/server";
 import { z } from "zod";

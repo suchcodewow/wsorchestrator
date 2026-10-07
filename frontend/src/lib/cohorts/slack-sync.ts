@@ -92,7 +92,7 @@ export const STATUS_FOR: Record<SlackSyncError, number> = {
 };
 
 const LOGGED: Record<Exclude<SlackSyncError, "already_running">, string> = {
-  not_configured: "No Slack bot token is configured — set slack_bot_token on the workspace.",
+  not_configured: "Slack is not connected — add the app to Slack on Cohort Settings → Slack.",
   slack_error: "Slack refused the sync.",
 };
 
@@ -466,7 +466,7 @@ export async function syncSlackChannels(
 
   const log = new RunLog(runId);
   try {
-    const token = slackToken();
+    const token = await slackToken();
     if (!token) {
       await finishRun(runId, "failed", { error: LOGGED.not_configured });
       return { ok: false, runId, error: "not_configured" };

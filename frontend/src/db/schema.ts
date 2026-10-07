@@ -54,11 +54,15 @@ export type TrainingRole = (typeof TRAINING_ROLES)[number];
 
 export const trainingRole = pgEnum("training_role", TRAINING_ROLES);
 
-/** The eVals area's roles, lowest first. No role at all is no access. */
-export const EVALS_ROLES = ["viewer", "administrator"] as const;
-export type EvalsRole = (typeof EVALS_ROLES)[number];
+/**
+ * The assessments area's roles, lowest first. No role at all is no access.
+ * eVals is one part of the area. The database type and its columns keep their
+ * original name, `evals_role`, from before the area covered more than eVals.
+ */
+export const ASSESSMENTS_ROLES = ["viewer", "administrator"] as const;
+export type AssessmentsRole = (typeof ASSESSMENTS_ROLES)[number];
 
-export const evalsRole = pgEnum("evals_role", EVALS_ROLES);
+export const assessmentsRole = pgEnum("evals_role", ASSESSMENTS_ROLES);
 
 /** The Iris area's roles, lowest first. No role at all is no access. */
 export const IRIS_ROLES = ["taker", "administrator"] as const;
@@ -84,7 +88,7 @@ export const users = pgTable("users", {
     .default("system"),
   eventRole: eventRole("site_role").notNull().default("none"),
   trainingRole: trainingRole("training_role"),
-  evalsRole: evalsRole("evals_role"),
+  assessmentsRole: assessmentsRole("evals_role"),
   irisRole: irisRole("iris_role"),
   isPlatformAdmin: boolean("is_platform_admin").notNull().default(false),
   calendarScope: calendarScope("calendar_scope").notNull().default("own"),
@@ -386,7 +390,7 @@ export const userInvites = pgTable(
     tokenHash: text("token_hash").notNull().unique(),
     eventRole: eventRole("event_role"),
     trainingRole: trainingRole("training_role"),
-    evalsRole: evalsRole("evals_role"),
+    assessmentsRole: assessmentsRole("evals_role"),
     irisRole: irisRole("iris_role"),
     createdBy: text("created_by")
       .notNull()
@@ -1035,6 +1039,91 @@ export const EVALS_SLACK_CONTACT_LIMITS = { email: 320 } as const;
 
 export type EvalsSlackContact = typeof evalsSlackContacts.$inferSelect;
 
+/** Who a Google meeting invites, each a stage and a track of the Cohorts page's Current tab. */
+export const MEETING_GROUPS = [
+  "bootcamp_sales",
+  "bootcamp_engineer",
+  "intermediate_sales",
+  "intermediate_engineer",
+] as const;
+export type MeetingGroup = (typeof MEETING_GROUPS)[number];
+
+/** The lengths a Google meeting can run, in minutes. */
+export const MEETING_LENGTHS = [15, 30, 60] as const;
+export type MeetingLength = (typeof MEETING_LENGTHS)[number];
+
+export const GOOGLE_MEETING_LIMITS = { title: 200 } as const;
+
+/**
+ * The meetings on eVals Settings → Google Meetings. Saving one changes nothing
+ * outside the app; Sync Now creates or updates its Google Calendar invite and
+ * Zoom meeting, and records here what it made.
+ */
+export const googleMeetings = pgTable(
+  "google_meetings",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    title: text("title").notNull(),
+    startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
+    durationMinutes: integer("duration_minutes").notNull(),
+    groups: text("groups").array().$type<MeetingGroup[]>().notNull().default([]),
+    /** The event on the connected account's meetings calendar; null until a sync creates it. */
+    googleEventId: text("google_event_id"),
+    zoomMeetingId: text("zoom_meeting_id"),
+    zoomJoinUrl: text("zoom_join_url"),
+    /** Lowercased: whom the last sync put on the invite, so the next one takes off only those it added. */
+    invitedEmails: text("invited_emails").array().$type<string[]>().notNull().default([]),
+    /** When the title, time, length or groups last changed. */
+    changedAt: timestamp("changed_at", { withTimezone: true }).notNull().defaultNow(),
+    /** When a sync last brought the invite in line with this row. */
+    syncedAt: timestamp("synced_at", { withTimezone: true }),
+    /** Why the last sync of this meeting failed; null once one succeeds. */
+    syncError: text("sync_error"),
+    createdBy: text("created_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("google_meetings_starts_at_idx").on(t.startsAt, t.id),
+    check("google_meetings_duration_check", sql`${t.durationMinutes} in (15, 30, 60)`),
+  ],
+);
+
+export type GoogleMeeting = typeof googleMeetings.$inferSelect;
+
+/**
+ * The Google account Google Meetings sends invites from, connected once by an
+ * Assessments Administrator who signs in as it. One row, keyed `meetings`.
+ * The refresh token is sealed with `lib/secret-box.ts`.
+ */
+export const googleConnections = pgTable("google_connections", {
+  key: text("key").primaryKey(),
+  /** Lowercased; also the Zoom user the meetings are scheduled under. */
+  email: text("email").notNull(),
+  refreshToken: bytea("refresh_token").notNull(),
+  scope: text("scope").notNull(),
+  /** The secondary calendar the sync made for the invites; null until the first sync. */
+  calendarId: text("calendar_id"),
+  /** Lowercased: whom the sync gave edit access to that calendar, so it takes away only those. */
+  sharedWith: text("shared_with").array().$type<string[]>().notNull().default([]),
+  connectedBy: text("connected_by").references(() => users.id, {
+    onDelete: "set null",
+  }),
+  connectedAt: timestamp("connected_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  /** Set while a sync runs, so a second press waits for it rather than inviting everyone twice. */
+  syncStartedAt: timestamp("sync_started_at", { withTimezone: true }),
+  lastSyncAt: timestamp("last_sync_at", { withTimezone: true }),
+  /** Why the last sync stopped before any meeting, such as a revoked token; null when it ran. */
+  lastSyncError: text("last_sync_error"),
+});
+
+export const GOOGLE_CONNECTION_KEY = "meetings";
+
 /**
  * Who has been through bootcamp (BTC) and the intermediate event (INT), and
  * how they scored. One row per email. A date of 2000-01-01 is the sheet's
@@ -1225,6 +1314,34 @@ export const cohortChannelContacts = pgTable(
 );
 
 export const CHANNEL_CONTACT_LIMITS = { email: 320 } as const;
+
+/**
+ * The Slack app's install in the workspace, from Cohort Settings → Slack's
+ * Add to Slack (`lib/slack-app.ts`). At most one row; installing again
+ * replaces it. The bot token is sealed with `lib/secret-box.ts`, so a copy of
+ * the database without the deployment's key holds nothing usable.
+ */
+export const slackInstallation = pgTable(
+  "slack_installation",
+  {
+    /** Always true: the one row. */
+    id: boolean("id").primaryKey().default(true),
+    teamId: text("team_id").notNull(),
+    teamName: text("team_name"),
+    appId: text("app_id").notNull(),
+    botUserId: text("bot_user_id").notNull(),
+    /** As Slack granted them, comma-separated. */
+    scopes: text("scopes").notNull(),
+    token: bytea("token").notNull(),
+    installedBy: text("installed_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    installedAt: timestamp("installed_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [check("slack_installation_one_row", sql`${t.id}`)],
+);
 
 /**
  * Each email's Slack user, as `users.lookupByEmail` last answered; a null id
@@ -1646,9 +1763,14 @@ export const CHECKLIST_LIMITS = { name: 200, itemsPerDay: 100 } as const;
 /** The Prep Day checklist, for before the bootcamp starts: day 0 of Bootcamp, the only track with a day 0. */
 export const CHECKLIST_PREP_DAY = { track: "btc", day: 0 } as const;
 
+/** Each track-day's checklist is in two halves: before the morning, and before the afternoon. */
+export const CHECKLIST_PERIODS = ["am", "pm"] as const;
+export type ChecklistPeriod = (typeof CHECKLIST_PERIODS)[number];
+
 /**
- * Something to do before one day of one track starts, or on Bootcamp's day 0
- * before the bootcamp does (`CHECKLIST_PREP_DAY`). Its owner, if any, is
+ * Something to do before one half of one day of one track starts, or on
+ * Bootcamp's day 0 before the bootcamp does (`CHECKLIST_PREP_DAY`). The day's
+ * limit counts both halves together. Its owner, if any, is
  * an administrator or guest judge of the bootcamp, kept by email; who wrote
  * it and who ticked it are copied in, so they outlast the accounts.
  */
@@ -1662,6 +1784,7 @@ export const scheduleChecklistItems = pgTable(
     track: text("track").$type<ChecklistTrack>().notNull(),
     /** 1-based, as a schedule session's; 0 is Bootcamp's Prep Day. */
     day: integer("day").notNull(),
+    period: text("period").$type<ChecklistPeriod>().notNull().default("am"),
     name: text("name").notNull(),
     /** Lowercased; null when nobody owns it. */
     ownerEmail: text("owner_email"),
@@ -1681,6 +1804,7 @@ export const scheduleChecklistItems = pgTable(
     index("schedule_checklist_items_owner_idx").on(t.ownerEmail),
     check("schedule_checklist_items_track_check", sql`${t.track} in ('btc', 'int', 'btc_se', 'int_se')`),
     check("schedule_checklist_items_day_check", sql`${t.day} between 0 and 30 and (${t.day} > 0 or ${t.track} = 'btc')`),
+    check("schedule_checklist_items_period_check", sql`${t.period} in ('am', 'pm')`),
   ],
 );
 

@@ -11,7 +11,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { auth, signInPath } from "@/auth";
 import {
-  EVALS_ROLE_LABELS,
+  ASSESSMENTS_ROLE_LABELS,
   EVENT_ROLE_LABELS,
   IRIS_ROLE_LABELS,
   TRAINING_ROLE_LABELS,
@@ -31,7 +31,7 @@ function grantLabels(grant: InviteGrant): string[] {
   return [
     ...(grant.eventRole ? [EVENT_ROLE_LABELS[grant.eventRole]] : []),
     ...(grant.trainingRole ? [TRAINING_ROLE_LABELS[grant.trainingRole]] : []),
-    ...(grant.evalsRole ? [EVALS_ROLE_LABELS[grant.evalsRole]] : []),
+    ...(grant.assessmentsRole ? [ASSESSMENTS_ROLE_LABELS[grant.assessmentsRole]] : []),
     ...(grant.irisRole ? [IRIS_ROLE_LABELS[grant.irisRole]] : []),
   ];
 }

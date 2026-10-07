@@ -7,7 +7,7 @@ import { db } from "@/db";
 import {
   users,
   workshopRuns,
-  type EvalsRole,
+  type AssessmentsRole,
   type EventRole,
   type IrisRole,
   type TrainingRole,
@@ -25,7 +25,7 @@ export type SiteUser = {
   email: string | null;
   eventRole: EventRole;
   trainingRole: TrainingRole | null;
-  evalsRole: EvalsRole | null;
+  assessmentsRole: AssessmentsRole | null;
   irisRole: IrisRole | null;
   isPlatformAdmin: boolean;
   /** Listed in SITE_ADMIN_EMAILS, so made a platform administrator on every sign-in. */
@@ -39,10 +39,9 @@ const eventCount = sql<number>`(select count(*)::int from ${workshopRuns} where 
 
 const USER_SORT_COLUMNS = {
   user: sql`lower(coalesce(nullif(${users.name}, ''), ${users.email}))`,
-  events: eventCount,
   eventRole: users.eventRole,
   trainingRole: users.trainingRole,
-  evalsRole: users.evalsRole,
+  assessmentsRole: users.assessmentsRole,
   irisRole: users.irisRole,
   platform: users.isPlatformAdmin,
 } as const;
@@ -57,7 +56,7 @@ export async function listSiteUsers(query: ListQuery<UserSort>): Promise<Page<Si
       email: users.email,
       eventRole: users.eventRole,
       trainingRole: users.trainingRole,
-      evalsRole: users.evalsRole,
+      assessmentsRole: users.assessmentsRole,
       irisRole: users.irisRole,
       isPlatformAdmin: users.isPlatformAdmin,
       eventCount,
@@ -77,7 +76,7 @@ export async function listSiteUsers(query: ListQuery<UserSort>): Promise<Page<Si
 export type RoleChange =
   | { area: "event"; role: EventRole }
   | { area: "training"; role: TrainingRole | null }
-  | { area: "evals"; role: EvalsRole | null }
+  | { area: "assessments"; role: AssessmentsRole | null }
   | { area: "iris"; role: IrisRole | null }
   | { area: "platform"; value: boolean };
 
@@ -127,8 +126,8 @@ export async function setUserRole(
       ? { eventRole: change.role }
       : change.area === "training"
         ? { trainingRole: change.role }
-        : change.area === "evals"
-          ? { evalsRole: change.role }
+        : change.area === "assessments"
+          ? { assessmentsRole: change.role }
           : change.area === "iris"
             ? { irisRole: change.role }
             : { isPlatformAdmin: change.value };

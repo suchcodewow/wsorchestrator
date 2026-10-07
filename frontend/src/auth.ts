@@ -11,7 +11,7 @@ import {
   sessions,
   users,
   verificationTokens,
-  type EvalsRole,
+  type AssessmentsRole,
   type EventRole,
   type IrisRole,
   type TrainingRole,
@@ -25,6 +25,7 @@ import { googlePhotoChosen, syncGoogleProfile } from "@/lib/google-profile";
 import { REQUEST_PATH_HEADER, returnPath } from "@/lib/request-path";
 import type { Access } from "@/lib/roles";
 import { isJudgingNow } from "@/lib/scheduler/judging";
+import { isManagerNow } from "@/lib/evals/managers";
 import { bootstrapAdminEmails, isBootstrapAdmin } from "@/lib/site-admins";
 
 /** The bootstrap administrators in SITE_ADMIN_EMAILS are platform administrators. */
@@ -40,7 +41,7 @@ async function applyBootstrapAdmin(email: string | null | undefined) {
 type UserRow = {
   eventRole?: EventRole;
   trainingRole?: TrainingRole | null;
-  evalsRole?: EvalsRole | null;
+  assessmentsRole?: AssessmentsRole | null;
   irisRole?: IrisRole | null;
   isPlatformAdmin?: boolean;
 };
@@ -125,10 +126,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       const access: Access = {
         event: row.eventRole ?? "none",
         training: row.trainingRole ?? null,
-        evals: row.evalsRole ?? null,
+        assessments: row.assessmentsRole ?? null,
         iris: row.irisRole ?? null,
         platform: row.isPlatformAdmin ?? false,
         judging: await isJudgingNow(session.user.email),
+        manager: await isManagerNow(session.user.email),
       };
 
       if (!access.platform && isBootstrapAdmin(session.user.email)) {

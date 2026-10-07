@@ -189,11 +189,16 @@ const STRIP_CREDENTIALS = [
   `delete from api_tokens`,
   `delete from harness_deployed_secrets`,
   `delete from harness_tokens`,
+  `delete from slack_installation`,
   `delete from harness_org_secrets`,
   `delete from harness_template_sources`,
   `update accounts
       set refresh_token = null, access_token = null, id_token = null,
           expires_at = null, session_state = null`,
+  // Google Meetings' account, and the meetings whose invites it sent to real
+  // people. Kept, a sync on QA would invite them all again from QA.
+  `delete from google_connections`,
+  `delete from google_meetings`,
 ];
 
 /** Nobody has access until the snapshot gives it back. */

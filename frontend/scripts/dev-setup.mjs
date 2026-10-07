@@ -14,14 +14,11 @@
 // column it no longer sees in the schema, and `workshops` holds real authored
 // work. CONTRIBUTING.md#changing-the-schema covers bringing an existing
 // database up to date.
-import { spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
-import pg from "pg";
+import { frontend, isLocalContainer, quoteIdent, run, urlFor as urlOn, withClient } from "./local-db.mjs";
 
-const frontend = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const envFile = path.join(frontend, ".env");
 const SCRATCH = "workshops_agent";
 
@@ -47,40 +44,15 @@ if (!databaseUrl) {
   process.exit(1);
 }
 
-// Production's Cloud SQL is reachable on localhost too, through
-// cloud-sql-proxy on :5433 or :6543 and up (docs/operations.md). This script
-// creates databases, so it refuses anything that is not plainly the container.
+// This script creates databases, so it refuses anything that is not plainly
+// the container (see isLocalContainer).
 const target = new URL(databaseUrl);
-const port = Number(target.port || 5432);
-if (!["localhost", "127.0.0.1", "::1"].includes(target.hostname) || port === 5433 || port >= 6543) {
+if (!isLocalContainer(databaseUrl)) {
   console.error(`DATABASE_URL points at ${target.host}, which is not the local container. Refusing.`);
   process.exit(1);
 }
 
-function urlFor(database) {
-  const url = new URL(databaseUrl);
-  url.pathname = `/${database}`;
-  return url.toString();
-}
-
-async function withClient(url, fn) {
-  const client = new pg.Client({ connectionString: url });
-  await client.connect();
-  try {
-    return await fn(client);
-  } finally {
-    await client.end();
-  }
-}
-
-function run(command, args, url) {
-  const result = spawnSync(command, args, {
-    cwd: frontend,
-    stdio: "inherit",
-    env: { ...process.env, DATABASE_URL: url },
-  });
-  if (result.status !== 0) process.exit(result.status ?? 1);
-}
+const urlFor = (database) => urlOn(databaseUrl, database);
 
 const databases = [...new Set([target.pathname.slice(1), SCRATCH])];
 
@@ -88,7 +60,7 @@ await withClient(urlFor("postgres"), async (client) => {
   for (const name of databases) {
     const { rowCount } = await client.query("select 1 from pg_database where datname = $1", [name]);
     if (!rowCount) {
-      await client.query(`create database "${name.replaceAll('"', '""')}"`);
+      await client.query(`create database ${quoteIdent(name)}`);
       console.log(`created database ${name}`);
     }
   }

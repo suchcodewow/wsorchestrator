@@ -1,5 +1,5 @@
-import { ASSESSMENT_ATTENDEE_LIST, ASSESSMENT_LIST, AUDIT_LIST, BOOTCAMP_HISTORY_LIST, BOOTCAMP_LIST, CURRENT_COHORT_LIST, DOMAIN_LIST, EMPLOYEE_LIST, HIBOB_SYNC_LIST, HISTORY_STATUSES, JUDGE_LIST, ORGANIZATION_LIST, PREVIOUS_SESSION_LIST, SESSION_COMMENT_LIST, SESSION_TYPE_LIST, SLACK_CONTACT_LIST, SLACK_SYNC_CHANGE_LIST, SLACK_SYNC_LIST, CHANNEL_CONTACT_LIST, TITLE_LIST, USER_LIST, FACILITY_LIST } from "@/lib/list-specs";
-import { BOOTCAMP_LIMITS, CHECKLIST_LIMITS, EVALS_ASSESSMENT_LIMITS, FACILITY_LIMITS, SCHEDULE_LIMITS } from "@/db/schema";
+import { ASSESSMENT_ATTENDEE_LIST, ASSESSMENT_LIST, AUDIT_LIST, BOOTCAMP_HISTORY_LIST, BOOTCAMP_LIST, CURRENT_COHORT_LIST, DOMAIN_LIST, EMPLOYEE_LIST, HIBOB_SYNC_LIST, HISTORY_STATUSES, JUDGE_LIST, ORGANIZATION_LIST, PREVIOUS_SESSION_LIST, SESSION_COMMENT_LIST, SESSION_TYPE_LIST, GOOGLE_MEETING_LIST, SLACK_CONTACT_LIST, SLACK_SYNC_CHANGE_LIST, SLACK_SYNC_LIST, CHANNEL_CONTACT_LIST, TITLE_LIST, USER_LIST, FACILITY_LIST } from "@/lib/list-specs";
+import { BOOTCAMP_LIMITS, CHECKLIST_LIMITS, EVALS_ASSESSMENT_LIMITS, FACILITY_LIMITS, GOOGLE_MEETING_LIMITS, SCHEDULE_LIMITS } from "@/db/schema";
 import { PAGE_SIZE } from "@/lib/paging";
 import { CHECKLIST_ITEM_ROW } from "./account";
 import { PAGE_FIELDS, listQuery } from "./paging";
@@ -130,7 +130,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         notes:
           "pendingAdmins lists the SITE_ADMIN_EMAILS addresses that have not signed in yet, whichever page is asked for.",
         query: listQuery(USER_LIST.sorts, "the name or email"),
-        returns: `{ users: { id, name, email, eventRole, trainingRole, evalsRole, irisRole, isPlatformAdmin, isBootstrapAdmin, eventCount }[], ${PAGE_FIELDS}, pendingAdmins: string[] }`,
+        returns: `{ users: { id, name, email, eventRole, trainingRole, assessmentsRole, irisRole, isPlatformAdmin, isBootstrapAdmin, eventCount }[], ${PAGE_FIELDS}, pendingAdmins: string[] }`,
       },
       {
         method: "PATCH",
@@ -146,7 +146,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           fields: [
             {
               name: "area",
-              type: `"event" | "training" | "evals" | "iris" | "platform"`,
+              type: `"event" | "training" | "assessments" | "iris" | "platform"`,
               required: true,
               note: "picks which of the fields below applies",
             },
@@ -218,7 +218,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
               required: true,
             },
             {
-              name: "evalsRole",
+              name: "assessmentsRole",
               type: `"viewer" | "administrator" | null`,
               note: "defaults to null",
             },
@@ -425,12 +425,140 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       },
       {
         method: "GET",
+        path: "/api/evals/google-meetings",
+        summary: "Lists the Google meetings, a page at a time, with the connected Google account and who is on every invite.",
+        access: "assessmentsAdmin",
+        token: true,
+        notes:
+          "A meeting is upcoming until it ends. groups are the Current-tab groups it invites: bootcamp_sales is the bootcamp stage on the Sales track, and so on. status is not_synced until a sync sends its invite, synced once one has, changed when it was edited since, and failed when the last sync of it failed, with syncError saying why. invited counts the guests the last sync put on the invite. connection is null until an Assessments Administrator connects a Google account, and never includes its token; running says whether a sync is under way. administrators are the Assessments Administrators, on every invite and able to edit it. groupSizes counts whom each group would invite now. counts are every upcoming and past meeting, whatever the search.",
+        query: [
+          { name: "when", type: `"upcoming" | "past"`, note: "Default upcoming." },
+          ...listQuery(GOOGLE_MEETING_LIST.sorts, "the title"),
+        ],
+        returns: `{ meetings: { id, title, startsAt, durationMinutes: 15 | 30 | 60, groups: ("bootcamp_sales" | "bootcamp_engineer" | "intermediate_sales" | "intermediate_engineer")[], zoomJoinUrl: string | null, status: "not_synced" | "synced" | "changed" | "failed", syncError: string | null, syncedAt: string | null, invited: number, addedBy: string | null }[], ${PAGE_FIELDS}, connection: { email, connectedAt, connectedBy: string | null, calendarId: string | null, lastSyncAt: string | null, lastSyncError: string | null, running: boolean } | null, zoomConfigured: boolean, administrators: string[], counts: { upcoming: number, past: number }, groupSizes: { bootcamp_sales, bootcamp_engineer, intermediate_sales, intermediate_engineer: number } }`,
+        errors: [{ status: 400, error: "invalid_when", when: "when is not upcoming or past" }],
+      },
+      {
+        method: "POST",
+        path: "/api/evals/google-meetings",
+        summary: "Adds a Google meeting. Nothing is sent until a sync.",
+        access: "assessmentsAdmin",
+        token: true,
+        body: {
+          kind: "json",
+          fields: [
+            { name: "title", type: "string", required: true, note: `1 to ${GOOGLE_MEETING_LIMITS.title} characters, trimmed` },
+            { name: "startsAt", type: "string", required: true, note: "ISO 8601 with an offset, not in the past" },
+            { name: "durationMinutes", type: "15 | 30 | 60", required: true },
+            {
+              name: "groups",
+              type: `("bootcamp_sales" | "bootcamp_engineer" | "intermediate_sales" | "intermediate_engineer")[]`,
+              note: "whom it invites besides the Assessments Administrators; defaults to none",
+            },
+          ],
+        },
+        returns: "{ id, title }",
+        errors: [
+          { status: 400, error: "invalid", when: "the body does not parse, or a field is out of range" },
+          { status: 400, error: "in_past", when: "startsAt has passed" },
+        ],
+      },
+      {
+        method: "PATCH",
+        path: "/api/evals/google-meetings/{id}",
+        summary: "Changes a Google meeting. The next sync sends the change.",
+        access: "assessmentsAdmin",
+        token: true,
+        params: [{ name: "id", type: "string", required: true, note: "UUID" }],
+        notes: "Any field left out is kept. A meeting can be renamed after it has ended, but not moved into the past.",
+        body: {
+          kind: "json",
+          fields: [
+            { name: "title", type: "string", note: `1 to ${GOOGLE_MEETING_LIMITS.title} characters, trimmed` },
+            { name: "startsAt", type: "string", note: "ISO 8601 with an offset" },
+            { name: "durationMinutes", type: "15 | 30 | 60" },
+            {
+              name: "groups",
+              type: `("bootcamp_sales" | "bootcamp_engineer" | "intermediate_sales" | "intermediate_engineer")[]`,
+              note: "replaces the set",
+            },
+          ],
+        },
+        returns: "{ id, title }",
+        errors: [
+          { status: 400, error: "invalid", when: "the body does not parse, or a field is out of range" },
+          { status: 400, error: "in_past", when: "startsAt changes to a time that has passed" },
+          { status: 404, error: "not_found", when: "id is not a UUID, or no such meeting" },
+        ],
+      },
+      {
+        method: "DELETE",
+        path: "/api/evals/google-meetings/{id}",
+        summary: "Deletes a Google meeting, first cancelling its invite and Zoom meeting.",
+        access: "assessmentsAdmin",
+        token: true,
+        params: [{ name: "id", type: "string", required: true, note: "UUID" }],
+        notes:
+          "A meeting still to end that a sync sent is cancelled in Google Calendar, which emails every guest, and its Zoom meeting is deleted; the row goes only once both are gone. A meeting that has ended, or was never synced, is deleted with nothing sent. Allows 60 seconds.",
+        returns: "{ ok: true }",
+        errors: [
+          { status: 404, error: "not_found", when: "id is not a UUID, or no such meeting" },
+          { status: 409, error: "not_connected", when: "its invite needs cancelling and no working Google account is connected; detail says why" },
+          { status: 502, error: "remote_failed", when: "Google or Zoom refused to cancel it; detail has their answer" },
+        ],
+      },
+      {
+        method: "POST",
+        path: "/api/evals/google-meetings/sync",
+        summary: "Creates and updates the Google Calendar invite and Zoom meeting of every meeting still to end.",
+        access: "assessmentsAdmin",
+        token: true,
+        notes:
+          "Runs as the connected Google account. The invites are on a calendar of its own, eVals Meetings, made on the first sync; every Assessments Administrator is given edit access to it, and is a guest on every invite. Each invite's guests are its groups' people on the Cohorts page's Current tab and the administrators; the sync takes off only guests it added itself. With Zoom set up, each meeting gets a Zoom meeting under the connected account, with every administrator who has an active Zoom user on that account as an alternative host. An invite or Zoom meeting already right is left alone, since a change emails every guest. One meeting failing is reported in its outcome and the sync carries on. notes lists what was skipped, such as an administrator Zoom does not know. Allows 300 seconds.",
+        returns:
+          '{ ok: true, account: string, meetings: { id, title, outcome: "created" | "updated" | "unchanged" | "failed", invited: number, error?: string }[], notes: string[] }',
+        errors: [
+          { status: 409, error: "not_connected", when: "no Google account is connected" },
+          { status: 409, error: "running", when: "another sync is under way" },
+          { status: 409, error: "revoked", when: "Google no longer accepts the account's token; connect it again" },
+          { status: 502, error: "failed", when: "Google refused before any meeting was synced; detail has its answer" },
+          { status: 503, error: "not_configured", when: "AUTH_GOOGLE_ID or AUTH_GOOGLE_SECRET is unset" },
+        ],
+      },
+      {
+        method: "GET",
+        path: "/api/evals/google-meetings/connect",
+        summary: "Sends the browser to Google to connect the account Google Meetings sends invites from.",
+        access: "assessmentsAdmin",
+        token: false,
+        notes:
+          "A browser link, not an API call: it redirects to Google's consent screen, asking for calendar access and a refresh token, with GOOGLE_USER as the sign-in hint when it is set. Google then sends the browser to /api/evals/google-meetings/callback, which must be registered as a redirect URI on the OAuth client for each environment.",
+        returns: "a redirect to accounts.google.com",
+        errors: [{ status: 503, error: "not_configured", when: "AUTH_GOOGLE_ID or AUTH_GOOGLE_SECRET is unset" }],
+      },
+      {
+        method: "GET",
+        path: "/api/evals/google-meetings/callback",
+        summary: "Where Google returns the browser after connecting; stores the account's token.",
+        access: "assessmentsAdmin",
+        token: false,
+        notes:
+          "Checks the state cookie connect set, trades the code for a refresh token, seals it, and stores it with the account's email. Reconnecting the same account replaces its token; a different one is refused while any meeting has an invite, because those invites are on the first account's calendar. Always redirects to the Google Meetings tab with ?google= connected, denied, expired, failed, scope or different_account (with ?current= naming the account already connected). Writes an audit record either way.",
+        query: [
+          { name: "code", type: "string", note: "from Google" },
+          { name: "state", type: "string", note: "from Google; must match the cookie" },
+          { name: "error", type: "string", note: "from Google, when the account refused" },
+        ],
+        returns: "a redirect to /evals-settings/google-meetings",
+      },
+      {
+        method: "GET",
         path: "/api/cohorts/slack/sync",
         summary: "Lists the cohort Slack channel sync's log a page at a time, newest first, with the active bootcamp's channels.",
         access: "trainingAdmin",
         token: true,
         notes:
-          "A run that has said running for over 10 minutes is shown as failed. running says whether a sync is under way, whichever page is asked for; live whether syncs change Slack or are dry runs; configured whether the deployment has a Slack bot token, which is never returned. active is null when no bootcamp is active; a channel's slackChannelId is null until a live sync has found or created it.",
+          "A run that has said running for over 10 minutes is shown as failed. running says whether a sync is under way, whichever page is asked for; live whether syncs change Slack or are dry runs; configured whether there is a bot token to sync with, from the Slack app's install or the deployment's SLACK_BOT_TOKEN, which is never returned. active is null when no bootcamp is active; a channel's slackChannelId is null until a live sync has found or created it.",
         query: listQuery(SLACK_SYNC_LIST.sorts, "who started it, the trigger, the status or the error", "desc"),
         returns: `{ runs: { id, trigger: "schedule" | "manual", triggeredBy: string | null, status: "running" | "succeeded" | "skipped" | "failed", dryRun: boolean, startedAt, finishedAt, invited, removed, notInSlack, failures: number, unfinished: boolean, error: string | null }[], ${PAGE_FIELDS}, running: boolean, live: boolean, configured: boolean, active: { bootcampId, startDate: "YYYY-MM-DD", channels: { kind: "sales_bootcamp" | "se_bootcamp" | "sales_intermediate" | "se_intermediate", name, slackChannelId: string | null, created: boolean }[] } | null }`,
       },
@@ -445,7 +573,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         returns: `{ ok: true, runId, status: "succeeded" | "skipped", dryRun: boolean, invited, removed, notInSlack, failures: number, unfinished: boolean }`,
         errors: [
           { status: 409, error: "already_running", when: "another sync is running" },
-          { status: 409, error: "not_configured", when: "the deployment has no Slack bot token" },
+          { status: 409, error: "not_configured", when: "the Slack app is not installed and the deployment has no SLACK_BOT_TOKEN" },
           { status: 502, error: "slack_error", when: "Slack refused the token or a call every member would need, such as a missing scope; detail says which" },
         ],
       },
@@ -480,6 +608,55 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         body: { kind: "json", fields: [{ name: "live", type: "boolean", required: true }] },
         returns: "{ live: boolean }",
         errors: [{ status: 400, error: "invalid", when: "the body is not that shape" }],
+      },
+      {
+        method: "GET",
+        path: "/api/cohorts/slack/installation",
+        summary: "The Slack app's install in the workspace, which the cohort sync acts as.",
+        access: "trainingAdmin",
+        token: true,
+        notes:
+          "The bot token is never returned. app.configured says whether the deployment has the app's Client ID and secret, and so can offer Add to Slack. installation is null until someone adds the app; missingScopes lists any the sync needs (users:read, users:read.email, channels:read, channels:manage, channels:join) that it was not granted; readable is false when the saved token was sealed by another deployment, as after an import, and the app must be added again. envToken says whether the deployment also sets SLACK_BOT_TOKEN, which the sync uses only while nothing is installed.",
+        returns:
+          "{ app: { configured: boolean, appId: string | null }, installation: { teamId, teamName: string | null, appId, botUserId, scopes: string[], missingScopes: string[], readable: boolean, installedBy: string | null, installedAt } | null, envToken: boolean }",
+      },
+      {
+        method: "DELETE",
+        path: "/api/cohorts/slack/installation",
+        summary: "Forgets the Slack app's bot token, which stops the sync until the app is added again.",
+        access: "trainingAdmin",
+        token: true,
+        notes:
+          "The app stays installed in Slack, where a workspace admin removes it; the token is not revoked, as another deployment may hold the same one. The sync falls back to SLACK_BOT_TOKEN if the deployment sets it.",
+        returns: "{ ok: true }",
+        errors: [{ status: 404, error: "not_found", when: "the app is not installed" }],
+      },
+      {
+        method: "GET",
+        path: "/api/cohorts/slack/install",
+        summary: "Starts Add to Slack: redirects the browser to Slack to install the app.",
+        access: "trainingAdmin",
+        token: false,
+        notes:
+          "For a browser, from the button on Cohort Settings → Slack. It sets a state cookie for ten minutes and redirects (307) to slack.com, asking for the scopes the sync needs; Slack then returns to GET /api/cohorts/slack/oauth/callback.",
+        returns: "307 redirect to slack.com",
+        errors: [{ status: 503, error: "not_configured", when: "SLACK_APP_CLIENT_ID or SLACK_APP_CLIENT_SECRET is unset" }],
+      },
+      {
+        method: "GET",
+        path: "/api/cohorts/slack/oauth/callback",
+        summary: "Where Slack returns after Add to Slack; saves the bot token and goes back to Cohort Settings → Slack.",
+        access: "trainingAdmin",
+        token: false,
+        notes:
+          "Slack calls it with code and state, or error when the install was cancelled. It must be one of the app's Redirect URLs on api.slack.com, as {AUTH_URL}/api/cohorts/slack/oauth/callback. The state must match the cookie GET /api/cohorts/slack/install set in the same browser. The code is traded for the bot token, which is sealed and replaces any earlier install; a SLACK_APP_ID that is set must match the app Slack names. Every outcome redirects (307) to /cohort-settings/slack?slack=installed, cancelled, bad_state or slack_error (with detail, Slack's error such as invalid_code, or wrong_app). An install or a refused one is audited.",
+        query: [
+          { name: "code", type: "string", note: "from Slack" },
+          { name: "state", type: "string", note: "from Slack" },
+          { name: "error", type: "string", note: "from Slack, when the install was cancelled" },
+        ],
+        returns: "307 redirect to /cohort-settings/slack",
+        errors: [{ status: 503, error: "not_configured", when: "SLACK_APP_CLIENT_ID or SLACK_APP_CLIENT_SECRET is unset" }],
       },
     ],
   },
@@ -685,7 +862,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "trainingAdmin",
         token: true,
         notes:
-          "Copies every session, who runs it and the assessment a breakout is scored on, but not comments or breakout groups. Rooms come too only when both bootcamps are at the same facility. Days past the end of a track here are left out; notes says what was. The checklists of the days it copies, and Prep Day's, are added to this bootcamp's, every item to do; replace leaves its own items alone, and an item whose day here already has one of the same name is not added again. An owner or a tag who is not an administrator or guest judge of this bootcamp is left off, and notes names them.",
+          "Copies every session, who runs it and the assessment a breakout is scored on, but not comments or breakout groups. Rooms come too only when both bootcamps are at the same facility. Days past the end of a track here are left out; notes says what was. The checklists of the days it copies, and Prep Day's, are added to this bootcamp's, every item to do; replace leaves its own items alone, and an item whose half-day (AM or PM) here already has one of the same name is not added again. An owner or a tag who is not an administrator or guest judge of this bootcamp is left off, and notes names them.",
         params: [BOOTCAMP_ID],
         body: {
           kind: "json",
@@ -904,21 +1081,21 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       {
         method: "GET",
         path: "/api/scheduler/bootcamps/{id}/checklist",
-        summary: "Counts each track-day's checklist items, and how many are done.",
+        summary: "Counts the checklist items of each half of each track-day, and how many are done.",
         access: "trainingViewer",
         token: true,
-        notes: "A day with no items is left out.",
+        notes: "One entry per track, day and period (AM or PM); a half-day with no items is left out.",
         params: [BOOTCAMP_ID],
-        returns: "{ days: { track: \"btc\" | \"int\" | \"btc_se\" | \"int_se\", day: number, total: number, done: number }[] }",
+        returns: "{ days: { track: \"btc\" | \"int\" | \"btc_se\" | \"int_se\", day: number, period: \"am\" | \"pm\", total: number, done: number }[] }",
         errors: [{ status: 404, error: "not_found", when: "no such bootcamp" }],
       },
       {
         method: "GET",
         path: "/api/scheduler/bootcamps/{id}/checklist/{track}/{day}",
-        summary: "Lists what is to be done before one day of one track, oldest first.",
+        summary: "Lists what is to be done before one day of one track, AM and PM together, oldest first.",
         access: "trainingViewer",
         token: true,
-        notes: `Whole: a track-day holds at most ${CHECKLIST_LIMITS.itemsPerDay} items.`,
+        notes: `Whole: a track-day holds at most ${CHECKLIST_LIMITS.itemsPerDay} items, both halves together. Each item's period says which half it is in.`,
         params: CHECKLIST_DAY_PARAMS,
         returns: `{ items: ${CHECKLIST_ITEM_ROW}[] }`,
         errors: [{ status: 404, error: "not_found", when: "no such bootcamp, or track or day is not one" }],
@@ -926,7 +1103,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       {
         method: "POST",
         path: "/api/scheduler/bootcamps/{id}/checklist/{track}/{day}",
-        summary: "Adds an item to one track-day's checklist, recording you as who wrote it.",
+        summary: "Adds an item to the AM or PM half of one track-day's checklist, recording you as who wrote it.",
         access: "trainingAdmin",
         token: true,
         params: CHECKLIST_DAY_PARAMS,
@@ -934,6 +1111,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           kind: "json",
           fields: [
             { name: "name", type: "string", required: true, note: `up to ${CHECKLIST_LIMITS.name} characters` },
+            { name: "period", type: `"am" | "pm"`, note: "which half of the day; am when omitted" },
             { name: "ownerEmail", type: "string | null", note: "a Training administrator or guest judge of the bootcamp; omit for nobody" },
             {
               name: "mentions",
@@ -944,7 +1122,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         },
         returns: `201 ${CHECKLIST_ITEM_ROW}`,
         errors: [
-          { status: 400, error: "invalid", when: "name is empty or too long" },
+          { status: 400, error: "invalid", when: "name is empty or too long, or period is neither am nor pm" },
           { status: 400, error: "no_day", when: "the track does not run that many days at this bootcamp, or day is 0 on a track other than btc" },
           { status: 400, error: "not_instructor", when: "ownerEmail or a mention is not an administrator or guest judge of the bootcamp; email names it" },
           { status: 404, error: "not_found", when: "no such bootcamp, or track or day is not one" },
@@ -954,16 +1132,19 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       {
         method: "PATCH",
         path: "/api/scheduler/bootcamps/{id}/checklist/items/{itemId}",
-        summary: "Ticks a checklist item done or back to do, or changes its name or owner.",
+        summary: "Ticks a checklist item done or back to do, changes its name or owner, or moves it to another half-day.",
         access: "signedIn",
         token: true,
         notes:
-          "A Training Administrator can tick any item; anyone else only one they own, matched by their account's email. Ticking one already done keeps when it was first ticked. Only a Training Administrator can change the name or owner; a field left out stays as it is. A new name replaces whom the item tags with mentions: anyone no longer named drops out, and anyone newly named finds it in their inbox.",
+          "A Training Administrator can tick any item; anyone else only one they own, matched by their account's email. Ticking one already done keeps when it was first ticked. Only a Training Administrator can change the name or owner, or move it; a field left out stays as it is. A new name replaces whom the item tags with mentions: anyone no longer named drops out, and anyone newly named finds it in their inbox. A move keeps who wrote it, whom it tags and whether it is done. Given together, the name and owner are changed first, then the item moved, then ticked; the first step that fails stops the rest, and steps before it stay saved.",
         params: [BOOTCAMP_ID, CHECKLIST_ITEM_ID],
         body: {
           kind: "json",
           fields: [
             { name: "done", type: "boolean" },
+            { name: "track", type: TRACK_TYPE, note: "to move it to another track" },
+            { name: "day", type: "number", note: "to move it to another day: 1-based; 0 is Prep Day, on btc only" },
+            { name: "period", type: `"am" | "pm"`, note: "to move it to the other half of the day" },
             { name: "name", type: "string", note: `up to ${CHECKLIST_LIMITS.name} characters` },
             { name: "ownerEmail", type: "string | null", note: "a Training administrator or guest judge of the bootcamp; null or blank for nobody" },
             {
@@ -975,11 +1156,13 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         },
         returns: CHECKLIST_ITEM_ROW,
         errors: [
-          { status: 400, error: "invalid", when: "none of done, name or ownerEmail is given, or one is the wrong type, or name is empty or too long" },
+          { status: 400, error: "invalid", when: "none of done, name, ownerEmail, track, day or period is given, or one is the wrong type, or name is empty or too long" },
+          { status: 400, error: "no_day", when: "the track does not run that day at this bootcamp, or day is 0 on a track other than btc" },
           { status: 400, error: "not_instructor", when: "ownerEmail or a mention is not an administrator or guest judge of the bootcamp; email names it" },
-          { status: 403, error: "forbidden", when: "you are not a Training Administrator and name or ownerEmail is given" },
+          { status: 403, error: "forbidden", when: "you are not a Training Administrator and name, ownerEmail, track, day or period is given" },
           { status: 403, error: "not_owner", when: "you are not a Training Administrator and it is not yours" },
           { status: 404, error: "not_found", when: "no such bootcamp or item" },
+          { status: 409, error: "full", when: `the day it is moved to already has ${CHECKLIST_LIMITS.itemsPerDay} items` },
         ],
       },
       {
@@ -1280,7 +1463,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "GET",
         path: "/api/evals/bootcamp-history",
         summary: "Lists everyone with a bootcamp history row, newest bootcamp first, a page at a time.",
-        access: "evalsViewer",
+        access: "assessmentsViewer",
         token: true,
         notes:
           "fullName is the person's name in the employee list from the last HiBob sync, or null for an email not in it, such as someone who has left. Someone is active while that list has their email, and inactive once it doesn't. btcDate is their bootcamp date; 2000-01-01 means they are exempt, which sorts as the oldest date. Rows that tie on the sort, such as one bootcamp's class, follow in name order, then email. counts gives everyone, the active and the inactive, whatever the search or status.",
@@ -1295,7 +1478,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "GET",
         path: "/api/evals/bootcamp-history/{id}",
         summary: "Returns one person's bootcamp history row in full, with their employee record.",
-        access: "evalsViewer",
+        access: "assessmentsViewer",
         token: true,
         notes:
           "A date of 2000-01-01 means the person is exempt from that class. Scores run from 1 (poor) to 4 (outstanding), to one decimal place; btcIndividualScores and intIndividualScores map each exercise's column name to its score, or are null. updatedBy is the id of whoever last changed the row and updatedByName their name or email, both null when that account is gone. employee is null for an email not in the employee list.",
@@ -1310,32 +1493,35 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
     id: "canary-wire",
     title: "Canary Wire",
     intro:
-      "Monthly Canary Wire completion in Mindtickle, by manager, as Reporting → Canary Wire shows it. It names everyone in the three Canary Wire role groups and who is behind, so every route here is for eVals administrators only.",
+      "Monthly Canary Wire completion in Mindtickle, by manager, as Reporting → Canary Wire shows it. It names everyone in the three Canary Wire role groups and who is behind, so it is for people managers — anyone HiBob has reporting to them — and platform administrators. A manager sees their own org by default: themselves and everyone under them, every level down.",
     endpoints: [
       {
         method: "GET",
         path: "/api/evals/canary-wire",
         summary: "Returns one Canary Wire month from the newest Mindtickle pull: every rep's progress per module, grouped by manager, with per-role and overall rates.",
-        access: "evalsAdmin",
+        access: "canaryWire",
         token: true,
         notes:
-          "Built from the newest pull and today's exemptions, so a past month counts whoever was accountable then. A rep is pre-bootcamp, and counted in no rate, until the month after their BTC date in bootcamp history; BTC marked exempt counts in every month. With no BTC date, someone whose HiBob start date is before the first real BTC date on record counts in every month, since bootcamp history doesn't go back far enough to have them; anyone else with none counts in none. None of this applies to SDRs, who never attend bootcamp: they count from their first full month at Harness by HiBob's start date (starting October 2 counts from November, October 1 from October), and in every month with no start date. Rates are percentages to one place, null when nothing is owed. A cell is keyed by module label: accountable cells are counted, exempt ones are pre-bootcamp work and off-role ones (neither) are another edition's module, shown but not counted. atPt is the event's moment in Pacific, empty when only the day is known. lastActivity is the newest completion in the month's content. hasSnapshot is false until the first pull from Mindtickle has finished, and every list is then empty. With format=csv, the same month as a CSV download, one row per rep.",
+          "Built from the newest pull and today's exemptions, so a past month counts whoever was accountable then. A rep is pre-bootcamp, and counted in no rate, until the month after their BTC date in bootcamp history; BTC marked exempt counts in every month. With no BTC date, someone whose HiBob start date is before the first real BTC date on record counts in every month, since bootcamp history doesn't go back far enough to have them; anyone else with none counts in none. None of this applies to SDRs, who never attend bootcamp: they count from their first full month at Harness by HiBob's start date (starting October 2 counts from November, October 1 from October), and in every month with no start date. Names, titles and managers are the HiBob sync's (the employee list), matched by email, with Mindtickle's for anyone HiBob doesn't have; an IC is someone nobody in HiBob reports to. Rates are percentages to one place, null when nothing is owed. A role's and the totals' rates are in people: of the learners who owe something this month, the share who finished everything they owe. A team's and a rep's are in modules. A cell is keyed by module label: accountable cells are counted, exempt ones are pre-bootcamp work and off-role ones (neither) are another edition's module, shown but not counted. atPt is the event's moment in Pacific, empty when only the day is known. lastActivity is the newest completion in the month's content. hasSnapshot is false until the first pull from Mindtickle has finished, and every list is then empty. With format=csv, the same month as a CSV download, one row per rep.",
         query: [
           { name: "month", type: "string", note: 'a month the picker offers, "September 2026"; the newest month anybody has worked in if omitted' },
           { name: "format", type: '"csv"', note: "a CSV download instead of JSON" },
+          { name: "scope", type: '"org" | "everyone"', note: "org: the caller and everyone under them in HiBob, for a manager; everyone: the whole Canary Wire. Defaults to org for a manager and everyone otherwise" },
         ],
         returns:
-          "{ month, months: string[], monthsWithData: string[], hasSnapshot, hasData, labels: string[], modules: { label, edition, name }[], teams: { manager, managerEmail, roles: string[], directs: Rep[], learners, exempt, assigned, completed, pct, fullyComplete, notActivated }[], roles: { role, learners, exempt, assigned, completed, pct, icLearners, icAssigned, icCompleted, icPct, modules: string[] }[], totals | null, lastActivity: { at, atPt, who, module, role }, fetchedAtPt, savedAt: string | null, notes: string[], seriesLinks: { edition, label, url }[], moduleUrlTemplate }, where Rep is { name, email, role, manager, managerEmail, title, notActivated, ic, exempt, exemptFrom, exemptSource: \"bootcamp\" | \"predates_history\" | \"no_bootcamp\" | \"first_month\" | \"edition\", cells: Record<label, { state, on, atPt, moduleId, seriesId, moduleType, accountable, exempt, also: { state, on, atPt, edition }[], edition? }>, assigned, completed, pct, offRole }; text/csv with format=csv",
+          "{ month, scope: \"org\" | \"everyone\", months: string[], monthsWithData: string[], hasSnapshot, hasData, labels: string[], modules: { label, edition, name }[], teams: { manager, managerEmail, roles: string[], directs: Rep[], learners, exempt, assigned, completed, pct, fullyComplete, notActivated }[], roles: { role, learners, finished, pct, icLearners, icFinished, icPct, exempt, modules: string[] }[], totals: { learners, finished, pct, icLearners, icFinished, icPct, exempt, rostered, notActivated } | null, lastActivity: { at, atPt, who, module, role }, fetchedAtPt, savedAt: string | null, notes: string[], seriesLinks: { edition, label, url }[], moduleUrlTemplate }, where Rep is { name, email, role, manager, managerEmail, title, notActivated, ic, exempt, exemptFrom, exemptSource: \"bootcamp\" | \"predates_history\" | \"no_bootcamp\" | \"first_month\" | \"edition\", cells: Record<label, { state, on, atPt, moduleId, seriesId, moduleType, accountable, exempt, also: { state, on, atPt, edition }[], edition? }>, assigned, completed, pct, offRole }; text/csv with format=csv",
         errors: [
           { status: 400, error: "invalid_month", when: "month is not one the picker offers" },
           { status: 400, error: "invalid_format", when: "format is set to anything but csv" },
+          { status: 400, error: "invalid_scope", when: "scope is neither org nor everyone" },
+          { status: 400, error: "not_a_manager", when: "scope is org and nobody reports to the caller" },
         ],
       },
       {
         method: "GET",
         path: "/api/evals/canary-wire/pull",
         summary: "Returns the newest pull from Mindtickle, running or not, and whether Mindtickle is configured.",
-        access: "evalsAdmin",
+        access: "canaryWire",
         token: true,
         notes:
           "A pull takes about 15 minutes, so it goes in steps of up to four minutes (POST /api/evals/canary-wire/pull/step), each saving where it got to. done of total counts learners fetched, 0 of 0 until the rosters are in. working is true while a step holds the pull. A running pull nobody works on for 6 hours is given up as failed. configured is false when MT_API_KEY or MT_SECRET_KEY is unset, and no pull can start.",
@@ -1345,7 +1531,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "POST",
         path: "/api/evals/canary-wire/pull",
         summary: "Starts a pull from Mindtickle now (Refresh now), rather than waiting for the next two-hourly one.",
-        access: "evalsAdmin",
+        access: "platform",
         token: true,
         notes:
           "Fetches nothing itself: call POST /api/evals/canary-wire/pull/step until the pull ends, as the page does. When it succeeds it replaces the Canary Wire's data.",
@@ -1359,7 +1545,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "POST",
         path: "/api/evals/canary-wire/pull/step",
         summary: "Works on the running pull for up to four minutes, then returns how it stands.",
-        access: "evalsAdmin",
+        access: "platform",
         token: true,
         notes:
           "Answers at once, with the pull unchanged, when another step holds it, and with null when no pull is running. Each step fetches learners' histories in order and saves every ten, so a step cut short loses little. One learner's history failing is noted and costs that learner; Mindtickle refusing the key pair fails the pull. Allows 300 seconds.",
@@ -1394,7 +1580,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "GET",
         path: "/api/evals/organization",
         summary: "Lists who the last HiBob sync found reporting up to the Organization Leader, a page at a time.",
-        access: "evalsAdmin",
+        access: "assessmentsAdmin",
         token: true,
         notes:
           "depth counts the links between a person and the leader, the leader included. managementChain is the emails of their managers, from the direct one up to and including the leader, joined with semicolons and no spaces. track is the one an administrator set by hand, if any; otherwise exempt when the person's bootcamp history marks BTC or INT exempt, ignored for a title on the Ignored list, deferred when they started too close to the next bootcamp (see GET /api/evals/deferral-days), or else the Sales or Engineer list their title is on, or null for a title on no list. btcDate, btcScore, intDate and intScore are from their bootcamp history, null where there is none; a date of 2000-01-01 means they are exempt from that class, and a score runs from 1 (poor) to 4 (outstanding), to one decimal place. The list is as of the last sync; current is false once a different leader has been set since, until the next sync runs. total counts everyone listed, whatever the search.",
@@ -1405,7 +1591,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "GET",
         path: "/api/evals/titles",
         summary: "Lists the titles on the Sales, Engineer and Ignored lists, a page at a time.",
-        access: "evalsAdmin",
+        access: "assessmentsAdmin",
         token: true,
         query: [
           { name: "list", type: `"sales" | "engineer" | "ignored"`, note: "One list only. Default every list." },
@@ -1418,7 +1604,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "POST",
         path: "/api/evals/titles",
         summary: "Adds titles to one list.",
-        access: "evalsAdmin",
+        access: "assessmentsAdmin",
         token: true,
         notes:
           "Titles are compared case-insensitively after collapsing whitespace. A title already on any list is reported in existing and not moved. Blank titles are dropped.",
@@ -1436,7 +1622,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "PATCH",
         path: "/api/evals/titles/{id}",
         summary: "Renames a listed title, or moves it to another list.",
-        access: "evalsAdmin",
+        access: "assessmentsAdmin",
         token: true,
         params: [{ name: "id", type: "string", required: true, note: "UUID" }],
         body: {
@@ -1457,7 +1643,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "DELETE",
         path: "/api/evals/titles/{id}",
         summary: "Removes a title from its list.",
-        access: "evalsAdmin",
+        access: "assessmentsAdmin",
         token: true,
         params: [{ name: "id", type: "string", required: true, note: "UUID" }],
         returns: "{ ok: true }",
@@ -1467,7 +1653,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "GET",
         path: "/api/evals/assessments",
         summary: "Lists the assessments attendees can be scored on, a page at a time.",
-        access: "evalsAdmin",
+        access: "assessmentsAdmin",
         token: true,
         notes:
           "criteria counts those still asked; submissions counts the attendees scored on it at any bootcamp. total counts every assessment, whatever the search.",
@@ -1478,7 +1664,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "GET",
         path: "/api/evals/assessments/unassigned-breakouts",
         summary: "Lists the breakouts at scheduled and active bootcamps that name no assessment.",
-        access: "evalsAdmin",
+        access: "assessmentsAdmin",
         token: true,
         notes:
           "Ordered by the bootcamp's start date, then track, day and start; at most 100. total counts every such breakout. Their groups appear under no assessment's Assigned to me until one is picked on the session's Breakout Assignments.",
@@ -1488,7 +1674,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "POST",
         path: "/api/evals/assessments",
         summary: "Creates an assessment and its criteria.",
-        access: "evalsAdmin",
+        access: "assessmentsAdmin",
         token: true,
         body: {
           kind: "json",
@@ -1512,7 +1698,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "GET",
         path: "/api/evals/assessments/{id}",
         summary: "Reads one assessment and the criteria it still asks, in order.",
-        access: "evalsAdmin",
+        access: "assessmentsAdmin",
         token: true,
         notes: "scored says some submission holds a score against that criterion, so removing it retires it rather than deleting it.",
         params: [{ name: "id", type: "string", required: true, note: "UUID" }],
@@ -1523,7 +1709,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "PUT",
         path: "/api/evals/assessments/{id}",
         summary: "Replaces an assessment's fields and criteria.",
-        access: "evalsAdmin",
+        access: "assessmentsAdmin",
         token: true,
         notes:
           "A criterion sent with its id is kept, renamed and moved as given; one sent without an id is added; one left out is deleted if nobody has been scored on it, or else retired, so it is no longer asked but the scores given against it remain. Submissions keep the names they were scored under. Once anyone has been scored on it, stage and audience cannot change. An attendee scored before a criterion was added shows as needing rescoring.",
@@ -1554,7 +1740,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "DELETE",
         path: "/api/evals/assessments/{id}",
         summary: "Removes an assessment nobody has been scored on.",
-        access: "evalsAdmin",
+        access: "assessmentsAdmin",
         token: true,
         notes: "One with scores is kept; set active to false with PUT instead.",
         params: [{ name: "id", type: "string", required: true, note: "UUID" }],
@@ -1568,7 +1754,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "GET",
         path: "/api/evals/slack-contacts",
         summary: "Lists the Additional Slack Contacts, a page at a time.",
-        access: "evalsAdmin",
+        access: "assessmentsAdmin",
         token: true,
         notes:
           "These people are added to the Slack messages sent to each attendee's team at the end of a bootcamp, after the attendee's management chain. fullName is their name in the employee list, as of when they were added or the last HiBob sync since, and empty for someone not in it. total counts every contact, whatever the search.",
@@ -1579,7 +1765,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "POST",
         path: "/api/evals/slack-contacts",
         summary: "Adds one Additional Slack Contact.",
-        access: "evalsAdmin",
+        access: "assessmentsAdmin",
         token: true,
         notes:
           "The email is lowercased. If it belongs to an imported employee, their name is stored with it; anyone else is added by email alone.",
@@ -1597,7 +1783,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "DELETE",
         path: "/api/evals/slack-contacts/{id}",
         summary: "Removes one Additional Slack Contact.",
-        access: "evalsAdmin",
+        access: "assessmentsAdmin",
         token: true,
         params: [{ name: "id", type: "string", required: true, note: "UUID" }],
         returns: "{ ok: true }",
@@ -1607,7 +1793,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "GET",
         path: "/api/evals/hibob/sync",
         summary: "Lists the HiBob sync log a page at a time, newest first.",
-        access: "evalsAdmin",
+        access: "assessmentsAdmin",
         token: true,
         notes:
           "A run that has said running for over 10 minutes is shown as failed, and running is false for it. running says whether a sync is under way, whichever page is asked for. The HiBob token itself is never returned.",
@@ -1618,7 +1804,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "POST",
         path: "/api/evals/hibob/sync",
         summary: "Syncs every active employee from HiBob now.",
-        access: "evalsAdmin",
+        access: "assessmentsAdmin",
         token: true,
         notes:
           "Calls HiBob and replaces the whole employees table in one transaction, so a failed sync leaves the previous one in place. Can take several seconds; the route allows 180. Every attempt, failed or not, is logged in the sync history.",
@@ -1635,7 +1821,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "PUT",
         path: "/api/evals/org-leader",
         summary: "Sets the Organization Leader whose reports eVals draws attendees from.",
-        access: "evalsAdmin",
+        access: "assessmentsAdmin",
         token: true,
         body: {
           kind: "json",
@@ -1653,7 +1839,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "GET",
         path: "/api/evals/candidate-cutoffs",
         summary: "Gets the date cutoffs on who in the org counts as a bootcamp or intermediate candidate.",
-        access: "evalsAdmin",
+        access: "assessmentsAdmin",
         token: true,
         notes:
           "A candidate's HiBob start date must be on or after startDateOnOrAfter, or blank; their HiBob active effective date must be after activeEffectiveDateAfter, and not blank. null means that cutoff is off. Until one is saved, each is the Google Sheet's: 2025-04-01 and 2026-01-01.",
@@ -1663,7 +1849,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "PUT",
         path: "/api/evals/candidate-cutoffs",
         summary: "Sets either or both candidate date cutoffs.",
-        access: "evalsAdmin",
+        access: "assessmentsAdmin",
         token: true,
         notes: "A field left out keeps its value. The Current tab uses the new cutoffs at once; no sync is needed.",
         body: {
@@ -1682,7 +1868,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "GET",
         path: "/api/evals/deferral-days",
         summary: "Gets the deferral window: how close to the next bootcamp someone can start and still be put in it.",
-        access: "evalsAdmin",
+        access: "assessmentsAdmin",
         token: true,
         notes:
           "Someone whose HiBob start date is fewer than days before bootcampStart, or after it, is on the deferred track rather than their title list's; an ignored title, exempt history or a track set by hand still comes first. A blank start date is never deferred. 0 turns deferral off. Until one is saved, days is the Google Sheet's 14. bootcampStart is the active bootcamp's start, else the soonest scheduled one starting today or later, or null when there is none, which also leaves no one deferred.",
@@ -1692,7 +1878,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "PUT",
         path: "/api/evals/deferral-days",
         summary: "Sets the deferral window, and retracks the org by it at once.",
-        access: "evalsAdmin",
+        access: "assessmentsAdmin",
         token: true,
         notes: "Every org member's track is worked out again rather than at the next sync; retracked counts those whose track changed. Creating, editing or deleting a bootcamp does the same.",
         body: {
@@ -1984,7 +2170,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
               name: "snapshot[]",
               type: "object[]",
               required: true,
-              note: "QA's users before the restore: id, email, name, image, eventRole, trainingRole, evalsRole, irisRole, isPlatformAdmin, calendarScope, accounts[]",
+              note: "QA's users before the restore: id, email, name, image, eventRole, trainingRole, assessmentsRole, irisRole, isPlatformAdmin, calendarScope, accounts[]",
             },
           ],
         },

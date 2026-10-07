@@ -4,7 +4,7 @@ import type { EndpointGroup } from "./types";
 
 /** One checklist item, as the Scheduler's routes and the inbox return it. */
 export const CHECKLIST_ITEM_ROW =
-  "{ id, track: \"btc\" | \"int\" | \"btc_se\" | \"int_se\", day: number, name, ownerEmail: string | null, ownerName, done: boolean, doneAt: string | null, doneByName, createdBy: string | null, createdByName, createdByEmail, createdAt, mentions: { email, fullName }[] }";
+  "{ id, track: \"btc\" | \"int\" | \"btc_se\" | \"int_se\", day: number, period: \"am\" | \"pm\", name, ownerEmail: string | null, ownerName, done: boolean, doneAt: string | null, doneByName, createdBy: string | null, createdByName, createdByEmail, createdAt, mentions: { email, fullName }[] }";
 
 const ORG_SECRET_SEARCH = "the id, the file name, the kind or who last stored it";
 
@@ -124,7 +124,7 @@ export const ACCOUNT_GROUPS: EndpointGroup[] = [
         access: "signedIn",
         token: true,
         returns:
-          "{ id, email: string | null, access: { event, training: string | null, evals: string | null, platform: boolean }, preferences: { themePreference: \"light\" | \"dark\" | \"system\", calendarScope: \"own\" | \"all\" } }",
+          "{ id, email: string | null, access: { event, training: string | null, assessments: string | null, iris: string | null, platform: boolean, judging: boolean, manager: boolean }, preferences: { themePreference: \"light\" | \"dark\" | \"system\", calendarScope: \"own\" | \"all\" } }",
       },
       {
         method: "PATCH",

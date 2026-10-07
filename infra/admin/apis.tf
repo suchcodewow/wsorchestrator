@@ -25,6 +25,11 @@ locals {
     # client: production's, which QA shares. QA enabling it alone does nothing.
     # Without it the app falls back to whatever picture the ID token carries.
     "people.googleapis.com",
+    # Calendar API — eVals Settings → Google Meetings creates its invites as
+    # the Google account an administrator connected. Like the People API, the
+    # calls carry that account's token, so they count against the project that
+    # owns the OAuth client: production's, which QA shares.
+    "calendar-json.googleapis.com",
   ]
 }
 

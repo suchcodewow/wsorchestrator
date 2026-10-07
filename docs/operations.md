@@ -79,11 +79,18 @@ a bootcamp is active, `lib/cohorts/slack-sync.ts` keeps
 in step with Cohorts → Current and Cohort Settings → Additional Channel
 Contacts. It removes only people it invited itself (`slack_channel_members`),
 never anyone added by hand. Every run is a dry run until someone presses
-*Go live* on Cohort Settings → Slack. The token is `SLACK_BOT_TOKEN`, from
-`slack_bot_token` / `tf_slack_bot_token`, set on production's workspace only
-(see [What the two share](environments.md#what-the-two-share-and-why-that-matters)).
-The bot needs `users:read`, `users:read.email`, `channels:read`,
-`channels:manage` and `channels:join`. The Sheet's old bot
+*Go live* on Cohort Settings → Slack. The bot is the Slack app's: *Add to
+Slack* on that tab runs Slack's OAuth install with `SLACK_APP_CLIENT_ID` and
+`SLACK_APP_CLIENT_SECRET` (from `slack_app_client_id` /
+`tf_slack_app_client_secret`, set on production's workspace only; see
+[What the two share](environments.md#what-the-two-share-and-why-that-matters))
+and seals the bot token into `slack_installation`. The app's Redirect URLs on
+api.slack.com must include `{app_url}/api/cohorts/slack/oauth/callback`, or
+Slack refuses the install with `bad_redirect_uri`. Until the app is added, a
+`SLACK_BOT_TOKEN` (`slack_bot_token` / `tf_slack_bot_token`) is used instead.
+The install asks for `users:read`, `users:read.email`, `channels:read`,
+`channels:manage` and `channels:join`, and the tab lists any Slack did not
+grant. The Sheet's old bot
 (`sheets_to_slack_conne`) has only the first two and `channels:manage`, so on
 that token a run fails with `conversations.list answered missing_scope (needs
 channels:read)`. A Slack admin must grant the rest and reinstall. Sending a DM
@@ -93,6 +100,49 @@ it alone; unarchive it or rename it.
 
 **This machine class has `tofu`, not `terraform`.** The Makefile and bootstrap
 script auto-detect which is present.
+
+### Google Meetings
+
+eVals Settings → Google Meetings sends Google Calendar invites as one Google
+account, and puts a Zoom meeting on each. Google's APIs take no password, so
+the account is connected once in the browser, and the app keeps the refresh
+token that returns (`google_connections`, sealed like the Harness tokens).
+Setting it up in an environment:
+
+1. **Register the callback** on the shared OAuth client (the one in
+   `AUTH_GOOGLE_ID`): add `{AUTH_URL}/api/evals/google-meetings/callback` as an
+   authorized redirect URI, for each environment that connects, and
+   `http://localhost:3000/api/evals/google-meetings/callback` for local work.
+   Until it is there, Google answers *redirect_uri_mismatch*.
+2. **Enable the Calendar API** (`calendar-json.googleapis.com`) on the project
+   that owns that OAuth client. `infra/admin/apis.tf` does this on apply.
+3. **Connect the account.** An Assessments Administrator presses *Connect
+   Google account* on the tab and signs in as the account the invites should
+   come from, allowing calendar access. `google_meetings_account` (env
+   `GOOGLE_USER`) only pre-fills that sign-in. The consent screen shows the
+   app as unverified to an account outside the OAuth client's Workspace; the
+   account's own Workspace admin may have to allow the app.
+4. **Zoom.** Create a Server-to-Server OAuth app on the Zoom account the
+   Google account belongs to, with `meeting:write:admin`, `meeting:read:admin`
+   and `user:read:admin`. Set `zoom_account_id` and `zoom_client_id` on the
+   workspace, and `zoom_client_secret` as a secret (`tf_zoom_client_secret`).
+   Without them, invites go out with no Zoom link and Sync Now says so. Zoom
+   takes as an alternative host only someone with an active user on that
+   account. Sync Now lists the administrators it left out, and still invites
+   them.
+
+The first sync makes an "eVals Meetings" calendar on the account and gives
+each Assessments Administrator edit access to it, which emails them the
+share. That is how they edit a meeting: Google Calendar cannot let only some
+guests edit an invite. Connecting a different account is refused while any
+meeting has an invite, because the first account's calendar holds them.
+Delete those meetings first, which cancels their invites. Sharing outside a
+Workspace domain may be blocked by its admin. The sync then notes each
+administrator it could not share with, and still invites them.
+
+Connect an account on **production only**. QA shares the Workspace and the
+people. A QA sync would send real invites to the real cohort, and QA's
+production import deletes the connection and the meetings for that reason.
 
 ---
 

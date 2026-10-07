@@ -170,11 +170,12 @@ Two mechanisms, and the distinction matters more here than in most projects:
   diffs it onto a database. It knows *shape* only — it will drop a column whose
   data is still needed, and it cannot add a `NOT NULL` column to a table that
   already has rows.
-- **`frontend/drizzle/NNNN_*.sql`** are hand-written, ordered, idempotent
+- **`frontend/drizzle/*.sql`** are hand-written, ordered, idempotent
   migrations applied by
   [`apply-sql.mjs`](frontend/scripts/apply-sql.mjs). Anything that has to *move*
   data lives here. Each wraps itself in a transaction and is written to be
-  re-runnable.
+  re-runnable. There is no record of which have run: every deploy runs every
+  file, in name order, and the ones already applied do nothing.
 
 The deploy pipeline runs the `.sql` files and **never** runs `db:push`, because
 an unattended `push` is a data-loss risk. That gives one rule worth
@@ -185,17 +186,24 @@ internalising, already stated in [DEPLOY.md](DEPLOY.md#schema-changes):
 
 ### Apply it locally in the same sitting
 
-When you change `schema.ts` or add a `.sql` file, apply it to your local
-`workshops` database before you stop for the day. Code that reads a column the
-local database does not have fails at *runtime* — `npm run typecheck` passes
-happily and you find out by hitting a broken page.
+Code that reads a column the local database does not have fails at *runtime* —
+`npm run typecheck` passes happily and you find out by hitting a broken page.
 
-Prefer running your new migration, which is written to be safe to re-run, over
+`npm run dev` takes care of it: its `predev` step
+([`migrate-local.mjs`](frontend/scripts/migrate-local.mjs)) runs every
+`drizzle/*.sql` against your local database before the server starts, so a new
+migration of yours, or one you pulled or merged, is in place by the time you
+load a page. It only ever touches the local container. A `DATABASE_URL` that
+points anywhere else, including Cloud SQL through a proxy on localhost, is
+skipped with a note. A migration that fails stops the dev server from starting;
+`SKIP_DEV_MIGRATE=1 npm run dev` starts it anyway.
+
+Without a dev server, run your new migration directly; prefer that over
 `push --force`:
 
 ```bash
 docker exec -i workshoporchestrator-postgres-1 \
-  psql -U postgres -d workshops < frontend/drizzle/00NN_your_migration.sql
+  psql -U postgres -d workshops < frontend/drizzle/20261007154939_your_migration.sql
 ```
 
 To check whether the schema and the database have drifted, ask Drizzle for the
@@ -215,12 +223,65 @@ run.
 > does not recognise the array cast and reports it forever. If those are the
 > *only* statements, you are in sync.
 
-### Migration numbering
+### Naming a migration
 
-Migrations are sequentially numbered (`0001_`, `0002_`, …). Two people working on
-separate branches will both reach for the next number. Before you name a file,
-check what is on `main` — and if you hit a collision at merge time, renumber
-yours to come last rather than resolving the conflict in place.
+Name a new migration for the UTC moment you write it, then what it does:
+
+```bash
+touch "frontend/drizzle/$(date -u +%Y%m%d%H%M%S)_what_it_does.sql"
+```
+
+The files up to `0063_` were numbered instead, and two branches that each took
+the next number collided (there are two `0035_`s). A timestamp is unique without
+anyone coordinating, and it sorts after every numbered file, so the old ones
+keep their order. `test/unit/migrations.test.ts` fails a new numbered file, a
+malformed timestamp, and a file not wrapped in `begin;` … `commit;`.
+
+The timestamp records when the file was written, not when it merged, so a
+branch that merges late can sort before a migration already deployed. Every
+file re-runs on every deploy, so that is harmless as long as a migration never
+depends on one that sorts after it. What no name can catch is two branches
+changing the same table or column in ways that disagree; that falls to review,
+and to running your branch after merging `main` into it.
+
+---
+
+## Working in a git worktree
+
+A worktree is a second checkout of the repository on another branch, so two
+pieces of work, or two agents, can proceed side by side. Give each one its own
+database, so one branch's migrations never reach the database every other
+checkout is using:
+
+```bash
+git worktree add -b my-branch ../workshoporchestrator-my-branch origin/main
+cd ../workshoporchestrator-my-branch/frontend
+npm install
+npm run db:worktree        # workshops_wt_my_branch, copied from the main checkout's database
+npm run dev -- -p 3001     # the main checkout's server usually has 3000
+```
+
+[`npm run db:worktree`](frontend/scripts/worktree-db.mjs) copies `frontend/.env`
+from the main checkout if the worktree has none, copies the main checkout's
+database into `workshops_wt_<branch>`, points this worktree's `.env` at it, and
+applies the branch's migrations. `npm run db:worktree -- --fresh` throws the
+copy away and makes it again; `npm run db:worktree:drop` drops it, before you
+`git worktree remove`.
+
+The copy is disposable, and nothing in it is ever merged back. Schema changes
+travel as `drizzle/*.sql` files merged with the code: once a branch merges,
+every other database catches up the next time its dev server starts. Author
+anything you mean to keep, such as a lab guide, in the main checkout instead.
+
+Signing in takes care. The copy carries the sessions the main checkout's
+database had when it was made, and browsers share cookies across localhost
+ports, so if you were signed in then, you still are. A new sign-in is different:
+Google sends the browser back to `AUTH_URL`, `http://localhost:3000`, and the
+session is saved in the database of whichever server is on 3000. To sign in to
+a worktree afresh, run it on 3000 for the moment, or sign in on the main
+checkout and `npm run db:worktree -- --fresh`. The same goes for anything else
+that returns to a callback route, such as Slack's *Add to Slack*: test it with
+the worktree on 3000.
 
 ---
 

@@ -1,7 +1,7 @@
 /** The shape of an entry in the API reference catalog. */
 
 import {
-  EVALS_ROLE_LABELS,
+  ASSESSMENTS_ROLE_LABELS,
   EVENT_ROLE_LABELS,
   IRIS_ROLE_LABELS,
   PLATFORM_ADMIN_LABEL,
@@ -21,12 +21,13 @@ export type Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
  *   eventAdmin   Event Administrator                   (canManageSettings, canAuditProjects)
  *   trainingViewer Training Viewer or above           (canUseTraining)
  *   trainingAdmin Training Administrator              (canManageTrainingSettings)
- *   evalsViewer  eVals Viewer or above                 (canUseEvals)
- *   evalsAdmin   eVals Administrator                   (canManageEvalsSettings)
- *   employeeSearch eVals or Training Administrator     (canSearchEmployees)
- *   scorer       eVals Viewer or above, or a guest judge on the active bootcamp (canScoreAssessments)
+ *   assessmentsViewer Assessments Viewer or above      (canUseEvals)
+ *   assessmentsAdmin Assessments Administrator         (canManageEvalsSettings)
+ *   employeeSearch Assessments or Training Administrator (canSearchEmployees)
+ *   scorer       Assessments Viewer or above, or a guest judge on the active bootcamp (canScoreAssessments)
  *   irisTaker    Iris Taker or above                   (canTakeIris)
  *   irisAdmin    Iris Administrator                    (canManageIris)
+ *   canaryWire   a people manager (by HiBob), or Platform Administrator (canSeeCanaryWire)
  *   userAdmin    an administrator in any area          (canManageUsers)
  *   platform     Platform Administrator                (canManageBackups, canManageSignInDomains, canDeleteUsers)
  *   internal     not for people: Cloud Scheduler or runner OIDC, or Auth.js
@@ -42,12 +43,13 @@ export type AccessKey =
   | "eventAdmin"
   | "trainingViewer"
   | "trainingAdmin"
-  | "evalsViewer"
-  | "evalsAdmin"
+  | "assessmentsViewer"
+  | "assessmentsAdmin"
   | "employeeSearch"
   | "scorer"
   | "irisTaker"
   | "irisAdmin"
+  | "canaryWire"
   | "userAdmin"
   | "platform"
   | "internal";
@@ -62,12 +64,13 @@ export const ACCESS_LABELS: Record<AccessKey, string> = {
   eventAdmin: EVENT_ROLE_LABELS.administrator,
   trainingViewer: `${TRAINING_ROLE_LABELS.viewer} or above`,
   trainingAdmin: TRAINING_ROLE_LABELS.administrator,
-  evalsViewer: `${EVALS_ROLE_LABELS.viewer} or above`,
-  evalsAdmin: EVALS_ROLE_LABELS.administrator,
-  employeeSearch: `${EVALS_ROLE_LABELS.administrator} or ${TRAINING_ROLE_LABELS.administrator}`,
-  scorer: `${EVALS_ROLE_LABELS.viewer} or above, or a guest judge on the active bootcamp`,
+  assessmentsViewer: `${ASSESSMENTS_ROLE_LABELS.viewer} or above`,
+  assessmentsAdmin: ASSESSMENTS_ROLE_LABELS.administrator,
+  employeeSearch: `${ASSESSMENTS_ROLE_LABELS.administrator} or ${TRAINING_ROLE_LABELS.administrator}`,
+  scorer: `${ASSESSMENTS_ROLE_LABELS.viewer} or above, or a guest judge on the active bootcamp`,
   irisTaker: `${IRIS_ROLE_LABELS.taker} or above`,
   irisAdmin: IRIS_ROLE_LABELS.administrator,
+  canaryWire: `A people manager (someone HiBob has reporting to them), or ${PLATFORM_ADMIN_LABEL}`,
   userAdmin: "An administrator in any area",
   platform: PLATFORM_ADMIN_LABEL,
   internal: "Internal",

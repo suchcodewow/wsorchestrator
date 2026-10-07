@@ -13,23 +13,44 @@ import { HEADER_ROW, PlainHeader } from "@/components/data-table";
 import type { PullSummary } from "@/lib/canary-wire/pull";
 import type { CanaryWireView } from "@/lib/canary-wire/view";
 import { riseChild, staggerParent } from "@/lib/motion";
+import { PillSwitch } from "@/components/pill-switch";
 import { HeatMap } from "./heat-map";
 import { RefreshControl } from "./refresh-control";
 import { Meter, PILL, SELECT_PILL } from "./ui";
 import { formatPct } from "@/lib/canary-wire/report";
 
-export function CanaryWireReport({ view, pull, configured }: { view: CanaryWireView; pull: PullSummary | null; configured: boolean }) {
+export function CanaryWireReport({
+  view,
+  pull,
+  configured,
+  canSwitchScope,
+  canRefresh,
+}: {
+  view: CanaryWireView;
+  pull: PullSummary | null;
+  configured: boolean;
+  /** A manager: My org, or everyone. */
+  canSwitchScope: boolean;
+  /** Refresh now, for testing: platform administrators. */
+  canRefresh: boolean;
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const withData = new Set(view.monthsWithData);
-  const csv = `/api/evals/canary-wire?month=${encodeURIComponent(view.month)}&format=csv`;
+  // The scope rides in the URL only when it isn't the caller's default, so a
+  // shared link opens on the sharer's month without forcing their view.
+  const scopeParam = canSwitchScope && view.scope === "everyone" ? "&scope=everyone" : "";
+  const go = (month: string, everyone = view.scope === "everyone") =>
+    router.push(`${pathname}?month=${encodeURIComponent(month)}${canSwitchScope && everyone ? "&scope=everyone" : ""}`);
+  const csv = `/api/evals/canary-wire?month=${encodeURIComponent(view.month)}&format=csv${scopeParam}`;
+  const yourOrg = view.scope === "org";
   const t = view.totals;
 
   const notes = [...view.notes];
   if (!view.hasSnapshot) {
     notes.unshift(
       configured
-        ? "No Mindtickle data yet. It is pulled every two hours, or use Refresh now; a pull takes about 15 minutes."
+        ? `No Mindtickle data yet. It is pulled every two hours${canRefresh ? ", or use Refresh now; a pull takes about 15 minutes" : ""}.`
         : "No Mindtickle data yet, and Mindtickle isn't configured on this server: MT_API_KEY or MT_SECRET_KEY is unset.",
     );
   } else if (!view.hasData) {
@@ -45,7 +66,8 @@ export function CanaryWireReport({ view, pull, configured }: { view: CanaryWireV
             {t && view.hasData ? (
               <>
                 <span className="font-medium text-foreground">{formatPct(t.pct)} complete</span> in {view.month}, across{" "}
-                {t.learners.toLocaleString()} accountable {t.learners === 1 ? "learner" : "learners"}.
+                {t.learners.toLocaleString()} accountable {t.learners === 1 ? "learner" : "learners"}
+                {yourOrg ? " in your org" : ""}.
               </>
             ) : view.hasSnapshot ? (
               <>Nothing assigned in {view.month}.</>
@@ -61,7 +83,7 @@ export function CanaryWireReport({ view, pull, configured }: { view: CanaryWireV
         <select
           aria-label="Month"
           value={view.month}
-          onChange={(e) => router.push(`${pathname}?month=${encodeURIComponent(e.target.value)}`)}
+          onChange={(e) => go(e.target.value)}
           className={SELECT_PILL}
         >
           {view.months.map((m) => (
@@ -88,7 +110,15 @@ export function CanaryWireReport({ view, pull, configured }: { view: CanaryWireV
           </a>
         ))}
         <span className="grow" />
-        <RefreshControl configured={configured} initial={pull} />
+        {canSwitchScope && (
+          <PillSwitch
+            label="Everyone"
+            title={yourOrg ? "Showing your org: you and everyone under you. Switch on to see everyone in the Canary Wire." : "Showing everyone in the Canary Wire. Switch off for your org: you and everyone under you."}
+            on={!yourOrg}
+            onChange={(everyone) => go(view.month, everyone)}
+          />
+        )}
+        {canRefresh && <RefreshControl configured={configured} initial={pull} />}
       </motion.div>
 
       {notes.length > 0 && (
@@ -150,45 +180,24 @@ function Freshness({ view }: { view: CanaryWireView }) {
 
 function Scores({ view }: { view: CanaryWireView }) {
   const t = view.totals!;
-  const nMods = view.labels.length;
-  const tiles: { label: string; value: string; sub: string }[] = [
-    {
-      label: "Complete",
-      value: formatPct(t.pct),
-      // The IC rate is what most people mean by "are the reps doing it", so it rides along here.
-      sub: `${t.completed.toLocaleString()} of ${t.assigned.toLocaleString()} assignments` + (t.icAssigned ? ` · ${formatPct(t.icPct)} among ICs` : ""),
-    },
-    {
-      label: "Accountable learners",
-      value: t.learners.toLocaleString(),
-      sub: `${nMods} module${nMods === 1 ? "" : "s"} this month` + (t.exempt ? ` · ${t.exempt} not yet accountable` : ""),
-    },
-    {
-      label: "Finished everything",
-      value: t.fullyComplete.toLocaleString(),
-      sub: t.learners ? `${((t.fullyComplete / t.learners) * 100).toFixed(1)}% of learners` : "",
-    },
-    {
-      label: "Managers",
-      value: view.teams.length.toLocaleString(),
-      sub: t.notActivated ? `${t.notActivated} ${t.notActivated === 1 ? "rep has" : "reps have"} never activated Mindtickle` : "with someone accountable",
-    },
+  const tiles: { label: string; value: string }[] = [
+    { label: "Complete", value: formatPct(t.pct) },
+    { label: "Accountable learners", value: t.learners.toLocaleString() },
+    { label: "Finished everything", value: t.finished.toLocaleString() },
   ];
   return (
-    <div className="grid divide-y overflow-hidden rounded-2xl border bg-card shadow-sm sm:grid-cols-2 sm:divide-y-0 lg:grid-cols-4 lg:divide-x">
+    <div className="grid divide-y overflow-hidden rounded-2xl border bg-card shadow-sm sm:grid-cols-3 sm:divide-x sm:divide-y-0">
       {tiles.map((tile) => (
         <div key={tile.label} className="px-5 py-4">
           <div className="text-2xl font-medium tabular-nums">{tile.value}</div>
           <div className="text-xs text-muted-foreground">{tile.label}</div>
-          {tile.sub && <div className="mt-1.5 text-xs text-muted-foreground/80">{tile.sub}</div>}
         </div>
       ))}
     </div>
   );
 }
 
-const IC_TIP =
-  "The same rate over individual contributors only — people nobody reports to. Worked out from who is named as someone else's manager, so a manager whose reports all sit outside the Canary Wire groups counts as an IC here.";
+const IC_TIP = "The same rate over individual contributors only: people nobody at Harness reports to, by HiBob.";
 
 function Roles({ view }: { view: CanaryWireView }) {
   return (
@@ -199,7 +208,7 @@ function Roles({ view }: { view: CanaryWireView }) {
             <tr className={HEADER_ROW}>
               <PlainHeader>Role</PlainHeader>
               <PlainHeader className="text-right">Learners</PlainHeader>
-              <PlainHeader className="text-right">Done</PlainHeader>
+              <PlainHeader className="text-right">Completed</PlainHeader>
               <PlainHeader className="w-36 text-right">Completion</PlainHeader>
               <PlainHeader className="w-36 text-right">
                 <span title={IC_TIP} className="cursor-help underline decoration-dotted underline-offset-2">
@@ -213,17 +222,12 @@ function Roles({ view }: { view: CanaryWireView }) {
             {view.roles.map((r) => (
               <tr key={r.role} className="border-b last:border-b-0">
                 <td className="px-5 py-3 font-medium whitespace-nowrap">{r.role}</td>
-                <td className="px-5 py-3 text-right tabular-nums" title={r.exempt ? `${r.exempt} not yet accountable, not counted` : undefined}>
-                  {r.learners}
-                </td>
-                <td className="px-5 py-3 text-right tabular-nums text-muted-foreground">{`${r.completed}/${r.assigned}`}</td>
+                <td className="px-5 py-3 text-right tabular-nums">{r.learners}</td>
+                <td className="px-5 py-3 text-right tabular-nums">{r.finished}</td>
                 <td className="px-5 py-3">
                   <Meter value={r.pct} />
                 </td>
-                <td
-                  className="px-5 py-3"
-                  title={r.icAssigned ? `${r.icCompleted} of ${r.icAssigned} modules, ${r.icLearners} ICs` : "No individual contributors owe modules in this role this month"}
-                >
+                <td className="px-5 py-3" title={r.icLearners ? `${r.icFinished} of ${r.icLearners} ICs finished` : "No individual contributors owe anything in this role this month"}>
                   <Meter value={r.icPct} />
                 </td>
                 <td className="px-5 py-3 text-xs text-muted-foreground">{r.modules.join(" · ")}</td>

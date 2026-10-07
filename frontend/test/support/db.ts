@@ -81,6 +81,8 @@ export async function deleteTestRows(
   await query(`delete from bootcamps where id in (${made})`, [like]);
   await query("delete from bootcamp_judges where email like $1", [`${scope}%@${TEST_EMAIL_DOMAIN}`]);
   await query("delete from iris_item_reviews where reviewer_id like $1", [like]);
+  await query("delete from google_meetings where created_by like $1", [like]);
+  await query("delete from employees where id like $1", [like]);
   await query("delete from users where id like $1", [like]);
   await query("delete from bootcamp_history where email like $1", [`${like}@${TEST_EMAIL_DOMAIN}`]);
 }

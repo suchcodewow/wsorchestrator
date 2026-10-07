@@ -20,7 +20,7 @@ database that already has tables alone. After it, every check under
 credentials at all**. If one fails on an untouched checkout, the setup is
 wrong, not the code; say so rather than working around it.
 
-What a contributor's machine usually does *not* have: Google OAuth values in
+What a contributor's machine usually does _not_ have: Google OAuth values in
 `.env`, `infra/admin/terraform.tfvars` (which holds the Harness PAT), and
 gcloud access to production. Without OAuth you cannot sign in through the
 browser; to see a signed-in page, use the session-row technique in
@@ -69,6 +69,24 @@ have uncommitted edits in the same checkout. So:
 - If a file holds both your change and someone else's, leave it out of your
   commit and say so in the message.
 
+**A worktree you create gets its own database before anything runs in it.**
+Every checkout pointed at `workshops` shares one schema, so a branch's
+migrations would reach every other checkout's server, and theirs yours. After
+`git worktree add` (or `EnterWorktree`), and before `npm run dev`, a test, or
+anything else that reads `DATABASE_URL`:
+
+```bash
+cd <worktree>/frontend && npm install && npm run db:worktree
+```
+
+It copies the main checkout's `.env` and database into `workshops_wt_<branch>`,
+repoints the worktree's `.env`, and applies the branch's migrations; see
+[Working in a git worktree](CONTRIBUTING.md#working-in-a-git-worktree). Never
+point a worktree at `workshops` itself. When you remove a worktree you made,
+run `npm run db:worktree:drop` in it first; it drops only `workshops_wt_*`.
+The copy is disposable: nothing in it is merged back, so tell the user before
+they author anything there they mean to keep.
+
 **Work on a branch and open a pull request. Never push to `main`.** A merge to
 `main` deploys QA (https://qa.harnessevents.io): it applies `qa_control_plane`,
 migrates QA's Cloud SQL, and rolls QA's Cloud Run. The GitHub ruleset lets
@@ -99,6 +117,13 @@ or `deploy_qa` by hand with `deploy=false` and `apply_infra=false`. Each deploy
 pipeline has a Queue step, so a second run waits rather than fighting the
 first over the same OpenTofu workspace and database.
 
+# Codebase Merging & Integrity Rules
+
+- NEVER overwrite, delete, or drastically refactor existing architectural patterns, helper functions, or utility classes unless explicitly directed. Always search the codebase for existing implementations before writing new logic.
+- COMPLIANCE: All new code additions must exactly adhere to the established design patterns, linter configurations, and file structuring already present in the repository.
+- TEST PRESERVATION: You must verify that existing unit tests still pass before modifying any file. If code changes alter an existing implementation, update the associated test file instead of bypassing it.
+- REDUNDANCY CHECK: Before introducing new dependencies or large helper files, cross-reference existing modules to see if the capability already exists.
+
 ## Conventions
 
 **Use Tailwind v4's canonical utility names, not the v3 aliases.**
@@ -109,14 +134,19 @@ kept the old ones only as deprecated aliases (`break-words` →
 JSX; don't reintroduce the alias just because it still compiles.
 
 **A `schema.ts` change must be applied to the local database in the same
-turn.** Code reading a column the local database lacks fails at *runtime*;
+turn.** Code reading a column the local database lacks fails at _runtime_;
 `npm run typecheck` passes and the developer finds out by hitting a broken page.
-Run the new `frontend/drizzle/NNNN_*.sql` (they are written to be re-runnable)
-rather than `drizzle-kit push --force`, which drops things.
+`npm run dev` applies every migration to the local container before it starts,
+but a server that is already running does not. Run the new
+`frontend/drizzle/*.sql` (they are written to be re-runnable) rather than
+`drizzle-kit push --force`, which drops things.
 
 **A `schema.ts` change must also be paired with a migration in
 `frontend/drizzle/`**, or it never reaches QA or production — the pipelines run
-the `.sql` files and never `db:push`.
+the `.sql` files and never `db:push`. Name it
+`$(date -u +%Y%m%d%H%M%S)_what_it_does.sql`, never the next number after
+`0063_`; `test/unit/migrations.test.ts` enforces it, and why is in
+[Naming a migration](CONTRIBUTING.md#naming-a-migration).
 
 **The Harness pipelines are stored inline and mirrored in
 `infra/admin/pipelines/`** (`verify.yml`, `deploy-qa.yml`,
@@ -217,14 +247,14 @@ docker exec workshoporchestrator-postgres-1 psql -U postgres -d workshops_agent 
 
 ## Where things are written down
 
-| Document | Covers |
-| --- | --- |
-| [CONTRIBUTING.md](CONTRIBUTING.md) | Clone to running locally; schema changes; how a change ships |
+| Document                                     | Covers                                                                                                                                 |
+| -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| [CONTRIBUTING.md](CONTRIBUTING.md)           | Clone to running locally; schema changes; how a change ships                                                                           |
 | [docs/environments.md](docs/environments.md) | QA vs production: what is separate, what is shared, who can release; where secrets and settings live (Harness, not `terraform.tfvars`) |
-| [README.md](README.md) | What the product does, architecture, standing up a new deployment |
-| [DEPLOY.md](DEPLOY.md) | Makefile targets, the deploy pipeline, rollback |
-| [TESTING.md](TESTING.md) | Why the runner's tests exist; exercising code without deploying |
-| [docs/operations.md](docs/operations.md) | The deployed environment, its quirks, production data, known issues |
-| [docs/harness.md](docs/harness.md) | Harness API access and the pipeline/trigger traps |
-| [docs/evals-port.md](docs/evals-port.md) | Every feature of the eVals Google Sheet and whether it is ported, partial, or still to decide; update a row when you port one |
-| [docs/api.md](docs/api.md) | Personal access tokens, which routes take one, and the session-only exceptions; the endpoint reference itself is `/api` |
+| [README.md](README.md)                       | What the product does, architecture, standing up a new deployment                                                                      |
+| [DEPLOY.md](DEPLOY.md)                       | Makefile targets, the deploy pipeline, rollback                                                                                        |
+| [TESTING.md](TESTING.md)                     | Why the runner's tests exist; exercising code without deploying                                                                        |
+| [docs/operations.md](docs/operations.md)     | The deployed environment, its quirks, production data, known issues                                                                    |
+| [docs/harness.md](docs/harness.md)           | Harness API access and the pipeline/trigger traps                                                                                      |
+| [docs/evals-port.md](docs/evals-port.md)     | Every feature of the eVals Google Sheet and whether it is ported, partial, or still to decide; update a row when you port one          |
+| [docs/api.md](docs/api.md)                   | Personal access tokens, which routes take one, and the session-only exceptions; the endpoint reference itself is `/api`                |
