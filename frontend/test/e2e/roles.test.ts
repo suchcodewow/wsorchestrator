@@ -267,6 +267,7 @@ const PAGES: Record<string, PageCase> = {
   },
   "/iris/tests/<unknown>": { path: () => "/iris/tests/nonsense", expect: () => 404 },
   "/iris/cohort": { path: () => "/iris/cohort", expect: gated(canManageIris) },
+  "/iris/cohort?view=charts": { path: () => "/iris/cohort?view=charts&q=e2e", expect: gated(canManageIris) },
   "/iris/cohort/<a person>": { path: () => `/iris/cohort/${people.irisTaker.id}`, expect: gated(canManageIris) },
   "/iris/cohort/<unknown>": { path: () => `/iris/cohort/${MISSING}`, expect: () => 404 },
   "/iris/questions": { path: () => "/iris/questions", expect: gated(canManageIris) },
@@ -952,14 +953,15 @@ describe("an Iris sitting, over HTTP", () => {
     assert.equal((await send(who, "PUT", "/api/iris/me/track", { track: "AE" })).status, 200);
     const started = await send(who, "POST", "/api/iris/sittings", { subject: "pipegen" });
     assert.equal(started.status, 201, started.body);
-    let sitting = JSON.parse(started.body).sitting as { attemptId: string; question: Record<string, unknown> };
+    let sitting = JSON.parse(started.body).sitting as { attemptId: string; number: number; question: object };
     for (let guard = 0; guard < 20; guard++) {
-      assert.deepEqual(Object.keys(sitting.question).sort(), ["id", "options", "stem"], "no answer is sent");
+      assert.deepEqual(Object.keys(sitting.question).sort(), ["options", "stem"], "no id, answer or level is sent");
       const res = await send(who, "POST", `/api/iris/sittings/${sitting.attemptId}/answers`, {
-        itemId: sitting.question.id,
+        number: sitting.number,
         choice: -1,
       });
       assert.equal(res.status, 200, res.body);
+      assert.doesNotMatch(res.body, /-l[123]-|"level"|"answer"/, "nothing sent spells a question's level");
       const body = JSON.parse(res.body);
       if (body.done) return body as Record<string, unknown>;
       sitting = body.sitting;

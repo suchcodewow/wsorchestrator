@@ -29,17 +29,21 @@ import {
 import { ITEMS_BY_ID, approvedCounts, isLive, poolFor } from "@/lib/iris/reviews";
 import { SUBJECTS, SUBJECT_KEYS, type SubjectKey, type Track } from "@/lib/iris/subjects";
 
-/** What a taker is shown of a question: never its answer, level or explanation. */
-export type Question = { id: string; stem: string; options: readonly string[] };
+/**
+ * What a taker is shown of a question: its wording and options, nothing else.
+ * Not even its id, which spells its level ("sdlc-l2-04"): watching that move
+ * up or down would tell a taker whether their last answer was right.
+ */
+export type Question = { stem: string; options: readonly string[] };
 
-export const toQuestion = (item: IrisItem): Question => ({ id: item.id, stem: item.stem, options: item.options });
+export const toQuestion = (item: IrisItem): Question => ({ stem: item.stem, options: item.options });
 
 export type SittingView = {
   attemptId: string;
   subject: SubjectKey;
   form: Form;
   mode: "live" | "preview";
-  /** 1-based number of the question on screen. */
+  /** 1-based number of the question on screen; an answer names it, so one from a stale tab is caught. */
   number: number;
   /** How far through the most questions a sitting can take, 0–100, never past 100. */
   progress: number;
@@ -190,7 +194,7 @@ export async function openSitting(userId: string, attemptId: string): Promise<Si
 /**
  * - `not_found` — no such sitting of theirs.
  * - `finished`  — it is over.
- * - `stale`     — they answered a question that is no longer the one on
+ * - `stale`     — they answered a question number that is no longer the one on
  *                 screen, from a second tab; `sitting` is the current one.
  * - `invalid_choice` — not one of the options or "I don't know".
  */
@@ -216,12 +220,25 @@ const MAX_MS = 60 * 60 * 1000;
 export async function answer(
   userId: string,
   attemptId: string,
-  itemId: string,
+  number: number,
   choice: number,
   random: () => number = Math.random,
 ): Promise<AnswerResult> {
   if (!Number.isInteger(choice) || choice < IDK || choice > 3) return { ok: false, error: "invalid_choice" };
 
+  // Which questions it may draw from next is a plain read, made before the
+  // lock below. Reading it inside the transaction took a second connection
+  // while the first was held, so a handful of answers at once could take
+  // every connection in the pool and stall waiting for one more.
+  const [sitting] = await db
+    .select({ subject: irisAttempts.subject, form: irisAttempts.form, mode: irisAttempts.mode })
+    .from(irisAttempts)
+    .where(and(eq(irisAttempts.id, attemptId), eq(irisAttempts.userId, userId)));
+  if (!sitting) return { ok: false, error: "not_found" };
+  const pool = await poolFor(sitting.subject as SubjectKey, sitting.form as Form, sitting.mode as "live" | "preview");
+
+  // The lock is on this one sitting only, so two tabs cannot record two
+  // answers to one question; other takers are never waiting on it.
   return db.transaction(async (tx) => {
     const [attempt] = await tx
       .select()
@@ -230,9 +247,9 @@ export async function answer(
       .for("update");
     if (!attempt) return { ok: false, error: "not_found" };
     if (attempt.finishedAt || !attempt.currentItemId) return { ok: false, error: "finished" };
-    if (attempt.currentItemId !== itemId) return { ok: false, error: "stale", sitting: viewOf(attempt) };
+    if (attempt.questions + 1 !== number) return { ok: false, error: "stale", sitting: viewOf(attempt) };
 
-    const item = ITEMS_BY_ID.get(itemId)!;
+    const item = ITEMS_BY_ID.get(attempt.currentItemId)!;
     const correct = choice !== IDK && choice === item.answer;
     const history = await tx
       .select({
@@ -247,7 +264,6 @@ export async function answer(
       .orderBy(asc(irisResponses.seq));
     const asked = history as Asked[];
 
-    const pool = await poolFor(attempt.subject as SubjectKey, attempt.form as Form, attempt.mode as "live" | "preview");
     const state = {
       level: attempt.level as Level,
       up: attempt.up,

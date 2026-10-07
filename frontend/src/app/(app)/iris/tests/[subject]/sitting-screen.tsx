@@ -81,7 +81,7 @@ export function SittingScreen({
       const res = await fetch(`/api/iris/sittings/${state.sitting.attemptId}/answers`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ itemId: state.sitting.question.id, choice: selected }),
+        body: JSON.stringify({ number: state.sitting.number, choice: selected }),
       });
       const body = await res.json().catch(() => null);
       if (res.status === 409 && body?.error === "stale" && body.sitting) {
@@ -214,7 +214,7 @@ export function SittingScreen({
 
           <AnimatePresence mode="wait">
             <motion.div
-              key={state.sitting.question.id}
+              key={`${state.sitting.attemptId}-${state.sitting.number}`}
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -6 }}
