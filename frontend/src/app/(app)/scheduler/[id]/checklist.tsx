@@ -358,7 +358,7 @@ function ChecklistBoard({
     const key = sectionKey(focus.day, focus.period);
     sections.current.get(key)?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
     const on = setTimeout(() => setLit(key), 150);
-    const off = setTimeout(() => setLit(null), 1900);
+    const off = setTimeout(() => setLit(null), 1100);
     return () => {
       clearTimeout(on);
       clearTimeout(off);
@@ -680,7 +680,7 @@ function HalfSection({
     if (composing) list.current?.scrollTo({ top: list.current.scrollHeight, behavior: "smooth" });
   }, [composing]);
 
-  // Lit, it pulses twice in its own colour and settles; the glow is a shadow, which `overflow-hidden` would clip from anything inside.
+  // Lit, it pulses once in its own colour and settles; the glow is a shadow, which `overflow-hidden` would clip from anything inside.
   const shine = (ring: number, glow: number, alpha: number) =>
     `0 0 0 ${ring}px rgba(${look.light}, ${alpha}), 0 0 ${glow}px ${glow / 4}px rgba(${look.light}, ${alpha * 0.6})`;
   return (
@@ -691,10 +691,10 @@ function HalfSection({
       }}
       animate={
         lit
-          ? { boxShadow: [shine(0, 0, 0), shine(4, 28, 1), shine(2, 12, 0.5), shine(4, 28, 1), shine(0, 0, 0)], scale: [1, 1.025, 1, 1.025, 1] }
+          ? { boxShadow: [shine(0, 0, 0), shine(4, 28, 1), shine(0, 0, 0)], scale: [1, 1.025, 1] }
           : undefined
       }
-      transition={{ duration: 1.7, ease: "easeInOut" }}
+      transition={{ duration: 0.9, ease: "easeInOut" }}
       className={cn(
         "relative flex min-h-0 flex-1 basis-0 flex-col overflow-hidden rounded-xl border",
         look.section,
@@ -724,21 +724,6 @@ function HalfSection({
           <span className={cn("rounded-full px-1.5 py-px text-[11px] font-medium tabular-nums", look.badge)}>
             {done}/{items.length}
           </span>
-        )}
-        {canManage && (
-          <motion.button
-            type="button"
-            whileHover={{ scale: 1.12, rotate: 90 }}
-            whileTap={{ scale: 0.9 }}
-            transition={{ type: "spring", stiffness: 500, damping: 18 }}
-            disabled={full}
-            onClick={() => setEditing(`new:${sectionKey(day, period)}`)}
-            aria-label={`Add to ${look.label}`}
-            title={full ? `A day holds at most ${CHECKLIST_LIMITS.itemsPerDay} items` : `Add to ${look.label}`}
-            className="ml-auto flex size-7 items-center justify-center rounded-full bg-background/70 text-foreground/70 shadow-xs backdrop-blur-sm hover:bg-background hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            <Plus className="size-4" />
-          </motion.button>
         )}
       </div>
 
@@ -789,8 +774,26 @@ function HalfSection({
             </motion.li>
           )}
         </AnimatePresence>
-        {items.length === 0 && !composing && (
-          <li className="flex flex-1 items-center justify-center py-3 text-xs text-foreground/40">{canManage ? "Nothing yet — press +" : "Nothing yet"}</li>
+        {canManage && !composing && (
+          <li>
+            <motion.button
+              type="button"
+              whileHover="hover"
+              whileTap={{ scale: 0.97 }}
+              disabled={full}
+              onClick={() => setEditing(`new:${sectionKey(day, period)}`)}
+              aria-label={`Add to ${look.label}`}
+              title={full ? `A day holds at most ${CHECKLIST_LIMITS.itemsPerDay} items` : `Add to ${look.label}`}
+              className="flex h-9 w-full items-center justify-center rounded-lg border border-dashed border-foreground/25 bg-background/30 text-foreground/50 transition-colors hover:border-foreground/45 hover:bg-background/60 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <motion.span variants={{ hover: { scale: 1.12, rotate: 90 } }} transition={{ type: "spring", stiffness: 500, damping: 18 }}>
+                <Plus className="size-4" />
+              </motion.span>
+            </motion.button>
+          </li>
+        )}
+        {!canManage && items.length === 0 && (
+          <li className="flex flex-1 items-center justify-center py-3 text-xs text-foreground/40">Nothing yet</li>
         )}
       </ul>
     </motion.div>
