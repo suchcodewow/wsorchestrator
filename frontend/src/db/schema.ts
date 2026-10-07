@@ -1227,6 +1227,34 @@ export const cohortChannelContacts = pgTable(
 export const CHANNEL_CONTACT_LIMITS = { email: 320 } as const;
 
 /**
+ * The Slack app's install in the workspace, from Cohort Settings → Slack's
+ * Add to Slack (`lib/slack-app.ts`). At most one row; installing again
+ * replaces it. The bot token is sealed with `lib/secret-box.ts`, so a copy of
+ * the database without the deployment's key holds nothing usable.
+ */
+export const slackInstallation = pgTable(
+  "slack_installation",
+  {
+    /** Always true: the one row. */
+    id: boolean("id").primaryKey().default(true),
+    teamId: text("team_id").notNull(),
+    teamName: text("team_name"),
+    appId: text("app_id").notNull(),
+    botUserId: text("bot_user_id").notNull(),
+    /** As Slack granted them, comma-separated. */
+    scopes: text("scopes").notNull(),
+    token: bytea("token").notNull(),
+    installedBy: text("installed_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    installedAt: timestamp("installed_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [check("slack_installation_one_row", sql`${t.id}`)],
+);
+
+/**
  * Each email's Slack user, as `users.lookupByEmail` last answered; a null id
  * is someone Slack has no account for, asked again after a day. Slack ids
  * never change, so one found is not asked again.

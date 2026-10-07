@@ -79,11 +79,18 @@ a bootcamp is active, `lib/cohorts/slack-sync.ts` keeps
 in step with Cohorts → Current and Cohort Settings → Additional Channel
 Contacts. It removes only people it invited itself (`slack_channel_members`),
 never anyone added by hand. Every run is a dry run until someone presses
-*Go live* on Cohort Settings → Slack. The token is `SLACK_BOT_TOKEN`, from
-`slack_bot_token` / `tf_slack_bot_token`, set on production's workspace only
-(see [What the two share](environments.md#what-the-two-share-and-why-that-matters)).
-The bot needs `users:read`, `users:read.email`, `channels:read`,
-`channels:manage` and `channels:join`. The Sheet's old bot
+*Go live* on Cohort Settings → Slack. The bot is the Slack app's: *Add to
+Slack* on that tab runs Slack's OAuth install with `SLACK_APP_CLIENT_ID` and
+`SLACK_APP_CLIENT_SECRET` (from `slack_app_client_id` /
+`tf_slack_app_client_secret`, set on production's workspace only; see
+[What the two share](environments.md#what-the-two-share-and-why-that-matters))
+and seals the bot token into `slack_installation`. The app's Redirect URLs on
+api.slack.com must include `{app_url}/api/cohorts/slack/oauth/callback`, or
+Slack refuses the install with `bad_redirect_uri`. Until the app is added, a
+`SLACK_BOT_TOKEN` (`slack_bot_token` / `tf_slack_bot_token`) is used instead.
+The install asks for `users:read`, `users:read.email`, `channels:read`,
+`channels:manage` and `channels:join`, and the tab lists any Slack did not
+grant. The Sheet's old bot
 (`sheets_to_slack_conne`) has only the first two and `channels:manage`, so on
 that token a run fails with `conversations.list answered missing_scope (needs
 channels:read)`. A Slack admin must grant the rest and reinstall. Sending a DM

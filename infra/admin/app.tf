@@ -142,6 +142,12 @@ resource "google_cloud_run_v2_service" "app" {
             HIBOB_SYNC_AUDIENCE = local.hibob_sync_audience
             HIBOB_SYNC_INVOKER  = google_service_account.scheduler.email
           },
+          # The Slack app behind Add to Slack. Its client secret is
+          # secret-backed, below.
+          var.slack_app_client_id != "" ? {
+            SLACK_APP_CLIENT_ID = var.slack_app_client_id
+            SLACK_APP_ID        = var.slack_app_id
+          } : {},
           # The Canary Wire's Mindtickle tenant, and who may call its scheduled
           # pull (see scheduler.tf). The key pair is secret-backed, below.
           var.mindtickle_company_id != "" ? {
@@ -204,6 +210,7 @@ resource "google_cloud_run_v2_service" "app" {
           var.hibob_userid != "" ? { HIBOB_TOKEN = "hibob-token" } : {},
           nonsensitive(var.deepgram_api_key != "") ? { DEEPGRAM_API_KEY = "deepgram-api-key" } : {},
           nonsensitive(var.slack_bot_token != "") ? { SLACK_BOT_TOKEN = "slack-bot-token" } : {},
+          var.slack_app_client_id != "" ? { SLACK_APP_CLIENT_SECRET = "slack-app-client-secret" } : {},
           var.mindtickle_company_id != "" ? {
             MT_API_KEY    = "mindtickle-api-key"
             MT_SECRET_KEY = "mindtickle-secret-key"
