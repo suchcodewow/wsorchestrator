@@ -12,9 +12,9 @@ import { redirect } from "next/navigation";
 import { LandingHero } from "./landing-hero";
 
 export const metadata: Metadata = {
-  title: "Harness Events — plan, set up, track and assess",
+  title: "Harness Events — workshops and training",
   description:
-    "Plan a workshop or a challenge, set up its labs and cloud environments, follow it while it runs, and record how everyone scored.",
+    "Plan a workshop or a challenge and have its labs and cloud environments ready when people arrive. Schedule bootcamps across your facilities, follow them as they run, and record how everyone scored.",
 };
 
 export default async function Home() {
@@ -54,9 +54,10 @@ export default async function Home() {
             </div>
           </section>
 
-          <section aria-label="One event, start to finish" className="mx-auto max-w-6xl px-6 pt-16 pb-24 sm:pt-20">
-            <EventTimeline />
-          </section>
+          <div className="mx-auto max-w-6xl space-y-20 px-6 pt-16 pb-24 sm:pt-20">
+            <EventTimeline path="workshops" />
+            <EventTimeline path="training" />
+          </div>
         </LandingHero>
       </main>
 
