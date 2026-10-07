@@ -170,25 +170,25 @@ export function useChecklistButtons({
   const count = (track: ChecklistTrack, day: number, period: ChecklistPeriod): Count =>
     checks.get(countKey(track, day, period)) ?? { total: 0, done: 0 };
 
-  const half = (track: ChecklistTrack, day: number, period: ChecklistPeriod, compact = false) => (
+  const half = (track: ChecklistTrack, day: number, period: ChecklistPeriod) => (
     <HalfButton
       key={period}
       period={period}
       label={checklistDayLabel(track, day, period)}
       count={count(track, day, period)}
-      compact={compact}
       onClick={() => setFocus({ track, day, period })}
     />
   );
 
+  // AM above PM, in the corner for Prep Day and beside each day's title.
+  const halves = (track: ChecklistTrack, day: number) => (
+    <div className="flex shrink-0 flex-col gap-1">{CHECKLIST_PERIODS.map((p) => half(track, day, p))}</div>
+  );
+
   const { track: prepTrack, day: prepDay } = CHECKLIST_PREP_DAY;
   return {
-    dayButton: (column) => (
-      <div className="flex w-full items-center justify-between gap-2">
-        {CHECKLIST_PERIODS.map((p) => half(column.track, column.day, p))}
-      </div>
-    ),
-    prepDayButton: <div className="flex flex-col gap-1">{CHECKLIST_PERIODS.map((p) => half(prepTrack, prepDay, p, true))}</div>,
+    dayButton: (column) => halves(column.track, column.day),
+    prepDayButton: halves(prepTrack, prepDay),
     board: focus && (
       <ChecklistBoard
         key={`${focus.track}:${focus.day}:${focus.period}`}
@@ -215,15 +215,12 @@ function HalfButton({
   period,
   label,
   count,
-  compact,
   onClick,
 }: {
   period: ChecklistPeriod;
   /** "Bootcamp, Day 2 AM", for the button's name. */
   label: string;
   count: Count;
-  /** Tighter, for the corner. */
-  compact: boolean;
   onClick: () => void;
 }) {
   const look = HALVES[period];
@@ -234,8 +231,7 @@ function HalfButton({
       variant="outline"
       size="sm"
       className={cn(
-        "h-7 shrink-0 gap-1.5 px-2 text-xs",
-        compact && "h-6 justify-start gap-1 px-1 has-[>svg]:px-1",
+        "h-6 shrink-0 justify-start gap-1 px-1 text-xs has-[>svg]:px-1",
         allDone ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/15 dark:text-emerald-400" : look.button,
       )}
       aria-label={`${label}: ${count.done} of ${count.total} done`}
@@ -246,8 +242,7 @@ function HalfButton({
       {count.total > 0 && (
         <span
           className={cn(
-            "rounded-full py-px text-[11px] font-medium tabular-nums",
-            compact ? "px-1" : "px-1.5",
+            "rounded-full px-1 py-px text-[11px] font-medium tabular-nums",
             allDone ? "bg-emerald-500/15" : look.badge,
           )}
         >
