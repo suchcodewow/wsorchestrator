@@ -2,8 +2,10 @@
  * The Zoom API calls Google Meetings makes, with a Server-to-Server OAuth app
  * on the Zoom account the connected Google account belongs to: `ZOOM_ACCOUNT_ID`,
  * `ZOOM_CLIENT_ID` and `ZOOM_CLIENT_SECRET` (infra/admin/app.tf). The app
- * needs the `meeting:write:admin`, `meeting:read:admin` and `user:read:admin`
- * scopes. Unset, meetings are synced to Google Calendar with no Zoom link.
+ * needs the `meeting:write:meeting:admin`, `meeting:read:meeting:admin`,
+ * `meeting:update:meeting:admin`, `meeting:delete:meeting:admin` and
+ * `user:read:user:admin` scopes. Unset, meetings are synced to Google Calendar
+ * with no Zoom link.
  */
 
 import "server-only";

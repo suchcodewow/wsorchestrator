@@ -140,7 +140,7 @@ variable "google_meetings_account" {
 }
 
 variable "zoom_account_id" {
-  description = "The Zoom account Google Meetings schedules its Zoom meetings on, through a Server-to-Server OAuth app with the meeting:write:admin, meeting:read:admin and user:read:admin scopes. Not secret: it grants nothing without zoom_client_secret. Empty leaves Zoom off, and invites go out with no Zoom link. QA shares production's Google Workspace, so leave it empty there."
+  description = "The Zoom account Google Meetings schedules its Zoom meetings on, through a Server-to-Server OAuth app with the meeting:write:meeting:admin, meeting:read:meeting:admin, meeting:update:meeting:admin, meeting:delete:meeting:admin and user:read:user:admin scopes. Not secret: it grants nothing without zoom_client_secret. Empty leaves Zoom off, and invites go out with no Zoom link. QA shares production's Google Workspace, so leave it empty there."
   type        = string
   default     = ""
 }

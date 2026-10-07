@@ -123,8 +123,9 @@ Setting it up in an environment:
    app as unverified to an account outside the OAuth client's Workspace; the
    account's own Workspace admin may have to allow the app.
 4. **Zoom.** Create a Server-to-Server OAuth app on the Zoom account the
-   Google account belongs to, with `meeting:write:admin`, `meeting:read:admin`
-   and `user:read:admin`. Set `zoom_account_id` and `zoom_client_id` on the
+   Google account belongs to, with the scopes `meeting:write:meeting:admin`,
+   `meeting:read:meeting:admin`, `meeting:update:meeting:admin`,
+   `meeting:delete:meeting:admin` and `user:read:user:admin`. Set `zoom_account_id` and `zoom_client_id` on the
    workspace, and `zoom_client_secret` as a secret (`tf_zoom_client_secret`).
    Without them, invites go out with no Zoom link and Sync Now says so. Zoom
    takes as an alternative host only someone with an active user on that
