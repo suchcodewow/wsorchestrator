@@ -189,6 +189,7 @@ const STRIP_CREDENTIALS = [
   `delete from api_tokens`,
   `delete from harness_deployed_secrets`,
   `delete from harness_tokens`,
+  `delete from slack_installation`,
   `delete from harness_org_secrets`,
   `delete from harness_template_sources`,
   `update accounts

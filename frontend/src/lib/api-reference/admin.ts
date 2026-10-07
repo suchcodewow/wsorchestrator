@@ -430,7 +430,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "trainingAdmin",
         token: true,
         notes:
-          "A run that has said running for over 10 minutes is shown as failed. running says whether a sync is under way, whichever page is asked for; live whether syncs change Slack or are dry runs; configured whether the deployment has a Slack bot token, which is never returned. active is null when no bootcamp is active; a channel's slackChannelId is null until a live sync has found or created it.",
+          "A run that has said running for over 10 minutes is shown as failed. running says whether a sync is under way, whichever page is asked for; live whether syncs change Slack or are dry runs; configured whether there is a bot token to sync with, from the Slack app's install or the deployment's SLACK_BOT_TOKEN, which is never returned. active is null when no bootcamp is active; a channel's slackChannelId is null until a live sync has found or created it.",
         query: listQuery(SLACK_SYNC_LIST.sorts, "who started it, the trigger, the status or the error", "desc"),
         returns: `{ runs: { id, trigger: "schedule" | "manual", triggeredBy: string | null, status: "running" | "succeeded" | "skipped" | "failed", dryRun: boolean, startedAt, finishedAt, invited, removed, notInSlack, failures: number, unfinished: boolean, error: string | null }[], ${PAGE_FIELDS}, running: boolean, live: boolean, configured: boolean, active: { bootcampId, startDate: "YYYY-MM-DD", channels: { kind: "sales_bootcamp" | "se_bootcamp" | "sales_intermediate" | "se_intermediate", name, slackChannelId: string | null, created: boolean }[] } | null }`,
       },
@@ -445,7 +445,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         returns: `{ ok: true, runId, status: "succeeded" | "skipped", dryRun: boolean, invited, removed, notInSlack, failures: number, unfinished: boolean }`,
         errors: [
           { status: 409, error: "already_running", when: "another sync is running" },
-          { status: 409, error: "not_configured", when: "the deployment has no Slack bot token" },
+          { status: 409, error: "not_configured", when: "the Slack app is not installed and the deployment has no SLACK_BOT_TOKEN" },
           { status: 502, error: "slack_error", when: "Slack refused the token or a call every member would need, such as a missing scope; detail says which" },
         ],
       },
@@ -480,6 +480,55 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         body: { kind: "json", fields: [{ name: "live", type: "boolean", required: true }] },
         returns: "{ live: boolean }",
         errors: [{ status: 400, error: "invalid", when: "the body is not that shape" }],
+      },
+      {
+        method: "GET",
+        path: "/api/cohorts/slack/installation",
+        summary: "The Slack app's install in the workspace, which the cohort sync acts as.",
+        access: "trainingAdmin",
+        token: true,
+        notes:
+          "The bot token is never returned. app.configured says whether the deployment has the app's Client ID and secret, and so can offer Add to Slack. installation is null until someone adds the app; missingScopes lists any the sync needs (users:read, users:read.email, channels:read, channels:manage, channels:join) that it was not granted; readable is false when the saved token was sealed by another deployment, as after an import, and the app must be added again. envToken says whether the deployment also sets SLACK_BOT_TOKEN, which the sync uses only while nothing is installed.",
+        returns:
+          "{ app: { configured: boolean, appId: string | null }, installation: { teamId, teamName: string | null, appId, botUserId, scopes: string[], missingScopes: string[], readable: boolean, installedBy: string | null, installedAt } | null, envToken: boolean }",
+      },
+      {
+        method: "DELETE",
+        path: "/api/cohorts/slack/installation",
+        summary: "Forgets the Slack app's bot token, which stops the sync until the app is added again.",
+        access: "trainingAdmin",
+        token: true,
+        notes:
+          "The app stays installed in Slack, where a workspace admin removes it; the token is not revoked, as another deployment may hold the same one. The sync falls back to SLACK_BOT_TOKEN if the deployment sets it.",
+        returns: "{ ok: true }",
+        errors: [{ status: 404, error: "not_found", when: "the app is not installed" }],
+      },
+      {
+        method: "GET",
+        path: "/api/cohorts/slack/install",
+        summary: "Starts Add to Slack: redirects the browser to Slack to install the app.",
+        access: "trainingAdmin",
+        token: false,
+        notes:
+          "For a browser, from the button on Cohort Settings → Slack. It sets a state cookie for ten minutes and redirects (307) to slack.com, asking for the scopes the sync needs; Slack then returns to GET /api/cohorts/slack/oauth/callback.",
+        returns: "307 redirect to slack.com",
+        errors: [{ status: 503, error: "not_configured", when: "SLACK_APP_CLIENT_ID or SLACK_APP_CLIENT_SECRET is unset" }],
+      },
+      {
+        method: "GET",
+        path: "/api/cohorts/slack/oauth/callback",
+        summary: "Where Slack returns after Add to Slack; saves the bot token and goes back to Cohort Settings → Slack.",
+        access: "trainingAdmin",
+        token: false,
+        notes:
+          "Slack calls it with code and state, or error when the install was cancelled. It must be one of the app's Redirect URLs on api.slack.com, as {AUTH_URL}/api/cohorts/slack/oauth/callback. The state must match the cookie GET /api/cohorts/slack/install set in the same browser. The code is traded for the bot token, which is sealed and replaces any earlier install; a SLACK_APP_ID that is set must match the app Slack names. Every outcome redirects (307) to /cohort-settings/slack?slack=installed, cancelled, bad_state or slack_error (with detail, Slack's error such as invalid_code, or wrong_app). An install or a refused one is audited.",
+        query: [
+          { name: "code", type: "string", note: "from Slack" },
+          { name: "state", type: "string", note: "from Slack" },
+          { name: "error", type: "string", note: "from Slack, when the install was cancelled" },
+        ],
+        returns: "307 redirect to /cohort-settings/slack",
+        errors: [{ status: 503, error: "not_configured", when: "SLACK_APP_CLIENT_ID or SLACK_APP_CLIENT_SECRET is unset" }],
       },
     ],
   },

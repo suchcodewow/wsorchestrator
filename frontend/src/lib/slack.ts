@@ -1,12 +1,14 @@
 /**
  * The few Slack Web API calls the cohort channel sync makes, with the bot
- * token in `SLACK_BOT_TOKEN` (infra/admin/app.tf). Each waits out a 429 for
+ * token from the app's install (`lib/slack-app.ts`), else the one in
+ * `SLACK_BOT_TOKEN` (infra/admin/app.tf). Each waits out a 429 for
  * as long as Slack asks, unless that would run past the caller's deadline,
  * when it throws `SlackOutOfTime` so the sync can stop cleanly and pick up on
  * its next run.
  */
 
 import "server-only";
+import { installedSlackToken } from "@/lib/slack-app";
 
 const API = "https://slack.com/api";
 
@@ -29,7 +31,12 @@ export class SlackOutOfTime extends Error {
   }
 }
 
-export function slackToken(): string | null {
+/** The installed app's token wins, so installing it replaces a deployment's older bot without a redeploy. */
+export async function slackToken(): Promise<string | null> {
+  return (await installedSlackToken()) ?? envSlackToken();
+}
+
+export function envSlackToken(): string | null {
   return process.env.SLACK_BOT_TOKEN?.trim() || null;
 }
 

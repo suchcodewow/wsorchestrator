@@ -107,6 +107,25 @@ variable "deepgram_api_key" {
   default     = ""
 }
 
+variable "slack_app_client_id" {
+  description = "Client ID of the Slack app the cohort channel sync acts as (api.slack.com → the app → Basic Information). Not secret. With slack_app_client_secret it puts Add to Slack on Cohort Settings → Slack, whose install saves the bot token in the database, so slack_bot_token is no longer needed. The app's Redirect URLs must include {app_url}/api/cohorts/slack/oauth/callback. Empty leaves Add to Slack off. QA shares production's Slack workspace, so leave it empty there or keep QA's sync in dry run."
+  type        = string
+  default     = ""
+}
+
+variable "slack_app_id" {
+  description = "App ID of that Slack app. Not secret. When set, an install that names any other app is refused."
+  type        = string
+  default     = ""
+}
+
+variable "slack_app_client_secret" {
+  description = "Client Secret of that Slack app, for trading Add to Slack's code for the bot token. Stored in Secret Manager as slack-app-client-secret and read by the app alone; created only when slack_app_client_id is set."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
 variable "slack_bot_token" {
   description = "Bot token (xoxb-) for the Slack app that keeps each active bootcamp's cohort channels in step with the Cohorts page; it needs users:read, users:read.email, channels:read, channels:join and channels:manage. Stored in Secret Manager as slack-bot-token and read by the app alone. Empty leaves the channel sync off: every run is logged as not configured. QA shares production's Slack workspace, so leave it empty there or keep QA's sync in dry run."
   type        = string
