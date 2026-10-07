@@ -532,24 +532,9 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "assessmentsAdmin",
         token: false,
         notes:
-          "A browser link, not an API call: it redirects to Google's consent screen, asking for calendar access and a refresh token, with GOOGLE_USER as the sign-in hint when it is set. Google then sends the browser to /api/evals/google-meetings/callback, which must be registered as a redirect URI on the OAuth client for each environment.",
+          "A browser link, not an API call: it redirects to Google's consent screen, asking for calendar access and a refresh token, with GOOGLE_USER as the sign-in hint when it is set. Google then sends the browser to the shared OAuth callback, GET /api/auth/callback/google, the URI already registered for sign-in. It checks the state cookie, trades the code for a refresh token, seals it, and stores it with the account's email. Reconnecting the same account replaces its token; a different one is refused while any meeting has an invite, because those invites are on the first account's calendar. It then redirects to the Google Meetings tab with ?google= connected, denied, expired, failed, scope or different_account (with ?current= naming the account already connected), and writes an audit record either way.",
         returns: "a redirect to accounts.google.com",
         errors: [{ status: 503, error: "not_configured", when: "AUTH_GOOGLE_ID or AUTH_GOOGLE_SECRET is unset" }],
-      },
-      {
-        method: "GET",
-        path: "/api/evals/google-meetings/callback",
-        summary: "Where Google returns the browser after connecting; stores the account's token.",
-        access: "assessmentsAdmin",
-        token: false,
-        notes:
-          "Checks the state cookie connect set, trades the code for a refresh token, seals it, and stores it with the account's email. Reconnecting the same account replaces its token; a different one is refused while any meeting has an invite, because those invites are on the first account's calendar. Always redirects to the Google Meetings tab with ?google= connected, denied, expired, failed, scope or different_account (with ?current= naming the account already connected). Writes an audit record either way.",
-        query: [
-          { name: "code", type: "string", note: "from Google" },
-          { name: "state", type: "string", note: "from Google; must match the cookie" },
-          { name: "error", type: "string", note: "from Google, when the account refused" },
-        ],
-        returns: "a redirect to /evals-settings/google-meetings",
       },
       {
         method: "GET",
@@ -638,24 +623,8 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "trainingAdmin",
         token: false,
         notes:
-          "For a browser, from the button on Cohort Settings → Slack. It sets a state cookie for ten minutes and redirects (307) to slack.com, asking for the scopes the sync needs; Slack then returns to GET /api/cohorts/slack/oauth/callback.",
+          "For a browser, from the button on Cohort Settings → Slack. It sets a state cookie for ten minutes and redirects (307) to slack.com, asking for the scopes the sync needs. Slack then returns to the shared OAuth callback, GET /api/auth/callback/google, which must be one of the app's Redirect URLs on api.slack.com, as {AUTH_URL}/api/auth/callback/google. It checks the state cookie, trades the code for the bot token, which is sealed and replaces any earlier install (a SLACK_APP_ID that is set must match the app Slack names), and redirects to /cohort-settings/slack?slack=installed, cancelled, bad_state or slack_error (with detail, Slack's error such as invalid_code, or wrong_app). An install or a refused one is audited.",
         returns: "307 redirect to slack.com",
-        errors: [{ status: 503, error: "not_configured", when: "SLACK_APP_CLIENT_ID or SLACK_APP_CLIENT_SECRET is unset" }],
-      },
-      {
-        method: "GET",
-        path: "/api/cohorts/slack/oauth/callback",
-        summary: "Where Slack returns after Add to Slack; saves the bot token and goes back to Cohort Settings → Slack.",
-        access: "trainingAdmin",
-        token: false,
-        notes:
-          "Slack calls it with code and state, or error when the install was cancelled. It must be one of the app's Redirect URLs on api.slack.com, as {AUTH_URL}/api/cohorts/slack/oauth/callback. The state must match the cookie GET /api/cohorts/slack/install set in the same browser. The code is traded for the bot token, which is sealed and replaces any earlier install; a SLACK_APP_ID that is set must match the app Slack names. Every outcome redirects (307) to /cohort-settings/slack?slack=installed, cancelled, bad_state or slack_error (with detail, Slack's error such as invalid_code, or wrong_app). An install or a refused one is audited.",
-        query: [
-          { name: "code", type: "string", note: "from Slack" },
-          { name: "state", type: "string", note: "from Slack" },
-          { name: "error", type: "string", note: "from Slack, when the install was cancelled" },
-        ],
-        returns: "307 redirect to /cohort-settings/slack",
         errors: [{ status: 503, error: "not_configured", when: "SLACK_APP_CLIENT_ID or SLACK_APP_CLIENT_SECRET is unset" }],
       },
     ],
@@ -2108,10 +2077,12 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       {
         method: "GET",
         path: "/api/auth/{...nextauth}",
-        summary: "Auth.js sign-in, callback and session endpoints.",
+        summary: "Auth.js sign-in, callback and session endpoints, and the one OAuth callback every connection returns to.",
         access: "internal",
         token: false,
-        returns: "handled by Auth.js",
+        notes:
+          "GET /api/auth/callback/google is the only redirect URI any provider needs: Google sign-in, Connect Google account (GET /api/evals/google-meetings/connect) and Add to Slack (GET /api/cohorts/slack/install) all return to it. A state that starts wo. is a connection, and is handled here for a signed-in session only (401 without one, 403 without the role the connection needs, 400 for a purpose it does not know, 503 when the provider is not configured), redirecting back to the page that started it; any other state is Auth.js's sign-in.",
+        returns: "handled by Auth.js, or a redirect back to the page a connection started from",
       },
       {
         method: "POST",

@@ -108,7 +108,7 @@ variable "deepgram_api_key" {
 }
 
 variable "slack_app_client_id" {
-  description = "Client ID of the Slack app the cohort channel sync acts as (api.slack.com → the app → Basic Information). Not secret. With slack_app_client_secret it puts Add to Slack on Cohort Settings → Slack, whose install saves the bot token in the database, so slack_bot_token is no longer needed. The app's Redirect URLs must include {app_url}/api/cohorts/slack/oauth/callback. Empty leaves Add to Slack off. QA shares production's Slack workspace, so leave it empty there or keep QA's sync in dry run."
+  description = "Client ID of the Slack app the cohort channel sync acts as (api.slack.com → the app → Basic Information). Not secret. With slack_app_client_secret it puts Add to Slack on Cohort Settings → Slack, whose install saves the bot token in the database, so slack_bot_token is no longer needed. The app's Redirect URLs must include {app_url}/api/auth/callback/google, the one OAuth callback every connection shares. Empty leaves Add to Slack off. QA shares production's Slack workspace, so leave it empty there or keep QA's sync in dry run."
   type        = string
   default     = ""
 }
@@ -140,7 +140,7 @@ variable "google_meetings_account" {
 }
 
 variable "zoom_account_id" {
-  description = "The Zoom account Google Meetings schedules its Zoom meetings on, through a Server-to-Server OAuth app with the meeting:write:admin, meeting:read:admin and user:read:admin scopes. Not secret: it grants nothing without zoom_client_secret. Empty leaves Zoom off, and invites go out with no Zoom link. QA shares production's Google Workspace, so leave it empty there."
+  description = "The Zoom account Google Meetings schedules its Zoom meetings on, through a Server-to-Server OAuth app with the meeting:write:meeting:admin, meeting:read:meeting:admin, meeting:update:meeting:admin, meeting:delete:meeting:admin and user:read:user:admin scopes. Not secret: it grants nothing without zoom_client_secret. Empty leaves Zoom off, and invites go out with no Zoom link. QA shares production's Google Workspace, so leave it empty there."
   type        = string
   default     = ""
 }

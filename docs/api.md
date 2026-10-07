@@ -90,9 +90,10 @@ escalate itself:
 | `/api/backups/**` | Taking, restoring and importing backups |
 | `PATCH`/`DELETE /api/users/[id]`, `POST /api/users/invites`, `POST /api/invites/accept` | Granting roles and creating accounts |
 | `POST /api/settings/domains`, `PATCH`/`DELETE /api/settings/domains/[id]` | Who can sign in at all |
-| `GET /api/cohorts/slack/install`, `GET /api/cohorts/slack/oauth/callback` | Add to Slack, which hands the app a bot token for the whole workspace and ends in a browser |
+| `GET /api/cohorts/slack/install` | Add to Slack, which hands the app a bot token for the whole workspace and ends in a browser |
 | `/api/tokens/**` | Minting tokens (a token must not be able to mint its own replacement) |
-| `GET /api/evals/google-meetings/connect`, `GET /api/evals/google-meetings/callback` | Connecting the Google account every meeting invite is sent from: a browser sign-in, and a standing token for the app |
+| `GET /api/evals/google-meetings/connect` | Connecting the Google account every meeting invite is sent from: a browser sign-in, and a standing token for the app |
+| `GET /api/auth/callback/google` with a `wo.` state | The one OAuth callback both connections above return to, shared with Auth.js's sign-in (see `frontend/src/lib/oauth-callback.ts`) |
 
 You can still *read* users (`GET /api/users`) and sign-in domains
 (`GET /api/settings/domains`) with a token.

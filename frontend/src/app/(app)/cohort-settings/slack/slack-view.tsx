@@ -87,7 +87,7 @@ const ERRORS: Record<string, string> = {
   forbidden: "Your own role changed — reload the page.",
 };
 
-/** What `oauth/callback` said about an Add to Slack, as `?slack=`. */
+/** What the shared OAuth callback (lib/oauth-purposes.ts) said about an Add to Slack, as `?slack=`. */
 const INSTALL_ERRORS: Record<string, string> = {
   cancelled: "Add to Slack was cancelled; nothing changed.",
   bad_state: "That Add to Slack expired or was started in another browser. Start it again.",

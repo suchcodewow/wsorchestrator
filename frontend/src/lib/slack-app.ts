@@ -2,8 +2,9 @@
  * The Slack app the cohort channel sync acts as, and its install in the
  * workspace. `SLACK_APP_CLIENT_ID` and `SLACK_APP_CLIENT_SECRET` let an
  * administrator press Add to Slack on Cohort Settings → Slack; Slack's OAuth
- * v2 flow sends them back to `/api/cohorts/slack/oauth/callback` with a code,
- * which is traded here for the bot token and sealed into `slack_installation`.
+ * v2 flow sends them back to the shared callback (`lib/oauth-callback.ts`) with
+ * a code, which is traded here for the bot token and sealed into
+ * `slack_installation`.
  */
 
 import "server-only";
@@ -21,11 +22,6 @@ export const SLACK_BOT_SCOPES = [
   "channels:join",
 ] as const;
 
-export const SLACK_CALLBACK_PATH = "/api/cohorts/slack/oauth/callback";
-
-/** The state cookie that ties a callback to the browser that started the install. */
-export const SLACK_STATE_COOKIE = "slack_oauth_state";
-
 export type SlackApp = { appId: string | null; clientId: string; clientSecret: string };
 
 /** The app's OAuth credentials, or null when this deployment has none and so cannot offer Add to Slack. */
@@ -34,20 +30,6 @@ export function slackApp(): SlackApp | null {
   const clientSecret = process.env.SLACK_APP_CLIENT_SECRET?.trim();
   if (!clientId || !clientSecret) return null;
   return { appId: process.env.SLACK_APP_ID?.trim() || null, clientId, clientSecret };
-}
-
-/**
- * Where Slack sends the browser back to. It must be one of the app's Redirect
- * URLs on api.slack.com, so it comes from `AUTH_URL` where that is set rather
- * than whatever host the request arrived on.
- */
-export function slackRedirectUri(req: Request): string {
-  return `${appBase(req)}${SLACK_CALLBACK_PATH}`;
-}
-
-/** The app's own origin, for sending the browser back to it. */
-export function appBase(req: Request): string {
-  return process.env.AUTH_URL?.replace(/\/+$/, "") || new URL(req.url).origin;
 }
 
 export function slackAuthorizeUrl(app: SlackApp, redirectUri: string, state: string): string {

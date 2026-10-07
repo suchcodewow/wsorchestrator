@@ -408,14 +408,3 @@ export async function googleMeetingsOverview(): Promise<GoogleMeetingsOverview> 
   ) as Record<MeetingGroup, number>;
   return { connection, zoomConfigured: zoomCredentials() !== null, administrators, counts, groupSizes };
 }
-
-/** Where Google sends the browser back to after the consent screen; each environment's must be registered on the OAuth client. */
-export const GOOGLE_CALLBACK_PATH = "/api/evals/google-meetings/callback";
-
-export function googleRedirectUri(req: Request): string {
-  const base = process.env.AUTH_URL?.replace(/\/+$/, "") || new URL(req.url).origin;
-  return `${base}${GOOGLE_CALLBACK_PATH}`;
-}
-
-/** The cookie that carries the consent request's state from `connect` to `callback`. */
-export const GOOGLE_STATE_COOKIE = "google_meetings_oauth_state";

@@ -85,8 +85,9 @@ Slack* on that tab runs Slack's OAuth install with `SLACK_APP_CLIENT_ID` and
 `tf_slack_app_client_secret`, set on production's workspace only; see
 [What the two share](environments.md#what-the-two-share-and-why-that-matters))
 and seals the bot token into `slack_installation`. The app's Redirect URLs on
-api.slack.com must include `{app_url}/api/cohorts/slack/oauth/callback`, or
-Slack refuses the install with `bad_redirect_uri`. Until the app is added, a
+api.slack.com must include `{app_url}/api/auth/callback/google`, the
+[one OAuth callback](#one-oauth-callback) every connection shares, or Slack
+refuses the install with `bad_redirect_uri`. Until the app is added, a
 `SLACK_BOT_TOKEN` (`slack_bot_token` / `tf_slack_bot_token`) is used instead.
 The install asks for `users:read`, `users:read.email`, `channels:read`,
 `channels:manage` and `channels:join`, and the tab lists any Slack did not
@@ -101,6 +102,24 @@ it alone; unarchive it or rename it.
 **This machine class has `tofu`, not `terraform`.** The Makefile and bootstrap
 script auto-detect which is present.
 
+### One OAuth callback
+
+Every account the app connects returns to one redirect URI,
+`{app_url}/api/auth/callback/google`, which is also Google sign-in's. Register
+it once with each provider and no new connection needs another:
+
+| Provider | Where | Status |
+| --- | --- | --- |
+| Google (sign-in, Google Meetings) | OAuth client in `AUTH_GOOGLE_ID` → Authorized redirect URIs | Already there for every environment |
+| Slack (Add to Slack) | api.slack.com → the app → OAuth & Permissions → Redirect URLs | Add it, replacing the old `/api/cohorts/slack/oauth/callback` |
+
+Auth.js owns that path and cannot be moved off it, so the other flows come to
+it. Their state starts `wo.<purpose>.`; the Auth.js route hands those to
+`lib/oauth-purposes.ts` and every other state to Auth.js. A new connection is
+an entry there and a start route that calls `startOAuth`
+(`lib/oauth-callback.ts`). The "google" in the path is Auth.js's provider id;
+Slack does not mind it.
+
 ### Google Meetings
 
 eVals Settings → Google Meetings sends Google Calendar invites as one Google
@@ -109,11 +128,10 @@ the account is connected once in the browser, and the app keeps the refresh
 token that returns (`google_connections`, sealed like the Harness tokens).
 Setting it up in an environment:
 
-1. **Register the callback** on the shared OAuth client (the one in
-   `AUTH_GOOGLE_ID`): add `{AUTH_URL}/api/evals/google-meetings/callback` as an
-   authorized redirect URI, for each environment that connects, and
-   `http://localhost:3000/api/evals/google-meetings/callback` for local work.
-   Until it is there, Google answers *redirect_uri_mismatch*.
+1. **The callback is already registered.** Google returns to
+   `{AUTH_URL}/api/auth/callback/google`, the sign-in callback every
+   environment has on the OAuth client in `AUTH_GOOGLE_ID` (see
+   [One OAuth callback](#one-oauth-callback)). Nothing to add.
 2. **Enable the Calendar API** (`calendar-json.googleapis.com`) on the project
    that owns that OAuth client. `infra/admin/apis.tf` does this on apply.
 3. **Connect the account.** An Assessments Administrator presses *Connect
@@ -121,12 +139,21 @@ Setting it up in an environment:
    come from, allowing calendar access. `google_meetings_account` (env
    `GOOGLE_USER`) only pre-fills that sign-in. The consent screen shows the
    app as unverified to an account outside the OAuth client's Workspace; the
-   account's own Workspace admin may have to allow the app.
+   account's own Workspace admin may have to allow the app. Do it once per
+   environment, after the release that brings the tab: the token is sealed
+   with that environment's key and kept in its database, so one connected on
+   QA or locally does not carry over. It lasts until Google stops accepting
+   it; Sync Now then says so, and *Reconnect* is the fix.
+   **Publish the OAuth consent screen** (APIs & Services → OAuth consent
+   screen → *In production*). In *Testing* status Google expires a Calendar
+   refresh token after 7 days, and every sync after that fails.
 4. **Zoom.** Create a Server-to-Server OAuth app on the Zoom account the
-   Google account belongs to, with `meeting:write:admin`, `meeting:read:admin`
-   and `user:read:admin`. Set `zoom_account_id` and `zoom_client_id` on the
-   workspace, and `zoom_client_secret` as a secret (`tf_zoom_client_secret`).
-   Without them, invites go out with no Zoom link and Sync Now says so. Zoom
+   Google account belongs to, with the scopes `meeting:write:meeting:admin`,
+   `meeting:read:meeting:admin`, `meeting:update:meeting:admin`,
+   `meeting:delete:meeting:admin` and `user:read:user:admin`. Set
+   `zoom_account_id` and `zoom_client_id` on the workspace, and
+   `zoom_client_secret` as a secret (`tf_zoom_client_secret`). Without
+   them, invites go out with no Zoom link and Sync Now says so. Zoom
    takes as an alternative host only someone with an active user on that
    account. Sync Now lists the administrators it left out, and still invites
    them.

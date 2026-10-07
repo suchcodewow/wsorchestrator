@@ -505,9 +505,10 @@ const ROUTES: RouteCase[] = [
   { method: "GET", path: "/api/cohorts/slack/installation", allowed: canManageTrainingSettings },
   { method: "DELETE", path: "/api/cohorts/slack/installation", allowed: canManageTrainingSettings, denyOnly: true },
   { method: "GET", path: "/api/cohorts/slack/install", allowed: canManageTrainingSettings, unconfigured: true, sessionOnly: true },
+  // The shared OAuth callback, with a connection's state: no Slack app on the e2e server, so 503 past the gate.
   {
     method: "GET",
-    path: "/api/cohorts/slack/oauth/callback",
+    path: "/api/auth/callback/google?state=wo.slack.stale&code=x",
     allowed: canManageTrainingSettings,
     unconfigured: true,
     sessionOnly: true,
@@ -614,7 +615,13 @@ const ROUTES: RouteCase[] = [
   { method: "POST", path: "/api/evals/google-meetings/sync", allowed: canManageEvalsSettings, denyOnly: true },
   // A redirect to Google, or 503 without an OAuth client; the callback sends a stale state back to the tab.
   { method: "GET", path: "/api/evals/google-meetings/connect", allowed: canManageEvalsSettings, unconfigured: true, sessionOnly: true },
-  { method: "GET", path: "/api/evals/google-meetings/callback?state=stale&code=x", allowed: canManageEvalsSettings, sessionOnly: true },
+  // The shared OAuth callback, which sends a stale state back to the tab.
+  {
+    method: "GET",
+    path: "/api/auth/callback/google?state=wo.google-meetings.stale&code=x",
+    allowed: canManageEvalsSettings,
+    sessionOnly: true,
+  },
   { method: "GET", path: "/api/evals/assessments", allowed: canManageEvalsSettings },
   { method: "POST", path: "/api/evals/assessments", allowed: canManageEvalsSettings, body: () => ({}) },
   { method: "GET", path: "/api/evals/assessments/unassigned-breakouts", allowed: canManageEvalsSettings },
@@ -718,6 +725,28 @@ for (const via of ["session", "token"] as const) describe(`API routes, by ${via}
       assert.deepEqual(wrong, []);
     });
   }
+});
+
+describe("the shared OAuth callback", () => {
+  // A connection's state goes to the connection; anything else is Auth.js's
+  // sign-in, which must behave for everyone exactly as it did before.
+  test("leaves a sign-in state to Auth.js, signed in or not", async () => {
+    const wrong: string[] = [];
+    for (const who of [SIGNED_OUT, ...PERSONA_NAMES] as Who[]) {
+      const { status, location } = await send(who, "GET", "/api/auth/callback/google?state=eyJhbGciOiJkaXIifQ.x&code=x");
+      if (status < 300 || status >= 400 || location?.startsWith("/evals-settings") || location?.startsWith("/cohort-settings")) {
+        wrong.push(`${label(who)}: got ${status} → ${location}`);
+      }
+    }
+    assert.deepEqual(wrong, []);
+  });
+
+  test("sends a connection back to the page that started it, and refuses a purpose it does not know", async () => {
+    const back = await send("assessmentsAdmin", "GET", "/api/auth/callback/google?state=wo.google-meetings.stale&code=x");
+    assert.deepEqual([back.status, back.location], [307, "/evals-settings/google-meetings"]);
+    const unknown = await send("platform", "GET", "/api/auth/callback/google?state=wo.nothing.x&code=x");
+    assert.equal(unknown.status, 400);
+  });
 });
 
 describe("the scheduled HiBob sync", () => {
