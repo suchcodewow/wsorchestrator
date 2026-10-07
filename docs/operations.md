@@ -125,9 +125,10 @@ Setting it up in an environment:
 4. **Zoom.** Create a Server-to-Server OAuth app on the Zoom account the
    Google account belongs to, with the scopes `meeting:write:meeting:admin`,
    `meeting:read:meeting:admin`, `meeting:update:meeting:admin`,
-   `meeting:delete:meeting:admin` and `user:read:user:admin`. Set `zoom_account_id` and `zoom_client_id` on the
-   workspace, and `zoom_client_secret` as a secret (`tf_zoom_client_secret`).
-   Without them, invites go out with no Zoom link and Sync Now says so. Zoom
+   `meeting:delete:meeting:admin` and `user:read:user:admin`. Set
+   `zoom_account_id` and `zoom_client_id` on the workspace, and
+   `zoom_client_secret` as a secret (`tf_zoom_client_secret`). Without
+   them, invites go out with no Zoom link and Sync Now says so. Zoom
    takes as an alternative host only someone with an active user on that
    account. Sync Now lists the administrators it left out, and still invites
    them.
