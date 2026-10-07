@@ -69,6 +69,24 @@ have uncommitted edits in the same checkout. So:
 - If a file holds both your change and someone else's, leave it out of your
   commit and say so in the message.
 
+**A worktree you create gets its own database before anything runs in it.**
+Every checkout pointed at `workshops` shares one schema, so a branch's
+migrations would reach every other checkout's server, and theirs yours. After
+`git worktree add` (or `EnterWorktree`), and before `npm run dev`, a test, or
+anything else that reads `DATABASE_URL`:
+
+```bash
+cd <worktree>/frontend && npm install && npm run db:worktree
+```
+
+It copies the main checkout's `.env` and database into `workshops_wt_<branch>`,
+repoints the worktree's `.env`, and applies the branch's migrations; see
+[Working in a git worktree](CONTRIBUTING.md#working-in-a-git-worktree). Never
+point a worktree at `workshops` itself. When you remove a worktree you made,
+run `npm run db:worktree:drop` in it first; it drops only `workshops_wt_*`.
+The copy is disposable: nothing in it is merged back, so tell the user before
+they author anything there they mean to keep.
+
 **Work on a branch and open a pull request. Never push to `main`.** A merge to
 `main` deploys QA (https://qa.harnessevents.io): it applies `qa_control_plane`,
 migrates QA's Cloud SQL, and rolls QA's Cloud Run. The GitHub ruleset lets
@@ -118,12 +136,17 @@ JSX; don't reintroduce the alias just because it still compiles.
 **A `schema.ts` change must be applied to the local database in the same
 turn.** Code reading a column the local database lacks fails at _runtime_;
 `npm run typecheck` passes and the developer finds out by hitting a broken page.
-Run the new `frontend/drizzle/NNNN_*.sql` (they are written to be re-runnable)
-rather than `drizzle-kit push --force`, which drops things.
+`npm run dev` applies every migration to the local container before it starts,
+but a server that is already running does not. Run the new
+`frontend/drizzle/*.sql` (they are written to be re-runnable) rather than
+`drizzle-kit push --force`, which drops things.
 
 **A `schema.ts` change must also be paired with a migration in
 `frontend/drizzle/`**, or it never reaches QA or production — the pipelines run
-the `.sql` files and never `db:push`.
+the `.sql` files and never `db:push`. Name it
+`$(date -u +%Y%m%d%H%M%S)_what_it_does.sql`, never the next number after
+`0063_`; `test/unit/migrations.test.ts` enforces it, and why is in
+[Naming a migration](CONTRIBUTING.md#naming-a-migration).
 
 **The Harness pipelines are stored inline and mirrored in
 `infra/admin/pipelines/`** (`verify.yml`, `deploy-qa.yml`,
