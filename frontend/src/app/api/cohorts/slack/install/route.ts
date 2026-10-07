@@ -1,20 +1,15 @@
 /**
- * Starts Add to Slack: sends the browser to Slack to install the app, with a
- * state cookie that `oauth/callback` checks. Session-only, as the install
- * ends in a browser and hands the app a bot token for the whole workspace.
+ * Starts Add to Slack: sends the browser to Slack to install the app. Slack
+ * returns to the shared OAuth callback (`lib/oauth-callback.ts`), which checks
+ * the state cookie set here. Session-only, as the install ends in a browser
+ * and hands the app a bot token for the whole workspace.
  */
 
-import { randomBytes } from "node:crypto";
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
+import { oauthRedirectUri, startOAuth } from "@/lib/oauth-callback";
 import { canManageTrainingSettings } from "@/lib/roles";
-import {
-  SLACK_CALLBACK_PATH,
-  SLACK_STATE_COOKIE,
-  slackApp,
-  slackAuthorizeUrl,
-  slackRedirectUri,
-} from "@/lib/slack-app";
+import { slackApp, slackAuthorizeUrl } from "@/lib/slack-app";
 
 export async function GET(req: Request) {
   const session = await auth();
@@ -28,15 +23,5 @@ export async function GET(req: Request) {
   const app = slackApp();
   if (!app) return NextResponse.json({ error: "not_configured" }, { status: 503 });
 
-  const state = randomBytes(24).toString("base64url");
-  const redirectUri = slackRedirectUri(req);
-  const res = NextResponse.redirect(slackAuthorizeUrl(app, redirectUri, state));
-  res.cookies.set(SLACK_STATE_COOKIE, state, {
-    httpOnly: true,
-    secure: redirectUri.startsWith("https:"),
-    sameSite: "lax",
-    path: SLACK_CALLBACK_PATH,
-    maxAge: 600,
-  });
-  return res;
+  return startOAuth(req, "slack", (state) => slackAuthorizeUrl(app, oauthRedirectUri(req), state));
 }

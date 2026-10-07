@@ -27,7 +27,7 @@ export default async function SlackPage({
     getSlackInstallation(),
   ]);
   const envToken = Boolean(envSlackToken());
-  // How Add to Slack went, as `oauth/callback` put it in the URL.
+  // How Add to Slack went, as the shared OAuth callback (lib/oauth-purposes.ts) put it in the URL.
   const result = typeof params.slack === "string" ? params.slack : null;
 
   return (
