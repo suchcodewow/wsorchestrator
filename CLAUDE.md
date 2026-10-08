@@ -69,6 +69,16 @@ have uncommitted edits in the same checkout. So:
 - If a file holds both your change and someone else's, leave it out of your
   commit and say so in the message.
 
+**Start in the main checkout; open a worktree only for work alongside it.**
+The first change in a session goes in the main checkout, on a branch cut from
+`main` (the pull-request rule below still applies). Check first that nothing
+is under way there: `git status --short` is clean, the branch is `main` or
+holds only merged work, and no dev server or other session is running from
+it (`lsof -a -d cwd | grep <checkout>`). If something is, or another piece of
+development starts in a new window while this one is open, put the new work in
+a worktree instead. A worktree for every change only leaves stale checkouts
+and databases to clean up.
+
 **A worktree you create gets its own database before anything runs in it.**
 Every checkout pointed at `workshops` shares one schema, so a branch's
 migrations would reach every other checkout's server, and theirs yours. After
