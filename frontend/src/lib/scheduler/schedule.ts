@@ -841,7 +841,7 @@ async function hasSessions(bootcampId: string): Promise<boolean> {
 
 const INSERT_BATCH = 100;
 
-/** One track-day of the source's checklist, oldest first, with whom each item tags. */
+/** One track-day of the source's checklist, each half in its order on the board, with whom each item tags. */
 async function loadChecklistDay(bootcampId: string, track: ScheduleTrack, day: number): Promise<NewChecklistItem[]> {
   const c = scheduleChecklistItems;
   return db
@@ -859,15 +859,16 @@ async function loadChecklistDay(bootcampId: string, track: ScheduleTrack, day: n
     })
     .from(c)
     .where(and(eq(c.bootcampId, bootcampId), eq(c.track, track), eq(c.day, day)))
-    .orderBy(c.createdAt, c.id)
+    .orderBy(c.period, c.position, c.createdAt, c.id)
     .limit(CHECKLIST_LIMITS.itemsPerDay);
 }
 
 /**
  * Replaces every session of the bootcamp with `sessions`, and adds `items` to
- * its checklists, all to do, each in the same half of its day. Its own items
- * stay: one whose half-day already has an item of the same name is not added
- * again, nor one past a day's limit.
+ * its checklists, all to do, each in the same half of its day and in the
+ * source's order, after any already there. Its own items stay: one whose
+ * half-day already has an item of the same name is not added again, nor one
+ * past a day's limit.
  */
 async function writeSchedule(
   actorId: string,
@@ -903,7 +904,7 @@ async function writeSchedule(
       const { track, day } = dayItems[0]!;
       const c = scheduleChecklistItems;
       const existing = await tx
-        .select({ name: sql<string>`${c.period} || ':' || lower(${c.name})` })
+        .select({ name: sql<string>`${c.period} || ':' || lower(${c.name})`, period: c.period, position: c.position })
         .from(c)
         .where(and(eq(c.bootcampId, bootcampId), eq(c.track, track), eq(c.day, day)))
         .limit(CHECKLIST_LIMITS.itemsPerDay);
@@ -914,6 +915,14 @@ async function writeSchedule(
       tally.had += dayItems.length - fresh.length;
       tally.full += fresh.length - adding.length;
       if (adding.length === 0) continue;
+      // Each half carries on after its last item.
+      const next = new Map<string, number>();
+      for (const e of existing) next.set(e.period, Math.max(next.get(e.period) ?? 0, e.position + 1));
+      const placeOf = (period: string) => {
+        const place = next.get(period) ?? 0;
+        next.set(period, place + 1);
+        return place;
+      };
 
       const made = await tx
         .insert(c)
@@ -923,6 +932,7 @@ async function writeSchedule(
             track,
             day,
             period: i.period,
+            position: placeOf(i.period),
             name: i.name,
             ownerEmail: i.ownerEmail,
             ownerName: i.ownerName,

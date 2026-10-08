@@ -78,6 +78,17 @@ export function testScope(name: string) {
     return { id, email: address, access };
   }
 
+  /** Someone on the employee list, with or without an account; the id carries the scope. */
+  async function createEmployee(key: string, email?: string): Promise<string> {
+    const id = `${TEST_PREFIX}${scope}${key}_employee`;
+    const address = (email ?? `${id}@${TEST_EMAIL_DOMAIN}`).toLowerCase();
+    await db
+      .insert(employees)
+      .values({ id, email: address, fullName: `${key} employee`, raw: {} })
+      .onConflictDoUpdate({ target: employees.id, set: { email: address } });
+    return address;
+  }
+
   /** A bootcamp history row; its email carries the scope, so cleanup finds it. */
   async function createHistory(key: string): Promise<string> {
     const email = `${TEST_PREFIX}${scope}${key}@${TEST_EMAIL_DOMAIN}`.toLowerCase();
@@ -106,6 +117,7 @@ export function testScope(name: string) {
 
   return {
     createUser,
+    createEmployee,
     createHistory,
     createAssessment,
     activeBootcamp,

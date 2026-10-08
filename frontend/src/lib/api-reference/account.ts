@@ -4,7 +4,7 @@ import type { EndpointGroup } from "./types";
 
 /** One checklist item, as the Scheduler's routes and the inbox return it. */
 export const CHECKLIST_ITEM_ROW =
-  "{ id, track: \"btc\" | \"int\" | \"btc_se\" | \"int_se\", day: number, period: \"am\" | \"pm\", name, ownerEmail: string | null, ownerName, done: boolean, doneAt: string | null, doneByName, createdBy: string | null, createdByName, createdByEmail, createdAt, mentions: { email, fullName }[] }";
+  "{ id, track: \"btc\" | \"int\" | \"btc_se\" | \"int_se\", day: number, period: \"am\" | \"pm\", position: number, name, ownerEmail: string | null, ownerName, done: boolean, doneAt: string | null, doneByName, createdBy: string | null, createdByName, createdByEmail, createdAt, mentions: { email, fullName }[] }";
 
 const ORG_SECRET_SEARCH = "the id, the file name, the kind or who last stored it";
 
@@ -147,6 +147,47 @@ export const ACCOUNT_GROUPS: EndpointGroup[] = [
           { status: 400, error: "invalid", when: "a value is not one of the allowed ones" },
           { status: 403, error: "forbidden", when: "calendarScope is sent by someone below Event Manager" },
         ],
+      },
+      {
+        method: "GET",
+        path: "/api/me/impersonation",
+        summary: "Returns whom you are viewing the app as, if anyone.",
+        access: "signedIn",
+        token: false,
+        notes: "Session only: impersonation belongs to a browser session, which a token does not have.",
+        returns:
+          "{ impersonating: { id, email: string | null, name: string | null } | null, impersonator: { id, email: string | null, name: string | null } | null }",
+      },
+      {
+        method: "POST",
+        path: "/api/me/impersonation",
+        summary: "Starts viewing the app as an employee.",
+        access: "platform",
+        token: false,
+        notes:
+          "Session only. From the next request this session is the employee's: every route answers with their roles and their data. It changes nothing: every other POST, PUT, PATCH and DELETE is refused with 403 `impersonating` until DELETE ends it. Anyone on the employee list may be chosen; someone who has never signed in is shown as a new account, with an id of the form `employee:{hibobId}`. Sent while already viewing as someone, it switches to the new employee. The audit trail records the administrator as the actor, with `impersonating` in the detail.",
+        body: {
+          kind: "json",
+          fields: [{ name: "email", type: "string", required: true, note: "an employee's email; case is ignored" }],
+        },
+        returns:
+          "{ impersonating: { id, email, name: string | null }, impersonator: { id, email: string | null, name: string | null } }",
+        errors: [
+          { status: 400, error: "invalid_email", when: "email is missing or blank" },
+          { status: 404, error: "not_found", when: "no employee has that email" },
+          { status: 409, error: "self", when: "the email is your own" },
+          { status: 409, error: "platform_admin", when: "the employee is a platform administrator, who already sees everything" },
+          { status: 409, error: "no_session", when: "the request carries no session cookie of yours to set it on" },
+        ],
+      },
+      {
+        method: "DELETE",
+        path: "/api/me/impersonation",
+        summary: "Stops viewing the app as someone else.",
+        access: "signedIn",
+        token: false,
+        notes: "Session only. The one change allowed while impersonating. Not impersonating, it changes nothing and answers the same.",
+        returns: "{ impersonating: null, impersonator: null }",
       },
       {
         method: "GET",

@@ -42,6 +42,8 @@ export type ChecklistItemRow = {
   track: ChecklistTrack;
   day: number;
   period: ChecklistPeriod;
+  /** Its place in its half-day, first at 0. */
+  position: number;
   name: string;
   /** Null when nobody owns it. */
   ownerEmail: string | null;
@@ -67,6 +69,7 @@ const COLUMNS = {
   track: t.track,
   day: t.day,
   period: t.period,
+  position: t.position,
   name: t.name,
   ownerEmail: t.ownerEmail,
   ownerName: t.ownerName,
@@ -105,14 +108,20 @@ export async function checklistCounts(bootcampId: string): Promise<ChecklistDayC
     .orderBy(t.track, t.day, t.period);
 }
 
-/** One track-day's items, both halves, oldest first. */
+/** One track-day's items, both halves, each half in its order on the board. */
 export async function listDayItems(bootcampId: string, track: ChecklistTrack, day: number): Promise<ChecklistItemRow[]> {
   return db
     .select(COLUMNS)
     .from(t)
     .where(and(eq(t.bootcampId, bootcampId), eq(t.track, track), eq(t.day, day)))
-    .orderBy(t.createdAt, t.id)
+    .orderBy(t.period, t.position, t.createdAt, t.id)
     .limit(CHECKLIST_LIMITS.itemsPerDay);
+}
+
+/** Where a new item goes in a half-day: after the last one there. */
+export function nextPosition(bootcampId: string, track: ChecklistTrack, day: number, period: ChecklistPeriod) {
+  return sql<number>`(select coalesce(max(${t.position}) + 1, 0) from ${t}
+    where ${t.bootcampId} = ${bootcampId} and ${t.track} = ${track} and ${t.day} = ${day} and ${t.period} = ${period})`;
 }
 
 export const checklistItemSchema = z.object({
@@ -177,6 +186,7 @@ export async function addChecklistItem(
         track,
         day,
         period,
+        position: nextPosition(bootcampId, track, day, period),
         name: input.name,
         ownerEmail: owner?.email ?? null,
         ownerName: owner?.fullName ?? "",
@@ -208,6 +218,8 @@ export const checklistEditSchema = z.object({
   track: checklistTrackSchema.optional(),
   day: checklistDaySchema.optional(),
   period: checklistPeriodSchema.optional(),
+  /** Its place in the half-day it ends up in, first at 0, counting the others there. */
+  position: z.number().int().min(0).max(CHECKLIST_LIMITS.itemsPerDay).optional(),
   name: checklistItemSchema.shape.name.optional(),
   /** Null or blank for nobody. */
   ownerEmail: checklistItemSchema.shape.ownerEmail,
@@ -274,11 +286,15 @@ export async function editChecklistItem(
  * either half of another day of any track the bootcamp runs. A field left
  * out stays as it is. It keeps who wrote it, whom it tags, and whether it is
  * done; a day it joins must have room for it.
+ *
+ * `position` puts it at that place among the half-day's other items, first at
+ * 0, as a card dropped on the board does; past the end is the end. Without
+ * one, an item that changes half goes last, and one that stays keeps its place.
  */
 export async function moveChecklistItem(
   bootcampId: string,
   itemId: string,
-  to: { track?: ChecklistTrack; day?: number; period?: ChecklistPeriod },
+  to: { track?: ChecklistTrack; day?: number; period?: ChecklistPeriod; position?: number },
 ): Promise<Result<ChecklistItemRow>> {
   const [item] = await db
     .select({ name: t.name, track: t.track, day: t.day, period: t.period })
@@ -288,11 +304,13 @@ export async function moveChecklistItem(
   const track = to.track ?? item.track;
   const day = to.day ?? item.day;
   const period = to.period ?? item.period;
+  const place = to.position === undefined ? "" : ` (place ${to.position + 1})`;
   noteAudit({
     target: itemId,
-    targetLabel: `${checklistDayLabel(item.track, item.day, item.period)} → ${checklistDayLabel(track, day, period)}: ${item.name.slice(0, 80)}`,
+    targetLabel: `${checklistDayLabel(item.track, item.day, item.period)} → ${checklistDayLabel(track, day, period)}${place}: ${item.name.slice(0, 80)}`,
   });
   const otherDay = track !== item.track || day !== item.day;
+  const otherHalf = otherDay || period !== item.period;
   if (otherDay) {
     const bootcamp = await scheduleBootcamp(bootcampId);
     if (!bootcamp) return { ok: false, error: "not_found" };
@@ -300,21 +318,41 @@ export async function moveChecklistItem(
   }
 
   return db.transaction(async (tx) => {
+    // Held until commit, as adding one holds it: a move and an add cannot both take a day's last place, nor two drops the same one.
+    await tx.select({ id: bootcamps.id }).from(bootcamps).where(eq(bootcamps.id, bootcampId)).for("update");
     if (otherDay) {
-      // Held until commit, as adding one holds it, so a move and an add cannot both take the last place.
-      await tx.select({ id: bootcamps.id }).from(bootcamps).where(eq(bootcamps.id, bootcampId)).for("update");
       const [count] = await tx
         .select({ n: sql<number>`count(*)::int` })
         .from(t)
         .where(and(eq(t.bootcampId, bootcampId), eq(t.track, track), eq(t.day, day)));
       if ((count?.n ?? 0) >= CHECKLIST_LIMITS.itemsPerDay) return { ok: false, error: "full" } as const;
     }
-    const [row] = await tx
+    const [moved] = await tx
       .update(t)
       .set({ track, day, period })
       .where(and(eq(t.id, itemId), eq(t.bootcampId, bootcampId)))
-      .returning(COLUMNS);
-    return row ? ({ ok: true, value: row } as const) : ({ ok: false, error: "not_found" } as const);
+      .returning({ id: t.id });
+    if (!moved) return { ok: false, error: "not_found" } as const;
+
+    if (to.position !== undefined || otherHalf) {
+      const others = await tx
+        .select({ id: t.id })
+        .from(t)
+        .where(and(eq(t.bootcampId, bootcampId), eq(t.track, track), eq(t.day, day), eq(t.period, period), sql`${t.id} <> ${itemId}`))
+        .orderBy(t.position, t.createdAt, t.id)
+        .limit(CHECKLIST_LIMITS.itemsPerDay);
+      const order = others.map((o) => o.id);
+      order.splice(Math.min(to.position ?? order.length, order.length), 0, itemId);
+      // The whole half renumbered 0 upwards, in one statement.
+      await tx.execute(sql`update ${t} set position = v.place
+        from (values ${sql.join(
+          order.map((id, place) => sql`(${id}::uuid, ${place}::int)`),
+          sql`, `,
+        )}) as v(id, place)
+        where ${t.id} = v.id`);
+    }
+    const [row] = await tx.select(COLUMNS).from(t).where(eq(t.id, itemId));
+    return { ok: true, value: row! } as const;
   });
 }
 

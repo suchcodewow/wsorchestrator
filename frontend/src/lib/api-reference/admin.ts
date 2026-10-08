@@ -532,24 +532,9 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "assessmentsAdmin",
         token: false,
         notes:
-          "A browser link, not an API call: it redirects to Google's consent screen, asking for calendar access and a refresh token, with GOOGLE_USER as the sign-in hint when it is set. Google then sends the browser to /api/evals/google-meetings/callback, which must be registered as a redirect URI on the OAuth client for each environment.",
+          "A browser link, not an API call: it redirects to Google's consent screen, asking for calendar access and a refresh token, with GOOGLE_USER as the sign-in hint when it is set. Google then sends the browser to the shared OAuth callback, GET /api/auth/callback/google, the URI already registered for sign-in. It checks the state cookie, trades the code for a refresh token, seals it, and stores it with the account's email. Reconnecting the same account replaces its token; a different one is refused while any meeting has an invite, because those invites are on the first account's calendar. It then redirects to the Google Meetings tab with ?google= connected, denied, expired, failed, scope or different_account (with ?current= naming the account already connected), and writes an audit record either way.",
         returns: "a redirect to accounts.google.com",
         errors: [{ status: 503, error: "not_configured", when: "AUTH_GOOGLE_ID or AUTH_GOOGLE_SECRET is unset" }],
-      },
-      {
-        method: "GET",
-        path: "/api/evals/google-meetings/callback",
-        summary: "Where Google returns the browser after connecting; stores the account's token.",
-        access: "assessmentsAdmin",
-        token: false,
-        notes:
-          "Checks the state cookie connect set, trades the code for a refresh token, seals it, and stores it with the account's email. Reconnecting the same account replaces its token; a different one is refused while any meeting has an invite, because those invites are on the first account's calendar. Always redirects to the Google Meetings tab with ?google= connected, denied, expired, failed, scope or different_account (with ?current= naming the account already connected). Writes an audit record either way.",
-        query: [
-          { name: "code", type: "string", note: "from Google" },
-          { name: "state", type: "string", note: "from Google; must match the cookie" },
-          { name: "error", type: "string", note: "from Google, when the account refused" },
-        ],
-        returns: "a redirect to /evals-settings/google-meetings",
       },
       {
         method: "GET",
@@ -638,24 +623,8 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "trainingAdmin",
         token: false,
         notes:
-          "For a browser, from the button on Cohort Settings → Slack. It sets a state cookie for ten minutes and redirects (307) to slack.com, asking for the scopes the sync needs; Slack then returns to GET /api/cohorts/slack/oauth/callback.",
+          "For a browser, from the button on Cohort Settings → Slack. It sets a state cookie for ten minutes and redirects (307) to slack.com, asking for the scopes the sync needs. Slack then returns to the shared OAuth callback, GET /api/auth/callback/google, which must be one of the app's Redirect URLs on api.slack.com, as {AUTH_URL}/api/auth/callback/google. It checks the state cookie, trades the code for the bot token, which is sealed and replaces any earlier install (a SLACK_APP_ID that is set must match the app Slack names), and redirects to /cohort-settings/slack?slack=installed, cancelled, bad_state or slack_error (with detail, Slack's error such as invalid_code, or wrong_app). An install or a refused one is audited.",
         returns: "307 redirect to slack.com",
-        errors: [{ status: 503, error: "not_configured", when: "SLACK_APP_CLIENT_ID or SLACK_APP_CLIENT_SECRET is unset" }],
-      },
-      {
-        method: "GET",
-        path: "/api/cohorts/slack/oauth/callback",
-        summary: "Where Slack returns after Add to Slack; saves the bot token and goes back to Cohort Settings → Slack.",
-        access: "trainingAdmin",
-        token: false,
-        notes:
-          "Slack calls it with code and state, or error when the install was cancelled. It must be one of the app's Redirect URLs on api.slack.com, as {AUTH_URL}/api/cohorts/slack/oauth/callback. The state must match the cookie GET /api/cohorts/slack/install set in the same browser. The code is traded for the bot token, which is sealed and replaces any earlier install; a SLACK_APP_ID that is set must match the app Slack names. Every outcome redirects (307) to /cohort-settings/slack?slack=installed, cancelled, bad_state or slack_error (with detail, Slack's error such as invalid_code, or wrong_app). An install or a refused one is audited.",
-        query: [
-          { name: "code", type: "string", note: "from Slack" },
-          { name: "state", type: "string", note: "from Slack" },
-          { name: "error", type: "string", note: "from Slack, when the install was cancelled" },
-        ],
-        returns: "307 redirect to /cohort-settings/slack",
         errors: [{ status: 503, error: "not_configured", when: "SLACK_APP_CLIENT_ID or SLACK_APP_CLIENT_SECRET is unset" }],
       },
     ],
@@ -1092,7 +1061,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       {
         method: "GET",
         path: "/api/scheduler/bootcamps/{id}/checklist/{track}/{day}",
-        summary: "Lists what is to be done before one day of one track, AM and PM together, oldest first.",
+        summary: "Lists what is to be done before one day of one track, AM and PM together, each half in its order on the board.",
         access: "trainingViewer",
         token: true,
         notes: `Whole: a track-day holds at most ${CHECKLIST_LIMITS.itemsPerDay} items, both halves together. Each item's period says which half it is in.`,
@@ -1106,6 +1075,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         summary: "Adds an item to the AM or PM half of one track-day's checklist, recording you as who wrote it.",
         access: "trainingAdmin",
         token: true,
+        notes: "It goes last in its half; PATCH it with position to move it up.",
         params: CHECKLIST_DAY_PARAMS,
         body: {
           kind: "json",
@@ -1132,11 +1102,11 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       {
         method: "PATCH",
         path: "/api/scheduler/bootcamps/{id}/checklist/items/{itemId}",
-        summary: "Ticks a checklist item done or back to do, changes its name or owner, or moves it to another half-day.",
+        summary: "Ticks a checklist item done or back to do, changes its name or owner, or moves it to another half-day or another place in its own.",
         access: "signedIn",
         token: true,
         notes:
-          "A Training Administrator can tick any item; anyone else only one they own, matched by their account's email. Ticking one already done keeps when it was first ticked. Only a Training Administrator can change the name or owner, or move it; a field left out stays as it is. A new name replaces whom the item tags with mentions: anyone no longer named drops out, and anyone newly named finds it in their inbox. A move keeps who wrote it, whom it tags and whether it is done. Given together, the name and owner are changed first, then the item moved, then ticked; the first step that fails stops the rest, and steps before it stay saved.",
+          "A Training Administrator can tick any item; anyone else only one they own, matched by their account's email. Ticking one already done keeps when it was first ticked. Only a Training Administrator can change the name or owner, or move it; a field left out stays as it is. A new name replaces whom the item tags with mentions: anyone no longer named drops out, and anyone newly named finds it in their inbox. A move keeps who wrote it, whom it tags and whether it is done. position puts it at that place among the other items of the half-day it ends up in, renumbering that half from 0, as dropping a card on the board does; past the end is the end. Without position, an item moved to another half goes last there, and one that stays keeps its place. Given together, the name and owner are changed first, then the item moved, then ticked; the first step that fails stops the rest, and steps before it stay saved.",
         params: [BOOTCAMP_ID, CHECKLIST_ITEM_ID],
         body: {
           kind: "json",
@@ -1145,6 +1115,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
             { name: "track", type: TRACK_TYPE, note: "to move it to another track" },
             { name: "day", type: "number", note: "to move it to another day: 1-based; 0 is Prep Day, on btc only" },
             { name: "period", type: `"am" | "pm"`, note: "to move it to the other half of the day" },
+            { name: "position", type: "number", note: `its place in the half-day, first at 0, counting the other items there; 0 to ${CHECKLIST_LIMITS.itemsPerDay}` },
             { name: "name", type: "string", note: `up to ${CHECKLIST_LIMITS.name} characters` },
             { name: "ownerEmail", type: "string | null", note: "a Training administrator or guest judge of the bootcamp; null or blank for nobody" },
             {
@@ -1156,10 +1127,10 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         },
         returns: CHECKLIST_ITEM_ROW,
         errors: [
-          { status: 400, error: "invalid", when: "none of done, name, ownerEmail, track, day or period is given, or one is the wrong type, or name is empty or too long" },
+          { status: 400, error: "invalid", when: "none of done, name, ownerEmail, track, day, period or position is given, or one is the wrong type, or name is empty or too long" },
           { status: 400, error: "no_day", when: "the track does not run that day at this bootcamp, or day is 0 on a track other than btc" },
           { status: 400, error: "not_instructor", when: "ownerEmail or a mention is not an administrator or guest judge of the bootcamp; email names it" },
-          { status: 403, error: "forbidden", when: "you are not a Training Administrator and name, ownerEmail, track, day or period is given" },
+          { status: 403, error: "forbidden", when: "you are not a Training Administrator and name, ownerEmail, track, day, period or position is given" },
           { status: 403, error: "not_owner", when: "you are not a Training Administrator and it is not yours" },
           { status: 404, error: "not_found", when: "no such bootcamp or item" },
           { status: 409, error: "full", when: `the day it is moved to already has ${CHECKLIST_LIMITS.itemsPerDay} items` },
@@ -2128,10 +2099,12 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       {
         method: "GET",
         path: "/api/auth/{...nextauth}",
-        summary: "Auth.js sign-in, callback and session endpoints.",
+        summary: "Auth.js sign-in, callback and session endpoints, and the one OAuth callback every connection returns to.",
         access: "internal",
         token: false,
-        returns: "handled by Auth.js",
+        notes:
+          "GET /api/auth/callback/google is the only redirect URI any provider needs: Google sign-in, Connect Google account (GET /api/evals/google-meetings/connect) and Add to Slack (GET /api/cohorts/slack/install) all return to it. A state that starts wo. is a connection, and is handled here for a signed-in session only (401 without one, 403 without the role the connection needs, 400 for a purpose it does not know, 503 when the provider is not configured), redirecting back to the page that started it; any other state is Auth.js's sign-in.",
+        returns: "handled by Auth.js, or a redirect back to the page a connection started from",
       },
       {
         method: "POST",

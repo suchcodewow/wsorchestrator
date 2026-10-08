@@ -29,7 +29,12 @@ export const getUserPreferences = cache(
   async (): Promise<UserPreferences> => {
     const session = await auth();
     if (!session?.user?.id) return DEFAULTS;
-    return preferencesOf(session.user.id);
+    const shown = await preferencesOf(session.user.id);
+    if (!session.impersonator) return shown;
+
+    // Viewing as someone else shows their calendar, in your own theme.
+    const own = await preferencesOf(session.impersonator.id);
+    return { ...shown, themePreference: own.themePreference };
   },
 );
 

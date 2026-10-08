@@ -8,13 +8,18 @@ import {
   ChevronDown,
   ChevronsUpDown,
   Laptop,
+  Loader2,
   LogOut,
   Moon,
   ShieldCheck,
   Sun,
+  Undo2,
+  VenetianMask,
   type LucideIcon,
 } from "lucide-react";
 import { Avatar } from "@/components/avatar";
+import { useEmployeeSearch } from "@/components/employee-picker";
+import { Input } from "@/components/ui/input";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -28,8 +33,9 @@ import {
 import { THEME_PREFERENCES, type ThemePreference } from "@/db/schema";
 import type { BuildInfo } from "@/lib/build-info";
 import { visibleSections } from "@/lib/nav";
-import { accessBadges, type Access } from "@/lib/roles";
+import { accessBadges, canImpersonate, type Access } from "@/lib/roles";
 import { applyTheme } from "@/lib/theme";
+import { cn } from "@/lib/utils";
 import { setThemePreference } from "@/lib/user-settings";
 
 const SECTION_HEADING =
@@ -63,6 +69,128 @@ function buildTitle(build: BuildInfo): string {
   return build.message ? `${built}\n${build.message}` : built;
 }
 
+/** The administrator really signed in, while the menu's name is whom they view the app as. */
+export type Impersonator = { name: string | null; email: string | null };
+
+const IMPERSONATION_ERRORS: Record<string, string> = {
+  not_found: "Not on the employee list.",
+  self: "That is you.",
+  platform_admin: "A platform administrator already sees everything.",
+  impersonating: "Stop viewing as them first.",
+};
+
+/**
+ * Starts or ends viewing as someone, then reloads the whole app as the new
+ * person: every page is rendered for whoever the session is, and the page
+ * an administrator was on may be one the employee cannot open.
+ */
+async function impersonate(email: string | null): Promise<string | null> {
+  const res = await fetch("/api/me/impersonation", {
+    method: email ? "POST" : "DELETE",
+    headers: { "content-type": "application/json" },
+    body: email ? JSON.stringify({ email }) : undefined,
+  });
+  if (!res.ok) {
+    const body = (await res.json().catch(() => null)) as { error?: string } | null;
+    return IMPERSONATION_ERRORS[body?.error ?? ""] ?? "Something went wrong.";
+  }
+  window.location.assign(email ? "/" : window.location.href);
+  return null;
+}
+
+/** Finds an employee to view the app as. */
+function ImpersonationPicker() {
+  const [query, setQuery] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const q = query.trim();
+  const { matches } = useEmployeeSearch(q, q.length > 0);
+
+  async function choose(email: string) {
+    setBusy(true);
+    setError(await impersonate(email));
+    setBusy(false);
+  }
+
+  return (
+    <>
+      <div className="px-2 pt-1 pb-1.5">
+        <span className="mb-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+          <VenetianMask className="size-3.5" />
+          View as an employee
+        </span>
+        <Input
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setError(null);
+          }}
+          // Typing belongs to the field, not the menu's jump-to-item search.
+          onKeyDown={(e) => {
+            if (e.key !== "Escape" && e.key !== "ArrowDown") e.stopPropagation();
+          }}
+          placeholder="Search by name or email"
+          aria-label="Search employees to view the app as"
+          autoComplete="off"
+          spellCheck={false}
+          className="h-8 text-sm"
+        />
+        {error && <p className="mt-1.5 text-xs text-destructive">{error}</p>}
+      </div>
+      {q &&
+        matches.slice(0, 6).map((e) => (
+          <DropdownMenuItem
+            key={e.email}
+            disabled={busy}
+            onSelect={(ev) => {
+              ev.preventDefault();
+              void choose(e.email);
+            }}
+            className="flex-col items-start gap-0"
+          >
+            <span className="truncate">{e.fullName}</span>
+            <span className="truncate text-xs text-muted-foreground">{e.email}</span>
+          </DropdownMenuItem>
+        ))}
+    </>
+  );
+}
+
+/** Says whom the app is shown as, and ends it. */
+function ImpersonationNotice({ impersonator, name }: { impersonator: Impersonator; name: string }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  return (
+    <>
+      <div className="mx-1 mb-1 rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1.5 text-xs text-amber-800 dark:text-amber-200">
+        <span className="flex items-center gap-1.5 font-medium">
+          <VenetianMask className="size-3.5 shrink-0" />
+          <span className="truncate">Viewing as {name}</span>
+        </span>
+        <span className="mt-0.5 block truncate opacity-80">
+          Signed in as {impersonator.name ?? impersonator.email}. Nothing can be changed.
+        </span>
+        {error && <span className="mt-0.5 block text-destructive">{error}</span>}
+      </div>
+      <DropdownMenuItem
+        disabled={busy}
+        onSelect={(ev) => {
+          ev.preventDefault();
+          setBusy(true);
+          void impersonate(null).then((e) => {
+            setError(e);
+            setBusy(false);
+          });
+        }}
+      >
+        {busy ? <Loader2 className="animate-spin" /> : <Undo2 />}
+        Stop viewing as {name}
+      </DropdownMenuItem>
+    </>
+  );
+}
+
 export function UserMenu({
   name,
   email,
@@ -71,6 +199,7 @@ export function UserMenu({
   initialTheme,
   build,
   signOutAction,
+  impersonator = null,
   accountOnly = false,
   variant = "header",
 }: {
@@ -81,6 +210,7 @@ export function UserMenu({
   initialTheme: ThemePreference;
   build: BuildInfo;
   signOutAction: () => Promise<void>;
+  impersonator?: Impersonator | null;
   accountOnly?: boolean;
   variant?: MenuVariant;
 }) {
@@ -105,7 +235,7 @@ export function UserMenu({
     <DropdownMenu>
       <DropdownMenuTrigger
         aria-label={variant === "rail" ? (name ?? email) : undefined}
-        className={TRIGGER_CLASS[variant]}
+        className={cn(TRIGGER_CLASS[variant], impersonator && "ring-2 ring-amber-500/60")}
       >
         {variant === "header" && (
           <>
@@ -156,6 +286,8 @@ export function UserMenu({
           )}
         </DropdownMenuLabel>
 
+        {impersonator && <ImpersonationNotice impersonator={impersonator} name={name ?? email} />}
+
         {sections.map((section) => (
           <Fragment key={section.heading}>
             <DropdownMenuSeparator />
@@ -187,6 +319,13 @@ export function UserMenu({
             ))}
           </DropdownMenuRadioGroup>
         </div>
+
+        {!impersonator && canImpersonate(access) && (
+          <>
+            <DropdownMenuSeparator />
+            <ImpersonationPicker />
+          </>
+        )}
 
         <DropdownMenuSeparator />
 

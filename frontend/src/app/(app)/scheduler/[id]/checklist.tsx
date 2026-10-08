@@ -9,7 +9,10 @@
  * was clicked.
  *
  * A Training administrator adds cards, edits, ticks and removes them, drags
- * them to another half-day, and copies them: the copy button on a card
+ * them up or down their half-day or to another, and copies them. As one is
+ * dragged the others make room where it will land, as sessions do on the
+ * schedule; let go outside every half, or Escape, and it goes back. They also
+ * copy them: the copy button on a card
  * duplicates it in place, or, dragged, drops a duplicate wherever it is let
  * go. An item's owner ticks their own.
  */
@@ -30,6 +33,7 @@ import {
   useSensors,
   type CollisionDetection,
   type DragEndEvent,
+  type DragMoveEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
 import { Check, Copy, Loader2, Plus, Sunrise, Sunset, Trash2 } from "lucide-react";
@@ -47,6 +51,7 @@ import {
 } from "@/db/schema";
 import { mentionsIn, type MentionPick } from "@/lib/mentions";
 import type { ChecklistDayCount, ChecklistItemRow } from "@/lib/scheduler/checklist";
+import { byPlace, placeInHalf, previewHalf } from "@/lib/scheduler/checklist-order";
 import type { Instructor } from "@/lib/scheduler/schedule";
 import { TRACK_LABELS, checklistDayLabel, dayDate, trackDays } from "@/lib/scheduler/timeline";
 import { cn } from "@/lib/utils";
@@ -170,25 +175,25 @@ export function useChecklistButtons({
   const count = (track: ChecklistTrack, day: number, period: ChecklistPeriod): Count =>
     checks.get(countKey(track, day, period)) ?? { total: 0, done: 0 };
 
-  const half = (track: ChecklistTrack, day: number, period: ChecklistPeriod, compact = false) => (
+  const half = (track: ChecklistTrack, day: number, period: ChecklistPeriod) => (
     <HalfButton
       key={period}
       period={period}
       label={checklistDayLabel(track, day, period)}
       count={count(track, day, period)}
-      compact={compact}
       onClick={() => setFocus({ track, day, period })}
     />
   );
 
+  // AM above PM, in the corner for Prep Day and beside each day's title.
+  const halves = (track: ChecklistTrack, day: number) => (
+    <div className="flex shrink-0 flex-col gap-1">{CHECKLIST_PERIODS.map((p) => half(track, day, p))}</div>
+  );
+
   const { track: prepTrack, day: prepDay } = CHECKLIST_PREP_DAY;
   return {
-    dayButton: (column) => (
-      <div className="flex w-full items-center justify-between gap-2">
-        {CHECKLIST_PERIODS.map((p) => half(column.track, column.day, p))}
-      </div>
-    ),
-    prepDayButton: <div className="flex flex-col gap-1">{CHECKLIST_PERIODS.map((p) => half(prepTrack, prepDay, p, true))}</div>,
+    dayButton: (column) => halves(column.track, column.day),
+    prepDayButton: halves(prepTrack, prepDay),
     board: focus && (
       <ChecklistBoard
         key={`${focus.track}:${focus.day}:${focus.period}`}
@@ -215,15 +220,12 @@ function HalfButton({
   period,
   label,
   count,
-  compact,
   onClick,
 }: {
   period: ChecklistPeriod;
   /** "Bootcamp, Day 2 AM", for the button's name. */
   label: string;
   count: Count;
-  /** Tighter, for the corner. */
-  compact: boolean;
   onClick: () => void;
 }) {
   const look = HALVES[period];
@@ -234,8 +236,7 @@ function HalfButton({
       variant="outline"
       size="sm"
       className={cn(
-        "h-7 shrink-0 gap-1.5 px-2 text-xs",
-        compact && "h-6 justify-start gap-1 px-1 has-[>svg]:px-1",
+        "h-6 shrink-0 justify-start gap-1 px-1 text-xs has-[>svg]:px-1",
         allDone ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/15 dark:text-emerald-400" : look.button,
       )}
       aria-label={`${label}: ${count.done} of ${count.total} done`}
@@ -246,8 +247,7 @@ function HalfButton({
       {count.total > 0 && (
         <span
           className={cn(
-            "rounded-full py-px text-[11px] font-medium tabular-nums",
-            compact ? "px-1" : "px-1.5",
+            "rounded-full px-1 py-px text-[11px] font-medium tabular-nums",
             allDone ? "bg-emerald-500/15" : look.badge,
           )}
         >
@@ -268,14 +268,18 @@ function boardDays(track: ChecklistTrack, bootcamp: Omit<BootcampDays, "startDat
 
 const sectionKey = (day: number, period: ChecklistPeriod) => `${day}:${period}`;
 
-/** Oldest first, as the API lists them. */
-const byAge = (a: Item, b: Item) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id);
 
 /** One track's items, loaded together so they never belong to another. */
 type Loaded = { track: ChecklistTrack; items: Item[] };
 
 /** What a card is being dragged to do: go somewhere else, or leave a duplicate there. */
 type Drag = { kind: "move" | "copy"; item: Item };
+
+/** Where a card being moved would land: a half-day, and its place among the others there. */
+type Landing = { day: number; period: ChecklistPeriod; index: number };
+
+/** A card's offset and height in its half's list, as the drag began. */
+type CardSpot = { id: string; top: number; height: number };
 
 function ChecklistBoard({
   focus,
@@ -311,6 +315,13 @@ function ChecklistBoard({
   /** Cards just added, which pop with a burst. */
   const [fresh, setFresh] = useState<Set<string>>(new Set());
   const [drag, setDrag] = useState<Drag | null>(null);
+  const [landing, setLanding] = useState<Landing | null>(null);
+  /**
+   * Every half's cards where they were as the drag began. The place a card
+   * lands is read against these, so the gap that opens for it as it moves
+   * never moves the place it is aiming for.
+   */
+  const spots = useRef(new Map<string, CardSpot[]>());
   const droppedAt = useRef(0);
   const sections = useRef(new Map<string, HTMLElement>());
   const focused = useRef(false);
@@ -344,7 +355,7 @@ function ChecklistBoard({
       if (!live) return;
       const failed = results.find((r) => !Array.isArray(r));
       if (failed && !Array.isArray(failed)) return setError(ERRORS[failed.error] ?? "Could not load the checklists.");
-      setLoaded({ track, items: (results as Item[][]).flat().sort(byAge) });
+      setLoaded({ track, items: (results as Item[][]).flat().sort(byPlace) });
     })();
     return () => {
       live = false;
@@ -358,7 +369,7 @@ function ChecklistBoard({
     const key = sectionKey(focus.day, focus.period);
     sections.current.get(key)?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
     const on = setTimeout(() => setLit(key), 150);
-    const off = setTimeout(() => setLit(null), 1900);
+    const off = setTimeout(() => setLit(null), 1100);
     return () => {
       clearTimeout(on);
       clearTimeout(off);
@@ -366,7 +377,7 @@ function ChecklistBoard({
   }, [items, focus]);
 
   const change = (fn: (list: Item[]) => Item[]) =>
-    setLoaded((prev) => (prev && prev.track === track ? { track, items: fn(prev.items).sort(byAge) } : prev));
+    setLoaded((prev) => (prev && prev.track === track ? { track, items: fn(prev.items).sort(byPlace) } : prev));
   const put = (item: Item) => change((list) => [...list.filter((i) => i.id !== item.id), item]);
   const pop = (id: string) => {
     setFresh((prev) => new Set(prev).add(id));
@@ -432,11 +443,16 @@ function ChecklistBoard({
     setEditing(null);
   }
 
-  /** Moved here at once, and put back if the server will not have it. */
-  async function move(item: Item, day: number, period: ChecklistPeriod) {
-    put({ ...item, day, period });
-    const out = (await send(`${base}/items/${item.id}`, { method: "PATCH", body: JSON.stringify({ day, period }) })) as Item | null;
-    put(out ?? item);
+  /** Moved here at once, to `index` among the others in its new half, and put back if the server will not have it. */
+  async function move(item: Item, day: number, period: ChecklistPeriod, index: number) {
+    const before = loaded;
+    change((list) => placeInHalf(list, item.id, { day, period, index }));
+    const out = (await send(`${base}/items/${item.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ day, period, position: index }),
+    })) as Item | null;
+    if (out) put(out);
+    else setLoaded((prev) => (before && prev?.track === before.track ? before : prev));
   }
 
   async function copy(item: Item, day: number, period: ChecklistPeriod) {
@@ -448,15 +464,68 @@ function ChecklistBoard({
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, { keyboardCodes: { start: ["Space"], cancel: ["Escape"], end: ["Space", "Enter"] } }),
   );
-  const onDragStart = ({ active }: DragStartEvent) => setDrag((active.data.current as Drag | undefined) ?? null);
-  const onDragEnd = ({ active, over }: DragEndEvent) => {
-    setDrag(null);
-    droppedAt.current = Date.now();
-    const what = active.data.current as Drag | undefined;
+  const onDragStart = ({ active }: DragStartEvent) => {
+    const what = (active.data.current as Drag | undefined) ?? null;
+    setDrag(what);
+    setLanding(null);
+    if (what?.kind !== "move") return;
+    spots.current = new Map(
+      [...document.querySelectorAll<HTMLElement>("[data-checklist-list]")].map((list) => [
+        list.dataset.checklistList!,
+        [...list.querySelectorAll<HTMLElement>("[data-checklist-card]")].map((card) => ({
+          id: card.dataset.checklistCard!,
+          top: card.offsetTop,
+          height: card.offsetHeight,
+        })),
+      ]),
+    );
+  };
+
+  /** The half under the dragged card, and the place in it whose middle its own middle is above. */
+  const landingFor = ({ active, over }: DragMoveEvent | DragEndEvent): Landing | null => {
     const to = over?.data.current as { day: number; period: ChecklistPeriod } | undefined;
+    const rect = active.rect.current.translated;
+    const what = active.data.current as Drag | undefined;
+    if (!to || !rect || what?.kind !== "move") return null;
+    const key = sectionKey(to.day, to.period);
+    const cards = (spots.current.get(key) ?? []).filter((c) => c.id !== what.item.id);
+    const list = document.querySelector<HTMLElement>(`[data-checklist-list="${key}"]`);
+    if (!list) return { ...to, index: cards.length };
+    // The list scrolls, so its cards are placed from where it is now and how far it has scrolled.
+    const top = list.getBoundingClientRect().top - list.scrollTop;
+    const middle = rect.top + rect.height / 2;
+    const index = cards.findIndex((c) => middle < top + c.top + c.height / 2);
+    return { ...to, index: index === -1 ? cards.length : index };
+  };
+
+  const onDragMove = (event: DragMoveEvent) => {
+    const next = landingFor(event);
+    setLanding((prev) =>
+      prev?.day === next?.day && prev?.period === next?.period && prev?.index === next?.index ? prev : next,
+    );
+  };
+
+  const onDragEnd = (event: DragEndEvent) => {
+    setDrag(null);
+    setLanding(null);
+    droppedAt.current = Date.now();
+    const what = event.active.data.current as Drag | undefined;
+    const to = event.over?.data.current as { day: number; period: ChecklistPeriod } | undefined;
     if (!what || !to) return;
     if (what.kind === "copy") return void copy(what.item, to.day, to.period);
-    if (what.item.day !== to.day || what.item.period !== to.period) void move(what.item, to.day, to.period);
+    // Let go outside every half: it stays where it was.
+    const at = landingFor(event);
+    if (!at || !items) return;
+    const wasAt = items
+      .filter((i) => i.day === what.item.day && i.period === what.item.period)
+      .findIndex((i) => i.id === what.item.id);
+    const sameHalf = what.item.day === at.day && what.item.period === at.period;
+    if (!sameHalf || wasAt !== at.index) void move(what.item, at.day, at.period, at.index);
+  };
+
+  const onDragCancel = () => {
+    setDrag(null);
+    setLanding(null);
   };
   /** The click that ends a drag is not a request to open or copy the card. */
   const justDropped = () => Date.now() - droppedAt.current < 250;
@@ -527,8 +596,9 @@ function ChecklistBoard({
               sensors={sensors}
               collisionDetection={underPointer}
               onDragStart={onDragStart}
+              onDragMove={onDragMove}
               onDragEnd={onDragEnd}
-              onDragCancel={() => setDrag(null)}
+              onDragCancel={onDragCancel}
             >
               <div className="flex min-h-0 flex-1 gap-3 overflow-x-auto px-6 pb-6">
                 {days.map((day) => {
@@ -556,7 +626,12 @@ function ChecklistBoard({
                           key={period}
                           day={day}
                           period={period}
-                          items={here.filter((i) => i.period === period)}
+                          items={previewHalf(
+                            here.filter((i) => i.period === period),
+                            { day, period },
+                            drag?.kind === "move" ? drag.item : null,
+                            landing,
+                          )}
                           lit={lit === sectionKey(day, period)}
                           full={full}
                           register={(el) => {
@@ -680,7 +755,7 @@ function HalfSection({
     if (composing) list.current?.scrollTo({ top: list.current.scrollHeight, behavior: "smooth" });
   }, [composing]);
 
-  // Lit, it pulses twice in its own colour and settles; the glow is a shadow, which `overflow-hidden` would clip from anything inside.
+  // Lit, it pulses once in its own colour and settles; the glow is a shadow, which `overflow-hidden` would clip from anything inside.
   const shine = (ring: number, glow: number, alpha: number) =>
     `0 0 0 ${ring}px rgba(${look.light}, ${alpha}), 0 0 ${glow}px ${glow / 4}px rgba(${look.light}, ${alpha * 0.6})`;
   return (
@@ -691,10 +766,10 @@ function HalfSection({
       }}
       animate={
         lit
-          ? { boxShadow: [shine(0, 0, 0), shine(4, 28, 1), shine(2, 12, 0.5), shine(4, 28, 1), shine(0, 0, 0)], scale: [1, 1.025, 1, 1.025, 1] }
+          ? { boxShadow: [shine(0, 0, 0), shine(4, 28, 1), shine(0, 0, 0)], scale: [1, 1.025, 1] }
           : undefined
       }
-      transition={{ duration: 1.7, ease: "easeInOut" }}
+      transition={{ duration: 0.9, ease: "easeInOut" }}
       className={cn(
         "relative flex min-h-0 flex-1 basis-0 flex-col overflow-hidden rounded-xl border",
         look.section,
@@ -725,24 +800,13 @@ function HalfSection({
             {done}/{items.length}
           </span>
         )}
-        {canManage && (
-          <motion.button
-            type="button"
-            whileHover={{ scale: 1.12, rotate: 90 }}
-            whileTap={{ scale: 0.9 }}
-            transition={{ type: "spring", stiffness: 500, damping: 18 }}
-            disabled={full}
-            onClick={() => setEditing(`new:${sectionKey(day, period)}`)}
-            aria-label={`Add to ${look.label}`}
-            title={full ? `A day holds at most ${CHECKLIST_LIMITS.itemsPerDay} items` : `Add to ${look.label}`}
-            className="ml-auto flex size-7 items-center justify-center rounded-full bg-background/70 text-foreground/70 shadow-xs backdrop-blur-sm hover:bg-background hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            <Plus className="size-4" />
-          </motion.button>
-        )}
       </div>
 
-      <ul ref={list} className="relative flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto px-2 pb-2">
+      <ul
+        ref={list}
+        data-checklist-list={sectionKey(day, period)}
+        className="relative flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto px-2 pb-2"
+      >
         <AnimatePresence initial={false}>
           {items.map((item) =>
             editing === item.id ? (
@@ -789,8 +853,26 @@ function HalfSection({
             </motion.li>
           )}
         </AnimatePresence>
-        {items.length === 0 && !composing && (
-          <li className="flex flex-1 items-center justify-center py-3 text-xs text-foreground/40">{canManage ? "Nothing yet — press +" : "Nothing yet"}</li>
+        {canManage && !composing && (
+          <li>
+            <motion.button
+              type="button"
+              whileHover="hover"
+              whileTap={{ scale: 0.97 }}
+              disabled={full}
+              onClick={() => setEditing(`new:${sectionKey(day, period)}`)}
+              aria-label={`Add to ${look.label}`}
+              title={full ? `A day holds at most ${CHECKLIST_LIMITS.itemsPerDay} items` : `Add to ${look.label}`}
+              className="flex h-9 w-full items-center justify-center rounded-lg border border-dashed border-foreground/25 bg-background/30 text-foreground/50 transition-colors hover:border-foreground/45 hover:bg-background/60 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <motion.span variants={{ hover: { scale: 1.12, rotate: 90 } }} transition={{ type: "spring", stiffness: 500, damping: 18 }}>
+                <Plus className="size-4" />
+              </motion.span>
+            </motion.button>
+          </li>
+        )}
+        {!canManage && items.length === 0 && (
+          <li className="flex flex-1 items-center justify-center py-3 text-xs text-foreground/40">Nothing yet</li>
         )}
       </ul>
     </motion.div>
@@ -857,7 +939,7 @@ function ChecklistCard({
   const canTick = canManage || mine;
 
   return (
-    <motion.li layout {...POP} className="relative">
+    <motion.li layout {...POP} data-checklist-card={item.id} className="relative">
       {fresh && <Burst />}
       <div
         ref={(el) => {
@@ -930,7 +1012,12 @@ function ChecklistCard({
   );
 }
 
-/** What a card shows: its name, whom it is on, and who ticked it. */
+/**
+ * What a card shows: its name, and whom it is on. A done card is its name alone,
+ * struck through on one line, with who ticked it in its tooltip. An open one is
+ * at least two lines tall, so the tick sliding in on hover, which narrows the
+ * name, never makes it grow or shrink.
+ */
 function CardFace({
   item,
   viewerEmail,
@@ -949,7 +1036,12 @@ function CardFace({
   const mine = item.ownerEmail !== null && item.ownerEmail === viewerEmail.toLowerCase();
   return (
     <div
-      title={`Added by ${item.createdByName || item.createdByEmail || "someone removed"} ${formatWhen(item.createdAt)}`}
+      title={[
+        `Added by ${item.createdByName || item.createdByEmail || "someone removed"} ${formatWhen(item.createdAt)}`,
+        item.done && item.doneAt ? `Ticked by ${item.doneByName || "someone"} ${formatWhen(item.doneAt)}` : null,
+      ]
+        .filter(Boolean)
+        .join("\n")}
       className={cn(
         "relative rounded-lg border bg-card px-2.5 py-2 pr-8 text-left shadow-xs transition-shadow group-hover:shadow-md group-hover:ring-1 group-hover:ring-brand/30",
         item.done && "border-emerald-500/30 bg-emerald-50/70 dark:bg-emerald-950/30",
@@ -963,33 +1055,26 @@ function CardFace({
       )}
       <div className="flex items-start gap-1.5">
         {tick && <div className="mt-0.5 flex">{tick}</div>}
-        <div className={cn("min-w-0 text-sm wrap-break-word", item.done && "text-muted-foreground line-through")}>
+        <div className={cn("min-w-0 text-sm", item.done ? "truncate text-muted-foreground line-through" : "min-h-[2lh] wrap-break-word")}>
           <MentionText text={item.name} mentions={item.mentions} viewerEmail={viewerEmail} />
         </div>
       </div>
-      {(item.ownerEmail || (item.done && item.doneAt)) && (
-        <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-          {item.ownerEmail && (
-            <span className={cn("inline-flex min-w-0 items-center gap-1", mine && "font-medium text-foreground")}>
-              <span
-                className={cn(
-                  "flex size-5 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold",
-                  mine ? "bg-brand text-brand-foreground" : "bg-foreground/10",
-                )}
-              >
-                {initials(item.ownerName || item.ownerEmail)}
-              </span>
-              <span className="truncate">
-                {item.ownerName || item.ownerEmail}
-                {mine && " (you)"}
-              </span>
+      {!item.done && item.ownerEmail && (
+        <div className="mt-1.5 flex items-center text-xs text-muted-foreground">
+          <span className={cn("inline-flex min-w-0 items-center gap-1", mine && "font-medium text-foreground")}>
+            <span
+              className={cn(
+                "flex size-5 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold",
+                mine ? "bg-brand text-brand-foreground" : "bg-foreground/10",
+              )}
+            >
+              {initials(item.ownerName || item.ownerEmail)}
             </span>
-          )}
-          {item.done && item.doneAt && (
-            <span className="text-emerald-700 dark:text-emerald-400">
-              ✓ {item.doneByName || "someone"} {formatWhen(item.doneAt)}
+            <span className="truncate">
+              {item.ownerName || item.ownerEmail}
+              {mine && " (you)"}
             </span>
-          )}
+          </span>
         </div>
       )}
     </div>
