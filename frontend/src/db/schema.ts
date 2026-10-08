@@ -2476,3 +2476,141 @@ export const MIMIR_SETTINGS_KEYS = {
 } as const;
 
 export const MIMIR_SETTING_MAX = 8000;
+
+export const INTAKE_QUESTION_KINDS = ["short", "paragraph", "choice", "checkboxes", "dropdown"] as const;
+export type IntakeQuestionKind = (typeof INTAKE_QUESTION_KINDS)[number];
+
+/**
+ * One question on the logistics intake form. `options` is used by choice,
+ * checkboxes and dropdown only; `other` adds a free-text "Other" to choice
+ * and checkboxes.
+ */
+export type IntakeQuestion = {
+  id: string;
+  kind: IntakeQuestionKind;
+  title: string;
+  description: string;
+  required: boolean;
+  options: string[];
+  other: boolean;
+};
+
+export const INTAKE_LIMITS = {
+  title: 300,
+  description: 2000,
+  questions: 50,
+  options: 30,
+  option: 200,
+  answer: 5000,
+} as const;
+
+/**
+ * The intake form a new bootcamp attendee fills in when they join Harness,
+ * as Logistics settings edits it. One row, `id` "intake"; until it is first
+ * saved the form is the default in `src/lib/logistics/intake.ts`.
+ */
+export const intakeForms = pgTable(
+  "intake_forms",
+  {
+    id: text("id").primaryKey(),
+    title: text("title").notNull(),
+    description: text("description").notNull().default(""),
+    questions: jsonb("questions").$type<IntakeQuestion[]>().notNull().default([]),
+    updatedBy: text("updated_by").references(() => users.id, { onDelete: "set null" }),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [check("intake_forms_id_check", sql`${t.id} = 'intake'`)],
+);
+
+/**
+ * One attendee's answers, keyed by question id, as the form stood when they
+ * sent it. Attendees have no account, so they are known by the email they
+ * give; sending again adds a row rather than replacing the last.
+ */
+export const intakeResponses = pgTable(
+  "intake_responses",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    email: text("email").notNull(),
+    answers: jsonb("answers").$type<Record<string, string | string[]>>().notNull(),
+    submittedAt: timestamp("submitted_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("intake_responses_email_idx").on(t.email, t.submittedAt)],
+);
+
+export const FOOD_ORDER_LIMITS = {
+  vendor: 200,
+  needs: 5000,
+  fileName: 200,
+  /** Under the 10 MB a request body may be. */
+  bytes: 8 * 1024 * 1024,
+} as const;
+
+/**
+ * Food ordered for a bootcamp, from ezCater or anywhere else: who it is from,
+ * when it arrives, and what the training team needs from it, with the
+ * vendor's PDF if one was uploaded. Lists select every column but
+ * `fileData`, which only the PDF route reads.
+ */
+export const foodOrders = pgTable(
+  "food_orders",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    vendor: text("vendor").notNull(),
+    arrivesAt: timestamp("arrives_at", { withTimezone: true }).notNull(),
+    needs: text("needs").notNull().default(""),
+    fileName: text("file_name"),
+    fileBytes: integer("file_bytes"),
+    fileData: bytea("file_data"),
+    createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("food_orders_arrives_at_idx").on(t.arrivesAt)],
+);
+
+export const GUEST_SPEAKER_PROGRAMS = ["bootcamp", "intermediate"] as const;
+export type GuestSpeakerProgram = (typeof GUEST_SPEAKER_PROGRAMS)[number];
+
+export const GUEST_SPEAKER_ROLES = ["teach", "commentator", "judge", "speaker"] as const;
+export type GuestSpeakerRole = (typeof GUEST_SPEAKER_ROLES)[number];
+
+/**
+ * Who taught, commentated or judged which session at a cohort kept outside
+ * the Scheduler, such as those before it, entered by a Training
+ * administrator on the Guest judges tab. A cohort run in the Scheduler keeps
+ * its guest judges in `bootcamp_judges` instead.
+ */
+export const guestSpeakerHistory = pgTable(
+  "guest_speaker_history",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** The first of the cohort's month. */
+    cohort: date("cohort", { mode: "string" }).notNull(),
+    program: text("program").$type<GuestSpeakerProgram>().notNull(),
+    /** Empty for someone the sheet names on no session. */
+    session: text("session").notNull().default(""),
+    role: text("role").$type<GuestSpeakerRole>().notNull(),
+    fullName: text("full_name").notNull(),
+    /** Lowercased, from HiBob; null for someone no longer in it. */
+    email: text("email"),
+  },
+  (t) => [
+    uniqueIndex("guest_speaker_history_entry_idx").on(t.cohort, t.program, t.session, t.role, t.fullName),
+    index("guest_speaker_history_email_idx").on(t.email),
+    check("guest_speaker_history_program_check", sql`${t.program} in ('bootcamp', 'intermediate')`),
+    check("guest_speaker_history_role_check", sql`${t.role} in ('teach', 'commentator', 'judge', 'speaker')`),
+  ],
+);
+
+/**
+ * Cohorts the guest speaker history lists before anyone is down for them, so
+ * an upcoming one shows as a space to fill in. A month with history entries
+ * or a Scheduler bootcamp shows whether or not it has a row here.
+ */
+export const guestSpeakerCohorts = pgTable("guest_speaker_cohorts", {
+  /** The first of the cohort's month. */
+  cohort: date("cohort", { mode: "string" }).primaryKey(),
+  createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
