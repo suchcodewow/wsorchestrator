@@ -669,6 +669,21 @@ function InstructorPicker({
               const theirs = busy.get(p.email) ?? [];
               return (
                 <div key={p.email} className="flex items-start gap-1">
+                  {added ? (
+                    // Its own item, so the arrow keys reach it as well as a click.
+                    <DropdownMenuItem
+                      aria-label={added.leader ? `${p.fullName} leads it` : `Make ${p.fullName} the leader`}
+                      onSelect={(e) => {
+                        keepOpen(e);
+                        if (!added.leader) onLeader(p.email);
+                      }}
+                      className="size-8 shrink-0 justify-center px-0"
+                    >
+                      <Crown className={cn("size-3.5", added.leader ? "fill-amber-400 text-amber-500" : "text-muted-foreground/50")} />
+                    </DropdownMenuItem>
+                  ) : (
+                    <span aria-hidden className="size-8 shrink-0" />
+                  )}
                   <DropdownMenuItem
                     role="menuitemcheckbox"
                     aria-checked={Boolean(added)}
@@ -677,7 +692,7 @@ function InstructorPicker({
                       keepOpen(e);
                       onToggle(p);
                     }}
-                    className={cn("min-w-0 flex-1 items-start", added && "bg-brand/8")}
+                    className="min-w-0 flex-1 items-start"
                   >
                     <span className="min-w-0">
                       <span className={cn("block truncate", theirs.length > 0 && "font-medium text-red-700 dark:text-red-400")}>
@@ -691,19 +706,6 @@ function InstructorPicker({
                       ))}
                     </span>
                   </DropdownMenuItem>
-                  {added && (
-                    // Its own item, so the arrow keys reach it as well as a click.
-                    <DropdownMenuItem
-                      aria-label={added.leader ? `${p.fullName} leads it` : `Make ${p.fullName} the leader`}
-                      onSelect={(e) => {
-                        keepOpen(e);
-                        if (!added.leader) onLeader(p.email);
-                      }}
-                      className="size-8 shrink-0 justify-center px-0"
-                    >
-                      <Crown className={cn("size-3.5", added.leader ? "fill-amber-400 text-amber-500" : "text-muted-foreground/50")} />
-                    </DropdownMenuItem>
-                  )}
                 </div>
               );
             })}
