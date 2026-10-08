@@ -22,9 +22,14 @@ const STATUS_FOR: Record<CreateTestAccountError, number> = {
   production: 409,
   forbidden: 403,
   invalid: 400,
+  source_not_found: 404,
+  platform_source: 409,
 };
 
-const postSchema = z.object({ name: z.string().max(TEST_ACCOUNT_LIMITS.name) });
+const postSchema = z.object({
+  name: z.string().max(TEST_ACCOUNT_LIMITS.name),
+  copyFrom: z.string().min(1).max(200).optional(),
+});
 
 export async function GET(req: Request) {
   const { error } = await requireCaller(req, canImpersonate);
@@ -42,7 +47,7 @@ export const POST = audited(async function POST(req: Request) {
   const parsed = postSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "invalid_body" }, { status: 400 });
 
-  const result = await createTestAccount(session.user, parsed.data.name);
+  const result = await createTestAccount(session.user, parsed.data.name, parsed.data.copyFrom);
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: STATUS_FOR[result.error] });
   return NextResponse.json({ testAccount: result.account }, { status: 201 });
 });

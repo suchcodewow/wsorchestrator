@@ -295,19 +295,24 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       {
         method: "POST",
         path: "/api/users/test-accounts",
-        summary: "Makes a test account, with no roles.",
+        summary: "Makes a test account, with no roles or as a copy of an existing account.",
         access: "platform",
         token: false,
         notes:
-          "Its address is generated on test-account.invalid, which no Google account can have, so nobody can sign in as it. Grant its roles with PATCH /api/users/{id}, and delete it with DELETE /api/users/{id}.",
+          "Its address is generated on test-account.invalid, which no Google account can have, so nobody can sign in as it. With copyFrom it starts with that account's roles in each area, its theme and calendar settings, and its Iris track, copied once; their Iris sittings, Mimir progress and Harness credentials are not copied, nor being a manager or a guest judge, which follow from their own address. Change its roles afterwards with PATCH /api/users/{id}, and delete it with DELETE /api/users/{id}.",
         body: {
           kind: "json",
-          fields: [{ name: "name", type: "string", required: true, note: "1–80 characters" }],
+          fields: [
+            { name: "name", type: "string", required: true, note: "1–80 characters" },
+            { name: "copyFrom", type: "string", note: "the id of an account to copy, from GET /api/users; not a platform administrator" },
+          ],
         },
         returns: "201 { testAccount: { id, name, email } }",
         errors: [
-          { status: 400, error: "invalid_body", when: "name is missing or longer than 80 characters" },
+          { status: 400, error: "invalid_body", when: "name is missing or longer than 80 characters, or copyFrom is blank" },
           { status: 400, error: "invalid", when: "name is blank" },
+          { status: 404, error: "source_not_found", when: "no account has the copyFrom id" },
+          { status: 409, error: "platform_source", when: "the copyFrom account is a platform administrator" },
           { status: 409, error: "production", when: "this deployment is production" },
         ],
       },

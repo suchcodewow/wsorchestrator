@@ -82,6 +82,42 @@ describe("createTestAccount", () => {
     );
   });
 
+  test("copies another account's roles, settings and Iris track, once, and nothing else", async () => {
+    const source = await scope.createUser("source", { ...PERSONAS.manager, training: "viewer", assessments: "viewer" });
+    await db.update(users).set({ themePreference: "dark", calendarScope: "all" }).where(eq(users.id, source.id));
+    await setTrack(source.id, "SE");
+    const sat = await startSitting(source.id, "sdlc", "A", "preview");
+    assert.ok(sat.ok, JSON.stringify(sat));
+
+    const result = await createTestAccount(admin, "Copy of source", source.id);
+    assert.ok(result.ok, JSON.stringify(result));
+    made.push(result.account.id);
+
+    const [row] = await db.select().from(users).where(eq(users.id, result.account.id));
+    assert.deepEqual(
+      [row!.eventRole, row!.trainingRole, row!.assessmentsRole, row!.themePreference, row!.calendarScope],
+      ["manager", "viewer", "viewer", "dark", "all"],
+    );
+    assert.deepEqual([row!.isTestAccount, row!.isPlatformAdmin, row!.name], [true, false, "Copy of source"]);
+    assert.notEqual(row!.email, source.email);
+    const [taker] = await db.select().from(irisTakers).where(eq(irisTakers.userId, row!.id));
+    assert.equal(taker?.track, "SE");
+    assert.equal((await db.select().from(irisAttempts).where(eq(irisAttempts.userId, row!.id))).length, 0);
+
+    // Once: a later change to the source does not reach the copy.
+    await db.update(users).set({ eventRole: "none" }).where(eq(users.id, source.id));
+    const [again] = await db.select({ eventRole: users.eventRole }).from(users).where(eq(users.id, row!.id));
+    assert.equal(again!.eventRole, "manager");
+  });
+
+  test("refuses to copy a platform administrator, or an account that does not exist", async () => {
+    assert.deepEqual(await createTestAccount(admin, "x", admin.id), { ok: false, error: "platform_source" });
+    assert.deepEqual(await createTestAccount(admin, "x", "wo_test_testacct_missing"), {
+      ok: false,
+      error: "source_not_found",
+    });
+  });
+
   test("refuses anyone but a platform administrator, a blank name, and production", async () => {
     const userAdmin = await scope.createUser("userAdmin", PERSONAS.bothAdmins);
     assert.deepEqual(await createTestAccount(userAdmin, "x"), { ok: false, error: "forbidden" });

@@ -22,11 +22,12 @@ import "server-only";
 import { randomBytes } from "node:crypto";
 import { and, count, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { TEST_ACCOUNT_LIMITS, users, workshopRuns } from "@/db/schema";
+import { TEST_ACCOUNT_LIMITS, irisTakers, users, workshopRuns } from "@/db/schema";
 import { noteAudit } from "@/lib/audit-context";
 import { isProduction } from "@/lib/deployment";
 import { searchAny } from "@/lib/paging-sql";
 import { canImpersonate, type Access } from "@/lib/roles";
+import { isBootstrapAdmin } from "@/lib/site-admins";
 
 /** Reserved by RFC 2606: no mailbox, and no Google account, can be on it. */
 export const TEST_ACCOUNT_DOMAIN = "test-account.invalid";
@@ -61,28 +62,77 @@ export function testAccountEmail(name: string, suffix = randomBytes(3).toString(
 export type TestAccount = { id: string; name: string | null; email: string };
 
 /**
- * - `production` — this deployment is production.
- * - `forbidden`  — only a platform administrator, who alone can view as one, makes them.
- * - `invalid`    — the name is blank or too long.
+ * - `production`      — this deployment is production.
+ * - `forbidden`       — only a platform administrator, who alone can view as one, makes them.
+ * - `invalid`         — the name is blank or too long.
+ * - `source_not_found` — no account has the id to copy from.
+ * - `platform_source` — the account to copy from is a platform administrator,
+ *                       which a test account never is: viewing as one would
+ *                       show nothing an administrator does not already see.
  */
-export type CreateTestAccountError = "production" | "forbidden" | "invalid";
+export type CreateTestAccountError = "production" | "forbidden" | "invalid" | "source_not_found" | "platform_source";
 
-/** A new test account with no roles; the Users page grants them. */
+/**
+ * A new test account. With `copyFrom`, it starts as a copy of that account,
+ * once: its roles in each area, its theme and calendar settings, and its Iris
+ * track. Nothing else comes over: not their Iris sittings or Mimir progress,
+ * not their Harness credentials, and not being a manager or a guest judge,
+ * which follow from a person's own address. Without it, it has no roles and
+ * the Users page grants them.
+ */
 export async function createTestAccount(
   actor: { access: Access },
   name: string,
+  copyFrom?: string,
 ): Promise<{ ok: true; account: TestAccount } | { ok: false; error: CreateTestAccountError }> {
   if (!testAccountsAllowed()) return { ok: false, error: "production" };
   if (!canImpersonate(actor.access)) return { ok: false, error: "forbidden" };
   const trimmed = name.trim();
   if (!trimmed || trimmed.length > TEST_ACCOUNT_LIMITS.name) return { ok: false, error: "invalid" };
 
-  const [account] = await db
-    .insert(users)
-    .values({ name: trimmed, email: testAccountEmail(trimmed), isTestAccount: true })
-    .returning({ id: users.id, name: users.name, email: users.email });
-  noteAudit({ target: account!.id, targetLabel: account!.email! });
-  return { ok: true, account: { ...account!, email: account!.email! } };
+  let copied: Partial<typeof users.$inferInsert> = {};
+  let track: string | null = null;
+  if (copyFrom) {
+    const [source] = await db
+      .select({
+        eventRole: users.eventRole,
+        trainingRole: users.trainingRole,
+        assessmentsRole: users.assessmentsRole,
+        themePreference: users.themePreference,
+        calendarScope: users.calendarScope,
+        isPlatformAdmin: users.isPlatformAdmin,
+        email: users.email,
+        track: irisTakers.track,
+      })
+      .from(users)
+      .leftJoin(irisTakers, eq(irisTakers.userId, users.id))
+      .where(eq(users.id, copyFrom));
+    if (!source) return { ok: false, error: "source_not_found" };
+    if (source.isPlatformAdmin || isBootstrapAdmin(source.email)) return { ok: false, error: "platform_source" };
+    copied = {
+      eventRole: source.eventRole,
+      trainingRole: source.trainingRole,
+      assessmentsRole: source.assessmentsRole,
+      themePreference: source.themePreference,
+      calendarScope: source.calendarScope,
+    };
+    track = source.track;
+  }
+
+  const account = await db.transaction(async (tx) => {
+    const [row] = await tx
+      .insert(users)
+      .values({ ...copied, name: trimmed, email: testAccountEmail(trimmed), isTestAccount: true })
+      .returning({ id: users.id, name: users.name, email: users.email });
+    if (track) await tx.insert(irisTakers).values({ userId: row!.id, track });
+    return row!;
+  });
+  noteAudit({
+    target: account.id,
+    targetLabel: account.email!,
+    ...(copyFrom && { detail: { copiedFrom: copyFrom } }),
+  });
+  return { ok: true, account: { ...account, email: account.email! } };
 }
 
 /**
