@@ -1,4 +1,4 @@
-/** The tabs across the top of Iris. Takers see none; Iris administrators see all three. */
+/** The tabs across the top of Iris. Takers see none; Assessments Administrators see all three. */
 
 import { FileQuestion, ListChecks, UsersRound } from "lucide-react";
 import type { TabItem } from "@/components/tab-nav";

@@ -531,19 +531,46 @@ placeholder; **eVals settings** holds what it will draw on:
 | Role                          | Adds                                                            |
 | ----------------------------- | --------------------------------------------------------------- |
 | *(none)*                      | Nothing. What everyone starts as.                               |
-| **Assessments Viewer**        | The **eVals** page.                                             |
-| **Assessments Administrator** | Sets everyone's Assessments role on **Manage users**, and **eVals settings**, including **Google Meetings**. |
+| **Assessments Viewer**        | The **eVals** page, and **Iris**: takes the placement tests.    |
+| **Assessments Administrator** | Sets everyone's Assessments role on **Manage users**; **eVals settings**, including **Google Meetings**; and Iris's console: everyone's results, the answer key, and approving and rejecting questions. |
 
 **Iris** — adaptive placement tests for new GTM hires: eight subjects, each
 taken once per form, which place someone Beginner, Intermediate or Advanced so
-enablement can route their training. Takers never see their own level.
-Independent of eVals: an Assessments role gives no Iris access, and the reverse.
+enablement can route their training. Takers never see their own level. Part of
+the assessments area, with no roles of its own: an Assessments Viewer takes the
+tests and an Assessments Administrator runs them. (It had its own Iris Taker
+and Iris Administrator roles until October 2026; the migration that removed
+them gave everyone the higher of their two roles.)
 
-| Role                     | Adds                                                            |
-| ------------------------ | --------------------------------------------------------------- |
-| *(none)*                 | Nothing. What everyone starts as.                               |
-| **Iris Taker**           | The **Iris** page: takes the tests.                             |
-| **Iris Administrator**   | Sets everyone's Iris role on **Manage users**; everyone's results and the answer key; approves and rejects questions. |
+**Mimir** — the GTM reference library and an AI coach, carried over from the
+Learning Hub prototype. Under **Training**, for everyone who can sign in,
+whatever their roles: Harness's four agents and the capabilities each is made
+of (with the products sold beside them), Harness AI, architecture, the SDLC,
+personas, competitive battlecards, proof points, discovery questions and a
+glossary. On
+each card the coach (Claude, server-side) explains, quizzes or roleplays, and
+says when the rep has shown real command of it; with the rep's own one-line
+takeaway that makes the card mastered. Each person's progress and
+conversations are their own, kept apart from Iris. **Mimir Settings**, for
+Training Administrators, edits the content and the coaching settings.
+
+The content is not in this repository, which is public. It lives in the
+database and arrives through **Mimir Settings → Content → Import**: run
+`npx tsx scripts/mimir-convert.ts <harness-learning-hub>/src/data.ts > file.json`
+in `frontend/` and import the file; importing again updates what it made. The
+converter places each of the hub's modules under its agent as harness.io lists
+them, and rewrites "module" to "capability" except where it means a Terraform
+or Go module. The
+coach is Claude Sonnet 5.5 at low effort, its replies streamed as they are
+written. A request it declines is rerouted by the API to Anthropic's fallback
+model, and when Sonnet can't be reached at all the turn goes to Claude Haiku
+4.5. A conversation runs as long as the model can read (about a million
+tokens). Glossary terms are underlined wherever the library and the coach use
+them, with the definition on hover. Progress is kept per person: Mimir offers
+to continue from the last item opened, and **Start over** clears it. The
+coach needs `ANTHROPIC_API_KEY` (`anthropic_api_key` on the IaCM workspace, the
+Harness secret `tf_anthropic_api_key`); without it the library works and the
+coach says it is not set up.
 
 **Platform Administrator** is a flag rather than a role in an area. It counts
 as administrator in every area, and adds what reaches past any single one:

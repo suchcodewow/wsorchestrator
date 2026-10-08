@@ -1,4 +1,4 @@
-/** One person's Iris sittings, question by question, with the answers they chose. Iris administrators only. */
+/** One person's Iris sittings, question by question, with the answers they chose. Assessments Administrators only. */
 
 import { notFound, redirect } from "next/navigation";
 import { auth, signInPath } from "@/auth";

@@ -145,7 +145,6 @@ export async function resolveToken(
       eventRole: users.eventRole,
       trainingRole: users.trainingRole,
       assessmentsRole: users.assessmentsRole,
-      irisRole: users.irisRole,
       isPlatformAdmin: users.isPlatformAdmin,
       email: users.email,
     })
@@ -175,7 +174,6 @@ export async function resolveToken(
       event: row.eventRole,
       training: row.trainingRole,
       assessments: row.assessmentsRole,
-      iris: row.irisRole,
       platform: row.isPlatformAdmin,
       judging: await isJudgingNow(row.email),
       manager: await isManagerNow(row.email),

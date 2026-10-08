@@ -1,6 +1,7 @@
 /** The navigation sections, and which of them a user's access may see. */
 
 import {
+  BrainCircuit,
   CalendarClock,
   CalendarCog,
   CalendarDays,
@@ -9,8 +10,10 @@ import {
   DatabaseBackup,
   Eye,
   FlaskConical,
+  House,
   Inbox,
   Layers,
+  LibraryBig,
   ScrollText,
   Settings,
   Settings2,
@@ -25,6 +28,7 @@ import {
   canAuditProjects,
   canManageBackups,
   canManageEvalsSettings,
+  canManageMimir,
   canManageSettings,
   canManageSignInDomains,
   canManageTrainingSettings,
@@ -33,6 +37,7 @@ import {
   canSeeReporting,
   canTakeIris,
   canUseEvents,
+  canUseMimir,
   canUseTraining,
   canViewAuditTrail,
   type Access,
@@ -42,6 +47,8 @@ export type NavItem = {
   href: string;
   label: string;
   Icon: LucideIcon;
+  /** One line on what it is for, on its card on the Welcome page. */
+  description: string;
   also?: string[];
   visible?: (access: Access) => boolean;
 };
@@ -56,23 +63,44 @@ export type NavSection = {
   items: NavItem[];
 };
 
+/** The Welcome page: first in the sidebar, for everyone. */
+export const WELCOME_HREF = "/welcome";
+
 export const NAV_SECTIONS: NavSection[] = [
+  {
+    heading: "Home",
+    items: [{ href: WELCOME_HREF, label: "Welcome", Icon: House, description: "Everything you can reach, in one place." }],
+  },
   {
     heading: "Events",
     items: [
-      { href: "/labs", label: "Event Guides", Icon: Layers, visible: canUseEvents },
+      {
+        href: "/labs",
+        label: "Event Guides",
+        Icon: Layers,
+        description: "The lab guides attendees follow at a workshop.",
+        visible: canUseEvents,
+      },
       {
         href: "/events",
         label: "Orchestrator",
         Icon: CalendarDays,
+        description: "Schedule a workshop and build its accounts, Harness org and cloud.",
         also: ["/runs"],
         visible: canUseEvents,
       },
-      { href: "/cloud-status", label: "Cloud Status", Icon: Cloud, visible: canAuditProjects },
+      {
+        href: "/cloud-status",
+        label: "Cloud Status",
+        Icon: Cloud,
+        description: "What each cloud holds now, and anything left behind.",
+        visible: canAuditProjects,
+      },
       {
         href: "/settings",
         label: "Event Settings",
         Icon: SlidersHorizontal,
+        description: "Org secrets, templates and repositories for every event.",
         visible: canManageSettings,
       },
     ],
@@ -80,32 +108,73 @@ export const NAV_SECTIONS: NavSection[] = [
   {
     heading: "Training",
     items: [
-      { href: "/scheduler", label: "Scheduler", Icon: CalendarClock, visible: canUseTraining },
+      {
+        href: "/scheduler",
+        label: "Scheduler",
+        Icon: CalendarClock,
+        description: "Bootcamp schedules, sessions, judges and day checklists.",
+        visible: canUseTraining,
+      },
       {
         href: "/scheduler-settings",
         label: "Scheduler settings",
         Icon: CalendarCog,
+        description: "Facilities, rooms and session types.",
         visible: canManageTrainingSettings,
       },
-      { href: "/cohorts", label: "Cohorts", Icon: Users, visible: canUseTraining },
+      {
+        href: "/cohorts",
+        label: "Cohorts",
+        Icon: Users,
+        description: "Who is in each bootcamp cohort.",
+        visible: canUseTraining,
+      },
       {
         href: "/cohort-settings",
         label: "Cohort Settings",
         Icon: Settings2,
+        description: "Employees, HiBob, the organization and Slack channels.",
         visible: canManageTrainingSettings,
+      },
+      {
+        href: "/mimir",
+        label: "Mimir",
+        Icon: BrainCircuit,
+        description: "Harness's agents and capabilities, with an AI coach.",
+        visible: canUseMimir,
+      },
+      {
+        href: "/mimir-settings",
+        label: "Mimir Settings",
+        Icon: LibraryBig,
+        description: "The library's content and the coach's settings.",
+        visible: canManageMimir,
       },
     ],
   },
   {
     heading: "Assessments",
     items: [
-      { href: "/evals", label: "eVals", Icon: FlaskConical, visible: canScoreAssessments },
-      { href: "/iris", label: "Iris", Icon: Eye, visible: canTakeIris },
-      { href: "/reporting", label: "Reporting", Icon: ChartColumn, visible: canSeeReporting },
+      {
+        href: "/evals",
+        label: "eVals",
+        Icon: FlaskConical,
+        description: "Score attendees on bootcamp and intermediate assessments.",
+        visible: canScoreAssessments,
+      },
+      { href: "/iris", label: "Iris", Icon: Eye, description: "Adaptive placement tests.", visible: canTakeIris },
+      {
+        href: "/reporting",
+        label: "Reporting",
+        Icon: ChartColumn,
+        description: "Bootcamp history and the Canary Wire.",
+        visible: canSeeReporting,
+      },
       {
         href: "/evals-settings",
         label: "eVals settings",
         Icon: TestTubes,
+        description: "Google Meetings, assessments and Slack contacts.",
         visible: canManageEvalsSettings,
       },
     ],
@@ -113,22 +182,41 @@ export const NAV_SECTIONS: NavSection[] = [
   {
     heading: "Account",
     items: [
-      { href: "/inbox", label: "My inbox", Icon: Inbox },
-      { href: "/me", label: "My settings", Icon: UserCog },
+      { href: "/inbox", label: "My inbox", Icon: Inbox, description: "Checklist items you own, and everywhere you're tagged." },
+      { href: "/me", label: "My settings", Icon: UserCog, description: "Your theme, API tokens, and a check of your PC." },
     ],
   },
   {
     heading: "Administration",
     items: [
-      { href: "/users", label: "Manage users", Icon: UsersRound, visible: canManageUsers },
-      { href: "/backups", label: "Backups", Icon: DatabaseBackup, visible: canManageBackups },
+      {
+        href: "/users",
+        label: "Manage users",
+        Icon: UsersRound,
+        description: "Everyone's roles, and invitations.",
+        visible: canManageUsers,
+      },
+      {
+        href: "/backups",
+        label: "Backups",
+        Icon: DatabaseBackup,
+        description: "Back up and restore the database.",
+        visible: canManageBackups,
+      },
       {
         href: "/admin-settings",
         label: "Admin Settings",
         Icon: Settings,
+        description: "Who may sign in.",
         visible: canManageSignInDomains,
       },
-      { href: "/audit", label: "Audit Trail", Icon: ScrollText, visible: canViewAuditTrail },
+      {
+        href: "/audit",
+        label: "Audit Trail",
+        Icon: ScrollText,
+        description: "Every change anyone has made.",
+        visible: canViewAuditTrail,
+      },
     ],
   },
 ];

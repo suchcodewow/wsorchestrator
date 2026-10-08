@@ -42,7 +42,7 @@ before(async () => {
   await scope.setUp();
   savedReviews = await db.select().from(irisItemReviews);
   await db.delete(irisItemReviews);
-  admin = await scope.createUser("admin", PERSONAS.irisAdmin);
+  admin = await scope.createUser("admin", PERSONAS.assessmentsAdmin);
 });
 
 after(async () => {
@@ -74,7 +74,7 @@ const right = (id: string) => ITEMS_BY_ID.get(id)!.answer;
 
 describe("before any question is approved", () => {
   test("a live sitting is not ready, and a subject shows as unavailable", async () => {
-    const taker = await scope.createUser("early", PERSONAS.irisTaker);
+    const taker = await scope.createUser("early", PERSONAS.assessmentsViewer);
     await setTrack(taker.id, "AE");
     assert.deepEqual(await startSitting(taker.id, "sdlc", "A", "live"), { ok: false, error: "not_ready" });
     const mine = await myIris(taker.id);
@@ -92,7 +92,7 @@ describe("a live sitting", () => {
   let taker: TestUser;
   before(async () => {
     assert.deepEqual(await approveDrafts(admin.id, "sdlc", "A"), { ok: true, written: 38 });
-    taker = await scope.createUser("taker", PERSONAS.irisTaker);
+    taker = await scope.createUser("taker", PERSONAS.assessmentsViewer);
   });
 
   test("needs the taker's track first", async () => {
@@ -130,7 +130,7 @@ describe("a live sitting", () => {
       assert.deepEqual(bad, { ok: false, error: "invalid_choice" }, String(choice));
     }
 
-    const other = await scope.createUser("other", PERSONAS.irisTaker);
+    const other = await scope.createUser("other", PERSONAS.assessmentsViewer);
     const theirs = await answer(other.id, first.sitting.attemptId, first.sitting.number, 0);
     assert.deepEqual(theirs, { ok: false, error: "not_found" }, "a sitting is only its taker's");
   });
@@ -163,7 +163,7 @@ describe("a live sitting", () => {
   });
 
   test("\"I don't know\" every time places Beginner", async () => {
-    const shrug = await scope.createUser("shrug", PERSONAS.irisTaker);
+    const shrug = await scope.createUser("shrug", PERSONAS.assessmentsViewer);
     await setTrack(shrug.id, "AE");
     const start = await startSitting(shrug.id, "sdlc", "A", "live");
     assert.ok(start.ok);
@@ -181,7 +181,7 @@ describe("a group answering at once", () => {
     // for a second, so 5 or more at once could take them all and stall.
     const takers = await Promise.all(
       Array.from({ length: 12 }, async (_, i) => {
-        const t = await scope.createUser(`group${i}`, PERSONAS.irisTaker);
+        const t = await scope.createUser(`group${i}`, PERSONAS.assessmentsViewer);
         await setTrack(t.id, "AE");
         const start = await startSitting(t.id, "sdlc", "A", "live");
         assert.ok(start.ok);

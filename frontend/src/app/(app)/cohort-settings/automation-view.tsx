@@ -12,6 +12,7 @@ import { motion } from "framer-motion";
 import { Check, Loader2, Pencil, Plus, Search, Trash2, X } from "lucide-react";
 import { HEADER_ROW, Pager, PlainHeader, SortHeader, useListParams } from "@/components/data-table";
 import { EmployeeMatches, useEmployeeSearch, type EmployeeCandidate } from "@/components/employee-picker";
+import { useAnchoredToParent } from "@/components/use-anchored";
 import { useDebouncedSearch } from "@/components/use-debounced-search";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -109,6 +110,7 @@ export function AutomationView({
     () => suggestions.filter((s) => s.title.toLowerCase().includes(q)),
     [suggestions, q],
   );
+  const suggestionsRef = useAnchoredToParent<HTMLDivElement>(searchOpen && q.length > 0 && shownSuggestions.length > 0);
 
   async function send(key: string, url: string, init: RequestInit) {
     setBusy(key);
@@ -225,7 +227,7 @@ export function AutomationView({
             <Loader2 className="absolute right-3 top-1/2 size-4 -translate-y-1/2 animate-spin text-muted-foreground" />
           )}
           {searchOpen && q.length > 0 && shownSuggestions.length > 0 && (
-            <div className="absolute inset-x-0 top-full z-20 mt-1 max-h-64 overflow-y-auto rounded-md border bg-popover shadow-md">
+            <div ref={suggestionsRef} className="absolute top-0 left-0 z-20 overflow-y-auto rounded-md border bg-popover shadow-md">
               {shownSuggestions.slice(0, 8).map((s) => (
                 <button
                   key={s.title}

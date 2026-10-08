@@ -20,7 +20,6 @@ import {
   ASSESSMENTS_ROLES,
   EVENT_ROLES,
   INVITE_TTL_MINUTES,
-  IRIS_ROLES,
   TRAINING_ROLES,
   userInvites,
   users,
@@ -42,37 +41,27 @@ after(() => scope.tearDown());
 
 const GRANTS: InviteGrant[] = EVENT_ROLES.flatMap((event) =>
   [null, ...TRAINING_ROLES].flatMap((trainingRole) =>
-    [null, ...ASSESSMENTS_ROLES].flatMap((assessmentsRole) =>
-      [null, ...IRIS_ROLES].map((irisRole) => ({
-        eventRole: event === "none" ? null : event,
-        trainingRole,
-        assessmentsRole,
-        irisRole,
-      })),
-    ),
+    [null, ...ASSESSMENTS_ROLES].map((assessmentsRole) => ({
+      eventRole: event === "none" ? null : event,
+      trainingRole,
+      assessmentsRole,
+    })),
   ),
 );
 
 const describeGrant = (g: InviteGrant) =>
-  `event=${g.eventRole ?? "-"} training=${g.trainingRole ?? "-"} assessments=${g.assessmentsRole ?? "-"} iris=${g.irisRole ?? "-"}`;
+  `event=${g.eventRole ?? "-"} training=${g.trainingRole ?? "-"} assessments=${g.assessmentsRole ?? "-"}`;
 
 function expected(actor: Access, grant: InviteGrant): "ok" | "empty" | "forbidden" {
-  if (
-    grant.eventRole === null &&
-    grant.trainingRole === null &&
-    grant.assessmentsRole === null &&
-    grant.irisRole === null
-  ) {
+  if (grant.eventRole === null && grant.trainingRole === null && grant.assessmentsRole === null) {
     return "empty";
   }
   const event = actor.platform || actor.event === "administrator";
   const training = actor.platform || actor.training === "administrator";
   const evals = actor.platform || actor.assessments === "administrator";
-  const iris = actor.platform || actor.iris === "administrator";
   if (grant.eventRole !== null && !event) return "forbidden";
   if (grant.trainingRole !== null && !training) return "forbidden";
   if (grant.assessmentsRole !== null && !evals) return "forbidden";
-  if (grant.irisRole !== null && !iris) return "forbidden";
   return "ok";
 }
 
@@ -110,7 +99,7 @@ describe("making a link", () => {
   test(`expires ${INVITE_TTL_MINUTES} minutes out`, async () => {
     const admin = await scope.createUser("ttl_admin", PERSONAS.eventAdmin);
     const before = Date.now();
-    const result = await createInvite(admin, { eventRole: "operator", trainingRole: null, assessmentsRole: null, irisRole: null });
+    const result = await createInvite(admin, { eventRole: "operator", trainingRole: null, assessmentsRole: null });
     assert.ok(result.ok);
     const minutes = (result.expiresAt.getTime() - before) / 60_000;
     assert.ok(Math.abs(minutes - INVITE_TTL_MINUTES) < 0.1, `${minutes} minutes`);
@@ -118,7 +107,7 @@ describe("making a link", () => {
 
   test("only the hash is stored, never the token", async () => {
     const admin = await scope.createUser("hash_admin", PERSONAS.eventAdmin);
-    const token = await mint(admin, { eventRole: "operator", trainingRole: null, assessmentsRole: null, irisRole: null });
+    const token = await mint(admin, { eventRole: "operator", trainingRole: null, assessmentsRole: null });
     const rows = await db
       .select({ hash: userInvites.tokenHash })
       .from(userInvites)
@@ -132,7 +121,7 @@ describe("making a link", () => {
 describe("using a link", () => {
   test("someone with no access gets exactly the roles it names", async () => {
     const admin = await scope.createUser("use_admin", PERSONAS.platform);
-    for (const grant of GRANTS.filter((g) => g.eventRole || g.trainingRole || g.assessmentsRole || g.irisRole)) {
+    for (const grant of GRANTS.filter((g) => g.eventRole || g.trainingRole || g.assessmentsRole)) {
       const token = await mint(admin, grant);
       const newcomer = await scope.createUser("use_newcomer", PERSONAS.nobody);
       assert.deepEqual(await acceptInvite(newcomer.id, token), { ok: true, applied: true, grant });
@@ -140,7 +129,6 @@ describe("using a link", () => {
         event: grant.eventRole ?? "none",
         training: grant.trainingRole,
         assessments: grant.assessmentsRole,
-        iris: grant.irisRole,
         platform: false,
         judging: false,
         manager: false,
@@ -150,7 +138,7 @@ describe("using a link", () => {
 
   test("a platform administrator's link never makes anyone a platform administrator", async () => {
     const admin = await scope.createUser("plat_admin", PERSONAS.platform);
-    const token = await mint(admin, { eventRole: "administrator", trainingRole: "administrator", assessmentsRole: null, irisRole: null });
+    const token = await mint(admin, { eventRole: "administrator", trainingRole: "administrator", assessmentsRole: null });
     const newcomer = await scope.createUser("plat_newcomer", PERSONAS.nobody);
     await acceptInvite(newcomer.id, token);
     assert.equal((await readRoles(newcomer.id))?.platform, false);
@@ -162,7 +150,6 @@ describe("using a link", () => {
       eventRole: "administrator",
       trainingRole: "administrator",
       assessmentsRole: "administrator",
-      irisRole: "administrator",
     });
     // A guest judge and a people manager hold no stored role, so a link
     // applies to them as to nobody.
@@ -177,7 +164,7 @@ describe("using a link", () => {
 
   test("works for more than one person, and counts each one", async () => {
     const admin = await scope.createUser("multi_admin", PERSONAS.eventAdmin);
-    const token = await mint(admin, { eventRole: "operator", trainingRole: null, assessmentsRole: null, irisRole: null });
+    const token = await mint(admin, { eventRole: "operator", trainingRole: null, assessmentsRole: null });
     for (const key of ["multi_a", "multi_b", "multi_c"]) {
       const newcomer = await scope.createUser(key, PERSONAS.nobody);
       assert.ok((await acceptInvite(newcomer.id, token)).ok);
@@ -188,7 +175,7 @@ describe("using a link", () => {
 
   test("an expired link gives nothing", async () => {
     const admin = await scope.createUser("exp_admin", PERSONAS.eventAdmin);
-    const token = await mint(admin, { eventRole: "operator", trainingRole: null, assessmentsRole: null, irisRole: null });
+    const token = await mint(admin, { eventRole: "operator", trainingRole: null, assessmentsRole: null });
     await db
       .update(userInvites)
       .set({ expiresAt: new Date(Date.now() - 1000) })
@@ -201,8 +188,8 @@ describe("using a link", () => {
 
   test("a link stops working when its creator loses the role, and not before", async () => {
     const admin = await scope.createUser("rev_admin", PERSONAS.bothAdmins);
-    const eventLink = await mint(admin, { eventRole: "operator", trainingRole: null, assessmentsRole: null, irisRole: null });
-    const trainingLink = await mint(admin, { eventRole: null, trainingRole: "viewer", assessmentsRole: null, irisRole: null });
+    const eventLink = await mint(admin, { eventRole: "operator", trainingRole: null, assessmentsRole: null });
+    const trainingLink = await mint(admin, { eventRole: null, trainingRole: "viewer", assessmentsRole: null });
 
     // Down to training administrator only: the event link dies, the other lives.
     await scope.createUser("rev_admin", PERSONAS.trainingAdmin);
@@ -215,7 +202,7 @@ describe("using a link", () => {
 
   test("a link dies with the administrator who made it", async () => {
     const admin = await scope.createUser("gone_admin", PERSONAS.eventAdmin);
-    const token = await mint(admin, { eventRole: "operator", trainingRole: null, assessmentsRole: null, irisRole: null });
+    const token = await mint(admin, { eventRole: "operator", trainingRole: null, assessmentsRole: null });
     await db.delete(users).where(eq(users.id, admin.id));
     assert.deepEqual(await readInvite(token), { ok: false, error: "not_found" });
   });

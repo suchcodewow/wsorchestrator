@@ -3,7 +3,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/auth";
-import { ASSESSMENTS_ROLES, EVENT_ROLES, IRIS_ROLES, TRAINING_ROLES } from "@/db/schema";
+import { ASSESSMENTS_ROLES, EVENT_ROLES, TRAINING_ROLES } from "@/db/schema";
 import { canManageUsers } from "@/lib/roles";
 import { createInvite, type CreateInviteError } from "@/lib/user-invites";
 import { audited } from "@/lib/audit";
@@ -13,8 +13,6 @@ const postSchema = z.object({
   trainingRole: z.enum(TRAINING_ROLES).nullable(),
   // Optional, so a caller written before eVals existed still works.
   assessmentsRole: z.enum(ASSESSMENTS_ROLES).nullable().default(null),
-  // Optional, so a caller written before Iris existed still works.
-  irisRole: z.enum(IRIS_ROLES).nullable().default(null),
 });
 
 const STATUS_FOR: Record<CreateInviteError, number> = {
@@ -36,10 +34,10 @@ export const POST = audited(async function POST(req: Request) {
     return NextResponse.json({ error: "invalid_body" }, { status: 400 });
   }
 
-  const { eventRole, trainingRole, assessmentsRole, irisRole } = parsed.data;
+  const { eventRole, trainingRole, assessmentsRole } = parsed.data;
   const result = await createInvite(
     { id: session.user.id, access: session.user.access },
-    { eventRole: eventRole === "none" ? null : eventRole, trainingRole, assessmentsRole, irisRole },
+    { eventRole: eventRole === "none" ? null : eventRole, trainingRole, assessmentsRole },
   );
   if (!result.ok) {
     return NextResponse.json(

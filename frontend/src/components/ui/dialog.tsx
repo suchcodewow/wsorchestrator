@@ -1,6 +1,11 @@
 "use client";
 
-/** The dialog primitives. */
+/**
+ * The dialog primitives. Every modal goes through `DialogContent`, which owns
+ * how a modal stands off the page — the dimmed backdrop, its own surface
+ * (`--dialog`), and in dark mode a brighter edge and deeper shadow — so a
+ * call site sizes and lays out its dialog but never restyles that.
+ */
 
 import * as React from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
@@ -20,7 +25,7 @@ function DialogOverlay({
   return (
     <DialogPrimitive.Overlay
       className={cn(
-        "fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+        "fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px] dark:bg-black/70 dark:backdrop-blur-[3px] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
         className,
       )}
       {...props}
@@ -42,7 +47,10 @@ function DialogContent({
           animate={{ opacity: 1, scale: 1, y: 0 }}
           transition={SPRING_SURFACE}
           className={cn(
-            "fixed left-1/2 top-1/2 z-50 grid max-h-[calc(100dvh-2rem)] w-full max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-2xl border bg-background p-6 shadow-2xl data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95",
+            "fixed left-1/2 top-1/2 z-50 grid max-h-[calc(100dvh-2rem)] w-full max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-2xl border bg-dialog p-6 shadow-2xl data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95",
+            // On a near-black page a dialog needs more than a shadow to stand off it: a
+            // brighter edge, and a faint highlight along the top where light would catch.
+            "dark:border-white/20 dark:shadow-[0_0_0_1px_rgb(0_0_0/0.6),inset_0_1px_0_rgb(255_255_255/0.08),0_32px_96px_-16px_rgb(0_0_0/0.9)]",
             className,
           )}
         >

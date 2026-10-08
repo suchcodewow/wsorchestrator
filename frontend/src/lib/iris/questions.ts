@@ -1,5 +1,5 @@
 /**
- * The question bank as Iris administrators review it: one subject and form at
+ * The question bank as Assessments Administrators review it: one subject and form at
  * a time, each question with its key, its review, and how it has performed in
  * live sittings of its current version.
  */

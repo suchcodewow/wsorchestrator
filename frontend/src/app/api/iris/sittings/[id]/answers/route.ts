@@ -36,7 +36,7 @@ export const POST = audited(async function POST(req: Request, { params }: { para
       placement: result.placement,
       confidence: result.confidence,
     };
-    // A taker is never told their level; an Iris administrator is.
+    // A taker is never told their level; an Assessments Administrator is.
     return NextResponse.json(canManageIris(user.access) ? finished : withoutLevel(finished));
   }
   return NextResponse.json({ done: false, sitting: result.sitting });

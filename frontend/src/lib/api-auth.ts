@@ -12,6 +12,7 @@ import { resolveToken, type TokenBearer } from "@/lib/api-tokens";
 import { noteAudit, noteCaller } from "@/lib/audit-context";
 import {
   canManageEvalsSettings,
+  canManageMimir,
   canManageSettings,
   canRefreshCanaryWire,
   canSeeCanaryWire,
@@ -95,6 +96,11 @@ export function requireEvalsViewer(req: Request) {
 /** An Assessments Administrator, for eVals settings. */
 export function requireEvalsAdministrator(req: Request) {
   return requireCaller(req, canManageEvalsSettings);
+}
+
+/** A Training Administrator, for Mimir Settings. */
+export function requireMimirAdministrator(req: Request) {
+  return requireCaller(req, canManageMimir);
 }
 
 /** A people manager or platform administrator, for Reporting → Canary Wire. */

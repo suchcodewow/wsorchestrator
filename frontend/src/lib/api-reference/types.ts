@@ -3,7 +3,6 @@
 import {
   ASSESSMENTS_ROLE_LABELS,
   EVENT_ROLE_LABELS,
-  IRIS_ROLE_LABELS,
   PLATFORM_ADMIN_LABEL,
   TRAINING_ROLE_LABELS,
 } from "@/lib/roles";
@@ -21,12 +20,10 @@ export type Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
  *   eventAdmin   Event Administrator                   (canManageSettings, canAuditProjects)
  *   trainingViewer Training Viewer or above           (canUseTraining)
  *   trainingAdmin Training Administrator              (canManageTrainingSettings)
- *   assessmentsViewer Assessments Viewer or above      (canUseEvals)
- *   assessmentsAdmin Assessments Administrator         (canManageEvalsSettings)
+ *   assessmentsViewer Assessments Viewer or above      (canUseEvals, canTakeIris)
+ *   assessmentsAdmin Assessments Administrator         (canManageEvalsSettings, canManageIris)
  *   employeeSearch Assessments or Training Administrator (canSearchEmployees)
  *   scorer       Assessments Viewer or above, or a guest judge on the active bootcamp (canScoreAssessments)
- *   irisTaker    Iris Taker or above                   (canTakeIris)
- *   irisAdmin    Iris Administrator                    (canManageIris)
  *   canaryWire   a people manager (by HiBob), or Platform Administrator (canSeeCanaryWire)
  *   userAdmin    an administrator in any area          (canManageUsers)
  *   platform     Platform Administrator                (canManageBackups, canManageSignInDomains, canDeleteUsers)
@@ -47,8 +44,6 @@ export type AccessKey =
   | "assessmentsAdmin"
   | "employeeSearch"
   | "scorer"
-  | "irisTaker"
-  | "irisAdmin"
   | "canaryWire"
   | "userAdmin"
   | "platform"
@@ -68,8 +63,6 @@ export const ACCESS_LABELS: Record<AccessKey, string> = {
   assessmentsAdmin: ASSESSMENTS_ROLE_LABELS.administrator,
   employeeSearch: `${ASSESSMENTS_ROLE_LABELS.administrator} or ${TRAINING_ROLE_LABELS.administrator}`,
   scorer: `${ASSESSMENTS_ROLE_LABELS.viewer} or above, or a guest judge on the active bootcamp`,
-  irisTaker: `${IRIS_ROLE_LABELS.taker} or above`,
-  irisAdmin: IRIS_ROLE_LABELS.administrator,
   canaryWire: `A people manager (someone HiBob has reporting to them), or ${PLATFORM_ADMIN_LABEL}`,
   userAdmin: "An administrator in any area",
   platform: PLATFORM_ADMIN_LABEL,

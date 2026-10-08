@@ -1,4 +1,4 @@
-/** One Iris subject, a question at a time. `?mode=preview` is an Iris administrator trying the questions out. */
+/** One Iris subject, a question at a time. `?mode=preview` is an Assessments Administrator trying the questions out. */
 
 import { notFound, redirect } from "next/navigation";
 import { auth, signInPath } from "@/auth";

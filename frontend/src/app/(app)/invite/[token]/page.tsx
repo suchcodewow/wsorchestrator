@@ -13,7 +13,6 @@ import { auth, signInPath } from "@/auth";
 import {
   ASSESSMENTS_ROLE_LABELS,
   EVENT_ROLE_LABELS,
-  IRIS_ROLE_LABELS,
   TRAINING_ROLE_LABELS,
   hasNoAccess,
   homePath,
@@ -32,7 +31,6 @@ function grantLabels(grant: InviteGrant): string[] {
     ...(grant.eventRole ? [EVENT_ROLE_LABELS[grant.eventRole]] : []),
     ...(grant.trainingRole ? [TRAINING_ROLE_LABELS[grant.trainingRole]] : []),
     ...(grant.assessmentsRole ? [ASSESSMENTS_ROLE_LABELS[grant.assessmentsRole]] : []),
-    ...(grant.irisRole ? [IRIS_ROLE_LABELS[grant.irisRole]] : []),
   ];
 }
 

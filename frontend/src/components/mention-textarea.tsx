@@ -13,6 +13,7 @@
 
 import { useEffect, useId, useLayoutEffect, useRef, useState, type ComponentProps, type KeyboardEvent } from "react";
 import { Textarea } from "@/components/ui/textarea";
+import { useAnchoredToParent } from "@/components/use-anchored";
 import { insertMention, matchesMention, mentionQueryAt, type MentionPick } from "@/lib/mentions";
 import { cn } from "@/lib/utils";
 
@@ -49,6 +50,7 @@ export function MentionTextarea({
   const matches =
     tag && tag.start !== closedAt ? people.filter((p) => p.fullName && matchesMention(p, tag.query)).slice(0, SHOWN) : [];
   const open = matches.length > 0;
+  const listRef = useAnchoredToParent<HTMLUListElement>(open);
   const current = Math.min(active, matches.length - 1);
 
   // Escape closes the list, not the dialog the box is in. A dialog listens on the
@@ -126,10 +128,11 @@ export function MentionTextarea({
       />
       {open && (
         <ul
+          ref={listRef}
           id={listId}
           role="listbox"
           aria-label="People to tag"
-          className="absolute inset-x-0 top-full z-50 mt-1 max-h-64 overflow-y-auto rounded-lg border bg-popover p-1 text-sm shadow-lg"
+          className="absolute top-0 left-0 z-50 overflow-y-auto rounded-lg border bg-popover p-1 text-sm shadow-lg"
         >
           {matches.map((p, i) => (
             <li

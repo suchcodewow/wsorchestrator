@@ -1,5 +1,5 @@
 /**
- * What Iris administrators see: everyone's placements, one person's
+ * What Assessments Administrators see: everyone's placements, one person's
  * question-by-question path with the answers they chose, and clearing a
  * person's results so they can sit the subjects again. Previews are never
  * reported.

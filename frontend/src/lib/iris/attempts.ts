@@ -4,7 +4,7 @@
  * graded against the bank. A sitting in progress is stored, so leaving and
  * coming back resumes it rather than starting a fresh, rerollable run.
  *
- * Takers never see their placement. It is recorded for Iris administrators and
+ * Takers never see their placement. It is recorded for Assessments Administrators and
  * routes training; showing it would turn a starting point into a grade.
  */
 
@@ -73,7 +73,7 @@ export type MyIris = {
     name: string;
     blurb: string;
     status: SubjectStatus;
-    /** Only for an Iris administrator looking at their own; a taker never gets it. */
+    /** Only for an Assessments Administrator looking at their own; a taker never gets it. */
     placement?: Level;
   }[];
   completed: number;
@@ -208,7 +208,7 @@ export type AnswerResult =
       subject: SubjectKey;
       mode: "live" | "preview";
       questions: number;
-      /** For Iris administrators only: strip with `withoutLevel` before answering a taker. */
+      /** For Assessments Administrators only: strip with `withoutLevel` before answering a taker. */
       placement: Level;
       confidence: Confidence;
     }

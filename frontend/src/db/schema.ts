@@ -64,7 +64,13 @@ export type AssessmentsRole = (typeof ASSESSMENTS_ROLES)[number];
 
 export const assessmentsRole = pgEnum("evals_role", ASSESSMENTS_ROLES);
 
-/** The Iris area's roles, lowest first. No role at all is no access. */
+/**
+ * The roles Iris had while it was an area of its own. Iris is part of the
+ * assessments area now — an Assessments Viewer takes it, an Administrator
+ * runs it — and the 20261008 migration moved everyone's Iris role into their
+ * Assessments role. The columns stay, unread, so an older build still runs
+ * against the database after a rollback.
+ */
 export const IRIS_ROLES = ["taker", "administrator"] as const;
 export type IrisRole = (typeof IRIS_ROLES)[number];
 
@@ -89,6 +95,7 @@ export const users = pgTable("users", {
   eventRole: eventRole("site_role").notNull().default("none"),
   trainingRole: trainingRole("training_role"),
   assessmentsRole: assessmentsRole("evals_role"),
+  /** No longer read; see IRIS_ROLES. */
   irisRole: irisRole("iris_role"),
   isPlatformAdmin: boolean("is_platform_admin").notNull().default(false),
   calendarScope: calendarScope("calendar_scope").notNull().default("own"),
@@ -398,6 +405,7 @@ export const userInvites = pgTable(
     eventRole: eventRole("event_role"),
     trainingRole: trainingRole("training_role"),
     assessmentsRole: assessmentsRole("evals_role"),
+    /** No longer read or written; see IRIS_ROLES. */
     irisRole: irisRole("iris_role"),
     createdBy: text("created_by")
       .notNull()
@@ -2225,3 +2233,246 @@ export const irisItemReviews = pgTable(
 );
 
 export const IRIS_NOTE_MAX = 2000;
+
+/* ------------------------------------------------------------------ */
+/* Mimir                                                               */
+/* ------------------------------------------------------------------ */
+
+/**
+ * What a Mimir item is. Most are cards a rep reads and is coached on: the
+ * four Harness agents, and the capabilities each is made of. The rest hold
+ * others (a discovery group its questions, a glossary category its terms) or
+ * introduce a library tab.
+ */
+export const MIMIR_KINDS = [
+  "agent",
+  "capability",
+  "ai",
+  "architecture",
+  "sdlc",
+  "persona",
+  "competitor",
+  "proof",
+  "framework",
+  "discovery",
+  "question",
+  "category",
+  "term",
+  "intro",
+] as const;
+export type MimirKind = (typeof MIMIR_KINDS)[number];
+
+export const MIMIR_SECTION_LIMIT = 30;
+export const MIMIR_ITEM_LIMITS = {
+  id: 80,
+  title: 1000,
+  emoji: 16,
+  summary: 4000,
+  body: 50_000,
+  sections: MIMIR_SECTION_LIMIT,
+  sectionTitle: 300,
+  sectionContent: 20_000,
+  attr: 4000,
+  listEntries: 30,
+} as const;
+
+/** A titled block of Markdown on a card, shown folded. */
+export type MimirSection = { title: string; content: string };
+
+/**
+ * The fields only some kinds use. Every one is optional; `lib/mimir/kinds.ts`
+ * says which each kind offers for editing.
+ */
+export type MimirAttrs = {
+  badge?: string;
+  role?: string;
+  tag?: string;
+  buyer?: string;
+  scenario?: string;
+  salesAngle?: string;
+  strength?: string;
+  advantages?: string;
+  watchOut?: string;
+  headline?: string;
+  url?: string;
+  loop?: string;
+  /** A Harness AI item's place: platform, agent or feature. */
+  group?: string;
+  why?: string;
+  followUp?: string;
+  seeAlso?: string;
+  /** The library tab an intro sits above. */
+  forKind?: string;
+  number?: number;
+  featured?: boolean;
+  cats?: string[];
+  mods?: string[];
+  /**
+   * A glossary term's forms in other text: "canary", "CI". An all-capitals
+   * form links only where it is written in capitals.
+   */
+  aliases?: string[];
+};
+
+/**
+ * Mimir's reference content: every card, question and glossary term, edited
+ * by Training Administrators in Mimir Settings and served to the coach. The
+ * id is a stable slug so an import can update what it made before.
+ */
+export const mimirItems = pgTable(
+  "mimir_items",
+  {
+    id: text("id").primaryKey(),
+    kind: text("kind").$type<MimirKind>().notNull(),
+    // Restrict: removing a group would silently take its questions or terms.
+    parentId: text("parent_id").references((): AnyPgColumn => mimirItems.id, { onDelete: "restrict" }),
+    /** Order within its kind (and parent), from 0. */
+    position: integer("position").notNull().default(0),
+    title: text("title").notNull(),
+    emoji: text("emoji").notNull().default(""),
+    /** `#rrggbb`, or empty. */
+    color: text("color").notNull().default(""),
+    summary: text("summary").notNull().default(""),
+    /** Markdown. */
+    body: text("body").notNull().default(""),
+    sections: jsonb("sections").$type<MimirSection[]>().notNull().default([]),
+    attrs: jsonb("attrs").$type<MimirAttrs>().notNull().default({}),
+    updatedBy: text("updated_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("mimir_items_kind_idx").on(t.kind, t.position),
+    index("mimir_items_parent_idx").on(t.parentId, t.position),
+    check(
+      "mimir_items_kind_check",
+      sql`${t.kind} in ('agent', 'capability', 'ai', 'architecture', 'sdlc', 'persona', 'competitor', 'proof', 'framework', 'discovery', 'question', 'category', 'term', 'intro')`,
+    ),
+  ],
+);
+
+export type MimirItem = typeof mimirItems.$inferSelect;
+
+/**
+ * Where one person is with one item. Viewed once they open it, practiced once
+ * they send the coach a message, mastered once the coach has said they are
+ * ready and they have written their one-line takeaway.
+ */
+export const mimirProgress = pgTable(
+  "mimir_progress",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    itemId: text("item_id")
+      .notNull()
+      .references(() => mimirItems.id, { onDelete: "cascade" }),
+    firstVisitAt: timestamp("first_visit_at", { withTimezone: true }).notNull().defaultNow(),
+    lastVisitAt: timestamp("last_visit_at", { withTimezone: true }).notNull().defaultNow(),
+    practicedAt: timestamp("practiced_at", { withTimezone: true }),
+    masteryReadyAt: timestamp("mastery_ready_at", { withTimezone: true }),
+    reflection: text("reflection").notNull().default(""),
+  },
+  (t) => [
+    primaryKey({ columns: [t.userId, t.itemId] }),
+    index("mimir_progress_item_idx").on(t.itemId),
+  ],
+);
+
+export const MIMIR_REFLECTION_MAX = 500;
+
+/**
+ * One person's coaching conversation on one item. The system prompt is fixed
+ * when it starts: the coach's earlier turns are only valid against the prompt
+ * they were written under, so an edit to the item reaches the next
+ * conversation, not this one.
+ */
+export const mimirConversations = pgTable(
+  "mimir_conversations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    itemId: text("item_id")
+      .notNull()
+      .references(() => mimirItems.id, { onDelete: "cascade" }),
+    mode: text("mode").notNull(),
+    model: text("model").notNull(),
+    systemPrompt: text("system_prompt").notNull(),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("mimir_conversations_one_idx").on(t.userId, t.itemId)],
+);
+
+export const MIMIR_MESSAGE_ROLES = ["user", "assistant"] as const;
+export type MimirMessageRole = (typeof MIMIR_MESSAGE_ROLES)[number];
+
+export const MIMIR_MESSAGE_MAX = 4000;
+
+/**
+ * One turn, in order. `content` is exactly what the Claude API was sent or
+ * returned, kept so the conversation replays unchanged; `text` is what the
+ * page shows. The kickoff that opens every conversation is not shown.
+ */
+export const mimirMessages = pgTable(
+  "mimir_messages",
+  {
+    conversationId: uuid("conversation_id")
+      .notNull()
+      .references(() => mimirConversations.id, { onDelete: "cascade" }),
+    seq: integer("seq").notNull(),
+    role: text("role").$type<MimirMessageRole>().notNull(),
+    shown: boolean("shown").notNull().default(true),
+    content: jsonb("content").$type<unknown>().notNull(),
+    text: text("text").notNull(),
+    /** The API's token counts for a coach turn. */
+    usage: jsonb("usage").$type<Record<string, unknown>>(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.conversationId, t.seq] }),
+    check("mimir_messages_role_check", sql`${t.role} in ('user', 'assistant')`),
+  ],
+);
+
+export const MIMIR_REP_ROLES = ["SDR", "AE", "SE"] as const;
+export type MimirRepRole = (typeof MIMIR_REP_ROLES)[number];
+
+export const MIMIR_COACH_STYLES = ["socratic", "direct"] as const;
+export type MimirCoachStyle = (typeof MIMIR_COACH_STYLES)[number];
+
+/** What one person has told Mimir about themselves, for the coach. Kept apart from Iris's track. */
+export const mimirProfiles = pgTable(
+  "mimir_profiles",
+  {
+    userId: text("user_id")
+      .primaryKey()
+      .references(() => users.id, { onDelete: "cascade" }),
+    role: text("role").$type<MimirRepRole>(),
+    coachStyle: text("coach_style").$type<MimirCoachStyle>().notNull().default("socratic"),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    check("mimir_profiles_role_check", sql`${t.role} is null or ${t.role} in ('SDR', 'AE', 'SE')`),
+    check("mimir_profiles_coach_style_check", sql`${t.coachStyle} in ('socratic', 'direct')`),
+  ],
+);
+
+/** Mimir-wide settings, one row per key; a key with no row reads as its default. */
+export const mimirSettings = pgTable("mimir_settings", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+  updatedBy: text("updated_by").references(() => users.id, { onDelete: "set null" }),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const MIMIR_SETTINGS_KEYS = {
+  /** Facts about the platform every sales-facing coaching prompt carries. */
+  platformContext: "platform_context",
+  /** Canonical names the coach must use, appended to every prompt. */
+  namingGuard: "naming_guard",
+} as const;
+
+export const MIMIR_SETTING_MAX = 8000;

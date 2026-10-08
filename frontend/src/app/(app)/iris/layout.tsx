@@ -1,4 +1,4 @@
-/** The layout for Iris: open to Iris Takers and above; the tabs to the console are for Iris administrators. */
+/** The layout for Iris: open to Assessments Viewers and above; the tabs to the console are for Assessments Administrators. */
 
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";

@@ -12,6 +12,7 @@ import { useEffect, useState } from "react";
 import { Loader2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useAnchoredToParent } from "@/components/use-anchored";
 import { SEARCH_DEBOUNCE_MS } from "@/components/use-debounced-search";
 import { EVALS_SLACK_CONTACT_LIMITS } from "@/db/schema";
 
@@ -56,7 +57,11 @@ export function useEmployeeSearch(q: string, enabled: boolean) {
   return { matches, clear: () => setMatches([]) };
 }
 
-/** The dropdown under a picker's field. Choosing keeps focus in the field. */
+/**
+ * The dropdown under a picker's field, or over it when there is no room
+ * below. Render it inside the `relative` box around the field. Choosing keeps
+ * focus in the field.
+ */
 export function EmployeeMatches({
   matches,
   onChoose,
@@ -64,10 +69,11 @@ export function EmployeeMatches({
   matches: EmployeeCandidate[];
   onChoose: (employee: EmployeeCandidate) => void;
 }) {
+  const ref = useAnchoredToParent<HTMLUListElement>(matches.length > 0);
   if (matches.length === 0) return null;
 
   return (
-    <ul className="absolute inset-x-0 top-full z-20 mt-1 max-h-64 overflow-y-auto rounded-md border bg-popover shadow-md">
+    <ul ref={ref} className="absolute top-0 left-0 z-20 overflow-y-auto rounded-md border bg-popover shadow-md">
       {matches.slice(0, SHOWN_MATCHES).map((e) => (
         <li key={e.email}>
           <button

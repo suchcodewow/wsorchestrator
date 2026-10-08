@@ -1,4 +1,4 @@
-/** Someone's Iris: their track, and each subject to start, continue or that is done; with levels for an Iris administrator. */
+/** Someone's Iris: their track, and each subject to start, continue or that is done; with levels for an Assessments Administrator. */
 
 import { notFound, redirect } from "next/navigation";
 import { auth, signInPath } from "@/auth";

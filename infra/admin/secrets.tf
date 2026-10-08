@@ -30,6 +30,8 @@ locals {
     # Deepgram has no non-secret half to gate on. Whether a key was given is
     # not itself a secret, so nonsensitive() lifts the taint off the test.
     nonsensitive(var.deepgram_api_key != "") ? ["deepgram-api-key"] : [],
+    # Likewise Claude's, for Mimir's coach.
+    nonsensitive(var.anthropic_api_key != "") ? ["anthropic-api-key"] : [],
     # Likewise the Slack bot token.
     nonsensitive(var.slack_bot_token != "") ? ["slack-bot-token"] : [],
     # Gated on the Slack app's client id, as Mindtickle's is on its tenant.
@@ -55,6 +57,7 @@ locals {
     "aws-secret-access-key"      = var.aws_secret_access_key
     "hibob-token"                = var.hibob_token
     "deepgram-api-key"           = var.deepgram_api_key
+    "anthropic-api-key"          = var.anthropic_api_key
     "slack-bot-token"            = var.slack_bot_token
     "slack-app-client-secret"    = var.slack_app_client_secret
     "mindtickle-api-key"         = var.mindtickle_api_key

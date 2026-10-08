@@ -1,6 +1,6 @@
 "use client";
 
-/** The tab row for Iris, shown to Iris administrators only. */
+/** The tab row for Iris, shown to Assessments Administrators only. */
 
 import { TabNav } from "@/components/tab-nav";
 import { IRIS_TABS } from "./tabs";
