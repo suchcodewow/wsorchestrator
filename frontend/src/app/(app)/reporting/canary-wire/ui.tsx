@@ -22,6 +22,14 @@ export const SELECT_PILL = cn(
   "focus-visible:ring-2 focus-visible:ring-ring/50 dark:bg-card",
 );
 
+// The month-by-manager tables, shared by the Canary Wire and its history.
+// Opaque, so a pinned cell hides what scrolls under it.
+export const MGR_BG = "bg-[color-mix(in_oklab,var(--muted)_70%,var(--card))]";
+export const ROW_BG = "bg-card group-hover:bg-[color-mix(in_oklab,var(--muted)_55%,var(--card))]";
+export const PIN_LEFT = "sticky left-0 z-10 w-72 max-w-72 min-w-72 shadow-[inset_-1px_0_0_var(--border)]";
+export const HEAD = "bg-card px-3 py-2.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground";
+export const TABLE = "w-full table-fixed border-separate border-spacing-0 text-[13px]";
+
 /** A rounded chip, as a run's status is shown. */
 export const CHIP = "inline-flex w-fit shrink-0 items-center rounded-full px-2 py-0.5 text-[11px] font-medium whitespace-nowrap";
 

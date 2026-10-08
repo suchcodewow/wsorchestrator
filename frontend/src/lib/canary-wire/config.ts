@@ -59,6 +59,13 @@ export const COLUMN_ORDER = { first: "AE and Supporting Orgs", second: "SE" } as
  */
 export const NO_BOOTCAMP_EDITIONS = ["SDR"];
 
+/**
+ * The first month Canary Wire History shows. Before it, the program wasn't
+ * yet expected of everyone: April and May 2026 have a few dozen progress
+ * records between some 200 people, against 1,500 for June.
+ */
+export const HISTORY_FIRST_MONTH = "June 2026";
+
 /** Modules whose name contains any of these are left out entirely. */
 export const EXCLUDE_MODULES = ["survey"];
 

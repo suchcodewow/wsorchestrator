@@ -13,13 +13,13 @@
  */
 
 import { useDeferredValue, useMemo, useRef, useState } from "react";
-import { Check, ChevronDown, ChevronRight, Copy, ListChecks, Search } from "lucide-react";
-import { Input } from "@/components/ui/input";
+import { Check, ChevronDown, ChevronRight, Copy, ListChecks } from "lucide-react";
 import { moduleUrl, slackReport, stateClass, when } from "@/lib/canary-wire/report";
 import type { CanaryWireView, Cell, Rep, Team } from "@/lib/canary-wire/view";
 import { cn } from "@/lib/utils";
 import { copyRich } from "./clipboard";
-import { CHIP, FILL, Meter, PILL, PILL_ON, UNCOUNTED } from "./ui";
+import { RolePills, SearchBox } from "./filters";
+import { CHIP, FILL, HEAD, MGR_BG, Meter, PILL, PILL_ON, PIN_LEFT, ROW_BG, TABLE, UNCOUNTED } from "./ui";
 
 function dotClass(cell: Cell | undefined): string {
   if (!cell) return FILL.blank;
@@ -36,14 +36,8 @@ const LEGEND: [string, string][] = [
   [UNCOUNTED.progress, "In progress, not in their lineup"],
 ];
 
-// Opaque, so a pinned cell hides the squares scrolling under it.
-const MGR_BG = "bg-[color-mix(in_oklab,var(--muted)_70%,var(--card))]";
-const ROW_BG = "bg-card group-hover:bg-[color-mix(in_oklab,var(--muted)_55%,var(--card))]";
-const PIN_LEFT = "sticky left-0 z-10 w-72 max-w-72 min-w-72 shadow-[inset_-1px_0_0_var(--border)]";
 const PIN_DONE = "sticky right-32 z-10 w-16 min-w-16 shadow-[inset_1px_0_0_var(--border)]";
 const PIN_RATE = "sticky right-0 z-10 w-32 min-w-32";
-const HEAD = "bg-card px-3 py-2.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground";
-const TABLE = "w-full table-fixed border-separate border-spacing-0 text-[13px]";
 
 /** The widths both tables share, so the header strip and the rows line up. */
 const COL = { name: 288, module: 112, done: 64, rate: 128 };
@@ -148,13 +142,6 @@ export function HeatMap({ view }: { view: CanaryWireView }) {
   // The series' short label, "AE", beside a name; the full edition is the tooltip.
   const short = (edition: string) => view.seriesLinks.find((s) => s.edition === edition)?.label ?? edition;
 
-  const roleCounts = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const t of view.teams) for (const d of t.directs) counts.set(d.role, (counts.get(d.role) ?? 0) + 1);
-    return [...counts].sort(([a], [b]) => (a < b ? -1 : 1));
-  }, [view.teams]);
-  const everyone = roleCounts.reduce((n, [, c]) => n + c, 0);
-  const rolePills: [string, string, number][] = [["", "All", everyone], ...roleCounts.map(([r, n]): [string, string, number] => [r, short(r), n])];
 
   const shown = useMemo(
     () =>
@@ -185,32 +172,8 @@ export function HeatMap({ view }: { view: CanaryWireView }) {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
-        <div className="relative w-full max-w-64 min-w-48 flex-1">
-          <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            type="search"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by name, manager or title"
-            aria-label="Search the heat map"
-            className="rounded-full pl-9"
-          />
-        </div>
-        <div role="group" aria-label="Role" className="flex flex-wrap gap-2">
-          {rolePills.map(([value, label, n]) => (
-            <button
-              key={value || "all"}
-              type="button"
-              title={value || "Every role"}
-              aria-pressed={role === value}
-              onClick={() => setRole(value)}
-              className={cn(PILL, role === value && PILL_ON)}
-            >
-              {label}
-              <span className="font-medium tabular-nums text-foreground">{n}</span>
-            </button>
-          ))}
-        </div>
+        <SearchBox value={search} onChange={setSearch} label="Search the heat map" />
+        <RolePills roles={view.teams.flatMap((t) => t.directs.map((d) => d.role))} short={short} value={role} onChange={setRole} />
         <button
           type="button"
           aria-pressed={incompleteOnly}

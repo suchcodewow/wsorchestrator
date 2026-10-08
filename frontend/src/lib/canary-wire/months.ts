@@ -73,6 +73,16 @@ export function firstFullMonth(day: string): string | null {
   return labelForKey(+m[1]! * 12 + +m[2]! + (m[3] === "01" ? 0 : 1));
 }
 
+/** The month `at` falls in, in Pacific, as the pages name months: "October 2026". */
+export function monthOf(at: Date): string {
+  const p = Object.fromEntries(
+    new Intl.DateTimeFormat("en-US", { timeZone: "America/Los_Angeles", month: "long", year: "numeric" })
+      .formatToParts(at)
+      .map((x) => [x.type, x.value]),
+  );
+  return `${p.month} ${p.year}`;
+}
+
 const PACIFIC = new Intl.DateTimeFormat("en-US", {
   timeZone: "America/Los_Angeles",
   month: "short",
