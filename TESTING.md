@@ -401,3 +401,29 @@ and per-row status marks faster than any screenshot would have. RSC boundary
 errors surface there as a 500 too — which is how the "Functions cannot be passed
 directly to Client Components" bug in the tab row was found, having passed both
 `tsc --noEmit` and `eslint`.
+
+## Using the app as someone else, changes included
+
+Viewing the app as an employee (the account menu's "View as an employee",
+for platform administrators) is read-only everywhere: every change is refused
+with `impersonating`, so nothing is ever done in a real person's name. To take
+an Iris test, file a score, or otherwise change things as someone with a given
+set of roles, use a **test account**. They exist only outside production
+(local `next dev`, QA).
+
+1. On **Manage users**, choose **New test account** and name it. It starts with
+   no roles; set them in its row like anyone else's.
+2. In the account menu, pick it under **Test accounts**. The header says
+   "Viewing as … · test account", and changes now go through, recorded in the
+   audit trail with you as the actor and the test account under
+   `impersonating`.
+3. **Reset** on its row clears everything that is its own, Iris sittings and
+   track included, and keeps its roles, so the same test can be taken again.
+
+Session-only routes (tokens, backups, roles, sign-in domains) stay refused
+while viewing as one. A test account's address is on `test-account.invalid`,
+so nobody can sign in as it. Production refuses to make one, finds none to
+view as, and refuses every change as one, so a row that arrives there in a
+restored backup does nothing. On QA, remember that a test account's actions
+are as real as anyone's: creating an event as one provisions real cloud
+accounts, just as it would for you.

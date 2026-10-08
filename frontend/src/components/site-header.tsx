@@ -51,11 +51,14 @@ export async function SiteHeader({
 
         {session?.impersonator && (
           <span
-            title={`Signed in as ${session.impersonator.name ?? session.impersonator.email}. Stop from the account menu.`}
+            title={`Signed in as ${session.impersonator.name ?? session.impersonator.email}.${session.impersonator.testAccount ? " Changes are saved as this test account." : ""} Stop from the account menu.`}
             className="flex min-w-0 items-center gap-1.5 rounded-full border border-amber-500/40 bg-amber-500/15 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-300"
           >
             <VenetianMask className="size-3.5 shrink-0" />
-            <span className="truncate">Viewing as {session.user.name ?? session.user.email}</span>
+            <span className="truncate">
+              Viewing as {session.user.name ?? session.user.email}
+              {session.impersonator.testAccount && " · test account"}
+            </span>
           </span>
         )}
 

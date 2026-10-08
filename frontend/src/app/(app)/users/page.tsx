@@ -3,9 +3,10 @@
 import { notFound, redirect } from "next/navigation";
 import { auth, pendingBootstrapAdmins, signInPath } from "@/auth";
 import { parseListQuery } from "@/lib/paging";
-import { canManageUsers } from "@/lib/roles";
+import { canImpersonate, canManageUsers } from "@/lib/roles";
 import { USER_LIST } from "@/lib/list-specs";
 import { listSiteUsers } from "@/lib/site-users";
+import { testAccountsAllowed } from "@/lib/test-accounts";
 import { UsersTable } from "./users-table";
 
 export default async function UsersPage({
@@ -30,6 +31,7 @@ export default async function UsersPage({
       viewerId={session.user.id}
       viewerAccess={session.user.access}
       pendingAdmins={pendingAdmins}
+      managesTestAccounts={testAccountsAllowed() && canImpersonate(session.user.access)}
     />
   );
 }

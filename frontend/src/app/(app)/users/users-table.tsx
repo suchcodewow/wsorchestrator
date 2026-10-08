@@ -49,6 +49,7 @@ import type { UserSort } from "@/lib/list-specs";
 import { cn } from "@/lib/utils";
 import { CreateInviteDialog } from "./create-invite-dialog";
 import { DeleteUserButton } from "./delete-user-button";
+import { CreateTestAccountDialog, ResetTestAccountButton } from "./test-account-controls";
 
 type SiteUser = {
   id: string;
@@ -59,6 +60,7 @@ type SiteUser = {
   assessmentsRole: AssessmentsRole | null;
   isPlatformAdmin: boolean;
   isBootstrapAdmin: boolean;
+  isTestAccount: boolean;
   eventCount: number;
 };
 
@@ -97,12 +99,15 @@ export function UsersTable({
   viewerId,
   viewerAccess,
   pendingAdmins,
+  managesTestAccounts,
 }: {
   query: ListQuery<UserSort>;
   page: Page<SiteUser>;
   viewerId: string;
   viewerAccess: Access;
   pendingAdmins: string[];
+  /** Outside production, a platform administrator makes and resets test accounts here. */
+  managesTestAccounts: boolean;
 }) {
   const router = useRouter();
   const [edits, setEdits] = useState<Record<string, Partial<Roles>>>({});
@@ -186,7 +191,10 @@ export function UsersTable({
         className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between"
       >
         <h1 className="text-3xl font-medium tracking-tight">Manage users</h1>
-        <CreateInviteDialog viewerAccess={viewerAccess} />
+        <div className="flex flex-wrap gap-2">
+          {managesTestAccounts && <CreateTestAccountDialog />}
+          <CreateInviteDialog viewerAccess={viewerAccess} />
+        </div>
       </motion.div>
 
       {pendingAdmins.length > 0 && (
@@ -263,6 +271,11 @@ export function UsersTable({
                           {isSelf && (
                             <span className="ml-2 text-xs font-normal text-muted-foreground">
                               you
+                            </span>
+                          )}
+                          {u.isTestAccount && (
+                            <span className="ml-2 rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-xs font-normal text-amber-700 dark:text-amber-300">
+                              Test account
                             </span>
                           )}
                         </span>
@@ -421,7 +434,17 @@ export function UsersTable({
                       </td>
 
                       {viewerDeletes && (
-                        <td className="px-3 py-3 text-right">
+                        <td className="px-3 py-3 text-right whitespace-nowrap">
+                          {managesTestAccounts && u.isTestAccount && (
+                            <ResetTestAccountButton
+                              user={u}
+                              blockedBy={
+                                u.eventCount > 0
+                                  ? `Owns ${u.eventCount} event${u.eventCount === 1 ? "" : "s"} — delete those first`
+                                  : null
+                              }
+                            />
+                          )}
                           <DeleteUserButton user={u} blockedBy={deleteBlockedBy(u)} />
                         </td>
                       )}

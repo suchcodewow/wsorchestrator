@@ -92,7 +92,7 @@ escalate itself:
 | Route | Why |
 | --- | --- |
 | `/api/backups/**` | Taking, restoring and importing backups |
-| `PATCH`/`DELETE /api/users/[id]`, `POST /api/users/invites`, `POST /api/invites/accept` | Granting roles and creating accounts |
+| `PATCH`/`DELETE /api/users/[id]`, `POST /api/users/invites`, `POST /api/invites/accept`, `POST /api/users/test-accounts`, `POST /api/users/test-accounts/[id]/reset` | Granting roles and creating accounts |
 | `POST /api/settings/domains`, `PATCH`/`DELETE /api/settings/domains/[id]` | Who can sign in at all |
 | `GET /api/cohorts/slack/install` | Add to Slack, which hands the app a bot token for the whole workspace and ends in a browser |
 | `/api/tokens/**` | Minting tokens (a token must not be able to mint its own replacement) |

@@ -100,7 +100,11 @@ export const users = pgTable("users", {
   irisRole: irisRole("iris_role"),
   isPlatformAdmin: boolean("is_platform_admin").notNull().default(false),
   calendarScope: calendarScope("calendar_scope").notNull().default("own"),
+  /** Made to test the app as, outside production; see src/lib/test-accounts.ts. */
+  isTestAccount: boolean("is_test_account").notNull().default(false),
 });
+
+export const TEST_ACCOUNT_LIMITS = { name: 80 } as const;
 
 export const accounts = pgTable(
   "accounts",
