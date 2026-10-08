@@ -442,6 +442,49 @@
 
 @layer components {
   /*
+   * Fields that sit back until they are reached for. Every dialog carries
+   * this, from `DialogContent`: at rest a field's fill and a control's border
+   * fade toward the dialog behind them, and the one under the pointer,
+   * focused, or with its menu open gets its full colors back. Only the tokens
+   * move, so each control's own utilities — hover fills, a selected option's
+   * brand border — still apply as written.
+   *
+   * Only form controls fade: inputs, selects, the bare buttons that serve as
+   * dropdown triggers and options, and controls grouped into one (a stepper,
+   * a segmented choice). Cards, separators and tab bars in a dialog keep
+   * their borders, and so does the `Button` component, whose outline is what
+   * marks it as an action.
+   *
+   * The full values are taken on the wrapper, before any control in it
+   * redefines them.
+   */
+  .quiet-fields {
+    --field-full: var(--field);
+    --input-full: var(--input);
+    --border-full: var(--border);
+  }
+
+  .quiet-fields :is(input, textarea, select, button:not([data-slot="button"]), [role="group"], [role="radiogroup"]) {
+    --field: color-mix(in oklab, var(--field-full) 50%, var(--dialog));
+    --input: color-mix(in oklab, var(--input-full) 35%, var(--dialog));
+    --border: color-mix(in oklab, var(--border-full) 45%, var(--dialog));
+  }
+
+  .quiet-fields
+    :is(input, textarea, select, button:not([data-slot="button"]), [role="group"], [role="radiogroup"]):is(
+      :hover,
+      :focus,
+      :focus-visible,
+      [data-state="open"]
+    ) {
+    --field: var(--field-full);
+    --input: var(--input-full);
+    --border: var(--border-full);
+  }
+}
+
+@layer components {
+  /*
    * Lab guide typography.
    *
    * Written out rather than pulled from a typography plugin: the guides are the
