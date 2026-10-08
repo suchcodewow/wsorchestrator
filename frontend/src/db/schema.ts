@@ -1785,6 +1785,8 @@ export const scheduleChecklistItems = pgTable(
     /** 1-based, as a schedule session's; 0 is Bootcamp's Prep Day. */
     day: integer("day").notNull(),
     period: text("period").$type<ChecklistPeriod>().notNull().default("am"),
+    /** Its place in its half-day, first at 0; dragging a card on the board changes it. Ties fall back to when it was added. */
+    position: integer("position").notNull().default(0),
     name: text("name").notNull(),
     /** Lowercased; null when nobody owns it. */
     ownerEmail: text("owner_email"),
@@ -1801,6 +1803,7 @@ export const scheduleChecklistItems = pgTable(
   },
   (t) => [
     index("schedule_checklist_items_day_idx").on(t.bootcampId, t.track, t.day, t.createdAt),
+    index("schedule_checklist_items_place_idx").on(t.bootcampId, t.track, t.day, t.period, t.position),
     index("schedule_checklist_items_owner_idx").on(t.ownerEmail),
     check("schedule_checklist_items_track_check", sql`${t.track} in ('btc', 'int', 'btc_se', 'int_se')`),
     check("schedule_checklist_items_day_check", sql`${t.day} between 0 and 30 and (${t.day} > 0 or ${t.track} = 'btc')`),
