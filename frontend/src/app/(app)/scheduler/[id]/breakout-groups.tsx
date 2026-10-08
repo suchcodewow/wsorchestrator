@@ -37,7 +37,12 @@ import { cn } from "@/lib/utils";
 type Person = { email: string; fullName: string; title: string; track: GroupAttendee["track"] | null; inClass: boolean };
 
 const POOL = "pool";
-const TRACK_BADGES: Record<GroupAttendee["track"], string> = { sales: "Sales", engineer: "Eng" };
+const TRACK_NAMES: Record<GroupAttendee["track"], string> = { sales: "Sales", engineer: "Engineer" };
+/** A name's color says which track they are on, in place of a tag. */
+const TRACK_TEXT: Record<GroupAttendee["track"], string> = {
+  sales: "text-blue-700 dark:text-blue-400",
+  engineer: "text-orange-700 dark:text-orange-400",
+};
 
 /** The groups a breakout keeps with this staff and audience, as the server prunes them when the session is saved. */
 export function keptGroups(groups: GroupRow[], staff: StaffRow[], audience: SessionAudience): GroupRow[] {
@@ -398,6 +403,8 @@ function Box({
   empty: string;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id, disabled: !editable });
+  // By first name, so someone dropped in lands among the rest rather than at the end.
+  const sorted = [...people].sort((a, b) => (a.fullName || a.email).localeCompare(b.fullName || b.email));
   return (
     <section
       ref={setNodeRef}
@@ -417,9 +424,9 @@ function Box({
       {people.length === 0 ? (
         <p className="text-xs text-muted-foreground">{empty}</p>
       ) : (
-        <ul className="flex flex-wrap gap-1.5">
-          {people.map((p) => (
-            <li key={p.email}>
+        <ul className="grid grid-cols-2 gap-1.5">
+          {sorted.map((p) => (
+            <li key={p.email} className="min-w-0">
               <DraggableChip person={p} editable={editable} />
             </li>
           ))}
@@ -441,15 +448,16 @@ function DraggableChip({ person, editable }: { person: Person; editable: boolean
 function Chip({ person: p, lifted }: { person: Person; lifted?: boolean }) {
   return (
     <span
-      title={p.inClass ? [p.email, p.title].filter(Boolean).join(" · ") : `${p.email} · no longer in this class`}
+      title={p.inClass ? [p.email, p.track && TRACK_NAMES[p.track], p.title].filter(Boolean).join(" · ") : `${p.email} · no longer in this class`}
       className={cn(
-        "inline-flex max-w-56 items-center gap-1.5 rounded-full border bg-background px-2.5 py-1 text-xs",
+        "flex w-full min-w-0 items-center gap-1.5 rounded-full border bg-background px-2.5 py-1 text-xs",
         lifted && "cursor-grabbing shadow-lg ring-2 ring-brand/50",
+        p.track && TRACK_TEXT[p.track],
         !p.inClass && "border-amber-300 text-amber-900 dark:border-amber-800 dark:text-amber-200",
       )}
     >
       <span className="truncate">{p.fullName || p.email}</span>
-      {p.track ? <span className="shrink-0 rounded bg-muted px-1 text-[10px] text-muted-foreground">{TRACK_BADGES[p.track]}</span> : <span className="shrink-0 text-[10px]">Left</span>}
+      {p.track ? <span className="sr-only">, {TRACK_NAMES[p.track]}</span> : <span className="ml-auto shrink-0 text-[10px]">Left</span>}
     </span>
   );
 }
