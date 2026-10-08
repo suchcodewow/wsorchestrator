@@ -50,7 +50,7 @@ export function SessionLookFields({
   value: SessionLook;
   onChange: (next: SessionLook) => void;
   autoFocus?: boolean;
-  /** Fields of the caller's own, shown under the length. */
+  /** Fields of the caller's own, shown under the length, icon and color. */
   afterLength?: ReactNode;
 }) {
   const set = <K extends keyof SessionLook>(key: K, v: SessionLook[K]) => onChange({ ...value, [key]: v });
@@ -91,11 +91,8 @@ export function SessionLookFields({
         />
       </div>
 
-      <div className="flex items-center gap-3">
-        <span id={`${id}-length`} className="text-sm font-medium">
-          Length
-        </span>
-        <div role="group" aria-labelledby={`${id}-length`} className="flex items-center rounded-md border">
+      <div className="flex flex-wrap items-center gap-3">
+        <div role="group" aria-label="Length" className="flex shrink-0 items-center rounded-md border">
           <button
             type="button"
             aria-label="15 minutes shorter"
@@ -118,17 +115,10 @@ export function SessionLookFields({
             <Plus className="size-3.5" />
           </button>
         </div>
-      </div>
 
-      {afterLength}
-
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="grid gap-1.5">
-          <span id={`${id}-emoji`} className="text-sm font-medium">
-            Icon
-          </span>
+        <div className="min-w-32 flex-1">
           <DropdownMenu>
-            <DropdownMenuTrigger aria-labelledby={`${id}-emoji`} className={TRIGGER}>
+            <DropdownMenuTrigger aria-label="Icon" className={TRIGGER}>
               {value.emoji ? <span className="text-base leading-none">{value.emoji}</span> : <span className="text-muted-foreground">No icon</span>}
               <ChevronDown className="ml-auto size-4 text-muted-foreground" />
             </DropdownMenuTrigger>
@@ -161,12 +151,9 @@ export function SessionLookFields({
           </DropdownMenu>
         </div>
 
-        <div className="grid gap-1.5">
-          <span id={`${id}-color`} className="text-sm font-medium">
-            Color
-          </span>
+        <div className="min-w-32 flex-1">
           <DropdownMenu>
-            <DropdownMenuTrigger aria-labelledby={`${id}-color`} className={TRIGGER}>
+            <DropdownMenuTrigger aria-label="Color" className={TRIGGER}>
               <span className={cn("size-4 rounded-full", SESSION_STYLES[value.color].dot)} />
               {SESSION_STYLES[value.color].label}
               <ChevronDown className="ml-auto size-4 text-muted-foreground" />
@@ -184,6 +171,8 @@ export function SessionLookFields({
           </DropdownMenu>
         </div>
       </div>
+
+      {afterLength}
 
       <div className="grid gap-1.5">
         <label htmlFor={`${id}-description`} className="text-sm font-medium">

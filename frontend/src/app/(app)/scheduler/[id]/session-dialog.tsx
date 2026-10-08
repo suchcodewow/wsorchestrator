@@ -16,16 +16,7 @@ import { ChevronDown, Crown, Loader2, Trash2 } from "lucide-react";
 import { SessionLookFields, type SessionLook } from "@/components/session-look-fields";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { SCHEDULE_LIMITS, SESSION_AUDIENCES, type ScheduleTrack, type SessionAudience } from "@/db/schema";
 import type { RoomRow } from "@/lib/scheduler/facilities";
@@ -439,7 +430,7 @@ export function SessionDialog({
             {look.kind !== "unstructured" && (
               <section className="grid gap-1.5">
                 <span id="session-audience" className="text-sm font-medium">
-                  Taught to
+                  Who attends this session
                 </span>
                 <div role="radiogroup" aria-labelledby="session-audience" className="inline-flex w-fit rounded-lg border p-0.5">
                   {SESSION_AUDIENCES.map((a) => (
@@ -600,9 +591,11 @@ const TRIGGER =
   "flex h-9 w-full items-center gap-2 rounded-md border border-input bg-transparent px-3 text-sm shadow-xs outline-none transition-colors hover:bg-accent/40 focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-input/30";
 
 /**
- * Who teaches it, as one dropdown: tick anyone in, and pick the leader among
- * those ticked. Someone busy then cannot be ticked in unless the session
- * already had them; anyone ticked who is busy is named under it in red.
+ * Who teaches it, as one dropdown: anyone free first, then anyone busy, each
+ * by first name. Click a row to add or drop someone; the leader's crown is
+ * gold, and a grey crown beside anyone else added makes them the leader.
+ * Someone busy then cannot be added unless the session already had them;
+ * anyone added who is busy is named under it in red.
  */
 function InstructorPicker({
   pool,
@@ -621,7 +614,10 @@ function InstructorPicker({
 }) {
   const [filter, setFilter] = useState("");
   const needle = filter.trim().toLowerCase();
-  const shown = needle ? pool.filter((p) => `${p.fullName} ${p.email}`.toLowerCase().includes(needle)) : pool;
+  const isBusy = (p: PoolPerson) => (busy.get(p.email) ?? []).length > 0;
+  const shown = pool
+    .filter((p) => !needle || `${p.fullName} ${p.email}`.toLowerCase().includes(needle))
+    .sort((a, b) => Number(isBusy(a)) - Number(isBusy(b)) || a.fullName.localeCompare(b.fullName));
   const leader = staff.find((s) => s.leader);
   const clashing = staff.filter((s) => (busy.get(s.email) ?? []).length > 0);
   // Held open while ticking, so several can be picked in one go.
@@ -669,46 +665,49 @@ function InstructorPicker({
           <div className="max-h-72 overflow-y-auto">
             {shown.length === 0 && <p className="px-2 py-1.5 text-sm text-muted-foreground">No one matches.</p>}
             {shown.map((p) => {
-              const on = staff.some((s) => s.email === p.email);
+              const added = staff.find((s) => s.email === p.email);
               const theirs = busy.get(p.email) ?? [];
               return (
-                <DropdownMenuCheckboxItem
-                  key={p.email}
-                  checked={on}
-                  disabled={theirs.length > 0 && !before.has(p.email) && !on}
-                  onSelect={keepOpen}
-                  onCheckedChange={() => onToggle(p)}
-                  className="items-start"
-                >
-                  <span className="min-w-0">
-                    <span className={cn("block truncate", theirs.length > 0 && "font-medium text-red-700 dark:text-red-400")}>
-                      {p.fullName}
-                      <span className="ml-1.5 text-xs font-normal text-muted-foreground">{ROLE_LABELS[p.role]}</span>
-                    </span>
-                    {theirs.map((c) => (
-                      <span key={c.sessionId} className="block truncate text-xs text-red-700 dark:text-red-400">
-                        Busy: {describeClash(c)}
+                <div key={p.email} className="flex items-start gap-1">
+                  <DropdownMenuItem
+                    role="menuitemcheckbox"
+                    aria-checked={Boolean(added)}
+                    disabled={theirs.length > 0 && !before.has(p.email) && !added}
+                    onSelect={(e) => {
+                      keepOpen(e);
+                      onToggle(p);
+                    }}
+                    className={cn("min-w-0 flex-1 items-start", added && "bg-brand/8")}
+                  >
+                    <span className="min-w-0">
+                      <span className={cn("block truncate", theirs.length > 0 && "font-medium text-red-700 dark:text-red-400")}>
+                        {p.fullName}
+                        <span className="ml-1.5 text-xs font-normal text-muted-foreground">{ROLE_LABELS[p.role]}</span>
                       </span>
-                    ))}
-                  </span>
-                </DropdownMenuCheckboxItem>
+                      {theirs.map((c) => (
+                        <span key={c.sessionId} className="block truncate text-xs text-red-700 dark:text-red-400">
+                          Busy: {describeClash(c)}
+                        </span>
+                      ))}
+                    </span>
+                  </DropdownMenuItem>
+                  {added && (
+                    // Its own item, so the arrow keys reach it as well as a click.
+                    <DropdownMenuItem
+                      aria-label={added.leader ? `${p.fullName} leads it` : `Make ${p.fullName} the leader`}
+                      onSelect={(e) => {
+                        keepOpen(e);
+                        if (!added.leader) onLeader(p.email);
+                      }}
+                      className="size-8 shrink-0 justify-center px-0"
+                    >
+                      <Crown className={cn("size-3.5", added.leader ? "fill-amber-400 text-amber-500" : "text-muted-foreground/50")} />
+                    </DropdownMenuItem>
+                  )}
+                </div>
               );
             })}
           </div>
-          {staff.length > 1 && (
-            <>
-              <DropdownMenuSeparator />
-              <DropdownMenuLabel className="text-xs text-muted-foreground">Leader</DropdownMenuLabel>
-              <DropdownMenuRadioGroup value={leader?.email ?? ""} onValueChange={onLeader}>
-                {staff.map((s) => (
-                  <DropdownMenuRadioItem key={s.email} value={s.email} onSelect={keepOpen}>
-                    <Crown className={cn("size-3.5", s.leader ? "text-amber-500" : "text-muted-foreground/50")} />
-                    {s.fullName}
-                  </DropdownMenuRadioItem>
-                ))}
-              </DropdownMenuRadioGroup>
-            </>
-          )}
         </DropdownMenuContent>
       </DropdownMenu>
       {clashing.map((s) =>
@@ -773,7 +772,7 @@ function ReadOnly({ session: s, roomName }: { session: SessionRow; roomName: (id
       <dd>{formatLength(s.minutes)}</dd>
       {s.kind !== "unstructured" && (
         <>
-          <dt className="text-muted-foreground">Taught to</dt>
+          <dt className="text-muted-foreground">Who attends</dt>
           <dd>{AUDIENCE_LABELS[s.audience]}</dd>
           <dt className="text-muted-foreground">Instructors</dt>
           <dd>{s.staff.length === 0 ? "No leader yet" : s.staff.map((p) => `${p.fullName}${p.leader ? " (leader)" : ""}`).join(", ")}</dd>
