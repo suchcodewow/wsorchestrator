@@ -9,7 +9,10 @@
  * was clicked.
  *
  * A Training administrator adds cards, edits, ticks and removes them, drags
- * them to another half-day, and copies them: the copy button on a card
+ * them up or down their half-day or to another, and copies them. As one is
+ * dragged the others make room where it will land, as sessions do on the
+ * schedule; let go outside every half, or Escape, and it goes back. They also
+ * copy them: the copy button on a card
  * duplicates it in place, or, dragged, drops a duplicate wherever it is let
  * go. An item's owner ticks their own.
  */
@@ -30,6 +33,7 @@ import {
   useSensors,
   type CollisionDetection,
   type DragEndEvent,
+  type DragMoveEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
 import { Check, Copy, Loader2, Plus, Sunrise, Sunset, Trash2 } from "lucide-react";
@@ -47,6 +51,7 @@ import {
 } from "@/db/schema";
 import { mentionsIn, type MentionPick } from "@/lib/mentions";
 import type { ChecklistDayCount, ChecklistItemRow } from "@/lib/scheduler/checklist";
+import { byPlace, placeInHalf, previewHalf } from "@/lib/scheduler/checklist-order";
 import type { Instructor } from "@/lib/scheduler/schedule";
 import { TRACK_LABELS, checklistDayLabel, dayDate, trackDays } from "@/lib/scheduler/timeline";
 import { cn } from "@/lib/utils";
@@ -263,14 +268,18 @@ function boardDays(track: ChecklistTrack, bootcamp: Omit<BootcampDays, "startDat
 
 const sectionKey = (day: number, period: ChecklistPeriod) => `${day}:${period}`;
 
-/** Oldest first, as the API lists them. */
-const byAge = (a: Item, b: Item) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id);
 
 /** One track's items, loaded together so they never belong to another. */
 type Loaded = { track: ChecklistTrack; items: Item[] };
 
 /** What a card is being dragged to do: go somewhere else, or leave a duplicate there. */
 type Drag = { kind: "move" | "copy"; item: Item };
+
+/** Where a card being moved would land: a half-day, and its place among the others there. */
+type Landing = { day: number; period: ChecklistPeriod; index: number };
+
+/** A card's offset and height in its half's list, as the drag began. */
+type CardSpot = { id: string; top: number; height: number };
 
 function ChecklistBoard({
   focus,
@@ -306,6 +315,13 @@ function ChecklistBoard({
   /** Cards just added, which pop with a burst. */
   const [fresh, setFresh] = useState<Set<string>>(new Set());
   const [drag, setDrag] = useState<Drag | null>(null);
+  const [landing, setLanding] = useState<Landing | null>(null);
+  /**
+   * Every half's cards where they were as the drag began. The place a card
+   * lands is read against these, so the gap that opens for it as it moves
+   * never moves the place it is aiming for.
+   */
+  const spots = useRef(new Map<string, CardSpot[]>());
   const droppedAt = useRef(0);
   const sections = useRef(new Map<string, HTMLElement>());
   const focused = useRef(false);
@@ -339,7 +355,7 @@ function ChecklistBoard({
       if (!live) return;
       const failed = results.find((r) => !Array.isArray(r));
       if (failed && !Array.isArray(failed)) return setError(ERRORS[failed.error] ?? "Could not load the checklists.");
-      setLoaded({ track, items: (results as Item[][]).flat().sort(byAge) });
+      setLoaded({ track, items: (results as Item[][]).flat().sort(byPlace) });
     })();
     return () => {
       live = false;
@@ -361,7 +377,7 @@ function ChecklistBoard({
   }, [items, focus]);
 
   const change = (fn: (list: Item[]) => Item[]) =>
-    setLoaded((prev) => (prev && prev.track === track ? { track, items: fn(prev.items).sort(byAge) } : prev));
+    setLoaded((prev) => (prev && prev.track === track ? { track, items: fn(prev.items).sort(byPlace) } : prev));
   const put = (item: Item) => change((list) => [...list.filter((i) => i.id !== item.id), item]);
   const pop = (id: string) => {
     setFresh((prev) => new Set(prev).add(id));
@@ -427,11 +443,16 @@ function ChecklistBoard({
     setEditing(null);
   }
 
-  /** Moved here at once, and put back if the server will not have it. */
-  async function move(item: Item, day: number, period: ChecklistPeriod) {
-    put({ ...item, day, period });
-    const out = (await send(`${base}/items/${item.id}`, { method: "PATCH", body: JSON.stringify({ day, period }) })) as Item | null;
-    put(out ?? item);
+  /** Moved here at once, to `index` among the others in its new half, and put back if the server will not have it. */
+  async function move(item: Item, day: number, period: ChecklistPeriod, index: number) {
+    const before = loaded;
+    change((list) => placeInHalf(list, item.id, { day, period, index }));
+    const out = (await send(`${base}/items/${item.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ day, period, position: index }),
+    })) as Item | null;
+    if (out) put(out);
+    else setLoaded((prev) => (before && prev?.track === before.track ? before : prev));
   }
 
   async function copy(item: Item, day: number, period: ChecklistPeriod) {
@@ -443,15 +464,68 @@ function ChecklistBoard({
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, { keyboardCodes: { start: ["Space"], cancel: ["Escape"], end: ["Space", "Enter"] } }),
   );
-  const onDragStart = ({ active }: DragStartEvent) => setDrag((active.data.current as Drag | undefined) ?? null);
-  const onDragEnd = ({ active, over }: DragEndEvent) => {
-    setDrag(null);
-    droppedAt.current = Date.now();
-    const what = active.data.current as Drag | undefined;
+  const onDragStart = ({ active }: DragStartEvent) => {
+    const what = (active.data.current as Drag | undefined) ?? null;
+    setDrag(what);
+    setLanding(null);
+    if (what?.kind !== "move") return;
+    spots.current = new Map(
+      [...document.querySelectorAll<HTMLElement>("[data-checklist-list]")].map((list) => [
+        list.dataset.checklistList!,
+        [...list.querySelectorAll<HTMLElement>("[data-checklist-card]")].map((card) => ({
+          id: card.dataset.checklistCard!,
+          top: card.offsetTop,
+          height: card.offsetHeight,
+        })),
+      ]),
+    );
+  };
+
+  /** The half under the dragged card, and the place in it whose middle its own middle is above. */
+  const landingFor = ({ active, over }: DragMoveEvent | DragEndEvent): Landing | null => {
     const to = over?.data.current as { day: number; period: ChecklistPeriod } | undefined;
+    const rect = active.rect.current.translated;
+    const what = active.data.current as Drag | undefined;
+    if (!to || !rect || what?.kind !== "move") return null;
+    const key = sectionKey(to.day, to.period);
+    const cards = (spots.current.get(key) ?? []).filter((c) => c.id !== what.item.id);
+    const list = document.querySelector<HTMLElement>(`[data-checklist-list="${key}"]`);
+    if (!list) return { ...to, index: cards.length };
+    // The list scrolls, so its cards are placed from where it is now and how far it has scrolled.
+    const top = list.getBoundingClientRect().top - list.scrollTop;
+    const middle = rect.top + rect.height / 2;
+    const index = cards.findIndex((c) => middle < top + c.top + c.height / 2);
+    return { ...to, index: index === -1 ? cards.length : index };
+  };
+
+  const onDragMove = (event: DragMoveEvent) => {
+    const next = landingFor(event);
+    setLanding((prev) =>
+      prev?.day === next?.day && prev?.period === next?.period && prev?.index === next?.index ? prev : next,
+    );
+  };
+
+  const onDragEnd = (event: DragEndEvent) => {
+    setDrag(null);
+    setLanding(null);
+    droppedAt.current = Date.now();
+    const what = event.active.data.current as Drag | undefined;
+    const to = event.over?.data.current as { day: number; period: ChecklistPeriod } | undefined;
     if (!what || !to) return;
     if (what.kind === "copy") return void copy(what.item, to.day, to.period);
-    if (what.item.day !== to.day || what.item.period !== to.period) void move(what.item, to.day, to.period);
+    // Let go outside every half: it stays where it was.
+    const at = landingFor(event);
+    if (!at || !items) return;
+    const wasAt = items
+      .filter((i) => i.day === what.item.day && i.period === what.item.period)
+      .findIndex((i) => i.id === what.item.id);
+    const sameHalf = what.item.day === at.day && what.item.period === at.period;
+    if (!sameHalf || wasAt !== at.index) void move(what.item, at.day, at.period, at.index);
+  };
+
+  const onDragCancel = () => {
+    setDrag(null);
+    setLanding(null);
   };
   /** The click that ends a drag is not a request to open or copy the card. */
   const justDropped = () => Date.now() - droppedAt.current < 250;
@@ -522,8 +596,9 @@ function ChecklistBoard({
               sensors={sensors}
               collisionDetection={underPointer}
               onDragStart={onDragStart}
+              onDragMove={onDragMove}
               onDragEnd={onDragEnd}
-              onDragCancel={() => setDrag(null)}
+              onDragCancel={onDragCancel}
             >
               <div className="flex min-h-0 flex-1 gap-3 overflow-x-auto px-6 pb-6">
                 {days.map((day) => {
@@ -551,7 +626,12 @@ function ChecklistBoard({
                           key={period}
                           day={day}
                           period={period}
-                          items={here.filter((i) => i.period === period)}
+                          items={previewHalf(
+                            here.filter((i) => i.period === period),
+                            { day, period },
+                            drag?.kind === "move" ? drag.item : null,
+                            landing,
+                          )}
                           lit={lit === sectionKey(day, period)}
                           full={full}
                           register={(el) => {
@@ -722,7 +802,11 @@ function HalfSection({
         )}
       </div>
 
-      <ul ref={list} className="relative flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto px-2 pb-2">
+      <ul
+        ref={list}
+        data-checklist-list={sectionKey(day, period)}
+        className="relative flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto px-2 pb-2"
+      >
         <AnimatePresence initial={false}>
           {items.map((item) =>
             editing === item.id ? (
@@ -855,7 +939,7 @@ function ChecklistCard({
   const canTick = canManage || mine;
 
   return (
-    <motion.li layout {...POP} className="relative">
+    <motion.li layout {...POP} data-checklist-card={item.id} className="relative">
       {fresh && <Burst />}
       <div
         ref={(el) => {
