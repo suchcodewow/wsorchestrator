@@ -6,7 +6,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
-import { UserMenu } from "@/components/user-menu";
+import { UserMenu, type Impersonator } from "@/components/user-menu";
 import {
   Tooltip,
   TooltipContent,
@@ -27,6 +27,7 @@ export function AppSidebar({
   access,
   initialTheme,
   build,
+  impersonator,
   defaultCollapsed,
   sticky = false,
   signOutAction,
@@ -37,6 +38,7 @@ export function AppSidebar({
   access: Access;
   initialTheme: ThemePreference;
   build: BuildInfo;
+  impersonator: Impersonator | null;
   defaultCollapsed: boolean;
   sticky?: boolean;
   signOutAction: () => Promise<void>;
@@ -96,6 +98,7 @@ export function AppSidebar({
             access={access}
             initialTheme={initialTheme}
             build={build}
+            impersonator={impersonator}
             signOutAction={signOutAction}
             accountOnly
             variant={collapsed ? "rail" : "sidebar"}

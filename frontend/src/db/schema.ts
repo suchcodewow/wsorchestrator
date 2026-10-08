@@ -122,6 +122,13 @@ export const sessions = pgTable("sessions", {
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
   expires: timestamp("expires", { mode: "date" }).notNull(),
+  /**
+   * Lowercased: the employee a platform administrator is viewing the app as
+   * in this browser session, or null. Kept on the session rather than the
+   * user so it ends at sign-out and never follows them to another device.
+   * Read by the session callback in `src/auth.ts`.
+   */
+  impersonatingEmail: text("impersonating_email"),
 });
 
 export const verificationTokens = pgTable(
