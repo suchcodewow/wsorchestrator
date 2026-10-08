@@ -279,6 +279,7 @@ const PAGES: Record<string, PageCase> = {
     expect: (a) => (canSeeReporting(a) ? { to: visibleReportingTabs(a)[0]!.href } : 404),
   },
   "/reporting/canary-wire": { path: () => "/reporting/canary-wire", expect: gated(canSeeCanaryWire) },
+  "/reporting/canary-wire-history": { path: () => "/reporting/canary-wire-history", expect: gated(canSeeCanaryWire) },
   "/reporting/bootcamp-history": { path: () => "/reporting/bootcamp-history", expect: gated(canUseEvals) },
   "/reporting/bootcamp-history?status=active": {
     path: () => "/reporting/bootcamp-history?status=active",
@@ -586,6 +587,7 @@ const ROUTES: RouteCase[] = [
   { method: "GET", path: `/api/evals/bootcamp-history/${MISSING}`, allowed: canUseEvals },
   { method: "GET", path: "/api/evals/canary-wire", allowed: canSeeCanaryWire },
   // No Mindtickle key on the e2e server: starting is refused as not_configured, and a step finds no pull.
+  { method: "GET", path: "/api/evals/canary-wire/history", allowed: canSeeCanaryWire },
   { method: "GET", path: "/api/evals/canary-wire/pull", allowed: canSeeCanaryWire },
   { method: "POST", path: "/api/evals/canary-wire/pull", allowed: canRefreshCanaryWire },
   { method: "POST", path: "/api/evals/canary-wire/pull/step", allowed: canRefreshCanaryWire },

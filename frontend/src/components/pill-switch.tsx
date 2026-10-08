@@ -4,7 +4,20 @@
 
 import { cn } from "@/lib/utils";
 
-export function PillSwitch({ label, title, on, onChange }: { label: string; title?: string; on: boolean; onChange: (on: boolean) => void }) {
+export function PillSwitch({
+  label,
+  title,
+  on,
+  onChange,
+  disabled = false,
+}: {
+  label: string;
+  title?: string;
+  on: boolean;
+  onChange: (on: boolean) => void;
+  /** Shown but greyed out, for a choice that doesn't apply to this person; `title` should say why. */
+  disabled?: boolean;
+}) {
   return (
     <div className="inline-flex rounded-lg border bg-card p-0.5 shadow-xs">
       <button
@@ -12,10 +25,12 @@ export function PillSwitch({ label, title, on, onChange }: { label: string; titl
         role="switch"
         aria-checked={on}
         title={title}
+        disabled={disabled}
         onClick={() => onChange(!on)}
         className={cn(
           "inline-flex cursor-pointer items-center gap-2 rounded-md px-3 py-1.5 text-sm outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50",
-          on ? "font-medium text-foreground" : "text-muted-foreground hover:text-foreground",
+          "disabled:cursor-not-allowed disabled:opacity-50",
+          on ? "font-medium text-foreground" : "text-muted-foreground enabled:hover:text-foreground",
         )}
       >
         {label}

@@ -18,6 +18,8 @@ import { MODULE_URL_TEMPLATE, SERIES_LINKS } from "@/lib/canary-wire/config";
 import { accountability } from "@/lib/canary-wire/exemptions";
 import { managersOf, onlyOrg, orgOf, withHiBob, type Person } from "@/lib/canary-wire/people";
 import { scopeFor } from "@/lib/canary-wire/scope";
+import { historyCsv, historyMonths, historyView } from "@/lib/canary-wire/history";
+import { monthOf } from "@/lib/canary-wire/months";
 import type { Access } from "@/lib/roles";
 import { firstFullMonth, monthAfterDay, monthKey, monthRange, toPacific } from "@/lib/canary-wire/months";
 import { dayOnly, moduleUrl, slackReport, stateClass, when } from "@/lib/canary-wire/report";
@@ -238,6 +240,73 @@ describe("scope", () => {
     assert.deepEqual([...orgOf(people, "Zed@Harness.io")].sort(), ["bo@harness.io", "cy@harness.io", "zed@harness.io"]);
     const mine = onlyOrg(pull(), new Set(["bo@harness.io", "cy@harness.io"]));
     assert.deepEqual(mine.learners.map((l) => l.email), ["bo@harness.io", "cy@harness.io"]);
+  });
+});
+
+describe("history", () => {
+  /** The test pull with an October module for AE, which Ada has finished. */
+  function twoMonths(): CanaryWireSnapshot {
+    const snap = pull();
+    snap.progress["ada@harness.io"]!["m-oct"] = { state: "Completed", on: "2026-10-02", at: "2026-10-02T10:00:00Z" };
+    return snap;
+  }
+
+  test("from June 2026, a month with no content skipped, and none before its time", () => {
+    const snap = pull();
+    for (const [i, m] of ["April", "May", "June", "July"].entries()) {
+      snap.modules.push({ module_id: `m-${i}`, name: `${m} 2026 - X`, label: "X", month: `${m} 2026`, edition: AE, series_id: "s-ae", type: "UPDATE" });
+    }
+    // Published ahead of time, and already finished by someone.
+    snap.modules.push({ module_id: "m-nov", name: "November 2026 - X", label: "X", month: "November 2026", edition: AE, series_id: "s-ae", type: "UPDATE" });
+    snap.progress["ada@harness.io"]!["m-nov"] = { state: "Completed", on: "2026-10-03", at: "2026-10-03T10:00:00Z" };
+
+    // October has content, but nobody has finished any of it yet: September is the newest.
+    assert.deepEqual(historyMonths(snap, "October 2026"), ["June 2026", "July 2026", "September 2026"]);
+    // The first completion of October content brings October in; November stays out until it's November.
+    snap.progress["bo@harness.io"]!["m-oct"] = { state: "Completed", on: "2026-10-02", at: "2026-10-02T10:00:00Z" };
+    assert.deepEqual(historyMonths(snap, "October 2026"), ["June 2026", "July 2026", "September 2026", "October 2026"]);
+    assert.deepEqual(historyMonths(snap, "November 2026").slice(-2), ["October 2026", "November 2026"]);
+    // In progress isn't finished: it doesn't bring a month in.
+    const started = pull();
+    started.progress["bo@harness.io"]!["m-oct"] = { state: "In Progress", on: "2026-10-02", at: "" };
+    assert.deepEqual(historyMonths(started, "October 2026"), ["September 2026"]);
+    assert.equal(monthOf(new Date("2026-11-01T05:00:00Z")), "October 2026");
+  });
+
+  test("a rep's month is the share of their own lineup they finished, and matches the month view", () => {
+    const h = historyView(twoMonths(), ["September 2026", "October 2026"], everyoneAccountable);
+    const rep = (email: string) => h.teams.flatMap((t) => t.directs).find((d) => d.email === email)!;
+    // Ada: Flex but not Objections in September; the one October module.
+    assert.deepEqual(rep("ada@harness.io").marks.map((m) => m.pct), [50, 100]);
+    // Di (SE) owes nothing in October: no SE module that month.
+    assert.deepEqual(rep("di@harness.io").marks.map((m) => m.pct), [50, null]);
+    const v = monthView(twoMonths(), "September 2026", everyoneAccountable);
+    assert.deepEqual([h.totals[0]!.learners, h.totals[0]!.finished], [v.totals!.learners, v.totals!.finished]);
+  });
+
+  test("a month someone didn't count yet is marked, not a 0%", () => {
+    const standing = accountability(known(pull().learners.filter((l) => l.email !== "bo@harness.io").map((l) => [l.email, EXEMPT_DATE])));
+    const h = historyView(twoMonths(), ["September 2026", "October 2026"], standing);
+    const bo = h.teams.flatMap((t) => t.directs).find((d) => d.email === "bo@harness.io")!;
+    assert.deepEqual(bo.marks.map((m) => [m.pct, m.exempt]), [[null, true], [null, true]]);
+  });
+
+  test("team and role rates are people who finished; teams sort best first, newest month first", () => {
+    const h = historyView(twoMonths(), ["September 2026", "October 2026"], everyoneAccountable);
+    const ada = h.teams.find((t) => t.manager === "Ada")!;
+    // October: Bo and Cy owe Pricing 2; neither has it.
+    assert.deepEqual(ada.rates.map((r) => [r.finished, r.learners]), [[0, 3], [0, 2]]);
+    // Ada's own team, under nobody, finished October: first. Ada's team is at
+    // 0% in October and Fay's owed nothing then, so Ada's comes next.
+    assert.deepEqual(h.teams.map((t) => t.manager), ["(no manager on record)", "Ada", "Fay"]);
+    assert.deepEqual(h.roles.find((r) => r.role === AE)!.rates.map((r) => r.pct), [0, 33.3]);
+  });
+
+  test("the CSV is a row per rep and a column per month, blank where nothing was owed", () => {
+    const csv = historyCsv({ ...historyView(twoMonths(), ["September 2026", "October 2026"], everyoneAccountable), scope: "everyone" }).split("\r\n");
+    assert.equal(csv[0], "Name,Email,Role,Manager,Manager Email,September 2026 %,October 2026 %");
+    assert.ok(csv.includes("Ada,ada@harness.io,AE and Supporting Orgs,(no manager on record),,50.0,100.0"));
+    assert.ok(csv.some((l) => l.startsWith("Di,") && l.endsWith(",50.0,")));
   });
 });
 

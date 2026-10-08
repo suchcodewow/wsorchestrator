@@ -13,6 +13,9 @@ import { EXEMPT_DATE, bootcampHistory, canaryWireSnapshots, employees } from "@/
 import { accountability, type History } from "@/lib/canary-wire/exemptions";
 import { managersOf, onlyOrg, orgOf, withHiBob, type Person } from "@/lib/canary-wire/people";
 import type { CanaryWireScope } from "@/lib/canary-wire/scope";
+import { SERIES_LINKS } from "@/lib/canary-wire/config";
+import { historyMonths, historyView, type CanaryWireHistory } from "@/lib/canary-wire/history";
+import { monthOf } from "@/lib/canary-wire/months";
 import { canaryWireSnapshotSchema, type CanaryWireSnapshot } from "@/lib/canary-wire/snapshot";
 import { defaultMonth, emptyView, monthLastActivity, monthView, offeredMonths, type CanaryWireView } from "@/lib/canary-wire/view";
 
@@ -96,4 +99,18 @@ export async function canaryWireView(month: string | null, scope: CanaryWireScop
     lastActivity: monthLastActivity(named, chosen),
     scope: scope.kind,
   };
+}
+
+/**
+ * The Canary Wire History for `scope`: the last six months with content, up
+ * to this one, each rep's completion in each. The same people, scope and
+ * exemptions as `canaryWireView`, month by month.
+ */
+export async function canaryWireHistory(scope: CanaryWireScope = { kind: "everyone" }, now = new Date()): Promise<CanaryWireHistory> {
+  const [stored, known, people] = await Promise.all([latestSnapshot(), history(), peopleByEmail()]);
+  if (!stored) return { months: [], scope: scope.kind, hasSnapshot: false, teams: [], roles: [], totals: [], seriesLinks: SERIES_LINKS };
+  const named = withHiBob(stored.snapshot, people);
+  const shown = scope.kind === "org" ? onlyOrg(named, orgOf(people, scope.email)) : named;
+  const months = historyMonths(stored.snapshot, monthOf(now));
+  return { ...historyView(shown, months, accountability(known), managersOf(people)), scope: scope.kind };
 }

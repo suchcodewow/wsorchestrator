@@ -29,7 +29,7 @@ export function CanaryWireReport({
   view: CanaryWireView;
   pull: PullSummary | null;
   configured: boolean;
-  /** A manager: My org, or everyone. */
+  /** Someone with a downline, who may narrow to it; for anyone else the switch is greyed out on Everyone. */
   canSwitchScope: boolean;
   /** Refresh now, for testing: platform administrators. */
   canRefresh: boolean;
@@ -110,14 +110,21 @@ export function CanaryWireReport({
           </a>
         ))}
         <span className="grow" />
-        {canSwitchScope && (
-          <PillSwitch
-            label="Everyone"
-            title={yourOrg ? "Showing your org: you and everyone under you. Switch on to see everyone in the Canary Wire." : "Showing everyone in the Canary Wire. Switch off for your org: you and everyone under you."}
-            on={!yourOrg}
-            onChange={(everyone) => go(view.month, everyone)}
-          />
-        )}
+        {/* Shown to everyone, so the page reads the same for all who open it;
+            greyed out, on Everyone, for someone with no one reporting to them. */}
+        <PillSwitch
+          label="Everyone"
+          title={
+            !canSwitchScope
+              ? "Nobody reports to you in HiBob, so there is no org to narrow to: this shows everyone in the Canary Wire."
+              : yourOrg
+                ? "Showing your org: you and everyone under you. Switch on to see everyone in the Canary Wire."
+                : "Showing everyone in the Canary Wire. Switch off for your org: you and everyone under you."
+          }
+          on={!yourOrg}
+          disabled={!canSwitchScope}
+          onChange={(everyone) => go(view.month, everyone)}
+        />
         {canRefresh && <RefreshControl configured={configured} initial={pull} />}
       </motion.div>
 
