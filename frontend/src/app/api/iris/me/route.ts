@@ -1,4 +1,4 @@
-/** Someone's own Iris: their track and where they are with each subject; the level only for an Iris administrator. */
+/** Someone's own Iris: their track and where they are with each subject; the level only for an Assessments Administrator. */
 
 import { NextResponse } from "next/server";
 import { requireCaller } from "@/lib/api-auth";

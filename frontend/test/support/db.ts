@@ -57,7 +57,8 @@ export async function assertScratchDatabase(url = testDatabaseUrl()): Promise<vo
  * design, so the suite's own are deleted by actor first. Judges are found by
  * email; a bootcamp or assessment the suite made, by its creator, along with
  * any scores given or transcripts filed at it or on it. Iris sittings cascade
- * from the user; question reviews they made are deleted by reviewer.
+ * from the user; question reviews they made are deleted by reviewer. Mimir
+ * items are found by id, which carries the same prefix.
  */
 export async function deleteTestRows(
   query: (sql: string, params: unknown[]) => Promise<unknown>,
@@ -81,6 +82,10 @@ export async function deleteTestRows(
   await query(`delete from bootcamps where id in (${made})`, [like]);
   await query("delete from bootcamp_judges where email like $1", [`${scope}%@${TEST_EMAIL_DOMAIN}`]);
   await query("delete from iris_item_reviews where reviewer_id like $1", [like]);
+  // Mimir items carry the prefix in their id; what sits under one goes first.
+  // Progress and conversations go with the items and the users.
+  await query("delete from mimir_items where parent_id like $1", [like]);
+  await query("delete from mimir_items where id like $1", [like]);
   await query("delete from google_meetings where created_by like $1", [like]);
   await query("delete from employees where id like $1", [like]);
   await query("delete from users where id like $1", [like]);

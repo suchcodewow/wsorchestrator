@@ -1,4 +1,4 @@
-/** One subject's Iris questions with their keys, reviews and live statistics. Iris administrators only. */
+/** One subject's Iris questions with their keys, reviews and live statistics. Assessments Administrators only. */
 
 import { notFound, redirect } from "next/navigation";
 import { auth, signInPath } from "@/auth";

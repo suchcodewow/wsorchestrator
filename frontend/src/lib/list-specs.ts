@@ -26,7 +26,7 @@ export const EMPLOYEE_LIST = spec([
 ]);
 export type EmployeeSort = (typeof EMPLOYEE_LIST.sorts)[number];
 
-export const USER_LIST = spec(["user", "eventRole", "trainingRole", "assessmentsRole", "irisRole", "platform"]);
+export const USER_LIST = spec(["user", "eventRole", "trainingRole", "assessmentsRole", "platform"]);
 export type UserSort = (typeof USER_LIST.sorts)[number];
 
 export const IRIS_COHORT_LIST = spec(["finishedAt", "person", "track", "completed"], "desc");
@@ -134,3 +134,11 @@ export type RepoSort = (typeof REPO_LIST.sorts)[number];
 
 export const ORG_SECRET_LIST = spec(["identifier", "kind", "updatedAt", "updatedBy"]);
 export type OrgSecretSort = (typeof ORG_SECRET_LIST.sorts)[number];
+
+/** Mimir's content; `position` is the order the library shows it in. */
+export const MIMIR_ITEM_LIST = spec(["position", "title", "kind", "updatedAt"]);
+export type MimirItemSort = (typeof MIMIR_ITEM_LIST.sorts)[number];
+
+/** One person's Mimir progress, most recently opened first. */
+export const MIMIR_PROGRESS_LIST = spec(["lastVisit", "title", "kind", "tier"], "desc");
+export type MimirProgressSort = (typeof MIMIR_PROGRESS_LIST.sorts)[number];

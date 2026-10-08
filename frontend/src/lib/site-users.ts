@@ -9,7 +9,6 @@ import {
   workshopRuns,
   type AssessmentsRole,
   type EventRole,
-  type IrisRole,
   type TrainingRole,
 } from "@/db/schema";
 import { noteAudit } from "@/lib/audit-context";
@@ -26,7 +25,6 @@ export type SiteUser = {
   eventRole: EventRole;
   trainingRole: TrainingRole | null;
   assessmentsRole: AssessmentsRole | null;
-  irisRole: IrisRole | null;
   isPlatformAdmin: boolean;
   /** Listed in SITE_ADMIN_EMAILS, so made a platform administrator on every sign-in. */
   isBootstrapAdmin: boolean;
@@ -42,7 +40,6 @@ const USER_SORT_COLUMNS = {
   eventRole: users.eventRole,
   trainingRole: users.trainingRole,
   assessmentsRole: users.assessmentsRole,
-  irisRole: users.irisRole,
   platform: users.isPlatformAdmin,
 } as const;
 
@@ -57,7 +54,6 @@ export async function listSiteUsers(query: ListQuery<UserSort>): Promise<Page<Si
       eventRole: users.eventRole,
       trainingRole: users.trainingRole,
       assessmentsRole: users.assessmentsRole,
-      irisRole: users.irisRole,
       isPlatformAdmin: users.isPlatformAdmin,
       eventCount,
     })
@@ -77,7 +73,6 @@ export type RoleChange =
   | { area: "event"; role: EventRole }
   | { area: "training"; role: TrainingRole | null }
   | { area: "assessments"; role: AssessmentsRole | null }
-  | { area: "iris"; role: IrisRole | null }
   | { area: "platform"; value: boolean };
 
 /**
@@ -128,9 +123,7 @@ export async function setUserRole(
         ? { trainingRole: change.role }
         : change.area === "assessments"
           ? { assessmentsRole: change.role }
-          : change.area === "iris"
-            ? { irisRole: change.role }
-            : { isPlatformAdmin: change.value };
+          : { isPlatformAdmin: change.value };
 
   const updated = await db
     .update(users)

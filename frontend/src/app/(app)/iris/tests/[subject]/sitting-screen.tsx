@@ -42,7 +42,7 @@ export function SittingScreen({
   subject: SubjectKey;
   name: string;
   mode: "live" | "preview";
-  /** Set for an Iris administrator, whose finish screen shows the level and links to the full path. */
+  /** Set for an Assessments Administrator, whose finish screen shows the level and links to the full path. */
   selfId: string | null;
 }) {
   const [state, setState] = useState<State>({ kind: "loading" });
@@ -175,7 +175,7 @@ export function SittingScreen({
               <p className="px-4 py-3 text-xs text-muted-foreground">
                 {mode === "preview"
                   ? "A preview, so this is not recorded anywhere."
-                  : "Shown because you are an Iris administrator. A taker sees only that their answers are recorded."}
+                  : "Shown because you are an Assessments Administrator. A taker sees only that their answers are recorded."}
               </p>
             </div>
           )}

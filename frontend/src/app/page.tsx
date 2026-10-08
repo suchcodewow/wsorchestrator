@@ -1,10 +1,11 @@
-/** The public front page. */
+/** The public front page. Someone already signed in goes on to the Welcome page instead. */
 
 import { auth } from "@/auth";
 import { AmbientBackdrop } from "@/components/ambient-backdrop";
 import { EventTimeline } from "@/components/event-timeline";
 import { SiteHeader } from "@/components/site-header";
 import { Button } from "@/components/ui/button";
+import { WELCOME_HREF } from "@/lib/nav";
 import { ArrowRight } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -18,7 +19,7 @@ export const metadata: Metadata = {
 };
 
 export default async function Home() {
-  if (await auth()) redirect("/events");
+  if (await auth()) redirect(WELCOME_HREF);
 
   return (
     <div className="relative min-h-screen">

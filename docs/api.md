@@ -140,6 +140,10 @@ add it to the table above.
 | A bootcamp's day checklists | `GET /api/scheduler/bootcamps/[id]/checklist`, `GET /api/scheduler/bootcamps/[id]/checklist/[track]/[day]` |
 | My inbox (checklist items I own, and everywhere I'm tagged) | `GET /api/me/checklist?status=open\|done\|all`, `GET /api/me/mentions` |
 | Scheduler settings → Facilities / Session types | `GET /api/scheduler/facilities`, `GET /api/scheduler/facilities/[id]`, `GET /api/scheduler/session-types` |
+| Mimir → Library, Glossary | `GET /api/mimir/items?kind=…[&parent=…&cat=…&featured=1]`, `GET /api/mimir/items/[id]` |
+| Mimir → an item's coach | `GET /api/mimir/items/[id]/chat` |
+| Mimir → Progress, and Continue in its header | `GET /api/mimir/progress` (its `resume`), `GET /api/mimir/me` |
+| Mimir Settings → Content / Coaching | `GET /api/mimir/items`, `GET /api/mimir/items/[id]`, `GET /api/mimir/settings` |
 | Audit Trail | `GET /api/audit` |
 | Labs | `GET /api/lab-workshops`, `GET /api/lab-workshops/[id or slug]`, `GET /api/lab-guides`, `GET /api/lab-guides/[id or slug]`, `GET /api/lab-images` |
 

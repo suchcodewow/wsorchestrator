@@ -24,7 +24,7 @@ import "../support/test-env";
 import { after, before, describe, test } from "node:test";
 import assert from "node:assert/strict";
 
-import { ASSESSMENTS_ROLES, EVENT_ROLES, IRIS_ROLES, TRAINING_ROLES } from "@/db/schema";
+import { ASSESSMENTS_ROLES, EVENT_ROLES, TRAINING_ROLES } from "@/db/schema";
 import type { Access } from "@/lib/roles";
 import { USER_LIST } from "@/lib/list-specs";
 import { setUserRole, listSiteUsers, type RoleChange, type SetRoleError } from "@/lib/site-users";
@@ -42,7 +42,6 @@ const CHANGES: RoleChange[] = [
   ...EVENT_ROLES.map((role) => ({ area: "event" as const, role })),
   ...[null, ...TRAINING_ROLES].map((role) => ({ area: "training" as const, role })),
   ...[null, ...ASSESSMENTS_ROLES].map((role) => ({ area: "assessments" as const, role })),
-  ...[null, ...IRIS_ROLES].map((role) => ({ area: "iris" as const, role })),
   { area: "platform", value: true },
   { area: "platform", value: false },
 ];
@@ -62,9 +61,7 @@ function expected(
         ? actor.platform || actor.event === "administrator"
         : change.area === "training"
           ? actor.platform || actor.training === "administrator"
-          : change.area === "assessments"
-            ? actor.platform || actor.assessments === "administrator"
-            : actor.platform || actor.iris === "administrator";
+          : actor.platform || actor.assessments === "administrator";
   if (!administers) return "forbidden";
   if (target.platform && !actor.platform) return "platform_target";
   if (change.area === "platform" && !change.value && target.bootstrap) return "bootstrap";
@@ -75,7 +72,6 @@ function applied(change: RoleChange, before: Access): Access {
   if (change.area === "event") return { ...before, event: change.role };
   if (change.area === "training") return { ...before, training: change.role };
   if (change.area === "assessments") return { ...before, assessments: change.role };
-  if (change.area === "iris") return { ...before, iris: change.role };
   return { ...before, platform: change.value };
 }
 
@@ -194,7 +190,6 @@ describe("the edges", () => {
       event: "operator",
       training: "viewer",
       assessments: "viewer",
-      iris: null,
       platform: true,
       judging: false,
       manager: false,
@@ -208,7 +203,6 @@ describe("the edges", () => {
       event: "manager",
       training: "viewer",
       assessments: null,
-      iris: null,
       platform: true,
       judging: false,
       manager: false,
@@ -218,7 +212,6 @@ describe("the edges", () => {
       event: "manager",
       training: "viewer",
       assessments: null,
-      iris: null,
       platform: false,
       judging: false,
       manager: false,
@@ -244,7 +237,6 @@ describe("listSiteUsers", () => {
       event: "manager",
       training: "viewer",
       assessments: "administrator",
-      iris: null,
       platform: false,
       judging: false,
       manager: false,

@@ -36,6 +36,7 @@ import {
   canManageEvalsSettings,
   canManageIris,
   canManageLabGuides,
+  canManageMimir,
   canManageTrainingSettings,
   canManageSettings,
   canManageSignInDomains,
@@ -57,6 +58,8 @@ import {
 } from "@/lib/roles";
 import { visibleCohortSettingsTabs } from "@/app/(app)/cohort-settings/tabs";
 import { EVALS_SETTINGS_TABS } from "@/app/(app)/evals-settings/tabs";
+import { MIMIR_TABS } from "@/app/(app)/mimir/tabs";
+import { MIMIR_SETTINGS_TABS } from "@/app/(app)/mimir-settings/tabs";
 import { SCHEDULER_SETTINGS_TABS } from "@/app/(app)/scheduler-settings/tabs";
 import { EVALS_TABS } from "@/app/(app)/evals/tabs";
 import { visibleReportingTabs } from "@/app/(app)/reporting/tabs";
@@ -83,6 +86,7 @@ let aliceRun: string;
 let historyId: string;
 let assessmentId: string;
 let bootcampId: string;
+let mimirItemId: string;
 
 before(async () => {
   await scope.setUp();
@@ -92,6 +96,7 @@ before(async () => {
   aliceRun = await createRun(alice.id, "Alice's workshop");
   historyId = await scope.createHistory("history");
   assessmentId = await scope.createAssessment(alice.id, "e2e assessment");
+  mimirItemId = await scope.createMimirItem("mimir");
   // The scoring pages need an active bootcamp.
   bootcampId = await scope.activeBootcamp(alice.id);
   for (const p of PERSONA_NAMES) {
@@ -175,7 +180,7 @@ type PageCase = {
 };
 
 const PAGES: Record<string, PageCase> = {
-  "/": { path: () => "/", expect: () => ({ to: "/events" }), signedOut: 200 },
+  "/": { path: () => "/", expect: () => ({ to: "/welcome" }), signedOut: 200 },
   "/events": {
     path: () => "/events",
     expect: (a) => (canUseEvents(a) ? 200 : { to: homePath(a) }),
@@ -271,7 +276,7 @@ const PAGES: Record<string, PageCase> = {
   "/iris/tests/<unknown>": { path: () => "/iris/tests/nonsense", expect: () => 404 },
   "/iris/cohort": { path: () => "/iris/cohort", expect: gated(canManageIris) },
   "/iris/cohort?view=charts": { path: () => "/iris/cohort?view=charts&q=e2e", expect: gated(canManageIris) },
-  "/iris/cohort/<a person>": { path: () => `/iris/cohort/${people.irisTaker.id}`, expect: gated(canManageIris) },
+  "/iris/cohort/<a person>": { path: () => `/iris/cohort/${people.assessmentsViewer.id}`, expect: gated(canManageIris) },
   "/iris/cohort/<unknown>": { path: () => `/iris/cohort/${MISSING}`, expect: () => 404 },
   "/iris/questions": { path: () => "/iris/questions", expect: gated(canManageIris) },
   "/iris/questions?subject": { path: () => "/iris/questions?subject=compete&level=3&status=draft", expect: gated(canManageIris) },
@@ -305,6 +310,23 @@ const PAGES: Record<string, PageCase> = {
     expect: () => ({ to: `/reporting/bootcamp-history/${MISSING}` }),
     signedOut: { to: `/reporting/bootcamp-history/${MISSING}` },
   },
+  "/mimir": { path: () => "/mimir", expect: () => ({ to: MIMIR_TABS[0]!.href }) },
+  "/mimir/library": { path: () => "/mimir/library", expect: () => 200 },
+  "/mimir/library?kind&cat": { path: () => "/mimir/library?kind=competitor&cat=cd&q=e2e", expect: () => 200 },
+  "/mimir/library?kind=<unknown>": { path: () => "/mimir/library?kind=nonsense", expect: () => 404 },
+  "/mimir/library/<one>": { path: () => `/mimir/library/${mimirItemId}`, expect: () => 200 },
+  "/mimir/library/<unknown>": { path: () => `/mimir/library/${MISSING}`, expect: () => 404 },
+  "/mimir/glossary": { path: () => "/mimir/glossary?q=e2e", expect: () => 200 },
+  "/mimir/progress": { path: () => "/mimir/progress?sort=tier", expect: () => 200 },
+  "/mimir-settings": {
+    path: () => "/mimir-settings",
+    expect: (a) => (canManageMimir(a) ? { to: MIMIR_SETTINGS_TABS[0]!.href } : 404),
+  },
+  "/mimir-settings/content": { path: () => "/mimir-settings/content?kind=capability", expect: gated(canManageMimir) },
+  "/mimir-settings/content/new": { path: () => "/mimir-settings/content/new?kind=term", expect: gated(canManageMimir) },
+  "/mimir-settings/content/<one>": { path: () => `/mimir-settings/content/${mimirItemId}`, expect: gated(canManageMimir) },
+  "/mimir-settings/content/<unknown>": { path: () => `/mimir-settings/content/${MISSING}`, expect: () => 404 },
+  "/mimir-settings/coaching": { path: () => "/mimir-settings/coaching", expect: gated(canManageMimir) },
   "/evals-settings": {
     path: () => "/evals-settings",
     expect: (a) => (canManageEvalsSettings(a) ? { to: EVALS_SETTINGS_TABS[0]!.href } : 404),
@@ -337,9 +359,10 @@ const PAGES: Record<string, PageCase> = {
     path: () => "/evals-settings/google-meetings?when=past",
     expect: gated(canManageEvalsSettings),
   },
+  // Everyone's front door, whatever else they can reach.
   "/welcome": {
     path: () => "/welcome",
-    expect: (a) => (homePath(a) === "/welcome" ? 200 : { to: homePath(a) }),
+    expect: () => 200,
   },
   "/users": { path: () => "/users", expect: gated(canManageUsers) },
   "/invite/<unknown>": { path: () => `/invite/${"A".repeat(32)}`, expect: () => 200 },
@@ -676,6 +699,27 @@ const ROUTES: RouteCase[] = [
   { method: "DELETE", path: `/api/lab-workshops/${MISSING}`, allowed: canManageLabGuides },
   { method: "POST", path: `/api/lab-workshops/${MISSING}/guides`, allowed: canManageLabGuides, body: () => ({}) },
 
+  // Mimir: the library and coach are everyone's; the content and settings, Training Administrators'.
+  { method: "GET", path: "/api/mimir/items?kind=capability", allowed: true },
+  { method: "GET", path: `/api/mimir/items/${MISSING}`, allowed: true },
+  { method: "POST", path: "/api/mimir/items", allowed: canManageMimir, body: () => ({}) },
+  { method: "PUT", path: `/api/mimir/items/${MISSING}`, allowed: canManageMimir, body: () => ({}) },
+  { method: "DELETE", path: `/api/mimir/items/${MISSING}`, allowed: canManageMimir },
+  { method: "POST", path: "/api/mimir/import", allowed: canManageMimir, body: form },
+  { method: "POST", path: `/api/mimir/items/${MISSING}/visit`, allowed: true },
+  { method: "GET", path: `/api/mimir/items/${MISSING}/chat`, allowed: true },
+  { method: "POST", path: `/api/mimir/items/${MISSING}/chat`, allowed: true, body: () => ({}) },
+  // Nobody has a conversation about an item that does not exist, so this deletes nothing.
+  { method: "DELETE", path: `/api/mimir/items/${MISSING}/chat`, allowed: true },
+  { method: "PUT", path: `/api/mimir/items/${MISSING}/reflection`, allowed: true, body: () => ({}) },
+  { method: "GET", path: "/api/mimir/progress", allowed: true },
+  // Each persona's own Mimir progress, which none of them has.
+  { method: "DELETE", path: "/api/mimir/progress", allowed: true },
+  { method: "GET", path: "/api/mimir/me", allowed: true },
+  { method: "PUT", path: "/api/mimir/me", allowed: true, body: () => ({}) },
+  { method: "GET", path: "/api/mimir/settings", allowed: canManageMimir },
+  { method: "PUT", path: "/api/mimir/settings", allowed: canManageMimir, body: () => ({}) },
+
   // Everyone's own
   { method: "GET", path: "/api/me", allowed: true },
   { method: "PATCH", path: "/api/me", allowed: true, body: () => ({ themePreference: "bogus" }) },
@@ -893,7 +937,6 @@ describe("PATCH /api/users/:id", () => {
       event: "manager",
       training: null,
       assessments: null,
-      iris: null,
       platform: false,
       judging: false,
       manager: false,
@@ -909,7 +952,6 @@ describe("PATCH /api/users/:id", () => {
       event: "operator",
       training: "viewer",
       assessments: null,
-      iris: null,
       platform: false,
       judging: false,
       manager: false,
@@ -925,28 +967,18 @@ describe("PATCH /api/users/:id", () => {
       event: "operator",
       training: null,
       assessments: "viewer",
-      iris: null,
       platform: false,
       judging: false,
       manager: false,
     });
   });
 
-  test("an Iris administrator sets Iris roles, and only Iris roles", async () => {
+  test("Iris is no longer an area of its own: an Iris role is refused, and the assessments role carries it", async () => {
     const target = await scope.createUser("u_target7", PERSONAS.operator);
-    assert.equal((await patch("irisAdmin", target.id, { area: "iris", role: "taker" })).status, 200);
-    assert.equal((await patch("irisAdmin", target.id, { area: "assessments", role: "viewer" })).status, 403);
-    assert.equal((await patch("irisAdmin", target.id, { area: "event", role: "manager" })).status, 403);
-    assert.equal((await patch("assessmentsAdmin", target.id, { area: "iris", role: "administrator" })).status, 403);
-    assert.deepEqual(await readRoles(target.id), {
-      event: "operator",
-      training: null,
-      assessments: null,
-      iris: "taker",
-      platform: false,
-      judging: false,
-      manager: false,
-    });
+    assert.equal((await patch("assessmentsAdmin", target.id, { area: "iris", role: "taker" })).status, 400);
+    assert.equal((await patch("platform", target.id, { area: "iris", role: "administrator" })).status, 400);
+    assert.equal((await patch("assessmentsAdmin", target.id, { area: "assessments", role: "viewer" })).status, 200);
+    assert.equal((await readRoles(target.id))?.assessments, "viewer");
   });
 
   test("a platform administrator sets anything, on anyone", async () => {
@@ -955,7 +987,6 @@ describe("PATCH /api/users/:id", () => {
       { area: "event", role: "administrator" },
       { area: "training", role: "administrator" },
       { area: "assessments", role: "administrator" },
-      { area: "iris", role: "administrator" },
       { area: "platform", value: true },
     ]) {
       assert.equal((await patch("platform", target.id, body)).status, 200, JSON.stringify(body));
@@ -964,7 +995,6 @@ describe("PATCH /api/users/:id", () => {
       event: "administrator",
       training: "administrator",
       assessments: "administrator",
-      iris: "administrator",
       platform: true,
       judging: false,
       manager: false,
@@ -976,20 +1006,17 @@ describe("PATCH /api/users/:id", () => {
     assert.equal((await patch("eventAdmin", target.id, { area: "event", role: "none" })).status, 403);
     assert.equal((await patch("trainingAdmin", target.id, { area: "training", role: null })).status, 403);
     assert.equal((await patch("assessmentsAdmin", target.id, { area: "assessments", role: null })).status, 403);
-    assert.equal((await patch("irisAdmin", target.id, { area: "iris", role: null })).status, 403);
     assert.deepEqual(await readRoles(target.id), PERSONAS.platform);
   });
 
   test("nobody changes their own roles", async () => {
-    for (const p of ["eventAdmin", "trainingAdmin", "assessmentsAdmin", "irisAdmin", "platform"] as const) {
+    for (const p of ["eventAdmin", "trainingAdmin", "assessmentsAdmin", "platform"] as const) {
       const body =
         p === "trainingAdmin"
           ? { area: "training", role: null }
           : p === "assessmentsAdmin"
             ? { area: "assessments", role: null }
-            : p === "irisAdmin"
-              ? { area: "iris", role: null }
-              : { area: "event", role: "none" };
+            : { area: "event", role: "none" };
       assert.equal((await patch(p, people[p].id, body)).status, 409, p);
       assert.deepEqual(await readRoles(people[p].id), PERSONAS[p]);
     }
@@ -1007,7 +1034,7 @@ describe("PATCH /api/users/:id", () => {
     for (const body of [
       { area: "event", role: "owner" },
       { area: "assessments", role: "manager" },
-      { area: "iris", role: "viewer" },
+      { area: "iris", role: "taker" },
       { area: "platform" },
       { role: "manager" },
       null,
@@ -1018,7 +1045,7 @@ describe("PATCH /api/users/:id", () => {
 });
 
 describe("an Iris sitting, over HTTP", () => {
-  // Grading is on the server, and only an Iris administrator is told the level.
+  // Grading is on the server, and only an Assessments Administrator is told the level.
   async function sit(who: Persona) {
     assert.equal((await send(who, "PUT", "/api/iris/me/track", { track: "AE" })).status, 200);
     const started = await send(who, "POST", "/api/iris/sittings", { subject: "pipegen" });
@@ -1045,16 +1072,16 @@ describe("an Iris sitting, over HTTP", () => {
     );
 
   test("a taker is told the sitting is over, never their level", async () => {
-    assert.equal((await send("irisAdmin", "POST", "/api/iris/questions/approve-drafts", { subject: "pipegen" })).status, 200);
-    const done = await sit("irisTaker");
+    assert.equal((await send("assessmentsAdmin", "POST", "/api/iris/questions/approve-drafts", { subject: "pipegen" })).status, 200);
+    const done = await sit("assessmentsViewer");
     assert.ok(!("placement" in done) && !("confidence" in done), JSON.stringify(done));
-    assert.ok(!("placement" in (await pipegen("irisTaker"))!));
+    assert.ok(!("placement" in (await pipegen("assessmentsViewer"))!));
   });
 
   test("an Iris administrator sees their own level", async () => {
-    const done = await sit("irisAdmin");
+    const done = await sit("assessmentsAdmin");
     assert.equal(done.placement, 1, "\"I don't know\" throughout places Beginner");
-    assert.equal((await pipegen("irisAdmin"))?.placement, 1);
+    assert.equal((await pipegen("assessmentsAdmin"))?.placement, 1);
   });
 });
 
@@ -1087,7 +1114,6 @@ describe("invite links", () => {
       event: "manager",
       training: null,
       assessments: null,
-      iris: null,
       platform: false,
       judging: false,
       manager: false,
@@ -1137,14 +1163,12 @@ describe("invite links", () => {
     assert.equal((await send({ cookie }, "GET", EVALS_TABS[0]!.href)).status, 200);
   });
 
-  test("an Iris link lands its newcomer on Iris", async () => {
-    const path = await link("irisAdmin", { eventRole: null, trainingRole: null, irisRole: "taker" });
+  test("an assessments link opens Iris too", async () => {
+    const path = await link("assessmentsAdmin", { eventRole: null, trainingRole: null, assessmentsRole: "viewer" });
     const newcomer = await scope.createUser("inv_iris", PERSONAS.nobody);
     const cookie = await createSession(newcomer.id);
     const res = await accept(cookie, path.split("/").pop()!);
     assert.equal(res.status, 200, res.body);
-    assert.deepEqual(JSON.parse(res.body), { applied: true, home: "/iris" });
-    assert.equal((await readRoles(newcomer.id))?.iris, "taker");
     assert.equal((await send({ cookie }, "GET", "/iris/tests")).status, 200);
   });
 
@@ -1153,7 +1177,8 @@ describe("invite links", () => {
       { eventRole: "none", trainingRole: null },
       { eventRole: null, trainingRole: null },
       { eventRole: null, trainingRole: null, assessmentsRole: null },
-      { eventRole: null, trainingRole: null, assessmentsRole: null, irisRole: null },
+      // Iris has no role of its own to grant any more.
+      { eventRole: null, trainingRole: null, assessmentsRole: null, irisRole: "taker" },
       { eventRole: "operator", trainingRole: null, platform: true },
     ]) {
       const res = await create("platform", body);

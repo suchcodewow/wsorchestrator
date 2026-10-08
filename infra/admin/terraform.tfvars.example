@@ -31,6 +31,8 @@ github_pat         = "ghp_xxxxxxxx"
 # hibob_token  = "xxxxxxxx"
 # Deepgram speech-to-text for Check PC's transcripts. Empty leaves it off.
 # deepgram_api_key = "xxxxxxxx"
+# Claude, for Mimir's coaching chat. Empty leaves the coach off.
+# anthropic_api_key = "sk-ant-xxxxxxxx"
 # harness_base_url = "https://app.harness.io"
 # Organizations the Cloud Status page should treat as permanent fixtures. Rarely
 # needed: an organization the orchestrator never tagged is already reported as

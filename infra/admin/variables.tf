@@ -107,6 +107,13 @@ variable "deepgram_api_key" {
   default     = ""
 }
 
+variable "anthropic_api_key" {
+  description = "Claude API key for Mimir's coaching chat. Stored in Secret Manager as anthropic-api-key and read by the app alone. Empty leaves the coach off: the Mimir library still works, and the coach says it is not set up."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
 variable "slack_app_client_id" {
   description = "Client ID of the Slack app the cohort channel sync acts as (api.slack.com → the app → Basic Information). Not secret. With slack_app_client_secret it puts Add to Slack on Cohort Settings → Slack, whose install saves the bot token in the database, so slack_bot_token is no longer needed. The app's Redirect URLs must include {app_url}/api/auth/callback/google, the one OAuth callback every connection shares. Empty leaves Add to Slack off. QA shares production's Slack workspace, so leave it empty there or keep QA's sync in dry run."
   type        = string

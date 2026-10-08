@@ -1,4 +1,4 @@
-/** The Iris placement tests: taking them, and what Iris administrators read and review. */
+/** The Iris placement tests: taking them, and what Assessments Administrators read and review. */
 
 import { IRIS_NOTE_MAX } from "@/db/schema";
 import { IRIS_COHORT_LIST } from "@/lib/list-specs";
@@ -22,10 +22,10 @@ export const IRIS_GROUPS: EndpointGroup[] = [
         method: "GET",
         path: "/api/iris/me",
         summary: "Returns your track and where you are with each subject.",
-        access: "irisTaker",
+        access: "assessmentsViewer",
         token: true,
         notes:
-          "status is completed once you have finished a live sitting of the subject on this form, in_progress while one is open, available when it has enough approved questions to run, and unavailable otherwise. A finished subject carries placement (1 Beginner, 2 Intermediate, 3 Advanced) only when you are an Iris Administrator; a taker is never told their level.",
+          "status is completed once you have finished a live sitting of the subject on this form, in_progress while one is open, available when it has enough approved questions to run, and unavailable otherwise. A finished subject carries placement (1 Beginner, 2 Intermediate, 3 Advanced) only when you are an Assessments Administrator; a taker is never told their level.",
         query: [FORM_QUERY],
         returns: `{ track: "AE" | "SE" | "SDR" | null, form, subjects: { key, name, blurb, status: "available" | "in_progress" | "completed" | "unavailable", placement?: 1 | 2 | 3 }[], completed: number }`,
         errors: [FORM_ERROR],
@@ -34,7 +34,7 @@ export const IRIS_GROUPS: EndpointGroup[] = [
         method: "PUT",
         path: "/api/iris/me/track",
         summary: "Sets the track you sell in, which weights your overall score.",
-        access: "irisTaker",
+        access: "assessmentsViewer",
         token: true,
         body: { kind: "json", fields: [{ name: "track", type: `"AE" | "SE" | "SDR"`, required: true }] },
         returns: "{ ok: true, track }",
@@ -44,10 +44,10 @@ export const IRIS_GROUPS: EndpointGroup[] = [
         method: "POST",
         path: "/api/iris/sittings",
         summary: "Starts a sitting of one subject, or picks up the one in progress.",
-        access: "irisTaker",
+        access: "assessmentsViewer",
         token: true,
         notes:
-          "A live sitting draws only approved questions and is taken once per subject and form. A preview draws every question not rejected, is never reported, can be taken any number of times, and needs an Iris Administrator. 201 for a new sitting, 200 with resumed: true for the one already open.",
+          "A live sitting draws only approved questions and is taken once per subject and form. A preview draws every question not rejected, is never reported, can be taken any number of times, and needs an Assessments Administrator. 201 for a new sitting, 200 with resumed: true for the one already open.",
         body: {
           kind: "json",
           fields: [
@@ -59,7 +59,7 @@ export const IRIS_GROUPS: EndpointGroup[] = [
         returns: `201 { sitting: ${SITTING_SHAPE}, resumed: false }, or 200 with resumed: true`,
         errors: [
           { status: 400, error: "invalid_body", when: "the body does not parse" },
-          { status: 403, error: "forbidden", when: "a preview, and you are not an Iris Administrator" },
+          { status: 403, error: "forbidden", when: "a preview, and you are not an Assessments Administrator" },
           { status: 409, error: "no_track", when: "a live sitting before you have set your track" },
           { status: 409, error: "already_taken", when: "you have finished a live sitting of this subject and form" },
           { status: 409, error: "not_ready", when: "too few approved questions to run it" },
@@ -69,7 +69,7 @@ export const IRIS_GROUPS: EndpointGroup[] = [
         method: "GET",
         path: "/api/iris/sittings/{id}",
         summary: "Returns the question on screen in one of your open sittings.",
-        access: "irisTaker",
+        access: "assessmentsViewer",
         token: true,
         params: [SITTING_ID],
         returns: `{ sitting: ${SITTING_SHAPE} }`,
@@ -79,10 +79,10 @@ export const IRIS_GROUPS: EndpointGroup[] = [
         method: "POST",
         path: "/api/iris/sittings/{id}/answers",
         summary: "Answers the question on screen and returns the next one.",
-        access: "irisTaker",
+        access: "assessmentsViewer",
         token: true,
         notes:
-          "A question is sent as its wording and options only, never its id or level. choice is the option's index from 0, or -1 for \"I don't know\", which is graded as wrong. A sitting ends after 10 to 14 questions plus up to 3 tiebreak questions; the last answer returns done: true, and the placement and confidence only to an Iris Administrator.",
+          "A question is sent as its wording and options only, never its id or level. choice is the option's index from 0, or -1 for \"I don't know\", which is graded as wrong. A sitting ends after 10 to 14 questions plus up to 3 tiebreak questions; the last answer returns done: true, and the placement and confidence only to an Assessments Administrator.",
         params: [SITTING_ID],
         body: {
           kind: "json",
@@ -104,7 +104,7 @@ export const IRIS_GROUPS: EndpointGroup[] = [
         method: "GET",
         path: "/api/iris/cohort",
         summary: "Lists everyone with a finished live sitting on one form, with their placements, a page at a time.",
-        access: "irisAdmin",
+        access: "assessmentsAdmin",
         token: true,
         notes:
           "placements maps each subject finished to a level: 1 Beginner, 2 Intermediate, 3 Advanced. composite is the share of the top level reached, weighted for the person's track, 0 to 100, and null without a track or a weighted subject. Previews are never listed.",
@@ -116,7 +116,7 @@ export const IRIS_GROUPS: EndpointGroup[] = [
         method: "GET",
         path: "/api/iris/cohort/{id}",
         summary: "Returns one person's live sittings on one form, each with every answer in order.",
-        access: "irisAdmin",
+        access: "assessmentsAdmin",
         token: true,
         notes:
           "chosen is null for \"I don't know\". stem and chosen.text are null for an answer given to an older version of a question.",
@@ -130,7 +130,7 @@ export const IRIS_GROUPS: EndpointGroup[] = [
         method: "DELETE",
         path: "/api/iris/cohort/{id}",
         summary: "Deletes every Iris sitting one person has, so they can take the subjects again.",
-        access: "irisAdmin",
+        access: "assessmentsAdmin",
         token: true,
         notes: "Every subject, every form, finished or not. Irreversible.",
         params: [{ name: "id", type: "string", required: true, note: "the user's id" }],
@@ -141,7 +141,7 @@ export const IRIS_GROUPS: EndpointGroup[] = [
         method: "GET",
         path: "/api/iris/questions",
         summary: "Lists one subject's questions on one form, with their keys, reviews and live statistics.",
-        access: "irisAdmin",
+        access: "assessmentsAdmin",
         token: true,
         notes:
           "At most 38 questions, in bank order. A question nobody has reviewed in its current version is a draft. Statistics count live sittings of the current version only. calibration reads too_easy above 85% correct and too_hard below 45% once 20 have answered; dead_distractors lists wrong options nobody has chosen once 10 have.",
@@ -164,7 +164,7 @@ export const IRIS_GROUPS: EndpointGroup[] = [
         method: "PUT",
         path: "/api/iris/questions/{id}/review",
         summary: "Approves, rejects or returns to draft one question's current version.",
-        access: "irisAdmin",
+        access: "assessmentsAdmin",
         token: true,
         notes: "Only an approved question is served in a live sitting. Leaving note out keeps the one already there.",
         params: [{ name: "id", type: "string", required: true, note: "the question's id, such as sdlc-l1-01" }],
@@ -185,7 +185,7 @@ export const IRIS_GROUPS: EndpointGroup[] = [
         method: "POST",
         path: "/api/iris/questions/approve-drafts",
         summary: "Approves every draft question on one subject and form at once.",
-        access: "irisAdmin",
+        access: "assessmentsAdmin",
         token: true,
         notes: "Rejected questions stay rejected.",
         body: {

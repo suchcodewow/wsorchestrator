@@ -3,11 +3,9 @@
 import {
   ASSESSMENTS_ROLES,
   EVENT_ROLES,
-  IRIS_ROLES,
   TRAINING_ROLES,
   type AssessmentsRole,
   type EventRole,
-  type IrisRole,
   type TrainingRole,
 } from "@/db/schema";
 
@@ -15,13 +13,13 @@ import {
  * Everything a signed-in user may do, one entry per functional area. A
  * platform administrator counts as an administrator in every area, whatever
  * their stored per-area roles say — so read roles through `eventRoleOf`,
- * `trainingRoleOf`, `assessmentsRoleOf` and `irisRoleOf`, never off this object directly.
+ * `trainingRoleOf` and `assessmentsRoleOf`, never off this object directly.
+ * Iris is part of the assessments area, not an area of its own.
  */
 export type Access = {
   event: EventRole;
   training: TrainingRole | null;
   assessments: AssessmentsRole | null;
-  iris: IrisRole | null;
   platform: boolean;
   /**
    * A guest judge on the active bootcamp. Not a role: the Scheduler grants it
@@ -36,7 +34,7 @@ export type Access = {
 };
 
 /** An area whose roles are granted by that area's own administrators. */
-export type Area = "event" | "training" | "assessments" | "iris";
+export type Area = "event" | "training" | "assessments";
 
 export const EVENT_ROLE_LABELS: Record<EventRole, string> = {
   none: "No event access",
@@ -73,23 +71,12 @@ export const ASSESSMENTS_ROLE_LABELS: Record<AssessmentsRole, string> = {
 };
 
 export const ASSESSMENTS_ROLE_DESCRIPTIONS: Record<AssessmentsRole, string> = {
-  viewer: "Sees and scores assessments, eVals among them.",
-  administrator: "Also manages eVals settings, Google meetings and everyone's assessments role.",
+  viewer: "Sees and scores assessments, eVals among them, and takes the Iris placement tests.",
+  administrator:
+    "Also manages eVals settings and Google meetings, sees everyone's Iris results and reviews its questions, and manages everyone's assessments role.",
 };
 
 export const NO_ASSESSMENTS_ACCESS_LABEL = "No assessments access";
-
-export const IRIS_ROLE_LABELS: Record<IrisRole, string> = {
-  taker: "Iris Taker",
-  administrator: "Iris Administrator",
-};
-
-export const IRIS_ROLE_DESCRIPTIONS: Record<IrisRole, string> = {
-  taker: "Takes the Iris placement tests.",
-  administrator: "Also sees everyone's results, reviews the questions, and manages everyone's Iris role.",
-};
-
-export const NO_IRIS_ACCESS_LABEL = "No Iris access";
 
 export const PLATFORM_ADMIN_LABEL = "Platform Administrator";
 
@@ -108,10 +95,6 @@ export function assessmentsRoleOf(access: Access): AssessmentsRole | null {
   return access.platform ? "administrator" : access.assessments;
 }
 
-export function irisRoleOf(access: Access): IrisRole | null {
-  return access.platform ? "administrator" : access.iris;
-}
-
 function eventAtLeast(access: Access, minimum: EventRole): boolean {
   return EVENT_ROLES.indexOf(eventRoleOf(access)) >= EVENT_ROLES.indexOf(minimum);
 }
@@ -124,11 +107,6 @@ function trainingAtLeast(access: Access, minimum: TrainingRole): boolean {
 function assessmentsAtLeast(access: Access, minimum: AssessmentsRole): boolean {
   const role = assessmentsRoleOf(access);
   return role !== null && ASSESSMENTS_ROLES.indexOf(role) >= ASSESSMENTS_ROLES.indexOf(minimum);
-}
-
-function irisAtLeast(access: Access, minimum: IrisRole): boolean {
-  const role = irisRoleOf(access);
-  return role !== null && IRIS_ROLES.indexOf(role) >= IRIS_ROLES.indexOf(minimum);
 }
 
 // The event area.
@@ -164,6 +142,12 @@ export const canUseTraining = (access: Access) => trainingAtLeast(access, "viewe
 export const canManageTrainingSettings = (access: Access) =>
   trainingAtLeast(access, "administrator");
 
+/** Mimir's library and coach are for everyone who can sign in, whatever their roles. */
+export const canUseMimir: (access: Access) => boolean = () => true;
+
+/** Mimir Settings: the content the coach serves, and its coaching settings. */
+export const canManageMimir = (access: Access) => canManageTrainingSettings(access);
+
 // The assessments area, of which eVals is a part.
 
 export const canUseEvals = (access: Access) => assessmentsAtLeast(access, "viewer");
@@ -191,12 +175,13 @@ export const canScoreAssessments = (access: Access) => canUseEvals(access) || ac
 export const canSearchEmployees = (access: Access) =>
   canManageEvalsSettings(access) || canManageTrainingSettings(access);
 
-// The Iris area.
+// Iris, part of the assessments area.
 
-export const canTakeIris = (access: Access) => irisAtLeast(access, "taker");
+/** Takes the placement tests: an Assessments Viewer or above. */
+export const canTakeIris = (access: Access) => assessmentsAtLeast(access, "viewer");
 
-/** Everyone's results, the answer key, and question review. */
-export const canManageIris = (access: Access) => irisAtLeast(access, "administrator");
+/** Everyone's results, the answer key, and question review: an Assessments Administrator. */
+export const canManageIris = (access: Access) => assessmentsAtLeast(access, "administrator");
 
 // The platform: whatever reaches past a single area.
 
@@ -219,8 +204,6 @@ export function canManageRoles(access: Access, area: Area | "platform"): boolean
       return trainingAtLeast(access, "administrator");
     case "assessments":
       return assessmentsAtLeast(access, "administrator");
-    case "iris":
-      return irisAtLeast(access, "administrator");
     case "platform":
       return access.platform;
   }
@@ -229,8 +212,7 @@ export function canManageRoles(access: Access, area: Area | "platform"): boolean
 export const canManageUsers = (access: Access) =>
   canManageRoles(access, "event") ||
   canManageRoles(access, "training") ||
-  canManageRoles(access, "assessments") ||
-  canManageRoles(access, "iris");
+  canManageRoles(access, "assessments");
 
 export const canDeleteUsers = (access: Access) => access.platform;
 
@@ -244,7 +226,6 @@ export function accessBadges(access: Access): string[] {
   }
   if (access.training) badges.push(TRAINING_ROLE_LABELS[access.training]);
   if (access.assessments) badges.push(ASSESSMENTS_ROLE_LABELS[access.assessments]);
-  if (access.iris) badges.push(IRIS_ROLE_LABELS[access.iris]);
   return badges;
 }
 
@@ -256,15 +237,13 @@ export const hasNoAccess = (access: Access) =>
   !access.platform &&
   access.event === "none" &&
   access.training === null &&
-  access.assessments === null &&
-  access.iris === null;
+  access.assessments === null;
 
 /** Where a signed-in user lands: the first area they can use. */
 export function homePath(access: Access): string {
   if (canUseEvents(access)) return "/events";
   if (canUseTraining(access)) return "/scheduler";
   if (canScoreAssessments(access)) return "/evals";
-  if (canTakeIris(access)) return "/iris";
   if (canSeeCanaryWire(access)) return "/reporting/canary-wire";
   return "/welcome";
 }
@@ -281,8 +260,4 @@ export function asTrainingRole(value: unknown): TrainingRole | null {
 
 export function asAssessmentsRole(value: unknown): AssessmentsRole | null {
   return ASSESSMENTS_ROLES.includes(value as AssessmentsRole) ? (value as AssessmentsRole) : null;
-}
-
-export function asIrisRole(value: unknown): IrisRole | null {
-  return IRIS_ROLES.includes(value as IrisRole) ? (value as IrisRole) : null;
 }

@@ -46,6 +46,12 @@
   --field: oklch(0.976 0.005 247.9);
 
   /*
+   * A dialog's own surface. On white the dimmed backdrop already sets it
+   * apart, so it stays white; see the dark value for why it has a token.
+   */
+  --dialog: oklch(1 0 0);
+
+  /*
    * Callout accents — one hue per kind of `:::` block in a lab guide, used for
    * the bar, the icon and the title, with the box tinted from the same colour.
    *
@@ -126,6 +132,14 @@
   /* Lifted above both the page (0.129) and the card (0.19) it sits on. */
   --field: oklch(0.235 0.008 265);
 
+  /*
+   * A dialog, lifted off the page (0.129) and above a card (0.19), so its
+   * edges hold against a near-black page that a dimmed backdrop can barely
+   * darken. It stays under a field (0.235), so the inputs inside it still
+   * read as inputs, and a card inside it reads as set into it.
+   */
+  --dialog: oklch(0.215 0.012 265);
+
   /* Lifted for text on a near-black page, the way the brand is. `danger`
      follows `--destructive`, which is already lifted above. A heavier tint,
      because the same mix that reads as a tinted panel on white disappears
@@ -163,6 +177,7 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-field: var(--field);
+  --color-dialog: var(--dialog);
   --color-ring: var(--ring);
   --color-brand: var(--brand);
   --color-brand-foreground: var(--brand-foreground);

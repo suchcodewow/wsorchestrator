@@ -39,7 +39,6 @@ export const POST = audited(async function POST(req: Request) {
         event: result.grant.eventRole ?? "none",
         training: result.grant.trainingRole,
         assessments: result.grant.assessmentsRole,
-        iris: result.grant.irisRole,
         platform: false,
         judging: session.user.access.judging,
         manager: session.user.access.manager,

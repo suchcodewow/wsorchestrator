@@ -13,7 +13,6 @@ import {
   verificationTokens,
   type AssessmentsRole,
   type EventRole,
-  type IrisRole,
   type TrainingRole,
 } from "@/db/schema";
 import {
@@ -43,7 +42,6 @@ type UserRow = {
   eventRole?: EventRole;
   trainingRole?: TrainingRole | null;
   assessmentsRole?: AssessmentsRole | null;
-  irisRole?: IrisRole | null;
   isPlatformAdmin?: boolean;
 };
 
@@ -53,7 +51,6 @@ async function accessOf(row: UserRow, email: string | null | undefined): Promise
     event: row.eventRole ?? "none",
     training: row.trainingRole ?? null,
     assessments: row.assessmentsRole ?? null,
-    iris: row.irisRole ?? null,
     platform: row.isPlatformAdmin ?? false,
     judging: await isJudgingNow(email),
     manager: await isManagerNow(email),

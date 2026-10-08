@@ -226,6 +226,27 @@ middle-click, styled `group-hover:underline`. Buttons, checkboxes and other
 links in the row keep their own behaviour without any extra work.
 `frontend/src/app/(app)/scheduler/scheduler-view.tsx` is the shape to copy.
 
+**Every popup is placed by Floating UI, never by hand.** A tooltip, popover,
+menu or suggestion list must stay on screen near any edge, so none is placed
+with `getBoundingClientRect` arithmetic or hung off its trigger with
+`top-full`. Where the trigger is a React element, use the Radix-based
+`Tooltip`, `DropdownMenu` or `Dialog` in `frontend/src/components/ui/`, which
+already do this. Otherwise call `anchorFloating` (`frontend/src/lib/floating.ts`):
+it flips, shifts, caps the height and follows scrolling. A suggestion list
+under a field uses `useAnchoredToParent`
+(`frontend/src/components/use-anchored.ts`), which keeps the list in the DOM so
+a dialog still counts it as inside. `frontend/src/components/employee-picker.tsx`
+is the shape to copy for a list, and `frontend/src/app/(app)/mimir/glossary-links.tsx`
+for a hover popup.
+
+**A modal is a `DialogContent`, styled as it comes.** It owns how a modal
+stands off the page: the dimmed backdrop, its own surface (`--dialog`, lifted
+above the card in dark mode), and in dark mode a brighter edge and a deeper
+shadow. A call site sets the size and the layout. It never gives the dialog a
+background, border or shadow of its own, and never builds a modal from a
+`fixed` div; check a new dialog in dark mode, where an edge that blends in is
+the usual failure.
+
 ## Before saying you are done
 
 ```bash

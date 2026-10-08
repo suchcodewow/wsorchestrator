@@ -1,6 +1,6 @@
 /**
  * Everyone with a finished Iris test and their placements, a page at a time,
- * as a table or as a radar per person. Iris administrators only.
+ * as a table or as a radar per person. Assessments Administrators only.
  */
 
 import { notFound, redirect } from "next/navigation";

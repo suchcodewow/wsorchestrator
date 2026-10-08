@@ -66,3 +66,6 @@ crash.*.log
 # would override the backend the Harness IaCM workspace injects during pipeline
 # runs, splitting the state — see the note in infra/admin/versions.tf.
 /infra/admin/backend_local.tf
+
+# Mimir content converted from the Learning Hub; private, never committed
+mimir-content*.json

@@ -25,53 +25,46 @@ function sidebar(a: Access): string[] {
   return visibleSections(a).flatMap((s) => [`[${s.heading}]`, ...s.items.map((i) => i.label)]);
 }
 
+const HOME = ["[Home]", "Welcome"];
+
 const EVENTS_USER = ["[Events]", "Event Guides", "Orchestrator"];
 const EVENTS_MANAGER = [...EVENTS_USER];
 const EVENTS_ADMIN = [...EVENTS_MANAGER, "Cloud Status", "Event Settings"];
 const ACCOUNT = ["[Account]", "My inbox", "My settings"];
 
+// Mimir is for everyone, so every sidebar has a Training section holding at least it.
+const MIMIR_ONLY = ["[Training]", "Mimir"];
+const TRAINING_ADMIN = ["[Training]", "Scheduler", "Scheduler settings", "Cohorts", "Cohort Settings", "Mimir", "Mimir Settings"];
+
 const EXPECTED_SIDEBAR: Record<Persona, string[]> = {
-  nobody: ACCOUNT,
-  contributor: [...EVENTS_USER, ...ACCOUNT],
-  operator: [...EVENTS_USER, ...ACCOUNT],
-  manager: [...EVENTS_MANAGER, ...ACCOUNT],
-  eventAdmin: [...EVENTS_ADMIN, ...ACCOUNT, "[Administration]", "Manage users"],
-  trainingViewer: ["[Training]", "Scheduler", "Cohorts", ...ACCOUNT],
-  trainingAdmin: [
-    "[Training]",
-    "Scheduler",
-    "Scheduler settings",
-    "Cohorts",
-    "Cohort Settings",
+  nobody: [...HOME, ...MIMIR_ONLY, ...ACCOUNT],
+  contributor: [...HOME, ...EVENTS_USER, ...MIMIR_ONLY, ...ACCOUNT],
+  operator: [...HOME, ...EVENTS_USER, ...MIMIR_ONLY, ...ACCOUNT],
+  manager: [...HOME, ...EVENTS_MANAGER, ...MIMIR_ONLY, ...ACCOUNT],
+  eventAdmin: [...HOME, ...EVENTS_ADMIN, ...MIMIR_ONLY, ...ACCOUNT, "[Administration]", "Manage users"],
+  trainingViewer: [...HOME, "[Training]", "Scheduler", "Cohorts", "Mimir", ...ACCOUNT],
+  trainingAdmin: [...HOME, ...TRAINING_ADMIN, ...ACCOUNT, "[Administration]", "Manage users"],
+  // Iris is part of the assessments area: a viewer takes it, an administrator runs it.
+  assessmentsViewer: [...HOME, ...MIMIR_ONLY, "[Assessments]", "eVals", "Iris", "Reporting", ...ACCOUNT],
+  assessmentsAdmin: [
+    ...HOME,
+    ...MIMIR_ONLY,
+    "[Assessments]",
+    "eVals",
+    "Iris",
+    "Reporting",
+    "eVals settings",
     ...ACCOUNT,
     "[Administration]",
     "Manage users",
   ],
-  assessmentsViewer: ["[Assessments]", "eVals", "Reporting", ...ACCOUNT],
-  assessmentsAdmin: ["[Assessments]", "eVals", "Reporting", "eVals settings", ...ACCOUNT, "[Administration]", "Manage users"],
-  irisTaker: ["[Assessments]", "Iris", ...ACCOUNT],
-  irisAdmin: ["[Assessments]", "Iris", ...ACCOUNT, "[Administration]", "Manage users"],
-  guestJudge: ["[Assessments]", "eVals", ...ACCOUNT],
+  guestJudge: [...HOME, ...MIMIR_ONLY, "[Assessments]", "eVals", ...ACCOUNT],
   // HiBob has people reporting to them: Reporting, for the Canary Wire, and nothing else.
-  peopleManager: ["[Assessments]", "Reporting", ...ACCOUNT],
-  bothAdmins: [
+  peopleManager: [...HOME, ...MIMIR_ONLY, "[Assessments]", "Reporting", ...ACCOUNT],
+  bothAdmins: [...HOME, ...EVENTS_ADMIN, ...TRAINING_ADMIN, ...ACCOUNT, "[Administration]", "Manage users"],
+  platform: [...HOME, 
     ...EVENTS_ADMIN,
-    "[Training]",
-    "Scheduler",
-    "Scheduler settings",
-    "Cohorts",
-    "Cohort Settings",
-    ...ACCOUNT,
-    "[Administration]",
-    "Manage users",
-  ],
-  platform: [
-    ...EVENTS_ADMIN,
-    "[Training]",
-    "Scheduler",
-    "Scheduler settings",
-    "Cohorts",
-    "Cohort Settings",
+    ...TRAINING_ADMIN,
     "[Assessments]",
     "eVals",
     "Iris",
@@ -118,6 +111,14 @@ describe("sidebar", () => {
     }
   });
 
+  test("Welcome comes first, for everyone", () => {
+    for (const a of EVERY_ACCESS) assert.deepEqual(sidebar(a).slice(0, 2), HOME, describeAccess(a));
+  });
+
+  test("every entry says what it is for, for its card on the Welcome page", () => {
+    for (const item of NAV_SECTIONS.flatMap((s) => s.items)) assert.ok(item.description.trim().length > 10, item.label);
+  });
+
   test("every entry has a distinct href", () => {
     const hrefs = NAV_SECTIONS.flatMap((s) => s.items.map((i) => i.href));
     assert.equal(new Set(hrefs).size, hrefs.length);
@@ -157,6 +158,13 @@ describe("isNavItemActive", () => {
   test("eVals settings does not also light up the eVals entry", () => {
     assert.equal(isNavItemActive("/evals-settings", evals), false);
     assert.equal(isNavItemActive("/evals-settings", evalsSettings), true);
+  });
+
+  test("Mimir Settings does not also light up the Mimir entry", () => {
+    const mimir = link("Mimir");
+    assert.equal(isNavItemActive("/mimir/library/cd", mimir), true);
+    assert.equal(isNavItemActive("/mimir-settings/content", mimir), false);
+    assert.equal(isNavItemActive("/mimir-settings/content", link("Mimir Settings")), true);
   });
 });
 
