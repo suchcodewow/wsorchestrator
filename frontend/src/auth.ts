@@ -1,6 +1,6 @@
 /** Auth.js configuration: Google sign-in, the session, and who is let in. */
 
-import NextAuth from "next-auth";
+import NextAuth, { type Session } from "next-auth";
 import Google from "next-auth/providers/google";
 import { DrizzleAdapter } from "@auth/drizzle-adapter";
 import { headers } from "next/headers";
@@ -133,12 +133,13 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       return false;
     },
 
+    // What this returns is also what GET /api/auth/session hands to any script
+    // on the page, so it is built from scratch: Auth.js passes in the whole
+    // `sessions` row, session token included, and the whole `users` row.
     async session({ session, user }) {
-      if (!session.user) return session;
-      session.user.id = user.id;
-      const access = await accessOf(user as UserRow, session.user.email);
+      const access = await accessOf(user as UserRow, user.email);
 
-      if (!access.platform && isBootstrapAdmin(session.user.email)) {
+      if (!access.platform && isBootstrapAdmin(user.email)) {
         await db
           .update(users)
           .set({ isPlatformAdmin: true })
@@ -146,7 +147,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         access.platform = true;
       }
 
-      session.user.access = access;
+      const shown: Session = {
+        expires: session.expires,
+        user: { id: user.id, name: user.name ?? null, email: user.email, image: user.image ?? null, access },
+      };
 
       // A platform administrator viewing the app as someone else: from here on
       // the session is theirs. Re-checked on every request, so it lapses the
@@ -155,18 +159,17 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       if (asked && canImpersonate(access)) {
         const target = await impersonationTarget(asked);
         if (target && !impersonationRefusal(user, target)) {
-          session.impersonator = { id: user.id, name: user.name ?? null, email: user.email ?? null };
-          session.user = {
+          shown.impersonator = { id: user.id, name: user.name ?? null, email: user.email ?? null };
+          shown.user = {
             id: target.id,
             name: target.name,
             email: target.email,
             image: target.image,
-            emailVerified: null,
             access: await accessOf((target.user ?? {}) as UserRow, target.email),
           };
         }
       }
-      return session;
+      return shown;
     },
   },
 });

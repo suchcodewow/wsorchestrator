@@ -1360,3 +1360,38 @@ describe("viewing the app as an employee", () => {
     assert.equal((await stop(cookie)).status, 200);
   });
 });
+
+describe("what the browser can read about its session", () => {
+  // GET /api/auth/session answers any script on the page. The cookie is
+  // httpOnly so that a script cannot read the session token; this must not
+  // hand it over either, nor the stored user row behind it.
+  const read = async (cookie: string) => {
+    const res = await send({ cookie }, "GET", "/api/auth/session");
+    assert.equal(res.status, 200);
+    return { raw: res.body, body: JSON.parse(res.body) as Record<string, unknown> & { user: Record<string, unknown> } };
+  };
+
+  test("is who they are and their roles, and never the session token", async () => {
+    const { raw, body } = await read(cookies.operator);
+    assert.ok(!raw.includes(cookies.operator), "the session token is in the body");
+    assert.deepEqual(Object.keys(body).sort(), ["expires", "user"]);
+    assert.deepEqual(Object.keys(body.user).sort(), ["access", "email", "id", "image", "name"]);
+    assert.deepEqual([body.user.id, body.user.access], [people.operator.id, PERSONAS.operator]);
+  });
+
+  test("while viewing as someone, adds who is really signed in and nothing else", async () => {
+    const admin = await scope.createUser("payload", PERSONAS.platform);
+    const cookie = await createSession(admin.id);
+    const email = await scope.createEmployee("payload");
+    assert.equal((await send({ cookie }, "POST", "/api/me/impersonation", { email })).status, 200);
+
+    const { raw, body } = await read(cookie);
+    assert.ok(!raw.includes(cookie), "the session token is in the body");
+    assert.deepEqual(Object.keys(body).sort(), ["expires", "impersonator", "user"]);
+    assert.deepEqual(Object.keys(body.user).sort(), ["access", "email", "id", "image", "name"]);
+    assert.deepEqual(body.impersonator, { id: admin.id, name: "payload", email: admin.email });
+    assert.equal(body.user.email, email);
+
+    assert.equal((await send({ cookie }, "DELETE", "/api/me/impersonation")).status, 200);
+  });
+});
