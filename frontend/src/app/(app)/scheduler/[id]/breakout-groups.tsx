@@ -403,6 +403,8 @@ function Box({
   empty: string;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id, disabled: !editable });
+  // By first name, so someone dropped in lands among the rest rather than at the end.
+  const sorted = [...people].sort((a, b) => (a.fullName || a.email).localeCompare(b.fullName || b.email));
   return (
     <section
       ref={setNodeRef}
@@ -423,7 +425,7 @@ function Box({
         <p className="text-xs text-muted-foreground">{empty}</p>
       ) : (
         <ul className="grid grid-cols-2 gap-1.5">
-          {people.map((p) => (
+          {sorted.map((p) => (
             <li key={p.email} className="min-w-0">
               <DraggableChip person={p} editable={editable} />
             </li>
