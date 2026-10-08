@@ -18,7 +18,7 @@ import { MODULE_URL_TEMPLATE, SERIES_LINKS } from "@/lib/canary-wire/config";
 import { accountability } from "@/lib/canary-wire/exemptions";
 import { managersOf, onlyOrg, orgOf, withHiBob, type Person } from "@/lib/canary-wire/people";
 import { scopeFor } from "@/lib/canary-wire/scope";
-import { historyCsv, historyMonths, historyView } from "@/lib/canary-wire/history";
+import { historyCsv, historyMonths, historyView, repTrends } from "@/lib/canary-wire/history";
 import { monthOf } from "@/lib/canary-wire/months";
 import type { Access } from "@/lib/roles";
 import { firstFullMonth, monthAfterDay, monthKey, monthRange, toPacific } from "@/lib/canary-wire/months";
@@ -300,6 +300,18 @@ describe("history", () => {
     // 0% in October and Fay's owed nothing then, so Ada's comes next.
     assert.deepEqual(h.teams.map((t) => t.manager), ["(no manager on record)", "Ada", "Fay"]);
     assert.deepEqual(h.roles.find((r) => r.role === AE)!.rates.map((r) => r.pct), [0, 33.3]);
+  });
+
+  test("the dots carry each rep's months and the day they last finished something of their own", () => {
+    const snap = twoMonths();
+    // Another role's module, finished later, isn't keeping up with their own.
+    snap.modules.push({ module_id: "m-se-oct", name: "October 2026 - SE only", label: "SE only", month: "October 2026", edition: SE, series_id: "s-se", type: "UPDATE" });
+    snap.progress["ada@harness.io"]!["m-se-oct"] = { state: "Completed", on: "2026-10-05", at: "2026-10-05T10:00:00Z" };
+    const t = repTrends(historyView(snap, ["September 2026", "October 2026"], everyoneAccountable));
+    assert.deepEqual(t.months, ["September 2026", "October 2026"]);
+    assert.deepEqual(t.reps["ada@harness.io"]!.marks.map((m) => m.pct), [50, 100]);
+    assert.equal(t.reps["ada@harness.io"]!.lastCompleted, "Oct 2, 2026");
+    assert.deepEqual(Object.keys(t.reps).sort(), pull().learners.map((l) => l.email).sort());
   });
 
   test("the CSV is a row per rep and a column per month, blank where nothing was owed", () => {

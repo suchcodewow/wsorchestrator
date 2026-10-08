@@ -8,6 +8,8 @@ const nextConfig: NextConfig = {
     return [
       { source: "/bootcamp-history", destination: "/reporting/bootcamp-history", permanent: true },
       { source: "/bootcamp-history/:id", destination: "/reporting/bootcamp-history/:id", permanent: true },
+      // The history tab became the dots beside each rep on the Canary Wire.
+      { source: "/reporting/canary-wire-history", destination: "/reporting/canary-wire", permanent: true },
     ];
   },
   experimental: {

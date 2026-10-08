@@ -60,7 +60,7 @@ export const COLUMN_ORDER = { first: "AE and Supporting Orgs", second: "SE" } as
 export const NO_BOOTCAMP_EDITIONS = ["SDR"];
 
 /**
- * The first month Canary Wire History shows. Before it, the program wasn't
+ * The first month a rep's history (the dots beside their name) reaches back to. Before it, the program wasn't
  * yet expected of everyone: April and May 2026 have a few dozen progress
  * records between some 200 people, against 1,500 for June.
  */

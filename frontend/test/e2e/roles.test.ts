@@ -285,7 +285,11 @@ const PAGES: Record<string, PageCase> = {
     expect: (a) => (canSeeReporting(a) ? { to: visibleReportingTabs(a)[0]!.href } : 404),
   },
   "/reporting/canary-wire": { path: () => "/reporting/canary-wire", expect: gated(canSeeCanaryWire) },
-  "/reporting/canary-wire-history": { path: () => "/reporting/canary-wire-history", expect: gated(canSeeCanaryWire) },
+  "/reporting/canary-wire-history": {
+    path: () => "/reporting/canary-wire-history",
+    expect: () => ({ to: "/reporting/canary-wire" }),
+    signedOut: { to: "/reporting/canary-wire" },
+  },
   "/reporting/bootcamp-history": { path: () => "/reporting/bootcamp-history", expect: gated(canUseEvals) },
   "/reporting/bootcamp-history?status=active": {
     path: () => "/reporting/bootcamp-history?status=active",

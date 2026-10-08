@@ -5,7 +5,8 @@ import { notFound, redirect } from "next/navigation";
 import { auth, signInPath } from "@/auth";
 import { mindtickleConfig } from "@/lib/canary-wire/mindtickle";
 import { latestPull } from "@/lib/canary-wire/pull";
-import { canaryWireView } from "@/lib/canary-wire/store";
+import { repTrends } from "@/lib/canary-wire/history";
+import { canaryWireHistory, canaryWireView } from "@/lib/canary-wire/store";
 import { scopeFor } from "@/lib/canary-wire/scope";
 import { canRefreshCanaryWire, canSeeCanaryWire } from "@/lib/roles";
 import { CanaryWireReport } from "./canary-wire-report";
@@ -26,11 +27,18 @@ export default async function CanaryWirePage({
   const whose = scopeFor({ access, email: session.user.email ?? null }, typeof scope === "string" ? scope : null);
   // A hand-typed month or scope that doesn't apply opens the default, as a bad sort does.
   if (!whose.ok) redirect("/reporting/canary-wire");
-  const [view, pull] = await Promise.all([canaryWireView(typeof month === "string" ? month : null, whose.scope), latestPull()]);
+  // The history is always the last six months to now, whichever month is
+  // picked, so a rep's dots don't change as the month does.
+  const [view, history, pull] = await Promise.all([
+    canaryWireView(typeof month === "string" ? month : null, whose.scope),
+    canaryWireHistory(whose.scope),
+    latestPull(),
+  ]);
   if (!view) redirect("/reporting/canary-wire");
   return (
     <CanaryWireReport
       view={view}
+      trends={repTrends(history)}
       pull={pull}
       configured={mindtickleConfig() !== null}
       canSwitchScope={access.manager}

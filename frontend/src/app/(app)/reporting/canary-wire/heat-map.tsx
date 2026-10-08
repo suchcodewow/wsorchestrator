@@ -15,10 +15,13 @@
 import { useDeferredValue, useMemo, useRef, useState } from "react";
 import { Check, ChevronDown, ChevronRight, Copy, ListChecks } from "lucide-react";
 import { moduleUrl, slackReport, stateClass, when } from "@/lib/canary-wire/report";
+import type { RepTrends } from "@/lib/canary-wire/history";
 import type { CanaryWireView, Cell, Rep, Team } from "@/lib/canary-wire/view";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { copyRich } from "./clipboard";
 import { RolePills, SearchBox } from "./filters";
+import { Trend } from "./trend";
 import { CHIP, FILL, HEAD, MGR_BG, Meter, PILL, PILL_ON, PIN_LEFT, ROW_BG, TABLE, UNCOUNTED } from "./ui";
 
 function dotClass(cell: Cell | undefined): string {
@@ -40,7 +43,7 @@ const PIN_DONE = "sticky right-32 z-10 w-16 min-w-16 shadow-[inset_1px_0_0_var(-
 const PIN_RATE = "sticky right-0 z-10 w-32 min-w-32";
 
 /** The widths both tables share, so the header strip and the rows line up. */
-const COL = { name: 288, module: 112, done: 64, rate: 128 };
+const COL = { name: 336, module: 112, done: 64, rate: 128 };
 
 function Columns({ labels }: { labels: string[] }) {
   return (
@@ -130,7 +133,7 @@ function CopyButton({ team, directs, view }: { team: Team; directs: Rep[]; view:
   );
 }
 
-export function HeatMap({ view }: { view: CanaryWireView }) {
+export function HeatMap({ view, trends }: { view: CanaryWireView; trends: RepTrends }) {
   const [search, setSearch] = useState("");
   const [role, setRole] = useState("");
   const [incompleteOnly, setIncompleteOnly] = useState(false);
@@ -199,13 +202,28 @@ export function HeatMap({ view }: { view: CanaryWireView }) {
               {label}
             </span>
           ))}
+          {trends.months.length > 0 && (
+            <span
+              className="inline-flex cursor-help items-center gap-1.5"
+              title={`The dots beside each name are their last ${trends.months.length} months, ${trends.months[0]} to ${trends.months.at(-1)}, oldest first: green finished everything, amber half or more, red under half, dashed not counted yet (pre-bootcamp or a new hire). Hover them for the detail.`}
+            >
+              <span className="inline-flex gap-0.5">
+                <i className="block size-2 rounded-full bg-emerald-500" />
+                <i className="block size-2 rounded-full bg-amber-400" />
+                <i className="block size-2 rounded-full bg-red-500" />
+              </span>
+              Last {trends.months.length} months
+            </span>
+          )}
           <span className="grow" />
-          <button type="button" className="cursor-pointer hover:text-foreground" onClick={() => setCollapsed(new Set(view.teams.map((t) => t.manager)))}>
-            Collapse all
-          </button>
-          <button type="button" className="cursor-pointer hover:text-foreground" onClick={() => setCollapsed(new Set())}>
-            Expand all
-          </button>
+          <span className="inline-flex gap-4">
+            <button type="button" className="cursor-pointer hover:text-foreground" onClick={() => setCollapsed(new Set(view.teams.map((t) => t.manager)))}>
+              Collapse all
+            </button>
+            <button type="button" className="cursor-pointer hover:text-foreground" onClick={() => setCollapsed(new Set())}>
+              Expand all
+            </button>
+          </span>
         </div>
 
         {shown.length === 0 ? (
@@ -244,6 +262,7 @@ export function HeatMap({ view }: { view: CanaryWireView }) {
             </div>
             {/* Sideways overscroll is contained, so a trackpad swipe across the
                 module columns doesn't navigate back. */}
+            <TooltipProvider>
             <div
               className="overflow-x-auto overscroll-x-contain"
               onScroll={(e) => {
@@ -318,7 +337,8 @@ export function HeatMap({ view }: { view: CanaryWireView }) {
                                   Never activated
                                 </span>
                               )}
-                              <span className="shrink-0 text-[11px] text-muted-foreground" title={d.role}>
+                              <Trend name={d.name || d.email} email={d.email} trends={trends} month={view.month} />
+                              <span className="w-7 shrink-0 text-[11px] text-muted-foreground" title={d.role}>
                                 {short(d.role)}
                               </span>
                             </span>
@@ -341,6 +361,7 @@ export function HeatMap({ view }: { view: CanaryWireView }) {
               })}
               </table>
             </div>
+            </TooltipProvider>
           </>
         )}
       </div>
