@@ -197,7 +197,8 @@ function Column({
         className={cn("relative transition-colors", isOver && "bg-brand/4")}
         style={{ height }}
       >
-        {hours.map((m) => (
+        {/* The header's bottom border already marks the day's start. */}
+        {hours.filter((m) => m !== dayStart).map((m) => (
           <div
             key={m}
             aria-hidden
@@ -286,7 +287,7 @@ function DraggableSession(props: CardProps) {
     <div
       ref={setNodeRef}
       className={cn(
-        "absolute inset-x-0 z-10 px-1.5 pb-0.5 transition-opacity",
+        "absolute inset-x-0 z-10 px-1.5 py-px transition-opacity",
         isDragging ? "opacity-30" : props.dimmed?.has(session.id) && "opacity-30 hover:opacity-100",
       )}
       style={{ top: (session.start - dayStart) * scale, height: session.minutes * scale }}
@@ -372,8 +373,8 @@ export function SessionFace({
         "focus-visible:ring-[3px] focus-visible:ring-ring/50",
         canManage ? "cursor-grab active:cursor-grabbing" : "cursor-pointer",
         SESSION_STYLES[s.color].card,
-        // An issue outweighs the session's colour: a red edge, and a red halo clear of the card.
-        wrong.length > 0 && "border-red-600 ring-2 ring-red-600 ring-offset-1 ring-offset-card dark:border-red-500 dark:ring-red-500",
+        // An issue outweighs the session's colour: a thin red edge.
+        wrong.length > 0 && "border-red-600 dark:border-red-500",
         lifted && "shadow-lg ring-2 ring-brand/50",
         density === "condensed" ? "justify-center px-1.5" : "px-2 py-1",
       )}
