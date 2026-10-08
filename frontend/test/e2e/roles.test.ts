@@ -31,6 +31,7 @@ import {
   canContributeComponents,
   canCreateEvents,
   canDeleteUsers,
+  canImpersonate,
   canManageBackups,
   canManageEvalsSettings,
   canManageIris,
@@ -676,6 +677,10 @@ const ROUTES: RouteCase[] = [
   // Everyone's own
   { method: "GET", path: "/api/me", allowed: true },
   { method: "PATCH", path: "/api/me", allowed: true, body: () => ({ themePreference: "bogus" }) },
+  { method: "GET", path: "/api/me/impersonation", allowed: true, sessionOnly: true },
+  { method: "POST", path: "/api/me/impersonation", allowed: canImpersonate, body: () => ({}), sessionOnly: true },
+  // Nobody here is impersonating anyone, so ending it changes nothing.
+  { method: "DELETE", path: "/api/me/impersonation", allowed: true, sessionOnly: true },
   { method: "GET", path: "/api/me/org-secrets", allowed: true },
   { method: "GET", path: "/api/me/templates", allowed: true },
   { method: "GET", path: "/api/me/harness-tokens", allowed: true },
@@ -1263,5 +1268,93 @@ describe("a session carries the roles as they are now", () => {
   test("a signed-out cookie is signed out", async () => {
     const res = await send({ cookie: `wo_test_${randomUUID()}` }, "GET", "/events");
     assert.ok(isRedirect(res.status) && res.location === "/signin", JSON.stringify(res));
+  });
+});
+
+describe("viewing the app as an employee", () => {
+  const start = (cookie: string, email: string) => send({ cookie }, "POST", "/api/me/impersonation", { email });
+  const stop = (cookie: string) => send({ cookie }, "DELETE", "/api/me/impersonation");
+  const me = async (cookie: string) => JSON.parse((await send({ cookie }, "GET", "/api/me")).body) as { id: string; access: Access };
+
+  test("shows the app as the employee, changes nothing, and ends", async () => {
+    const admin = await scope.createUser("impersonator", PERSONAS.platform);
+    const cookie = await createSession(admin.id);
+    const viewed = await scope.createUser("viewed", PERSONAS.operator);
+    await scope.createEmployee("viewed", viewed.email);
+
+    assert.equal((await start(cookie, viewed.email.toUpperCase())).status, 200);
+    assert.deepEqual(await me(cookie), { ...(await me(cookies.operator)), id: viewed.id, email: viewed.email });
+    assert.equal((await send({ cookie }, "GET", "/backups")).status, 404);
+    const page = await send({ cookie }, "GET", "/events");
+    assert.equal(page.status, 200);
+    assert.ok(page.body.includes("Viewing as"), "the header says whom the app is shown as");
+
+    // Nothing is changed in their name, session-only routes included, and the
+    // trail says who really asked.
+    const marker = `wo_test_imp_${randomUUID().slice(0, 8)}`;
+    for (const [method, path, body] of [
+      ["PATCH", "/api/me", { themePreference: "dark", note: marker }],
+      ["POST", "/api/tokens", { name: marker }],
+      ["POST", "/api/runs", { note: marker }],
+    ] as const) {
+      const res = await send({ cookie }, method, path, body);
+      assert.deepEqual([res.status, JSON.parse(res.body).error], [403, "impersonating"], `${method} ${path}`);
+    }
+    const trail = JSON.parse((await send("platform", "GET", `/api/audit?q=${marker}`)).body) as {
+      events: { actorId: string | null; detail: { impersonating?: string } | null }[];
+    };
+    assert.equal(trail.events.length, 3);
+    for (const e of trail.events) assert.deepEqual([e.actorId, e.detail?.impersonating], [admin.id, viewed.email]);
+
+    assert.deepEqual(JSON.parse((await stop(cookie)).body), { impersonating: null, impersonator: null });
+    assert.equal((await me(cookie)).id, admin.id);
+    assert.equal((await send({ cookie }, "GET", "/backups")).status, 200);
+  });
+
+  test("someone who has never signed in is shown as a new account, with the way back", async () => {
+    const admin = await scope.createUser("impersonator", PERSONAS.platform);
+    const cookie = await createSession(admin.id);
+    const email = await scope.createEmployee("newcomer");
+
+    assert.equal((await start(cookie, email)).status, 200);
+    const shown = await me(cookie);
+    assert.ok(shown.id.startsWith("employee:"), shown.id);
+    assert.deepEqual(shown.access, PERSONAS.nobody);
+    const events = await send({ cookie }, "GET", "/events");
+    assert.deepEqual([events.status, events.location], [307, "/welcome"]);
+    const welcome = await send({ cookie }, "GET", "/welcome");
+    assert.equal(welcome.status, 200);
+    assert.ok(welcome.body.includes("Viewing as"), "the account menu is there to stop it");
+    assert.equal((await stop(cookie)).status, 200);
+  });
+
+  test("refuses yourself, a platform administrator, and anyone not on the list", async () => {
+    const admin = await scope.createUser("impersonator", PERSONAS.platform);
+    const cookie = await createSession(admin.id);
+    await scope.createEmployee("impersonator", admin.email);
+    await scope.createEmployee("platform", people.platform.email);
+
+    for (const [email, status, error] of [
+      [admin.email, 409, "self"],
+      [people.platform.email, 409, "platform_admin"],
+      ["nobody@roles.test", 404, "not_found"],
+    ] as const) {
+      const res = await start(cookie, email);
+      assert.deepEqual([res.status, JSON.parse(res.body).error], [status, error], email);
+    }
+    assert.equal((await me(cookie)).id, admin.id);
+  });
+
+  test("ends the moment the administrator loses the flag", async () => {
+    const admin = await scope.createUser("impersonator", PERSONAS.platform);
+    const cookie = await createSession(admin.id);
+    const email = await scope.createEmployee("newcomer");
+    assert.equal((await start(cookie, email)).status, 200);
+
+    await scope.createUser("impersonator", PERSONAS.nobody);
+    const after = await me(cookie);
+    assert.deepEqual([after.id, after.access], [admin.id, PERSONAS.nobody]);
+    await scope.createUser("impersonator", PERSONAS.platform);
+    assert.equal((await stop(cookie)).status, 200);
   });
 });

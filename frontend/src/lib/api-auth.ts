@@ -9,7 +9,7 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { resolveToken, type TokenBearer } from "@/lib/api-tokens";
-import { noteCaller } from "@/lib/audit-context";
+import { noteAudit, noteCaller } from "@/lib/audit-context";
 import {
   canManageEvalsSettings,
   canManageSettings,
@@ -33,7 +33,13 @@ export async function sessionOrToken(req: Request): Promise<Caller | null> {
       access: session.user.access,
       email: session.user.email ?? null,
     };
-    noteCaller({ ...caller, name: session.user.name ?? null }, "session");
+    // The trail names whoever is at the keyboard, and whom they were viewing as.
+    if (session.impersonator) {
+      noteCaller(session.impersonator, "session");
+      noteAudit({ detail: { impersonating: caller.email } });
+    } else {
+      noteCaller({ ...caller, name: session.user.name ?? null }, "session");
+    }
     return caller;
   }
 

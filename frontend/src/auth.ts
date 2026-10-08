@@ -22,8 +22,9 @@ import {
 } from "@/lib/allowed-domains";
 import { recordAudit, requestIp } from "@/lib/audit";
 import { googlePhotoChosen, syncGoogleProfile } from "@/lib/google-profile";
+import { impersonationRefusal, impersonationTarget } from "@/lib/impersonation";
 import { REQUEST_PATH_HEADER, returnPath } from "@/lib/request-path";
-import type { Access } from "@/lib/roles";
+import { canImpersonate, type Access } from "@/lib/roles";
 import { isJudgingNow } from "@/lib/scheduler/judging";
 import { isManagerNow } from "@/lib/evals/managers";
 import { bootstrapAdminEmails, isBootstrapAdmin } from "@/lib/site-admins";
@@ -45,6 +46,19 @@ type UserRow = {
   irisRole?: IrisRole | null;
   isPlatformAdmin?: boolean;
 };
+
+/** What a stored user may do; an empty row is an account that has none. */
+async function accessOf(row: UserRow, email: string | null | undefined): Promise<Access> {
+  return {
+    event: row.eventRole ?? "none",
+    training: row.trainingRole ?? null,
+    assessments: row.assessmentsRole ?? null,
+    iris: row.irisRole ?? null,
+    platform: row.isPlatformAdmin ?? false,
+    judging: await isJudgingNow(email),
+    manager: await isManagerNow(email),
+  };
+}
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   adapter: DrizzleAdapter(db, {
@@ -122,16 +136,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     async session({ session, user }) {
       if (!session.user) return session;
       session.user.id = user.id;
-      const row = user as UserRow;
-      const access: Access = {
-        event: row.eventRole ?? "none",
-        training: row.trainingRole ?? null,
-        assessments: row.assessmentsRole ?? null,
-        iris: row.irisRole ?? null,
-        platform: row.isPlatformAdmin ?? false,
-        judging: await isJudgingNow(session.user.email),
-        manager: await isManagerNow(session.user.email),
-      };
+      const access = await accessOf(user as UserRow, session.user.email);
 
       if (!access.platform && isBootstrapAdmin(session.user.email)) {
         await db
@@ -142,6 +147,25 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       }
 
       session.user.access = access;
+
+      // A platform administrator viewing the app as someone else: from here on
+      // the session is theirs. Re-checked on every request, so it lapses the
+      // moment the administrator loses the flag or the employee leaves.
+      const asked = (session as { impersonatingEmail?: string | null }).impersonatingEmail;
+      if (asked && canImpersonate(access)) {
+        const target = await impersonationTarget(asked);
+        if (target && !impersonationRefusal(user, target)) {
+          session.impersonator = { id: user.id, name: user.name ?? null, email: user.email ?? null };
+          session.user = {
+            id: target.id,
+            name: target.name,
+            email: target.email,
+            image: target.image,
+            emailVerified: null,
+            access: await accessOf((target.user ?? {}) as UserRow, target.email),
+          };
+        }
+      }
       return session;
     },
   },

@@ -35,13 +35,18 @@ export async function setThemePreference(
   const session = await auth();
   if (!session?.user?.id) return;
 
-  const result = await savePreferences(session.user, { themePreference: preference });
-  await recordPreference(session.user, "Set their theme.", { themePreference: preference }, result);
+  // The theme is whoever is at the screen's, even while viewing as someone else.
+  const user = session.impersonator
+    ? { ...session.impersonator, access: session.user.access }
+    : session.user;
+  const result = await savePreferences(user, { themePreference: preference });
+  await recordPreference(user, "Set their theme.", { themePreference: preference }, result);
 }
 
 export async function setCalendarScope(scope: CalendarScope): Promise<void> {
   const session = await auth();
-  if (!session?.user?.id) return;
+  // Viewing as someone else changes nothing of theirs.
+  if (!session?.user?.id || session.impersonator) return;
 
   const result = await savePreferences(session.user, { calendarScope: scope });
   await recordPreference(session.user, "Set which events their calendar shows.", { calendarScope: scope }, result);

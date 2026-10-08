@@ -47,6 +47,10 @@ Responses are JSON:
 - `401 {"error":"unauthorized"}`: no session, or the token is missing, revoked,
   expired or malformed.
 - `403 {"error":"forbidden"}`: the owner's roles do not allow the request.
+- `403 {"error":"impersonating"}`: a change asked of a browser session that
+  a platform administrator is using to view the app as an employee. Only
+  `DELETE /api/me/impersonation`, which ends it, gets through. A token is
+  never impersonating.
 
 The gate is `requireCaller` in
 [`frontend/src/lib/api-auth.ts`](../frontend/src/lib/api-auth.ts).
@@ -92,6 +96,7 @@ escalate itself:
 | `POST /api/settings/domains`, `PATCH`/`DELETE /api/settings/domains/[id]` | Who can sign in at all |
 | `GET /api/cohorts/slack/install` | Add to Slack, which hands the app a bot token for the whole workspace and ends in a browser |
 | `/api/tokens/**` | Minting tokens (a token must not be able to mint its own replacement) |
+| `/api/me/impersonation` | Viewing the app as an employee, which changes what a browser session is; a token has no session to change |
 | `GET /api/evals/google-meetings/connect` | Connecting the Google account every meeting invite is sent from: a browser sign-in, and a standing token for the app |
 | `GET /api/auth/callback/google` with a `wo.` state | The one OAuth callback both connections above return to, shared with Auth.js's sign-in (see `frontend/src/lib/oauth-callback.ts`) |
 
@@ -116,6 +121,7 @@ add it to the table above.
 | My Harness tokens | `GET /api/me/harness-tokens` |
 | My org secrets / templates | `GET /api/me/org-secrets`, `GET /api/me/templates[?status=1]` |
 | My settings (theme, calendar scope) | `GET`/`PATCH /api/me` |
+| Account menu → View as an employee | `GET /api/me/impersonation`; the search is `GET /api/evals/employees?match=person` |
 | Users | `GET /api/users` |
 | Admin settings (sign-in domains) | `GET /api/settings/domains` |
 | eVals → Bootcamp / Intermediate | `GET /api/evals/scoring?stage=bootcamp\|intermediate` |

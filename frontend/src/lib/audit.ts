@@ -19,6 +19,8 @@
 import "server-only";
 import { desc, sql } from "drizzle-orm";
 import { headers } from "next/headers";
+import { NextResponse } from "next/server";
+import { auth } from "@/auth";
 import { db } from "@/db";
 import {
   auditEvents,
@@ -29,10 +31,13 @@ import {
 import { sessionOrToken } from "@/lib/api-auth";
 import {
   auditScope,
+  noteAudit,
+  noteCaller,
   type AuditActor,
   type AuditScope,
 } from "@/lib/audit-context";
 import { createdTarget, endpointFor, outcomeFor, redact } from "@/lib/audit-shape";
+import { IMPERSONATION_PATH } from "@/lib/impersonation";
 import type { AuditSort } from "@/lib/list-specs";
 import { pageWindow, toPage, type ListQuery, type Page } from "@/lib/paging";
 import { blankAsNull, orderFor, searchAny } from "@/lib/paging-sql";
@@ -174,7 +179,10 @@ export function audited<C extends RouteContext>(
     let res: Response | null = null;
     let thrown: unknown = null;
     try {
-      res = await auditScope.run(scope, () => handler(req, ctx));
+      res = await auditScope.run(
+        scope,
+        async () => (await refuseWhileImpersonating(req)) ?? handler(req, ctx),
+      );
     } catch (err) {
       thrown = err;
     }
@@ -187,6 +195,23 @@ export function audited<C extends RouteContext>(
     if (thrown) throw thrown;
     return res!;
   };
+}
+
+/**
+ * A 403 for any change asked of a session that is viewing the app as someone
+ * else (`src/lib/impersonation.ts`), other than ending it. Session-only
+ * routes call `auth()` themselves, so this asks too rather than trusting
+ * `requireCaller` to.
+ */
+async function refuseWhileImpersonating(req: Request): Promise<Response | null> {
+  if (new URL(req.url).pathname === IMPERSONATION_PATH) return null;
+
+  const session = await auth();
+  if (!session?.impersonator) return null;
+
+  noteCaller(session.impersonator, "session");
+  noteAudit({ detail: { impersonating: session.user.email ?? null } });
+  return NextResponse.json({ error: "impersonating" }, { status: 403 });
 }
 
 async function writeRequest(

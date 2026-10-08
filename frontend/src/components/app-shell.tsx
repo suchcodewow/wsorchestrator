@@ -59,6 +59,7 @@ export async function AppShell({
           access={user.access}
           initialTheme={themePreference}
           build={buildInfo()}
+          impersonator={session.impersonator ?? null}
           defaultCollapsed={collapsed}
           sticky={!pane}
           signOutAction={async () => {
