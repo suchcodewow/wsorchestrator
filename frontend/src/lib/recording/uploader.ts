@@ -55,6 +55,8 @@ export type UploadSnapshot = {
   /** This browser's store has been read at least once, so `streams` says what it holds. */
   loaded: boolean;
   streams: StreamUpload[];
+  /** Streams the server has said are ready while this page was open, oldest first: the recorder can download them. */
+  completed: { takeId: string; kind: "camera" | "screen" }[];
   /** The last attempt failed and the next is waiting; why, in a few words. */
   retrying: string | null;
   online: boolean;
@@ -86,7 +88,7 @@ export class RecordingUploader {
   private asking = new Map<string, Promise<void>>();
   /** Streams the server says are already joined: their chunks are all in. */
   private finished = new Set<string>();
-  private snapshot: UploadSnapshot = { loaded: false, streams: [], retrying: null, online: true, gone: false };
+  private snapshot: UploadSnapshot = { loaded: false, streams: [], completed: [], retrying: null, online: true, gone: false };
 
   constructor(
     private readonly ownerId: string,
@@ -249,6 +251,10 @@ export class RecordingUploader {
         await markNotUploaded(r.id, answer.missing);
         assembling.delete(r.id);
       } else if (answer.status === "ready") {
+        const done = { takeId: r.upload!.takeId, kind: r.upload!.kind };
+        if (!this.snapshot.completed.some((c) => c.takeId === done.takeId && c.kind === done.kind)) {
+          this.update({ completed: [...this.snapshot.completed, done] });
+        }
         await deleteRecording(r.id);
         this.registered.delete(r.id);
         this.urls.delete(r.id);

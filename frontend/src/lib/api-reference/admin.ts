@@ -1442,6 +1442,24 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         ],
       },
       {
+        method: "GET",
+        path: "/api/record/tracks/{takeId}/{kind}/file",
+        summary: "Downloads one finished stream of the caller's own take.",
+        access: "signedIn",
+        token: true,
+        notes:
+          "What the recorder page offers once an upload is complete, so whoever recorded it keeps a copy. Served as an attachment named after who recorded it, when, and the stream: a 302 to a signed URL where recordings are kept in Cloud Storage, or the bytes from disk.",
+        params: [
+          { name: "takeId", type: "string", required: true },
+          { name: "kind", type: `"camera" | "screen"`, required: true },
+        ],
+        returns: "302 to the file in the bucket; or the video as video/mp4 or video/webm",
+        errors: [
+          { status: 404, error: "not_found", when: "no such stream of the caller's, or it is not ready yet" },
+          { status: 503, error: "signing_failed", when: "the download URL could not be signed; the reason is in the app's log" },
+        ],
+      },
+      {
         method: "POST",
         path: "/api/record/tracks/{takeId}/{kind}/finish",
         summary: "Says a stream has ended, and starts joining its file once every chunk is in.",

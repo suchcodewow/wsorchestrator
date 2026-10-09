@@ -60,7 +60,7 @@ import { cn } from "@/lib/utils";
  */
 const LOW_SPACE_BYTES = 4 * 1024 * 1024 * 1024;
 
-const EMPTY: UploadSnapshot = { loaded: false, streams: [], retrying: null, online: true, gone: false };
+const EMPTY: UploadSnapshot = { loaded: false, streams: [], completed: [], retrying: null, online: true, gone: false };
 
 /** The uploader for this link, running for as long as the page is open. */
 function useUploads(ownerId: string) {
@@ -466,11 +466,17 @@ function UploadStatus({ snapshot, recording, finishedTakes }: { snapshot: Upload
   if (streams.length === 0) {
     if (finishedTakes === 0 || recording) return null;
     return (
-      <Banner tone="pass" icon={<CheckCircle2 />}>
-        <span className="font-medium">Upload complete.</span>{" "}
-        {finishedTakes === 1 ? "Your recording has" : `All ${finishedTakes} takes have`} been received. You can close this
-        window, or record another take.
-      </Banner>
+      <motion.div variants={riseChild} className="divide-y overflow-hidden rounded-2xl border bg-card text-sm shadow-sm">
+        <div className="flex items-start gap-3 px-5 py-4 [&>svg]:mt-0.5 [&>svg]:size-4 [&>svg]:shrink-0 [&>svg]:text-emerald-600 dark:[&>svg]:text-emerald-500">
+          <CheckCircle2 />
+          <p>
+            <span className="font-medium">Upload complete.</span>{" "}
+            {finishedTakes === 1 ? "Your recording has" : `All ${finishedTakes} takes have`} been received. Download a copy for
+            yourself below, then close this window or record another take.
+          </p>
+        </div>
+        <CompletedDownloads completed={snapshot.completed} />
+      </motion.div>
     );
   }
 
@@ -514,6 +520,35 @@ function UploadStatus({ snapshot, recording, finishedTakes }: { snapshot: Upload
         <StreamRow key={s.recordingId} stream={s} />
       ))}
     </motion.div>
+  );
+}
+
+/**
+ * A download for each stream uploaded while the page was open, a take to a
+ * row, from the server: each is its own click, so Chrome never asks about
+ * downloading several files at once.
+ */
+function CompletedDownloads({ completed }: { completed: UploadSnapshot["completed"] }) {
+  const takes = [...new Set(completed.map((c) => c.takeId))];
+  if (takes.length === 0) return null;
+  return (
+    <>
+      {takes.map((takeId, i) => (
+        <div key={takeId} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3">
+          <span className="w-20 font-medium">{takes.length > 1 ? `Take ${i + 1}` : "Your files"}</span>
+          {(["camera", "screen"] as const)
+            .filter((kind) => completed.some((c) => c.takeId === takeId && c.kind === kind))
+            .map((kind) => (
+              <Button key={kind} variant="outline" size="sm" asChild>
+                <a href={`/api/record/tracks/${takeId}/${kind}/file`} download>
+                  <Download />
+                  Download {kind}
+                </a>
+              </Button>
+            ))}
+        </div>
+      ))}
+    </>
   );
 }
 

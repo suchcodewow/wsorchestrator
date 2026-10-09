@@ -667,6 +667,7 @@ const ROUTES: RouteCase[] = [
   { method: "PUT", path: `/api/record/tracks/${MISSING}/camera/chunks/0`, allowed: true },
   { method: "POST", path: `/api/record/tracks/${MISSING}/camera/upload-urls`, allowed: true, body: () => ({}) },
   { method: "POST", path: `/api/record/tracks/${MISSING}/camera/finish`, allowed: true, body: () => ({}) },
+  { method: "GET", path: `/api/record/tracks/${MISSING}/camera/file`, allowed: true },
 
   // eVals
   { method: "GET", path: "/api/evals/bootcamp-history", allowed: canUseEvals },
