@@ -12,12 +12,20 @@
  *
  * IndexedDB belongs to the site, not the account, so every recording carries
  * its owner and is only ever listed for them.
+ *
+ * A recording with an `upload` target is one stream of an async recording
+ * take, and is sent to the server a chunk at a time by
+ * `lib/recording/uploader.ts`. Which chunks have landed is kept beside the
+ * chunks, so a reload or a crash resumes the upload where it stopped; once
+ * the server has the whole stream, the recording is deleted from here.
  */
 
 const DB_NAME = "workshop-orchestrator-recordings";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const RECORDINGS = "recordings";
 const CHUNKS = "chunks";
+/** Since version 2: `[recordingId, seq]` of each chunk the server has confirmed. */
+const UPLOADED = "uploaded";
 
 /** Several chunk intervals: long enough that a busy tab is not mistaken for a dead one. */
 const STALE_MS = 10_000;
@@ -39,6 +47,18 @@ export type StoredRecording = {
   bytes: number;
   chunks: number;
   status: RecordingStatus;
+  /** Where an async recording's stream goes; absent for a recording kept only here. */
+  upload?: UploadTarget;
+};
+
+export type UploadTarget = {
+  linkId: string;
+  takeId: string;
+  kind: "camera" | "screen";
+  /** When this stream started after the take's first one. */
+  offsetMs: number;
+  /** The name the person recording gave; absent on a take recorded before the page asked. */
+  contributor?: string;
 };
 
 type StoredChunk = { recordingId: string; seq: number; data: ArrayBuffer };
@@ -58,13 +78,18 @@ let opening: Promise<IDBDatabase> | null = null;
 function open(): Promise<IDBDatabase> {
   opening ??= new Promise<IDBDatabase>((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
-    req.onupgradeneeded = () => {
+    req.onupgradeneeded = (event) => {
       const db = req.result;
-      const recordings = db.createObjectStore(RECORDINGS, { keyPath: "id" });
-      recordings.createIndex("owner_subject", ["ownerId", "subject"]);
-      recordings.createIndex("owner", "ownerId");
-      const chunks = db.createObjectStore(CHUNKS, { keyPath: ["recordingId", "seq"] });
-      chunks.createIndex("recording", "recordingId");
+      if (event.oldVersion < 1) {
+        const recordings = db.createObjectStore(RECORDINGS, { keyPath: "id" });
+        recordings.createIndex("owner_subject", ["ownerId", "subject"]);
+        recordings.createIndex("owner", "ownerId");
+        const chunks = db.createObjectStore(CHUNKS, { keyPath: ["recordingId", "seq"] });
+        chunks.createIndex("recording", "recordingId");
+      }
+      if (event.oldVersion < 2) {
+        db.createObjectStore(UPLOADED, { keyPath: ["recordingId", "seq"] });
+      }
     };
     req.onsuccess = () => {
       const db = req.result;
@@ -104,7 +129,7 @@ function result<T>(req: IDBRequest<T>): Promise<T> {
 
 /** Files a new, empty recording, before its first chunk arrives. */
 export async function createRecording(
-  fields: Pick<StoredRecording, "ownerId" | "subject" | "label" | "mimeType">,
+  fields: Pick<StoredRecording, "ownerId" | "subject" | "label" | "mimeType" | "upload">,
 ): Promise<StoredRecording> {
   const now = Date.now();
   const recording: StoredRecording = {
@@ -210,9 +235,54 @@ export async function readRecording(id: string): Promise<Blob | null> {
 
 export async function deleteRecording(id: string): Promise<void> {
   const db = await open();
-  const tx = db.transaction([RECORDINGS, CHUNKS], "readwrite");
+  const tx = db.transaction([RECORDINGS, CHUNKS, UPLOADED], "readwrite");
   tx.objectStore(RECORDINGS).delete(id);
-  tx.objectStore(CHUNKS).delete(IDBKeyRange.bound([id, 0], [id, Number.MAX_SAFE_INTEGER]));
+  tx.objectStore(CHUNKS).delete(chunkRange(id));
+  tx.objectStore(UPLOADED).delete(chunkRange(id));
+  await done(tx);
+}
+
+const chunkRange = (id: string) => IDBKeyRange.bound([id, 0], [id, Number.MAX_SAFE_INTEGER]);
+
+const seqsOf = (keys: IDBValidKey[]) => keys.map((k) => (k as [string, number])[1]);
+
+/** `ownerId`'s recordings that are going to the server, oldest first, whether still recording or not. */
+export async function listUploads(ownerId: string): Promise<StoredRecording[]> {
+  const rows = await listRecordings(ownerId);
+  return rows.filter((r) => r.upload).reverse();
+}
+
+/** Which chunks of a recording are kept here, and which of them the server has. */
+export async function uploadProgress(id: string): Promise<{ kept: number[]; uploaded: Set<number> }> {
+  const db = await open();
+  const tx = db.transaction([CHUNKS, UPLOADED], "readonly");
+  const [kept, uploaded] = await Promise.all([
+    result(tx.objectStore(CHUNKS).getAllKeys(chunkRange(id))),
+    result(tx.objectStore(UPLOADED).getAllKeys(chunkRange(id))),
+  ]);
+  return { kept: seqsOf(kept), uploaded: new Set(seqsOf(uploaded)) };
+}
+
+/** One chunk's bytes, or null if it is not kept. */
+export async function readChunk(id: string, seq: number): Promise<ArrayBuffer | null> {
+  const db = await open();
+  const tx = db.transaction(CHUNKS, "readonly");
+  const chunk = (await result(tx.objectStore(CHUNKS).get([id, seq]))) as StoredChunk | undefined;
+  return chunk?.data ?? null;
+}
+
+export async function markUploaded(id: string, seq: number): Promise<void> {
+  const db = await open();
+  const tx = db.transaction(UPLOADED, "readwrite");
+  tx.objectStore(UPLOADED).put({ recordingId: id, seq });
+  await done(tx);
+}
+
+/** Forgets that the server had these chunks, for when it says it does not: they are sent again. */
+export async function markNotUploaded(id: string, seqs: number[]): Promise<void> {
+  const db = await open();
+  const tx = db.transaction(UPLOADED, "readwrite");
+  for (const seq of seqs) tx.objectStore(UPLOADED).delete([id, seq]);
   await done(tx);
 }
 

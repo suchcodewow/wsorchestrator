@@ -69,3 +69,6 @@ crash.*.log
 
 # Mimir content converted from the Learning Hub; private, never committed
 mimir-content*.json
+
+# async recordings kept on local disk in development (RECORDINGS_DIR)
+/frontend/.recordings/

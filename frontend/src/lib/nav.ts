@@ -24,6 +24,7 @@ import {
   UserCog,
   Users,
   UsersRound,
+  Video,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -159,6 +160,18 @@ export const NAV_SECTIONS: NavSection[] = [
         Icon: LibraryBig,
         description: "The library's content and the coach's settings.",
         visible: canManageMimir,
+      },
+    ],
+  },
+  {
+    heading: "Enablement Tools",
+    items: [
+      {
+        href: "/recordings",
+        label: "Async Recordings",
+        Icon: Video,
+        description: "One link anyone can use to record their camera, and their screen, as separate files.",
+        visible: canUseTraining,
       },
     ],
   },

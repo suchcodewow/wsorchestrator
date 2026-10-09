@@ -528,3 +528,9 @@ variable "backup_reader_members" {
   type        = list(string)
   default     = []
 }
+
+variable "recordings_retention_days" {
+  description = "Days an async recording is kept before the recordings bucket deletes it. Must match RECORDING_RETENTION_DAYS in frontend/src/lib/recording/video.ts, which deletes the app's record of it on the same schedule."
+  type        = number
+  default     = 90
+}
