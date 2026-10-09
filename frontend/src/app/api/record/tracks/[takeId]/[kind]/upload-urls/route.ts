@@ -6,18 +6,21 @@
  */
 
 import { NextResponse } from "next/server";
+import { requireUser } from "@/lib/api-auth";
 import { audited, noteAudit } from "@/lib/audit";
 import { acceptsChunks, findTrack, uploadMode, uploadUrls, uploadUrlsSchema } from "@/lib/recording/recordings";
 
-type Params = { params: Promise<{ id: string; takeId: string; kind: string }> };
+type Params = { params: Promise<{ takeId: string; kind: string }> };
 
 export const POST = audited(async function POST(req: Request, { params }: Params) {
-  const { id, takeId, kind } = await params;
+  const { error, user } = await requireUser(req);
+  if (error) return error;
+  const { takeId, kind } = await params;
   if (uploadMode() !== "direct") return NextResponse.json({ error: "app_upload" }, { status: 409 });
   const parsed = uploadUrlsSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "invalid" }, { status: 400 });
 
-  const track = await findTrack(id, takeId, kind);
+  const track = await findTrack(user.id, takeId, kind);
   if (!track) return NextResponse.json({ error: "not_found" }, { status: 404 });
   noteAudit({ target: track.id, targetLabel: `${track.kind} chunks ${Math.min(...parsed.data.seqs)}–${Math.max(...parsed.data.seqs)}` });
   if (!acceptsChunks(track)) return NextResponse.json({ error: "finished" }, { status: 409 });

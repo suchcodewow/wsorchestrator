@@ -1,8 +1,7 @@
 "use client";
 
 /**
- * The recording link, to copy and share, and every take that has come back
- * through it: who recorded it, when, how long, whether it has the screen, and
+ * The recording link, to copy and share, and every take recorded there: who recorded it, when, how long, whether it has the screen, and
  * where its upload stands. A row opens the take. While anything is still
  * uploading the page refreshes itself.
  */
@@ -11,7 +10,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Check, Copy, ExternalLink, Loader2, Plus, RefreshCw } from "lucide-react";
+import { Check, Copy, ExternalLink } from "lucide-react";
 import { HEADER_ROW, LINK_ROW, Pager, PlainHeader, SortHeader, TableSearch, useRowLink } from "@/components/data-table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,23 +19,13 @@ import { riseChild, staggerParent } from "@/lib/motion";
 import type { ListQuery, Page } from "@/lib/paging";
 import { formatBytes, formatDuration } from "@/lib/recording/format";
 import { RECORDING_RETENTION_DAYS } from "@/lib/recording/video";
-import type { RecordingLink, RecordingTakeRow } from "@/lib/recording/recordings";
+import type { RecordingTakeRow } from "@/lib/recording/recordings";
 import { formatWhen } from "./format";
 import { TakeStatus } from "./take-status";
 
 const REFRESH_MS = 5_000;
 
-export function RecordingsView({
-  query,
-  page,
-  link,
-  canManage,
-}: {
-  query: ListQuery<RecordingSort>;
-  page: Page<RecordingTakeRow>;
-  link: RecordingLink | null;
-  canManage: boolean;
-}) {
+export function RecordingsView({ query, page }: { query: ListQuery<RecordingSort>; page: Page<RecordingTakeRow> }) {
   const router = useRouter();
   const rowLink = useRowLink();
   const sortProps = { sort: query.sort, dir: query.dir };
@@ -54,7 +43,7 @@ export function RecordingsView({
         Async Recordings
       </motion.h1>
 
-      <LinkCard link={link} canManage={canManage} />
+      <LinkCard />
 
       <motion.div variants={riseChild}>
         <TableSearch value={query.q} placeholder="Search by who recorded it" label="Search recordings" className="max-w-md" />
@@ -121,20 +110,17 @@ export function RecordingsView({
   );
 }
 
-/** The one link everyone records through: copy it, open it, or, for an administrator, replace it. */
-function LinkCard({ link, canManage }: { link: RecordingLink | null; canManage: boolean }) {
-  const router = useRouter();
+/** The one address everyone records at, to copy and share: anyone in the org, once signed in. */
+function LinkCard() {
   const [origin, setOrigin] = useState("");
   const [copied, setCopied] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- the address the link is shared from is only known in the browser
     setOrigin(window.location.origin);
   }, []);
 
-  const url = link ? `${origin}/record/${link.id}` : "";
+  const url = `${origin}/record`;
 
   async function copy() {
     await navigator.clipboard.writeText(url).catch(() => null);
@@ -142,81 +128,32 @@ function LinkCard({ link, canManage }: { link: RecordingLink | null; canManage: 
     setTimeout(() => setCopied(false), 2_000);
   }
 
-  async function replace() {
-    if (
-      link &&
-      !window.confirm(
-        "Replace the recording link? The current link stops accepting new recordings straight away. Anything already uploading on it still finishes.",
-      )
-    ) {
-      return;
-    }
-    setBusy(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/recordings/link", { method: "POST" });
-      if (!res.ok) return setError(`Could not make a new link (${res.status}).`);
-      router.refresh();
-    } catch {
-      setError("Could not reach the server.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
   return (
     <motion.div variants={riseChild} className="space-y-3 rounded-2xl border bg-card px-5 py-4 text-sm shadow-sm">
       <h2 className="text-base font-medium">Recording link</h2>
-      {link ? (
-        <>
-          <div className="flex flex-wrap gap-2">
-            <Input
-              aria-label="Recording link"
-              readOnly
-              value={url}
-              onFocus={(e) => e.target.select()}
-              className="min-w-64 flex-1 font-mono text-xs"
-            />
-            <Button variant="brand" onClick={() => void copy()} disabled={!origin}>
-              {copied ? <Check /> : <Copy />}
-              {copied ? "Copied" : "Copy"}
-            </Button>
-            <Button variant="outline" asChild>
-              <a href={`/record/${link.id}`} target="_blank" rel="noreferrer">
-                <ExternalLink />
-                Open
-              </a>
-            </Button>
-          </div>
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-muted-foreground" suppressHydrationWarning>
-              In use since {formatWhen(link.createdAt)}. Anyone with it can record, without an account. Recordings are
-              deleted {RECORDING_RETENTION_DAYS} days after they&apos;re made.
-            </p>
-            {canManage && (
-              <Button variant="ghost" size="sm" disabled={busy} onClick={() => void replace()}>
-                {busy ? <Loader2 className="animate-spin" /> : <RefreshCw />}
-                Replace link
-              </Button>
-            )}
-          </div>
-        </>
-      ) : canManage ? (
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-muted-foreground">There is no recording link yet.</p>
-          <Button variant="brand" disabled={busy} onClick={() => void replace()}>
-            {busy ? <Loader2 className="animate-spin" /> : <Plus />}
-            Create link
-          </Button>
-        </div>
-      ) : (
-        <p className="text-muted-foreground">There is no recording link yet. A Training administrator can create one.</p>
-      )}
-      {error && (
-        <p role="alert" className="text-destructive">
-          {error}
-        </p>
-      )}
+      <div className="flex flex-wrap gap-2">
+        <Input
+          aria-label="Recording link"
+          readOnly
+          value={url}
+          onFocus={(e) => e.target.select()}
+          className="min-w-64 flex-1 font-mono text-xs"
+        />
+        <Button variant="brand" onClick={() => void copy()} disabled={!origin}>
+          {copied ? <Check /> : <Copy />}
+          {copied ? "Copied" : "Copy"}
+        </Button>
+        <Button variant="outline" asChild>
+          <a href="/record" target="_blank" rel="noreferrer">
+            <ExternalLink />
+            Open
+          </a>
+        </Button>
+      </div>
+      <p className="text-muted-foreground">
+        Anyone in the org can record there once they sign in with Google; they need no role here.{" "}
+        {`Recordings are deleted ${RECORDING_RETENTION_DAYS} days after they're made.`}
+      </p>
     </motion.div>
   );
 }

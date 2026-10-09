@@ -58,11 +58,18 @@ export type UploadSnapshot = {
   /** The last attempt failed and the next is waiting; why, in a few words. */
   retrying: string | null;
   online: boolean;
-  /** The link was removed: nothing more can be sent. */
+  /** The take is another account's, or was deleted: nothing more can be sent. */
   gone: boolean;
 };
 
+/** The take is not this account's to upload, or no longer exists: nothing more can be sent. */
 class Gone extends Error {}
+
+/** A refused request, said so a participant knows what to do: signed out is the one they can fix. */
+function answered(res: Response): Error {
+  if (res.status === 401) return new Error("you're signed out, so reload this page and sign in again");
+  return new Error(`the server answered ${res.status}`);
+}
 
 export class RecordingUploader {
   private stopped = false;
@@ -82,7 +89,6 @@ export class RecordingUploader {
   private snapshot: UploadSnapshot = { loaded: false, streams: [], retrying: null, online: true, gone: false };
 
   constructor(
-    private readonly linkId: string,
     private readonly ownerId: string,
     private readonly onChange: (snapshot: UploadSnapshot) => void,
   ) {}
@@ -160,7 +166,7 @@ export class RecordingUploader {
   }
 
   private async load() {
-    const recordings = (await listUploads(this.ownerId)).filter((r) => r.upload!.linkId === this.linkId);
+    const recordings = await listUploads(this.ownerId);
     const progress = new Map(await Promise.all(recordings.map(async (r) => [r.id, await uploadProgress(r.id)] as const)));
     return { recordings, progress };
   }
@@ -257,12 +263,12 @@ export class RecordingUploader {
   }
 
   private base(r: StoredRecording) {
-    return `/api/record/${this.linkId}/tracks/${r.upload!.takeId}/${r.upload!.kind}`;
+    return `/api/record/tracks/${r.upload!.takeId}/${r.upload!.kind}`;
   }
 
   private async register(r: StoredRecording, again = false) {
     if (this.registered.has(r.id) && !again) return;
-    const res = await fetch(`/api/record/${this.linkId}/tracks`, {
+    const res = await fetch(`/api/record/tracks`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -275,8 +281,9 @@ export class RecordingUploader {
       }),
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
-    if (res.status === 404) throw new Gone();
-    if (!res.ok) throw new Error(`the server answered ${res.status}`);
+    // 403: the take is another account's — recorded here by someone else, now signed in as someone new.
+    if (res.status === 403) throw new Gone();
+    if (!res.ok) throw answered(res);
     const body = (await res.json().catch(() => ({}))) as { upload?: "direct" | "app" };
     this.registered.set(r.id, body.upload === "direct" ? "direct" : "app");
   }
@@ -312,7 +319,7 @@ export class RecordingUploader {
         this.finished.add(r.id);
         return;
       }
-      if (!res.ok) throw new Error(`the server answered ${res.status}`);
+      if (!res.ok) throw answered(res);
       const { urls } = (await res.json()) as { urls: Record<string, string> };
       // Signed for an hour; used well inside it, so a slow chunk never starts on a URL about to lapse.
       const until = Date.now() + URL_REUSE_MS;
@@ -361,7 +368,7 @@ export class RecordingUploader {
         throw new Error("the server lost track of the recording");
       }
       // 409: the file is already joined, so the server has this chunk.
-      if (!res.ok && res.status !== 409) throw new Error(`the server answered ${res.status}`);
+      if (!res.ok && res.status !== 409) throw answered(res);
     }
     await markUploaded(r.id, seq);
   }
@@ -377,7 +384,7 @@ export class RecordingUploader {
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
     if (res.status === 404) throw new Gone();
-    if (!res.ok) throw new Error(`the server answered ${res.status}`);
+    if (!res.ok) throw answered(res);
     return res.json();
   }
 }

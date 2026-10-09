@@ -6,15 +6,18 @@
  */
 
 import { NextResponse } from "next/server";
+import { requireUser } from "@/lib/api-auth";
 import { RECORDING_LIMITS } from "@/db/schema";
 import { audited, noteAudit } from "@/lib/audit";
 import { acceptsChunks, findTrack, noteChunk, uploadMode } from "@/lib/recording/recordings";
 import { putChunk } from "@/lib/recording/storage";
 
-type Params = { params: Promise<{ id: string; takeId: string; kind: string; seq: string }> };
+type Params = { params: Promise<{ takeId: string; kind: string; seq: string }> };
 
 export const PUT = audited(async function PUT(req: Request, { params }: Params) {
-  const { id, takeId, kind, seq: rawSeq } = await params;
+  const { error, user } = await requireUser(req);
+  if (error) return error;
+  const { takeId, kind, seq: rawSeq } = await params;
   if (uploadMode() === "direct") return NextResponse.json({ error: "direct_upload" }, { status: 409 });
   const seq = Number(rawSeq);
   if (!/^\d+$/.test(rawSeq) || seq >= RECORDING_LIMITS.chunks) {
@@ -25,7 +28,7 @@ export const PUT = audited(async function PUT(req: Request, { params }: Params) 
     return NextResponse.json({ error: "too_large" }, { status: 413 });
   }
 
-  const track = await findTrack(id, takeId, kind);
+  const track = await findTrack(user.id, takeId, kind);
   if (!track) return NextResponse.json({ error: "not_found" }, { status: 404 });
   noteAudit({ target: track.id, targetLabel: `${track.kind} chunk ${seq}` });
   if (!acceptsChunks(track)) return NextResponse.json({ error: "finished" }, { status: 409 });

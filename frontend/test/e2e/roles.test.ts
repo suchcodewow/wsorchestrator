@@ -227,7 +227,7 @@ const PAGES: Record<string, PageCase> = {
     expect: gated(canUseTraining),
   },
   "/logistics/food-orders": { path: () => "/logistics/food-orders?q=x&sort=vendor", expect: gated(canUseTraining) },
-  "/recordings": { path: () => "/recordings?q=x&sort=contributor", expect: gated(canUseTraining) },
+  "/recordings": { path: () => "/recordings?q=x&sort=contributor", expect: gated(canManageTrainingSettings) },
   "/recordings/<unknown>": { path: () => `/recordings/${MISSING}`, expect: () => 404 },
   "/logistics/food-orders/print": { path: () => "/logistics/food-orders/print", expect: gated(canUseTraining) },
   "/logistics/food-orders/print?<unknown>": { path: () => `/logistics/food-orders/print?id=${MISSING}`, expect: () => 404 },
@@ -421,7 +421,8 @@ const PAGES: Record<string, PageCase> = {
   "/inbox": { path: () => "/inbox", expect: () => 200 },
   "/labs": { path: () => "/labs", expect: () => 200, signedOut: 200 },
   "/intake": { path: () => "/intake", expect: () => 200, signedOut: 200 },
-  "/record/<unknown>": { path: () => `/record/${MISSING}`, expect: () => 404, signedOut: 404 },
+  // Anyone in the org records, signed in but with no role; signed out, they are sent to sign in.
+  "/record": { path: () => "/record", expect: () => 200 },
   "/api": { path: () => "/api", expect: () => 200, signedOut: 200 },
   "/labs/new": {
     path: () => "/labs/new",
@@ -657,18 +658,15 @@ const ROUTES: RouteCase[] = [
   { method: "GET", path: "/api/intake", allowed: "public" },
   { method: "POST", path: "/api/intake", allowed: "public", body: () => ({}) },
 
-  // Recordings
-  { method: "GET", path: "/api/recordings/link", allowed: canUseTraining },
-  { method: "POST", path: "/api/recordings/link", allowed: canManageTrainingSettings, denyOnly: true },
-  { method: "GET", path: "/api/recordings", allowed: canUseTraining },
-  { method: "GET", path: `/api/recordings/${MISSING}`, allowed: canUseTraining },
+  // Recordings: the recorder is any signed-in account's; everything else a Training Administrator's
+  { method: "GET", path: "/api/recordings", allowed: canManageTrainingSettings },
+  { method: "GET", path: `/api/recordings/${MISSING}`, allowed: canManageTrainingSettings },
   { method: "DELETE", path: `/api/recordings/${MISSING}`, allowed: canManageTrainingSettings },
-  { method: "GET", path: `/api/recordings/${MISSING}/camera/file`, allowed: canUseTraining },
-  { method: "GET", path: `/api/record/${MISSING}`, allowed: "public" },
-  { method: "POST", path: `/api/record/${MISSING}/tracks`, allowed: "public", body: () => ({}) },
-  { method: "PUT", path: `/api/record/${MISSING}/tracks/${MISSING}/camera/chunks/0`, allowed: "public" },
-  { method: "POST", path: `/api/record/${MISSING}/tracks/${MISSING}/camera/upload-urls`, allowed: "public", body: () => ({}) },
-  { method: "POST", path: `/api/record/${MISSING}/tracks/${MISSING}/camera/finish`, allowed: "public", body: () => ({}) },
+  { method: "GET", path: `/api/recordings/${MISSING}/camera/file`, allowed: canManageTrainingSettings },
+  { method: "POST", path: "/api/record/tracks", allowed: true, body: () => ({}) },
+  { method: "PUT", path: `/api/record/tracks/${MISSING}/camera/chunks/0`, allowed: true },
+  { method: "POST", path: `/api/record/tracks/${MISSING}/camera/upload-urls`, allowed: true, body: () => ({}) },
+  { method: "POST", path: `/api/record/tracks/${MISSING}/camera/finish`, allowed: true, body: () => ({}) },
 
   // eVals
   { method: "GET", path: "/api/evals/bootcamp-history", allowed: canUseEvals },

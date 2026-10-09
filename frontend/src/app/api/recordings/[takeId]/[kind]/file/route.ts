@@ -8,7 +8,7 @@ import { NextResponse } from "next/server";
 import { requireCaller } from "@/lib/api-auth";
 import { openRecordingFile } from "@/lib/recording/recordings";
 import { videoContentType } from "@/lib/recording/video";
-import { canUseTraining } from "@/lib/roles";
+import { canManageTrainingSettings } from "@/lib/roles";
 
 /** `bytes=start-end`, `bytes=start-` or `bytes=-suffix`, clamped to the file; null for anything else. */
 function parseRange(header: string | null, size: number): { start: number; end: number } | null {
@@ -20,7 +20,7 @@ function parseRange(header: string | null, size: number): { start: number; end: 
 }
 
 export async function GET(req: Request, { params }: { params: Promise<{ takeId: string; kind: string }> }) {
-  const { error } = await requireCaller(req, canUseTraining);
+  const { error } = await requireCaller(req, canManageTrainingSettings);
   if (error) return error;
 
   const { takeId, kind } = await params;

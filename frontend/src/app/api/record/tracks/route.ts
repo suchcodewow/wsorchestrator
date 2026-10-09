@@ -5,6 +5,7 @@
  */
 
 import { after, NextResponse } from "next/server";
+import { requireUser } from "@/lib/api-auth";
 import { SYSTEM_ACTORS, audited, noteAudit, recordAudit } from "@/lib/audit";
 import { purgeExpiredTakes, registerTrack, registerTrackSchema, uploadMode } from "@/lib/recording/recordings";
 import { RECORDING_RETENTION_DAYS } from "@/lib/recording/video";
@@ -25,13 +26,14 @@ async function purge() {
   }
 }
 
-export const POST = audited(async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
+export const POST = audited(async function POST(req: Request) {
+  const { error, user } = await requireUser(req);
+  if (error) return error;
   const parsed = registerTrackSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "invalid" }, { status: 400 });
 
-  const track = await registerTrack(id, parsed.data);
-  if (!track) return NextResponse.json({ error: "not_found" }, { status: 404 });
+  const track = await registerTrack(user.id, parsed.data);
+  if (!track) return NextResponse.json({ error: "not_yours" }, { status: 403 });
   noteAudit({ target: track.id, targetLabel: `${track.kind} of take ${track.takeId}` });
   // Keeping to the retention window rides on new recordings arriving, so it needs no scheduler.
   after(() => purge().catch((err) => console.error("recording: purge failed", err)));

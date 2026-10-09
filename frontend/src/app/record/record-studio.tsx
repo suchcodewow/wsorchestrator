@@ -1,9 +1,9 @@
 "use client";
 
 /**
- * Where someone records for the training team, from a link and with no
- * account: their camera and microphone, and their screen if they want to
- * show one, each as its own file, under the name they give.
+ * Where someone in the org records for the training team, signed in with
+ * Google but needing no role: their camera and microphone, and their screen
+ * if they want to show one, each as its own file, under the name they give.
  *
  * Everything is recorded here, in the browser, at full quality, and kept on
  * this computer as it records; the upload runs alongside and catches up on its
@@ -63,29 +63,30 @@ const LOW_SPACE_BYTES = 4 * 1024 * 1024 * 1024;
 const EMPTY: UploadSnapshot = { loaded: false, streams: [], retrying: null, online: true, gone: false };
 
 /** The uploader for this link, running for as long as the page is open. */
-function useUploads(linkId: string, ownerId: string) {
+function useUploads(ownerId: string) {
   const [snapshot, setSnapshot] = useState<UploadSnapshot>(EMPTY);
   const uploader = useRef<RecordingUploader | null>(null);
 
   useEffect(() => {
     if (!canRecordVideoHere()) return;
-    const u = new RecordingUploader(linkId, ownerId, setSnapshot);
+    const u = new RecordingUploader(ownerId, setSnapshot);
     uploader.current = u;
     const stop = u.start();
     return () => {
       stop();
       uploader.current = null;
     };
-  }, [linkId, ownerId]);
+  }, [ownerId]);
 
   const poke = useCallback(() => uploader.current?.poke(), []);
   return { snapshot, poke };
 }
 
-export function RecordStudio({ linkId }: { linkId: string }) {
-  const ownerId = `record:${linkId}`;
-  const { snapshot, poke } = useUploads(linkId, ownerId);
-  const take = useTakeRecorder({ linkId: linkId, ownerId, onChunk: poke });
+export function RecordStudio({ userId, accountName }: { userId: string; accountName: string }) {
+  // This browser's recordings are filed per account, so a shared computer keeps each person's apart.
+  const ownerId = `record:${userId}`;
+  const { snapshot, poke } = useUploads(ownerId);
+  const take = useTakeRecorder({ ownerId, onChunk: poke });
 
   const [supported, setSupported] = useState<boolean | null>(null);
   const [lowSpace, setLowSpace] = useState<number | null>(null);
@@ -106,12 +107,12 @@ export function RecordStudio({ linkId }: { linkId: string }) {
     const ok = canRecordVideoHere() && pickVideoMimeType((t) => MediaRecorder.isTypeSupported(t), true) !== null;
     // eslint-disable-next-line react-hooks/set-state-in-effect -- what the browser supports, and what it remembers, is only known here
     setSupported(ok);
-    setName(savedContributor() ?? "");
+    setName(accountName || savedContributor() || "");
     if (!ok) return;
     void storageStatus().then((s) => {
       if (s.quota !== null && s.usage !== null && s.quota - s.usage < LOW_SPACE_BYTES) setLowSpace(s.quota - s.usage);
     });
-  }, []);
+  }, [accountName]);
 
   const turnOnCamera = useCallback(async (cam: string | null, mic: string | null) => {
     setOpening(true);
@@ -218,7 +219,8 @@ export function RecordStudio({ linkId }: { linkId: string }) {
     <Page>
       {snapshot.gone && (
         <Banner tone="fail" icon={<AlertTriangle />}>
-          This recording link has been replaced, so it can&apos;t take new recordings. Ask whoever sent it for the new one.
+          This recording belongs to another account, so it can&apos;t be uploaded from this one. Sign in as whoever
+          recorded it.
         </Banner>
       )}
       {resuming && (
@@ -239,6 +241,8 @@ export function RecordStudio({ linkId }: { linkId: string }) {
         <div className="divide-y">
           <Section title="Your name">
             <Input
+              id="recording-name"
+              name="name"
               aria-label="Your name"
               placeholder="First and last name"
               autoComplete="name"
@@ -367,8 +371,8 @@ function Page({ children }: { children: ReactNode }) {
         <Instruction n={2}>Press Start recording, and Stop when you&apos;re done. You can record more than one take.</Instruction>
         <Instruction n={3}>
           <span className="font-medium">Keep this window open until the upload says it&apos;s complete.</span> Your
-          recording is saved on this computer as you go. If the window closes early, open this same link again in the same
-          browser to finish the upload.
+          recording is saved on this computer as you go. If the window closes early, open this page again in the same
+          browser, signed in as the same person, to finish the upload.
         </Instruction>
         <li className="pl-8 text-muted-foreground">Use Chrome or Edge on a computer, in a normal window rather than a private or incognito one.</li>
       </motion.ul>

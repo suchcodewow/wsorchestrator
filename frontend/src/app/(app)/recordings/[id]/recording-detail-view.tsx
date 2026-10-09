@@ -21,7 +21,7 @@ import { TakeStatus } from "../take-status";
 
 const REFRESH_MS = 5_000;
 
-export function RecordingDetailView({ take, canManage }: { take: RecordingTake; canManage: boolean }) {
+export function RecordingDetailView({ take }: { take: RecordingTake }) {
   const router = useRouter();
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -72,18 +72,16 @@ export function RecordingDetailView({ take, canManage }: { take: RecordingTake; 
                 .join(" · ")}
             </p>
           </div>
-          {canManage && (
-            <Button
-              variant="ghost"
-              size="sm"
-              disabled={deleting}
-              className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-              onClick={() => void remove()}
-            >
-              {deleting ? <Loader2 className="animate-spin" /> : <Trash2 />}
-              Delete
-            </Button>
-          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={deleting}
+            className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+            onClick={() => void remove()}
+          >
+            {deleting ? <Loader2 className="animate-spin" /> : <Trash2 />}
+            Delete
+          </Button>
         </div>
       </motion.div>
 
@@ -155,24 +153,28 @@ function TrackCard({ track }: { track: RecordingTrackRow }) {
 
       {ready && playing ? (
         <video src={file} controls autoPlay className="aspect-video w-full rounded-md bg-black" />
-      ) : (
+      ) : ready ? (
         <button
           type="button"
-          disabled={!ready}
           onClick={() => setPlaying(true)}
-          className="flex aspect-video w-full items-center justify-center rounded-md bg-muted text-muted-foreground enabled:cursor-pointer enabled:hover:text-foreground"
-          aria-label={ready ? `Play the ${track.kind} recording` : undefined}
+          className="group/play relative flex aspect-video w-full cursor-pointer items-center justify-center overflow-hidden rounded-md bg-black"
+          aria-label={`Play the ${track.kind} recording`}
         >
-          {ready ? (
-            <Play className="size-8" />
-          ) : track.status === "failed" ? (
+          <Thumbnail src={file} durationMs={track.durationMs} />
+          <span className="absolute flex size-14 items-center justify-center rounded-full bg-black/55 text-white transition-transform group-hover/play:scale-110">
+            <Play className="ml-0.5 size-6 fill-current" />
+          </span>
+        </button>
+      ) : (
+        <div className="flex aspect-video w-full items-center justify-center rounded-md bg-muted text-muted-foreground">
+          {track.status === "failed" ? (
             <span className="px-4 text-center text-xs text-destructive">{track.error ?? "The file could not be put together."}</span>
           ) : (
             <span className="text-xs" suppressHydrationWarning>
               {track.lastChunkAt ? `Last upload ${formatWhen(track.lastChunkAt)}` : "Waiting for the first upload"}
             </span>
           )}
-        </button>
+        </div>
       )}
 
       <Button variant="outline" size="sm" disabled={!ready} asChild={ready}>
@@ -191,3 +193,27 @@ function TrackCard({ track }: { track: RecordingTrackRow }) {
     </div>
   );
 }
+
+/**
+ * A still of the file, to see who is in it at a glance: the video itself,
+ * paused 5 seconds in (or halfway through a shorter one) and never played.
+ * Only enough of the file to reach that frame is fetched.
+ */
+function Thumbnail({ src, durationMs }: { src: string; durationMs: number | null }) {
+  const at = Math.min(5, (durationMs ?? 10_000) / 2000);
+  return (
+    <video
+      src={src}
+      preload="metadata"
+      muted
+      playsInline
+      tabIndex={-1}
+      aria-hidden
+      onLoadedMetadata={(e) => {
+        e.currentTarget.currentTime = at;
+      }}
+      className="pointer-events-none size-full object-contain"
+    />
+  );
+}
+
