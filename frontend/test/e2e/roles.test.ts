@@ -223,7 +223,7 @@ const PAGES: Record<string, PageCase> = {
   },
   "/logistics/dietary": { path: () => "/logistics/dietary", expect: gated(canUseTraining) },
   "/logistics/guest-judges": {
-    path: () => "/logistics/guest-judges?q=x&sort=sessions&leaders.sort=location&leaders.page=2",
+    path: () => "/logistics/guest-judges?q=x&sort=sessions&leaders.sort=tenure&leaders.group=se&leaders.page=2",
     expect: gated(canUseTraining),
   },
   "/logistics/food-orders": { path: () => "/logistics/food-orders?q=x&sort=vendor", expect: gated(canUseTraining) },
@@ -641,7 +641,7 @@ const ROUTES: RouteCase[] = [
   { method: "GET", path: "/api/logistics/intake-responses?question=dietary&answer=Yes", allowed: canManageTrainingSettings },
   { method: "GET", path: "/api/logistics/dietary", allowed: canUseTraining },
   { method: "GET", path: "/api/logistics/guest-judges?sort=sessions", allowed: canUseTraining },
-  { method: "GET", path: "/api/logistics/guest-judges/prospects?sort=location", allowed: canUseTraining },
+  { method: "GET", path: "/api/logistics/guest-judges/prospects?sort=tenure&group=sales", allowed: canUseTraining },
   { method: "POST", path: "/api/logistics/guest-speakers", allowed: canManageTrainingSettings, body: () => ({}) },
   { method: "DELETE", path: "/api/logistics/guest-speakers?cohort=1999-01-01&person=nobody", allowed: canManageTrainingSettings },
   { method: "POST", path: "/api/logistics/guest-speakers/cohorts", allowed: canManageTrainingSettings, body: () => ({}) },

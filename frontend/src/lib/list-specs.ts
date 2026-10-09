@@ -112,7 +112,7 @@ export const GUEST_JUDGE_LIST = spec(["cohort", "name", "sessions"], "desc");
 export type GuestJudgeSort = (typeof GUEST_JUDGE_LIST.sorts)[number];
 
 /** Sales and sales engineering leaders in HiBob who have never been a guest judge. */
-export const JUDGE_PROSPECT_LIST = spec(["name", "department", "location"]);
+export const JUDGE_PROSPECT_LIST = spec(["name", "department", "location", "tenure"]);
 export type JudgeProspectSort = (typeof JUDGE_PROSPECT_LIST.sorts)[number];
 
 export const SESSION_TYPE_LIST = spec(["position", "name", "kind", "minutes"]);

@@ -10,7 +10,7 @@ import { GUEST_JUDGE_LIST, JUDGE_PROSPECT_LIST } from "@/lib/list-specs";
 import { guestJudgeCounts, listEmptyCohorts, listGuestJudges, listJudgeProspects } from "@/lib/logistics/guest-judges";
 import { parseListQuery } from "@/lib/paging";
 import { canManageTrainingSettings } from "@/lib/roles";
-import { PROSPECTS } from "@/lib/logistics/guest-judge-values";
+import { PROSPECTS, isProspectGroup } from "@/lib/logistics/guest-judge-values";
 import { GuestJudgesView } from "./guest-judges-view";
 
 export default async function GuestJudgesPage({
@@ -21,10 +21,13 @@ export default async function GuestJudgesPage({
   const params = await searchParams;
   const judgeQuery = parseListQuery(params, GUEST_JUDGE_LIST);
   const prospectQuery = parseListQuery(params, JUDGE_PROSPECT_LIST, PROSPECTS);
+  // A hand-typed group that isn't one shows every leader, as a bad sort does.
+  const asked = params[`${PROSPECTS}.group`];
+  const prospectGroup = isProspectGroup(asked) ? asked : null;
   const [session, judges, prospects, counts, { syncedAt }, emptyCohorts] = await Promise.all([
     auth(),
     listGuestJudges(judgeQuery),
-    listJudgeProspects(prospectQuery),
+    listJudgeProspects(prospectQuery, prospectGroup),
     guestJudgeCounts(),
     employeeSummary(),
     listEmptyCohorts(),
@@ -35,6 +38,7 @@ export default async function GuestJudgesPage({
       judges={judges}
       prospectQuery={prospectQuery}
       prospects={prospects}
+      prospectGroup={prospectGroup}
       counts={counts}
       emptyCohorts={emptyCohorts}
       syncedAt={syncedAt?.toISOString() ?? null}

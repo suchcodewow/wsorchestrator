@@ -1421,7 +1421,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         notes:
           "Two sources, side by side. source scheduler is a Scheduler bootcamp's guest judges, with person null: cohort is its first day, and sessions are the bootcamp's sessions with the judge on their staff, in schedule order, role lead on the one they led. source history is the guest speaker history, the cohorts kept outside the Scheduler, as POST /api/logistics/guest-speakers adds them: cohort is the first of the month, person is what DELETE /api/logistics/guest-speakers takes, bootcampId and status are null, sessions have no day or start, and role is teach, commentator, judge or speaker; email is null for someone no longer in HiBob. title is the employee list's now. Rows are always in month order, month being the first of cohort's month: sort cohort orders the months, newest first by default, and name or sessions orders people within each month. emptyCohorts lists the months set aside with POST /api/logistics/guest-speakers/cohorts that have no one in them yet, newest first. counts covers everyone, whatever the search.",
         query: listQuery(GUEST_JUDGE_LIST.sorts, "the name, email, title or a session's name"),
-        returns: `{ judges: { id, email: string | null, fullName, title: string | null, cohort: string, month: string, source: "scheduler" | "history", person: string | null, bootcampId: string | null, status: "scheduled" | "active" | "complete" | null, sessions: { name, role: "lead" | "teach" | "commentator" | "judge" | "speaker" | null, track: ${TRACK_TYPE}, day: number | null, start: number | null }[] }[], ${PAGE_FIELDS}, counts: { judges: number, cohorts: number, prospects: number }, emptyCohorts: string[] }`,
+        returns: `{ judges: { id, email: string | null, fullName, title: string | null, cohort: string, month: string, source: "scheduler" | "history", person: string | null, bootcampId: string | null, status: "scheduled" | "active" | "complete" | null, sessions: { name, role: "lead" | "teach" | "commentator" | "judge" | "speaker" | null, track: ${TRACK_TYPE}, day: number | null, start: number | null }[] }[], ${PAGE_FIELDS}, counts: { judges: number, cohorts: number, prospects: number, prospectGroups: { sales: number, se: number } }, emptyCohorts: string[] }`,
       },
       {
         method: "GET",
@@ -1429,9 +1429,12 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         summary: "Lists the sales and sales engineering leaders who have never been a guest judge, a page at a time.",
         access: "trainingViewer",
         token: true,
-        notes: `Read from the employee list as the last HiBob sync left it: anyone in ${GUEST_JUDGE_DEPARTMENTS.join(", ")} with at least one direct report, on no bootcamp's guest judges and not in the guest speaker history, by email. location is HiBob's work location and site its country. syncedAt is when that sync ran.`,
-        query: listQuery(JUDGE_PROSPECT_LIST.sorts, "the name, email or title"),
-        returns: `{ leaders: { email, fullName, title, department, reportsToName, location: string | null, site }[], ${PAGE_FIELDS}, syncedAt: string | null }`,
+        notes: `Read from the employee list as the last HiBob sync left it: anyone in ${GUEST_JUDGE_DEPARTMENTS.join(", ")} with at least one direct report, on no bootcamp's guest judges and not in the guest speaker history, by email. location is HiBob's work location and site its country. tenureMonths is the whole months since HiBob's start date, the first day of their current time at Harness, so a rehire counts from their return; sort tenure ascending is the newest first. syncedAt is when that sync ran.`,
+        query: [
+          ...listQuery(JUDGE_PROSPECT_LIST.sorts, "the name, email, title or location"),
+          { name: "group", type: `"sales" | "se"`, note: "only Enterprise Sales and Corporate Sales, or only Sales Engineering, by HiBob department; anything else is every leader" },
+        ],
+        returns: `{ leaders: { email, fullName, title, department, reportsToName, location: string | null, site, startDate: string | null, tenureMonths: number | null }[], ${PAGE_FIELDS}, syncedAt: string | null }`,
       },
       {
         method: "POST",

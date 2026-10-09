@@ -8,7 +8,7 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 
-import { groupByCohort, guestSpeakerSchema } from "@/lib/logistics/guest-judge-values";
+import { formatTenure, groupByCohort, guestSpeakerSchema, isProspectGroup } from "@/lib/logistics/guest-judge-values";
 
 const row = (month: string, name: string) => ({ month, name });
 const months = (groups: { month: string; rows: unknown[] }[]) => groups.map((g) => `${g.month}:${g.rows.length}`);
@@ -76,5 +76,20 @@ describe("a guest speaker entry", () => {
     assert.ok(!guestSpeakerSchema.safeParse({ ...entry, cohort: "2026-13" }).success);
     assert.ok(!guestSpeakerSchema.safeParse({ ...entry, cohort: "2026-11-01" }).success);
     assert.ok(!guestSpeakerSchema.safeParse({ ...entry, fullName: " " }).success);
+  });
+});
+
+describe("a leader's tenure and group", () => {
+  test("reads as years and months, leaving out a zero", () => {
+    assert.equal(formatTenure(0), "Under a month");
+    assert.equal(formatTenure(11), "11 mo");
+    assert.equal(formatTenure(24), "2 yr");
+    assert.equal(formatTenure(38), "3 yr 2 mo");
+    assert.equal(formatTenure(null), "—");
+  });
+
+  test("takes only the two groups the toggle offers", () => {
+    assert.ok(isProspectGroup("sales") && isProspectGroup("se"));
+    assert.ok(!isProspectGroup("Sales") && !isProspectGroup("") && !isProspectGroup(undefined));
   });
 });
