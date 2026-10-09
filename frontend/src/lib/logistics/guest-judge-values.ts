@@ -9,6 +9,31 @@ import { GUEST_SPEAKER_PROGRAMS, GUEST_SPEAKER_ROLES } from "@/db/schema";
  */
 export const GUEST_JUDGE_DEPARTMENTS = ["Enterprise Sales", "Corporate Sales", "Sales Engineering"] as const;
 
+/**
+ * The two halves of that list the leaders table toggles between, by HiBob
+ * department rather than title: a title can leave its department out
+ * ("Chief Revenue Officer") or misspell it, a department cannot.
+ */
+export const PROSPECT_GROUPS = {
+  sales: { label: "Enterprise & Corporate Sales", departments: ["Enterprise Sales", "Corporate Sales"] },
+  se: { label: "Sales Engineering", departments: ["Sales Engineering"] },
+} as const;
+
+export type ProspectGroup = keyof typeof PROSPECT_GROUPS;
+
+export function isProspectGroup(value: unknown): value is ProspectGroup {
+  return value === "sales" || value === "se";
+}
+
+/** Whole months as "3 yr 2 mo", "11 mo", "Under a month". */
+export function formatTenure(months: number | null): string {
+  if (months === null) return "—";
+  if (months < 1) return "Under a month";
+  const years = Math.floor(months / 12);
+  const rest = months % 12;
+  return [years ? `${years} yr` : "", rest ? `${rest} mo` : ""].filter(Boolean).join(" ");
+}
+
 /** The URL prefix the leaders table sorts and pages under, beside the judges table's. */
 export const PROSPECTS = "leaders";
 

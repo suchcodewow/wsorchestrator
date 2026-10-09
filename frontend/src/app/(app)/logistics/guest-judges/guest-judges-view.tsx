@@ -10,9 +10,9 @@
  * administrators add to and remove from the history and its cohorts.
  */
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { CalendarPlus, ChevronRight, Loader2, Plus, Trash2 } from "lucide-react";
 import { EmployeeMatches, useEmployeeSearch } from "@/components/employee-picker";
@@ -27,9 +27,12 @@ import {
   GUEST_JUDGE_DEPARTMENTS,
   GUEST_SPEAKER_LIMITS,
   PROGRAM_LABELS,
-  groupByCohort,
+  PROSPECT_GROUPS,
   PROSPECTS,
   ROLE_LABELS,
+  formatTenure,
+  groupByCohort,
+  type ProspectGroup,
 } from "@/lib/logistics/guest-judge-values";
 import type { GuestJudgeCounts, GuestJudgeRow, JudgedSession, JudgeProspectRow } from "@/lib/logistics/guest-judges";
 import { riseChild, staggerParent } from "@/lib/motion";
@@ -57,6 +60,7 @@ export function GuestJudgesView({
   judges,
   prospectQuery,
   prospects,
+  prospectGroup,
   counts,
   emptyCohorts,
   syncedAt,
@@ -66,6 +70,8 @@ export function GuestJudgesView({
   judges: Page<GuestJudgeRow>;
   prospectQuery: ListQuery<JudgeProspectSort>;
   prospects: Page<JudgeProspectRow>;
+  /** The one group of leaders shown, or null for all of them. */
+  prospectGroup: ProspectGroup | null;
   counts: GuestJudgeCounts;
   /** Months set aside for a cohort with no one in them yet, `YYYY-MM-01`. */
   emptyCohorts: string[];
@@ -82,7 +88,8 @@ export function GuestJudgesView({
   const prospectSort = { sort: prospectQuery.sort, dir: prospectQuery.dir, prefix: PROSPECTS };
   // A search, a sort or a page turn means someone is looking: show what they asked for.
   const judgesAsked = judgeQuery.q !== "" || judgeQuery.page > 1 || judgeQuery.sort !== "cohort";
-  const prospectsAsked = prospectQuery.q !== "" || prospectQuery.page > 1 || prospectQuery.sort !== "name";
+  const prospectsAsked =
+    prospectQuery.q !== "" || prospectQuery.page > 1 || prospectQuery.sort !== "name" || prospectGroup !== null;
 
   const groups = groupByCohort(judges.rows, emptyCohorts, {
     first: judges.page === 1,
@@ -305,6 +312,7 @@ export function GuestJudgesView({
         }
         openFor={prospectsAsked}
       >
+        <ProspectGroupToggle shown={prospectGroup} counts={counts.prospectGroups} />
         <table className="w-full min-w-160 text-sm">
           <thead>
             <tr className={HEADER_ROW}>
@@ -318,14 +326,17 @@ export function GuestJudgesView({
               <SortHeader column="location" {...prospectSort}>
                 Location
               </SortHeader>
+              <SortHeader column="tenure" {...prospectSort} className="w-32">
+                Tenure
+              </SortHeader>
               <PlainHeader>Reports to</PlainHeader>
             </tr>
           </thead>
           <tbody>
             {prospects.rows.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-5 py-8 text-center text-muted-foreground">
-                  {prospectQuery.q ? "No leader matches that search." : "Every leader has judged."}
+                <td colSpan={6} className="px-5 py-8 text-center text-muted-foreground">
+                  {prospectQuery.q || prospectGroup ? "No leader matches that search." : "Every leader has judged."}
                 </td>
               </tr>
             )}
@@ -340,6 +351,10 @@ export function GuestJudgesView({
                 <td className="px-5 py-3">
                   {p.location || p.site || "—"}
                   {p.location && p.site && <span className="block text-xs text-muted-foreground">{p.site}</span>}
+                </td>
+                <td className="whitespace-nowrap px-5 py-3 tabular-nums">
+                  {formatTenure(p.tenureMonths)}
+                  {p.startDate && <span className="block text-xs text-muted-foreground">since {formatDate(p.startDate)}</span>}
                 </td>
                 <td className="px-5 py-3 text-muted-foreground">{p.reportsToName || "—"}</td>
               </tr>
@@ -358,6 +373,54 @@ export function GuestJudgesView({
         </>
       )}
     </motion.div>
+  );
+}
+
+/**
+ * Narrows the leaders to one of `PROSPECT_GROUPS`, or back to all of them
+ * when the one shown is pressed again; back to their first page either way.
+ */
+function ProspectGroupToggle({ shown, counts }: { shown: ProspectGroup | null; counts: Record<ProspectGroup, number> }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const params = useSearchParams();
+  const [pending, startTransition] = useTransition();
+
+  function toggle(group: ProspectGroup) {
+    const next = new URLSearchParams(params.toString());
+    const key = `${PROSPECTS}.group`;
+    if (next.get(key) === group) next.delete(key);
+    else next.set(key, group);
+    next.delete(`${PROSPECTS}.page`);
+    const qs = next.toString();
+    startTransition(() => router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false }));
+  }
+
+  return (
+    <div role="group" aria-label="Show leaders in" className="flex flex-wrap gap-2 px-5 py-3">
+      {(Object.keys(PROSPECT_GROUPS) as ProspectGroup[]).map((g) => {
+        const on = shown === g;
+        return (
+          <button
+            key={g}
+            type="button"
+            aria-pressed={on}
+            disabled={pending}
+            onClick={() => toggle(g)}
+            className={cn(
+              "inline-flex h-8 cursor-pointer items-center gap-2 rounded-full border px-3 text-sm shadow-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/50 disabled:cursor-wait",
+              on
+                ? "border-brand-border bg-brand-subtle text-foreground"
+                : "bg-card text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+            )}
+          >
+            {PROSPECT_GROUPS[g].label}
+            <span className="font-medium tabular-nums text-foreground">{counts[g].toLocaleString()}</span>
+          </button>
+        );
+      })}
+      {pending && <Loader2 className="size-4 self-center animate-spin text-muted-foreground" />}
+    </div>
   );
 }
 

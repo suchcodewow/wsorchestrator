@@ -11,7 +11,13 @@ import { and, eq, inArray, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { employees, guestSpeakerCohorts, guestSpeakerHistory, type BootcampStatus, type GuestSpeakerRole, type ScheduleTrack } from "@/db/schema";
 import type { GuestJudgeSort, JudgeProspectSort } from "@/lib/list-specs";
-import { GUEST_JUDGE_DEPARTMENTS, HIBOB_WORK_LOCATION_COLUMN, type GuestSpeakerInput } from "@/lib/logistics/guest-judge-values";
+import {
+  GUEST_JUDGE_DEPARTMENTS,
+  HIBOB_WORK_LOCATION_COLUMN,
+  PROSPECT_GROUPS,
+  type GuestSpeakerInput,
+  type ProspectGroup,
+} from "@/lib/logistics/guest-judge-values";
 import { pageWindow, toPage, type ListQuery, type Page } from "@/lib/paging";
 import { containsPattern, orderFor, searchAny } from "@/lib/paging-sql";
 
@@ -139,7 +145,14 @@ export type JudgeProspectRow = {
   location: string | null;
   /** HiBob's site, a country. */
   site: string;
+  /** HiBob's start date, `YYYY-MM-DD`: the first day of their current time at Harness. */
+  startDate: string | null;
+  /** Whole months from `startDate` to today; null where HiBob has no start date. */
+  tenureMonths: number | null;
 };
+
+/** Whole months since the start date, counted by the database so every viewer sees the same. */
+const tenureMonths = sql<number | null>`(extract(year from age(current_date, ${employees.startDate})) * 12 + extract(month from age(current_date, ${employees.startDate})))::int`;
 
 const location = sql<string | null>`nullif(${employees.raw} -> 'humanReadable' -> 'work' -> 'customColumns' ->> ${sql.raw(`'${HIBOB_WORK_LOCATION_COLUMN}'`)}, '')`;
 
@@ -159,10 +172,21 @@ const PROSPECT_SORTS = {
   name: sql`lower(${employees.fullName})`,
   department: employees.department,
   location: sql`lower(coalesce(${location}, nullif(${employees.site}, '')))`,
+  // Ascending is the newest to Harness first, as a count of months would read.
+  tenure: tenureMonths,
 } as const;
 
-/** Those leaders, a page at a time, from the employee list as the last HiBob sync left it. */
-export async function listJudgeProspects(query: ListQuery<JudgeProspectSort>): Promise<Page<JudgeProspectRow>> {
+const inGroup = (group: ProspectGroup | null) =>
+  group ? inArray(employees.department, [...PROSPECT_GROUPS[group].departments]) : undefined;
+
+/**
+ * Those leaders, a page at a time, from the employee list as the last HiBob
+ * sync left it; only one of `PROSPECT_GROUPS` when `group` is given.
+ */
+export async function listJudgeProspects(
+  query: ListQuery<JudgeProspectSort>,
+  group: ProspectGroup | null = null,
+): Promise<Page<JudgeProspectRow>> {
   const { limit, offset } = pageWindow(query.page);
   const rows = await db
     .select({
@@ -173,16 +197,24 @@ export async function listJudgeProspects(query: ListQuery<JudgeProspectSort>): P
       reportsToName: employees.reportsToName,
       location,
       site: employees.site,
+      startDate: employees.startDate,
+      tenureMonths,
     })
     .from(employees)
-    .where(and(isProspect, searchAny(query.q, [employees.fullName, employees.email, employees.title, location, employees.site])))
+    .where(and(isProspect, inGroup(group), searchAny(query.q, [employees.fullName, employees.email, employees.title, location, employees.site])))
     .orderBy(...orderFor(PROSPECT_SORTS[query.sort], query.dir, sql`lower(${employees.fullName})`, employees.email))
     .limit(limit)
     .offset(offset);
   return toPage(rows, query.page);
 }
 
-export type GuestJudgeCounts = { judges: number; cohorts: number; prospects: number };
+export type GuestJudgeCounts = {
+  judges: number;
+  cohorts: number;
+  prospects: number;
+  /** The leaders in each of `PROSPECT_GROUPS`, whatever the search. */
+  prospectGroups: Record<ProspectGroup, number>;
+};
 
 /** Everyone who has judged, the cohorts they judged, and the leaders yet to; whatever the search. */
 export async function guestJudgeCounts(): Promise<GuestJudgeCounts> {
@@ -191,9 +223,21 @@ export async function guestJudgeCounts(): Promise<GuestJudgeCounts> {
       select count(distinct coalesce(g.email, lower(g.full_name)))::int as judges, count(distinct g.cohort)::int as cohorts
       from ${judged} g
     `),
-    db.select({ n: sql<number>`count(*)::int` }).from(employees).where(isProspect),
+    db
+      .select({
+        n: sql<number>`count(*)::int`,
+        sales: sql<number>`(count(*) filter (where ${inGroup("sales")}))::int`,
+        se: sql<number>`(count(*) filter (where ${inGroup("se")}))::int`,
+      })
+      .from(employees)
+      .where(isProspect),
   ]);
-  return { judges: judgedCounts?.judges ?? 0, cohorts: judgedCounts?.cohorts ?? 0, prospects: prospects?.n ?? 0 };
+  return {
+    judges: judgedCounts?.judges ?? 0,
+    cohorts: judgedCounts?.cohorts ?? 0,
+    prospects: prospects?.n ?? 0,
+    prospectGroups: { sales: prospects?.sales ?? 0, se: prospects?.se ?? 0 },
+  };
 }
 
 /**
