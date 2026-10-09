@@ -16,7 +16,13 @@ import "server-only";
 import { GoogleAuth } from "google-auth-library";
 import { encodeRfc3986, signingParts } from "./gcs-sign";
 
-const SCOPE = "https://www.googleapis.com/auth/devstorage.read_write";
+/**
+ * cloud-platform, not devstorage: on Cloud Run the same token signs URLs
+ * through IAM Credentials signBlob, which refuses a storage-only token
+ * (ACCESS_TOKEN_SCOPE_INSUFFICIENT). What app-sa may do is still bounded by
+ * its roles — objectAdmin on the recordings bucket, Token Creator on itself.
+ */
+const SCOPE = "https://www.googleapis.com/auth/cloud-platform";
 
 /** Sources one compose call takes. */
 export const COMPOSE_LIMIT = 32;
@@ -59,6 +65,20 @@ async function call(path: string, init: RequestInit = {}): Promise<Response> {
 }
 
 const objectPath = (bucket: string, name: string) => `/b/${encodeRfc3986(bucket)}/o/${encodeRfc3986(name)}`;
+
+/** Signing failed: the reason Google gave, kept whole for the log. */
+export class SigningError extends Error {}
+
+async function signAs(email: string, data: string): Promise<string> {
+  try {
+    return await googleAuth().sign(data);
+  } catch (err) {
+    const body = (err as { response?: { data?: unknown } })?.response?.data;
+    throw new SigningError(
+      `Could not sign a recording URL as ${email}: ${(err as Error)?.message ?? err}${body ? ` ${JSON.stringify(body).slice(0, 500)}` : ""}`,
+    );
+  }
+}
 
 /** Every object under `prefix`, with its size, a page of up to 1,000 at a time until done. */
 export async function listObjects(bucket: string, prefix: string): Promise<{ name: string; size: number }[]> {
@@ -116,6 +136,6 @@ export async function signedUrl(input: {
   if (!email) throw new Error("The app's credentials name no service account to sign recording URLs as.");
   if (emu) await ensureEmulatorBucket(`/b/${encodeRfc3986(input.bucket)}`);
   const { stringToSign, unsignedUrl } = signingParts({ ...input, host, email, now: new Date() });
-  const signature = emu ? "0".repeat(64) : Buffer.from(await googleAuth().sign(stringToSign), "base64").toString("hex");
+  const signature = emu ? "0".repeat(64) : Buffer.from(await signAs(email, stringToSign), "base64").toString("hex");
   return `${origin()}${unsignedUrl}&X-Goog-Signature=${signature}`;
 }

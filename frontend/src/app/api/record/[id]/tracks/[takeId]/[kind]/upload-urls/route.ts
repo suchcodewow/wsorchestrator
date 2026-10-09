@@ -22,5 +22,12 @@ export const POST = audited(async function POST(req: Request, { params }: Params
   noteAudit({ target: track.id, targetLabel: `${track.kind} chunks ${Math.min(...parsed.data.seqs)}–${Math.max(...parsed.data.seqs)}` });
   if (!acceptsChunks(track)) return NextResponse.json({ error: "finished" }, { status: 409 });
 
-  return NextResponse.json({ urls: await uploadUrls(track, parsed.data.seqs) });
+  try {
+    return NextResponse.json({ urls: await uploadUrls(track, parsed.data.seqs) });
+  } catch (err) {
+    // The browser keeps the chunks and retries; the reason is for whoever reads the logs.
+    console.error("recording: upload URLs failed", err);
+    noteAudit({ detail: { error: String((err as Error)?.message ?? err).slice(0, 500) } });
+    return NextResponse.json({ error: "signing_failed" }, { status: 503 });
+  }
 });

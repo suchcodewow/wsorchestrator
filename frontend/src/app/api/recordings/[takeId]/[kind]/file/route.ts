@@ -25,10 +25,16 @@ export async function GET(req: Request, { params }: { params: Promise<{ takeId: 
 
   const { takeId, kind } = await params;
   const download = new URL(req.url).searchParams.get("download") === "1";
-  const opened = await openRecordingFile(takeId, kind, {
-    download,
-    pickRange: (size) => parseRange(req.headers.get("range"), size),
-  });
+  let opened: Awaited<ReturnType<typeof openRecordingFile>>;
+  try {
+    opened = await openRecordingFile(takeId, kind, {
+      download,
+      pickRange: (size) => parseRange(req.headers.get("range"), size),
+    });
+  } catch (err) {
+    console.error("recording: download URL failed", err);
+    return NextResponse.json({ error: "signing_failed" }, { status: 503 });
+  }
   if (!opened) return NextResponse.json({ error: "not_found" }, { status: 404 });
   const { file, name, mimeType } = opened;
   if ("redirect" in file) {

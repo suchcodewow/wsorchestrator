@@ -1384,7 +1384,10 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         ],
         query: [{ name: "download", type: `"1"`, note: "as an attachment rather than inline" }],
         returns: "302 to the file in the bucket; or the video as video/mp4 or video/webm, 206 for a range",
-        errors: [{ status: 404, error: "not_found", when: "no such stream, or it is not ready yet" }],
+        errors: [
+          { status: 404, error: "not_found", when: "no such stream, or it is not ready yet" },
+          { status: 503, error: "signing_failed", when: "the download URL could not be signed; the reason is in the app's log" },
+        ],
       },
       {
         method: "GET",
@@ -1468,6 +1471,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           { status: 404, error: "not_found", when: "the stream is not filed on that link" },
           { status: 409, error: "finished", when: "the stream's file is already joined: every chunk is in" },
           { status: 409, error: "app_upload", when: "recordings are kept on disk: chunks go through the chunks route" },
+          { status: 503, error: "signing_failed", when: "the URLs could not be signed; the reason is in the app's log and the audit row" },
         ],
       },
       {
