@@ -227,6 +227,8 @@ const PAGES: Record<string, PageCase> = {
     expect: gated(canUseTraining),
   },
   "/logistics/food-orders": { path: () => "/logistics/food-orders?q=x&sort=vendor", expect: gated(canUseTraining) },
+  "/recordings": { path: () => "/recordings?q=x&sort=contributor", expect: gated(canUseTraining) },
+  "/recordings/<unknown>": { path: () => `/recordings/${MISSING}`, expect: () => 404 },
   "/logistics/food-orders/print": { path: () => "/logistics/food-orders/print", expect: gated(canUseTraining) },
   "/logistics/food-orders/print?<unknown>": { path: () => `/logistics/food-orders/print?id=${MISSING}`, expect: () => 404 },
   "/logistics-settings": {
@@ -419,6 +421,7 @@ const PAGES: Record<string, PageCase> = {
   "/inbox": { path: () => "/inbox", expect: () => 200 },
   "/labs": { path: () => "/labs", expect: () => 200, signedOut: 200 },
   "/intake": { path: () => "/intake", expect: () => 200, signedOut: 200 },
+  "/record/<unknown>": { path: () => `/record/${MISSING}`, expect: () => 404, signedOut: 404 },
   "/api": { path: () => "/api", expect: () => 200, signedOut: 200 },
   "/labs/new": {
     path: () => "/labs/new",
@@ -653,6 +656,19 @@ const ROUTES: RouteCase[] = [
   { method: "GET", path: `/api/logistics/food-orders/${MISSING}/pdf`, allowed: canUseTraining },
   { method: "GET", path: "/api/intake", allowed: "public" },
   { method: "POST", path: "/api/intake", allowed: "public", body: () => ({}) },
+
+  // Recordings
+  { method: "GET", path: "/api/recordings/link", allowed: canUseTraining },
+  { method: "POST", path: "/api/recordings/link", allowed: canManageTrainingSettings, denyOnly: true },
+  { method: "GET", path: "/api/recordings", allowed: canUseTraining },
+  { method: "GET", path: `/api/recordings/${MISSING}`, allowed: canUseTraining },
+  { method: "DELETE", path: `/api/recordings/${MISSING}`, allowed: canManageTrainingSettings },
+  { method: "GET", path: `/api/recordings/${MISSING}/camera/file`, allowed: canUseTraining },
+  { method: "GET", path: `/api/record/${MISSING}`, allowed: "public" },
+  { method: "POST", path: `/api/record/${MISSING}/tracks`, allowed: "public", body: () => ({}) },
+  { method: "PUT", path: `/api/record/${MISSING}/tracks/${MISSING}/camera/chunks/0`, allowed: "public" },
+  { method: "POST", path: `/api/record/${MISSING}/tracks/${MISSING}/camera/upload-urls`, allowed: "public", body: () => ({}) },
+  { method: "POST", path: `/api/record/${MISSING}/tracks/${MISSING}/camera/finish`, allowed: "public", body: () => ({}) },
 
   // eVals
   { method: "GET", path: "/api/evals/bootcamp-history", allowed: canUseEvals },

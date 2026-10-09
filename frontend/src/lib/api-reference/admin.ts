@@ -1,6 +1,7 @@
-import { DIETARY_LIST, FOOD_ORDER_LIST, GUEST_JUDGE_LIST, INTAKE_RESPONSE_LIST, JUDGE_PROSPECT_LIST, ASSESSMENT_ATTENDEE_LIST, ASSESSMENT_LIST, AUDIT_LIST, BOOTCAMP_HISTORY_LIST, BOOTCAMP_LIST, CURRENT_COHORT_LIST, DOMAIN_LIST, EMPLOYEE_LIST, HIBOB_SYNC_LIST, HISTORY_STATUSES, JUDGE_LIST, ORGANIZATION_LIST, PREVIOUS_SESSION_LIST, SESSION_COMMENT_LIST, SESSION_TYPE_LIST, GOOGLE_MEETING_LIST, SLACK_CONTACT_LIST, SLACK_SYNC_CHANGE_LIST, SLACK_SYNC_LIST, CHANNEL_CONTACT_LIST, TITLE_LIST, USER_LIST, FACILITY_LIST } from "@/lib/list-specs";
-import { BOOTCAMP_LIMITS, CHECKLIST_LIMITS, EVALS_ASSESSMENT_LIMITS, FACILITY_LIMITS, FOOD_ORDER_LIMITS, GOOGLE_MEETING_LIMITS, INTAKE_LIMITS, SCHEDULE_LIMITS } from "@/db/schema";
+import { DIETARY_LIST, FOOD_ORDER_LIST, RECORDING_LIST, GUEST_JUDGE_LIST, INTAKE_RESPONSE_LIST, JUDGE_PROSPECT_LIST, ASSESSMENT_ATTENDEE_LIST, ASSESSMENT_LIST, AUDIT_LIST, BOOTCAMP_HISTORY_LIST, BOOTCAMP_LIST, CURRENT_COHORT_LIST, DOMAIN_LIST, EMPLOYEE_LIST, HIBOB_SYNC_LIST, HISTORY_STATUSES, JUDGE_LIST, ORGANIZATION_LIST, PREVIOUS_SESSION_LIST, SESSION_COMMENT_LIST, SESSION_TYPE_LIST, GOOGLE_MEETING_LIST, SLACK_CONTACT_LIST, SLACK_SYNC_CHANGE_LIST, SLACK_SYNC_LIST, CHANNEL_CONTACT_LIST, TITLE_LIST, USER_LIST, FACILITY_LIST } from "@/lib/list-specs";
+import { BOOTCAMP_LIMITS, CHECKLIST_LIMITS, EVALS_ASSESSMENT_LIMITS, FACILITY_LIMITS, FOOD_ORDER_LIMITS, GOOGLE_MEETING_LIMITS, INTAKE_LIMITS, RECORDING_LIMITS, SCHEDULE_LIMITS } from "@/db/schema";
 import { PAGE_SIZE } from "@/lib/paging";
+import { RECORDING_RETENTION_DAYS, UPLOAD_STALLED_MS, UPLOAD_URL_BATCH } from "@/lib/recording/video";
 import { CHECKLIST_ITEM_ROW } from "./account";
 import { GUEST_JUDGE_DEPARTMENTS, GUEST_SPEAKER_LIMITS } from "@/lib/logistics/guest-judge-values";
 import { PAGE_FIELDS, listQuery } from "./paging";
@@ -47,6 +48,10 @@ const TRACK_TYPE = `"btc" | "int" | "btc_se" | "int_se"`;
 const KIND_TYPE = `"main" | "breakout" | "unstructured"`;
 const AUDIENCE_TYPE = `"both" | "sales" | "engineers"`;
 const COLOR_TYPE = `"slate" | "red" | "orange" | "amber" | "green" | "teal" | "blue" | "violet" | "pink"`;
+const RECORDING_LINK_SHAPE = "{ id, createdAt }";
+const RECORDING_TAKE_SHAPE = `{ takeId, contributor, startedAt, durationMs: number | null, bytes: number, kinds: ("camera" | "screen")[], status: "uploading" | "assembling" | "ready" | "failed", stalled: boolean }`;
+const RECORDING_TRACK_SHAPE = `{ id, takeId, kind: "camera" | "screen", mimeType, startedAt, offsetMs: number, contributor, status: "uploading" | "assembling" | "ready" | "failed", chunks: number | null, durationMs: number | null, fileBytes: number | null, error: string | null, lastChunkAt: string | null, stalled: boolean }`;
+
 const MINUTES_NOTE = `a multiple of ${SCHEDULE_LIMITS.slot} from ${SCHEDULE_LIMITS.slot} to ${SCHEDULE_LIMITS.maxMinutes}`;
 
 const SESSION_SHAPE = `{ id, track: ${TRACK_TYPE}, day: number, start: number, minutes: number, kind, audience: ${AUDIENCE_TYPE}, typeId: string | null, name, description, emoji, color, roomId: string | null, assessmentId: string | null, staff: { email, fullName, leader: boolean, roomId: string | null }[], comments: number, largestGroup: number, assigned: string[], updatedAt }`;
@@ -1306,6 +1311,190 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         params: [{ name: "id", type: "string", required: true, note: "the type's id" }],
         returns: "{ ok: true }",
         errors: [{ status: 404, error: "not_found", when: "no such type" }],
+      },
+    ],
+  },
+  {
+    id: "recordings",
+    title: "Recordings",
+    intro:
+      `Async recordings. There is one recording link in use, /record/{id}; anyone with it opens the Harness Training Recorder with no account, types their name, and records their camera (with the microphone) and, if they choose, their screen, each as its own file. The browser keeps every stream locally and uploads it a chunk at a time while it records, retrying until each lands: on a deployment, straight to Cloud Storage on signed URLs, so no video passes through the app. The /api/record routes are what that page calls; the id in the link is the only thing guarding them. A recording is deleted ${RECORDING_RETENTION_DAYS} days after it is made, and is not listed meanwhile.`,
+    endpoints: [
+      {
+        method: "GET",
+        path: "/api/recordings/link",
+        summary: "Reads the recording link in use.",
+        access: "trainingViewer",
+        token: true,
+        notes: "link is null until one has been created. The address to share is /record/{id}.",
+        returns: `{ link: ${RECORDING_LINK_SHAPE} | null }`,
+      },
+      {
+        method: "POST",
+        path: "/api/recordings/link",
+        summary: "Makes a new recording link and retires the one in use.",
+        access: "trainingAdmin",
+        token: true,
+        notes:
+          "Also how the first link is created. The retired link stops filing new takes at once; streams already filed on it keep uploading and finish.",
+        returns: `201 { link: ${RECORDING_LINK_SHAPE} }`,
+      },
+      {
+        method: "GET",
+        path: "/api/recordings",
+        summary: "Lists recorded takes, a page at a time, the newest first.",
+        access: "trainingViewer",
+        token: true,
+        notes: `A row per take, its streams rolled up: durationMs is the longest stream's, bytes the finished files', and status failed if any stream failed, else uploading or assembling while any is, else ready. stalled is a stream still uploading with no chunk for ${UPLOAD_STALLED_MS / 60_000} minutes: most likely the page was closed, and reopening the link on the same computer and browser resumes it.`,
+        query: listQuery(RECORDING_LIST.sorts, "who recorded it"),
+        returns: `{ takes: ${RECORDING_TAKE_SHAPE}[], ${PAGE_FIELDS} }`,
+      },
+      {
+        method: "GET",
+        path: "/api/recordings/{takeId}",
+        summary: "Reads one take with each of its streams.",
+        access: "trainingViewer",
+        token: true,
+        notes: "offsetMs is when a stream started after the take's first, to line the files up.",
+        params: [{ name: "takeId", type: "string", required: true, note: "the take's id" }],
+        returns: `{ takeId, contributor, startedAt, tracks: ${RECORDING_TRACK_SHAPE}[] }`,
+        errors: [{ status: 404, error: "not_found", when: "no such take" }],
+      },
+      {
+        method: "DELETE",
+        path: "/api/recordings/{takeId}",
+        summary: "Deletes a take and every file of it.",
+        access: "trainingAdmin",
+        token: true,
+        params: [{ name: "takeId", type: "string", required: true, note: "the take's id" }],
+        returns: "{ ok: true }",
+        errors: [{ status: 404, error: "not_found", when: "no such take" }],
+      },
+      {
+        method: "GET",
+        path: "/api/recordings/{takeId}/{kind}/file",
+        summary: "Serves one finished stream of a take — the camera or the screen — as MP4 or WebM, or redirects to it.",
+        access: "trainingViewer",
+        token: true,
+        notes:
+          "Where recordings are kept in Cloud Storage, as on every deployment, it answers 302 to a signed URL good for 15 minutes, and the bucket honours Range; kept on disk, it serves the bytes itself and honours Range. Either way a video element plays and seeks it. download=1 serves it as an attachment named after who recorded it, when, and the stream.",
+        params: [
+          { name: "takeId", type: "string", required: true, note: "the take's id" },
+          { name: "kind", type: `"camera" | "screen"`, required: true },
+        ],
+        query: [{ name: "download", type: `"1"`, note: "as an attachment rather than inline" }],
+        returns: "302 to the file in the bucket; or the video as video/mp4 or video/webm, 206 for a range",
+        errors: [{ status: 404, error: "not_found", when: "no such stream, or it is not ready yet" }],
+      },
+      {
+        method: "GET",
+        path: "/api/record/{id}",
+        summary: "Says whether a recording link can take a new recording.",
+        access: "public",
+        token: true,
+        params: [{ name: "id", type: "string", required: true, note: "the link's id" }],
+        returns: "{ id }",
+        errors: [{ status: 404, error: "not_found", when: "`id` is not a UUID, not a link, or a link that has been replaced" }],
+      },
+      {
+        method: "POST",
+        path: "/api/record/{id}/tracks",
+        summary: "Files one stream of a take before its chunks are uploaded.",
+        access: "public",
+        token: true,
+        notes:
+          "Idempotent: the browser sends it again after every reload, and a stream already filed is returned unchanged, even on a link that has since been replaced. A new stream needs the link in use. upload says how its chunks go: direct to Cloud Storage on URLs from upload-urls, or app through the chunks route. Also deletes, after answering, any recordings past their retention.",
+        params: [{ name: "id", type: "string", required: true, note: "the link's id" }],
+        body: {
+          kind: "json",
+          fields: [
+            { name: "takeId", type: "string", required: true, note: "a UUID the browser makes for the take" },
+            { name: "kind", type: `"camera" | "screen"`, required: true },
+            { name: "mimeType", type: "string", required: true, note: "what MediaRecorder records: video/mp4 or video/webm, with codecs" },
+            { name: "startedAt", type: "string", required: true, note: "ISO 8601" },
+            { name: "offsetMs", type: "number", required: true, note: "when this stream started after the take's first; 0 to 60000" },
+            { name: "contributor", type: "string", note: `the name the person recording gave; trimmed, at most ${RECORDING_LIMITS.contributor} characters` },
+          ],
+        },
+        returns: `${RECORDING_TRACK_SHAPE} & { upload: "direct" | "app" }`,
+        errors: [
+          { status: 400, error: "invalid", when: "a field is missing or malformed" },
+          { status: 404, error: "not_found", when: "no such link, or a new stream on a link that has been replaced" },
+        ],
+      },
+      {
+        method: "PUT",
+        path: "/api/record/{id}/tracks/{takeId}/{kind}/chunks/{seq}",
+        summary: "Uploads one chunk of a stream, as raw bytes, where recordings are kept on disk.",
+        access: "public",
+        token: true,
+        notes: `seq counts from 0 with no gaps. Sending a chunk again replaces it, so a retry after a lost response is safe. At most ${RECORDING_LIMITS.chunkBytes / (1024 * 1024)} MB.`,
+        params: [
+          { name: "id", type: "string", required: true, note: "the link's id" },
+          { name: "takeId", type: "string", required: true },
+          { name: "kind", type: `"camera" | "screen"`, required: true },
+          { name: "seq", type: "number", required: true, note: `0 to ${RECORDING_LIMITS.chunks - 1}` },
+        ],
+        returns: "204 No Content",
+        errors: [
+          { status: 400, error: "invalid", when: "seq is not a whole number in range" },
+          { status: 400, error: "empty", when: "the body is empty" },
+          { status: 400, error: "truncated", when: "fewer bytes arrived than Content-Length declared; nothing is kept, so send it again" },
+          { status: 404, error: "not_found", when: "the stream is not filed on that link" },
+          { status: 409, error: "finished", when: "the stream's file is already joined" },
+          { status: 409, error: "direct_upload", when: "recordings are kept in Cloud Storage: chunks go to it on URLs from upload-urls" },
+          { status: 413, error: "too_large", when: "the chunk is too big" },
+        ],
+      },
+      {
+        method: "POST",
+        path: "/api/record/{id}/tracks/{takeId}/{kind}/upload-urls",
+        summary: "Hands out signed URLs to upload chunks of a stream straight to Cloud Storage.",
+        access: "public",
+        token: true,
+        notes: `Each URL takes a PUT of the chunk's bytes, Content-Type application/octet-stream, for an hour. The browser asks for ${UPLOAD_URL_BATCH} at a time, ahead of the chunks, so one request covers about 50 seconds of a stream; it also marks the stream as still arriving, which is what keeps it from reading as stalled.`,
+        params: [
+          { name: "id", type: "string", required: true, note: "the link's id" },
+          { name: "takeId", type: "string", required: true },
+          { name: "kind", type: `"camera" | "screen"`, required: true },
+        ],
+        body: {
+          kind: "json",
+          fields: [{ name: "seqs", type: "number[]", required: true, note: `1 to ${UPLOAD_URL_BATCH} chunk sequence numbers` }],
+        },
+        returns: "{ urls: Record<seq, url> }",
+        errors: [
+          { status: 400, error: "invalid", when: "seqs is missing, empty, too long, or out of range" },
+          { status: 404, error: "not_found", when: "the stream is not filed on that link" },
+          { status: 409, error: "finished", when: "the stream's file is already joined: every chunk is in" },
+          { status: 409, error: "app_upload", when: "recordings are kept on disk: chunks go through the chunks route" },
+        ],
+      },
+      {
+        method: "POST",
+        path: "/api/record/{id}/tracks/{takeId}/{kind}/finish",
+        summary: "Says a stream has ended, and starts joining its file once every chunk is in.",
+        access: "public",
+        token: true,
+        notes:
+          "Answers missing with the chunks still to send (at most 1,000 at a time). Otherwise joins the file: in Cloud Storage by composing the chunks before answering, ready; on disk in the background, assembling until it is done. The browser keeps its own copy, and calls this again, until it hears ready.",
+        params: [
+          { name: "id", type: "string", required: true, note: "the link's id" },
+          { name: "takeId", type: "string", required: true },
+          { name: "kind", type: `"camera" | "screen"`, required: true },
+        ],
+        body: {
+          kind: "json",
+          fields: [
+            { name: "chunks", type: "number", required: true, note: "how many chunks the stream has; 0 marks it failed, nothing having been saved" },
+            { name: "durationMs", type: "number", required: true },
+          ],
+        },
+        returns: `{ status: "missing", missing: number[] } | { status: "assembling" | "ready" | "failed" }`,
+        errors: [
+          { status: 400, error: "invalid", when: "a field is missing or malformed" },
+          { status: 404, error: "not_found", when: "the stream is not filed on that link" },
+        ],
       },
     ],
   },

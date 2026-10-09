@@ -25,5 +25,19 @@ services:
       timeout: 5s
       retries: 5
 
+  # A stand-in for the Cloud Storage bucket async recordings are kept in, for
+  # developing against the bucket path (signed uploads, composing) without one.
+  # Off unless asked for:
+  #   docker compose --profile recordings up -d gcs
+  # then in frontend/.env: RECORDINGS_BUCKET=recordings-dev and
+  # STORAGE_EMULATOR_HOST=http://localhost:4443. Without them, recordings are
+  # kept on local disk instead.
+  gcs:
+    image: fsouza/fake-gcs-server:1.52.2
+    profiles: ["recordings"]
+    command: ["-scheme", "http", "-port", "4443", "-public-host", "localhost:4443", "-cors-headers", "Content-Type,Range"]
+    ports:
+      - "4443:4443"
+
 volumes:
   pgdata:

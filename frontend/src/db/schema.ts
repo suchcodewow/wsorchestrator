@@ -7,6 +7,7 @@ import {
   jsonb,
   boolean,
   integer,
+  bigint,
   uuid,
   bigserial,
   primaryKey,
@@ -2614,3 +2615,76 @@ export const guestSpeakerCohorts = pgTable("guest_speaker_cohorts", {
   createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+export const RECORDING_TRACK_KINDS = ["camera", "screen"] as const;
+export type RecordingTrackKind = (typeof RECORDING_TRACK_KINDS)[number];
+
+export const RECORDING_TRACK_STATUSES = ["uploading", "assembling", "ready", "failed"] as const;
+export type RecordingTrackStatus = (typeof RECORDING_TRACK_STATUSES)[number];
+
+export const RECORDING_LIMITS = {
+  /** The name the person recording gives on the page. */
+  contributor: 200,
+  mimeType: 100,
+  /**
+   * One chunk's body. The browser sends at most 4 MB (`VIDEO_PIECE_BYTES`);
+   * this stays under the 10 MB of a request body Next.js reads, past which it
+   * keeps the first 10 MB and drops the rest without an error.
+   */
+  chunkBytes: 8 * 1024 * 1024,
+  /** Sequence numbers run from 0; a day of 2-second chunks is 43,200. */
+  chunks: 100_000,
+} as const;
+
+/**
+ * The link anyone records through, with no account: `/record/{id}`, so the id
+ * is the secret. There is one in use at a time — `retiredAt` is null on it —
+ * and replacing it retires the old one, which then files no new takes but
+ * still finishes the uploads already under way on it.
+ */
+export const recordingLinks = pgTable("recording_links", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  retiredAt: timestamp("retired_at", { withTimezone: true }),
+});
+
+/**
+ * One stream of one take: the camera with the microphone, or the shared
+ * screen. A take is the streams sharing a `takeId`, recorded together under
+ * the name the person typed. The browser records each locally and uploads it
+ * a chunk at a time; the chunks are kept by `lib/recording/storage.ts`, not
+ * here. `offsetMs` is when this stream started after the take's first one, to
+ * line the files up in an editor.
+ */
+export const recordingTracks = pgTable(
+  "recording_tracks",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    linkId: uuid("link_id")
+      .notNull()
+      .references(() => recordingLinks.id),
+    takeId: uuid("take_id").notNull(),
+    kind: text("kind").$type<RecordingTrackKind>().notNull(),
+    mimeType: text("mime_type").notNull(),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+    offsetMs: integer("offset_ms").notNull().default(0),
+    /** Who recorded it, as they typed their name on the page; the same on every stream of a take. */
+    contributor: text("contributor").notNull().default(""),
+    status: text("status").$type<RecordingTrackStatus>().notNull().default("uploading"),
+    /** Known once the browser says the stream ended. */
+    chunks: integer("chunks"),
+    durationMs: integer("duration_ms"),
+    fileBytes: bigint("file_bytes", { mode: "number" }),
+    error: text("error"),
+    lastChunkAt: timestamp("last_chunk_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("recording_tracks_take_kind_idx").on(t.takeId, t.kind),
+    index("recording_tracks_started_at_idx").on(t.startedAt),
+    check("recording_tracks_kind_check", sql`${t.kind} in ('camera', 'screen')`),
+    check("recording_tracks_status_check", sql`${t.status} in ('uploading', 'assembling', 'ready', 'failed')`),
+  ],
+);

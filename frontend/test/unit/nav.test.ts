@@ -34,6 +34,8 @@ const ACCOUNT = ["[Account]", "My inbox", "My settings"];
 
 // Mimir is for everyone, so every sidebar has a Training section holding at least it.
 const MIMIR_ONLY = ["[Training]", "Mimir"];
+// Enablement Tools follow Training, for the same people.
+const ENABLEMENT = ["[Enablement Tools]", "Async Recordings"];
 const TRAINING_ADMIN = [
   "[Training]",
   "Scheduler",
@@ -44,6 +46,7 @@ const TRAINING_ADMIN = [
   "Logistics settings",
   "Mimir",
   "Mimir Settings",
+  ...ENABLEMENT,
 ];
 
 const EXPECTED_SIDEBAR: Record<Persona, string[]> = {
@@ -52,7 +55,7 @@ const EXPECTED_SIDEBAR: Record<Persona, string[]> = {
   operator: [...HOME, ...EVENTS_USER, ...MIMIR_ONLY, ...ACCOUNT],
   manager: [...HOME, ...EVENTS_MANAGER, ...MIMIR_ONLY, ...ACCOUNT],
   eventAdmin: [...HOME, ...EVENTS_ADMIN, ...MIMIR_ONLY, ...ACCOUNT, "[Administration]", "Manage users"],
-  trainingViewer: [...HOME, "[Training]", "Scheduler", "Cohorts", "Logistics", "Mimir", ...ACCOUNT],
+  trainingViewer: [...HOME, "[Training]", "Scheduler", "Cohorts", "Logistics", "Mimir", ...ENABLEMENT, ...ACCOUNT],
   trainingAdmin: [...HOME, ...TRAINING_ADMIN, ...ACCOUNT, "[Administration]", "Manage users"],
   // Iris is part of the assessments area: a viewer takes it, an administrator runs it.
   assessmentsViewer: [...HOME, ...MIMIR_ONLY, "[Assessments]", "eVals", "Iris", "Reporting", ...ACCOUNT],

@@ -96,6 +96,9 @@ resource "google_cloud_run_v2_service" "app" {
           # resource rather than configured, so the page can never be pointed
           # at an instance this deployment does not own.
           { CLOUD_SQL_INSTANCE = google_sql_database_instance.main.name },
+          # Where async recordings are kept; derived from the resource, like
+          # the instance above, so it is always this deployment's own bucket.
+          { RECORDINGS_BUCKET = google_storage_bucket.recordings.name },
           # Anything but production puts a badge in the header.
           var.environment != "production" ? { APP_ENVIRONMENT = var.environment } : {},
           var.app_url != "" ? { AUTH_URL = var.app_url } : {},
