@@ -604,9 +604,11 @@ HiBob sync has reporting to them sees it, as do platform administrators. It
 is read on every request, so a reorg reaches it with the next sync. A manager
 opens on their own org — themselves and everyone under them, every level down —
 and an **Everyone** switch shows the whole Canary Wire; for someone with no one
-reporting to them it is shown greyed out, on everyone. **Canary Wire History**,
-beside it, shows each rep's share of their lineup finished month by month over
-the last six months, under the same scope. **Refresh now**, which
+reporting to them it is shown greyed out, on everyone. A row of dots beside
+each rep shows their share of their lineup finished in each of the last six
+months, whichever month is picked, with the detail on hover, and the page
+exports either the month on screen or that six-month history as CSV.
+**Refresh now**, which
 pulls Mindtickle by hand rather than waiting for the two-hourly pull, is for
 platform administrators.
 

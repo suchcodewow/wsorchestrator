@@ -10,6 +10,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Download, ExternalLink } from "lucide-react";
 import { HEADER_ROW, PlainHeader } from "@/components/data-table";
+import type { RepTrends } from "@/lib/canary-wire/history";
 import type { PullSummary } from "@/lib/canary-wire/pull";
 import type { CanaryWireView } from "@/lib/canary-wire/view";
 import { riseChild, staggerParent } from "@/lib/motion";
@@ -21,12 +22,15 @@ import { formatPct } from "@/lib/canary-wire/report";
 
 export function CanaryWireReport({
   view,
+  trends,
   pull,
   configured,
   canSwitchScope,
   canRefresh,
 }: {
   view: CanaryWireView;
+  /** Each rep's last six months, for the dots beside their name. */
+  trends: RepTrends;
   pull: PullSummary | null;
   configured: boolean;
   /** Someone with a downline, who may narrow to it; for anyone else the switch is greyed out on Everyone. */
@@ -43,6 +47,8 @@ export function CanaryWireReport({
   const go = (month: string, everyone = view.scope === "everyone") =>
     router.push(`${pathname}?month=${encodeURIComponent(month)}${canSwitchScope && everyone ? "&scope=everyone" : ""}`);
   const csv = `/api/evals/canary-wire?month=${encodeURIComponent(view.month)}&format=csv${scopeParam}`;
+  const historyCsv = `/api/evals/canary-wire/history?format=csv${scopeParam}`;
+  const span = trends.months.length ? `${trends.months[0]} to ${trends.months.at(-1)}` : "";
   const yourOrg = view.scope === "org";
   const t = view.totals;
 
@@ -92,24 +98,6 @@ export function CanaryWireReport({
             </option>
           ))}
         </select>
-        <a href={csv} download className={PILL}>
-          <Download />
-          Export CSV
-        </a>
-        {view.seriesLinks.map((s) => (
-          <a
-            key={s.edition}
-            href={s.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            title={`Open the ${s.edition} series in Mindtickle`}
-            className={PILL}
-          >
-            {s.label} series
-            <ExternalLink />
-          </a>
-        ))}
-        <span className="grow" />
         {/* Shown to everyone, so the page reads the same for all who open it;
             greyed out, on Everyone, for someone with no one reporting to them. */}
         <PillSwitch
@@ -125,8 +113,42 @@ export function CanaryWireReport({
           disabled={!canSwitchScope}
           onChange={(everyone) => go(view.month, everyone)}
         />
+        {/* Two exports, named for what each holds: the month on screen,
+            module by module, and the history behind the dots, a column a month. */}
+        <a href={csv} download className={PILL} title={`Every rep's modules in ${view.month}, one row each`}>
+          <Download />
+          Export {view.month}
+        </a>
+        {trends.months.length > 0 && (
+          <a href={historyCsv} download className={PILL} title={`Every rep's completion by month, ${span}: the months on their dots`}>
+            <Download />
+            Export {trends.months.length}-month history
+          </a>
+        )}
+        <span className="grow" />
         {canRefresh && <RefreshControl configured={configured} initial={pull} />}
       </motion.div>
+
+      {/* A row of their own: beside the controls they pushed the toolbar
+          past the page's width. */}
+      {view.seriesLinks.length > 0 && (
+        <motion.div variants={riseChild} className="-mt-3 flex flex-wrap items-center gap-2">
+          <span className="text-xs text-muted-foreground">Open in Mindtickle</span>
+          {view.seriesLinks.map((s) => (
+            <a
+              key={s.edition}
+              href={s.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              title={`Open the ${s.edition} series in Mindtickle`}
+              className={PILL}
+            >
+              {s.label} series
+              <ExternalLink />
+            </a>
+          ))}
+        </motion.div>
+      )}
 
       {notes.length > 0 && (
         <motion.div
@@ -153,7 +175,7 @@ export function CanaryWireReport({
       )}
       {view.hasSnapshot && (
         <motion.div variants={riseChild}>
-          <HeatMap view={view} />
+          <HeatMap view={view} trends={trends} />
         </motion.div>
       )}
     </motion.div>

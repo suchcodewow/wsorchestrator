@@ -1,12 +1,15 @@
 /**
- * Reporting → Canary Wire History: each rep's completion month over month.
+ * The Canary Wire month over month: each rep's completion in each of the last
+ * six months, for the dots beside their name on Reporting → Canary Wire and
+ * the history CSV.
  *
  * Built by running the month view (`view.ts`) once per month and lining the
  * results up, so a month here can never disagree with the same month on the
- * Canary Wire tab: the same lineups, the same exemptions, the same people.
+ * page: the same lineups, the same exemptions, the same people.
  */
 
 import { contentMonths, monthView, rate, type Rep } from "@/lib/canary-wire/view";
+import { dayOnly, stateClass } from "@/lib/canary-wire/report";
 import type { Accountability } from "@/lib/canary-wire/exemptions";
 import { byMonth, monthKey } from "@/lib/canary-wire/months";
 import { HISTORY_FIRST_MONTH, SERIES_LINKS, type SeriesLink } from "@/lib/canary-wire/config";
@@ -30,6 +33,14 @@ export type MonthRate = { learners: number; finished: number; pct: number | null
 export type HistoryRep = Pick<Rep, "name" | "email" | "role" | "manager" | "managerEmail" | "title" | "notActivated"> & {
   /** By month, in the order of `months`. */
   marks: MonthMark[];
+  /** The newest module they finished from these months' lineups, as "Sep 12, 2026", or "". */
+  lastCompleted: string;
+};
+
+/** What the dots beside each rep's name show: their marks by email, over `months`. */
+export type RepTrends = {
+  months: string[];
+  reps: Record<string, Pick<HistoryRep, "marks" | "lastCompleted">>;
 };
 
 export type HistoryTeam = { manager: string; managerEmail: string; roles: string[]; directs: HistoryRep[]; rates: MonthRate[] };
@@ -112,6 +123,7 @@ export function historyView(
   // Who people are comes from the newest month: the roster is the same in
   // every month — it is today's — and so are names and reporting lines.
   const people = new Map<string, HistoryRep>();
+  const newest = new Map<string, string>();
   views.forEach((v, i) => {
     for (const team of v.teams) {
       for (const d of team.directs) {
@@ -124,7 +136,17 @@ export function historyView(
           title: d.title,
           notActivated: d.notActivated,
           marks: months.map(() => ({ pct: null, completed: 0, assigned: 0, exempt: false })),
+          lastCompleted: "",
         };
+        // Their own lineup only, counted or not yet: another role's module
+        // they opened says nothing about keeping up with their own.
+        for (const cell of Object.values(d.cells)) {
+          if (!(cell.accountable || cell.exempt) || stateClass(cell.state) !== "completed" || !cell.on) continue;
+          if (cell.on > (newest.get(d.email) ?? "")) {
+            newest.set(d.email, cell.on);
+            rep.lastCompleted = dayOnly(cell);
+          }
+        }
         rep.marks[i] = { pct: d.exempt ? null : d.pct, completed: d.completed, assigned: d.assigned, exempt: d.exempt };
         people.set(d.email, rep);
       }
@@ -161,6 +183,13 @@ export function historyView(
     .map((role) => ({ role, rates: ratesOver(reps.filter((r) => r.role === role), months.length) }));
 
   return { months, hasSnapshot: true, teams, roles, totals: ratesOver(reps, months.length), seriesLinks: SERIES_LINKS };
+}
+
+/** The history as the dots need it: no teams or rates, just each rep's months. */
+export function repTrends(h: Pick<CanaryWireHistory, "months" | "teams">): RepTrends {
+  const reps: RepTrends["reps"] = {};
+  for (const team of h.teams) for (const r of team.directs) reps[r.email] = { marks: r.marks, lastCompleted: r.lastCompleted };
+  return { months: h.months, reps };
 }
 
 function csvField(value: string): string {

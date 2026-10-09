@@ -1481,17 +1481,17 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       {
         method: "GET",
         path: "/api/evals/canary-wire/history",
-        summary: "Returns the Canary Wire month over month: each rep's share of their own lineup finished in each of the last six months with content.",
+        summary: "Returns the Canary Wire month over month: each rep's share of their own lineup finished in each of the last six months with content, as the dots beside each rep on Reporting → Canary Wire show it.",
         access: "canaryWire",
         token: true,
         notes:
-          "months are the last six months with Canary Wire content from June 2026, oldest first; a month nobody published for is skipped. The current month in Pacific is included once anyone has finished one of its modules, and a later month never is, however early its content was published. Each month is the same month GET /api/evals/canary-wire returns, with the same people, scope and exemptions. A rep's mark is the percentage of their own lineup they finished that month, null when they owed nothing; exempt marks a month they didn't count yet (pre-bootcamp, or an SDR before their first full month). A team's, a role's and the totals' rates are in people: of those who owed something that month, the share who finished everything. Teams and their reps sort best first by the latest month, ties broken by the month before, and so on back. With format=csv, one row per rep with a column per month, blank where they owed nothing.",
+          "months are the last six months with Canary Wire content from June 2026, oldest first; a month nobody published for is skipped. The current month in Pacific is included once anyone has finished one of its modules, and a later month never is, however early its content was published. Each month is the same month GET /api/evals/canary-wire returns, with the same people, scope and exemptions. A rep's mark is the percentage of their own lineup they finished that month, null when they owed nothing; exempt marks a month they didn't count yet (pre-bootcamp, or an SDR before their first full month). lastCompleted is the day they last finished a module of their own lineup in these months, as Sep 12, 2026, or an empty string. A team's, a role's and the totals' rates are in people: of those who owed something that month, the share who finished everything. Teams and their reps sort best first by the latest month, ties broken by the month before, and so on back. With format=csv, one row per rep with a column per month, blank where they owed nothing.",
         query: [
           { name: "scope", type: '"org" | "everyone"', note: "as for GET /api/evals/canary-wire" },
           { name: "format", type: '"csv"', note: "a CSV download instead of JSON" },
         ],
         returns:
-          "{ months: string[], scope: \"org\" | \"everyone\", hasSnapshot, teams: { manager, managerEmail, roles: string[], directs: { name, email, role, manager, managerEmail, title, notActivated, marks: { pct: number | null, completed, assigned, exempt }[] }[], rates: { learners, finished, pct }[] }[], roles: { role, rates }[], totals: { learners, finished, pct }[], seriesLinks }; text/csv with format=csv",
+          "{ months: string[], scope: \"org\" | \"everyone\", hasSnapshot, teams: { manager, managerEmail, roles: string[], directs: { name, email, role, manager, managerEmail, title, notActivated, marks: { pct: number | null, completed, assigned, exempt }[], lastCompleted: string }[], rates: { learners, finished, pct }[] }[], roles: { role, rates }[], totals: { learners, finished, pct }[], seriesLinks }; text/csv with format=csv",
         errors: [
           { status: 400, error: "invalid_scope", when: "scope is neither org nor everyone" },
           { status: 400, error: "not_a_manager", when: "scope is org and nobody reports to the caller" },
