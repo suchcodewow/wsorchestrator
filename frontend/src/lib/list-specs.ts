@@ -95,6 +95,26 @@ export const FACILITY_LIST = spec(["name", "rooms", "capacity", "updatedAt"]);
 export type FacilitySort = (typeof FACILITY_LIST.sorts)[number];
 
 /** `position` is the order the session dialog offers them in. */
+/** Every response sent to the logistics intake form, newest first. */
+export const INTAKE_RESPONSE_LIST = spec(["submittedAt", "email"], "desc");
+export type IntakeResponseSort = (typeof INTAKE_RESPONSE_LIST.sorts)[number];
+
+/** Each attendee's dietary needs, the most critical first. */
+export const DIETARY_LIST = spec(["critical", "name", "email", "submittedAt"], "desc");
+export type DietarySort = (typeof DIETARY_LIST.sorts)[number];
+
+/** Food orders, the soonest to arrive first. */
+export const FOOD_ORDER_LIST = spec(["arrivesAt", "vendor", "updatedAt"]);
+export type FoodOrderSort = (typeof FOOD_ORDER_LIST.sorts)[number];
+
+/** Each guest judge on each bootcamp they judged, the latest bootcamp first. */
+export const GUEST_JUDGE_LIST = spec(["cohort", "name", "sessions"], "desc");
+export type GuestJudgeSort = (typeof GUEST_JUDGE_LIST.sorts)[number];
+
+/** Sales and sales engineering leaders in HiBob who have never been a guest judge. */
+export const JUDGE_PROSPECT_LIST = spec(["name", "department", "location"]);
+export type JudgeProspectSort = (typeof JUDGE_PROSPECT_LIST.sorts)[number];
+
 export const SESSION_TYPE_LIST = spec(["position", "name", "kind", "minutes"]);
 export type SessionTypeSort = (typeof SESSION_TYPE_LIST.sorts)[number];
 

@@ -34,7 +34,17 @@ const ACCOUNT = ["[Account]", "My inbox", "My settings"];
 
 // Mimir is for everyone, so every sidebar has a Training section holding at least it.
 const MIMIR_ONLY = ["[Training]", "Mimir"];
-const TRAINING_ADMIN = ["[Training]", "Scheduler", "Scheduler settings", "Cohorts", "Cohort Settings", "Mimir", "Mimir Settings"];
+const TRAINING_ADMIN = [
+  "[Training]",
+  "Scheduler",
+  "Scheduler settings",
+  "Cohorts",
+  "Cohort Settings",
+  "Logistics",
+  "Logistics settings",
+  "Mimir",
+  "Mimir Settings",
+];
 
 const EXPECTED_SIDEBAR: Record<Persona, string[]> = {
   nobody: [...HOME, ...MIMIR_ONLY, ...ACCOUNT],
@@ -42,7 +52,7 @@ const EXPECTED_SIDEBAR: Record<Persona, string[]> = {
   operator: [...HOME, ...EVENTS_USER, ...MIMIR_ONLY, ...ACCOUNT],
   manager: [...HOME, ...EVENTS_MANAGER, ...MIMIR_ONLY, ...ACCOUNT],
   eventAdmin: [...HOME, ...EVENTS_ADMIN, ...MIMIR_ONLY, ...ACCOUNT, "[Administration]", "Manage users"],
-  trainingViewer: [...HOME, "[Training]", "Scheduler", "Cohorts", "Mimir", ...ACCOUNT],
+  trainingViewer: [...HOME, "[Training]", "Scheduler", "Cohorts", "Logistics", "Mimir", ...ACCOUNT],
   trainingAdmin: [...HOME, ...TRAINING_ADMIN, ...ACCOUNT, "[Administration]", "Manage users"],
   // Iris is part of the assessments area: a viewer takes it, an administrator runs it.
   assessmentsViewer: [...HOME, ...MIMIR_ONLY, "[Assessments]", "eVals", "Iris", "Reporting", ...ACCOUNT],
@@ -153,6 +163,11 @@ describe("isNavItemActive", () => {
     // Why /scheduler-settings sits beside /scheduler rather than under it.
     assert.equal(isNavItemActive("/scheduler-settings", scheduler), false);
     assert.equal(isNavItemActive("/scheduler-settings", schedulerSettings), true);
+  });
+
+  test("logistics settings does not also light up the Logistics entry", () => {
+    assert.equal(isNavItemActive("/logistics-settings/intake", link("Logistics")), false);
+    assert.equal(isNavItemActive("/logistics-settings/intake", link("Logistics settings")), true);
   });
 
   test("eVals settings does not also light up the eVals entry", () => {

@@ -1,7 +1,8 @@
-import { ASSESSMENT_ATTENDEE_LIST, ASSESSMENT_LIST, AUDIT_LIST, BOOTCAMP_HISTORY_LIST, BOOTCAMP_LIST, CURRENT_COHORT_LIST, DOMAIN_LIST, EMPLOYEE_LIST, HIBOB_SYNC_LIST, HISTORY_STATUSES, JUDGE_LIST, ORGANIZATION_LIST, PREVIOUS_SESSION_LIST, SESSION_COMMENT_LIST, SESSION_TYPE_LIST, GOOGLE_MEETING_LIST, SLACK_CONTACT_LIST, SLACK_SYNC_CHANGE_LIST, SLACK_SYNC_LIST, CHANNEL_CONTACT_LIST, TITLE_LIST, USER_LIST, FACILITY_LIST } from "@/lib/list-specs";
-import { BOOTCAMP_LIMITS, CHECKLIST_LIMITS, EVALS_ASSESSMENT_LIMITS, FACILITY_LIMITS, GOOGLE_MEETING_LIMITS, SCHEDULE_LIMITS } from "@/db/schema";
+import { DIETARY_LIST, FOOD_ORDER_LIST, GUEST_JUDGE_LIST, INTAKE_RESPONSE_LIST, JUDGE_PROSPECT_LIST, ASSESSMENT_ATTENDEE_LIST, ASSESSMENT_LIST, AUDIT_LIST, BOOTCAMP_HISTORY_LIST, BOOTCAMP_LIST, CURRENT_COHORT_LIST, DOMAIN_LIST, EMPLOYEE_LIST, HIBOB_SYNC_LIST, HISTORY_STATUSES, JUDGE_LIST, ORGANIZATION_LIST, PREVIOUS_SESSION_LIST, SESSION_COMMENT_LIST, SESSION_TYPE_LIST, GOOGLE_MEETING_LIST, SLACK_CONTACT_LIST, SLACK_SYNC_CHANGE_LIST, SLACK_SYNC_LIST, CHANNEL_CONTACT_LIST, TITLE_LIST, USER_LIST, FACILITY_LIST } from "@/lib/list-specs";
+import { BOOTCAMP_LIMITS, CHECKLIST_LIMITS, EVALS_ASSESSMENT_LIMITS, FACILITY_LIMITS, FOOD_ORDER_LIMITS, GOOGLE_MEETING_LIMITS, INTAKE_LIMITS, SCHEDULE_LIMITS } from "@/db/schema";
 import { PAGE_SIZE } from "@/lib/paging";
 import { CHECKLIST_ITEM_ROW } from "./account";
+import { GUEST_JUDGE_DEPARTMENTS, GUEST_SPEAKER_LIMITS } from "@/lib/logistics/guest-judge-values";
 import { PAGE_FIELDS, listQuery } from "./paging";
 import type { Endpoint, EndpointGroup, Field } from "./types";
 
@@ -115,6 +116,34 @@ const ACTIVE_EXISTS_ERROR: EndpointError = {
   error: "active_exists",
   when: "status is active, another bootcamp already is, and completeActive does not name it; active names it",
 };
+
+const INTAKE_QUESTION_SHAPE = `{ id, kind: "short" | "paragraph" | "choice" | "checkboxes" | "dropdown", title, description, required: boolean, options: string[], other: boolean }`;
+
+const INTAKE_FORM_FIELDS: Field[] = [
+  { name: "title", type: "string", required: true, note: `up to ${INTAKE_LIMITS.title} characters` },
+  { name: "description", type: "string", note: `up to ${INTAKE_LIMITS.description} characters; shown under the title` },
+  {
+    name: "questions",
+    type: `${INTAKE_QUESTION_SHAPE}[]`,
+    required: true,
+    note: `1 to ${INTAKE_LIMITS.questions}, in the order asked, each id distinct. A choice, checkboxes or dropdown question needs 1 to ${INTAKE_LIMITS.options} distinct options of up to ${INTAKE_LIMITS.option} characters; other adds a free-text "Other" to choice and checkboxes, and is ignored on the rest`,
+  },
+];
+
+const FOOD_ORDER_SHAPE = "{ id, vendor, arrivesAt, needs, fileName: string | null, fileBytes: number | null, arrived: boolean, updatedAt }";
+
+const FOOD_ORDER_FIELDS: Field[] = [
+  { name: "vendor", type: "string", required: true, note: `who it is from, up to ${FOOD_ORDER_LIMITS.vendor} characters` },
+  { name: "arrivesAt", type: "string", required: true, note: "when it arrives, an ISO 8601 date and time with an offset" },
+  { name: "needs", type: "string", note: `what the training team needs from it, up to ${FOOD_ORDER_LIMITS.needs} characters; one thing a line prints as a checklist` },
+  { name: "file", type: "File", note: `the vendor's PDF, under ${FOOD_ORDER_LIMITS.bytes / (1024 * 1024)} MB` },
+];
+
+const FOOD_ORDER_FORM_ERRORS: EndpointError[] = [
+  { status: 400, error: "invalid", when: "vendor or arrivesAt is missing or malformed" },
+  { status: 413, error: "too_large", when: `the file is ${FOOD_ORDER_LIMITS.bytes / (1024 * 1024)} MB or more` },
+  { status: 415, error: "not_pdf", when: "the file is not a PDF" },
+];
 
 export const ADMIN_GROUPS: EndpointGroup[] = [
   {
@@ -1277,6 +1306,223 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         params: [{ name: "id", type: "string", required: true, note: "the type's id" }],
         returns: "{ ok: true }",
         errors: [{ status: 404, error: "not_found", when: "no such type" }],
+      },
+    ],
+  },
+  {
+    id: "logistics",
+    title: "Logistics",
+    endpoints: [
+      {
+        method: "GET",
+        path: "/api/logistics/intake-form",
+        summary: "Reads the intake form, as Logistics settings edits it.",
+        access: "trainingAdmin",
+        token: true,
+        notes: "Until it is first saved this is the default form, with updatedAt null.",
+        returns: `{ title, description, questions: ${INTAKE_QUESTION_SHAPE}[], updatedAt: string | null }`,
+      },
+      {
+        method: "PUT",
+        path: "/api/logistics/intake-form",
+        summary: "Replaces the intake form.",
+        access: "trainingAdmin",
+        token: true,
+        notes: "Answers already sent keep the question ids they were given under; a question removed stops being asked.",
+        body: { kind: "json", fields: INTAKE_FORM_FIELDS },
+        returns: `{ title, description, questions: ${INTAKE_QUESTION_SHAPE}[], updatedAt: string }`,
+        errors: [{ status: 400, error: "invalid", when: "the body is not that shape" }],
+      },
+      {
+        method: "GET",
+        path: "/api/logistics/intake-responses",
+        summary: "Lists every response sent to the intake form, a page at a time, newest first.",
+        access: "trainingAdmin",
+        token: true,
+        notes: "Each response is listed, including a second one from the same email.",
+        query: [
+          ...listQuery(INTAKE_RESPONSE_LIST.sorts, "the email or any answer"),
+          { name: "question", type: "string", note: "with answer, only responses whose answer to this question id is, or for checkboxes includes, answer" },
+          { name: "answer", type: "string", note: "with question; either alone is ignored" },
+        ],
+        returns: `{ responses: { id, email, answers: Record<string, string | string[]>, submittedAt }[], ${PAGE_FIELDS} }`,
+      },
+      {
+        method: "GET",
+        path: "/api/logistics/dietary",
+        summary: "Lists the attendees who said they have dietary needs, a page at a time, the most critical first.",
+        access: "trainingViewer",
+        token: true,
+        notes:
+          "Reads each attendee's latest response only. critical is the first digit 1 to 5 in their answer to how critical their needs are, or null where there is none; 5 is an allergy or a religious restriction. counts covers everyone, whatever the search.",
+        query: listQuery(DIETARY_LIST.sorts, "the name, email or needs"),
+        returns: `{ attendees: { email, name: string | null, needs: string | null, critical: number | null, submittedAt }[], ${PAGE_FIELDS}, counts: { responded: number, withNeeds: number, byLevel: { 1..5: number }, unrated: number } }`,
+      },
+      {
+        method: "GET",
+        path: "/api/logistics/food-orders",
+        summary: "Lists food orders, a page at a time, the soonest to arrive first.",
+        access: "trainingViewer",
+        token: true,
+        query: listQuery(FOOD_ORDER_LIST.sorts, "the vendor, what is needed or the file name"),
+        returns: `{ orders: ${FOOD_ORDER_SHAPE}[], ${PAGE_FIELDS} }`,
+      },
+      {
+        method: "POST",
+        path: "/api/logistics/food-orders",
+        summary: "Adds a food order, with the vendor's PDF if one is sent.",
+        access: "trainingAdmin",
+        token: true,
+        body: { kind: "multipart", fields: FOOD_ORDER_FIELDS },
+        returns: `201 ${FOOD_ORDER_SHAPE}`,
+        errors: FOOD_ORDER_FORM_ERRORS,
+      },
+      {
+        method: "PATCH",
+        path: "/api/logistics/food-orders/{id}",
+        summary: "Changes a food order, and replaces or removes its PDF.",
+        access: "trainingAdmin",
+        token: true,
+        notes: "Takes every field POST does, vendor and arrivesAt required. With no file the PDF is kept, unless removeFile is 1.",
+        params: [{ name: "id", type: "string", required: true, note: "the order's id" }],
+        body: {
+          kind: "multipart",
+          fields: [...FOOD_ORDER_FIELDS, { name: "removeFile", type: `"1"`, note: "with no file, removes the PDF the order has" }],
+        },
+        returns: FOOD_ORDER_SHAPE,
+        errors: [...FOOD_ORDER_FORM_ERRORS, { status: 404, error: "not_found", when: "no such order" }],
+      },
+      {
+        method: "DELETE",
+        path: "/api/logistics/food-orders/{id}",
+        summary: "Removes a food order and its PDF.",
+        access: "trainingAdmin",
+        token: true,
+        params: [{ name: "id", type: "string", required: true, note: "the order's id" }],
+        returns: "{ ok: true }",
+        errors: [{ status: 404, error: "not_found", when: "no such order" }],
+      },
+      {
+        method: "GET",
+        path: "/api/logistics/food-orders/{id}/pdf",
+        summary: "Serves a food order's PDF, to open in the browser.",
+        access: "trainingViewer",
+        token: true,
+        params: [{ name: "id", type: "string", required: true, note: "the order's id" }],
+        returns: "the PDF, as application/pdf",
+        errors: [{ status: 404, error: "not_found", when: "no such order, or it has no PDF" }],
+      },
+      {
+        method: "GET",
+        path: "/api/logistics/guest-judges",
+        summary: "Lists everyone who has been a guest judge, a row per cohort they judged, with the sessions they ran on it.",
+        access: "trainingViewer",
+        token: true,
+        notes:
+          "Two sources, side by side. source scheduler is a Scheduler bootcamp's guest judges, with person null: cohort is its first day, and sessions are the bootcamp's sessions with the judge on their staff, in schedule order, role lead on the one they led. source history is the guest speaker history, the cohorts kept outside the Scheduler, as POST /api/logistics/guest-speakers adds them: cohort is the first of the month, person is what DELETE /api/logistics/guest-speakers takes, bootcampId and status are null, sessions have no day or start, and role is teach, commentator, judge or speaker; email is null for someone no longer in HiBob. title is the employee list's now. Rows are always in month order, month being the first of cohort's month: sort cohort orders the months, newest first by default, and name or sessions orders people within each month. emptyCohorts lists the months set aside with POST /api/logistics/guest-speakers/cohorts that have no one in them yet, newest first. counts covers everyone, whatever the search.",
+        query: listQuery(GUEST_JUDGE_LIST.sorts, "the name, email, title or a session's name"),
+        returns: `{ judges: { id, email: string | null, fullName, title: string | null, cohort: string, month: string, source: "scheduler" | "history", person: string | null, bootcampId: string | null, status: "scheduled" | "active" | "complete" | null, sessions: { name, role: "lead" | "teach" | "commentator" | "judge" | "speaker" | null, track: ${TRACK_TYPE}, day: number | null, start: number | null }[] }[], ${PAGE_FIELDS}, counts: { judges: number, cohorts: number, prospects: number }, emptyCohorts: string[] }`,
+      },
+      {
+        method: "GET",
+        path: "/api/logistics/guest-judges/prospects",
+        summary: "Lists the sales and sales engineering leaders who have never been a guest judge, a page at a time.",
+        access: "trainingViewer",
+        token: true,
+        notes: `Read from the employee list as the last HiBob sync left it: anyone in ${GUEST_JUDGE_DEPARTMENTS.join(", ")} with at least one direct report, on no bootcamp's guest judges and not in the guest speaker history, by email. location is HiBob's work location and site its country. syncedAt is when that sync ran.`,
+        query: listQuery(JUDGE_PROSPECT_LIST.sorts, "the name, email or title"),
+        returns: `{ leaders: { email, fullName, title, department, reportsToName, location: string | null, site }[], ${PAGE_FIELDS}, syncedAt: string | null }`,
+      },
+      {
+        method: "POST",
+        path: "/api/logistics/guest-speakers",
+        summary: "Adds someone to the guest speaker history: a session they taught, commentated or judged at a month's cohort.",
+        access: "trainingAdmin",
+        token: true,
+        notes: "For cohorts kept outside the Scheduler; a Scheduler bootcamp's judges are set in its bootcamp dialog. An entry already there is left as it is, and added is false. With an email the person drops off the leaders list.",
+        body: {
+          kind: "json",
+          fields: [
+            { name: "cohort", type: "string", required: true, note: "the cohort's month, YYYY-MM" },
+            { name: "program", type: `"bootcamp" | "intermediate"`, required: true },
+            { name: "session", type: "string", note: `up to ${GUEST_SPEAKER_LIMITS.session} characters; empty for someone on no particular session` },
+            { name: "role", type: `"teach" | "commentator" | "judge" | "speaker"`, required: true },
+            { name: "fullName", type: "string", required: true, note: `up to ${GUEST_SPEAKER_LIMITS.name} characters` },
+            { name: "email", type: "string | null", note: "their email, from the employee list; null or left out for someone not in it" },
+          ],
+        },
+        returns: "201 { added: true }, or 200 { added: false }",
+        errors: [{ status: 400, error: "invalid", when: "the body is not that shape" }],
+      },
+      {
+        method: "POST",
+        path: "/api/logistics/guest-speakers/cohorts",
+        summary: "Sets a month aside for a cohort, so it lists as a space to fill in before anyone is down for it.",
+        access: "trainingAdmin",
+        token: true,
+        notes: "A month already set aside is left as it is, and added is false. A month with guest speakers or a Scheduler bootcamp lists whether or not it is set aside.",
+        body: { kind: "json", fields: [{ name: "cohort", type: "string", required: true, note: "the cohort's month, YYYY-MM" }] },
+        returns: "201 { added: true }, or 200 { added: false }",
+        errors: [{ status: 400, error: "invalid", when: "the body is not that shape" }],
+      },
+      {
+        method: "DELETE",
+        path: "/api/logistics/guest-speakers/cohorts",
+        summary: "Takes a month off the cohorts set aside.",
+        access: "trainingAdmin",
+        token: true,
+        notes: "Removes only the space: guest speakers already down for that month, and a Scheduler bootcamp in it, keep it listed.",
+        query: [{ name: "cohort", type: "string", required: true, note: "the first of the month, YYYY-MM-DD, as emptyCohorts gives it" }],
+        returns: "{ ok: true }",
+        errors: [{ status: 404, error: "not_found", when: "that month is not set aside" }],
+      },
+      {
+        method: "DELETE",
+        path: "/api/logistics/guest-speakers",
+        summary: "Removes everything the guest speaker history holds for one person at one cohort.",
+        access: "trainingAdmin",
+        token: true,
+        query: [
+          { name: "cohort", type: "string", required: true, note: "a history row's cohort, YYYY-MM-DD, the first of its month" },
+          { name: "person", type: "string", required: true, note: "a history row's person: their email, or their lowercased name for someone with none" },
+        ],
+        returns: "{ removed: number }",
+        errors: [{ status: 404, error: "not_found", when: "the history holds nothing for them at that cohort" }],
+      },
+      {
+        method: "GET",
+        path: "/api/intake",
+        summary: "Reads the intake form a new bootcamp attendee fills in at /intake.",
+        access: "public",
+        token: true,
+        returns: `{ title, description, questions: ${INTAKE_QUESTION_SHAPE}[] }`,
+      },
+      {
+        method: "POST",
+        path: "/api/intake",
+        summary: "Sends an attendee's answers to the intake form.",
+        access: "public",
+        token: true,
+        notes:
+          "Attendees have no account, so anyone with the link can send answers under any email. Answers are checked against the form as it stands now: trimmed, blanks dropped, and any for a question not on it ignored. Sending again adds another response rather than replacing the last.",
+        body: {
+          kind: "json",
+          fields: [
+            { name: "email", type: "string", required: true, note: "an email address; stored lowercased" },
+            {
+              name: "answers",
+              type: "Record<string, string | string[]>",
+              required: true,
+              note: `keyed by question id: an array for checkboxes, a string for the rest, each up to ${INTAKE_LIMITS.answer} characters. A choice, checkboxes or dropdown answer must be one of the options, except for one free-text answer where the question offers "Other"`,
+            },
+          ],
+        },
+        returns: "201 { id }",
+        errors: [
+          { status: 400, error: "invalid", when: "the body is not that shape, or email is not an email address" },
+          { status: 400, error: "required", when: "a required question has no answer; questionId names it" },
+          { status: 400, error: "not_an_option", when: "an answer is not one the question offers, or a single-answer question was given several; questionId names it" },
+        ],
       },
     ],
   },

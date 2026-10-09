@@ -61,6 +61,8 @@ import { EVALS_SETTINGS_TABS } from "@/app/(app)/evals-settings/tabs";
 import { MIMIR_TABS } from "@/app/(app)/mimir/tabs";
 import { MIMIR_SETTINGS_TABS } from "@/app/(app)/mimir-settings/tabs";
 import { SCHEDULER_SETTINGS_TABS } from "@/app/(app)/scheduler-settings/tabs";
+import { LOGISTICS_SETTINGS_TABS } from "@/app/(app)/logistics-settings/tabs";
+import { LOGISTICS_TABS } from "@/app/(app)/logistics/tabs";
 import { EVALS_TABS } from "@/app/(app)/evals/tabs";
 import { visibleReportingTabs } from "@/app/(app)/reporting/tabs";
 import { COHORTS_TABS } from "@/app/(app)/cohorts/tabs";
@@ -215,6 +217,29 @@ const PAGES: Record<string, PageCase> = {
   "/cohorts/deferred": { path: () => "/cohorts/deferred", expect: gated(canUseTraining) },
   "/cohorts/name-cards": { path: () => "/cohorts/name-cards", expect: gated(canUseTraining) },
   "/cohorts/previous": { path: () => "/cohorts/previous", expect: gated(canUseTraining) },
+  "/logistics": {
+    path: () => "/logistics",
+    expect: (a) => (canUseTraining(a) ? { to: LOGISTICS_TABS[0]!.href } : 404),
+  },
+  "/logistics/dietary": { path: () => "/logistics/dietary", expect: gated(canUseTraining) },
+  "/logistics/guest-judges": {
+    path: () => "/logistics/guest-judges?q=x&sort=sessions&leaders.sort=location&leaders.page=2",
+    expect: gated(canUseTraining),
+  },
+  "/logistics/food-orders": { path: () => "/logistics/food-orders?q=x&sort=vendor", expect: gated(canUseTraining) },
+  "/logistics/food-orders/print": { path: () => "/logistics/food-orders/print", expect: gated(canUseTraining) },
+  "/logistics/food-orders/print?<unknown>": { path: () => `/logistics/food-orders/print?id=${MISSING}`, expect: () => 404 },
+  "/logistics-settings": {
+    path: () => "/logistics-settings",
+    expect: (a) => (canManageTrainingSettings(a) ? { to: LOGISTICS_SETTINGS_TABS[0]!.href } : 404),
+  },
+  "/logistics-settings/intake": { path: () => "/logistics-settings/intake", expect: gated(canManageTrainingSettings) },
+  "/logistics-settings/responses": { path: () => "/logistics-settings/responses", expect: gated(canManageTrainingSettings) },
+  "/logistics-settings/responses?filtered": {
+    path: () => "/logistics-settings/responses?question=dietary&answer=Yes&q=x",
+    expect: gated(canManageTrainingSettings),
+  },
+  "/logistics/dietary?searched": { path: () => "/logistics/dietary?q=x&sort=name", expect: gated(canUseTraining) },
   "/cohorts/previous?open=<a day>": { path: () => "/cohorts/previous?open=2026-09-14", expect: gated(canUseTraining) },
   "/cohorts/previous/<a record>": {
     path: () => `/cohorts/previous/${historyId}`,
@@ -393,6 +418,7 @@ const PAGES: Record<string, PageCase> = {
   "/me/api-tokens": { path: () => "/me/api-tokens", expect: () => 200 },
   "/inbox": { path: () => "/inbox", expect: () => 200 },
   "/labs": { path: () => "/labs", expect: () => 200, signedOut: 200 },
+  "/intake": { path: () => "/intake", expect: () => 200, signedOut: 200 },
   "/api": { path: () => "/api", expect: () => 200, signedOut: 200 },
   "/labs/new": {
     path: () => "/labs/new",
@@ -610,6 +636,23 @@ const ROUTES: RouteCase[] = [
   { method: "POST", path: "/api/scheduler/session-types", allowed: canManageTrainingSettings, body: () => ({}) },
   { method: "PATCH", path: `/api/scheduler/session-types/${MISSING}`, allowed: canManageTrainingSettings, body: () => ({ minutes: 7 }) },
   { method: "DELETE", path: `/api/scheduler/session-types/${MISSING}`, allowed: canManageTrainingSettings },
+  { method: "GET", path: "/api/logistics/intake-form", allowed: canManageTrainingSettings },
+  { method: "PUT", path: "/api/logistics/intake-form", allowed: canManageTrainingSettings, body: () => ({}) },
+  { method: "GET", path: "/api/logistics/intake-responses?question=dietary&answer=Yes", allowed: canManageTrainingSettings },
+  { method: "GET", path: "/api/logistics/dietary", allowed: canUseTraining },
+  { method: "GET", path: "/api/logistics/guest-judges?sort=sessions", allowed: canUseTraining },
+  { method: "GET", path: "/api/logistics/guest-judges/prospects?sort=location", allowed: canUseTraining },
+  { method: "POST", path: "/api/logistics/guest-speakers", allowed: canManageTrainingSettings, body: () => ({}) },
+  { method: "DELETE", path: "/api/logistics/guest-speakers?cohort=1999-01-01&person=nobody", allowed: canManageTrainingSettings },
+  { method: "POST", path: "/api/logistics/guest-speakers/cohorts", allowed: canManageTrainingSettings, body: () => ({}) },
+  { method: "DELETE", path: "/api/logistics/guest-speakers/cohorts?cohort=1999-01-01", allowed: canManageTrainingSettings },
+  { method: "GET", path: "/api/logistics/food-orders", allowed: canUseTraining },
+  { method: "POST", path: "/api/logistics/food-orders", allowed: canManageTrainingSettings, body: form },
+  { method: "PATCH", path: `/api/logistics/food-orders/${MISSING}`, allowed: canManageTrainingSettings, body: form },
+  { method: "DELETE", path: `/api/logistics/food-orders/${MISSING}`, allowed: canManageTrainingSettings },
+  { method: "GET", path: `/api/logistics/food-orders/${MISSING}/pdf`, allowed: canUseTraining },
+  { method: "GET", path: "/api/intake", allowed: "public" },
+  { method: "POST", path: "/api/intake", allowed: "public", body: () => ({}) },
 
   // eVals
   { method: "GET", path: "/api/evals/bootcamp-history", allowed: canUseEvals },
