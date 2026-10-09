@@ -18,7 +18,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { appendChunk, createRecording, markStopped, requestPersistence } from "@/lib/recording/store";
+import { RECORDING_SUBJECT, appendChunk, createRecording, markStopped, requestPersistence } from "@/lib/recording/store";
 import {
   VIDEO_AUDIO_BITS_PER_SECOND,
   VIDEO_BITS_PER_SECOND,
@@ -40,11 +40,9 @@ type Take = {
 const START_TIMEOUT_MS = 5_000;
 
 export function useTakeRecorder({
-  linkId,
   ownerId,
   onChunk,
 }: {
-  linkId: string;
   ownerId: string;
   /** After each chunk is on disk, and when a take ends: the uploader looks again. */
   onChunk: () => void;
@@ -121,10 +119,10 @@ export function useTakeRecorder({
         for (const [kind, at] of times) {
           const recording = await createRecording({
             ownerId,
-            subject: linkId,
+            subject: RECORDING_SUBJECT,
             label: kind === "camera" ? "Camera" : "Screen",
             mimeType: recorders[kind]!.mimeType || mimeTypes[kind]!,
-            upload: { linkId, takeId, kind, offsetMs: Math.round(at - first), contributor },
+            upload: { takeId, kind, offsetMs: Math.round(at - first), contributor },
           });
           ids[kind] = recording.id;
         }
@@ -211,7 +209,7 @@ export function useTakeRecorder({
       setState("recording");
       return true;
     },
-    [ownerId, linkId, stop],
+    [ownerId, stop],
   );
 
   useEffect(() => {

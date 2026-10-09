@@ -2637,22 +2637,9 @@ export const RECORDING_LIMITS = {
 } as const;
 
 /**
- * The link anyone records through, with no account: `/record/{id}`, so the id
- * is the secret. There is one in use at a time — `retiredAt` is null on it —
- * and replacing it retires the old one, which then files no new takes but
- * still finishes the uploads already under way on it.
- */
-export const recordingLinks = pgTable("recording_links", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  retiredAt: timestamp("retired_at", { withTimezone: true }),
-});
-
-/**
  * One stream of one take: the camera with the microphone, or the shared
- * screen. A take is the streams sharing a `takeId`, recorded together under
- * the name the person typed. The browser records each locally and uploads it
+ * screen. A take is the streams sharing a `takeId`, recorded together by the
+ * signed-in account in `recordedBy`, under the name they typed. The browser records each locally and uploads it
  * a chunk at a time; the chunks are kept by `lib/recording/storage.ts`, not
  * here. `offsetMs` is when this stream started after the take's first one, to
  * line the files up in an editor.
@@ -2661,9 +2648,8 @@ export const recordingTracks = pgTable(
   "recording_tracks",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    linkId: uuid("link_id")
-      .notNull()
-      .references(() => recordingLinks.id),
+    /** Who recorded it: anyone in the org can, signed in, without a role. Only they may add to it. */
+    recordedBy: text("recorded_by").references(() => users.id, { onDelete: "set null" }),
     takeId: uuid("take_id").notNull(),
     kind: text("kind").$type<RecordingTrackKind>().notNull(),
     mimeType: text("mime_type").notNull(),

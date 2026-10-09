@@ -1,17 +1,21 @@
 # Async recordings
 
-There is one recording link, `/record/{id}`, shown on **Recordings**
-(`/recordings`) for anyone in Training to copy and share. Whoever opens it gets
-the Harness Training Recorder, with no account: they type their name, turn on
-their camera, optionally share their screen, and record. What comes back is a
-file per stream per take, never one composited video: the camera with the
-microphone, and, if they shared one, the screen with any audio the browser
-shares with it. Each take is filed under the name they typed, which also names
-the downloads, and Recordings lists every take, newest first.
+The recorder is at **`/record`**, the Harness Training Recorder. Anyone in the
+org can use it: they sign in with Google, as for the rest of the app, but need
+no role, so a first visit just creates an account with no access. They type
+their name, turn on their camera, optionally share their screen, and record.
+What comes back is a file per stream per take, never one composited video: the
+camera with the microphone, and, if they shared one, the screen with any audio
+the browser shares with it.
 
-The id in the link is its only guard, so a Training administrator can
-**Replace link**: the old one stops filing new takes at once, and takes already
-uploading on it still finish. Replacing is also how the first link is created.
+A take belongs to the account that recorded it (`recorded_by`): nobody else can
+file a stream on it or upload to it, and a browser shared by two people keeps
+each one's unfinished uploads apart.
+
+**Async Recordings** (`/recordings`, under Enablement Tools) is for Training
+Administrators only: the address to share, and every take, newest first, under
+the name its recorder typed, with a still from five seconds in, a player and
+downloads for each file.
 
 ## Why it survives a bad connection
 
@@ -38,7 +42,7 @@ Every step can be repeated:
 - *Finish* is asked again until the answer is `ready`.
 
 Which chunks have landed is kept in IndexedDB. Closing the tab, a crash or a
-reload costs nothing: opening the same link in the same browser resumes the upload.
+reload costs nothing: opening /record again in the same browser, signed in as the same person, resumes the upload.
 The browser deletes its copy only once the server says the file is ready. Until
 then, *Save a copy* on the page downloads it straight from IndexedDB.
 
@@ -110,9 +114,9 @@ It is usually under 50 ms; it is shown on the take's page and returned by the AP
 
 ## Still open
 
-- **Bounding a leaked link.** Replacing the link stops it, but only once someone
-  notices. A cap on how much one take, or one hour, may upload would bound the
-  damage before then.
+- **Bounding one account's uploads.** Anyone in the org can record, so a cap
+  on how much one take, or one account in a day, may upload would bound a
+  runaway or a mistake.
 - **Remuxing in the bucket**, so every editor seeks the files quickly (above).
 
 ## Limits

@@ -1,7 +1,7 @@
 /**
- * Async recordings: the one link anyone records through, and the takes that
- * come back on it, each a camera stream and perhaps a screen stream, filed
- * under the name the person typed.
+ * Async recordings: the takes anyone in the org records at /record, signed
+ * in with Google but needing no role, each a camera stream and perhaps a
+ * screen stream, filed under the name they typed.
  *
  * The participant's browser records each stream locally and uploads it a
  * chunk at a time while it records, retrying until each lands (see
@@ -12,13 +12,12 @@
 
 import "server-only";
 
-import { and, eq, inArray, isNull, lt, or, sql } from "drizzle-orm";
+import { and, eq, inArray, lt, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
 import {
   RECORDING_LIMITS,
   RECORDING_TRACK_KINDS,
-  recordingLinks,
   recordingTracks,
   type RecordingTrackKind,
   type RecordingTrackStatus,
@@ -42,8 +41,6 @@ import { RECORDING_RETENTION_DAYS, UPLOAD_STALLED_MS, UPLOAD_URL_BATCH, missingC
 
 /** An assembly that has not finished in this long died with its server, and may be tried again. */
 const STALE_ASSEMBLY_MS = 15 * 60_000;
-
-export type RecordingLink = { id: string; createdAt: string };
 
 export type RecordingTrackRow = {
   id: string;
@@ -110,44 +107,6 @@ const toTrackRow = (t: TrackSelect): RecordingTrackRow => ({
   startedAt: t.startedAt.toISOString(),
   lastChunkAt: t.lastChunkAt ? t.lastChunkAt.toISOString() : null,
 });
-
-// ─── The link ───────────────────────────────────────────────────────────────
-
-/** The link in use, or null before the first is made. */
-export async function getActiveLink(): Promise<RecordingLink | null> {
-  const [row] = await db
-    .select({ id: recordingLinks.id, createdAt: recordingLinks.createdAt })
-    .from(recordingLinks)
-    .where(isNull(recordingLinks.retiredAt))
-    .orderBy(sql`${recordingLinks.createdAt} desc`)
-    .limit(1);
-  return row ? { id: row.id, createdAt: row.createdAt.toISOString() } : null;
-}
-
-/**
- * Makes a new link and retires every other, in one transaction. The old link
- * stops filing new takes at once; uploads already under way on it finish.
- */
-export async function replaceLink(actorId: string): Promise<RecordingLink> {
-  return db.transaction(async (tx) => {
-    await tx.update(recordingLinks).set({ retiredAt: new Date() }).where(isNull(recordingLinks.retiredAt));
-    const [row] = await tx
-      .insert(recordingLinks)
-      .values({ createdBy: actorId })
-      .returning({ id: recordingLinks.id, createdAt: recordingLinks.createdAt });
-    return { id: row!.id, createdAt: row!.createdAt.toISOString() };
-  });
-}
-
-/** Whether `id` is a link a new take may be recorded on: the one in use. */
-export async function isActiveLink(id: string): Promise<boolean> {
-  if (!isUuid(id)) return false;
-  const [row] = await db
-    .select({ id: recordingLinks.id })
-    .from(recordingLinks)
-    .where(and(eq(recordingLinks.id, id), isNull(recordingLinks.retiredAt)));
-  return Boolean(row);
-}
 
 // ─── Takes ──────────────────────────────────────────────────────────────────
 
@@ -264,31 +223,34 @@ export const registerTrackSchema = z.object({
 export type RegisterTrackFields = z.infer<typeof registerTrackSchema>;
 
 /**
- * Files a stream before its first chunk. Saying so again, as a browser does
- * after every reload, changes nothing, even once the link has been replaced;
- * a new take needs the link in use. Null when neither holds, or the take is
- * already on another link.
+ * Files a stream before its first chunk, as `userId`'s. Saying so again, as a
+ * browser does after every reload, changes nothing. Null when the take is
+ * someone else's: nobody may add to another person's recording.
  */
-export async function registerTrack(linkId: string, fields: RegisterTrackFields): Promise<RecordingTrackRow | null> {
-  const existing = await findTrack(linkId, fields.takeId, fields.kind);
-  if (existing) return existing;
-  if (!(await isActiveLink(linkId))) return null;
+export async function registerTrack(userId: string, fields: RegisterTrackFields): Promise<RecordingTrackRow | null> {
+  // A take is whoever filed its first stream: a second account cannot add one, of either kind.
+  const [owner] = await db
+    .select({ recordedBy: recordingTracks.recordedBy })
+    .from(recordingTracks)
+    .where(eq(recordingTracks.takeId, fields.takeId))
+    .limit(1);
+  if (owner && owner.recordedBy !== userId) return null;
   await db
     .insert(recordingTracks)
-    .values({ linkId, ...fields })
+    .values({ recordedBy: userId, ...fields })
     .onConflictDoNothing({ target: [recordingTracks.takeId, recordingTracks.kind] });
-  return findTrack(linkId, fields.takeId, fields.kind);
+  return findTrack(userId, fields.takeId, fields.kind);
 }
 
-/** One stream of one take recorded on `linkId`, or null. */
-export async function findTrack(linkId: string, takeId: string, kind: string): Promise<RecordingTrackRow | null> {
-  if (!isUuid(linkId) || !isUuid(takeId) || !RECORDING_TRACK_KINDS.includes(kind as RecordingTrackKind)) return null;
+/** One stream of one take `userId` recorded, or null. */
+export async function findTrack(userId: string, takeId: string, kind: string): Promise<RecordingTrackRow | null> {
+  if (!isUuid(takeId) || !RECORDING_TRACK_KINDS.includes(kind as RecordingTrackKind)) return null;
   const [row] = await db
     .select(TRACK_COLUMNS)
     .from(recordingTracks)
     .where(
       and(
-        eq(recordingTracks.linkId, linkId),
+        eq(recordingTracks.recordedBy, userId),
         eq(recordingTracks.takeId, takeId),
         eq(recordingTracks.kind, kind as RecordingTrackKind),
       ),

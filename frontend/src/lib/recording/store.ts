@@ -52,7 +52,6 @@ export type StoredRecording = {
 };
 
 export type UploadTarget = {
-  linkId: string;
   takeId: string;
   kind: "camera" | "screen";
   /** When this stream started after the take's first one. */
@@ -68,6 +67,9 @@ export const evalSubject = (assessmentId: string, employeeId: string) =>
   `eval:${assessmentId}:${employeeId}`;
 
 export const CHECK_PC_SUBJECT = "check-pc";
+
+/** The subject an async recording's streams are filed under, beside an eVals subject or Check PC's. */
+export const RECORDING_SUBJECT = "async-recording";
 
 export function recordingsSupported(): boolean {
   return typeof indexedDB !== "undefined";

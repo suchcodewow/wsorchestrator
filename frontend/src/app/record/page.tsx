@@ -1,11 +1,13 @@
-/** The Harness Training Recorder, opened from a shared link with no sign-in: record a camera, and a screen if wanted. */
+/**
+ * The Harness Training Recorder: anyone in the org, signed in with Google but
+ * needing no role, records their camera, and their screen if they want.
+ */
 
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
-import { auth } from "@/auth";
+import { redirect } from "next/navigation";
+import { auth, signInPath } from "@/auth";
 import { AmbientBackdrop } from "@/components/ambient-backdrop";
 import { SiteHeader } from "@/components/site-header";
-import { isActiveLink } from "@/lib/recording/recordings";
 import { RecordStudio } from "./record-studio";
 
 export const metadata: Metadata = {
@@ -17,11 +19,9 @@ export const dynamic = "force-dynamic";
 
 const SHELL = "max-w-3xl";
 
-export default async function RecordPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  if (!(await isActiveLink(id))) notFound();
-
+export default async function RecordPage() {
   const session = await auth();
+  if (!session?.user) redirect(await signInPath());
 
   return (
     <div className="relative min-h-screen">
@@ -30,7 +30,7 @@ export default async function RecordPage({ params }: { params: Promise<{ id: str
       <SiteHeader session={session} width={SHELL} />
 
       <main className={`relative mx-auto ${SHELL} px-6 py-10`}>
-        <RecordStudio linkId={id} />
+        <RecordStudio userId={session.user.id} accountName={session.user.name ?? ""} />
       </main>
     </div>
   );
