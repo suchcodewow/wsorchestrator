@@ -161,20 +161,20 @@ export const ACCOUNT_GROUPS: EndpointGroup[] = [
       {
         method: "POST",
         path: "/api/me/impersonation",
-        summary: "Starts viewing the app as an employee.",
+        summary: "Starts viewing the app as an employee, or as a test account.",
         access: "platform",
         token: false,
         notes:
-          "Session only. From the next request this session is the employee's: every route answers with their roles and their data. It changes nothing: every other POST, PUT, PATCH and DELETE is refused with 403 `impersonating` until DELETE ends it. Anyone on the employee list may be chosen; someone who has never signed in is shown as a new account, with an id of the form `employee:{hibobId}`. Sent while already viewing as someone, it switches to the new employee. The audit trail records the administrator as the actor, with `impersonating` in the detail.",
+          "Session only. From the next request this session is the employee's: every route answers with their roles and their data. It changes nothing: every other POST, PUT, PATCH and DELETE is refused with 403 `impersonating` until DELETE ends it. Anyone on the employee list may be chosen; someone who has never signed in is shown as a new account, with an id of the form `employee:{hibobId}`. Outside production a test account (GET /api/users/test-accounts) may be chosen too, and is the exception: changes made as it go through, save on session-only routes, which are still refused with `impersonating`. Sent while already viewing as someone, it switches to the new person. The audit trail records the administrator as the actor, with `impersonating` in the detail.",
         body: {
           kind: "json",
-          fields: [{ name: "email", type: "string", required: true, note: "an employee's email; case is ignored" }],
+          fields: [{ name: "email", type: "string", required: true, note: "an employee's or a test account's email; case is ignored" }],
         },
         returns:
           "{ impersonating: { id, email, name: string | null }, impersonator: { id, email: string | null, name: string | null } }",
         errors: [
           { status: 400, error: "invalid_email", when: "email is missing or blank" },
-          { status: 404, error: "not_found", when: "no employee has that email" },
+          { status: 404, error: "not_found", when: "no employee has that email, nor, outside production, any test account" },
           { status: 409, error: "self", when: "the email is your own" },
           { status: 409, error: "platform_admin", when: "the employee is a platform administrator, who already sees everything" },
           { status: 409, error: "no_session", when: "the request carries no session cookie of yours to set it on" },

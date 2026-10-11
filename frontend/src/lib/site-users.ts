@@ -28,6 +28,8 @@ export type SiteUser = {
   isPlatformAdmin: boolean;
   /** Listed in SITE_ADMIN_EMAILS, so made a platform administrator on every sign-in. */
   isBootstrapAdmin: boolean;
+  /** Made to test the app as; see src/lib/test-accounts.ts. */
+  isTestAccount: boolean;
   eventCount: number;
 };
 
@@ -55,6 +57,7 @@ export async function listSiteUsers(query: ListQuery<UserSort>): Promise<Page<Si
       trainingRole: users.trainingRole,
       assessmentsRole: users.assessmentsRole,
       isPlatformAdmin: users.isPlatformAdmin,
+      isTestAccount: users.isTestAccount,
       eventCount,
     })
     .from(users)

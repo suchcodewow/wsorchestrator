@@ -2,11 +2,12 @@
 
 /** The account menu, everywhere one is opened. */
 
-import { Fragment, useState, useTransition } from "react";
+import { Fragment, useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import {
   ChevronDown,
   ChevronsUpDown,
+  FlaskConical,
   Laptop,
   Loader2,
   LogOut,
@@ -19,6 +20,7 @@ import {
 } from "lucide-react";
 import { Avatar } from "@/components/avatar";
 import { useEmployeeSearch } from "@/components/employee-picker";
+import { SEARCH_DEBOUNCE_MS } from "@/components/use-debounced-search";
 import { Input } from "@/components/ui/input";
 import {
   DropdownMenu,
@@ -69,11 +71,14 @@ function buildTitle(build: BuildInfo): string {
   return build.message ? `${built}\n${build.message}` : built;
 }
 
-/** The administrator really signed in, while the menu's name is whom they view the app as. */
-export type Impersonator = { name: string | null; email: string | null };
+/**
+ * The administrator really signed in, while the menu's name is whom they view
+ * the app as; `testAccount` when that is a test account, which can change things.
+ */
+export type Impersonator = { name: string | null; email: string | null; testAccount?: true };
 
 const IMPERSONATION_ERRORS: Record<string, string> = {
-  not_found: "Not on the employee list.",
+  not_found: "Not on the employee list, nor a test account.",
   self: "That is you.",
   platform_admin: "A platform administrator already sees everything.",
   impersonating: "Stop viewing as them first.",
@@ -98,13 +103,40 @@ async function impersonate(email: string | null): Promise<string | null> {
   return null;
 }
 
-/** Finds an employee to view the app as. */
+type TestAccountMatch = { id: string; name: string | null; email: string };
+
+/** Test accounts matching `q`, every one (up to the route's few) when it is empty; none on production. */
+function useTestAccountSearch(q: string) {
+  const [matches, setMatches] = useState<TestAccountMatch[]>([]);
+
+  useEffect(() => {
+    const ctrl = new AbortController();
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/users/test-accounts?${new URLSearchParams({ q })}`, { signal: ctrl.signal });
+        const body = res.ok ? ((await res.json()) as { testAccounts?: TestAccountMatch[] }) : null;
+        setMatches(body?.testAccounts ?? []);
+      } catch {
+        // Aborted by the next keystroke, or offline: the list just stays as it was.
+      }
+    }, SEARCH_DEBOUNCE_MS);
+    return () => {
+      clearTimeout(t);
+      ctrl.abort();
+    };
+  }, [q]);
+
+  return matches;
+}
+
+/** Finds an employee, or a test account, to view the app as. */
 function ImpersonationPicker() {
   const [query, setQuery] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const q = query.trim();
   const { matches } = useEmployeeSearch(q, q.length > 0);
+  const testAccounts = useTestAccountSearch(q);
 
   async function choose(email: string) {
     setBusy(true);
@@ -152,6 +184,28 @@ function ImpersonationPicker() {
             <span className="truncate text-xs text-muted-foreground">{e.email}</span>
           </DropdownMenuItem>
         ))}
+      {testAccounts.length > 0 && (
+        <>
+          <div className={cn(SECTION_HEADING, "flex items-center gap-1.5")}>
+            <FlaskConical className="size-3" />
+            Test accounts
+          </div>
+          {testAccounts.map((t) => (
+            <DropdownMenuItem
+              key={t.id}
+              disabled={busy}
+              onSelect={(ev) => {
+                ev.preventDefault();
+                void choose(t.email);
+              }}
+              className="flex-col items-start gap-0"
+            >
+              <span className="truncate">{t.name ?? t.email}</span>
+              <span className="truncate text-xs text-muted-foreground">Changes are saved as it</span>
+            </DropdownMenuItem>
+          ))}
+        </>
+      )}
     </>
   );
 }
@@ -169,7 +223,10 @@ function ImpersonationNotice({ impersonator, name }: { impersonator: Impersonato
           <span className="truncate">Viewing as {name}</span>
         </span>
         <span className="mt-0.5 block truncate opacity-80">
-          Signed in as {impersonator.name ?? impersonator.email}. Nothing can be changed.
+          Signed in as {impersonator.name ?? impersonator.email}.
+        </span>
+        <span className="block opacity-80">
+          {impersonator.testAccount ? "A test account: changes are saved." : "Nothing can be changed."}
         </span>
         {error && <span className="mt-0.5 block text-destructive">{error}</span>}
       </div>

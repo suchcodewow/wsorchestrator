@@ -5,10 +5,13 @@
  * administrator in `session.impersonator`. It ends when they stop it, sign
  * out, or stop being a platform administrator.
  *
- * It is for seeing, not doing. Every non-GET route is refused with
- * `impersonating` while it lasts (`audited` checks), save the one that ends
- * it, so nothing is ever changed, and no token minted, in another person's
- * name. The theme stays the administrator's own.
+ * Viewing as an employee is for seeing, not doing. Every non-GET route is
+ * refused with `impersonating` while it lasts (`audited` checks), save the one
+ * that ends it, so nothing is ever changed, and no token minted, in another
+ * person's name. The theme stays the administrator's own.
+ *
+ * A test account (`src/lib/test-accounts.ts`) can be viewed as too, outside
+ * production, and is the one exception: changes made as it go through.
  *
  * Someone who has never signed in has no account. They are shown as a new
  * account would be on its first visit, with a stand-in id no row has.
@@ -21,6 +24,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { employees, sessions, users } from "@/db/schema";
 import { isBootstrapAdmin } from "@/lib/site-admins";
+import { testAccountsAllowed } from "@/lib/test-accounts";
 
 /** The route that starts and ends it, which stays open while it lasts. */
 export const IMPERSONATION_PATH = "/api/me/impersonation";
@@ -38,11 +42,13 @@ export type ImpersonationTarget = {
   image: string | null;
   /** Their stored row, which the session callback builds their roles from; null with no account. */
   user: typeof users.$inferSelect | null;
+  /** A test account, outside production, so changes made as it go through. */
+  testAccount: boolean;
 };
 
 /**
- * The employee with this email, and their account if they have one; null if
- * no employee has it.
+ * The employee with this email, and their account if they have one, or else
+ * the test account with it; null if neither has it.
  */
 export async function impersonationTarget(email: string): Promise<ImpersonationTarget | null> {
   const lower = email.trim().toLowerCase();
@@ -53,13 +59,18 @@ export async function impersonationTarget(email: string): Promise<ImpersonationT
     .from(employees)
     .where(eq(employees.email, lower))
     .limit(1);
-  if (!employee) return null;
 
   const user = await db.query.users.findFirst({
     where: sql`lower(${users.email}) = ${lower}`,
   });
 
+  if (!employee) {
+    if (!user?.isTestAccount || !testAccountsAllowed()) return null;
+    return { id: user.id, email: lower, name: user.name, image: user.image, user, testAccount: true };
+  }
+
   return {
+    testAccount: false,
     id: user?.id ?? `${NO_ACCOUNT_PREFIX}${employee.id}`,
     email: lower,
     name: user?.name ?? employee.fullName,

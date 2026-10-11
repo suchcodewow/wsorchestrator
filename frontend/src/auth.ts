@@ -151,12 +151,18 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
       // A platform administrator viewing the app as someone else: from here on
       // the session is theirs. Re-checked on every request, so it lapses the
-      // moment the administrator loses the flag or the employee leaves.
+      // moment the administrator loses the flag, the employee leaves, or the
+      // test account is deleted.
       const asked = (session as { impersonatingEmail?: string | null }).impersonatingEmail;
       if (asked && canImpersonate(access)) {
         const target = await impersonationTarget(asked);
         if (target && !impersonationRefusal(user, target)) {
-          shown.impersonator = { id: user.id, name: user.name ?? null, email: user.email ?? null };
+          shown.impersonator = {
+            id: user.id,
+            name: user.name ?? null,
+            email: user.email ?? null,
+            ...(target.testAccount && { testAccount: true as const }),
+          };
           shown.user = {
             id: target.id,
             name: target.name,

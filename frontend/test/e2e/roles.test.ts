@@ -23,7 +23,10 @@ import "../support/test-env";
 import { after, before, describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
+import { eq } from "drizzle-orm";
 
+import { db } from "@/db";
+import { users } from "@/db/schema";
 import { mintToken, revokeToken } from "@/lib/api-tokens";
 import { NAV_SECTIONS, visibleSections } from "@/lib/nav";
 import {
@@ -730,6 +733,9 @@ const ROUTES: RouteCase[] = [
   { method: "DELETE", path: `/api/users/${MISSING}`, allowed: canDeleteUsers, sessionOnly: true },
   { method: "POST", path: "/api/users/invites", allowed: canManageUsers, body: () => ({}), sessionOnly: true },
   { method: "POST", path: "/api/invites/accept", allowed: true, body: () => ({}), sessionOnly: true },
+  { method: "GET", path: "/api/users/test-accounts", allowed: canImpersonate },
+  { method: "POST", path: "/api/users/test-accounts", allowed: canImpersonate, body: () => ({}), sessionOnly: true },
+  { method: "POST", path: `/api/users/test-accounts/${MISSING}/reset`, allowed: canImpersonate, sessionOnly: true },
 
   // Components
   { method: "GET", path: "/api/components", allowed: canUseEvents },
@@ -1432,6 +1438,26 @@ describe("viewing the app as an employee", () => {
       assert.deepEqual([res.status, JSON.parse(res.body).error], [status, error], email);
     }
     assert.equal((await me(cookie)).id, admin.id);
+  });
+
+  // The server under test reads as production, so this is production's side:
+  // test accounts are refused at every step. What they may do elsewhere is in
+  // test/db/test-accounts.test.ts and test/unit/test-accounts.test.ts.
+  test("production makes no test account, finds none, and changes nothing as one", async () => {
+    const admin = await scope.createUser("impersonator", PERSONAS.platform);
+    const cookie = await createSession(admin.id);
+    const made = await send({ cookie }, "POST", "/api/users/test-accounts", { name: "e2e" });
+    assert.deepEqual([made.status, JSON.parse(made.body).error], [409, "production"]);
+
+    // One that reached production anyway, in a restored backup, say.
+    const account = await scope.createUser("testaccount", PERSONAS.assessmentsViewer);
+    await db.update(users).set({ isTestAccount: true }).where(eq(users.id, account.id));
+    const found = JSON.parse((await send({ cookie }, "GET", "/api/users/test-accounts")).body);
+    assert.deepEqual(found, { enabled: false, testAccounts: [] });
+    const viewed = await start(cookie, account.email);
+    assert.deepEqual([viewed.status, JSON.parse(viewed.body).error], [404, "not_found"]);
+    const reset = await send({ cookie }, "POST", `/api/users/test-accounts/${account.id}/reset`);
+    assert.deepEqual([reset.status, JSON.parse(reset.body).error], [409, "production"]);
   });
 
   test("ends the moment the administrator loses the flag", async () => {

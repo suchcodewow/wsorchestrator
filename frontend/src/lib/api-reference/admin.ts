@@ -163,7 +163,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         notes:
           "pendingAdmins lists the SITE_ADMIN_EMAILS addresses that have not signed in yet, whichever page is asked for.",
         query: listQuery(USER_LIST.sorts, "the name or email"),
-        returns: `{ users: { id, name, email, eventRole, trainingRole, assessmentsRole, isPlatformAdmin, isBootstrapAdmin, eventCount }[], ${PAGE_FIELDS}, pendingAdmins: string[] }`,
+        returns: `{ users: { id, name, email, eventRole, trainingRole, assessmentsRole, isPlatformAdmin, isBootstrapAdmin, isTestAccount, eventCount }[], ${PAGE_FIELDS}, pendingAdmins: string[] }`,
       },
       {
         method: "PATCH",
@@ -279,6 +279,57 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           { status: 404, error: "not_found", when: "no such link" },
           { status: 410, error: "expired", when: "the link is past its 15 minutes" },
           { status: 410, error: "revoked", when: "its creator no longer administers an area it grants" },
+        ],
+      },
+      {
+        method: "GET",
+        path: "/api/users/test-accounts",
+        summary: "Finds test accounts to view the app as, by name or address.",
+        access: "platform",
+        token: true,
+        notes:
+          "A test account is an account made to test the app as, outside production. Viewing as one (POST /api/me/impersonation with its email), changes go through, except on session-only routes. On production enabled is false and testAccounts is always empty. At most 8 are returned.",
+        query: [{ name: "q", type: "string", note: "matched against the name and the address; empty matches every one" }],
+        returns: "{ enabled: boolean, testAccounts: { id, name, email }[] }",
+      },
+      {
+        method: "POST",
+        path: "/api/users/test-accounts",
+        summary: "Makes a test account, with no roles or as a copy of an existing account.",
+        access: "platform",
+        token: false,
+        notes:
+          "Its address is generated on test-account.invalid, which no Google account can have, so nobody can sign in as it. With copyFrom it starts with that account's roles in each area, its theme and calendar settings, and its Iris track, copied once; their Iris sittings, Mimir progress and Harness credentials are not copied, nor being a manager or a guest judge, which follow from their own address. Change its roles afterwards with PATCH /api/users/{id}, and delete it with DELETE /api/users/{id}.",
+        body: {
+          kind: "json",
+          fields: [
+            { name: "name", type: "string", required: true, note: "1–80 characters" },
+            { name: "copyFrom", type: "string", note: "the id of an account to copy, from GET /api/users; not a platform administrator" },
+          ],
+        },
+        returns: "201 { testAccount: { id, name, email } }",
+        errors: [
+          { status: 400, error: "invalid_body", when: "name is missing or longer than 80 characters, or copyFrom is blank" },
+          { status: 400, error: "invalid", when: "name is blank" },
+          { status: 404, error: "source_not_found", when: "no account has the copyFrom id" },
+          { status: 409, error: "platform_source", when: "the copyFrom account is a platform administrator" },
+          { status: 409, error: "production", when: "this deployment is production" },
+        ],
+      },
+      {
+        method: "POST",
+        path: "/api/users/test-accounts/{id}/reset",
+        summary: "Gives a test account a fresh start.",
+        access: "platform",
+        token: false,
+        notes:
+          "Everything that is the account's own goes, as if it were deleted, Iris sittings and track included, and it comes back with the same id, name, address and roles. What it authored elsewhere stays, unattributed.",
+        params: [{ name: "id", type: "string", required: true, note: "the test account's id" }],
+        returns: "{ ok: true }",
+        errors: [
+          { status: 404, error: "not_found", when: "no test account has that id; a real account is never reset" },
+          { status: 409, error: "owns_events", when: "the account owns one or more events" },
+          { status: 409, error: "production", when: "this deployment is production" },
         ],
       },
     ],

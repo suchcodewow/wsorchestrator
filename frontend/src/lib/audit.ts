@@ -41,6 +41,7 @@ import { IMPERSONATION_PATH } from "@/lib/impersonation";
 import type { AuditSort } from "@/lib/list-specs";
 import { pageWindow, toPage, type ListQuery, type Page } from "@/lib/paging";
 import { blankAsNull, orderFor, searchAny } from "@/lib/paging-sql";
+import { testAccountMayChange } from "@/lib/test-accounts";
 
 export { noteAudit } from "@/lib/audit-context";
 
@@ -199,18 +200,23 @@ export function audited<C extends RouteContext>(
 
 /**
  * A 403 for any change asked of a session that is viewing the app as someone
- * else (`src/lib/impersonation.ts`), other than ending it. Session-only
- * routes call `auth()` themselves, so this asks too rather than trusting
+ * else (`src/lib/impersonation.ts`), other than ending it, or than a change a
+ * test account may make (`src/lib/test-accounts.ts`). Session-only routes
+ * call `auth()` themselves, so this asks too rather than trusting
  * `requireCaller` to.
  */
 async function refuseWhileImpersonating(req: Request): Promise<Response | null> {
-  if (new URL(req.url).pathname === IMPERSONATION_PATH) return null;
+  const { pathname } = new URL(req.url);
+  if (pathname === IMPERSONATION_PATH) return null;
 
   const session = await auth();
   if (!session?.impersonator) return null;
 
   noteCaller(session.impersonator, "session");
   noteAudit({ detail: { impersonating: session.user.email ?? null } });
+  if (session.impersonator.testAccount && testAccountMayChange(endpointFor(req.method, pathname))) {
+    return null;
+  }
   return NextResponse.json({ error: "impersonating" }, { status: 403 });
 }
 
