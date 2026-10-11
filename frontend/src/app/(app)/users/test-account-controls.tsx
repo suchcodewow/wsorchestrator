@@ -7,7 +7,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { FlaskConical, Loader2, Recycle, RotateCcw, X } from "lucide-react";
+import { FlaskConical, Loader2, Recycle, RotateCcw, VenetianMask, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { EmployeeMatches, useEmployeeSearch, type EmployeeCandidate } from "@/components/employee-picker";
 import {
@@ -19,6 +19,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { impersonate } from "@/components/user-menu";
 import { TEST_ACCOUNT_LIMITS } from "@/db/schema";
 import { cn } from "@/lib/utils";
 
@@ -230,6 +231,44 @@ export function CreateTestAccountDialog() {
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+/** Views the app as a test account, as picking it in the account menu does; the app reloads as it. */
+export function ViewAsTestAccountButton({
+  user,
+  onError,
+}: {
+  user: { name: string | null; email: string | null };
+  onError: (message: string) => void;
+}) {
+  const [pending, setPending] = useState(false);
+  const who = user.name ?? user.email ?? "this test account";
+
+  async function start() {
+    if (!user.email) return;
+    setPending(true);
+    const failed = await impersonate(user.email);
+    // On success the page is already going away.
+    if (failed) {
+      setPending(false);
+      onError(failed);
+    }
+  }
+
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      // In the "Test account" tag's colours, so it reads as belonging to it.
+      className="size-8 rounded-full border border-amber-500/40 bg-amber-500/10 text-amber-700 hover:bg-amber-500/20 hover:text-amber-800 dark:text-amber-300 dark:hover:text-amber-200"
+      title={`View as ${who}`}
+      aria-label={`View as ${who}`}
+      disabled={pending || !user.email}
+      onClick={() => void start()}
+    >
+      {pending ? <Loader2 className="animate-spin" /> : <VenetianMask />}
+    </Button>
   );
 }
 

@@ -49,7 +49,7 @@ import type { UserSort } from "@/lib/list-specs";
 import { cn } from "@/lib/utils";
 import { CreateInviteDialog } from "./create-invite-dialog";
 import { DeleteUserButton } from "./delete-user-button";
-import { CreateTestAccountDialog, ResetTestAccountButton } from "./test-account-controls";
+import { CreateTestAccountDialog, ResetTestAccountButton, ViewAsTestAccountButton } from "./test-account-controls";
 
 type SiteUser = {
   id: string;
@@ -435,6 +435,9 @@ export function UsersTable({
 
                       {viewerDeletes && (
                         <td className="px-3 py-3 text-right whitespace-nowrap">
+                          {managesTestAccounts && u.isTestAccount && (
+                            <ViewAsTestAccountButton user={u} onError={setError} />
+                          )}
                           {managesTestAccounts && u.isTestAccount && (
                             <ResetTestAccountButton
                               user={u}

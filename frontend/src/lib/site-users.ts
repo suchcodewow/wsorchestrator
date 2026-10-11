@@ -2,7 +2,7 @@
 
 import "server-only";
 
-import { count, eq, sql } from "drizzle-orm";
+import { count, desc, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   users,
@@ -45,7 +45,7 @@ const USER_SORT_COLUMNS = {
   platform: users.isPlatformAdmin,
 } as const;
 
-/** One page of accounts, searched by name or email. */
+/** One page of accounts, searched by name or email, test accounts first and then in the order asked for. */
 export async function listSiteUsers(query: ListQuery<UserSort>): Promise<Page<SiteUser>> {
   const { limit, offset } = pageWindow(query.page);
   const rows = await db
@@ -62,7 +62,10 @@ export async function listSiteUsers(query: ListQuery<UserSort>): Promise<Page<Si
     })
     .from(users)
     .where(searchAny(query.q, [users.name, users.email]))
-    .orderBy(...orderFor(USER_SORT_COLUMNS[query.sort], query.dir, users.email, users.id))
+    .orderBy(
+      desc(users.isTestAccount),
+      ...orderFor(USER_SORT_COLUMNS[query.sort], query.dir, users.email, users.id),
+    )
     .limit(limit)
     .offset(offset);
 

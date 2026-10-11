@@ -161,7 +161,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "userAdmin",
         token: true,
         notes:
-          "pendingAdmins lists the SITE_ADMIN_EMAILS addresses that have not signed in yet, whichever page is asked for.",
+          "Test accounts come first, then everyone else, each in the order asked for. pendingAdmins lists the SITE_ADMIN_EMAILS addresses that have not signed in yet, whichever page is asked for.",
         query: listQuery(USER_LIST.sorts, "the name or email"),
         returns: `{ users: { id, name, email, eventRole, trainingRole, assessmentsRole, isPlatformAdmin, isBootstrapAdmin, isTestAccount, eventCount }[], ${PAGE_FIELDS}, pendingAdmins: string[] }`,
       },
