@@ -7,8 +7,9 @@
  * only one carrying `HIBOB_SYNC_AUDIENCE` for the `HIBOB_SYNC_INVOKER` service
  * account is accepted. Either unset refuses every call.
  *
- * A successful sync is followed by the cohort Slack channel sync
- * (`lib/cohorts/slack-sync.ts`), which skips itself when no bootcamp is active.
+ * A successful sync is followed by the cohort Slack sync's channels
+ * (`lib/cohorts/slack-sync.ts`), which skip themselves when no bootcamp is
+ * active. Its messages go out later in the day, on a schedule of their own.
  * Its own failure is logged on Cohort Settings' Slack tab and does not fail
  * this call: the HiBob sync it follows went through.
  */
@@ -17,7 +18,7 @@ import { NextResponse } from "next/server";
 import { OAuth2Client } from "google-auth-library";
 import { STATUS_FOR, syncHibobEmployees } from "@/lib/evals/hibob";
 import { audited, noteAudit } from "@/lib/audit";
-import { syncSlackChannels } from "@/lib/cohorts/slack-sync";
+import { runSlackSync } from "@/lib/cohorts/slack-sync";
 
 // Cloud Scheduler's attempt_deadline (infra/admin/scheduler.tf) is the same.
 export const maxDuration = 300;
@@ -59,7 +60,7 @@ export const POST = audited(async function POST(req: Request) {
     );
   }
 
-  const slack = await syncSlackChannels("schedule", null, started + SLACK_DEADLINE_MS).catch((err: unknown) => ({
+  const slack = await runSlackSync("schedule", null, started + SLACK_DEADLINE_MS, { scope: "channels" }).catch((err: unknown) => ({
     ok: false as const,
     runId: null,
     error: "failed",

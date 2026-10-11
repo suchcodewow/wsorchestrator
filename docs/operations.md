@@ -90,14 +90,35 @@ api.slack.com must include `{app_url}/api/auth/callback/google`, the
 refuses the install with `bad_redirect_uri`. Until the app is added, a
 `SLACK_BOT_TOKEN` (`slack_bot_token` / `tf_slack_bot_token`) is used instead.
 The install asks for `users:read`, `users:read.email`, `channels:read`,
-`channels:manage` and `channels:join`, and the tab lists any Slack did not
-grant. The Sheet's old bot
+`channels:manage` and `channels:join`, and for the intake reminders' direct
+messages `chat:write` and `im:write`; the tab lists any Slack did not grant.
+An app installed before the last two were asked for keeps syncing channels,
+but cannot send the reminders until someone presses *Add to Slack* again.
+The Sheet's old bot
 (`sheets_to_slack_conne`) has only the first two and `channels:manage`, so on
 that token a run fails with `conversations.list answered missing_scope (needs
-channels:read)`. A Slack admin must grant the rest and reinstall. Sending a DM
-would also need `chat:write` and `im:write`. Slack keeps an archived channel's
+channels:read)`. A Slack admin must grant the rest and reinstall. Slack keeps an archived channel's
 name taken. A run that meets one logs a failure for that channel and leaves
 it alone; unarchive it or rename it.
+
+**The intake form's daily Slack reminder is off until someone turns it on,
+and is sent by the cohort Slack sync.** One run of the sync does everything
+the bot does: the channels above, and a direct message to everyone in the
+current cohort (Cohorts → Current, Sales and Engineer tracks) who has not
+saved answers to their stage's form at /intake. Cloud Scheduler job
+`intake-reminders-trigger` (`intake_reminders_schedule`, 10:00 AM Eastern by
+default) calls `/api/logistics/intake-reminders/scheduled`, which starts a
+reminders-only run; the 3 AM run after HiBob does channels only; *Sync Slack
+Now* on Cohort Settings → Slack does both. Reminders go out only once a
+Training Administrator presses *Turn on* on Logistics settings → Reminders,
+at most once per Eastern day however many runs there are, and never for a
+form with no questions. In dry run they are logged, each with its text and
+recipient, not sent; *Preview* on the Slack tab makes any run a dry run, and
+every run's page lists what it did and sent, channel by channel and person
+by person. A dry run works even with Slack not connected, as on QA or a
+developer's machine: it cannot see who is already in a channel or has an
+account, so it lists every channel not yet created, everyone each should
+hold, and every reminder due, and says so at the top of the run. Every run is also in the audit trail.
 
 **This machine class has `tofu`, not `terraform`.** The Makefile and bootstrap
 script auto-detect which is present.

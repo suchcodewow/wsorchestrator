@@ -1,26 +1,42 @@
-/** The public intake form's endpoints: reading the form, and sending answers to it. */
+/**
+ * The signed-in caller's own intake form: the one for their stage of the
+ * current cohort, with the answers they last saved, and saving new ones.
+ */
 
 import { NextResponse } from "next/server";
+import { requireUser } from "@/lib/api-auth";
 import { audited, noteAudit } from "@/lib/audit";
-import { getIntakeForm, submitIntake } from "@/lib/logistics/intake";
-import { intakeSubmissionSchema } from "@/lib/logistics/intake-values";
+import { getMyIntake, saveMyIntake } from "@/lib/logistics/intake";
+import { INTAKE_FORM_LABELS, intakeSubmissionSchema } from "@/lib/logistics/intake-values";
 
-export async function GET() {
-  const { title, description, questions } = await getIntakeForm();
-  return NextResponse.json({ title, description, questions });
+const NOT_IN_COHORT = { error: "not_in_cohort" } as const;
+
+export async function GET(req: Request) {
+  const { error, user } = await requireUser(req);
+  if (error) return error;
+
+  const mine = user.email ? await getMyIntake(user.email) : null;
+  if (!mine) return NextResponse.json(NOT_IN_COHORT, { status: 404 });
+  return NextResponse.json(mine);
 }
 
-export const POST = audited(async function POST(req: Request) {
+export const PUT = audited(async function PUT(req: Request) {
+  const { error, user } = await requireUser(req);
+  if (error) return error;
+
   const parsed = intakeSubmissionSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json({ error: "invalid" }, { status: 400 });
   }
+  if (!user.email) return NextResponse.json(NOT_IN_COHORT, { status: 404 });
 
-  const { email, answers } = parsed.data;
-  noteAudit({ target: email, targetLabel: email });
-  const result = await submitIntake(email, answers);
+  const result = await saveMyIntake(user.email, parsed.data.answers);
   if (!result.ok) {
-    return NextResponse.json({ error: result.error.problem, questionId: result.error.questionId }, { status: 400 });
+    const { error: problem } = result;
+    if (problem.problem === "not_in_cohort") return NextResponse.json(NOT_IN_COHORT, { status: 404 });
+    if (problem.problem === "no_questions") return NextResponse.json({ error: "no_questions" }, { status: 409 });
+    return NextResponse.json({ error: problem.problem, questionId: problem.questionId }, { status: 400 });
   }
-  return NextResponse.json({ id: result.id }, { status: 201 });
+  noteAudit({ target: user.email, targetLabel: `${INTAKE_FORM_LABELS[result.form]} form: ${user.email}` });
+  return NextResponse.json({ form: result.form, savedAt: result.savedAt });
 });

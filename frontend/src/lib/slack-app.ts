@@ -13,14 +13,22 @@ import { db } from "@/db";
 import { slackInstallation, users } from "@/db/schema";
 import { openSecret, sealSecret } from "@/lib/secret-box";
 
-/** What the channel sync calls; see `lib/cohorts/slack-sync.ts`. */
+/**
+ * What the channel sync calls (`lib/cohorts/slack-sync.ts`), and the direct
+ * messages the intake reminders send (`lib/logistics/intake-reminders.ts`).
+ */
 export const SLACK_BOT_SCOPES = [
   "users:read",
   "users:read.email",
   "channels:read",
   "channels:manage",
   "channels:join",
+  "chat:write",
+  "im:write",
 ] as const;
+
+/** The scopes the intake reminders need beyond looking people up. */
+export const SLACK_DM_SCOPES = ["chat:write", "im:write"] as const;
 
 export type SlackApp = { appId: string | null; clientId: string; clientSecret: string };
 

@@ -1,14 +1,23 @@
 /**
- * The cohort Slack channel sync: while a bootcamp is active in the Scheduler,
- * puts everyone on the Cohorts page's Current tab, and the Additional Channel
- * Contacts, in that bootcamp's channels (see `slack-plan.ts` for which), and
- * takes out anyone it invited who no longer belongs. Someone it did not
- * invite is never removed. It runs after each scheduled HiBob sync, and from
- * Cohort Settings' Slack tab.
+ * The cohort Slack sync, everything the app's Slack bot does, in one logged
+ * run:
+ *
+ * - Channels: while a bootcamp is active in the Scheduler, puts everyone on
+ *   the Cohorts page's Current tab, and the Additional Channel Contacts, in
+ *   that bootcamp's channels (see `slack-plan.ts` for which), and takes out
+ *   anyone it invited who no longer belongs. Someone it did not invite is
+ *   never removed.
+ * - Messages: the intake form's reminders that are due, one direct message
+ *   to each person (see `lib/logistics/intake-reminders.ts` for whom, and when).
+ *
+ * The channels are synced after each scheduled HiBob sync, the reminders on
+ * a schedule of their own, and both with Sync Slack Now on Cohort Settings'
+ * Slack tab.
  *
  * Until an administrator turns it live, every run is a dry run: it reads
- * Slack and logs what it would do, but invites, removes and creates nothing.
- * QA shares production's Slack workspace, so QA stays in dry run, or has no
+ * Slack and logs what it would do and send, and to whom, but invites,
+ * removes, creates and sends nothing. Preview makes any run a dry run. QA
+ * shares production's Slack workspace, so QA stays in dry run, or has no
  * token at all.
  *
  * A run has a deadline. Slack's rate limits can make a first run, which looks
@@ -18,7 +27,7 @@
 
 import "server-only";
 
-import { and, desc, eq, inArray, lt, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, lt, ne, or, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import {
   EVALS_SETTINGS_KEYS,
@@ -30,10 +39,19 @@ import {
   slackUsers,
   users,
   type SlackSyncAction,
+  type SlackSyncScope,
   type SlackSyncStatus,
   type SlackSyncTrigger,
 } from "@/db/schema";
 import { allChannelContacts } from "@/lib/cohorts/channel-contacts";
+import {
+  claimIntakeRemindersToday,
+  getIntakeRemindersOn,
+  intakeReminderSlack,
+  intakeRemindersSentToday,
+  outstandingIntake,
+} from "@/lib/logistics/intake-reminders";
+import { INTAKE_FORM_HEADINGS, intakeReminderText } from "@/lib/logistics/intake-values";
 import {
   channelAudience,
   cohortChannels,
@@ -104,32 +122,45 @@ async function closeStaleRuns(): Promise<void> {
 }
 
 /** Opens a run, or null if one is already running — the partial unique index allows one. */
-async function startRun(trigger: SlackSyncTrigger, actorId: string | null, dryRun: boolean): Promise<string | null> {
+async function startRun(
+  trigger: SlackSyncTrigger,
+  actorId: string | null,
+  dryRun: boolean,
+  scope: SlackSyncScope,
+): Promise<string | null> {
   await closeStaleRuns();
   const [run] = await db
     .insert(slackSyncRuns)
-    .values({ trigger, triggeredBy: actorId, dryRun })
+    .values({ trigger, triggeredBy: actorId, dryRun, scope })
     .onConflictDoNothing()
     .returning({ id: slackSyncRuns.id });
   return run?.id ?? null;
 }
 
-type Tally = { invited: number; removed: number; notInSlack: number; failures: number };
+type Tally = { invited: number; removed: number; messaged: number; notInSlack: number; failures: number };
 
-type ChangeRow = { channelName: string; action: SlackSyncAction; email?: string; detail?: string | null };
+type ChangeRow = { channelName: string; action: SlackSyncAction; email?: string; detail?: string | null; at?: Date };
 
 /** What a run has done so far, written out a channel at a time so a cut-off run still shows its work. */
 class RunLog {
-  readonly tally: Tally = { invited: 0, removed: 0, notInSlack: 0, failures: 0 };
+  readonly tally: Tally = { invited: 0, removed: 0, messaged: 0, notInSlack: 0, failures: 0 };
   private pending: ChangeRow[] = [];
+  /** Each email already counted as having no Slack account, so the channels and the messages count one once. */
+  private missing = new Set<string>();
+  /** When the last change was noted; each is a millisecond after the one before, so the log lists them in the order they happened. */
+  private lastAt = 0;
   constructor(readonly runId: string) {}
 
   note(row: ChangeRow): void {
-    this.pending.push(row);
+    this.lastAt = Math.max(Date.now(), this.lastAt + 1);
+    this.pending.push({ ...row, at: new Date(this.lastAt) });
     if (row.action === "invited") this.tally.invited++;
     else if (row.action === "removed") this.tally.removed++;
-    else if (row.action === "not_in_slack") this.tally.notInSlack++;
-    else if (row.action === "failed") this.tally.failures++;
+    else if (row.action === "messaged") this.tally.messaged++;
+    else if (row.action === "not_in_slack" && !this.missing.has(row.email ?? "")) {
+      this.missing.add(row.email ?? "");
+      this.tally.notInSlack++;
+    } else if (row.action === "failed") this.tally.failures++;
   }
 
   async flush(): Promise<void> {
@@ -143,6 +174,7 @@ class RunLog {
           action: r.action,
           email: r.email ?? "",
           detail: r.detail ?? null,
+          at: r.at,
         })),
       );
     }
@@ -152,7 +184,7 @@ class RunLog {
 async function finishRun(
   runId: string,
   status: Exclude<SlackSyncStatus, "running">,
-  fields: Partial<Tally> & { unfinished?: boolean; error?: string | null; bootcampId?: string | null },
+  fields: Partial<Tally> & { unfinished?: boolean; error?: string | null; bootcampId?: string | null; notes?: string[] },
 ): Promise<void> {
   await db
     .update(slackSyncRuns)
@@ -168,8 +200,9 @@ async function finishRun(
  * Each email's Slack user id, or null for one Slack has no active account for.
  * Read from `slack_users` where it can be, asking Slack only for the rest; each
  * answer is stored as it comes, so a run cut off part-way keeps its progress.
+ * The intake reminders (`lib/logistics/intake-reminders.ts`) find people by it too.
  */
-async function resolveSlackUsers(slack: SlackClient, emails: string[]): Promise<Map<string, string | null>> {
+export async function resolveSlackUsers(slack: SlackClient, emails: string[]): Promise<Map<string, string | null>> {
   const known = new Map<string, { id: string | null; at: Date }>();
   for (let i = 0; i < emails.length; i += 500) {
     const rows = await db
@@ -438,6 +471,123 @@ async function syncChannel(
 }
 
 /* ------------------------------------------------------------------ */
+/* Channels                                                            */
+/* ------------------------------------------------------------------ */
+
+/**
+ * The active bootcamp's channels brought in step, or a note saying why there
+ * were none to sync. With no `slack`, in a dry run with Slack not connected,
+ * it cannot see who is already in a channel: every channel the sync has not
+ * found or made is one to create, and everyone it should hold is one to add.
+ */
+async function syncChannels(slack: SlackClient | null, runId: string, dryRun: boolean, log: RunLog): Promise<string | null> {
+  const bootcamp = await activeBootcamp();
+  if (!bootcamp) return "No bootcamp is active in the Scheduler, so no channels were synced.";
+  await db.update(slackSyncRuns).set({ bootcampId: bootcamp.id }).where(eq(slackSyncRuns.id, runId));
+
+  const channels = cohortChannels(bootcamp.startDate, bootcamp.intDays !== null);
+  const [cohort, contacts] = await Promise.all([currentCohortEmails(), allChannelContacts()]);
+  const audiences = new Map(channels.map((ch) => [ch.name, channelAudience(ch, cohort, contacts)]));
+
+  if (!slack) {
+    const known = new Set(
+      (await db.select({ name: slackChannels.name }).from(slackChannels).where(inArray(slackChannels.name, channels.map((ch) => ch.name)))).map(
+        (r) => r.name,
+      ),
+    );
+    for (const channel of channels) {
+      if (!known.has(channel.name)) log.note({ channelName: channel.name, action: "created" });
+      for (const email of [...audiences.get(channel.name)!].sort()) log.note({ channelName: channel.name, action: "invited", email });
+      await log.flush();
+    }
+    return null;
+  }
+
+  const everyone = [...new Set([...audiences.values()].flatMap((a) => [...a]))].sort();
+  const slackIds = await resolveSlackUsers(slack, everyone);
+
+  const missing = everyone.filter((email) => !slackIds.get(email));
+  for (const email of missing) log.note({ channelName: "", action: "not_in_slack", email });
+  await log.flush();
+
+  const channelIds = await ensureChannels(slack, channels, dryRun, log);
+  await log.flush();
+
+  for (const channel of channels) {
+    if (!channelIds.has(channel.name)) continue;
+    const wanted = new Map<string, string>();
+    for (const email of audiences.get(channel.name)!) {
+      const id = slackIds.get(email);
+      if (id) wanted.set(id, email);
+    }
+    await syncChannel(slack, channel, channelIds.get(channel.name)!, wanted, dryRun, log);
+    await log.flush();
+  }
+  return null;
+}
+
+/* ------------------------------------------------------------------ */
+/* Messages                                                            */
+/* ------------------------------------------------------------------ */
+
+/**
+ * The intake form reminders that are due, one direct message each, or a
+ * note saying why none were. Each message's text is logged as its detail,
+ * so a dry run shows exactly what each person would be sent. A live run
+ * claims the day first, so no one is reminded twice in it.
+ */
+async function sendReminders(slack: SlackClient | null, dryRun: boolean, appUrl: string, log: RunLog): Promise<string | null> {
+  if (!(await getIntakeRemindersOn())) {
+    return "Intake form reminders are off, so none were sent. Turn them on in Logistics settings → Reminders.";
+  }
+  const { missingScopes } = await intakeReminderSlack();
+  if (missingScopes.length > 0) {
+    return `Intake form reminders were not sent: the Slack app is missing ${missingScopes.join(", ")}. Add it again above to grant them.`;
+  }
+  const alreadySent = dryRun ? await intakeRemindersSentToday() : !(await claimIntakeRemindersToday());
+  if (alreadySent) return "Today's intake form reminders have already gone out.";
+
+  const { outstanding } = await outstandingIntake();
+  if (outstanding.length === 0) return "Everyone in the current cohort has answered their intake form, so no reminders were due.";
+
+  const link = `${appUrl.replace(/\/+$/, "")}/intake`;
+  // Not connected, so a dry run cannot ask who has an account: it takes it that everyone does.
+  const slackIds = slack
+    ? await resolveSlackUsers(
+        slack,
+        outstanding.map((p) => p.email),
+      )
+    : new Map(outstanding.map((p) => [p.email, p.email]));
+  for (const person of outstanding) {
+    const user = slackIds.get(person.email);
+    if (!user) {
+      log.note({
+        channelName: "",
+        action: "not_in_slack",
+        email: person.email,
+        detail: `Not reminded about the ${INTAKE_FORM_HEADINGS[person.form]} form`,
+      });
+      continue;
+    }
+    const text = intakeReminderText(person.fullName, person.form, link);
+    if (dryRun || !slack) {
+      log.note({ channelName: "", action: "messaged", email: person.email, detail: text });
+      continue;
+    }
+    try {
+      const { channel } = await slack.call<{ channel: { id: string } }>("conversations.open", { users: user });
+      await slack.call("chat.postMessage", { channel: channel.id, text, unfurl_links: "false" });
+      log.note({ channelName: "", action: "messaged", email: person.email, detail: text });
+    } catch (err) {
+      if (!(err instanceof SlackError) || isFatal(err)) throw err;
+      log.note({ channelName: "", action: "failed", email: person.email, detail: `Message: ${err.error}` });
+    }
+  }
+  await log.flush();
+  return null;
+}
+
+/* ------------------------------------------------------------------ */
 /* The sync                                                            */
 /* ------------------------------------------------------------------ */
 
@@ -448,82 +598,90 @@ export type SlackSyncResult =
       status: "succeeded" | "skipped";
       dryRun: boolean;
       unfinished: boolean;
+      /** Why a part of the run did nothing. */
+      notes: string[];
     } & Tally
   | { ok: false; runId: string | null; error: SlackSyncError; detail?: string };
+
+/** Why a dry run with Slack not connected lists what it does. */
+const OFFLINE_NOTE =
+  "Slack is not connected, so this dry run could not check Slack. It lists every channel not yet created as one to create, everyone each channel should hold as one to add, and a message to everyone due a reminder, as though no one were in Slack yet. Add the app above for a dry run that checks.";
+
+export type SlackSyncOptions = {
+  /** What to do; `all` unless said otherwise. */
+  scope?: SlackSyncScope;
+  /** A dry run whether or not the sync is live, to see what it would do and send. */
+  preview?: boolean;
+  /** The app's own origin, for the link in each reminder; needed unless `scope` is `channels`. */
+  appUrl?: string;
+};
 
 /**
  * One run, logged. `actorId` is whoever pressed the button, or null for the
  * schedule; `deadline` is when it must stop by, as `Date.now()` counts.
  */
-export async function syncSlackChannels(
+export async function runSlackSync(
   trigger: SlackSyncTrigger,
   actorId: string | null,
   deadline: number,
+  { scope = "all", preview = false, appUrl = "" }: SlackSyncOptions = {},
 ): Promise<SlackSyncResult> {
-  const dryRun = !(await getSlackSyncLive());
-  const runId = await startRun(trigger, actorId, dryRun);
+  const dryRun = preview || !(await getSlackSyncLive());
+  const runId = await startRun(trigger, actorId, dryRun, scope);
   if (!runId) return { ok: false, runId: null, error: "already_running" };
 
   const log = new RunLog(runId);
+  const notes: string[] = [];
   try {
+    // A live run needs Slack; a dry run without it still says what it would do, from the app's side alone.
     const token = await slackToken();
-    if (!token) {
+    if (!token && !dryRun) {
       await finishRun(runId, "failed", { error: LOGGED.not_configured });
       return { ok: false, runId, error: "not_configured" };
     }
+    if (!token) notes.push(OFFLINE_NOTE);
 
-    const bootcamp = await activeBootcamp();
-    if (!bootcamp) {
-      await finishRun(runId, "skipped", { error: "No bootcamp is active in the Scheduler." });
-      return { ok: true, runId, status: "skipped", dryRun, unfinished: false, ...log.tally };
-    }
-    await db.update(slackSyncRuns).set({ bootcampId: bootcamp.id }).where(eq(slackSyncRuns.id, runId));
-
-    const slack = slackClient(token, deadline);
+    const slack = token ? slackClient(token, deadline) : null;
     let unfinished = false;
+    let partsSkipped = 0;
+    const parts = [
+      scope !== "reminders" && (() => syncChannels(slack, runId, dryRun, log)),
+      scope !== "channels" && (() => sendReminders(slack, dryRun, appUrl, log)),
+    ].filter((part) => part !== false);
     try {
       // Fails fast, and plainly, on a token Slack no longer takes.
-      await slack.call("auth.test", {});
-
-      const channels = cohortChannels(bootcamp.startDate, bootcamp.intDays !== null);
-      const [cohort, contacts] = await Promise.all([currentCohortEmails(), allChannelContacts()]);
-      const audiences = new Map(channels.map((ch) => [ch.name, channelAudience(ch, cohort, contacts)]));
-      const everyone = [...new Set([...audiences.values()].flatMap((a) => [...a]))].sort();
-      const slackIds = await resolveSlackUsers(slack, everyone);
-
-      const missing = everyone.filter((email) => !slackIds.get(email));
-      for (const email of missing) log.note({ channelName: "", action: "not_in_slack", email });
-      await log.flush();
-
-      const channelIds = await ensureChannels(slack, channels, dryRun, log);
-      await log.flush();
-
-      for (const channel of channels) {
-        if (!channelIds.has(channel.name)) continue;
-        const wanted = new Map<string, string>();
-        for (const email of audiences.get(channel.name)!) {
-          const id = slackIds.get(email);
-          if (id) wanted.set(id, email);
+      if (slack) await slack.call("auth.test", {});
+      for (const part of parts) {
+        const note = await part();
+        if (note) {
+          notes.push(note);
+          partsSkipped++;
         }
-        await syncChannel(slack, channel, channelIds.get(channel.name)!, wanted, dryRun, log);
-        await log.flush();
       }
     } catch (err) {
       if (err instanceof SlackOutOfTime) unfinished = true;
       else if (err instanceof SlackError) {
         await log.flush();
-        await finishRun(runId, "failed", { ...log.tally, error: `${LOGGED.slack_error} ${err.message}` });
+        await finishRun(runId, "failed", { ...log.tally, notes, error: `${LOGGED.slack_error} ${err.message}` });
         return { ok: false, runId, error: "slack_error", detail: err.message };
       } else throw err;
     }
 
     await log.flush();
-    await finishRun(runId, "succeeded", { ...log.tally, unfinished });
-    return { ok: true, runId, status: "succeeded", dryRun, unfinished, ...log.tally };
+    // Nothing to do in any part it set out to do: skipped, with why.
+    const status = !unfinished && partsSkipped === parts.length ? "skipped" : "succeeded";
+    await finishRun(runId, status, {
+      ...log.tally,
+      unfinished,
+      notes,
+      ...(status === "skipped" && { error: notes.join(" ") }),
+    });
+    return { ok: true, runId, status, dryRun, unfinished, notes, ...log.tally };
   } catch (err) {
     // Anything else — the database, most likely — still ends the run.
     await finishRun(runId, "failed", {
       ...log.tally,
+      notes,
       error: err instanceof Error ? err.message.slice(0, 500) : "The sync failed.",
     }).catch(() => {});
     throw err;
@@ -566,6 +724,7 @@ export async function activeCohortChannels(): Promise<{
 export type SlackSyncRunSummary = {
   id: string;
   trigger: SlackSyncTrigger;
+  scope: SlackSyncScope;
   triggeredBy: string | null;
   status: SlackSyncStatus;
   dryRun: boolean;
@@ -573,10 +732,12 @@ export type SlackSyncRunSummary = {
   finishedAt: Date | null;
   invited: number;
   removed: number;
+  messaged: number;
   notInSlack: number;
   failures: number;
   unfinished: boolean;
   error: string | null;
+  notes: string[];
 };
 
 const RUN_SORT_COLUMNS = {
@@ -588,6 +749,7 @@ const RUN_SORT_COLUMNS = {
 const runColumns = {
   id: slackSyncRuns.id,
   trigger: slackSyncRuns.trigger,
+  scope: slackSyncRuns.scope,
   triggeredByName: users.name,
   triggeredByEmail: users.email,
   status: slackSyncRuns.status,
@@ -596,10 +758,12 @@ const runColumns = {
   finishedAt: slackSyncRuns.finishedAt,
   invited: slackSyncRuns.invited,
   removed: slackSyncRuns.removed,
+  messaged: slackSyncRuns.messaged,
   notInSlack: slackSyncRuns.notInSlack,
   failures: slackSyncRuns.failures,
   unfinished: slackSyncRuns.unfinished,
   error: slackSyncRuns.error,
+  notes: slackSyncRuns.notes,
 };
 
 type RunRow = { triggeredByName: string | null; triggeredByEmail: string | null } & Omit<SlackSyncRunSummary, "triggeredBy">;
@@ -648,6 +812,18 @@ export async function getSlackSyncRun(id: string): Promise<SlackSyncRunSummary |
   return row ? summarize(row, Date.now() - STALE_MS) : null;
 }
 
+/** The latest run that set out to send the intake form reminders, or null for none yet. */
+export async function lastReminderRun(): Promise<SlackSyncRunSummary | null> {
+  const [row] = await db
+    .select(runColumns)
+    .from(slackSyncRuns)
+    .leftJoin(users, eq(users.id, slackSyncRuns.triggeredBy))
+    .where(inArray(slackSyncRuns.scope, ["all", "reminders"]))
+    .orderBy(desc(slackSyncRuns.startedAt))
+    .limit(1);
+  return row ? summarize(row, Date.now() - STALE_MS) : null;
+}
+
 /** Whether a run is under way: one marked running that has not gone stale. */
 export async function slackSyncInProgress(): Promise<boolean> {
   const [row] = await db
@@ -677,10 +853,47 @@ const CHANGE_SORT_COLUMNS = {
   email: slackSyncChanges.email,
 } as const;
 
-/** One page of what a run did. The search matches the channel, the action, the email, the name or the detail. */
+/**
+ * Which of a run's changes to list: those to a channel, the direct messages
+ * (and the ones Slack refused), or what went wrong — refusals and emails
+ * with no Slack account.
+ */
+export const SLACK_CHANGE_KINDS = ["channels", "messages", "problems"] as const;
+export type SlackChangeKind = (typeof SLACK_CHANGE_KINDS)[number];
+
+export function isSlackChangeKind(value: unknown): value is SlackChangeKind {
+  return SLACK_CHANGE_KINDS.includes(value as SlackChangeKind);
+}
+
+const sc = slackSyncChanges;
+const OF_KIND: Record<SlackChangeKind, SQL> = {
+  channels: ne(sc.channelName, ""),
+  messages: or(eq(sc.action, "messaged"), and(eq(sc.action, "failed"), eq(sc.channelName, "")))!,
+  problems: inArray(sc.action, ["failed", "not_in_slack"]),
+};
+
+/** How many of a run's changes are of each kind, whatever the search. */
+export async function countSlackSyncChanges(runId: string): Promise<Record<SlackChangeKind | "all", number>> {
+  const [row] = await db
+    .select({
+      all: sql<number>`count(*)::int`,
+      channels: sql<number>`count(*) filter (where ${OF_KIND.channels})::int`,
+      messages: sql<number>`count(*) filter (where ${OF_KIND.messages})::int`,
+      problems: sql<number>`count(*) filter (where ${OF_KIND.problems})::int`,
+    })
+    .from(sc)
+    .where(eq(sc.runId, runId));
+  return row ?? { all: 0, channels: 0, messages: 0, problems: 0 };
+}
+
+/**
+ * One page of what a run did, only of one kind when `kind` is given. The
+ * search matches the channel, the action, the email, the name or the detail.
+ */
 export async function listSlackSyncChanges(
   runId: string,
   query: ListQuery<SlackSyncChangeSort>,
+  kind: SlackChangeKind | null = null,
 ): Promise<Page<SlackSyncChangeRow>> {
   const { limit, offset } = pageWindow(query.page);
   // A sync replaces `employees` wholesale, so the name is looked up now rather than kept.
@@ -701,6 +914,7 @@ export async function listSlackSyncChanges(
     .where(
       and(
         eq(slackSyncChanges.runId, runId),
+        kind ? OF_KIND[kind] : undefined,
         searchAny(query.q, [
           slackSyncChanges.channelName,
           slackSyncChanges.action,

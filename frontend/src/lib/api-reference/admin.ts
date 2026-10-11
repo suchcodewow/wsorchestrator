@@ -124,15 +124,21 @@ const ACTIVE_EXISTS_ERROR: EndpointError = {
 const INTAKE_QUESTION_SHAPE = `{ id, kind: "short" | "paragraph" | "choice" | "checkboxes" | "dropdown", title, description, required: boolean, options: string[], other: boolean }`;
 
 const INTAKE_FORM_FIELDS: Field[] = [
-  { name: "title", type: "string", required: true, note: `up to ${INTAKE_LIMITS.title} characters` },
-  { name: "description", type: "string", note: `up to ${INTAKE_LIMITS.description} characters; shown under the title` },
   {
     name: "questions",
     type: `${INTAKE_QUESTION_SHAPE}[]`,
     required: true,
-    note: `1 to ${INTAKE_LIMITS.questions}, in the order asked, each id distinct. A choice, checkboxes or dropdown question needs 1 to ${INTAKE_LIMITS.options} distinct options of up to ${INTAKE_LIMITS.option} characters; other adds a free-text "Other" to choice and checkboxes, and is ignored on the rest`,
+    note: `0 to ${INTAKE_LIMITS.questions}, in the order asked, each id distinct; with none, nobody is asked the form or reminded of it. A question's title is up to ${INTAKE_LIMITS.title} characters and its description up to ${INTAKE_LIMITS.description}. A choice, checkboxes or dropdown question needs 1 to ${INTAKE_LIMITS.options} distinct options of up to ${INTAKE_LIMITS.option} characters; other adds a free-text "Other" to choice and checkboxes, and is ignored on the rest`,
   },
 ];
+
+const INTAKE_FORM_PARAM: Field = {
+  name: "form",
+  type: '"bootcamp" | "intermediate"',
+  required: true,
+  note: "Pre-Bootcamp or Pre-Intermediate",
+};
+
 
 const FOOD_ORDER_SHAPE = "{ id, vendor, arrivesAt, needs, fileName: string | null, fileBytes: number | null, arrived: boolean, updatedAt }";
 
@@ -616,40 +622,48 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       {
         method: "GET",
         path: "/api/cohorts/slack/sync",
-        summary: "Lists the cohort Slack channel sync's log a page at a time, newest first, with the active bootcamp's channels.",
+        summary: "Lists the cohort Slack sync's log a page at a time, newest first, with the active bootcamp's channels.",
         access: "trainingAdmin",
         token: true,
         notes:
-          "A run that has said running for over 10 minutes is shown as failed. running says whether a sync is under way, whichever page is asked for; live whether syncs change Slack or are dry runs; configured whether there is a bot token to sync with, from the Slack app's install or the deployment's SLACK_BOT_TOKEN, which is never returned. active is null when no bootcamp is active; a channel's slackChannelId is null until a live sync has found or created it.",
+          "A run that has said running for over 10 minutes is shown as failed. scope says what a run set out to do: channels, the intake form reminders, or all of it. notes says why a part of it did nothing, such as no active bootcamp or reminders turned off. running says whether a sync is under way, whichever page is asked for; live whether syncs change Slack or are dry runs; configured whether there is a bot token to sync with, from the Slack app's install or the deployment's SLACK_BOT_TOKEN, which is never returned. active is null when no bootcamp is active; a channel's slackChannelId is null until a live sync has found or created it.",
         query: listQuery(SLACK_SYNC_LIST.sorts, "who started it, the trigger, the status or the error", "desc"),
-        returns: `{ runs: { id, trigger: "schedule" | "manual", triggeredBy: string | null, status: "running" | "succeeded" | "skipped" | "failed", dryRun: boolean, startedAt, finishedAt, invited, removed, notInSlack, failures: number, unfinished: boolean, error: string | null }[], ${PAGE_FIELDS}, running: boolean, live: boolean, configured: boolean, active: { bootcampId, startDate: "YYYY-MM-DD", channels: { kind: "sales_bootcamp" | "se_bootcamp" | "sales_intermediate" | "se_intermediate", name, slackChannelId: string | null, created: boolean }[] } | null }`,
+        returns: `{ runs: { id, trigger: "schedule" | "manual", scope: "all" | "channels" | "reminders", triggeredBy: string | null, status: "running" | "succeeded" | "skipped" | "failed", dryRun: boolean, startedAt, finishedAt, invited, removed, messaged, notInSlack, failures: number, unfinished: boolean, error: string | null, notes: string[] }[], ${PAGE_FIELDS}, running: boolean, live: boolean, configured: boolean, active: { bootcampId, startDate: "YYYY-MM-DD", channels: { kind: "sales_bootcamp" | "se_bootcamp" | "sales_intermediate" | "se_intermediate", name, slackChannelId: string | null, created: boolean }[] } | null }`,
       },
       {
         method: "POST",
         path: "/api/cohorts/slack/sync",
-        summary: "Syncs the active bootcamp's Slack channels with the Current tab now.",
+        summary: "Syncs the active bootcamp's Slack channels with the Current tab now, and sends the intake form reminders that are due.",
         access: "trainingAdmin",
         token: true,
+        body: {
+          kind: "json",
+          fields: [{ name: "preview", type: "boolean", note: "true for a dry run whether or not the sync is live, to see what it would change and send, and to whom; the body may be left out" }],
+        },
         notes:
-          "Also runs after each scheduled HiBob sync. With no bootcamp active the run is skipped. Otherwise it finds or creates the public channels sales-bootcamp-{mon}-{yyyy} and se-bootcamp-{mon}-{yyyy}, and the -intermediate- pair when the bootcamp holds an intermediate class, from its start date; joins each; invites the Current tab's Sales and Engineers at that stage, and the Bootcamp Contacts, to the sales- channel, and its Engineers and the Engineer Contacts to the se- one; and removes anyone it invited earlier who no longer belongs. Undecided people are left out, and no one it did not invite is ever removed. In dry run (see PUT /api/cohorts/slack/settings) it changes nothing and the counts say what it would do. Slack's rate limits can stop a run part-way, when unfinished is true and the next run carries on. Allows 300 seconds; every attempt is logged.",
-        returns: `{ ok: true, runId, status: "succeeded" | "skipped", dryRun: boolean, invited, removed, notInSlack, failures: number, unfinished: boolean }`,
+          "Its channels also run after each scheduled HiBob sync, and its reminders once a day on their own. Channels: with no bootcamp active, none are synced. Otherwise it finds or creates the public channels sales-bootcamp-{mon}-{yyyy} and se-bootcamp-{mon}-{yyyy}, and the -intermediate- pair when the bootcamp holds an intermediate class, from its start date; joins each; invites the Current tab's Sales and Engineers at that stage, and the Bootcamp Contacts, to the sales- channel, and its Engineers and the Engineer Contacts to the se- one; and removes anyone it invited earlier who no longer belongs. Undecided people are left out, and no one it did not invite is ever removed. Reminders: while they are on (PUT /api/logistics/intake-reminders) and today's have not gone out, a direct message, with a link to /intake, to everyone in the current cohort who has not answered their stage's intake form; a form with no questions sends nothing, and an app missing chat:write or im:write sends nothing and says so in notes. A run with nothing to do in any part is skipped. In dry run (see PUT /api/cohorts/slack/settings), or with preview, it changes and sends nothing, and the counts and GET /api/cohorts/slack/sync/{id} say what it would do and send, and to whom. A dry run works with Slack not connected too: unable to see who is already anywhere, it lists every channel not yet created as one to create, everyone each should hold as one to add, and a message to everyone due a reminder, and says so in notes. Slack's rate limits can stop a run part-way, when unfinished is true and the next run carries on. Allows 300 seconds; every attempt is logged.",
+        returns: `{ ok: true, runId, status: "succeeded" | "skipped", dryRun: boolean, invited, removed, messaged, notInSlack, failures: number, unfinished: boolean, notes: string[] }`,
         errors: [
+          { status: 400, error: "invalid", when: "the body is not that shape" },
           { status: 409, error: "already_running", when: "another sync is running" },
-          { status: 409, error: "not_configured", when: "the Slack app is not installed and the deployment has no SLACK_BOT_TOKEN" },
+          { status: 409, error: "not_configured", when: "a live run, with the Slack app not installed and no SLACK_BOT_TOKEN on the deployment" },
           { status: 502, error: "slack_error", when: "Slack refused the token or a call every member would need, such as a missing scope; detail says which" },
         ],
       },
       {
         method: "GET",
         path: "/api/cohorts/slack/sync/{id}",
-        summary: "One Slack sync run, and a page of what it did.",
+        summary: "One Slack sync run, how many of its changes are of each kind, and a page of what it did and sent, and to whom.",
         access: "trainingAdmin",
         token: true,
         notes:
-          "One change per channel created or joined, per person invited, removed or refused, and per email with no Slack account (with an empty channelName). In a dry run each says what would have happened. fullName is the employee list's name for the email now, or null.",
+          "One change per channel created or joined, per person invited, removed or refused, per direct message sent, and per email with no Slack account. A change to a channel names it in channelName; one to a person alone has an empty channelName: a message (messaged, its text in detail, as Slack mrkdwn), a message Slack refused (failed), or no Slack account (not_in_slack). In a dry run each says what would have happened. fullName is the employee list's name for the email now, or null. counts is by kind, whatever the search.",
         params: [{ name: "id", type: "string", required: true, note: "UUID" }],
-        query: listQuery(SLACK_SYNC_CHANGE_LIST.sorts, "the channel, the action, the email, the name or the detail"),
-        returns: `{ run: <as in GET /api/cohorts/slack/sync>, changes: { id, channelName, action: "created" | "joined" | "invited" | "removed" | "not_in_slack" | "failed", email, fullName: string | null, detail: string | null, at }[], ${PAGE_FIELDS} }`,
+        query: [
+          { name: "kind", type: '"channels" | "messages" | "problems"', note: "only changes to a channel; only messages, sent or refused; or only refusals and emails with no Slack account. Every change if left out" },
+          ...listQuery(SLACK_SYNC_CHANGE_LIST.sorts, "the channel, the action, the email, the name or the detail"),
+        ],
+        returns: `{ run: <as in GET /api/cohorts/slack/sync>, counts: { all, channels, messages, problems: number }, changes: { id, channelName, action: "created" | "joined" | "invited" | "removed" | "messaged" | "not_in_slack" | "failed", email, fullName: string | null, detail: string | null, at }[], ${PAGE_FIELDS} }`,
         errors: [{ status: 404, error: "not_found", when: "id is not a UUID, or no such run" }],
       },
       {
@@ -678,7 +692,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "trainingAdmin",
         token: true,
         notes:
-          "The bot token is never returned. app.configured says whether the deployment has the app's Client ID and secret, and so can offer Add to Slack. installation is null until someone adds the app; missingScopes lists any the sync needs (users:read, users:read.email, channels:read, channels:manage, channels:join) that it was not granted; readable is false when the saved token was sealed by another deployment, as after an import, and the app must be added again. envToken says whether the deployment also sets SLACK_BOT_TOKEN, which the sync uses only while nothing is installed.",
+          "The bot token is never returned. app.configured says whether the deployment has the app's Client ID and secret, and so can offer Add to Slack. installation is null until someone adds the app; missingScopes lists any it was not granted of those the channel sync needs (users:read, users:read.email, channels:read, channels:manage, channels:join) and those the intake reminders' direct messages need (chat:write, im:write); readable is false when the saved token was sealed by another deployment, as after an import, and the app must be added again. envToken says whether the deployment also sets SLACK_BOT_TOKEN, which the sync uses only while nothing is installed.",
         returns:
           "{ app: { configured: boolean, appId: string | null }, installation: { teamId, teamName: string | null, appId, botUserId, scopes: string[], missingScopes: string[], readable: boolean, installedBy: string | null, installedAt } | null, envToken: boolean }",
       },
@@ -1546,37 +1560,65 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
     endpoints: [
       {
         method: "GET",
-        path: "/api/logistics/intake-form",
-        summary: "Reads the intake form, as Logistics settings edits it.",
+        path: "/api/logistics/intake-forms/{form}",
+        summary: "Reads one intake form, Pre-Bootcamp or Pre-Intermediate, as Logistics settings edits it.",
         access: "trainingAdmin",
         token: true,
-        notes: "Until it is first saved this is the default form, with updatedAt null.",
-        returns: `{ title, description, questions: ${INTAKE_QUESTION_SHAPE}[], updatedAt: string | null }`,
+        params: [INTAKE_FORM_PARAM],
+        notes: "Until it is first saved this is the default form, with updatedAt null: Pre-Bootcamp's seven questions, and none for Pre-Intermediate. A form has no title of its own; /intake heads it Bootcamp Registration or Intermediate Registration.",
+        returns: `{ questions: ${INTAKE_QUESTION_SHAPE}[], updatedAt: string | null }`,
+        errors: [{ status: 404, error: "not_found", when: "form is neither bootcamp nor intermediate" }],
       },
       {
         method: "PUT",
-        path: "/api/logistics/intake-form",
-        summary: "Replaces the intake form.",
+        path: "/api/logistics/intake-forms/{form}",
+        summary: "Replaces one intake form's questions.",
         access: "trainingAdmin",
         token: true,
-        notes: "Answers already sent keep the question ids they were given under; a question removed stops being asked.",
+        params: [INTAKE_FORM_PARAM],
+        notes: "Answers already saved keep the question ids they were given under; a question removed stops being asked.",
         body: { kind: "json", fields: INTAKE_FORM_FIELDS },
-        returns: `{ title, description, questions: ${INTAKE_QUESTION_SHAPE}[], updatedAt: string }`,
-        errors: [{ status: 400, error: "invalid", when: "the body is not that shape" }],
+        returns: `{ questions: ${INTAKE_QUESTION_SHAPE}[], updatedAt: string }`,
+        errors: [
+          { status: 400, error: "invalid", when: "the body is not that shape" },
+          { status: 404, error: "not_found", when: "form is neither bootcamp nor intermediate" },
+        ],
       },
       {
         method: "GET",
         path: "/api/logistics/intake-responses",
-        summary: "Lists every response sent to the intake form, a page at a time, newest first.",
+        summary: "Lists each person's latest answers to one intake form, a page at a time, the most recently saved first.",
         access: "trainingAdmin",
         token: true,
-        notes: "Each response is listed, including a second one from the same email.",
+        notes: "Someone who changed their answers is listed once, as they are now. name is from HiBob, and null for an email no employee has.",
         query: [
-          ...listQuery(INTAKE_RESPONSE_LIST.sorts, "the email or any answer"),
+          { name: "form", type: '"bootcamp" | "intermediate"', note: "the form; bootcamp, Pre-Bootcamp, if left out or anything else" },
+          ...listQuery(INTAKE_RESPONSE_LIST.sorts, "the name, email or any answer"),
           { name: "question", type: "string", note: "with answer, only responses whose answer to this question id is, or for checkboxes includes, answer" },
           { name: "answer", type: "string", note: "with question; either alone is ignored" },
         ],
-        returns: `{ responses: { id, email, answers: Record<string, string | string[]>, submittedAt }[], ${PAGE_FIELDS} }`,
+        returns: `{ form: "bootcamp" | "intermediate", responses: { id, email, name: string | null, answers: Record<string, string | string[]>, submittedAt }[], ${PAGE_FIELDS} }`,
+      },
+      {
+        method: "GET",
+        path: "/api/logistics/intake-reminders",
+        summary: "Reads the intake form's daily Slack reminder: whether it is on, who is still to answer, and the last run that set out to send it.",
+        access: "trainingAdmin",
+        token: true,
+        notes:
+          "The cohort Slack sync sends the reminders (POST /api/cohorts/slack/sync), so live says whether it sends them or, in dry run, only logs them. sentToday says whether today's have gone out. counts has, for each form, how many in the current cohort are in its stage (asked), how many of them have answered, and how many questions it has; a form with none sends no reminders. slack.configured is false with no bot token; missingScopes lists chat:write or im:write where the installed app was not granted them. lastRun is the latest sync run whose scope is all or reminders, or null.",
+        returns: `{ on: boolean, live: boolean, sentToday: boolean, lastRun: <a run, as in GET /api/cohorts/slack/sync> | null, counts: Record<"bootcamp" | "intermediate", { asked: number, answered: number, questions: number }>, slack: { configured: boolean, missingScopes: string[] } }`,
+      },
+      {
+        method: "PUT",
+        path: "/api/logistics/intake-reminders",
+        summary: "Turns the intake form's daily Slack reminder on or off.",
+        access: "trainingAdmin",
+        token: true,
+        notes: "Off until someone turns it on; while off, no sync sends any. QA shares production's Slack workspace, so QA leaves it off.",
+        body: { kind: "json", fields: [{ name: "on", type: "boolean", required: true }] },
+        returns: "{ on: boolean }",
+        errors: [{ status: 400, error: "invalid", when: "the body is not that shape" }],
       },
       {
         method: "GET",
@@ -1726,23 +1768,25 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       {
         method: "GET",
         path: "/api/intake",
-        summary: "Reads the intake form a new bootcamp attendee fills in at /intake.",
-        access: "public",
-        token: true,
-        returns: `{ title, description, questions: ${INTAKE_QUESTION_SHAPE}[] }`,
-      },
-      {
-        method: "POST",
-        path: "/api/intake",
-        summary: "Sends an attendee's answers to the intake form.",
-        access: "public",
+        summary: "Reads the caller's own intake form, as /intake shows it, with the answers they last saved.",
+        access: "signedIn",
         token: true,
         notes:
-          "Attendees have no account, so anyone with the link can send answers under any email. Answers are checked against the form as it stands now: trimmed, blanks dropped, and any for a question not on it ignored. Sending again adds another response rather than replacing the last.",
+          "The form is the one for the caller's stage of the current cohort (the Cohorts page's Current tab, Sales and Engineer tracks): bootcamp, headed Bootcamp Registration, for a bootcamp candidate, and intermediate, Intermediate Registration, for an intermediate one. answers is empty and savedAt null until they have saved any.",
+        returns: `{ form: "bootcamp" | "intermediate", heading, questions: ${INTAKE_QUESTION_SHAPE}[], answers: Record<string, string | string[]>, savedAt: string | null }`,
+        errors: [{ status: 404, error: "not_in_cohort", when: "the caller is not in the current cohort" }],
+      },
+      {
+        method: "PUT",
+        path: "/api/intake",
+        summary: "Saves the caller's answers to their own intake form.",
+        access: "signedIn",
+        token: true,
+        notes:
+          "Saved under the caller's own email, to the form for their stage, as GET /api/intake reads it. Answers are checked against the form as it stands now: trimmed, blanks dropped, and any for a question not on it ignored. Saving again replaces their answers; the ones before are kept, but only the latest is listed or counted.",
         body: {
           kind: "json",
           fields: [
-            { name: "email", type: "string", required: true, note: "an email address; stored lowercased" },
             {
               name: "answers",
               type: "Record<string, string | string[]>",
@@ -1751,9 +1795,11 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
             },
           ],
         },
-        returns: "201 { id }",
+        returns: '{ form: "bootcamp" | "intermediate", savedAt }',
         errors: [
-          { status: 400, error: "invalid", when: "the body is not that shape, or email is not an email address" },
+          { status: 400, error: "invalid", when: "the body is not that shape" },
+          { status: 404, error: "not_in_cohort", when: "the caller is not in the current cohort" },
+          { status: 409, error: "no_questions", when: "their form has no questions yet, so there is nothing to answer" },
           { status: 400, error: "required", when: "a required question has no answer; questionId names it" },
           { status: 400, error: "not_an_option", when: "an answer is not one the question offers, or a single-answer question was given several; questionId names it" },
         ],
@@ -2600,12 +2646,28 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       },
       {
         method: "POST",
+        path: "/api/logistics/intake-reminders/scheduled",
+        summary: "Sends the intake form's daily Slack reminder for Cloud Scheduler.",
+        access: "internal",
+        token: false,
+        notes:
+          "Accepts only a Google-signed OIDC token for INTAKE_REMINDERS_AUDIENCE from the INTAKE_REMINDERS_INVOKER service account; either unset refuses every call. Starts no run while the reminder is off or once today's (America/New_York) have gone out, so a retried call messages nobody twice. Otherwise a run of the cohort Slack sync with scope reminders, as POST /api/cohorts/slack/sync sends them, and a dry run while the sync is. Allows 300 seconds.",
+        returns: `{ skipped: "off" | "already_sent" } | <as POST /api/cohorts/slack/sync answers>`,
+        errors: [
+          { status: 401, error: "unauthorized", when: "the OIDC token is missing, invalid or from someone else" },
+          { status: 409, error: "already_running", when: "another sync is running" },
+          { status: 409, error: "not_configured", when: "there is no Slack bot token" },
+          { status: 502, error: "slack_error", when: "Slack refused the token, as for a missing scope" },
+        ],
+      },
+      {
+        method: "POST",
         path: "/api/evals/hibob/sync/scheduled",
         summary: "Runs the daily HiBob sync for Cloud Scheduler.",
         access: "internal",
         token: false,
         notes:
-          "Accepts only a Google-signed OIDC token for HIBOB_SYNC_AUDIENCE from the HIBOB_SYNC_INVOKER service account; either unset refuses every call. Same sync as the manual one. A successful sync is followed by the cohort Slack channel sync, as POST /api/cohorts/slack/sync does it; its result is slack, and its failure does not fail this call. Allows 300 seconds.",
+          "Accepts only a Google-signed OIDC token for HIBOB_SYNC_AUDIENCE from the HIBOB_SYNC_INVOKER service account; either unset refuses every call. Same sync as the manual one. A successful sync is followed by the cohort Slack sync's channels, as POST /api/cohorts/slack/sync syncs them, without its reminders, which go out on their own schedule; its result is slack, and its failure does not fail this call. Allows 300 seconds.",
         returns: "{ count: number, skipped: number, slack: <as POST /api/cohorts/slack/sync answers, or { ok: false, error, detail }> }",
         errors: [
           { status: 401, error: "unauthorized", when: "the OIDC token is missing, invalid or from someone else" },

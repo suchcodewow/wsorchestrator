@@ -77,6 +77,42 @@ resource "google_cloud_scheduler_job" "hibob_sync" {
 }
 
 locals {
+  intake_reminders_audience = "workshop-orchestrator/intake-reminders"
+  intake_reminders_url = format(
+    "%s/api/logistics/intake-reminders/scheduled",
+    trimsuffix(var.app_url != "" ? var.app_url : google_cloud_run_v2_service.app.uri, "/"),
+  )
+}
+
+# Slack the current cohort's stragglers a link to their intake form once a
+# day. The app sends nothing until a Training Administrator turns reminders
+# on in Logistics settings → Reminders, which QA, sharing production's Slack
+# workspace, leaves off; it also sends at most once a day, so a retry is safe.
+resource "google_cloud_scheduler_job" "intake_reminders" {
+  name    = "intake-reminders-trigger"
+  project = var.admin_project_id
+  region  = var.region
+
+  schedule  = var.intake_reminders_schedule
+  time_zone = "America/New_York"
+
+  # The route allows 300 seconds and stops sending at 270.
+  attempt_deadline = "300s"
+
+  http_target {
+    http_method = "POST"
+    uri         = local.intake_reminders_url
+
+    oidc_token {
+      service_account_email = google_service_account.scheduler.email
+      audience              = local.intake_reminders_audience
+    }
+  }
+
+  depends_on = [google_project_service.admin]
+}
+
+locals {
   canary_wire_pull_audience = "workshop-orchestrator/canary-wire-pull"
   canary_wire_pull_url = format(
     "%s/api/evals/canary-wire/pull/scheduled",
