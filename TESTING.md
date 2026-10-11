@@ -411,9 +411,11 @@ an Iris test, file a score, or otherwise change things as someone with a given
 set of roles, use a **test account**. They exist only outside production
 (local `next dev`, QA).
 
-1. On **Manage users**, choose **New test account** and name it. To start from
-   a real person, pick them under **Copy from**: it takes their roles, theme and
-   calendar settings, and Iris track, once, but not their test results,
+1. On **Manage users**, choose **New test account**. It starts with a film or
+   television character's name that no account has yet; change it if you like.
+   To start from a real person, search the employee list under **Copy from**:
+   it takes their roles, theme and calendar settings, and Iris track, once (no
+   roles, if they have never signed in), but not their test results,
    progress, Harness credentials, or manager and guest-judge status (those
    follow from their own address). Otherwise it starts with no roles. Either
    way, change its roles in its row like anyone else's.

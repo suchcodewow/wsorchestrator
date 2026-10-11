@@ -5,12 +5,11 @@
  * only; see src/lib/test-accounts.ts.
  */
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { FlaskConical, Loader2, RotateCcw, X } from "lucide-react";
+import { FlaskConical, Loader2, Recycle, RotateCcw, VenetianMask, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useAnchoredToParent } from "@/components/use-anchored";
-import { SEARCH_DEBOUNCE_MS } from "@/components/use-debounced-search";
+import { EmployeeMatches, useEmployeeSearch, type EmployeeCandidate } from "@/components/employee-picker";
 import {
   Dialog,
   DialogContent,
@@ -20,12 +19,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { impersonate } from "@/components/user-menu";
 import { TEST_ACCOUNT_LIMITS } from "@/db/schema";
 import { cn } from "@/lib/utils";
 
 const ERRORS: Record<string, string> = {
   invalid: "Give it a name.",
-  source_not_found: "That user no longer exists. Choose someone else.",
+  source_not_found: "That person is no longer in the employee list. Choose someone else.",
   platform_source: "A platform administrator already sees everything. Choose someone else.",
   invalid_body: "Give it a name of up to 80 characters.",
   production: "Test accounts can't be made on production.",
@@ -50,63 +50,18 @@ async function send(url: string, body?: unknown): Promise<string | null> {
   }
 }
 
-/** An account the new test account can start as a copy of. */
-type Source = { id: string; name: string | null; email: string | null; isPlatformAdmin: boolean };
-
-/** How many matches the copy-from list shows; the rest are a sharper search away. */
-const SHOWN_SOURCES = 6;
-
-/** Accounts matching `q`, from the Users page's own list, fetched once typing pauses. */
-function useSourceSearch(q: string, enabled: boolean): Source[] {
-  const [matches, setMatches] = useState<Source[]>([]);
-
-  useEffect(() => {
-    if (!enabled) return;
-    const ctrl = new AbortController();
-    const t = setTimeout(async () => {
-      try {
-        const res = await fetch(`/api/users?${new URLSearchParams({ q })}`, { signal: ctrl.signal });
-        const body = res.ok ? ((await res.json()) as { users?: Source[] }) : null;
-        setMatches((body?.users ?? []).slice(0, SHOWN_SOURCES));
-      } catch {
-        // Aborted by the next keystroke, or offline: the list just stays as it was.
-      }
-    }, SEARCH_DEBOUNCE_MS);
-    return () => {
-      clearTimeout(t);
-      ctrl.abort();
-    };
-  }, [q, enabled]);
-
-  return matches;
-}
-
-/** The list under the copy-from field. Render it inside the `relative` box around the field. */
-function SourceMatches({ matches, onChoose }: { matches: Source[]; onChoose: (source: Source) => void }) {
-  const ref = useAnchoredToParent<HTMLUListElement>(matches.length > 0);
-  if (matches.length === 0) return null;
-
-  return (
-    <ul ref={ref} className="absolute top-0 left-0 z-20 overflow-y-auto rounded-md border bg-popover shadow-md">
-      {matches.map((s) => (
-        <li key={s.id}>
-          <button
-            type="button"
-            disabled={s.isPlatformAdmin}
-            title={s.isPlatformAdmin ? "A platform administrator already sees everything" : undefined}
-            onMouseDown={(ev) => ev.preventDefault()}
-            onClick={() => onChoose(s)}
-            className="flex w-full flex-col items-start gap-0.5 px-3 py-2 text-left text-sm transition-colors hover:bg-muted/50 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <span>{s.name ?? s.email}</span>
-            <span className="text-xs text-muted-foreground">
-              {s.isPlatformAdmin ? "Platform administrator — can't be copied" : s.email}
-            </span>
-          </button>
-        </li>
-      ))}
-    </ul>
-  );
+/**
+ * The name a new test account starts with: a character's no account has yet,
+ * other than `skip`; or none when all are taken.
+ */
+async function fetchSuggestedName(skip?: string): Promise<string | null> {
+  try {
+    const res = await fetch(`/api/users/test-accounts?${new URLSearchParams(skip ? { skip } : {})}`);
+    const body = res.ok ? ((await res.json()) as { suggestedName?: string | null }) : null;
+    return body?.suggestedName ?? null;
+  } catch {
+    return null;
+  }
 }
 
 export function CreateTestAccountDialog() {
@@ -115,26 +70,35 @@ export function CreateTestAccountDialog() {
   const [name, setName] = useState("");
   const [query, setQuery] = useState("");
   const [listOpen, setListOpen] = useState(false);
-  const [source, setSource] = useState<Source | null>(null);
+  const [source, setSource] = useState<EmployeeCandidate | null>(null);
   const [pending, setPending] = useState(false);
+  const [rerolling, setRerolling] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const q = query.trim();
   const searching = q.length > 0 && !source;
-  const matches = useSourceSearch(q, searching);
+  const { matches } = useEmployeeSearch(q, searching);
 
-  function choose(s: Source) {
-    setSource(s);
-    setQuery(s.name ?? s.email ?? "");
+  function choose(e: EmployeeCandidate) {
+    setSource(e);
+    setQuery(e.fullName);
     setListOpen(false);
-    if (!name.trim()) setName(`Test: ${s.name ?? s.email}`.slice(0, TEST_ACCOUNT_LIMITS.name));
+    if (!name.trim()) setName(`Test: ${e.fullName}`.slice(0, TEST_ACCOUNT_LIMITS.name));
+  }
+
+  /** Another character's name in place of the one shown; kept as it is when none is left. */
+  async function reroll() {
+    setRerolling(true);
+    const next = await fetchSuggestedName(name.trim() || undefined);
+    setRerolling(false);
+    if (next) setName(next);
   }
 
   async function submit() {
     if (!name.trim() || pending) return;
     setPending(true);
     setError(null);
-    const failed = await send("/api/users/test-accounts", { name, ...(source && { copyFrom: source.id }) });
+    const failed = await send("/api/users/test-accounts", { name, ...(source && { copyFrom: source.email }) });
     setPending(false);
     if (failed) return setError(failed);
     setOpen(false);
@@ -152,6 +116,10 @@ export function CreateTestAccountDialog() {
           setSource(null);
           setError(null);
           setOpen(true);
+          // Only if nothing has been typed in the meantime.
+          void fetchSuggestedName().then((suggested) => {
+            if (suggested) setName((typed) => typed || suggested);
+          });
         }}
       >
         <FlaskConical />
@@ -180,7 +148,7 @@ export function CreateTestAccountDialog() {
                   value={query}
                   autoComplete="off"
                   spellCheck={false}
-                  placeholder="Search users by name or email"
+                  placeholder="Search employees by name or email"
                   className={cn(source && "pr-9")}
                   onChange={(e) => {
                     setQuery(e.target.value);
@@ -209,11 +177,11 @@ export function CreateTestAccountDialog() {
                     <X className="size-3.5" />
                   </button>
                 )}
-                {listOpen && searching && <SourceMatches matches={matches} onChoose={choose} />}
+                {listOpen && searching && <EmployeeMatches matches={matches} onChoose={choose} />}
               </div>
               <p className="text-xs text-muted-foreground">
                 {source
-                  ? `Starts with ${source.name ?? source.email}'s roles, theme and calendar settings, and Iris track, copied once. Not their test results or progress.`
+                  ? `Starts with ${source.fullName}'s roles, theme and calendar settings, and Iris track, copied once, or no roles if they have never signed in. Not their test results or progress.`
                   : "Without one, it starts with no roles; set them in the table."}
               </p>
             </div>
@@ -222,16 +190,30 @@ export function CreateTestAccountDialog() {
               <label htmlFor="test-account-name" className="text-sm font-medium">
                 Name
               </label>
-              <Input
-                id="test-account-name"
-                value={name}
-                maxLength={TEST_ACCOUNT_LIMITS.name}
-                placeholder="Iris tester, SDR track"
-                onChange={(e) => setName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") void submit();
-                }}
-              />
+              <div className="flex items-center gap-2">
+                <Input
+                  id="test-account-name"
+                  value={name}
+                  maxLength={TEST_ACCOUNT_LIMITS.name}
+                  placeholder="Iris tester, SDR track"
+                  onChange={(e) => setName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") void submit();
+                  }}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="shrink-0"
+                  title="Another character's name"
+                  aria-label="Another character's name"
+                  disabled={rerolling}
+                  onClick={() => void reroll()}
+                >
+                  {rerolling ? <Loader2 className="animate-spin" /> : <Recycle />}
+                </Button>
+              </div>
             </div>
           </div>
 
@@ -249,6 +231,44 @@ export function CreateTestAccountDialog() {
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+/** Views the app as a test account, as picking it in the account menu does; the app reloads as it. */
+export function ViewAsTestAccountButton({
+  user,
+  onError,
+}: {
+  user: { name: string | null; email: string | null };
+  onError: (message: string) => void;
+}) {
+  const [pending, setPending] = useState(false);
+  const who = user.name ?? user.email ?? "this test account";
+
+  async function start() {
+    if (!user.email) return;
+    setPending(true);
+    const failed = await impersonate(user.email);
+    // On success the page is already going away.
+    if (failed) {
+      setPending(false);
+      onError(failed);
+    }
+  }
+
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      // In the "Test account" tag's colours, so it reads as belonging to it.
+      className="size-8 rounded-full border border-amber-500/40 bg-amber-500/10 text-amber-700 hover:bg-amber-500/20 hover:text-amber-800 dark:text-amber-300 dark:hover:text-amber-200"
+      title={`View as ${who}`}
+      aria-label={`View as ${who}`}
+      disabled={pending || !user.email}
+      onClick={() => void start()}
+    >
+      {pending ? <Loader2 className="animate-spin" /> : <VenetianMask />}
+    </Button>
   );
 }
 

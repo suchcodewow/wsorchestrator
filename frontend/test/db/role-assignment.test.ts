@@ -23,8 +23,10 @@ import "../support/test-env";
 
 import { after, before, describe, test } from "node:test";
 import assert from "node:assert/strict";
+import { inArray } from "drizzle-orm";
 
-import { ASSESSMENTS_ROLES, EVENT_ROLES, TRAINING_ROLES } from "@/db/schema";
+import { db } from "@/db";
+import { ASSESSMENTS_ROLES, EVENT_ROLES, TRAINING_ROLES, users } from "@/db/schema";
 import type { Access } from "@/lib/roles";
 import { USER_LIST } from "@/lib/list-specs";
 import { setUserRole, listSiteUsers, type RoleChange, type SetRoleError } from "@/lib/site-users";
@@ -280,6 +282,18 @@ describe("listSiteUsers", () => {
 
     const beyond = await listSiteUsers({ q: "sort_", sort: "user", dir: "asc", page: 2 });
     assert.deepEqual([beyond.rows, beyond.hasMore], [[], false]);
+  });
+
+  test("puts test accounts first, each group in the order asked for", async () => {
+    const real = await scope.createUser("first_a_real", PERSONAS.nobody);
+    const testB = await scope.createUser("first_b_test", PERSONAS.nobody);
+    const testC = await scope.createUser("first_c_test", PERSONAS.manager);
+    await db.update(users).set({ isTestAccount: true }).where(inArray(users.id, [testB.id, testC.id]));
+    const ids = async (sort: "user" | "eventRole", dir: "asc" | "desc") =>
+      (await listSiteUsers({ q: "first_", sort, dir, page: 1 })).rows.map((u) => u.id);
+    assert.deepEqual(await ids("user", "asc"), [testB.id, testC.id, real.id]);
+    assert.deepEqual(await ids("user", "desc"), [testC.id, testB.id, real.id]);
+    assert.deepEqual(await ids("eventRole", "asc"), [testB.id, testC.id, real.id]);
   });
 });
 

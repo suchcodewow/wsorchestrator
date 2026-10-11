@@ -20,14 +20,15 @@
 import "server-only";
 
 import { randomBytes } from "node:crypto";
-import { and, count, eq } from "drizzle-orm";
+import { and, count, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { TEST_ACCOUNT_LIMITS, irisTakers, users, workshopRuns } from "@/db/schema";
+import { TEST_ACCOUNT_LIMITS, employees, irisTakers, users, workshopRuns } from "@/db/schema";
 import { noteAudit } from "@/lib/audit-context";
 import { isProduction } from "@/lib/deployment";
 import { searchAny } from "@/lib/paging-sql";
 import { canImpersonate, type Access } from "@/lib/roles";
 import { isBootstrapAdmin } from "@/lib/site-admins";
+import { CHARACTER_NAMES, pickCharacterName } from "@/lib/test-account-names";
 
 /** Reserved by RFC 2606: no mailbox, and no Google account, can be on it. */
 export const TEST_ACCOUNT_DOMAIN = "test-account.invalid";
@@ -65,7 +66,7 @@ export type TestAccount = { id: string; name: string | null; email: string };
  * - `production`      — this deployment is production.
  * - `forbidden`       — only a platform administrator, who alone can view as one, makes them.
  * - `invalid`         — the name is blank or too long.
- * - `source_not_found` — no account has the id to copy from.
+ * - `source_not_found` — neither an employee nor an account has the address to copy from.
  * - `platform_source` — the account to copy from is a platform administrator,
  *                       which a test account never is: viewing as one would
  *                       show nothing an administrator does not already see.
@@ -73,12 +74,14 @@ export type TestAccount = { id: string; name: string | null; email: string };
 export type CreateTestAccountError = "production" | "forbidden" | "invalid" | "source_not_found" | "platform_source";
 
 /**
- * A new test account. With `copyFrom`, it starts as a copy of that account,
- * once: its roles in each area, its theme and calendar settings, and its Iris
- * track. Nothing else comes over: not their Iris sittings or Mimir progress,
- * not their Harness credentials, and not being a manager or a guest judge,
- * which follow from a person's own address. Without it, it has no roles and
- * the Users page grants them.
+ * A new test account. With `copyFrom`, an address, it starts as a copy of the
+ * account with that address, once: its roles in each area, its theme and
+ * calendar settings, and its Iris track. Nothing else comes over: not their
+ * Iris sittings or Mimir progress, not their Harness credentials, and not
+ * being a manager or a guest judge, which follow from a person's own address.
+ * An employee who has never signed in has no account to copy, so it starts as
+ * they would: with no roles. Without `copyFrom`, the same, and the Users page
+ * grants them.
  */
 export async function createTestAccount(
   actor: { access: Access },
@@ -92,7 +95,9 @@ export async function createTestAccount(
 
   let copied: Partial<typeof users.$inferInsert> = {};
   let track: string | null = null;
-  if (copyFrom) {
+  const address = copyFrom?.trim().toLowerCase();
+  if (address) {
+    if (isBootstrapAdmin(address)) return { ok: false, error: "platform_source" };
     const [source] = await db
       .select({
         eventRole: users.eventRole,
@@ -101,22 +106,25 @@ export async function createTestAccount(
         themePreference: users.themePreference,
         calendarScope: users.calendarScope,
         isPlatformAdmin: users.isPlatformAdmin,
-        email: users.email,
         track: irisTakers.track,
       })
       .from(users)
       .leftJoin(irisTakers, eq(irisTakers.userId, users.id))
-      .where(eq(users.id, copyFrom));
-    if (!source) return { ok: false, error: "source_not_found" };
-    if (source.isPlatformAdmin || isBootstrapAdmin(source.email)) return { ok: false, error: "platform_source" };
-    copied = {
-      eventRole: source.eventRole,
-      trainingRole: source.trainingRole,
-      assessmentsRole: source.assessmentsRole,
-      themePreference: source.themePreference,
-      calendarScope: source.calendarScope,
-    };
-    track = source.track;
+      .where(sql`lower(${users.email}) = ${address}`);
+    if (source) {
+      if (source.isPlatformAdmin) return { ok: false, error: "platform_source" };
+      copied = {
+        eventRole: source.eventRole,
+        trainingRole: source.trainingRole,
+        assessmentsRole: source.assessmentsRole,
+        themePreference: source.themePreference,
+        calendarScope: source.calendarScope,
+      };
+      track = source.track;
+    } else {
+      const [employee] = await db.select({ id: employees.id }).from(employees).where(eq(employees.email, address));
+      if (!employee) return { ok: false, error: "source_not_found" };
+    }
   }
 
   const account = await db.transaction(async (tx) => {
@@ -130,9 +138,31 @@ export async function createTestAccount(
   noteAudit({
     target: account.id,
     targetLabel: account.email!,
-    ...(copyFrom && { detail: { copiedFrom: copyFrom } }),
+    ...(address && { detail: { copiedFrom: address } }),
   });
   return { ok: true, account: { ...account, email: account.email! } };
+}
+
+/**
+ * A character's name (`src/lib/test-account-names.ts`) that no account has
+ * yet, for a new test account to start with, and not `skip`, the one the
+ * dialog already shows when asked for another; null when every one is taken,
+ * and on production, which makes none.
+ */
+export async function suggestTestAccountName(skip?: string): Promise<string | null> {
+  if (!testAccountsAllowed()) return null;
+  const lowered = sql<string>`lower(${users.name})`;
+  const taken = await db
+    .selectDistinct({ name: lowered })
+    .from(users)
+    .where(
+      inArray(
+        lowered,
+        CHARACTER_NAMES.map((n) => n.toLowerCase()),
+      ),
+    )
+    .limit(CHARACTER_NAMES.length);
+  return pickCharacterName([...taken.map((r) => r.name), ...(skip ? [skip] : [])]);
 }
 
 /**

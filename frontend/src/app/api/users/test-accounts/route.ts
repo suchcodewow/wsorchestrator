@@ -14,6 +14,7 @@ import { canImpersonate } from "@/lib/roles";
 import {
   createTestAccount,
   searchTestAccounts,
+  suggestTestAccountName,
   testAccountsAllowed,
   type CreateTestAccountError,
 } from "@/lib/test-accounts";
@@ -28,15 +29,19 @@ const STATUS_FOR: Record<CreateTestAccountError, number> = {
 
 const postSchema = z.object({
   name: z.string().max(TEST_ACCOUNT_LIMITS.name),
-  copyFrom: z.string().min(1).max(200).optional(),
+  copyFrom: z.string().trim().min(1).max(200).optional(),
 });
 
 export async function GET(req: Request) {
   const { error } = await requireCaller(req, canImpersonate);
   if (error) return error;
 
-  const q = new URL(req.url).searchParams.get("q") ?? "";
-  return NextResponse.json({ enabled: testAccountsAllowed(), testAccounts: await searchTestAccounts(q) });
+  const params = new URL(req.url).searchParams;
+  const [testAccounts, suggestedName] = await Promise.all([
+    searchTestAccounts(params.get("q") ?? ""),
+    suggestTestAccountName(params.get("skip") ?? undefined),
+  ]);
+  return NextResponse.json({ enabled: testAccountsAllowed(), testAccounts, suggestedName });
 }
 
 export const POST = audited(async function POST(req: Request) {

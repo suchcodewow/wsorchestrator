@@ -89,7 +89,7 @@ const IMPERSONATION_ERRORS: Record<string, string> = {
  * person: every page is rendered for whoever the session is, and the page
  * an administrator was on may be one the employee cannot open.
  */
-async function impersonate(email: string | null): Promise<string | null> {
+export async function impersonate(email: string | null): Promise<string | null> {
   const res = await fetch("/api/me/impersonation", {
     method: email ? "POST" : "DELETE",
     headers: { "content-type": "application/json" },

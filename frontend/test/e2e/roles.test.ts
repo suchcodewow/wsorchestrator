@@ -1453,7 +1453,7 @@ describe("viewing the app as an employee", () => {
     const account = await scope.createUser("testaccount", PERSONAS.assessmentsViewer);
     await db.update(users).set({ isTestAccount: true }).where(eq(users.id, account.id));
     const found = JSON.parse((await send({ cookie }, "GET", "/api/users/test-accounts")).body);
-    assert.deepEqual(found, { enabled: false, testAccounts: [] });
+    assert.deepEqual(found, { enabled: false, testAccounts: [], suggestedName: null });
     const viewed = await start(cookie, account.email);
     assert.deepEqual([viewed.status, JSON.parse(viewed.body).error], [404, "not_found"]);
     const reset = await send({ cookie }, "POST", `/api/users/test-accounts/${account.id}/reset`);
