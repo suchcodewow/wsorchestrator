@@ -1,4 +1,8 @@
-/** The Slack tab: the app's install, the active bootcamp's channels, dry run or live, syncing now, and the sync's log a page at a time. */
+/**
+ * The Slack tab: the app's install, the active bootcamp's channels, the
+ * intake form's reminders, dry run or live, previewing and syncing now, and
+ * the sync's log a page at a time.
+ */
 
 import {
   activeCohortChannels,
@@ -7,6 +11,7 @@ import {
   slackSyncInProgress,
 } from "@/lib/cohorts/slack-sync";
 import { SLACK_SYNC_LIST } from "@/lib/list-specs";
+import { getIntakeRemindersOn, intakeRemindersSentToday, outstandingIntake } from "@/lib/logistics/intake-reminders";
 import { parseListQuery } from "@/lib/paging";
 import { envSlackToken } from "@/lib/slack";
 import { getSlackInstallation, slackApp } from "@/lib/slack-app";
@@ -19,12 +24,15 @@ export default async function SlackPage({
 }) {
   const params = await searchParams;
   const query = parseListQuery(params, SLACK_SYNC_LIST);
-  const [page, running, live, active, installation] = await Promise.all([
+  const [page, running, live, active, installation, remindersOn, sentToday, { outstanding }] = await Promise.all([
     listSlackSyncRuns(query),
     slackSyncInProgress(),
     getSlackSyncLive(),
     activeCohortChannels(),
     getSlackInstallation(),
+    getIntakeRemindersOn(),
+    intakeRemindersSentToday(),
+    outstandingIntake(),
   ]);
   const envToken = Boolean(envSlackToken());
   // How Add to Slack went, as the shared OAuth callback (lib/oauth-purposes.ts) put it in the URL.
@@ -41,6 +49,7 @@ export default async function SlackPage({
       installResult={result ? { result, detail: typeof params.detail === "string" ? params.detail : null } : null}
       live={live}
       active={active}
+      reminders={{ on: remindersOn, outstanding: outstanding.length, sentToday }}
       query={query}
       running={running}
       page={{

@@ -1,19 +1,27 @@
 /**
- * Reading the intake form's responses back: every response, for Logistics
- * settings, and each attendee's dietary needs, for the Logistics page.
+ * Reading the intake forms' responses back: each person's latest answers to
+ * one form, for Logistics settings, and each attendee's dietary needs from
+ * the Pre-Bootcamp form, for the Logistics page.
  */
 
 import "server-only";
 
-import { and, count, desc, sql } from "drizzle-orm";
+import { and, count, desc, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { INTAKE_LIMITS, intakeResponses } from "@/db/schema";
+import { INTAKE_LIMITS, employees, intakeResponses, type IntakeFormId } from "@/db/schema";
 import type { DietarySort, IntakeResponseSort } from "@/lib/list-specs";
 import { DIETARY_QUESTION_IDS, type IntakeAnswers } from "@/lib/logistics/intake-values";
 import { pageWindow, toPage, type ListQuery, type Page } from "@/lib/paging";
 import { orderFor, searchAny } from "@/lib/paging-sql";
 
-export type IntakeResponseRow = { id: string; email: string; answers: IntakeAnswers; submittedAt: string };
+export type IntakeResponseRow = {
+  id: string;
+  email: string;
+  /** Their name from HiBob; null for an email no employee has. */
+  name: string | null;
+  answers: IntakeAnswers;
+  submittedAt: string;
+};
 
 /** Only the responses whose answer to `question` is, or for checkboxes includes, `answer`. */
 export type AnswerFilter = { question: string; answer: string };
@@ -36,40 +44,58 @@ export function answerFilter(
 
 const iso = <T extends { submittedAt: Date }>(row: T) => ({ ...row, submittedAt: row.submittedAt.toISOString() });
 
-/** Every response, a page at a time, searched across the email and every answer. */
+/** Each person's most recent response to `form`: someone who changes their answers is counted once, as they are now. */
+function latestOf(form: IntakeFormId) {
+  return db
+    .selectDistinctOn([intakeResponses.email], {
+      id: intakeResponses.id,
+      email: intakeResponses.email,
+      answers: intakeResponses.answers,
+      submittedAt: intakeResponses.submittedAt,
+    })
+    .from(intakeResponses)
+    .where(eq(intakeResponses.form, form))
+    .orderBy(intakeResponses.email, desc(intakeResponses.submittedAt))
+    .as("latest");
+}
+
+/** Each person's latest answers to `form`, a page at a time, searched across their name, email and every answer. */
 export async function listIntakeResponses(
+  form: IntakeFormId,
   query: ListQuery<IntakeResponseSort>,
   filter: AnswerFilter | null,
 ): Promise<Page<IntakeResponseRow>> {
   const { limit, offset } = pageWindow(query.page);
-  const sortColumn = { submittedAt: intakeResponses.submittedAt, email: intakeResponses.email }[query.sort];
+  const latest = latestOf(form);
+  // One name per email, so an email two employee rows share still lists once.
+  const named = db
+    .selectDistinctOn([sql`lower(${employees.email})`], {
+      email: sql<string>`lower(${employees.email})`.as("named_email"),
+      fullName: employees.fullName,
+    })
+    .from(employees)
+    .orderBy(sql`lower(${employees.email})`, employees.fullName)
+    .as("named");
+  const name = named.fullName;
+  const sortColumn = { submittedAt: latest.submittedAt, name: sql`lower(${name})`, email: latest.email }[query.sort];
   const rows = await db
-    .select()
-    .from(intakeResponses)
+    .select({ id: latest.id, email: latest.email, name, answers: latest.answers, submittedAt: latest.submittedAt })
+    .from(latest)
+    .leftJoin(named, eq(named.email, latest.email))
     .where(
       and(
-        searchAny(query.q, [intakeResponses.email, sql`${intakeResponses.answers}::text`]),
-        filter
-          ? sql`${intakeResponses.answers} -> ${filter.question}::text @> to_jsonb(${filter.answer}::text)`
-          : undefined,
+        searchAny(query.q, [latest.email, name, sql`${latest.answers}::text`]),
+        filter ? sql`${latest.answers} -> ${filter.question}::text @> to_jsonb(${filter.answer}::text)` : undefined,
       ),
     )
-    .orderBy(...orderFor(sortColumn, query.dir, desc(intakeResponses.submittedAt), intakeResponses.id))
+    .orderBy(...orderFor(sortColumn, query.dir, desc(latest.submittedAt), latest.id))
     .limit(limit)
     .offset(offset);
   return toPage(rows.map(iso), query.page);
 }
 
-/** Each attendee's most recent response: someone who sends the form twice is counted once. */
-const latest = db
-  .selectDistinctOn([intakeResponses.email], {
-    email: intakeResponses.email,
-    answers: intakeResponses.answers,
-    submittedAt: intakeResponses.submittedAt,
-  })
-  .from(intakeResponses)
-  .orderBy(intakeResponses.email, desc(intakeResponses.submittedAt))
-  .as("latest");
+/** The Pre-Bootcamp form's latest responses, which hold the dietary questions. */
+const latest = latestOf("bootcamp");
 
 /**
  * The answer to one of the dietary questions. Their ids are constants, written

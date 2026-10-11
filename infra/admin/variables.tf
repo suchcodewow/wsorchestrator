@@ -197,6 +197,12 @@ variable "canary_wire_pull_schedule" {
   default     = "0,5,10,15,20,25,30 */2 * * *"
 }
 
+variable "intake_reminders_schedule" {
+  description = "Cron for the daily Slack reminder to fill in the intake form, in America/New_York. The app sends it only while reminders are on in Logistics settings → Reminders."
+  type        = string
+  default     = "0 10 * * *"
+}
+
 variable "hibob_sync_schedule" {
   description = "Cron for the daily HiBob employee sync, in America/New_York."
   type        = string

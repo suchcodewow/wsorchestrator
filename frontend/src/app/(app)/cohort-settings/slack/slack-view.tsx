@@ -1,9 +1,10 @@
 "use client";
 
 /**
- * The Slack app's install, the active bootcamp's Slack channels, whether the
- * sync is live or a dry run, the Sync Slack Now button, and every run's
- * result, each linking to what it did.
+ * The Slack app's install, the active bootcamp's Slack channels, the intake
+ * form's reminders, whether the sync is live or a dry run, the Preview and
+ * Sync Slack Now buttons, and every run's result, each linking to what it
+ * did and sent, and to whom.
  */
 
 import { useEffect, useState } from "react";
@@ -15,8 +16,10 @@ import {
   CalendarClock,
   CheckCircle2,
   ExternalLink,
+  Eye,
   Hash,
   Loader2,
+  MessageSquare,
   MinusCircle,
   Plug,
   RefreshCw,
@@ -35,15 +38,17 @@ import {
 } from "@/components/data-table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import type { SlackSyncStatus, SlackSyncTrigger } from "@/db/schema";
+import type { SlackSyncScope, SlackSyncStatus, SlackSyncTrigger } from "@/db/schema";
 import type { SlackSyncSort } from "@/lib/list-specs";
 import { riseChild, staggerParent } from "@/lib/motion";
 import type { ListQuery, Page } from "@/lib/paging";
+import { cn } from "@/lib/utils";
 import { formatDate, formatWhen } from "../format";
 
 export type SlackRun = {
   id: string;
   trigger: SlackSyncTrigger;
+  scope: SlackSyncScope;
   triggeredBy: string | null;
   status: SlackSyncStatus;
   dryRun: boolean;
@@ -51,10 +56,27 @@ export type SlackRun = {
   finishedAt: string | null;
   invited: number;
   removed: number;
+  messaged: number;
   notInSlack: number;
   failures: number;
   unfinished: boolean;
   error: string | null;
+  notes: string[];
+};
+
+/** What a run set out to do, as the log names it. */
+export const SCOPE_LABELS: Record<SlackSyncScope, string> = {
+  all: "Channels and messages",
+  channels: "Channels",
+  reminders: "Messages",
+};
+
+/** The intake form's reminders, as far as the Slack tab says. */
+export type ReminderStatus = {
+  on: boolean;
+  /** In the current cohort with questions to answer and no answers yet. */
+  outstanding: number;
+  sentToday: boolean;
 };
 
 export type ActiveChannels = {
@@ -109,11 +131,14 @@ function plural(n: number, one: string, many = `${one}s`) {
   return `${n.toLocaleString()} ${n === 1 ? one : many}`;
 }
 
-/** "12 invited, 2 removed, 3 not in Slack", leaving out the zeros; "No changes" for none. */
-export function runCounts(run: Pick<SlackRun, "invited" | "removed" | "notInSlack" | "failures" | "dryRun">): string {
+/** "12 invited, 2 removed, 5 messaged, 3 not in Slack", leaving out the zeros; "No changes" for none. */
+export function runCounts(
+  run: Pick<SlackRun, "invited" | "removed" | "messaged" | "notInSlack" | "failures" | "dryRun">,
+): string {
   const parts = [
     run.invited && `${run.invited.toLocaleString()} ${run.dryRun ? "to invite" : "invited"}`,
     run.removed && `${run.removed.toLocaleString()} ${run.dryRun ? "to remove" : "removed"}`,
+    run.messaged && `${run.messaged.toLocaleString()} ${run.dryRun ? "to message" : "messaged"}`,
     run.notInSlack && `${run.notInSlack.toLocaleString()} not in Slack`,
     run.failures && plural(run.failures, "failure"),
   ].filter(Boolean);
@@ -126,6 +151,7 @@ export function SlackSyncView({
   installResult,
   live,
   active,
+  reminders,
   query,
   page,
   running: syncing,
@@ -136,6 +162,7 @@ export function SlackSyncView({
   installResult: { result: string; detail: string | null } | null;
   live: boolean;
   active: ActiveChannels;
+  reminders: ReminderStatus;
   query: ListQuery<SlackSyncSort>;
   page: Page<SlackRun>;
   /** Whether a sync is under way now, whichever page this is. */
@@ -145,7 +172,7 @@ export function SlackSyncView({
   const sortProps = { sort: query.sort, dir: query.dir };
   const router = useRouter();
   const rowLink = useRowLink();
-  const [busy, setBusy] = useState<"sync" | "mode" | "disconnect" | null>(null);
+  const [busy, setBusy] = useState<"sync" | "preview" | "mode" | "disconnect" | null>(null);
   const installed = installResult ? installMessage(installResult) : null;
   const [error, setError] = useState<string | null>(installed?.error ?? null);
   const [notice, setNotice] = useState<string | null>(installed?.notice ?? null);
@@ -178,27 +205,52 @@ export function SlackSyncView({
     }
   }
 
-  async function syncNow() {
-    setBusy("sync");
+  /**
+   * Runs the sync, or with `preview` a dry run of it, then opens the run to
+   * show everything it did or would do, and sent or would send, and to whom.
+   */
+  async function sync(preview: boolean) {
+    if (
+      !preview &&
+      live &&
+      !window.confirm(
+        "Sync Slack now? It changes the cohort channels and sends the intake form reminders that are due. Preview shows what it would do without doing it.",
+      )
+    ) {
+      return;
+    }
+    setBusy(preview ? "preview" : "sync");
     setError(null);
     setNotice(null);
     try {
-      const res = await fetch("/api/cohorts/slack/sync", { method: "POST" });
+      const res = await fetch("/api/cohorts/slack/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(preview ? { preview: true } : {}),
+      });
       const body = await res.json().catch(() => null);
-      if (!res.ok) setError(message(body, res.status));
-      else if (body.status === "skipped") setNotice("No bootcamp is active in the Scheduler, so there was nothing to sync.");
-      else setNotice(`${body.dryRun ? "Dry run: " : ""}${runCounts(body)}.${body.unfinished ? " Slack's rate limit stopped it part-way; the next run carries on." : ""}`);
+      if (!res.ok) {
+        setError(message(body, res.status));
+        // A failed run is logged too.
+        router.refresh();
+      } else {
+        router.push(`/cohort-settings/slack/${body.runId}`);
+      }
     } catch {
       setError("Could not reach the server.");
     } finally {
       setBusy(null);
-      // A failed run is logged too.
-      router.refresh();
     }
   }
 
   async function setLive(next: boolean) {
-    if (next && !window.confirm("Go live? The next sync will create channels, invite people and remove those it invited who no longer belong.")) {
+    if (next === live) return;
+    if (
+      next &&
+      !window.confirm(
+        "Go live? From the next sync, it creates channels, invites people, removes those it invited who no longer belong, and sends the intake form reminders that are due.",
+      )
+    ) {
       return;
     }
     setBusy("mode");
@@ -220,23 +272,44 @@ export function SlackSyncView({
     }
   }
 
-  const running = busy === "sync" || syncing;
+  const running = busy === "sync" || busy === "preview" || syncing;
+  const syncLabel = busy === "sync" || (syncing && busy === null);
 
   return (
     <motion.div variants={staggerParent(0.05)} initial="hidden" animate="show" className="space-y-6">
       <motion.div variants={riseChild} className="flex flex-wrap items-start justify-between gap-4">
         <div className="space-y-1">
-          <h2 className="text-xl font-medium tracking-tight">Slack channels</h2>
+          <h2 className="text-xl font-medium tracking-tight">Slack</h2>
           {active && (
             <p className="text-sm text-muted-foreground">
               For the bootcamp starting {formatDate(active.startDate)}
             </p>
           )}
         </div>
-        <Button variant="brand" disabled={running || !configured} onClick={syncNow}>
-          {running ? <Loader2 className="animate-spin" /> : <RefreshCw />}
-          {running ? "Syncing…" : "Sync Slack Now"}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          {/* In dry run every sync is already a preview; live, this is the way to see one first. */}
+          {live && (
+            <Button
+              variant="outline"
+              disabled={running}
+              title="A dry run: see what a sync would change and send, and to whom, without doing any of it"
+              onClick={() => sync(true)}
+            >
+              {busy === "preview" ? <Loader2 className="animate-spin" /> : <Eye />}
+              Preview
+            </Button>
+          )}
+          <Button
+            variant="brand"
+            // A dry run works without Slack; a live one needs it.
+            disabled={running || (live && !configured)}
+            title={live ? undefined : "A dry run: logs what it would change and send, and to whom, without doing any of it"}
+            onClick={() => sync(false)}
+          >
+            {syncLabel ? <Loader2 className="animate-spin" /> : <RefreshCw />}
+            {syncLabel ? "Syncing…" : "Sync Slack Now"}
+          </Button>
+        </div>
       </motion.div>
 
       {!configured && !connection.appConfigured && (
@@ -260,21 +333,61 @@ export function SlackSyncView({
 
       <motion.div variants={riseChild} className="divide-y overflow-hidden rounded-2xl border bg-card shadow-sm">
         <ConnectionRow connection={connection} disconnecting={busy === "disconnect"} onDisconnect={disconnect} />
+        <div className="flex flex-wrap items-center justify-between gap-4 px-5 py-4 sm:flex-nowrap">
+          <div className="min-w-0 space-y-0.5">
+            <p className="text-sm font-medium">Mode</p>
+            <p className="text-sm text-muted-foreground">
+              {live
+                ? "Each sync creates the channels, invites the cohort and its contacts, removes anyone it invited who no longer belongs, and sends the reminders that are due."
+                : configured
+                  ? "Each sync reads Slack and logs the channels it would create, who it would add and remove, and the messages it would send, without changing or sending anything."
+                  : "Each sync logs the channels it would create, who it would add, and the messages it would send, without Slack: connect it to check who is already there."}
+            </p>
+          </div>
+          <div role="radiogroup" aria-label="Mode" className="inline-flex shrink-0 items-center rounded-lg border bg-card p-0.5 shadow-xs">
+            {([
+              [false, "Dry run"],
+              [true, "Live"],
+            ] as const).map(([value, label]) => (
+              <button
+                key={label}
+                type="button"
+                role="radio"
+                aria-checked={live === value}
+                disabled={busy === "mode"}
+                onClick={() => setLive(value)}
+                className={cn(
+                  "inline-flex cursor-pointer items-center gap-1.5 rounded-md px-3 py-1.5 text-sm outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-wait",
+                  live === value
+                    ? value
+                      ? "bg-brand font-medium text-brand-foreground"
+                      : "bg-accent font-medium text-foreground"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {busy === "mode" && live !== value && <Loader2 className="size-3.5 animate-spin" />}
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
         <div className="flex flex-wrap items-center justify-between gap-4 px-5 py-4">
           <div className="space-y-0.5">
             <p className="flex items-center gap-2 text-sm font-medium">
-              Mode
-              {live ? <Badge>Live</Badge> : <Badge variant="secondary">Dry run</Badge>}
+              <MessageSquare className="size-3.5 text-muted-foreground" />
+              Intake form reminders
+              {reminders.on ? <Badge>On</Badge> : <Badge variant="secondary">Off</Badge>}
             </p>
             <p className="text-sm text-muted-foreground">
-              {live
-                ? "Each sync creates the channels, invites the cohort and its contacts, and removes anyone it invited who no longer belongs."
-                : "Each sync reads Slack and logs what it would do, without changing anything."}
+              {!reminders.on
+                ? `${reminders.outstanding.toLocaleString()} in the current cohort still to answer; no one is reminded while reminders are off.`
+                : reminders.sentToday
+                  ? `${reminders.outstanding.toLocaleString()} still to answer; today's reminders have gone out, so the next go out tomorrow.`
+                  : `${reminders.outstanding.toLocaleString()} still to answer, each sent a direct message by the next sync.`}
             </p>
           </div>
-          <Button variant="outline" disabled={busy === "mode"} onClick={() => setLive(!live)}>
-            {busy === "mode" && <Loader2 className="animate-spin" />}
-            {live ? "Switch to dry run" : "Go live"}
+          <Button variant="outline" asChild>
+            <Link href="/logistics-settings/reminders">Reminder settings</Link>
           </Button>
         </div>
         {active ? (
@@ -321,6 +434,7 @@ export function SlackSyncView({
                 <SortHeader column="triggeredBy" {...sortProps}>
                   Triggered by
                 </SortHeader>
+                <PlainHeader>Covers</PlainHeader>
                 <SortHeader column="status" {...sortProps}>
                   Result
                 </SortHeader>
@@ -354,6 +468,7 @@ export function SlackSyncView({
                       )}
                     </span>
                   </td>
+                  <td className="whitespace-nowrap px-5 py-2.5 text-muted-foreground">{SCOPE_LABELS[run.scope]}</td>
                   <td className="px-5 py-2.5">
                     <RunResult run={run} />
                   </td>
@@ -364,7 +479,7 @@ export function SlackSyncView({
               ))}
               {runs.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="px-5 py-8 text-center text-muted-foreground">
+                  <td colSpan={5} className="px-5 py-8 text-center text-muted-foreground">
                     {query.q ? "No syncs match." : "No syncs yet."}
                   </td>
                 </tr>

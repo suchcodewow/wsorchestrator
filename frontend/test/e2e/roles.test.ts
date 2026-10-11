@@ -238,12 +238,14 @@ const PAGES: Record<string, PageCase> = {
     path: () => "/logistics-settings",
     expect: (a) => (canManageTrainingSettings(a) ? { to: LOGISTICS_SETTINGS_TABS[0]!.href } : 404),
   },
-  "/logistics-settings/intake": { path: () => "/logistics-settings/intake", expect: gated(canManageTrainingSettings) },
+  "/logistics-settings/pre-bootcamp": { path: () => "/logistics-settings/pre-bootcamp", expect: gated(canManageTrainingSettings) },
+  "/logistics-settings/pre-intermediate": { path: () => "/logistics-settings/pre-intermediate", expect: gated(canManageTrainingSettings) },
   "/logistics-settings/responses": { path: () => "/logistics-settings/responses", expect: gated(canManageTrainingSettings) },
   "/logistics-settings/responses?filtered": {
-    path: () => "/logistics-settings/responses?question=dietary&answer=Yes&q=x",
+    path: () => "/logistics-settings/responses?form=intermediate&question=dietary&answer=Yes&q=x",
     expect: gated(canManageTrainingSettings),
   },
+  "/logistics-settings/reminders": { path: () => "/logistics-settings/reminders", expect: gated(canManageTrainingSettings) },
   "/logistics/dietary?searched": { path: () => "/logistics/dietary?q=x&sort=name", expect: gated(canUseTraining) },
   "/cohorts/previous?open=<a day>": { path: () => "/cohorts/previous?open=2026-09-14", expect: gated(canUseTraining) },
   "/cohorts/previous/<a record>": {
@@ -423,7 +425,9 @@ const PAGES: Record<string, PageCase> = {
   "/me/api-tokens": { path: () => "/me/api-tokens", expect: () => 200 },
   "/inbox": { path: () => "/inbox", expect: () => 200 },
   "/labs": { path: () => "/labs", expect: () => 200, signedOut: 200 },
-  "/intake": { path: () => "/intake", expect: () => 200, signedOut: 200 },
+  // Any signed-in account: someone outside the current cohort is told it is not theirs.
+  "/intake": { path: () => "/intake", expect: () => 200 },
+  "/intake?preview": { path: () => "/intake?preview=bootcamp", expect: () => 200 },
   // Anyone in the org records, signed in but with no role; signed out, they are sent to sign in.
   "/record": { path: () => "/record", expect: () => 200 },
   "/api": { path: () => "/api", expect: () => 200, signedOut: 200 },
@@ -561,6 +565,9 @@ const ROUTES: RouteCase[] = [
   { method: "DELETE", path: `/api/cohorts/channel-contacts/${MISSING}`, allowed: canManageTrainingSettings },
   { method: "GET", path: "/api/cohorts/slack/sync", allowed: canManageTrainingSettings },
   { method: "POST", path: "/api/cohorts/slack/sync", allowed: canManageTrainingSettings, denyOnly: true },
+  // Refused for its body before it starts a run, so this is safe past the gate.
+  { method: "POST", path: "/api/cohorts/slack/sync", allowed: canManageTrainingSettings, body: () => ({ preview: "yes" }) },
+  { method: "GET", path: `/api/cohorts/slack/sync/${MISSING}?kind=messages`, allowed: canManageTrainingSettings },
   { method: "GET", path: `/api/cohorts/slack/sync/${MISSING}`, allowed: canManageTrainingSettings },
   { method: "GET", path: "/api/cohorts/slack/settings", allowed: canManageTrainingSettings },
   { method: "PUT", path: "/api/cohorts/slack/settings", allowed: canManageTrainingSettings, body: () => ({}) },
@@ -643,9 +650,12 @@ const ROUTES: RouteCase[] = [
   { method: "POST", path: "/api/scheduler/session-types", allowed: canManageTrainingSettings, body: () => ({}) },
   { method: "PATCH", path: `/api/scheduler/session-types/${MISSING}`, allowed: canManageTrainingSettings, body: () => ({ minutes: 7 }) },
   { method: "DELETE", path: `/api/scheduler/session-types/${MISSING}`, allowed: canManageTrainingSettings },
-  { method: "GET", path: "/api/logistics/intake-form", allowed: canManageTrainingSettings },
-  { method: "PUT", path: "/api/logistics/intake-form", allowed: canManageTrainingSettings, body: () => ({}) },
-  { method: "GET", path: "/api/logistics/intake-responses?question=dietary&answer=Yes", allowed: canManageTrainingSettings },
+  { method: "GET", path: "/api/logistics/intake-forms/bootcamp", allowed: canManageTrainingSettings },
+  { method: "GET", path: "/api/logistics/intake-forms/intermediate", allowed: canManageTrainingSettings },
+  { method: "PUT", path: "/api/logistics/intake-forms/bootcamp", allowed: canManageTrainingSettings, body: () => ({}) },
+  { method: "GET", path: "/api/logistics/intake-responses?form=intermediate&question=dietary&answer=Yes", allowed: canManageTrainingSettings },
+  { method: "GET", path: "/api/logistics/intake-reminders", allowed: canManageTrainingSettings },
+  { method: "PUT", path: "/api/logistics/intake-reminders", allowed: canManageTrainingSettings, body: () => ({}) },
   { method: "GET", path: "/api/logistics/dietary", allowed: canUseTraining },
   { method: "GET", path: "/api/logistics/guest-judges?sort=sessions", allowed: canUseTraining },
   { method: "GET", path: "/api/logistics/guest-judges/prospects?sort=tenure&group=sales", allowed: canUseTraining },
@@ -658,8 +668,8 @@ const ROUTES: RouteCase[] = [
   { method: "PATCH", path: `/api/logistics/food-orders/${MISSING}`, allowed: canManageTrainingSettings, body: form },
   { method: "DELETE", path: `/api/logistics/food-orders/${MISSING}`, allowed: canManageTrainingSettings },
   { method: "GET", path: `/api/logistics/food-orders/${MISSING}/pdf`, allowed: canUseTraining },
-  { method: "GET", path: "/api/intake", allowed: "public" },
-  { method: "POST", path: "/api/intake", allowed: "public", body: () => ({}) },
+  { method: "GET", path: "/api/intake", allowed: true },
+  { method: "PUT", path: "/api/intake", allowed: true, body: () => ({}) },
 
   // Recordings: the recorder is any signed-in account's; everything else a Training Administrator's
   { method: "GET", path: "/api/recordings", allowed: canManageTrainingSettings },
@@ -888,6 +898,18 @@ describe("the scheduled Canary Wire pull", () => {
     const forged = { bearer: "not-a-google-token" };
     for (const who of [SIGNED_OUT, ...PERSONA_NAMES, forged]) {
       const { status } = await send(who, "POST", "/api/evals/canary-wire/pull/scheduled");
+      if (status !== 401) wrong.push(`${who === forged ? "forged token" : label(who as Who)}: got ${status}`);
+    }
+    assert.deepEqual(wrong, []);
+  });
+});
+
+describe("the scheduled intake reminders", () => {
+  test("refuses every session and a forged token", async () => {
+    const wrong: string[] = [];
+    const forged = { bearer: "not-a-google-token" };
+    for (const who of [SIGNED_OUT, ...PERSONA_NAMES, forged]) {
+      const { status } = await send(who, "POST", "/api/logistics/intake-reminders/scheduled");
       if (status !== 401) wrong.push(`${who === forged ? "forged token" : label(who as Who)}: got ${status}`);
     }
     assert.deepEqual(wrong, []);

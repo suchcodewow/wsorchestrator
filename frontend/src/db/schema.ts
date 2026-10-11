@@ -1007,6 +1007,10 @@ export const EVALS_SETTINGS_KEYS = {
   deferralDays: "deferral_days",
   /** `true` to let the Slack channel sync change Slack; anything else is a dry run. */
   slackSyncLive: "slack_sync_live",
+  /** `true` to send the daily intake form reminders; anything else sends none. See `lib/logistics/intake-reminders.ts`. */
+  intakeRemindersOn: "intake_reminders_on",
+  /** The America/New_York day, `YYYY-MM-DD`, the scheduled reminders last went out on, so a retried call sends none twice. */
+  intakeRemindersSentOn: "intake_reminders_sent_on",
 } as const;
 
 /** The deferral window an administrator can set, in whole days; 0 turns deferral off. */
@@ -1411,15 +1415,24 @@ export const SLACK_SYNC_TRIGGERS = ["schedule", "manual"] as const;
 export type SlackSyncTrigger = (typeof SLACK_SYNC_TRIGGERS)[number];
 
 /** `skipped` is a run with no active bootcamp to sync. */
+/** `skipped` is a run with nothing to do: no active bootcamp to sync, and no reminder due. */
 export const SLACK_SYNC_STATUSES = ["running", "succeeded", "skipped", "failed"] as const;
 export type SlackSyncStatus = (typeof SLACK_SYNC_STATUSES)[number];
 
-/** One run of the cohort channel sync and how it ended. */
+/**
+ * What a run set out to do: `channels` keeps the cohort channels in step,
+ * `reminders` sends the intake form's reminders that are due, `all` both.
+ */
+export const SLACK_SYNC_SCOPES = ["all", "channels", "reminders"] as const;
+export type SlackSyncScope = (typeof SLACK_SYNC_SCOPES)[number];
+
+/** One run of the cohort Slack sync — its channels, its messages, or both — and how it ended. */
 export const slackSyncRuns = pgTable(
   "slack_sync_runs",
   {
     id: uuid("id").primaryKey().defaultRandom(),
     trigger: text("trigger").$type<SlackSyncTrigger>().notNull(),
+    scope: text("scope").$type<SlackSyncScope>().notNull().default("channels"),
     /** Who pressed the button; null for a scheduled run. */
     triggeredBy: text("triggered_by").references(() => users.id, {
       onDelete: "set null",
@@ -1436,6 +1449,8 @@ export const slackSyncRuns = pgTable(
     finishedAt: timestamp("finished_at", { withTimezone: true }),
     invited: integer("invited").notNull().default(0),
     removed: integer("removed").notNull().default(0),
+    /** Direct messages sent, or in a dry run that would be. */
+    messaged: integer("messaged").notNull().default(0),
     /** Emails Slack has no account for. */
     notInSlack: integer("not_in_slack").notNull().default(0),
     /** Changes Slack refused. */
@@ -1444,9 +1459,12 @@ export const slackSyncRuns = pgTable(
     unfinished: boolean("unfinished").notNull().default(false),
     /** Why it failed, or why it was skipped. */
     error: text("error"),
+    /** Why a part of it did nothing, such as no active bootcamp or reminders turned off. */
+    notes: jsonb("notes").$type<string[]>().notNull().default([]),
   },
   (t) => [
     index("slack_sync_runs_started_at_idx").on(t.startedAt),
+    check("slack_sync_runs_scope_check", sql`${t.scope} in ('all', 'channels', 'reminders')`),
     // One sync at a time: a second insert while one runs is a conflict.
     uniqueIndex("slack_sync_runs_one_running_idx")
       .on(t.status)
@@ -1459,10 +1477,15 @@ export const slackSyncRuns = pgTable(
   ],
 );
 
-export const SLACK_SYNC_ACTIONS = ["created", "joined", "invited", "removed", "not_in_slack", "failed"] as const;
+/** `messaged` is a direct message to `email`, its text in `detail`; it has no channel. */
+export const SLACK_SYNC_ACTIONS = ["created", "joined", "invited", "removed", "messaged", "not_in_slack", "failed"] as const;
 export type SlackSyncAction = (typeof SLACK_SYNC_ACTIONS)[number];
 
-/** What one run did, or in a dry run would have done, to each channel and person. */
+/**
+ * What one run did, or in a dry run would have done, to each channel and
+ * person. A row with no `channelName` is about the person alone: a direct
+ * message, a message Slack refused, or an email with no Slack account.
+ */
 export const slackSyncChanges = pgTable(
   "slack_sync_changes",
   {
@@ -1474,7 +1497,7 @@ export const slackSyncChanges = pgTable(
     action: text("action").$type<SlackSyncAction>().notNull(),
     /** Lowercased; empty for a change to the channel itself. */
     email: text("email").notNull().default(""),
-    /** Slack's error, for a failure. */
+    /** Slack's error, for a failure; the text, for a message. */
     detail: text("detail"),
     at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -2510,37 +2533,48 @@ export const INTAKE_LIMITS = {
 } as const;
 
 /**
- * The intake form a new bootcamp attendee fills in when they join Harness,
- * as Logistics settings edits it. One row, `id` "intake"; until it is first
- * saved the form is the default in `src/lib/logistics/intake.ts`.
+ * The intake forms, one for each stage of the current cohort: `bootcamp` is
+ * Pre-Bootcamp and `intermediate` Pre-Intermediate.
+ */
+export const INTAKE_FORM_IDS = ["bootcamp", "intermediate"] as const;
+export type IntakeFormId = (typeof INTAKE_FORM_IDS)[number];
+
+/**
+ * The intake form someone in the current cohort fills in at /intake, one row
+ * per stage, as Logistics settings edits it: only its questions, since its
+ * heading is fixed by the stage (`INTAKE_FORM_HEADINGS`). Until a form is
+ * first saved it is the default in `src/lib/logistics/intake-values.ts`.
  */
 export const intakeForms = pgTable(
   "intake_forms",
   {
-    id: text("id").primaryKey(),
-    title: text("title").notNull(),
-    description: text("description").notNull().default(""),
+    id: text("id").$type<IntakeFormId>().primaryKey(),
     questions: jsonb("questions").$type<IntakeQuestion[]>().notNull().default([]),
     updatedBy: text("updated_by").references(() => users.id, { onDelete: "set null" }),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [check("intake_forms_id_check", sql`${t.id} = 'intake'`)],
+  (t) => [check("intake_forms_id_check", sql`${t.id} in ('bootcamp', 'intermediate')`)],
 );
 
 /**
- * One attendee's answers, keyed by question id, as the form stood when they
- * sent it. Attendees have no account, so they are known by the email they
- * give; sending again adds a row rather than replacing the last.
+ * One person's answers to one form, keyed by question id, as the form stood
+ * when they saved them, under the email they were signed in with. Changing
+ * their answers adds a row rather than replacing the last: their latest row
+ * is their answers, and the ones before it are kept.
  */
 export const intakeResponses = pgTable(
   "intake_responses",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    form: text("form").$type<IntakeFormId>().notNull().default("bootcamp"),
     email: text("email").notNull(),
     answers: jsonb("answers").$type<Record<string, string | string[]>>().notNull(),
     submittedAt: timestamp("submitted_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index("intake_responses_email_idx").on(t.email, t.submittedAt)],
+  (t) => [
+    index("intake_responses_form_email_idx").on(t.form, t.email, t.submittedAt),
+    check("intake_responses_form_check", sql`${t.form} in ('bootcamp', 'intermediate')`),
+  ],
 );
 
 export const FOOD_ORDER_LIMITS = {

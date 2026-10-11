@@ -144,7 +144,7 @@ export const NAV_SECTIONS: NavSection[] = [
         href: "/logistics-settings",
         label: "Logistics settings",
         Icon: ClipboardList,
-        description: "The intake form new attendees fill in, and its responses.",
+        description: "The Pre-Bootcamp and Pre-Intermediate forms, their responses and Slack reminders.",
         visible: canManageTrainingSettings,
       },
       {

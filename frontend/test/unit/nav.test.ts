@@ -169,8 +169,8 @@ describe("isNavItemActive", () => {
   });
 
   test("logistics settings does not also light up the Logistics entry", () => {
-    assert.equal(isNavItemActive("/logistics-settings/intake", link("Logistics")), false);
-    assert.equal(isNavItemActive("/logistics-settings/intake", link("Logistics settings")), true);
+    assert.equal(isNavItemActive("/logistics-settings/pre-bootcamp", link("Logistics")), false);
+    assert.equal(isNavItemActive("/logistics-settings/pre-bootcamp", link("Logistics settings")), true);
   });
 
   test("eVals settings does not also light up the eVals entry", () => {

@@ -95,8 +95,8 @@ export const FACILITY_LIST = spec(["name", "rooms", "capacity", "updatedAt"]);
 export type FacilitySort = (typeof FACILITY_LIST.sorts)[number];
 
 /** `position` is the order the session dialog offers them in. */
-/** Every response sent to the logistics intake form, newest first. */
-export const INTAKE_RESPONSE_LIST = spec(["submittedAt", "email"], "desc");
+/** Each person's latest answers to one logistics intake form, the most recently saved first. */
+export const INTAKE_RESPONSE_LIST = spec(["submittedAt", "name", "email"], "desc");
 export type IntakeResponseSort = (typeof INTAKE_RESPONSE_LIST.sorts)[number];
 
 /** Each attendee's dietary needs, the most critical first. */

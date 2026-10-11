@@ -1,9 +1,10 @@
 "use client";
 
 /**
- * Edits the intake form attendees fill in at /intake: its title and
- * description, and its questions in order, each with a kind, whether it is
- * required, and for a list its options. Saving replaces the whole form.
+ * Edits one intake form, Pre-Bootcamp or Pre-Intermediate, that the current
+ * cohort fills in at /intake: its questions in order, each with a kind,
+ * whether it is required, and for a list its options. Saving replaces the
+ * whole form; a form may have no questions, and then nobody is asked it.
  */
 
 import { useState } from "react";
@@ -11,11 +12,17 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { ArrowDown, ArrowUp, Copy, ExternalLink, Loader2, Plus, Save, Trash2, X } from "lucide-react";
+import { AutoGrowTextarea } from "@/components/auto-grow-textarea";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { INTAKE_LIMITS, INTAKE_QUESTION_KINDS, type IntakeQuestion, type IntakeQuestionKind } from "@/db/schema";
-import { HAS_OPTIONS, HAS_OTHER, KIND_LABELS } from "@/lib/logistics/intake-values";
+import {
+  INTAKE_LIMITS,
+  INTAKE_QUESTION_KINDS,
+  type IntakeFormId,
+  type IntakeQuestion,
+  type IntakeQuestionKind,
+} from "@/db/schema";
+import { HAS_OPTIONS, HAS_OTHER, INTAKE_FORM_LABELS, KIND_LABELS } from "@/lib/logistics/intake-values";
 import type { IntakeFormView } from "@/lib/logistics/intake";
 import { riseChild, staggerParent } from "@/lib/motion";
 import { cn } from "@/lib/utils";
@@ -26,7 +33,7 @@ const SELECT = cn(
 );
 
 const ERRORS: Record<string, string> = {
-  invalid: "Give the form a title, every question a title, and every list question at least one option, with none repeated.",
+  invalid: "Give every question a title, and every list question at least one option, with none repeated.",
   forbidden: "Your own role changed — reload the page.",
 };
 
@@ -42,10 +49,8 @@ const blank = (): IntakeQuestion => ({
   other: false,
 });
 
-export function IntakeEditor({ form }: { form: IntakeFormView }) {
+export function IntakeEditor({ id, form }: { id: IntakeFormId; form: IntakeFormView }) {
   const router = useRouter();
-  const [title, setTitle] = useState(form.title);
-  const [description, setDescription] = useState(form.description);
   const [questions, setQuestions] = useState<IntakeQuestion[]>(form.questions);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -54,11 +59,7 @@ export function IntakeEditor({ form }: { form: IntakeFormView }) {
   const listsComplete = questions.every(
     (q) => !HAS_OPTIONS.has(q.kind) || (q.options.length > 0 && q.options.every((o) => o.trim().length > 0)),
   );
-  const canSave =
-    title.trim().length > 0 &&
-    questions.length > 0 &&
-    questions.every((q) => q.title.trim().length > 0) &&
-    listsComplete;
+  const canSave = questions.every((q) => q.title.trim().length > 0) && listsComplete;
 
   function change(id: string, patch: Partial<IntakeQuestion>) {
     setQuestions((list) => list.map((q) => (q.id === id ? { ...q, ...patch } : q)));
@@ -90,10 +91,10 @@ export function IntakeEditor({ form }: { form: IntakeFormView }) {
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch("/api/logistics/intake-form", {
+      const res = await fetch(`/api/logistics/intake-forms/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, description, questions }),
+        body: JSON.stringify({ questions }),
       });
       const body = await res.json().catch(() => null);
       if (!res.ok) {
@@ -113,20 +114,20 @@ export function IntakeEditor({ form }: { form: IntakeFormView }) {
     <motion.div variants={staggerParent(0.05)} initial="hidden" animate="show" className="max-w-3xl space-y-6">
       <motion.div variants={riseChild} className="flex flex-wrap items-end justify-between gap-3">
         <div className="space-y-1.5">
-          <h2 className="text-xl font-medium tracking-tight">Intake form</h2>
+          <h2 className="text-xl font-medium tracking-tight">{INTAKE_FORM_LABELS[id]} form</h2>
           <p className="text-sm text-muted-foreground">
+            {questions.length} {questions.length === 1 ? "question" : "questions"}
             {savedAt ? (
               <>
-                {questions.length} {questions.length === 1 ? "question" : "questions"}, last saved{" "}
-                <span className="font-medium text-foreground">{new Date(savedAt).toLocaleString()}</span>
+                , last saved <span className="font-medium text-foreground">{new Date(savedAt).toLocaleString()}</span>
               </>
             ) : (
-              <>{questions.length} questions, not saved yet: attendees see the default form</>
+              ", not saved yet"
             )}
           </p>
         </div>
         <Button variant="outline" asChild>
-          <Link href="/intake" target="_blank">
+          <Link href={`/intake?preview=${id}`} target="_blank">
             <ExternalLink />
             Open the form
           </Link>
@@ -134,45 +135,22 @@ export function IntakeEditor({ form }: { form: IntakeFormView }) {
       </motion.div>
 
       <motion.div variants={staggerParent(0.04)} className="divide-y overflow-hidden rounded-2xl border bg-card shadow-sm">
-        <motion.section variants={riseChild} className="space-y-4 px-5 py-4">
-          <div className="space-y-1.5">
-            <label htmlFor="intake-title" className="text-sm font-medium">
-              Title
-            </label>
-            <Input
-              id="intake-title"
-              value={title}
-              maxLength={INTAKE_LIMITS.title}
-              onChange={(e) => setTitle(e.target.value)}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <label htmlFor="intake-description" className="text-sm font-medium">
-              Description
-            </label>
-            <Textarea
-              id="intake-description"
-              placeholder="Shown under the title"
-              value={description}
-              maxLength={INTAKE_LIMITS.description}
-              onChange={(e) => setDescription(e.target.value)}
-            />
-          </div>
-          <p className="text-xs text-muted-foreground">Every attendee is also asked for their email, first.</p>
-        </motion.section>
+        {questions.length === 0 && (
+          <motion.p variants={riseChild} className="px-5 py-8 text-center text-sm text-muted-foreground">
+            No questions yet. Until it has one, nobody is asked this form or reminded about it.
+          </motion.p>
+        )}
 
         {questions.map((q, i) => (
           <motion.section key={q.id} variants={riseChild} className="space-y-3 px-5 py-4">
             <div className="flex items-start gap-2">
               <span className="mt-2 w-6 shrink-0 text-sm text-muted-foreground">{i + 1}.</span>
-              <div className="grid flex-1 gap-3 sm:grid-cols-[1fr_11rem]">
-                <Textarea
+              <div className="grid flex-1 items-start gap-3 sm:grid-cols-[1fr_11rem]">
+                <AutoGrowTextarea
                   aria-label={`Question ${i + 1}`}
                   placeholder="Question"
-                  rows={1}
                   value={q.title}
                   maxLength={INTAKE_LIMITS.title}
-                  className="min-h-9"
                   onChange={(e) => change(q.id, { title: e.target.value })}
                 />
                 <select
@@ -191,7 +169,7 @@ export function IntakeEditor({ form }: { form: IntakeFormView }) {
             </div>
 
             <div className="space-y-3 pl-8">
-              <Textarea
+              <AutoGrowTextarea
                 aria-label={`Question ${i + 1} description`}
                 placeholder="Description (optional)"
                 value={q.description}
@@ -249,7 +227,6 @@ export function IntakeEditor({ form }: { form: IntakeFormView }) {
                     variant="ghost"
                     size="icon"
                     aria-label={`Remove question ${i + 1}`}
-                    disabled={questions.length === 1}
                     className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                     onClick={() => setQuestions((list) => list.filter((x) => x.id !== q.id))}
                   >
@@ -270,9 +247,11 @@ export function IntakeEditor({ form }: { form: IntakeFormView }) {
             <Plus />
             Add question
           </Button>
-          <span className="text-sm text-muted-foreground">
-            {questions.filter((q) => q.required).length} of {questions.length} required
-          </span>
+          {questions.length > 0 && (
+            <span className="text-sm text-muted-foreground">
+              {questions.filter((q) => q.required).length} of {questions.length} required
+            </span>
+          )}
         </motion.div>
       </motion.div>
 

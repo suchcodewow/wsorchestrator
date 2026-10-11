@@ -1,9 +1,10 @@
 "use client";
 
 /**
- * One page of intake form responses, a column per question as the form
- * stands now. The search reaches the email and every answer; the filter
- * beside it narrows to one answer to one list question.
+ * One page of one intake form's responses, each person's latest, a column per
+ * question as the form stands now. The search reaches the name, email and
+ * every answer; the filter beside it narrows to one answer to one list
+ * question.
  */
 
 import { useTransition } from "react";
@@ -11,9 +12,9 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { Loader2 } from "lucide-react";
 import { HEADER_ROW, Pager, PlainHeader, SortHeader, TableSearch } from "@/components/data-table";
-import type { IntakeQuestion } from "@/db/schema";
+import { INTAKE_FORM_IDS, type IntakeFormId, type IntakeQuestion } from "@/db/schema";
 import type { IntakeResponseSort } from "@/lib/list-specs";
-import { HAS_OPTIONS } from "@/lib/logistics/intake-values";
+import { HAS_OPTIONS, INTAKE_FORM_LABELS } from "@/lib/logistics/intake-values";
 import type { AnswerFilter, IntakeResponseRow } from "@/lib/logistics/responses";
 import { riseChild, staggerParent } from "@/lib/motion";
 import type { ListQuery, Page } from "@/lib/paging";
@@ -24,17 +25,19 @@ const SELECT = cn(
   "focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-wait disabled:opacity-50",
 );
 
-/** Sets or clears the answer filter in the URL; back to page 1 either way. */
+/** Sets or clears the form and the answer filter in the URL; back to page 1 either way. */
 function useAnswerFilter() {
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
   const [pending, startTransition] = useTransition();
 
-  function set(filter: { question: string; answer: string }) {
+  function set(filter: { form?: IntakeFormId; question: string; answer: string }) {
     const next = new URLSearchParams(params.toString());
-    for (const key of ["question", "answer"] as const) {
-      if (filter[key]) next.set(key, filter[key]);
+    for (const key of ["form", "question", "answer"] as const) {
+      if (key === "form" && filter.form === undefined) continue;
+      const value = key === "form" && filter.form === "bootcamp" ? "" : filter[key];
+      if (value) next.set(key, value);
       else next.delete(key);
     }
     next.delete("page");
@@ -46,11 +49,13 @@ function useAnswerFilter() {
 }
 
 export function ResponsesView({
+  form,
   questions,
   query,
   filter,
   page,
 }: {
+  form: IntakeFormId;
   questions: IntakeQuestion[];
   query: ListQuery<IntakeResponseSort>;
   filter: AnswerFilter | null;
@@ -63,9 +68,22 @@ export function ResponsesView({
   return (
     <motion.div variants={staggerParent(0.05)} initial="hidden" animate="show" className="space-y-6">
       <motion.div variants={riseChild} className="flex flex-wrap items-center gap-3">
+        <select
+          aria-label="Form"
+          value={form}
+          disabled={pending}
+          onChange={(e) => set({ form: e.target.value as IntakeFormId, question: "", answer: "" })}
+          className={SELECT}
+        >
+          {INTAKE_FORM_IDS.map((id) => (
+            <option key={id} value={id}>
+              {INTAKE_FORM_LABELS[id]}
+            </option>
+          ))}
+        </select>
         <TableSearch
           value={query.q}
-          placeholder="Search emails and answers"
+          placeholder="Search names, emails and answers"
           label="Search responses"
           className="min-w-56 flex-1"
         />
@@ -110,7 +128,10 @@ export function ResponsesView({
             <thead>
               <tr className={HEADER_ROW}>
                 <SortHeader column="submittedAt" sort={query.sort} dir={query.dir}>
-                  Sent
+                  Saved
+                </SortHeader>
+                <SortHeader column="name" sort={query.sort} dir={query.dir}>
+                  Name
                 </SortHeader>
                 <SortHeader column="email" sort={query.sort} dir={query.dir}>
                   Email
@@ -130,7 +151,10 @@ export function ResponsesView({
                   <td className="whitespace-nowrap px-5 py-3 text-muted-foreground tabular-nums">
                     {new Date(r.submittedAt).toLocaleString()}
                   </td>
-                  <td className="px-5 py-3 font-medium">{r.email}</td>
+                  <td className="whitespace-nowrap px-5 py-3 font-medium">
+                    {r.name ?? <span className="text-muted-foreground">—</span>}
+                  </td>
+                  <td className="px-5 py-3">{r.email}</td>
                   {questions.map((q) => {
                     const a = r.answers[q.id];
                     return (
@@ -149,8 +173,8 @@ export function ResponsesView({
               ))}
               {page.rows.length === 0 && (
                 <tr>
-                  <td colSpan={questions.length + 2} className="px-5 py-8 text-center text-muted-foreground">
-                    {query.q || filter ? "No response matches that search and filter." : "No one has sent the form yet."}
+                  <td colSpan={questions.length + 3} className="px-5 py-8 text-center text-muted-foreground">
+                    {query.q || filter ? "No response matches that search and filter." : "No one has answered this form yet."}
                   </td>
                 </tr>
               )}

@@ -1,18 +1,46 @@
 /**
- * The logistics intake form's shape, its default questions, and the checks on
- * an attendee's answers. Pure, so the editor, the public form and the unit
- * suite share them with the routes.
+ * The logistics intake forms' shape, their default questions, and the checks
+ * on an attendee's answers. Pure, so the editor, the form at /intake and the
+ * unit suite share them with the routes.
  */
 
 import { z } from "zod";
 import {
+  INTAKE_FORM_IDS,
   INTAKE_LIMITS,
   INTAKE_QUESTION_KINDS,
+  type IntakeFormId,
   type IntakeQuestion,
   type IntakeQuestionKind,
 } from "@/db/schema";
 
-export type IntakeForm = { title: string; description: string; questions: IntakeQuestion[] };
+export type IntakeForm = { questions: IntakeQuestion[] };
+
+/** Each form's name in Logistics settings; the stage of the current cohort it is named for is the one asked it. */
+export const INTAKE_FORM_LABELS: Record<IntakeFormId, string> = {
+  bootcamp: "Pre-Bootcamp",
+  intermediate: "Pre-Intermediate",
+};
+
+/** What each form is called where it is filled in, at /intake and in its Slack reminder. */
+export const INTAKE_FORM_HEADINGS: Record<IntakeFormId, string> = {
+  bootcamp: "Bootcamp Registration",
+  intermediate: "Intermediate Registration",
+};
+
+export function isIntakeFormId(value: unknown): value is IntakeFormId {
+  return INTAKE_FORM_IDS.includes(value as IntakeFormId);
+}
+
+/** Slack's mrkdwn treats these three as markup. */
+const slackEscape = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+/** The Slack message someone yet to answer `form` is sent, greeting them by their first name. */
+export function intakeReminderText(fullName: string, form: IntakeFormId, link: string): string {
+  const first = fullName.trim().split(/\s+/)[0];
+  const hello = first ? `Hi ${slackEscape(first)}!` : "Hi!";
+  return `${hello} You haven't filled in your *${INTAKE_FORM_HEADINGS[form]}* yet. It only takes a few minutes: <${link}|complete it here>.`;
+}
 
 export const KIND_LABELS: Record<IntakeQuestionKind, string> = {
   short: "Short answer",
@@ -37,8 +65,6 @@ const question = (q: Omit<IntakeQuestion, "description" | "options" | "other"> &
 
 /** The November 2026 Sales Bootcamp registration, as the Google Form it replaces asked it. */
 export const DEFAULT_INTAKE_FORM: IntakeForm = {
-  title: "November 2026 Sales Bootcamp Registration",
-  description: "",
   questions: [
     question({
       id: "attend",
@@ -92,8 +118,14 @@ export const DEFAULT_INTAKE_FORM: IntakeForm = {
   ],
 };
 
+/** Each form until it is first saved: Pre-Bootcamp as the Google Form asked it, Pre-Intermediate with nothing to ask yet. */
+export const DEFAULT_INTAKE_FORMS: Record<IntakeFormId, IntakeForm> = {
+  bootcamp: DEFAULT_INTAKE_FORM,
+  intermediate: { questions: [] },
+};
+
 /**
- * The default form's questions the Logistics page reads dietary needs from.
+ * The Pre-Bootcamp form's questions the Logistics page reads dietary needs from.
  * Editing their wording keeps them; removing one and adding another in its
  * place does not, since the new question gets a new id.
  */
@@ -128,16 +160,14 @@ const questionSchema = z
 
 export const intakeFormSchema = z
   .object({
-    title: z.string().trim().min(1).max(INTAKE_LIMITS.title),
-    description: z.string().max(INTAKE_LIMITS.description).default(""),
-    questions: z.array(questionSchema).min(1).max(INTAKE_LIMITS.questions),
+    questions: z.array(questionSchema).max(INTAKE_LIMITS.questions),
   })
   .strict()
   .refine((f) => new Set(f.questions.map((q) => q.id)).size === f.questions.length, "question ids repeat");
 
+/** Someone's answers to their own form; who they are is their sign-in, never something they type. */
 export const intakeSubmissionSchema = z
   .object({
-    email: z.string().trim().toLowerCase().email().max(320),
     answers: z.record(
       z.union([
         z.string().max(INTAKE_LIMITS.answer),

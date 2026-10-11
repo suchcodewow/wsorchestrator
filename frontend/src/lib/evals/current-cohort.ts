@@ -237,22 +237,46 @@ export async function listCurrentCohort(
 
 /**
  * Everyone on the Current tab on the Sales or Engineer track, by stage, for
- * the Slack channel sync: the undecided and the deferred are left out. Not a
+ * the Slack channel sync and the intake form's reminders: the undecided and
+ * the deferred are left out. Not a
  * page, since the sync needs all of them; it is one email per candidate.
  */
 export async function currentCohortEmails(): Promise<
-  { email: string; stage: CandidateStage; track: "sales" | "engineer" }[]
+  { email: string; fullName: string; stage: CandidateStage; track: "sales" | "engineer" }[]
 > {
   const cutoffs = await getCandidateCutoffs();
   return db
     .select({
       email: sql<string>`lower(${e.email})`,
+      fullName: e.fullName,
       stage: candidateStage,
       track: sql<"sales" | "engineer">`${e.track}`,
     })
     .from(e)
     .leftJoin(h, sql`${h.email} = ${e.email}`)
     .where(and(isCandidate(cutoffs), inArray(e.track, ["sales", "engineer"])));
+}
+
+/**
+ * The stage `email` is in, if they are one of `currentCohortEmails` — on the
+ * Current tab on the Sales or Engineer track — else null. The intake form at
+ * /intake is theirs to fill in by it.
+ */
+export async function cohortStageOf(email: string): Promise<CandidateStage | null> {
+  const cutoffs = await getCandidateCutoffs();
+  const [row] = await db
+    .select({ stage: candidateStage })
+    .from(e)
+    .leftJoin(h, sql`${h.email} = ${e.email}`)
+    .where(
+      and(
+        sql`lower(${e.email}) = ${email.trim().toLowerCase()}`,
+        isCandidate(cutoffs),
+        inArray(e.track, ["sales", "engineer"]),
+      ),
+    )
+    .limit(1);
+  return row?.stage ?? null;
 }
 
 /**

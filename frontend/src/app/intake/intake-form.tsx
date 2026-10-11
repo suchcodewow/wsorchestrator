@@ -1,19 +1,21 @@
 "use client";
 
 /**
- * The intake form as an attendee fills it in: their email, then each
- * question, checked in the browser for what is required and again by the
- * server when it is sent.
+ * The intake form as someone in the current cohort fills it in, under their
+ * own sign-in: each question, starting from the answers they last saved,
+ * checked in the browser for what is required and again by the server when
+ * it is saved. They can come back and change their answers at any time.
  */
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { CheckCircle2, Loader2, Send } from "lucide-react";
+import { CheckCircle2, Eye, Loader2, Save, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { INTAKE_LIMITS, type IntakeQuestion } from "@/db/schema";
-import type { IntakeAnswers, IntakeForm } from "@/lib/logistics/intake-values";
+import type { MyIntake } from "@/lib/logistics/intake";
+import { HAS_OPTIONS, type IntakeAnswers } from "@/lib/logistics/intake-values";
 import { riseChild, staggerParent } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 
@@ -25,19 +27,51 @@ const SELECT = cn(
 /** What an "Other" answer is held under until it is sent. */
 const OTHER = "\u0000other";
 
-export function IntakeFormFiller({ form }: { form: IntakeForm }) {
-  const [email, setEmail] = useState("");
-  const [answers, setAnswers] = useState<IntakeAnswers>({});
-  const [others, setOthers] = useState<Record<string, string>>({});
+const ERRORS: Record<string, string> = {
+  not_in_cohort: "This form is no longer yours to fill in: you are not in the current cohort.",
+  no_questions: "This form no longer asks anything. Reload the page.",
+  impersonating: "You are viewing the app as someone else, so their answers cannot be changed.",
+  required: "Answer every question marked with *.",
+  not_an_option: "One of your answers is not one the form offers. The form may have changed: reload the page.",
+};
+
+/**
+ * Saved answers as the inputs hold them: one a list question does not offer
+ * is its "Other", which is how it was given.
+ */
+function startingFrom(intake: MyIntake): { answers: IntakeAnswers; others: Record<string, string> } {
+  const answers: IntakeAnswers = {};
+  const others: Record<string, string> = {};
+  for (const q of intake.questions) {
+    const saved = intake.answers[q.id];
+    if (saved === undefined) continue;
+    if (!HAS_OPTIONS.has(q.kind) || !q.other) {
+      answers[q.id] = saved;
+      continue;
+    }
+    const values = Array.isArray(saved) ? saved : [saved];
+    const outside = values.find((v) => !q.options.includes(v));
+    if (outside !== undefined) others[q.id] = outside;
+    const held = values.map((v) => (v === outside ? OTHER : v));
+    answers[q.id] = q.kind === "checkboxes" ? held : held[0]!;
+  }
+  return { answers, others };
+}
+
+export function IntakeFormFiller({ intake, preview }: { intake: MyIntake; preview: boolean }) {
+  const [start] = useState(() => startingFrom(intake));
+  const [answers, setAnswers] = useState<IntakeAnswers>(start.answers);
+  const [others, setOthers] = useState<Record<string, string>>(start.others);
   const [missing, setMissing] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [sent, setSent] = useState(false);
+  const [savedAt, setSavedAt] = useState(intake.savedAt);
+  const [justSaved, setJustSaved] = useState(false);
 
   /** The answers as the server takes them, with "Other" replaced by what was typed. */
   function payload(): IntakeAnswers {
     const out: IntakeAnswers = {};
-    for (const q of form.questions) {
+    for (const q of intake.questions) {
       const a = answers[q.id];
       if (a === undefined) continue;
       const other = (others[q.id] ?? "").trim();
@@ -52,14 +86,15 @@ export function IntakeFormFiller({ form }: { form: IntakeForm }) {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    setJustSaved(false);
     const out = payload();
-    const unanswered = form.questions.filter((q) => {
+    const unanswered = intake.questions.filter((q) => {
       const a = out[q.id];
       return q.required && (a === undefined || (Array.isArray(a) ? a.length === 0 : a.trim() === ""));
     });
     setMissing(new Set(unanswered.map((q) => q.id)));
     if (unanswered.length > 0) {
-      setError("Answer every question marked with *.");
+      setError(ERRORS.required!);
       return;
     }
 
@@ -67,41 +102,23 @@ export function IntakeFormFiller({ form }: { form: IntakeForm }) {
     setError(null);
     try {
       const res = await fetch("/api/intake", {
-        method: "POST",
+        method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, answers: out }),
+        body: JSON.stringify({ answers: out }),
       });
       const body = await res.json().catch(() => null);
       if (!res.ok) {
         if (body?.questionId) setMissing(new Set([body.questionId]));
-        setError(
-          body?.error === "invalid"
-            ? "Check your email address."
-            : "One of your answers is not one the form offers. The form may have changed: reload the page.",
-        );
+        setError(ERRORS[body?.error ?? ""] ?? `Could not save your answers (${res.status}).`);
         return;
       }
-      setSent(true);
+      setSavedAt(body.savedAt);
+      setJustSaved(true);
     } catch {
       setError("Could not reach the server.");
     } finally {
       setBusy(false);
     }
-  }
-
-  if (sent) {
-    return (
-      <motion.div
-        variants={riseChild}
-        initial="hidden"
-        animate="show"
-        className="space-y-2 rounded-2xl border bg-card px-5 py-8 text-center shadow-sm"
-      >
-        <CheckCircle2 className="mx-auto size-8 text-brand" />
-        <h1 className="text-xl font-medium tracking-tight">Thanks, {email}</h1>
-        <p className="text-sm text-muted-foreground">Your answers to {form.title} were sent.</p>
-      </motion.div>
-    );
   }
 
   return (
@@ -114,27 +131,26 @@ export function IntakeFormFiller({ form }: { form: IntakeForm }) {
       className="space-y-6"
     >
       <motion.div variants={riseChild} className="space-y-2">
-        <h1 className="text-3xl font-medium tracking-tight">{form.title}</h1>
-        {form.description && <p className="whitespace-pre-line text-sm text-muted-foreground">{form.description}</p>}
+        <h1 className="text-3xl font-medium tracking-tight">{intake.heading}</h1>
+        {savedAt && (
+          <p className="text-sm text-muted-foreground">
+            Answered {new Date(savedAt).toLocaleString()}. Change anything below and save again.
+          </p>
+        )}
       </motion.div>
 
-      <motion.div variants={staggerParent(0.04)} className="divide-y overflow-hidden rounded-2xl border bg-card shadow-sm">
-        <motion.div variants={riseChild} className="space-y-2 px-5 py-4">
-          <label htmlFor="intake-email" className="text-sm font-medium">
-            Email <span className="text-destructive">*</span>
-          </label>
-          <Input
-            id="intake-email"
-            type="email"
-            autoComplete="email"
-            required
-            value={email}
-            maxLength={320}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-        </motion.div>
+      {preview && (
+        <motion.p
+          variants={riseChild}
+          className="flex items-center gap-2 rounded-lg border bg-card px-4 py-3 text-sm text-muted-foreground"
+        >
+          <Eye className="size-4 shrink-0" />
+          A preview of the form as the cohort sees it. Nothing you enter here is saved.
+        </motion.p>
+      )}
 
-        {form.questions.map((q) => (
+      <motion.div variants={staggerParent(0.04)} className="divide-y overflow-hidden rounded-2xl border bg-card shadow-sm">
+        {intake.questions.map((q) => (
           <motion.fieldset
             key={q.id}
             variants={riseChild}
@@ -166,11 +182,17 @@ export function IntakeFormFiller({ form }: { form: IntakeForm }) {
         </motion.p>
       )}
 
-      <motion.div variants={riseChild}>
-        <Button type="submit" variant="brand" disabled={busy || email.trim() === ""}>
-          {busy ? <Loader2 className="animate-spin" /> : <Send />}
-          Submit
+      <motion.div variants={riseChild} className="flex flex-wrap items-center gap-3">
+        <Button type="submit" variant="brand" disabled={busy || preview}>
+          {busy ? <Loader2 className="animate-spin" /> : savedAt ? <Save /> : <Send />}
+          {savedAt ? "Save changes" : "Submit"}
         </Button>
+        {justSaved && (
+          <span role="status" className="flex items-center gap-1.5 text-sm text-muted-foreground">
+            <CheckCircle2 className="size-4 text-brand" />
+            Your answers are saved.
+          </span>
+        )}
       </motion.div>
     </motion.form>
   );
