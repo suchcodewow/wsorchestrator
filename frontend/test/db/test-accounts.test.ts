@@ -8,6 +8,9 @@
  *    included) and keeps its id, name, address and roles.
  * 4. A real account is never reset, and neither is one that owns an event.
  * 5. Only test accounts are found to view as, and none on production.
+ * 6. One copies from an address: an account's, or an employee's who has
+ *    never signed in, which gives no roles.
+ * 7. The suggested name is a character's that no account has yet.
  *
  * Accounts made through `createTestAccount` get random ids, which the scope's
  * cleanup cannot find, so the suite deletes them by the ids it was given.
@@ -30,7 +33,9 @@ import {
   createTestAccount,
   resetTestAccount,
   searchTestAccounts,
+  suggestTestAccountName,
 } from "@/lib/test-accounts";
+import { CHARACTER_NAMES } from "@/lib/test-account-names";
 import { PERSONAS } from "../support/access";
 import { createRun, testScope, type TestUser } from "../support/seed";
 
@@ -89,7 +94,8 @@ describe("createTestAccount", () => {
     const sat = await startSitting(source.id, "sdlc", "A", "preview");
     assert.ok(sat.ok, JSON.stringify(sat));
 
-    const result = await createTestAccount(admin, "Copy of source", source.id);
+    // An address in any case finds them, as the employee list's lowercased one does.
+    const result = await createTestAccount(admin, "Copy of source", source.email.toUpperCase());
     assert.ok(result.ok, JSON.stringify(result));
     made.push(result.account.id);
 
@@ -110,9 +116,23 @@ describe("createTestAccount", () => {
     assert.equal(again!.eventRole, "manager");
   });
 
-  test("refuses to copy a platform administrator, or an account that does not exist", async () => {
-    assert.deepEqual(await createTestAccount(admin, "x", admin.id), { ok: false, error: "platform_source" });
-    assert.deepEqual(await createTestAccount(admin, "x", "wo_test_testacct_missing"), {
+  test("copies an employee who has never signed in as no roles", async () => {
+    const address = await scope.createEmployee("newcomer");
+    const result = await createTestAccount(admin, "Copy of newcomer", address);
+    assert.ok(result.ok, JSON.stringify(result));
+    made.push(result.account.id);
+
+    const [row] = await db.select().from(users).where(eq(users.id, result.account.id));
+    assert.deepEqual(
+      [row!.isTestAccount, row!.eventRole, row!.trainingRole, row!.assessmentsRole, row!.isPlatformAdmin],
+      [true, "none", null, null, false],
+    );
+    assert.equal((await db.select().from(irisTakers).where(eq(irisTakers.userId, row!.id))).length, 0);
+  });
+
+  test("refuses to copy a platform administrator, or an address nobody has", async () => {
+    assert.deepEqual(await createTestAccount(admin, "x", admin.email), { ok: false, error: "platform_source" });
+    assert.deepEqual(await createTestAccount(admin, "x", "wo_test_testacct_missing@example.invalid"), {
       ok: false,
       error: "source_not_found",
     });
@@ -176,5 +196,37 @@ describe("finding one to view as", () => {
       assert.deepEqual(await searchTestAccounts("findable"), []);
       assert.equal(await impersonationTarget(account.email), null);
     });
+  });
+});
+
+describe("suggestTestAccountName", () => {
+  test("asked for another, is never the one shown", async () => {
+    const shown = await suggestTestAccountName();
+    assert.ok(shown);
+    for (let i = 0; i < 20; i++) assert.notEqual(await suggestTestAccountName(shown), shown);
+  });
+
+  test("is a character's name that no account has yet", async () => {
+    // The scratch database may hold some already, so keep free one it does not.
+    const free = await suggestTestAccountName();
+    assert.ok(free && (CHARACTER_NAMES as readonly string[]).includes(free), String(free));
+
+    // Every other name taken, by scope users the cleanup removes; case doesn't matter.
+    const taken = CHARACTER_NAMES.filter((n) => n !== free);
+    for (const [i, name] of taken.entries()) {
+      const user = await scope.createUser(`named${i}`, PERSONAS.nobody);
+      await db.update(users).set({ name: i === 0 ? name.toUpperCase() : name }).where(eq(users.id, user.id));
+    }
+    assert.equal(await suggestTestAccountName(), free);
+    // Asked for another, with none left but the one shown, there is none.
+    assert.equal(await suggestTestAccountName(free!), null);
+
+    const last = await scope.createUser("namedLast", PERSONAS.nobody);
+    await db.update(users).set({ name: free }).where(eq(users.id, last.id));
+    assert.equal(await suggestTestAccountName(), null);
+  });
+
+  test("is none on production", async () => {
+    assert.equal(await asProduction(() => suggestTestAccountName()), null);
   });
 });

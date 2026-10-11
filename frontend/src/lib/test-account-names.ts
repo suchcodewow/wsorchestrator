@@ -1,0 +1,126 @@
+/**
+ * Names for new test accounts: famous characters from film and television,
+ * so a test account reads as obviously not a real person in a list of users,
+ * an audit trail, or the account menu. The New test account dialog starts
+ * with one no account has yet (`suggestTestAccountName`).
+ */
+
+export const CHARACTER_NAMES = [
+  // Film
+  "Ellen Ripley",
+  "Indiana Jones",
+  "Han Solo",
+  "Leia Organa",
+  "Luke Skywalker",
+  "Darth Vader",
+  "Marty McFly",
+  "Emmett Brown",
+  "Sarah Connor",
+  "John McClane",
+  "Vito Corleone",
+  "Michael Corleone",
+  "Forrest Gump",
+  "Clarice Starling",
+  "Atticus Finch",
+  "Rick Blaine",
+  "Dorothy Gale",
+  "Holly Golightly",
+  "Scarlett O'Hara",
+  "James Bond",
+  "Ethan Hunt",
+  "Jason Bourne",
+  "Lara Croft",
+  "Neo",
+  "Frodo Baggins",
+  "Samwise Gamgee",
+  "Harry Potter",
+  "Hermione Granger",
+  "Severus Snape",
+  "Buzz Lightyear",
+  "Sheriff Woody",
+  "Ferris Bueller",
+  "Rocky Balboa",
+  "Elle Woods",
+  "Jeffrey Lebowski",
+  "Jack Sparrow",
+  "Willy Wonka",
+  "Mary Poppins",
+  "Tony Stark",
+  "Peggy Carter",
+  "Diana Prince",
+  "Bruce Wayne",
+  "Imperator Furiosa",
+  "Max Rockatansky",
+  "Beatrix Kiddo",
+  "John Wick",
+  "Amélie Poulain",
+  "Princess Buttercup",
+  "Inigo Montoya",
+  "Jules Winnfield",
+  "Marge Gunderson",
+  "Paddington Bear",
+  "Shrek",
+  // Television
+  "Leslie Knope",
+  "Ron Swanson",
+  "Michael Scott",
+  "Dwight Schrute",
+  "Jim Halpert",
+  "Pam Beesly",
+  "Walter White",
+  "Jesse Pinkman",
+  "Saul Goodman",
+  "Tony Soprano",
+  "Don Draper",
+  "Peggy Olson",
+  "Olivia Pope",
+  "Liz Lemon",
+  "Jack Donaghy",
+  "Buffy Summers",
+  "Dana Scully",
+  "Fox Mulder",
+  "Jean-Luc Picard",
+  "James T. Kirk",
+  "Spock",
+  "Kathryn Janeway",
+  "Daenerys Targaryen",
+  "Tyrion Lannister",
+  "Arya Stark",
+  "Jon Snow",
+  "Sherlock Holmes",
+  "Lucy Ricardo",
+  "Homer Simpson",
+  "Lisa Simpson",
+  "Ted Lasso",
+  "Roy Kent",
+  "Selina Meyer",
+  "Kendall Roy",
+  "Eleven",
+  "Jim Hopper",
+  "Rachel Green",
+  "Monica Geller",
+  "Chandler Bing",
+  "Joey Tribbiani",
+  "Phoebe Buffay",
+  "Ross Geller",
+  "Frasier Crane",
+  "Carrie Bradshaw",
+  "Arthur Fonzarelli",
+  "Jessica Fletcher",
+  "Hawkeye Pierce",
+] as const;
+
+/** Compared ignoring case and surrounding space, as a person reading the list would. */
+const key = (name: string) => name.trim().toLowerCase();
+
+/**
+ * A character's name not among `taken`, chosen at random so two
+ * administrators opening the dialog at once rarely start with the same one;
+ * null once every name is taken.
+ */
+export function pickCharacterName(taken: Iterable<string>, random: () => number = Math.random): string | null {
+  const used = new Set(Array.from(taken, key));
+  const free = CHARACTER_NAMES.filter((n) => !used.has(key(n)));
+  if (free.length === 0) return null;
+  return free[Math.min(free.length - 1, Math.floor(random() * free.length))]!;
+}

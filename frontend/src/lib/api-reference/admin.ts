@@ -288,30 +288,33 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "platform",
         token: true,
         notes:
-          "A test account is an account made to test the app as, outside production. Viewing as one (POST /api/me/impersonation with its email), changes go through, except on session-only routes. On production enabled is false and testAccounts is always empty. At most 8 are returned.",
-        query: [{ name: "q", type: "string", note: "matched against the name and the address; empty matches every one" }],
-        returns: "{ enabled: boolean, testAccounts: { id, name, email }[] }",
+          "A test account is an account made to test the app as, outside production. Viewing as one (POST /api/me/impersonation with its email), changes go through, except on session-only routes. suggestedName is a famous film or television character's name that no account has yet, for a new one to start with; it is null once all 100 are taken, and on production. On production enabled is false and testAccounts is always empty. At most 8 are returned.",
+        query: [
+          { name: "q", type: "string", note: "matched against the name and the address; empty matches every one" },
+          { name: "skip", type: "string", note: "a name suggestedName must not be, to ask for a different one" },
+        ],
+        returns: "{ enabled: boolean, testAccounts: { id, name, email }[], suggestedName: string | null }",
       },
       {
         method: "POST",
         path: "/api/users/test-accounts",
-        summary: "Makes a test account, with no roles or as a copy of an existing account.",
+        summary: "Makes a test account, with no roles or as a copy of an employee's account.",
         access: "platform",
         token: false,
         notes:
-          "Its address is generated on test-account.invalid, which no Google account can have, so nobody can sign in as it. With copyFrom it starts with that account's roles in each area, its theme and calendar settings, and its Iris track, copied once; their Iris sittings, Mimir progress and Harness credentials are not copied, nor being a manager or a guest judge, which follow from their own address. Change its roles afterwards with PATCH /api/users/{id}, and delete it with DELETE /api/users/{id}.",
+          "Its address is generated on test-account.invalid, which no Google account can have, so nobody can sign in as it. With copyFrom it starts with the roles in each area, theme and calendar settings, and Iris track of the account with that address, copied once; an employee who has never signed in has no account, so it starts with no roles, as they would. Their Iris sittings, Mimir progress and Harness credentials are not copied, nor being a manager or a guest judge, which follow from their own address. Change its roles afterwards with PATCH /api/users/{id}, and delete it with DELETE /api/users/{id}.",
         body: {
           kind: "json",
           fields: [
             { name: "name", type: "string", required: true, note: "1–80 characters" },
-            { name: "copyFrom", type: "string", note: "the id of an account to copy, from GET /api/users; not a platform administrator" },
+            { name: "copyFrom", type: "string", note: "the email of an employee, from GET /api/evals/employees, or of any account; not a platform administrator" },
           ],
         },
         returns: "201 { testAccount: { id, name, email } }",
         errors: [
           { status: 400, error: "invalid_body", when: "name is missing or longer than 80 characters, or copyFrom is blank" },
           { status: 400, error: "invalid", when: "name is blank" },
-          { status: 404, error: "source_not_found", when: "no account has the copyFrom id" },
+          { status: 404, error: "source_not_found", when: "neither an employee nor an account has the copyFrom address" },
           { status: 409, error: "platform_source", when: "the copyFrom account is a platform administrator" },
           { status: 409, error: "production", when: "this deployment is production" },
         ],
