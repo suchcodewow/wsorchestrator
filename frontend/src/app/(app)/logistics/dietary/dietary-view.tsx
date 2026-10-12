@@ -52,7 +52,7 @@ export function DietaryView({
         <h2 className="text-xl font-medium tracking-tight">Dietary needs</h2>
         <p className="text-sm text-muted-foreground">
           <span className="font-medium text-foreground">{plural(counts.withNeeds, "attendee", "attendees")}</span> of{" "}
-          {counts.responded.toLocaleString()} who sent a registration form, bootcamp or intermediate, of whom{" "}
+          {counts.responded.toLocaleString()} in the current cohort who sent a registration form, bootcamp or intermediate, of whom{" "}
           <span className="font-medium text-foreground">{counts.byLevel[5].toLocaleString()}</span> rated their needs 5
         </p>
       </motion.div>
@@ -115,7 +115,10 @@ export function DietaryView({
                   </td>
                   <td className="px-5 py-3">
                     <span className="font-medium">{r.name || "—"}</span>
-                    <span className="block text-xs text-muted-foreground">{PROGRAMS[r.form]}</span>
+                    <span className="block text-xs text-muted-foreground">
+                      {PROGRAMS[r.stage]}
+                      {r.form !== r.stage && ` · from their ${PROGRAMS[r.form]} registration`}
+                    </span>
                   </td>
                   <td className="px-5 py-3 text-muted-foreground">{r.email}</td>
                   <td className="px-5 py-3 whitespace-pre-line">{r.needs || <span className="text-muted-foreground">Not described</span>}</td>

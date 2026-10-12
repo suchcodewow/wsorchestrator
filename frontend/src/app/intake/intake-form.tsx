@@ -155,6 +155,12 @@ export function IntakeFormFiller({ intake, preview }: { intake: MyIntake; previe
             Answered {new Date(savedAt).toLocaleString()}. Change anything below and save again.
           </p>
         )}
+        {!savedAt && intake.carriedFrom && (
+          <p className="rounded-lg border border-brand-border bg-brand-subtle px-4 py-3 text-sm">
+            We&apos;ve filled in your dietary needs from your Bootcamp registration on{" "}
+            {new Date(intake.carriedFrom.savedAt).toLocaleDateString()}. Update anything that&apos;s changed, then submit.
+          </p>
+        )}
       </motion.div>
 
       {preview && (

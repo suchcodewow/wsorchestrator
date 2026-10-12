@@ -14,6 +14,7 @@ import { cohortStageOf } from "@/lib/evals/current-cohort";
 import {
   DEFAULT_INTAKE_FORMS,
   INTAKE_FORM_HEADINGS,
+  carriedAnswers,
   checkAnswers,
   isNameQuestion,
   lockNameQuestion,
@@ -72,6 +73,12 @@ export type MyIntake = {
   answers: IntakeAnswers;
   savedAt: string | null;
   /**
+   * When `answers` start from what they told an earlier form rather than their
+   * own, which form and when: Pre-Intermediate, for someone with no answers to
+   * it yet, starts from their Pre-Bootcamp dietary needs. Unset otherwise.
+   */
+  carriedFrom?: { form: IntakeFormId; savedAt: string };
+  /**
    * The name the app has for them now — the one their email gives, until they
    * choose another — which the name question starts from until they answer it.
    */
@@ -106,26 +113,46 @@ export async function getMyIntake(email: string, want: IntakeFormId | null = nul
   const found = await intakeStageFor(email, want);
   if (!found) return null;
   const { stage } = found;
-  const [{ introduction, questions }, name, [latest]] = await Promise.all([
+  const [{ introduction, questions }, name, latest] = await Promise.all([
     getIntakeForm(stage),
     nameOnRecord(email),
-    db
-      .select({ answers: intakeResponses.answers, submittedAt: intakeResponses.submittedAt })
-      .from(intakeResponses)
-      .where(and(eq(intakeResponses.form, stage), eq(intakeResponses.email, email.toLowerCase())))
-      .orderBy(desc(intakeResponses.submittedAt))
-      .limit(1),
+    latestAnswers(stage, email),
   ]);
+
+  // Someone at intermediate who answered Pre-Bootcamp in an earlier cohort starts from what lasts of that.
+  let carriedFrom: MyIntake["carriedFrom"];
+  let answers = latest?.answers ?? {};
+  if (!latest && stage === "intermediate") {
+    const earlier = await latestAnswers("bootcamp", email);
+    const carried = earlier ? carriedAnswers({ introduction, questions }, earlier.answers) : {};
+    if (earlier && Object.keys(carried).length > 0) {
+      answers = carried;
+      carriedFrom = { form: "bootcamp", savedAt: earlier.submittedAt.toISOString() };
+    }
+  }
+
   return {
     form: stage,
     heading: INTAKE_FORM_HEADINGS[stage],
     introduction,
     questions,
-    answers: latest?.answers ?? {},
+    answers,
     savedAt: latest?.submittedAt.toISOString() ?? null,
+    ...(carriedFrom ? { carriedFrom } : {}),
     name,
     ...(found.both ? { testForms: ["bootcamp", "intermediate"] as IntakeFormId[] } : {}),
   };
+}
+
+/** The answers `email` last saved to `form`, and when; undefined if they never have. */
+async function latestAnswers(form: IntakeFormId, email: string) {
+  const [row] = await db
+    .select({ answers: intakeResponses.answers, submittedAt: intakeResponses.submittedAt })
+    .from(intakeResponses)
+    .where(and(eq(intakeResponses.form, form), eq(intakeResponses.email, email.toLowerCase())))
+    .orderBy(desc(intakeResponses.submittedAt))
+    .limit(1);
+  return row;
 }
 
 /**

@@ -12,6 +12,8 @@ import {
   DEFAULT_INTAKE_FORM,
   DEFAULT_INTAKE_FORMS,
   DIETARY_QUESTION_IDS,
+  CARRIED_TO_INTERMEDIATE,
+  carriedAnswers,
   INTAKE_NAME_QUESTION_ID,
   LOCKED_NAME_QUESTION,
   checkAnswers,
@@ -278,5 +280,38 @@ describe("the locked name question", () => {
     assert.equal(lockNameQuestion([other, LOCKED_NAME_QUESTION])[0]!.id, INTAKE_NAME_QUESTION_ID);
     assert.deepEqual(lockNameQuestion([other]), [LOCKED_NAME_QUESTION, other]);
     assert.deepEqual(lockNameQuestion([{ ...LOCKED_NAME_QUESTION, title: "  " }])[0], LOCKED_NAME_QUESTION);
+  });
+});
+
+describe("what Pre-Intermediate carries over from Pre-Bootcamp", () => {
+  const bootcampAnswers = {
+    "preferred-name": "Pat Example",
+    attend: "Yes - I'm there!",
+    dietary: "Yes",
+    "dietary-needs": "Peanut allergy",
+    "dietary-critical": "5",
+    concerns: "Arriving late on day one",
+  };
+
+  test("is the dietary answers only: what lasts from one cohort to the next", () => {
+    assert.deepEqual(carriedAnswers(DEFAULT_INTAKE_FORMS.intermediate, bootcampAnswers), {
+      dietary: "Yes",
+      "dietary-needs": "Peanut allergy",
+      "dietary-critical": "5",
+    });
+  });
+
+  test("leaves out a carried question the intermediate form no longer asks, and an answer never given", () => {
+    const fewer = {
+      ...DEFAULT_INTAKE_FORMS.intermediate,
+      questions: DEFAULT_INTAKE_FORMS.intermediate.questions.filter((q) => q.id !== "dietary-critical"),
+    };
+    assert.deepEqual(carriedAnswers(fewer, { dietary: "No" }), { dietary: "No" });
+  });
+
+  test("is only questions Pre-Bootcamp asks too", () => {
+    for (const id of CARRIED_TO_INTERMEDIATE) {
+      assert.ok(DEFAULT_INTAKE_FORM.questions.some((q) => q.id === id), id);
+    }
   });
 });

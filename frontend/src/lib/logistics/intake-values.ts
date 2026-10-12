@@ -244,6 +244,28 @@ export function isNameQuestion(q: Pick<IntakeQuestion, "id" | "kind">): boolean 
   return q.id === INTAKE_NAME_QUESTION_ID && (q.kind === "short" || q.kind === "paragraph");
 }
 
+/**
+ * The answers Pre-Intermediate starts from when someone has none of its own
+ * yet but answered Pre-Bootcamp, usually a cohort or two before: their
+ * dietary needs, which last. What is about one cohort, such as whether they
+ * will attend, starts blank. Only a question on both forms is carried.
+ */
+export const CARRIED_TO_INTERMEDIATE = [
+  DIETARY_QUESTION_IDS.has,
+  DIETARY_QUESTION_IDS.needs,
+  DIETARY_QUESTION_IDS.critical,
+] as const;
+
+/** `answers` cut down to what `CARRIED_TO_INTERMEDIATE` carries, for the questions `form` asks. */
+export function carriedAnswers(form: IntakeForm, answers: IntakeAnswers): IntakeAnswers {
+  const asked = new Set(form.questions.map((q) => q.id));
+  const kept: IntakeAnswers = {};
+  for (const id of CARRIED_TO_INTERMEDIATE) {
+    if (asked.has(id) && answers[id] !== undefined) kept[id] = answers[id]!;
+  }
+  return kept;
+}
+
 /** How critical a dietary need is, 1 to 5; 5 is an allergy or a religious restriction. */
 export const DIETARY_LEVELS = [5, 4, 3, 2, 1] as const;
 
