@@ -659,6 +659,7 @@ const ROUTES: RouteCase[] = [
   { method: "GET", path: "/api/logistics/intake-forms/intermediate", allowed: canManageTrainingSettings },
   { method: "PUT", path: "/api/logistics/intake-forms/bootcamp", allowed: canManageTrainingSettings, body: () => ({}) },
   { method: "GET", path: "/api/logistics/intake-responses?form=intermediate&question=dietary&answer=Yes", allowed: canManageTrainingSettings },
+  { method: "POST", path: "/api/logistics/intake-responses/import?form=intermediate", allowed: canManageTrainingSettings, body: form },
   { method: "GET", path: "/api/logistics/dietary", allowed: canUseTraining },
   { method: "GET", path: "/api/logistics/guest-judges?sort=sessions", allowed: canUseTraining },
   { method: "GET", path: "/api/logistics/guest-judges/prospects?sort=tenure&group=sales", allowed: canUseTraining },

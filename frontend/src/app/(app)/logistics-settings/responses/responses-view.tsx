@@ -4,13 +4,14 @@
  * One page of one intake form's responses, each person's latest, a column per
  * question as the form stands now. The search reaches the name, email and
  * every answer; the filter beside it narrows to one answer to one list
- * question.
+ * question. Import brings in a Google Form's responses sheet.
  */
 
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
-import { Loader2 } from "lucide-react";
+import { Loader2, Upload } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { HEADER_ROW, Pager, PlainHeader, SortHeader, TableSearch } from "@/components/data-table";
 import { INTAKE_FORM_IDS, type IntakeFormId, type IntakeQuestion } from "@/db/schema";
 import type { IntakeResponseSort } from "@/lib/list-specs";
@@ -19,6 +20,7 @@ import type { AnswerFilter, IntakeResponseRow } from "@/lib/logistics/responses"
 import { riseChild, staggerParent } from "@/lib/motion";
 import type { ListQuery, Page } from "@/lib/paging";
 import { cn } from "@/lib/utils";
+import { ImportResponsesDialog } from "./import-dialog";
 
 const SELECT = cn(
   "h-9 rounded-md border border-input bg-field px-2 text-sm text-foreground shadow-xs outline-none",
@@ -62,6 +64,7 @@ export function ResponsesView({
   page: Page<IntakeResponseRow>;
 }) {
   const { set, pending } = useAnswerFilter();
+  const [importing, setImporting] = useState(false);
   const lists = questions.filter((q) => HAS_OPTIONS.has(q.kind));
   const chosen = lists.find((q) => q.id === filter?.question);
 
@@ -120,7 +123,13 @@ export function ResponsesView({
           )}
           {pending && <Loader2 className="size-4 animate-spin text-muted-foreground" />}
         </div>
+        <Button variant="outline" onClick={() => setImporting(true)}>
+          <Upload />
+          Import
+        </Button>
       </motion.div>
+
+      <ImportResponsesDialog form={form} questions={questions} open={importing} onClose={() => setImporting(false)} />
 
       <motion.div variants={riseChild} className="overflow-hidden rounded-2xl border bg-card shadow-sm">
         <div className="overflow-x-auto">

@@ -1646,6 +1646,31 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         returns: `{ form: "bootcamp" | "intermediate", responses: { id, email, name: string | null, answers: Record<string, string | string[]>, submittedAt }[], ${PAGE_FIELDS} }`,
       },
       {
+        method: "POST",
+        path: "/api/logistics/intake-responses/import",
+        summary: "Brings a Google Form's responses sheet into one intake form, or with commit left out only says how it lines up.",
+        access: "trainingAdmin",
+        token: true,
+        notes:
+          "The sheet's first row is its headers, as Google writes them: an Email Address column is needed, a Timestamp column dates each response, and every other column answers the question whose title it is, or ends with. Columns that answer no question are left out. Each row is stored as that person's answers, dated by its timestamp, so an answer they give at /intake afterwards is newer; a row with the same email and timestamp as one already stored is skipped, so the same sheet twice adds nothing. inCohort is how many of its people are in the current cohort, the ones Dietary needs lists.",
+        query: [
+          { name: "form", type: '"bootcamp" | "intermediate"', required: true, note: "the form to bring the responses into" },
+          { name: "commit", type: '"1"', note: "store them; left out, nothing is written" },
+        ],
+        body: { kind: "multipart", fields: [{ name: "file", type: "File", required: true, note: "the responses sheet as .csv or .xlsx, up to 2 MB and 2,000 rows" }] },
+        returns:
+          "{ imported: boolean, columns: { header, questionId: string | null }[], added: number, alreadyThere: number, inCohort: number, people: number, problems: { row: number, problem: \"no_email\" | \"not_an_email\" }[] }",
+        errors: [
+          { status: 400, error: "no_file", when: "no file was sent" },
+          { status: 400, error: "unreadable", when: "the file is neither a .csv nor an .xlsx" },
+          { status: 400, error: "empty", when: "it has no rows under its headers" },
+          { status: 400, error: "no_email_column", when: "no column is headed Email or Email Address" },
+          { status: 404, error: "not_found", when: "form is not bootcamp or intermediate" },
+          { status: 413, error: "too_large", when: "the file is over 2 MB" },
+          { status: 413, error: "too_many_rows", when: "it has more than 2,000 rows" },
+        ],
+      },
+      {
         method: "GET",
         path: "/api/logistics/dietary",
         summary: "Lists the attendees who said they have dietary needs, a page at a time, the most critical first.",
