@@ -426,50 +426,13 @@ variable "google_oauth_client_secret" {
 # Continuous deployment
 #
 # The pipeline lives in Harness now, so it needs no GitHub wiring from this
-# config: Harness holds its own repo connector. The four `github_*` variables
-# below are read by nothing and are kept only so an existing terraform.tfvars
-# that still sets them keeps applying cleanly. See cicd.tf.
+# config: Harness holds its own repo connector. See cicd.tf.
 # ---------------------------------------------------------------------------
 
 variable "enable_cicd" {
   description = "Grant build-sa the extra IAM it needs to deploy and migrate (run.admin, cloudsql.client, actAs on app-sa/runner-sa, accessor on database-url). False strips it back to build-and-push, which disables the Harness pipeline's deploy and migrate steps by removing their permissions."
   type        = bool
   default     = false
-}
-
-variable "github_owner" {
-  description = "Unused. GitHub user or org that owned the deleted Cloud Build connection."
-  type        = string
-  default     = ""
-}
-
-variable "github_repo" {
-  description = "Unused. Repository name for the deleted Cloud Build connection."
-  type        = string
-  default     = ""
-}
-
-variable "github_app_installation_id" {
-  description = "Unused. Installation ID of the Cloud Build GitHub App, which no longer needs to be installed."
-  type        = string
-  default     = ""
-}
-
-variable "github_pat_secret_id" {
-  description = "Unused. NAME of the Secret Manager secret that held the PAT the deleted Cloud Build connection authenticated with — never the token itself. The `github-pat` secret it names was created by hand and is not managed here, so nothing removed it; delete it if nothing else reads it."
-  type        = string
-  default     = "github-pat"
-
-  # Kept even though nothing reads the variable: the name invites pasting the
-  # token here instead of the secret's name, and doing so used to fail deep
-  # inside the API with "does not match the expected format
-  # [projects/*/secrets/*/versions/*]", which did not point at the cause. This
-  # is Secret Manager's actual id charset, so a token (which has dots) is
-  # rejected immediately, with a message that says what to do.
-  validation {
-    condition     = can(regex("^[a-zA-Z0-9_-]{1,255}$", var.github_pat_secret_id))
-    error_message = "github_pat_secret_id must be the NAME of a Secret Manager secret (letters, digits, '-' and '_' only), not the PAT value. Store the token first:\n  printf '%s' <GITHUB_TOKEN> | gcloud secrets create github-pat --data-file=- --project <ADMIN_PROJECT>\nthen set github_pat_secret_id = \"github-pat\"."
-  }
 }
 
 # ---------------------------------------------------------------------------
