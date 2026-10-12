@@ -1147,6 +1147,44 @@ export async function snapshotUsers(): Promise<UserSnapshot[]> {
 let poolEnded = false;
 
 /**
+ * Whether a timed job is switched on, from the Timed Jobs tab under Settings
+ * (the frontend's `timed_jobs`). On when it has no row, and on when the table
+ * cannot be read: this is bookkeeping, and must never be why the reaper does
+ * not reap.
+ */
+export async function timedJobEnabled(key: string): Promise<boolean> {
+  try {
+    const { rows } = await pool.query<{ enabled: boolean }>("select enabled from timed_jobs where key = $1", [key]);
+    return rows[0]?.enabled ?? true;
+  } catch (err) {
+    console.warn(`timed job ${key}: could not read its switch, running anyway: ${err instanceof Error ? err.message : err}`);
+    return true;
+  }
+}
+
+/** Records how a timed job's run is going for the Timed Jobs tab; never throws. */
+export async function recordTimedJob(
+  key: string,
+  status: "running" | "succeeded" | "failed" | "skipped",
+  detail: string | null,
+): Promise<void> {
+  try {
+    await pool.query(
+      `insert into timed_jobs (key, last_started_at, last_finished_at, last_status, last_detail)
+       values ($1, now(), case when $2::text = 'running' then null else now() end, $2::text, $3)
+       on conflict (key) do update set
+         last_started_at = case when $2::text in ('running', 'skipped') then now() else timed_jobs.last_started_at end,
+         last_finished_at = case when $2::text = 'running' then null else now() end,
+         last_status = $2::text,
+         last_detail = $3`,
+      [key, status, detail],
+    );
+  } catch (err) {
+    console.warn(`timed job ${key}: could not record its run: ${err instanceof Error ? err.message : err}`);
+  }
+}
+
+/**
  * Close the pool. Safe to call twice: the import closes it before the restore,
  * which drops every connection under it, and `main` closes it again on the way
  * out.

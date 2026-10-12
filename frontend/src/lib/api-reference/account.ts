@@ -695,6 +695,32 @@ export const ACCOUNT_GROUPS: EndpointGroup[] = [
         returns: "{ ok: true }",
         errors: [{ status: 404, error: "not_found", when: "no such repository" }],
       },
+      {
+        method: "GET",
+        path: "/api/settings/timed-jobs",
+        summary: "Lists the jobs Cloud Scheduler runs, with their schedules, switches and last runs.",
+        access: "eventAdmin",
+        token: true,
+        notes: "A fixed handful of jobs, all in one response. A job that has never run has null last-run fields.",
+        returns:
+          '{ jobs: { key, name, summary, cron, timeZone, schedule, resource, offWarning?: string, enabled: boolean, lastStartedAt: string | null, lastFinishedAt: string | null, lastStatus: "running" | "succeeded" | "failed" | "skipped" | null, lastDetail: string | null }[] }',
+      },
+      {
+        method: "PATCH",
+        path: "/api/settings/timed-jobs/{key}",
+        summary: "Switches one scheduled job on or off.",
+        access: "eventAdmin",
+        token: true,
+        notes:
+          "A job that is off still gets called by Cloud Scheduler and answers { skipped: \"off\" }; it does nothing and shows as Skipped. Intake reminders share their switch with the daily reminder on Cohort Settings → Slack.",
+        params: [{ name: "key", type: "string", required: true, note: "the job's key, as GET /api/settings/timed-jobs lists it" }],
+        body: { kind: "json", fields: [{ name: "enabled", type: "boolean", required: true }] },
+        returns: "{ ok: true }",
+        errors: [
+          { status: 400, error: "invalid_enabled", when: "enabled is not true or false" },
+          { status: 404, error: "not_found", when: "no such job" },
+        ],
+      },
     ],
   },
 ];

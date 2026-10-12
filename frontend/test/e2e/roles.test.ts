@@ -416,6 +416,7 @@ const PAGES: Record<string, PageCase> = {
   "/settings/org-secrets": { path: () => "/settings/org-secrets", expect: gated(canManageSettings) },
   "/settings/templates": { path: () => "/settings/templates", expect: gated(canManageSettings) },
   "/settings/repos": { path: () => "/settings/repos", expect: gated(canManageSettings) },
+  "/settings/timed-jobs": { path: () => "/settings/timed-jobs", expect: gated(canManageSettings) },
   "/me": { path: () => "/me", expect: (a) => ({ to: visibleMySettingsTabs(a)[0]!.href }) },
   "/me/tokens": { path: () => "/me/tokens", expect: gated(canUseEvents) },
   "/me/org-secrets": { path: () => "/me/org-secrets", expect: gated(canUseEvents) },
@@ -530,6 +531,8 @@ const ROUTES: RouteCase[] = [
   { method: "POST", path: "/api/settings/repos", allowed: canManageSettings, body: () => ({}) },
   { method: "PATCH", path: `/api/settings/repos/${MISSING}`, allowed: canManageSettings, body: () => ({}) },
   { method: "DELETE", path: `/api/settings/repos/${MISSING}`, allowed: canManageSettings },
+  { method: "GET", path: "/api/settings/timed-jobs", allowed: canManageSettings },
+  { method: "PATCH", path: "/api/settings/timed-jobs/missing", allowed: canManageSettings, body: () => ({ enabled: true }) },
   { method: "POST", path: `/api/me/harness-tokens/${MISSING}/deploy`, allowed: canManageSettings, body: () => ({}) },
   { method: "POST", path: `/api/me/harness-tokens/${MISSING}/scrub`, allowed: canManageSettings },
 

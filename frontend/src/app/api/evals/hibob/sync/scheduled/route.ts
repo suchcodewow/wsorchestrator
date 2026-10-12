@@ -19,6 +19,7 @@ import { OAuth2Client } from "google-auth-library";
 import { STATUS_FOR, syncHibobEmployees } from "@/lib/evals/hibob";
 import { audited, noteAudit } from "@/lib/audit";
 import { runSlackSync } from "@/lib/cohorts/slack-sync";
+import { runTimedJob } from "@/lib/timed-jobs";
 
 // Cloud Scheduler's attempt_deadline (infra/admin/scheduler.tf) is the same.
 export const maxDuration = 300;
@@ -50,22 +51,28 @@ export const POST = audited(async function POST(req: Request) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  // A failure is logged on the HiBob tab either way; the status tells Cloud
-  // Scheduler too, so its own history agrees.
-  const result = await syncHibobEmployees("schedule", null);
-  if (!result.ok) {
-    return NextResponse.json(
-      { error: result.error, detail: result.detail },
-      { status: STATUS_FOR[result.error] },
-    );
-  }
+  return runTimedJob(
+    "hibob-sync",
+    async () => {
+      // A failure is logged on the HiBob tab either way; the status tells Cloud
+      // Scheduler too, so its own history agrees.
+      const result = await syncHibobEmployees("schedule", null);
+      if (!result.ok) {
+        return NextResponse.json(
+          { error: result.error, detail: result.detail },
+          { status: STATUS_FOR[result.error] },
+        );
+      }
 
-  const slack = await runSlackSync("schedule", null, started + SLACK_DEADLINE_MS, { scope: "channels" }).catch((err: unknown) => ({
-    ok: false as const,
-    runId: null,
-    error: "failed",
-    detail: err instanceof Error ? err.message : String(err),
-  }));
-  noteAudit({ detail: { slack } });
-  return NextResponse.json({ count: result.count, skipped: result.skipped, slack });
+      const slack = await runSlackSync("schedule", null, started + SLACK_DEADLINE_MS, { scope: "channels" }).catch((err: unknown) => ({
+        ok: false as const,
+        runId: null,
+        error: "failed",
+        detail: err instanceof Error ? err.message : String(err),
+      }));
+      noteAudit({ detail: { slack } });
+      return NextResponse.json({ count: result.count, skipped: result.skipped, slack });
+    },
+    (body) => (typeof body.count === "number" ? `${body.count} employees synced` : null),
+  );
 });

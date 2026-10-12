@@ -191,7 +191,7 @@ describe("event settings tabs", () => {
 
   test("every event administrator gets every tab, platform administrators included", () => {
     for (const a of [PERSONAS.eventAdmin, PERSONAS.platform]) {
-      assert.deepEqual(labels(a), ["Org Secrets", "Templates", "GitHub Repos"], describeAccess(a));
+      assert.deepEqual(labels(a), ["Org Secrets", "Templates", "GitHub Repos", "Timed Jobs"], describeAccess(a));
     }
   });
 

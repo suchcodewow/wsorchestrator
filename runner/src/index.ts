@@ -3,7 +3,28 @@ import { reap } from "./reap.js";
 import { provisionDue } from "./schedule.js";
 import { scrubDeployedSecrets } from "./scrub.js";
 import { importProduction } from "./import-production.js";
-import { endPool } from "./db.js";
+import { endPool, recordTimedJob, timedJobEnabled } from "./db.js";
+
+/**
+ * Runs one of the two scheduled commands if its switch on the Timed Jobs tab
+ * is on, and records how it went there. A failure is recorded and rethrown, so
+ * the Cloud Run execution still fails.
+ */
+async function timed(key: string, work: () => Promise<void>) {
+  if (!(await timedJobEnabled(key))) {
+    console.log(`${key}: switched off on the Timed Jobs tab, skipping`);
+    await recordTimedJob(key, "skipped", "Switched off");
+    return;
+  }
+  await recordTimedJob(key, "running", null);
+  try {
+    await work();
+  } catch (err) {
+    await recordTimedJob(key, "failed", err instanceof Error ? err.message : String(err));
+    throw err;
+  }
+  await recordTimedJob(key, "succeeded", null);
+}
 
 async function main() {
   const command = process.argv[2] ?? process.env.RUNNER_COMMAND;
@@ -22,11 +43,13 @@ async function main() {
     // difference in behaviour. Runs after the teardowns, and separately, so a
     // Harness account that will not answer cannot cost a workshop its teardown.
     case "reap":
-      await reap();
-      await scrubDeployedSecrets();
+      await timed("reaper", async () => {
+        await reap();
+        await scrubDeployedSecrets();
+      });
       break;
     case "provision-due":
-      await provisionDue();
+      await timed("scheduler", provisionDue);
       break;
     // QA only, and it refuses anywhere else. Started from QA's Backups page as
     // a tf-runner execution with this as its args.
