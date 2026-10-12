@@ -241,6 +241,51 @@ export async function attendeeCounts(
   return { attendees: row?.attendees ?? 0, scored: row?.scored ?? 0, mine: row?.mine ?? 0 };
 }
 
+/** How many scorings a group of attendees is due, and how many of those are done. */
+export type ScoringTally = { scored: number; total: number };
+
+/**
+ * Every active assessment's `attendeeCounts`, added up by stage and by the
+ * attendee's track: `total` is one for each attendee on each assessment that
+ * applies to them, and `scored` those with a submission at the scoring
+ * bootcamp. Sales attendees are the Bootcamp and Intermediate classes, and
+ * engineers the SE tracks, as the Scheduler names them.
+ */
+export async function scoringProgress(): Promise<Record<ScheduleTrack, ScoringTally>> {
+  const a = evalsAssessments;
+  const cutoffs = await getCandidateCutoffs();
+  const byStage = await Promise.all(
+    (["bootcamp", "intermediate"] as const).map(async (stage) => {
+      const bootcamp = await scoringBootcamp(stage);
+      const rows = await db
+        .select({
+          track: sql<"sales" | "engineer">`${e.track}`,
+          total: sql<number>`count(*)::int`,
+          scored: sql<number>`count(${s.id})::int`,
+        })
+        .from(e)
+        .leftJoin(h, sql`${h.email} = ${e.email}`)
+        .innerJoin(
+          a,
+          and(eq(a.active, true), eq(a.stage, stage), sql`${a.audience} in ('both', ${e.track})`),
+        )
+        .leftJoin(
+          s,
+          and(eq(s.attendeeEmail, e.email), eq(s.assessmentId, a.id), bootcamp ? eq(s.bootcampId, bootcamp.id) : sql`false`),
+        )
+        .where(and(isCandidate(cutoffs), IN_STAGE[stage], inArray(e.track, ["sales", "engineer"])))
+        .groupBy(e.track);
+      const tally = (track: "sales" | "engineer"): ScoringTally => {
+        const row = rows.find((r) => r.track === track);
+        return { scored: row?.scored ?? 0, total: row?.total ?? 0 };
+      };
+      return { sales: tally("sales"), engineer: tally("engineer") };
+    }),
+  );
+  const [btc, int] = byStage as [(typeof byStage)[number], (typeof byStage)[number]];
+  return { btc: btc.sales, int: int.sales, btc_se: btc.engineer, int_se: int.engineer };
+}
+
 export type ScoringForm = {
   assessment: ScoringAssessment;
   criteria: { id: string; name: string; description: string }[];
