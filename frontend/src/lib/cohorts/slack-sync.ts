@@ -59,7 +59,7 @@ import {
   type CohortChannel,
   type CohortChannelKind,
 } from "@/lib/cohorts/slack-plan";
-import { currentCohortEmails } from "@/lib/evals/current-cohort";
+import { forgetTestArtifact, outboundCohort, recordTestArtifact, testArtifacts } from "@/lib/cohorts/test-group";
 import type { SlackSyncChangeSort, SlackSyncSort } from "@/lib/list-specs";
 import { pageWindow, toPage, type ListQuery, type Page } from "@/lib/paging";
 import { orderFor, searchAny } from "@/lib/paging-sql";
@@ -485,8 +485,13 @@ async function syncChannels(slack: SlackClient | null, runId: string, dryRun: bo
   if (!bootcamp) return "No bootcamp is active in the Scheduler, so no channels were synced.";
   await db.update(slackSyncRuns).set({ bootcampId: bootcamp.id }).where(eq(slackSyncRuns.id, runId));
 
-  const channels = cohortChannels(bootcamp.startDate, bootcamp.intDays !== null);
-  const [cohort, contacts] = await Promise.all([currentCohortEmails(), allChannelContacts()]);
+  // With the test group on, its own channels and its own people; the channel contacts are real people, so none.
+  const { cohort, testSuffix } = await outboundCohort();
+  const channels = cohortChannels(bootcamp.startDate, bootcamp.intDays !== null, testSuffix);
+  const contacts = testSuffix === null ? await allChannelContacts() : [];
+  if (testSuffix !== null && !dryRun) {
+    for (const channel of channels) await recordTestArtifact("slack_channel", channel.name);
+  }
   const audiences = new Map(channels.map((ch) => [ch.name, channelAudience(ch, cohort, contacts)]));
 
   if (!slack) {
@@ -547,7 +552,7 @@ async function sendReminders(slack: SlackClient | null, dryRun: boolean, appUrl:
   const alreadySent = dryRun ? await intakeRemindersSentToday() : !(await claimIntakeRemindersToday());
   if (alreadySent) return "Today's intake form reminders have already gone out.";
 
-  const { outstanding } = await outstandingIntake();
+  const { outstanding } = await outstandingIntake({ outbound: true });
   if (outstanding.length === 0) return "Everyone in the current cohort has answered their intake form, so no reminders were due.";
 
   const link = `${appUrl.replace(/\/+$/, "")}/intake`;
@@ -918,4 +923,53 @@ export async function listSlackSyncChanges(
     .limit(limit)
     .offset(offset);
   return toPage(rows, query.page);
+}
+
+/* ------------------------------------------------------------------ */
+/* Taking the test group's channels away                               */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Archives each channel the test group made, and forgets it. Slack's API
+ * archives a channel but cannot delete one. A channel the sync only found, not
+ * made, is left alone. One Slack refuses is named in `failures` and stays
+ * recorded, so the next try finds it.
+ */
+export async function archiveTestChannels(): Promise<{ archived: string[]; failures: string[] }> {
+  const artifacts = await testArtifacts("slack_channel");
+  const archived: string[] = [];
+  const failures: string[] = [];
+  if (artifacts.length === 0) return { archived, failures };
+
+  const token = await slackToken();
+  const slack = token ? slackClient(token, Date.now() + 120_000) : null;
+  const rows = new Map(
+    (await db.select().from(slackChannels).where(inArray(slackChannels.name, artifacts.map((a) => a.key)))).map((r) => [r.name, r]),
+  );
+
+  for (const { key: name } of artifacts) {
+    const row = rows.get(name);
+    if (row?.created) {
+      if (!slack) {
+        failures.push(`#${name}: Slack is not connected`);
+        continue;
+      }
+      try {
+        await slack.call("conversations.archive", { channel: row.slackChannelId });
+        archived.push(name);
+      } catch (err) {
+        const gone = err instanceof SlackError && ["channel_not_found", "already_archived"].includes(err.error);
+        if (!gone) {
+          failures.push(`#${name}: ${(err as Error).message}`);
+          continue;
+        }
+      }
+    }
+    if (row) {
+      await db.delete(slackChannelMembers).where(eq(slackChannelMembers.slackChannelId, row.slackChannelId));
+      await db.delete(slackChannels).where(eq(slackChannels.name, name));
+    }
+    await forgetTestArtifact("slack_channel", name);
+  }
+  return { archived, failures };
 }

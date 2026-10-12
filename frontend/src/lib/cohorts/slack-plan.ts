@@ -36,9 +36,9 @@ export function channelSuffix(startDate: string): string {
   return `${month}-${match[1]}`;
 }
 
-/** The bootcamp's channels, the intermediate ones only when it holds an intermediate class. */
-export function cohortChannels(startDate: string, holdsIntermediate: boolean): CohortChannel[] {
-  const suffix = channelSuffix(startDate);
+/** The bootcamp's channels, the intermediate ones only when it holds an intermediate class; the test group's suffix, if any, ends each name. */
+export function cohortChannels(startDate: string, holdsIntermediate: boolean, testSuffix?: string | null): CohortChannel[] {
+  const suffix = channelSuffix(startDate) + (testSuffix ? `-${testSuffix}` : "");
   const stages: CohortStage[] = holdsIntermediate ? ["bootcamp", "intermediate"] : ["bootcamp"];
   return stages.flatMap((stage) =>
     (["sales", "se"] as const).map((prefix) => ({

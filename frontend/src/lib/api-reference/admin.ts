@@ -694,6 +694,39 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       },
       {
         method: "GET",
+        path: "/api/cohorts/test-group",
+        summary: "The cohort test group: whether it is on, its suffix and its people.",
+        access: "trainingViewer",
+        token: true,
+        returns: "{ on: boolean, suffix: string, members: { email, fullName }[] }",
+      },
+      {
+        method: "PUT",
+        path: "/api/cohorts/test-group",
+        summary: "Turns the cohort test group on or off, sets its suffix, or replaces its people.",
+        access: "platform",
+        token: true,
+        notes:
+          "While on, everything the app sends outside itself for the cohort goes to the test group instead: the cohort Slack sync makes its own public channels, named like the real ones with -{suffix} on the end, and invites the group to them; the intake form reminders are sent to the group; and the Google Meetings sync sends each meeting still to end as a second invite, titled with [{suffix}], to the group alone. The real cohort's channels and invites are left untouched, and the Bootcamp and Engineer Contacts are not added. It cannot be on without a suffix and at least one person, and the suffix (lowercased, letters, digits and hyphens) cannot change while it is on. Turning it off first archives the Slack channels it made (Slack's API archives; it cannot delete) and cancels the invites it sent, emailing their guests; if any of that fails it stays on and returns 502 with the failures, to try again. At most 100 people.",
+        body: {
+          kind: "json",
+          fields: [
+            { name: "on", type: "boolean" },
+            { name: "suffix", type: "string", note: "slugified, at most 40 characters" },
+            { name: "members", type: "{ email: string, fullName: string }[]", note: "replaces the whole list" },
+          ],
+        },
+        returns: "{ on, suffix, members, archived?: string[], cancelled?: number } (archived and cancelled only when turning it off)",
+        errors: [
+          { status: 400, error: "invalid", when: "the body is not that shape, or changes nothing" },
+          { status: 400, error: "suffix_required", when: "it would be on with no suffix" },
+          { status: 400, error: "members_required", when: "it would be on with no one in it" },
+          { status: 409, error: "suffix_locked", when: "the suffix is changed while the group is on" },
+          { status: 502, error: "teardown_failed", when: "a channel or invite could not be removed; failures lists them and the group stays on" },
+        ],
+      },
+      {
+        method: "GET",
         path: "/api/cohorts/slack/installation",
         summary: "The Slack app's install in the workspace, which the cohort sync acts as.",
         access: "trainingAdmin",
