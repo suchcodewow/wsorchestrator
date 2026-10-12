@@ -1017,6 +1017,32 @@ export const evalsSettings = pgTable("evals_settings", {
     .defaultNow(),
 });
 
+/**
+ * What the Timed Jobs tab shows and sets for each job Cloud Scheduler runs:
+ * whether it is switched on, and how its last run went. One row per job,
+ * keyed by `lib/timed-jobs-registry.ts`'s key and made the first time the job
+ * runs or is switched; a job with no row is on and has never run. Only the
+ * last run is kept here. Each job's own history stays where it already is.
+ */
+export const TIMED_JOB_STATUSES = ["running", "succeeded", "failed", "skipped"] as const;
+export type TimedJobStatus = (typeof TIMED_JOB_STATUSES)[number];
+
+export const timedJobs = pgTable("timed_jobs", {
+  key: text("key").primaryKey(),
+  enabled: boolean("enabled").notNull().default(true),
+  lastStartedAt: timestamp("last_started_at", { withTimezone: true }),
+  lastFinishedAt: timestamp("last_finished_at", { withTimezone: true }),
+  lastStatus: text("last_status", { enum: TIMED_JOB_STATUSES }),
+  /** A sentence on how the last run ended, or its error. */
+  lastDetail: text("last_detail"),
+  updatedBy: text("updated_by").references(() => users.id, {
+    onDelete: "set null",
+  }),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
 export const EVALS_SETTINGS_KEYS = {
   orgLeaderEmail: "org_leader_email",
   /** `YYYY-MM-DD`, or empty for no cutoff. See `getCandidateCutoffs`. */

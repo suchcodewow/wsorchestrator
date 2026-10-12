@@ -12,6 +12,7 @@ import { NextResponse } from "next/server";
 import { audited, noteAudit } from "@/lib/audit";
 import { scheduledStep } from "@/lib/canary-wire/pull";
 import { fromInvoker } from "@/lib/oidc-caller";
+import { runTimedJob } from "@/lib/timed-jobs";
 
 // Cloud Scheduler's attempt_deadline (infra/admin/scheduler.tf) is the same.
 export const maxDuration = 300;
@@ -20,8 +21,14 @@ export const POST = audited(async function POST(req: Request) {
   if (!(await fromInvoker(req, process.env.CANARY_WIRE_PULL_AUDIENCE, process.env.CANARY_WIRE_PULL_INVOKER))) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
-  const { outcome, pull } = await scheduledStep();
-  if (outcome === "not_configured") return NextResponse.json({ error: "not_configured" }, { status: 409 });
-  if (pull) noteAudit({ target: pull.id, targetLabel: "Canary Wire pull from Mindtickle", detail: { outcome, status: pull.status } });
-  return NextResponse.json({ outcome, pull });
+  return runTimedJob(
+    "canary-wire-pull",
+    async () => {
+      const { outcome, pull } = await scheduledStep();
+      if (outcome === "not_configured") return NextResponse.json({ error: "not_configured" }, { status: 409 });
+      if (pull) noteAudit({ target: pull.id, targetLabel: "Canary Wire pull from Mindtickle", detail: { outcome, status: pull.status } });
+      return NextResponse.json({ outcome, pull });
+    },
+    (body) => (typeof body.outcome === "string" ? `Pull ${body.outcome}` : null),
+  );
 });
