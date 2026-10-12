@@ -694,6 +694,39 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       },
       {
         method: "GET",
+        path: "/api/cohorts/test-group",
+        summary: "The cohort test group: whether it is on, its suffix and its people.",
+        access: "trainingViewer",
+        token: true,
+        returns: '{ on: boolean, suffix: string, members: { email, fullName, stage: "bootcamp" | "intermediate" | "both" }[] }',
+      },
+      {
+        method: "PUT",
+        path: "/api/cohorts/test-group",
+        summary: "Turns the cohort test group on or off, sets its suffix, or replaces its people.",
+        access: "platform",
+        token: true,
+        notes:
+          "While on, everything the app sends outside itself for the cohort goes to the test group instead: the cohort Slack sync makes its own public channels, named like the real ones with -{suffix} on the end, and invites the group to them; the intake form reminders are sent to the group; and the Google Meetings sync sends each meeting still to end as a second invite, titled with [{suffix}], to the group alone. The real cohort's channels and invites are left untouched, and the Bootcamp and Engineer Contacts are not added. It cannot be on without a suffix and at least one person, and the suffix (lowercased, letters, digits and hyphens) cannot change while it is on. Each person has a stage (bootcamp, intermediate or both): they are invited to that stage's channels and meetings, reminded about its intake form, and may fill it in at /intake, their answers kept apart and deleted when the group is turned off. Turning it off first archives the Slack channels it made (Slack's API archives; it cannot delete) and cancels the invites it sent, emailing their guests; if any of that fails it stays on and returns 502 with the failures, to try again. At most 100 people.",
+        body: {
+          kind: "json",
+          fields: [
+            { name: "on", type: "boolean" },
+            { name: "suffix", type: "string", note: "slugified, at most 40 characters" },
+            { name: "members", type: '{ email: string, fullName: string, stage?: "bootcamp" | "intermediate" | "both" }[]', note: "replaces the whole list; stage is both unless given, and says which stage's channels, meetings, reminders and intake form the person gets" },
+          ],
+        },
+        returns: "{ on, suffix, members: as in GET, archived?: string[], cancelled?: number } (archived and cancelled only when turning it off)",
+        errors: [
+          { status: 400, error: "invalid", when: "the body is not that shape, or changes nothing" },
+          { status: 400, error: "suffix_required", when: "it would be on with no suffix" },
+          { status: 400, error: "members_required", when: "it would be on with no one in it" },
+          { status: 409, error: "suffix_locked", when: "the suffix is changed while the group is on" },
+          { status: 502, error: "teardown_failed", when: "a channel or invite could not be removed; failures lists them and the group stays on" },
+        ],
+      },
+      {
+        method: "GET",
         path: "/api/cohorts/slack/installation",
         summary: "The Slack app's install in the workspace, which the cohort sync acts as.",
         access: "trainingAdmin",
@@ -1759,8 +1792,9 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "signedIn",
         token: true,
         notes:
-          "The form is the one for the caller's stage of the current cohort (the Cohorts page's Current tab, Sales and Engineer tracks): bootcamp, headed Bootcamp Registration, for a bootcamp candidate, and intermediate, Intermediate Registration, for an intermediate one. answers is empty and savedAt null until they have saved any. name is the name the app has for them now, the one their email gives until they choose another, which the preferred-name question starts from until they answer it; null for an email no employee has.",
-        returns: `{ form: "bootcamp" | "intermediate", heading, questions: ${INTAKE_QUESTION_SHAPE}[], answers: Record<string, string | string[]>, savedAt: string | null, name: string | null }`,
+          "The form is the one for the caller's stage of the current cohort (the Cohorts page's Current tab, Sales and Engineer tracks): bootcamp, headed Bootcamp Registration, for a bootcamp candidate, and intermediate, Intermediate Registration, for an intermediate one. answers is empty and savedAt null until they have saved any. name is the name the app has for them now, the one their email gives until they choose another, which the preferred-name question starts from until they answer it; null for an email no employee has. While the cohort test group is on (PUT /api/cohorts/test-group), a person in it gets the form for the stage they were given there; one given both picks with ?form=bootcamp or ?form=intermediate (bootcamp by default), and testForms lists the two. Their answers are marked as test answers and deleted when the group is turned off, and never change their name.",
+        query: [{ name: "form", type: "bootcamp | intermediate", note: "which form, for a test group member in both stages; ignored for anyone else" }],
+        returns: `{ form: "bootcamp" | "intermediate", heading, questions: ${INTAKE_QUESTION_SHAPE}[], answers: Record<string, string | string[]>, savedAt: string | null, name: string | null, testForms?: ("bootcamp" | "intermediate")[] }`,
         errors: [{ status: 404, error: "not_in_cohort", when: "the caller is not in the current cohort" }],
       },
       {
@@ -1770,7 +1804,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "signedIn",
         token: true,
         notes:
-          "Saved under the caller's own email, to the form for their stage, as GET /api/intake reads it. Answers are checked against the form as it stands now: trimmed, blanks dropped, and any for a question not on it ignored. Saving again replaces their answers; the ones before are kept, but only the latest is listed or counted. The answer to the preferred-name question (while it is a short or paragraph answer) must be a first and a last name with one space between, its stray spaces closed up, and becomes their name wherever the app shows one: their employee record, as their reports' manager, judges, contacts, breakout groups, name cards, their account (which signing in with Google then keeps), and the names kept with comments, checklist items, transcripts, mentions they made and the guest speaker history. A mention of them keeps the name its text spells, and the audit trail keeps the name it recorded. Giving the name their email gives clears a name chosen before. The HiBob sync keeps a chosen name.",
+          "Saved under the caller's own email, to the form for their stage, as GET /api/intake reads it. Answers are checked against the form as it stands now: trimmed, blanks dropped, and any for a question not on it ignored. A test group member in both stages saves to the form named by ?form=. Saving again replaces their answers; the ones before are kept, but only the latest is listed or counted. The answer to the preferred-name question (while it is a short or paragraph answer) must be a first and a last name with one space between, its stray spaces closed up, and becomes their name wherever the app shows one: their employee record, as their reports' manager, judges, contacts, breakout groups, name cards, their account (which signing in with Google then keeps), and the names kept with comments, checklist items, transcripts, mentions they made and the guest speaker history. A mention of them keeps the name its text spells, and the audit trail keeps the name it recorded. Giving the name their email gives clears a name chosen before. The HiBob sync keeps a chosen name.",
         body: {
           kind: "json",
           fields: [

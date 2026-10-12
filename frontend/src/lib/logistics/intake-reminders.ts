@@ -19,6 +19,7 @@ import "server-only";
 import { eq, ne } from "drizzle-orm";
 import { db } from "@/db";
 import { EVALS_SETTINGS_KEYS, INTAKE_FORM_IDS, evalsSettings, type IntakeFormId } from "@/db/schema";
+import { outboundCohort } from "@/lib/cohorts/test-group";
 import { currentCohortEmails } from "@/lib/evals/current-cohort";
 import { answeredIntake, getIntakeForm } from "@/lib/logistics/intake";
 import { slackToken } from "@/lib/slack";
@@ -76,8 +77,12 @@ export type OutstandingIntake = { email: string; fullName: string; form: IntakeF
 export type IntakeCounts = Record<IntakeFormId, { asked: number; answered: number; questions: number }>;
 
 /** Everyone in the current cohort yet to answer their stage's form, leaving out a stage whose form asks nothing. */
-export async function outstandingIntake(): Promise<{ outstanding: OutstandingIntake[]; counts: IntakeCounts }> {
-  const cohort = await currentCohortEmails();
+export async function outstandingIntake({ outbound = false }: { outbound?: boolean } = {}): Promise<{
+  outstanding: OutstandingIntake[];
+  counts: IntakeCounts;
+}> {
+  // What is sent goes to the test group while it is on; what a page counts is always the real cohort.
+  const cohort = outbound ? (await outboundCohort()).cohort : await currentCohortEmails();
   const outstanding: OutstandingIntake[] = [];
   const counts = {} as IntakeCounts;
   for (const form of INTAKE_FORM_IDS) {

@@ -10,9 +10,15 @@ import {
 } from "@/lib/evals/current-cohort";
 import { CURRENT_COHORT_LIST } from "@/lib/list-specs";
 import { parseListQuery } from "@/lib/paging";
-import { canManageTrainingSettings, canUseEvals } from "@/lib/roles";
+import { getTestGroup } from "@/lib/cohorts/test-group";
+import {
+  canManageTestGroup,
+  canManageTrainingSettings,
+  canUseEvals,
+} from "@/lib/roles";
 import { activeBootcamp } from "@/lib/scheduler/bootcamps";
 import { CurrentCohortView } from "./current-view";
+import { TestGroupPanel } from "./test-group-panel";
 
 export default async function CurrentCohortPage({
   searchParams,
@@ -28,24 +34,37 @@ export default async function CurrentCohortPage({
   };
   const session = await auth();
   const canSeeScores = session?.user ? canUseEvals(session.user.access) : false;
-  const scoring = canSeeScores ? { scoring: await cohortScoring(filter) } : undefined;
-  const [page, summary, active] = await Promise.all([
+  const scoring = canSeeScores
+    ? { scoring: await cohortScoring(filter) }
+    : undefined;
+  const [page, summary, active, testGroup] = await Promise.all([
     listCurrentCohort(filter, query, scoring),
     currentCohortSummary(),
     activeBootcamp(),
+    getTestGroup(),
   ]);
   return (
-    <CurrentCohortView
-      tab="current"
-      query={query}
-      filter={filter}
-      page={page}
-      counts={summary.counts}
-      assessments={scoring?.scoring?.assessments ?? null}
-      deferral={summary.deferral}
-      activeBootcamp={active}
-      canSetTrack={session?.user ? canManageTrainingSettings(session.user.access) : false}
-      canSeeScores={canSeeScores}
-    />
+    <div className="space-y-4">
+      <TestGroupPanel
+        group={testGroup}
+        canManage={
+          session?.user ? canManageTestGroup(session.user.access) : false
+        }
+      />
+      <CurrentCohortView
+        tab="current"
+        query={query}
+        filter={filter}
+        page={page}
+        counts={summary.counts}
+        assessments={scoring?.scoring?.assessments ?? null}
+        deferral={summary.deferral}
+        activeBootcamp={active}
+        canSetTrack={
+          session?.user ? canManageTrainingSettings(session.user.access) : false
+        }
+        canSeeScores={canSeeScores}
+      />
+    </div>
   );
 }

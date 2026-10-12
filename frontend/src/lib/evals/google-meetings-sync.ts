@@ -22,6 +22,7 @@
 import "server-only";
 
 import type { GoogleMeeting } from "@/db/schema";
+import { forgetTestArtifact, getTestGroup, recordTestArtifact, testArtifacts, type TestGroup } from "@/lib/cohorts/test-group";
 import { currentCohortEmails } from "@/lib/evals/current-cohort";
 import {
   assessmentAdministratorEmails,
@@ -247,9 +248,56 @@ type SyncContext = {
   cohort: CohortMember[];
   administrators: string[];
   notes: string[];
+  /** The test group, while it is on: its people are invited to their own copy of each meeting, and the real invites are left alone. */
+  testGroup: TestGroup | null;
 };
 
+/**
+ * With the test group on, a meeting's invite for the group alone, titled with
+ * the group's suffix and carrying the meeting's Zoom link if it has one. The
+ * real invite is never changed, so the real cohort hears nothing.
+ */
+async function syncOneForTestGroup(ctx: SyncContext, group: TestGroup, meeting: GoogleMeeting): Promise<MeetingSyncOutcome> {
+  const invitees = [...new Set(group.members.map((m) => m.email.toLowerCase()))].filter((e) => e !== ctx.organizer.toLowerCase()).sort();
+  try {
+    const fields = eventFields({ ...meeting, title: `${meeting.title} [${group.suffix}]` }, meeting.zoomJoinUrl);
+    const events = `/calendars/${enc(ctx.calendarId)}/events`;
+    const [stored] = (await testArtifacts("calendar_event")).filter((a) => a.key === meeting.id);
+    let current: CalendarEvent | null = null;
+    if (stored?.ref) {
+      try {
+        current = await ctx.calendar.call<CalendarEvent>("GET", `${events}/${enc(stored.ref)}`);
+        if (current.status === "cancelled") current = null;
+      } catch (err) {
+        if (!(err instanceof GoogleError && err.gone)) throw err;
+      }
+    }
+    if (current) {
+      const attendees = mergeAttendees(current.attendees ?? [], invitees, (current.attendees ?? []).map((a) => a.email));
+      if (!eventDiffers(current, fields, attendees)) return { id: meeting.id, title: meeting.title, outcome: "unchanged", invited: invitees.length };
+      await ctx.calendar.call("PATCH", `${events}/${enc(current.id)}`, { query: { sendUpdates: "all" }, body: { ...fields, attendees } });
+      return { id: meeting.id, title: meeting.title, outcome: "updated", invited: invitees.length };
+    }
+    const made = await ctx.calendar.call<{ id: string }>("POST", events, {
+      query: { sendUpdates: "all" },
+      body: {
+        ...fields,
+        attendees: invitees.map((email) => ({ email })),
+        guestsCanModify: false,
+        guestsCanInviteOthers: false,
+        guestsCanSeeOtherGuests: true,
+        reminders: { useDefault: true },
+      },
+    });
+    await recordTestArtifact("calendar_event", meeting.id, made.id);
+    return { id: meeting.id, title: meeting.title, outcome: "created", invited: invitees.length };
+  } catch (err) {
+    return { id: meeting.id, title: meeting.title, outcome: "failed", invited: invitees.length, error: (err as Error).message };
+  }
+}
+
 async function syncOne(ctx: SyncContext, meeting: GoogleMeeting): Promise<MeetingSyncOutcome> {
+  if (ctx.testGroup) return syncOneForTestGroup(ctx, ctx.testGroup, meeting);
   // Taken before the row was read, so an edit made while this runs still shows as changed.
   const syncedAt = new Date();
   const invitees = inviteList(meeting.groups, ctx.cohort, ctx.administrators, ctx.organizer);
@@ -332,7 +380,10 @@ export async function syncGoogleMeetings(): Promise<GoogleSyncResult> {
     const creds = zoomCredentials();
     const zoom = creds ? zoomClient(creds) : null;
     if (!zoom) notes.push("Zoom is not set up, so the invites have no Zoom link. Set ZOOM_ACCOUNT_ID, ZOOM_CLIENT_ID and ZOOM_CLIENT_SECRET.");
-    const zoomHosts = zoom ? await zoomHostsAmong(zoom, administrators, connection.email, notes) : [];
+    const group = await getTestGroup();
+    const testGroup = group.on ? group : null;
+    if (testGroup) notes.push(`The test group is on, so each meeting was sent to the test group alone as “[${testGroup.suffix}]”, with no Zoom meeting of its own; the real invites were left as they were.`);
+    const zoomHosts = zoom && !testGroup ? await zoomHostsAmong(zoom, administrators, connection.email, notes) : [];
 
     const ctx: SyncContext = {
       calendar,
@@ -343,6 +394,7 @@ export async function syncGoogleMeetings(): Promise<GoogleSyncResult> {
       cohort: await currentCohortEmails(),
       administrators,
       notes,
+      testGroup,
     };
 
     const meetings: MeetingSyncOutcome[] = [];
@@ -402,4 +454,34 @@ export async function cancelGoogleMeeting(
   } catch (err) {
     return { ok: false, error: "remote_failed", message: (err as Error).message };
   }
+}
+
+/**
+ * Cancels every invite the test group made, emailing its guests, and forgets
+ * them. One Google refuses is named in `failures` and stays recorded.
+ */
+export async function cancelTestMeetings(): Promise<{ cancelled: number; failures: string[] }> {
+  const artifacts = await testArtifacts("calendar_event");
+  const failures: string[] = [];
+  let cancelled = 0;
+  if (artifacts.length === 0) return { cancelled, failures };
+
+  const connected = await connect();
+  if (!connected.ok) return { cancelled, failures: [`Test invites could not be cancelled: ${connected.message}`] };
+  const { connection, calendar } = connected;
+  for (const { key, ref } of artifacts) {
+    try {
+      if (ref && connection.calendarId) {
+        await calendar.call("DELETE", `/calendars/${enc(connection.calendarId)}/events/${enc(ref)}`, { query: { sendUpdates: "all" } });
+        cancelled++;
+      }
+    } catch (err) {
+      if (!(err instanceof GoogleError && err.gone)) {
+        failures.push(`${key}: ${(err as Error).message}`);
+        continue;
+      }
+    }
+    await forgetTestArtifact("calendar_event", key);
+  }
+  return { cancelled, failures };
 }

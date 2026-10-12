@@ -1043,6 +1043,27 @@ export const timedJobs = pgTable("timed_jobs", {
     .defaultNow(),
 });
 
+export const TEST_GROUP_ARTIFACT_KINDS = ["slack_channel", "calendar_event"] as const;
+export type TestGroupArtifactKind = (typeof TEST_GROUP_ARTIFACT_KINDS)[number];
+
+/**
+ * What the test group has made outside the app, so turning it off can take it
+ * all away: a Slack channel (`key` is its name) or a calendar invite (`key` is
+ * the meeting's id, `ref` the Google event id).
+ */
+export const testGroupArtifacts = pgTable(
+  "test_group_artifacts",
+  {
+    kind: text("kind", { enum: TEST_GROUP_ARTIFACT_KINDS }).notNull(),
+    key: text("key").notNull(),
+    ref: text("ref"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.kind, t.key] })],
+);
+
 export const EVALS_SETTINGS_KEYS = {
   orgLeaderEmail: "org_leader_email",
   /** `YYYY-MM-DD`, or empty for no cutoff. See `getCandidateCutoffs`. */
@@ -1056,7 +1077,16 @@ export const EVALS_SETTINGS_KEYS = {
   intakeRemindersOn: "intake_reminders_on",
   /** The America/New_York day, `YYYY-MM-DD`, the scheduled reminders last went out on, so a retried call sends none twice. */
   intakeRemindersSentOn: "intake_reminders_sent_on",
+  /** `true` while cohort signals go to the test group instead of the cohort. See `lib/cohorts/test-group.ts`. */
+  testGroupOn: "test_group_on",
+  /** The slug added to every channel and meeting name the test group makes. */
+  testGroupSuffix: "test_group_suffix",
+  /** JSON `{ email, fullName }[]`, at most `TEST_GROUP_MAX_MEMBERS`. */
+  testGroupMembers: "test_group_members",
 } as const;
+
+/** Most people the test group holds. */
+export const TEST_GROUP_MAX_MEMBERS = 100;
 
 /** The deferral window an administrator can set, in whole days; 0 turns deferral off. */
 export const DEFERRAL_DAYS_LIMITS = { min: 0, max: 365 } as const;
@@ -2615,6 +2645,8 @@ export const intakeResponses = pgTable(
     email: text("email").notNull(),
     answers: jsonb("answers").$type<Record<string, string | string[]>>().notNull(),
     submittedAt: timestamp("submitted_at", { withTimezone: true }).notNull().defaultNow(),
+    /** Saved by a member of the cohort test group; deleted when the group is turned off. */
+    test: boolean("test").notNull().default(false),
   },
   (t) => [
     index("intake_responses_form_email_idx").on(t.form, t.email, t.submittedAt),

@@ -7,6 +7,7 @@
  */
 
 import type { Metadata } from "next";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth, signInPath } from "@/auth";
 import { AmbientBackdrop } from "@/components/ambient-backdrop";
@@ -33,7 +34,7 @@ export default async function IntakePage({
   const session = await auth();
   if (!session?.user) redirect(await signInPath());
 
-  const { preview } = await searchParams;
+  const { preview, form } = await searchParams;
   let mine: MyIntake | null;
   let previewing = false;
   if (isIntakeFormId(preview) && canManageTrainingSettings(session.user.access)) {
@@ -41,7 +42,7 @@ export default async function IntakePage({
     mine = { form: preview, heading: INTAKE_FORM_HEADINGS[preview], questions, answers: {}, savedAt: null, name: null };
     previewing = true;
   } else {
-    mine = session.user.email ? await getMyIntake(session.user.email) : null;
+    mine = session.user.email ? await getMyIntake(session.user.email, isIntakeFormId(form) ? form : null) : null;
   }
 
   return (
@@ -51,6 +52,21 @@ export default async function IntakePage({
       <SiteHeader session={session} width={SHELL} />
 
       <main className={`relative mx-auto ${SHELL} px-6 py-10`}>
+        {mine?.testForms && (
+          <nav aria-label="Test group forms" className="mb-4 flex items-center gap-2 text-sm">
+            <span className="text-muted-foreground">Test group:</span>
+            {mine.testForms.map((f) => (
+              <Link
+                key={f}
+                href={`/intake?form=${f}`}
+                aria-current={f === mine.form ? "page" : undefined}
+                className={f === mine.form ? "font-medium underline underline-offset-4" : "text-muted-foreground hover:text-foreground"}
+              >
+                {INTAKE_FORM_HEADINGS[f]}
+              </Link>
+            ))}
+          </nav>
+        )}
         {!mine ? (
           <Notice heading="Registration">
             There is no registration form for {session.user.email ?? "this account"}: it is for people in the current
