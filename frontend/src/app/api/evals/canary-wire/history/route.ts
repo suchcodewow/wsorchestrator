@@ -1,4 +1,4 @@
-/** The Canary Wire month over month, as Reporting → Canary Wire History shows it, or as a CSV. */
+/** The Canary Wire month over month, as the dots on Reporting → Canary Wire show it, or as a CSV of every month since the program began. */
 
 import { NextResponse } from "next/server";
 import { requireCanaryWire } from "@/lib/api-auth";
@@ -18,7 +18,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "invalid_format" }, { status: 400 });
   }
 
-  const history = await canaryWireHistory(whose.scope);
+  const history = await canaryWireHistory(whose.scope, new Date(), format === "csv");
   if (format === "csv") {
     const name = `canary-wire-history${history.scope === "org" ? "-my-org" : ""}.csv`;
     return new Response(historyCsv(history), {

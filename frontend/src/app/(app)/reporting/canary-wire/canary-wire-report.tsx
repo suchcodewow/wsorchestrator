@@ -10,6 +10,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Download, ExternalLink } from "lucide-react";
 import { HEADER_ROW, PlainHeader } from "@/components/data-table";
+import { HISTORY_FIRST_MONTH } from "@/lib/canary-wire/config";
 import type { RepTrends } from "@/lib/canary-wire/history";
 import type { PullSummary } from "@/lib/canary-wire/pull";
 import type { CanaryWireView } from "@/lib/canary-wire/view";
@@ -48,7 +49,6 @@ export function CanaryWireReport({
     router.push(`${pathname}?month=${encodeURIComponent(month)}${canSwitchScope && everyone ? "&scope=everyone" : ""}`);
   const csv = `/api/evals/canary-wire?month=${encodeURIComponent(view.month)}&format=csv${scopeParam}`;
   const historyCsv = `/api/evals/canary-wire/history?format=csv${scopeParam}`;
-  const span = trends.months.length ? `${trends.months[0]} to ${trends.months.at(-1)}` : "";
   const yourOrg = view.scope === "org";
   const t = view.totals;
 
@@ -114,15 +114,15 @@ export function CanaryWireReport({
           onChange={(everyone) => go(view.month, everyone)}
         />
         {/* Two exports, named for what each holds: the month on screen,
-            module by module, and the history behind the dots, a column a month. */}
+            module by module, and every month since the program began, a column a month. */}
         <a href={csv} download className={PILL} title={`Every rep's modules in ${view.month}, one row each`}>
           <Download />
           Export {view.month}
         </a>
         {trends.months.length > 0 && (
-          <a href={historyCsv} download className={PILL} title={`Every rep's completion by month, ${span}: the months on their dots`}>
+          <a href={historyCsv} download className={PILL} title={`Every rep's completion in every month since ${HISTORY_FIRST_MONTH}, not just the months on their dots`}>
             <Download />
-            Export {trends.months.length}-month history
+            Export history since {HISTORY_FIRST_MONTH}
           </a>
         )}
         <span className="grow" />

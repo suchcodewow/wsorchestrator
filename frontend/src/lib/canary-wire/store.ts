@@ -103,14 +103,19 @@ export async function canaryWireView(month: string | null, scope: CanaryWireScop
 
 /**
  * The Canary Wire History for `scope`: the last six months with content, up
- * to this one, each rep's completion in each. The same people, scope and
- * exemptions as `canaryWireView`, month by month.
+ * to this one, each rep's completion in each, or with `allMonths` every month
+ * from HISTORY_FIRST_MONTH. The same people, scope and exemptions as
+ * `canaryWireView`, month by month.
  */
-export async function canaryWireHistory(scope: CanaryWireScope = { kind: "everyone" }, now = new Date()): Promise<CanaryWireHistory> {
+export async function canaryWireHistory(
+  scope: CanaryWireScope = { kind: "everyone" },
+  now = new Date(),
+  allMonths = false,
+): Promise<CanaryWireHistory> {
   const [stored, known, people] = await Promise.all([latestSnapshot(), history(), peopleByEmail()]);
   if (!stored) return { months: [], scope: scope.kind, hasSnapshot: false, teams: [], roles: [], totals: [], seriesLinks: SERIES_LINKS };
   const named = withHiBob(stored.snapshot, people);
   const shown = scope.kind === "org" ? onlyOrg(named, orgOf(people, scope.email)) : named;
-  const months = historyMonths(stored.snapshot, monthOf(now));
+  const months = historyMonths(stored.snapshot, monthOf(now), allMonths);
   return { ...historyView(shown, months, accountability(known), managersOf(people)), scope: scope.kind };
 }
