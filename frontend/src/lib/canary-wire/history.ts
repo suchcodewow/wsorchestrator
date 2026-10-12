@@ -71,8 +71,11 @@ const cmp = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
  * modules — on the 1st, before anyone has, last month is still the newest.
  * Over the whole pull, not a manager's org, so every viewer sees one set of
  * months.
+ *
+ * `all` lifts the `HISTORY_MONTHS` cap, for the CSV: every month from
+ * `HISTORY_FIRST_MONTH`, not just the ones the dots have room for.
  */
-export function historyMonths(snap: CanaryWireSnapshot, current: string): string[] {
+export function historyMonths(snap: CanaryWireSnapshot, current: string, all = false): string[] {
   const finishedIn = new Set<string>();
   const monthOfModule = new Map(snap.modules.map((m) => [m.module_id, m.month]));
   for (const states of Object.values(snap.progress)) {
@@ -81,11 +84,11 @@ export function historyMonths(snap: CanaryWireSnapshot, current: string): string
       if (month && norm(entry.state) === norm(COMPLETED)) finishedIn.add(month);
     }
   }
-  return contentMonths(snap)
+  const months = contentMonths(snap)
     .filter((m) => monthKey(m) >= monthKey(HISTORY_FIRST_MONTH) && monthKey(m) <= monthKey(current))
     .filter((m) => monthKey(m) < monthKey(current) || finishedIn.has(m))
-    .sort(byMonth)
-    .slice(-HISTORY_MONTHS);
+    .sort(byMonth);
+  return all ? months : months.slice(-HISTORY_MONTHS);
 }
 
 function rateOf(marks: MonthMark[]): MonthRate {
@@ -196,7 +199,7 @@ function csvField(value: string): string {
   return /[",\r\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
 }
 
-/** One row per rep, a column per month: the share of their lineup they finished, blank when they owed nothing. */
+/** One row per rep, a column per month in `h` (the CSV route passes every month, not the dots' last six): the share of their lineup they finished, blank when they owed nothing. */
 export function historyCsv(h: CanaryWireHistory): string {
   const rows = [["Name", "Email", "Role", "Manager", "Manager Email", ...h.months.map((m) => `${m} %`)]];
   for (const team of h.teams) {

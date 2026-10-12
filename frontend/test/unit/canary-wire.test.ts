@@ -314,6 +314,23 @@ describe("history", () => {
     assert.deepEqual(Object.keys(t.reps).sort(), pull().learners.map((l) => l.email).sort());
   });
 
+  test("the CSV's months are every one from June 2026, where the dots stop at six", () => {
+    const snap = pull();
+    // Eight months of content, June 2026 to January 2027, each finished by someone.
+    const names = ["June", "July", "September", "October", "November", "December"].map((m) => `${m} 2026`).concat(["January 2027", "February 2027"]);
+    names.forEach((month, i) => {
+      snap.modules.push({ module_id: `x-${i}`, name: `${month} - X`, label: "X", month, edition: AE, series_id: "s-ae", type: "UPDATE" });
+      snap.progress["ada@harness.io"]![`x-${i}`] = { state: "Completed", on: "2026-10-03", at: "2026-10-03T10:00:00Z" };
+    });
+    const dots = historyMonths(snap, "February 2027");
+    const all = historyMonths(snap, "February 2027", true);
+    assert.equal(dots.length, 6);
+    assert.deepEqual(dots, all.slice(-6));
+    assert.equal(all[0], "June 2026");
+    assert.equal(all.at(-1), "February 2027");
+    assert.ok(all.length > dots.length);
+  });
+
   test("the CSV is a row per rep and a column per month, blank where nothing was owed", () => {
     const csv = historyCsv({ ...historyView(twoMonths(), ["September 2026", "October 2026"], everyoneAccountable), scope: "everyone" }).split("\r\n");
     assert.equal(csv[0], "Name,Email,Role,Manager,Manager Email,September 2026 %,October 2026 %");
