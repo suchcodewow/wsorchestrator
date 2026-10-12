@@ -26,6 +26,11 @@ The working PAT lives in `infra/admin/terraform.tfvars` as `harness_api_key`.
 That file is git-ignored, so it exists only on machines that have been set up to
 deploy. Use it for any direct REST call, as `x-api-key: <PAT>`.
 
+`frontend/.env` also carries it as `HARNESS_PAT` on a machine set up for local
+development. An agent uses either only when the user has told it to talk to
+Harness; otherwise it says what it needs and stops. Load it without printing
+it (`set -a; . frontend/.env; set +a`), and never echo it into a command's output.
+
 **That PAT belongs to a person** (`GET /ng/api/user/currentUser` says whose).
 Anything done with it is recorded as that person's action: a pipeline it
 starts shows them as the trigger. `deploy_production` has no approval stage,
@@ -52,6 +57,33 @@ must not start one unless asked to in so many words.
 | Create an environment / infrastructure | `POST /ng/api/environmentsV2`, `POST /ng/api/infrastructures` — same JSON shape |
 | Upload a File Store file | `POST /ng/api/file-store` — multipart: `name`, `identifier`, `type=FILE`, `parentIdentifier=Root`, `fileUsage=MANIFEST_FILE`, `content=@…` |
 | Retry failed stages | `POST /pipeline/api/pipeline/execute/retry/{pipeline}?planExecutionId=…&retryStages=…&runAllStages=false` — inputs YAML body. `PUT` answers 405. A retry reuses the original run's pipeline YAML, so it will not pick up an edit. |
+
+### Workspace variables (IaCM)
+
+Read a workspace with `GET /gateway/iacm/api/orgs/operations/projects/orchestrator/workspaces/{qa_control_plane|admin_control_plane}?accountIdentifier=…`.
+Its `terraform_variables` map is keyed by variable name, each entry
+`{key, value, value_type}`; `value_type` is `string` or `secret`, and a
+`secret` entry's `value` is the **identifier of a project-scoped Harness secret**,
+not the secret itself. These are the `var.*` inputs of `infra/admin`, so a new
+variable there has to be added to **both** workspaces.
+
+To add or change one, `PUT` the same path with a JSON body of the workspace's
+config fields (`name`, `identifier`, `description`, `provisioner`,
+`provisioner_version`, `provider_connector(s)`, `repository*`,
+`terraform_variables`, `environment_variables`, `terraform_variable_files`,
+`variable_sets`, `tags`, `default_pipelines`, `cost_estimation_enabled`,
+`ccm_cost_enabled`, `budget`, `prune_sensitive_data`) — the GET response minus the
+read-only fields (`state`, `plan`, `status`, `lock`, timestamps and so on). It
+answers `{}` with 200. It replaces `terraform_variables` wholesale, so start from
+a fresh GET, change only the entry you mean to, keep a copy of the old body, and
+GET again afterwards to confirm only that entry moved. Saving a variable
+applies nothing: it reaches the environment on the next apply (QA on merge;
+production on `deploy_production` with `run_infra=true`).
+
+The Mindtickle variables (`mindtickle_company_id`, `mindtickle_api_key`,
+`mindtickle_secret_key`) were added to `admin_control_plane` this way, copied
+from `qa_control_plane`. Their secrets are `mindtickle_api_key` and
+`mindtickle_secret_key` (no `tf_` prefix).
 
 ### Where the MCP server falls short
 
