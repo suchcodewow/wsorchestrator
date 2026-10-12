@@ -147,6 +147,9 @@ export function IntakeFormFiller({ intake, preview }: { intake: MyIntake; previe
     >
       <motion.div variants={riseChild} className="space-y-2">
         <h1 className="text-3xl font-medium tracking-tight">{intake.heading}</h1>
+        {intake.introduction && (
+          <p className="whitespace-pre-line text-sm leading-relaxed text-muted-foreground">{intake.introduction}</p>
+        )}
         {savedAt && (
           <p className="text-sm text-muted-foreground">
             Answered {new Date(savedAt).toLocaleString()}. Change anything below and save again.

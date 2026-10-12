@@ -11,6 +11,7 @@ import assert from "node:assert/strict";
 import {
   DEFAULT_INTAKE_FORM,
   DEFAULT_INTAKE_FORMS,
+  DIETARY_QUESTION_IDS,
   INTAKE_NAME_QUESTION_ID,
   LOCKED_NAME_QUESTION,
   checkAnswers,
@@ -26,6 +27,7 @@ import {
 } from "@/lib/logistics/intake-values";
 
 const FORM: IntakeForm = {
+  introduction: "",
   questions: [
     { id: "name", kind: "short", title: "Name", description: "", required: true, options: [], other: false },
     { id: "notes", kind: "paragraph", title: "Notes", description: "", required: false, options: [], other: false },
@@ -48,10 +50,55 @@ describe("the default form", () => {
     );
   });
 
-  test("is Pre-Bootcamp's, and Pre-Intermediate starts with nothing to ask", () => {
+  test("is Pre-Bootcamp's, with no introduction", () => {
     assert.equal(DEFAULT_INTAKE_FORMS.bootcamp, DEFAULT_INTAKE_FORM);
-    assert.deepEqual(DEFAULT_INTAKE_FORMS.intermediate.questions, []);
-    assert.ok(intakeFormSchema.safeParse(DEFAULT_INTAKE_FORMS.intermediate).success);
+    assert.equal(DEFAULT_INTAKE_FORM.introduction, "");
+  });
+});
+
+describe("the default Pre-Intermediate form", () => {
+  const form = DEFAULT_INTAKE_FORMS.intermediate;
+
+  test("is one the editor could have saved, introduction and all", () => {
+    assert.ok(intakeFormSchema.safeParse(form).success);
+    assert.match(form.introduction, /^Intermediate Training takes place/);
+    assert.match(form.introduction, /"All or Nothing"/);
+  });
+
+  test("asks the Google Form's five questions, only the dietary one required", () => {
+    assert.deepEqual(
+      form.questions.map((q) => q.id),
+      ["attend", "dietary", "dietary-needs", "dietary-critical", "concerns"],
+    );
+    assert.deepEqual(form.questions.filter((q) => q.required).map((q) => q.id), ["dietary"]);
+  });
+
+  test("asks the dietary questions under the ids the Logistics page reads, as Pre-Bootcamp does", () => {
+    // Both groups are catered for together, so their answers must line up.
+    const ids = new Set(form.questions.map((q) => q.id));
+    for (const id of [DIETARY_QUESTION_IDS.has, DIETARY_QUESTION_IDS.needs, DIETARY_QUESTION_IDS.critical]) {
+      assert.ok(ids.has(id), id);
+      assert.ok(DEFAULT_INTAKE_FORM.questions.some((q) => q.id === id), id);
+    }
+  });
+
+  test("asks no name question, so it saves no one's name", () => {
+    assert.ok(!form.questions.some((q) => q.id === DIETARY_QUESTION_IDS.name));
+  });
+});
+
+describe("a form's introduction", () => {
+  test("is optional, and long enough for a page of travel rules", () => {
+    assert.equal(intakeFormSchema.parse({ questions: [] }).introduction, "");
+    assert.ok(intakeFormSchema.safeParse({ introduction: "x".repeat(10000), questions: [] }).success);
+    assert.ok(!intakeFormSchema.safeParse({ introduction: "x".repeat(10001), questions: [] }).success);
+  });
+
+  test("lets a question run to 2,000 characters and an option to 500", () => {
+    const q = { id: "a", kind: "choice", title: "x".repeat(2000), options: ["y".repeat(500)] };
+    assert.ok(intakeFormSchema.safeParse({ questions: [q] }).success);
+    assert.ok(!intakeFormSchema.safeParse({ questions: [{ ...q, title: "x".repeat(2001) }] }).success);
+    assert.ok(!intakeFormSchema.safeParse({ questions: [{ ...q, options: ["y".repeat(501)] }] }).success);
   });
 });
 
@@ -160,6 +207,7 @@ describe("the Slack reminder", () => {
 
 describe("the name question", () => {
   const NAMED: IntakeForm = {
+    introduction: "",
     questions: [
       { id: INTAKE_NAME_QUESTION_ID, kind: "short", title: "Name?", description: "", required: true, options: [], other: false },
     ],

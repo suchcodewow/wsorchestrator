@@ -35,8 +35,11 @@ const asAsked = (id: IntakeFormId, questions: IntakeForm["questions"]) =>
  */
 export async function getIntakeForm(id: IntakeFormId): Promise<IntakeFormView> {
   const [row] = await db.select().from(intakeForms).where(eq(intakeForms.id, id));
-  if (!row) return { questions: asAsked(id, DEFAULT_INTAKE_FORMS[id].questions), updatedAt: null };
-  return { questions: asAsked(id, row.questions), updatedAt: row.updatedAt.toISOString() };
+  if (!row) {
+    const { introduction, questions } = DEFAULT_INTAKE_FORMS[id];
+    return { introduction, questions: asAsked(id, questions), updatedAt: null };
+  }
+  return { introduction: row.introduction, questions: asAsked(id, row.questions), updatedAt: row.updatedAt.toISOString() };
 }
 
 /**
@@ -45,7 +48,12 @@ export async function getIntakeForm(id: IntakeFormId): Promise<IntakeFormView> {
  * was sent: first, and changed only in its title (`lockNameQuestion`).
  */
 export async function saveIntakeForm(actorId: string, id: IntakeFormId, form: IntakeForm): Promise<IntakeFormView> {
-  const values = { questions: asAsked(id, form.questions), updatedBy: actorId, updatedAt: new Date() };
+  const values = {
+    introduction: form.introduction,
+    questions: asAsked(id, form.questions),
+    updatedBy: actorId,
+    updatedAt: new Date(),
+  };
   await db
     .insert(intakeForms)
     .values({ id, ...values })
@@ -58,6 +66,8 @@ export type MyIntake = {
   form: IntakeFormId;
   /** "Bootcamp Registration" or "Intermediate Registration". */
   heading: string;
+  /** Shown above the first question; empty for none. */
+  introduction: string;
   questions: IntakeForm["questions"];
   answers: IntakeAnswers;
   savedAt: string | null;
@@ -96,7 +106,7 @@ export async function getMyIntake(email: string, want: IntakeFormId | null = nul
   const found = await intakeStageFor(email, want);
   if (!found) return null;
   const { stage } = found;
-  const [{ questions }, name, [latest]] = await Promise.all([
+  const [{ introduction, questions }, name, [latest]] = await Promise.all([
     getIntakeForm(stage),
     nameOnRecord(email),
     db
@@ -109,6 +119,7 @@ export async function getMyIntake(email: string, want: IntakeFormId | null = nul
   return {
     form: stage,
     heading: INTAKE_FORM_HEADINGS[stage],
+    introduction,
     questions,
     answers: latest?.answers ?? {},
     savedAt: latest?.submittedAt.toISOString() ?? null,

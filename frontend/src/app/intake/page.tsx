@@ -38,8 +38,8 @@ export default async function IntakePage({
   let mine: MyIntake | null;
   let previewing = false;
   if (isIntakeFormId(preview) && canManageTrainingSettings(session.user.access)) {
-    const { questions } = await getIntakeForm(preview);
-    mine = { form: preview, heading: INTAKE_FORM_HEADINGS[preview], questions, answers: {}, savedAt: null, name: null };
+    const { introduction, questions } = await getIntakeForm(preview);
+    mine = { form: preview, heading: INTAKE_FORM_HEADINGS[preview], introduction, questions, answers: {}, savedAt: null, name: null };
     previewing = true;
   } else {
     mine = session.user.email ? await getMyIntake(session.user.email, isIntakeFormId(form) ? form : null) : null;

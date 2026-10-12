@@ -1,7 +1,8 @@
 /**
  * Reading the intake forms' responses back: each person's latest answers to
  * one form, for Logistics settings, and each attendee's dietary needs from
- * the Pre-Bootcamp form, for the Logistics page.
+ * both forms together, for the Logistics page: bootcamp and intermediate are
+ * there at the same time, and are catered for as one group.
  */
 
 import "server-only";
@@ -44,19 +45,35 @@ export function answerFilter(
 
 const iso = <T extends { submittedAt: Date }>(row: T) => ({ ...row, submittedAt: row.submittedAt.toISOString() });
 
-/** Each person's most recent response to `form`: someone who changes their answers is counted once, as they are now. */
-function latestOf(form: IntakeFormId) {
+/**
+ * Each person's most recent response to `form`, or to either form when it is
+ * null: someone who changes their answers is counted once, as they are now.
+ */
+function latestOf(form: IntakeFormId | null) {
   return db
     .selectDistinctOn([intakeResponses.email], {
       id: intakeResponses.id,
+      form: intakeResponses.form,
       email: intakeResponses.email,
       answers: intakeResponses.answers,
       submittedAt: intakeResponses.submittedAt,
     })
     .from(intakeResponses)
-    .where(eq(intakeResponses.form, form))
+    .where(form ? eq(intakeResponses.form, form) : undefined)
     .orderBy(intakeResponses.email, desc(intakeResponses.submittedAt))
     .as("latest");
+}
+
+/** One name per email from the employee list, so an email two employee rows share still lists once. */
+function namedEmployees() {
+  return db
+    .selectDistinctOn([sql`lower(${employees.email})`], {
+      email: sql<string>`lower(${employees.email})`.as("named_email"),
+      fullName: employees.fullName,
+    })
+    .from(employees)
+    .orderBy(sql`lower(${employees.email})`, employees.fullName)
+    .as("named");
 }
 
 /** Each person's latest answers to `form`, a page at a time, searched across their name, email and every answer. */
@@ -67,15 +84,7 @@ export async function listIntakeResponses(
 ): Promise<Page<IntakeResponseRow>> {
   const { limit, offset } = pageWindow(query.page);
   const latest = latestOf(form);
-  // One name per email, so an email two employee rows share still lists once.
-  const named = db
-    .selectDistinctOn([sql`lower(${employees.email})`], {
-      email: sql<string>`lower(${employees.email})`.as("named_email"),
-      fullName: employees.fullName,
-    })
-    .from(employees)
-    .orderBy(sql`lower(${employees.email})`, employees.fullName)
-    .as("named");
+  const named = namedEmployees();
   const name = named.fullName;
   const sortColumn = { submittedAt: latest.submittedAt, name: sql`lower(${name})`, email: latest.email }[query.sort];
   const rows = await db
@@ -94,8 +103,9 @@ export async function listIntakeResponses(
   return toPage(rows.map(iso), query.page);
 }
 
-/** The Pre-Bootcamp form's latest responses, which hold the dietary questions. */
-const latest = latestOf("bootcamp");
+/** Both forms' latest responses, one per person, which hold the dietary questions. */
+const latest = latestOf(null);
+const named = namedEmployees();
 
 /**
  * The answer to one of the dietary questions. Their ids are constants, written
@@ -111,6 +121,9 @@ const hasNeeds = sql`${answer(DIETARY_QUESTION_IDS.has)} = 'Yes'`;
 
 export type DietaryRow = {
   email: string;
+  /** Which form the answer came from: the person is at bootcamp or intermediate. */
+  form: IntakeFormId;
+  /** Their answer to the name question, or for a form that asks none the name the app has for them. */
   name: string | null;
   needs: string | null;
   critical: number | null;
@@ -120,7 +133,7 @@ export type DietaryRow = {
 /** Everyone who said they have dietary needs, a page at a time, the most critical first. */
 export async function listDietaryNeeds(query: ListQuery<DietarySort>): Promise<Page<DietaryRow>> {
   const { limit, offset } = pageWindow(query.page);
-  const name = answer(DIETARY_QUESTION_IDS.name);
+  const name = sql<string | null>`coalesce(nullif(${answer(DIETARY_QUESTION_IDS.name)}, ''), ${named.fullName})`;
   const needs = answer(DIETARY_QUESTION_IDS.needs);
   const sortColumn = {
     critical,
@@ -129,8 +142,9 @@ export async function listDietaryNeeds(query: ListQuery<DietarySort>): Promise<P
     submittedAt: latest.submittedAt,
   }[query.sort];
   const rows = await db
-    .select({ email: latest.email, name, needs, critical, submittedAt: latest.submittedAt })
+    .select({ email: latest.email, form: latest.form, name, needs, critical, submittedAt: latest.submittedAt })
     .from(latest)
+    .leftJoin(named, eq(named.email, latest.email))
     .where(and(hasNeeds, searchAny(query.q, [latest.email, name, needs])))
     .orderBy(...orderFor(sortColumn, query.dir, sql`${critical} desc nulls last`, latest.email))
     .limit(limit)
@@ -139,7 +153,7 @@ export async function listDietaryNeeds(query: ListQuery<DietarySort>): Promise<P
 }
 
 export type DietaryCounts = {
-  /** Attendees who have sent the form. */
+  /** Attendees who have sent either form. */
   responded: number;
   /** Of them, those with dietary needs. */
   withNeeds: number;
