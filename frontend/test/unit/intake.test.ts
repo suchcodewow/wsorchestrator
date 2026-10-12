@@ -11,8 +11,15 @@ import assert from "node:assert/strict";
 import {
   DEFAULT_INTAKE_FORM,
   DEFAULT_INTAKE_FORMS,
+  INTAKE_NAME_QUESTION_ID,
+  LOCKED_NAME_QUESTION,
   checkAnswers,
+  isLockedQuestion,
+  lockNameQuestion,
   intakeReminderText,
+  isFirstLast,
+  isNameQuestion,
+  normalizeName,
   intakeFormSchema,
   intakeSubmissionSchema,
   type IntakeForm,
@@ -37,7 +44,7 @@ describe("the default form", () => {
     assert.equal(DEFAULT_INTAKE_FORM.questions.length, 7);
     assert.deepEqual(
       DEFAULT_INTAKE_FORM.questions.filter((q) => q.required).map((q) => q.id),
-      ["dietary", "dietary-critical", "preferred-name"],
+      ["preferred-name", "dietary", "dietary-critical"],
     );
   });
 
@@ -148,5 +155,80 @@ describe("the Slack reminder", () => {
   test("keeps a name from reading as Slack markup", () => {
     assert.match(intakeReminderText("<!channel> & co", "bootcamp", "https://app.test/intake"), /^Hi &lt;!channel&gt;!/);
     assert.match(intakeReminderText("  ", "bootcamp", "https://app.test/intake"), /^Hi! .*Bootcamp Registration/);
+  });
+});
+
+describe("the name question", () => {
+  const NAMED: IntakeForm = {
+    questions: [
+      { id: INTAKE_NAME_QUESTION_ID, kind: "short", title: "Name?", description: "", required: true, options: [], other: false },
+    ],
+  };
+
+  test("is the Pre-Bootcamp form's preferred-name question, while it is a short or paragraph answer", () => {
+    const q = DEFAULT_INTAKE_FORM.questions.find((x) => x.id === INTAKE_NAME_QUESTION_ID)!;
+    assert.ok(isNameQuestion(q));
+    assert.ok(!isNameQuestion({ ...q, kind: "dropdown" }));
+    assert.ok(!isNameQuestion({ ...q, id: "q-1234abcd" }));
+  });
+
+  test("takes a first and a last name, as people spell them", () => {
+    for (const name of ["Sam Rivera", "Mary-Kate O'Neil", "José Núñez", "Sam R."]) assert.ok(isFirstLast(name), name);
+  });
+
+  test("refuses one name, three, or anything not a name", () => {
+    for (const name of ["Sam", "Sam Lee Rivera", "Sam 3", "Sam_Rivera", "", "  "]) assert.ok(!isFirstLast(name), name);
+  });
+
+  test("closes up stray spaces, and stores the answer that way", () => {
+    assert.equal(normalizeName("  Sam   Rivera "), "Sam Rivera");
+    assert.deepEqual(checkAnswers(NAMED, { [INTAKE_NAME_QUESTION_ID]: "  Sam   Rivera " }), {
+      ok: true,
+      answers: { [INTAKE_NAME_QUESTION_ID]: "Sam Rivera" },
+    });
+  });
+
+  test("is refused when it is not a first and a last name", () => {
+    assert.deepEqual(checkAnswers(NAMED, { [INTAKE_NAME_QUESTION_ID]: "Sammy" }), {
+      ok: false,
+      error: { questionId: INTAKE_NAME_QUESTION_ID, problem: "not_a_name" },
+    });
+  });
+});
+
+describe("the locked name question", () => {
+  const other = DEFAULT_INTAKE_FORM.questions.find((q) => q.id === "attend")!;
+
+  test("comes first on the default Pre-Bootcamp form", () => {
+    assert.equal(DEFAULT_INTAKE_FORM.questions[0]!.id, INTAKE_NAME_QUESTION_ID);
+    assert.deepEqual(lockNameQuestion(DEFAULT_INTAKE_FORM.questions), DEFAULT_INTAKE_FORM.questions);
+  });
+
+  test("is locked on Pre-Bootcamp only", () => {
+    assert.ok(isLockedQuestion("bootcamp", LOCKED_NAME_QUESTION));
+    assert.ok(!isLockedQuestion("intermediate", LOCKED_NAME_QUESTION));
+    assert.ok(!isLockedQuestion("bootcamp", other));
+  });
+
+  test("keeps a new title, and undoes every other change to it", () => {
+    const altered = {
+      ...LOCKED_NAME_QUESTION,
+      title: "What should we call you?",
+      kind: "dropdown" as const,
+      description: "Anything",
+      required: false,
+      options: ["A"],
+      other: true,
+    };
+    assert.deepEqual(lockNameQuestion([other, altered]), [
+      { ...LOCKED_NAME_QUESTION, title: "What should we call you?" },
+      other,
+    ]);
+  });
+
+  test("moves back to first, and comes back when removed or left blank", () => {
+    assert.equal(lockNameQuestion([other, LOCKED_NAME_QUESTION])[0]!.id, INTAKE_NAME_QUESTION_ID);
+    assert.deepEqual(lockNameQuestion([other]), [LOCKED_NAME_QUESTION, other]);
+    assert.deepEqual(lockNameQuestion([{ ...LOCKED_NAME_QUESTION, title: "  " }])[0], LOCKED_NAME_QUESTION);
   });
 });

@@ -961,6 +961,25 @@ export type EmployeeTrack = (typeof EMPLOYEE_TRACKS)[number];
  * them undecided. Keyed by lowercased email, since a sync replaces HiBob ids'
  * rows wholesale.
  */
+/**
+ * The name someone chose for themselves, which the app shows in place of the
+ * one their email gives (`nameFromEmail`): as `employees.full_name`, and so on
+ * name cards and everywhere else that reads it. Set from the Pre-Bootcamp
+ * form's name question (`INTAKE_NAME_QUESTION_ID`); the HiBob sync applies it
+ * again each time it rewrites `employees`. Only a name other than the email's
+ * is kept: choosing that one again deletes the row. See
+ * `lib/evals/chosen-names.ts`.
+ */
+export const employeeChosenNames = pgTable("employee_chosen_names", {
+  /** Lowercased. */
+  email: text("email").primaryKey(),
+  /** A first and a last name, one space between (`isFirstLast`). */
+  fullName: text("full_name").notNull(),
+  /** Who saved it: the person themselves, at /intake. */
+  updatedBy: text("updated_by").references(() => users.id, { onDelete: "set null" }),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const employeeTrackOverrides = pgTable(
   "employee_track_overrides",
   {

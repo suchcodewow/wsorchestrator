@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { INTAKE_LIMITS, type IntakeQuestion } from "@/db/schema";
 import type { MyIntake } from "@/lib/logistics/intake";
-import { HAS_OPTIONS, type IntakeAnswers } from "@/lib/logistics/intake-values";
+import { HAS_OPTIONS, isFirstLast, isNameQuestion, type IntakeAnswers } from "@/lib/logistics/intake-values";
 import { riseChild, staggerParent } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 
@@ -33,6 +33,7 @@ const ERRORS: Record<string, string> = {
   impersonating: "You are viewing the app as someone else, so their answers cannot be changed.",
   required: "Answer every question marked with *.",
   not_an_option: "One of your answers is not one the form offers. The form may have changed: reload the page.",
+  not_a_name: "Give your name as a first and a last name, with one space between.",
 };
 
 /**
@@ -55,7 +56,15 @@ function startingFrom(intake: MyIntake): { answers: IntakeAnswers; others: Recor
     const held = values.map((v) => (v === outside ? OTHER : v));
     answers[q.id] = q.kind === "checkboxes" ? held : held[0]!;
   }
+  // The name question starts from the name the app already has for them.
+  const nameQuestion = intake.questions.find(isNameQuestion);
+  if (nameQuestion && answers[nameQuestion.id] === undefined && intake.name) answers[nameQuestion.id] = intake.name;
   return { answers, others };
+}
+
+/** The name question's answer, when there is one and it is not a first and a last name. */
+function badName(q: IntakeQuestion, value: string | string[] | undefined): boolean {
+  return isNameQuestion(q) && typeof value === "string" && value.trim() !== "" && !isFirstLast(value);
 }
 
 export function IntakeFormFiller({ intake, preview }: { intake: MyIntake; preview: boolean }) {
@@ -95,6 +104,12 @@ export function IntakeFormFiller({ intake, preview }: { intake: MyIntake; previe
     setMissing(new Set(unanswered.map((q) => q.id)));
     if (unanswered.length > 0) {
       setError(ERRORS.required!);
+      return;
+    }
+    const misnamed = intake.questions.find((q) => badName(q, out[q.id]));
+    if (misnamed) {
+      setMissing(new Set([misnamed.id]));
+      setError(ERRORS.not_a_name!);
       return;
     }
 
@@ -163,6 +178,11 @@ export function IntakeFormFiller({ intake, preview }: { intake: MyIntake; previe
                 {q.required && <span className="text-destructive"> *</span>}
               </p>
               {q.description && <p className="whitespace-pre-line text-sm text-muted-foreground">{q.description}</p>}
+              {isNameQuestion(q) && (
+                <p className="text-sm text-muted-foreground">
+                  Your first and last name, like Sam Rivera. It is the name on your name card and everywhere else here.
+                </p>
+              )}
             </div>
             <Answer
               question={q}
@@ -171,7 +191,13 @@ export function IntakeFormFiller({ intake, preview }: { intake: MyIntake; previe
               onChange={(v) => setAnswers((a) => ({ ...a, [q.id]: v }))}
               onOther={(v) => setOthers((o) => ({ ...o, [q.id]: v }))}
             />
-            {missing.has(q.id) && <p className="text-xs text-destructive">This question needs an answer.</p>}
+            {missing.has(q.id) && (
+              <p className="text-xs text-destructive">
+                {badName(q, answers[q.id])
+                  ? "Enter a first name and a last name, with one space between."
+                  : "This question needs an answer."}
+              </p>
+            )}
           </motion.fieldset>
         ))}
       </motion.div>

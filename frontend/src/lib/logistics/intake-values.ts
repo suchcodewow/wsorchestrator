@@ -67,6 +67,12 @@ const question = (q: Omit<IntakeQuestion, "description" | "options" | "other"> &
 export const DEFAULT_INTAKE_FORM: IntakeForm = {
   questions: [
     question({
+      id: "preferred-name",
+      kind: "short",
+      title: "What name would you like instructors and classmates to use?",
+      required: true,
+    }),
+    question({
       id: "attend",
       kind: "choice",
       title: "Sales Bootcamp takes place in-person in Dallas November 17th - 20th. Will you attend?",
@@ -109,12 +115,6 @@ export const DEFAULT_INTAKE_FORM: IntakeForm = {
       required: false,
       options: ["Yes", "No", "I'm not sure"],
     }),
-    question({
-      id: "preferred-name",
-      kind: "short",
-      title: "What name would you like instructors and classmates to use?",
-      required: true,
-    }),
   ],
 };
 
@@ -135,6 +135,63 @@ export const DIETARY_QUESTION_IDS = {
   critical: "dietary-critical",
   name: "preferred-name",
 } as const;
+
+/**
+ * The question whose answer becomes the person's name across the app — on
+ * their employee record, name cards and everywhere else — rather than only an
+ * answer. It must be a first and a last name (`isFirstLast`), and starts from
+ * the name the app already has for them. Only a short or paragraph question
+ * with this id counts.
+ */
+export const INTAKE_NAME_QUESTION_ID = DIETARY_QUESTION_IDS.name;
+
+/** One name: a letter, then letters, apostrophes, hyphens or dots, as in O'Neil, Mary-Kate or St. */
+const ONE_NAME = /^\p{L}[\p{L}\p{M}'’.-]*$/u;
+
+/** A name as it is stored: trimmed, with runs of spaces closed up to one. */
+export function normalizeName(value: string): string {
+  return value.trim().replace(/\s+/g, " ");
+}
+
+/** Whether `value`, once normalized, is exactly two names, a first and a last, with one space between. */
+export function isFirstLast(value: string): boolean {
+  const words = normalizeName(value).split(" ");
+  return words.length === 2 && words.every((w) => ONE_NAME.test(w));
+}
+
+/**
+ * The name question as Pre-Bootcamp always asks it. It saves each person's
+ * answer into the database as their name, so it is locked: it comes first,
+ * cannot be removed, and nothing about it but its wording can change.
+ */
+export const LOCKED_NAME_QUESTION: IntakeQuestion = DEFAULT_INTAKE_FORM.questions.find(
+  (q) => q.id === INTAKE_NAME_QUESTION_ID,
+)!;
+
+/** Whether `q` is the locked name question on form `form`: only its title may be edited. */
+export function isLockedQuestion(form: IntakeFormId, q: Pick<IntakeQuestion, "id">): boolean {
+  return form === "bootcamp" && q.id === INTAKE_NAME_QUESTION_ID;
+}
+
+/**
+ * Pre-Bootcamp's questions with the name question locked in: first, as
+ * `LOCKED_NAME_QUESTION` has it, keeping only the title it was given (or the
+ * default's, if it was given none or left out). Whatever else was sent for
+ * it — another kind, not required, a description, a place further down, or
+ * its removal — is undone.
+ */
+export function lockNameQuestion(questions: IntakeQuestion[]): IntakeQuestion[] {
+  const given = questions.find((q) => q.id === INTAKE_NAME_QUESTION_ID)?.title.trim();
+  return [
+    { ...LOCKED_NAME_QUESTION, title: given || LOCKED_NAME_QUESTION.title },
+    ...questions.filter((q) => q.id !== INTAKE_NAME_QUESTION_ID),
+  ];
+}
+
+/** Whether `q` is the name question, so its answer is the person's name. */
+export function isNameQuestion(q: Pick<IntakeQuestion, "id" | "kind">): boolean {
+  return q.id === INTAKE_NAME_QUESTION_ID && (q.kind === "short" || q.kind === "paragraph");
+}
 
 /** How critical a dietary need is, 1 to 5; 5 is an allergy or a religious restriction. */
 export const DIETARY_LEVELS = [5, 4, 3, 2, 1] as const;
@@ -179,12 +236,14 @@ export const intakeSubmissionSchema = z
 
 export type IntakeAnswers = Record<string, string | string[]>;
 
-export type AnswerProblem = { questionId: string; problem: "required" | "not_an_option" };
+/** `not_a_name`: the name question's answer is not a first and a last name (`isFirstLast`). */
+export type AnswerProblem = { questionId: string; problem: "required" | "not_an_option" | "not_a_name" };
 
 /**
  * The answers as they will be stored — trimmed, blanks dropped, and only for
  * questions on the form — or the first question that is wrong. An answer
- * outside a list's options passes only where the question offers "Other".
+ * outside a list's options passes only where the question offers "Other",
+ * and the name question's must be a first and a last name, its spaces closed up.
  */
 export function checkAnswers(
   form: IntakeForm,
@@ -210,6 +269,9 @@ export function checkAnswers(
       }
     } else if (values.length > 1) {
       return { ok: false, error: { questionId: q.id, problem: "not_an_option" } };
+    } else if (isNameQuestion(q)) {
+      if (!isFirstLast(values[0]!)) return { ok: false, error: { questionId: q.id, problem: "not_a_name" } };
+      values[0] = normalizeName(values[0]!);
     }
 
     kept[q.id] = q.kind === "checkboxes" ? values : values[0]!;

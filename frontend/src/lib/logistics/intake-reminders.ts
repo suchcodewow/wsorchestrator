@@ -8,9 +8,10 @@
  * them with everything else it does: once a day from Cloud Scheduler
  * (infra/admin/scheduler.tf), and with Sync Slack Now on Cohort Settings →
  * Slack. In the sync's dry run they are logged, not sent. Nothing is sent at
- * all until a Training Administrator turns reminders on in Logistics settings
- * → Reminders, and then at most once per America/New_York day, so a retried
- * or second run does not message anyone twice.
+ * all until a Training Administrator turns the daily reminder on, beside the
+ * sync's other settings on Cohort Settings → Slack, and then at most once per
+ * America/New_York day, so a retried or second run does not message anyone
+ * twice.
  */
 
 import "server-only";

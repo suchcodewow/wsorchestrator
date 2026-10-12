@@ -2,8 +2,8 @@
  * The intake form's daily Slack reminders, called by Cloud Scheduler once a
  * day (infra/admin/scheduler.tf). A run of the cohort Slack sync that sends
  * only the reminders, logged on Cohort Settings → Slack, and a dry run while
- * the sync is. Starts no run at all while reminders are off on Logistics
- * settings → Reminders, or once today's have gone out.
+ * the sync is. Starts no run at all while the daily reminder is off on
+ * Cohort Settings → Slack, or once today's have gone out.
  *
  * Only a Google-signed OIDC token with `INTAKE_REMINDERS_AUDIENCE` from
  * `INTAKE_REMINDERS_INVOKER` is accepted; either unset refuses every call.

@@ -245,7 +245,6 @@ const PAGES: Record<string, PageCase> = {
     path: () => "/logistics-settings/responses?form=intermediate&question=dietary&answer=Yes&q=x",
     expect: gated(canManageTrainingSettings),
   },
-  "/logistics-settings/reminders": { path: () => "/logistics-settings/reminders", expect: gated(canManageTrainingSettings) },
   "/logistics/dietary?searched": { path: () => "/logistics/dietary?q=x&sort=name", expect: gated(canUseTraining) },
   "/cohorts/previous?open=<a day>": { path: () => "/cohorts/previous?open=2026-09-14", expect: gated(canUseTraining) },
   "/cohorts/previous/<a record>": {
@@ -654,8 +653,6 @@ const ROUTES: RouteCase[] = [
   { method: "GET", path: "/api/logistics/intake-forms/intermediate", allowed: canManageTrainingSettings },
   { method: "PUT", path: "/api/logistics/intake-forms/bootcamp", allowed: canManageTrainingSettings, body: () => ({}) },
   { method: "GET", path: "/api/logistics/intake-responses?form=intermediate&question=dietary&answer=Yes", allowed: canManageTrainingSettings },
-  { method: "GET", path: "/api/logistics/intake-reminders", allowed: canManageTrainingSettings },
-  { method: "PUT", path: "/api/logistics/intake-reminders", allowed: canManageTrainingSettings, body: () => ({}) },
   { method: "GET", path: "/api/logistics/dietary", allowed: canUseTraining },
   { method: "GET", path: "/api/logistics/guest-judges?sort=sessions", allowed: canUseTraining },
   { method: "GET", path: "/api/logistics/guest-judges/prospects?sort=tenure&group=sales", allowed: canUseTraining },

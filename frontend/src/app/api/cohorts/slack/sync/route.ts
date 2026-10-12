@@ -17,6 +17,7 @@ import {
   runSlackSync,
 } from "@/lib/cohorts/slack-sync";
 import { SLACK_SYNC_LIST } from "@/lib/list-specs";
+import { getIntakeRemindersOn, intakeRemindersSentToday, outstandingIntake } from "@/lib/logistics/intake-reminders";
 import { appBase } from "@/lib/oauth-callback";
 import { parseListQuery } from "@/lib/paging";
 import { canManageTrainingSettings } from "@/lib/roles";
@@ -34,12 +35,15 @@ export async function GET(req: Request) {
   if (error) return error;
 
   const query = parseListQuery(new URL(req.url).searchParams, SLACK_SYNC_LIST);
-  const [{ rows, page, hasMore }, running, live, active, token] = await Promise.all([
+  const [{ rows, page, hasMore }, running, live, active, token, remindersOn, sentToday, { counts }] = await Promise.all([
     listSlackSyncRuns(query),
     slackSyncInProgress(),
     getSlackSyncLive(),
     activeCohortChannels(),
     slackToken(),
+    getIntakeRemindersOn(),
+    intakeRemindersSentToday(),
+    outstandingIntake(),
   ]);
   return NextResponse.json({
     runs: rows,
@@ -49,6 +53,7 @@ export async function GET(req: Request) {
     live,
     configured: Boolean(token),
     active,
+    reminders: { on: remindersOn, sentToday, counts },
   });
 }
 

@@ -18,6 +18,7 @@ import { db } from "@/db";
 import {
   bootcampJudges,
   cohortChannelContacts,
+  employeeChosenNames,
   employees,
   evalsSlackContacts,
   hibobSyncRuns,
@@ -167,7 +168,7 @@ export type SyncResult =
   | { ok: true; runId: string; count: number; skipped: number }
   | { ok: false; runId: string | null; error: HibobError; detail?: string };
 
-type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+export type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 /**
  * Brings the names kept with judges, contacts and breakout groups up to date
@@ -175,9 +176,10 @@ type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
  * HiBob or `nameFromEmail` changes reads the same everywhere. A session's
  * staff follow their judge's name; an administrator on it keeps the name from
  * their account, which is the one the instructor list offers. Mentions keep
- * theirs: the text of what tagged them spells it.
+ * theirs: the text of what tagged them spells it. A name someone chooses
+ * (`lib/evals/chosen-names.ts`) is spread the same way.
  */
-async function refreshNameCopies(tx: Tx): Promise<void> {
+export async function refreshNameCopies(tx: Tx): Promise<void> {
   for (const table of [bootcampJudges, scheduleSessionGroups, evalsSlackContacts, cohortChannelContacts]) {
     await tx.execute(sql`
       update ${table} t set full_name = e.full_name
@@ -256,6 +258,13 @@ export async function syncHibobEmployees(
       // Two syncs are kept apart by the one-running index, but a revision from
       // before it (importing through the hibob_employees view) is not.
       await tx.execute(sql`select pg_advisory_xact_lock(hashtext('hibob_employees'))`);
+      // Read under the lock, which saving a chosen name takes too, so one saved mid-sync is not lost.
+      // The name someone chose wins over their email's, as their own and as their reports' manager.
+      const chosen = new Map(
+        (await tx.select({ email: employeeChosenNames.email, fullName: employeeChosenNames.fullName }).from(employeeChosenNames)).map(
+          (r) => [r.email, r.fullName],
+        ),
+      );
       await tx.delete(employees);
       for (let i = 0; i < unique.length; i += BATCH) {
         await tx
@@ -265,6 +274,8 @@ export async function syncHibobEmployees(
               .slice(i, i + BATCH)
               .map((r) => ({
                 ...r,
+                fullName: chosen.get(r.email) ?? r.fullName,
+                reportsToName: chosen.get(r.reportsToEmail) ?? r.reportsToName,
                 importedAt,
                 orgDepth: orgDepth.get(r.id) ?? null,
                 managementChain: chainOf.get(r.id)?.join(";") ?? null,

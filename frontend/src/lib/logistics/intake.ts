@@ -8,11 +8,14 @@ import "server-only";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { intakeForms, intakeResponses, type IntakeFormId } from "@/db/schema";
+import { nameOnRecord, setChosenName } from "@/lib/evals/chosen-names";
 import { cohortStageOf } from "@/lib/evals/current-cohort";
 import {
   DEFAULT_INTAKE_FORMS,
   INTAKE_FORM_HEADINGS,
   checkAnswers,
+  isNameQuestion,
+  lockNameQuestion,
   type AnswerProblem,
   type IntakeAnswers,
   type IntakeForm,
@@ -20,16 +23,28 @@ import {
 
 export type IntakeFormView = IntakeForm & { updatedAt: string | null };
 
-/** The saved form, or its default with a null `updatedAt` if it has never been saved. */
+/** A form's questions as they are asked: Pre-Bootcamp's with its name question locked in first. */
+const asAsked = (id: IntakeFormId, questions: IntakeForm["questions"]) =>
+  id === "bootcamp" ? lockNameQuestion(questions) : questions;
+
+/**
+ * The saved form, or its default with a null `updatedAt` if it has never been
+ * saved. Pre-Bootcamp's name question is locked in as it is read, so one
+ * saved before it was locked reads the same as one saved since.
+ */
 export async function getIntakeForm(id: IntakeFormId): Promise<IntakeFormView> {
   const [row] = await db.select().from(intakeForms).where(eq(intakeForms.id, id));
-  if (!row) return { ...DEFAULT_INTAKE_FORMS[id], updatedAt: null };
-  return { questions: row.questions, updatedAt: row.updatedAt.toISOString() };
+  if (!row) return { questions: asAsked(id, DEFAULT_INTAKE_FORMS[id].questions), updatedAt: null };
+  return { questions: asAsked(id, row.questions), updatedAt: row.updatedAt.toISOString() };
 }
 
-/** Replaces the whole form. Answers already saved keep the question ids they were given under. */
+/**
+ * Replaces the whole form. Answers already saved keep the question ids they
+ * were given under. On Pre-Bootcamp the name question is locked in whatever
+ * was sent: first, and changed only in its title (`lockNameQuestion`).
+ */
 export async function saveIntakeForm(actorId: string, id: IntakeFormId, form: IntakeForm): Promise<IntakeFormView> {
-  const values = { ...form, updatedBy: actorId, updatedAt: new Date() };
+  const values = { questions: asAsked(id, form.questions), updatedBy: actorId, updatedAt: new Date() };
   await db
     .insert(intakeForms)
     .values({ id, ...values })
@@ -45,6 +60,11 @@ export type MyIntake = {
   questions: IntakeForm["questions"];
   answers: IntakeAnswers;
   savedAt: string | null;
+  /**
+   * The name the app has for them now — the one their email gives, until they
+   * choose another — which the name question starts from until they answer it.
+   */
+  name: string | null;
 };
 
 /**
@@ -55,8 +75,9 @@ export type MyIntake = {
 export async function getMyIntake(email: string): Promise<MyIntake | null> {
   const stage = await cohortStageOf(email);
   if (!stage) return null;
-  const [{ questions }, [latest]] = await Promise.all([
+  const [{ questions }, name, [latest]] = await Promise.all([
     getIntakeForm(stage),
+    nameOnRecord(email),
     db
       .select({ answers: intakeResponses.answers, submittedAt: intakeResponses.submittedAt })
       .from(intakeResponses)
@@ -70,6 +91,7 @@ export async function getMyIntake(email: string): Promise<MyIntake | null> {
     questions,
     answers: latest?.answers ?? {},
     savedAt: latest?.submittedAt.toISOString() ?? null,
+    name,
   };
 }
 
@@ -82,10 +104,12 @@ export type SaveIntakeError = AnswerProblem | { problem: "not_in_cohort" } | { p
 /**
  * Checks someone's answers against their form as it stands now and saves them
  * as their latest, under their own email; `form` says which form that was.
+ * Their answer to the name question becomes their name across the app.
  */
 export async function saveMyIntake(
   email: string,
   answers: IntakeAnswers,
+  actorId: string | null,
 ): Promise<{ ok: true; form: IntakeFormId; savedAt: string } | { ok: false; error: SaveIntakeError }> {
   const stage = await cohortStageOf(email);
   if (!stage) return { ok: false, error: { problem: "not_in_cohort" } };
@@ -99,6 +123,11 @@ export async function saveMyIntake(
     .insert(intakeResponses)
     .values({ form: stage, email: email.toLowerCase(), answers: checked.answers })
     .returning({ submittedAt: intakeResponses.submittedAt });
+
+  const nameQuestion = form.questions.find(isNameQuestion);
+  const name = nameQuestion && checked.answers[nameQuestion.id];
+  if (typeof name === "string") await setChosenName(email, name, actorId);
+
   return { ok: true, form: stage, savedAt: row!.submittedAt.toISOString() };
 }
 
