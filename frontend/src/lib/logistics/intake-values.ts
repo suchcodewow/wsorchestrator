@@ -33,6 +33,24 @@ export function isIntakeFormId(value: unknown): value is IntakeFormId {
   return INTAKE_FORM_IDS.includes(value as IntakeFormId);
 }
 
+/** What the Responses tab lists: one form, or `all` for both together. */
+export type ResponsesForm = IntakeFormId | "all";
+
+/** The `form` a Responses URL asks for; Pre-Bootcamp for one that asks none, or anything else. */
+export function responsesFormOf(value: unknown): ResponsesForm {
+  return value === "all" || isIntakeFormId(value) ? value : "bootcamp";
+}
+
+/**
+ * Both forms' questions for listing their responses together: Pre-Bootcamp's,
+ * then those only Pre-Intermediate asks. A question both ask, such as the
+ * dietary ones, is one column, under Pre-Bootcamp's wording.
+ */
+export function questionsOfBoth(bootcamp: IntakeQuestion[], intermediate: IntakeQuestion[]): IntakeQuestion[] {
+  const ids = new Set(bootcamp.map((q) => q.id));
+  return [...bootcamp, ...intermediate.filter((q) => !ids.has(q.id))];
+}
+
 /** Slack's mrkdwn treats these three as markup. */
 const slackEscape = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 

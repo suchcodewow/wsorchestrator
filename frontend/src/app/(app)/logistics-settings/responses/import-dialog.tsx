@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Brings a Google Form's responses sheet into the intake form shown: the file
+ * Brings a Google Form's responses sheet into one intake form, chosen here: the file
  * is checked first, showing which column answers which question and how many
  * of the people are in the current cohort, and only stored when imported.
  */
@@ -12,7 +12,7 @@ import { CheckCircle2, Loader2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import type { IntakeFormId, IntakeQuestion } from "@/db/schema";
+import { INTAKE_FORM_IDS, type IntakeFormId, type IntakeQuestion } from "@/db/schema";
 import { INTAKE_FORM_LABELS } from "@/lib/logistics/intake-values";
 import type { IntakeImportSummary } from "@/lib/logistics/intake-import";
 
@@ -27,18 +27,24 @@ const ERRORS: Record<string, string> = {
 
 const PROBLEMS = { no_email: "has no email", not_an_email: "has something other than an email" } as const;
 
+const SELECT =
+  "h-9 w-full rounded-md border border-input bg-field px-2 text-sm text-foreground shadow-xs outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50";
+
 export function ImportResponsesDialog({
-  form,
-  questions,
+  initialForm,
+  questionsByForm,
   open,
   onClose,
 }: {
-  form: IntakeFormId;
-  questions: IntakeQuestion[];
+  /** The form the Responses tab is showing, or Pre-Bootcamp when it shows both. */
+  initialForm: IntakeFormId;
+  questionsByForm: Record<IntakeFormId, IntakeQuestion[]>;
   open: boolean;
   onClose: () => void;
 }) {
   const router = useRouter();
+  const [form, setForm] = useState<IntakeFormId>(initialForm);
+  const questions = questionsByForm[form];
   const [file, setFile] = useState<File | null>(null);
   const [summary, setSummary] = useState<IntakeImportSummary | null>(null);
   const [busy, setBusy] = useState(false);
@@ -49,6 +55,7 @@ export function ImportResponsesDialog({
   if (open !== was) {
     setWas(open);
     if (open) {
+      setForm(initialForm);
       setFile(null);
       setSummary(null);
       setError(null);
@@ -85,14 +92,15 @@ export function ImportResponsesDialog({
     <Dialog open={open} onOpenChange={(next) => !next && !busy && onClose()}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Import {INTAKE_FORM_LABELS[form]} responses</DialogTitle>
+          <DialogTitle>Import responses</DialogTitle>
         </DialogHeader>
 
         {summary?.imported ? (
           <div className="space-y-2 py-2 text-sm">
             <p className="flex items-center gap-2 font-medium">
               <CheckCircle2 className="size-4 text-brand" />
-              Imported {summary.added.toLocaleString()} {summary.added === 1 ? "response" : "responses"}
+              Imported {summary.added.toLocaleString()} {summary.added === 1 ? "response" : "responses"} into{" "}
+              {INTAKE_FORM_LABELS[form]}
             </p>
             {summary.alreadyThere > 0 && (
               <p className="text-muted-foreground">{summary.alreadyThere.toLocaleString()} were already here and left as they were.</p>
@@ -104,6 +112,27 @@ export function ImportResponsesDialog({
           </div>
         ) : (
           <div className="grid gap-4">
+            <div className="space-y-1.5">
+              <label htmlFor="import-form" className="text-sm font-medium">
+                Into
+              </label>
+              <select
+                id="import-form"
+                value={form}
+                disabled={busy}
+                onChange={(e) => {
+                  setForm(e.target.value as IntakeFormId);
+                  setSummary(null);
+                }}
+                className={SELECT}
+              >
+                {INTAKE_FORM_IDS.map((id) => (
+                  <option key={id} value={id}>
+                    {INTAKE_FORM_LABELS[id]}: the {id === "bootcamp" ? "Bootcamp" : "Intermediate"} registration&apos;s responses
+                  </option>
+                ))}
+              </select>
+            </div>
             <div className="space-y-1.5">
               <label htmlFor="import-file" className="text-sm font-medium">
                 Responses sheet

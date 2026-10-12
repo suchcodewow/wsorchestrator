@@ -1633,17 +1633,17 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       {
         method: "GET",
         path: "/api/logistics/intake-responses",
-        summary: "Lists each person's latest answers to one intake form, a page at a time, the most recently saved first.",
+        summary: "Lists each person's latest answers to one intake form, or to both, a page at a time, the most recently saved first.",
         access: "trainingAdmin",
         token: true,
-        notes: "Someone who changed their answers is listed once, as they are now. name is from HiBob, and null for an email no employee has.",
+        notes: "Someone who changed their answers is listed once, as they are now; with form all, once for each form they answered, form saying which. name is from HiBob, and null for an email no employee has.",
         query: [
-          { name: "form", type: '"bootcamp" | "intermediate"', note: "the form; bootcamp, Pre-Bootcamp, if left out or anything else" },
+          { name: "form", type: '"bootcamp" | "intermediate" | "all"', note: "the form, or all for both together; bootcamp, Pre-Bootcamp, if left out or anything else" },
           ...listQuery(INTAKE_RESPONSE_LIST.sorts, "the name, email or any answer"),
           { name: "question", type: "string", note: "with answer, only responses whose answer to this question id is, or for checkboxes includes, answer" },
           { name: "answer", type: "string", note: "with question; either alone is ignored" },
         ],
-        returns: `{ form: "bootcamp" | "intermediate", responses: { id, email, name: string | null, answers: Record<string, string | string[]>, submittedAt }[], ${PAGE_FIELDS} }`,
+        returns: `{ form: "bootcamp" | "intermediate" | "all", responses: { id, form: "bootcamp" | "intermediate", email, name: string | null, answers: Record<string, string | string[]>, submittedAt }[], ${PAGE_FIELDS} }`,
       },
       {
         method: "POST",

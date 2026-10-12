@@ -242,6 +242,7 @@ const PAGES: Record<string, PageCase> = {
   "/logistics-settings/pre-bootcamp": { path: () => "/logistics-settings/pre-bootcamp", expect: gated(canManageTrainingSettings) },
   "/logistics-settings/pre-intermediate": { path: () => "/logistics-settings/pre-intermediate", expect: gated(canManageTrainingSettings) },
   "/logistics-settings/responses": { path: () => "/logistics-settings/responses", expect: gated(canManageTrainingSettings) },
+  "/logistics-settings/responses?all": { path: () => "/logistics-settings/responses?form=all&q=x", expect: gated(canManageTrainingSettings) },
   "/logistics-settings/responses?filtered": {
     path: () => "/logistics-settings/responses?form=intermediate&question=dietary&answer=Yes&q=x",
     expect: gated(canManageTrainingSettings),
@@ -660,6 +661,7 @@ const ROUTES: RouteCase[] = [
   { method: "PUT", path: "/api/logistics/intake-forms/bootcamp", allowed: canManageTrainingSettings, body: () => ({}) },
   { method: "GET", path: "/api/logistics/intake-responses?form=intermediate&question=dietary&answer=Yes", allowed: canManageTrainingSettings },
   { method: "POST", path: "/api/logistics/intake-responses/import?form=intermediate", allowed: canManageTrainingSettings, body: form },
+  { method: "GET", path: "/api/logistics/intake-responses?form=all&sort=name", allowed: canManageTrainingSettings },
   { method: "GET", path: "/api/logistics/dietary", allowed: canUseTraining },
   { method: "GET", path: "/api/logistics/guest-judges?sort=sessions", allowed: canUseTraining },
   { method: "GET", path: "/api/logistics/guest-judges/prospects?sort=tenure&group=sales", allowed: canUseTraining },

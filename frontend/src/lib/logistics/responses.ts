@@ -19,6 +19,8 @@ import { orderFor, searchAny } from "@/lib/paging-sql";
 
 export type IntakeResponseRow = {
   id: string;
+  /** Which form it answers; with both listed, a person who answered both has a row for each. */
+  form: IntakeFormId;
   email: string;
   /** Their name from HiBob; null for an email no employee has. */
   name: string | null;
@@ -50,10 +52,11 @@ const iso = <T extends { submittedAt: Date }>(row: T) => ({ ...row, submittedAt:
 /**
  * Each person's most recent response to `form`, or to either form when it is
  * null: someone who changes their answers is counted once, as they are now.
+ * `perForm` keeps each person's latest to each form instead, for listing both.
  */
-function latestOf(form: IntakeFormId | null) {
+function latestOf(form: IntakeFormId | null, perForm = false) {
   return db
-    .selectDistinctOn([intakeResponses.email], {
+    .selectDistinctOn(perForm ? [intakeResponses.email, intakeResponses.form] : [intakeResponses.email], {
       id: intakeResponses.id,
       form: intakeResponses.form,
       email: intakeResponses.email,
@@ -62,7 +65,10 @@ function latestOf(form: IntakeFormId | null) {
     })
     .from(intakeResponses)
     .where(form ? eq(intakeResponses.form, form) : undefined)
-    .orderBy(intakeResponses.email, desc(intakeResponses.submittedAt))
+    .orderBy(
+      ...(perForm ? [intakeResponses.email, intakeResponses.form] : [intakeResponses.email]),
+      desc(intakeResponses.submittedAt),
+    )
     .as("latest");
 }
 
@@ -78,19 +84,23 @@ function namedEmployees() {
     .as("named");
 }
 
-/** Each person's latest answers to `form`, a page at a time, searched across their name, email and every answer. */
+/**
+ * Each person's latest answers to `form`, or with null their latest to each
+ * form, both forms in one list; a page at a time, searched across their name,
+ * email and every answer.
+ */
 export async function listIntakeResponses(
-  form: IntakeFormId,
+  form: IntakeFormId | null,
   query: ListQuery<IntakeResponseSort>,
   filter: AnswerFilter | null,
 ): Promise<Page<IntakeResponseRow>> {
   const { limit, offset } = pageWindow(query.page);
-  const latest = latestOf(form);
+  const latest = form ? latestOf(form) : latestOf(null, true);
   const named = namedEmployees();
   const name = named.fullName;
   const sortColumn = { submittedAt: latest.submittedAt, name: sql`lower(${name})`, email: latest.email }[query.sort];
   const rows = await db
-    .select({ id: latest.id, email: latest.email, name, answers: latest.answers, submittedAt: latest.submittedAt })
+    .select({ id: latest.id, form: latest.form, email: latest.email, name, answers: latest.answers, submittedAt: latest.submittedAt })
     .from(latest)
     .leftJoin(named, eq(named.email, latest.email))
     .where(

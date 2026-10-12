@@ -14,6 +14,8 @@ import {
   DIETARY_QUESTION_IDS,
   CARRIED_TO_INTERMEDIATE,
   carriedAnswers,
+  questionsOfBoth,
+  responsesFormOf,
   INTAKE_NAME_QUESTION_ID,
   LOCKED_NAME_QUESTION,
   checkAnswers,
@@ -315,5 +317,33 @@ describe("what Pre-Intermediate carries over from Pre-Bootcamp", () => {
     for (const id of CARRIED_TO_INTERMEDIATE) {
       assert.ok(DEFAULT_INTAKE_FORM.questions.some((q) => q.id === id), id);
     }
+  });
+});
+
+describe("listing both forms' responses together", () => {
+  test("asks for one form, or all, and falls back to Pre-Bootcamp", () => {
+    assert.equal(responsesFormOf("intermediate"), "intermediate");
+    assert.equal(responsesFormOf("all"), "all");
+    assert.equal(responsesFormOf(undefined), "bootcamp");
+    assert.equal(responsesFormOf("everything"), "bootcamp");
+  });
+
+  test("has a column for every question either form asks, one for each a both ask", () => {
+    const columns = questionsOfBoth(DEFAULT_INTAKE_FORMS.bootcamp.questions, DEFAULT_INTAKE_FORMS.intermediate.questions);
+    const ids = columns.map((q) => q.id);
+    assert.equal(new Set(ids).size, ids.length);
+    assert.deepEqual(ids, DEFAULT_INTAKE_FORMS.bootcamp.questions.map((q) => q.id));
+    // Every intermediate question is one Pre-Bootcamp asks too, under Pre-Bootcamp's wording.
+    const attend = columns.find((q) => q.id === "attend")!;
+    assert.match(attend.title, /^Sales Bootcamp/);
+  });
+
+  test("adds a question only Pre-Intermediate asks after Pre-Bootcamp's", () => {
+    const hotel = { ...DEFAULT_INTAKE_FORMS.intermediate.questions[0]!, id: "hotel-nights", title: "Hotel nights" };
+    const columns = questionsOfBoth(DEFAULT_INTAKE_FORMS.bootcamp.questions, [
+      ...DEFAULT_INTAKE_FORMS.intermediate.questions,
+      hotel,
+    ]);
+    assert.equal(columns.at(-1)!.id, "hotel-nights");
   });
 });
