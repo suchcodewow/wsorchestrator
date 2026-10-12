@@ -66,7 +66,7 @@ const question = (q: Omit<IntakeQuestion, "description" | "options" | "other"> &
 
 /** The November 2026 Sales Bootcamp registration, as the Google Form it replaces asked it. */
 export const DEFAULT_INTAKE_FORM: IntakeForm = {
-  introduction: "",
+  introduction: "Sales Bootcamp takes place from Tuesday November 17 through Friday November 20 in Dallas, Texas.\n\n1) We strictly enforce an \"All or Nothing\" model where every person must attend the entirety of Bootcamp, no exceptions, even for customer meetings.\n\n2) You will not be able to step out for any reason during Bootcamp sessions throughout the day.\n\n3) If you already know that you will be on PTO any of the days between November 17-20 you should mark \"No\" in this form.\n\n4) If you're traveling from EMEA or APAC, you are allowed to arrive on Monday Nov 16th to adjust to the time zone prior to Bootcamp Day 1. We recommend you do so if your schedule permits; we want you to be fresh and ready come Tuesday morning.\n\n5) No departure flights before 2:00PM PST on Friday, Nov 20th.\n\nPlease discuss with your manager if anything above may prevent you from attending Bootcamp.",
   questions: [
     question({
       id: "preferred-name",

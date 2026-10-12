@@ -1610,7 +1610,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "trainingAdmin",
         token: true,
         params: [INTAKE_FORM_PARAM],
-        notes: "Until it is first saved this is the default form, with updatedAt null: each as the Google Form it replaces asked it, Pre-Bootcamp's seven questions and Pre-Intermediate's introduction and five. A form has no title of its own; /intake heads it Bootcamp Registration or Intermediate Registration.",
+        notes: "Until it is first saved this is the default form, with updatedAt null: each as the Google Form it replaces asked it: Pre-Bootcamp's introduction and seven questions, Pre-Intermediate's introduction and five. A form has no title of its own; /intake heads it Bootcamp Registration or Intermediate Registration.",
         returns: `{ introduction: string, questions: ${INTAKE_QUESTION_SHAPE}[], updatedAt: string | null }`,
         errors: [{ status: 404, error: "not_found", when: "form is neither bootcamp nor intermediate" }],
       },

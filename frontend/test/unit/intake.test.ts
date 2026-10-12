@@ -52,9 +52,11 @@ describe("the default form", () => {
     );
   });
 
-  test("is Pre-Bootcamp's, with no introduction", () => {
+  test("is Pre-Bootcamp's, with the Google Form's introduction", () => {
     assert.equal(DEFAULT_INTAKE_FORMS.bootcamp, DEFAULT_INTAKE_FORM);
-    assert.equal(DEFAULT_INTAKE_FORM.introduction, "");
+    assert.ok(intakeFormSchema.safeParse(DEFAULT_INTAKE_FORM).success);
+    assert.match(DEFAULT_INTAKE_FORM.introduction, /^Sales Bootcamp takes place from Tuesday November 17/);
+    assert.match(DEFAULT_INTAKE_FORM.introduction, /"All or Nothing"/);
   });
 });
 
