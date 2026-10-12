@@ -86,7 +86,7 @@ locals {
 
 # Slack the current cohort's stragglers a link to their intake form once a
 # day. The app sends nothing until a Training Administrator turns reminders
-# on in Logistics settings → Reminders, which QA, sharing production's Slack
+# on in Cohort Settings → Slack, which QA, sharing production's Slack
 # workspace, leaves off; it also sends at most once a day, so a retry is safe.
 resource "google_cloud_scheduler_job" "intake_reminders" {
   name    = "intake-reminders-trigger"

@@ -38,7 +38,9 @@ import {
 } from "@/components/data-table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import type { SlackSyncScope, SlackSyncStatus, SlackSyncTrigger } from "@/db/schema";
+import { INTAKE_FORM_IDS, type SlackSyncScope, type SlackSyncStatus, type SlackSyncTrigger } from "@/db/schema";
+import type { IntakeCounts } from "@/lib/logistics/intake-reminders";
+import { INTAKE_FORM_LABELS } from "@/lib/logistics/intake-values";
 import type { SlackSyncSort } from "@/lib/list-specs";
 import { riseChild, staggerParent } from "@/lib/motion";
 import type { ListQuery, Page } from "@/lib/paging";
@@ -71,12 +73,12 @@ export const SCOPE_LABELS: Record<SlackSyncScope, string> = {
   reminders: "Messages",
 };
 
-/** The intake form's reminders, as far as the Slack tab says. */
+/** The intake form's daily reminder, and how each form stands with the current cohort. */
 export type ReminderStatus = {
   on: boolean;
-  /** In the current cohort with questions to answer and no answers yet. */
-  outstanding: number;
   sentToday: boolean;
+  /** By form: how many in the cohort are asked it, how many have answered, and how many questions it has. */
+  counts: IntakeCounts;
 };
 
 export type ActiveChannels = {
@@ -172,7 +174,7 @@ export function SlackSyncView({
   const sortProps = { sort: query.sort, dir: query.dir };
   const router = useRouter();
   const rowLink = useRowLink();
-  const [busy, setBusy] = useState<"sync" | "preview" | "mode" | "disconnect" | null>(null);
+  const [busy, setBusy] = useState<"sync" | "preview" | "mode" | "reminders" | "disconnect" | null>(null);
   const installed = installResult ? installMessage(installResult) : null;
   const [error, setError] = useState<string | null>(installed?.error ?? null);
   const [notice, setNotice] = useState<string | null>(installed?.notice ?? null);
@@ -261,6 +263,36 @@ export function SlackSyncView({
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ live: next }),
+      });
+      const body = await res.json().catch(() => null);
+      if (!res.ok) setError(message(body, res.status));
+      else router.refresh();
+    } catch {
+      setError("Could not reach the server.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function setReminders(next: boolean) {
+    if (
+      next &&
+      !window.confirm(
+        live
+          ? "Turn the daily reminder on? From the next sync, everyone in the current cohort who has not answered their form gets a Slack message once a day."
+          : "Turn the daily reminder on? The sync is in dry run, so reminders are logged, not sent, until it goes live.",
+      )
+    ) {
+      return;
+    }
+    setBusy("reminders");
+    setError(null);
+    setNotice(null);
+    try {
+      const res = await fetch("/api/cohorts/slack/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reminders: next }),
       });
       const body = await res.json().catch(() => null);
       if (!res.ok) setError(message(body, res.status));
@@ -371,25 +403,44 @@ export function SlackSyncView({
             ))}
           </div>
         </div>
-        <div className="flex flex-wrap items-center justify-between gap-4 px-5 py-4">
-          <div className="space-y-0.5">
+        <div className="flex flex-wrap items-center justify-between gap-4 px-5 py-4 sm:flex-nowrap">
+          <div className="min-w-0 space-y-0.5">
             <p className="flex items-center gap-2 text-sm font-medium">
               <MessageSquare className="size-3.5 text-muted-foreground" />
-              Intake form reminders
+              Daily reminder
               {reminders.on ? <Badge>On</Badge> : <Badge variant="secondary">Off</Badge>}
             </p>
             <p className="text-sm text-muted-foreground">
               {!reminders.on
-                ? `${reminders.outstanding.toLocaleString()} in the current cohort still to answer; no one is reminded while reminders are off.`
+                ? "Nobody is reminded to fill in their intake form, on the schedule or by Sync Slack Now."
                 : reminders.sentToday
-                  ? `${reminders.outstanding.toLocaleString()} still to answer; today's reminders have gone out, so the next go out tomorrow.`
-                  : `${reminders.outstanding.toLocaleString()} still to answer, each sent a direct message by the next sync.`}
+                  ? "Today's have gone out; the next go out tomorrow, to whoever has still not answered their intake form."
+                  : "Once a day, and with Sync Slack Now, everyone in the current cohort who has not answered their intake form gets a direct message linking to it."}
             </p>
           </div>
-          <Button variant="outline" asChild>
-            <Link href="/logistics-settings/reminders">Reminder settings</Link>
+          <Button
+            variant="outline"
+            className="shrink-0"
+            disabled={busy === "reminders"}
+            onClick={() => setReminders(!reminders.on)}
+          >
+            {busy === "reminders" && <Loader2 className="animate-spin" />}
+            {reminders.on ? "Turn off" : "Turn on"}
           </Button>
         </div>
+        {INTAKE_FORM_IDS.map((id) => {
+          const c = reminders.counts[id];
+          return (
+            <div key={id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3">
+              <span className="text-sm font-medium">{INTAKE_FORM_LABELS[id]}</span>
+              <span className="text-sm text-muted-foreground tabular-nums">
+                {c.questions === 0
+                  ? `No questions yet, so none of the ${c.asked.toLocaleString()} in the stage is reminded`
+                  : `${c.answered.toLocaleString()} of ${c.asked.toLocaleString()} answered`}
+              </span>
+            </div>
+          );
+        })}
         {active ? (
           active.channels.map((ch) => (
             <div key={ch.name} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3">

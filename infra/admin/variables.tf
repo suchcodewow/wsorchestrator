@@ -198,7 +198,7 @@ variable "canary_wire_pull_schedule" {
 }
 
 variable "intake_reminders_schedule" {
-  description = "Cron for the daily Slack reminder to fill in the intake form, in America/New_York. The app sends it only while reminders are on in Logistics settings → Reminders."
+  description = "Cron for the daily Slack reminder to fill in the intake form, in America/New_York. The app sends it only while the daily reminder is on in Cohort Settings → Slack."
   type        = string
   default     = "0 10 * * *"
 }

@@ -110,7 +110,8 @@ saved answers to their stage's form at /intake. Cloud Scheduler job
 default) calls `/api/logistics/intake-reminders/scheduled`, which starts a
 reminders-only run; the 3 AM run after HiBob does channels only; *Sync Slack
 Now* on Cohort Settings → Slack does both. Reminders go out only once a
-Training Administrator presses *Turn on* on Logistics settings → Reminders,
+Training Administrator turns the *Daily reminder* on, under *Mode* on
+Cohort Settings → Slack, which also shows how many have answered each form,
 at most once per Eastern day however many runs there are, and never for a
 form with no questions. In dry run they are logged, each with its text and
 recipient, not sent; *Preview* on the Slack tab makes any run a dry run, and

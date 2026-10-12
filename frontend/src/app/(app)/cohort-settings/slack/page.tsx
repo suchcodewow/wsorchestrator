@@ -1,7 +1,8 @@
 /**
- * The Slack tab: the app's install, the active bootcamp's channels, the
- * intake form's reminders, dry run or live, previewing and syncing now, and
- * the sync's log a page at a time.
+ * The Slack tab: everything the app sends through Slack. The app's install,
+ * dry run or live, the intake form's daily reminder and how each form stands,
+ * the active bootcamp's channels, previewing and syncing now, and the sync's
+ * log a page at a time.
  */
 
 import {
@@ -24,7 +25,7 @@ export default async function SlackPage({
 }) {
   const params = await searchParams;
   const query = parseListQuery(params, SLACK_SYNC_LIST);
-  const [page, running, live, active, installation, remindersOn, sentToday, { outstanding }] = await Promise.all([
+  const [page, running, live, active, installation, remindersOn, sentToday, { counts }] = await Promise.all([
     listSlackSyncRuns(query),
     slackSyncInProgress(),
     getSlackSyncLive(),
@@ -49,7 +50,7 @@ export default async function SlackPage({
       installResult={result ? { result, detail: typeof params.detail === "string" ? params.detail : null } : null}
       live={live}
       active={active}
-      reminders={{ on: remindersOn, outstanding: outstanding.length, sentToday }}
+      reminders={{ on: remindersOn, sentToday, counts }}
       query={query}
       running={running}
       page={{

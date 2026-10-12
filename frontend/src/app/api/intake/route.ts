@@ -30,7 +30,7 @@ export const PUT = audited(async function PUT(req: Request) {
   }
   if (!user.email) return NextResponse.json(NOT_IN_COHORT, { status: 404 });
 
-  const result = await saveMyIntake(user.email, parsed.data.answers);
+  const result = await saveMyIntake(user.email, parsed.data.answers, user.id);
   if (!result.ok) {
     const { error: problem } = result;
     if (problem.problem === "not_in_cohort") return NextResponse.json(NOT_IN_COHORT, { status: 404 });

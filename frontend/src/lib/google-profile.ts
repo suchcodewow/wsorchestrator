@@ -1,9 +1,9 @@
 /** Keeping a user's name and photo in step with their Google account. */
 
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import type { Profile } from "next-auth";
 import { db } from "@/db";
-import { users } from "@/db/schema";
+import { employeeChosenNames, users } from "@/db/schema";
 
 const PEOPLE_ME_PHOTOS = "https://people.googleapis.com/v1/people/me?personFields=photos";
 
@@ -53,9 +53,11 @@ export async function googlePhotoChosen(accessToken: string | undefined): Promis
  * sign-in. Auth.js writes them only when the account is first created, so
  * without this a renamed account or a new photo never shows up here.
  *
- * A name Google leaves out is kept rather than blanked. A picture it leaves out,
- * or one `photoChosen` says is Google's generated default, clears the stored
- * one, so the nav falls back to its own initial.
+ * A name Google leaves out is kept rather than blanked, and so is one the
+ * person chose on the Pre-Bootcamp form (`lib/evals/chosen-names.ts`), which
+ * wins over Google's. A picture it leaves out, or one `photoChosen` says is
+ * Google's generated default, clears the stored one, so the nav falls back to
+ * its own initial.
  */
 export async function syncGoogleProfile(
   userId: string | undefined,
@@ -66,8 +68,15 @@ export async function syncGoogleProfile(
 
   const picture = typeof profile.picture === "string" ? profile.picture.trim() : "";
   const image = photoChosen === false ? null : picture || null;
-  const changes: { name?: string; image: string | null } = { image };
-  if (profile.name?.trim()) changes.name = profile.name.trim();
+  const google = profile.name?.trim();
+  // A chosen name, if they have one, and otherwise Google's; with neither, the name already stored.
+  // Aliased by hand: Drizzle writes bare column names, and inside the subquery a bare
+  // "email" would be the chosen name's own, matching every account.
+  const name = sql`coalesce(
+    (select c.full_name from ${employeeChosenNames} c where c.email = lower("users"."email")),
+    ${google || null},
+    "users"."name"
+  )`;
 
-  await db.update(users).set(changes).where(eq(users.id, userId));
+  await db.update(users).set({ image, name }).where(eq(users.id, userId));
 }

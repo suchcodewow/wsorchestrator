@@ -80,7 +80,17 @@ export function EmployeesTable({
             <tbody>
               {shown.map((p) => (
                 <tr key={p.id} className="border-b transition-colors last:border-b-0 hover:bg-muted/30">
-                  <td className="px-5 py-2.5 font-medium">{p.fullName}</td>
+                  <td className="px-5 py-2.5 font-medium">
+                    {p.fullName}
+                    {p.nameChosen && (
+                      <span
+                        title="The name they chose on the Pre-Bootcamp form, in place of the one their email gives"
+                        className="ml-2 rounded-full border px-1.5 py-0.5 text-xs font-normal text-muted-foreground"
+                      >
+                        Chosen
+                      </span>
+                    )}
+                  </td>
                   <td className="px-5 py-2.5 text-muted-foreground">{p.email}</td>
                   <td className="px-5 py-2.5">{p.title || "—"}</td>
                   <td className="px-5 py-2.5 text-muted-foreground">{p.department || "—"}</td>

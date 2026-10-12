@@ -11,7 +11,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { ArrowDown, ArrowUp, Copy, ExternalLink, Loader2, Plus, Save, Trash2, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Copy, ExternalLink, Loader2, Lock, Plus, Save, Trash2, X } from "lucide-react";
 import { AutoGrowTextarea } from "@/components/auto-grow-textarea";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,7 +22,7 @@ import {
   type IntakeQuestion,
   type IntakeQuestionKind,
 } from "@/db/schema";
-import { HAS_OPTIONS, HAS_OTHER, INTAKE_FORM_LABELS, KIND_LABELS } from "@/lib/logistics/intake-values";
+import { HAS_OPTIONS, HAS_OTHER, INTAKE_FORM_LABELS, KIND_LABELS, isLockedQuestion } from "@/lib/logistics/intake-values";
 import type { IntakeFormView } from "@/lib/logistics/intake";
 import { riseChild, staggerParent } from "@/lib/motion";
 import { cn } from "@/lib/utils";
@@ -141,102 +141,125 @@ export function IntakeEditor({ id, form }: { id: IntakeFormId; form: IntakeFormV
           </motion.p>
         )}
 
-        {questions.map((q, i) => (
-          <motion.section key={q.id} variants={riseChild} className="space-y-3 px-5 py-4">
-            <div className="flex items-start gap-2">
-              <span className="mt-2 w-6 shrink-0 text-sm text-muted-foreground">{i + 1}.</span>
-              <div className="grid flex-1 items-start gap-3 sm:grid-cols-[1fr_11rem]">
-                <AutoGrowTextarea
-                  aria-label={`Question ${i + 1}`}
-                  placeholder="Question"
-                  value={q.title}
-                  maxLength={INTAKE_LIMITS.title}
-                  onChange={(e) => change(q.id, { title: e.target.value })}
-                />
-                <select
-                  aria-label={`Question ${i + 1} kind`}
-                  value={q.kind}
-                  onChange={(e) => setKind(q, e.target.value as IntakeQuestionKind)}
-                  className={SELECT}
-                >
-                  {INTAKE_QUESTION_KINDS.map((k) => (
-                    <option key={k} value={k}>
-                      {KIND_LABELS[k]}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="space-y-3 pl-8">
-              <AutoGrowTextarea
-                aria-label={`Question ${i + 1} description`}
-                placeholder="Description (optional)"
-                value={q.description}
-                maxLength={INTAKE_LIMITS.description}
-                onChange={(e) => change(q.id, { description: e.target.value })}
-              />
-
-              {HAS_OPTIONS.has(q.kind) ? (
-                <OptionsEditor question={q} index={i} onChange={(patch) => change(q.id, patch)} />
-              ) : (
-                <p className="border-b border-dashed pb-1 text-sm text-muted-foreground">
-                  {q.kind === "short" ? "Short answer text" : "Long answer text"}
-                </p>
-              )}
-
-              <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={q.required}
-                    onChange={(e) => change(q.id, { required: e.target.checked })}
-                    className="size-3.5 shrink-0 accent-brand"
+        {questions.map((q, i) => {
+          const locked = isLockedQuestion(id, q);
+          // Nothing moves above the locked question, which stays first.
+          const belowLocked = i > 0 && isLockedQuestion(id, questions[i - 1]!);
+          return (
+            <motion.section key={q.id} variants={riseChild} className="space-y-3 px-5 py-4">
+              <div className="flex items-start gap-2">
+                <span className="mt-2 w-6 shrink-0 text-sm text-muted-foreground">{i + 1}.</span>
+                <div className="grid flex-1 items-start gap-3 sm:grid-cols-[1fr_11rem]">
+                  <AutoGrowTextarea
+                    aria-label={`Question ${i + 1}`}
+                    placeholder="Question"
+                    value={q.title}
+                    maxLength={INTAKE_LIMITS.title}
+                    onChange={(e) => change(q.id, { title: e.target.value })}
                   />
-                  Required
-                </label>
-                <div className="flex gap-1">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    aria-label={`Move question ${i + 1} up`}
-                    disabled={i === 0}
-                    onClick={() => move(i, -1)}
+                  <select
+                    aria-label={`Question ${i + 1} kind`}
+                    value={q.kind}
+                    disabled={locked}
+                    title={locked ? "Locked: this question saves a name into the database" : undefined}
+                    onChange={(e) => setKind(q, e.target.value as IntakeQuestionKind)}
+                    className={SELECT}
                   >
-                    <ArrowUp className="size-3.5" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    aria-label={`Move question ${i + 1} down`}
-                    disabled={i === questions.length - 1}
-                    onClick={() => move(i, 1)}
-                  >
-                    <ArrowDown className="size-3.5" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    aria-label={`Duplicate question ${i + 1}`}
-                    disabled={questions.length >= INTAKE_LIMITS.questions}
-                    onClick={() => duplicate(i)}
-                  >
-                    <Copy className="size-3.5" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    aria-label={`Remove question ${i + 1}`}
-                    className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                    onClick={() => setQuestions((list) => list.filter((x) => x.id !== q.id))}
-                  >
-                    <Trash2 className="size-3.5" />
-                  </Button>
+                    {INTAKE_QUESTION_KINDS.map((k) => (
+                      <option key={k} value={k}>
+                        {KIND_LABELS[k]}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
-            </div>
-          </motion.section>
-        ))}
+
+              <div className="space-y-3 pl-8">
+                {locked ? (
+                  <p className="flex items-start gap-2 rounded-lg border bg-muted/40 px-3 py-2.5 text-sm text-muted-foreground">
+                    <Lock className="mt-0.5 size-3.5 shrink-0" />
+                    <span>
+                      <span className="font-medium text-foreground">Locked, except its wording.</span> This question
+                      saves each person&rsquo;s answer into the database as their name: on their employee record, their
+                      name card and everywhere else the app shows it. So it always comes first, cannot be removed, and
+                      stays a required short answer, which must be a first and a last name. It starts from the name
+                      their email gives.
+                    </span>
+                  </p>
+                ) : (
+                  <AutoGrowTextarea
+                    aria-label={`Question ${i + 1} description`}
+                    placeholder="Description (optional)"
+                    value={q.description}
+                    maxLength={INTAKE_LIMITS.description}
+                    onChange={(e) => change(q.id, { description: e.target.value })}
+                  />
+                )}
+
+                {HAS_OPTIONS.has(q.kind) ? (
+                  <OptionsEditor question={q} index={i} onChange={(patch) => change(q.id, patch)} />
+                ) : (
+                  <p className="border-b border-dashed pb-1 text-sm text-muted-foreground">
+                    {q.kind === "short" ? "Short answer text" : "Long answer text"}
+                  </p>
+                )}
+
+                <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={q.required}
+                      disabled={locked}
+                      onChange={(e) => change(q.id, { required: e.target.checked })}
+                      className="size-3.5 shrink-0 accent-brand disabled:opacity-60"
+                    />
+                    Required
+                  </label>
+                  {!locked && (
+                    <div className="flex gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label={`Move question ${i + 1} up`}
+                        disabled={i === 0 || belowLocked}
+                        onClick={() => move(i, -1)}
+                      >
+                        <ArrowUp className="size-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label={`Move question ${i + 1} down`}
+                        disabled={i === questions.length - 1}
+                        onClick={() => move(i, 1)}
+                      >
+                        <ArrowDown className="size-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label={`Duplicate question ${i + 1}`}
+                        disabled={questions.length >= INTAKE_LIMITS.questions}
+                        onClick={() => duplicate(i)}
+                      >
+                        <Copy className="size-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label={`Remove question ${i + 1}`}
+                        className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                        onClick={() => setQuestions((list) => list.filter((x) => x.id !== q.id))}
+                      >
+                        <Trash2 className="size-3.5" />
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </motion.section>
+          );
+        })}
 
         <motion.div variants={riseChild} className="flex flex-wrap items-center gap-3 px-5 py-4">
           <Button

@@ -54,7 +54,10 @@ export type Roster = {
   unlisted: UnlistedTitle[];
 };
 
-export type EmployeeListing = Omit<Employee, "raw" | "importedAt" | "orgDepth" | "managementChain" | "track">;
+export type EmployeeListing = Omit<Employee, "raw" | "importedAt" | "orgDepth" | "managementChain" | "track"> & {
+  /** Whether `fullName` is one they chose for themselves (`employee_chosen_names`) rather than their email's. */
+  nameChosen: boolean;
+};
 
 const EMPLOYEE_COLUMNS = {
   id: employees.id,
@@ -67,6 +70,8 @@ const EMPLOYEE_COLUMNS = {
   reportsToName: employees.reportsToName,
   startDate: employees.startDate,
   activeEffectiveDate: employees.activeEffectiveDate,
+  // Qualified by hand: Drizzle writes a bare `"email"` here, which inside the subquery would mean its own.
+  nameChosen: sql<boolean>`exists (select 1 from employee_chosen_names c where c.email = lower("employees"."email"))`,
 };
 
 const EMPLOYEE_SORT_COLUMNS = {

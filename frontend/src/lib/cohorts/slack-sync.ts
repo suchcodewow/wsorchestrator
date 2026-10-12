@@ -538,7 +538,7 @@ async function syncChannels(slack: SlackClient | null, runId: string, dryRun: bo
  */
 async function sendReminders(slack: SlackClient | null, dryRun: boolean, appUrl: string, log: RunLog): Promise<string | null> {
   if (!(await getIntakeRemindersOn())) {
-    return "Intake form reminders are off, so none were sent. Turn them on in Logistics settings → Reminders.";
+    return "The daily reminder is off, so no intake form reminders were sent. Turn it on above.";
   }
   const { missingScopes } = await intakeReminderSlack();
   if (missingScopes.length > 0) {
@@ -809,18 +809,6 @@ export async function getSlackSyncRun(id: string): Promise<SlackSyncRunSummary |
     .from(slackSyncRuns)
     .leftJoin(users, eq(users.id, slackSyncRuns.triggeredBy))
     .where(eq(slackSyncRuns.id, id));
-  return row ? summarize(row, Date.now() - STALE_MS) : null;
-}
-
-/** The latest run that set out to send the intake form reminders, or null for none yet. */
-export async function lastReminderRun(): Promise<SlackSyncRunSummary | null> {
-  const [row] = await db
-    .select(runColumns)
-    .from(slackSyncRuns)
-    .leftJoin(users, eq(users.id, slackSyncRuns.triggeredBy))
-    .where(inArray(slackSyncRuns.scope, ["all", "reminders"]))
-    .orderBy(desc(slackSyncRuns.startedAt))
-    .limit(1);
   return row ? summarize(row, Date.now() - STALE_MS) : null;
 }
 
