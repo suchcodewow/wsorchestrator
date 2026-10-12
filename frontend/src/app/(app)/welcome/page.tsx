@@ -1,8 +1,7 @@
 /**
- * The front door, for everyone: Mimir first, since everyone can use it, then
- * a card for every page this person can reach, grouped as the sidebar groups
- * them — so a guest judge finds eVals here, and someone with no role yet
- * finds Mimir and their own account.
+ * The front door, for everyone: for someone in Training or Assessments, the
+ * steps of running a live training session, each with where it stands now;
+ * then Mimir, since everyone can use it. The sidebar has every other page.
  */
 
 import type { Metadata } from "next";
@@ -13,8 +12,9 @@ import { auth, signInPath } from "@/auth";
 import { MimirArt } from "@/components/mimir-art";
 import { Button } from "@/components/ui/button";
 import { progressSummary, resumePoint } from "@/lib/mimir/progress";
-import { WELCOME_HREF, visibleSections } from "@/lib/nav";
+import { canSeeLiveTraining, liveTraining } from "@/lib/live-training";
 import { canUseMimir, hasNoAccess } from "@/lib/roles";
+import { LiveTrainingSteps } from "./live-training";
 
 export const metadata: Metadata = { title: "Welcome" };
 
@@ -26,12 +26,11 @@ export default async function WelcomePage() {
   const { access } = session.user;
 
   const mimir = canUseMimir(access);
-  const [resume, summary] = mimir
-    ? await Promise.all([resumePoint(session.user.id), progressSummary(session.user.id)])
-    : [null, null];
-  const sections = visibleSections(access)
-    .map((s) => ({ ...s, items: s.items.filter((i) => i.href !== WELCOME_HREF && i.href !== MIMIR_HREF) }))
-    .filter((s) => s.items.length > 0);
+  const [resume, summary, live] = await Promise.all([
+    mimir ? resumePoint(session.user.id) : null,
+    mimir ? progressSummary(session.user.id) : null,
+    canSeeLiveTraining(access) ? liveTraining(access) : null,
+  ]);
   const firstName = session.user.name?.split(" ")[0];
   const continueHref = resume && `/mimir/library/${encodeURIComponent(resume.id)}`;
 
@@ -43,6 +42,8 @@ export default async function WelcomePage() {
           Signed in as <span className="font-medium text-foreground">{session.user.email}</span>
         </p>
       </div>
+
+      {live && <LiveTrainingSteps {...live} />}
 
       {mimir && (
         <section
@@ -92,31 +93,6 @@ export default async function WelcomePage() {
           </div>
         </section>
       )}
-
-      {sections.map((section) => (
-        <section key={section.heading} aria-labelledby={`welcome-${section.heading}`} className="space-y-3">
-          <h2 id={`welcome-${section.heading}`} className="text-sm font-medium tracking-wide text-muted-foreground uppercase">
-            {section.heading}
-          </h2>
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {section.items.map(({ href, label, description, Icon }) => (
-              <Link
-                key={href}
-                href={href}
-                className="group flex items-start gap-3 rounded-2xl border bg-card px-4 py-3.5 shadow-sm transition-colors hover:border-brand-border/70 hover:bg-accent/30"
-              >
-                <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-brand-subtle text-brand">
-                  <Icon className="size-4.5" />
-                </span>
-                <span className="min-w-0 space-y-0.5">
-                  <span className="block font-medium group-hover:underline">{label}</span>
-                  <span className="block text-sm text-muted-foreground">{description}</span>
-                </span>
-              </Link>
-            ))}
-          </div>
-        </section>
-      ))}
 
       {hasNoAccess(access) && !access.judging && !access.manager && (
         <p className="max-w-prose text-sm text-muted-foreground">Other areas open up when an administrator gives you a role.</p>

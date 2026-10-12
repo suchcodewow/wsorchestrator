@@ -30,26 +30,21 @@ import {
 import { AlertTriangle, CalendarDays, Check, ChevronLeft, ChevronRight, Copy, Loader2, Pencil, Printer, Rows3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { AUDIENCE_TRACKS, SCHEDULE_LIMITS, SCHEDULE_TRACKS, type ScheduleTrack } from "@/db/schema";
+import { SCHEDULE_LIMITS, SCHEDULE_TRACKS, type ScheduleTrack } from "@/db/schema";
 import { riseChild, staggerParent } from "@/lib/motion";
-import type { ClassLists } from "@/lib/scheduler/attendees";
 import type { ChecklistDayCount } from "@/lib/scheduler/checklist";
-import type { CopySource, Instructor, Schedule, SessionRow } from "@/lib/scheduler/schedule";
+import { findIssues, tally, type Spot } from "@/lib/scheduler/issues";
+import type { CopySource, Schedule, SessionRow } from "@/lib/scheduler/schedule";
 import type { SessionTypeRow } from "@/lib/scheduler/session-types";
 import {
-  GROUP_NAMES,
   TRACK_LABELS,
   attendeeCount,
   dayDate,
   describeClash,
   findClashes,
-  formatClock,
   place,
   snapStart,
-  stageOf,
   trackDays,
-  type Clash,
-  type Placed,
 } from "@/lib/scheduler/timeline";
 import { type ScheduleViewMode, writeScheduleCondensedCookie, writeScheduleViewCookie } from "@/lib/scheduler/schedule-prefs";
 import { cn } from "@/lib/utils";
@@ -677,116 +672,7 @@ const underPointer: CollisionDetection = (args) => {
   return hits.length > 0 ? hits : rectIntersection(args);
 };
 
-/** Where a session is, for naming it and going to it. */
-type Spot = Omit<Clash, "what">;
-
-/** Something wrong with the schedule: a sentence that starts with `lead` and names the sessions it is about. */
-type Issue = { kind: IssueKind; key: string; lead: string; spots: Spot[] };
-
-type IssueKind = "clash" | "leader" | "outsider" | "late" | "breakout";
-
-/** How many of each kind there are, for the top of the tooltip: "3 clashes · 12 with nobody leading". */
-function tally(issues: Issue[]): string {
-  const count = (k: IssueKind) => issues.filter((i) => i.kind === k).length;
-  const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
-  const clashes = count("clash");
-  const leaders = count("leader");
-  const outsiders = count("outsider");
-  const late = count("late");
-  const breakouts = count("breakout");
-  return [
-    clashes > 0 && plural(clashes, "clash", "clashes"),
-    leaders > 0 && `${leaders} with nobody leading`,
-    outsiders > 0 && `${plural(outsiders, "person", "people")} not an administrator or guest judge`,
-    late > 0 && `${late} ending after ${formatClock(SCHEDULE_LIMITS.dayEnd)}`,
-    breakouts > 0 && `${plural(breakouts, "breakout", "breakouts")} not fully assigned`,
-  ]
-    .filter(Boolean)
-    .join(" · ");
-}
-
 const ISSUES_IN_TOOLTIP = 8;
-
-/**
- * Everything wrong with the schedule, in the order it happens: each pair of
- * sessions that clash (once), each main or breakout session nobody leads,
- * each person on a session who is not a Training administrator or a guest
- * judge of this bootcamp (once, with all their sessions; a copied schedule
- * can bring them in), each session that ends after the day does, and each
- * breakout that leaves
- * someone in its class out of every group, has no assessment to score them on,
- * or, when the facility has rooms, leaves an instructor without one. `flagged` has what is wrong with each session, by
- * id, for its card.
- */
-function findIssues(
-  placed: Placed<SessionRow>[],
-  clashes: Map<string, Clash[]>,
-  roomNames: Map<string, string>,
-  classes: ClassLists,
-  hasRooms: boolean,
-  instructors: Instructor[],
-) {
-  const { dayEnd } = SCHEDULE_LIMITS;
-  const spotOf = (s: Placed<SessionRow>): Spot => ({ sessionId: s.id, name: s.name, track: s.track, day: s.day, start: s.start, end: s.end });
-  const nameOf = (what: Clash["what"]) =>
-    what.kind === "person" ? what.fullName : what.kind === "room" ? (roomNames.get(what.roomId) ?? "A room") : GROUP_NAMES[what.group];
-  const verb = (what: Clash["what"]) => (what.kind === "audience" ? "are" : "is");
-  const issues: Issue[] = [];
-  const flagged = new Map<string, string[]>();
-  const flag = (id: string, why: string) => flagged.set(id, [...(flagged.get(id) ?? []), why]);
-  const pool = new Set(instructors.map((i) => i.email.toLowerCase()));
-  const outsiders = new Map<string, { fullName: string; spots: Spot[] }>();
-
-  for (const s of placed) {
-    for (const c of clashes.get(s.id) ?? []) {
-      flag(s.id, `${nameOf(c.what)} ${verb(c.what)} also in ${c.name}`);
-      if (s.id > c.sessionId) continue;
-      const whatKey = c.what.kind === "person" ? c.what.email : c.what.kind === "room" ? c.what.roomId : c.what.group;
-      issues.push({ kind: "clash", key: `clash:${s.id}:${c.sessionId}:${whatKey}`, lead: `${nameOf(c.what)} ${verb(c.what)} in both`, spots: [spotOf(s), c] });
-    }
-    if (s.kind !== "unstructured" && s.staff.length === 0) {
-      flag(s.id, "Nobody leads it");
-      issues.push({ kind: "leader", key: `leader:${s.id}`, lead: "Nobody leads", spots: [spotOf(s)] });
-    }
-    for (const p of s.staff) {
-      const email = p.email.toLowerCase();
-      if (pool.has(email)) continue;
-      flag(s.id, `${p.fullName} is not an administrator or guest judge here`);
-      const o = outsiders.get(email) ?? { fullName: p.fullName, spots: [] };
-      o.spots.push(spotOf(s));
-      outsiders.set(email, o);
-    }
-    if (s.end > dayEnd) {
-      flag(s.id, `Ends after ${formatClock(dayEnd)}`);
-      issues.push({ kind: "late", key: `late:${s.id}`, lead: `Ends after ${formatClock(dayEnd)}:`, spots: [spotOf(s)] });
-    }
-    if (s.kind === "breakout") {
-      const assigned = new Set(s.assigned);
-      const unassigned = AUDIENCE_TRACKS[s.audience].flatMap((t) => classes[stageOf(s.track)][t]).filter((e) => !assigned.has(e)).length;
-      const roomless = hasRooms ? s.staff.filter((p) => !p.roomId).length : 0;
-      const gaps = [
-        unassigned > 0 && `${unassigned} ${unassigned === 1 ? "attendee" : "attendees"} not assigned`,
-        roomless > 0 && `${roomless} ${roomless === 1 ? "instructor" : "instructors"} without a room`,
-        !s.assessmentId && "no assessment",
-      ].filter((g): g is string => Boolean(g));
-      const upper = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
-      for (const g of gaps) flag(s.id, upper(g));
-      if (gaps.length > 0) issues.push({ kind: "breakout", key: `breakout:${s.id}`, lead: `${upper(gaps.join(" and "))}:`, spots: [spotOf(s)] });
-    }
-  }
-  const bySpot = (x: Spot, y: Spot) => x.day - y.day || x.start - y.start;
-  for (const [email, o] of outsiders) {
-    issues.push({
-      kind: "outsider",
-      key: `outsider:${email}`,
-      lead: `${o.fullName} is not an administrator or guest judge here:`,
-      spots: o.spots.sort(bySpot),
-    });
-  }
-  const first = (i: Issue) => i.spots[0]!;
-  issues.sort((x, y) => bySpot(first(x), first(y)));
-  return { issues, flagged };
-}
 
 function SaveBadge({ save, onRetry }: { save: SaveState; onRetry: () => void }) {
   if (save.state === "error") {
