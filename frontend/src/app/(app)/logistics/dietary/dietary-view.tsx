@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Attendees' dietary needs from the intake form: how many are at each level
+ * Attendees' dietary needs from both intake forms, bootcamp and intermediate together: how many are at each level
  * of criticality, then everyone with a need, the most critical first. A 5 is
  * an allergy or a religious restriction, so it is marked wherever it shows.
  */
@@ -11,6 +11,7 @@ import { TriangleAlert } from "lucide-react";
 import { HEADER_ROW, Pager, PlainHeader, SortHeader, TableSearch } from "@/components/data-table";
 import type { DietarySort } from "@/lib/list-specs";
 import { DIETARY_LEVELS } from "@/lib/logistics/intake-values";
+import type { IntakeFormId } from "@/db/schema";
 import type { DietaryCounts, DietaryRow } from "@/lib/logistics/responses";
 import { riseChild, staggerParent } from "@/lib/motion";
 import type { ListQuery, Page } from "@/lib/paging";
@@ -24,6 +25,9 @@ const COLUMNS: { column: DietarySort; label: string; className?: string }[] = [
 
 /** What a 5 means; the other levels are only their number. */
 const TOP_LABEL = "Allergy or religious";
+
+/** Which group someone is with, from the form they answered: both are there at once and catered for together. */
+const PROGRAMS: Record<IntakeFormId, string> = { bootcamp: "Bootcamp", intermediate: "Intermediate" };
 
 const plural = (n: number, one: string, many: string) => `${n.toLocaleString()} ${n === 1 ? one : many}`;
 
@@ -48,7 +52,7 @@ export function DietaryView({
         <h2 className="text-xl font-medium tracking-tight">Dietary needs</h2>
         <p className="text-sm text-muted-foreground">
           <span className="font-medium text-foreground">{plural(counts.withNeeds, "attendee", "attendees")}</span> of{" "}
-          {counts.responded.toLocaleString()} who sent the intake form, of whom{" "}
+          {counts.responded.toLocaleString()} in the current cohort who sent a registration form, bootcamp or intermediate, of whom{" "}
           <span className="font-medium text-foreground">{counts.byLevel[5].toLocaleString()}</span> rated their needs 5
         </p>
       </motion.div>
@@ -109,7 +113,13 @@ export function DietaryView({
                   <td className="px-5 py-3">
                     <Level level={r.critical} />
                   </td>
-                  <td className="px-5 py-3 font-medium">{r.name || "—"}</td>
+                  <td className="px-5 py-3">
+                    <span className="font-medium">{r.name || "—"}</span>
+                    <span className="block text-xs text-muted-foreground">
+                      {PROGRAMS[r.stage]}
+                      {r.form !== r.stage && ` · from their ${PROGRAMS[r.form]} registration`}
+                    </span>
+                  </td>
                   <td className="px-5 py-3 text-muted-foreground">{r.email}</td>
                   <td className="px-5 py-3 whitespace-pre-line">{r.needs || <span className="text-muted-foreground">Not described</span>}</td>
                 </tr>

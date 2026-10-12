@@ -125,6 +125,11 @@ const INTAKE_QUESTION_SHAPE = `{ id, kind: "short" | "paragraph" | "choice" | "c
 
 const INTAKE_FORM_FIELDS: Field[] = [
   {
+    name: "introduction",
+    type: "string",
+    note: `up to ${INTAKE_LIMITS.introduction} characters, shown above the first question with its line breaks kept; left out, none`,
+  },
+  {
     name: "questions",
     type: `${INTAKE_QUESTION_SHAPE}[]`,
     required: true,
@@ -1605,21 +1610,21 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "trainingAdmin",
         token: true,
         params: [INTAKE_FORM_PARAM],
-        notes: "Until it is first saved this is the default form, with updatedAt null: Pre-Bootcamp's seven questions, and none for Pre-Intermediate. A form has no title of its own; /intake heads it Bootcamp Registration or Intermediate Registration.",
-        returns: `{ questions: ${INTAKE_QUESTION_SHAPE}[], updatedAt: string | null }`,
+        notes: "Until it is first saved this is the default form, with updatedAt null: each as the Google Form it replaces asked it: Pre-Bootcamp's introduction and seven questions, Pre-Intermediate's introduction and five. A form has no title of its own; /intake heads it Bootcamp Registration or Intermediate Registration.",
+        returns: `{ introduction: string, questions: ${INTAKE_QUESTION_SHAPE}[], updatedAt: string | null }`,
         errors: [{ status: 404, error: "not_found", when: "form is neither bootcamp nor intermediate" }],
       },
       {
         method: "PUT",
         path: "/api/logistics/intake-forms/{form}",
-        summary: "Replaces one intake form's questions.",
+        summary: "Replaces one intake form's introduction and questions.",
         access: "trainingAdmin",
         token: true,
         params: [INTAKE_FORM_PARAM],
         notes:
           "Answers already saved keep the question ids they were given under; a question removed stops being asked. Pre-Bootcamp's preferred-name question saves each person's answer into the database as their name, so it is locked: whatever is sent, it is kept first, put back if left out, and changed only in its title, staying a required short answer with no description.",
         body: { kind: "json", fields: INTAKE_FORM_FIELDS },
-        returns: `{ questions: ${INTAKE_QUESTION_SHAPE}[], updatedAt: string }`,
+        returns: `{ introduction: string, questions: ${INTAKE_QUESTION_SHAPE}[], updatedAt: string }`,
         errors: [
           { status: 400, error: "invalid", when: "the body is not that shape" },
           { status: 404, error: "not_found", when: "form is neither bootcamp nor intermediate" },
@@ -1628,17 +1633,42 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       {
         method: "GET",
         path: "/api/logistics/intake-responses",
-        summary: "Lists each person's latest answers to one intake form, a page at a time, the most recently saved first.",
+        summary: "Lists each person's latest answers to one intake form, or to both, a page at a time, the most recently saved first.",
         access: "trainingAdmin",
         token: true,
-        notes: "Someone who changed their answers is listed once, as they are now. name is from HiBob, and null for an email no employee has.",
+        notes: "Someone who changed their answers is listed once, as they are now; with form all, once for each form they answered, form saying which. name is from HiBob, and null for an email no employee has.",
         query: [
-          { name: "form", type: '"bootcamp" | "intermediate"', note: "the form; bootcamp, Pre-Bootcamp, if left out or anything else" },
+          { name: "form", type: '"bootcamp" | "intermediate" | "all"', note: "the form, or all for both together; bootcamp, Pre-Bootcamp, if left out or anything else" },
           ...listQuery(INTAKE_RESPONSE_LIST.sorts, "the name, email or any answer"),
           { name: "question", type: "string", note: "with answer, only responses whose answer to this question id is, or for checkboxes includes, answer" },
           { name: "answer", type: "string", note: "with question; either alone is ignored" },
         ],
-        returns: `{ form: "bootcamp" | "intermediate", responses: { id, email, name: string | null, answers: Record<string, string | string[]>, submittedAt }[], ${PAGE_FIELDS} }`,
+        returns: `{ form: "bootcamp" | "intermediate" | "all", responses: { id, form: "bootcamp" | "intermediate", email, name: string | null, answers: Record<string, string | string[]>, submittedAt }[], ${PAGE_FIELDS} }`,
+      },
+      {
+        method: "POST",
+        path: "/api/logistics/intake-responses/import",
+        summary: "Brings a Google Form's responses sheet into one intake form, or with commit left out only says how it lines up.",
+        access: "trainingAdmin",
+        token: true,
+        notes:
+          "The sheet's first row is its headers, as Google writes them: an Email Address column is needed, a Timestamp column dates each response, and every other column answers the question whose title it is, or ends with. Columns that answer no question are left out. Each row is stored as that person's answers, dated by its timestamp, so an answer they give at /intake afterwards is newer; a row with the same email and timestamp as one already stored is skipped, so the same sheet twice adds nothing. inCohort is how many of its people are in the current cohort, the ones Dietary needs lists.",
+        query: [
+          { name: "form", type: '"bootcamp" | "intermediate"', required: true, note: "the form to bring the responses into" },
+          { name: "commit", type: '"1"', note: "store them; left out, nothing is written" },
+        ],
+        body: { kind: "multipart", fields: [{ name: "file", type: "File", required: true, note: "the responses sheet as .csv or .xlsx, up to 2 MB and 2,000 rows" }] },
+        returns:
+          "{ imported: boolean, columns: { header, questionId: string | null }[], added: number, alreadyThere: number, inCohort: number, people: number, problems: { row: number, problem: \"no_email\" | \"not_an_email\" }[] }",
+        errors: [
+          { status: 400, error: "no_file", when: "no file was sent" },
+          { status: 400, error: "unreadable", when: "the file is neither a .csv nor an .xlsx" },
+          { status: 400, error: "empty", when: "it has no rows under its headers" },
+          { status: 400, error: "no_email_column", when: "no column is headed Email or Email Address" },
+          { status: 404, error: "not_found", when: "form is not bootcamp or intermediate" },
+          { status: 413, error: "too_large", when: "the file is over 2 MB" },
+          { status: 413, error: "too_many_rows", when: "it has more than 2,000 rows" },
+        ],
       },
       {
         method: "GET",
@@ -1647,9 +1677,9 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "trainingViewer",
         token: true,
         notes:
-          "Reads each attendee's latest response only. critical is the first digit 1 to 5 in their answer to how critical their needs are, or null where there is none; 5 is an allergy or a religious restriction. counts covers everyone, whatever the search.",
+          "Reads both forms, Pre-Bootcamp and Pre-Intermediate, as one list, since both groups are there at once, for the current cohort only (the Cohorts page's Current tab, Sales and Engineer tracks), and the test group's members while it is on: each person's latest response to either, form saying which it was and stage the stage they are in now, so a returning intermediate who has only answered bootcamp still counts. name is their answer to the name question, or the employee list's name for a form that asks none. critical is the first digit 1 to 5 in their answer to how critical their needs are, or null where there is none; 5 is an allergy or a religious restriction. counts covers everyone, whatever the search.",
         query: listQuery(DIETARY_LIST.sorts, "the name, email or needs"),
-        returns: `{ attendees: { email, name: string | null, needs: string | null, critical: number | null, submittedAt }[], ${PAGE_FIELDS}, counts: { responded: number, withNeeds: number, byLevel: { 1..5: number }, unrated: number } }`,
+        returns: `{ attendees: { email, stage: "bootcamp" | "intermediate", form: "bootcamp" | "intermediate", name: string | null, needs: string | null, critical: number | null, submittedAt }[], ${PAGE_FIELDS}, counts: { responded: number, withNeeds: number, byLevel: { 1..5: number }, unrated: number } }`,
       },
       {
         method: "GET",
@@ -1792,9 +1822,9 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "signedIn",
         token: true,
         notes:
-          "The form is the one for the caller's stage of the current cohort (the Cohorts page's Current tab, Sales and Engineer tracks): bootcamp, headed Bootcamp Registration, for a bootcamp candidate, and intermediate, Intermediate Registration, for an intermediate one. answers is empty and savedAt null until they have saved any. name is the name the app has for them now, the one their email gives until they choose another, which the preferred-name question starts from until they answer it; null for an email no employee has. While the cohort test group is on (PUT /api/cohorts/test-group), a person in it gets the form for the stage they were given there; one given both picks with ?form=bootcamp or ?form=intermediate (bootcamp by default), and testForms lists the two. Their answers are marked as test answers and deleted when the group is turned off, and never change their name.",
+          "The form is the one for the caller's stage of the current cohort (the Cohorts page's Current tab, Sales and Engineer tracks): bootcamp, headed Bootcamp Registration, for a bootcamp candidate, and intermediate, Intermediate Registration, for an intermediate one. answers is empty and savedAt null until they have saved any, except on intermediate for someone who answered bootcamp before: answers then starts from their bootcamp dietary answers, and carriedFrom says when those were saved. name is the name the app has for them now, the one their email gives until they choose another, which the preferred-name question starts from until they answer it; null for an email no employee has. While the cohort test group is on (PUT /api/cohorts/test-group), a person in it gets the form for the stage they were given there; one given both picks with ?form=bootcamp or ?form=intermediate (bootcamp by default), and testForms lists the two. Their answers are marked as test answers and deleted when the group is turned off, and never change their name.",
         query: [{ name: "form", type: "bootcamp | intermediate", note: "which form, for a test group member in both stages; ignored for anyone else" }],
-        returns: `{ form: "bootcamp" | "intermediate", heading, questions: ${INTAKE_QUESTION_SHAPE}[], answers: Record<string, string | string[]>, savedAt: string | null, name: string | null, testForms?: ("bootcamp" | "intermediate")[] }`,
+        returns: `{ form: "bootcamp" | "intermediate", heading, introduction: string, questions: ${INTAKE_QUESTION_SHAPE}[], answers: Record<string, string | string[]>, savedAt: string | null, carriedFrom?: { form: "bootcamp", savedAt }, name: string | null, testForms?: ("bootcamp" | "intermediate")[] }`,
         errors: [{ status: 404, error: "not_in_cohort", when: "the caller is not in the current cohort" }],
       },
       {

@@ -1,14 +1,17 @@
 /**
  * Reading the intake forms' responses back: each person's latest answers to
  * one form, for Logistics settings, and each attendee's dietary needs from
- * the Pre-Bootcamp form, for the Logistics page.
+ * both forms together, for the Logistics page: bootcamp and intermediate are
+ * there at the same time, and are catered for as one group.
  */
 
 import "server-only";
 
-import { and, count, desc, eq, sql } from "drizzle-orm";
+import { and, count, desc, eq, inArray, isNotNull, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { INTAKE_LIMITS, employees, intakeResponses, type IntakeFormId } from "@/db/schema";
+import { getTestGroup } from "@/lib/cohorts/test-group";
+import { currentCohortSubquery } from "@/lib/evals/current-cohort";
 import type { DietarySort, IntakeResponseSort } from "@/lib/list-specs";
 import { DIETARY_QUESTION_IDS, type IntakeAnswers } from "@/lib/logistics/intake-values";
 import { pageWindow, toPage, type ListQuery, type Page } from "@/lib/paging";
@@ -16,6 +19,8 @@ import { orderFor, searchAny } from "@/lib/paging-sql";
 
 export type IntakeResponseRow = {
   id: string;
+  /** Which form it answers; with both listed, a person who answered both has a row for each. */
+  form: IntakeFormId;
   email: string;
   /** Their name from HiBob; null for an email no employee has. */
   name: string | null;
@@ -44,31 +49,32 @@ export function answerFilter(
 
 const iso = <T extends { submittedAt: Date }>(row: T) => ({ ...row, submittedAt: row.submittedAt.toISOString() });
 
-/** Each person's most recent response to `form`: someone who changes their answers is counted once, as they are now. */
-function latestOf(form: IntakeFormId) {
+/**
+ * Each person's most recent response to `form`, or to either form when it is
+ * null: someone who changes their answers is counted once, as they are now.
+ * `perForm` keeps each person's latest to each form instead, for listing both.
+ */
+function latestOf(form: IntakeFormId | null, perForm = false) {
   return db
-    .selectDistinctOn([intakeResponses.email], {
+    .selectDistinctOn(perForm ? [intakeResponses.email, intakeResponses.form] : [intakeResponses.email], {
       id: intakeResponses.id,
+      form: intakeResponses.form,
       email: intakeResponses.email,
       answers: intakeResponses.answers,
       submittedAt: intakeResponses.submittedAt,
     })
     .from(intakeResponses)
-    .where(eq(intakeResponses.form, form))
-    .orderBy(intakeResponses.email, desc(intakeResponses.submittedAt))
+    .where(form ? eq(intakeResponses.form, form) : undefined)
+    .orderBy(
+      ...(perForm ? [intakeResponses.email, intakeResponses.form] : [intakeResponses.email]),
+      desc(intakeResponses.submittedAt),
+    )
     .as("latest");
 }
 
-/** Each person's latest answers to `form`, a page at a time, searched across their name, email and every answer. */
-export async function listIntakeResponses(
-  form: IntakeFormId,
-  query: ListQuery<IntakeResponseSort>,
-  filter: AnswerFilter | null,
-): Promise<Page<IntakeResponseRow>> {
-  const { limit, offset } = pageWindow(query.page);
-  const latest = latestOf(form);
-  // One name per email, so an email two employee rows share still lists once.
-  const named = db
+/** One name per email from the employee list, so an email two employee rows share still lists once. */
+function namedEmployees() {
+  return db
     .selectDistinctOn([sql`lower(${employees.email})`], {
       email: sql<string>`lower(${employees.email})`.as("named_email"),
       fullName: employees.fullName,
@@ -76,10 +82,25 @@ export async function listIntakeResponses(
     .from(employees)
     .orderBy(sql`lower(${employees.email})`, employees.fullName)
     .as("named");
+}
+
+/**
+ * Each person's latest answers to `form`, or with null their latest to each
+ * form, both forms in one list; a page at a time, searched across their name,
+ * email and every answer.
+ */
+export async function listIntakeResponses(
+  form: IntakeFormId | null,
+  query: ListQuery<IntakeResponseSort>,
+  filter: AnswerFilter | null,
+): Promise<Page<IntakeResponseRow>> {
+  const { limit, offset } = pageWindow(query.page);
+  const latest = form ? latestOf(form) : latestOf(null, true);
+  const named = namedEmployees();
   const name = named.fullName;
   const sortColumn = { submittedAt: latest.submittedAt, name: sql`lower(${name})`, email: latest.email }[query.sort];
   const rows = await db
-    .select({ id: latest.id, email: latest.email, name, answers: latest.answers, submittedAt: latest.submittedAt })
+    .select({ id: latest.id, form: latest.form, email: latest.email, name, answers: latest.answers, submittedAt: latest.submittedAt })
     .from(latest)
     .leftJoin(named, eq(named.email, latest.email))
     .where(
@@ -94,8 +115,24 @@ export async function listIntakeResponses(
   return toPage(rows.map(iso), query.page);
 }
 
-/** The Pre-Bootcamp form's latest responses, which hold the dietary questions. */
-const latest = latestOf("bootcamp");
+/** Both forms' latest responses, one per person, which hold the dietary questions. */
+const latest = latestOf(null);
+const named = namedEmployees();
+
+/**
+ * Who the dietary list is for: the current cohort, bootcamp and intermediate,
+ * and while the test group is on its members too. Answers from people in an
+ * earlier cohort stay saved, so a returning intermediate's bootcamp answers
+ * still count, but someone no longer in the cohort is not catered for.
+ */
+async function dietaryScope() {
+  const [cohort, group] = await Promise.all([currentCohortSubquery(), getTestGroup()]);
+  const testers = group.on ? group.members.map((m) => m.email) : [];
+  return {
+    cohort,
+    inScope: or(isNotNull(cohort.email), testers.length ? inArray(latest.email, testers) : undefined),
+  };
+}
 
 /**
  * The answer to one of the dietary questions. Their ids are constants, written
@@ -111,6 +148,11 @@ const hasNeeds = sql`${answer(DIETARY_QUESTION_IDS.has)} = 'Yes'`;
 
 export type DietaryRow = {
   email: string;
+  /** The stage they are in now, bootcamp or intermediate; for a test group member, the form they answered. */
+  stage: IntakeFormId;
+  /** Which form the answer came from; a returning intermediate may not have answered theirs yet. */
+  form: IntakeFormId;
+  /** Their answer to the name question, or for a form that asks none the name the app has for them. */
   name: string | null;
   needs: string | null;
   critical: number | null;
@@ -120,7 +162,8 @@ export type DietaryRow = {
 /** Everyone who said they have dietary needs, a page at a time, the most critical first. */
 export async function listDietaryNeeds(query: ListQuery<DietarySort>): Promise<Page<DietaryRow>> {
   const { limit, offset } = pageWindow(query.page);
-  const name = answer(DIETARY_QUESTION_IDS.name);
+  const { cohort, inScope } = await dietaryScope();
+  const name = sql<string | null>`coalesce(nullif(${answer(DIETARY_QUESTION_IDS.name)}, ''), ${named.fullName})`;
   const needs = answer(DIETARY_QUESTION_IDS.needs);
   const sortColumn = {
     critical,
@@ -129,9 +172,19 @@ export async function listDietaryNeeds(query: ListQuery<DietarySort>): Promise<P
     submittedAt: latest.submittedAt,
   }[query.sort];
   const rows = await db
-    .select({ email: latest.email, name, needs, critical, submittedAt: latest.submittedAt })
+    .select({
+      email: latest.email,
+      stage: sql<IntakeFormId>`coalesce(${cohort.stage}, ${latest.form})`,
+      form: latest.form,
+      name,
+      needs,
+      critical,
+      submittedAt: latest.submittedAt,
+    })
     .from(latest)
-    .where(and(hasNeeds, searchAny(query.q, [latest.email, name, needs])))
+    .leftJoin(named, eq(named.email, latest.email))
+    .leftJoin(cohort, eq(cohort.email, latest.email))
+    .where(and(inScope, hasNeeds, searchAny(query.q, [latest.email, name, needs])))
     .orderBy(...orderFor(sortColumn, query.dir, sql`${critical} desc nulls last`, latest.email))
     .limit(limit)
     .offset(offset);
@@ -139,7 +192,7 @@ export async function listDietaryNeeds(query: ListQuery<DietarySort>): Promise<P
 }
 
 export type DietaryCounts = {
-  /** Attendees who have sent the form. */
+  /** People in the current cohort who have sent either form. */
   responded: number;
   /** Of them, those with dietary needs. */
   withNeeds: number;
@@ -148,13 +201,21 @@ export type DietaryCounts = {
   unrated: number;
 };
 
-/** How many attendees have dietary needs at each level, whatever the search. */
+/** How many in the current cohort have dietary needs at each level, whatever the search. */
 export async function dietaryCounts(): Promise<DietaryCounts> {
+  const { cohort, inScope } = await dietaryScope();
   const [[totals], levels] = await Promise.all([
     db
       .select({ responded: count(), withNeeds: sql<number>`count(*) filter (where ${hasNeeds})::int` })
-      .from(latest),
-    db.select({ level: critical, n: count() }).from(latest).where(hasNeeds).groupBy(critical),
+      .from(latest)
+      .leftJoin(cohort, eq(cohort.email, latest.email))
+      .where(inScope),
+    db
+      .select({ level: critical, n: count() })
+      .from(latest)
+      .leftJoin(cohort, eq(cohort.email, latest.email))
+      .where(and(inScope, hasNeeds))
+      .groupBy(critical),
   ]);
   const byLevel = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
   let unrated = 0;

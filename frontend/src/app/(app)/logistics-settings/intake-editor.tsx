@@ -2,7 +2,7 @@
 
 /**
  * Edits one intake form, Pre-Bootcamp or Pre-Intermediate, that the current
- * cohort fills in at /intake: its questions in order, each with a kind,
+ * cohort fills in at /intake: the introduction above it, and its questions in order, each with a kind,
  * whether it is required, and for a list its options. Saving replaces the
  * whole form; a form may have no questions, and then nobody is asked it.
  */
@@ -51,6 +51,7 @@ const blank = (): IntakeQuestion => ({
 
 export function IntakeEditor({ id, form }: { id: IntakeFormId; form: IntakeFormView }) {
   const router = useRouter();
+  const [introduction, setIntroduction] = useState(form.introduction);
   const [questions, setQuestions] = useState<IntakeQuestion[]>(form.questions);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -94,7 +95,7 @@ export function IntakeEditor({ id, form }: { id: IntakeFormId; form: IntakeFormV
       const res = await fetch(`/api/logistics/intake-forms/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ questions }),
+        body: JSON.stringify({ introduction, questions }),
       });
       const body = await res.json().catch(() => null);
       if (!res.ok) {
@@ -135,6 +136,22 @@ export function IntakeEditor({ id, form }: { id: IntakeFormId; form: IntakeFormV
       </motion.div>
 
       <motion.div variants={staggerParent(0.04)} className="divide-y overflow-hidden rounded-2xl border bg-card shadow-sm">
+        <motion.section variants={riseChild} className="space-y-1.5 px-5 py-4">
+          <label htmlFor={`${id}-introduction`} className="text-sm font-medium">
+            Introduction
+          </label>
+          <AutoGrowTextarea
+            id={`${id}-introduction`}
+            placeholder="Shown above the first question: dates, rules, what to bring"
+            value={introduction}
+            maxLength={INTAKE_LIMITS.introduction}
+            onChange={(e) => setIntroduction(e.target.value)}
+          />
+          <p className="text-xs text-muted-foreground">
+            {introduction.length.toLocaleString()} of {INTAKE_LIMITS.introduction.toLocaleString()} characters. Line breaks
+            show as written.
+          </p>
+        </motion.section>
         {questions.length === 0 && (
           <motion.p variants={riseChild} className="px-5 py-8 text-center text-sm text-muted-foreground">
             No questions yet. Until it has one, nobody is asked this form or reminded about it.

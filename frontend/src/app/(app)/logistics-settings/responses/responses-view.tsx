@@ -1,24 +1,26 @@
 "use client";
 
 /**
- * One page of one intake form's responses, each person's latest, a column per
- * question as the form stands now. The search reaches the name, email and
+ * One page of one intake form's responses, or both forms' together, each
+ * person's latest, a column per question as the forms stand now. The search reaches the name, email and
  * every answer; the filter beside it narrows to one answer to one list
- * question.
+ * question. Import brings in a Google Form's responses sheet.
  */
 
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
-import { Loader2 } from "lucide-react";
+import { Loader2, Upload } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { HEADER_ROW, Pager, PlainHeader, SortHeader, TableSearch } from "@/components/data-table";
 import { INTAKE_FORM_IDS, type IntakeFormId, type IntakeQuestion } from "@/db/schema";
 import type { IntakeResponseSort } from "@/lib/list-specs";
-import { HAS_OPTIONS, INTAKE_FORM_LABELS } from "@/lib/logistics/intake-values";
+import { HAS_OPTIONS, INTAKE_FORM_LABELS, type ResponsesForm } from "@/lib/logistics/intake-values";
 import type { AnswerFilter, IntakeResponseRow } from "@/lib/logistics/responses";
 import { riseChild, staggerParent } from "@/lib/motion";
 import type { ListQuery, Page } from "@/lib/paging";
 import { cn } from "@/lib/utils";
+import { ImportResponsesDialog } from "./import-dialog";
 
 const SELECT = cn(
   "h-9 rounded-md border border-input bg-field px-2 text-sm text-foreground shadow-xs outline-none",
@@ -32,7 +34,7 @@ function useAnswerFilter() {
   const params = useSearchParams();
   const [pending, startTransition] = useTransition();
 
-  function set(filter: { form?: IntakeFormId; question: string; answer: string }) {
+  function set(filter: { form?: ResponsesForm; question: string; answer: string }) {
     const next = new URLSearchParams(params.toString());
     for (const key of ["form", "question", "answer"] as const) {
       if (key === "form" && filter.form === undefined) continue;
@@ -48,20 +50,27 @@ function useAnswerFilter() {
   return { set, pending };
 }
 
+/** Which group a response is from, in the list of both. */
+const PROGRAMS: Record<IntakeFormId, string> = { bootcamp: "Bootcamp", intermediate: "Intermediate" };
+
 export function ResponsesView({
   form,
   questions,
+  questionsByForm,
   query,
   filter,
   page,
 }: {
-  form: IntakeFormId;
+  form: ResponsesForm;
+  /** The columns: the form's questions, or with both listed every question either asks, once. */
   questions: IntakeQuestion[];
+  questionsByForm: Record<IntakeFormId, IntakeQuestion[]>;
   query: ListQuery<IntakeResponseSort>;
   filter: AnswerFilter | null;
   page: Page<IntakeResponseRow>;
 }) {
   const { set, pending } = useAnswerFilter();
+  const [importing, setImporting] = useState(false);
   const lists = questions.filter((q) => HAS_OPTIONS.has(q.kind));
   const chosen = lists.find((q) => q.id === filter?.question);
 
@@ -72,9 +81,10 @@ export function ResponsesView({
           aria-label="Form"
           value={form}
           disabled={pending}
-          onChange={(e) => set({ form: e.target.value as IntakeFormId, question: "", answer: "" })}
+          onChange={(e) => set({ form: e.target.value as ResponsesForm, question: "", answer: "" })}
           className={SELECT}
         >
+          <option value="all">Both forms</option>
           {INTAKE_FORM_IDS.map((id) => (
             <option key={id} value={id}>
               {INTAKE_FORM_LABELS[id]}
@@ -120,7 +130,18 @@ export function ResponsesView({
           )}
           {pending && <Loader2 className="size-4 animate-spin text-muted-foreground" />}
         </div>
+        <Button variant="outline" onClick={() => setImporting(true)}>
+          <Upload />
+          Import
+        </Button>
       </motion.div>
+
+      <ImportResponsesDialog
+        initialForm={form === "all" ? "bootcamp" : form}
+        questionsByForm={questionsByForm}
+        open={importing}
+        onClose={() => setImporting(false)}
+      />
 
       <motion.div variants={riseChild} className="overflow-hidden rounded-2xl border bg-card shadow-sm">
         <div className="overflow-x-auto">
@@ -136,6 +157,7 @@ export function ResponsesView({
                 <SortHeader column="email" sort={query.sort} dir={query.dir}>
                   Email
                 </SortHeader>
+                {form === "all" && <PlainHeader>Program</PlainHeader>}
                 {questions.map((q) => (
                   <PlainHeader key={q.id} className="min-w-48 max-w-72">
                     <span title={q.title} className="line-clamp-2 normal-case tracking-normal">
@@ -155,6 +177,7 @@ export function ResponsesView({
                     {r.name ?? <span className="text-muted-foreground">—</span>}
                   </td>
                   <td className="px-5 py-3">{r.email}</td>
+                  {form === "all" && <td className="whitespace-nowrap px-5 py-3">{PROGRAMS[r.form]}</td>}
                   {questions.map((q) => {
                     const a = r.answers[q.id];
                     return (
@@ -173,8 +196,12 @@ export function ResponsesView({
               ))}
               {page.rows.length === 0 && (
                 <tr>
-                  <td colSpan={questions.length + 3} className="px-5 py-8 text-center text-muted-foreground">
-                    {query.q || filter ? "No response matches that search and filter." : "No one has answered this form yet."}
+                  <td colSpan={questions.length + (form === "all" ? 4 : 3)} className="px-5 py-8 text-center text-muted-foreground">
+                    {query.q || filter
+                      ? "No response matches that search and filter."
+                      : form === "all"
+                        ? "No one has answered either form yet."
+                        : "No one has answered this form yet."}
                   </td>
                 </tr>
               )}

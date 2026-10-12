@@ -2599,11 +2599,13 @@ export type IntakeQuestion = {
 };
 
 export const INTAKE_LIMITS = {
-  title: 300,
-  description: 2000,
+  title: 2000,
+  description: 10000,
+  /** The text above a form's first question. */
+  introduction: 10000,
   questions: 50,
   options: 30,
-  option: 200,
+  option: 500,
   answer: 5000,
 } as const;
 
@@ -2616,14 +2618,17 @@ export type IntakeFormId = (typeof INTAKE_FORM_IDS)[number];
 
 /**
  * The intake form someone in the current cohort fills in at /intake, one row
- * per stage, as Logistics settings edits it: only its questions, since its
- * heading is fixed by the stage (`INTAKE_FORM_HEADINGS`). Until a form is
- * first saved it is the default in `src/lib/logistics/intake-values.ts`.
+ * per stage, as Logistics settings edits it: an introduction above its
+ * questions, and the questions; its heading is fixed by the stage
+ * (`INTAKE_FORM_HEADINGS`). Until a form is first saved it is the default in
+ * `src/lib/logistics/intake-values.ts`.
  */
 export const intakeForms = pgTable(
   "intake_forms",
   {
     id: text("id").$type<IntakeFormId>().primaryKey(),
+    /** Shown above the first question, its line breaks kept; empty for none. */
+    introduction: text("introduction").notNull().default(""),
     questions: jsonb("questions").$type<IntakeQuestion[]>().notNull().default([]),
     updatedBy: text("updated_by").references(() => users.id, { onDelete: "set null" }),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

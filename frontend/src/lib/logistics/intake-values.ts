@@ -14,7 +14,8 @@ import {
   type IntakeQuestionKind,
 } from "@/db/schema";
 
-export type IntakeForm = { questions: IntakeQuestion[] };
+/** A form as Logistics settings edits it: the text above its first question, then its questions. */
+export type IntakeForm = { introduction: string; questions: IntakeQuestion[] };
 
 /** Each form's name in Logistics settings; the stage of the current cohort it is named for is the one asked it. */
 export const INTAKE_FORM_LABELS: Record<IntakeFormId, string> = {
@@ -30,6 +31,24 @@ export const INTAKE_FORM_HEADINGS: Record<IntakeFormId, string> = {
 
 export function isIntakeFormId(value: unknown): value is IntakeFormId {
   return INTAKE_FORM_IDS.includes(value as IntakeFormId);
+}
+
+/** What the Responses tab lists: one form, or `all` for both together. */
+export type ResponsesForm = IntakeFormId | "all";
+
+/** The `form` a Responses URL asks for; Pre-Bootcamp for one that asks none, or anything else. */
+export function responsesFormOf(value: unknown): ResponsesForm {
+  return value === "all" || isIntakeFormId(value) ? value : "bootcamp";
+}
+
+/**
+ * Both forms' questions for listing their responses together: Pre-Bootcamp's,
+ * then those only Pre-Intermediate asks. A question both ask, such as the
+ * dietary ones, is one column, under Pre-Bootcamp's wording.
+ */
+export function questionsOfBoth(bootcamp: IntakeQuestion[], intermediate: IntakeQuestion[]): IntakeQuestion[] {
+  const ids = new Set(bootcamp.map((q) => q.id));
+  return [...bootcamp, ...intermediate.filter((q) => !ids.has(q.id))];
 }
 
 /** Slack's mrkdwn treats these three as markup. */
@@ -65,6 +84,7 @@ const question = (q: Omit<IntakeQuestion, "description" | "options" | "other"> &
 
 /** The November 2026 Sales Bootcamp registration, as the Google Form it replaces asked it. */
 export const DEFAULT_INTAKE_FORM: IntakeForm = {
+  introduction: "Sales Bootcamp takes place from Tuesday November 17 through Friday November 20 in Dallas, Texas.\n\n1) We strictly enforce an \"All or Nothing\" model where every person must attend the entirety of Bootcamp, no exceptions, even for customer meetings.\n\n2) You will not be able to step out for any reason during Bootcamp sessions throughout the day.\n\n3) If you already know that you will be on PTO any of the days between November 17-20 you should mark \"No\" in this form.\n\n4) If you're traveling from EMEA or APAC, you are allowed to arrive on Monday Nov 16th to adjust to the time zone prior to Bootcamp Day 1. We recommend you do so if your schedule permits; we want you to be fresh and ready come Tuesday morning.\n\n5) No departure flights before 2:00PM PST on Friday, Nov 20th.\n\nPlease discuss with your manager if anything above may prevent you from attending Bootcamp.",
   questions: [
     question({
       id: "preferred-name",
@@ -118,14 +138,63 @@ export const DEFAULT_INTAKE_FORM: IntakeForm = {
   ],
 };
 
-/** Each form until it is first saved: Pre-Bootcamp as the Google Form asked it, Pre-Intermediate with nothing to ask yet. */
+/**
+ * The November 2026 Intermediate registration, as the Google Form it replaces
+ * asked it. It stays the same from cohort to cohort but for its dates. Its
+ * dietary questions keep Pre-Bootcamp's ids, so the Logistics page reads both
+ * forms' answers as one list; it asks no name, so its people are listed under
+ * the name the app has for them.
+ */
+export const DEFAULT_INTERMEDIATE_FORM: IntakeForm = {
+  introduction: "Intermediate Training takes place on November 17 - 19 in Dallas, Texas.\n\n1) We strictly enforce an \"All or Nothing\" model where every person must attend all of Intermediate, no exceptions, even for customer meetings.\n\n2) You will not be able to step out for any reason during Intermediate sessions throughout the day.\n\n3) If you already know that you will be on PTO any of the days between November 17 -20 you should mark \"No\" in this form.\n\n4) If you're traveling from EMEA or APAC, you are allowed to arrive on Sunday November 15th to adjust to the time zone prior to Intermediate Day 1. We recommend you do so if your schedule permits; we want you to be fresh and ready come Tuesday morning. We also understand many may not have flight options available Wednesday evening, so please mark on the form exactly which nights you will need a hotel for.\n\n5) No departure flights before 2PM PST on Thursday, November 19.\n\nPlease discuss with your manager if anything above may prevent you from attending Intermediate.\n\nAlso, please input accurate responses below as they help us plan our agenda, hotel blocks, and catered meals.",
+  questions: [
+    question({
+      id: "attend",
+      kind: "choice",
+      title: "Intermediate takes place in-person on November 17 - 19, will you be there",
+      required: false,
+      options: ["Yes - I'm there!", "No - I can't make it."],
+      other: true,
+    }),
+    question({
+      id: "dietary",
+      kind: "dropdown",
+      title:
+        "Are there any dietary restrictions that we should try to accommodate? (check yes for vegetarian, vegan, allergies, etc. and describe in the following field)",
+      required: true,
+      options: ["Yes", "No"],
+    }),
+    question({
+      id: "dietary-needs",
+      kind: "paragraph",
+      title: "If yes, please describe your dietary needs.",
+      required: false,
+    }),
+    question({
+      id: "dietary-critical",
+      kind: "paragraph",
+      title: "On a scale of 1 to 5, how critical are your dietary/allergy needs?",
+      required: false,
+    }),
+    question({
+      id: "concerns",
+      kind: "short",
+      title: "Any other concerns or special considerations we should be aware of? Write them in here.",
+      description:
+        "If you have received a copy of the Harness Value Framework V2.0 please bring it to training. If not, we will provide you with one.\n\nYou will need to pass an Intermediate entrance exam, so make sure to complete your pre-work in advance to prepare!",
+      required: false,
+    }),
+  ],
+};
+
+/** Each form until it is first saved, as the Google Forms they replace asked them. */
 export const DEFAULT_INTAKE_FORMS: Record<IntakeFormId, IntakeForm> = {
   bootcamp: DEFAULT_INTAKE_FORM,
-  intermediate: { questions: [] },
+  intermediate: DEFAULT_INTERMEDIATE_FORM,
 };
 
 /**
- * The Pre-Bootcamp form's questions the Logistics page reads dietary needs from.
+ * The questions the Logistics page reads dietary needs from, on both forms.
  * Editing their wording keeps them; removing one and adding another in its
  * place does not, since the new question gets a new id.
  */
@@ -193,6 +262,28 @@ export function isNameQuestion(q: Pick<IntakeQuestion, "id" | "kind">): boolean 
   return q.id === INTAKE_NAME_QUESTION_ID && (q.kind === "short" || q.kind === "paragraph");
 }
 
+/**
+ * The answers Pre-Intermediate starts from when someone has none of its own
+ * yet but answered Pre-Bootcamp, usually a cohort or two before: their
+ * dietary needs, which last. What is about one cohort, such as whether they
+ * will attend, starts blank. Only a question on both forms is carried.
+ */
+export const CARRIED_TO_INTERMEDIATE = [
+  DIETARY_QUESTION_IDS.has,
+  DIETARY_QUESTION_IDS.needs,
+  DIETARY_QUESTION_IDS.critical,
+] as const;
+
+/** `answers` cut down to what `CARRIED_TO_INTERMEDIATE` carries, for the questions `form` asks. */
+export function carriedAnswers(form: IntakeForm, answers: IntakeAnswers): IntakeAnswers {
+  const asked = new Set(form.questions.map((q) => q.id));
+  const kept: IntakeAnswers = {};
+  for (const id of CARRIED_TO_INTERMEDIATE) {
+    if (asked.has(id) && answers[id] !== undefined) kept[id] = answers[id]!;
+  }
+  return kept;
+}
+
 /** How critical a dietary need is, 1 to 5; 5 is an allergy or a religious restriction. */
 export const DIETARY_LEVELS = [5, 4, 3, 2, 1] as const;
 
@@ -217,6 +308,7 @@ const questionSchema = z
 
 export const intakeFormSchema = z
   .object({
+    introduction: z.string().max(INTAKE_LIMITS.introduction).default(""),
     questions: z.array(questionSchema).max(INTAKE_LIMITS.questions),
   })
   .strict()

@@ -147,9 +147,18 @@ export function IntakeFormFiller({ intake, preview }: { intake: MyIntake; previe
     >
       <motion.div variants={riseChild} className="space-y-2">
         <h1 className="text-3xl font-medium tracking-tight">{intake.heading}</h1>
+        {intake.introduction && (
+          <p className="whitespace-pre-line text-sm leading-relaxed text-muted-foreground">{intake.introduction}</p>
+        )}
         {savedAt && (
           <p className="text-sm text-muted-foreground">
             Answered {new Date(savedAt).toLocaleString()}. Change anything below and save again.
+          </p>
+        )}
+        {!savedAt && intake.carriedFrom && (
+          <p className="rounded-lg border border-brand-border bg-brand-subtle px-4 py-3 text-sm">
+            We&apos;ve filled in your dietary needs from your Bootcamp registration on{" "}
+            {new Date(intake.carriedFrom.savedAt).toLocaleDateString()}. Update anything that&apos;s changed, then submit.
           </p>
         )}
       </motion.div>

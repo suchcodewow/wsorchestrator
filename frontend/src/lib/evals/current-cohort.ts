@@ -258,6 +258,24 @@ export async function currentCohortEmails(): Promise<
 }
 
 /**
+ * `currentCohortEmails` as a subquery to join on, one row per candidate: their
+ * lowercased email as `email` and their stage as `stage`. For queries that
+ * narrow something to the current cohort without fetching it first.
+ */
+export async function currentCohortSubquery() {
+  const cutoffs = await getCandidateCutoffs();
+  return db
+    .select({
+      email: sql<string>`lower(${e.email})`.as("cohort_email"),
+      stage: candidateStage.as("cohort_stage"),
+    })
+    .from(e)
+    .leftJoin(h, sql`${h.email} = ${e.email}`)
+    .where(and(isCandidate(cutoffs), inArray(e.track, ["sales", "engineer"])))
+    .as("cohort");
+}
+
+/**
  * The stage `email` is in, if they are one of `currentCohortEmails` — on the
  * Current tab on the Sales or Engineer track — else null. The intake form at
  * /intake is theirs to fill in by it.

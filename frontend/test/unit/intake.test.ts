@@ -11,6 +11,11 @@ import assert from "node:assert/strict";
 import {
   DEFAULT_INTAKE_FORM,
   DEFAULT_INTAKE_FORMS,
+  DIETARY_QUESTION_IDS,
+  CARRIED_TO_INTERMEDIATE,
+  carriedAnswers,
+  questionsOfBoth,
+  responsesFormOf,
   INTAKE_NAME_QUESTION_ID,
   LOCKED_NAME_QUESTION,
   checkAnswers,
@@ -26,6 +31,7 @@ import {
 } from "@/lib/logistics/intake-values";
 
 const FORM: IntakeForm = {
+  introduction: "",
   questions: [
     { id: "name", kind: "short", title: "Name", description: "", required: true, options: [], other: false },
     { id: "notes", kind: "paragraph", title: "Notes", description: "", required: false, options: [], other: false },
@@ -48,10 +54,57 @@ describe("the default form", () => {
     );
   });
 
-  test("is Pre-Bootcamp's, and Pre-Intermediate starts with nothing to ask", () => {
+  test("is Pre-Bootcamp's, with the Google Form's introduction", () => {
     assert.equal(DEFAULT_INTAKE_FORMS.bootcamp, DEFAULT_INTAKE_FORM);
-    assert.deepEqual(DEFAULT_INTAKE_FORMS.intermediate.questions, []);
-    assert.ok(intakeFormSchema.safeParse(DEFAULT_INTAKE_FORMS.intermediate).success);
+    assert.ok(intakeFormSchema.safeParse(DEFAULT_INTAKE_FORM).success);
+    assert.match(DEFAULT_INTAKE_FORM.introduction, /^Sales Bootcamp takes place from Tuesday November 17/);
+    assert.match(DEFAULT_INTAKE_FORM.introduction, /"All or Nothing"/);
+  });
+});
+
+describe("the default Pre-Intermediate form", () => {
+  const form = DEFAULT_INTAKE_FORMS.intermediate;
+
+  test("is one the editor could have saved, introduction and all", () => {
+    assert.ok(intakeFormSchema.safeParse(form).success);
+    assert.match(form.introduction, /^Intermediate Training takes place/);
+    assert.match(form.introduction, /"All or Nothing"/);
+  });
+
+  test("asks the Google Form's five questions, only the dietary one required", () => {
+    assert.deepEqual(
+      form.questions.map((q) => q.id),
+      ["attend", "dietary", "dietary-needs", "dietary-critical", "concerns"],
+    );
+    assert.deepEqual(form.questions.filter((q) => q.required).map((q) => q.id), ["dietary"]);
+  });
+
+  test("asks the dietary questions under the ids the Logistics page reads, as Pre-Bootcamp does", () => {
+    // Both groups are catered for together, so their answers must line up.
+    const ids = new Set(form.questions.map((q) => q.id));
+    for (const id of [DIETARY_QUESTION_IDS.has, DIETARY_QUESTION_IDS.needs, DIETARY_QUESTION_IDS.critical]) {
+      assert.ok(ids.has(id), id);
+      assert.ok(DEFAULT_INTAKE_FORM.questions.some((q) => q.id === id), id);
+    }
+  });
+
+  test("asks no name question, so it saves no one's name", () => {
+    assert.ok(!form.questions.some((q) => q.id === DIETARY_QUESTION_IDS.name));
+  });
+});
+
+describe("a form's introduction", () => {
+  test("is optional, and long enough for a page of travel rules", () => {
+    assert.equal(intakeFormSchema.parse({ questions: [] }).introduction, "");
+    assert.ok(intakeFormSchema.safeParse({ introduction: "x".repeat(10000), questions: [] }).success);
+    assert.ok(!intakeFormSchema.safeParse({ introduction: "x".repeat(10001), questions: [] }).success);
+  });
+
+  test("lets a question run to 2,000 characters and an option to 500", () => {
+    const q = { id: "a", kind: "choice", title: "x".repeat(2000), options: ["y".repeat(500)] };
+    assert.ok(intakeFormSchema.safeParse({ questions: [q] }).success);
+    assert.ok(!intakeFormSchema.safeParse({ questions: [{ ...q, title: "x".repeat(2001) }] }).success);
+    assert.ok(!intakeFormSchema.safeParse({ questions: [{ ...q, options: ["y".repeat(501)] }] }).success);
   });
 });
 
@@ -160,6 +213,7 @@ describe("the Slack reminder", () => {
 
 describe("the name question", () => {
   const NAMED: IntakeForm = {
+    introduction: "",
     questions: [
       { id: INTAKE_NAME_QUESTION_ID, kind: "short", title: "Name?", description: "", required: true, options: [], other: false },
     ],
@@ -230,5 +284,66 @@ describe("the locked name question", () => {
     assert.equal(lockNameQuestion([other, LOCKED_NAME_QUESTION])[0]!.id, INTAKE_NAME_QUESTION_ID);
     assert.deepEqual(lockNameQuestion([other]), [LOCKED_NAME_QUESTION, other]);
     assert.deepEqual(lockNameQuestion([{ ...LOCKED_NAME_QUESTION, title: "  " }])[0], LOCKED_NAME_QUESTION);
+  });
+});
+
+describe("what Pre-Intermediate carries over from Pre-Bootcamp", () => {
+  const bootcampAnswers = {
+    "preferred-name": "Pat Example",
+    attend: "Yes - I'm there!",
+    dietary: "Yes",
+    "dietary-needs": "Peanut allergy",
+    "dietary-critical": "5",
+    concerns: "Arriving late on day one",
+  };
+
+  test("is the dietary answers only: what lasts from one cohort to the next", () => {
+    assert.deepEqual(carriedAnswers(DEFAULT_INTAKE_FORMS.intermediate, bootcampAnswers), {
+      dietary: "Yes",
+      "dietary-needs": "Peanut allergy",
+      "dietary-critical": "5",
+    });
+  });
+
+  test("leaves out a carried question the intermediate form no longer asks, and an answer never given", () => {
+    const fewer = {
+      ...DEFAULT_INTAKE_FORMS.intermediate,
+      questions: DEFAULT_INTAKE_FORMS.intermediate.questions.filter((q) => q.id !== "dietary-critical"),
+    };
+    assert.deepEqual(carriedAnswers(fewer, { dietary: "No" }), { dietary: "No" });
+  });
+
+  test("is only questions Pre-Bootcamp asks too", () => {
+    for (const id of CARRIED_TO_INTERMEDIATE) {
+      assert.ok(DEFAULT_INTAKE_FORM.questions.some((q) => q.id === id), id);
+    }
+  });
+});
+
+describe("listing both forms' responses together", () => {
+  test("asks for one form, or all, and falls back to Pre-Bootcamp", () => {
+    assert.equal(responsesFormOf("intermediate"), "intermediate");
+    assert.equal(responsesFormOf("all"), "all");
+    assert.equal(responsesFormOf(undefined), "bootcamp");
+    assert.equal(responsesFormOf("everything"), "bootcamp");
+  });
+
+  test("has a column for every question either form asks, one for each a both ask", () => {
+    const columns = questionsOfBoth(DEFAULT_INTAKE_FORMS.bootcamp.questions, DEFAULT_INTAKE_FORMS.intermediate.questions);
+    const ids = columns.map((q) => q.id);
+    assert.equal(new Set(ids).size, ids.length);
+    assert.deepEqual(ids, DEFAULT_INTAKE_FORMS.bootcamp.questions.map((q) => q.id));
+    // Every intermediate question is one Pre-Bootcamp asks too, under Pre-Bootcamp's wording.
+    const attend = columns.find((q) => q.id === "attend")!;
+    assert.match(attend.title, /^Sales Bootcamp/);
+  });
+
+  test("adds a question only Pre-Intermediate asks after Pre-Bootcamp's", () => {
+    const hotel = { ...DEFAULT_INTAKE_FORMS.intermediate.questions[0]!, id: "hotel-nights", title: "Hotel nights" };
+    const columns = questionsOfBoth(DEFAULT_INTAKE_FORMS.bootcamp.questions, [
+      ...DEFAULT_INTAKE_FORMS.intermediate.questions,
+      hotel,
+    ]);
+    assert.equal(columns.at(-1)!.id, "hotel-nights");
   });
 });
