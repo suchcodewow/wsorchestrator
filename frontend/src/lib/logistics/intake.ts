@@ -9,6 +9,7 @@ import { and, desc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { intakeForms, intakeResponses, type IntakeFormId } from "@/db/schema";
 import { nameOnRecord, setChosenName } from "@/lib/evals/chosen-names";
+import { testGroupStageOf } from "@/lib/cohorts/test-group";
 import { cohortStageOf } from "@/lib/evals/current-cohort";
 import {
   DEFAULT_INTAKE_FORMS,
@@ -65,16 +66,36 @@ export type MyIntake = {
    * choose another — which the name question starts from until they answer it.
    */
   name: string | null;
+  /** For a test group member in both stages: both forms, to switch between; unset for everyone else. */
+  testForms?: IntakeFormId[];
 };
+
+/**
+ * The stage whose form `email` fills in: their stage in the current cohort, or
+ * while the test group is on, the one they were given there. `want` picks
+ * between the two for someone in both. `test` marks the second kind, whose
+ * answers are deleted when the group is turned off.
+ */
+async function intakeStageFor(
+  email: string,
+  want: IntakeFormId | null,
+): Promise<{ stage: IntakeFormId; test: boolean; both: boolean } | null> {
+  const real = await cohortStageOf(email);
+  if (real) return { stage: real, test: false, both: false };
+  const given = await testGroupStageOf(email);
+  if (!given) return null;
+  return { stage: given === "both" ? (want ?? "bootcamp") : given, test: true, both: given === "both" };
+}
 
 /**
  * The form for the stage `email` is in — Pre-Bootcamp for a bootcamp
  * candidate, Pre-Intermediate for an intermediate one — with their last
  * answers to it, or null for someone not in the current cohort.
  */
-export async function getMyIntake(email: string): Promise<MyIntake | null> {
-  const stage = await cohortStageOf(email);
-  if (!stage) return null;
+export async function getMyIntake(email: string, want: IntakeFormId | null = null): Promise<MyIntake | null> {
+  const found = await intakeStageFor(email, want);
+  if (!found) return null;
+  const { stage } = found;
   const [{ questions }, name, [latest]] = await Promise.all([
     getIntakeForm(stage),
     nameOnRecord(email),
@@ -92,6 +113,7 @@ export async function getMyIntake(email: string): Promise<MyIntake | null> {
     answers: latest?.answers ?? {},
     savedAt: latest?.submittedAt.toISOString() ?? null,
     name,
+    ...(found.both ? { testForms: ["bootcamp", "intermediate"] as IntakeFormId[] } : {}),
   };
 }
 
@@ -110,9 +132,11 @@ export async function saveMyIntake(
   email: string,
   answers: IntakeAnswers,
   actorId: string | null,
+  want: IntakeFormId | null = null,
 ): Promise<{ ok: true; form: IntakeFormId; savedAt: string } | { ok: false; error: SaveIntakeError }> {
-  const stage = await cohortStageOf(email);
-  if (!stage) return { ok: false, error: { problem: "not_in_cohort" } };
+  const found = await intakeStageFor(email, want);
+  if (!found) return { ok: false, error: { problem: "not_in_cohort" } };
+  const { stage, test } = found;
 
   const form = await getIntakeForm(stage);
   if (form.questions.length === 0) return { ok: false, error: { problem: "no_questions" } };
@@ -121,12 +145,13 @@ export async function saveMyIntake(
 
   const [row] = await db
     .insert(intakeResponses)
-    .values({ form: stage, email: email.toLowerCase(), answers: checked.answers })
+    .values({ form: stage, email: email.toLowerCase(), answers: checked.answers, test })
     .returning({ submittedAt: intakeResponses.submittedAt });
 
   const nameQuestion = form.questions.find(isNameQuestion);
   const name = nameQuestion && checked.answers[nameQuestion.id];
-  if (typeof name === "string") await setChosenName(email, name, actorId);
+  // A test answer never renames a real employee.
+  if (typeof name === "string" && !test) await setChosenName(email, name, actorId);
 
   return { ok: true, form: stage, savedAt: row!.submittedAt.toISOString() };
 }

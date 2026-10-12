@@ -1,13 +1,14 @@
 /**
  * The signed-in caller's own intake form: the one for their stage of the
- * current cohort, with the answers they last saved, and saving new ones.
+ * current cohort, with the answers they last saved, and saving new ones. A
+ * member of the cohort test group in both stages picks one with ?form=.
  */
 
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/api-auth";
 import { audited, noteAudit } from "@/lib/audit";
 import { getMyIntake, saveMyIntake } from "@/lib/logistics/intake";
-import { INTAKE_FORM_LABELS, intakeSubmissionSchema } from "@/lib/logistics/intake-values";
+import { INTAKE_FORM_LABELS, intakeSubmissionSchema, isIntakeFormId } from "@/lib/logistics/intake-values";
 
 const NOT_IN_COHORT = { error: "not_in_cohort" } as const;
 
@@ -15,7 +16,8 @@ export async function GET(req: Request) {
   const { error, user } = await requireUser(req);
   if (error) return error;
 
-  const mine = user.email ? await getMyIntake(user.email) : null;
+  const want = new URL(req.url).searchParams.get("form");
+  const mine = user.email ? await getMyIntake(user.email, isIntakeFormId(want) ? want : null) : null;
   if (!mine) return NextResponse.json(NOT_IN_COHORT, { status: 404 });
   return NextResponse.json(mine);
 }
@@ -30,7 +32,8 @@ export const PUT = audited(async function PUT(req: Request) {
   }
   if (!user.email) return NextResponse.json(NOT_IN_COHORT, { status: 404 });
 
-  const result = await saveMyIntake(user.email, parsed.data.answers, user.id);
+  const want = new URL(req.url).searchParams.get("form");
+  const result = await saveMyIntake(user.email, parsed.data.answers, user.id, isIntakeFormId(want) ? want : null);
   if (!result.ok) {
     const { error: problem } = result;
     if (problem.problem === "not_in_cohort") return NextResponse.json(NOT_IN_COHORT, { status: 404 });

@@ -116,7 +116,7 @@ export function IntakeFormFiller({ intake, preview }: { intake: MyIntake; previe
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch("/api/intake", {
+      const res = await fetch(`/api/intake?form=${intake.form}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ answers: out }),

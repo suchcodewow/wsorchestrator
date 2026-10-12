@@ -11,7 +11,7 @@ import { TEST_GROUP_MAX_MEMBERS } from "@/db/schema";
 import { requireCaller } from "@/lib/api-auth";
 import { audited, noteAudit } from "@/lib/audit";
 import { getTestGroup, saveTestGroup } from "@/lib/cohorts/test-group";
-import { dedupeMembers, testGroupSlug } from "@/lib/cohorts/test-group-plan";
+import { TEST_GROUP_STAGES, dedupeMembers, testGroupSlug } from "@/lib/cohorts/test-group-plan";
 import { takeDownTestGroup } from "@/lib/cohorts/test-group-teardown";
 import { canManageTestGroup, canUseTraining } from "@/lib/roles";
 
@@ -25,6 +25,7 @@ const bodySchema = z
           .object({
             email: z.string().trim().email().max(320),
             fullName: z.string().trim().max(200),
+            stage: z.enum(TEST_GROUP_STAGES).default("both"),
           })
           .strict(),
       )

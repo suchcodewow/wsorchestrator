@@ -15,10 +15,16 @@ describe("testGroupSlug", () => {
 
 describe("testGroupAsCohort", () => {
   test("puts each member in every stage on every track", () => {
-    const cohort = testGroupAsCohort([{ email: "A@x.io", fullName: "A" }]);
+    const cohort = testGroupAsCohort([{ email: "A@x.io", fullName: "A", stage: "both" }]);
     assert.equal(cohort.length, 4);
     assert.equal(new Set(cohort.map((m) => `${m.stage}/${m.track}`)).size, 4);
     assert.ok(cohort.every((m) => m.email === "a@x.io"));
+  });
+
+  test("puts a member given one stage in that stage alone", () => {
+    const cohort = testGroupAsCohort([{ email: "a@x.io", fullName: "A", stage: "intermediate" }]);
+    assert.equal(cohort.length, 2);
+    assert.ok(cohort.every((m) => m.stage === "intermediate"));
   });
 });
 
@@ -29,7 +35,7 @@ describe("dedupeMembers", () => {
         { email: "A@x.io", fullName: "A" },
         { email: "a@x.io ", fullName: "B" },
       ]),
-      [{ email: "a@x.io", fullName: "A" }],
+      [{ email: "a@x.io", fullName: "A", stage: "both" }],
     );
   });
 });

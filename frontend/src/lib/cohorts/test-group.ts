@@ -20,8 +20,10 @@ import {
 } from "@/db/schema";
 import {
   dedupeMembers,
+  isTestGroupStage,
   testGroupAsCohort,
   type TestGroupMember,
+  type TestGroupStage,
 } from "@/lib/cohorts/test-group-plan";
 import { currentCohortEmails } from "@/lib/evals/current-cohort";
 
@@ -64,6 +66,7 @@ function parseMembers(raw: string | null): TestGroupMember[] {
               {
                 email: m.email,
                 fullName: typeof m.fullName === "string" ? m.fullName : "",
+                stage: isTestGroupStage(m.stage) ? m.stage : "both",
               },
             ]
           : [],
@@ -162,4 +165,11 @@ export async function forgetTestArtifact(
     .where(
       and(eq(testGroupArtifacts.kind, kind), eq(testGroupArtifacts.key, key)),
     );
+}
+
+/** The stage form(s) a test group member fills in at /intake; null for anyone else, and for everyone while the group is off. */
+export async function testGroupStageOf(email: string): Promise<TestGroupStage | null> {
+  const group = await getTestGroup();
+  if (!group.on) return null;
+  return group.members.find((m) => m.email === email.trim().toLowerCase())?.stage ?? null;
 }

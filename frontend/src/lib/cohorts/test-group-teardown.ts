@@ -9,7 +9,7 @@ import "server-only";
 
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { EVALS_SETTINGS_KEYS, evalsSettings } from "@/db/schema";
+import { EVALS_SETTINGS_KEYS, evalsSettings, intakeResponses } from "@/db/schema";
 import { archiveTestChannels } from "@/lib/cohorts/slack-sync";
 import { cancelTestMeetings } from "@/lib/evals/google-meetings-sync";
 
@@ -28,6 +28,8 @@ export async function takeDownTestGroup(): Promise<{
     await db
       .delete(evalsSettings)
       .where(eq(evalsSettings.key, EVALS_SETTINGS_KEYS.intakeRemindersSentOn));
+    // The answers the group filled in are test data.
+    await db.delete(intakeResponses).where(eq(intakeResponses.test, true));
   }
   return {
     ok: failures.length === 0,

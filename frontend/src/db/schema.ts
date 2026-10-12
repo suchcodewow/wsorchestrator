@@ -2645,6 +2645,8 @@ export const intakeResponses = pgTable(
     email: text("email").notNull(),
     answers: jsonb("answers").$type<Record<string, string | string[]>>().notNull(),
     submittedAt: timestamp("submitted_at", { withTimezone: true }).notNull().defaultNow(),
+    /** Saved by a member of the cohort test group; deleted when the group is turned off. */
+    test: boolean("test").notNull().default(false),
   },
   (t) => [
     index("intake_responses_form_email_idx").on(t.form, t.email, t.submittedAt),

@@ -15,9 +15,48 @@ import { EmployeePicker } from "@/components/employee-picker";
 import { PillSwitch } from "@/components/pill-switch";
 import { Input } from "@/components/ui/input";
 import {
+  TEST_GROUP_STAGES,
   testGroupSlug,
   type TestGroupMember,
+  type TestGroupStage,
 } from "@/lib/cohorts/test-group-plan";
+
+const STAGE_LABELS: Record<TestGroupStage, string> = {
+  bootcamp: "Bootcamp",
+  intermediate: "Intermediate",
+  both: "Both",
+};
+
+function StageSelect({
+  id,
+  label,
+  value,
+  disabled,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  value: TestGroupStage;
+  disabled: boolean;
+  onChange: (stage: TestGroupStage) => void;
+}) {
+  return (
+    <select
+      id={id}
+      aria-label={label}
+      value={value}
+      disabled={disabled}
+      onChange={(e) => onChange(e.target.value as TestGroupStage)}
+      className="h-8 cursor-pointer rounded-md border bg-background px-2 text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
+    >
+      {TEST_GROUP_STAGES.map((s) => (
+        <option key={s} value={s}>
+          {STAGE_LABELS[s]}
+        </option>
+      ))}
+    </select>
+  );
+}
 
 type Group = { on: boolean; suffix: string; members: TestGroupMember[] };
 
@@ -39,6 +78,7 @@ export function TestGroupPanel({
   const router = useRouter();
   const [draft, setDraft] = useState(false);
   const [suffix, setSuffix] = useState(group.suffix);
+  const [newStage, setNewStage] = useState<TestGroupStage>("both");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [failures, setFailures] = useState<string[]>([]);
@@ -132,6 +172,8 @@ export function TestGroupPanel({
                 <li key={m.email}>
                   {m.fullName ? `${m.fullName} ` : ""}
                   <span className="opacity-80">{m.email}</span>
+                  {" · "}
+                  {STAGE_LABELS[m.stage]}
                 </li>
               ))}
             </ul>
@@ -182,6 +224,19 @@ export function TestGroupPanel({
                 </p>
               </div>
 
+              <div className="flex items-center gap-2 text-sm">
+                <label htmlFor="test-group-new-stage" className="font-medium">
+                  New people join
+                </label>
+                <StageSelect
+                  id="test-group-new-stage"
+                  label="Stage for people you add"
+                  value={newStage}
+                  disabled={busy}
+                  onChange={setNewStage}
+                />
+              </div>
+
               <EmployeePicker
                 id="test-group-member"
                 label="Add to the test group"
@@ -191,7 +246,7 @@ export function TestGroupPanel({
                   saveAndEnable({
                     members: [
                       ...group.members,
-                      { email, fullName: fullName ?? "" },
+                      { email, fullName: fullName ?? "", stage: newStage },
                     ],
                   })
                 }
@@ -210,6 +265,19 @@ export function TestGroupPanel({
                         )}
                         <span className="text-muted-foreground">{m.email}</span>
                       </span>
+                      <StageSelect
+                        id={`stage-${m.email}`}
+                        label={`Stage for ${m.fullName || m.email}`}
+                        value={m.stage}
+                        disabled={busy}
+                        onChange={(stage) =>
+                          void saveAndEnable({
+                            members: group.members.map((x) =>
+                              x.email === m.email ? { ...x, stage } : x,
+                            ),
+                          })
+                        }
+                      />
                       <button
                         type="button"
                         aria-label={`Remove ${m.fullName || m.email}`}
