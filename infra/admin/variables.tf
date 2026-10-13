@@ -146,20 +146,14 @@ variable "google_meetings_account" {
   default     = ""
 }
 
-variable "zoom_account_id" {
-  description = "The Zoom account Google Meetings schedules its Zoom meetings on, through a Server-to-Server OAuth app with the meeting:write:meeting:admin, meeting:read:meeting:admin, meeting:update:meeting:admin, meeting:delete:meeting:admin and user:read:user:admin scopes. Not secret: it grants nothing without zoom_client_secret. Empty leaves Zoom off, and invites go out with no Zoom link. QA shares production's Google Workspace, so leave it empty there."
-  type        = string
-  default     = ""
-}
-
 variable "zoom_client_id" {
-  description = "The client id of the Server-to-Server OAuth app for zoom_account_id. Not secret."
+  description = "The client id of the user-managed Zoom General App Google Meetings makes its Zoom meetings through, with only the user-level meeting:write:meeting, meeting:read:meeting, meeting:update:meeting and meeting:delete:meeting scopes: it reaches the meetings of the one Zoom user an Assessments Administrator connects, and no one else's. Not secret: it grants nothing without zoom_client_secret. Empty leaves Zoom off, and invites go out with no Zoom link. QA shares production's Google Workspace, so leave it empty there."
   type        = string
   default     = ""
 }
 
 variable "zoom_client_secret" {
-  description = "The client secret of the Server-to-Server OAuth app for zoom_account_id. Stored in Secret Manager as zoom-client-secret and read by the app alone."
+  description = "The client secret of the Zoom app for zoom_client_id. Stored in Secret Manager as zoom-client-secret and read by the app alone."
   type        = string
   sensitive   = true
   default     = ""

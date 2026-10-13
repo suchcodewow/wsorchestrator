@@ -523,7 +523,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           { name: "when", type: `"upcoming" | "past"`, note: "Default upcoming." },
           ...listQuery(GOOGLE_MEETING_LIST.sorts, "the title"),
         ],
-        returns: `{ meetings: { id, title, startsAt, durationMinutes: 15 | 30 | 60, groups: ("bootcamp_sales" | "bootcamp_engineer" | "intermediate_sales" | "intermediate_engineer")[], zoomJoinUrl: string | null, status: "not_synced" | "synced" | "changed" | "failed", syncError: string | null, syncedAt: string | null, invited: number, addedBy: string | null }[], ${PAGE_FIELDS}, connection: { email, connectedAt, connectedBy: string | null, calendarId: string | null, lastSyncAt: string | null, lastSyncError: string | null, running: boolean } | null, zoomConfigured: boolean, administrators: string[], counts: { upcoming: number, past: number }, groupSizes: { bootcamp_sales, bootcamp_engineer, intermediate_sales, intermediate_engineer: number } }`,
+        returns: `{ meetings: { id, title, startsAt, durationMinutes: 15 | 30 | 60, groups: ("bootcamp_sales" | "bootcamp_engineer" | "intermediate_sales" | "intermediate_engineer")[], zoomJoinUrl: string | null, status: "not_synced" | "synced" | "changed" | "failed", syncError: string | null, syncedAt: string | null, invited: number, addedBy: string | null }[], ${PAGE_FIELDS}, connection: { email, connectedAt, connectedBy: string | null, calendarId: string | null, lastSyncAt: string | null, lastSyncError: string | null, running: boolean } | null, zoom: { configured: boolean, connection: { email, connectedAt, connectedBy: string | null } | null }, administrators: string[], counts: { upcoming: number, past: number }, groupSizes: { bootcamp_sales, bootcamp_engineer, intermediate_sales, intermediate_engineer: number } }`,
         errors: [{ status: 400, error: "invalid_when", when: "when is not upcoming or past" }],
       },
       {
@@ -602,7 +602,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "assessmentsAdmin",
         token: true,
         notes:
-          "Runs as the connected Google account. The invites are on a calendar of its own, eVals Meetings, made on the first sync; every Assessments Administrator is given edit access to it, and is a guest on every invite. Each invite's guests are its groups' people on the Cohorts page's Current tab and the administrators; the sync takes off only guests it added itself. With Zoom set up, each meeting gets a Zoom meeting under the connected account, with every administrator who has an active Zoom user on that account as an alternative host. An invite or Zoom meeting already right is left alone, since a change emails every guest. One meeting failing is reported in its outcome and the sync carries on. notes lists what was skipped, such as an administrator Zoom does not know. Allows 300 seconds.",
+          "Runs as the connected Google account. The invites are on a calendar of its own, eVals Meetings, made on the first sync; every Assessments Administrator is given edit access to it, and is a guest on every invite. Each invite's guests are its groups' people on the Cohorts page's Current tab and the administrators; the sync takes off only guests it added itself. With a Zoom user connected, each meeting gets a Zoom meeting made as that user, with every administrator as an alternative host. Zoom is asked for them all at once; if it refuses one (an administrator with no user on its account), the hosts are added one at a time and notes names each it would not take. An invite or Zoom meeting already right is left alone, since a change emails every guest. One meeting failing is reported in its outcome and the sync carries on. notes lists what was skipped, such as an administrator Zoom would not take as a host. Allows 300 seconds.",
         returns:
           '{ ok: true, account: string, meetings: { id, title, outcome: "created" | "updated" | "unchanged" | "failed", invited: number, error?: string }[], notes: string[] }',
         errors: [
@@ -623,6 +623,17 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           "A browser link, not an API call: it redirects to Google's consent screen, asking for calendar access and a refresh token, with GOOGLE_USER as the sign-in hint when it is set. Google then sends the browser to the shared OAuth callback, GET /api/auth/callback/google, the URI already registered for sign-in. It checks the state cookie, trades the code for a refresh token, seals it, and stores it with the account's email. Reconnecting the same account replaces its token; a different one is refused while any meeting has an invite, because those invites are on the first account's calendar. It then redirects to the Google Meetings tab with ?google= connected, denied, expired, failed, scope or different_account (with ?current= naming the account already connected), and writes an audit record either way.",
         returns: "a redirect to accounts.google.com",
         errors: [{ status: 503, error: "not_configured", when: "AUTH_GOOGLE_ID or AUTH_GOOGLE_SECRET is unset" }],
+      },
+      {
+        method: "GET",
+        path: "/api/evals/google-meetings/zoom/connect",
+        summary: "Sends the browser to Zoom to connect the user Google Meetings schedules its Zoom meetings as.",
+        access: "assessmentsAdmin",
+        token: false,
+        notes:
+          "A browser link, not an API call: it redirects to Zoom's consent screen for the user-managed Zoom app (ZOOM_CLIENT_ID), which can reach only the signing-in user's own meetings. Zoom then sends the browser to the shared OAuth callback, GET /api/auth/callback/google. It checks the state cookie, trades the code for tokens, reads the user's email, seals the tokens, and stores them; Zoom rotates the refresh token on every use, so each sync saves the new one. Reconnecting replaces the user. It then redirects to the Google Meetings tab with ?zoom= connected, denied, expired, failed or scope, and writes an audit record either way.",
+        returns: "a redirect to zoom.us",
+        errors: [{ status: 503, error: "not_configured", when: "ZOOM_CLIENT_ID or ZOOM_CLIENT_SECRET is unset" }],
       },
       {
         method: "GET",
@@ -2671,7 +2682,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "internal",
         token: false,
         notes:
-          "GET /api/auth/callback/google is the only redirect URI any provider needs: Google sign-in, Connect Google account (GET /api/evals/google-meetings/connect) and Add to Slack (GET /api/cohorts/slack/install) all return to it. A state that starts wo. is a connection, and is handled here for a signed-in session only (401 without one, 403 without the role the connection needs, 400 for a purpose it does not know, 503 when the provider is not configured), redirecting back to the page that started it; any other state is Auth.js's sign-in.",
+          "GET /api/auth/callback/google is the only redirect URI any provider needs: Google sign-in, Connect Google account (GET /api/evals/google-meetings/connect), Connect Zoom user (GET /api/evals/google-meetings/zoom/connect) and Add to Slack (GET /api/cohorts/slack/install) all return to it. A state that starts wo. is a connection, and is handled here for a signed-in session only (401 without one, 403 without the role the connection needs, 400 for a purpose it does not know, 503 when the provider is not configured), redirecting back to the page that started it; any other state is Auth.js's sign-in.",
         returns: "handled by Auth.js, or a redirect back to the page a connection started from",
       },
       {

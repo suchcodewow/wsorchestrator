@@ -25,7 +25,8 @@ import { MEETING_GROUP_COHORT, meetingStatus, orderedGroups, type MeetingStatus 
 import type { GoogleMeetingSort } from "@/lib/list-specs";
 import { PAGE_SIZE, pageWindow, toPage, type ListQuery, type Page } from "@/lib/paging";
 import { orderFor, searchAny } from "@/lib/paging-sql";
-import { zoomCredentials } from "@/lib/zoom";
+import { zoomApp } from "@/lib/zoom";
+import { zoomConnectionStatus, type ZoomConnectionStatus } from "@/lib/zoom-connection";
 
 /** A sync still marked running after this was cut off, and another may start. */
 export const SYNC_STALE_MS = 10 * 60_000;
@@ -387,8 +388,8 @@ export async function finishGoogleSync(result: {
 
 export type GoogleMeetingsOverview = {
   connection: GoogleConnectionStatus | null;
-  /** Whether Sync Now can make Zoom meetings. */
-  zoomConfigured: boolean;
+  /** Sync Now makes Zoom meetings only when the app is set up and a Zoom user is connected. */
+  zoom: { configured: boolean; connection: ZoomConnectionStatus | null };
   /** Guests on every invite, with edit access to the meetings calendar. */
   administrators: string[];
   counts: Record<MeetingWhen, number>;
@@ -397,8 +398,9 @@ export type GoogleMeetingsOverview = {
 };
 
 export async function googleMeetingsOverview(): Promise<GoogleMeetingsOverview> {
-  const [connection, administrators, counts, cohort] = await Promise.all([
+  const [connection, zoomConnection, administrators, counts, cohort] = await Promise.all([
     googleConnectionStatus(),
+    zoomConnectionStatus(),
     assessmentAdministratorEmails(),
     googleMeetingCounts(),
     currentCohortSummary(),
@@ -406,5 +408,5 @@ export async function googleMeetingsOverview(): Promise<GoogleMeetingsOverview> 
   const groupSizes = Object.fromEntries(
     MEETING_GROUPS.map((g) => [g, cohort.counts[MEETING_GROUP_COHORT[g].stage][MEETING_GROUP_COHORT[g].track]]),
   ) as Record<MeetingGroup, number>;
-  return { connection, zoomConfigured: zoomCredentials() !== null, administrators, counts, groupSizes };
+  return { connection, zoom: { configured: zoomApp() !== null, connection: zoomConnection }, administrators, counts, groupSizes };
 }

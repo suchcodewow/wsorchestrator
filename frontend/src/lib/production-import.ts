@@ -195,9 +195,10 @@ const STRIP_CREDENTIALS = [
   `update accounts
       set refresh_token = null, access_token = null, id_token = null,
           expires_at = null, session_state = null`,
-  // Google Meetings' account, and the meetings whose invites it sent to real
+  // Google Meetings' accounts (Google, and the Zoom user), and the meetings whose invites it sent to real
   // people. Kept, a sync on QA would invite them all again from QA.
   `delete from google_connections`,
+  `delete from zoom_connections`,
   `delete from google_meetings`,
 ];
 

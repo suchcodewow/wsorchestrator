@@ -38,7 +38,11 @@ export type MeetingListing = EditableMeeting & {
   addedBy: string | null;
 };
 
-type Overview = Omit<GoogleMeetingsOverview, "connection"> & {
+type Overview = Omit<GoogleMeetingsOverview, "connection" | "zoom"> & {
+  zoom: {
+    configured: boolean;
+    connection: (Omit<NonNullable<GoogleMeetingsOverview["zoom"]["connection"]>, "connectedAt"> & { connectedAt: string }) | null;
+  };
   connection:
     | (Omit<NonNullable<GoogleMeetingsOverview["connection"]>, "connectedAt" | "lastSyncAt"> & {
         connectedAt: string;
@@ -68,6 +72,15 @@ const RETURNED: Record<string, { tone: "ok" | "error"; text: (current: string | 
   },
 };
 
+/** What Zoom's consent screen came back with, from the callback's `?zoom=`. */
+const ZOOM_RETURNED: Record<string, { tone: "ok" | "error"; text: string }> = {
+  connected: { tone: "ok", text: "Connected. Sync Now makes each Zoom meeting as this user." },
+  denied: { tone: "error", text: "Zoom was not given access, so nothing changed." },
+  expired: { tone: "error", text: "That sign-in took too long or started in another tab. Connect again." },
+  failed: { tone: "error", text: "Zoom did not finish connecting. Connect again." },
+  scope: { tone: "error", text: "The user was connected without meeting access. Connect again and allow it." },
+};
+
 const SYNC_ERRORS: Record<string, string> = {
   not_connected: "Connect a Google account first.",
   not_configured: "The app's Google OAuth client is not set up here.",
@@ -91,19 +104,21 @@ export function GoogleMeetingsView({
   page,
   overview,
   returned,
+  zoomReturned,
 }: {
   query: ListQuery<GoogleMeetingSort>;
   when: MeetingWhen;
   page: Page<MeetingListing>;
   overview: Overview;
   returned: string | null;
+  zoomReturned: string | null;
 }) {
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
   const rowLink = useRowLink();
   const sortProps = { sort: query.sort, dir: query.dir };
-  const { connection, zoomConfigured, administrators, counts, groupSizes } = overview;
+  const { connection, zoom, administrators, counts, groupSizes } = overview;
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<EditableMeeting | null>(null);
@@ -113,6 +128,7 @@ export function GoogleMeetingsView({
   const [notice, setNotice] = useState<string | null>(null);
   const [summary, setSummary] = useState<SyncSummary | null>(null);
   const shownReturn = returned ? RETURNED[returned] : undefined;
+  const shownZoomReturn = zoomReturned ? ZOOM_RETURNED[zoomReturned] : undefined;
 
   function open(meeting: EditableMeeting | null) {
     setEditing(meeting);
@@ -123,6 +139,7 @@ export function GoogleMeetingsView({
     const p = new URLSearchParams(params.toString());
     p.delete("page");
     p.delete("google");
+    p.delete("zoom");
     p.delete("current");
     if (next === "upcoming") p.delete("when");
     else p.set("when", next);
@@ -228,13 +245,32 @@ export function GoogleMeetingsView({
             {connection ? "Reconnect" : "Connect Google account"}
           </Button>
         </div>
-        <div className="space-y-0.5 px-5 py-4">
-          <div className="font-medium">Zoom</div>
-          <div className="text-muted-foreground">
-            {zoomConfigured
-              ? "Each invite gets a Zoom link, with the administrators below as alternative hosts."
-              : "Not set up here, so invites go out with no Zoom link."}
+        <div className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="space-y-0.5">
+            <div className="font-medium">Zoom user</div>
+            <div className="text-muted-foreground">
+              {zoom.connection ? (
+                <>
+                  {zoom.connection.email}, connected {formatWhen(zoom.connection.connectedAt)}
+                  {zoom.connection.connectedBy && <> by {zoom.connection.connectedBy}</>}. Each invite gets a Zoom link, with the
+                  administrators below as alternative hosts.
+                </>
+              ) : zoom.configured ? (
+                "None yet, so invites go out with no Zoom link. Sign in as the user the Zoom meetings should be made as."
+              ) : (
+                "Zoom is not set up here, so invites go out with no Zoom link."
+              )}
+            </div>
           </div>
+          {zoom.configured && (
+            <Button
+              variant={zoom.connection ? "outline" : "brand"}
+              size="sm"
+              onClick={() => window.location.assign("/api/evals/google-meetings/zoom/connect")}
+            >
+              {zoom.connection ? "Reconnect" : "Connect Zoom user"}
+            </Button>
+          )}
         </div>
         <div className="space-y-0.5 px-5 py-4">
           <div className="font-medium">
@@ -261,6 +297,16 @@ export function GoogleMeetingsView({
           className={cn("text-sm", shownReturn.tone === "error" ? "text-destructive" : "text-muted-foreground")}
         >
           {shownReturn.text(params.get("current"))}
+        </motion.p>
+      )}
+
+      {shownZoomReturn && (
+        <motion.p
+          variants={riseChild}
+          role={shownZoomReturn.tone === "error" ? "alert" : "status"}
+          className={cn("text-sm", shownZoomReturn.tone === "error" ? "text-destructive" : "text-muted-foreground")}
+        >
+          {shownZoomReturn.text}
         </motion.p>
       )}
       {error && (

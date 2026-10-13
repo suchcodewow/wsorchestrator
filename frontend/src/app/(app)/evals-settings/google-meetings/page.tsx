@@ -15,7 +15,7 @@ export default async function GoogleMeetingsPage({
   // A hand-typed `when` that isn't one shows the upcoming, as a bad sort does.
   const when = isMeetingWhen(params.when) ? params.when : "upcoming";
   const [page, overview] = await Promise.all([listGoogleMeetings(when, query), googleMeetingsOverview()]);
-  const { connection } = overview;
+  const { connection, zoom } = overview;
 
   return (
     <GoogleMeetingsView
@@ -36,8 +36,10 @@ export default async function GoogleMeetingsPage({
           connectedAt: connection.connectedAt.toISOString(),
           lastSyncAt: connection.lastSyncAt?.toISOString() ?? null,
         },
+        zoom: { ...zoom, connection: zoom.connection && { ...zoom.connection, connectedAt: zoom.connection.connectedAt.toISOString() } },
       }}
       returned={typeof params.google === "string" ? params.google : null}
+      zoomReturned={typeof params.zoom === "string" ? params.zoom : null}
     />
   );
 }

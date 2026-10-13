@@ -1225,6 +1225,32 @@ export const googleConnections = pgTable("google_connections", {
 export const GOOGLE_CONNECTION_KEY = "meetings";
 
 /**
+ * The Zoom user Google Meetings schedules its Zoom meetings as, connected once
+ * by an Assessments Administrator who signs in to Zoom as it. One row, keyed
+ * `meetings`. Zoom rotates the refresh token every time it is used, so the
+ * sync saves each new one here; the access token is kept until it expires so
+ * that a sync and a cancel running together do not spend the same refresh
+ * token twice. Both are sealed with `lib/secret-box.ts`.
+ */
+export const zoomConnections = pgTable("zoom_connections", {
+  key: text("key").primaryKey(),
+  /** Lowercased: the Zoom user the meetings are made under. */
+  email: text("email").notNull(),
+  refreshToken: bytea("refresh_token").notNull(),
+  accessToken: bytea("access_token"),
+  accessTokenExpiresAt: timestamp("access_token_expires_at", { withTimezone: true }),
+  scope: text("scope").notNull(),
+  connectedBy: text("connected_by").references(() => users.id, {
+    onDelete: "set null",
+  }),
+  connectedAt: timestamp("connected_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const ZOOM_CONNECTION_KEY = "meetings";
+
+/**
  * Who has been through bootcamp (BTC) and the intermediate event (INT), and
  * how they scored. One row per email. A date of 2000-01-01 is the sheet's
  * marker for "exempt": someone who never needs to attend.

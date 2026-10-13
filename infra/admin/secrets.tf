@@ -38,8 +38,8 @@ locals {
     var.slack_app_client_id != "" ? ["slack-app-client-secret"] : [],
     # Gated on the tenant, not the key pair, as HiBob's is on its service user.
     var.mindtickle_company_id != "" ? ["mindtickle-api-key", "mindtickle-secret-key"] : [],
-    # Gated on the Zoom account, not the secret, as Mindtickle's is on its tenant.
-    var.zoom_account_id != "" ? ["zoom-client-secret"] : [],
+    # Gated on the Zoom app's client id, not the secret, as Slack's is.
+    var.zoom_client_id != "" ? ["zoom-client-secret"] : [],
   )
 
   # id -> value, holding the (mostly sensitive) payloads. Only ever looked up by
