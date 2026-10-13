@@ -146,12 +146,6 @@ variable "google_meetings_account" {
   default     = ""
 }
 
-variable "zoom_account_id" {
-  description = "Deprecated and unused: Google Meetings used a Server-to-Server OAuth app on this Zoom account, and now uses a user-managed app (zoom_client_id) that needs no account id. Kept declared so a workspace that still sets it does not fail the plan; delete it from the workspaces, then from here."
-  type        = string
-  default     = ""
-}
-
 variable "zoom_client_id" {
   description = "The client id of the user-managed Zoom General App Google Meetings makes its Zoom meetings through, with only the user-level meeting:write:meeting, meeting:read:meeting, meeting:update:meeting and meeting:delete:meeting scopes: it reaches the meetings of the one Zoom user an Assessments Administrator connects, and no one else's. Not secret: it grants nothing without zoom_client_secret. Empty leaves Zoom off, and invites go out with no Zoom link. QA shares production's Google Workspace, so leave it empty there."
   type        = string
