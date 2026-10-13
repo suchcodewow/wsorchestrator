@@ -7,11 +7,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ArrowRight, Library } from "lucide-react";
+import { ArrowRight, Map as MapIcon } from "lucide-react";
 import { auth, signInPath } from "@/auth";
 import { MimirArt } from "@/components/mimir-art";
 import { Button } from "@/components/ui/button";
-import { progressSummary, resumePoint } from "@/lib/mimir/progress";
+import { mapSummary } from "@/lib/mimir/map/summary";
 import { canSeeLiveTraining, liveTraining } from "@/lib/live-training";
 import { canUseMimir, hasNoAccess } from "@/lib/roles";
 import { LiveTrainingSteps } from "./live-training";
@@ -26,13 +26,11 @@ export default async function WelcomePage() {
   const { access } = session.user;
 
   const mimir = canUseMimir(access);
-  const [resume, summary, live] = await Promise.all([
-    mimir ? resumePoint(session.user.id) : null,
-    mimir ? progressSummary(session.user.id) : null,
+  const [summary, live] = await Promise.all([
+    mimir ? mapSummary(session.user.id) : null,
     canSeeLiveTraining(access) ? liveTraining(access) : null,
   ]);
   const firstName = session.user.name?.split(" ")[0];
-  const continueHref = resume && `/mimir/library/${encodeURIComponent(resume.id)}`;
 
   return (
     <div className="space-y-10">
@@ -50,7 +48,7 @@ export default async function WelcomePage() {
           aria-labelledby="welcome-mimir"
           className="grid max-w-3xl overflow-hidden rounded-2xl border bg-card shadow-sm sm:grid-cols-[16rem_minmax(0,1fr)]"
         >
-          <Link href={continueHref ?? MIMIR_HREF} tabIndex={-1} aria-hidden>
+          <Link href={MIMIR_HREF} tabIndex={-1} aria-hidden>
             <MimirArt className="h-full w-full" title="Mimir at the well of wisdom" />
           </Link>
           <div className="flex flex-col justify-center gap-3 p-5">
@@ -59,25 +57,25 @@ export default async function WelcomePage() {
               Mimir
             </h2>
             <p className="text-muted-foreground">Learn Harness with Mimir.</p>
-            {summary && summary.viewed > 0 && (
+            {summary && summary.mastered + summary.watched > 0 && (
               <p className="text-sm text-muted-foreground tnum">
-                <span className="font-medium text-foreground">{summary.mastered}</span> of {summary.total} mastered ·{" "}
-                {summary.practiced} practiced · {summary.viewed} opened
+                <span className="font-medium text-foreground">{summary.mastered}</span> of {summary.total} concepts mastered · {summary.watched} of{" "}
+                {summary.withVideo} videos watched
               </p>
             )}
             <div className="flex flex-wrap gap-2">
-              {resume && continueHref ? (
+              {summary?.next && summary.mastered + summary.watched > 0 ? (
                 <>
                   <Button variant="brand" asChild>
-                    <Link href={continueHref}>
-                      Continue: <span className="max-w-56 truncate">{resume.title}</span>
+                    <Link href="/mimir/chat">
+                      Continue: <span className="max-w-56 truncate">{summary.next.name}</span>
                       <ArrowRight />
                     </Link>
                   </Button>
                   <Button variant="outline" asChild>
-                    <Link href="/mimir/library">
-                      <Library />
-                      Browse the library
+                    <Link href="/mimir/map">
+                      <MapIcon />
+                      Open the map
                     </Link>
                   </Button>
                 </>

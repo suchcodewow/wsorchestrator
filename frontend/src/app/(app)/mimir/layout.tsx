@@ -1,15 +1,17 @@
 /**
- * The layout for Mimir: the reference library and its coach, open to everyone
- * signed in. Progress is each person's own and kept between visits, so the
- * header offers to carry on from the item they last opened, or to start over.
+ * The layout for Mimir: a coach that walks you through the course, and the map
+ * of the course with a video for each concept. Open to everyone signed in.
+ * What you have mastered and watched is yours, and kept between visits.
  */
 
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { Archive } from "lucide-react";
 import { auth, signInPath } from "@/auth";
-import { resumePoint } from "@/lib/mimir/progress";
-import { canUseMimir } from "@/lib/roles";
-import { MimirHeaderActions } from "./header-actions";
+import { Button } from "@/components/ui/button";
+import { mapSummary } from "@/lib/mimir/map/summary";
+import { canManageMimir, canUseMimir } from "@/lib/roles";
 import { MimirTabs } from "./mimir-tabs";
 
 export const metadata: Metadata = { title: "Mimir" };
@@ -19,12 +21,27 @@ export default async function MimirLayout({ children }: { children: React.ReactN
   if (!session?.user) redirect(await signInPath());
   if (!canUseMimir(session.user.access)) notFound();
 
-  const resume = await resumePoint(session.user.id);
+  const summary = await mapSummary(session.user.id);
   return (
     <div className="space-y-8">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-3xl font-medium tracking-tight">Mimir</h1>
-        <MimirHeaderActions resume={resume} />
+        <div className="space-y-1">
+          <h1 className="text-3xl font-medium tracking-tight">Mimir</h1>
+          {summary && (
+            <p className="text-sm text-muted-foreground tnum">
+              <span className="font-medium text-foreground">{summary.mastered}</span> of {summary.total} concepts mastered ·{" "}
+              {summary.watched} of {summary.withVideo} videos watched
+            </p>
+          )}
+        </div>
+        {canManageMimir(session.user.access) && (
+          <Button variant="ghost" size="sm" asChild>
+            <Link href="/mimir-archive">
+              <Archive />
+              Archive
+            </Link>
+          </Button>
+        )}
       </div>
       <MimirTabs />
       {children}

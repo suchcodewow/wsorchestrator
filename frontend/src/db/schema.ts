@@ -11,6 +11,7 @@ import {
   uuid,
   bigserial,
   primaryKey,
+  foreignKey,
   pgEnum,
   index,
   uniqueIndex,
@@ -2605,6 +2606,89 @@ export const MIMIR_SETTINGS_KEYS = {
 } as const;
 
 export const MIMIR_SETTING_MAX = 8000;
+
+/**
+ * The concept map: the slides, the concepts they rely on, the course order,
+ * and the video for each concept that has one. One row, `current`, replaced
+ * whole by each import. The repository is public and this content is not, so
+ * it is imported in Mimir Settings → Map rather than seeded. Validated by
+ * `lib/mimir/map/content.ts` on the way in and on the way out.
+ */
+export const mimirMap = pgTable("mimir_map", {
+  id: text("id").primaryKey(),
+  content: jsonb("content").$type<Record<string, unknown>>().notNull(),
+  importedBy: text("imported_by").references(() => users.id, { onDelete: "set null" }),
+  importedAt: timestamp("imported_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
+ * One person's standing on one concept of the map: how far through its video
+ * they are and where to resume, whether the coach has marked them as
+ * knowing it, and whether the coach has recommended they watch the video.
+ * The concept id is a key into the imported map, not a foreign key.
+ */
+export const mimirConceptProgress = pgTable(
+  "mimir_concept_progress",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    conceptId: text("concept_id").notNull(),
+    /** Where they left off, in seconds. */
+    videoSeconds: doublePrecision("video_seconds").notNull().default(0),
+    /** The furthest point they have reached, in seconds: the ring on the map. */
+    videoFurthest: doublePrecision("video_furthest").notNull().default(0),
+    /** The video's length as the player last reported it. */
+    videoDuration: doublePrecision("video_duration").notNull().default(0),
+    /** Set once they have watched to the end, and kept if they watch again. */
+    videoCompletedAt: timestamp("video_completed_at", { withTimezone: true }),
+    videoUpdatedAt: timestamp("video_updated_at", { withTimezone: true }),
+    /** The coach is satisfied they know the main points. */
+    masteredAt: timestamp("mastered_at", { withTimezone: true }),
+    /** The coach asked them to watch the video; cleared once mastered. */
+    recommendedAt: timestamp("recommended_at", { withTimezone: true }),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.conceptId] })],
+);
+
+/**
+ * One person's conversation with the map coach, the whole of it. The system
+ * prompt (the course) is fixed when it starts, for the same reason as
+ * `mimir_conversations`. `stateHash` is the progress snapshot the coach was
+ * last given, so it is sent again only when it changes.
+ */
+export const mimirCoachConversations = pgTable("mimir_coach_conversations", {
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  model: text("model").notNull(),
+  systemPrompt: text("system_prompt").notNull(),
+  stateHash: text("state_hash").notNull().default(""),
+  startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** One turn of the map coach, in order; `content` and `text` as in `mimir_messages`. */
+export const mimirCoachMessages = pgTable(
+  "mimir_coach_messages",
+  {
+    userId: text("user_id").notNull(),
+    seq: integer("seq").notNull(),
+    role: text("role").$type<MimirMessageRole>().notNull(),
+    shown: boolean("shown").notNull().default(true),
+    content: jsonb("content").$type<unknown>().notNull(),
+    text: text("text").notNull(),
+    usage: jsonb("usage").$type<Record<string, unknown>>(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.userId, t.seq] }),
+    // Named by hand: the name Drizzle would make is past Postgres's 63 characters.
+    foreignKey({ columns: [t.userId], foreignColumns: [mimirCoachConversations.userId], name: "mimir_coach_messages_user_fk" }).onDelete("cascade"),
+    check("mimir_coach_messages_role_check", sql`${t.role} in ('user', 'assistant')`),
+  ],
+);
 
 export const INTAKE_QUESTION_KINDS = ["short", "paragraph", "choice", "checkboxes", "dropdown"] as const;
 export type IntakeQuestionKind = (typeof INTAKE_QUESTION_KINDS)[number];

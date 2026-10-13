@@ -337,7 +337,7 @@ export type Turn = {
 };
 
 /** The tokens a coach turn's request and reply came to, from its stored usage. */
-function tokensOf(usage: Record<string, unknown> | null): number {
+export function tokensOf(usage: Record<string, unknown> | null): number {
   if (!usage) return 0;
   const n = (k: string) => (typeof usage[k] === "number" ? (usage[k] as number) : 0);
   return n("input_tokens") + n("cache_creation_input_tokens") + n("cache_read_input_tokens") + n("output_tokens");

@@ -100,7 +100,7 @@ export function ProgressView({
                 </tr>
               )}
               {page.rows.map((r) => {
-                const href = `/mimir/library/${encodeURIComponent(r.id)}`;
+                const href = `/mimir-archive/library/${encodeURIComponent(r.id)}`;
                 return (
                   <tr key={r.id} className={LINK_ROW} onClick={rowLink(href)}>
                     <td className="px-5 py-3 font-medium">

@@ -166,7 +166,7 @@ export function ItemEditor({ item, holds, kind: initialKind }: { item: Item | nu
           </div>
           {item && LIBRARY_KINDS.includes(item.kind) && (
             <Button variant="outline" size="sm" asChild>
-              <Link href={`/mimir/library/${encodeURIComponent(item.id)}`}>
+              <Link href={`/mimir-archive/library/${encodeURIComponent(item.id)}`}>
                 <ExternalLink />
                 View in library
               </Link>

@@ -1,4 +1,4 @@
-/** Sends /mimir to the library. */
+/** Sends /mimir to the coach. */
 
 import { redirect } from "next/navigation";
 import { auth, signInPath } from "@/auth";

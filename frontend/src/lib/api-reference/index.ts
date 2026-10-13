@@ -41,6 +41,7 @@ export const GROUPS: EndpointGroup[] = [
   "cloud-status",
   "scheduler",
   "cohorts",
+  "mimir-map",
   "mimir",
   "logistics",
   "recordings",

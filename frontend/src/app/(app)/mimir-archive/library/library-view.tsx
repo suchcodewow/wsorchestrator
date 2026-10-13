@@ -18,7 +18,7 @@ import { ChipNav } from "../chip-nav";
 import { TierDot } from "../tier";
 import type { Card } from "./page";
 
-const LIBRARY = "/mimir/library";
+const LIBRARY = "/mimir-archive/library";
 
 function hrefFor(kind: MimirKind, extra: Record<string, string> = {}): string {
   const params = new URLSearchParams({ kind, ...extra });
