@@ -98,7 +98,8 @@ escalate itself:
 | `/api/tokens/**` | Minting tokens (a token must not be able to mint its own replacement) |
 | `/api/me/impersonation` | Viewing the app as an employee, which changes what a browser session is; a token has no session to change |
 | `GET /api/evals/google-meetings/connect` | Connecting the Google account every meeting invite is sent from: a browser sign-in, and a standing token for the app |
-| `GET /api/auth/callback/google` with a `wo.` state | The one OAuth callback both connections above return to, shared with Auth.js's sign-in (see `frontend/src/lib/oauth-callback.ts`) |
+| `GET /api/evals/google-meetings/zoom/connect` | Connecting the Zoom user every Zoom meeting is made as: a browser sign-in, and a standing token for the app |
+| `GET /api/auth/callback/google` with a `wo.` state | The one OAuth callback the connections above return to, shared with Auth.js's sign-in (see `frontend/src/lib/oauth-callback.ts`) |
 
 You can still *read* users (`GET /api/users`) and sign-in domains
 (`GET /api/settings/domains`) with a token.

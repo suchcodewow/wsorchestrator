@@ -13,7 +13,7 @@
  * `lib/oauth-purposes.ts` and everything else to Auth.js, so sign-in is
  * untouched.
  *
- * Slack registers the same URL under its app's Redirect URLs; the "google" in
+ * Slack and Zoom register the same URL under their apps' Redirect URLs; the "google" in
  * the path is Auth.js's provider id and means nothing to Slack.
  */
 
@@ -30,7 +30,7 @@ export const OAUTH_STATE_COOKIE = "oauth_connect_state";
 const PREFIX = "wo.";
 
 /** Every flow that returns through the shared callback; `lib/oauth-purposes.ts` says what each does. */
-export const OAUTH_PURPOSES = ["slack", "google-meetings"] as const;
+export const OAUTH_PURPOSES = ["slack", "google-meetings", "zoom-meetings"] as const;
 export type OAuthPurpose = (typeof OAUTH_PURPOSES)[number];
 
 /** The app's own origin, from `AUTH_URL` where it is set, since a provider matches the redirect URI exactly. */

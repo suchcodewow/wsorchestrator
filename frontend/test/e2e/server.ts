@@ -78,6 +78,8 @@ export async function startServer(databaseUrl: string): Promise<Server> {
       AUTH_TRUST_HOST: "true",
       AUTH_GOOGLE_ID: "e2e.apps.googleusercontent.com",
       AUTH_GOOGLE_SECRET: "e2e",
+      ZOOM_CLIENT_ID: "e2e-zoom-client",
+      ZOOM_CLIENT_SECRET: "e2e",
       AUTH_ALLOWED_EMAIL_DOMAINS: "",
       SITE_ADMIN_EMAILS: E2E_BOOTSTRAP_EMAILS.join(","),
       NEXT_TELEMETRY_DISABLED: "1",

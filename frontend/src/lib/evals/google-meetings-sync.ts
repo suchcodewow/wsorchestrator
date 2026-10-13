@@ -9,10 +9,12 @@
  * meeting from it, while the cohort on the invite cannot. The administrators
  * are guests on every invite too.
  *
- * Each meeting gets a Zoom meeting scheduled under the connected account, with
- * every administrator who has a user on that Zoom account as an alternative
- * host, and its join link on the invite. Without Zoom credentials the invites
- * go out with no link, and the result says so.
+ * Each meeting gets a Zoom meeting scheduled as the connected Zoom user, with
+ * every administrator as an alternative host, and its join link on the
+ * invite. The Zoom app is user-managed, so it can reach that user's meetings
+ * and nothing else: it cannot look up whether an administrator has a Zoom
+ * user, and learns it from Zoom refusing them as a host. Without a connected
+ * Zoom user the invites go out with no link, and the result says so.
  *
  * Changing an invite emails every guest, so one already right is left alone.
  * The sync takes off an invite only those it put there; it never takes away
@@ -49,7 +51,8 @@ import {
 } from "@/lib/evals/google-meetings-plan";
 import { accessToken, calendarClient, GoogleError, oauthClient, type CalendarClient } from "@/lib/google-calendar";
 import { openSecret } from "@/lib/secret-box";
-import { zoomClient, zoomCredentials, ZoomError, type ZoomClient } from "@/lib/zoom";
+import { ZoomError, type ZoomClient } from "@/lib/zoom";
+import { connectedZoom } from "@/lib/zoom-connection";
 
 export const MEETINGS_CALENDAR_NAME = "eVals Meetings";
 
@@ -170,26 +173,6 @@ async function shareCalendar(
   return [...shared].sort();
 }
 
-/** The administrators Zoom will take as alternative hosts: those with an active user on the account. */
-async function zoomHostsAmong(zoom: ZoomClient, administrators: readonly string[], organizer: string, notes: string[]): Promise<string[]> {
-  const hosts: string[] = [];
-  for (const email of administrators) {
-    if (email === organizer) continue;
-    try {
-      const user = await zoom.call<{ status?: string }>("GET", `/users/${enc(email)}`);
-      if (user.status === "active") hosts.push(email);
-      else notes.push(`${email} is not an active Zoom user, so is not an alternative host.`);
-    } catch (err) {
-      if (err instanceof ZoomError && (err.status === 404 || err.code === 1001)) {
-        notes.push(`${email} has no user on the Zoom account, so is not an alternative host.`);
-      } else {
-        notes.push(`Could not look up ${email} on Zoom: ${(err as Error).message}`);
-      }
-    }
-  }
-  return hosts;
-}
-
 type Zoomed = { zoomMeetingId: string | null; zoomJoinUrl: string | null };
 
 function zoomBody(fields: ZoomFields) {
@@ -203,39 +186,89 @@ function zoomBody(fields: ZoomFields) {
   };
 }
 
-/** Zoom refuses the whole meeting over one alternative host it will not take; fall back to none, and say so. */
-async function withHostFallback<T>(fields: ZoomFields, notes: string[], title: string, send: (fields: ZoomFields) => Promise<T>): Promise<T> {
-  try {
-    return await send(fields);
-  } catch (err) {
-    if (!(err instanceof ZoomError && err.status === 400 && /alternative/i.test(err.message) && fields.alternativeHosts)) throw err;
-    notes.push(`Zoom would not take the alternative hosts for “${title}”, so it has none: ${err.message}`);
-    return send({ ...fields, alternativeHosts: "" });
+const hostList = (hosts: string) => hosts.split(/[;,]/).map((h) => h.trim().toLowerCase()).filter(Boolean);
+
+/**
+ * The administrators to ask Zoom to take as alternative hosts, and those it has
+ * refused so far in this sync, which later meetings leave out rather than
+ * asking again: a refused request changes nothing, so a meeting that could not
+ * get everyone would otherwise look out of line, and be patched, on every sync.
+ */
+type ZoomHosts = { wanted: string[]; refused: Set<string> };
+
+/**
+ * Zoom refuses the whole request over one alternative host it will not take,
+ * such as an administrator with no user on its account. Fall back to adding the
+ * hosts one at a time, keeping those Zoom takes and saying which it did not.
+ * `kept` are the hosts the meeting already has that should stay: a refused
+ * request changes nothing, so those that are right are never sent again and
+ * their people are not emailed on every sync.
+ */
+async function addHostsOneByOne(
+  zoom: ZoomClient,
+  meetingId: string,
+  fields: ZoomFields,
+  kept: string[],
+  hosts: ZoomHosts,
+  notes: string[],
+  title: string,
+): Promise<void> {
+  const wanted = hostList(fields.alternativeHosts);
+  const have = kept.filter((h) => wanted.includes(h));
+  if (have.length !== kept.length) {
+    await zoom.call("PATCH", `/meetings/${enc(meetingId)}`, zoomBody({ ...fields, alternativeHosts: have.join(";") }));
+  }
+  for (const host of wanted.filter((h) => !have.includes(h))) {
+    try {
+      await zoom.call("PATCH", `/meetings/${enc(meetingId)}`, zoomBody({ ...fields, alternativeHosts: [...have, host].join(";") }));
+      have.push(host);
+    } catch (err) {
+      if (!(err instanceof ZoomError && err.status === 400)) throw err;
+      hosts.refused.add(host);
+      notes.push(`Zoom would not take ${host} as an alternative host (first refused on “${title}”), so they are not one: ${err.message}`);
+    }
   }
 }
 
+const refusedHosts = (err: unknown, fields: ZoomFields): err is ZoomError =>
+  err instanceof ZoomError && err.status === 400 && /alternative|host/i.test(err.message) && fields.alternativeHosts !== "";
+
 /** Creates or updates the meeting's Zoom meeting; returns its id and join link. */
-async function syncZoom(zoom: ZoomClient, meeting: GoogleMeeting, organizer: string, hosts: string[], notes: string[]): Promise<Zoomed> {
-  const fields = zoomFields(meeting, hosts);
+async function syncZoom(zoom: ZoomClient, meeting: GoogleMeeting, hosts: ZoomHosts, notes: string[]): Promise<Zoomed> {
+  const fields = zoomFields(meeting, hosts.wanted.filter((h) => !hosts.refused.has(h)));
   if (meeting.zoomMeetingId) {
+    const id = meeting.zoomMeetingId;
     let existing: (ZoomMeetingState & { join_url?: string }) | null = null;
     try {
-      existing = await zoom.call("GET", `/meetings/${enc(meeting.zoomMeetingId)}`);
+      existing = await zoom.call("GET", `/meetings/${enc(id)}`);
     } catch (err) {
       if (!(err instanceof ZoomError && err.gone)) throw err;
     }
     if (existing) {
       if (zoomDiffers(existing, fields)) {
-        await withHostFallback(fields, notes, meeting.title, (f) =>
-          zoom.call("PATCH", `/meetings/${enc(meeting.zoomMeetingId!)}`, zoomBody(f)),
-        );
+        try {
+          await zoom.call("PATCH", `/meetings/${enc(id)}`, zoomBody(fields));
+        } catch (err) {
+          if (!refusedHosts(err, fields)) throw err;
+          await addHostsOneByOne(zoom, id, fields, hostList(existing.settings?.alternative_hosts ?? ""), hosts, notes, meeting.title);
+        }
       }
-      return { zoomMeetingId: meeting.zoomMeetingId, zoomJoinUrl: existing.join_url ?? meeting.zoomJoinUrl };
+      return { zoomMeetingId: id, zoomJoinUrl: existing.join_url ?? meeting.zoomJoinUrl };
     }
   }
-  const made = await withHostFallback(fields, notes, meeting.title, (f) =>
-    zoom.call<{ id: number | string; join_url: string }>("POST", `/users/${enc(organizer)}/meetings`, zoomBody(f)),
-  );
+  let made: { id: number | string; join_url: string };
+  try {
+    made = await zoom.call("POST", "/users/me/meetings", zoomBody(fields));
+  } catch (err) {
+    if (!refusedHosts(err, fields)) throw err;
+    made = await zoom.call("POST", "/users/me/meetings", zoomBody({ ...fields, alternativeHosts: "" }));
+    // The meeting exists now, so a failure adding hosts is a note, not a failed sync: the next one updates it rather than making another.
+    try {
+      await addHostsOneByOne(zoom, String(made.id), fields, [], hosts, notes, meeting.title);
+    } catch (hostErr) {
+      notes.push(`Could not add alternative hosts to “${meeting.title}”: ${(hostErr as Error).message}`);
+    }
+  }
   return { zoomMeetingId: String(made.id), zoomJoinUrl: made.join_url };
 }
 
@@ -244,7 +277,7 @@ type SyncContext = {
   calendarId: string;
   organizer: string;
   zoom: ZoomClient | null;
-  zoomHosts: string[];
+  zoomHosts: ZoomHosts;
   cohort: CohortMember[];
   administrators: string[];
   notes: string[];
@@ -303,7 +336,7 @@ async function syncOne(ctx: SyncContext, meeting: GoogleMeeting): Promise<Meetin
   const invitees = inviteList(meeting.groups, ctx.cohort, ctx.administrators, ctx.organizer);
   let zoomed: Zoomed = { zoomMeetingId: meeting.zoomMeetingId, zoomJoinUrl: meeting.zoomJoinUrl };
   try {
-    if (ctx.zoom) zoomed = await syncZoom(ctx.zoom, meeting, ctx.organizer, ctx.zoomHosts, ctx.notes);
+    if (ctx.zoom) zoomed = await syncZoom(ctx.zoom, meeting, ctx.zoomHosts, ctx.notes);
 
     const fields = eventFields(meeting, zoomed.zoomJoinUrl);
     const events = `/calendars/${enc(ctx.calendarId)}/events`;
@@ -377,13 +410,13 @@ export async function syncGoogleMeetings(): Promise<GoogleSyncResult> {
     const administrators = await assessmentAdministratorEmails();
     sharedWith = await shareCalendar(calendar, calendarId, administrators, connection.sharedWith, connection.email, notes);
 
-    const creds = zoomCredentials();
-    const zoom = creds ? zoomClient(creds) : null;
-    if (!zoom) notes.push("Zoom is not set up, so the invites have no Zoom link. Set ZOOM_ACCOUNT_ID, ZOOM_CLIENT_ID and ZOOM_CLIENT_SECRET.");
+    const connectedUser = await connectedZoom();
+    const zoom = connectedUser?.client ?? null;
+    if (!zoom) notes.push("No Zoom user is connected, so the invites have no Zoom link. Connect one on this page, with ZOOM_CLIENT_ID and ZOOM_CLIENT_SECRET set.");
     const group = await getTestGroup();
     const testGroup = group.on ? group : null;
     if (testGroup) notes.push(`The test group is on, so each meeting was sent to the test group alone as “[${testGroup.suffix}]”, with no Zoom meeting of its own; the real invites were left as they were.`);
-    const zoomHosts = zoom && !testGroup ? await zoomHostsAmong(zoom, administrators, connection.email, notes) : [];
+    const zoomHosts: ZoomHosts = { wanted: zoom && !testGroup ? administrators.filter((email) => email !== connectedUser!.email) : [], refused: new Set() };
 
     const ctx: SyncContext = {
       calendar,
@@ -442,10 +475,10 @@ export async function cancelGoogleMeeting(
         if (!(err instanceof GoogleError && err.gone)) throw err;
       }
     }
-    const creds = zoomCredentials();
-    if (meeting.zoomMeetingId && creds) {
+    const zoom = (await connectedZoom())?.client;
+    if (meeting.zoomMeetingId && zoom) {
       try {
-        await zoomClient(creds).call("DELETE", `/meetings/${enc(meeting.zoomMeetingId)}`);
+        await zoom.call("DELETE", `/meetings/${enc(meeting.zoomMeetingId)}`);
       } catch (err) {
         if (!(err instanceof ZoomError && err.gone)) throw err;
       }

@@ -6,7 +6,7 @@
  * console needs another redirect URI.
  *
  * Each purpose keeps the outcome words its page already reads, as
- * `?slack=` and `?google=`. A GET, so `audited` never sees it: each outcome
+ * `?slack=`, `?google=` and `?zoom=`. A GET, so `audited` never sees it: each outcome
  * that reaches a provider records itself.
  */
 
@@ -29,6 +29,8 @@ import {
 import { canManageEvalsSettings, canManageTrainingSettings, type Access } from "@/lib/roles";
 import { sealSecret } from "@/lib/secret-box";
 import { exchangeSlackCode, saveSlackInstallation, slackApp } from "@/lib/slack-app";
+import { exchangeCode as exchangeZoomCode, grantedScopes, zoomApp, zoomUserEmail } from "@/lib/zoom";
+import { saveZoomConnection } from "@/lib/zoom-connection";
 
 type Actor = { id: string; email: string | null; name: string | null };
 
@@ -120,6 +122,44 @@ const PURPOSES: Record<OAuthPurpose, Purpose> = {
         return { result: "different_account", extra: { current: saved.current } };
       }
       await audit({ summary: "Connected the Google account Google Meetings sends invites from.", ...label, status: 200, outcome: "succeeded", detail: { replaced: saved.replaced } });
+      return { result: "connected" };
+    },
+  },
+
+  /** Connect Zoom user on eVals Settings → Google Meetings: the user the Zoom meetings are scheduled as. */
+  "zoom-meetings": {
+    allowed: canManageEvalsSettings,
+    configured: () => zoomApp() !== null,
+    page: "/evals-settings/google-meetings",
+    param: "zoom",
+    badState: "expired",
+    cancelled: "denied",
+    action: "evals.zoom-meetings.connect",
+    async complete({ req, code, actor, audit }) {
+      let email: string;
+      let tokens: Awaited<ReturnType<typeof exchangeZoomCode>>;
+      try {
+        tokens = await exchangeZoomCode(zoomApp()!, code, oauthRedirectUri(req));
+        email = await zoomUserEmail(tokens.accessToken);
+      } catch (err) {
+        await audit({ summary: "Tried to connect the Zoom user for Google Meetings.", status: 400, outcome: "failed", detail: { error: (err as Error).message } });
+        return { result: "failed" };
+      }
+      const label = { target: email, targetLabel: email };
+
+      if (!grantedScopes(tokens.scope)) {
+        await audit({ summary: "Connected a Zoom user without meeting access.", ...label, status: 400, outcome: "failed", detail: { scope: tokens.scope } });
+        return { result: "scope" };
+      }
+
+      const saved = await saveZoomConnection(actor.id, { email, tokens });
+      await audit({
+        summary: "Connected the Zoom user Google Meetings schedules Zoom meetings as.",
+        ...label,
+        status: 200,
+        outcome: "succeeded",
+        detail: { replaced: saved.replaced, previous: saved.previous },
+      });
       return { result: "connected" };
     },
   },

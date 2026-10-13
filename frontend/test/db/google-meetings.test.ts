@@ -3,8 +3,9 @@
  * fake `fetch`: saving and listing meetings, connecting an account, and what
  * Sync Now and a delete send. Nothing leaves the machine.
  *
- * The connection is one row for the whole database. If the scratch database
- * already has one, the suite puts it back afterwards. Meetings are made by
+ * The connections (Google, and the Zoom user) are one row each for the whole
+ * database. If the scratch database already has them, the suite puts them back
+ * afterwards. Meetings are made by
  * this suite's users, so cleanup finds them; employees carry `TEST_PREFIX`.
  */
 
@@ -19,8 +20,9 @@ process.env.AUTH_GOOGLE_ID = "test-client-id";
 process.env.AUTH_GOOGLE_SECRET = "test-client-secret";
 
 import { db } from "@/db";
-import { employees, GOOGLE_CONNECTION_KEY, googleConnections, googleMeetings } from "@/db/schema";
+import { employees, GOOGLE_CONNECTION_KEY, googleConnections, googleMeetings, ZOOM_CONNECTION_KEY, zoomConnections } from "@/db/schema";
 import {
+  assessmentAdministratorEmails,
   createGoogleMeeting,
   googleConnectionStatus,
   googleMeeting,
@@ -31,7 +33,8 @@ import {
 } from "@/lib/evals/google-meetings";
 import { cancelGoogleMeeting, syncGoogleMeetings } from "@/lib/evals/google-meetings-sync";
 import { GOOGLE_MEETING_LIST } from "@/lib/list-specs";
-import { sealSecret } from "@/lib/secret-box";
+import { openSecret, sealSecret } from "@/lib/secret-box";
+import { saveZoomConnection, zoomConnectionStatus } from "@/lib/zoom-connection";
 import { PERSONAS } from "../support/access";
 import { TEST_EMAIL_DOMAIN, TEST_PREFIX } from "../support/db";
 import { testScope, type TestUser } from "../support/seed";
@@ -39,9 +42,11 @@ import { testScope, type TestUser } from "../support/seed";
 const scope = testScope("gmeet");
 const today = new Date().toISOString().slice(0, 10);
 const ORGANIZER = `${TEST_PREFIX}organizer@${TEST_EMAIL_DOMAIN}`;
+const ZOOM_USER = `${TEST_PREFIX}zoomuser@${TEST_EMAIL_DOMAIN}`;
 
 let admin: TestUser;
 let saved: GoogleConnection | null = null;
+let savedZoom: typeof zoomConnections.$inferSelect | null = null;
 
 /* ------------------------------------------------------------------ */
 /* Google and Zoom, played by a fake fetch                             */
@@ -54,7 +59,11 @@ const fake = {
   events: new Map<string, Record<string, unknown>>(),
   zoomMeetings: new Map<string, Record<string, unknown>>(),
   acl: [] as { id: string; role: string; scope: { type: string; value: string } }[],
+  /** Who Zoom will take as an alternative host: the users on the connected user's account. */
   zoomUsers: new Set<string>(),
+  /** The one refresh token Zoom still accepts; it rotates on every use, as Zoom's does. */
+  zoomRefreshToken: "zoom-refresh-0",
+  zoomRefreshes: 0,
   nextId: 1,
   reset() {
     this.calls = [];
@@ -62,6 +71,8 @@ const fake = {
     this.zoomMeetings.clear();
     this.acl = [];
     this.zoomUsers.clear();
+    this.zoomRefreshToken = "zoom-refresh-0";
+    this.zoomRefreshes = 0;
   },
   /** The calls that changed something, as `METHOD path`. */
   writes() {
@@ -82,15 +93,30 @@ async function fakeFetch(input: string | URL | Request, init?: RequestInit): Pro
   const path = url.pathname;
 
   if (url.host === "oauth2.googleapis.com") return json({ access_token: "google-token" });
-  if (url.host === "zoom.us") return json({ access_token: "zoom-token" });
+  if (url.host === "zoom.us") {
+    const form = new URLSearchParams(typeof init?.body === "string" ? init.body : (init?.body as URLSearchParams).toString());
+    if (form.get("grant_type") === "refresh_token") {
+      if (form.get("refresh_token") !== fake.zoomRefreshToken) return json({ reason: "Invalid Token!", error: "invalid_grant" }, 400);
+      fake.zoomRefreshes++;
+    }
+    fake.zoomRefreshToken = `zoom-refresh-${fake.nextId++}`;
+    return json({
+      access_token: `zoom-access-${fake.nextId++}`,
+      refresh_token: fake.zoomRefreshToken,
+      expires_in: 3600,
+      scope: "meeting:write:meeting meeting:read:meeting meeting:update:meeting meeting:delete:meeting",
+    });
+  }
 
   if (url.host === "api.zoom.us") {
-    const user = /^\/v2\/users\/([^/]+)$/.exec(path);
-    if (user && method === "GET") {
-      const email = decodeURIComponent(user[1]!);
-      return fake.zoomUsers.has(email) ? json({ email, status: "active" }) : json({ code: 1001, message: "User does not exist" }, 404);
-    }
-    if (/^\/v2\/users\/[^/]+\/meetings$/.test(path) && method === "POST") {
+    if (path === "/v2/users/me" && method === "GET") return json({ email: ZOOM_USER });
+    const refusedHost = (settings: unknown) =>
+      String((settings as { alternative_hosts?: string } | undefined)?.alternative_hosts ?? "")
+        .split(";")
+        .find((h) => h && !fake.zoomUsers.has(h));
+    if (path === "/v2/users/me/meetings" && method === "POST") {
+      const bad = refusedHost(body?.settings);
+      if (bad) return json({ code: 1114, message: `Invalid alternative host: ${bad}` }, 400);
       const id = String(fake.nextId++);
       const made = { ...body, id: Number(id), join_url: `https://zoom.us/j/${id}` };
       fake.zoomMeetings.set(id, made);
@@ -103,6 +129,8 @@ async function fakeFetch(input: string | URL | Request, init?: RequestInit): Pro
       if (!current) return json({ code: 3001, message: "Meeting does not exist" }, 404);
       if (method === "GET") return json(current);
       if (method === "PATCH") {
+        const bad = refusedHost(body?.settings);
+        if (bad) return json({ code: 1114, message: `Invalid alternative host: ${bad}` }, 400);
         fake.zoomMeetings.set(id, { ...current, ...body, settings: { ...(current.settings as object), ...(body?.settings as object) } });
         return new Response(null, { status: 204 });
       }
@@ -174,9 +202,15 @@ async function candidate(key: string, track: "sales" | "engineer") {
 
 const inAnHour = () => new Date(Date.now() + 60 * 60_000).toISOString();
 
-async function connect() {
+async function connect({ zoom = true }: { zoom?: boolean } = {}) {
   const result = await saveGoogleConnection(admin.id, { email: ORGANIZER, refreshToken: sealSecret("refresh"), scope: "openid email https://www.googleapis.com/auth/calendar" });
   assert.ok(result.ok);
+  if (zoom) {
+    await saveZoomConnection(admin.id, {
+      email: ZOOM_USER,
+      tokens: { accessToken: "zoom-access-first", refreshToken: fake.zoomRefreshToken, expiresAt: new Date(Date.now() + 3_600_000), scope: "meeting:write:meeting" },
+    });
+  }
 }
 
 let salesEmail: string;
@@ -186,27 +220,33 @@ before(async () => {
   await scope.setUp();
   [saved] = await db.select().from(googleConnections).where(eq(googleConnections.key, GOOGLE_CONNECTION_KEY));
   await db.delete(googleConnections).where(eq(googleConnections.key, GOOGLE_CONNECTION_KEY));
+  [savedZoom] = await db.select().from(zoomConnections).where(eq(zoomConnections.key, ZOOM_CONNECTION_KEY));
+  await db.delete(zoomConnections).where(eq(zoomConnections.key, ZOOM_CONNECTION_KEY));
   await db.delete(employees).where(like(employees.id, `${TEST_PREFIX}%`));
   admin = await scope.createUser("admin", PERSONAS.assessmentsAdmin);
   salesEmail = await candidate("gm_sales", "sales");
   engineerEmail = await candidate("gm_engineer", "engineer");
   globalThis.fetch = fakeFetch as typeof fetch;
-  process.env.ZOOM_ACCOUNT_ID = "acct";
   process.env.ZOOM_CLIENT_ID = "zoom-id";
   process.env.ZOOM_CLIENT_SECRET = "zoom-secret";
 });
 
 beforeEach(async () => {
   fake.reset();
+  // Everyone who is an administrator here has a user on the Zoom account, but for the test that clears it.
+  for (const email of await assessmentAdministratorEmails()) fake.zoomUsers.add(email);
   fake.zoomUsers.add(admin.email);
   await db.delete(googleMeetings).where(like(googleMeetings.createdBy, `${TEST_PREFIX}%`));
   await db.delete(googleConnections).where(eq(googleConnections.key, GOOGLE_CONNECTION_KEY));
+  await db.delete(zoomConnections).where(eq(zoomConnections.key, ZOOM_CONNECTION_KEY));
 });
 
 after(async () => {
   globalThis.fetch = realFetch;
   await db.delete(googleConnections).where(eq(googleConnections.key, GOOGLE_CONNECTION_KEY));
   if (saved) await db.insert(googleConnections).values(saved);
+  await db.delete(zoomConnections).where(eq(zoomConnections.key, ZOOM_CONNECTION_KEY));
+  if (savedZoom) await db.insert(zoomConnections).values(savedZoom);
   await db.delete(employees).where(like(employees.id, `${TEST_PREFIX}%`));
   await scope.tearDown();
 });
@@ -254,6 +294,20 @@ describe("the connection", () => {
       { ok: false, error: "different_account", current: ORGANIZER },
     );
     assert.deepEqual(await saveGoogleConnection(admin.id, { email: ORGANIZER, refreshToken: sealSecret("r2"), scope: "" }), { ok: true, replaced: true });
+  });
+});
+
+describe("the Zoom connection", () => {
+  test("never shows its tokens, and reconnecting replaces the user", async () => {
+    await connect();
+    const status = await zoomConnectionStatus();
+    assert.equal(status?.email, ZOOM_USER);
+    assert.ok(!("refreshToken" in (status ?? {})) && !("accessToken" in (status ?? {})));
+    const again = await saveZoomConnection(admin.id, {
+      email: `other-zoom@${TEST_EMAIL_DOMAIN}`,
+      tokens: { accessToken: "a", refreshToken: "r", expiresAt: new Date(Date.now() + 3_600_000), scope: "" },
+    });
+    assert.deepEqual(again, { replaced: true, previous: ZOOM_USER });
   });
 });
 
@@ -324,6 +378,35 @@ describe("Sync Now", () => {
     assert.equal(fake.events.get(row.googleEventId!)!.summary, `${TEST_PREFIX}Swapped`);
     assert.equal(fake.zoomMeetings.get(row.zoomMeetingId!)!.topic, `${TEST_PREFIX}Swapped`);
     assert.equal((await listGoogleMeetings("upcoming", { ...GOOGLE_MEETING_LIST, q: "Swapped", page: 1 })).rows[0]?.status, "synced");
+  });
+
+  test("makes Zoom meetings as the connected user, whose own token rotates and is saved, not spent twice", async () => {
+    await connect();
+    await db.update(zoomConnections).set({ accessTokenExpiresAt: new Date(Date.now() - 1_000) }).where(eq(zoomConnections.key, ZOOM_CONNECTION_KEY));
+    const made = await createGoogleMeeting(admin.id, { title: `${TEST_PREFIX}Rotating`, startsAt: inAnHour(), durationMinutes: 15, groups: [] });
+    assert.ok(made.ok);
+
+    assert.ok((await syncGoogleMeetings()).ok);
+    assert.equal(fake.zoomRefreshes, 1, "the expired access token was renewed once");
+    const [row] = await db.select().from(zoomConnections).where(eq(zoomConnections.key, ZOOM_CONNECTION_KEY));
+    assert.equal(openSecret(row!.refreshToken), fake.zoomRefreshToken, "the new refresh token is the one saved");
+    assert.ok(fake.calls.some((c) => c.method === "POST" && c.url.pathname === "/v2/users/me/meetings"), "scheduled as the connected user, not by email");
+
+    // The saved access token carries the next sync; no second refresh.
+    assert.ok((await syncGoogleMeetings()).ok);
+    assert.equal(fake.zoomRefreshes, 1);
+  });
+
+  test("with no Zoom user connected, the invites go out with no Zoom link and the result says so", async () => {
+    await connect({ zoom: false });
+    const made = await createGoogleMeeting(admin.id, { title: `${TEST_PREFIX}No zoom`, startsAt: inAnHour(), durationMinutes: 15, groups: [] });
+    assert.ok(made.ok);
+    const result = await syncGoogleMeetings();
+    assert.ok(result.ok);
+    assert.ok(result.notes.some((n) => n.includes("No Zoom user is connected")));
+    const row = (await googleMeeting(made.meeting.id))!;
+    assert.equal(row.zoomJoinUrl, null);
+    assert.ok(!fake.calls.some((c) => c.url.host === "api.zoom.us"));
   });
 
   test("an administrator with no Zoom user is still invited, but not made a host", async () => {
