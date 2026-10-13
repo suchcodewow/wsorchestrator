@@ -1,0 +1,22 @@
+{
+  "name": "explainer-video",
+  "private": true,
+  "type": "module",
+  "description": "Narrated explainer videos: ElevenLabs narration + Remotion graphics + ffmpeg. Content and output are gitignored.",
+  "scripts": {
+    "studio": "remotion studio src/index.ts"
+  },
+  "dependencies": {
+    "@remotion/bundler": "4.0.535",
+    "@remotion/cli": "4.0.535",
+    "@remotion/renderer": "4.0.535",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "remotion": "4.0.535"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  }
+}

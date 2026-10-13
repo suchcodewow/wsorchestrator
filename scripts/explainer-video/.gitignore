@@ -1,0 +1,10 @@
+# Internal GTM content, and everything generated from it, stays out of this public repo.
+# Only the engine is committed: lib/, cli/, the shared src/ files, README.md and STANDARDS.md.
+/source/
+/content/
+/public/
+/out/
+/node_modules/
+# Each video's scene code holds its on-screen text, so it is local too.
+/src/videos/*
+!/src/videos/.gitkeep
