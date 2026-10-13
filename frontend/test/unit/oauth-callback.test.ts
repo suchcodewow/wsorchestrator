@@ -14,6 +14,7 @@ test("Auth.js's own state, an encrypted token, is never taken for a connection",
 test("a connection's state names its purpose, and only one it knows", () => {
   assert.equal(purposeOf("wo.slack.abc123"), "slack");
   assert.equal(purposeOf("wo.google-meetings.abc123"), "google-meetings");
+  assert.equal(purposeOf("wo.zoom-meetings.abc123"), "zoom-meetings");
   assert.equal(purposeOf("wo.nothing.abc123"), null);
   assert.equal(purposeOf("wo.slack"), null, "no nonce");
   assert.equal(purposeOf("wo.slack.a.b"), null, "an extra part");

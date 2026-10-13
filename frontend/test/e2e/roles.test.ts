@@ -722,10 +722,17 @@ const ROUTES: RouteCase[] = [
   { method: "POST", path: "/api/evals/google-meetings/sync", allowed: canManageEvalsSettings, denyOnly: true },
   // A redirect to Google, or 503 without an OAuth client; the callback sends a stale state back to the tab.
   { method: "GET", path: "/api/evals/google-meetings/connect", allowed: canManageEvalsSettings, unconfigured: true, sessionOnly: true },
+  { method: "GET", path: "/api/evals/google-meetings/zoom/connect", allowed: canManageEvalsSettings, unconfigured: true, sessionOnly: true },
   // The shared OAuth callback, which sends a stale state back to the tab.
   {
     method: "GET",
     path: "/api/auth/callback/google?state=wo.google-meetings.stale&code=x",
+    allowed: canManageEvalsSettings,
+    sessionOnly: true,
+  },
+  {
+    method: "GET",
+    path: "/api/auth/callback/google?state=wo.zoom-meetings.stale&code=x",
     allowed: canManageEvalsSettings,
     sessionOnly: true,
   },

@@ -169,16 +169,27 @@ Setting it up in an environment:
    **Publish the OAuth consent screen** (APIs & Services → OAuth consent
    screen → *In production*). In *Testing* status Google expires a Calendar
    refresh token after 7 days, and every sync after that fails.
-4. **Zoom.** Create a Server-to-Server OAuth app on the Zoom account the
-   Google account belongs to, with the scopes `meeting:write:meeting:admin`,
-   `meeting:read:meeting:admin`, `meeting:update:meeting:admin`,
-   `meeting:delete:meeting:admin` and `user:read:user:admin`. Set
-   `zoom_account_id` and `zoom_client_id` on the workspace, and
-   `zoom_client_secret` as a secret (`tf_zoom_client_secret`). Without
-   them, invites go out with no Zoom link and Sync Now says so. Zoom
-   takes as an alternative host only someone with an active user on that
-   account. Sync Now lists the administrators it left out, and still invites
-   them.
+4. **Zoom.** Create a **General App** in the Zoom Marketplace, managed by
+   *User* (not account-level), with the user-level scopes
+   `meeting:write:meeting`, `meeting:read:meeting`,
+   `meeting:update:meeting` and `meeting:delete:meeting`. Nothing with
+   `:admin`: the app then reaches only the meetings of the one Zoom user who
+   authorizes it, not the company account's. It can stay unpublished. Under
+   OAuth, add `{AUTH_URL}/api/auth/callback/google` as the redirect URL (the
+   same one Google sign-in and Slack use) and, if Zoom asks, as an allow-list
+   entry. Leave Event Subscriptions and the in-client Zoom Apps SDK off: the
+   sync only calls Zoom, and Zoom never calls it. Set `zoom_client_id` on the
+   workspace and `zoom_client_secret` as a secret (`tf_zoom_client_secret`),
+   then press *Connect Zoom user* on this tab and sign in as the user the
+   meetings should be made as, on the Zoom account the eVals administrators
+   belong to. Its tokens are kept in `zoom_connections`, sealed like the
+   Google one; Zoom rotates the refresh token on every use, so each sync
+   saves the new one. *Reconnect* is the fix if Zoom stops accepting it.
+   Without a connected user, invites go out with no Zoom link and Sync Now
+   says so. Zoom takes as an alternative host only someone with a user on that
+   Zoom account. The app cannot look them up, so Sync Now asks Zoom for them
+   all and, if it refuses one, adds them one at a time and lists each it would
+   not take; it still invites them to the calendar event.
 
 The first sync makes an "eVals Meetings" calendar on the account and gives
 each Assessments Administrator edit access to it, which emails them the
