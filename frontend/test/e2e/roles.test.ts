@@ -62,6 +62,7 @@ import {
 } from "@/lib/roles";
 import { visibleCohortSettingsTabs } from "@/app/(app)/cohort-settings/tabs";
 import { EVALS_SETTINGS_TABS } from "@/app/(app)/evals-settings/tabs";
+import { MIMIR_TABS as MIMIR_ARCHIVE_TABS } from "@/app/(app)/mimir-archive/tabs";
 import { MIMIR_TABS } from "@/app/(app)/mimir/tabs";
 import { MIMIR_SETTINGS_TABS } from "@/app/(app)/mimir-settings/tabs";
 import { SCHEDULER_SETTINGS_TABS } from "@/app/(app)/scheduler-settings/tabs";
@@ -348,17 +349,26 @@ const PAGES: Record<string, PageCase> = {
     signedOut: { to: `/reporting/bootcamp-history/${MISSING}` },
   },
   "/mimir": { path: () => "/mimir", expect: () => ({ to: MIMIR_TABS[0]!.href }) },
-  "/mimir/library": { path: () => "/mimir/library", expect: () => 200 },
-  "/mimir/library?kind&cat": { path: () => "/mimir/library?kind=competitor&cat=cd&q=e2e", expect: () => 200 },
-  "/mimir/library?kind=<unknown>": { path: () => "/mimir/library?kind=nonsense", expect: () => 404 },
-  "/mimir/library/<one>": { path: () => `/mimir/library/${mimirItemId}`, expect: () => 200 },
-  "/mimir/library/<unknown>": { path: () => `/mimir/library/${MISSING}`, expect: () => 404 },
-  "/mimir/glossary": { path: () => "/mimir/glossary?q=e2e", expect: () => 200 },
-  "/mimir/progress": { path: () => "/mimir/progress?sort=tier", expect: () => 200 },
+  "/mimir/chat": { path: () => "/mimir/chat", expect: () => 200 },
+  "/mimir/map": { path: () => "/mimir/map", expect: () => 200 },
+  "/mimir/map?play=<unknown>": { path: () => `/mimir/map?play=${MISSING}`, expect: () => 200 },
+  // The previous Mimir, kept to read, for Training Administrators.
+  "/mimir-archive": {
+    path: () => "/mimir-archive",
+    expect: (a) => (canManageMimir(a) ? { to: MIMIR_ARCHIVE_TABS[0]!.href } : 404),
+  },
+  "/mimir-archive/library": { path: () => "/mimir-archive/library", expect: gated(canManageMimir) },
+  "/mimir-archive/library?kind&cat": { path: () => "/mimir-archive/library?kind=competitor&cat=cd&q=e2e", expect: gated(canManageMimir) },
+  "/mimir-archive/library?kind=<unknown>": { path: () => "/mimir-archive/library?kind=nonsense", expect: () => 404 },
+  "/mimir-archive/library/<one>": { path: () => `/mimir-archive/library/${mimirItemId}`, expect: gated(canManageMimir) },
+  "/mimir-archive/library/<unknown>": { path: () => `/mimir-archive/library/${MISSING}`, expect: () => 404 },
+  "/mimir-archive/glossary": { path: () => "/mimir-archive/glossary?q=e2e", expect: gated(canManageMimir) },
+  "/mimir-archive/progress": { path: () => "/mimir-archive/progress?sort=tier", expect: gated(canManageMimir) },
   "/mimir-settings": {
     path: () => "/mimir-settings",
     expect: (a) => (canManageMimir(a) ? { to: MIMIR_SETTINGS_TABS[0]!.href } : 404),
   },
+  "/mimir-settings/map": { path: () => "/mimir-settings/map", expect: gated(canManageMimir) },
   "/mimir-settings/content": { path: () => "/mimir-settings/content?kind=capability", expect: gated(canManageMimir) },
   "/mimir-settings/content/new": { path: () => "/mimir-settings/content/new?kind=term", expect: gated(canManageMimir) },
   "/mimir-settings/content/<one>": { path: () => `/mimir-settings/content/${mimirItemId}`, expect: gated(canManageMimir) },
@@ -783,7 +793,17 @@ const ROUTES: RouteCase[] = [
   { method: "DELETE", path: `/api/lab-workshops/${MISSING}`, allowed: canManageLabGuides },
   { method: "POST", path: `/api/lab-workshops/${MISSING}/guides`, allowed: canManageLabGuides, body: () => ({}) },
 
-  // Mimir: the library and coach are everyone's; the content and settings, Training Administrators'.
+  // Mimir map: the map, its videos and the coach are everyone's; importing the map, a Training Administrator's.
+  { method: "GET", path: "/api/mimir/map", allowed: true },
+  { method: "POST", path: "/api/mimir/map/import", allowed: canManageMimir, body: form },
+  { method: "GET", path: `/api/mimir/map/concepts/${MISSING}/video`, allowed: true },
+  { method: "PUT", path: `/api/mimir/map/concepts/${MISSING}/video`, allowed: true, body: () => ({}) },
+  { method: "GET", path: "/api/mimir/coach", allowed: true },
+  { method: "POST", path: "/api/mimir/coach", allowed: true, body: () => ({}) },
+  // Each persona's own coach conversation, which none of them has.
+  { method: "DELETE", path: "/api/mimir/coach", allowed: true },
+
+  // The archived Mimir library, which the archive pages still read: the library and coach are everyone's; the content and settings, Training Administrators'.
   { method: "GET", path: "/api/mimir/items?kind=capability", allowed: true },
   { method: "GET", path: `/api/mimir/items/${MISSING}`, allowed: true },
   { method: "POST", path: "/api/mimir/items", allowed: canManageMimir, body: () => ({}) },

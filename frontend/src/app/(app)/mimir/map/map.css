@@ -1,0 +1,229 @@
+/*
+ * The concept map. The geometry is absolute, in the canvas's own pixels
+ * (lib/mimir/map/layout.ts); everything else takes the app's theme tokens so
+ * it sits in the page and follows light and dark. Level colours are the
+ * course's: 100 green, 200 blue, 300 purple, 400 amber.
+ */
+
+.mm {
+  --l0: #8d8c85;
+  --l1: #2f8a5b;
+  --l2: #2b6cd4;
+  --l3: #7a4bd1;
+  --l4: #b3741a;
+  --onl: #ffffff;
+  --s1: #4d6a9b;
+  --s2: #3f8062;
+  --s3: #8a6a2f;
+  --s4: #8d4a5c;
+  --flag: #b45309;
+}
+.dark .mm {
+  --l1: #5fd09a;
+  --l2: #6ea4ff;
+  --l3: #b595ff;
+  --l4: #f0b94d;
+  --onl: #12120f;
+  --flag: #f0b94d;
+}
+
+.mm-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  background: var(--card);
+  padding: 10px 0 14px;
+  -webkit-overflow-scrolling: touch;
+}
+.mm-canvas {
+  position: relative;
+}
+.mm-edges {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.mm-e {
+  fill: none;
+  stroke-width: 1;
+  opacity: 0.22;
+}
+.mm-l1 { stroke: var(--l1); }
+.mm-l2 { stroke: var(--l2); }
+.mm-l3 { stroke: var(--l3); }
+.mm-sel .mm-e { opacity: 0.035; }
+.mm-sel .mm-e.mm-on { opacity: 0.9; stroke-width: 1.8; }
+
+.mm-band {
+  position: absolute;
+  top: 0;
+  height: 24px;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 5px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.mm-slide,
+.mm-concept,
+.mm-group,
+.mm-level {
+  cursor: pointer;
+}
+.mm-slide {
+  position: absolute;
+  top: 34px;
+  width: 78px;
+  height: 122px;
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-top: 5px solid var(--ln);
+  border-radius: 6px;
+  padding: 4px 5px;
+  font-size: 10.5px;
+  line-height: 1.25;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.mm-slide b {
+  display: block;
+  font-size: 16px;
+  line-height: 1.2;
+}
+.mm-slide .mm-tag {
+  position: absolute;
+  left: 5px;
+  bottom: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--ln);
+  line-height: 1.1;
+}
+.mm-slide.mm-empty { opacity: 0.55; }
+
+.mm-concept {
+  position: absolute;
+  width: 84px;
+  height: 124px;
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-top: 5px solid var(--lc);
+  border-radius: 6px;
+  padding: 5px;
+  font-size: 11px;
+  line-height: 1.25;
+  font-weight: 600;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.mm-concept .mm-st {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--lc);
+  margin-right: 3px;
+}
+.mm-concept .mm-n {
+  display: block;
+  color: var(--muted-foreground);
+  font-weight: 400;
+  font-size: 10.5px;
+  margin-top: 3px;
+}
+.mm-concept.mm-recommended {
+  border-color: var(--flag);
+  box-shadow: 0 0 0 1px var(--flag);
+}
+.mm-concept .mm-flag {
+  display: block;
+  margin-top: 3px;
+  font-size: 9.5px;
+  font-weight: 700;
+  color: var(--flag);
+  line-height: 1.1;
+}
+.mm-concept .mm-done {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  color: var(--lc);
+}
+.mm-concept .mm-play-slot {
+  position: absolute;
+  left: 50%;
+  bottom: 6px;
+  transform: translateX(-50%);
+}
+
+.mm-group {
+  position: absolute;
+  height: 24px;
+  border: 1px solid var(--lc);
+  background: color-mix(in srgb, var(--lc) 16%, var(--card));
+  color: var(--foreground);
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 5px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.mm-level {
+  position: absolute;
+  height: 28px;
+  background: var(--lc);
+  color: var(--onl);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 5px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.mm-sel .mm-slide:not(.mm-on),
+.mm-sel .mm-concept:not(.mm-on),
+.mm-sel .mm-group:not(.mm-on),
+.mm-sel .mm-level:not(.mm-on) {
+  opacity: 0.28;
+}
+.mm-slide.mm-on,
+.mm-concept.mm-on,
+.mm-group.mm-on,
+.mm-level.mm-on {
+  box-shadow: 0 0 0 2px var(--foreground);
+}
+
+/* The play button: a ring that fills as the video is watched. */
+.mm-play {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--lc);
+  border-radius: 999px;
+  cursor: pointer;
+}
+.mm-play:hover { filter: brightness(1.15); }
+.mm-play:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.mm-play:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.mm-chip {
+  font-size: 12px;
+  border: 1px solid var(--border);
+  border-left-width: 4px;
+  border-radius: 5px;
+  padding: 1px 7px;
+  background: var(--card);
+}
+.mm-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 6px;
+}

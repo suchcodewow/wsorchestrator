@@ -5,9 +5,7 @@
  * it holds (an agent its capabilities), and the coach. Opening it counts as viewing it.
  */
 
-import { useEffect } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { ArrowLeft, ChevronDown, ExternalLink } from "lucide-react";
 import type { MimirAttrs, MimirKind } from "@/db/schema";
@@ -16,7 +14,6 @@ import { KIND_LABELS, TIER_LABELS, type Tier } from "@/lib/mimir/kinds";
 import { riseChild, staggerParent } from "@/lib/motion";
 import { GlossaryHtml, GlossaryProvider, GlossaryText } from "../../glossary-links";
 import { TierBadge } from "../../tier";
-import { ChatPanel, type ChatState } from "./chat-panel";
 
 type ItemData = {
   id: string;
@@ -37,7 +34,6 @@ export function ItemView({
   parent,
   holds,
   tier,
-  chat,
   glossary,
 }: {
   item: ItemData;
@@ -45,29 +41,20 @@ export function ItemView({
   /** The items under it: an agent's capabilities, or a discovery group's questions. */
   holds: Child[];
   tier: Tier;
-  chat: ChatState | null;
   /** Every glossary term, for underlining the ones this page uses. */
   glossary: GlossaryEntry[];
 }) {
-  const router = useRouter();
-  useEffect(() => {
-    // Opening it is a visit; the refresh moves the header's Continue on to this item.
-    void fetch(`/api/mimir/items/${encodeURIComponent(item.id)}/visit`, { method: "POST" })
-      .then((res) => res.ok && router.refresh())
-      .catch(() => undefined);
-  }, [item.id, router]);
-
   const a = item.attrs;
   const tag = a.badge || a.role || a.tag;
   const facts = factsOf(item.kind, a);
 
   return (
     <GlossaryProvider entries={glossary}>
-    <div className={chat ? "grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_28rem]" : "max-w-3xl"}>
+    <div className="max-w-3xl">
       <motion.article variants={staggerParent(0.04)} initial="hidden" animate="show" className="min-w-0 space-y-6">
         <motion.div variants={riseChild} className="space-y-4">
           <Link
-            href={parent ? `/mimir/library/${encodeURIComponent(parent.id)}` : `/mimir/library?kind=${item.kind}`}
+            href={parent ? `/mimir-archive/library/${encodeURIComponent(parent.id)}` : `/mimir-archive/library?kind=${item.kind}`}
             className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
           >
             <ArrowLeft className="size-3.5" />
@@ -135,11 +122,6 @@ export function ItemView({
         {holds.length > 0 && <Children kind={item.kind} items={holds} />}
       </motion.article>
 
-      {chat && (
-        <aside className="lg:sticky lg:top-6">
-          <ChatPanel itemId={item.id} title={item.title} initial={chat} />
-        </aside>
-      )}
     </div>
     </GlossaryProvider>
   );
@@ -206,7 +188,7 @@ function Children({ kind, items }: { kind: MimirKind; items: Child[] }) {
       <h3 className="text-sm font-medium">{kind === "agent" ? "Capabilities" : "Breakdown"}</h3>
       <div className="divide-y overflow-hidden rounded-2xl border bg-card text-sm shadow-sm">
         {items.map((c) => (
-          <Link key={c.id} href={`/mimir/library/${encodeURIComponent(c.id)}`} className="group flex items-start gap-3 px-5 py-4 hover:bg-muted/30">
+          <Link key={c.id} href={`/mimir-archive/library/${encodeURIComponent(c.id)}`} className="group flex items-start gap-3 px-5 py-4 hover:bg-muted/30">
             {c.emoji && <span aria-hidden>{c.emoji}</span>}
             <span className="min-w-0 space-y-0.5">
               <span className="block font-medium group-hover:underline">{c.title}</span>

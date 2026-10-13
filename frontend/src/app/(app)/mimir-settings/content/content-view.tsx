@@ -19,7 +19,7 @@ import { KIND_LABELS } from "@/lib/mimir/kinds";
 import { riseChild, staggerParent } from "@/lib/motion";
 import type { ListQuery, Page } from "@/lib/paging";
 import { formatWhen } from "../../cohort-settings/format";
-import { ChipNav } from "../../mimir/chip-nav";
+import { ChipNav } from "../../mimir-archive/chip-nav";
 
 type Row = { id: string; kind: MimirKind; parentId: string | null; position: number; title: string; emoji: string; updatedAt: string };
 

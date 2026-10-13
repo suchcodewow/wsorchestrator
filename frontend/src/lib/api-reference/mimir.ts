@@ -47,9 +47,9 @@ const ITEM_ERRORS = [
 export const MIMIR_GROUPS: EndpointGroup[] = [
   {
     id: "mimir",
-    title: "Mimir",
+    title: "Mimir library (archived)",
     intro:
-      "The GTM reference library and its AI coach: Harness's four agents and the capabilities each is made of, personas, competitors, proof points and more. Anyone signed in reads the content, is coached on it, and keeps their own progress; nobody sees anyone else's. Training Administrators edit the content and the coaching settings.",
+      "The previous Mimir, kept at /mimir-archive for Training Administrators. The GTM reference library and its AI coach: Harness's four agents and the capabilities each is made of, personas, competitors, proof points and more. Anyone signed in reads the content, is coached on it, and keeps their own progress; nobody sees anyone else's. Training Administrators edit the content and the coaching settings.",
     endpoints: [
       {
         method: "GET",
@@ -289,6 +289,127 @@ export const MIMIR_GROUPS: EndpointGroup[] = [
         },
         returns: "{ ok: true }",
         errors: [{ status: 400, error: "invalid", when: "the body does not parse" }],
+      },
+    ],
+  },
+  {
+    id: "mimir-map",
+    title: "Mimir map",
+    intro:
+      "The concept map, the video for each concept, and the coach that walks you through them in order. Anyone signed in reads the map, watches the videos and chats with the coach, and keeps their own progress; nobody sees anyone else's. A Training Administrator imports the map.",
+    endpoints: [
+      {
+        method: "GET",
+        path: "/api/mimir/map",
+        summary: "Returns the concept map and where you stand on every concept in it.",
+        access: "signedIn",
+        token: true,
+        notes:
+          "map is null until a Training Administrator imports one. A concept's video holds only its length: where the file is kept and what the narrator says stay on the server. states has an entry for each concept you have progress on: resumeAt is where playing starts if you press play now (the beginning if you had reached the end), completed is kept once you have watched to the end, and recommended is the coach asking you to watch the video before you move on. videos is false on a deployment with nowhere to keep them.",
+        returns:
+          "{ map: { version, title, lead, sections, slides, levels, buckets, concepts: { id, name, slides, explanation, video?: { seconds } }[], capstone? } | null, importedAt: string | null, states: { [conceptId]: { videoSeconds, videoFurthest, videoDuration, completed, mastered, recommended, resumeAt } }, videos: boolean }",
+      },
+      {
+        method: "POST",
+        path: "/api/mimir/map/import",
+        summary: "Imports the concept map from a JSON file, replacing the one there.",
+        access: "trainingAdmin",
+        token: true,
+        notes:
+          "The file is validated whole and written whole, or refused. Progress is keyed by concept id, so everyone's progress on a concept the new map keeps carries over. frontend/scripts/mimir-map-convert.ts makes such a file from the course data and the videos' scripts. The content is private, so the file is never committed.",
+        body: { kind: "multipart", fields: [{ name: "file", type: "file", required: true, note: "JSON, at most 8 MB" }] },
+        returns: "{ ok: true, concepts: number, videos: number }",
+        errors: [
+          { status: 400, error: "no_file", when: "there is no file field" },
+          { status: 400, error: "not_json", when: "the file is not JSON" },
+          { status: 400, error: "invalid", when: "the file does not fit the map's shape; path and message say where" },
+          { status: 413, error: "too_large", when: "the file is over 8 MB" },
+        ],
+      },
+      {
+        method: "GET",
+        path: "/api/mimir/map/concepts/{id}/video",
+        summary: "Returns a link to play a concept's video, and where to start.",
+        access: "signedIn",
+        token: true,
+        notes:
+          "url is a signed Cloud Storage link, good for expiresInSeconds, that the browser plays directly, so seeking works. startAt is where you left off, or 0 if you had reached the end or have not started.",
+        params: [{ name: "id", type: "string", required: true, note: "the concept's id" }],
+        returns: "{ url, expiresInSeconds, name, seconds, startAt, state }",
+        errors: [
+          { status: 404, error: "not_found", when: "no concept has that id, or it has no video" },
+          { status: 404, error: "missing", when: "the video's file is not in the bucket" },
+          { status: 503, error: "not_configured", when: "this deployment has nowhere to keep videos" },
+        ],
+      },
+      {
+        method: "PUT",
+        path: "/api/mimir/map/concepts/{id}/video",
+        summary: "Saves where you are in a concept's video.",
+        access: "signedIn",
+        token: true,
+        notes:
+          "The player sends it every 30 seconds while playing, when you pause or seek, when the video ends and when you leave. Reaching the end (ended, or all but the last 5%) marks the video completed, and that is kept if you watch again. A position at the end makes the next play start over.",
+        params: [{ name: "id", type: "string", required: true, note: "the concept's id" }],
+        body: {
+          kind: "json",
+          fields: [
+            { name: "position", type: "number", required: true, note: "seconds from the start" },
+            { name: "duration", type: "number", required: true, note: "the video's length in seconds, as the player reports it" },
+            { name: "ended", type: "boolean", note: "true when the video has played through" },
+          ],
+        },
+        returns: "{ state: { videoSeconds, videoFurthest, videoDuration, completed, mastered, recommended, resumeAt } }",
+        errors: [
+          { status: 400, error: "invalid", when: "position or duration is missing or out of range" },
+          { status: 404, error: "not_found", when: "no concept has that id, or it has no video" },
+        ],
+      },
+      {
+        method: "GET",
+        path: "/api/mimir/coach",
+        summary: "Returns your conversation with the Mimir coach and how far through the course you are.",
+        access: "signedIn",
+        token: true,
+        notes:
+          "messages holds the latest 100 turns; earlier is true when older ones come before them, which before= reads a page at a time. needsGreeting is true when the page should ask the coach to greet you: you have no conversation yet, it has been a while, or your progress has moved (a video finished, say). configured is false when the server has no Claude key: the conversation reads but the coach cannot reply. progress.next is the lowest-numbered concept you have not mastered.",
+        query: [{ name: "before", type: "integer", note: "The page of turns before this seq, for reading back further." }],
+        returns: `{ hasMap: boolean, configured: boolean, conversation: { startedAt, messages: ${MESSAGE_SHAPE}[], earlier: boolean } | null, needsGreeting: boolean, progress: { mastered, total, next: { id, name, hasVideo } | null } }`,
+      },
+      {
+        method: "POST",
+        path: "/api/mimir/coach",
+        summary: "Sends the coach a message, or asks it to greet you, and returns its reply.",
+        access: "signedIn",
+        token: true,
+        notes:
+          "Send { message } to say something, or { open: true } to have the coach greet you, say where you are and ask about the next concept. The coach checks what you know of each concept in turn: when you show you know its main points it marks the concept mastered and moves on, and when you do not it links the concept's video and marks it recommended. mastered and recommended list the concept ids it changed. The coach is Claude Sonnet 5.5; a request it declines is answered by Anthropic's fallback model, and when it can't be reached, by Claude Haiku 4.5. Send Accept: text/event-stream to have the reply streamed as it is written — text events with each delta, restart if it begins again on the fallback model, then done with the body below, or error with { error, status } — otherwise the whole reply comes back as JSON.",
+        body: {
+          kind: "json",
+          fields: [
+            { name: "message", type: "string", note: `up to ${MIMIR_MESSAGE_MAX} characters; give this or open` },
+            { name: "open", type: "true", note: "ask the coach to greet you instead of saying something" },
+          ],
+        },
+        returns: `{ messages: ${MESSAGE_SHAPE}[] (yours, if you said something, and the coach's), progress, mastered: string[], recommended: string[] }`,
+        errors: [
+          { status: 400, error: "invalid", when: "neither a message nor open is given, or the message is empty or too long" },
+          { status: 409, error: "no_map", when: "no map has been imported, so there is nothing to coach on" },
+          { status: 409, error: "busy", when: "the coach is still replying to your last message" },
+          { status: 409, error: "full", when: "the conversation is as long as the model can read; start a new one" },
+          { status: 422, error: "refused", when: "Claude declined to reply; your message was not kept" },
+          { status: 502, error: "upstream", when: "Claude could not be reached or returned nothing; your message was not kept" },
+          { status: 503, error: "not_configured", when: "the server has no Claude key" },
+        ],
+      },
+      {
+        method: "DELETE",
+        path: "/api/mimir/coach",
+        summary: "Throws away your conversation with the coach, so the next one starts afresh.",
+        access: "signedIn",
+        token: true,
+        notes: "Your progress, mastery and videos watched stay.",
+        returns: "{ ok: true, deleted: boolean }",
       },
     ],
   },

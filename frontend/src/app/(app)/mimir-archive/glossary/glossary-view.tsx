@@ -24,7 +24,7 @@ export function GlossaryView({
   category: string | null;
   page: Page<Term>;
 }) {
-  const href = (id: string | null) => (id ? `/mimir/glossary?category=${encodeURIComponent(id)}` : "/mimir/glossary");
+  const href = (id: string | null) => (id ? `/mimir-archive/glossary?category=${encodeURIComponent(id)}` : "/mimir-archive/glossary");
 
   return (
     <motion.div variants={staggerParent(0.04)} initial="hidden" animate="show" className="space-y-6">
