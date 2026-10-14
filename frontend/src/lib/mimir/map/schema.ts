@@ -16,6 +16,8 @@ export const MAP_CONCEPT_LIMIT = 100;
 export const MAP_SLIDE_LIMIT = 200;
 /** A video object lives under this prefix in the recordings bucket, clear of the prefixes its lifecycle rules delete. */
 export const VIDEO_PREFIX = "mimir/videos/";
+/** A slide's picture is `<n>.jpg` under this prefix, in the same bucket and clear of the same lifecycle rules. */
+export const SLIDE_PREFIX = "mimir/slides/";
 
 const id = z.string().regex(/^[a-z0-9][a-z0-9_-]{0,63}$/, "lowercase letters, digits, - and _");
 const text = (max: number) => z.string().trim().max(max);
