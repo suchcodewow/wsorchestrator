@@ -36,10 +36,9 @@ export function mapFixture(overrides: Partial<Record<string, unknown>> = {}): Ma
         explanation: "Gamma comes third.",
         video: { object: "mimir/videos/test-gamma.mp4", seconds: 60, transcript: "The narrator explains gamma." },
       },
-      { id: "delta", name: "Delta", slides: [4, 5], explanation: "Delta is level two." },
+      { id: "delta", name: "Delta", slides: [3, 4, 5], explanation: "Delta is level two." },
       { id: "omega", name: "Omega", slides: [6], explanation: "Omega is last." },
     ],
-    capstone: { title: "Put it together", intro: "Say it in your own words.", steps: [{ text: "Step one.", slides: "slides 1, 2" }], teachBack: "Teach it back." },
     ...overrides,
   });
 }

@@ -3,8 +3,12 @@
 /**
  * The concept map. Slides run along the top, the concepts they rely on in
  * course order along the bottom, a curve from each slide to each concept it
- * needs, and the groups and levels beneath. Point at, or tap, a slide, concept,
- * group or level to isolate its lines; tap again to lock it.
+ * needs, and the groups and levels beneath. Point at a slide, concept, group
+ * or level and its lines light up, with its details in a popup beside it (the
+ * popup floats, so nothing on the page moves under the pointer); click one to
+ * keep its lines lit. The level chips under the title filter the map to one
+ * level's concepts and the slides that need them; press the chip again for
+ * everything.
  *
  * Each concept with a video has a play button, a ring that fills as the video
  * is watched. A concept the coach has marked as known shows a check, and one it
@@ -12,9 +16,10 @@
  */
 
 import "./map.css";
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Check, Star } from "lucide-react";
+import { anchorFloating } from "@/lib/floating";
 import {
   CANVAS_H,
   CONCEPT_H,
@@ -22,10 +27,10 @@ import {
   CONCEPT_Y,
   GROUP_Y,
   LEVEL_Y,
-  PAD,
   SLIDE_W,
   SLIDE_Y,
   layoutMap,
+  type MapLayout,
   type PlacedConcept,
 } from "@/lib/mimir/map/layout";
 import { NO_STATE, ringFraction, type ConceptState, type MapLevel, type PublicMap } from "@/lib/mimir/map/schema";
@@ -34,28 +39,33 @@ import { ProgressRing } from "./progress-ring";
 import { VideoDialog } from "./video-dialog";
 
 type Sel = { type: "slide"; id: number } | { type: "concept"; id: string } | { type: "group"; id: string } | { type: "level"; id: MapLevel };
+/** What is being pointed at, and the element the popup sits beside. */
+type Pointed = { sel: Sel; anchor: HTMLElement };
 const same = (a: Sel | null, b: Sel) => a !== null && a.type === b.type && a.id === b.id;
 const levelVar = (level: number) => ({ "--lc": `var(--l${level})` }) as React.CSSProperties;
 
 export function MapView({ map, states: initialStates, videos }: { map: PublicMap; states: Record<string, ConceptState>; videos: boolean }) {
   const router = useRouter();
   const params = useSearchParams();
-  const layout = useMemo(() => layoutMap(map), [map]);
-  const byId = useMemo(() => new Map(layout.concepts.map((c) => [c.id, c])), [layout]);
+  const [filter, setFilter] = useState<MapLevel | null>(null);
+  // The whole course, for what a concept or slide is; and what is shown now, for where it sits.
+  const full = useMemo(() => layoutMap(map), [map]);
+  const layout = useMemo(() => (filter ? layoutMap(map, filter) : full), [map, filter, full]);
+  const byId = useMemo(() => new Map(full.concepts.map((c) => [c.id, c])), [full]);
   // The coach links here with ?play=<concept>: that concept's video opens at once, and the parameter comes off the address.
   const wanted = params.get("play");
   const startWith = wanted && videos && byId.get(wanted)?.video ? wanted : null;
 
   const [states, setStates] = useState(initialStates);
-  const [hover, setHover] = useState<Sel | null>(null);
+  const [hover, setHover] = useState<Pointed | null>(null);
   const [locked, setLocked] = useState<Sel | null>(startWith ? { type: "concept", id: startWith } : null);
   const [playing, setPlaying] = useState<string | null>(startWith);
   const scroller = useRef<HTMLDivElement>(null);
-  const sel = locked ?? hover;
+  const sel = locked ?? hover?.sel ?? null;
   const stateOf = (id: string) => states[id] ?? NO_STATE;
   const onState = useCallback((id: string, s: ConceptState) => setStates((prev) => ({ ...prev, [id]: s })), []);
   const levelName = (level: MapLevel) => map.levels.find((l) => l.level === level)?.name ?? `Level ${level * 100}`;
-  const groupName = (id: string) => layout.groups.find((g) => g.id === id)?.name ?? id;
+  const groupName = (id: string) => full.groups.find((g) => g.id === id)?.name ?? id;
   const groupBlurb = (id: string) => map.buckets.find((b) => b.id === id)?.blurb ?? "";
 
   // What the selection lights up.
@@ -75,36 +85,52 @@ export function MapView({ map, states: initialStates, videos }: { map: PublicMap
     };
   }, [sel, layout, byId]);
 
-  function play(id: string) {
-    setPlaying(id);
-  }
-
   useEffect(() => {
     if (params.get("play")) router.replace("/mimir/map", { scroll: false });
   }, [params, router]);
 
   useEffect(() => {
-    const onKey = (e: globalThis.KeyboardEvent) => e.key === "Escape" && !playing && setLocked(null);
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key !== "Escape" || playing) return;
+      setLocked(null);
+      setHover(null);
+    };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [playing]);
 
-  const wire = (s: Sel) => ({
-    onMouseEnter: () => !locked && setHover(s),
-    onMouseLeave: () => !locked && setHover(null),
-    onClick: () => setLocked(same(locked, s) ? null : s),
-    onKeyDown: (e: KeyboardEvent) => {
-      if (e.key === "Enter" || e.key === " ") {
-        e.preventDefault();
-        setLocked(same(locked, s) ? null : s);
-      }
-    },
-  });
+  /** Show only one level's concepts and the slides that need them, or everything again. */
+  function toggleFilter(level: MapLevel) {
+    setHover(null);
+    setLocked(null);
+    setFilter((now) => (now === level ? null : level));
+  }
+
+  const wire = (s: Sel) => {
+    const choose = () => (s.type === "level" ? toggleFilter(s.id) : setLocked(same(locked, s) ? null : s));
+    return {
+      onMouseEnter: (e: React.MouseEvent<HTMLElement>) => setHover({ sel: s, anchor: e.currentTarget }),
+      onMouseLeave: () => setHover(null),
+      onFocus: (e: React.FocusEvent<HTMLElement>) => setHover({ sel: s, anchor: e.currentTarget }),
+      onBlur: () => setHover(null),
+      onClick: choose,
+      onKeyDown: (e: KeyboardEvent) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          choose();
+        }
+      },
+    };
+  };
 
   function focusConcept(c: PlacedConcept) {
+    // A concept outside the level being shown needs the whole map back to be found on it.
+    const visible = !filter || filter === c.level;
+    if (!visible) setFilter(null);
     setLocked({ type: "concept", id: c.id });
+    const target = visible ? layout.concepts.find((k) => k.id === c.id) : full.concepts.find((k) => k.id === c.id);
     const el = scroller.current;
-    el?.scrollTo({ left: Math.max(0, c.x - el.clientWidth / 2), behavior: "smooth" });
+    if (target) el?.scrollTo({ left: Math.max(0, target.x - el.clientWidth / 2), behavior: "smooth" });
     el?.scrollIntoView({ block: "start", behavior: "smooth" });
   }
 
@@ -124,7 +150,7 @@ export function MapView({ map, states: initialStates, videos }: { map: PublicMap
         aria-label={`${what}: ${c.name}`}
         onClick={(e) => {
           e.stopPropagation();
-          play(c.id);
+          setPlaying(c.id);
         }}
       >
         <ProgressRing fraction={fraction} completed={st.completed} size={size} />
@@ -133,66 +159,41 @@ export function MapView({ map, states: initialStates, videos }: { map: PublicMap
     );
   };
 
-  const chip = (c: PlacedConcept) => (
-    <span key={c.id} className="mm-chip" style={{ borderLeftColor: `var(--l${c.level})` }}>
-      {c.study}. {c.name}
-    </span>
-  );
-
-  const slideCount = map.slides.length;
   const concepts = layout.concepts;
-  const mastered = concepts.filter((c) => stateOf(c.id).mastered).length;
+  const mastered = full.concepts.filter((c) => stateOf(c.id).mastered).length;
 
   return (
     <div className="mm space-y-6">
-      <div className="space-y-2">
+      <div className="space-y-3">
         <h2 className="text-xl font-medium tracking-tight">{map.title}</h2>
-        <p className="max-w-3xl text-sm text-muted-foreground">
-          <span className="font-medium text-foreground tnum">
-            {mastered} of {concepts.length}
+        <p className="text-sm text-muted-foreground tnum">
+          <span className="font-medium text-foreground">
+            {mastered} of {full.concepts.length}
           </span>{" "}
-          concepts mastered. They run in course order, left to right, from foundations to technical differentiators; each line runs from one of{" "}
-          {slideCount} slides to a concept it relies on. Point at a slide, concept, group or level to isolate its lines, and tap to lock it.
+          concepts mastered
         </p>
-        <div className="flex flex-wrap gap-x-3 gap-y-1.5 text-[13px]">
-          {map.levels.map((l) => (
-            <span
-              key={l.level}
-              className="inline-flex cursor-pointer items-center rounded-md border bg-card px-2 py-0.5"
-              {...wire({ type: "level", id: l.level })}
-              role="button"
-              tabIndex={0}
-            >
-              <i className="mm-dot" style={{ background: `var(--l${l.level})` }} />
-              {l.name}
-            </span>
-          ))}
-          <span className="inline-flex items-center rounded-md border bg-card px-2 py-0.5">
-            <i className="mm-dot" style={{ background: "var(--l0)" }} />
-            Slide needs no technical concepts
-          </span>
-          {map.capstone && (
-            <span className="inline-flex items-center rounded-md border bg-card px-2 py-0.5">
-              <i className="mm-dot" style={{ background: "var(--l4)" }} />
-              Level 400: {map.capstone.title} (below the map)
-            </span>
-          )}
+        <div className="flex flex-wrap gap-2 text-[13px]" role="group" aria-label="Filter the map by level">
+          {map.levels.map((l) => {
+            const on = filter === l.level;
+            return (
+              <button
+                key={l.level}
+                type="button"
+                aria-pressed={on}
+                onClick={() => toggleFilter(l.level)}
+                className={cn(
+                  "inline-flex items-center rounded-md border px-2.5 py-1 transition-colors hover:bg-muted",
+                  on ? "border-[var(--lc)] bg-[color-mix(in_srgb,var(--lc)_16%,var(--card))] font-medium text-foreground" : "bg-card",
+                )}
+                style={levelVar(l.level)}
+              >
+                <i className="mm-dot" style={{ background: `var(--l${l.level})` }} />
+                {l.name}
+              </button>
+            );
+          })}
         </div>
       </div>
-
-      <Info
-        sel={sel}
-        locked={locked !== null}
-        onClear={() => setLocked(null)}
-        map={map}
-        layout={layout}
-        stateOf={stateOf}
-        levelName={levelName}
-        groupName={groupName}
-        groupBlurb={groupBlurb}
-        chip={chip}
-        playButton={playButton}
-      />
 
       <div ref={scroller} className="mm-scroll" tabIndex={0} aria-label="Concept map. Scroll sideways to move across the slides.">
         <div className={cn("mm-canvas", sel && "mm-sel")} style={{ width: layout.width, height: CANVAS_H }}>
@@ -202,30 +203,27 @@ export function MapView({ map, states: initialStates, videos }: { map: PublicMap
             ))}
           </svg>
 
-          {map.sections.map((s) => (
-            <div
-              key={s.name}
-              className="mm-band"
-              style={{ background: `var(--s${s.band})`, left: PAD + layout.slideSpacing * (s.from - 1) + 1, width: layout.slideSpacing * (s.to - s.from + 1) - 6 }}
-            >
-              {s.name} (slides {s.from}-{s.to})
+          {layout.bands.map((b) => (
+            <div key={b.name} className="mm-band" style={{ background: `var(--s${b.band})`, left: b.left, width: b.width }}>
+              {filter ? `${b.name} (${b.count} ${b.count === 1 ? "slide" : "slides"})` : `${b.name} (slides ${b.from}-${b.to})`}
             </div>
           ))}
 
-          {map.slides.map((s) => {
-            const lv = layout.need[s.n];
+          {layout.slides.map((n) => {
+            const lv = layout.need[n];
+            const title = map.slides.find((s) => s.n === n)?.title ?? "";
             return (
               <div
-                key={s.n}
+                key={n}
                 role="button"
                 tabIndex={0}
-                aria-label={`Slide ${s.n}: ${s.title}`}
-                className={cn("mm-slide", !lv && "mm-empty", lit?.slides.has(s.n) && "mm-on")}
-                style={{ left: layout.slideX(s.n) - SLIDE_W / 2, top: SLIDE_Y, ["--ln" as string]: `var(--l${lv ?? 0})` }}
-                {...wire({ type: "slide", id: s.n })}
+                aria-label={`Slide ${n}: ${title}`}
+                className={cn("mm-slide", !lv && "mm-empty", lit?.slides.has(n) && "mm-on")}
+                style={{ left: layout.slideX(n) - SLIDE_W / 2, top: SLIDE_Y, ["--ln" as string]: `var(--l${lv ?? 0})` }}
+                {...wire({ type: "slide", id: n })}
               >
-                <b>{s.n}</b>
-                {s.title}
+                <b>{n}</b>
+                {title}
                 <span className="mm-tag">{lv ? `Needs L${lv * 100}` : "No concepts"}</span>
               </div>
             );
@@ -273,6 +271,7 @@ export function MapView({ map, states: initialStates, videos }: { map: PublicMap
               key={l.level}
               role="button"
               tabIndex={0}
+              aria-pressed={filter === l.level}
               className={cn("mm-level", lit && concepts.some((c) => c.level === l.level && lit.concepts.has(c.id)) && "mm-on")}
               style={{ left: l.x0, width: l.x1 - l.x0, top: LEVEL_Y, ...levelVar(l.level) }}
               {...wire({ type: "level", id: l.level })}
@@ -282,21 +281,6 @@ export function MapView({ map, states: initialStates, videos }: { map: PublicMap
           ))}
         </div>
       </div>
-
-      {map.capstone && (
-        <section className="space-y-3 rounded-2xl border border-l-[6px] bg-card p-5" style={{ borderLeftColor: "var(--l4)" }}>
-          <h2 className="text-xl font-medium tracking-tight">Level 400: {map.capstone.title}</h2>
-          {map.capstone.intro && <p className="text-sm">{map.capstone.intro}</p>}
-          <ol className="list-decimal space-y-1 pl-5 text-sm">
-            {map.capstone.steps.map((s, i) => (
-              <li key={i}>
-                {s.text} {s.slides && <span className="text-muted-foreground">({s.slides})</span>}
-              </li>
-            ))}
-          </ol>
-          {map.capstone.teachBack && <p className="text-sm">{map.capstone.teachBack}</p>}
-        </section>
-      )}
 
       <section className="space-y-4">
         <h2 className="text-xl font-medium tracking-tight">What each concept means</h2>
@@ -309,7 +293,7 @@ export function MapView({ map, states: initialStates, videos }: { map: PublicMap
               </h3>
               {l.blurb && <p className="text-sm text-muted-foreground">{l.blurb}</p>}
             </div>
-            {layout.groups
+            {full.groups
               .filter((g) => g.level === l.level)
               .map((g) => (
                 <div key={g.index} className="space-y-2">
@@ -370,6 +354,8 @@ export function MapView({ map, states: initialStates, videos }: { map: PublicMap
         ))}
       </section>
 
+      {hover && <Popup pointed={hover} full={full} map={map} stateOf={stateOf} levelName={levelName} groupName={groupName} groupBlurb={groupBlurb} />}
+
       {playing && byId.get(playing) && (
         <VideoDialog conceptId={playing} name={byId.get(playing)!.name} onClose={() => setPlaying(null)} onState={onState} />
       )}
@@ -377,125 +363,115 @@ export function MapView({ map, states: initialStates, videos }: { map: PublicMap
   );
 }
 
-/** What is selected, in words, with its play button when it is a concept. */
-function Info({
-  sel,
-  locked,
-  onClear,
+/**
+ * What is being pointed at, in a popup beside it. It floats over the page and
+ * takes no pointer events, so it can never move what is under the pointer or
+ * be hovered itself; it flips and slides to stay on screen.
+ */
+function Popup({
+  pointed,
+  full,
   map,
-  layout,
   stateOf,
   levelName,
   groupName,
   groupBlurb,
-  chip,
-  playButton,
 }: {
-  sel: Sel | null;
-  locked: boolean;
-  onClear: () => void;
+  pointed: Pointed;
+  full: MapLayout;
   map: PublicMap;
-  layout: ReturnType<typeof layoutMap>;
   stateOf: (id: string) => ConceptState;
   levelName: (level: MapLevel) => string;
   groupName: (id: string) => string;
   groupBlurb: (id: string) => string;
-  chip: (c: PlacedConcept) => React.ReactNode;
-  playButton: (c: PlacedConcept, size: number, label?: string) => React.ReactNode;
 }) {
-  const clear = locked && (
-    <button type="button" onClick={onClear} className="ml-auto rounded-md border bg-card px-2.5 py-0.5 text-xs hover:bg-muted">
-      Clear
-    </button>
+  const { sel, anchor } = pointed;
+  const box = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    if (!box.current) return;
+    return anchorFloating(anchor, box.current, { placement: "bottom-start", gap: 10, maxHeight: 440 });
+  }, [anchor, sel]);
+
+  const chip = (c: PlacedConcept) => (
+    <span key={c.id} className="mm-chip" style={{ borderLeftColor: `var(--l${c.level})` }}>
+      {c.study}. {c.name}
+    </span>
   );
-  const box = "min-h-24 space-y-1.5 rounded-xl border bg-card px-4 py-3 text-sm";
-  const head = "flex flex-wrap items-baseline gap-x-3 gap-y-1";
+  const head = "text-[15px] font-semibold";
   const meta = "text-xs text-muted-foreground tnum";
 
-  if (!sel) {
-    return (
-      <div className={box} aria-live="polite">
-        <div className={head}>
-          <strong className="text-[15px]">Nothing selected</strong>
-        </div>
-        <p>Point at or tap a slide to see the concepts it needs, a concept to see every slide that uses it, or a group or level to see everything connected to it.</p>
-      </div>
-    );
-  }
+  let body: React.ReactNode;
   if (sel.type === "slide") {
-    const slide = map.slides.find((s) => s.n === sel.id)!;
-    const needs = layout.concepts.filter((c) => c.slides.includes(sel.id));
-    const lv = layout.need[sel.id];
-    return (
-      <div className={box} aria-live="polite">
-        <div className={head}>
-          <strong className="text-[15px]">
-            Slide {sel.id}: {slide.title}
-          </strong>
-          <span className={meta}>{lv ? `Needs up to Level ${lv * 100} · ${needs.length} concepts` : "No technical concepts"}</span>
-          {clear}
-        </div>
+    const slide = map.slides.find((s) => s.n === sel.id);
+    const needs = full.concepts.filter((c) => c.slides.includes(sel.id));
+    const lv = full.need[sel.id];
+    body = (
+      <>
+        <p className={head}>
+          Slide {sel.id}: {slide?.title}
+        </p>
+        <p className={meta}>{lv ? `Needs up to Level ${lv * 100} · ${needs.length} concepts` : "No technical concepts"}</p>
         {needs.length ? (
           <div className="flex flex-wrap gap-1.5 pt-1">{needs.map(chip)}</div>
         ) : (
-          <p>This slide is a divider, closing or internal slide, so it needs no technical background.</p>
+          <p>A divider, closing or internal slide, so it needs no technical background.</p>
         )}
-      </div>
+      </>
     );
-  }
-  if (sel.type === "concept") {
-    const c = layout.concepts.find((k) => k.id === sel.id)!;
+  } else if (sel.type === "concept") {
+    const c = full.concepts.find((k) => k.id === sel.id)!;
     const st = stateOf(c.id);
-    return (
-      <div className={box} aria-live="polite">
-        <div className={head}>
-          <strong className="text-[15px]">
-            {c.study}. {c.name}
-          </strong>
-          <span className={meta}>
-            Level {c.level * 100} · {groupName(c.bucket)} · {c.slides.length} {c.slides.length === 1 ? "slide" : "slides"}: {c.slides.join(", ")}
-          </span>
-          {clear}
-        </div>
+    body = (
+      <>
+        <p className={head}>
+          {c.study}. {c.name}
+        </p>
+        <p className={meta}>
+          Level {c.level * 100} · {groupName(c.bucket)} · {c.slides.length} {c.slides.length === 1 ? "slide" : "slides"}: {c.slides.join(", ")}
+        </p>
         <p>{c.explanation}</p>
-        <div className="flex flex-wrap items-center gap-3 pt-1">
-          {playButton(c, 34, "Play video")}
-          {st.mastered && <span className="text-xs font-medium text-emerald-700 dark:text-emerald-400">✓ Mastered</span>}
-          {st.recommended && <span className="text-xs font-medium text-amber-700 dark:text-amber-400">★ Recommended: watch the video</span>}
-        </div>
-      </div>
+        {(st.mastered || st.recommended) && (
+          <p className={cn("text-xs font-medium", st.mastered ? "text-emerald-700 dark:text-emerald-400" : "text-amber-700 dark:text-amber-400")}>
+            {st.mastered ? "✓ Mastered" : "★ Recommended: watch the video"}
+          </p>
+        )}
+      </>
     );
-  }
-  if (sel.type === "group") {
-    const cs = layout.concepts.filter((c) => c.bucket === sel.id);
+  } else if (sel.type === "group") {
+    const cs = full.concepts.filter((c) => c.bucket === sel.id);
     const used = new Set(cs.flatMap((c) => c.slides)).size;
-    return (
-      <div className={box} aria-live="polite">
-        <div className={head}>
-          <strong className="text-[15px]">{groupName(sel.id)}</strong>
-          <span className={meta}>
-            Level {(cs[0]?.level ?? 1) * 100} · {cs.length} concepts · used on {used} slides
-          </span>
-          {clear}
-        </div>
+    body = (
+      <>
+        <p className={head}>{groupName(sel.id)}</p>
+        <p className={meta}>
+          Level {(cs[0]?.level ?? 1) * 100} · {cs.length} concepts · used on {used} slides
+        </p>
         {groupBlurb(sel.id) && <p>{groupBlurb(sel.id)}</p>}
         <div className="flex flex-wrap gap-1.5 pt-1">{cs.map(chip)}</div>
-      </div>
+      </>
+    );
+  } else {
+    const cl = full.concepts.filter((c) => c.level === sel.id);
+    const used = new Set(cl.flatMap((c) => c.slides)).size;
+    const blurb = map.levels.find((l) => l.level === sel.id)?.blurb;
+    body = (
+      <>
+        <p className={head}>{levelName(sel.id)}</p>
+        <p className={meta}>
+          {cl.length} concepts · used on {used} slides · click to show only these
+        </p>
+        {blurb && <p>{blurb}</p>}
+      </>
     );
   }
-  const cl = layout.concepts.filter((c) => c.level === sel.id);
-  const used = new Set(cl.flatMap((c) => c.slides)).size;
-  const tagged = Object.values(layout.need).filter((l) => l === sel.id).length;
+
   return (
-    <div className={box} aria-live="polite">
-      <div className={head}>
-        <strong className="text-[15px]">{levelName(sel.id)}</strong>
-        <span className={meta}>
-          {cl.length} concepts · used on {used} slides · {tagged} slides need this as their highest level
-        </span>
-        {clear}
-      </div>
-      {map.levels.find((l) => l.level === sel.id)?.blurb && <p>{map.levels.find((l) => l.level === sel.id)!.blurb}</p>}
+    <div
+      ref={box}
+      role="tooltip"
+      className="pointer-events-none fixed top-0 left-0 z-50 w-96 space-y-1.5 overflow-hidden rounded-xl border bg-popover px-4 py-3 text-sm text-popover-foreground shadow-lg"
+    >
+      {body}
     </div>
   );
 }

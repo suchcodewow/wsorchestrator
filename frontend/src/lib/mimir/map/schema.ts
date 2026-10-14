@@ -58,14 +58,6 @@ export const mapContentSchema = z
       .min(1)
       .max(40),
     concepts: z.array(conceptSchema).min(1).max(MAP_CONCEPT_LIMIT),
-    capstone: z
-      .object({
-        title: text(120).min(1),
-        intro: text(600),
-        steps: z.array(z.object({ text: text(400).min(1), slides: text(120) })).max(10),
-        teachBack: text(600),
-      })
-      .optional(),
   })
   .superRefine((c, ctx) => {
     const fail = (message: string, path: (string | number)[] = []) => ctx.addIssue({ code: "custom", message, path });
