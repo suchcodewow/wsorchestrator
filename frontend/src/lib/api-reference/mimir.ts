@@ -343,6 +343,21 @@ export const MIMIR_GROUPS: EndpointGroup[] = [
         ],
       },
       {
+        method: "GET",
+        path: "/api/mimir/map/slides/{n}",
+        summary: "Redirects to a slide's picture, which the map shows when you point at the slide.",
+        access: "signedIn",
+        token: true,
+        notes: "The redirect goes to a signed Cloud Storage link, good for an hour, and may be cached for most of that. The pictures are uploaded per environment, so a slide can have none.",
+        params: [{ name: "n", type: "number", required: true, note: "the slide's number, 1 to 200" }],
+        returns: "a 302 to the JPEG",
+        errors: [
+          { status: 404, error: "not_found", when: "n is not a slide number" },
+          { status: 404, error: "missing", when: "that slide has no picture in the bucket" },
+          { status: 503, error: "not_configured", when: "this deployment has nowhere to keep pictures" },
+        ],
+      },
+      {
         method: "PUT",
         path: "/api/mimir/map/concepts/{id}/video",
         summary: "Saves where you are in a concept's video.",

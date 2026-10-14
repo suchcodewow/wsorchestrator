@@ -13,7 +13,7 @@ import { objectSize, signedUrl } from "@/lib/recording/gcs";
 /** Long enough to watch a video through, then a fresh one is asked for. */
 const VIDEO_URL_SECONDS = 3 * 60 * 60;
 
-const bucket = () => process.env.RECORDINGS_BUCKET || null;
+export const bucket = () => process.env.RECORDINGS_BUCKET || null;
 
 /** Whether this deployment has somewhere to keep videos. Local disk mode has none. */
 export const videosConfigured = () => Boolean(bucket());

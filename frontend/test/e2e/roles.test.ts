@@ -803,6 +803,7 @@ const ROUTES: RouteCase[] = [
   // Mimir map: the map, its videos and the coach are everyone's; importing the map, a Training Administrator's.
   { method: "GET", path: "/api/mimir/map", allowed: true },
   { method: "POST", path: "/api/mimir/map/import", allowed: canManageMimir, body: form },
+  { method: "GET", path: "/api/mimir/map/slides/999", allowed: true },
   { method: "GET", path: `/api/mimir/map/concepts/${MISSING}/video`, allowed: true },
   { method: "PUT", path: `/api/mimir/map/concepts/${MISSING}/video`, allowed: true, body: () => ({}) },
   { method: "GET", path: "/api/mimir/coach", allowed: true },

@@ -18,6 +18,7 @@ import {
   slideLevels,
   startAt,
 } from "@/lib/mimir/map/schema";
+import { parseSlideNumber, slideObject } from "@/lib/mimir/map/slides";
 import { CONCEPT_W, CONCEPT_Y, PAD, SLIDE_H, SLIDE_W, SLIDE_Y, layoutMap } from "@/lib/mimir/map/layout";
 import {
   OPEN_REQUEST,
@@ -327,5 +328,18 @@ describe("what a reply asks the app to do", () => {
 
   test("a reply with no marker is just its text", () => {
     assert.deepEqual(readCoachReply("Tell me more.", ids), { text: "Tell me more.", mastered: [], recommended: [] });
+  });
+});
+
+describe("a slide's picture", () => {
+  test("lives at mimir/slides/<n>.jpg, clear of the video prefix", () => {
+    assert.equal(slideObject(7), "mimir/slides/7.jpg");
+  });
+
+  test("takes only a whole slide number in range from the address", () => {
+    assert.equal(parseSlideNumber("1"), 1);
+    assert.equal(parseSlideNumber("46"), 46);
+    assert.equal(parseSlideNumber("200"), 200);
+    for (const bad of ["0", "201", "-1", "01", "1.5", "1e2", "abc", "", "../1", "1%2F2", "99999"]) assert.equal(parseSlideNumber(bad), null, bad);
   });
 });

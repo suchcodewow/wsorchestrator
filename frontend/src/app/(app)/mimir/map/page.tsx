@@ -6,6 +6,7 @@ import { auth, signInPath } from "@/auth";
 import { getMap } from "@/lib/mimir/map/content";
 import { listConceptStates } from "@/lib/mimir/map/progress";
 import { publicMap } from "@/lib/mimir/map/schema";
+import { slidesPresent } from "@/lib/mimir/map/slides";
 import { videosConfigured } from "@/lib/mimir/map/video";
 import { canManageMimir } from "@/lib/roles";
 import { MapView } from "./map-view";
@@ -14,7 +15,7 @@ export default async function MapPage() {
   const session = await auth();
   if (!session?.user) redirect(await signInPath());
 
-  const [map, states] = await Promise.all([getMap(), listConceptStates(session.user.id)]);
+  const [map, states, slideImages] = await Promise.all([getMap(), listConceptStates(session.user.id), slidesPresent().catch(() => null)]);
   if (!map) {
     return (
       <div className="max-w-xl rounded-2xl border bg-card p-6 text-sm shadow-sm">
@@ -35,5 +36,5 @@ export default async function MapPage() {
       </div>
     );
   }
-  return <MapView map={publicMap(map.content)} states={states} videos={videosConfigured()} />;
+  return <MapView map={publicMap(map.content)} states={states} videos={videosConfigured()} slideImages={slideImages ?? []} />;
 }
