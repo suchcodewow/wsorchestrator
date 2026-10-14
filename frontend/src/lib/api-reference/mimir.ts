@@ -307,7 +307,7 @@ export const MIMIR_GROUPS: EndpointGroup[] = [
         notes:
           "map is null until a Training Administrator imports one. A concept's video holds only its length: where the file is kept and what the narrator says stay on the server. states has an entry for each concept you have progress on: resumeAt is where playing starts if you press play now (the beginning if you had reached the end), completed is kept once you have watched to the end, and recommended is the coach asking you to watch the video before you move on. videos is false on a deployment with nowhere to keep them.",
         returns:
-          "{ map: { version, title, lead, sections, slides, levels, buckets, concepts: { id, name, slides, explanation, video?: { seconds } }[], capstone? } | null, importedAt: string | null, states: { [conceptId]: { videoSeconds, videoFurthest, videoDuration, completed, mastered, recommended, resumeAt } }, videos: boolean }",
+          "{ map: { version, title, lead, sections, slides, levels, buckets, concepts: { id, name, slides, explanation, video?: { seconds } }[] } | null, importedAt: string | null, states: { [conceptId]: { videoSeconds, videoFurthest, videoDuration, completed, mastered, recommended, resumeAt } }, videos: boolean }",
       },
       {
         method: "POST",

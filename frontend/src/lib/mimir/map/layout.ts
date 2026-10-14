@@ -5,7 +5,10 @@
  * geometry is tested rather than eyeballed.
  *
  * The concepts are laid out first, in course order and grouped, because their
- * width fixes the canvas; the slides are then spread evenly across it.
+ * width fixes the canvas; the slides are then spread evenly across it. Given a
+ * level, only that level's concepts are laid out, and only the slides that need
+ * them, packed together: the study numbers and each slide's tag are the whole
+ * course's, so nothing changes meaning when the rest is hidden.
  */
 
 import { conceptsInOrder, slideLevels, type InOrder, type MapLevel, type PublicMap } from "./schema";
@@ -20,55 +23,86 @@ export const CONCEPT_Y = 516;
 export const GROUP_Y = CONCEPT_Y + CONCEPT_H + 6;
 export const LEVEL_Y = GROUP_Y + 30;
 export const CANVAS_H = LEVEL_Y + 40;
+/** The least room a slide is given, so a few concepts with many slides never stack them. */
+const SLIDE_ROOM = SLIDE_W + 6;
 
 export type PublicConcept = PublicMap["concepts"][number];
 export type PlacedConcept = InOrder<PublicConcept> & { x: number };
 export type PlacedGroup = { index: number; id: string; level: MapLevel; name: string; sub?: string; x0: number; x1: number; concepts: string[] };
 export type PlacedLevel = { level: MapLevel; x0: number; x1: number };
 export type Edge = { slide: number; concept: string; level: MapLevel; d: string };
+/** A section's band across the slides it covers, among those shown. */
+export type Band = { name: string; band: number; from: number; to: number; count: number; left: number; width: number };
 
 export type MapLayout = {
   width: number;
   concepts: PlacedConcept[];
   groups: PlacedGroup[];
   levels: PlacedLevel[];
-  /** The highest level each slide needs; a slide no concept uses is absent. */
+  /** The slides shown, in order. */
+  slides: number[];
+  bands: Band[];
+  /** The highest level each slide needs across the whole course; a slide no concept uses is absent. */
   need: Record<number, MapLevel>;
   edges: Edge[];
   slideX: (n: number) => number;
   slideSpacing: number;
 };
 
-export function layoutMap(map: PublicMap): MapLayout {
-  const concepts = conceptsInOrder(map);
-  const byId = new Map(concepts.map((c) => [c.id, c]));
+export function layoutMap(map: PublicMap, only: MapLevel | null = null): MapLayout {
+  const everyConcept = conceptsInOrder(map);
+  const need = slideLevels(everyConcept);
+  const shown = new Set(everyConcept.filter((c) => !only || c.level === only).map((c) => c.id));
+  const byId = new Map(everyConcept.map((c) => [c.id, c]));
 
+  // Concepts, grouped, left to right.
   const placed: PlacedConcept[] = [];
   const groups: PlacedGroup[] = [];
   let x = PAD;
+  let previous: MapLevel | null = null;
   map.buckets.forEach((b, i) => {
-    if (i > 0) x += map.buckets[i - 1]!.level !== b.level ? 30 : 16;
+    const ids = b.concepts.filter((id) => shown.has(id));
+    if (ids.length === 0) return;
+    if (previous !== null) x += previous !== b.level ? 30 : 16;
+    previous = b.level;
     const x0 = x;
-    b.concepts.forEach((id, k) => {
-      const c = byId.get(id);
-      if (!c) return;
-      placed.push({ ...c, x: x + CONCEPT_W / 2 });
-      x += CONCEPT_W + (k < b.concepts.length - 1 ? 6 : 0);
+    ids.forEach((id, k) => {
+      placed.push({ ...byId.get(id)!, x: x + CONCEPT_W / 2 });
+      x += CONCEPT_W + (k < ids.length - 1 ? 6 : 0);
     });
-    groups.push({ index: i, id: b.id, level: b.level, name: b.name, sub: b.sub, x0, x1: x, concepts: b.concepts });
+    groups.push({ index: i, id: b.id, level: b.level, name: b.name, sub: b.sub, x0, x1: x, concepts: ids });
   });
-  const width = x + PAD;
+
+  // The slides that need what is shown, or all of them.
+  const slides = map.slides.map((s) => s.n).filter((n) => !only || placed.some((c) => c.slides.includes(n)));
+  const conceptsWidth = x + PAD;
+  const width = Math.max(conceptsWidth, 2 * PAD + slides.length * SLIDE_ROOM);
+  // Fewer concepts than the slides need room for: centre them in what the slides need.
+  const shift = (width - conceptsWidth) / 2;
+  if (shift > 0) {
+    for (const c of placed) c.x += shift;
+    for (const g of groups) {
+      g.x0 += shift;
+      g.x1 += shift;
+    }
+  }
 
   const levels: PlacedLevel[] = ([1, 2, 3] as const).flatMap((level) => {
     const g = groups.filter((gr) => gr.level === level);
     return g.length ? [{ level, x0: g[0]!.x0, x1: g.at(-1)!.x1 }] : [];
   });
 
-  const slideCount = map.slides.length;
-  const slideSpacing = (width - 2 * PAD) / slideCount;
-  const slideX = (n: number) => PAD + slideSpacing * (n - 0.5);
+  const slideSpacing = (width - 2 * PAD) / Math.max(slides.length, 1);
+  const position = new Map(slides.map((n, i) => [n, i + 1]));
+  const slideX = (n: number) => PAD + slideSpacing * ((position.get(n) ?? 1) - 0.5);
 
-  const need = slideLevels(placed);
+  const bands: Band[] = map.sections.flatMap((s) => {
+    const inside = slides.filter((n) => n >= s.from && n <= s.to);
+    if (inside.length === 0) return [];
+    const first = position.get(inside[0]!)!;
+    return [{ name: s.name, band: s.band, from: inside[0]!, to: inside.at(-1)!, count: inside.length, left: PAD + slideSpacing * (first - 1) + 1, width: slideSpacing * inside.length - 6 }];
+  });
+
   const linking: Record<number, PlacedConcept[]> = {};
   for (const c of placed) for (const n of c.slides) (linking[n] ??= []).push(c);
 
@@ -93,5 +127,5 @@ export function layoutMap(map: PublicMap): MapLayout {
     });
   }
 
-  return { width, concepts: placed, groups, levels, need, edges, slideX, slideSpacing };
+  return { width, concepts: placed, groups, levels, slides, bands, need, edges, slideX, slideSpacing };
 }

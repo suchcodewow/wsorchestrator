@@ -10,7 +10,9 @@ Mimir teaches the course one concept at a time. It has two tabs:
   again, differently, before it marks anything.
 - **Map** is the concept map: the slides along the top, the concepts they rely
   on in study order along the bottom, and a line from each slide to each
-  concept it needs. Each concept with a video has a play button whose ring
+  concept it needs. Point at anything for its details. The level chips under
+  the title filter the map to one level, with just the slides that need its
+  concepts; press the chip again to see everything. Each concept with a video has a play button whose ring
   fills as you watch and turns into a check when you have watched it to the
   end. A concept the coach has marked shows a check; one it asked you to watch
   shows **Recommended**.
@@ -35,8 +37,7 @@ npx tsx scripts/mimir-map-convert.ts \
 ```
 
 then loaded in **Mimir Settings → Map** (or `POST /api/mimir/map/import`). The
-file holds the slides, the concepts and their order, the groups and levels, the
-capstone, and for each concept with a video, where it is kept and what the
+file holds the slides, the concepts and their order, the groups and levels, and for each concept with a video, where it is kept and what the
 narrator says in it (which is how the coach knows each video). It is validated
 whole against `src/lib/mimir/map/schema.ts` and replaces the last one. Progress
 is keyed by concept id, so everyone's progress on a concept the new map keeps
