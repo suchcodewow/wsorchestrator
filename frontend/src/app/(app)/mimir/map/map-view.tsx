@@ -48,13 +48,25 @@ const NOT_DRAGGABLE = ".mm-slide, .mm-concept, .mm-group, .mm-level, button";
 const DRAG_THRESHOLD = 4;
 const levelVar = (level: number) => ({ "--lc": `var(--l${level})` }) as React.CSSProperties;
 
-export function MapView({ map, states: initialStates, videos }: { map: PublicMap; states: Record<string, ConceptState>; videos: boolean }) {
+export function MapView({
+  map,
+  states: initialStates,
+  videos,
+  slideImages,
+}: {
+  map: PublicMap;
+  states: Record<string, ConceptState>;
+  videos: boolean;
+  /** The slide numbers that have a picture in this environment. */
+  slideImages: number[];
+}) {
   const router = useRouter();
   const params = useSearchParams();
   const [filter, setFilter] = useState<MapLevel | null>(null);
   // The whole course, for what a concept or slide is; and what is shown now, for where it sits.
   const full = useMemo(() => layoutMap(map), [map]);
   const layout = useMemo(() => (filter ? layoutMap(map, filter) : full), [map, filter, full]);
+  const hasImage = useMemo(() => new Set(slideImages), [slideImages]);
   const byId = useMemo(() => new Map(full.concepts.map((c) => [c.id, c])), [full]);
   // The coach links here with ?play=<concept>: that concept's video opens at once, and the parameter comes off the address.
   const wanted = params.get("play");
@@ -393,7 +405,7 @@ export function MapView({ map, states: initialStates, videos }: { map: PublicMap
         ))}
       </section>
 
-      {hover && <Popup pointed={hover} full={full} map={map} stateOf={stateOf} levelName={levelName} groupName={groupName} groupBlurb={groupBlurb} />}
+      {hover && <Popup pointed={hover} full={full} map={map} hasImage={hasImage} stateOf={stateOf} levelName={levelName} groupName={groupName} groupBlurb={groupBlurb} />}
 
       {playing && byId.get(playing) && (
         <VideoDialog conceptId={playing} name={byId.get(playing)!.name} onClose={() => setPlaying(null)} onState={onState} />
@@ -411,6 +423,7 @@ function Popup({
   pointed,
   full,
   map,
+  hasImage,
   stateOf,
   levelName,
   groupName,
@@ -419,6 +432,8 @@ function Popup({
   pointed: Pointed;
   full: MapLayout;
   map: PublicMap;
+  /** The slides that have a picture to show. */
+  hasImage: Set<number>;
   stateOf: (id: string) => ConceptState;
   levelName: (level: MapLevel) => string;
   groupName: (id: string) => string;
@@ -440,12 +455,20 @@ function Popup({
   const meta = "text-xs text-muted-foreground tnum";
 
   let body: React.ReactNode;
+  // A slide with a picture shows it above its details, in a box of the picture's shape so the popup is its full height before the picture arrives.
+  const picture = sel.type === "slide" && hasImage.has(sel.id);
   if (sel.type === "slide") {
     const slide = map.slides.find((s) => s.n === sel.id);
     const needs = full.concepts.filter((c) => c.slides.includes(sel.id));
     const lv = full.need[sel.id];
     body = (
       <>
+        {picture && (
+          <div className="-mx-1 aspect-video overflow-hidden rounded-md border bg-muted">
+            {/* eslint-disable-next-line @next/next/no-img-element -- a signed redirect to a private bucket, which next/image cannot optimize */}
+            <img src={`/api/mimir/map/slides/${sel.id}`} alt={`Slide ${sel.id}: ${slide?.title ?? ""}`} className="size-full object-contain" />
+          </div>
+        )}
         <p className={head}>
           Slide {sel.id}: {slide?.title}
         </p>
@@ -508,7 +531,10 @@ function Popup({
     <div
       ref={box}
       role="tooltip"
-      className="pointer-events-none fixed top-0 left-0 z-50 w-96 space-y-1.5 overflow-hidden rounded-xl border bg-popover px-4 py-3 text-sm text-popover-foreground shadow-lg"
+      className={cn(
+        "pointer-events-none fixed top-0 left-0 z-50 space-y-1.5 overflow-hidden rounded-xl border bg-popover px-4 py-3 text-sm text-popover-foreground shadow-lg",
+        picture ? "w-[26rem]" : "w-96",
+      )}
     >
       {body}
     </div>

@@ -70,6 +70,32 @@ in `frontend/.env`, create the bucket in the emulator and upload to
 `mimir/videos/` there (see [recordings.md](recordings.md)). Without a bucket the
 Map still shows, but the play buttons are disabled.
 
+## The slide pictures
+
+Pointing at a slide along the top of the map shows the slide itself above its
+details in the popup. The pictures are the course's, so like the videos they are
+uploaded rather than committed, to the same private bucket under
+`mimir/slides/<n>.jpg`, where `<n>` is the slide's number. The browser asks the
+app for `/api/mimir/map/slides/<n>`, which answers with a signed Cloud Storage
+link, so the image never passes through the app. A slide with no picture just
+has no image in its popup; nothing else changes, so each environment can have
+them or not.
+
+Export the deck from PowerPoint with File → Export → PNG (all slides), then:
+
+```bash
+cd frontend
+npx tsx scripts/mimir-slides-prepare.ts ~/path/to/exported-pngs ~/path/to/slides-out
+gcloud auth login
+scripts/mimir-upload-slides.sh qa ~/path/to/slides-out
+scripts/mimir-upload-slides.sh production ~/path/to/slides-out
+```
+
+The first writes each slide as a 960-pixel-wide JPEG named by its number; the
+second uploads them, overwriting any already there. Replacing the deck is doing
+it again. Locally the pictures need the same emulator and bucket as the videos
+(above); without a bucket the popup simply has no picture.
+
 ## Where you left off
 
 The player reports where it is: every 30 seconds while playing, when you pause
