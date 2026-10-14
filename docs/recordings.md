@@ -101,8 +101,11 @@ A recording is deleted 90 days after it is made: `RECORDING_RETENTION_DAYS` in
 `src/lib/recording/video.ts`, and `recordings_retention_days` in Terraform,
 which must agree.
 
-- The bucket's lifecycle deletes `files/` at 90 days, and abandoned `chunks/`
-  and `compose/` objects at 7.
+- The bucket's lifecycle deletes `recordings/files/` at 90 days, and abandoned
+  `recordings/chunks/` and `recordings/compose/` objects at 7. Everything a
+  recording keeps is under `recordings/`, and the course's videos and slide
+  pictures under `mimir/` (see [mimir.md](mimir.md)), so each use has its own
+  folder and its own retention.
 - The app never lists or serves a take past 90 days, and deletes its rows (and
   any files) after each new take is filed, a batch at a time, each recorded in
   the audit trail as `recordings.expire` by System. There is no scheduler to

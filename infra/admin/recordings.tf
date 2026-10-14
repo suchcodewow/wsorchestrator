@@ -7,10 +7,13 @@
 # video passes through Cloud Run. So the bucket stays private, the app's
 # service account reads and writes it, and CORS lets the app's own origin PUT.
 #
-# Objects, and what removes them:
-#   chunks/{take}/{kind}/{seq}     the app deletes them once a file is joined;
-#   compose/{take}/{kind}/{n}      leftovers (an abandoned take) go after a week
-#   files/{take}/{kind}.{ext}      the finished file: retention_days after it is made
+# One folder per use. Recordings are under recordings/, and what removes them:
+#   recordings/chunks/{take}/{kind}/{seq}   the app deletes them once a file is joined;
+#   recordings/compose/{take}/{kind}/{n}    leftovers (an abandoned take) go after a week
+#   recordings/files/{take}/{kind}.{ext}    the finished file: retention_days after it is made
+# The course's videos and slide pictures (Mimir) are under mimir/videos/ and
+# mimir/slides/, which no rule deletes; they are uploaded by hand
+# (frontend/scripts/mimir-upload-*.sh).
 locals {
   recordings_bucket = "${var.admin_project_id}-recordings"
   # The origins browsers upload from: the canonical app URL, and the custom
@@ -43,7 +46,7 @@ resource "google_storage_bucket" "recordings" {
   lifecycle_rule {
     condition {
       age            = var.recordings_retention_days
-      matches_prefix = ["files/"]
+      matches_prefix = ["recordings/files/"]
     }
     action {
       type = "Delete"
@@ -55,7 +58,7 @@ resource "google_storage_bucket" "recordings" {
   lifecycle_rule {
     condition {
       age            = 7
-      matches_prefix = ["chunks/", "compose/"]
+      matches_prefix = ["recordings/chunks/", "recordings/compose/"]
     }
     action {
       type = "Delete"

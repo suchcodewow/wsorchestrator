@@ -235,18 +235,25 @@ export async function removeTakeFiles(takeId: string): Promise<void> {
     return;
   }
   const objects = (
-    await Promise.all(["chunks", "compose", "files"].map((top) => listObjects(b, `${top}/${takeId}/`)))
+    await Promise.all(["chunks", "compose", "files"].map((top) => listObjects(b, `${RECORDINGS_PREFIX}${top}/${takeId}/`)))
   ).flat();
   await inBatches(objects.map((o) => () => deleteObject(b, o.name)), PARALLEL_DELETES);
 }
 
 // ─── Names ──────────────────────────────────────────────────────────────────
 
+/**
+ * Everything a recording keeps in the bucket is under this prefix, as the
+ * course's videos and slide pictures are under `mimir/`. It must match the
+ * lifecycle rules in infra/admin/recordings.tf.
+ */
+const RECORDINGS_PREFIX = "recordings/";
+
 /** Every id in a key has been checked as a UUID by the caller, so none can climb out of where it belongs. */
-const chunkPrefix = (key: TrackKey) => `chunks/${key.takeId}/${key.kind}/`;
+const chunkPrefix = (key: TrackKey) => `${RECORDINGS_PREFIX}chunks/${key.takeId}/${key.kind}/`;
 const chunkObject = (key: TrackKey, seq: number) => `${chunkPrefix(key)}${seqName(seq)}`;
-const composePrefix = (key: TrackKey) => `compose/${key.takeId}/${key.kind}/`;
-const fileObject = (key: TrackKey, mimeType: string) => `files/${key.takeId}/${key.kind}.${videoExtensionFor(mimeType)}`;
+const composePrefix = (key: TrackKey) => `${RECORDINGS_PREFIX}compose/${key.takeId}/${key.kind}/`;
+const fileObject = (key: TrackKey, mimeType: string) => `${RECORDINGS_PREFIX}files/${key.takeId}/${key.kind}.${videoExtensionFor(mimeType)}`;
 
 const diskRoot = () => path.resolve(process.env.RECORDINGS_DIR || path.join(process.cwd(), ".recordings"));
 const trackDir = (key: TrackKey) => path.join(diskRoot(), key.takeId, key.kind);

@@ -48,7 +48,7 @@ carries over. `.gitignore` refuses `mimir-map-content*.json` as a backstop.
 Each environment keeps them in its own private recordings bucket
 (`<admin project>-recordings`, `infra/admin/recordings.tf`) under
 `mimir/videos/`. That prefix is clear of the ones its lifecycle rules delete
-(`files/`, `chunks/`, `compose/`), so they stay until someone removes them. No
+(`recordings/files/`, `recordings/chunks/`, `recordings/compose/`), so they stay until someone removes them. No
 video passes through the app: it hands the browser a signed link (3 hours) and
 the browser plays the file from Cloud Storage, so seeking works.
 
