@@ -4,11 +4,11 @@
  * The concept map. Slides run along the top, the concepts they rely on in
  * course order along the bottom, a curve from each slide to each concept it
  * needs, and the groups and levels beneath. Point at a slide, concept, group
- * or level and its lines light up, with its details in a popup beside it (the
- * popup floats, so nothing on the page moves under the pointer); click one to
- * keep its lines lit. The level chips under the title filter the map to one
- * level's concepts and the slides that need them; press the chip again for
- * everything.
+ * or level and its details appear in a popup beside it (the popup floats, so
+ * nothing on the page moves under the pointer); click one to light its lines,
+ * and click it again, or press Escape, to clear them. The level chips under the
+ * title filter the map to one level's concepts and the slides that need them;
+ * press the chip again for everything. Drag the empty map to pan it sideways.
  *
  * Each concept with a video has a play button, a ring that fills as the video
  * is watched. A concept the coach has marked as known shows a check, and one it
@@ -16,7 +16,7 @@
  */
 
 import "./map.css";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Check, Star } from "lucide-react";
 import { anchorFloating } from "@/lib/floating";
@@ -42,6 +42,10 @@ type Sel = { type: "slide"; id: number } | { type: "concept"; id: string } | { t
 /** What is being pointed at, and the element the popup sits beside. */
 type Pointed = { sel: Sel; anchor: HTMLElement };
 const same = (a: Sel | null, b: Sel) => a !== null && a.type === b.type && a.id === b.id;
+/** A press on any of these is a click on the box, not the start of a drag across the empty map. */
+const NOT_DRAGGABLE = ".mm-slide, .mm-concept, .mm-group, .mm-level, button";
+/** How far the pointer moves, in pixels, before a press on the empty map counts as a drag. */
+const DRAG_THRESHOLD = 4;
 const levelVar = (level: number) => ({ "--lc": `var(--l${level})` }) as React.CSSProperties;
 
 export function MapView({ map, states: initialStates, videos }: { map: PublicMap; states: Record<string, ConceptState>; videos: boolean }) {
@@ -61,7 +65,7 @@ export function MapView({ map, states: initialStates, videos }: { map: PublicMap
   const [locked, setLocked] = useState<Sel | null>(startWith ? { type: "concept", id: startWith } : null);
   const [playing, setPlaying] = useState<string | null>(startWith);
   const scroller = useRef<HTMLDivElement>(null);
-  const sel = locked ?? hover?.sel ?? null;
+  const drag = useRef<{ x: number; left: number; moved: boolean } | null>(null);
   const stateOf = (id: string) => states[id] ?? NO_STATE;
   const onState = useCallback((id: string, s: ConceptState) => setStates((prev) => ({ ...prev, [id]: s })), []);
   const levelName = (level: MapLevel) => map.levels.find((l) => l.level === level)?.name ?? `Level ${level * 100}`;
@@ -70,20 +74,20 @@ export function MapView({ map, states: initialStates, videos }: { map: PublicMap
 
   // What the selection lights up.
   const lit = useMemo(() => {
-    if (!sel) return null;
+    if (!locked) return null;
     const edges = layout.edges.filter((e) => {
       const c = byId.get(e.concept)!;
-      if (sel.type === "slide") return e.slide === sel.id;
-      if (sel.type === "concept") return e.concept === sel.id;
-      if (sel.type === "group") return c.bucket === sel.id;
-      return c.level === sel.id;
+      if (locked.type === "slide") return e.slide === locked.id;
+      if (locked.type === "concept") return e.concept === locked.id;
+      if (locked.type === "group") return c.bucket === locked.id;
+      return c.level === locked.id;
     });
     return {
       edges: new Set(edges.map((e) => `${e.slide}|${e.concept}`)),
       concepts: new Set(edges.map((e) => e.concept)),
       slides: new Set(edges.map((e) => e.slide)),
     };
-  }, [sel, layout, byId]);
+  }, [locked, layout, byId]);
 
   useEffect(() => {
     if (params.get("play")) router.replace("/mimir/map", { scroll: false });
@@ -122,6 +126,32 @@ export function MapView({ map, states: initialStates, videos }: { map: PublicMap
       },
     };
   };
+
+  // Drag the empty map sideways. A touch screen already pans it, so touch is left to the browser.
+  function dragStart(e: PointerEvent<HTMLDivElement>) {
+    const el = scroller.current;
+    if (!el || e.pointerType === "touch" || e.button !== 0 || (e.target as Element).closest(NOT_DRAGGABLE)) return;
+    drag.current = { x: e.clientX, left: el.scrollLeft, moved: false };
+  }
+  function dragMove(e: PointerEvent<HTMLDivElement>) {
+    const el = scroller.current;
+    const d = drag.current;
+    if (!el || !d) return;
+    const dx = e.clientX - d.x;
+    if (!d.moved) {
+      if (Math.abs(dx) < DRAG_THRESHOLD) return;
+      d.moved = true;
+      el.setPointerCapture(e.pointerId);
+      el.classList.add("mm-dragging");
+    }
+    el.scrollLeft = d.left - dx;
+  }
+  function dragEnd(e: PointerEvent<HTMLDivElement>) {
+    const el = scroller.current;
+    if (el?.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId);
+    el?.classList.remove("mm-dragging");
+    drag.current = null;
+  }
 
   function focusConcept(c: PlacedConcept) {
     // A concept outside the level being shown needs the whole map back to be found on it.
@@ -195,8 +225,17 @@ export function MapView({ map, states: initialStates, videos }: { map: PublicMap
         </div>
       </div>
 
-      <div ref={scroller} className="mm-scroll" tabIndex={0} aria-label="Concept map. Scroll sideways to move across the slides.">
-        <div className={cn("mm-canvas", sel && "mm-sel")} style={{ width: layout.width, height: CANVAS_H }}>
+      <div
+        ref={scroller}
+        className="mm-scroll"
+        tabIndex={0}
+        aria-label="Concept map. Scroll sideways to move across the slides."
+        onPointerDown={dragStart}
+        onPointerMove={dragMove}
+        onPointerUp={dragEnd}
+        onPointerCancel={dragEnd}
+      >
+        <div className={cn("mm-canvas", locked && "mm-sel")} style={{ width: layout.width, height: CANVAS_H }}>
           <svg className="mm-edges" viewBox={`0 0 ${layout.width} ${CANVAS_H}`} xmlns="http://www.w3.org/2000/svg" aria-hidden>
             {layout.edges.map((e) => (
               <path key={`${e.slide}|${e.concept}`} d={e.d} className={cn("mm-e", `mm-l${e.level}`, lit?.edges.has(`${e.slide}|${e.concept}`) && "mm-on")} />

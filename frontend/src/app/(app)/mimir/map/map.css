@@ -35,6 +35,11 @@
   background: var(--card);
   padding: 10px 0 14px;
   -webkit-overflow-scrolling: touch;
+  cursor: grab;
+}
+.mm-scroll.mm-dragging {
+  cursor: grabbing;
+  user-select: none;
 }
 .mm-canvas {
   position: relative;
@@ -70,6 +75,9 @@
   overflow: hidden;
 }
 
+.mm-slide,
+.mm-concept,
+.mm-group,
 .mm-slide,
 .mm-concept,
 .mm-group,
