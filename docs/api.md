@@ -94,7 +94,7 @@ escalate itself:
 | `/api/backups/**` | Taking, restoring and importing backups |
 | `PATCH`/`DELETE /api/users/[id]`, `POST /api/users/invites`, `POST /api/invites/accept`, `POST /api/users/test-accounts`, `POST /api/users/test-accounts/[id]/reset` | Granting roles and creating accounts |
 | `POST /api/settings/domains`, `PATCH`/`DELETE /api/settings/domains/[id]` | Who can sign in at all |
-| `GET /api/cohorts/slack/install` | Add to Slack, which hands the app a bot token for the whole workspace and ends in a browser |
+| `GET /api/cohorts/slack/install`, `GET /api/evals/google-meetings/connect`, `GET /api/evals/google-meetings/zoom/connect` | Admin Settings → External Connectors: each hands the app a standing token for an outside account and ends in a browser; platform administrators only |
 | `/api/tokens/**` | Minting tokens (a token must not be able to mint its own replacement) |
 | `/api/me/impersonation` | Viewing the app as an employee, which changes what a browser session is; a token has no session to change |
 | `GET /api/evals/google-meetings/connect` | Connecting the Google account every meeting invite is sent from: a browser sign-in, and a standing token for the app |

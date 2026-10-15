@@ -93,7 +93,7 @@ The install asks for `users:read`, `users:read.email`, `channels:read`,
 `channels:manage` and `channels:join`, and for the intake reminders' direct
 messages `chat:write` and `im:write`; the tab lists any Slack did not grant.
 An app installed before the last two were asked for keeps syncing channels,
-but cannot send the reminders until someone presses *Add to Slack* again.
+but cannot send the reminders until a platform administrator presses *Add to Slack* again on Admin Settings → External Connectors.
 The Sheet's old bot
 (`sheets_to_slack_conne`) has only the first two and `channels:manage`, so on
 that token a run fails with `conversations.list answered missing_scope (needs
@@ -156,8 +156,8 @@ Setting it up in an environment:
    [One OAuth callback](#one-oauth-callback)). Nothing to add.
 2. **Enable the Calendar API** (`calendar-json.googleapis.com`) on the project
    that owns that OAuth client. `infra/admin/apis.tf` does this on apply.
-3. **Connect the account.** An Assessments Administrator presses *Connect
-   Google account* on the tab and signs in as the account the invites should
+3. **Connect the account.** A platform administrator presses *Connect
+   Google account* on Admin Settings → External Connectors and signs in as the account the invites should
    come from, allowing calendar access. `google_meetings_account` (env
    `GOOGLE_USER`) only pre-fills that sign-in. The consent screen shows the
    app as unverified to an account outside the OAuth client's Workspace; the
@@ -172,15 +172,17 @@ Setting it up in an environment:
 4. **Zoom.** Create a **General App** in the Zoom Marketplace, managed by
    *User* (not account-level), with the user-level scopes
    `meeting:write:meeting`, `meeting:read:meeting`,
-   `meeting:update:meeting` and `meeting:delete:meeting`. Nothing with
-   `:admin`: the app then reaches only the meetings of the one Zoom user who
+   `meeting:update:meeting` and `meeting:delete:meeting`, plus `user:read:user`
+   (without it Zoom answers 400 "does not contain scopes" when the app reads
+   who connected). Nothing with `:admin`: the app then reaches only the meetings of the one Zoom user who
    authorizes it, not the company account's. It can stay unpublished. Under
    OAuth, add `{AUTH_URL}/api/auth/callback/google` as the redirect URL (the
    same one Google sign-in and Slack use) and, if Zoom asks, as an allow-list
    entry. Leave Event Subscriptions and the in-client Zoom Apps SDK off: the
    sync only calls Zoom, and Zoom never calls it. Set `zoom_client_id` on the
    workspace and `zoom_client_secret` as a secret (`tf_zoom_client_secret`),
-   then press *Connect Zoom user* on this tab and sign in as the user the
+   then, as a platform administrator, press *Connect Zoom user* on Admin
+   Settings → External Connectors and sign in as the user the
    meetings should be made as, on the Zoom account the eVals administrators
    belong to. Its tokens are kept in `zoom_connections`, sealed like the
    Google one; Zoom rotates the refresh token on every use, so each sync

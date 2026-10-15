@@ -189,6 +189,12 @@ export const canManageBackups = (access: Access) => access.platform;
 
 export const canManageSignInDomains = (access: Access) => access.platform;
 
+/**
+ * Admin Settings → External Connectors: the Google, Zoom and Slack accounts the app acts as. Each
+ * is signed in with a tightly held service account, so only a platform administrator connects one.
+ */
+export const canManageConnectors = (access: Access) => access.platform;
+
 /** The cohort test group sends real Slack and calendar traffic, so only a platform administrator turns it on or off. */
 export const canManageTestGroup = (access: Access) => access.platform;
 

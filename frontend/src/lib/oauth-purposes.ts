@@ -5,7 +5,7 @@
  * new entry here and a start route that calls `startOAuth`; no provider
  * console needs another redirect URI.
  *
- * Each purpose keeps the outcome words its page already reads, as
+ * Each purpose keeps the outcome words the connectors page reads, as
  * `?slack=`, `?google=` and `?zoom=`. A GET, so `audited` never sees it: each outcome
  * that reaches a provider records itself.
  */
@@ -26,11 +26,14 @@ import {
   stateMatches,
   type OAuthPurpose,
 } from "@/lib/oauth-callback";
-import { canManageEvalsSettings, canManageTrainingSettings, type Access } from "@/lib/roles";
+import { canManageConnectors, type Access } from "@/lib/roles";
 import { sealSecret } from "@/lib/secret-box";
 import { exchangeSlackCode, saveSlackInstallation, slackApp } from "@/lib/slack-app";
-import { exchangeCode as exchangeZoomCode, grantedScopes, zoomApp, zoomUserEmail } from "@/lib/zoom";
+import { exchangeCode as exchangeZoomCode, grantedScopes, zoomApp, zoomUserEmail, ZoomError } from "@/lib/zoom";
 import { saveZoomConnection } from "@/lib/zoom-connection";
+
+/** Every connection is made and reported on the one page. */
+export const CONNECTORS_PAGE = "/admin-settings/connectors";
 
 type Actor = { id: string; email: string | null; name: string | null };
 
@@ -52,11 +55,11 @@ type Purpose = {
 };
 
 const PURPOSES: Record<OAuthPurpose, Purpose> = {
-  /** Add to Slack on Cohort Settings → Slack: the bot token the cohort channel sync acts with. */
+  /** Add to Slack on Admin Settings → External Connectors: the bot token the cohort channel sync acts with. */
   slack: {
-    allowed: canManageTrainingSettings,
+    allowed: canManageConnectors,
     configured: () => slackApp() !== null,
-    page: "/cohort-settings/slack",
+    page: CONNECTORS_PAGE,
     param: "slack",
     badState: "bad_state",
     cancelled: "cancelled",
@@ -81,11 +84,11 @@ const PURPOSES: Record<OAuthPurpose, Purpose> = {
     },
   },
 
-  /** Connect Google account on eVals Settings → Google Meetings: the account invites are sent from. */
+  /** Connect Google account on Admin Settings → External Connectors: the account invites are sent from. */
   "google-meetings": {
-    allowed: canManageEvalsSettings,
+    allowed: canManageConnectors,
     configured: () => oauthClient() !== null,
-    page: "/evals-settings/google-meetings",
+    page: CONNECTORS_PAGE,
     param: "google",
     badState: "expired",
     cancelled: "denied",
@@ -126,11 +129,11 @@ const PURPOSES: Record<OAuthPurpose, Purpose> = {
     },
   },
 
-  /** Connect Zoom user on eVals Settings → Google Meetings: the user the Zoom meetings are scheduled as. */
+  /** Connect Zoom user on Admin Settings → External Connectors: the user the Zoom meetings are scheduled as. */
   "zoom-meetings": {
-    allowed: canManageEvalsSettings,
+    allowed: canManageConnectors,
     configured: () => zoomApp() !== null,
-    page: "/evals-settings/google-meetings",
+    page: CONNECTORS_PAGE,
     param: "zoom",
     badState: "expired",
     cancelled: "denied",
@@ -142,8 +145,10 @@ const PURPOSES: Record<OAuthPurpose, Purpose> = {
         tokens = await exchangeZoomCode(zoomApp()!, code, oauthRedirectUri(req));
         email = await zoomUserEmail(tokens.accessToken);
       } catch (err) {
+        // The token works but the app was not given a scope it needs: Zoom answers 400 and names the scopes.
+        const missingScope = err instanceof ZoomError && err.status === 400 && /does not contain scopes/i.test(err.message);
         await audit({ summary: "Tried to connect the Zoom user for Google Meetings.", status: 400, outcome: "failed", detail: { error: (err as Error).message } });
-        return { result: "failed" };
+        return { result: missingScope ? "scope" : "failed" };
       }
       const label = { target: email, targetLabel: email };
 

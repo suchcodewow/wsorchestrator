@@ -3,7 +3,7 @@
 import { NextResponse } from "next/server";
 import { requireCaller } from "@/lib/api-auth";
 import { audited, noteAudit } from "@/lib/audit";
-import { canManageTrainingSettings } from "@/lib/roles";
+import { canManageConnectors, canManageTrainingSettings } from "@/lib/roles";
 import { envSlackToken } from "@/lib/slack";
 import { deleteSlackInstallation, getSlackInstallation, slackApp } from "@/lib/slack-app";
 
@@ -20,7 +20,7 @@ export async function GET(req: Request) {
 }
 
 export const DELETE = audited(async function DELETE(req: Request) {
-  const { error } = await requireCaller(req, canManageTrainingSettings);
+  const { error } = await requireCaller(req, canManageConnectors);
   if (error) return error;
 
   const installation = await getSlackInstallation();

@@ -8,7 +8,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { oauthRedirectUri, startOAuth } from "@/lib/oauth-callback";
-import { canManageTrainingSettings } from "@/lib/roles";
+import { canManageConnectors } from "@/lib/roles";
 import { slackApp, slackAuthorizeUrl } from "@/lib/slack-app";
 
 export async function GET(req: Request) {
@@ -16,7 +16,7 @@ export async function GET(req: Request) {
   if (!session?.user) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
-  if (!canManageTrainingSettings(session.user.access)) {
+  if (!canManageConnectors(session.user.access)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
