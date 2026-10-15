@@ -230,7 +230,7 @@ export const NAV_SECTIONS: NavSection[] = [
         href: "/admin-settings",
         label: "Admin Settings",
         Icon: Settings,
-        description: "Who may sign in.",
+        description: "Who may sign in, and the connected Google, Zoom and Slack accounts.",
         visible: canManageSignInDomains,
       },
       {

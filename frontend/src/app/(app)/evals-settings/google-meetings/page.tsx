@@ -38,8 +38,6 @@ export default async function GoogleMeetingsPage({
         },
         zoom: { ...zoom, connection: zoom.connection && { ...zoom.connection, connectedAt: zoom.connection.connectedAt.toISOString() } },
       }}
-      returned={typeof params.google === "string" ? params.google : null}
-      zoomReturned={typeof params.zoom === "string" ? params.zoom : null}
     />
   );
 }

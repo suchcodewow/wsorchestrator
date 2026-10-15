@@ -101,6 +101,7 @@ const POLICY: Record<string, { actual: Check; expected: Check }> = {
 
   canManageBackups: { actual: roles.canManageBackups, expected: platformOnly },
   canManageSignInDomains: { actual: roles.canManageSignInDomains, expected: platformOnly },
+  canManageConnectors: { actual: roles.canManageConnectors, expected: platformOnly },
   canManageTestGroup: { actual: roles.canManageTestGroup, expected: platformOnly },
   canViewAuditTrail: { actual: roles.canViewAuditTrail, expected: platformOnly },
   canImpersonate: { actual: roles.canImpersonate, expected: platformOnly },
@@ -167,6 +168,7 @@ describe("the areas are independent", () => {
     assert.equal(roles.canManageRoles(a, "platform"), false);
     assert.equal(roles.canManageBackups(a), false);
     assert.equal(roles.canManageSignInDomains(a), false);
+    assert.equal(roles.canManageConnectors(a), false);
     assert.equal(roles.canDeleteUsers(a), false);
   });
 

@@ -17,7 +17,14 @@ const TOKEN = "https://zoom.us/oauth/token";
 const API = "https://api.zoom.us/v2";
 
 /** What the app is set up with in the Zoom Marketplace; Zoom's consent screen asks for these. */
-export const ZOOM_SCOPES = ["meeting:write:meeting", "meeting:read:meeting", "meeting:update:meeting", "meeting:delete:meeting"] as const;
+export const ZOOM_SCOPES = [
+  "meeting:write:meeting",
+  "meeting:read:meeting",
+  "meeting:update:meeting",
+  "meeting:delete:meeting",
+  // To read the connecting user's own email (`GET /users/me`); not the account-wide `:admin` scope.
+  "user:read:user",
+] as const;
 
 export type ZoomApp = { clientId: string; clientSecret: string };
 

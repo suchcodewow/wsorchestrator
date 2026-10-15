@@ -8,13 +8,13 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { oauthRedirectUri, startOAuth } from "@/lib/oauth-callback";
-import { canManageEvalsSettings } from "@/lib/roles";
+import { canManageConnectors } from "@/lib/roles";
 import { authorizationUrl, zoomApp } from "@/lib/zoom";
 
 export async function GET(req: Request) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  if (!canManageEvalsSettings(session.user.access)) {
+  if (!canManageConnectors(session.user.access)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 

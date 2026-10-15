@@ -58,40 +58,17 @@ const STATUS: Record<MeetingStatus, { label: string; chip: string }> = {
   failed: { label: "Sync failed", chip: "bg-red-100 text-red-700 dark:bg-red-400/15 dark:text-red-300" },
 };
 
-/** What the consent screen came back with, from the callback's `?google=`. */
-const RETURNED: Record<string, { tone: "ok" | "error"; text: (current: string | null) => string }> = {
-  connected: { tone: "ok", text: () => "Connected. Sync Now sends the invites from this account." },
-  denied: { tone: "error", text: () => "Google was not given access, so nothing changed." },
-  expired: { tone: "error", text: () => "That sign-in took too long or started in another tab. Connect again." },
-  failed: { tone: "error", text: () => "Google did not finish connecting. Connect again." },
-  scope: { tone: "error", text: () => "The account was connected without calendar access. Connect again and allow it." },
-  different_account: {
-    tone: "error",
-    text: (current) =>
-      `Meetings already have invites from ${current ?? "the connected account"}. Connect that account again, or delete those meetings first.`,
-  },
-};
-
-/** What Zoom's consent screen came back with, from the callback's `?zoom=`. */
-const ZOOM_RETURNED: Record<string, { tone: "ok" | "error"; text: string }> = {
-  connected: { tone: "ok", text: "Connected. Sync Now makes each Zoom meeting as this user." },
-  denied: { tone: "error", text: "Zoom was not given access, so nothing changed." },
-  expired: { tone: "error", text: "That sign-in took too long or started in another tab. Connect again." },
-  failed: { tone: "error", text: "Zoom did not finish connecting. Connect again." },
-  scope: { tone: "error", text: "The user was connected without meeting access. Connect again and allow it." },
-};
-
 const SYNC_ERRORS: Record<string, string> = {
-  not_connected: "Connect a Google account first.",
+  not_connected: "Connect a Google account first, under Admin Settings → External Connectors.",
   not_configured: "The app's Google OAuth client is not set up here.",
   running: "A sync is already running. Give it a minute.",
-  revoked: "Google no longer accepts the connected account's token. Connect it again.",
+  revoked: "Google no longer accepts the connected account's token. Ask a platform administrator to connect it again under Admin Settings → External Connectors.",
   forbidden: "Your own role changed — reload the page.",
 };
 
 const DELETE_ERRORS: Record<string, string> = {
   not_found: "That meeting was already deleted — reload the page.",
-  not_connected: "Its invite can't be cancelled until a Google account is connected again.",
+  not_connected: "Its invite can't be cancelled until a Google account is connected again, under Admin Settings → External Connectors.",
   remote_failed: "Google or Zoom would not cancel it.",
   forbidden: "Your own role changed — reload the page.",
 };
@@ -103,15 +80,11 @@ export function GoogleMeetingsView({
   when,
   page,
   overview,
-  returned,
-  zoomReturned,
 }: {
   query: ListQuery<GoogleMeetingSort>;
   when: MeetingWhen;
   page: Page<MeetingListing>;
   overview: Overview;
-  returned: string | null;
-  zoomReturned: string | null;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -127,8 +100,6 @@ export function GoogleMeetingsView({
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [summary, setSummary] = useState<SyncSummary | null>(null);
-  const shownReturn = returned ? RETURNED[returned] : undefined;
-  const shownZoomReturn = zoomReturned ? ZOOM_RETURNED[zoomReturned] : undefined;
 
   function open(meeting: EditableMeeting | null) {
     setEditing(meeting);
@@ -138,9 +109,6 @@ export function GoogleMeetingsView({
   function show(next: MeetingWhen) {
     const p = new URLSearchParams(params.toString());
     p.delete("page");
-    p.delete("google");
-    p.delete("zoom");
-    p.delete("current");
     if (next === "upcoming") p.delete("when");
     else p.set("when", next);
     const qs = p.toString();
@@ -213,7 +181,7 @@ export function GoogleMeetingsView({
         <Button
           variant="brand"
           disabled={!connection || connection.running || busy === "sync"}
-          title={connection ? undefined : "Connect a Google account first"}
+          title={connection ? undefined : "Connect a Google account first, under Admin Settings → External Connectors"}
           onClick={syncNow}
         >
           {busy === "sync" || connection?.running ? <Loader2 className="animate-spin" /> : <RefreshCw />}
@@ -232,18 +200,10 @@ export function GoogleMeetingsView({
                   {connection.connectedBy && <> by {connection.connectedBy}</>}
                 </>
               ) : (
-                "None yet. Sign in as the account the invites should come from."
+                "None yet. A platform administrator connects it under Admin Settings → External Connectors."
               )}
             </div>
           </div>
-          {/* A full page load, not a client navigation: the route sends the browser on to Google. */}
-          <Button
-            variant={connection ? "outline" : "brand"}
-            size="sm"
-            onClick={() => window.location.assign("/api/evals/google-meetings/connect")}
-          >
-            {connection ? "Reconnect" : "Connect Google account"}
-          </Button>
         </div>
         <div className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="space-y-0.5">
@@ -256,21 +216,12 @@ export function GoogleMeetingsView({
                   administrators below as alternative hosts.
                 </>
               ) : zoom.configured ? (
-                "None yet, so invites go out with no Zoom link. Sign in as the user the Zoom meetings should be made as."
+                "None yet, so invites go out with no Zoom link. A platform administrator connects one under Admin Settings → External Connectors."
               ) : (
                 "Zoom is not set up here, so invites go out with no Zoom link."
               )}
             </div>
           </div>
-          {zoom.configured && (
-            <Button
-              variant={zoom.connection ? "outline" : "brand"}
-              size="sm"
-              onClick={() => window.location.assign("/api/evals/google-meetings/zoom/connect")}
-            >
-              {zoom.connection ? "Reconnect" : "Connect Zoom user"}
-            </Button>
-          )}
         </div>
         <div className="space-y-0.5 px-5 py-4">
           <div className="font-medium">
@@ -290,25 +241,6 @@ export function GoogleMeetingsView({
         )}
       </motion.div>
 
-      {shownReturn && (
-        <motion.p
-          variants={riseChild}
-          role={shownReturn.tone === "error" ? "alert" : "status"}
-          className={cn("text-sm", shownReturn.tone === "error" ? "text-destructive" : "text-muted-foreground")}
-        >
-          {shownReturn.text(params.get("current"))}
-        </motion.p>
-      )}
-
-      {shownZoomReturn && (
-        <motion.p
-          variants={riseChild}
-          role={shownZoomReturn.tone === "error" ? "alert" : "status"}
-          className={cn("text-sm", shownZoomReturn.tone === "error" ? "text-destructive" : "text-muted-foreground")}
-        >
-          {shownZoomReturn.text}
-        </motion.p>
-      )}
       {error && (
         <motion.p variants={riseChild} role="alert" className="text-sm text-destructive">
           {error}

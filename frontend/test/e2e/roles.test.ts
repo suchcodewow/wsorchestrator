@@ -42,6 +42,7 @@ import {
   canManageMimir,
   canManageTrainingSettings,
   canManageSettings,
+  canManageConnectors,
   canManageSignInDomains,
   canManageTestGroup,
   canManageUsers,
@@ -415,7 +416,12 @@ const PAGES: Record<string, PageCase> = {
   "/invite/<unknown>": { path: () => `/invite/${"A".repeat(32)}`, expect: () => 200 },
   "/backups": { path: () => "/backups", expect: gated(canManageBackups) },
   "/cloud-status": { path: () => "/cloud-status", expect: gated(canAuditProjects) },
-  "/admin-settings": { path: () => "/admin-settings", expect: gated(canManageSignInDomains) },
+  "/admin-settings": {
+    path: () => "/admin-settings",
+    expect: (a) => (canManageSignInDomains(a) ? { to: "/admin-settings/domains" } : 404),
+  },
+  "/admin-settings/domains": { path: () => "/admin-settings/domains", expect: gated(canManageSignInDomains) },
+  "/admin-settings/connectors": { path: () => "/admin-settings/connectors", expect: gated(canManageConnectors) },
   "/audit": { path: () => "/audit", expect: gated(canViewAuditTrail) },
   "/audit?q=nothing&sort=actor&page=2": {
     path: () => "/audit?q=nothing&sort=actor&page=2",
@@ -588,13 +594,13 @@ const ROUTES: RouteCase[] = [
   { method: "GET", path: "/api/cohorts/test-group", allowed: canUseTraining },
   { method: "PUT", path: "/api/cohorts/test-group", allowed: canManageTestGroup, body: () => ({}) },
   { method: "GET", path: "/api/cohorts/slack/installation", allowed: canManageTrainingSettings },
-  { method: "DELETE", path: "/api/cohorts/slack/installation", allowed: canManageTrainingSettings, denyOnly: true },
-  { method: "GET", path: "/api/cohorts/slack/install", allowed: canManageTrainingSettings, unconfigured: true, sessionOnly: true },
+  { method: "DELETE", path: "/api/cohorts/slack/installation", allowed: canManageConnectors, denyOnly: true },
+  { method: "GET", path: "/api/cohorts/slack/install", allowed: canManageConnectors, unconfigured: true, sessionOnly: true },
   // The shared OAuth callback, with a connection's state: no Slack app on the e2e server, so 503 past the gate.
   {
     method: "GET",
     path: "/api/auth/callback/google?state=wo.slack.stale&code=x",
-    allowed: canManageTrainingSettings,
+    allowed: canManageConnectors,
     unconfigured: true,
     sessionOnly: true,
   },
@@ -731,19 +737,19 @@ const ROUTES: RouteCase[] = [
   // An allowed sync would call Google for real, were an account connected.
   { method: "POST", path: "/api/evals/google-meetings/sync", allowed: canManageEvalsSettings, denyOnly: true },
   // A redirect to Google, or 503 without an OAuth client; the callback sends a stale state back to the tab.
-  { method: "GET", path: "/api/evals/google-meetings/connect", allowed: canManageEvalsSettings, unconfigured: true, sessionOnly: true },
-  { method: "GET", path: "/api/evals/google-meetings/zoom/connect", allowed: canManageEvalsSettings, unconfigured: true, sessionOnly: true },
+  { method: "GET", path: "/api/evals/google-meetings/connect", allowed: canManageConnectors, unconfigured: true, sessionOnly: true },
+  { method: "GET", path: "/api/evals/google-meetings/zoom/connect", allowed: canManageConnectors, unconfigured: true, sessionOnly: true },
   // The shared OAuth callback, which sends a stale state back to the tab.
   {
     method: "GET",
     path: "/api/auth/callback/google?state=wo.google-meetings.stale&code=x",
-    allowed: canManageEvalsSettings,
+    allowed: canManageConnectors,
     sessionOnly: true,
   },
   {
     method: "GET",
     path: "/api/auth/callback/google?state=wo.zoom-meetings.stale&code=x",
-    allowed: canManageEvalsSettings,
+    allowed: canManageConnectors,
     sessionOnly: true,
   },
   { method: "GET", path: "/api/evals/assessments", allowed: canManageEvalsSettings },
@@ -907,8 +913,8 @@ describe("the shared OAuth callback", () => {
   });
 
   test("sends a connection back to the page that started it, and refuses a purpose it does not know", async () => {
-    const back = await send("assessmentsAdmin", "GET", "/api/auth/callback/google?state=wo.google-meetings.stale&code=x");
-    assert.deepEqual([back.status, back.location], [307, "/evals-settings/google-meetings"]);
+    const back = await send("platform", "GET", "/api/auth/callback/google?state=wo.google-meetings.stale&code=x");
+    assert.deepEqual([back.status, back.location], [307, "/admin-settings/connectors"]);
     const unknown = await send("platform", "GET", "/api/auth/callback/google?state=wo.nothing.x&code=x");
     assert.equal(unknown.status, 400);
   });

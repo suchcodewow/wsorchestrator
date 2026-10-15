@@ -57,10 +57,11 @@ test("an answer with no new refresh token is a failure, since the old one is spe
   await assert.rejects(refreshTokens(app, "old"), ZoomError);
 });
 
-test("every meeting scope is needed, named with or without a suffix; an answer that names none is let through", () => {
-  const all = "meeting:write:meeting meeting:read:meeting meeting:update:meeting meeting:delete:meeting";
+test("every meeting scope and the profile scope are needed, named with or without a suffix; an answer that names none is let through", () => {
+  const all = "meeting:write:meeting meeting:read:meeting meeting:update:meeting meeting:delete:meeting user:read:user";
   assert.equal(grantedScopes(all), true);
-  assert.equal(grantedScopes("meeting:write:meeting:admin meeting:read:meeting:admin meeting:update:meeting:admin meeting:delete:meeting:admin"), true);
+  assert.equal(grantedScopes("meeting:write:meeting:admin meeting:read:meeting:admin meeting:update:meeting:admin meeting:delete:meeting:admin user:read:user:admin"), true);
+  assert.equal(grantedScopes(all.replace(" user:read:user", "")), false);
   assert.equal(grantedScopes("meeting:write:meeting meeting:read:meeting"), false);
   assert.equal(grantedScopes(""), true);
 });
