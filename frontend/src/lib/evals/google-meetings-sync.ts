@@ -281,19 +281,29 @@ type SyncContext = {
   cohort: CohortMember[];
   administrators: string[];
   notes: string[];
-  /** The test group, while it is on: its people are invited to their own copy of each meeting, and the real invites are left alone. */
+  /** The test group, while it is on: its people are invited to their own copy of each meeting, with a Zoom meeting of its own, and the real invites are left alone. */
   testGroup: TestGroup | null;
 };
 
 /**
  * With the test group on, a meeting's invite for the group alone, titled with
- * the group's suffix and carrying the meeting's Zoom link if it has one. The
- * real invite is never changed, so the real cohort hears nothing.
+ * the group's suffix, with a Zoom meeting of its own made the same way as a
+ * real one. The real invite and Zoom meeting are never changed, so the real
+ * cohort hears nothing; the group's people are the only difference.
  */
 async function syncOneForTestGroup(ctx: SyncContext, group: TestGroup, meeting: GoogleMeeting): Promise<MeetingSyncOutcome> {
   const invitees = [...new Set(group.members.map((m) => m.email.toLowerCase()))].filter((e) => e !== ctx.organizer.toLowerCase()).sort();
   try {
-    const fields = eventFields({ ...meeting, title: `${meeting.title} [${group.suffix}]` }, meeting.zoomJoinUrl);
+    const titled = { ...meeting, title: `${meeting.title} [${group.suffix}]` };
+    let zoomJoinUrl: string | null = null;
+    if (ctx.zoom) {
+      const [storedZoom] = (await testArtifacts("zoom_meeting")).filter((a) => a.key === meeting.id);
+      const zoomed = await syncZoom(ctx.zoom, { ...titled, zoomMeetingId: storedZoom?.ref ?? null, zoomJoinUrl: null }, ctx.zoomHosts, ctx.notes);
+      // Recorded at once, so turning the group off removes it even if the invite below fails.
+      await recordTestArtifact("zoom_meeting", meeting.id, zoomed.zoomMeetingId);
+      zoomJoinUrl = zoomed.zoomJoinUrl;
+    }
+    const fields = eventFields(titled, zoomJoinUrl);
     const events = `/calendars/${enc(ctx.calendarId)}/events`;
     const [stored] = (await testArtifacts("calendar_event")).filter((a) => a.key === meeting.id);
     let current: CalendarEvent | null = null;
@@ -415,8 +425,8 @@ export async function syncGoogleMeetings(): Promise<GoogleSyncResult> {
     if (!zoom) notes.push("No Zoom user is connected, so the invites have no Zoom link. Connect one on this page, with ZOOM_CLIENT_ID and ZOOM_CLIENT_SECRET set.");
     const group = await getTestGroup();
     const testGroup = group.on ? group : null;
-    if (testGroup) notes.push(`The test group is on, so each meeting was sent to the test group alone as “[${testGroup.suffix}]”, with no Zoom meeting of its own; the real invites were left as they were.`);
-    const zoomHosts: ZoomHosts = { wanted: zoom && !testGroup ? administrators.filter((email) => email !== connectedUser!.email) : [], refused: new Set() };
+    if (testGroup) notes.push(`The test group is on, so each meeting was sent to the test group alone as “[${testGroup.suffix}]”, with a Zoom meeting of its own; the real invites were left as they were.`);
+    const zoomHosts: ZoomHosts = { wanted: zoom ? administrators.filter((email) => email !== connectedUser!.email) : [], refused: new Set() };
 
     const ctx: SyncContext = {
       calendar,
@@ -490,13 +500,33 @@ export async function cancelGoogleMeeting(
 }
 
 /**
- * Cancels every invite the test group made, emailing its guests, and forgets
- * them. One Google refuses is named in `failures` and stays recorded.
+ * Cancels every invite and Zoom meeting the test group made, emailing its
+ * guests, and forgets them. One Google or Zoom refuses is named in `failures`
+ * and stays recorded.
  */
 export async function cancelTestMeetings(): Promise<{ cancelled: number; failures: string[] }> {
   const artifacts = await testArtifacts("calendar_event");
+  const zoomMeetings = await testArtifacts("zoom_meeting");
   const failures: string[] = [];
   let cancelled = 0;
+  if (artifacts.length === 0 && zoomMeetings.length === 0) return { cancelled, failures };
+
+  const zoom = (await connectedZoom())?.client;
+  for (const { key, ref } of zoomMeetings) {
+    if (!zoom) {
+      failures.push(`${key}: no Zoom user is connected to cancel its Zoom meeting`);
+      continue;
+    }
+    try {
+      if (ref) await zoom.call("DELETE", `/meetings/${enc(ref)}`);
+    } catch (err) {
+      if (!(err instanceof ZoomError && err.gone)) {
+        failures.push(`${key}: ${(err as Error).message}`);
+        continue;
+      }
+    }
+    await forgetTestArtifact("zoom_meeting", key);
+  }
   if (artifacts.length === 0) return { cancelled, failures };
 
   const connected = await connect();

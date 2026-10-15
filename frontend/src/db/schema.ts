@@ -1044,13 +1044,14 @@ export const timedJobs = pgTable("timed_jobs", {
     .defaultNow(),
 });
 
-export const TEST_GROUP_ARTIFACT_KINDS = ["slack_channel", "calendar_event"] as const;
+export const TEST_GROUP_ARTIFACT_KINDS = ["slack_channel", "calendar_event", "zoom_meeting"] as const;
 export type TestGroupArtifactKind = (typeof TEST_GROUP_ARTIFACT_KINDS)[number];
 
 /**
  * What the test group has made outside the app, so turning it off can take it
  * all away: a Slack channel (`key` is its name) or a calendar invite (`key` is
- * the meeting's id, `ref` the Google event id).
+ * the meeting's id, `ref` the Google event id) or a Zoom
+ * meeting (`key` is the meeting's id, `ref` the Zoom meeting id).
  */
 export const testGroupArtifacts = pgTable(
   "test_group_artifacts",
