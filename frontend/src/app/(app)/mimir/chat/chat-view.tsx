@@ -77,6 +77,7 @@ export function ChatView({ initial, concepts, profile }: { initial: View; concep
   const scroller = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
   const greeted = useRef(false);
+  const busy = replying || resetting;
   const nameOf = (id: string) => concepts.find((c) => c.id === id)?.name ?? id;
 
   const messages = view.conversation?.messages ?? [];
@@ -132,7 +133,7 @@ export function ChatView({ initial, concepts, profile }: { initial: View; concep
       router.refresh();
     } else {
       setError(failed);
-      if ("message" in input) setDraft(input.message);
+      if ("message" in input) setDraft((d) => d || input.message);
     }
     setPending(null);
     setReplying(false);
@@ -149,7 +150,7 @@ export function ChatView({ initial, concepts, profile }: { initial: View; concep
 
   async function send() {
     const message = draft.trim();
-    if (!message || replying) return;
+    if (!message || busy) return;
     setPending(message);
     setDraft("");
     await run({ message });
@@ -194,7 +195,6 @@ export function ChatView({ initial, concepts, profile }: { initial: View; concep
   }
 
   const next = view.progress.next;
-  const busy = replying || resetting;
   const pct = view.progress.total ? Math.round((view.progress.mastered / view.progress.total) * 100) : 0;
 
   return (
@@ -321,7 +321,7 @@ export function ChatView({ initial, concepts, profile }: { initial: View; concep
               placeholder="Your answer… (Enter to send, Shift+Enter for a new line)"
               aria-label="Your message to the coach"
               className="max-h-40 min-h-0 resize-none"
-              disabled={busy}
+              aria-busy={busy}
             />
             <Button type="submit" variant="brand" size="icon" aria-label="Send" disabled={!draft.trim() || busy}>
               {replying ? <Loader2 className="animate-spin" /> : <SendHorizontal />}
