@@ -83,6 +83,9 @@ export type CalendarScope = (typeof CALENDAR_SCOPES)[number];
 
 export const calendarScope = pgEnum("calendar_scope", CALENDAR_SCOPES);
 
+/** A tab a user starred: where it goes, and what the sidebar calls it. */
+export type FavoriteTab = { href: string; label: string };
+
 export const users = pgTable("users", {
   id: text("id")
     .primaryKey()
@@ -101,6 +104,10 @@ export const users = pgTable("users", {
   irisRole: irisRole("iris_role"),
   isPlatformAdmin: boolean("is_platform_admin").notNull().default(false),
   calendarScope: calendarScope("calendar_scope").notNull().default("own"),
+  favoriteTabs: jsonb("favorite_tabs")
+    .$type<FavoriteTab[]>()
+    .notNull()
+    .default(sql`'[]'::jsonb`),
   /** Made to test the app as, outside production; see src/lib/test-accounts.ts. */
   isTestAccount: boolean("is_test_account").notNull().default(false),
 });

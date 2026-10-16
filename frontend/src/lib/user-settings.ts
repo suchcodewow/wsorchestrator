@@ -4,7 +4,7 @@
 
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
-import type { CalendarScope, ThemePreference } from "@/db/schema";
+import type { CalendarScope, FavoriteTab, ThemePreference } from "@/db/schema";
 import { recordAudit, requestIp } from "@/lib/audit";
 import { savePreferences } from "@/lib/user-preferences";
 
@@ -51,4 +51,16 @@ export async function setCalendarScope(scope: CalendarScope): Promise<void> {
   const result = await savePreferences(session.user, { calendarScope: scope });
   await recordPreference(session.user, "Set which events their calendar shows.", { calendarScope: scope }, result);
   if (result.ok) revalidatePath("/events");
+}
+
+/** Saves the whole favorites list; they are whoever is at the screen's, even while viewing as someone else. */
+export async function setFavoriteTabs(tabs: FavoriteTab[]): Promise<void> {
+  const session = await auth();
+  if (!session?.user?.id) return;
+
+  const user = session.impersonator
+    ? { ...session.impersonator, access: session.user.access }
+    : session.user;
+  const result = await savePreferences(user, { favoriteTabs: tabs });
+  await recordPreference(user, "Changed their favorite tabs.", { favoriteTabs: tabs }, result);
 }

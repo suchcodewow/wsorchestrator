@@ -24,6 +24,7 @@ export const PATCH = audited(async function PATCH(req: Request) {
   const body = (await req.json().catch(() => null)) as {
     themePreference?: unknown;
     calendarScope?: unknown;
+    favoriteTabs?: unknown;
   } | null;
   if (!body || typeof body !== "object") {
     return NextResponse.json({ error: "invalid_body" }, { status: 400 });
