@@ -126,7 +126,7 @@
 .mm-slide {
   position: absolute;
   top: 34px;
-  width: 78px;
+  width: 117px;
   height: 61px;
   background: var(--background);
   border: 1px solid var(--border);
@@ -150,7 +150,7 @@
 
 .mm-concept {
   position: absolute;
-  width: 84px;
+  width: 126px;
   height: 124px;
   background: var(--background);
   border: 1px solid var(--border);
@@ -297,3 +297,13 @@
 /* "Show all connections" off: a line shows only when it belongs to what is selected. */
 .mm-bare .mm-edges .mm-e { opacity: 0; }
 .mm-bare.mm-sel .mm-edges .mm-e.mm-on { opacity: 0.9; }
+
+/* A faint rule between the slides and the first level's column. */
+.mm-divider {
+  position: absolute;
+  top: 20px;
+  width: 1px;
+  background: var(--border);
+  opacity: 0.6;
+  pointer-events: none;
+}
