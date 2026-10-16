@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import type { Session } from "next-auth";
 import { signOut } from "@/auth";
 import { AmbientBackdrop } from "@/components/ambient-backdrop";
+import { FavoriteTabsProvider } from "@/components/favorite-tabs";
 import { AppSidebar } from "@/components/app-sidebar";
 import { SiteHeader } from "@/components/site-header";
 import { buildInfo } from "@/lib/build-info";
@@ -29,14 +30,17 @@ export async function AppShell({
 
         <SiteHeader session={session} />
 
-        <main className="relative mx-auto max-w-6xl px-6 py-10">{children}</main>
+        <main className="relative mx-auto max-w-6xl px-6 py-10">
+          {children}
+        </main>
       </div>
     );
   }
 
-  const { themePreference } = await getUserPreferences();
+  const { themePreference, favoriteTabs } = await getUserPreferences();
   const collapsed =
-    parseSidebarState((await cookies()).get(SIDEBAR_COOKIE)?.value) === "collapsed";
+    parseSidebarState((await cookies()).get(SIDEBAR_COOKIE)?.value) ===
+    "collapsed";
 
   const pane = scroll === "pane";
 
@@ -51,32 +55,34 @@ export async function AppShell({
 
       <SiteHeader session={session} width="max-w-none" sidebar />
 
-      <div className="flex min-h-0 flex-1">
-        <AppSidebar
-          name={user.name ?? null}
-          email={user.email ?? ""}
-          image={user.image ?? null}
-          access={user.access}
-          initialTheme={themePreference}
-          build={buildInfo()}
-          impersonator={session.impersonator ?? null}
-          defaultCollapsed={collapsed}
-          sticky={!pane}
-          signOutAction={async () => {
-            "use server";
-            await signOut({ redirectTo: "/" });
-          }}
-        />
+      <FavoriteTabsProvider initial={favoriteTabs}>
+        <div className="flex min-h-0 flex-1">
+          <AppSidebar
+            name={user.name ?? null}
+            email={user.email ?? ""}
+            image={user.image ?? null}
+            access={user.access}
+            initialTheme={themePreference}
+            build={buildInfo()}
+            impersonator={session.impersonator ?? null}
+            defaultCollapsed={collapsed}
+            sticky={!pane}
+            signOutAction={async () => {
+              "use server";
+              await signOut({ redirectTo: "/" });
+            }}
+          />
 
-        <main
-          className={cn(
-            "relative min-w-0 flex-1",
-            pane && "lg:overflow-y-auto",
-          )}
-        >
-          <div className="mx-auto max-w-6xl px-6 py-10">{children}</div>
-        </main>
-      </div>
+          <main
+            className={cn(
+              "relative min-w-0 flex-1",
+              pane && "lg:overflow-y-auto",
+            )}
+          >
+            <div className="mx-auto max-w-6xl px-6 py-10">{children}</div>
+          </main>
+        </div>
+      </FavoriteTabsProvider>
     </div>
   );
 }

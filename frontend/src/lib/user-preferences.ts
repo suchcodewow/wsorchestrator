@@ -11,18 +11,22 @@ import {
   THEME_PREFERENCES,
   users,
   type CalendarScope,
+  type FavoriteTab,
   type ThemePreference,
 } from "@/db/schema";
+import { parseFavoriteTabs } from "@/lib/favorite-tabs";
 import { canSeeAllEvents, type Access } from "@/lib/roles";
 
 export type UserPreferences = {
   themePreference: ThemePreference;
   calendarScope: CalendarScope;
+  favoriteTabs: FavoriteTab[];
 };
 
 const DEFAULTS: UserPreferences = {
   themePreference: "system",
   calendarScope: "own",
+  favoriteTabs: [],
 };
 
 export const getUserPreferences = cache(
@@ -32,16 +36,20 @@ export const getUserPreferences = cache(
     const shown = await preferencesOf(session.user.id);
     if (!session.impersonator) return shown;
 
-    // Viewing as someone else shows their calendar, in your own theme.
+    // Viewing as someone else shows their calendar, in your own theme and favorites.
     const own = await preferencesOf(session.impersonator.id);
-    return { ...shown, themePreference: own.themePreference };
+    return {
+      ...shown,
+      themePreference: own.themePreference,
+      favoriteTabs: own.favoriteTabs,
+    };
   },
 );
 
 export async function preferencesOf(userId: string): Promise<UserPreferences> {
   const row = await db.query.users.findFirst({
     where: eq(users.id, userId),
-    columns: { themePreference: true, calendarScope: true },
+    columns: { themePreference: true, calendarScope: true, favoriteTabs: true },
   });
   return row ?? DEFAULTS;
 }
@@ -51,7 +59,11 @@ export type PreferencesError = "invalid" | "forbidden";
 /** Saves whichever preferences are given; the calendar scope needs the role. */
 export async function savePreferences(
   user: { id: string; access: Access },
-  patch: { themePreference?: unknown; calendarScope?: unknown },
+  patch: {
+    themePreference?: unknown;
+    calendarScope?: unknown;
+    favoriteTabs?: unknown;
+  },
 ): Promise<{ ok: true } | { ok: false; error: PreferencesError }> {
   const set: Partial<UserPreferences> = {};
 
@@ -68,6 +80,12 @@ export async function savePreferences(
     }
     if (!canSeeAllEvents(user.access)) return { ok: false, error: "forbidden" };
     set.calendarScope = patch.calendarScope as CalendarScope;
+  }
+
+  if (patch.favoriteTabs !== undefined) {
+    const tabs = parseFavoriteTabs(patch.favoriteTabs);
+    if (!tabs) return { ok: false, error: "invalid" };
+    set.favoriteTabs = tabs;
   }
 
   if (Object.keys(set).length > 0) {
