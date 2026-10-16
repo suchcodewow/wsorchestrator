@@ -9,11 +9,16 @@
  */
 
 import { z } from "zod";
+import type { MimirConceptPoint } from "@/db/schema";
 
 export const MAP_ID = "current";
 /** The most any one list the map holds may run to, so no query reads more than a page of rows. */
 export const MAP_CONCEPT_LIMIT = 100;
 export const MAP_SLIDE_LIMIT = 200;
+/** A concept's checklist: enough points to be worth ticking one by one, few enough to say in a few messages. */
+export const POINTS_MIN = 2;
+export const POINTS_MAX = 6;
+export const POINT_CHARS = 160;
 /** A video object lives under this prefix in the recordings bucket, clear of the prefixes its lifecycle rules delete. */
 export const VIDEO_PREFIX = "mimir/videos/";
 /** A slide's picture is `<n>.jpg` under this prefix, in the same bucket and clear of the same lifecycle rules. */
@@ -41,6 +46,11 @@ const conceptSchema = z.object({
   slides: z.array(z.number().int().min(1).max(MAP_SLIDE_LIMIT)).max(MAP_SLIDE_LIMIT),
   /** One plain-language paragraph. */
   explanation: text(4000).min(1),
+  /**
+   * The main points a rep must put in their own words, each ticked on its own.
+   * Without them the coach writes a checklist for each rep the first time it asks.
+   */
+  points: z.array(text(POINT_CHARS).min(1)).min(POINTS_MIN).max(POINTS_MAX).optional(),
   video: videoSchema.optional(),
 });
 export type MapConceptInput = z.infer<typeof conceptSchema>;
@@ -142,6 +152,21 @@ export function startAt(position: number, duration: number): number {
   return position >= duration - END_SLACK_SECONDS ? 0 : position;
 }
 
+export type ConceptPoint = MimirConceptPoint;
+
+/**
+ * The checklist a rep is held to on a concept: the imported points when it has
+ * them, with any ticks the rep has earned on the same words, or else the one
+ * the coach wrote for them. Null when there is neither yet.
+ */
+export function checklistOf(concept: { points?: string[] }, stored: ConceptPoint[] | null | undefined): ConceptPoint[] | null {
+  if (concept.points?.length) {
+    const ticked = new Set((stored ?? []).filter((p) => p.covered).map((p) => p.text));
+    return concept.points.map((text) => ({ text, covered: ticked.has(text) }));
+  }
+  return stored?.length ? stored : null;
+}
+
 /** One person's standing on one concept, as the page reads it. */
 export type ConceptState = {
   /** Where they left off, and the furthest they have been, in seconds. */
@@ -154,6 +179,8 @@ export type ConceptState = {
   mastered: boolean;
   /** The coach has asked them to watch the video, and they have not yet shown they know it. */
   recommended: boolean;
+  /** The checklist as stored for them, ticks and all; `checklistOf` reads it against the concept. */
+  points: ConceptPoint[] | null;
   /** Where playing starts if they press play now. */
   resumeAt: number;
 };
@@ -165,6 +192,7 @@ export const NO_STATE: ConceptState = {
   completed: false,
   mastered: false,
   recommended: false,
+  points: null,
   resumeAt: 0,
 };
 

@@ -332,3 +332,115 @@ describe("the coach", () => {
     }
   });
 });
+
+describe("the coach's checklists", () => {
+  beforeEach(async () => {
+    for (const u of [rep, other]) {
+      await resetCoachChat(u.id);
+      await db.delete(mimirConceptProgress).where(eq(mimirConceptProgress.userId, u.id));
+    }
+  });
+
+  const say = async (userId: string, reply: string, message = "Here is what I know.") => {
+    const result = await sendCoachMessage(userId, { message }, { complete: coach(reply).complete });
+    assert.ok(result.ok, JSON.stringify(result));
+    return result;
+  };
+
+  test("the coach sets out a checklist once and ticks it a point at a time, and the last tick masters the concept", async () => {
+    const first = await say(rep.id, "Good start. What does alpha do for the bakery?\n[POINTS: alpha | Alpha comes first | Alpha is a bakery | Alpha saves time]\n[COVERED: alpha 1]");
+    assert.deepEqual(first.covered, [{ id: "alpha", points: ["Alpha comes first"], covered: 1, total: 3 }]);
+    assert.deepEqual(first.mastered, []);
+    assert.deepEqual(first.progress.next?.points, [
+      { text: "Alpha comes first", covered: true },
+      { text: "Alpha is a bakery", covered: false },
+      { text: "Alpha saves time", covered: false },
+    ]);
+
+    // The coach knows what it just ticked, so the next turn is not handed the snapshot again.
+    const quiet = coach("Right.\n[POINTS: alpha | Something else | And another]\n[COVERED: alpha 2]");
+    const second = await sendCoachMessage(rep.id, { message: "It is about a bakery." }, { complete: quiet.complete });
+    assert.equal(lastUserContent(quiet.sent[0]!), "It is about a bakery.");
+    assert.ok(second.ok);
+    // A second checklist does not replace the first: the target never moves, and the next turn shows the coach the one that stands.
+    assert.deepEqual(second.covered, [{ id: "alpha", points: ["Alpha is a bakery"], covered: 2, total: 3 }]);
+    assert.deepEqual((await getConceptState(rep.id, "alpha")).points?.map((p) => p.text), ["Alpha comes first", "Alpha is a bakery", "Alpha saves time"]);
+
+    // The coach is told which points are still open.
+    const c = coach("That's it.\n[COVERED: alpha 3 1]");
+    const last = await sendCoachMessage(rep.id, { message: "It saves time." }, { complete: c.complete });
+    assert.match(lastUserContent(c.sent[0]!), /1\. \[covered\] Alpha comes first\n {2}2\. \[covered\] Alpha is a bakery\n {2}3\. \[open\] Alpha saves time/);
+    assert.ok(last.ok);
+    assert.deepEqual(last.covered, [{ id: "alpha", points: ["Alpha saves time"], covered: 3, total: 3 }]);
+    assert.deepEqual(last.mastered, ["alpha"]);
+    assert.equal(last.progress.next?.id, "beta");
+    assert.equal(last.progress.next?.points, null);
+    assert.equal((await getConceptState(rep.id, "alpha")).mastered, true);
+  });
+
+  test("completing a checklist clears the recommendation, and a recommendation in the same reply does not stand", async () => {
+    await say(rep.id, "Watch it.\n[POINTS: gamma | Gamma one | Gamma two]\n[RECOMMEND: gamma]");
+    assert.equal((await getConceptState(rep.id, "gamma")).recommended, true);
+    const done = await say(rep.id, "Both.\n[COVERED: gamma 1 2]\n[RECOMMEND: gamma]");
+    assert.deepEqual([done.mastered, done.recommended], [["gamma"], []]);
+    const s = await getConceptState(rep.id, "gamma");
+    assert.deepEqual([s.mastered, s.recommended], [true, false]);
+  });
+
+  test("a tick before any checklist, or past its end, does nothing", async () => {
+    assert.deepEqual((await say(rep.id, "Ok.\n[COVERED: beta 1]")).covered, []);
+    assert.equal((await getConceptState(rep.id, "beta")).points, null);
+    await say(rep.id, "Ok.\n[POINTS: beta | Beta one | Beta two]");
+    assert.deepEqual((await say(rep.id, "Ok.\n[COVERED: beta 5]")).covered, []);
+    assert.deepEqual((await say(rep.id, "Again.\n[COVERED: beta 1]\n")).covered.map((c) => c.covered), [1]);
+    // A point already ticked is not news.
+    assert.deepEqual((await say(rep.id, "Still.\n[COVERED: beta 1]")).covered, []);
+  });
+
+  test("each rep's checklist and ticks are their own", async () => {
+    await say(rep.id, "Ok.\n[POINTS: beta | Beta one | Beta two]\n[COVERED: beta 1]");
+    await say(other.id, "Ok.\n[POINTS: beta | Other one | Other two]");
+    assert.deepEqual((await getConceptState(other.id, "beta")).points, [
+      { text: "Other one", covered: false },
+      { text: "Other two", covered: false },
+    ]);
+    assert.equal((await getConceptState(rep.id, "beta")).points?.[0]?.covered, true);
+  });
+
+  test("a concept's own points are its checklist: the coach cannot replace them, and a tick survives a re-import that keeps the wording", async () => {
+    const authored = () =>
+      mapFixture({ concepts: mapFixture().concepts.map((c) => (c.id === "alpha" ? { ...c, points: ["Alpha comes first", "Alpha is a bakery"] } : c)) });
+    await importMap(admin.id, authored());
+    try {
+      const view = await getCoachChat(rep.id);
+      assert.deepEqual(view.progress.next?.points?.map((p) => p.covered), [false, false]);
+      const r = await say(rep.id, "Good.\n[POINTS: alpha | Mine | Yours]\n[COVERED: alpha 2]");
+      assert.deepEqual(r.covered, [{ id: "alpha", points: ["Alpha is a bakery"], covered: 1, total: 2 }]);
+
+      const reworded = authored();
+      reworded.concepts[0]!.points = ["Alpha comes first", "Alpha bakes bread"];
+      await importMap(admin.id, reworded);
+      assert.deepEqual((await getCoachChat(rep.id)).progress.next?.points?.map((p) => p.covered), [false, false]);
+      await importMap(admin.id, authored());
+      assert.deepEqual((await getCoachChat(rep.id)).progress.next?.points?.map((p) => p.covered), [false, true]);
+    } finally {
+      await importMap(admin.id, mapFixture());
+    }
+  });
+
+  test("a conversation from before checklists reads as none and is replaced on the next turn, keeping progress", async () => {
+    await say(rep.id, "Good.\n[MASTERED: alpha]");
+    await db.update(mimirCoachConversations).set({ systemPrompt: "An old coach that only knew [MASTERED: concept-id]." }).where(eq(mimirCoachConversations.userId, rep.id));
+
+    const view = await getCoachChat(rep.id);
+    assert.deepEqual([view.conversation, view.needsGreeting, view.progress.mastered], [null, true, 1]);
+
+    const c = coach("Welcome back. Beta next.");
+    const greeted = await sendCoachMessage(rep.id, { open: true }, { complete: c.complete });
+    assert.ok(greeted.ok);
+    assert.match(c.sent[0]!.system, /\[COVERED: concept-id 1 3\]/);
+    assert.equal(c.sent[0]!.messages.length, 1);
+    assert.equal((await messagesOf(rep.id)).length, 2);
+    assert.equal((await getConceptState(rep.id, "alpha")).mastered, true);
+  });
+});

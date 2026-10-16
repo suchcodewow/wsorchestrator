@@ -4,10 +4,13 @@ Mimir teaches the course one concept at a time. It has two tabs:
 
 - **Chat** is a coach that walks you through the course in order. It opens by
   saying how far through you are and asking what you know about the next
-  concept. If you cover the main points, it marks the concept mastered and
-  moves on. If you don't, it links the concept's video and flags the concept
-  **Recommended** on the map. When you come back after watching, it asks you
-  again, differently, before it marks anything.
+  concept. Each concept has a checklist of two to six main points, shown above
+  the conversation. The coach ticks a point as soon as you have put it in your
+  own words, in whichever message and however loosely, and then asks only
+  about the points still open; it never asks you to restate the lot. When
+  every point is ticked the concept is mastered and it moves on. If you don't
+  know the concept, it links its video and flags it **Recommended** on the
+  map. When you come back after watching, it asks about the open points.
 - **Map** is the concept map: the slides along the top, the concepts they rely
   on in study order along the bottom, and a line from each slide to each
   concept it needs. Point at anything for its details. The level chips under
@@ -123,10 +126,28 @@ role and coaching style), pointed at the course. One conversation per person.
   (a video finished, a concept marked), and a hidden "I just opened Mimir"
   when you open the tab after 30 minutes away or after your progress changed,
   so it greets you with where you are.
-- It acts through markers on a line of their own at the end of a reply:
-  `[MASTERED: concept-id]` and `[RECOMMEND: concept-id]`. The app reads them,
-  applies them, and never shows them. A marker for a concept that is not in the
-  course does nothing; at most one of each takes effect per reply.
+- It acts through markers on a line of their own at the end of a reply. The
+  app reads them, applies them, and never shows them. A marker for a concept
+  that is not in the course does nothing; at most one of each takes effect per
+  reply.
+  - `[POINTS: concept-id | point | point …]` sets out a concept's checklist,
+    two to six points. Only for a concept the import gave no `points`, and
+    only once per person: the first checklist stands, so the target never
+    moves.
+  - `[COVERED: concept-id 1 3]` ticks points by number. Ticks are kept, and
+    the tick that completes a checklist marks the concept mastered and clears
+    Recommended.
+  - `[MASTERED: concept-id]` masters a concept outright, for a rep who plainly
+    knows it all; `[RECOMMEND: concept-id]` flags its video.
+- The progress snapshot lists the next concept's checklist, which points are
+  covered and which are open, so it carries over a new conversation or a day
+  away.
+- A concept in the import may carry `points`: two to six strings of up to
+  160 characters, its main points as the author wants them checked. Those win
+  over any the coach set out, and ticks carry across a re-import for a point
+  whose wording is unchanged.
+- A conversation started before checklists existed is replaced the next time
+  you open the tab; progress, mastery and videos watched stay.
 - "Next" is always the lowest-numbered concept you have not mastered.
 - It needs `ANTHROPIC_API_KEY`. Without one the map and videos still work.
 
@@ -135,7 +156,7 @@ role and coaching style), pointed at the course. One conversation per person.
 | Table | Holds |
 | --- | --- |
 | `mimir_map` | The imported map: one row, `current`. |
-| `mimir_concept_progress` | Per person per concept: where they left off, the furthest reached, when the video was finished, when the coach marked it mastered or recommended it. |
+| `mimir_concept_progress` | Per person per concept: where they left off, the furthest reached, when the video was finished, when the coach marked it mastered or recommended it, and its checklist (`points`: each point and whether it is covered). |
 | `mimir_coach_conversations`, `mimir_coach_messages` | One conversation per person with the map coach. |
 
 Every list is capped at 100 rows (`MAP_CONCEPT_LIMIT`), the most the importer

@@ -305,9 +305,9 @@ export const MIMIR_GROUPS: EndpointGroup[] = [
         access: "signedIn",
         token: true,
         notes:
-          "map is null until a Training Administrator imports one. A concept's video holds only its length: where the file is kept and what the narrator says stay on the server. states has an entry for each concept you have progress on: resumeAt is where playing starts if you press play now (the beginning if you had reached the end), completed is kept once you have watched to the end, and recommended is the coach asking you to watch the video before you move on. videos is false on a deployment with nowhere to keep them.",
+          "map is null until a Training Administrator imports one. A concept's video holds only its length: where the file is kept and what the narrator says stay on the server. states has an entry for each concept you have progress on: resumeAt is where playing starts if you press play now (the beginning if you had reached the end), completed is kept once you have watched to the end, recommended is the coach asking you to watch the video before you move on, and points is your checklist for the concept as stored: the one the coach set out for you, or your ticks against the concept's own points. videos is false on a deployment with nowhere to keep them.",
         returns:
-          "{ map: { version, title, lead, sections, slides, levels, buckets, concepts: { id, name, slides, explanation, video?: { seconds } }[] } | null, importedAt: string | null, states: { [conceptId]: { videoSeconds, videoFurthest, videoDuration, completed, mastered, recommended, resumeAt } }, videos: boolean }",
+          "{ map: { version, title, lead, sections, slides, levels, buckets, concepts: { id, name, slides, explanation, points?: string[], video?: { seconds } }[] } | null, importedAt: string | null, states: { [conceptId]: { videoSeconds, videoFurthest, videoDuration, completed, mastered, recommended, points: { text, covered }[] | null, resumeAt } }, videos: boolean }",
       },
       {
         method: "POST",
@@ -387,9 +387,9 @@ export const MIMIR_GROUPS: EndpointGroup[] = [
         access: "signedIn",
         token: true,
         notes:
-          "messages holds the latest 100 turns; earlier is true when older ones come before them, which before= reads a page at a time. needsGreeting is true when the page should ask the coach to greet you: you have no conversation yet, it has been a while, or your progress has moved (a video finished, say). configured is false when the server has no Claude key: the conversation reads but the coach cannot reply. progress.next is the lowest-numbered concept you have not mastered.",
+          "messages holds the latest 100 turns; earlier is true when older ones come before them, which before= reads a page at a time. needsGreeting is true when the page should ask the coach to greet you: you have no conversation yet, it has been a while, or your progress has moved (a video finished, say). configured is false when the server has no Claude key: the conversation reads but the coach cannot reply. progress.next is the lowest-numbered concept you have not mastered, and its points are the checklist you are being checked on, each covered once you have said it, or null before the coach has set one out. A conversation started before checklists reads as none, and the next greeting or message starts a new one.",
         query: [{ name: "before", type: "integer", note: "The page of turns before this seq, for reading back further." }],
-        returns: `{ hasMap: boolean, configured: boolean, conversation: { startedAt, messages: ${MESSAGE_SHAPE}[], earlier: boolean } | null, needsGreeting: boolean, progress: { mastered, total, next: { id, name, hasVideo } | null } }`,
+        returns: `{ hasMap: boolean, configured: boolean, conversation: { startedAt, messages: ${MESSAGE_SHAPE}[], earlier: boolean } | null, needsGreeting: boolean, progress: { mastered, total, next: { id, name, hasVideo, points: { text, covered }[] | null } | null } }`,
       },
       {
         method: "POST",
@@ -398,7 +398,7 @@ export const MIMIR_GROUPS: EndpointGroup[] = [
         access: "signedIn",
         token: true,
         notes:
-          "Send { message } to say something, or { open: true } to have the coach greet you, say where you are and ask about the next concept. The coach checks what you know of each concept in turn: when you show you know its main points it marks the concept mastered and moves on, and when you do not it links the concept's video and marks it recommended. mastered and recommended list the concept ids it changed. The coach is Claude Sonnet 5.5; a request it declines is answered by Anthropic's fallback model, and when it can't be reached, by Claude Haiku 4.5. Send Accept: text/event-stream to have the reply streamed as it is written — text events with each delta, restart if it begins again on the fallback model, then done with the body below, or error with { error, status } — otherwise the whole reply comes back as JSON.",
+          "Send { message } to say something, or { open: true } to have the coach greet you, say where you are and ask about the next concept. The coach checks what you know of each concept in turn, against a checklist of its main points: the concept's own, or one it sets out the first time it asks. It ticks each point once you have put it in your own words, in whichever message, and the ticks are kept. When every point is ticked the concept is mastered and it moves on; when you do not know the concept it links its video and marks it recommended. mastered and recommended list the concept ids it changed; covered lists, per concept, the points this reply ticked and how many of its checklist are now covered. The coach is Claude Sonnet 5.5; a request it declines is answered by Anthropic's fallback model, and when it can't be reached, by Claude Haiku 4.5. Send Accept: text/event-stream to have the reply streamed as it is written — text events with each delta, restart if it begins again on the fallback model, then done with the body below, or error with { error, status } — otherwise the whole reply comes back as JSON.",
         body: {
           kind: "json",
           fields: [
@@ -406,7 +406,7 @@ export const MIMIR_GROUPS: EndpointGroup[] = [
             { name: "open", type: "true", note: "ask the coach to greet you instead of saying something" },
           ],
         },
-        returns: `{ messages: ${MESSAGE_SHAPE}[] (yours, if you said something, and the coach's), progress, mastered: string[], recommended: string[] }`,
+        returns: `{ messages: ${MESSAGE_SHAPE}[] (yours, if you said something, and the coach's), progress, mastered: string[], recommended: string[], covered: { id, points: string[], covered: number, total: number }[] }`,
         errors: [
           { status: 400, error: "invalid", when: "neither a message nor open is given, or the message is empty or too long" },
           { status: 409, error: "no_map", when: "no map has been imported, so there is nothing to coach on" },
@@ -423,7 +423,7 @@ export const MIMIR_GROUPS: EndpointGroup[] = [
         summary: "Throws away your conversation with the coach, so the next one starts afresh.",
         access: "signedIn",
         token: true,
-        notes: "Your progress, mastery and videos watched stay.",
+        notes: "Your progress, mastery, checklists and videos watched stay.",
         returns: "{ ok: true, deleted: boolean }",
       },
     ],
