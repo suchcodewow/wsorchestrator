@@ -13,7 +13,7 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 
-import { NAV_SECTIONS, isNavItemActive, visibleSections, type NavItem } from "@/lib/nav";
+import { NAV_SECTIONS, isNavItemActive, navItemAt, visibleSections, type NavItem } from "@/lib/nav";
 import { SITE_SETTINGS_TABS, visibleSettingsTabs } from "@/app/(app)/settings/tabs";
 import { MY_SETTINGS_TABS, visibleMySettingsTabs } from "@/app/(app)/me/tabs";
 import { canUseEvents } from "@/lib/roles";
@@ -32,10 +32,8 @@ const EVENTS_MANAGER = [...EVENTS_USER];
 const EVENTS_ADMIN = [...EVENTS_MANAGER, "Cloud Status", "Event Settings"];
 const ACCOUNT = ["[Account]", "My inbox", "My settings"];
 
-// Mimir is for everyone, so every sidebar has a Training section holding at least it.
-const MIMIR_ONLY = ["[Training]", "Mimir"];
-// Enablement Tools follow Training, for its administrators only.
-const ENABLEMENT = ["[Enablement Tools]", "Async Recordings"];
+// Mimir is for everyone, so every sidebar has an Assessments section holding at least it.
+const MIMIR_ONLY = ["[Assessments]", "Mimir"];
 const TRAINING_ADMIN = [
   "[Training]",
   "Scheduler",
@@ -44,10 +42,9 @@ const TRAINING_ADMIN = [
   "Cohort Settings",
   "Logistics",
   "Logistics settings",
-  "Mimir",
-  "Mimir Settings",
-  ...ENABLEMENT,
+  "Async Recordings",
 ];
+const MIMIR_ADMIN = ["Mimir", "Mimir Settings"];
 
 const EXPECTED_SIDEBAR: Record<Persona, string[]> = {
   nobody: [...HOME, ...MIMIR_ONLY, ...ACCOUNT],
@@ -55,26 +52,26 @@ const EXPECTED_SIDEBAR: Record<Persona, string[]> = {
   operator: [...HOME, ...EVENTS_USER, ...MIMIR_ONLY, ...ACCOUNT],
   manager: [...HOME, ...EVENTS_MANAGER, ...MIMIR_ONLY, ...ACCOUNT],
   eventAdmin: [...HOME, ...EVENTS_ADMIN, ...MIMIR_ONLY, ...ACCOUNT, "[Administration]", "Manage users"],
-  trainingViewer: [...HOME, "[Training]", "Scheduler", "Cohorts", "Logistics", "Mimir", ...ACCOUNT],
-  trainingAdmin: [...HOME, ...TRAINING_ADMIN, ...ACCOUNT, "[Administration]", "Manage users"],
+  trainingViewer: [...HOME, "[Training]", "Scheduler", "Cohorts", "Logistics", "Async Recordings", ...MIMIR_ONLY, ...ACCOUNT],
+  trainingAdmin: [...HOME, ...TRAINING_ADMIN, "[Assessments]", ...MIMIR_ADMIN, ...ACCOUNT, "[Administration]", "Manage users"],
   // Iris is part of the assessments area: a viewer takes it, an administrator runs it.
-  assessmentsViewer: [...HOME, ...MIMIR_ONLY, "[Assessments]", "eVals", "Iris", "Reporting", ...ACCOUNT],
+  assessmentsViewer: [...HOME, "[Assessments]", "eVals", "Iris", "Reporting", "Mimir", ...ACCOUNT],
   assessmentsAdmin: [
     ...HOME,
-    ...MIMIR_ONLY,
     "[Assessments]",
     "eVals",
     "Iris",
     "Reporting",
     "eVals settings",
+    "Mimir",
     ...ACCOUNT,
     "[Administration]",
     "Manage users",
   ],
-  guestJudge: [...HOME, ...MIMIR_ONLY, "[Assessments]", "eVals", ...ACCOUNT],
+  guestJudge: [...HOME, "[Assessments]", "eVals", "Mimir", ...ACCOUNT],
   // HiBob has people reporting to them: Reporting, for the Canary Wire, and nothing else.
-  peopleManager: [...HOME, ...MIMIR_ONLY, "[Assessments]", "Reporting", ...ACCOUNT],
-  bothAdmins: [...HOME, ...EVENTS_ADMIN, ...TRAINING_ADMIN, ...ACCOUNT, "[Administration]", "Manage users"],
+  peopleManager: [...HOME, "[Assessments]", "Reporting", "Mimir", ...ACCOUNT],
+  bothAdmins: [...HOME, ...EVENTS_ADMIN, ...TRAINING_ADMIN, "[Assessments]", ...MIMIR_ADMIN, ...ACCOUNT, "[Administration]", "Manage users"],
   platform: [...HOME, 
     ...EVENTS_ADMIN,
     ...TRAINING_ADMIN,
@@ -83,6 +80,7 @@ const EXPECTED_SIDEBAR: Record<Persona, string[]> = {
     "Iris",
     "Reporting",
     "eVals settings",
+    ...MIMIR_ADMIN,
     ...ACCOUNT,
     "[Administration]",
     "Manage users",
@@ -229,5 +227,13 @@ describe("My settings tabs", () => {
 
   test("every tab lives under /me", () => {
     for (const t of MY_SETTINGS_TABS) assert.match(t.href, /^\/me\//);
+  });
+});
+
+describe("settings gears", () => {
+  test("every entry's settings link points at another sidebar entry", () => {
+    for (const item of NAV_SECTIONS.flatMap((s) => s.items)) {
+      if (item.settings) assert.ok(navItemAt(item.settings), `${item.label}: no entry at ${item.settings}`);
+    }
   });
 });

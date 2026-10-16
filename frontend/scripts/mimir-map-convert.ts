@@ -17,7 +17,7 @@
  *
  * `--concepts` is the concept data: slides, and each concept's id, name,
  * study order, explanation and slides. `--extras` is what that does not
- * carry: the section bands, the level and group blurbs, and the groups' order.
+ * carry: the section bands, which concepts require which, the level and group blurbs, and the groups' order.
  * `--videos` holds `<video>.mp4` and `--scripts` holds
  * `<video>/scene-*.txt`, where a video is named `NN-slug` and NN is the study
  * order of the concept it explains. A concept with no video simply has none.
@@ -50,6 +50,8 @@ type Extras = {
   sections: unknown[];
   levels: unknown[];
   groups: { id: string; level: number; name: string; sub?: string; blurb: string; concepts: string[] }[];
+  /** Optional: by concept id, the lower-level concepts to understand first. */
+  requires?: Record<string, string[]>;
 };
 
 const data = JSON.parse(readFileSync(arg("concepts"), "utf8")) as ConceptData;
@@ -91,6 +93,7 @@ const concepts = data.concepts.map((c) => {
     name: c.name,
     slides: c.slides,
     explanation: c.explanation,
+    ...(extras.requires?.[c.id]?.length ? { requires: extras.requires[c.id] } : {}),
     ...(video && existsSync(join(scriptsDir, video))
       ? { video: { object: `${VIDEO_PREFIX}${video}.mp4`, seconds: seconds(join(videosDir, `${video}.mp4`)), transcript: transcript(video) } }
       : {}),

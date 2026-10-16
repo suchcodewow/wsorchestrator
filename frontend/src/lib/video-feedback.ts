@@ -22,7 +22,7 @@ import type { VideoFeedbackSort } from "@/lib/list-specs";
 import { getMap } from "@/lib/mimir/map/content";
 import { pageWindow, toPage, type ListQuery, type Page } from "@/lib/paging";
 import { blankAsNull, orderFor, searchAny } from "@/lib/paging-sql";
-import { canManageTrainingSettings, type Access } from "@/lib/roles";
+import { canUseTraining, type Access } from "@/lib/roles";
 import { isUuid } from "@/lib/utils";
 
 export type VideoRef = { kind: VideoFeedbackKind; id: string };
@@ -36,7 +36,7 @@ export async function findVideo(access: Access, ref: VideoRef): Promise<FoundVid
     const concept = (await getMap())?.content.concepts.find((c) => c.id === ref.id);
     return concept?.video ? { kind: ref.kind, conceptId: concept.id, recordingTrackId: null, label: concept.name } : null;
   }
-  if (!canManageTrainingSettings(access)) return "forbidden";
+  if (!canUseTraining(access)) return "forbidden";
   if (!isUuid(ref.id)) return null;
   const [track] = await db
     .select({ id: recordingTracks.id, kind: recordingTracks.kind, contributor: recordingTracks.contributor })

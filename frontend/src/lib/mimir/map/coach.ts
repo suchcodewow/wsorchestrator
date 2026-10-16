@@ -27,7 +27,7 @@
 
 import "server-only";
 
-import { and, asc, desc, eq, gt, lt } from "drizzle-orm";
+import { and, asc, count, desc, eq, gt, lt } from "drizzle-orm";
 import { db } from "@/db";
 import { mimirCoachConversations, mimirCoachMessages, users, type MimirMessageRole } from "@/db/schema";
 import { renderMarkdown } from "@/lib/markdown";
@@ -38,6 +38,7 @@ import { PAGE_SIZE } from "@/lib/paging";
 import { getMap } from "./content";
 import {
   OPEN_REQUEST,
+  openContent,
   buildCoachSystem,
   knowsChecklists,
   nextConcept,
@@ -231,7 +232,15 @@ export async function beginCoachTurn(
     const seq = (last?.seq ?? -1) + 1;
     // The snapshot goes first whenever progress has moved since the coach last saw it, and always when greeting.
     const fresh = message === null || conversation.stateHash !== snapshot.hash;
-    const content = turnContent(message ?? OPEN_REQUEST, fresh ? snapshot : null);
+    let sent = message;
+    if (message === null) {
+      const [{ n }] = await tx
+        .select({ n: count() })
+        .from(mimirCoachMessages)
+        .where(and(eq(mimirCoachMessages.userId, userId), eq(mimirCoachMessages.role, "user"), eq(mimirCoachMessages.shown, false)));
+      sent = openContent(n ?? 0);
+    }
+    const content = turnContent(sent ?? OPEN_REQUEST, fresh ? snapshot : null);
     const [row] = await tx
       .insert(mimirCoachMessages)
       .values({ userId, seq, role: "user", shown: message !== null, content, text: message ?? OPEN_REQUEST })

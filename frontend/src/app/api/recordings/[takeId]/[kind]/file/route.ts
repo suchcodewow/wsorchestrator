@@ -2,10 +2,10 @@
 
 import { requireCaller } from "@/lib/api-auth";
 import { serveTrackFile } from "@/lib/recording/serve-file";
-import { canManageTrainingSettings } from "@/lib/roles";
+import { canUseTraining } from "@/lib/roles";
 
 export async function GET(req: Request, { params }: { params: Promise<{ takeId: string; kind: string }> }) {
-  const { error } = await requireCaller(req, canManageTrainingSettings);
+  const { error } = await requireCaller(req, canUseTraining);
   if (error) return error;
 
   const { takeId, kind } = await params;

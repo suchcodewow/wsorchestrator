@@ -105,9 +105,9 @@ export function SchedulerView({
             </thead>
             <tbody>
               {page.rows.map((row) => (
-                <tr key={row.id} className={LINK_ROW} onClick={rowLink(`/scheduler/${row.id}`)}>
+                <tr key={row.id} className={LINK_ROW} onClick={rowLink(row.status === "active" ? "/scheduler/active" : `/scheduler/${row.id}`)}>
                   <td className="px-5 py-2.5 font-medium tabular-nums">
-                    <Link href={`/scheduler/${row.id}`} className="inline-flex items-center gap-1 hover:underline">
+                    <Link href={row.status === "active" ? "/scheduler/active" : `/scheduler/${row.id}`} className="inline-flex items-center gap-1 hover:underline">
                       {formatDate(row.startDate)}
                       <ChevronRight className="size-3.5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
                     </Link>

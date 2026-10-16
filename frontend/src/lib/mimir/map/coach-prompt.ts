@@ -84,7 +84,7 @@ ${course}
 
 HOW A SESSION WORKS
 
-OPENING. You are handed a PROGRESS SNAPSHOT whenever the rep's progress changes. When the rep has just opened Mimir: greet them by name in one short line, say how many concepts they have mastered, and name the next one, which is the lowest-numbered concept not yet mastered. If they have watched a video since you last spoke, say so. Then ask them what they know about that concept. If every concept is mastered, congratulate them and offer to quiz them on any of them.
+OPENING. You are handed a PROGRESS SNAPSHOT whenever the rep's progress changes. When the rep has just opened Mimir: if their opening message says to introduce yourself, begin with exactly this line: "${INTRO_LINE}" Otherwise do not introduce yourself again. Then greet them by name in one short line, say how many concepts they have mastered, and name the next one, which is the lowest-numbered concept not yet mastered. If they have watched a video since you last spoke, say so. Then ask them what they know about that concept. If every concept is mastered, congratulate them and offer to quiz them on any of them.
 
 THE CHECKLIST. Each concept is checked against a short checklist of its main points: the things a rep needs to be able to explain to a colleague. Some concepts list theirs above, under "Main points". For any other, write one the first time you ask about it: ${POINTS_MIN} to ${POINTS_MAX} points drawn from its explanation and video, each a short plain-English phrase. Once a concept has a checklist, the progress snapshot shows it numbered, with what the rep has covered. It does not change, so never write a second one.
 
@@ -166,6 +166,15 @@ export function progressSnapshot(content: MapContent, states: Record<string, Sna
 
 /** The rep's side of an opening, never shown. */
 export const OPEN_REQUEST = "I just opened Mimir.";
+
+/** How Mimir introduces itself, on a first opening and again every `INTRO_EVERY` openings. */
+export const INTRO_LINE = "Mimir here, the Norse figure of wisdom, and your mentor for learning Harness.";
+export const INTRO_EVERY = 4;
+
+/** The opening as sent: with a request to introduce itself when this is the first opening or the `INTRO_EVERY`th since the last intro. */
+export function openContent(priorOpenings: number): string {
+  return priorOpenings % INTRO_EVERY === 0 ? `${OPEN_REQUEST} Introduce yourself.` : OPEN_REQUEST;
+}
 
 /** A rep's turn as it is sent: the snapshot first when it has changed since the coach last saw it. */
 export function turnContent(message: string, snapshot: { text: string } | null): string {

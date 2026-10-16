@@ -9,6 +9,7 @@ import { publicMap } from "@/lib/mimir/map/schema";
 import { slidesPresent } from "@/lib/mimir/map/slides";
 import { videosConfigured } from "@/lib/mimir/map/video";
 import { canManageMimir } from "@/lib/roles";
+import { WideView } from "@/components/wide-view";
 import { MapView } from "./map-view";
 
 export default async function MapPage() {
@@ -36,5 +37,9 @@ export default async function MapPage() {
       </div>
     );
   }
-  return <MapView map={publicMap(map.content)} states={states} videos={videosConfigured()} slideImages={slideImages ?? []} />;
+  return (
+    <WideView>
+      <MapView map={publicMap(map.content)} states={states} videos={videosConfigured()} slideImages={slideImages ?? []} />
+    </WideView>
+  );
 }

@@ -7,7 +7,7 @@ import { getMap } from "@/lib/mimir/map/content";
 import { getCoachChat } from "@/lib/mimir/map/coach";
 import { conceptsInOrder } from "@/lib/mimir/map/schema";
 import { getProfile } from "@/lib/mimir/progress";
-import { canManageMimir } from "@/lib/roles";
+import { canManageEvalsSettings, canManageMimir } from "@/lib/roles";
 import { ChatView } from "./chat-view";
 
 export default async function ChatPage() {
@@ -49,6 +49,7 @@ export default async function ChatPage() {
       }}
       concepts={conceptsInOrder(map.content).map((c) => ({ id: c.id, name: c.name, hasVideo: Boolean(c.video) }))}
       profile={{ role: profile.role, coachStyle: profile.coachStyle }}
+      canSeePoints={canManageEvalsSettings(session.user.access)}
     />
   );
 }

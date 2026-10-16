@@ -75,7 +75,7 @@ export async function AppShell({
 
           <main
             className={cn(
-              "relative min-w-0 flex-1",
+              "@container relative min-w-0 flex-1",
               pane && "lg:overflow-y-auto",
             )}
           >

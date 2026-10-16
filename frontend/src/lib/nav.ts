@@ -53,6 +53,10 @@ export type NavItem = {
   /** One line on what it is for, on its card on the Welcome page. */
   description: string;
   also?: string[];
+  /** Its page has a row of tabs, each of which can be starred itself, so the entry cannot be. */
+  hasTabs?: boolean;
+  /** The href of the entry that configures this one: for someone who can see it, the sidebar swaps this icon for a gear on hover that goes there. */
+  settings?: string;
   visible?: (access: Access) => boolean;
 };
 
@@ -101,6 +105,7 @@ export const NAV_SECTIONS: NavSection[] = [
       },
       {
         href: "/settings",
+        hasTabs: true,
         label: "Event Settings",
         Icon: SlidersHorizontal,
         description: "Org secrets, templates and repositories for every event.",
@@ -113,6 +118,7 @@ export const NAV_SECTIONS: NavSection[] = [
     items: [
       {
         href: "/scheduler",
+        settings: "/scheduler-settings",
         label: "Scheduler",
         Icon: CalendarClock,
         description: "Bootcamp schedules, sessions, judges and day checklists.",
@@ -120,6 +126,7 @@ export const NAV_SECTIONS: NavSection[] = [
       },
       {
         href: "/scheduler-settings",
+        hasTabs: true,
         label: "Scheduler settings",
         Icon: CalendarCog,
         description: "Facilities, rooms and session types.",
@@ -127,6 +134,8 @@ export const NAV_SECTIONS: NavSection[] = [
       },
       {
         href: "/cohorts",
+        settings: "/cohort-settings",
+        hasTabs: true,
         label: "Cohorts",
         Icon: Users,
         description: "Who is in each bootcamp cohort.",
@@ -134,44 +143,27 @@ export const NAV_SECTIONS: NavSection[] = [
       },
       {
         href: "/cohort-settings",
+        hasTabs: true,
         label: "Cohort Settings",
         Icon: Settings2,
         description: "Employees, HiBob, the organization and Slack channels.",
         visible: canManageTrainingSettings,
       },
-      { href: "/logistics", label: "Logistics", Icon: Luggage, description: "Guest judges, dietary needs and food orders.", visible: canUseTraining },
+      { href: "/logistics", settings: "/logistics-settings", hasTabs: true, label: "Logistics", Icon: Luggage, description: "Guest judges, dietary needs and food orders.", visible: canUseTraining },
       {
         href: "/logistics-settings",
+        hasTabs: true,
         label: "Logistics settings",
         Icon: ClipboardList,
         description: "The Pre-Bootcamp and Pre-Intermediate forms, and their responses.",
         visible: canManageTrainingSettings,
       },
       {
-        href: "/mimir",
-        label: "Mimir",
-        Icon: BrainCircuit,
-        description: "Harness's agents and capabilities, with an AI coach.",
-        visible: canUseMimir,
-      },
-      {
-        href: "/mimir-settings",
-        label: "Mimir Settings",
-        Icon: LibraryBig,
-        description: "The library's content and the coach's settings.",
-        visible: canManageMimir,
-      },
-    ],
-  },
-  {
-    heading: "Enablement Tools",
-    items: [
-      {
         href: "/recordings",
         label: "Async Recordings",
         Icon: Video,
         description: "One link anyone in the org can use to record their camera, and their screen, as separate files.",
-        visible: canManageTrainingSettings,
+        visible: canUseTraining,
       },
     ],
   },
@@ -180,14 +172,17 @@ export const NAV_SECTIONS: NavSection[] = [
     items: [
       {
         href: "/evals",
+        settings: "/evals-settings",
+        hasTabs: true,
         label: "eVals",
         Icon: FlaskConical,
         description: "Score attendees on bootcamp and intermediate assessments.",
         visible: canScoreAssessments,
       },
-      { href: "/iris", label: "Iris", Icon: Eye, description: "Adaptive placement tests.", visible: canTakeIris },
+      { href: "/iris", hasTabs: true, label: "Iris", Icon: Eye, description: "Adaptive placement tests.", visible: canTakeIris },
       {
         href: "/reporting",
+        hasTabs: true,
         label: "Reporting",
         Icon: ChartColumn,
         description: "Bootcamp history and the Canary Wire.",
@@ -195,10 +190,28 @@ export const NAV_SECTIONS: NavSection[] = [
       },
       {
         href: "/evals-settings",
+        hasTabs: true,
         label: "eVals settings",
         Icon: TestTubes,
         description: "Google Meetings, assessments and Slack contacts.",
         visible: canManageEvalsSettings,
+      },
+      {
+        href: "/mimir",
+        settings: "/mimir-settings",
+        hasTabs: true,
+        label: "Mimir",
+        Icon: BrainCircuit,
+        description: "Harness's agents and capabilities, with an AI coach.",
+        visible: canUseMimir,
+      },
+      {
+        href: "/mimir-settings",
+        hasTabs: true,
+        label: "Mimir Settings",
+        Icon: LibraryBig,
+        description: "The library's content and the coach's settings.",
+        visible: canManageMimir,
       },
     ],
   },
@@ -206,7 +219,7 @@ export const NAV_SECTIONS: NavSection[] = [
     heading: "Account",
     items: [
       { href: "/inbox", label: "My inbox", Icon: Inbox, description: "Checklist items you own, and everywhere you're tagged." },
-      { href: "/me", label: "My settings", Icon: UserCog, description: "Your theme, API tokens, and a check of your PC." },
+      { href: "/me", hasTabs: true, label: "My settings", Icon: UserCog, description: "Your theme, API tokens, and a check of your PC." },
     ],
   },
   {
@@ -228,6 +241,7 @@ export const NAV_SECTIONS: NavSection[] = [
       },
       {
         href: "/admin-settings",
+        hasTabs: true,
         label: "Admin Settings",
         Icon: Settings,
         description: "Who may sign in, and the connected Google, Zoom and Slack accounts.",
@@ -256,4 +270,9 @@ export function isNavItemActive(pathname: string, item: NavItem): boolean {
   return [item.href, ...(item.also ?? [])].some(
     (path) => pathname === path || pathname.startsWith(`${path}/`),
   );
+}
+
+/** The sidebar entry at `href`, wherever it sits, for the icon a favorite of it shows. */
+export function navItemAt(href: string): NavItem | undefined {
+  return NAV_SECTIONS.flatMap((section) => section.items).find((item) => item.href === href);
 }

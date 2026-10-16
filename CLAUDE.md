@@ -196,6 +196,13 @@ and mark those `sessionOnly` in the e2e matrix. A page that shows data needs a
 `frontend/src/lib/api-reference/`, which is published at `/api`. The unit suite
 fails until that entry exists, so describe the handler as it actually behaves.
 
+**A page that needs more room than the reading column uses `WideView`.**
+The shell wraps every page in `max-w-6xl`. A map, a wide table or a canvas
+that gains from the browser's width wraps its content in `WideView`
+(`frontend/src/components/wide-view.tsx`), which spans 95% of the space beside
+the sidebar. Don't widen the shell or hand-roll a breakout; the Mimir map page
+is the shape to copy.
+
 **A heading's subtitle must earn its place with a live value.** A `<p>` under
 an `<h1>`/`<h2>`/`<h3>` stays only if it leads with or consists of something
 that changes at runtime — a count, a timestamp, a configured value, a name.
