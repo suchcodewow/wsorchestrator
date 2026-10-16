@@ -2622,11 +2622,14 @@ export const mimirMap = pgTable("mimir_map", {
   importedAt: timestamp("imported_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+/** One main point of a concept, and whether this person has put it in their own words. */
+export type MimirConceptPoint = { text: string; covered: boolean };
+
 /**
  * One person's standing on one concept of the map: how far through its video
  * they are and where to resume, whether the coach has marked them as
- * knowing it, and whether the coach has recommended they watch the video.
- * The concept id is a key into the imported map, not a foreign key.
+ * knowing it, whether the coach has recommended they watch the video, and
+ * which of its main points they have covered. The concept id is a key into the imported map, not a foreign key.
  */
 export const mimirConceptProgress = pgTable(
   "mimir_concept_progress",
@@ -2648,6 +2651,8 @@ export const mimirConceptProgress = pgTable(
     masteredAt: timestamp("mastered_at", { withTimezone: true }),
     /** The coach asked them to watch the video; cleared once mastered. */
     recommendedAt: timestamp("recommended_at", { withTimezone: true }),
+    /** The main points they are checked on, each ticked once they have said it; null until there is a checklist. */
+    points: jsonb("points").$type<MimirConceptPoint[]>(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [primaryKey({ columns: [t.userId, t.conceptId] })],

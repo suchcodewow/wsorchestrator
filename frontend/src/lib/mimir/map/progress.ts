@@ -1,8 +1,8 @@
 /**
  * Where each person is on each concept of the map: how far through its video
- * and where to resume, whether the coach has marked them as knowing it, and
- * whether the coach has asked them to watch the video. Everything here is the
- * signed-in person's own.
+ * and where to resume, whether the coach has marked them as knowing it,
+ * whether the coach has asked them to watch the video, and which of its main
+ * points they have covered. Everything here is the signed-in person's own.
  */
 
 import "server-only";
@@ -11,7 +11,7 @@ import { and, eq, sql, type SQL } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { db } from "@/db";
 import { mimirConceptProgress } from "@/db/schema";
-import { COMPLETE_SHARE, MAP_CONCEPT_LIMIT, NO_STATE, startAt, type ConceptState } from "./schema";
+import { COMPLETE_SHARE, MAP_CONCEPT_LIMIT, NO_STATE, checklistOf, startAt, type ConceptPoint, type ConceptState } from "./schema";
 
 export { NO_STATE, type ConceptState };
 
@@ -25,6 +25,7 @@ function stateOf(row: Row): ConceptState {
     completed: row.videoCompletedAt !== null,
     mastered: row.masteredAt !== null,
     recommended: row.recommendedAt !== null && row.masteredAt === null,
+    points: row.points ?? null,
     resumeAt: startAt(row.videoSeconds, row.videoDuration),
   };
 }
@@ -104,6 +105,56 @@ export async function markRecommended(userId: string, conceptId: string): Promis
       target: [t.userId, t.conceptId],
       set: { recommendedAt: sqlIfNull(t.masteredAt, now, t.recommendedAt), updatedAt: now },
     });
+}
+
+/**
+ * The coach has set out what it will check them on. The first checklist
+ * stands, so the boxes they have ticked never move under them; a concept that
+ * comes with its own points needs none.
+ */
+export async function setChecklist(userId: string, concept: { id: string; points?: string[] }, points: string[]): Promise<boolean> {
+  if (concept.points?.length) return false;
+  const now = new Date();
+  const t = mimirConceptProgress;
+  const fresh = points.map((text) => ({ text, covered: false }));
+  const rows = await db
+    .insert(t)
+    .values({ userId, conceptId: concept.id, points: fresh, updatedAt: now })
+    .onConflictDoUpdate({ target: [t.userId, t.conceptId], set: { points: fresh, updatedAt: now }, setWhere: sql`${t.points} is null` })
+    .returning({ conceptId: t.conceptId });
+  return rows.length > 0;
+}
+
+export type Covered = { checklist: ConceptPoint[]; ticked: string[]; complete: boolean };
+
+/**
+ * Ticks the points they have now put in their own words, by number from 1 as
+ * the coach was shown them. Ticks are kept: a point once covered stays
+ * covered. Null when the concept has no checklist to tick.
+ */
+export async function coverPoints(userId: string, concept: { id: string; points?: string[] }, numbers: number[]): Promise<Covered | null> {
+  return db.transaction(async (tx) => {
+    const t = mimirConceptProgress;
+    const [row] = await tx
+      .select({ points: t.points })
+      .from(t)
+      .where(and(eq(t.userId, userId), eq(t.conceptId, concept.id)))
+      .for("update");
+    const checklist = checklistOf(concept, row?.points);
+    if (!checklist) return null;
+    const ticked: string[] = [];
+    const next = checklist.map((p, i) => {
+      if (p.covered || !numbers.includes(i + 1)) return p;
+      ticked.push(p.text);
+      return { ...p, covered: true };
+    });
+    const now = new Date();
+    await tx
+      .insert(t)
+      .values({ userId, conceptId: concept.id, points: next, updatedAt: now })
+      .onConflictDoUpdate({ target: [t.userId, t.conceptId], set: { points: next, updatedAt: now } });
+    return { checklist: next, ticked, complete: next.every((p) => p.covered) };
+  });
 }
 
 const sqlGreatest = (column: AnyPgColumn, value: number): SQL => sql`greatest(${column}, ${value})`;

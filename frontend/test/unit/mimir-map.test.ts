@@ -11,6 +11,8 @@ import assert from "node:assert/strict";
 import {
   COMPLETE_SHARE,
   END_SLACK_SECONDS,
+  POINT_CHARS,
+  checklistOf,
   conceptsInOrder,
   mapContentSchema,
   publicMap,
@@ -23,6 +25,7 @@ import { CONCEPT_W, CONCEPT_Y, PAD, SLIDE_H, SLIDE_W, SLIDE_Y, layoutMap } from 
 import {
   OPEN_REQUEST,
   buildCoachSystem,
+  knowsChecklists,
   nextConcept,
   progressSnapshot,
   readCoachReply,
@@ -64,6 +67,16 @@ describe("what an import must satisfy", () => {
     assert.ok(issue({ concepts: withVideo("files/x.mp4") }));
     assert.match(issue({ concepts: withVideo("mimir/videos/test-alpha.mp4") })!.message, /two videos at/);
     assert.equal(issue({ concepts: withVideo("mimir/videos/test-beta.mp4") }), null);
+  });
+
+  test("a concept's own main points number two to six, each short", () => {
+    const f = mapFixture();
+    const withPoints = (points: unknown) => f.concepts.map((c) => (c.id === "beta" ? { ...c, points } : c));
+    assert.equal(issue({ concepts: withPoints(["One idea", "Another idea"]) }), null);
+    assert.ok(issue({ concepts: withPoints(["Only one"]) }));
+    assert.ok(issue({ concepts: withPoints(Array.from({ length: 7 }, (_, i) => `Point ${i}`)) }));
+    assert.ok(issue({ concepts: withPoints(["Fine", "x".repeat(POINT_CHARS + 1)]) }));
+    assert.ok(issue({ concepts: withPoints(["Fine", ""]) }));
   });
 
   test("the lists are capped, so no read of one runs past a page of rows", () => {
@@ -241,6 +254,22 @@ describe("what the map coach is told", () => {
     assert.match(p, /own level or earlier/);
   });
 
+  test("it is told to tick points one at a time, never to ask for the lot again, and to be lenient about wording", () => {
+    const p = buildCoachSystem(content, { name: null, role: null, coachStyle: "socratic" }, { platformContext: "", namingGuard: "" });
+    assert.match(p, /\[POINTS: concept-id \| /);
+    assert.match(p, /\[COVERED: concept-id 1 3\]/);
+    assert.match(p, /THE CHECKLIST/);
+    assert.ok(knowsChecklists(p));
+    assert.equal(knowsChecklists("An old prompt that only knew [MASTERED: concept-id]."), false);
+  });
+
+  test("a concept's own main points are in the prompt as its checklist", () => {
+    const authored = mapFixture({ concepts: mapFixture().concepts.map((c) => (c.id === "beta" ? { ...c, points: ["Beta saves time", "Beta needs alpha"] } : c)) });
+    const p = buildCoachSystem(authored, { name: null, role: null, coachStyle: "socratic" }, { platformContext: "", namingGuard: "" });
+    assert.match(p, /Main points \(its checklist\):\n1\. Beta saves time\n2\. Beta needs alpha/);
+    assert.equal((p.match(/Main points \(its checklist\)/g) ?? []).length, 1);
+  });
+
   test("a direct coach is told to be brief, and the platform and naming guards follow", () => {
     const direct = buildCoachSystem(content, { name: null, role: null, coachStyle: "direct" }, { platformContext: "PLATFORM-FACTS", namingGuard: "NAMING-GUARD" });
     assert.match(direct, /COACHING STYLE: Be concise/);
@@ -273,6 +302,35 @@ describe("what the map coach is told", () => {
     assert.notEqual(progressSnapshot(content, { alpha: state({ videoFurthest: 10, videoDuration: 100 }) }).hash, base.hash);
     assert.notEqual(progressSnapshot(content, { alpha: state({ mastered: true }) }).hash, base.hash);
     assert.match(progressSnapshot(content, Object.fromEntries(conceptsInOrder(content).map((c) => [c.id, state({ mastered: true })]))).text, /Every concept is mastered\./);
+  });
+
+  test("the snapshot lists the next concept's checklist, which points are covered and which are open", () => {
+    assert.match(progressSnapshot(content, {}).text, /Checklist for \[alpha\] Alpha: none yet\. Write one with \[POINTS\]/);
+    const points = [
+      { text: "Alpha is first", covered: true },
+      { text: "Alpha is a bakery", covered: false },
+    ];
+    const s = progressSnapshot(content, { alpha: state({ points }) });
+    assert.match(s.text, /\[alpha\] Alpha: 1 of 2 points covered/);
+    assert.match(s.text, /Checklist for \[alpha\] Alpha \(1 of 2 covered; ask only about open points\):\n  1\. \[covered\] Alpha is first\n  2\. \[open\] Alpha is a bakery/);
+    assert.doesNotMatch(s.text, /Checklist for \[beta\]/);
+  });
+
+  test("a concept started on keeps its checklist in the snapshot after the rep moves past it", () => {
+    const s = progressSnapshot(content, { alpha: state({ mastered: true }), gamma: state({ points: [{ text: "G one", covered: true }, { text: "G two", covered: false }] }) });
+    assert.match(s.text, /Checklist for \[beta\] Beta: none yet/);
+    assert.match(s.text, /Checklist for \[gamma\] Gamma \(1 of 2 covered/);
+    assert.doesNotMatch(s.text, /Checklist for \[alpha\]/);
+  });
+
+  test("a tick changes the snapshot's fingerprint, so the coach is told", () => {
+    const open = [
+      { text: "One", covered: false },
+      { text: "Two", covered: false },
+    ];
+    const before = progressSnapshot(content, { alpha: state({ points: open }) });
+    const after = progressSnapshot(content, { alpha: state({ points: [{ ...open[0]!, covered: true }, open[1]!] }) });
+    assert.notEqual(after.hash, before.hash);
   });
 
   test("a video's status reads in words", () => {
@@ -327,7 +385,59 @@ describe("what a reply asks the app to do", () => {
   });
 
   test("a reply with no marker is just its text", () => {
-    assert.deepEqual(readCoachReply("Tell me more.", ids), { text: "Tell me more.", mastered: [], recommended: [] });
+    assert.deepEqual(readCoachReply("Tell me more.", ids), { text: "Tell me more.", mastered: [], recommended: [], checklists: [], covered: [] });
+  });
+
+  test("a checklist and a tick are read together and neither is shown", () => {
+    const r = readCoachReply("Good, that's the first one. What does beta need?\n[POINTS: beta | Beta saves time | Beta needs alpha |  ]\n[COVERED: beta 1]", ids);
+    assert.deepEqual(r.checklists, [{ id: "beta", points: ["Beta saves time", "Beta needs alpha"] }]);
+    assert.deepEqual(r.covered, [{ id: "beta", points: [1] }]);
+    assert.equal(r.text, "Good, that's the first one. What does beta need?");
+  });
+
+  test("a checklist of one point does not count, a long one is cut to six, and a long point is cut short", () => {
+    assert.deepEqual(readCoachReply("Ok.\n[POINTS: beta | Just one]", ids).checklists, []);
+    const many = readCoachReply(`Ok.\n[POINTS: beta | ${Array.from({ length: 8 }, (_, i) => `P${i + 1}`).join(" | ")}]`, ids).checklists[0]!;
+    assert.deepEqual(many.points, ["P1", "P2", "P3", "P4", "P5", "P6"]);
+    const long = readCoachReply(`Ok.\n[POINTS: beta | ${"y".repeat(400)} | Short]`, ids).checklists[0]!;
+    assert.equal(long.points[0]!.length, POINT_CHARS);
+  });
+
+  test("ticks are numbers from one to six, each once, in order, with commas or spaces", () => {
+    assert.deepEqual(readCoachReply("Ok.\n[COVERED: alpha 3, 1 3  9 0]", ids).covered, [{ id: "alpha", points: [1, 3] }]);
+    assert.deepEqual(readCoachReply("Ok.\n[COVERED: alpha 0 7]", ids).covered, []);
+    assert.deepEqual(readCoachReply("Ok.\n[COVERED: nonsense 1]", ids).covered, []);
+    assert.deepEqual(readCoachReply("Ok.\n[COVERED: alpha 1]\n[COVERED: beta 2]", ids).covered, [{ id: "alpha", points: [1] }]);
+  });
+
+  test("a tick in the middle of a sentence is hidden but does not count", () => {
+    const r = readCoachReply("You got [COVERED: alpha 1] that one.", ids);
+    assert.deepEqual(r.covered, []);
+    assert.equal(r.text, "You got  that one.");
+  });
+});
+
+describe("a concept's checklist", () => {
+  const stored = [
+    { text: "Kept wording", covered: true },
+    { text: "Old wording", covered: true },
+  ];
+
+  test("a concept's own points win, and a tick carries over to a point whose wording is unchanged", () => {
+    assert.deepEqual(checklistOf({ points: ["Kept wording", "New wording"] }, stored), [
+      { text: "Kept wording", covered: true },
+      { text: "New wording", covered: false },
+    ]);
+  });
+
+  test("without its own points, the one the coach set out is used, and none means none yet", () => {
+    assert.deepEqual(checklistOf({}, stored), stored);
+    assert.equal(checklistOf({}, null), null);
+    assert.equal(checklistOf({}, []), null);
+    assert.deepEqual(checklistOf({ points: ["A", "B"] }, null), [
+      { text: "A", covered: false },
+      { text: "B", covered: false },
+    ]);
   });
 });
 

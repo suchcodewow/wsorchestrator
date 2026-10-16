@@ -11,6 +11,13 @@
  * opened Mimir") when they open the tab after a while or after finishing a
  * video, so it can say where they are and what comes next.
  *
+ * The coach checks each concept point by point against a checklist (the
+ * concept's own, or one it sets out with `[POINTS]`), ticks points with
+ * `[COVERED]` as the rep says them, and the app masters the concept once the
+ * last one is ticked. A conversation started before the coach knew about
+ * checklists is replaced, not carried on, the next time the rep writes or
+ * opens the tab; their progress stays.
+ *
  * A turn is two halves, as there: `beginCoachTurn` saves the rep's message,
  * so a second send while the coach replies is refused as `busy`;
  * `finishCoachTurn` asks Claude, streaming the reply, and saves it, applies
@@ -32,13 +39,14 @@ import { getMap } from "./content";
 import {
   OPEN_REQUEST,
   buildCoachSystem,
+  knowsChecklists,
   nextConcept,
   progressSnapshot,
   readCoachReply,
   turnContent,
 } from "./coach-prompt";
-import { listConceptStates, markMastered, markRecommended } from "./progress";
-import { conceptsInOrder, type MapContent } from "./schema";
+import { coverPoints, getConceptState, listConceptStates, markMastered, markRecommended, setChecklist } from "./progress";
+import { checklistOf, conceptsInOrder, type ConceptPoint, type MapContent } from "./schema";
 
 /** A message left without a reply this long is treated as abandoned (the server stopped mid-call). */
 const ABANDONED_MS = 3 * 60_000;
@@ -58,7 +66,8 @@ export const COACH_STATUS_FOR: Record<CoachError, number> = {
 export type CoachProgress = {
   mastered: number;
   total: number;
-  next: { id: string; name: string; hasVideo: boolean } | null;
+  /** `points` is its checklist, ticks and all, or null before there is one. */
+  next: { id: string; name: string; hasVideo: boolean; points: ConceptPoint[] | null } | null;
 };
 
 export type CoachView = {
@@ -92,7 +101,7 @@ async function standing(userId: string, content: MapContent) {
   const progress: CoachProgress = {
     mastered: concepts.filter((c) => states[c.id]?.mastered).length,
     total: concepts.length,
-    next: next && { id: next.id, name: next.name, hasVideo: Boolean(next.video) },
+    next: next && { id: next.id, name: next.name, hasVideo: Boolean(next.video), points: checklistOf(next, states[next.id]?.points) },
   };
   return { states, concepts, snapshot, progress };
 }
@@ -102,12 +111,18 @@ async function conversationOf(userId: string) {
   return row ?? null;
 }
 
+/** Their conversation, unless it started before checklists, when it is as good as none: the next turn starts a new one. */
+async function currentConversation(userId: string) {
+  const row = await conversationOf(userId);
+  return row && knowsChecklists(row.systemPrompt) ? row : null;
+}
+
 /** This person's conversation as the Chat tab shows it: the latest page of turns, or the page before `before`. */
 export async function getCoachChat(userId: string, before?: number): Promise<CoachView> {
   const map = await getMap();
   if (!map) return { hasMap: false, configured: coachConfigured(), conversation: null, needsGreeting: false, progress: EMPTY_PROGRESS };
 
-  const [{ snapshot, progress }, conversation] = await Promise.all([standing(userId, map.content), conversationOf(userId)]);
+  const [{ snapshot, progress }, conversation] = await Promise.all([standing(userId, map.content), currentConversation(userId)]);
   const configured = coachConfigured();
   if (!conversation) return { hasMap: true, configured, conversation: null, needsGreeting: configured, progress };
 
@@ -133,10 +148,11 @@ export async function getCoachChat(userId: string, before?: number): Promise<Coa
   };
 }
 
-/** Starts the conversation if there is none. The course is fixed into its system prompt here. */
+/** Starts the conversation if there is none, or if theirs predates checklists. The course is fixed into its system prompt here. */
 async function ensureConversation(userId: string, content: MapContent) {
   const existing = await conversationOf(userId);
-  if (existing) return existing;
+  if (existing && knowsChecklists(existing.systemPrompt)) return existing;
+  if (existing) await resetCoachChat(userId);
   const [[user], profile, settings] = await Promise.all([
     db.select({ name: users.name }).from(users).where(eq(users.id, userId)),
     getProfile(userId),
@@ -246,8 +262,11 @@ async function historyOf(userId: string): Promise<CompletionRequest["messages"]>
   }
 }
 
+/** Points a reply ticked on one concept, by their words, and where that leaves its checklist. */
+export type CoveredPoints = { id: string; points: string[]; covered: number; total: number };
+
 export type CoachSendResult =
-  | { ok: true; messages: ChatMessage[]; progress: CoachProgress; mastered: string[]; recommended: string[] }
+  | { ok: true; messages: ChatMessage[]; progress: CoachProgress; mastered: string[]; recommended: string[]; covered: CoveredPoints[] }
   | { ok: false; error: CoachError };
 
 /**
@@ -283,22 +302,44 @@ export async function finishCoachTurn(
     .insert(mimirCoachMessages)
     .values({ userId: turn.userId, seq: turn.seq + 1, role: "assistant", content: completion.content, text: reply.text, usage: completion.usage })
     .returning({ createdAt: mimirCoachMessages.createdAt });
-  for (const id of reply.mastered) await markMastered(turn.userId, id);
-  for (const id of reply.recommended) await markRecommended(turn.userId, id);
+  // A checklist first, so a reply that sets one and ticks it at once does both; then the ticks, which master a concept once complete.
+  const map = await getMap();
+  const conceptOf = (id: string) => (map ? conceptsInOrder(map.content).find((c) => c.id === id) : undefined);
+  // Whether the checklists now stand as the coach believes; when not, it is shown them as they are next turn.
+  let asItThinks = true;
+  for (const { id, points } of reply.checklists) {
+    const concept = conceptOf(id);
+    if (!concept || (await setChecklist(turn.userId, concept, points))) continue;
+    const kept = checklistOf(concept, (await getConceptState(turn.userId, id)).points);
+    if (kept?.map((p) => p.text).join("\n") !== points.join("\n")) asItThinks = false;
+  }
+  const mastered = [...reply.mastered];
+  const covered: CoveredPoints[] = [];
+  for (const { id, points } of reply.covered) {
+    const concept = conceptOf(id);
+    const done = concept ? await coverPoints(turn.userId, concept, points) : null;
+    if (!done || points.some((n) => n > done.checklist.length)) asItThinks = false;
+    if (!done) continue;
+    if (done.ticked.length) covered.push({ id, points: done.ticked, covered: done.checklist.filter((p) => p.covered).length, total: done.checklist.length });
+    if (done.complete && !mastered.includes(id)) mastered.push(id);
+  }
+  for (const id of mastered) await markMastered(turn.userId, id);
+  const recommended = reply.recommended.filter((id) => !mastered.includes(id));
+  for (const id of recommended) await markRecommended(turn.userId, id);
 
   // The coach knows what it just did: the next turn need not be told, and opening the tab is not a change.
-  const map = await getMap();
+  // Unless the app did not do it as asked: then the next turn, or opening the tab, shows it how things stand.
   const now = map ? await standing(turn.userId, map.content) : null;
   await db
     .update(mimirCoachConversations)
-    .set({ updatedAt: new Date(), ...(now ? { stateHash: now.snapshot.hash } : {}) })
+    .set({ updatedAt: new Date(), ...(now && asItThinks ? { stateHash: now.snapshot.hash } : {}) })
     .where(eq(mimirCoachConversations.userId, turn.userId));
 
   const rows = [
     ...(turn.message === null ? [] : [{ seq: turn.seq, role: "user" as const, text: turn.message, createdAt: turn.at }]),
     { seq: turn.seq + 1, role: "assistant" as const, text: reply.text, createdAt: saved!.createdAt },
   ];
-  return { ok: true, messages: await shown(rows), progress: now?.progress ?? EMPTY_PROGRESS, mastered: reply.mastered, recommended: reply.recommended };
+  return { ok: true, messages: await shown(rows), progress: now?.progress ?? EMPTY_PROGRESS, mastered, recommended, covered };
 }
 
 /** Both halves at once. */

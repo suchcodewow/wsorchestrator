@@ -4,16 +4,18 @@
  * The coach. Opening the tab, it greets you by saying how far through the
  * course you are and asking what you know of the next concept; your answers
  * move you on, or send you to the video. Your message shows at once and the
- * coach's reply streams in as it is written. When the coach marks a concept
- * mastered, or recommends its video, it says so under its reply and the map
- * follows. A long conversation shows its latest turns, with the earlier ones
+ * coach's reply streams in as it is written. The next concept's main points
+ * show as a checklist above the conversation, each ticked once you have said
+ * it in your own words, so you are never asked to repeat the lot. When the
+ * coach ticks a point, marks a concept mastered, or recommends its video, it
+ * says so under its reply and the map follows. A long conversation shows its latest turns, with the earlier ones
  * a click away.
  */
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChevronUp, Loader2, MessageSquarePlus, Play, SendHorizontal, Sparkles, Star, Check } from "lucide-react";
+import { ChevronUp, Circle, CircleCheck, Loader2, MessageSquarePlus, Play, SendHorizontal, Sparkles, Star, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
@@ -21,7 +23,8 @@ import { MIMIR_COACH_STYLES, MIMIR_MESSAGE_MAX, MIMIR_REP_ROLES, type MimirCoach
 import { cn } from "@/lib/utils";
 
 type Msg = { seq: number; role: MimirMessageRole; text: string; html: string | null; at: string };
-type Progress = { mastered: number; total: number; next: { id: string; name: string; hasVideo: boolean } | null };
+type Point = { text: string; covered: boolean };
+type Progress = { mastered: number; total: number; next: { id: string; name: string; hasVideo: boolean; points: Point[] | null } | null };
 type View = {
   configured: boolean;
   conversation: { messages: Msg[]; earlier: boolean } | null;
@@ -29,7 +32,8 @@ type View = {
   progress: Progress;
 };
 type Concept = { id: string; name: string; hasVideo: boolean };
-type Done = { messages: Msg[]; progress: Progress; mastered: string[]; recommended: string[] };
+type Covered = { id: string; points: string[]; covered: number; total: number };
+type Done = { messages: Msg[]; progress: Progress; mastered: string[]; recommended: string[]; covered: Covered[] };
 
 const ERRORS: Record<string, string> = {
   busy: "The coach is still answering your last message.",
@@ -61,7 +65,7 @@ async function readEvents(res: Response, on: (event: string, data: unknown) => v
   }
 }
 
-type Notice = { kind: "mastered" | "recommended"; id: string };
+type Notice = { kind: "mastered" | "recommended"; id: string } | ({ kind: "covered" } & Covered);
 
 export function ChatView({ initial, concepts, profile }: { initial: View; concepts: Concept[]; profile: { role: MimirRepRole | null; coachStyle: MimirCoachStyle } }) {
   const router = useRouter();
@@ -126,6 +130,8 @@ export function ChatView({ initial, concepts, profile }: { initial: View; concep
         progress: result.progress,
       }));
       const made: Notice[] = [
+        // A concept the reply finished says so once, as mastered, rather than as its last point too.
+        ...(result.covered ?? []).filter((c) => !result.mastered.includes(c.id)).map((c) => ({ kind: "covered" as const, ...c })),
         ...result.mastered.map((id) => ({ kind: "mastered" as const, id })),
         ...result.recommended.map((id) => ({ kind: "recommended" as const, id })),
       ];
@@ -235,6 +241,7 @@ export function ChatView({ initial, concepts, profile }: { initial: View; concep
               <span className="font-medium text-foreground">Every concept mastered</span>
             )}
           </div>
+          {next?.points && <Checklist points={next.points} />}
         </div>
       </header>
 
@@ -271,18 +278,31 @@ export function ChatView({ initial, concepts, profile }: { initial: View; concep
         {messages.map((m) => (
           <div key={m.seq} className="space-y-1.5">
             <Bubble role={m.role} html={m.html} text={m.text} />
-            {notices[m.seq]?.map((n) => (
-              <p key={`${n.kind}${n.id}`} className={cn("flex items-center gap-1.5 px-1 text-xs font-medium", n.kind === "mastered" ? "text-emerald-700 dark:text-emerald-400" : "text-amber-700 dark:text-amber-400")}>
-                {n.kind === "mastered" ? <Check className="size-3.5" strokeWidth={3} /> : <Star className="size-3.5 fill-current" />}
-                {n.kind === "mastered" ? `${nameOf(n.id)} marked as mastered.` : `${nameOf(n.id)} flagged as Recommended on the map.`}
-              </p>
-            ))}
+            {notices[m.seq]?.map((n) =>
+              n.kind === "covered" ? (
+                <p key={`${n.kind}${n.id}`} className="flex items-start gap-1.5 px-1 text-xs font-medium text-emerald-700 dark:text-emerald-400">
+                  <CircleCheck className="mt-px size-3.5 shrink-0" />
+                  <span>
+                    {nameOf(n.id)}: {n.points.join("; ")}
+                    <span className="tnum font-normal text-muted-foreground">
+                      {" "}
+                      ({n.covered} of {n.total})
+                    </span>
+                  </span>
+                </p>
+              ) : (
+                <p key={`${n.kind}${n.id}`} className={cn("flex items-center gap-1.5 px-1 text-xs font-medium", n.kind === "mastered" ? "text-emerald-700 dark:text-emerald-400" : "text-amber-700 dark:text-amber-400")}>
+                  {n.kind === "mastered" ? <Check className="size-3.5" strokeWidth={3} /> : <Star className="size-3.5 fill-current" />}
+                  {n.kind === "mastered" ? `${nameOf(n.id)} marked as mastered.` : `${nameOf(n.id)} flagged as Recommended on the map.`}
+                </p>
+              ),
+            )}
           </div>
         ))}
         {pending && <Bubble role="user" html={null} text={pending} />}
         {replying &&
           (streaming ? (
-            <Bubble role="assistant" html={null} text={streaming.replace(/\[(?:MASTERED|RECOMMEND):[^\]]*\]?/gi, "").trimEnd()} live />
+            <Bubble role="assistant" html={null} text={streaming.replace(/\[(?:MASTERED|RECOMMEND|POINTS|COVERED):[^\]]*\]?/gi, "").trimEnd()} live />
           ) : (
             <div className="flex items-center gap-2 px-1 text-sm text-muted-foreground">
               <Loader2 className="size-4 animate-spin" />
@@ -330,6 +350,27 @@ export function ChatView({ initial, concepts, profile }: { initial: View; concep
         )}
       </footer>
     </section>
+  );
+}
+
+/** The next concept's main points, each ticked once you have put it in your own words. */
+function Checklist({ points }: { points: Point[] }) {
+  const done = points.filter((p) => p.covered).length;
+  return (
+    <div className="space-y-1 pt-0.5">
+      <p className="tnum text-xs text-muted-foreground">
+        {done} of {points.length} points covered
+      </p>
+      <ul className="grid gap-x-4 gap-y-0.5 text-xs sm:grid-cols-2" aria-label="Main points of the next concept">
+        {points.map((p, i) => (
+          <li key={i} className={cn("flex items-start gap-1.5", p.covered ? "text-foreground" : "text-muted-foreground")}>
+            {p.covered ? <CircleCheck className="mt-px size-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" /> : <Circle className="mt-px size-3.5 shrink-0" />}
+            <span>{p.text}</span>
+            <span className="sr-only">{p.covered ? "(covered)" : "(open)"}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 

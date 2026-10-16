@@ -39,8 +39,8 @@ export const POST = audited(async function POST(req: Request) {
   if (!(req.headers.get("accept") ?? "").includes("text/event-stream")) {
     const result = await finishCoachTurn(begun.turn);
     if (!result.ok) return NextResponse.json({ error: result.error }, { status: COACH_STATUS_FOR[result.error] });
-    noteAudit({ detail: { mastered: result.mastered, recommended: result.recommended } });
-    return NextResponse.json({ messages: result.messages, progress: result.progress, mastered: result.mastered, recommended: result.recommended });
+    noteAudit({ detail: { mastered: result.mastered, recommended: result.recommended, covered: result.covered.map((c) => c.id) } });
+    return NextResponse.json({ messages: result.messages, progress: result.progress, mastered: result.mastered, recommended: result.recommended, covered: result.covered });
   }
 
   noteAudit({ detail: { streamed: true } });
@@ -56,7 +56,7 @@ export const POST = audited(async function POST(req: Request) {
       };
       const result = await finishCoachTurn(begun.turn, { stream: { text: (delta) => send("text", { delta }), restart: () => send("restart", {}) } });
       if (result.ok) {
-        send("done", { messages: result.messages, progress: result.progress, mastered: result.mastered, recommended: result.recommended });
+        send("done", { messages: result.messages, progress: result.progress, mastered: result.mastered, recommended: result.recommended, covered: result.covered });
       } else {
         send("error", { error: result.error, status: COACH_STATUS_FOR[result.error] });
       }
