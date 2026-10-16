@@ -11,7 +11,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Loader2, TriangleAlert } from "lucide-react";
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { VideoWithFeedback } from "@/components/video-feedback";
+import { FILL_VIDEO, VideoPlayerDialog } from "@/components/video-player-dialog";
 import type { ConceptState } from "@/lib/mimir/map/schema";
 
 /** How often, while playing, the player says where it is. */
@@ -102,47 +103,42 @@ export function VideoDialog({
   }, []);
 
   return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-4xl">
-        <div className="space-y-1">
-          <DialogTitle>{name}</DialogTitle>
-          <DialogDescription>Your place is kept: close it and carry on later.</DialogDescription>
+    <VideoPlayerDialog title={name} description="Your place is kept: close it and carry on later." onClose={onClose}>
+      {error ? (
+        <p role="alert" className="flex items-center gap-2 rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-6 text-sm text-destructive">
+          <TriangleAlert className="size-4 shrink-0" />
+          {error}
+        </p>
+      ) : !ready ? (
+        <div className="flex h-full items-center justify-center rounded-lg bg-muted/40 text-muted-foreground">
+          <Loader2 className="size-6 animate-spin" aria-label="Loading the video" />
         </div>
-        {error ? (
-          <p role="alert" className="flex items-center gap-2 rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-6 text-sm text-destructive">
-            <TriangleAlert className="size-4 shrink-0" />
-            {error}
-          </p>
-        ) : !ready ? (
-          <div className="flex aspect-video items-center justify-center rounded-lg bg-muted/40 text-muted-foreground">
-            <Loader2 className="size-6 animate-spin" aria-label="Loading the video" />
-          </div>
-        ) : (
-          <video
-            ref={video}
-            src={ready.url}
-            controls
-            playsInline
-            preload="metadata"
-            className="aspect-video w-full rounded-lg bg-black"
-            onLoadedMetadata={(e) => {
-              const el = e.currentTarget;
-              if (ready.startAt > 0 && ready.startAt < el.duration) el.currentTime = ready.startAt;
-              started.current = true;
-              void el.play().catch(() => undefined);
-            }}
-            onTimeUpdate={(e) => {
-              const el = e.currentTarget;
-              seen.current = { position: el.currentTime, duration: el.duration };
-              if (!el.paused && Date.now() - lastReport.current >= REPORT_EVERY_MS) report();
-            }}
-            onPause={() => report()}
-            onSeeked={() => report()}
-            onEnded={() => report(true)}
-            onError={() => setError("The video couldn't be played.")}
-          />
-        )}
-      </DialogContent>
-    </Dialog>
+      ) : (
+        <VideoWithFeedback
+          {...FILL_VIDEO}
+          videoRef={video}
+          feedback={{ kind: "mimir_concept", id: conceptId }}
+          src={ready.url}
+          controls
+          playsInline
+          preload="metadata"
+          onLoadedMetadata={(e) => {
+            const el = e.currentTarget;
+            if (ready.startAt > 0 && ready.startAt < el.duration) el.currentTime = ready.startAt;
+            started.current = true;
+            void el.play().catch(() => undefined);
+          }}
+          onTimeUpdate={(e) => {
+            const el = e.currentTarget;
+            seen.current = { position: el.currentTime, duration: el.duration };
+            if (!el.paused && Date.now() - lastReport.current >= REPORT_EVERY_MS) report();
+          }}
+          onPause={() => report()}
+          onSeeked={() => report()}
+          onEnded={() => report(true)}
+          onError={() => setError("The video couldn't be played.")}
+        />
+      )}
+    </VideoPlayerDialog>
   );
 }
