@@ -1,11 +1,11 @@
-import { DIETARY_LIST, FOOD_ORDER_LIST, RECORDING_LIST, GUEST_JUDGE_LIST, INTAKE_RESPONSE_LIST, JUDGE_PROSPECT_LIST, ASSESSMENT_ATTENDEE_LIST, ASSESSMENT_LIST, AUDIT_LIST, BOOTCAMP_HISTORY_LIST, BOOTCAMP_LIST, CURRENT_COHORT_LIST, DOMAIN_LIST, EMPLOYEE_LIST, HIBOB_SYNC_LIST, HISTORY_STATUSES, JUDGE_LIST, ORGANIZATION_LIST, PREVIOUS_SESSION_LIST, SESSION_COMMENT_LIST, SESSION_TYPE_LIST, GOOGLE_MEETING_LIST, SLACK_CONTACT_LIST, SLACK_SYNC_CHANGE_LIST, SLACK_SYNC_LIST, CHANNEL_CONTACT_LIST, TITLE_LIST, USER_LIST, FACILITY_LIST } from "@/lib/list-specs";
-import { BOOTCAMP_LIMITS, CHECKLIST_LIMITS, EVALS_ASSESSMENT_LIMITS, FACILITY_LIMITS, FOOD_ORDER_LIMITS, GOOGLE_MEETING_LIMITS, INTAKE_LIMITS, RECORDING_LIMITS, SCHEDULE_LIMITS } from "@/db/schema";
+import { DIETARY_LIST, FOOD_ORDER_LIST, RECORDING_LIST, GUEST_JUDGE_LIST, INTAKE_RESPONSE_LIST, JUDGE_PROSPECT_LIST, ASSESSMENT_ATTENDEE_LIST, ASSESSMENT_LIST, AUDIT_LIST, BOOTCAMP_HISTORY_LIST, BOOTCAMP_LIST, CURRENT_COHORT_LIST, DOMAIN_LIST, EMPLOYEE_LIST, HIBOB_SYNC_LIST, HISTORY_STATUSES, JUDGE_LIST, ORGANIZATION_LIST, PREVIOUS_SESSION_LIST, SESSION_COMMENT_LIST, SESSION_TYPE_LIST, GOOGLE_MEETING_LIST, SLACK_CONTACT_LIST, SLACK_SYNC_CHANGE_LIST, SLACK_SYNC_LIST, CHANNEL_CONTACT_LIST, TITLE_LIST, USER_LIST, FACILITY_LIST, VIDEO_FEEDBACK_LIST } from "@/lib/list-specs";
+import { BOOTCAMP_LIMITS, CHECKLIST_LIMITS, EVALS_ASSESSMENT_LIMITS, FACILITY_LIMITS, FOOD_ORDER_LIMITS, GOOGLE_MEETING_LIMITS, INTAKE_LIMITS, RECORDING_LIMITS, SCHEDULE_LIMITS, VIDEO_FEEDBACK_LIMITS } from "@/db/schema";
 import { PAGE_SIZE } from "@/lib/paging";
 import { RECORDING_RETENTION_DAYS, UPLOAD_STALLED_MS, UPLOAD_URL_BATCH } from "@/lib/recording/video";
 import { CHECKLIST_ITEM_ROW } from "./account";
 import { GUEST_JUDGE_DEPARTMENTS, GUEST_SPEAKER_LIMITS } from "@/lib/logistics/guest-judge-values";
 import { PAGE_FIELDS, listQuery } from "./paging";
-import type { Endpoint, EndpointGroup, Field } from "./types";
+import { ACCESS_LABELS, type Endpoint, type EndpointGroup, type Field } from "./types";
 
 type EndpointError = NonNullable<Endpoint["errors"]>[number];
 
@@ -49,7 +49,8 @@ const KIND_TYPE = `"main" | "breakout" | "unstructured"`;
 const AUDIENCE_TYPE = `"both" | "sales" | "engineers"`;
 const COLOR_TYPE = `"slate" | "red" | "orange" | "amber" | "green" | "teal" | "blue" | "violet" | "pink"`;
 const RECORDING_TAKE_SHAPE = `{ takeId, contributor, startedAt, durationMs: number | null, bytes: number, kinds: ("camera" | "screen")[], status: "uploading" | "assembling" | "ready" | "failed", stalled: boolean }`;
-const RECORDING_TRACK_SHAPE = `{ id, takeId, kind: "camera" | "screen", mimeType, startedAt, offsetMs: number, contributor, status: "uploading" | "assembling" | "ready" | "failed", chunks: number | null, durationMs: number | null, fileBytes: number | null, error: string | null, lastChunkAt: string | null, stalled: boolean }`;
+const VIDEO_FEEDBACK_SHAPE = `{ id, rating: "up" | "down", video: { kind: "mimir_concept" | "recording", id, label }, positionSeconds: number, comment: string | null, user: { id, name, email } | null, createdAt }`;
+const RECORDING_TRACK_SHAPE =`{ id, takeId, kind: "camera" | "screen", mimeType, startedAt, offsetMs: number, contributor, status: "uploading" | "assembling" | "ready" | "failed", chunks: number | null, durationMs: number | null, fileBytes: number | null, error: string | null, lastChunkAt: string | null, stalled: boolean }`;
 
 const MINUTES_NOTE = `a multiple of ${SCHEDULE_LIMITS.slot} from ${SCHEDULE_LIMITS.slot} to ${SCHEDULE_LIMITS.maxMinutes}`;
 
@@ -1607,6 +1608,52 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           { status: 400, error: "invalid", when: "a field is missing or malformed" },
           { status: 404, error: "not_found", when: "no such stream of the caller's" },
         ],
+      },
+    ],
+  },
+  {
+    id: "video-feedback",
+    title: "Video feedback",
+    intro:
+      "Thumbs up and thumbs down on videos. Every player in the app — a Mimir concept's video, and each stream of a recorded take — has a thumbs up and a thumbs down over it, each with a comment button beside it. A thumb is saved as it is pressed; the comment button pauses the video, and saving the comment saves the thumb with it and plays on. Every press is its own row, so the same person can rate the same video more than once.",
+    endpoints: [
+      {
+        method: "POST",
+        path: "/api/video-feedback",
+        summary: "Saves a thumbs up or thumbs down on a video, where it was, and an optional comment.",
+        access: "signedIn",
+        token: true,
+        notes:
+          `A Mimir concept's video may be rated by anyone signed in; a recording's stream only by a ${ACCESS_LABELS.trainingAdmin}, who are the ones who can watch it. The video's name is saved with the feedback as it is now. A comment is trimmed, and a blank one is saved as none. A recording's feedback is deleted with the take.`,
+        body: {
+          kind: "json",
+          fields: [
+            { name: "video", type: `{ kind: "mimir_concept" | "recording", id: string }`, required: true, note: "the concept's id, or the recording stream's id" },
+            { name: "rating", type: `"up" | "down"`, required: true },
+            { name: "position", type: "number", required: true, note: "where the video was, in seconds from the start" },
+            { name: "comment", type: "string", note: `up to ${VIDEO_FEEDBACK_LIMITS.comment} characters` },
+          ],
+        },
+        returns: `{ feedback: ${VIDEO_FEEDBACK_SHAPE} }, with 201`,
+        errors: [
+          { status: 400, error: "invalid", when: "a field is missing or out of range" },
+          { status: 403, error: "forbidden", when: "the video is a recording and the caller may not watch recordings" },
+          { status: 404, error: "not_found", when: "no concept has that id or it has no video, or no recording stream has that id" },
+        ],
+      },
+      {
+        method: "GET",
+        path: "/api/video-feedback",
+        summary: "Lists feedback on videos, a page at a time, the newest first.",
+        access: "trainingAdmin",
+        token: true,
+        notes: "user is null once the account that gave it is deleted.",
+        query: [
+          ...listQuery(VIDEO_FEEDBACK_LIST.sorts, "the video's name, the comment, or the name or email of who gave it", "desc"),
+          { name: "kind", type: `"mimir_concept" | "recording"`, note: "only feedback on that kind of video" },
+          { name: "rating", type: `"up" | "down"`, note: "only thumbs up, or only thumbs down" },
+        ],
+        returns: `{ feedback: ${VIDEO_FEEDBACK_SHAPE}[], ${PAGE_FIELDS} }`,
       },
     ],
   },

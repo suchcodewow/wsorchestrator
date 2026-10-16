@@ -704,6 +704,10 @@ const ROUTES: RouteCase[] = [
   { method: "POST", path: `/api/record/tracks/${MISSING}/camera/finish`, allowed: true, body: () => ({}) },
   { method: "GET", path: `/api/record/tracks/${MISSING}/camera/file`, allowed: true },
 
+  // Video feedback: anyone signed in rates what they can watch; reading it back is a Training Administrator's
+  { method: "GET", path: "/api/video-feedback", allowed: canManageTrainingSettings },
+  { method: "POST", path: "/api/video-feedback", allowed: true, body: () => ({}) },
+
   // eVals
   { method: "GET", path: "/api/evals/bootcamp-history", allowed: canUseEvals },
   { method: "GET", path: `/api/evals/bootcamp-history/${MISSING}`, allowed: canUseEvals },

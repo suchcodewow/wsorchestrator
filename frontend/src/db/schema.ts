@@ -2935,3 +2935,52 @@ export const recordingTracks = pgTable(
     check("recording_tracks_status_check", sql`${t.status} in ('uploading', 'assembling', 'ready', 'failed')`),
   ],
 );
+
+/** The videos a viewer can rate: a Mimir concept's video, or one stream of a recorded take. */
+export const VIDEO_FEEDBACK_KINDS = ["mimir_concept", "recording"] as const;
+export type VideoFeedbackKind = (typeof VIDEO_FEEDBACK_KINDS)[number];
+
+export const VIDEO_FEEDBACK_RATINGS = ["up", "down"] as const;
+export type VideoFeedbackRating = (typeof VIDEO_FEEDBACK_RATINGS)[number];
+
+export const VIDEO_FEEDBACK_LIMITS = {
+  comment: 2000,
+  /** The longest video anything here plays, in seconds: the same bound as a Mimir progress report. */
+  position: 6 * 3600,
+} as const;
+
+/**
+ * One thumbs up or thumbs down on a video, from the buttons over the player:
+ * who gave it, which video, where in it they were, and what they wrote if
+ * they used the comment button beside the thumb. Every click is its own row.
+ * A Mimir concept is a key into the imported map, not a foreign key; a
+ * recording's stream is, so its feedback goes when the take is deleted.
+ * `videoLabel` is the video's name when the feedback was given.
+ */
+export const videoFeedback = pgTable(
+  "video_feedback",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id").references(() => users.id, { onDelete: "set null" }),
+    videoKind: text("video_kind").$type<VideoFeedbackKind>().notNull(),
+    conceptId: text("concept_id"),
+    recordingTrackId: uuid("recording_track_id").references(() => recordingTracks.id, { onDelete: "cascade" }),
+    videoLabel: text("video_label").notNull().default(""),
+    rating: text("rating").$type<VideoFeedbackRating>().notNull(),
+    /** Where the video was, in seconds, when the thumb or comment button was pressed. */
+    positionSeconds: doublePrecision("position_seconds").notNull(),
+    comment: text("comment"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("video_feedback_created_at_idx").on(t.createdAt),
+    index("video_feedback_concept_id_idx").on(t.conceptId),
+    index("video_feedback_recording_track_id_idx").on(t.recordingTrackId),
+    check("video_feedback_video_kind_check", sql`${t.videoKind} in ('mimir_concept', 'recording')`),
+    check("video_feedback_rating_check", sql`${t.rating} in ('up', 'down')`),
+    check(
+      "video_feedback_video_check",
+      sql`(${t.videoKind} = 'mimir_concept' and ${t.conceptId} is not null) or (${t.videoKind} = 'recording' and ${t.recordingTrackId} is not null)`,
+    ),
+  ],
+);

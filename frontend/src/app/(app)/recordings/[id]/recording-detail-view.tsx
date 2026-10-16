@@ -12,6 +12,8 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { AlertTriangle, ArrowLeft, Camera, Download, Loader2, Monitor, Play, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { VideoWithFeedback } from "@/components/video-feedback";
+import { FILL_VIDEO, VideoPlayerDialog } from "@/components/video-player-dialog";
 import { riseChild, staggerParent } from "@/lib/motion";
 import { formatBytes, formatDuration } from "@/lib/recording/format";
 import { deletesOn } from "@/lib/recording/video";
@@ -151,9 +153,23 @@ function TrackCard({ track }: { track: RecordingTrackRow }) {
         </span>
       </div>
 
-      {ready && playing ? (
-        <video src={file} controls autoPlay className="aspect-video w-full rounded-md bg-black" />
-      ) : ready ? (
+      {ready && playing && (
+        <VideoPlayerDialog
+          title={`${track.contributor || "No name given"} — ${track.kind === "camera" ? "Camera" : "Screen"}`}
+          description={
+            <span className="tabular-nums" suppressHydrationWarning>
+              {[formatWhen(track.startedAt), track.durationMs !== null ? formatDuration(track.durationMs) : null]
+                .filter(Boolean)
+                .join(" · ")}
+            </span>
+          }
+          onClose={() => setPlaying(false)}
+        >
+          <VideoWithFeedback {...FILL_VIDEO} feedback={{ kind: "recording", id: track.id }} src={file} controls autoPlay playsInline />
+        </VideoPlayerDialog>
+      )}
+
+      {ready ? (
         <button
           type="button"
           onClick={() => setPlaying(true)}
