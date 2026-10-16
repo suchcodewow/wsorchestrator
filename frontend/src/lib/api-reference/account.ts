@@ -124,7 +124,7 @@ export const ACCOUNT_GROUPS: EndpointGroup[] = [
         access: "signedIn",
         token: true,
         returns:
-          "{ id, email: string | null, access: { event, training: string | null, assessments: string | null, iris: string | null, platform: boolean, judging: boolean, manager: boolean }, preferences: { themePreference: \"light\" | \"dark\" | \"system\", calendarScope: \"own\" | \"all\" } }",
+          "{ id, email: string | null, access: { event, training: string | null, assessments: string | null, iris: string | null, platform: boolean, judging: boolean, manager: boolean }, preferences: { themePreference: \"light\" | \"dark\" | \"system\", calendarScope: \"own\" | \"all\", favoriteTabs: { href: string, label: string }[] } }",
       },
       {
         method: "PATCH",
@@ -139,9 +139,14 @@ export const ACCOUNT_GROUPS: EndpointGroup[] = [
           fields: [
             { name: "themePreference", type: "\"light\" | \"dark\" | \"system\"" },
             { name: "calendarScope", type: "\"own\" | \"all\"", note: "Event Manager or above only" },
+            {
+              name: "favoriteTabs",
+              type: "{ href: string, label: string }[]",
+              note: "replaces the whole list shown under Favorites in the sidebar; 25 at most; href is an in-app path, label 80 characters at most",
+            },
           ],
         },
-        returns: "{ preferences: { themePreference, calendarScope } }",
+        returns: "{ preferences: { themePreference, calendarScope, favoriteTabs } }",
         errors: [
           { status: 400, error: "invalid_body", when: "the body is not a JSON object" },
           { status: 400, error: "invalid", when: "a value is not one of the allowed ones" },

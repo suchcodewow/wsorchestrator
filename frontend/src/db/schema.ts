@@ -83,6 +83,9 @@ export type CalendarScope = (typeof CALENDAR_SCOPES)[number];
 
 export const calendarScope = pgEnum("calendar_scope", CALENDAR_SCOPES);
 
+/** A tab a user starred: where it goes, and what the sidebar calls it. */
+export type FavoriteTab = { href: string; label: string };
+
 export const users = pgTable("users", {
   id: text("id")
     .primaryKey()
@@ -101,6 +104,10 @@ export const users = pgTable("users", {
   irisRole: irisRole("iris_role"),
   isPlatformAdmin: boolean("is_platform_admin").notNull().default(false),
   calendarScope: calendarScope("calendar_scope").notNull().default("own"),
+  favoriteTabs: jsonb("favorite_tabs")
+    .$type<FavoriteTab[]>()
+    .notNull()
+    .default(sql`'[]'::jsonb`),
   /** Made to test the app as, outside production; see src/lib/test-accounts.ts. */
   isTestAccount: boolean("is_test_account").notNull().default(false),
 });
@@ -2696,6 +2703,24 @@ export const mimirCoachMessages = pgTable(
   ],
 );
 
+/**
+ * How one person uses the map coach, for the people who run Mimir to read in
+ * the database. Never shown to the person it describes. `peakMastered` is the
+ * most concepts they have ever stood mastered on at once, so it outlives a
+ * new conversation and a re-imported map.
+ */
+export const mimirCoachStats = pgTable("mimir_coach_stats", {
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  /** Messages they typed to the coach; the coach's greetings are not counted. */
+  messagesSent: integer("messages_sent").notNull().default(0),
+  peakMastered: integer("peak_mastered").notNull().default(0),
+  /** Times they pressed "New conversation". */
+  newConversations: integer("new_conversations").notNull().default(0),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const INTAKE_QUESTION_KINDS = ["short", "paragraph", "choice", "checkboxes", "dropdown"] as const;
 export type IntakeQuestionKind = (typeof INTAKE_QUESTION_KINDS)[number];
 
@@ -2908,5 +2933,54 @@ export const recordingTracks = pgTable(
     index("recording_tracks_started_at_idx").on(t.startedAt),
     check("recording_tracks_kind_check", sql`${t.kind} in ('camera', 'screen')`),
     check("recording_tracks_status_check", sql`${t.status} in ('uploading', 'assembling', 'ready', 'failed')`),
+  ],
+);
+
+/** The videos a viewer can rate: a Mimir concept's video, or one stream of a recorded take. */
+export const VIDEO_FEEDBACK_KINDS = ["mimir_concept", "recording"] as const;
+export type VideoFeedbackKind = (typeof VIDEO_FEEDBACK_KINDS)[number];
+
+export const VIDEO_FEEDBACK_RATINGS = ["up", "down"] as const;
+export type VideoFeedbackRating = (typeof VIDEO_FEEDBACK_RATINGS)[number];
+
+export const VIDEO_FEEDBACK_LIMITS = {
+  comment: 2000,
+  /** The longest video anything here plays, in seconds: the same bound as a Mimir progress report. */
+  position: 6 * 3600,
+} as const;
+
+/**
+ * One thumbs up or thumbs down on a video, from the buttons over the player:
+ * who gave it, which video, where in it they were, and what they wrote if
+ * they used the comment button beside the thumb. Every click is its own row.
+ * A Mimir concept is a key into the imported map, not a foreign key; a
+ * recording's stream is, so its feedback goes when the take is deleted.
+ * `videoLabel` is the video's name when the feedback was given.
+ */
+export const videoFeedback = pgTable(
+  "video_feedback",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id").references(() => users.id, { onDelete: "set null" }),
+    videoKind: text("video_kind").$type<VideoFeedbackKind>().notNull(),
+    conceptId: text("concept_id"),
+    recordingTrackId: uuid("recording_track_id").references(() => recordingTracks.id, { onDelete: "cascade" }),
+    videoLabel: text("video_label").notNull().default(""),
+    rating: text("rating").$type<VideoFeedbackRating>().notNull(),
+    /** Where the video was, in seconds, when the thumb or comment button was pressed. */
+    positionSeconds: doublePrecision("position_seconds").notNull(),
+    comment: text("comment"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("video_feedback_created_at_idx").on(t.createdAt),
+    index("video_feedback_concept_id_idx").on(t.conceptId),
+    index("video_feedback_recording_track_id_idx").on(t.recordingTrackId),
+    check("video_feedback_video_kind_check", sql`${t.videoKind} in ('mimir_concept', 'recording')`),
+    check("video_feedback_rating_check", sql`${t.rating} in ('up', 'down')`),
+    check(
+      "video_feedback_video_check",
+      sql`(${t.videoKind} = 'mimir_concept' and ${t.conceptId} is not null) or (${t.videoKind} = 'recording' and ${t.recordingTrackId} is not null)`,
+    ),
   ],
 );

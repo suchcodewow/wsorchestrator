@@ -13,6 +13,7 @@ import { MIMIR_MESSAGE_MAX } from "@/db/schema";
 import { requireUser } from "@/lib/api-auth";
 import { audited, noteAudit } from "@/lib/audit";
 import { COACH_STATUS_FOR, beginCoachTurn, finishCoachTurn, getCoachChat, resetCoachChat } from "@/lib/mimir/map/coach";
+import { countNewConversation } from "@/lib/mimir/map/stats";
 
 export async function GET(req: Request) {
   const { error, user } = await requireUser(req);
@@ -76,5 +77,6 @@ export const DELETE = audited(async function DELETE(req: Request) {
   const { error, user } = await requireUser(req);
   if (error) return error;
 
+  await countNewConversation(user.id);
   return NextResponse.json({ ok: true, deleted: await resetCoachChat(user.id) });
 });

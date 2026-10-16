@@ -46,6 +46,7 @@ import {
   turnContent,
 } from "./coach-prompt";
 import { coverPoints, getConceptState, listConceptStates, markMastered, markRecommended, setChecklist } from "./progress";
+import { countMessage, notePeakMastered } from "./stats";
 import { checklistOf, conceptsInOrder, type ConceptPoint, type MapContent } from "./schema";
 
 /** A message left without a reply this long is treated as abandoned (the server stopped mid-call). */
@@ -239,6 +240,7 @@ export async function beginCoachTurn(
     return { seq, at: row!.createdAt };
   });
   if ("error" in claimed) return { ok: false, error: claimed.error };
+  if (message !== null) await countMessage(userId);
   return {
     ok: true,
     turn: { userId, systemPrompt: conversation.systemPrompt, message, ...claimed, conceptIds: conceptsInOrder(map.content).map((c) => c.id) },
@@ -330,6 +332,7 @@ export async function finishCoachTurn(
   // The coach knows what it just did: the next turn need not be told, and opening the tab is not a change.
   // Unless the app did not do it as asked: then the next turn, or opening the tab, shows it how things stand.
   const now = map ? await standing(turn.userId, map.content) : null;
+  if (now) await notePeakMastered(turn.userId, now.progress.mastered);
   await db
     .update(mimirCoachConversations)
     .set({ updatedAt: new Date(), ...(now && asItThinks ? { stateHash: now.snapshot.hash } : {}) })

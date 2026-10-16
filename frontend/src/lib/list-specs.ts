@@ -111,6 +111,10 @@ export type FoodOrderSort = (typeof FOOD_ORDER_LIST.sorts)[number];
 export const RECORDING_LIST = spec(["startedAt", "contributor"], "desc");
 export type RecordingSort = (typeof RECORDING_LIST.sorts)[number];
 
+/** Thumbs up and down on videos, with their comments, the newest first. */
+export const VIDEO_FEEDBACK_LIST = spec(["createdAt", "video", "user", "rating"], "desc");
+export type VideoFeedbackSort = (typeof VIDEO_FEEDBACK_LIST.sorts)[number];
+
 /** Each guest judge on each bootcamp they judged, the latest bootcamp first. */
 export const GUEST_JUDGE_LIST = spec(["cohort", "name", "sessions"], "desc");
 export type GuestJudgeSort = (typeof GUEST_JUDGE_LIST.sorts)[number];

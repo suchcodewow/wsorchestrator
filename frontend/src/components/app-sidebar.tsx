@@ -5,7 +5,8 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { PanelLeftClose, PanelLeftOpen, Star } from "lucide-react";
+import { useFavoriteTabs } from "@/components/favorite-tabs";
 import { UserMenu, type Impersonator } from "@/components/user-menu";
 import {
   Tooltip,
@@ -46,6 +47,7 @@ export function AppSidebar({
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
   const sections = visibleSections(access);
+  const favorites = useFavoriteTabs()?.tabs ?? [];
 
   function toggle() {
     const next = !collapsed;
@@ -63,6 +65,28 @@ export function AppSidebar({
         )}
       >
         <nav className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-3 py-5">
+          {favorites.length > 0 && (
+            <div className="flex flex-col gap-0.5 rounded-xl bg-amber-400/10 py-2 ring-1 ring-amber-400/25">
+              {collapsed ? (
+                <Star aria-label="Favorites" className="mx-auto mb-1 size-3.5 fill-amber-400 text-amber-400" />
+              ) : (
+                <h2 className="flex items-center gap-1.5 px-3 pb-1.5 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+                  <Star aria-hidden className="size-3 fill-amber-400 text-amber-400" />
+                  Favorites
+                </h2>
+              )}
+
+              {favorites.map((tab) => (
+                <NavLink
+                  key={tab.href}
+                  item={{ href: tab.href, label: tab.label, Icon: Star }}
+                  active={pathname === tab.href || pathname.startsWith(`${tab.href}/`)}
+                  collapsed={collapsed}
+                />
+              ))}
+            </div>
+          )}
+
           {sections.map((section) => (
             <div key={section.heading} className="flex flex-col gap-0.5">
               {collapsed ? (
@@ -132,7 +156,7 @@ function NavLink({
   active,
   collapsed,
 }: {
-  item: NavItem;
+  item: Pick<NavItem, "href" | "label" | "Icon">;
   active: boolean;
   collapsed: boolean;
 }) {

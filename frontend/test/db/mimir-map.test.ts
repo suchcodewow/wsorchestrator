@@ -16,12 +16,13 @@ import assert from "node:assert/strict";
 import { eq } from "drizzle-orm";
 
 import { db } from "@/db";
-import { mimirCoachConversations, mimirCoachMessages, mimirConceptProgress, mimirMap } from "@/db/schema";
+import { mimirCoachConversations, mimirCoachMessages, mimirCoachStats, mimirConceptProgress, mimirMap } from "@/db/schema";
 import { MIMIR_CONTEXT_LIMIT, type Complete, type CompletionRequest } from "@/lib/mimir/chat";
 import { getMap, importMap } from "@/lib/mimir/map/content";
 import { GREET_AFTER_MS, beginCoachTurn, getCoachChat, resetCoachChat, sendCoachMessage } from "@/lib/mimir/map/coach";
 import { getConceptState, listConceptStates, markMastered, markRecommended, saveVideoProgress } from "@/lib/mimir/map/progress";
 import { MAP_ID } from "@/lib/mimir/map/schema";
+import { countNewConversation } from "@/lib/mimir/map/stats";
 import { mapSummary } from "@/lib/mimir/map/summary";
 import { PERSONAS } from "../support/access";
 import { testScope, type TestUser } from "../support/seed";
@@ -289,6 +290,31 @@ describe("the coach", () => {
     await sendCoachMessage(rep.id, { open: true }, { complete: c.complete });
     assert.match(c.sent[2]!.system, /\[alpha\] Alpha Prime/);
     await importMap(admin.id, mapFixture());
+  });
+
+  test("the coach keeps count of what they type, their best mastery, and new conversations, across starting over", async () => {
+    const statsOf = async (id: string) => (await db.select().from(mimirCoachStats).where(eq(mimirCoachStats.userId, id)))[0];
+    await db.delete(mimirCoachStats).where(eq(mimirCoachStats.userId, rep.id));
+
+    await sendCoachMessage(rep.id, { open: true }, { complete: coach("Welcome.").complete });
+    await sendCoachMessage(rep.id, { message: "Hi." }, { complete: coach("Good.\n[MASTERED: alpha]").complete });
+    await sendCoachMessage(rep.id, { message: "More." }, { complete: coach("Ok.").complete });
+    let stats = await statsOf(rep.id);
+    assert.equal(stats?.messagesSent, 2, "a greeting is not something they typed");
+    assert.equal(stats?.peakMastered, 1);
+    assert.equal(stats?.newConversations, 0);
+
+    await countNewConversation(rep.id);
+    await resetCoachChat(rep.id);
+    await sendCoachMessage(rep.id, { message: "Again." }, { complete: coach("Fine.").complete });
+    stats = await statsOf(rep.id);
+    assert.equal(stats?.messagesSent, 3);
+    assert.equal(stats?.peakMastered, 1, "a new conversation does not lower the best");
+    assert.equal(stats?.newConversations, 1);
+
+    await db.delete(mimirConceptProgress).where(eq(mimirConceptProgress.userId, rep.id));
+    await sendCoachMessage(rep.id, { message: "Back to none." }, { complete: coach("Ok.").complete });
+    assert.equal((await statsOf(rep.id))?.peakMastered, 1, "losing progress does not lower it either");
   });
 
   test("starting over throws the conversation away but keeps their progress", async () => {
