@@ -21,7 +21,7 @@ import {
   startAt,
 } from "@/lib/mimir/map/schema";
 import { parseSlideNumber, slideObject } from "@/lib/mimir/map/slides";
-import { CONCEPT_W, CONCEPT_Y, PAD, SLIDE_H, SLIDE_W, SLIDE_Y, layoutMap } from "@/lib/mimir/map/layout";
+import { CONCEPT_H, CONCEPT_W, PAD, SLIDE_H, SLIDE_W, layoutMap } from "@/lib/mimir/map/layout";
 import {
   OPEN_REQUEST,
   buildCoachSystem,
@@ -59,6 +59,16 @@ describe("what an import must satisfy", () => {
     const f = mapFixture();
     assert.match(issue({ buckets: [{ ...f.buckets[0], concepts: ["alpha", "beta", "nope"] }, ...f.buckets.slice(1)] })!.message, /unknown concept nope/);
     assert.match(issue({ concepts: [{ ...f.concepts[1], slides: [99] }, ...f.concepts.filter((c) => c.id !== "beta")] })!.message, /slide 99 does not exist/);
+  });
+
+  test("a concept may only require other concepts, at a lower level, once each", () => {
+    const f = mapFixture();
+    const requiring = (id: string, requires: string[]) => f.concepts.map((c) => (c.id === id ? { ...c, requires } : c));
+    assert.match(issue({ concepts: requiring("delta", ["nope"]) })!.message, /unknown concept nope/);
+    assert.match(issue({ concepts: requiring("delta", ["alpha", "alpha"]) })!.message, /alpha is listed twice/);
+    assert.match(issue({ concepts: requiring("alpha", ["beta"]) })!.message, /beta is not at a lower level than alpha/);
+    assert.match(issue({ concepts: requiring("delta", ["omega"]) })!.message, /omega is not at a lower level than delta/);
+    assert.equal(issue({ concepts: requiring("omega", ["alpha", "delta"].slice(0, 1)) }), null);
   });
 
   test("a video must live under the mimir/videos/ prefix, once", () => {
@@ -134,101 +144,171 @@ describe("where a video starts and how full its ring is", () => {
 
 describe("the canvas", () => {
   const layout = layoutMap(publicMap(mapFixture()));
+  const x = (id: string) => layout.concepts.find((c) => c.id === id)!.x;
 
-  test("concepts run left to right in study order, with a wider gap between levels than between groups", () => {
-    const xs = layout.concepts.map((c) => c.x);
-    assert.deepEqual([...xs].sort((a, b) => a - b), xs);
-    const gap = (i: number) => layout.concepts[i + 1]!.x - layout.concepts[i]!.x - CONCEPT_W;
-    assert.equal(gap(0), 6); // same group
-    assert.equal(gap(1), 16); // next group, same level
-    assert.equal(gap(2), 30); // next level
+  test("the slides are the first column, then a column per level, Level 100 first", () => {
+    assert.equal(x("alpha"), x("gamma"));
+    assert.equal(x("delta"), x("omega"));
+    assert.ok(x("alpha") < x("delta"));
+    assert.deepEqual(layout.levels.map((l) => l.level), [1, 2]);
+    assert.ok(layout.slides.every((n) => layout.slideX(n) === layout.slideX(1)));
+    assert.ok(layout.slideX(1) + layout.slideW / 2 < x("alpha") - layout.conceptW / 2, "the slides sit left of Level 100");
+    const tops = layout.slides.map((n) => layout.slideY(n));
+    for (let i = 1; i < tops.length; i++) assert.ok(tops[i]! - tops[i - 1]! >= SLIDE_H + 6 - 1e-9);
+    assert.ok(layout.height > layout.slideY(6) + SLIDE_H);
   });
 
-  test("the groups and levels cover exactly the concepts they hold, centred in the canvas", () => {
-    const first = layout.groups[0]!;
-    const last = layout.groups.at(-1)!;
-    assert.ok(first.x0 >= PAD && last.x1 + PAD <= layout.width);
-    assert.ok(Math.abs(first.x0 - (layout.width - last.x1)) < 1e-9, "equal margins either side");
-    assert.equal(layout.levels.length, 2);
-    assert.equal(layout.levels[0]!.x0, first.x0);
-    assert.equal(layout.levels[1]!.x1, last.x1);
-    assert.deepEqual(layout.groups.map((g) => g.concepts.length), [2, 1, 2]);
+  test("within a column, concepts run top to bottom in study order, with a wider gap between groups than within one", () => {
+    const col = layout.concepts.filter((c) => c.level === 1);
+    const gap = (i: number) => col[i + 1]!.y - col[i]!.y - CONCEPT_H;
+    assert.deepEqual(col.map((c) => c.id), ["alpha", "beta", "gamma"]);
+    assert.equal(gap(0), 6 + 24 * 0); // same group
+    assert.ok(gap(1) > gap(0), "the next group is further off");
   });
 
-  test("every slide-to-concept link gets a curve from the slide's foot to the concept's head, inside both cards", () => {
+  test("the slides are headed EMD like a level, with each section's name over its slides like a group's", () => {
+    assert.deepEqual([layout.heading!.label, layout.heading!.top, layout.heading!.left, layout.heading!.width], ["EMD", layout.levels[0]!.y, PAD, layout.slideW]);
+    assert.deepEqual(layout.bands.map((b) => [b.name, b.count]), [["First half", 3], ["Second half", 3]]);
+    assert.ok(layout.bands[0]!.top > layout.heading!.top);
+    assert.ok(layout.bands[0]!.top + layout.bands[0]!.height <= layout.slideY(1));
+    assert.ok(layout.bands[1]!.top > layout.slideY(3) + SLIDE_H, "the second section starts below the first's last slide");
+    assert.ok(layout.slideY(4) >= layout.bands[1]!.top + layout.bands[1]!.height);
+  });
+
+  test("every concept card is one width and every slide card another", () => {
+    assert.ok(layout.levels.every((l) => Math.abs(l.x1 - l.x0 - layout.conceptW) < 1e-9));
+    assert.ok(layout.groups.every((g) => Math.abs(g.x1 - g.x0 - layout.conceptW) < 1e-9));
+    assert.ok(layout.bands.every((b) => b.width === layout.slideW));
+    assert.equal(layout.conceptW, CONCEPT_W);
+    assert.equal(layout.slideW, SLIDE_W);
+  });
+
+  test("every slide-to-concept link leaves a slide's right side and arrives at the concept's left side", () => {
     const expected = mapFixture().concepts.reduce((n, c) => n + c.slides.length, 0);
     assert.equal(layout.edges.length, expected);
     for (const e of layout.edges) {
       const m = /^M([\d.]+),([\d.]+) C[\d.]+,[\d.]+ [\d.]+,[\d.]+ ([\d.]+),([\d.]+)$/.exec(e.d);
       assert.ok(m, e.d);
       const [xa, ya, xb, yb] = m!.slice(1).map(Number) as [number, number, number, number];
-      assert.equal(ya, SLIDE_Y + SLIDE_H);
-      assert.equal(yb, CONCEPT_Y);
-      assert.ok(Math.abs(xa - layout.slideX(e.slide)) <= SLIDE_W / 2);
       const c = layout.concepts.find((k) => k.id === e.concept)!;
-      assert.ok(Math.abs(xb - c.x) <= CONCEPT_W / 2);
+      assert.equal(xa, layout.slideX(e.slide) + layout.slideW / 2);
+      assert.equal(xb, c.x - layout.conceptW / 2);
+      assert.ok(ya >= layout.slideY(e.slide) && ya <= layout.slideY(e.slide) + SLIDE_H);
+      assert.ok(yb >= c.y && yb <= c.y + CONCEPT_H);
     }
   });
 
-  test("the bands cover the slides of each section, and say which", () => {
-    assert.deepEqual(layout.bands.map((b) => [b.name, b.from, b.to, b.count]), [["First half", 1, 3, 3], ["Second half", 4, 6, 3]]);
-    assert.equal(layout.bands[0]!.left, PAD + 1);
-  });
-
-  test("slides are spread evenly across the canvas", () => {
-    const step = layout.slideX(2) - layout.slideX(1);
-    assert.ok(Math.abs(step - layout.slideSpacing) < 1e-9);
-    assert.ok(layout.slideX(1) > PAD && layout.slideX(6) < layout.width - PAD);
+  test("each requirement leaves the left side of the concept and arrives at the right side of the one it requires", () => {
+    assert.deepEqual(layout.links.map((l) => `${l.from}>${l.to}`).sort(), ["delta>alpha", "delta>gamma", "omega>beta"]);
+    for (const l of layout.links) {
+      const m = /^M([\d.]+),([\d.]+) C[\d.]+,[\d.]+ [\d.]+,[\d.]+ ([\d.]+),([\d.]+)$/.exec(l.d);
+      assert.ok(m, l.d);
+      const [xa, ya, xb, yb] = m!.slice(1).map(Number) as [number, number, number, number];
+      const from = layout.concepts.find((k) => k.id === l.from)!;
+      const to = layout.concepts.find((k) => k.id === l.to)!;
+      assert.equal(xa, from.x - layout.conceptW / 2);
+      assert.equal(xb, to.x + layout.conceptW / 2);
+      assert.ok(ya >= from.y && ya <= from.y + CONCEPT_H);
+      assert.ok(yb >= to.y && yb <= to.y + CONCEPT_H);
+      assert.equal(l.level, to.level);
+    }
   });
 });
 
-describe("the canvas filtered to one level", () => {
+describe("the canvas filtered to one section of slides", () => {
   const pub = publicMap(mapFixture());
   const everything = layoutMap(pub);
-  const basics = layoutMap(pub, 1);
-  const more = layoutMap(pub, 2);
+  const basics = layoutMap(pub, "First half");
+  const more = layoutMap(pub, "Second half");
 
-  test("only that level's concepts, groups and level bar are laid out, numbered as in the whole course", () => {
-    assert.deepEqual(basics.concepts.map((c) => [c.id, c.study]), [["alpha", 1], ["beta", 2], ["gamma", 3]]);
-    assert.deepEqual(basics.groups.map((g) => g.id), ["g1", "g2"]);
-    assert.deepEqual(basics.levels.map((l) => l.level), [1]);
+  test("only the concepts the section's slides rely on are laid out, numbered as in the whole course", () => {
+    assert.deepEqual(basics.concepts.map((c) => [c.id, c.study]).sort(), [["alpha", 1], ["beta", 2], ["delta", 4], ["gamma", 3]]);
     assert.deepEqual(more.concepts.map((c) => [c.id, c.study]), [["delta", 4], ["omega", 5]]);
-    assert.deepEqual(more.levels.map((l) => l.level), [2]);
   });
 
-  test("only the slides that need those concepts are shown, in order", () => {
+  test("only that section's slides are shown, in order", () => {
     assert.deepEqual(everything.slides, [1, 2, 3, 4, 5, 6]);
     assert.deepEqual(basics.slides, [1, 2, 3]);
-    assert.deepEqual(more.slides, [3, 4, 5, 6]);
+    assert.deepEqual(more.slides, [4, 5, 6]);
+  });
+
+  test("every level keeps its column, at the same place and width, whatever is hidden", () => {
+    for (const l of [basics, more]) {
+      assert.deepEqual(l.levels, everything.levels);
+      assert.equal(l.conceptW, everything.conceptW);
+      assert.equal(l.slideW, everything.slideW);
+      assert.equal(l.width, everything.width);
+    }
   });
 
   test("a slide keeps the level it needs across the whole course, not just among what is shown", () => {
     assert.equal(basics.need[3], 2);
-    assert.equal(more.need[3], 2);
+    assert.equal(more.need[4], 2);
     assert.deepEqual(basics.need, everything.need);
   });
 
-  test("only lines between what is shown remain", () => {
-    assert.deepEqual([...new Set(basics.edges.map((e) => e.concept))].sort(), ["alpha", "beta", "gamma"]);
-    assert.equal(basics.edges.length, 2 + 2 + 1);
+  test("only lines from the section's slides remain", () => {
+    assert.equal(basics.edges.length, 2 + 2 + 1 + 1);
+    assert.ok(basics.edges.every((e) => basics.slides.includes(e.slide)));
+    assert.equal(more.edges.length, 2 + 1);
     assert.ok(more.edges.every((e) => more.slides.includes(e.slide)));
   });
 
-  test("the bands cover only the sections that still have a slide, counted among those shown", () => {
+  test("a requirement is drawn only when both concepts are shown", () => {
+    assert.equal(everything.links.length, 3);
+    assert.deepEqual(basics.links.map((l) => `${l.from}>${l.to}`).sort(), ["delta>alpha", "delta>gamma"]);
+    assert.deepEqual(more.links, []);
+  });
+
+  test("the bands cover only the chosen section, counted among those shown", () => {
     assert.deepEqual(basics.bands.map((b) => [b.name, b.count]), [["First half", 3]]);
-    assert.deepEqual(more.bands.map((b) => [b.name, b.count]), [["First half", 1], ["Second half", 3]]);
+    assert.deepEqual(more.bands.map((b) => [b.name, b.count]), [["Second half", 3]]);
   });
 
-  test("slides never overlap, even when a few concepts leave many slides to place; the concepts are centred", () => {
-    for (const l of [everything, basics, more]) assert.ok(l.slideSpacing >= SLIDE_W + 6 - 1e-9);
-    const centre = (more.groups[0]!.x0 + more.groups.at(-1)!.x1) / 2;
-    assert.ok(Math.abs(centre - more.width / 2) < 1e-9);
-    assert.ok(more.width > more.groups.at(-1)!.x1 + PAD);
-  });
-
-  test("a level with nothing in it leaves an empty map rather than failing", () => {
-    const empty = layoutMap({ ...pub, buckets: pub.buckets.filter((b) => b.level === 1), concepts: pub.concepts.filter((c) => ["alpha", "beta", "gamma"].includes(c.id)) }, 2);
+  test("a section that does not exist leaves an empty map rather than failing", () => {
+    const empty = layoutMap(pub, "No such section");
     assert.deepEqual([empty.concepts.length, empty.slides.length, empty.edges.length], [0, 0, 0]);
+    assert.equal(empty.width, everything.width);
+  });
+});
+
+describe("the canvas narrowed to one slide", () => {
+  const pub = publicMap(mapFixture());
+  const everything = layoutMap(pub);
+  const slide = everything.edges[0]!.slide;
+  const one = layoutMap(pub, null, 0, slide);
+
+  test("only the concepts that slide needs remain, and every slide stays", () => {
+    const needs = everything.edges.filter((e) => e.slide === slide).map((e) => e.concept).sort();
+    assert.deepEqual(one.concepts.map((c) => c.id).sort(), needs);
+    assert.deepEqual(one.slides, everything.slides);
+  });
+
+  test("no column moves or changes width", () => {
+    assert.deepEqual(one.levels, everything.levels);
+    assert.equal(one.conceptW, everything.conceptW);
+    assert.equal(one.width, everything.width);
+    assert.equal(one.slideX(slide), everything.slideX(slide));
+  });
+});
+
+describe("a map given more room than it needs", () => {
+  const pub = publicMap(mapFixture());
+
+  test("it fills the room, and never shrinks below what it needs", () => {
+    const natural = layoutMap(pub);
+    assert.equal(layoutMap(pub, null, natural.width + 900).width, natural.width + 900);
+    assert.equal(layoutMap(pub, null, 10).width, natural.width);
+  });
+
+  test("spare room widens the cards, all alike, and the gaps", () => {
+    const natural = layoutMap(pub);
+    const wide = layoutMap(pub, null, natural.width + 600);
+    const x = (l: typeof wide, id: string) => l.concepts.find((c) => c.id === id)!.x;
+    assert.ok(wide.conceptW > natural.conceptW && wide.slideW > natural.slideW);
+    assert.ok(x(wide, "delta") - x(wide, "alpha") > x(natural, "delta") - x(natural, "alpha"));
+    assert.ok(wide.levels.at(-1)!.x1 + PAD <= wide.width + 1e-9);
+    assert.ok(wide.levels.every((l) => Math.abs(l.x1 - l.x0 - wide.conceptW) < 1e-9));
   });
 });
 

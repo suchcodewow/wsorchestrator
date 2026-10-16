@@ -179,7 +179,17 @@ describe("the coach", () => {
     const opener = lastUserContent(req);
     assert.match(opener, /^<progress>\nPROGRESS SNAPSHOT/);
     assert.match(opener, /Next concept to cover: \[alpha\] Alpha/);
-    assert.ok(opener.endsWith("I just opened Mimir."));
+    assert.ok(opener.endsWith("I just opened Mimir. Introduce yourself."));
+  });
+
+  test("it introduces itself on the first opening and every fourth one after", async () => {
+    const asked: boolean[] = [];
+    for (let i = 0; i < 5; i++) {
+      const c = coach("Hello.");
+      await sendCoachMessage(rep.id, { open: true }, { complete: c.complete });
+      asked.push(/Introduce yourself\.$/.test(lastUserContent(c.sent[0]!)));
+    }
+    assert.deepEqual(asked, [true, false, false, false, true]);
   });
 
   test("the greeting is not shown as something they said", async () => {

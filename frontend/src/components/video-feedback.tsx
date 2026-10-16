@@ -1,8 +1,9 @@
 "use client";
 
 /**
- * A video with feedback buttons over its top corner: a thumbs up and a thumbs
- * down, each with a comment button beside it. A thumb is saved the moment it
+ * A video with feedback buttons: a green thumbs up and a red thumbs down, each
+ * with a square comment button tucked behind it. In a `VideoPlayerDialog` they
+ * sit centred in its title bar; elsewhere they float over the video's top corner. A thumb is saved the moment it
  * is pressed, with where the video was. A comment button pauses the video and
  * opens a small box beside it; saving the comment saves that thumb with it,
  * closes the box and plays on. Cancelling saves nothing and plays on too.
@@ -16,12 +17,31 @@
  * honour that; Firefox and Safari still offer their full-screen button.
  */
 
-import { useEffect, useLayoutEffect, useRef, useState, type ComponentProps, type RefObject } from "react";
+import {
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ComponentProps,
+  type RefObject,
+} from "react";
+import { createPortal } from "react-dom";
 import { Loader2, MessageSquarePlus, ThumbsDown, ThumbsUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { FeedbackSlotContext } from "@/components/video-player-dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { VIDEO_FEEDBACK_LIMITS, type VideoFeedbackKind, type VideoFeedbackRating } from "@/db/schema";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
+  VIDEO_FEEDBACK_LIMITS,
+  type VideoFeedbackKind,
+  type VideoFeedbackRating,
+} from "@/db/schema";
 import { anchorFloating } from "@/lib/floating";
 import { formatDuration } from "@/lib/recording/format";
 import { cn } from "@/lib/utils";
@@ -32,11 +52,24 @@ export type FeedbackTarget = { kind: VideoFeedbackKind; id: string };
 /** How long a saved thumb stays lit. */
 const SAVED_MS = 2_000;
 
-const RATING_LABELS: Record<VideoFeedbackRating, string> = { up: "Thumbs up", down: "Thumbs down" };
+const RATING_LABELS: Record<VideoFeedbackRating, string> = {
+  up: "Thumbs up",
+  down: "Thumbs down",
+};
 
-type Composing = { rating: VideoFeedbackRating; position: number; resume: boolean; anchor: HTMLElement };
+type Composing = {
+  rating: VideoFeedbackRating;
+  position: number;
+  resume: boolean;
+  anchor: HTMLElement;
+};
 
-async function sendFeedback(target: FeedbackTarget, rating: VideoFeedbackRating, position: number, comment?: string) {
+async function sendFeedback(
+  target: FeedbackTarget,
+  rating: VideoFeedbackRating,
+  position: number,
+  comment?: string,
+) {
   try {
     const res = await fetch("/api/video-feedback", {
       method: "POST",
@@ -80,7 +113,13 @@ export function VideoWithFeedback({
   );
 }
 
-function FeedbackBar({ video, target }: { video: RefObject<HTMLVideoElement | null>; target: FeedbackTarget }) {
+function FeedbackBar({
+  video,
+  target,
+}: {
+  video: RefObject<HTMLVideoElement | null>;
+  target: FeedbackTarget;
+}) {
   const [sending, setSending] = useState<VideoFeedbackRating | null>(null);
   const [saved, setSaved] = useState<VideoFeedbackRating | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -121,25 +160,41 @@ function FeedbackBar({ video, target }: { video: RefObject<HTMLVideoElement | nu
     if (resume) void video.current?.play().catch(() => undefined);
   }
 
-  return (
-    <TooltipProvider>
-      <div className="absolute top-3 right-3 z-10 flex items-center gap-2">
-        {(error || saved) && (
-          <span
-            role="status"
-            className={cn("rounded-full bg-black/65 px-2.5 py-1 text-xs text-white", error && "text-red-300")}
-          >
-            {error ?? "Thanks for the feedback!"}
-          </span>
-        )}
-        <div className="flex items-center gap-0.5 rounded-full bg-black/55 p-1 text-white backdrop-blur-sm">
-          {(["up", "down"] as const).map((rating, i) => (
-            <div key={rating} className="flex items-center gap-0.5">
-              {i > 0 && <span aria-hidden className="mx-1 h-5 w-px bg-white/25" />}
+  const slot = useContext(FeedbackSlotContext);
+  const controls = (
+    <div
+      className={cn(
+        "flex items-center gap-2",
+        !slot && "absolute top-3 right-3 z-10",
+      )}
+    >
+      {(error || saved) && (
+        <span
+          role="status"
+          className={cn(
+            "rounded-full bg-black/65 px-2.5 py-1 text-xs text-white",
+            error && "text-red-300",
+          )}
+        >
+          {error ?? "Thanks for the feedback!"}
+        </span>
+      )}
+      <div className="flex items-center gap-4">
+        {(["up", "down"] as const).map((rating) => {
+          const tone =
+            rating === "up"
+              ? "bg-green-600 hover:bg-green-500"
+              : "bg-red-600 hover:bg-red-500";
+          return (
+            <div key={rating} className="flex items-center">
               <OverlayButton
                 label={RATING_LABELS[rating]}
                 disabled={sending === rating}
                 active={saved === rating}
+                className={cn(
+                  "relative z-10 size-9 rounded-full shadow-md ring-2 ring-background",
+                  tone,
+                )}
                 onClick={() => void thumb(rating)}
               >
                 {sending === rating ? (
@@ -147,21 +202,40 @@ function FeedbackBar({ video, target }: { video: RefObject<HTMLVideoElement | nu
                 ) : rating === "up" ? (
                   <ThumbsUp className={cn(saved === "up" && "fill-current")} />
                 ) : (
-                  <ThumbsDown className={cn(saved === "down" && "fill-current")} />
+                  <ThumbsDown
+                    className={cn(saved === "down" && "fill-current")}
+                  />
                 )}
               </OverlayButton>
               <OverlayButton
                 label={`${RATING_LABELS[rating]}, with a comment`}
                 active={composing?.rating === rating}
+                className={cn(
+                  "-ml-3 h-7 w-10 rounded-md pl-3 brightness-90",
+                  tone,
+                )}
                 onClick={(e) => comment(rating, e.currentTarget)}
               >
                 <MessageSquarePlus />
               </OverlayButton>
             </div>
-          ))}
-        </div>
+          );
+        })}
       </div>
-      {composing && <CommentBox key={`${composing.rating}-${composing.position}`} target={target} composing={composing} onClose={close} />}
+    </div>
+  );
+
+  return (
+    <TooltipProvider>
+      {slot ? createPortal(controls, slot) : controls}
+      {composing && (
+        <CommentBox
+          key={`${composing.rating}-${composing.position}`}
+          target={target}
+          composing={composing}
+          onClose={close}
+        />
+      )}
     </TooltipProvider>
   );
 }
@@ -170,10 +244,12 @@ function OverlayButton({
   label,
   active,
   disabled,
+  className,
   onClick,
   children,
 }: {
   label: string;
+  className?: string;
   active?: boolean;
   disabled?: boolean;
   onClick: (e: React.MouseEvent<HTMLButtonElement>) => void;
@@ -188,8 +264,9 @@ function OverlayButton({
           disabled={disabled}
           onClick={onClick}
           className={cn(
-            "inline-flex size-8 cursor-pointer items-center justify-center rounded-full outline-none transition-colors hover:bg-white/15 focus-visible:ring-2 focus-visible:ring-white/70 disabled:cursor-default [&_svg]:size-4",
-            active && "bg-white/20",
+            "inline-flex cursor-pointer items-center justify-center text-white outline-none transition-colors focus-visible:ring-2 focus-visible:ring-white/70 disabled:cursor-default [&_svg]:size-4",
+            active && "brightness-125",
+            className,
           )}
         >
           {children}
@@ -221,7 +298,10 @@ function CommentBox({
 
   useLayoutEffect(() => {
     if (!box.current) return;
-    return anchorFloating(composing.anchor, box.current, { strategy: "absolute", placement: "bottom-end" });
+    return anchorFloating(composing.anchor, box.current, {
+      strategy: "absolute",
+      placement: "bottom-end",
+    });
   }, [composing.anchor]);
 
   // Radix's Dialog hears Escape on the document, in the capture phase; the
@@ -238,14 +318,20 @@ function CommentBox({
       latestClose.current(null);
     };
     window.addEventListener("keydown", onKey, { capture: true });
-    return () => window.removeEventListener("keydown", onKey, { capture: true });
+    return () =>
+      window.removeEventListener("keydown", onKey, { capture: true });
   }, []);
 
   async function save() {
     if (!text.trim() || saving) return;
     setSaving(true);
     setError(null);
-    const failed = await sendFeedback(target, composing.rating, composing.position, text);
+    const failed = await sendFeedback(
+      target,
+      composing.rating,
+      composing.position,
+      text,
+    );
     setSaving(false);
     if (failed) setError(failed);
     else onClose(composing.rating);
@@ -265,7 +351,10 @@ function CommentBox({
     >
       <p className="flex items-center gap-1.5 font-medium">
         <Icon className="size-3.5" />
-        {RATING_LABELS[composing.rating]} at <span className="tabular-nums">{formatDuration(composing.position * 1000)}</span>
+        {RATING_LABELS[composing.rating]} at{" "}
+        <span className="tabular-nums">
+          {formatDuration(composing.position * 1000)}
+        </span>
       </p>
       <Textarea
         autoFocus
@@ -287,7 +376,12 @@ function CommentBox({
         </p>
       )}
       <div className="flex justify-end gap-2">
-        <Button type="button" variant="ghost" size="sm" onClick={() => onClose(null)}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() => onClose(null)}
+        >
           Cancel
         </Button>
         <Button type="submit" size="sm" disabled={!text.trim() || saving}>

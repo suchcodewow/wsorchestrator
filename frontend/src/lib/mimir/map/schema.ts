@@ -19,6 +19,7 @@ export const MAP_SLIDE_LIMIT = 200;
 export const POINTS_MIN = 2;
 export const POINTS_MAX = 6;
 export const POINT_CHARS = 160;
+export const REQUIRES_MAX = 12;
 /** A video object lives under this prefix in the recordings bucket, clear of the prefixes its lifecycle rules delete. */
 export const VIDEO_PREFIX = "mimir/videos/";
 /** A slide's picture is `<n>.jpg` under this prefix, in the same bucket and clear of the same lifecycle rules. */
@@ -51,6 +52,8 @@ const conceptSchema = z.object({
    * Without them the coach writes a checklist for each rep the first time it asks.
    */
   points: z.array(text(POINT_CHARS).min(1)).min(POINTS_MIN).max(POINTS_MAX).optional(),
+  /** The concepts, each at a lower level, to understand before this one. The map draws a line to each. */
+  requires: z.array(id).max(REQUIRES_MAX).optional(),
   video: videoSchema.optional(),
 });
 export type MapConceptInput = z.infer<typeof conceptSchema>;
@@ -93,6 +96,18 @@ export const mapContentSchema = z
         if (!slideNumbers.has(n)) fail(`slide ${n} does not exist`, ["concepts", i, "slides", j]);
       }),
     );
+    const levelOf = new Map<string, number>();
+    c.buckets.forEach((b) => b.concepts.forEach((cid) => levelOf.set(cid, b.level)));
+    c.concepts.forEach((k, i) => {
+      const seen = new Set<string>();
+      k.requires?.forEach((rid, j) => {
+        const at = ["concepts", i, "requires", j];
+        if (!conceptIds.has(rid)) return fail(`unknown concept ${rid}`, at);
+        if (seen.has(rid)) fail(`${rid} is listed twice`, at);
+        seen.add(rid);
+        if ((levelOf.get(rid) ?? 0) >= (levelOf.get(k.id) ?? 0)) fail(`${rid} is not at a lower level than ${k.id}`, at);
+      });
+    });
     const objects = new Set<string>();
     c.concepts.forEach((k, i) => {
       if (!k.video) return;

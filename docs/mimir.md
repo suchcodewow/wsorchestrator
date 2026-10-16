@@ -11,11 +11,16 @@ Mimir teaches the course one concept at a time. It has two tabs:
   every point is ticked the concept is mastered and it moves on. If you don't
   know the concept, it links its video and flags it **Recommended** on the
   map. When you come back after watching, it asks about the open points.
-- **Map** is the concept map: the slides along the top, the concepts they rely
-  on in study order along the bottom, and a line from each slide to each
-  concept it needs. Point at anything for its details. The level chips under
-  the title filter the map to one level, with just the slides that need its
-  concepts; press the chip again to see everything. Each concept with a video has a play button whose ring
+- **Map** is the concept map: the slides (headed EMD) in the first column,
+  then a column per level, Level 100 to Level 300. No lines show until you
+  click something, or turn on **Show all connections**; a solid line then runs
+  from each slide to each concept it needs, and a dashed one from each concept
+  to the lower-level concepts it requires. Clicking a slide hides the concepts
+  it does not need, and the columns keep their places. Point at a slide for its
+  picture, or at anything else for its details. The
+  chips under the title filter the map to one section of the slides (Core
+  Pitch, say) and the concepts those slides rely on; press the chip again to
+  see everything. Each concept with a video has a play button whose ring
   fills as you watch and turns into a check when you have watched it to the
   end. A concept the coach has marked shows a check; one it asked you to watch
   shows **Recommended**.
@@ -40,7 +45,7 @@ npx tsx scripts/mimir-map-convert.ts \
 ```
 
 then loaded in **Mimir Settings → Map** (or `POST /api/mimir/map/import`). The
-file holds the slides, the concepts and their order, the groups and levels, and for each concept with a video, where it is kept and what the
+file holds the slides, the concepts and their order (each may list `requires`, the lower-level concepts to understand first), the groups and levels, and for each concept with a video, where it is kept and what the
 narrator says in it (which is how the coach knows each video). It is validated
 whole against `src/lib/mimir/map/schema.ts` and replaces the last one. Progress
 is keyed by concept id, so everyone's progress on a concept the new map keeps

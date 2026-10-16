@@ -1442,13 +1442,13 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
     id: "recordings",
     title: "Recordings",
     intro:
-      `Async recordings. Anyone in the org signs in with Google at /record — the Harness Training Recorder — and, needing no role, types their name, and records their camera (with the microphone) and, if they choose, their screen, each as its own file. The browser keeps every stream locally and uploads it a chunk at a time while it records, retrying until each lands: on a deployment, straight to Cloud Storage on signed URLs, so no video passes through the app. The /api/record routes are what that page calls, as the signed-in account: a take is its recorder's, and nobody else may add to it. Everything else here is for Training Administrators. A recording is deleted ${RECORDING_RETENTION_DAYS} days after it is made, and is not listed meanwhile.`,
+      `Async recordings. Anyone in the org signs in with Google at /record — the Harness Training Recorder — and, needing no role, types their name, and records their camera (with the microphone) and, if they choose, their screen, each as its own file. The browser keeps every stream locally and uploads it a chunk at a time while it records, retrying until each lands: on a deployment, straight to Cloud Storage on signed URLs, so no video passes through the app. The /api/record routes are what that page calls, as the signed-in account: a take is its recorder's, and nobody else may add to it. Everything else here is for Training Viewers to read and play, and for Training Administrators to delete. A recording is deleted ${RECORDING_RETENTION_DAYS} days after it is made, and is not listed meanwhile.`,
     endpoints: [
       {
         method: "GET",
         path: "/api/recordings",
         summary: "Lists recorded takes, a page at a time, the newest first.",
-        access: "trainingAdmin",
+        access: "trainingViewer",
         token: true,
         notes: `A row per take, its streams rolled up: durationMs is the longest stream's, bytes the finished files', and status failed if any stream failed, else uploading or assembling while any is, else ready. stalled is a stream still uploading with no chunk for ${UPLOAD_STALLED_MS / 60_000} minutes: most likely the page was closed, and opening /record again on the same computer and browser, signed in as the same person, resumes it.`,
         query: listQuery(RECORDING_LIST.sorts, "who recorded it"),
@@ -1458,7 +1458,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "GET",
         path: "/api/recordings/{takeId}",
         summary: "Reads one take with each of its streams.",
-        access: "trainingAdmin",
+        access: "trainingViewer",
         token: true,
         notes: "offsetMs is when a stream started after the take's first, to line the files up.",
         params: [{ name: "takeId", type: "string", required: true, note: "the take's id" }],
@@ -1479,7 +1479,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "GET",
         path: "/api/recordings/{takeId}/{kind}/file",
         summary: "Serves one finished stream of a take — the camera or the screen — as MP4 or WebM, or redirects to it.",
-        access: "trainingAdmin",
+        access: "trainingViewer",
         token: true,
         notes:
           "Where recordings are kept in Cloud Storage, as on every deployment, it answers 302 to a signed URL good for 15 minutes, and the bucket honours Range; kept on disk, it serves the bytes itself and honours Range. Either way a video element plays and seeks it. download=1 serves it as an attachment named after who recorded it, when, and the stream.",

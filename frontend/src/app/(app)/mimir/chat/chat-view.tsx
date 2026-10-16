@@ -15,7 +15,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChevronUp, Circle, CircleCheck, Loader2, MessageSquarePlus, Play, SendHorizontal, Sparkles, Star, Check } from "lucide-react";
+import { ChevronDown, ChevronUp, Circle, CircleCheck, Loader2, MessageSquarePlus, Play, SendHorizontal, Sparkles, Star, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
@@ -67,7 +67,18 @@ async function readEvents(res: Response, on: (event: string, data: unknown) => v
 
 type Notice = { kind: "mastered" | "recommended"; id: string } | ({ kind: "covered" } & Covered);
 
-export function ChatView({ initial, concepts, profile }: { initial: View; concepts: Concept[]; profile: { role: MimirRepRole | null; coachStyle: MimirCoachStyle } }) {
+export function ChatView({
+  initial,
+  concepts,
+  profile,
+  canSeePoints,
+}: {
+  initial: View;
+  concepts: Concept[];
+  profile: { role: MimirRepRole | null; coachStyle: MimirCoachStyle };
+  /** Assessments Administrators alone see the next concept's points covered. */
+  canSeePoints: boolean;
+}) {
   const router = useRouter();
   const [view, setView] = useState(initial);
   const [draft, setDraft] = useState("");
@@ -204,7 +215,7 @@ export function ChatView({ initial, concepts, profile }: { initial: View; concep
   const pct = view.progress.total ? Math.round((view.progress.mastered / view.progress.total) * 100) : 0;
 
   return (
-    <section className="mx-auto flex max-h-[calc(100dvh-14rem)] min-h-[32rem] max-w-3xl flex-col overflow-hidden rounded-2xl border bg-card shadow-sm">
+    <section className="mx-auto flex max-h-[calc(100dvh-19rem)] min-h-[32rem] max-w-3xl flex-col overflow-hidden rounded-2xl border bg-card shadow-sm">
       <header className="space-y-3 border-b px-5 py-3">
         <div className="flex items-center justify-between gap-3">
           <h2 className="flex items-center gap-1.5 font-medium">
@@ -241,7 +252,7 @@ export function ChatView({ initial, concepts, profile }: { initial: View; concep
               <span className="font-medium text-foreground">Every concept mastered</span>
             )}
           </div>
-          {next?.points && <Checklist points={next.points} />}
+          {canSeePoints && next?.points && <Checklist points={next.points} />}
         </div>
       </header>
 
@@ -355,21 +366,30 @@ export function ChatView({ initial, concepts, profile }: { initial: View; concep
 
 /** The next concept's main points, each ticked once you have put it in your own words. */
 function Checklist({ points }: { points: Point[] }) {
+  const [open, setOpen] = useState(false);
   const done = points.filter((p) => p.covered).length;
   return (
     <div className="space-y-1 pt-0.5">
-      <p className="tnum text-xs text-muted-foreground">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className="tnum flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+      >
+        <ChevronDown className={cn("size-3.5 transition-transform", !open && "-rotate-90")} />
         {done} of {points.length} points covered
-      </p>
-      <ul className="grid gap-x-4 gap-y-0.5 text-xs sm:grid-cols-2" aria-label="Main points of the next concept">
-        {points.map((p, i) => (
-          <li key={i} className={cn("flex items-start gap-1.5", p.covered ? "text-foreground" : "text-muted-foreground")}>
-            {p.covered ? <CircleCheck className="mt-px size-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" /> : <Circle className="mt-px size-3.5 shrink-0" />}
-            <span>{p.text}</span>
-            <span className="sr-only">{p.covered ? "(covered)" : "(open)"}</span>
-          </li>
-        ))}
-      </ul>
+      </button>
+      {open && (
+        <ul className="grid gap-x-4 gap-y-0.5 text-xs sm:grid-cols-2" aria-label="Main points of the next concept">
+          {points.map((p, i) => (
+            <li key={i} className={cn("flex items-start gap-1.5", p.covered ? "text-foreground" : "text-muted-foreground")}>
+              {p.covered ? <CircleCheck className="mt-px size-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" /> : <Circle className="mt-px size-3.5 shrink-0" />}
+              <span>{p.text}</span>
+              <span className="sr-only">{p.covered ? "(covered)" : "(open)"}</span>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

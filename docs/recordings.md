@@ -12,8 +12,9 @@ A take belongs to the account that recorded it (`recorded_by`): nobody else can
 file a stream on it or upload to it, and a browser shared by two people keeps
 each one's unfinished uploads apart.
 
-**Async Recordings** (`/recordings`, under Enablement Tools) is for Training
-Administrators only: the address to share, and every take, newest first, under
+**Async Recordings** (`/recordings`, under Training) is for Training
+Viewers and above to watch and download, and for Training Administrators
+alone to delete from: the address to share, and every take, newest first, under
 the name its recorder typed, with a still from five seconds in, a player and
 downloads for each file.
 

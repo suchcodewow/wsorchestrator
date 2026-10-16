@@ -233,7 +233,7 @@ const PAGES: Record<string, PageCase> = {
     expect: gated(canUseTraining),
   },
   "/logistics/food-orders": { path: () => "/logistics/food-orders?q=x&sort=vendor", expect: gated(canUseTraining) },
-  "/recordings": { path: () => "/recordings?q=x&sort=contributor", expect: gated(canManageTrainingSettings) },
+  "/recordings": { path: () => "/recordings?q=x&sort=contributor", expect: gated(canUseTraining) },
   "/recordings/<unknown>": { path: () => `/recordings/${MISSING}`, expect: () => 404 },
   "/logistics/food-orders/print": { path: () => "/logistics/food-orders/print", expect: gated(canUseTraining) },
   "/logistics/food-orders/print?<unknown>": { path: () => `/logistics/food-orders/print?id=${MISSING}`, expect: () => 404 },
@@ -693,11 +693,11 @@ const ROUTES: RouteCase[] = [
   { method: "GET", path: "/api/intake", allowed: true },
   { method: "PUT", path: "/api/intake", allowed: true, body: () => ({}) },
 
-  // Recordings: the recorder is any signed-in account's; everything else a Training Administrator's
-  { method: "GET", path: "/api/recordings", allowed: canManageTrainingSettings },
-  { method: "GET", path: `/api/recordings/${MISSING}`, allowed: canManageTrainingSettings },
+  // Recordings: the recorder is any signed-in account's; reading is a Training Viewer's, deleting a Training Administrator's
+  { method: "GET", path: "/api/recordings", allowed: canUseTraining },
+  { method: "GET", path: `/api/recordings/${MISSING}`, allowed: canUseTraining },
   { method: "DELETE", path: `/api/recordings/${MISSING}`, allowed: canManageTrainingSettings },
-  { method: "GET", path: `/api/recordings/${MISSING}/camera/file`, allowed: canManageTrainingSettings },
+  { method: "GET", path: `/api/recordings/${MISSING}/camera/file`, allowed: canUseTraining },
   { method: "POST", path: "/api/record/tracks", allowed: true, body: () => ({}) },
   { method: "PUT", path: `/api/record/tracks/${MISSING}/camera/chunks/0`, allowed: true },
   { method: "POST", path: `/api/record/tracks/${MISSING}/camera/upload-urls`, allowed: true, body: () => ({}) },

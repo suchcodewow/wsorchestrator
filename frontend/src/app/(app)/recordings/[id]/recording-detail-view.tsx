@@ -23,7 +23,7 @@ import { TakeStatus } from "../take-status";
 
 const REFRESH_MS = 5_000;
 
-export function RecordingDetailView({ take }: { take: RecordingTake }) {
+export function RecordingDetailView({ take, canDelete }: { take: RecordingTake; canDelete: boolean }) {
   const router = useRouter();
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -74,16 +74,18 @@ export function RecordingDetailView({ take }: { take: RecordingTake }) {
                 .join(" · ")}
             </p>
           </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={deleting}
-            className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-            onClick={() => void remove()}
-          >
-            {deleting ? <Loader2 className="animate-spin" /> : <Trash2 />}
-            Delete
-          </Button>
+          {canDelete && (
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={deleting}
+              className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+              onClick={() => void remove()}
+            >
+              {deleting ? <Loader2 className="animate-spin" /> : <Trash2 />}
+              Delete
+            </Button>
+          )}
         </div>
       </motion.div>
 

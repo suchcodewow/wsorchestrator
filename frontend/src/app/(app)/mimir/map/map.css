@@ -65,14 +65,53 @@
 .mm-band {
   position: absolute;
   top: 0;
-  height: 24px;
+  height: 96px;
   color: #fff;
   font-size: 12px;
   font-weight: 600;
   padding: 3px 9px;
   border-radius: 5px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.mm-band > span {
   white-space: nowrap;
   overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mm-course {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.mm-course button {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  font-weight: 500;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+  text-align: left;
+}
+.mm-ring {
+  flex: none;
+  width: 20px;
+  height: 20px;
+}
+.mm-ring path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  opacity: 0.35;
+}
+.mm-ring path.mm-ring-on {
+  opacity: 1;
 }
 
 .mm-slide,
@@ -88,32 +127,26 @@
   position: absolute;
   top: 34px;
   width: 78px;
-  height: 122px;
+  height: 61px;
   background: var(--background);
   border: 1px solid var(--border);
   border-top: 5px solid var(--ln);
   border-radius: 6px;
   padding: 4px 5px;
-  font-size: 10.5px;
+  font-size: 12px;
   line-height: 1.25;
   overflow: hidden;
   overflow-wrap: anywhere;
 }
 .mm-slide b {
-  display: block;
-  font-size: 16px;
+  display: inline;
+  margin-right: 5px;
+  font-size: 17px;
   line-height: 1.2;
 }
-.mm-slide .mm-tag {
-  position: absolute;
-  left: 5px;
-  bottom: 4px;
-  font-size: 10px;
-  font-weight: 700;
-  color: var(--ln);
-  line-height: 1.1;
+.mm-slide.mm-empty {
+  color: color-mix(in srgb, var(--foreground) 55%, var(--background));
 }
-.mm-slide.mm-empty { opacity: 0.55; }
 
 .mm-concept {
   position: absolute;
@@ -124,7 +157,7 @@
   border-top: 5px solid var(--lc);
   border-radius: 6px;
   padding: 5px;
-  font-size: 11px;
+  font-size: 13px;
   line-height: 1.25;
   font-weight: 600;
   overflow: hidden;
@@ -132,7 +165,7 @@
 }
 .mm-concept .mm-st {
   display: inline-block;
-  font-size: 10px;
+  font-size: 11.5px;
   font-weight: 700;
   color: var(--lc);
   margin-right: 3px;
@@ -141,7 +174,7 @@
   display: block;
   color: var(--muted-foreground);
   font-weight: 400;
-  font-size: 10.5px;
+  font-size: 12px;
   margin-top: 3px;
 }
 .mm-concept.mm-recommended {
@@ -151,7 +184,7 @@
 .mm-concept .mm-flag {
   display: block;
   margin-top: 3px;
-  font-size: 9.5px;
+  font-size: 11px;
   font-weight: 700;
   color: var(--flag);
   line-height: 1.1;
@@ -194,9 +227,13 @@
   white-space: nowrap;
   overflow: hidden;
 }
+/* Cards that are not part of the selection fade by colour, not transparency, so lines still pass behind them rather than showing through. */
 .mm-sel .mm-slide:not(.mm-on),
 .mm-sel .mm-concept:not(.mm-on),
-.mm-sel .mm-group:not(.mm-on),
+.mm-sel .mm-group:not(.mm-on) {
+  color: color-mix(in srgb, var(--foreground) 35%, var(--background));
+  filter: saturate(0.25);
+}
 .mm-sel .mm-level:not(.mm-on) {
   opacity: 0.28;
 }
@@ -235,3 +272,28 @@
   border-radius: 50%;
   margin-right: 6px;
 }
+
+/* A line from a concept to one it requires: dashed, so it reads apart from the slide lines. */
+.mm-e.mm-req { stroke-dasharray: 5 3; opacity: 0.4; }
+.mm-sel .mm-e.mm-req { opacity: 0.035; }
+.mm-sel .mm-e.mm-req.mm-on { opacity: 0.9; }
+
+
+
+/* The heading over the stack of slides, in the shape of a level's but belonging to none. */
+.mm-heading {
+  position: absolute;
+  height: 28px;
+  background: var(--l0);
+  color: var(--onl);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 5px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+/* "Show all connections" off: a line shows only when it belongs to what is selected. */
+.mm-bare .mm-edges .mm-e { opacity: 0; }
+.mm-bare.mm-sel .mm-edges .mm-e.mm-on { opacity: 0.9; }
