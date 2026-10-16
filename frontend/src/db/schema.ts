@@ -2696,6 +2696,24 @@ export const mimirCoachMessages = pgTable(
   ],
 );
 
+/**
+ * How one person uses the map coach, for the people who run Mimir to read in
+ * the database. Never shown to the person it describes. `peakMastered` is the
+ * most concepts they have ever stood mastered on at once, so it outlives a
+ * new conversation and a re-imported map.
+ */
+export const mimirCoachStats = pgTable("mimir_coach_stats", {
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  /** Messages they typed to the coach; the coach's greetings are not counted. */
+  messagesSent: integer("messages_sent").notNull().default(0),
+  peakMastered: integer("peak_mastered").notNull().default(0),
+  /** Times they pressed "New conversation". */
+  newConversations: integer("new_conversations").notNull().default(0),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const INTAKE_QUESTION_KINDS = ["short", "paragraph", "choice", "checkboxes", "dropdown"] as const;
 export type IntakeQuestionKind = (typeof INTAKE_QUESTION_KINDS)[number];
 
