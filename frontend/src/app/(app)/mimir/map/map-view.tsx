@@ -24,6 +24,7 @@ import { Check, Star } from "lucide-react";
 import { anchorFloating } from "@/lib/floating";
 import {
   CONCEPT_H,
+  PAD,
   SLIDE_H,
   layoutMap,
   type MapLayout,
@@ -313,6 +314,8 @@ export function MapView({
               </div>
             </div>
           ))}
+
+          {layout.divider !== null && <div className="mm-divider" style={{ left: layout.divider, height: layout.height - 2 * PAD }} aria-hidden />}
 
           {layout.heading && (
             <div className="mm-heading" style={{ left: layout.heading.left, width: layout.heading.width, top: layout.heading.top }}>

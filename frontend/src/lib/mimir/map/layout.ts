@@ -16,10 +16,10 @@
 import { conceptsInOrder, slideLevels, type InOrder, type MapLevel, type PublicMap } from "./schema";
 
 export const PAD = 20;
-export const SLIDE_W = 78;
+export const SLIDE_W = 117;
 export const SLIDE_H = 61;
 export const SLIDE_Y = 34;
-export const CONCEPT_W = 84;
+export const CONCEPT_W = 126;
 export const CONCEPT_H = 83;
 export const LEVEL_H = 28;
 export const GROUP_H = 24;
@@ -60,11 +60,13 @@ export type MapLayout = {
   slideW: number;
   /** The heading over a single stack of slides (columns only), placed like a level's. */
   heading: { label: string; left: number; width: number; top: number } | null;
+  /** The x of a rule down the middle of the gap between the slides and the first level column, or null with no slides or no columns. */
+  divider: number | null;
 };
 
 /** The gap between level columns, and between the last column and the slides, for the lines to fan out in. */
-const COL_GAP = 130;
-const SLIDE_COL_GAP = 170;
+const COL_GAP = 65;
+const SLIDE_COL_GAP = 85;
 /** The most a card grows when there is room, so a very wide window gets wider gaps instead of absurd cards. */
 const CONCEPT_GROW_MAX = 240;
 const SLIDE_GROW_MAX = 300;
@@ -202,5 +204,5 @@ export function layoutMap(map: PublicMap, only: string | null = null, minWidth =
     });
   }
 
-  return { width, height, conceptW: cw, slideW: sw, heading, concepts: placed, groups, levels, slides, bands, need, edges, links, slideX, slideY, slideSpacing: SLIDE_PITCH };
+  return { width, height, conceptW: cw, slideW: sw, heading, concepts: placed, groups, levels, slides, bands, need, edges, links, slideX, slideY, slideSpacing: SLIDE_PITCH, divider: m && n ? slidesLeft + sw + (colsLeft - slidesLeft - sw) / 2 : null };
 }
