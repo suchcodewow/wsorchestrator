@@ -50,6 +50,9 @@ export function AppSidebar({
   const sections = visibleSections(access);
   // Settings pages with a gear on their entry have no row of their own, except in the collapsed rail, which has no gear.
   const gearPages = new Set(sections.flatMap((sec) => sec.items.flatMap((i) => (i.settings ? [i.settings] : []))));
+  // On a settings page that has a gear, its parent's row is the selected one and shows the gear.
+  const onSettings = (item: NavItem) =>
+    !collapsed && !!item.settings && gearPages.has(item.settings) && (pathname === item.settings || pathname.startsWith(`${item.settings}/`));
   const favoriteTabs = useFavoriteTabs();
   const favorites = favoriteTabs?.tabs ?? [];
 
@@ -105,7 +108,8 @@ export function AppSidebar({
                 <NavLink
                   key={item.href}
                   item={item}
-                  active={isNavItemActive(pathname, item) || (!collapsed && !!item.settings && gearPages.has(item.settings) && pathname.startsWith(`${item.settings}/`)) || (!collapsed && !!item.settings && pathname === item.settings)}
+                  active={isNavItemActive(pathname, item) || onSettings(item)}
+                  onSettings={onSettings(item)}
                   collapsed={collapsed}
                   settings={item.settings && sections.some((sec) => sec.items.some((i) => i.href === item.settings)) ? item.settings : undefined}
                   starred={favoriteTabs?.has(item.href)}
@@ -165,6 +169,7 @@ function NavLink({
   active,
   collapsed,
   settings,
+  onSettings = false,
   starred = false,
   onStar,
 }: {
@@ -173,6 +178,8 @@ function NavLink({
   collapsed: boolean;
   /** Where its settings are, when this person may open them: the icon becomes a gear to there on hover. */
   settings?: string;
+  /** The page open is that settings page: the gear stays shown in place of the icon. */
+  onSettings?: boolean;
   starred?: boolean;
   /** Adds or removes it from the favorites; none for an entry that cannot be starred. */
   onStar?: () => void;
@@ -191,7 +198,7 @@ function NavLink({
           : "text-muted-foreground hover:bg-accent hover:text-accent-foreground group-hover/nav:bg-accent group-hover/nav:text-accent-foreground",
       )}
     >
-      <item.Icon className={cn("size-4 shrink-0", settings && !collapsed && "group-hover/nav:opacity-0 group-focus-within/nav:opacity-0")} />
+      <item.Icon className={cn("size-4 shrink-0", settings && !collapsed && (onSettings ? "opacity-0" : "group-hover/nav:opacity-0 group-has-[[data-gear]:focus-visible]/nav:opacity-0"))} />
       {!collapsed && <span className="truncate">{item.label}</span>}
     </Link>
   );
@@ -206,7 +213,8 @@ function NavLink({
             href={settings}
             aria-label={`${item.label} settings`}
             title={`${item.label} settings`}
-            className="absolute inset-y-0 left-0 flex w-[34px] items-center justify-center rounded-l-lg bg-foreground/10 text-muted-foreground opacity-0 outline-none transition-opacity hover:bg-foreground/15 hover:text-foreground focus-visible:opacity-100 focus-visible:ring-[3px] focus-visible:ring-ring/50 group-hover/nav:opacity-100"
+            data-gear
+            className={cn("absolute inset-y-0 left-0 flex w-[34px] items-center justify-center rounded-l-lg bg-foreground/10 text-muted-foreground opacity-0 outline-none transition-opacity hover:bg-foreground/15 hover:text-foreground focus-visible:opacity-100 focus-visible:ring-[3px] focus-visible:ring-ring/50 group-hover/nav:opacity-100", onSettings && "opacity-100")}
           >
             <Settings className="size-4" />
           </Link>
