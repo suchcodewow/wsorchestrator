@@ -1820,11 +1820,11 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       {
         method: "POST",
         path: "/api/logistics/guest-judges/thank-you",
-        summary: "Makes a one-slide Google Slides deck saying Thank You! over the guest judges' Slack photos, and shares it with the caller.",
+        summary: "Makes a one-slide Google Slides deck saying Thank You! over the guest judges' Slack photos, saves it as BootCamp Thank You in the shared Drive folder, and shares it with the caller.",
         access: "trainingAdmin",
         token: true,
         notes:
-          "Takes no body. The judges are each person once, at their latest cohort, newest cohort first: a Scheduler bootcamp counts only once it is complete, a history cohort always, and at most 48 fit the slide. Photos come from Slack by each judge's email; someone with no email or no custom Slack photo shows as a name alone. The deck is owned by the Google account connected for Google Meetings, which needs the Slides and Drive scopes, so an account connected before they were asked for must be connected again.",
+          "Takes no body. The judges are each person once, at their latest cohort, newest cohort first: a Scheduler bootcamp counts only once it is complete, a history cohort always, and at most 48 fit the slide. Photos come from Slack by each judge's email; someone with no email or no custom Slack photo shows as a name alone. The deck is owned by the Google account connected for Google Meetings; a deck of the same name already in the folder is trashed first. That account needs the Slides and Drive scopes, so an account connected before they were asked for must be connected again.",
         returns: "201 { url: string, judges: number, withPhotos: number }",
         errors: [
           { status: 404, error: "no_judges", when: "no guest judges are listed" },
