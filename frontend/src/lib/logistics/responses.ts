@@ -12,7 +12,7 @@ import { db } from "@/db";
 import { INTAKE_LIMITS, employees, intakeResponses, type IntakeFormId } from "@/db/schema";
 import { getTestGroup } from "@/lib/cohorts/test-group";
 import { currentCohortSubquery } from "@/lib/evals/current-cohort";
-import type { DietarySort, IntakeResponseSort } from "@/lib/list-specs";
+import type { DietarySort, IntakeResponseSort, UnregisteredSort } from "@/lib/list-specs";
 import { DIETARY_QUESTION_IDS, type IntakeAnswers } from "@/lib/logistics/intake-values";
 import { pageWindow, toPage, type ListQuery, type Page } from "@/lib/paging";
 import { orderFor, searchAny } from "@/lib/paging-sql";
@@ -207,8 +207,10 @@ export type DietaryCounts = {
   responded: number;
   /** Of them, how many are at each stage now: the whole group to cater for, split. */
   respondedByStage: Record<IntakeFormId, number>;
-  /** Everyone in the current cohort, registered or not, so the page can say how many have yet to. */
+  /** Everyone in the current cohort, registered or not. */
   cohortSize: number;
+  /** Of them, those who have sent neither form: `listUnregistered`'s people. */
+  notRegistered: number;
   /** Of them, those with dietary needs. */
   withNeeds: number;
   /** Those with needs at each level, 1 to 5; `unrated` gave no level that reads as one. */
@@ -237,7 +239,12 @@ export async function dietaryCounts(): Promise<DietaryCounts> {
       .leftJoin(cohort, eq(cohort.email, latest.email))
       .where(and(inScope, hasNeeds))
       .groupBy(critical),
-    db.select({ n: count() }).from(cohort),
+    db
+      .select({
+        n: count(),
+        notRegistered: sql<number>`count(*) filter (where not exists (select 1 from intake_responses r where r.email = ${cohort.email}))::int`,
+      })
+      .from(cohort),
   ]);
   const byLevel = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
   let unrated = 0;
@@ -249,8 +256,39 @@ export async function dietaryCounts(): Promise<DietaryCounts> {
     responded: totals?.responded ?? 0,
     respondedByStage: { bootcamp: totals?.bootcamp ?? 0, intermediate: totals?.intermediate ?? 0 },
     cohortSize: size?.n ?? 0,
+    notRegistered: size?.notRegistered ?? 0,
     withNeeds: totals?.withNeeds ?? 0,
     byLevel,
     unrated,
   };
+}
+
+export type UnregisteredRow = { email: string; name: string | null; stage: IntakeFormId };
+
+/**
+ * Everyone in the current cohort who has sent neither form yet, a page at a
+ * time, so the Dietary needs page names who is still to register. Someone at
+ * intermediate who registered for bootcamp a cohort ago has answers, so is
+ * not here: their bootcamp needs are counted until they answer again.
+ */
+export async function listUnregistered(query: ListQuery<UnregisteredSort>): Promise<Page<UnregisteredRow>> {
+  const { limit, offset } = pageWindow(query.page);
+  const cohort = await currentCohortSubquery();
+  const named = namedEmployees();
+  const email = sql`${cohort.email}`;
+  const sortColumn = { name: sql`lower(${named.fullName})`, email, stage: sql`${cohort.stage}` }[query.sort];
+  const rows = await db
+    .select({ email: cohort.email, name: named.fullName, stage: sql<IntakeFormId>`${cohort.stage}` })
+    .from(cohort)
+    .leftJoin(named, eq(named.email, cohort.email))
+    .where(
+      and(
+        sql`not exists (select 1 from intake_responses r where r.email = ${cohort.email})`,
+        searchAny(query.q, [email, named.fullName]),
+      ),
+    )
+    .orderBy(...orderFor(sortColumn, query.dir, sql`lower(${named.fullName})`, email))
+    .limit(limit)
+    .offset(offset);
+  return toPage(rows, query.page);
 }

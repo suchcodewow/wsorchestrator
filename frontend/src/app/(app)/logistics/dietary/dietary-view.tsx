@@ -12,10 +12,10 @@ import { Fragment } from "react";
 import { motion } from "framer-motion";
 import { TriangleAlert } from "lucide-react";
 import { HEADER_ROW, Pager, PlainHeader, SortHeader, TableSearch } from "@/components/data-table";
-import type { DietarySort } from "@/lib/list-specs";
+import { UNREGISTERED_PREFIX, type DietarySort, type UnregisteredSort } from "@/lib/list-specs";
 import { DIETARY_LEVELS } from "@/lib/logistics/intake-values";
 import type { IntakeFormId } from "@/db/schema";
-import type { DietaryCounts, DietaryRow } from "@/lib/logistics/responses";
+import type { DietaryCounts, DietaryRow, UnregisteredRow } from "@/lib/logistics/responses";
 import { riseChild, staggerParent } from "@/lib/motion";
 import type { ListQuery, Page } from "@/lib/paging";
 import { cn } from "@/lib/utils";
@@ -38,10 +38,15 @@ export function DietaryView({
   query,
   page,
   counts,
+  unregisteredQuery,
+  unregistered,
 }: {
   query: ListQuery<DietarySort>;
   page: Page<DietaryRow>;
   counts: DietaryCounts;
+  /** Who in the current cohort has yet to register, with its own sort and page. */
+  unregisteredQuery: ListQuery<UnregisteredSort>;
+  unregistered: Page<UnregisteredRow>;
 }) {
   const bars = [
     ...DIETARY_LEVELS.map((level) => ({ key: String(level), level, n: counts.byLevel[level] })),
@@ -65,11 +70,14 @@ export function DietaryView({
           <span className="font-medium text-foreground">{counts.withNeeds.toLocaleString()}</span> with dietary
           restrictions, of whom <span className="font-medium text-foreground">{counts.byLevel[5].toLocaleString()}</span>{" "}
           rated their needs 5
-          {counts.cohortSize > counts.responded && (
+          {counts.notRegistered > 0 && (
             <>
               {" "}
-              · {plural(counts.cohortSize - counts.responded, "more", "more")} in the current cohort{" "}
-              {counts.cohortSize - counts.responded === 1 ? "hasn't" : "haven't"} registered yet
+              ·{" "}
+              <a href="#not-registered" className="underline underline-offset-2 hover:text-foreground">
+                {plural(counts.notRegistered, "more", "more")} in the current cohort{" "}
+                {counts.notRegistered === 1 ? "hasn't" : "haven't"} registered yet
+              </a>
             </>
           )}
         </p>
@@ -172,6 +180,54 @@ export function DietaryView({
         </div>
         <Pager page={page} noun="attendees" />
       </motion.div>
+
+      {counts.notRegistered > 0 && (
+        <motion.section
+          id="not-registered"
+          variants={riseChild}
+          className="scroll-mt-6 overflow-hidden rounded-2xl border bg-card shadow-sm"
+        >
+          <h3 className="border-b px-5 py-3 text-sm font-medium">
+            Not registered yet · {plural(counts.notRegistered, "person", "people")}
+          </h3>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className={HEADER_ROW}>
+                  <SortHeader column="name" sort={unregisteredQuery.sort} dir={unregisteredQuery.dir} prefix={UNREGISTERED_PREFIX}>
+                    Name
+                  </SortHeader>
+                  <SortHeader column="stage" sort={unregisteredQuery.sort} dir={unregisteredQuery.dir} prefix={UNREGISTERED_PREFIX}>
+                    Program
+                  </SortHeader>
+                  <SortHeader column="email" sort={unregisteredQuery.sort} dir={unregisteredQuery.dir} prefix={UNREGISTERED_PREFIX}>
+                    Email
+                  </SortHeader>
+                </tr>
+              </thead>
+              <tbody>
+                {unregistered.rows.map((u) => (
+                  <tr key={u.email} className="border-b last:border-b-0">
+                    <td className="px-5 py-3 font-medium">{u.name || "—"}</td>
+                    <td className="px-5 py-3">{PROGRAMS[u.stage]}</td>
+                    <td className="px-5 py-3 text-muted-foreground">{u.email}</td>
+                  </tr>
+                ))}
+                {unregistered.rows.length === 0 && (
+                  <tr>
+                    <td colSpan={3} className="px-5 py-6 text-center text-muted-foreground">
+                      No one still to register matches that search.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          <div className="border-t empty:hidden">
+            <Pager page={unregistered} noun="people" prefix={UNREGISTERED_PREFIX} />
+          </div>
+        </motion.section>
+      )}
     </motion.div>
   );
 }
