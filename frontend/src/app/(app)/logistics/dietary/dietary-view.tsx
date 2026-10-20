@@ -1,11 +1,14 @@
 "use client";
 
 /**
- * Attendees' dietary needs from both intake forms, bootcamp and intermediate together: how many are at each level
- * of criticality, then everyone with a need, the most critical first. A 5 is
- * an allergy or a religious restriction, so it is marked wherever it shows.
+ * Attendees' dietary needs from both intake forms, bootcamp and intermediate
+ * together: how many are at each level of criticality, then everyone in the
+ * current cohort who has registered, those with restrictions first, the most
+ * critical first. A 5 is an allergy or a religious restriction, so it is
+ * marked wherever it shows.
  */
 
+import { Fragment } from "react";
 import { motion } from "framer-motion";
 import { TriangleAlert } from "lucide-react";
 import { HEADER_ROW, Pager, PlainHeader, SortHeader, TableSearch } from "@/components/data-table";
@@ -108,10 +111,21 @@ export function DietaryView({
               </tr>
             </thead>
             <tbody>
-              {page.rows.map((r) => (
-                <tr key={r.email} className={cn("border-b last:border-b-0", r.critical === 5 && "bg-destructive/5")}>
+              {page.rows.map((r, i) => (
+                <Fragment key={r.email}>
+                  {/* A heading where each group starts on this page: those with restrictions come first. */}
+                  {(i === 0 || page.rows[i - 1]!.restricted !== r.restricted) && (
+                    <tr className="border-b bg-muted/40">
+                      <th colSpan={4} scope="rowgroup" className="px-5 py-2 text-left text-xs font-medium">
+                        {r.restricted
+                          ? `Dietary restrictions · ${plural(counts.withNeeds, "person", "people")}`
+                          : `No dietary restrictions · ${plural(counts.responded - counts.withNeeds, "person", "people")}`}
+                      </th>
+                    </tr>
+                  )}
+                <tr className={cn("border-b last:border-b-0", r.critical === 5 && "bg-destructive/5")}>
                   <td className="px-5 py-3">
-                    <Level level={r.critical} />
+                    {r.restricted ? <Level level={r.critical} /> : <span className="text-muted-foreground">—</span>}
                   </td>
                   <td className="px-5 py-3">
                     <span className="font-medium">{r.name || "—"}</span>
@@ -121,13 +135,20 @@ export function DietaryView({
                     </span>
                   </td>
                   <td className="px-5 py-3 text-muted-foreground">{r.email}</td>
-                  <td className="px-5 py-3 whitespace-pre-line">{r.needs || <span className="text-muted-foreground">Not described</span>}</td>
+                  <td className="px-5 py-3 whitespace-pre-line">
+                    {!r.restricted ? (
+                      <span className="text-muted-foreground">None</span>
+                    ) : (
+                      r.needs || <span className="text-muted-foreground">Not described</span>
+                    )}
+                  </td>
                 </tr>
+                </Fragment>
               ))}
               {page.rows.length === 0 && (
                 <tr>
                   <td colSpan={4} className="px-5 py-8 text-center text-muted-foreground">
-                    {query.q ? "No one with dietary needs matches that search." : "No one has said they have dietary needs yet."}
+                    {query.q ? "No one matches that search." : "No one in the current cohort has sent a registration form yet."}
                   </td>
                 </tr>
               )}

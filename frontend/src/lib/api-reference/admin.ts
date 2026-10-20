@@ -1731,13 +1731,13 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       {
         method: "GET",
         path: "/api/logistics/dietary",
-        summary: "Lists the attendees who said they have dietary needs, a page at a time, the most critical first.",
+        summary: "Lists everyone in the current cohort who has registered, those with dietary restrictions first, a page at a time.",
         access: "trainingViewer",
         token: true,
         notes:
-          "Reads both forms, Pre-Bootcamp and Pre-Intermediate, as one list, since both groups are there at once, for the current cohort only (the Cohorts page's Current tab, Sales and Engineer tracks), and the test group's members while it is on: each person's latest response to either, form saying which it was and stage the stage they are in now, so a returning intermediate who has only answered bootcamp still counts. name is their answer to the name question, or the employee list's name for a form that asks none. critical is the first digit 1 to 5 in their answer to how critical their needs are, or null where there is none; 5 is an allergy or a religious restriction. counts covers everyone, whatever the search.",
+          "Reads both forms, Pre-Bootcamp and Pre-Intermediate, as one list, since both groups are there at once, for the current cohort only (the Cohorts page's Current tab, Sales and Engineer tracks), and the test group's members while it is on: each person's latest response to either, form saying which it was and stage the stage they are in now, so a returning intermediate who has only answered bootcamp still counts. Everyone who has registered is listed: restricted, a Yes to having dietary restrictions, sorts first whatever the sort, and the sort orders within each. name is their answer to the name question, or the employee list's name for a form that asks none. critical is the first digit 1 to 5 in their answer to how critical their needs are, or null where there is none; 5 is an allergy or a religious restriction. counts covers everyone, whatever the search.",
         query: listQuery(DIETARY_LIST.sorts, "the name, email or needs"),
-        returns: `{ attendees: { email, stage: "bootcamp" | "intermediate", form: "bootcamp" | "intermediate", name: string | null, needs: string | null, critical: number | null, submittedAt }[], ${PAGE_FIELDS}, counts: { responded: number, withNeeds: number, byLevel: { 1..5: number }, unrated: number } }`,
+        returns: `{ attendees: { email, stage: "bootcamp" | "intermediate", form: "bootcamp" | "intermediate", restricted: boolean, name: string | null, needs: string | null, critical: number | null, submittedAt }[], ${PAGE_FIELDS}, counts: { responded: number, withNeeds: number, byLevel: { 1..5: number }, unrated: number } }`,
       },
       {
         method: "GET",

@@ -17,6 +17,7 @@ import {
   canUseEvals,
 } from "@/lib/roles";
 import { activeBootcamp } from "@/lib/scheduler/bootcamps";
+import { intakeQuestionsByForm, latestIntakesOf } from "@/lib/logistics/intake";
 import { CurrentCohortView } from "./current-view";
 import { TestGroupPanel } from "./test-group-panel";
 
@@ -37,12 +38,14 @@ export default async function CurrentCohortPage({
   const scoring = canSeeScores
     ? { scoring: await cohortScoring(filter) }
     : undefined;
-  const [page, summary, active, testGroup] = await Promise.all([
+  const [page, summary, active, testGroup, intakeQuestions] = await Promise.all([
     listCurrentCohort(filter, query, scoring),
     currentCohortSummary(),
     activeBootcamp(),
     getTestGroup(),
+    intakeQuestionsByForm(),
   ]);
+  const intakes = await latestIntakesOf(page.rows.map((m) => m.email));
   return (
     <div className="space-y-4">
       <TestGroupPanel
@@ -64,6 +67,8 @@ export default async function CurrentCohortPage({
           session?.user ? canManageTrainingSettings(session.user.access) : false
         }
         canSeeScores={canSeeScores}
+        intakes={intakes}
+        intakeQuestions={intakeQuestions}
       />
     </div>
   );

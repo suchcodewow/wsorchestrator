@@ -152,6 +152,8 @@ export type DietaryRow = {
   stage: IntakeFormId;
   /** Which form the answer came from; a returning intermediate may not have answered theirs yet. */
   form: IntakeFormId;
+  /** Whether they answered Yes to having dietary restrictions; everyone else is listed after them. */
+  restricted: boolean;
   /** Their answer to the name question, or for a form that asks none the name the app has for them. */
   name: string | null;
   needs: string | null;
@@ -159,7 +161,12 @@ export type DietaryRow = {
   submittedAt: string;
 };
 
-/** Everyone who said they have dietary needs, a page at a time, the most critical first. */
+/**
+ * Everyone in the current cohort who has sent a form, a page at a time: those
+ * who said they have dietary restrictions first, whatever the sort, the most
+ * critical first by default; then everyone else, so the list is the whole
+ * group to cater for.
+ */
 export async function listDietaryNeeds(query: ListQuery<DietarySort>): Promise<Page<DietaryRow>> {
   const { limit, offset } = pageWindow(query.page);
   const { cohort, inScope } = await dietaryScope();
@@ -179,13 +186,17 @@ export async function listDietaryNeeds(query: ListQuery<DietarySort>): Promise<P
       name,
       needs,
       critical,
+      restricted: sql<boolean>`coalesce(${hasNeeds}, false)`,
       submittedAt: latest.submittedAt,
     })
     .from(latest)
     .leftJoin(named, eq(named.email, latest.email))
     .leftJoin(cohort, eq(cohort.email, latest.email))
-    .where(and(inScope, hasNeeds, searchAny(query.q, [latest.email, name, needs])))
-    .orderBy(...orderFor(sortColumn, query.dir, sql`${critical} desc nulls last`, latest.email))
+    .where(and(inScope, searchAny(query.q, [latest.email, name, needs])))
+    .orderBy(
+      sql`coalesce(${hasNeeds}, false) desc`,
+      ...orderFor(sortColumn, query.dir, sql`${critical} desc nulls last`, latest.email),
+    )
     .limit(limit)
     .offset(offset);
   return toPage(rows.map(iso), query.page);

@@ -6,6 +6,7 @@ import { CURRENT_COHORT_LIST } from "@/lib/list-specs";
 import { parseListQuery } from "@/lib/paging";
 import { canManageTrainingSettings, canUseEvals } from "@/lib/roles";
 import { activeBootcamp } from "@/lib/scheduler/bootcamps";
+import { intakeQuestionsByForm, latestIntakesOf } from "@/lib/logistics/intake";
 import { CurrentCohortView } from "../current/current-view";
 
 export default async function DeferredCohortPage({
@@ -19,11 +20,13 @@ export default async function DeferredCohortPage({
   const filter = { stage: isCandidateStage(params.stage) ? params.stage : null, track: "deferred" as const };
   const session = await auth();
   const canSeeScores = session?.user ? canUseEvals(session.user.access) : false;
-  const [page, summary, active] = await Promise.all([
+  const [page, summary, active, intakeQuestions] = await Promise.all([
     listCurrentCohort(filter, query, canSeeScores ? { scoring: null } : undefined),
     currentCohortSummary(),
     activeBootcamp(),
+    intakeQuestionsByForm(),
   ]);
+  const intakes = await latestIntakesOf(page.rows.map((m) => m.email));
   return (
     <CurrentCohortView
       tab="deferred"
@@ -36,6 +39,8 @@ export default async function DeferredCohortPage({
       activeBootcamp={active}
       canSetTrack={session?.user ? canManageTrainingSettings(session.user.access) : false}
       canSeeScores={canSeeScores}
+      intakes={intakes}
+      intakeQuestions={intakeQuestions}
     />
   );
 }
