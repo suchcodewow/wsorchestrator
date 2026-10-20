@@ -48,6 +48,7 @@ export const GROUPS: EndpointGroup[] = [
   "video-feedback",
   "evals-scoring",
   "transcription",
+  "reporting-bootcamp",
   "bootcamp-history",
   "canary-wire",
   "evals",

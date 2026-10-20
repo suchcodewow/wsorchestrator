@@ -32,8 +32,8 @@ const EVENTS_MANAGER = [...EVENTS_USER];
 const EVENTS_ADMIN = [...EVENTS_MANAGER, "Cloud Status", "Event Settings"];
 const ACCOUNT = ["[Account]", "My inbox", "My settings"];
 
-// Mimir is for everyone, so every sidebar has an Assessments section holding at least it.
-const MIMIR_ONLY = ["[Assessments]", "Mimir"];
+// Mimir and Reporting are for everyone, so every sidebar has an Assessments section holding at least them.
+const MIMIR_ONLY = ["[Assessments]", "Reporting", "Mimir"];
 const TRAINING_ADMIN = [
   "[Training]",
   "Scheduler",
@@ -53,7 +53,7 @@ const EXPECTED_SIDEBAR: Record<Persona, string[]> = {
   manager: [...HOME, ...EVENTS_MANAGER, ...MIMIR_ONLY, ...ACCOUNT],
   eventAdmin: [...HOME, ...EVENTS_ADMIN, ...MIMIR_ONLY, ...ACCOUNT, "[Administration]", "Manage users"],
   trainingViewer: [...HOME, "[Training]", "Scheduler", "Cohorts", "Logistics", "Async Recordings", ...MIMIR_ONLY, ...ACCOUNT],
-  trainingAdmin: [...HOME, ...TRAINING_ADMIN, "[Assessments]", ...MIMIR_ADMIN, ...ACCOUNT, "[Administration]", "Manage users"],
+  trainingAdmin: [...HOME, ...TRAINING_ADMIN, "[Assessments]", "Reporting", ...MIMIR_ADMIN, ...ACCOUNT, "[Administration]", "Manage users"],
   // Iris is part of the assessments area: a viewer takes it, an administrator runs it.
   assessmentsViewer: [...HOME, "[Assessments]", "eVals", "Iris", "Reporting", "Mimir", ...ACCOUNT],
   assessmentsAdmin: [
@@ -68,10 +68,10 @@ const EXPECTED_SIDEBAR: Record<Persona, string[]> = {
     "[Administration]",
     "Manage users",
   ],
-  guestJudge: [...HOME, "[Assessments]", "eVals", "Mimir", ...ACCOUNT],
-  // HiBob has people reporting to them: Reporting, for the Canary Wire, and nothing else.
+  guestJudge: [...HOME, "[Assessments]", "eVals", "Reporting", "Mimir", ...ACCOUNT],
+  // HiBob has people reporting to them: the Canary Wire as well as Bootcamp, under the Reporting everyone has.
   peopleManager: [...HOME, "[Assessments]", "Reporting", "Mimir", ...ACCOUNT],
-  bothAdmins: [...HOME, ...EVENTS_ADMIN, ...TRAINING_ADMIN, "[Assessments]", ...MIMIR_ADMIN, ...ACCOUNT, "[Administration]", "Manage users"],
+  bothAdmins: [...HOME, ...EVENTS_ADMIN, ...TRAINING_ADMIN, "[Assessments]", "Reporting", ...MIMIR_ADMIN, ...ACCOUNT, "[Administration]", "Manage users"],
   platform: [...HOME, 
     ...EVENTS_ADMIN,
     ...TRAINING_ADMIN,

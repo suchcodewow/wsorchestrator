@@ -36,6 +36,7 @@ import {
   canDeleteUsers,
   canImpersonate,
   canManageBackups,
+  canManageBootcampRecords,
   canManageEvalsSettings,
   canManageIris,
   canManageLabGuides,
@@ -50,6 +51,7 @@ import {
   canScoreAssessments,
   canSearchEmployees,
   canRefreshCanaryWire,
+  canSeeBootcampRecords,
   canSeeCanaryWire,
   canSeeReporting,
   canSeeAllEvents,
@@ -325,29 +327,40 @@ const PAGES: Record<string, PageCase> = {
     expect: () => ({ to: "/reporting/canary-wire" }),
     signedOut: { to: "/reporting/canary-wire" },
   },
-  "/reporting/bootcamp-history": { path: () => "/reporting/bootcamp-history", expect: gated(canUseEvals) },
-  "/reporting/bootcamp-history?status=active": {
-    path: () => "/reporting/bootcamp-history?status=active",
+  "/reporting/bootcamp": { path: () => "/reporting/bootcamp", expect: gated(canSeeBootcampRecords) },
+  "/reporting/bootcamp?searched": {
+    path: () => "/reporting/bootcamp?status=active&q=x&sort=email&cohort.sort=stage&cohort.page=2",
+    expect: gated(canSeeBootcampRecords),
+  },
+  // No persona is in the employee list, so the record is in nobody's org; only Assessments sees it.
+  "/reporting/bootcamp/<a record>": {
+    path: () => `/reporting/bootcamp/${historyId}`,
     expect: gated(canUseEvals),
   },
-  "/reporting/bootcamp-history/<a record>": {
-    path: () => `/reporting/bootcamp-history/${historyId}`,
-    expect: gated(canUseEvals),
-  },
-  "/reporting/bootcamp-history/<unknown>": {
-    path: () => `/reporting/bootcamp-history/${MISSING}`,
+  "/reporting/bootcamp/<unknown>": {
+    path: () => `/reporting/bootcamp/${MISSING}`,
     expect: () => 404,
   },
-  // The old path, before Bootcamp History moved under Reporting, redirects for everyone.
+  // The old paths, from before Bootcamp History became Reporting → Bootcamp, redirect for everyone.
+  "/reporting/bootcamp-history": {
+    path: () => "/reporting/bootcamp-history",
+    expect: () => ({ to: "/reporting/bootcamp" }),
+    signedOut: { to: "/reporting/bootcamp" },
+  },
+  "/reporting/bootcamp-history/<id>": {
+    path: () => `/reporting/bootcamp-history/${MISSING}`,
+    expect: () => ({ to: `/reporting/bootcamp/${MISSING}` }),
+    signedOut: { to: `/reporting/bootcamp/${MISSING}` },
+  },
   "/bootcamp-history": {
     path: () => "/bootcamp-history",
-    expect: () => ({ to: "/reporting/bootcamp-history" }),
-    signedOut: { to: "/reporting/bootcamp-history" },
+    expect: () => ({ to: "/reporting/bootcamp" }),
+    signedOut: { to: "/reporting/bootcamp" },
   },
   "/bootcamp-history/<id>": {
     path: () => `/bootcamp-history/${MISSING}`,
-    expect: () => ({ to: `/reporting/bootcamp-history/${MISSING}` }),
-    signedOut: { to: `/reporting/bootcamp-history/${MISSING}` },
+    expect: () => ({ to: `/reporting/bootcamp/${MISSING}` }),
+    signedOut: { to: `/reporting/bootcamp/${MISSING}` },
   },
   "/mimir": { path: () => "/mimir", expect: () => ({ to: MIMIR_TABS[0]!.href }) },
   "/mimir/chat": { path: () => "/mimir/chat", expect: () => 200 },
@@ -712,6 +725,14 @@ const ROUTES: RouteCase[] = [
   // eVals
   { method: "GET", path: "/api/evals/bootcamp-history", allowed: canUseEvals },
   { method: "GET", path: `/api/evals/bootcamp-history/${MISSING}`, allowed: canUseEvals },
+
+  // Reporting → Bootcamp: anyone reads their own org; only an Assessments Administrator releases or corrects
+  { method: "GET", path: "/api/reporting/bootcamp", allowed: canSeeBootcampRecords },
+  { method: "GET", path: "/api/reporting/bootcamp/cohort", allowed: canSeeBootcampRecords },
+  { method: "GET", path: `/api/reporting/bootcamp/people/${MISSING}`, allowed: canSeeBootcampRecords },
+  { method: "POST", path: "/api/reporting/bootcamp/release", allowed: canManageBootcampRecords, body: () => ({}) },
+  { method: "PATCH", path: `/api/reporting/bootcamp/submissions/${MISSING}`, allowed: canManageBootcampRecords, body: () => ({}) },
+  { method: "PATCH", path: `/api/reporting/bootcamp/history/${MISSING}`, allowed: canManageBootcampRecords, body: () => ({ email: "x" }) },
   { method: "GET", path: "/api/evals/canary-wire", allowed: canSeeCanaryWire },
   // No Mindtickle key on the e2e server: starting is refused as not_configured, and a step finds no pull.
   { method: "GET", path: "/api/evals/canary-wire/history", allowed: canSeeCanaryWire },

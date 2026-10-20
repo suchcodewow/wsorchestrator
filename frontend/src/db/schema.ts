@@ -1389,6 +1389,15 @@ export const bootcamps = pgTable(
     facilityId: uuid("facility_id").references((): AnyPgColumn => facilities.id, {
       onDelete: "set null",
     }),
+    /**
+     * When an Assessments Administrator released this bootcamp's BTC scores to
+     * managers on Reporting → Bootcamp. Until then only Assessments Viewers see them.
+     */
+    btcReleasedAt: timestamp("btc_released_at", { withTimezone: true }),
+    btcReleasedBy: text("btc_released_by").references(() => users.id, { onDelete: "set null" }),
+    /** The same for its INT scores. */
+    intReleasedAt: timestamp("int_released_at", { withTimezone: true }),
+    intReleasedBy: text("int_released_by").references(() => users.id, { onDelete: "set null" }),
     createdBy: text("created_by").references(() => users.id, {
       onDelete: "set null",
     }),

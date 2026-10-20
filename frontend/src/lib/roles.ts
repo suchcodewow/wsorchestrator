@@ -165,8 +165,18 @@ export const canSeeCanaryWire = (access: Access) => access.platform || access.ma
 /** Starts a Canary Wire pull by hand. It pulls every two hours on its own; this is for testing. */
 export const canRefreshCanaryWire = (access: Access) => access.platform;
 
-/** The Reporting section: anyone who can see one of its tabs. */
-export const canSeeReporting = (access: Access) => canUseEvals(access) || canSeeCanaryWire(access);
+/**
+ * Reporting → Bootcamp: everyone who can sign in. What it lists narrows by
+ * who is reading (see `src/lib/reporting/bootcamp.ts`): an Assessments Viewer
+ * sees everyone, anyone else the people below them in HiBob.
+ */
+export const canSeeBootcampRecords: (access: Access) => boolean = () => true;
+
+/** Releases the active bootcamp's BTC or INT scores to managers, and corrects any assessment. */
+export const canManageBootcampRecords = (access: Access) => canManageEvalsSettings(access);
+
+/** The Reporting section: anyone who can see one of its tabs, which with Bootcamp is everyone. */
+export const canSeeReporting = (access: Access) => canSeeBootcampRecords(access) || canSeeCanaryWire(access);
 
 /** Sees and submits assessments on the eVals page: anyone in eVals, and the active bootcamp's guest judges. */
 export const canScoreAssessments = (access: Access) => canUseEvals(access) || access.judging;

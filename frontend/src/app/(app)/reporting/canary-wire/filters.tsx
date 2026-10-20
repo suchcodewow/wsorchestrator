@@ -23,7 +23,7 @@ export function SearchBox({ value, onChange, label }: { value: string; onChange:
   );
 }
 
-/** All, then a pill per role with how many reps are in it, as Bootcamp History filters by status. */
+/** All, then a pill per role with how many reps are in it, as Reporting → Bootcamp filters by status. */
 export function RolePills({
   roles,
   short,

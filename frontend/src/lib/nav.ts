@@ -185,7 +185,7 @@ export const NAV_SECTIONS: NavSection[] = [
         hasTabs: true,
         label: "Reporting",
         Icon: ChartColumn,
-        description: "Bootcamp history and the Canary Wire.",
+        description: "Bootcamp records and the Canary Wire.",
         visible: canSeeReporting,
       },
       {
