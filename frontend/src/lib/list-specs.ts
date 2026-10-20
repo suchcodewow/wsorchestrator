@@ -101,6 +101,12 @@ export type IntakeResponseSort = (typeof INTAKE_RESPONSE_LIST.sorts)[number];
 
 /** Each attendee's dietary needs, the most critical first. */
 export const DIETARY_LIST = spec(["critical", "name", "email", "submittedAt"], "desc");
+
+/** Who in the current cohort has yet to send either registration form, by name. */
+export const UNREGISTERED_LIST = spec(["name", "email", "stage"]);
+/** The URL prefix that list sorts and pages under, beside the Dietary needs list on the same page. */
+export const UNREGISTERED_PREFIX = "unregistered";
+export type UnregisteredSort = (typeof UNREGISTERED_LIST.sorts)[number];
 export type DietarySort = (typeof DIETARY_LIST.sorts)[number];
 
 /** Food orders, the soonest to arrive first. */

@@ -1,18 +1,21 @@
 "use client";
 
 /**
- * Attendees' dietary needs from both intake forms, bootcamp and intermediate together: how many are at each level
- * of criticality, then everyone with a need, the most critical first. A 5 is
- * an allergy or a religious restriction, so it is marked wherever it shows.
+ * Attendees' dietary needs from both intake forms, bootcamp and intermediate
+ * together: how many are at each level of criticality, then everyone in the
+ * current cohort who has registered, those with restrictions first, the most
+ * critical first. A 5 is an allergy or a religious restriction, so it is
+ * marked wherever it shows.
  */
 
+import { Fragment } from "react";
 import { motion } from "framer-motion";
 import { TriangleAlert } from "lucide-react";
 import { HEADER_ROW, Pager, PlainHeader, SortHeader, TableSearch } from "@/components/data-table";
-import type { DietarySort } from "@/lib/list-specs";
+import { UNREGISTERED_PREFIX, type DietarySort, type UnregisteredSort } from "@/lib/list-specs";
 import { DIETARY_LEVELS } from "@/lib/logistics/intake-values";
 import type { IntakeFormId } from "@/db/schema";
-import type { DietaryCounts, DietaryRow } from "@/lib/logistics/responses";
+import type { DietaryCounts, DietaryRow, UnregisteredRow } from "@/lib/logistics/responses";
 import { riseChild, staggerParent } from "@/lib/motion";
 import type { ListQuery, Page } from "@/lib/paging";
 import { cn } from "@/lib/utils";
@@ -35,10 +38,15 @@ export function DietaryView({
   query,
   page,
   counts,
+  unregisteredQuery,
+  unregistered,
 }: {
   query: ListQuery<DietarySort>;
   page: Page<DietaryRow>;
   counts: DietaryCounts;
+  /** Who in the current cohort has yet to register, with its own sort and page. */
+  unregisteredQuery: ListQuery<UnregisteredSort>;
+  unregistered: Page<UnregisteredRow>;
 }) {
   const bars = [
     ...DIETARY_LEVELS.map((level) => ({ key: String(level), level, n: counts.byLevel[level] })),
@@ -50,10 +58,28 @@ export function DietaryView({
     <motion.div variants={staggerParent(0.05)} initial="hidden" animate="show" className="max-w-4xl space-y-6">
       <motion.div variants={riseChild} className="space-y-1.5">
         <h2 className="text-xl font-medium tracking-tight">Dietary needs</h2>
+        <p className="text-base">
+          <span className="font-semibold">{plural(counts.responded, "attendee", "attendees")}</span>{" "}
+          <span className="text-muted-foreground">registered:</span>{" "}
+          <span className="font-medium">{counts.respondedByStage.bootcamp.toLocaleString()}</span>{" "}
+          <span className="text-muted-foreground">Bootcamp,</span>{" "}
+          <span className="font-medium">{counts.respondedByStage.intermediate.toLocaleString()}</span>{" "}
+          <span className="text-muted-foreground">Intermediate</span>
+        </p>
         <p className="text-sm text-muted-foreground">
-          <span className="font-medium text-foreground">{plural(counts.withNeeds, "attendee", "attendees")}</span> of{" "}
-          {counts.responded.toLocaleString()} in the current cohort who sent a registration form, bootcamp or intermediate, of whom{" "}
-          <span className="font-medium text-foreground">{counts.byLevel[5].toLocaleString()}</span> rated their needs 5
+          <span className="font-medium text-foreground">{counts.withNeeds.toLocaleString()}</span> with dietary
+          restrictions, of whom <span className="font-medium text-foreground">{counts.byLevel[5].toLocaleString()}</span>{" "}
+          rated their needs 5
+          {counts.notRegistered > 0 && (
+            <>
+              {" "}
+              ·{" "}
+              <a href="#not-registered" className="underline underline-offset-2 hover:text-foreground">
+                {plural(counts.notRegistered, "more", "more")} in the current cohort{" "}
+                {counts.notRegistered === 1 ? "hasn't" : "haven't"} registered yet
+              </a>
+            </>
+          )}
         </p>
       </motion.div>
 
@@ -108,10 +134,21 @@ export function DietaryView({
               </tr>
             </thead>
             <tbody>
-              {page.rows.map((r) => (
-                <tr key={r.email} className={cn("border-b last:border-b-0", r.critical === 5 && "bg-destructive/5")}>
+              {page.rows.map((r, i) => (
+                <Fragment key={r.email}>
+                  {/* A heading where each group starts on this page: those with restrictions come first. */}
+                  {(i === 0 || page.rows[i - 1]!.restricted !== r.restricted) && (
+                    <tr className="border-b bg-muted/40">
+                      <th colSpan={4} scope="rowgroup" className="px-5 py-2 text-left text-xs font-medium">
+                        {r.restricted
+                          ? `Dietary restrictions · ${plural(counts.withNeeds, "person", "people")}`
+                          : `No dietary restrictions · ${plural(counts.responded - counts.withNeeds, "person", "people")}`}
+                      </th>
+                    </tr>
+                  )}
+                <tr className={cn("border-b last:border-b-0", r.critical === 5 && "bg-destructive/5")}>
                   <td className="px-5 py-3">
-                    <Level level={r.critical} />
+                    {r.restricted ? <Level level={r.critical} /> : <span className="text-muted-foreground">—</span>}
                   </td>
                   <td className="px-5 py-3">
                     <span className="font-medium">{r.name || "—"}</span>
@@ -121,13 +158,20 @@ export function DietaryView({
                     </span>
                   </td>
                   <td className="px-5 py-3 text-muted-foreground">{r.email}</td>
-                  <td className="px-5 py-3 whitespace-pre-line">{r.needs || <span className="text-muted-foreground">Not described</span>}</td>
+                  <td className="px-5 py-3 whitespace-pre-line">
+                    {!r.restricted ? (
+                      <span className="text-muted-foreground">None</span>
+                    ) : (
+                      r.needs || <span className="text-muted-foreground">Not described</span>
+                    )}
+                  </td>
                 </tr>
+                </Fragment>
               ))}
               {page.rows.length === 0 && (
                 <tr>
                   <td colSpan={4} className="px-5 py-8 text-center text-muted-foreground">
-                    {query.q ? "No one with dietary needs matches that search." : "No one has said they have dietary needs yet."}
+                    {query.q ? "No one matches that search." : "No one in the current cohort has sent a registration form yet."}
                   </td>
                 </tr>
               )}
@@ -136,6 +180,54 @@ export function DietaryView({
         </div>
         <Pager page={page} noun="attendees" />
       </motion.div>
+
+      {counts.notRegistered > 0 && (
+        <motion.section
+          id="not-registered"
+          variants={riseChild}
+          className="scroll-mt-6 overflow-hidden rounded-2xl border bg-card shadow-sm"
+        >
+          <h3 className="border-b px-5 py-3 text-sm font-medium">
+            Not registered yet · {plural(counts.notRegistered, "person", "people")}
+          </h3>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className={HEADER_ROW}>
+                  <SortHeader column="name" sort={unregisteredQuery.sort} dir={unregisteredQuery.dir} prefix={UNREGISTERED_PREFIX}>
+                    Name
+                  </SortHeader>
+                  <SortHeader column="stage" sort={unregisteredQuery.sort} dir={unregisteredQuery.dir} prefix={UNREGISTERED_PREFIX}>
+                    Program
+                  </SortHeader>
+                  <SortHeader column="email" sort={unregisteredQuery.sort} dir={unregisteredQuery.dir} prefix={UNREGISTERED_PREFIX}>
+                    Email
+                  </SortHeader>
+                </tr>
+              </thead>
+              <tbody>
+                {unregistered.rows.map((u) => (
+                  <tr key={u.email} className="border-b last:border-b-0">
+                    <td className="px-5 py-3 font-medium">{u.name || "—"}</td>
+                    <td className="px-5 py-3">{PROGRAMS[u.stage]}</td>
+                    <td className="px-5 py-3 text-muted-foreground">{u.email}</td>
+                  </tr>
+                ))}
+                {unregistered.rows.length === 0 && (
+                  <tr>
+                    <td colSpan={3} className="px-5 py-6 text-center text-muted-foreground">
+                      No one still to register matches that search.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          <div className="border-t empty:hidden">
+            <Pager page={unregistered} noun="people" prefix={UNREGISTERED_PREFIX} />
+          </div>
+        </motion.section>
+      )}
     </motion.div>
   );
 }

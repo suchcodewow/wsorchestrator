@@ -34,7 +34,9 @@ import type {
   CurrentCohortMember,
   CurrentTrack,
 } from "@/lib/evals/current-cohort";
+import type { IntakeFormId, IntakeQuestion } from "@/db/schema";
 import type { SetTrackResult, TrackChoice } from "@/lib/evals/tracks";
+import type { IntakeOnFile } from "@/lib/logistics/intake";
 import type { CurrentCohortSort } from "@/lib/list-specs";
 import { riseChild, staggerParent } from "@/lib/motion";
 import type { ListQuery, Page } from "@/lib/paging";
@@ -58,7 +60,7 @@ import {
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Fragment, useState, useTransition } from "react";
-import { formatDate } from "../../cohort-settings/format";
+import { formatDate, formatWhen } from "../../cohort-settings/format";
 
 const STAGE_COUNTERS: { stage: CandidateStage; label: string; Icon: LucideIcon }[] = [
   { stage: "bootcamp", label: "Bootcamp", Icon: Users },
@@ -133,6 +135,8 @@ export function CurrentCohortView({
   activeBootcamp,
   canSetTrack,
   canSeeScores,
+  intakes,
+  intakeQuestions,
 }: {
   /** Current shows everyone but the deferred, by stage and track; Deferred the deferred alone, by stage. */
   tab: "current" | "deferred";
@@ -149,6 +153,10 @@ export function CurrentCohortView({
   canSetTrack: boolean;
   /** Whether the viewer is in eVals, whose scores and bootcamp history records these are. */
   canSeeScores: boolean;
+  /** Each person on the page's latest answers to each registration form, by lowercased email. */
+  intakes: Record<string, IntakeOnFile[]>;
+  /** Both forms' questions as they stand now, to label those answers. */
+  intakeQuestions: Record<IntakeFormId, IntakeQuestion[]>;
 }) {
   const router = useRouter();
   const { toggle, pending } = useFilterParams();
@@ -433,6 +441,11 @@ export function CurrentCohortView({
                       <tr id={`person-${m.email}`} className="border-b bg-muted/30 last:border-b-0">
                         <td colSpan={columnCount} className="px-5 pt-1 pb-4 pl-10">
                           <PersonDetails member={m} canSeeScores={canSeeScores} />
+                          <Registrations
+                            stage={m.stage}
+                            intakes={intakes[m.email.toLowerCase()] ?? []}
+                            questions={intakeQuestions}
+                          />
                         </td>
                       </tr>
                     )}
@@ -556,6 +569,60 @@ function PersonDetails({ member: m, canSeeScores }: { member: CurrentCohortMembe
         )}
       </Field>
     </dl>
+  );
+}
+
+const FORM_NAMES: Record<IntakeFormId, string> = { bootcamp: "Bootcamp registration", intermediate: "Intermediate registration" };
+
+/**
+ * Everything they answered on their registration forms, under each question
+ * as the form asks it now: the one for their stage first, then an earlier
+ * one, as an intermediate who registered for bootcamp a cohort ago has.
+ */
+function Registrations({
+  stage,
+  intakes,
+  questions,
+}: {
+  stage: IntakeFormId;
+  intakes: IntakeOnFile[];
+  questions: Record<IntakeFormId, IntakeQuestion[]>;
+}) {
+  const ordered = [...intakes].sort((a, b) => (a.form === stage ? -1 : b.form === stage ? 1 : 0));
+  if (!ordered.some((i) => i.form === stage)) {
+    ordered.unshift({ form: stage, submittedAt: "", answers: {} });
+  }
+  return (
+    <div className="mt-4 space-y-4 border-t pt-4">
+      {ordered.map((intake) => (
+        <section key={intake.form} className="space-y-2">
+          <h4 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            {FORM_NAMES[intake.form]}
+            {intake.submittedAt && (
+              <span className="normal-case tracking-normal"> · answered {formatWhen(intake.submittedAt)}</span>
+            )}
+          </h4>
+          {!intake.submittedAt ? (
+            <p className="text-sm text-muted-foreground">Not filled in yet.</p>
+          ) : (
+            <dl className="grid gap-x-8 gap-y-3 md:grid-cols-2">
+              {questions[intake.form].map((q) => {
+                const a = intake.answers[q.id];
+                return (
+                  <Field key={q.id} label={q.title}>
+                    {a === undefined || (Array.isArray(a) && a.length === 0) ? (
+                      <span className="text-muted-foreground">—</span>
+                    ) : (
+                      <span className="whitespace-pre-line">{Array.isArray(a) ? a.join(", ") : a}</span>
+                    )}
+                  </Field>
+                );
+              })}
+            </dl>
+          )}
+        </section>
+      ))}
+    </div>
   );
 }
 
