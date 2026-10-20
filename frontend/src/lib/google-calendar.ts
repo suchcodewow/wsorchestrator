@@ -20,8 +20,9 @@ export const GOOGLE_MEETING_SCOPES = [
   "email",
   "https://www.googleapis.com/auth/calendar",
   // The Guest judges thank-you slide (`lib/logistics/thank-you.ts`): a deck the account makes and shares.
+  // Full `drive`, not `drive.file`: the deck goes into a folder that already exists, which `drive.file` cannot see.
   "https://www.googleapis.com/auth/presentations",
-  "https://www.googleapis.com/auth/drive.file",
+  "https://www.googleapis.com/auth/drive",
 ];
 
 export class GoogleError extends Error {
