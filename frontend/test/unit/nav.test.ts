@@ -43,6 +43,7 @@ const TRAINING_ADMIN = [
   "Logistics",
   "Logistics settings",
   "Async Recordings",
+  "Survey Results",
 ];
 const MIMIR_ADMIN = ["Mimir", "Mimir Settings"];
 
@@ -52,7 +53,7 @@ const EXPECTED_SIDEBAR: Record<Persona, string[]> = {
   operator: [...HOME, ...EVENTS_USER, ...MIMIR_ONLY, ...ACCOUNT],
   manager: [...HOME, ...EVENTS_MANAGER, ...MIMIR_ONLY, ...ACCOUNT],
   eventAdmin: [...HOME, ...EVENTS_ADMIN, ...MIMIR_ONLY, ...ACCOUNT, "[Administration]", "Manage users"],
-  trainingViewer: [...HOME, "[Training]", "Scheduler", "Cohorts", "Logistics", "Async Recordings", ...MIMIR_ONLY, ...ACCOUNT],
+  trainingViewer: [...HOME, "[Training]", "Scheduler", "Cohorts", "Logistics", "Async Recordings", "Survey Results", ...MIMIR_ONLY, ...ACCOUNT],
   trainingAdmin: [...HOME, ...TRAINING_ADMIN, "[Assessments]", ...MIMIR_ADMIN, ...ACCOUNT, "[Administration]", "Manage users"],
   // Iris is part of the assessments area: a viewer takes it, an administrator runs it.
   assessmentsViewer: [...HOME, "[Assessments]", "eVals", "Iris", "Reporting", "Mimir", ...ACCOUNT],

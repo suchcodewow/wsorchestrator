@@ -2800,6 +2800,90 @@ export const intakeResponses = pgTable(
   ],
 );
 
+/** The people a daily survey is for: one survey per stage, day and `employees.track`. */
+export const SURVEY_AUDIENCES = ["sales", "engineer"] as const;
+export type SurveyAudience = (typeof SURVEY_AUDIENCES)[number];
+
+export const SURVEY_LIMITS = {
+  /** One free-text answer. */
+  answer: 5000,
+  /** The people one survey can be assigned to. */
+  people: 500,
+} as const;
+
+/** A session as a daily survey asks about it, copied from the schedule when the survey was assigned. */
+export type SurveySession = {
+  id: string;
+  track: ScheduleTrack;
+  name: string;
+  emoji: string;
+  start: number;
+  minutes: number;
+};
+
+/** One person's answers to one daily survey: a rating and optional feedback for each session. */
+export type SurveySessionAnswers = Record<string, { rating: number; feedback: string }>;
+
+/**
+ * The survey one stage's attendees on one employee track fill in about one
+ * day of a bootcamp: the class and its SE track together, since they are the
+ * same people. Its sessions are the day's as they stood when it was assigned.
+ */
+export const dailySurveys = pgTable(
+  "daily_surveys",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    bootcampId: uuid("bootcamp_id")
+      .notNull()
+      .references(() => bootcamps.id, { onDelete: "cascade" }),
+    stage: text("stage").$type<IntakeFormId>().notNull(),
+    /** 1-based, as on the schedule. */
+    day: integer("day").notNull(),
+    audience: text("audience").$type<SurveyAudience>().notNull(),
+    sessions: jsonb("sessions").$type<SurveySession[]>().notNull().default([]),
+    createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("daily_surveys_day_idx").on(t.bootcampId, t.stage, t.day, t.audience),
+    check("daily_surveys_stage_check", sql`${t.stage} in ('bootcamp', 'intermediate')`),
+    check("daily_surveys_audience_check", sql`${t.audience} in ('sales', 'engineer')`),
+    check("daily_surveys_day_check", sql`${t.day} between 1 and 30`),
+  ],
+);
+
+export type DailySurvey = typeof dailySurveys.$inferSelect;
+
+/**
+ * One person's copy of a daily survey, under their lowercased email, and
+ * their answers once they have given them. They can change their answers;
+ * the row keeps the latest.
+ */
+export const dailySurveyAssignments = pgTable(
+  "daily_survey_assignments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    surveyId: uuid("survey_id")
+      .notNull()
+      .references(() => dailySurveys.id, { onDelete: "cascade" }),
+    email: text("email").notNull(),
+    fullName: text("full_name").notNull().default(""),
+    assignedAt: timestamp("assigned_at", { withTimezone: true }).notNull().defaultNow(),
+    sessionAnswers: jsonb("session_answers").$type<SurveySessionAnswers>(),
+    /** 1 to 5; null until they answer. */
+    dayRating: integer("day_rating"),
+    dayChange: text("day_change").notNull().default(""),
+    submittedAt: timestamp("submitted_at", { withTimezone: true }),
+  },
+  (t) => [
+    uniqueIndex("daily_survey_assignments_person_idx").on(t.surveyId, t.email),
+    index("daily_survey_assignments_email_idx").on(t.email, t.assignedAt),
+    check("daily_survey_assignments_day_rating_check", sql`${t.dayRating} between 1 and 5`),
+  ],
+);
+
+export type DailySurveyAssignment = typeof dailySurveyAssignments.$inferSelect;
+
 export const FOOD_ORDER_LIMITS = {
   vendor: 200,
   needs: 5000,

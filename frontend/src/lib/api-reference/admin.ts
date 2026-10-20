@@ -1,5 +1,5 @@
-import { DIETARY_LIST, FOOD_ORDER_LIST, RECORDING_LIST, GUEST_JUDGE_LIST, INTAKE_RESPONSE_LIST, JUDGE_PROSPECT_LIST, ASSESSMENT_ATTENDEE_LIST, ASSESSMENT_LIST, AUDIT_LIST, BOOTCAMP_HISTORY_LIST, BOOTCAMP_LIST, CURRENT_COHORT_LIST, DOMAIN_LIST, EMPLOYEE_LIST, HIBOB_SYNC_LIST, HISTORY_STATUSES, JUDGE_LIST, ORGANIZATION_LIST, PREVIOUS_SESSION_LIST, SESSION_COMMENT_LIST, SESSION_TYPE_LIST, GOOGLE_MEETING_LIST, SLACK_CONTACT_LIST, SLACK_SYNC_CHANGE_LIST, SLACK_SYNC_LIST, CHANNEL_CONTACT_LIST, TITLE_LIST, USER_LIST, FACILITY_LIST, VIDEO_FEEDBACK_LIST } from "@/lib/list-specs";
-import { BOOTCAMP_LIMITS, CHECKLIST_LIMITS, EVALS_ASSESSMENT_LIMITS, FACILITY_LIMITS, FOOD_ORDER_LIMITS, GOOGLE_MEETING_LIMITS, INTAKE_LIMITS, RECORDING_LIMITS, SCHEDULE_LIMITS, VIDEO_FEEDBACK_LIMITS } from "@/db/schema";
+import { DIETARY_LIST, FOOD_ORDER_LIST, RECORDING_LIST, GUEST_JUDGE_LIST, INTAKE_RESPONSE_LIST, JUDGE_PROSPECT_LIST, ASSESSMENT_ATTENDEE_LIST, ASSESSMENT_LIST, AUDIT_LIST, BOOTCAMP_HISTORY_LIST, BOOTCAMP_LIST, CURRENT_COHORT_LIST, DOMAIN_LIST, EMPLOYEE_LIST, HIBOB_SYNC_LIST, HISTORY_STATUSES, JUDGE_LIST, ORGANIZATION_LIST, PREVIOUS_SESSION_LIST, SESSION_COMMENT_LIST, SESSION_TYPE_LIST, GOOGLE_MEETING_LIST, SLACK_CONTACT_LIST, SLACK_SYNC_CHANGE_LIST, SLACK_SYNC_LIST, CHANNEL_CONTACT_LIST, SURVEY_RESPONSE_LIST, SURVEY_RESULT_LIST, TITLE_LIST, USER_LIST, FACILITY_LIST, VIDEO_FEEDBACK_LIST } from "@/lib/list-specs";
+import { BOOTCAMP_LIMITS, CHECKLIST_LIMITS, EVALS_ASSESSMENT_LIMITS, FACILITY_LIMITS, FOOD_ORDER_LIMITS, GOOGLE_MEETING_LIMITS, INTAKE_LIMITS, RECORDING_LIMITS, SCHEDULE_LIMITS, SURVEY_LIMITS, VIDEO_FEEDBACK_LIMITS } from "@/db/schema";
 import { PAGE_SIZE } from "@/lib/paging";
 import { RECORDING_RETENTION_DAYS, UPLOAD_STALLED_MS, UPLOAD_URL_BATCH } from "@/lib/recording/video";
 import { CHECKLIST_ITEM_ROW } from "./account";
@@ -121,6 +121,12 @@ const ACTIVE_EXISTS_ERROR: EndpointError = {
   error: "active_exists",
   when: "status is active, another bootcamp already is, and completeActive does not name it; active names it",
 };
+
+const SURVEY_DAY_SHAPE = `{ stage: "bootcamp" | "intermediate", day: number, audiences: ("sales" | "engineer")[], assigned: number, answered: number }`;
+const SURVEY_SESSION_SHAPE = `{ id, track: ${TRACK_TYPE}, name, emoji, start: number, minutes: number }`;
+const MY_SURVEY_SHAPE = `{ id, stage: "bootcamp" | "intermediate", audience: "sales" | "engineer", day: number, date, sessions: ${SURVEY_SESSION_SHAPE}[], answers: { sessions: Record<string, { rating: number, feedback }>, dayRating: number, dayChange } | null, submittedAt: string | null }`;
+const SURVEY_CARD_SHAPE = `{ id, bootcampId, startDate, stage: "bootcamp" | "intermediate", audience: "sales" | "engineer", day: number, date, sessions: number, assigned: number, responses: number, average: number }`;
+const SURVEY_RESULT_SHAPE = `{ id, bootcampId, startDate, stage, audience, day: number, date, assigned: number, responses: number, average: number | null, sessions: (${SURVEY_SESSION_SHAPE} & { average: number | null, ratings: number, comments: number })[] }`;
 
 const INTAKE_QUESTION_SHAPE = `{ id, kind: "short" | "paragraph" | "choice" | "checkboxes" | "dropdown", title, description, required: boolean, options: string[], other: boolean }`;
 
@@ -1891,7 +1897,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       {
         method: "GET",
         path: "/api/intake",
-        summary: "Reads the caller's own intake form, as /intake shows it, with the answers they last saved.",
+        summary: "Reads the caller's own intake form, as /intake/registration shows it, with the answers they last saved.",
         access: "signedIn",
         token: true,
         notes:
@@ -1928,6 +1934,119 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           { status: 400, error: "not_an_option", when: "an answer is not one the question offers, or a single-answer question was given several; questionId names it" },
           { status: 400, error: "not_a_name", when: "the preferred-name answer is not a first and a last name with one space between; questionId names it" },
         ],
+      },
+    ],
+  },
+  {
+    id: "daily-surveys",
+    title: "Daily surveys",
+    intro:
+      "The survey each attendee fills in about one day of the bootcamp: a 1 to 5 rating and optional feedback for each session they were in, then a 1 to 5 rating of the day overall and one thing they would change. A survey is one stage's class on one employee track for one day, its SE track included, since they are the same people: Bootcamp Sales, Bootcamp Engineers, Intermediate Sales, Intermediate Engineers. Each person has at most one survey a day.",
+    endpoints: [
+      {
+        method: "GET",
+        path: "/api/scheduler/bootcamps/{id}/surveys",
+        summary: "Lists the days of a bootcamp that have been sent a survey, as the scheduler's Assign Surveys buttons read them.",
+        access: "trainingViewer",
+        token: true,
+        notes:
+          "One row per stage and day with a survey, at most two stages of thirty days: audiences says which surveys that day has (a class's button sends sales and engineer, an SE track's engineer alone, so a track-day reads as sent once every audience it teaches has one), assigned how many people were sent one, and answered how many have answered.",
+        params: [BOOTCAMP_ID],
+        returns: `{ days: ${SURVEY_DAY_SHAPE}[] }`,
+        errors: [{ status: 404, error: "not_found", when: "no such bootcamp" }],
+      },
+      {
+        method: "POST",
+        path: "/api/scheduler/bootcamps/{id}/surveys",
+        summary: "Sends one track-day's surveys to everyone that track teaches.",
+        access: "trainingAdmin",
+        token: true,
+        notes: `On a class (btc, int) it sends the sales and the engineer survey; on an SE track (btc_se, int_se), the engineer survey. Each asks about every session that day on the class and its SE track that is taught to its audience, in start order, leaving out unstructured ones; the sessions are copied in when the survey is first made, and a later change to the schedule does not reach it. A survey already made for that day is reused, and anyone already sent it is not sent it again, so repeating the call sends only to people who have joined the class since. A survey with no sessions to ask about is made but sent to no one. Each goes to at most ${SURVEY_LIMITS.people} people; hasMore says there were more. Attendees are the class's current candidates, as the scheduler's class lists count them.`,
+        params: [BOOTCAMP_ID],
+        body: {
+          kind: "json",
+          fields: [
+            { name: "track", type: TRACK_TYPE, required: true, note: "the track whose button was pressed" },
+            { name: "day", type: "integer", required: true, note: "from 1, a day the track runs at this bootcamp" },
+          ],
+        },
+        returns: `{ surveys: { id, audience: "sales" | "engineer", sessions: number, sent: number, hasMore: boolean }[], days: ${SURVEY_DAY_SHAPE}[] }`,
+        errors: [
+          { status: 400, error: "invalid", when: "the body is not that shape" },
+          { status: 404, error: "not_found", when: "no such bootcamp" },
+          { status: 404, error: "no_such_day", when: "the track does not run that many days at this bootcamp" },
+        ],
+      },
+      {
+        method: "GET",
+        path: "/api/me/forms",
+        summary: "Lists everything the caller has been asked to fill in, as /intake shows it: their registration form and their daily surveys.",
+        access: "signedIn",
+        token: true,
+        notes: `The ones still to answer come first: the registration form, then surveys by day. Those answered follow, most recently answered first. The registration form is listed only for someone in the current cohort (see GET /api/intake) whose form has questions; a test group member in both stages has both. At most ${PAGE_SIZE} surveys are listed.`,
+        returns: '{ forms: { kind: "registration" | "survey", id, title, detail, href, completedAt: string | null }[] }',
+      },
+      {
+        method: "GET",
+        path: "/api/surveys/{id}",
+        summary: "Reads one of the caller's own daily surveys, with the answers they last saved.",
+        access: "signedIn",
+        token: true,
+        notes: "id is the caller's copy of the survey, as GET /api/me/forms lists it. answers is null until they have answered.",
+        params: [{ name: "id", type: "string", required: true, note: "the caller's survey" }],
+        returns: `${MY_SURVEY_SHAPE}`,
+        errors: [{ status: 404, error: "not_found", when: "no such survey, or it was not sent to the caller" }],
+      },
+      {
+        method: "PUT",
+        path: "/api/surveys/{id}",
+        summary: "Saves the caller's answers to one of their own daily surveys.",
+        access: "signedIn",
+        token: true,
+        notes: "Every session the survey asks about needs a rating; feedback and dayChange are trimmed and may be empty. Saving again replaces the answers given before.",
+        params: [{ name: "id", type: "string", required: true, note: "the caller's survey" }],
+        body: {
+          kind: "json",
+          fields: [
+            {
+              name: "sessions",
+              type: "Record<string, { rating: number, feedback?: string }>",
+              required: true,
+              note: `keyed by session id, one for each session the survey asks about: rating a whole number from 1 (poor) to 5 (excellent), feedback up to ${SURVEY_LIMITS.answer} characters`,
+            },
+            { name: "dayRating", type: "integer", required: true, note: "the day overall, from 1 to 5" },
+            { name: "dayChange", type: "string", note: `one thing they would change about the day, up to ${SURVEY_LIMITS.answer} characters` },
+          ],
+        },
+        returns: `${MY_SURVEY_SHAPE}`,
+        errors: [
+          { status: 400, error: "invalid", when: "the body is not that shape, or a rating is not 1 to 5" },
+          { status: 400, error: "required", when: "a session the survey asks about has no rating; sessionId names it" },
+          { status: 400, error: "unknown_session", when: "an answer is for a session the survey does not ask about; sessionId names it" },
+          { status: 404, error: "not_found", when: "no such survey, or it was not sent to the caller" },
+        ],
+      },
+      {
+        method: "GET",
+        path: "/api/survey-results",
+        summary: "Lists the daily surveys anyone has answered, as Survey Results shows them, a page at a time.",
+        access: "trainingViewer",
+        token: true,
+        notes: "A survey is listed once it has at least one response. average is the mean of the day-overall ratings; Survey Results shows it to one decimal place. date is the day the survey is about. Sorting by date puts the latest day first by default.",
+        query: listQuery(SURVEY_RESULT_LIST.sorts, 'the bootcamp\'s month and the group, as in "November 2026 Bootcamp Sales"', "desc"),
+        returns: `{ surveys: ${SURVEY_CARD_SHAPE}[], ${PAGE_FIELDS} }`,
+      },
+      {
+        method: "GET",
+        path: "/api/survey-results/{id}",
+        summary: "Reads one daily survey's results: how each session was rated, and its responses a page at a time.",
+        access: "trainingViewer",
+        token: true,
+        notes: "survey.sessions are the sessions it asks about, each with its mean rating, how many rated it, and how many left feedback on it. responses are the people who have answered, with every answer they gave.",
+        params: [{ name: "id", type: "string", required: true, note: "the survey's id, as GET /api/survey-results lists it" }],
+        query: listQuery(SURVEY_RESPONSE_LIST.sorts, "the name or email", "desc"),
+        returns: `{ survey: ${SURVEY_RESULT_SHAPE}, responses: { id, email, fullName, submittedAt, dayRating: number, dayChange, sessions: Record<string, { rating: number, feedback }> }[], ${PAGE_FIELDS} }`,
+        errors: [{ status: 404, error: "not_found", when: "no such survey" }],
       },
     ],
   },

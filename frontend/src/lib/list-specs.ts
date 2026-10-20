@@ -170,3 +170,11 @@ export type MimirItemSort = (typeof MIMIR_ITEM_LIST.sorts)[number];
 /** One person's Mimir progress, most recently opened first. */
 export const MIMIR_PROGRESS_LIST = spec(["lastVisit", "title", "kind", "tier"], "desc");
 export type MimirProgressSort = (typeof MIMIR_PROGRESS_LIST.sorts)[number];
+
+/** Survey Results: each daily survey with a response, newest bootcamp first. */
+export const SURVEY_RESULT_LIST = spec(["date", "average", "responses"], "desc");
+export type SurveyResultSort = (typeof SURVEY_RESULT_LIST.sorts)[number];
+
+/** One daily survey's responses, most recently answered first. */
+export const SURVEY_RESPONSE_LIST = spec(["submittedAt", "fullName", "dayRating"], "desc");
+export type SurveyResponseSort = (typeof SURVEY_RESPONSE_LIST.sorts)[number];

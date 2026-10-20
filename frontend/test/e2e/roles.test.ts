@@ -203,6 +203,8 @@ const PAGES: Record<string, PageCase> = {
   "/scheduler/<unknown>/print": { path: () => `/scheduler/${MISSING}/print`, expect: () => 404 },
   "/scheduler/<unknown>": { path: () => `/scheduler/${MISSING}`, expect: () => 404 },
   "/scheduler/<not an id>": { path: () => "/scheduler/nonsense", expect: () => 404 },
+  "/survey-results": { path: () => "/survey-results", expect: gated(canUseTraining) },
+  "/survey-results/<unknown>": { path: () => `/survey-results/${MISSING}`, expect: () => 404 },
   "/scheduler-settings": {
     path: () => "/scheduler-settings",
     expect: (a) => (canManageTrainingSettings(a) ? { to: SCHEDULER_SETTINGS_TABS[0]!.href } : 404),
@@ -445,7 +447,12 @@ const PAGES: Record<string, PageCase> = {
   "/labs": { path: () => "/labs", expect: () => 200, signedOut: 200 },
   // Any signed-in account: someone outside the current cohort is told it is not theirs.
   "/intake": { path: () => "/intake", expect: () => 200 },
-  "/intake?preview": { path: () => "/intake?preview=bootcamp", expect: () => 200 },
+  "/intake/registration": { path: () => "/intake/registration", expect: () => 200 },
+  "/intake/registration?preview": { path: () => "/intake/registration?preview=bootcamp", expect: () => 200 },
+  // The old preview link now lives under /intake/registration, its query carried along (the matrix compares paths).
+  "/intake?preview": { path: () => "/intake?preview=bootcamp", expect: () => ({ to: "/intake/registration" }) },
+  // Someone else's survey, or none, is not found.
+  "/intake/surveys/<unknown>": { path: () => `/intake/surveys/${MISSING}`, expect: () => 404 },
   // Anyone in the org records, signed in but with no role; signed out, they are sent to sign in.
   "/record": { path: () => "/record", expect: () => 200 },
   "/api": { path: () => "/api", expect: () => 200, signedOut: 200 },
@@ -663,6 +670,10 @@ const ROUTES: RouteCase[] = [
   // An item's owner ticks it with no Training role, so the gate is past the role check.
   { method: "PATCH", path: `/api/scheduler/bootcamps/${MISSING}/checklist/items/${MISSING}`, allowed: true, body: () => ({}) },
   { method: "DELETE", path: `/api/scheduler/bootcamps/${MISSING}/checklist/items/${MISSING}`, allowed: canManageTrainingSettings },
+  { method: "GET", path: `/api/scheduler/bootcamps/${MISSING}/surveys`, allowed: canUseTraining },
+  { method: "POST", path: `/api/scheduler/bootcamps/${MISSING}/surveys`, allowed: canManageTrainingSettings, body: () => ({}) },
+  { method: "GET", path: "/api/survey-results", allowed: canUseTraining },
+  { method: "GET", path: `/api/survey-results/${MISSING}`, allowed: canUseTraining },
   { method: "GET", path: "/api/scheduler/facilities", allowed: canUseTraining },
   { method: "POST", path: "/api/scheduler/facilities", allowed: canManageTrainingSettings, body: () => ({}) },
   { method: "GET", path: `/api/scheduler/facilities/${MISSING}`, allowed: canUseTraining },
@@ -693,6 +704,9 @@ const ROUTES: RouteCase[] = [
   { method: "GET", path: `/api/logistics/food-orders/${MISSING}/pdf`, allowed: canUseTraining },
   { method: "GET", path: "/api/intake", allowed: true },
   { method: "PUT", path: "/api/intake", allowed: true, body: () => ({}) },
+  { method: "GET", path: "/api/me/forms", allowed: true },
+  { method: "GET", path: `/api/surveys/${MISSING}`, allowed: true },
+  { method: "PUT", path: `/api/surveys/${MISSING}`, allowed: true, body: () => ({}) },
 
   // Recordings: the recorder is any signed-in account's; reading is a Training Viewer's, deleting a Training Administrator's
   { method: "GET", path: "/api/recordings", allowed: canUseTraining },
