@@ -2,8 +2,9 @@
  * The Guest judges tab's Generate Thank You Page: one Google Slides slide
  * saying "Thank You!" over the judges' Slack photos, newest cohort first. The
  * deck is made by the Google account connected for Google Meetings, which
- * needs the Slides and Drive scopes (`GOOGLE_MEETING_SCOPES`), and shared with
- * whoever asked.
+ * needs the Slides and Drive scopes (`GOOGLE_MEETING_SCOPES`), and put in the
+ * Drive folder `THANK_YOU_FOLDER_ID` as "BootCamp Thank You" (a deck already
+ * there by that name is trashed first), and shared with whoever asked.
  */
 
 import "server-only";
@@ -18,6 +19,10 @@ import { slackClient, slackToken, SlackError } from "@/lib/slack";
 export type ThankYouResult =
   | { ok: true; url: string; judges: number; withPhotos: number }
   | { ok: false; error: "google_not_configured" | "google_not_connected" | "google_reconnect" | "slack_not_connected" | "no_judges" | "failed"; message: string };
+
+/** The Drive folder the deck goes in, and the name it has there. */
+const THANK_YOU_FOLDER_ID = "10Yvy8SSz0x859Ymnx2J4bFYsYlVYNPhI";
+const THANK_YOU_TITLE = "BootCamp Thank You";
 
 const SLACK_BUDGET_MS = 60_000;
 const PARALLEL = 4;
@@ -70,7 +75,8 @@ export async function generateThankYou(shareWith: string): Promise<ThankYouResul
     if (!refreshToken) return { ok: false, error: "google_reconnect", message: "The stored Google token cannot be opened here. Connect the account again." };
     const access = await accessToken(client, refreshToken);
     const deck = await createThankYouDeck(calendarClient(access, SLIDES_API), calendarClient(access, DRIVE_API), {
-      title: `Thank You, Guest Judges (${new Date().toISOString().slice(0, 10)})`,
+      title: THANK_YOU_TITLE,
+      folderId: THANK_YOU_FOLDER_ID,
       judges: people,
       shareWith,
     });

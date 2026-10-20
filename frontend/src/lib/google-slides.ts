@@ -95,18 +95,27 @@ function textBox(id: string, pageId: string, x: number, y: number, w: number, h:
   ];
 }
 
-/** Makes the deck, shares it with `shareWith`, and gives its link. */
+/** Makes the deck in `folderId`, shares it with `shareWith`, and gives its link. A deck already there with the same title is trashed first. */
 export async function createThankYouDeck(
   slides: CalendarClient,
   drive: CalendarClient,
-  input: { title: string; judges: SlideJudge[]; shareWith: string },
+  input: { title: string; judges: SlideJudge[]; shareWith: string; folderId: string },
 ): Promise<{ id: string; url: string }> {
+  const old = await drive.call<{ files?: { id: string }[] }>("GET", "/files", {
+    query: {
+      q: `name = '${input.title.replace(/['\\]/g, "\\$&")}' and '${input.folderId}' in parents and mimeType = 'application/vnd.google-apps.presentation' and trashed = false`,
+      fields: "files(id)",
+      pageSize: "100",
+    },
+  });
+  for (const file of old?.files ?? []) await drive.call("PATCH", `/files/${file.id}`, { body: { trashed: true } });
   const deck = await slides.call<{ presentationId: string; slides: { objectId: string }[] }>("POST", "/presentations", {
     body: { title: input.title },
   });
   await slides.call("POST", `/presentations/${deck.presentationId}:batchUpdate`, {
     body: { requests: thankYouRequests(deck.slides[0].objectId, input.judges).flat() },
   });
+  await drive.call("PATCH", `/files/${deck.presentationId}`, { query: { addParents: input.folderId, removeParents: "root" } });
   await drive.call("POST", `/files/${deck.presentationId}/permissions`, {
     query: { sendNotificationEmail: "false" },
     body: { type: "user", role: "writer", emailAddress: input.shareWith },
