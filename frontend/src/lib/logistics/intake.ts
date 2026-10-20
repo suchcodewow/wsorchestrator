@@ -203,3 +203,37 @@ export async function answeredIntake(form: IntakeFormId, emails: string[]): Prom
     .where(and(eq(intakeResponses.form, form), inArray(intakeResponses.email, emails)));
   return new Set(rows.map((r) => r.email));
 }
+
+/** One form's answers someone last saved, as the Cohorts page shows them under the person. */
+export type IntakeOnFile = { form: IntakeFormId; submittedAt: string; answers: IntakeAnswers };
+
+/**
+ * Each of `emails`' latest answers to each form, Pre-Bootcamp first: someone
+ * at intermediate who answered both has two. Only the emails asked for, so a
+ * page of the Cohorts table costs one query.
+ */
+export async function latestIntakesOf(emails: string[]): Promise<Record<string, IntakeOnFile[]>> {
+  const lower = [...new Set(emails.map((e) => e.toLowerCase()))];
+  if (lower.length === 0) return {};
+  const rows = await db
+    .selectDistinctOn([intakeResponses.email, intakeResponses.form], {
+      email: intakeResponses.email,
+      form: intakeResponses.form,
+      answers: intakeResponses.answers,
+      submittedAt: intakeResponses.submittedAt,
+    })
+    .from(intakeResponses)
+    .where(inArray(intakeResponses.email, lower))
+    .orderBy(intakeResponses.email, intakeResponses.form, desc(intakeResponses.submittedAt));
+  const byEmail: Record<string, IntakeOnFile[]> = {};
+  for (const r of rows) {
+    (byEmail[r.email] ??= []).push({ form: r.form, answers: r.answers, submittedAt: r.submittedAt.toISOString() });
+  }
+  return byEmail;
+}
+
+/** Both forms' questions as they stand now, to label answers with. */
+export async function intakeQuestionsByForm(): Promise<Record<IntakeFormId, IntakeForm["questions"]>> {
+  const [bootcamp, intermediate] = await Promise.all([getIntakeForm("bootcamp"), getIntakeForm("intermediate")]);
+  return { bootcamp: bootcamp.questions, intermediate: intermediate.questions };
+}
