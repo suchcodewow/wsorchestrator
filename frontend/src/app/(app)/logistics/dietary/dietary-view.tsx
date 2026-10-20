@@ -8,9 +8,9 @@
  * marked wherever it shows.
  */
 
-import { Fragment } from "react";
+import { Fragment, useState } from "react";
 import { motion } from "framer-motion";
-import { TriangleAlert } from "lucide-react";
+import { ChevronRight, TriangleAlert } from "lucide-react";
 import { HEADER_ROW, Pager, PlainHeader, SortHeader, TableSearch } from "@/components/data-table";
 import { UNREGISTERED_PREFIX, type DietarySort, type UnregisteredSort } from "@/lib/list-specs";
 import { DIETARY_LEVELS } from "@/lib/logistics/intake-values";
@@ -53,6 +53,15 @@ export function DietaryView({
     { key: "unrated", level: null, n: counts.unrated },
   ];
   const most = Math.max(1, ...bars.map((b) => b.n));
+  // The two groups that need no catering for start folded, so the restrictions and the
+  // not-registered count sit together near the top; a search, sort or page turn opens them.
+  const [noneToggled, setShowNone] = useState(query.page > 1);
+  const [unregisteredToggled, setShowUnregistered] = useState(
+    unregisteredQuery.page > 1 || unregisteredQuery.sort !== "name",
+  );
+  // A search shows every match, folded or not.
+  const showNone = noneToggled || query.q !== "";
+  const showUnregistered = unregisteredToggled || query.q !== "";
 
   return (
     <motion.div variants={staggerParent(0.05)} initial="hidden" animate="show" className="max-w-4xl space-y-6">
@@ -74,7 +83,11 @@ export function DietaryView({
             <>
               {" "}
               ·{" "}
-              <a href="#not-registered" className="underline underline-offset-2 hover:text-foreground">
+              <a
+                href="#not-registered"
+                onClick={() => setShowUnregistered(true)}
+                className="underline underline-offset-2 hover:text-foreground"
+              >
                 {plural(counts.notRegistered, "more", "more")} in the current cohort{" "}
                 {counts.notRegistered === 1 ? "hasn't" : "haven't"} registered yet
               </a>
@@ -140,12 +153,17 @@ export function DietaryView({
                   {(i === 0 || page.rows[i - 1]!.restricted !== r.restricted) && (
                     <tr className="border-b bg-muted/40">
                       <th colSpan={4} scope="rowgroup" className="px-5 py-2 text-left text-xs font-medium">
-                        {r.restricted
-                          ? `Dietary restrictions · ${plural(counts.withNeeds, "person", "people")}`
-                          : `No dietary restrictions · ${plural(counts.responded - counts.withNeeds, "person", "people")}`}
+                        {r.restricted ? (
+                          `Dietary restrictions · ${plural(counts.withNeeds, "person", "people")}`
+                        ) : (
+                          <GroupToggle open={showNone} onToggle={() => setShowNone((o) => !o)}>
+                            No dietary restrictions · {plural(counts.responded - counts.withNeeds, "person", "people")}
+                          </GroupToggle>
+                        )}
                       </th>
                     </tr>
                   )}
+                {(r.restricted || showNone) && (
                 <tr className={cn("border-b last:border-b-0", r.critical === 5 && "bg-destructive/5")}>
                   <td className="px-5 py-3">
                     {r.restricted ? <Level level={r.critical} /> : <span className="text-muted-foreground">—</span>}
@@ -166,6 +184,7 @@ export function DietaryView({
                     )}
                   </td>
                 </tr>
+                )}
                 </Fragment>
               ))}
               {page.rows.length === 0 && (
@@ -187,9 +206,13 @@ export function DietaryView({
           variants={riseChild}
           className="scroll-mt-6 overflow-hidden rounded-2xl border bg-card shadow-sm"
         >
-          <h3 className="border-b px-5 py-3 text-sm font-medium">
-            Not registered yet · {plural(counts.notRegistered, "person", "people")}
+          <h3 className={cn("px-5 py-3 text-sm font-medium", showUnregistered && "border-b")}>
+            <GroupToggle open={showUnregistered} onToggle={() => setShowUnregistered((o) => !o)}>
+              Not registered yet · {plural(counts.notRegistered, "person", "people")}
+            </GroupToggle>
           </h3>
+          {showUnregistered && (
+          <>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -226,9 +249,26 @@ export function DietaryView({
           <div className="border-t empty:hidden">
             <Pager page={unregistered} noun="people" prefix={UNREGISTERED_PREFIX} />
           </div>
+          </>
+          )}
         </motion.section>
       )}
     </motion.div>
+  );
+}
+
+/** A group's heading that folds its rows away and back, its chevron saying which. */
+function GroupToggle({ open, onToggle, children }: { open: boolean; onToggle: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      aria-expanded={open}
+      onClick={onToggle}
+      className="-mx-1 inline-flex cursor-pointer items-center gap-1.5 rounded-md px-1 text-left outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+    >
+      <ChevronRight className={cn("size-3.5 shrink-0 text-muted-foreground transition-transform", open && "rotate-90")} />
+      {children}
+    </button>
   );
 }
 
