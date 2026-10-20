@@ -1516,8 +1516,8 @@ export type BootcampStatus = (typeof BOOTCAMP_STATUSES)[number];
 /**
  * A bootcamp the Scheduler has planned: BTC over `btcDays` from `startDate`,
  * with INT alongside it unless `intDays` is null. `complete` once it has
- * run. At most one is `active`, and its start date is the BTC or INT date that loading its final scores
- * writes to bootcamp history.
+ * run. At most one is `active`, and its start date is the BTC or INT date that releasing its
+ * scores on Reporting → Bootcamp writes to bootcamp history.
  */
 export const bootcamps = pgTable(
   "bootcamps",

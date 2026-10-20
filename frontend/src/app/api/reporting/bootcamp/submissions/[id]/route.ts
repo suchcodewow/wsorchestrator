@@ -10,7 +10,7 @@ import { canManageBootcampRecords } from "@/lib/roles";
 const idSchema = z.string().uuid();
 
 export const PATCH = audited(async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { error } = await requireCaller(req, canManageBootcampRecords);
+  const { error, user } = await requireCaller(req, canManageBootcampRecords);
   if (error) return error;
 
   const id = idSchema.safeParse((await params).id);
@@ -19,7 +19,7 @@ export const PATCH = audited(async function PATCH(req: Request, { params }: { pa
   const parsed = submissionEditSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "invalid" }, { status: 400 });
 
-  const result = await editSubmission(id.data, parsed.data);
+  const result = await editSubmission(user.id, id.data, parsed.data);
   if (!result.ok) {
     return NextResponse.json({ error: result.error }, { status: SUBMISSION_EDIT_STATUS_FOR[result.error] });
   }

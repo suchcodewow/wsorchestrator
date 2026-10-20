@@ -85,8 +85,9 @@ export function ReleaseButton({
             <DialogTitle>{RELEASE_LABELS[stage]}?</DialogTitle>
             <DialogDescription>
               Managers will see the {code} results of the bootcamp starting {formatDate(startDate)} for the people
-              in their org, here and on each person&apos;s page. Only release once every assessment is in; a release
-              cannot be taken back.
+              in their org, here and on each person&apos;s page. Everyone scored in {code} gets{" "}
+              {formatDate(startDate)} as their {code} date in bootcamp history, with their scores, which completes
+              the class. Only release once every assessment is in; a release cannot be taken back.
             </DialogDescription>
           </DialogHeader>
           {error && <p className="text-sm text-destructive">{error}</p>}

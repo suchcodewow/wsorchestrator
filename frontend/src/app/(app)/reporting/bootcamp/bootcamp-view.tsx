@@ -47,7 +47,7 @@ const RECORD_COLUMNS: { column: BootcampRecordSort; label: string; className?: s
   { column: "fullName", label: "Name" },
   { column: "email", label: "Email" },
   { column: "level", label: "Level", className: "whitespace-nowrap" },
-  { column: "date", label: "Latest class", className: "whitespace-nowrap" },
+  { column: "date", label: "Session Date", className: "whitespace-nowrap" },
 ];
 
 const COHORT_COLUMNS: { column: BootcampCohortSort; label: string; className?: string }[] = [

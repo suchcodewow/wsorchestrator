@@ -34,6 +34,7 @@ import { averageScore, requiredFeedback, wholeScore } from "@/lib/evals/assessme
 import { updateHistory, type HistoryCorrection, type HistoryError } from "@/lib/evals/bootcamp-history";
 import { isCandidate } from "@/lib/evals/current-cohort";
 import { getCandidateCutoffs } from "@/lib/evals/settings";
+import { retrackEmployees } from "@/lib/evals/tracks";
 import type { BootcampCohortSort, BootcampRecordSort, HistoryStatus } from "@/lib/list-specs";
 import { PAGE_SIZE, pageWindow, toPage, type ListQuery, type Page } from "@/lib/paging";
 import { orderFor, searchAny } from "@/lib/paging-sql";
@@ -264,7 +265,9 @@ export async function listCohort(
   const { rows } = await db.execute<CohortRow>(sql`
     with candidates as (
       select ${employees.email} as email,
-             (case when ${bootcampHistory.btcDate} is null then 'bootcamp' else 'intermediate' end) as stage
+             -- A BTC date from this bootcamp's own release still counts them in its BTC class.
+             (case when ${bootcampHistory.btcDate} is null or ${bootcampHistory.btcDate} >= ${bootcamp.startDate}
+                   then 'bootcamp' else 'intermediate' end) as stage
         from ${employees} left join ${bootcampHistory} on ${bootcampHistory.email} = ${employees.email}
        where ${and(isCandidate(cutoffs), inArray(employees.track, ["sales", "engineer"]))}
       union
@@ -298,33 +301,85 @@ export type ReleaseError = "no_bootcamp" | "no_intermediate";
 export const RELEASE_STATUS_FOR: Record<ReleaseError, number> = { no_bootcamp: 409, no_intermediate: 409 };
 
 /**
- * Releases one class of the active bootcamp to managers, from now on. Once
- * released it stays so; releasing again changes nothing, and says when it was.
+ * Releases one class of the active bootcamp to managers, from now on, and
+ * completes it: everyone scored in that class gets the bootcamp's start date
+ * as their BTC or INT date in `bootcamp_history`, with the mean of their
+ * submissions' averages as the class score and each assessment's average as
+ * an exercise score. That moves a BTC class on to Intermediate on Cohorts →
+ * Current, and takes an INT class off it. Once released it stays so;
+ * releasing again changes nothing, and says when it was.
  */
 export async function releaseScores(
   actorId: string,
   stage: ReleaseStage,
-): Promise<{ ok: true; bootcamp: { id: string; startDate: string }; releasedAt: Date } | { ok: false; error: ReleaseError }> {
+): Promise<
+  | { ok: true; bootcamp: { id: string; startDate: string }; releasedAt: Date; written: number }
+  | { ok: false; error: ReleaseError }
+> {
   const bootcamp = await cohortBootcamp();
   if (!bootcamp) return { ok: false, error: "no_bootcamp" };
   if (stage === "intermediate" && !bootcamp.intermediate) return { ok: false, error: "no_intermediate" };
   const done = { id: bootcamp.id, startDate: bootcamp.startDate };
   const already = bootcamp.released[stage];
-  if (already) return { ok: true, bootcamp: done, releasedAt: already.at };
+  if (already) return { ok: true, bootcamp: done, releasedAt: already.at, written: 0 };
 
   const now = new Date();
   const [atColumn, byColumn] =
     stage === "bootcamp"
       ? (["btcReleasedAt", "btcReleasedBy"] as const)
       : (["intReleasedAt", "intReleasedBy"] as const);
-  const [row] = await db
-    .update(bootcamps)
-    .set({ [atColumn]: now, [byColumn]: actorId, updatedAt: now })
-    .where(and(eq(bootcamps.id, bootcamp.id), isNull(bootcamps[atColumn])))
-    .returning({ at: bootcamps[atColumn] });
-  // Someone else released it between our read and our write.
-  if (!row) return { ok: true, bootcamp: done, releasedAt: (await cohortBootcamp())?.released[stage]?.at ?? now };
-  return { ok: true, bootcamp: done, releasedAt: row.at ?? now };
+  const result = await db.transaction(async (tx) => {
+    const [row] = await tx
+      .update(bootcamps)
+      .set({ [atColumn]: now, [byColumn]: actorId, updatedAt: now })
+      .where(and(eq(bootcamps.id, bootcamp.id), isNull(bootcamps[atColumn])))
+      .returning({ at: bootcamps[atColumn] });
+    // Someone else released it between our read and our write, and wrote the history with it.
+    if (!row) return null;
+    return { releasedAt: row.at ?? now, emails: await writeClassHistory(tx, done, stage, actorId) };
+  });
+  if (!result) {
+    return { ok: true, bootcamp: done, releasedAt: (await cohortBootcamp())?.released[stage]?.at ?? now, written: 0 };
+  }
+  await retrackEmployees(result.emails);
+  return { ok: true, bootcamp: done, releasedAt: result.releasedAt, written: result.emails.length };
+}
+
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+/**
+ * Writes one class of `bootcamp` into `bootcamp_history` for everyone scored
+ * in it, or only for `only`: its start date, the mean of their submissions'
+ * averages, and each assessment's average by name. Creates the row for
+ * someone with none; leaves the other class's columns alone. Returns whose
+ * rows it wrote.
+ */
+async function writeClassHistory(
+  tx: Tx,
+  bootcamp: { id: string; startDate: string },
+  stage: ReleaseStage,
+  actorId: string,
+  only?: string,
+): Promise<string[]> {
+  const [date, score, exercises] =
+    stage === "bootcamp"
+      ? [sql.raw("btc_date"), sql.raw("btc_score"), sql.raw("btc_individual_scores")]
+      : [sql.raw("int_date"), sql.raw("int_score"), sql.raw("int_individual_scores")];
+  const { rows } = await tx.execute<{ email: string }>(sql`
+    insert into ${bootcampHistory} (email, ${date}, ${score}, ${exercises}, updated_by)
+    select lower(s.attendee_email), ${bootcamp.startDate}::date,
+           round(avg(s.average_score)::numeric, 1)::float8,
+           jsonb_object_agg(s.assessment_name, s.average_score),
+           ${actorId}
+      from ${evalsSubmissions} s join ${evalsAssessments} a on a.id = s.assessment_id
+     where s.bootcamp_id = ${bootcamp.id} and a.stage = ${stage}
+       ${only ? sql`and lower(s.attendee_email) = ${only.toLowerCase()}` : sql``}
+     group by lower(s.attendee_email)
+    on conflict (email) do update
+       set ${date} = excluded.${date}, ${score} = excluded.${score}, ${exercises} = excluded.${exercises},
+           updated_by = excluded.updated_by, updated_at = now()
+    returning email`);
+  return rows.map((r) => r.email);
 }
 
 const uuidSchema = z.string().uuid();
@@ -577,9 +632,11 @@ export const SUBMISSION_EDIT_STATUS_FOR: Record<SubmissionEditError, number> = {
  * Corrects a submission's scores, comments and feedback in place, at any
  * bootcamp. It keeps the criteria it was scored on, their names as scored,
  * its owner and its tags; the average follows the new scores, and the
- * feedback the eVals form requires for it still is.
+ * feedback the eVals form requires for it still is. In a class already
+ * released, the person's history for that class is written again.
  */
 export async function editSubmission(
+  actorId: string,
   id: string,
   input: SubmissionEdit,
 ): Promise<
@@ -589,10 +646,22 @@ export async function editSubmission(
   const s = evalsSubmissions;
   return db.transaction(async (tx) => {
     const [current] = await tx
-      .select({ id: s.id, attendeeEmail: s.attendeeEmail, assessmentName: s.assessmentName, updatedAt: s.updatedAt })
+      .select({
+        id: s.id,
+        attendeeEmail: s.attendeeEmail,
+        assessmentName: s.assessmentName,
+        updatedAt: s.updatedAt,
+        stage: evalsAssessments.stage,
+        bootcampId: bootcamps.id,
+        startDate: bootcamps.startDate,
+        btcReleasedAt: bootcamps.btcReleasedAt,
+        intReleasedAt: bootcamps.intReleasedAt,
+      })
       .from(s)
+      .innerJoin(evalsAssessments, eq(evalsAssessments.id, s.assessmentId))
+      .leftJoin(bootcamps, eq(bootcamps.id, s.bootcampId))
       .where(eq(s.id, id))
-      .for("update");
+      .for("update", { of: s });
     if (!current) return { ok: false as const, error: "not_found" as const };
     if (current.updatedAt.getTime() !== Date.parse(input.revises)) return { ok: false as const, error: "conflict" as const };
 
@@ -631,6 +700,12 @@ export async function editSubmission(
         comment: given.get(c.criterionId)!.comment,
       })),
     );
+    // A released class has had its history written; keep that in step with the edit.
+    const releasedAt = current.stage === "bootcamp" ? current.btcReleasedAt : current.intReleasedAt;
+    if (current.bootcampId && current.startDate && releasedAt) {
+      const bootcamp = { id: current.bootcampId, startDate: current.startDate };
+      await writeClassHistory(tx, bootcamp, current.stage, actorId, current.attendeeEmail);
+    }
     return {
       ok: true as const,
       submission: {

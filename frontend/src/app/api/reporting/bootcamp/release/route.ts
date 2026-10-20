@@ -1,6 +1,7 @@
 /**
  * Releases the active bootcamp's BTC or INT scores to managers: from now on,
- * Reporting → Bootcamp shows that class's results below Assessments Viewer.
+ * Reporting → Bootcamp shows that class's results below Assessments Viewer,
+ * and everyone scored in it has the class written to bootcamp history.
  * Releasing a class already released changes nothing.
  */
 
@@ -28,7 +29,13 @@ export const POST = audited(async function POST(req: Request) {
   noteAudit({
     target: result.bootcamp.id,
     targetLabel: `${STAGE_CODES[stage]} ${result.bootcamp.startDate}`,
-    detail: { stage },
+    detail: { stage, written: result.written },
   });
-  return NextResponse.json({ ok: true, stage, bootcamp: result.bootcamp, releasedAt: result.releasedAt });
+  return NextResponse.json({
+    ok: true,
+    stage,
+    bootcamp: result.bootcamp,
+    releasedAt: result.releasedAt,
+    written: result.written,
+  });
 });

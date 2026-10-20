@@ -881,7 +881,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "trainingAdmin",
         token: true,
         notes:
-          "Only one bootcamp may be active; the active one's start date is the BTC and INT date its final scores are loaded with. To make a new one active while another is, name that other in completeActive: it is marked complete in the same write.",
+          "Only one bootcamp may be active; the active one's start date is the BTC and INT date that releasing its scores on Reporting → Bootcamp writes to bootcamp history. To make a new one active while another is, name that other in completeActive: it is marked complete in the same write.",
         body: {
           kind: "json",
           fields: [
@@ -2301,13 +2301,13 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       {
         method: "POST",
         path: "/api/reporting/bootcamp/release",
-        summary: "Releases the active bootcamp's BTC or INT results to managers.",
+        summary: "Releases the active bootcamp's BTC or INT results to managers, and writes them to bootcamp history.",
         access: "assessmentsAdmin",
         token: true,
         notes:
-          "From then on, managers see that class's results for the people in their org. A release cannot be taken back; releasing a class already released changes nothing and returns when it was.",
+          "From then on, managers see that class's results for the people in their org. Everyone scored in the class gets the bootcamp's start date as their BTC or INT date in bootcamp history, the mean of their submissions' averages as the class score, and each assessment's average as an exercise score; a BTC class then moves on to Intermediate on Cohorts → Current, and an INT class leaves it. written counts the history rows written. A release cannot be taken back; releasing a class already released changes nothing, writes nothing, and returns when it was.",
         body: { kind: "json", fields: [{ name: "stage", type: '"bootcamp" | "intermediate"', required: true }] },
-        returns: "{ ok: true, stage, bootcamp: { id, startDate }, releasedAt }",
+        returns: "{ ok: true, stage, bootcamp: { id, startDate }, releasedAt, written: number }",
         errors: [
           { status: 400, error: "invalid", when: "stage is missing or neither bootcamp nor intermediate" },
           { status: 409, error: "no_bootcamp", when: "no bootcamp is active" },
@@ -2334,7 +2334,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "assessmentsAdmin",
         token: true,
         notes:
-          "It keeps the criteria the assessment was scored on, their names as scored, and its owner; the audit log records who corrected it. The average follows the new scores, and the feedback the eVals form requires for that average is still required.",
+          "It keeps the criteria the assessment was scored on, their names as scored, and its owner; the audit log records who corrected it. The average follows the new scores, and the feedback the eVals form requires for that average is still required. In a class already released, the person's bootcamp history score and exercise scores for it are written again.",
         params: [{ name: "id", type: "string", required: true, note: "the submission's id" }],
         body: { kind: "json", fields: [
           { name: "scores", type: "{ criterionId, score: 1 | 2 | 3 | 4, comment?: string }[]", required: true, note: `every criterion it was scored on, once each; comments up to ${EVALS_ASSESSMENT_LIMITS.comment} characters` },
