@@ -34,14 +34,14 @@ type Message = { tone: "ok" | "error"; text: string };
 
 function googleMessage(result: string, current: string | null): Message | null {
   const messages: Record<string, Message> = {
-    connected: { tone: "ok", text: "Google is connected. Sync Now sends the invites from this account." },
+    connected: { tone: "ok", text: "Google is connected. Sync Now adds the cohort to the Revenue Enablement calendar's meetings as this account." },
     denied: { tone: "error", text: "Google was not given access, so nothing changed." },
     expired: { tone: "error", text: "That sign-in took too long or started in another tab. Connect again." },
     failed: { tone: "error", text: "Google did not finish connecting. Connect again." },
     scope: { tone: "error", text: "The account was connected without calendar access. Connect again and allow it." },
     different_account: {
       tone: "error",
-      text: `Meetings already have invites from ${current ?? "the connected account"}. Connect that account again, or delete those meetings first.`,
+      text: `The old eVals meetings still have invites from ${current ?? "the connected account"}. Connect that account again, or run a live sync first, which cancels them.`,
     },
   };
   return messages[result] ?? null;
@@ -49,13 +49,13 @@ function googleMessage(result: string, current: string | null): Message | null {
 
 function zoomMessage(result: string): Message | null {
   const messages: Record<string, Message> = {
-    connected: { tone: "ok", text: "Zoom is connected. Sync Now makes each Zoom meeting as this user." },
+    connected: { tone: "ok", text: "Zoom is connected. Sync Now reads who joined the meetings this user hosts." },
     denied: { tone: "error", text: "Zoom was not given access, so nothing changed." },
     expired: { tone: "error", text: "That sign-in took too long or started in another tab. Connect again." },
     failed: { tone: "error", text: "Zoom did not finish connecting. Connect again." },
     scope: {
       tone: "error",
-      text: "Zoom did not grant every scope the app needs (the meeting scopes and user:read:user). Add the missing ones to the app in the Zoom Marketplace, then connect again.",
+      text: "Zoom did not grant every scope the app needs (meeting:read:list_past_instances, meeting:read:list_past_participants, meeting:delete:meeting and user:read:user). Add the missing ones to the app in the Zoom Marketplace, then connect again.",
     },
   };
   return messages[result] ?? null;
@@ -153,9 +153,9 @@ export function ConnectorsView({
           connected={Boolean(google.connection)}
           detail={
             google.connection
-              ? `${google.connection.email}, connected ${formatWhen(google.connection.connectedAt)}${google.connection.connectedBy ? ` by ${google.connection.connectedBy}` : ""}. Google Meetings sends its invites from this account.`
+              ? `${google.connection.email}, connected ${formatWhen(google.connection.connectedAt)}${google.connection.connectedBy ? ` by ${google.connection.connectedBy}` : ""}. Google Meetings adds the cohort to the Revenue Enablement calendar's meetings as this account.`
               : google.configured
-                ? "None yet. Sign in as the account the Google Meetings invites should come from."
+                ? "None yet. Sign in as an account that can make changes to events on the Revenue Enablement calendar."
                 : "Google OAuth is not set up here."
           }
           action={
@@ -173,10 +173,10 @@ export function ConnectorsView({
           connected={Boolean(zoom.connection)}
           detail={
             zoom.connection
-              ? `${zoom.connection.email}, connected ${formatWhen(zoom.connection.connectedAt)}${zoom.connection.connectedBy ? ` by ${zoom.connection.connectedBy}` : ""}. Each Google Meetings invite gets a Zoom link made as this user.`
+              ? `${zoom.connection.email}, connected ${formatWhen(zoom.connection.connectedAt)}${zoom.connection.connectedBy ? ` by ${zoom.connection.connectedBy}` : ""}. Google Meetings reads who joined the meetings this user hosts.`
               : zoom.configured
-                ? "None yet, so invites go out with no Zoom link. Sign in as the user the Zoom meetings should be made as."
-                : "Zoom is not set up here, so invites go out with no Zoom link."
+                ? "None yet, so attendance is only what an administrator marks. Sign in as the user who hosts the meetings."
+                : "Zoom is not set up here, so attendance is only what an administrator marks."
           }
           action={
             zoom.configured && (

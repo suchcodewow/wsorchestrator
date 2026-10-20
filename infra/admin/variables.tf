@@ -147,7 +147,7 @@ variable "google_meetings_account" {
 }
 
 variable "zoom_client_id" {
-  description = "The client id of the user-managed Zoom General App Google Meetings makes its Zoom meetings through, with only the user-level meeting:write:meeting, meeting:read:meeting, meeting:update:meeting and meeting:delete:meeting scopes, plus user:read:user: it reaches the meetings of the one Zoom user an Assessments Administrator connects, and no one else's. Not secret: it grants nothing without zoom_client_secret. Empty leaves Zoom off, and invites go out with no Zoom link. QA shares production's Google Workspace, so leave it empty there."
+  description = "The client id of the user-managed Zoom General App Google Meetings reads attendance through, with only the user-level meeting:read:list_past_instances, meeting:read:list_past_participants and meeting:delete:meeting scopes, plus user:read:user: it reaches the meetings of the one Zoom user an Assessments Administrator connects, and no one else's. Not secret: it grants nothing without zoom_client_secret. Empty leaves Zoom off, and attendance is marked by hand on the Current tab. QA shares production's Google Workspace, so leave it empty there."
   type        = string
   default     = ""
 }

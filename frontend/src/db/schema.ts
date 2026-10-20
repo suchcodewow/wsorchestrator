@@ -1092,6 +1092,8 @@ export const EVALS_SETTINGS_KEYS = {
   testGroupSuffix: "test_group_suffix",
   /** JSON `{ email, fullName }[]`, at most `TEST_GROUP_MAX_MEMBERS`. */
   testGroupMembers: "test_group_members",
+  /** `true` to let the Google Meetings sync change calendar invites; anything else is a dry run. */
+  meetingSyncLive: "meeting_sync_live",
 } as const;
 
 /** Most people the test group holds. */
@@ -1257,6 +1259,147 @@ export const zoomConnections = pgTable("zoom_connections", {
 });
 
 export const ZOOM_CONNECTION_KEY = "meetings";
+
+/** Which stage of the Cohorts page's Current tab a calendar meeting is for. */
+export const MEETING_STAGES = ["bootcamp", "intermediate", "both"] as const;
+export type MeetingStage = (typeof MEETING_STAGES)[number];
+
+/** Which employee track a calendar meeting is for. */
+export const MEETING_TRACKS = ["sales", "engineer", "both"] as const;
+export type MeetingTrack = (typeof MEETING_TRACKS)[number];
+
+export const MEETING_SELECTION_LIMITS = { name: 300 } as const;
+
+/**
+ * A meeting on the Revenue Enablement calendar that Google Meetings invites
+ * the cohort to, picked by its name: every event of that name in the coming
+ * weeks is one occurrence of it. Sync Now invites each person it is for to
+ * one occurrence before their bootcamp, and to the next one if they miss it.
+ */
+export const meetingSelections = pgTable(
+  "meeting_selections",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** Trimmed, as the calendar names the events; matched without regard to case. */
+    name: text("name").notNull(),
+    stage: text("stage").$type<MeetingStage>().notNull(),
+    track: text("track").$type<MeetingTrack>().notNull(),
+    /** When a live sync last read the calendar for it; null until one has. */
+    syncedAt: timestamp("synced_at", { withTimezone: true }),
+    createdBy: text("created_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("meeting_selections_name_idx").on(sql`lower(${t.name})`),
+    check("meeting_selections_stage_check", sql`${t.stage} in ('bootcamp', 'intermediate', 'both')`),
+    check("meeting_selections_track_check", sql`${t.track} in ('sales', 'engineer', 'both')`),
+  ],
+);
+
+export type MeetingSelection = typeof meetingSelections.$inferSelect;
+
+/**
+ * One event on the calendar of a picked meeting's name: an instance of a
+ * recurring event, or a single event. Kept after it ends, so whom it invited
+ * and who came are still known.
+ */
+export const meetingOccurrences = pgTable(
+  "meeting_occurrences",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    meetingId: uuid("meeting_id")
+      .notNull()
+      .references(() => meetingSelections.id, { onDelete: "cascade" }),
+    /** Google's id for the instance, such as `abc_20261021T133000Z`. */
+    eventId: text("event_id").notNull(),
+    startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
+    endsAt: timestamp("ends_at", { withTimezone: true }).notNull(),
+    /** The day it starts on in the calendar's time zone, which is what a bootcamp's start date is compared with. */
+    startDate: date("start_date").notNull(),
+    /** From the Zoom link on the event, to read who joined; null for an event with none. */
+    zoomMeetingId: text("zoom_meeting_id"),
+    /** When the sync last read who joined from Zoom; null until it has. */
+    attendanceReadAt: timestamp("attendance_read_at", { withTimezone: true }),
+  },
+  (t) => [
+    uniqueIndex("meeting_occurrences_event_idx").on(t.meetingId, t.eventId),
+    index("meeting_occurrences_starts_at_idx").on(t.meetingId, t.startsAt),
+  ],
+);
+
+export type MeetingOccurrence = typeof meetingOccurrences.$inferSelect;
+
+export const MEETING_INVITE_ROLES = ["member", "administrator"] as const;
+export type MeetingInviteRole = (typeof MEETING_INVITE_ROLES)[number];
+
+export const MEETING_ATTENDANCE = ["attended", "missed"] as const;
+export type MeetingAttendance = (typeof MEETING_ATTENDANCE)[number];
+
+/**
+ * Whom the sync invited to one occurrence, how they answered, and whether
+ * Zoom saw them join. A guest already on the invite when the sync came to add
+ * them has `addedBySync` false, so it never takes them off.
+ */
+export const meetingInvites = pgTable(
+  "meeting_invites",
+  {
+    occurrenceId: uuid("occurrence_id")
+      .notNull()
+      .references(() => meetingOccurrences.id, { onDelete: "cascade" }),
+    /** Lowercased. */
+    email: text("email").notNull(),
+    role: text("role").$type<MeetingInviteRole>().notNull(),
+    addedBySync: boolean("added_by_sync").notNull().default(true),
+    /** Made while the test group was on; turning the test group off takes it away. */
+    test: boolean("test").notNull().default(false),
+    /** Google's `needsAction`, `accepted`, `tentative` or `declined`, as of the last sync. */
+    responseStatus: text("response_status"),
+    /** From Zoom once the occurrence is over; null until it is read, or where it cannot be. */
+    attendance: text("attendance").$type<MeetingAttendance>(),
+    invitedAt: timestamp("invited_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.occurrenceId, t.email] }),
+    index("meeting_invites_email_idx").on(t.email),
+    check("meeting_invites_role_check", sql`${t.role} in ('member', 'administrator')`),
+    check("meeting_invites_attendance_check", sql`${t.attendance} in ('attended', 'missed')`),
+  ],
+);
+
+export type MeetingInvite = typeof meetingInvites.$inferSelect;
+
+/**
+ * An administrator's word on whether someone attended a picked meeting,
+ * which overrides what Zoom says: attended, so they are not invited again,
+ * or missed, so they are.
+ */
+export const meetingAttendanceMarks = pgTable(
+  "meeting_attendance_marks",
+  {
+    meetingId: uuid("meeting_id")
+      .notNull()
+      .references(() => meetingSelections.id, { onDelete: "cascade" }),
+    /** Lowercased. */
+    email: text("email").notNull(),
+    attended: boolean("attended").notNull(),
+    markedBy: text("marked_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    markedAt: timestamp("marked_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.meetingId, t.email] }), index("meeting_attendance_marks_email_idx").on(t.email)],
+);
 
 /**
  * Who has been through bootcamp (BTC) and the intermediate event (INT), and
@@ -1612,6 +1755,84 @@ export const slackSyncChanges = pgTable(
     at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("slack_sync_changes_run_idx").on(t.runId, t.at)],
+);
+
+/** `skipped` is a run with nothing to do: no meeting picked, or no active bootcamp. */
+export const MEETING_SYNC_STATUSES = ["running", "succeeded", "skipped", "failed"] as const;
+export type MeetingSyncStatus = (typeof MEETING_SYNC_STATUSES)[number];
+
+/** One press of Sync Now on eVals Settings → Google Meetings, and how it ended. */
+export const meetingSyncRuns = pgTable(
+  "meeting_sync_runs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    triggeredBy: text("triggered_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    status: text("status").$type<MeetingSyncStatus>().notNull().default("running"),
+    /** A dry run reads the calendar and Zoom and logs what it would do, but changes nothing. */
+    dryRun: boolean("dry_run").notNull(),
+    /** Run for the test group rather than the cohort. */
+    testGroup: boolean("test_group").notNull().default(false),
+    startedAt: timestamp("started_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+    invited: integer("invited").notNull().default(0),
+    removed: integer("removed").notNull().default(0),
+    /** People Zoom newly saw join, or who newly did not. */
+    attended: integer("attended").notNull().default(0),
+    missed: integer("missed").notNull().default(0),
+    /** People with no occurrence left before their bootcamp. */
+    noneLeft: integer("none_left").notNull().default(0),
+    /** Changes Google or Zoom refused. */
+    failures: integer("failures").notNull().default(0),
+    /** Stopped before its time ran out; the next run picks up where it left off. */
+    unfinished: boolean("unfinished").notNull().default(false),
+    /** Why it failed, or why it was skipped. */
+    error: text("error"),
+    /** Why a part of it did nothing, such as Zoom not being connected. */
+    notes: jsonb("notes").$type<string[]>().notNull().default([]),
+  },
+  (t) => [
+    index("meeting_sync_runs_started_at_idx").on(t.startedAt),
+    // One sync at a time: a second insert while one runs is a conflict.
+    uniqueIndex("meeting_sync_runs_one_running_idx")
+      .on(t.status)
+      .where(sql`${t.status} = 'running'`),
+    check(
+      "meeting_sync_runs_status_check",
+      sql`${t.status} in ('running', 'succeeded', 'skipped', 'failed')`,
+    ),
+  ],
+);
+
+/**
+ * `cancelled` is an event the old create-a-meeting flow made, taken off the
+ * calendar; `none_left` is someone with no occurrence before their bootcamp.
+ */
+export const MEETING_SYNC_ACTIONS = ["invited", "removed", "attended", "missed", "none_left", "cancelled", "failed"] as const;
+export type MeetingSyncAction = (typeof MEETING_SYNC_ACTIONS)[number];
+
+/** What one run did, or in a dry run would have done, to each meeting and person. */
+export const meetingSyncChanges = pgTable(
+  "meeting_sync_changes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    runId: uuid("run_id")
+      .notNull()
+      .references(() => meetingSyncRuns.id, { onDelete: "cascade" }),
+    meetingName: text("meeting_name").notNull(),
+    /** When the occurrence it is about starts; null for a change to no one occurrence. */
+    occurrenceStartsAt: timestamp("occurrence_starts_at", { withTimezone: true }),
+    action: text("action").$type<MeetingSyncAction>().notNull(),
+    /** Lowercased; empty for a change to the meeting itself. */
+    email: text("email").notNull().default(""),
+    /** Google's or Zoom's error, for a failure. */
+    detail: text("detail"),
+    at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("meeting_sync_changes_run_idx").on(t.runId, t.at)],
 );
 
 /**
@@ -2799,6 +3020,90 @@ export const intakeResponses = pgTable(
     check("intake_responses_form_check", sql`${t.form} in ('bootcamp', 'intermediate')`),
   ],
 );
+
+/** The people a daily survey is for: one survey per stage, day and `employees.track`. */
+export const SURVEY_AUDIENCES = ["sales", "engineer"] as const;
+export type SurveyAudience = (typeof SURVEY_AUDIENCES)[number];
+
+export const SURVEY_LIMITS = {
+  /** One free-text answer. */
+  answer: 5000,
+  /** The people one survey can be assigned to. */
+  people: 500,
+} as const;
+
+/** A session as a daily survey asks about it, copied from the schedule when the survey was assigned. */
+export type SurveySession = {
+  id: string;
+  track: ScheduleTrack;
+  name: string;
+  emoji: string;
+  start: number;
+  minutes: number;
+};
+
+/** One person's answers to one daily survey: a rating and optional feedback for each session. */
+export type SurveySessionAnswers = Record<string, { rating: number; feedback: string }>;
+
+/**
+ * The survey one stage's attendees on one employee track fill in about one
+ * day of a bootcamp: the class and its SE track together, since they are the
+ * same people. Its sessions are the day's as they stood when it was assigned.
+ */
+export const dailySurveys = pgTable(
+  "daily_surveys",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    bootcampId: uuid("bootcamp_id")
+      .notNull()
+      .references(() => bootcamps.id, { onDelete: "cascade" }),
+    stage: text("stage").$type<IntakeFormId>().notNull(),
+    /** 1-based, as on the schedule. */
+    day: integer("day").notNull(),
+    audience: text("audience").$type<SurveyAudience>().notNull(),
+    sessions: jsonb("sessions").$type<SurveySession[]>().notNull().default([]),
+    createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("daily_surveys_day_idx").on(t.bootcampId, t.stage, t.day, t.audience),
+    check("daily_surveys_stage_check", sql`${t.stage} in ('bootcamp', 'intermediate')`),
+    check("daily_surveys_audience_check", sql`${t.audience} in ('sales', 'engineer')`),
+    check("daily_surveys_day_check", sql`${t.day} between 1 and 30`),
+  ],
+);
+
+export type DailySurvey = typeof dailySurveys.$inferSelect;
+
+/**
+ * One person's copy of a daily survey, under their lowercased email, and
+ * their answers once they have given them. They can change their answers;
+ * the row keeps the latest.
+ */
+export const dailySurveyAssignments = pgTable(
+  "daily_survey_assignments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    surveyId: uuid("survey_id")
+      .notNull()
+      .references(() => dailySurveys.id, { onDelete: "cascade" }),
+    email: text("email").notNull(),
+    fullName: text("full_name").notNull().default(""),
+    assignedAt: timestamp("assigned_at", { withTimezone: true }).notNull().defaultNow(),
+    sessionAnswers: jsonb("session_answers").$type<SurveySessionAnswers>(),
+    /** 1 to 5; null until they answer. */
+    dayRating: integer("day_rating"),
+    dayChange: text("day_change").notNull().default(""),
+    submittedAt: timestamp("submitted_at", { withTimezone: true }),
+  },
+  (t) => [
+    uniqueIndex("daily_survey_assignments_person_idx").on(t.surveyId, t.email),
+    index("daily_survey_assignments_email_idx").on(t.email, t.assignedAt),
+    check("daily_survey_assignments_day_rating_check", sql`${t.dayRating} between 1 and 5`),
+  ],
+);
+
+export type DailySurveyAssignment = typeof dailySurveyAssignments.$inferSelect;
 
 export const FOOD_ORDER_LIMITS = {
   vendor: 200,

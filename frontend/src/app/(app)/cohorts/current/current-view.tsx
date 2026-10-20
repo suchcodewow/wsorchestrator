@@ -10,6 +10,8 @@
  * through every sync until they hand it back to the rules. A row opens to show the rest of what the sync knows about them.
  * With one stage and Sales or Engineer picked, an eVals viewer also sees a
  * column per assessment for that stage and track, after their average.
+ * Beside each name on the Current tab is a mark for each picked Google meeting
+ * that is for them, and an eVals administrator can override what Zoom said.
  */
 
 import { HEADER_ROW, Pager, PlainHeader, SortHeader, TableSearch } from "@/components/data-table";
@@ -25,6 +27,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import type {
   CandidateStage,
   CandidateTrack,
@@ -34,6 +37,7 @@ import type {
   CurrentCohortMember,
   CurrentTrack,
 } from "@/lib/evals/current-cohort";
+import type { MeetingMark } from "@/lib/evals/meeting-plan";
 import type { IntakeFormId, IntakeQuestion } from "@/db/schema";
 import type { SetTrackResult, TrackChoice } from "@/lib/evals/tracks";
 import type { IntakeOnFile } from "@/lib/logistics/intake";
@@ -44,8 +48,11 @@ import type { ActiveBootcamp } from "@/lib/scheduler/bootcamps";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 import {
+  Check,
   ChevronDown,
   ChevronRight,
+  CircleAlert,
+  CircleCheck,
   CircleHelp,
   Code,
   GraduationCap,
@@ -53,6 +60,7 @@ import {
   Loader2,
   Pin,
   Printer,
+  RotateCcw,
   Upload,
   Users,
   type LucideIcon,
@@ -124,6 +132,12 @@ function useFilterParams() {
   return { toggle, pending };
 }
 
+/** Where each person stands with each picked Google meeting that is for them, by lowercased email. */
+export type MemberMeetings = Record<
+  string,
+  { meetingId: string; name: string; mark: MeetingMark; marked: boolean | null; startsAt: string | null }[]
+>;
+
 export function CurrentCohortView({
   tab,
   query,
@@ -135,6 +149,8 @@ export function CurrentCohortView({
   activeBootcamp,
   canSetTrack,
   canSeeScores,
+  meetings = {},
+  canMarkAttendance = false,
   intakes,
   intakeQuestions,
 }: {
@@ -153,6 +169,10 @@ export function CurrentCohortView({
   canSetTrack: boolean;
   /** Whether the viewer is in eVals, whose scores and bootcamp history records these are. */
   canSeeScores: boolean;
+  /** The Current tab's meeting marks; none on the Deferred tab. */
+  meetings?: MemberMeetings;
+  /** Whether the viewer may say someone attended or missed a meeting, over what Zoom said. */
+  canMarkAttendance?: boolean;
   /** Each person on the page's latest answers to each registration form, by lowercased email. */
   intakes: Record<string, IntakeOnFile[]>;
   /** Both forms' questions as they stand now, to label those answers. */
@@ -392,21 +412,29 @@ export function CurrentCohortView({
                       )}
                     >
                       <td className="px-5 py-2.5 font-medium">
-                        <button
-                          type="button"
-                          aria-expanded={expanded}
-                          aria-controls={`person-${m.email}`}
-                          onClick={(ev) => {
-                            ev.stopPropagation();
-                            toggleOpen(m.email);
-                          }}
-                          className="-mx-1 flex cursor-pointer items-center gap-1.5 rounded-md px-1 text-left outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                        >
-                          <ChevronRight
-                            className={cn("size-3.5 shrink-0 text-muted-foreground transition-transform", expanded && "rotate-90")}
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                          <button
+                            type="button"
+                            aria-expanded={expanded}
+                            aria-controls={`person-${m.email}`}
+                            onClick={(ev) => {
+                              ev.stopPropagation();
+                              toggleOpen(m.email);
+                            }}
+                            className="-mx-1 flex cursor-pointer items-center gap-1.5 rounded-md px-1 text-left outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                          >
+                            <ChevronRight
+                              className={cn("size-3.5 shrink-0 text-muted-foreground transition-transform", expanded && "rotate-90")}
+                            />
+                            {m.fullName}
+                          </button>
+                          <MeetingMarks
+                            member={m}
+                            meetings={meetings[m.email.trim().toLowerCase()] ?? []}
+                            canMark={canMarkAttendance}
+                            onError={setError}
                           />
-                          {m.fullName}
-                        </button>
+                        </div>
                       </td>
                       {/* React bubbles the menu's clicks through its portal, so they stop here rather than toggling the row. */}
                       <td className="px-5 py-1.5" onClick={(ev) => ev.stopPropagation()}>
@@ -687,5 +715,136 @@ function TrackMenu({
         )}
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+const MARKS: Record<MeetingMark, { Icon: LucideIcon; className: string; label: string }> = {
+  attended: { Icon: CircleCheck, className: "text-emerald-600 dark:text-emerald-400", label: "Attended" },
+  accepted: { Icon: Check, className: "text-muted-foreground", label: "Accepted" },
+  pending: { Icon: CircleHelp, className: "text-muted-foreground", label: "Not accepted" },
+  none_left: { Icon: CircleAlert, className: "text-red-600 dark:text-red-400", label: "None left before their bootcamp" },
+};
+
+/** An icon per meeting; for an eVals administrator, each opens a menu that marks them attended or missed over what Zoom said. */
+function MeetingMarks({
+  member,
+  meetings,
+  canMark,
+  onError,
+}: {
+  member: CurrentCohortMember;
+  meetings: MemberMeetings[string];
+  canMark: boolean;
+  onError: (error: string | null) => void;
+}) {
+  const router = useRouter();
+  const [busy, setBusy] = useState<string | null>(null);
+  if (meetings.length === 0) return null;
+
+  async function mark(meetingId: string, attended: boolean | null) {
+    setBusy(meetingId);
+    onError(null);
+    try {
+      const res = await fetch(`/api/evals/google-meetings/${meetingId}/attendance`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: member.email, attended }),
+      });
+      if (!res.ok) {
+        onError(res.status === 404 ? "That meeting was deleted — reload the page." : `Could not save the mark (${res.status}).`);
+        return;
+      }
+      router.refresh();
+    } catch {
+      onError("Could not reach the server.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <TooltipProvider>
+      {/* React bubbles the menu's clicks through its portal, so they stop here rather than toggling the row. */}
+      <span className="flex items-center gap-0.5" onClick={(ev) => ev.stopPropagation()}>
+        {meetings.map((m) => {
+          const { Icon, className, label } = MARKS[m.mark];
+          const detail =
+            m.marked !== null
+              ? `${m.marked ? "attended" : "missed"}, marked by an administrator`
+              : m.mark !== "attended" && m.startsAt
+                ? `${label}, ${formatWhen(m.startsAt)}`
+                : m.mark === "pending"
+                  ? "Not invited yet; the next sync invites them"
+                  : label;
+          const icon =
+            busy === m.meetingId ? (
+              <Loader2 className="size-4 animate-spin text-muted-foreground" />
+            ) : (
+              <Icon className={cn("size-4", className)} />
+            );
+          const tip = (
+            <TooltipContent>
+              <span className="font-medium">{m.name}</span>: {detail}
+            </TooltipContent>
+          );
+          if (!canMark) {
+            return (
+              <Tooltip key={m.meetingId}>
+                <TooltipTrigger asChild>
+                  <span
+                    tabIndex={0}
+                    aria-label={`${m.name}: ${detail}`}
+                    className="rounded-sm p-0.5 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                  >
+                    {icon}
+                  </span>
+                </TooltipTrigger>
+                {tip}
+              </Tooltip>
+            );
+          }
+          return (
+            <DropdownMenu key={m.meetingId}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      aria-label={`${m.name}: ${detail}`}
+                      disabled={busy !== null}
+                      className="cursor-pointer rounded-sm p-0.5 outline-none hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                    >
+                      {icon}
+                    </button>
+                  </DropdownMenuTrigger>
+                </TooltipTrigger>
+                {tip}
+              </Tooltip>
+              <DropdownMenuContent align="start" className="w-60">
+                <DropdownMenuLabel className="font-normal">
+                  <span className="font-medium">{m.name}</span>
+                  <span className="block text-xs text-muted-foreground">{member.fullName}</span>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem disabled={m.marked === true} onSelect={() => void mark(m.meetingId, true)}>
+                  <CircleCheck />
+                  Mark attended
+                </DropdownMenuItem>
+                <DropdownMenuItem disabled={m.marked === false} onSelect={() => void mark(m.meetingId, false)}>
+                  <CircleAlert />
+                  Mark missed
+                </DropdownMenuItem>
+                {m.marked !== null && (
+                  <DropdownMenuItem onSelect={() => void mark(m.meetingId, null)}>
+                    <RotateCcw />
+                    Go by Zoom again
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          );
+        })}
+      </span>
+    </TooltipProvider>
   );
 }

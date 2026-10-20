@@ -12,6 +12,7 @@ import { facilityPicks } from "@/lib/scheduler/facilities";
 import { parseScheduleCondensed, parseScheduleView, SCHEDULE_CONDENSED_COOKIE, SCHEDULE_VIEW_COOKIE } from "@/lib/scheduler/schedule-prefs";
 import { copySources, type Schedule } from "@/lib/scheduler/schedule";
 import { allSessionTypes } from "@/lib/scheduler/session-types";
+import { surveyDays } from "@/lib/surveys/surveys";
 import { ScheduleView } from "./schedule-view";
 
 const MONTH_YEAR = new Intl.DateTimeFormat("en-US", { month: "short", year: "numeric", timeZone: "UTC" });
@@ -24,10 +25,11 @@ export async function SchedulePage({
   viewer: { id: string; email: string; access: Access };
 }) {
   const canManage = canManageTrainingSettings(viewer.access);
-  const [types, sources, checklist, facilities, cookieJar] = await Promise.all([
+  const [types, sources, checklist, surveys, facilities, cookieJar] = await Promise.all([
     canManage ? allSessionTypes() : [],
     canManage ? copySources(schedule.bootcamp.id) : [],
     checklistCounts(schedule.bootcamp.id),
+    surveyDays(schedule.bootcamp.id),
     canManage ? facilityPicks() : [],
     cookies(),
   ]);
@@ -48,6 +50,7 @@ export async function SchedulePage({
         viewerId={viewer.id}
         viewerEmail={viewer.email}
         checklist={checklist}
+        surveys={surveys}
         initialView={initialView}
         initialCondensed={initialCondensed}
       />

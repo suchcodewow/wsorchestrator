@@ -36,6 +36,7 @@ import type { ChecklistDayCount } from "@/lib/scheduler/checklist";
 import { findIssues, tally, type Spot } from "@/lib/scheduler/issues";
 import type { CopySource, Schedule, SessionRow } from "@/lib/scheduler/schedule";
 import type { SessionTypeRow } from "@/lib/scheduler/session-types";
+import type { SurveyDayStatus } from "@/lib/surveys/survey-values";
 import {
   TRACK_LABELS,
   attendeeCount,
@@ -52,6 +53,7 @@ import { PillSwitch } from "@/components/pill-switch";
 import { BootcampDialog } from "../bootcamp-dialog";
 import { Board, COLUMN_ATTR, SCALE, SessionFace, type BoardColumn, type Density } from "./board";
 import { useChecklistButtons } from "./checklist";
+import { useSurveyButtons } from "./surveys";
 import { dayOf, everyDay, keyOf, locate, moveTo, resize, type Days } from "./days";
 import { CopyDialog } from "./copy-dialog";
 import { SessionDialog, type SessionTarget } from "./session-dialog";
@@ -79,6 +81,7 @@ export function ScheduleView({
   viewerId,
   viewerEmail,
   checklist,
+  surveys,
   initialView,
   initialCondensed,
 }: {
@@ -91,6 +94,8 @@ export function ScheduleView({
   viewerEmail: string;
   /** How much of each half of each class-day's checklist is done. */
   checklist: ChecklistDayCount[];
+  /** Which days have been sent their surveys. */
+  surveys: SurveyDayStatus[];
   /** The manager's last-chosen view and density, from a cookie read on the server. */
   initialView: View;
   initialCondensed: boolean;
@@ -126,6 +131,7 @@ export function ScheduleView({
     viewerEmail,
     instructors: schedule.instructors,
   });
+  const surveyButtons = useSurveyButtons({ bootcampId: bootcamp.id, days: surveys, canManage, onNotice: setNotice });
 
   const tracks = SCHEDULE_TRACKS.filter((t) => (trackDays(t, bootcamp) ?? 0) > 0);
   const dayCount = Math.max(bootcamp.btcDays, bootcamp.intDays ?? 0);
@@ -589,6 +595,7 @@ export function ScheduleView({
               onResizeEnd={onResizeEnd}
               headerAction={checklistButtons.dayButton}
               corner={checklistButtons.prepDayButton}
+              footerAction={surveyButtons.dayButton}
             />
             <DragOverlay dropAnimation={null}>
               {active && (

@@ -128,7 +128,7 @@ export function IntakeEditor({ id, form }: { id: IntakeFormId; form: IntakeFormV
           </p>
         </div>
         <Button variant="outline" asChild>
-          <Link href={`/intake?preview=${id}`} target="_blank">
+          <Link href={`/intake/registration?preview=${id}`} target="_blank">
             <ExternalLink />
             Open the form
           </Link>

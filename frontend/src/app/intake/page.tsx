@@ -1,30 +1,26 @@
 /**
- * The intake form for whoever is signed in: Bootcamp Registration for a
- * bootcamp candidate in the current cohort, Intermediate Registration for an
- * intermediate one, with the answers they last saved. Anyone else is told it
- * is not for them. `?preview=bootcamp` or `?preview=intermediate` shows a
- * Training Administrator that form as the cohort sees it, without saving.
+ * Everything whoever is signed in has been asked to fill in: their
+ * registration form while they are in the current cohort, and each daily
+ * survey the scheduler has sent them. The ones still to do come first.
+ *
+ * `?preview=` and `?form=` belong to the registration form, which this page
+ * used to be, so links made before it moved are sent on to it.
  */
 
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { CheckCircle2, ChevronRight, ClipboardList, MessageSquareText } from "lucide-react";
 import { auth, signInPath } from "@/auth";
-import { AmbientBackdrop } from "@/components/ambient-backdrop";
-import { SiteHeader } from "@/components/site-header";
-import { getIntakeForm, getMyIntake, type MyIntake } from "@/lib/logistics/intake";
-import { INTAKE_FORM_HEADINGS, isIntakeFormId } from "@/lib/logistics/intake-values";
-import { canManageTrainingSettings } from "@/lib/roles";
-import { IntakeFormFiller } from "./intake-form";
+import { listMyForms, type MyForm } from "@/lib/surveys/my-forms";
+import { IntakeNotice, IntakeShell } from "./intake-shell";
 
 export const metadata: Metadata = {
-  title: "Registration",
+  title: "My forms",
   robots: { index: false, follow: false },
 };
 
 export const dynamic = "force-dynamic";
-
-const SHELL = "max-w-2xl";
 
 export default async function IntakePage({
   searchParams,
@@ -35,58 +31,70 @@ export default async function IntakePage({
   if (!session?.user) redirect(await signInPath());
 
   const { preview, form } = await searchParams;
-  let mine: MyIntake | null;
-  let previewing = false;
-  if (isIntakeFormId(preview) && canManageTrainingSettings(session.user.access)) {
-    const { introduction, questions } = await getIntakeForm(preview);
-    mine = { form: preview, heading: INTAKE_FORM_HEADINGS[preview], introduction, questions, answers: {}, savedAt: null, name: null };
-    previewing = true;
-  } else {
-    mine = session.user.email ? await getMyIntake(session.user.email, isIntakeFormId(form) ? form : null) : null;
+  if (typeof preview === "string" || typeof form === "string") {
+    const query = new URLSearchParams();
+    if (typeof preview === "string") query.set("preview", preview);
+    if (typeof form === "string") query.set("form", form);
+    redirect(`/intake/registration?${query}`);
   }
 
+  const forms = session.user.email ? await listMyForms(session.user.email) : [];
+  const todo = forms.filter((f) => !f.completedAt);
+  const done = forms.filter((f) => f.completedAt);
+
   return (
-    <div className="relative min-h-screen">
-      <AmbientBackdrop className="fixed inset-0 -z-10" />
-
-      <SiteHeader session={session} width={SHELL} />
-
-      <main className={`relative mx-auto ${SHELL} px-6 py-10`}>
-        {mine?.testForms && (
-          <nav aria-label="Test group forms" className="mb-4 flex items-center gap-2 text-sm">
-            <span className="text-muted-foreground">Test group:</span>
-            {mine.testForms.map((f) => (
-              <Link
-                key={f}
-                href={`/intake?form=${f}`}
-                aria-current={f === mine.form ? "page" : undefined}
-                className={f === mine.form ? "font-medium underline underline-offset-4" : "text-muted-foreground hover:text-foreground"}
-              >
-                {INTAKE_FORM_HEADINGS[f]}
-              </Link>
-            ))}
-          </nav>
-        )}
-        {!mine ? (
-          <Notice heading="Registration">
-            There is no registration form for {session.user.email ?? "this account"}: it is for people in the current
-            bootcamp or intermediate cohort. If you think you should be in it, ask the training team.
-          </Notice>
-        ) : mine.questions.length === 0 ? (
-          <Notice heading={mine.heading}>There is nothing to fill in yet. Check back later.</Notice>
-        ) : (
-          <IntakeFormFiller key={mine.form} intake={mine} preview={previewing} />
-        )}
-      </main>
-    </div>
+    <IntakeShell session={session}>
+      {forms.length === 0 ? (
+        <IntakeNotice heading="My forms">
+          There is nothing for {session.user.email ?? "this account"} to fill in. Registration forms are for people in the
+          current bootcamp or intermediate cohort, and surveys arrive here as the training team sends them.
+        </IntakeNotice>
+      ) : (
+        <div className="space-y-8">
+          <div className="space-y-2">
+            <h1 className="text-3xl font-medium tracking-tight">My forms</h1>
+            <p className="text-sm text-muted-foreground">
+              {todo.length === 0 ? "All done" : `${todo.length} to do`}
+              {done.length > 0 && `, ${done.length} completed`}
+            </p>
+          </div>
+          {todo.length > 0 && <FormList heading="To do" forms={todo} />}
+          {done.length > 0 && <FormList heading="Completed" forms={done} />}
+        </div>
+      )}
+    </IntakeShell>
   );
 }
 
-function Notice({ heading, children }: { heading: string; children: React.ReactNode }) {
+function FormList({ heading, forms }: { heading: string; forms: MyForm[] }) {
   return (
-    <div className="space-y-2 rounded-2xl border bg-card px-5 py-8 text-center shadow-sm">
-      <h1 className="text-xl font-medium tracking-tight">{heading}</h1>
-      <p className="text-sm text-muted-foreground">{children}</p>
-    </div>
+    <section className="space-y-3">
+      <h2 className="text-sm font-medium text-muted-foreground">{heading}</h2>
+      <ul className="divide-y overflow-hidden rounded-2xl border bg-card shadow-sm">
+        {forms.map((f) => {
+          const Icon = f.kind === "registration" ? ClipboardList : MessageSquareText;
+          return (
+            <li key={`${f.kind}-${f.id}`}>
+              <Link href={f.href} className="group flex items-center gap-4 px-5 py-4 transition-colors hover:bg-muted/50">
+                <Icon className="size-5 shrink-0 text-muted-foreground" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium group-hover:underline">{f.title}</p>
+                  <p className="truncate text-sm text-muted-foreground">{f.detail}</p>
+                </div>
+                {f.completedAt ? (
+                  <span className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
+                    <CheckCircle2 className="size-4 text-brand" />
+                    {new Date(f.completedAt).toLocaleDateString()}
+                  </span>
+                ) : (
+                  <span className="shrink-0 text-xs font-medium text-brand">Start</span>
+                )}
+                <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
   );
 }

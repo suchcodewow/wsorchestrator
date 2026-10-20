@@ -8,17 +8,19 @@ import {
   isCurrentTrack,
   listCurrentCohort,
 } from "@/lib/evals/current-cohort";
+import { meetingStatusesFor } from "@/lib/evals/google-meetings";
 import { CURRENT_COHORT_LIST } from "@/lib/list-specs";
 import { parseListQuery } from "@/lib/paging";
 import { getTestGroup } from "@/lib/cohorts/test-group";
 import {
+  canManageEvalsSettings,
   canManageTestGroup,
   canManageTrainingSettings,
   canUseEvals,
 } from "@/lib/roles";
 import { activeBootcamp } from "@/lib/scheduler/bootcamps";
 import { intakeQuestionsByForm, latestIntakesOf } from "@/lib/logistics/intake";
-import { CurrentCohortView } from "./current-view";
+import { CurrentCohortView, type MemberMeetings } from "./current-view";
 import { TestGroupPanel } from "./test-group-panel";
 
 export default async function CurrentCohortPage({
@@ -45,6 +47,13 @@ export default async function CurrentCohortPage({
     getTestGroup(),
     intakeQuestionsByForm(),
   ]);
+  const statuses = await meetingStatusesFor(page.rows);
+  const meetings: MemberMeetings = Object.fromEntries(
+    [...statuses].map(([email, list]) => [
+      email,
+      list.map((m) => ({ ...m, startsAt: m.startsAt?.toISOString() ?? null })),
+    ]),
+  );
   const intakes = await latestIntakesOf(page.rows.map((m) => m.email));
   return (
     <div className="space-y-4">
@@ -67,6 +76,10 @@ export default async function CurrentCohortPage({
           session?.user ? canManageTrainingSettings(session.user.access) : false
         }
         canSeeScores={canSeeScores}
+        meetings={meetings}
+        canMarkAttendance={
+          session?.user ? canManageEvalsSettings(session.user.access) : false
+        }
         intakes={intakes}
         intakeQuestions={intakeQuestions}
       />

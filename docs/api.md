@@ -97,8 +97,8 @@ escalate itself:
 | `GET /api/cohorts/slack/install`, `GET /api/evals/google-meetings/connect`, `GET /api/evals/google-meetings/zoom/connect` | Admin Settings → External Connectors: each hands the app a standing token for an outside account and ends in a browser; platform administrators only |
 | `/api/tokens/**` | Minting tokens (a token must not be able to mint its own replacement) |
 | `/api/me/impersonation` | Viewing the app as an employee, which changes what a browser session is; a token has no session to change |
-| `GET /api/evals/google-meetings/connect` | Connecting the Google account every meeting invite is sent from: a browser sign-in, and a standing token for the app |
-| `GET /api/evals/google-meetings/zoom/connect` | Connecting the Zoom user every Zoom meeting is made as: a browser sign-in, and a standing token for the app |
+| `GET /api/evals/google-meetings/connect` | Connecting the Google account that adds the cohort to the Revenue Enablement calendar's meetings: a browser sign-in, and a standing token for the app |
+| `GET /api/evals/google-meetings/zoom/connect` | Connecting the Zoom user whose meetings' attendance the sync reads: a browser sign-in, and a standing token for the app |
 | `GET /api/auth/callback/google` with a `wo.` state | The one OAuth callback the connections above return to, shared with Auth.js's sign-in (see `frontend/src/lib/oauth-callback.ts`) |
 
 You can still *read* users (`GET /api/users`) and sign-in domains
@@ -128,7 +128,7 @@ add it to the table above.
 | eVals → Bootcamp / Intermediate | `GET /api/evals/scoring?stage=bootcamp\|intermediate` |
 | eVals → an assessment's attendees | `GET /api/evals/scoring/[assessmentId]` |
 | eVals → an attendee's scoring form | `GET /api/evals/scoring/[assessmentId]/[employeeId]` |
-| eVals settings → Google Meetings | `GET /api/evals/google-meetings?when=upcoming\|past` |
+| eVals settings → Google Meetings | `GET /api/evals/google-meetings`, `GET /api/evals/google-meetings/sync`, `GET /api/evals/google-meetings/sync/[id]`, `GET /api/evals/google-meetings/settings` |
 | eVals settings → Assessments | `GET /api/evals/assessments`, `GET /api/evals/assessments/[id]` |
 | Cohort Settings | `GET /api/evals/employees`, `GET /api/evals/organization`, `GET /api/evals/hibob/sync`, `GET /api/evals/titles?list=` |
 | Bootcamp History | `GET /api/evals/bootcamp-history` |

@@ -161,6 +161,9 @@ describe("finishProductionImport", () => {
         values ('meetings', 'invites@example.test', '\\x00', 'meeting:write:meeting');
       insert into google_meetings (title, starts_at, duration_minutes, google_event_id)
         values ('Kickoff', now() + interval '1 day', 30, 'prod-event');
+      insert into meeting_selections (name, stage, track) values ('Pitch Practice', 'bootcamp', 'sales');
+      insert into meeting_sync_runs (dry_run, status) values (false, 'succeeded');
+      insert into evals_settings (key, value) values ('meeting_sync_live', 'true');
     `);
   });
 
@@ -235,9 +238,10 @@ describe("finishProductionImport", () => {
       [{ refresh_token: null, access_token: null, id_token: null }],
     );
 
-    for (const table of ["sessions", "api_tokens", "harness_tokens", "user_invites", "google_connections", "zoom_connections", "google_meetings"]) {
+    for (const table of ["sessions", "api_tokens", "harness_tokens", "user_invites", "google_connections", "zoom_connections", "google_meetings", "meeting_selections", "meeting_sync_runs"]) {
       assert.equal((await q(`select count(*)::int as n from ${table}`))[0].n, 0, table);
     }
+    assert.deepEqual(await q(`select key from evals_settings where key = 'meeting_sync_live'`), [], "a sync on QA starts as a dry run");
     assert.deepEqual(await q(`select temp_password from workshop_accounts`), [{ temp_password: "" }]);
     assert.deepEqual(await q(`select environment, status::text from workshop_runs`), [
       { environment: "production", status: "ready" },
