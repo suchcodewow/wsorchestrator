@@ -77,6 +77,8 @@ export type AssignedSurvey = {
   id: string;
   audience: SurveyAudience;
   sessions: number;
+  /** Whether this call made it, rather than finding it made by an earlier one. */
+  created: boolean;
   /** People sent it by this call; anyone who already had it is not counted. */
   sent: number;
   /** More attendees than one survey takes; those past the limit were not sent it. */
@@ -131,10 +133,11 @@ export async function assignDaySurveys(
   const value = await db.transaction(async (tx) => {
     const made: AssignedSurvey[] = [];
     for (const [i, audience] of audiences.entries()) {
-      await tx
+      const fresh = await tx
         .insert(s)
         .values({ bootcampId, stage, day, audience, sessions: surveySessions(daySessions, stage, audience), createdBy: actorId })
-        .onConflictDoNothing();
+        .onConflictDoNothing()
+        .returning({ id: s.id });
       const [survey] = await tx
         .select({ id: s.id, sessions: s.sessions })
         .from(s)
@@ -149,7 +152,7 @@ export async function assignDaySurveys(
           .returning({ id: a.id });
         sent = inserted.length;
       }
-      made.push({ id: survey!.id, audience, sessions: survey!.sessions.length, sent, hasMore });
+      made.push({ id: survey!.id, audience, sessions: survey!.sessions.length, created: fresh.length > 0, sent, hasMore });
     }
     return made;
   });
@@ -264,7 +267,12 @@ export async function saveMySurvey(
   if (!checked.ok) return checked;
   const [row] = await db
     .update(a)
-    .set({ sessionAnswers: checked.sessions, dayRating: checked.dayRating, dayChange: checked.dayChange, submittedAt: new Date() })
+    .set({
+      sessionAnswers: checked.sessions,
+      dayRating: checked.dayRating,
+      dayChange: checked.dayChange,
+      submittedAt: new Date(),
+    })
     .where(eq(a.id, id))
     .returning({ submittedAt: a.submittedAt });
   noteAudit({

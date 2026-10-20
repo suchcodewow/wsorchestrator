@@ -17,6 +17,7 @@ import {
   type SurveySession,
   type SurveySessionAnswers,
 } from "@/db/schema";
+import type { CohortChannelKind } from "@/lib/cohorts/slack-plan";
 import { stageOf } from "@/lib/scheduler/timeline";
 
 /** The two questions asked about each session, and the two about the day, worded as they are asked. */
@@ -52,6 +53,30 @@ export const STAGE_TRACKS: Record<IntakeFormId, readonly ScheduleTrack[]> = {
 export function surveyAudiencesOf(track: ScheduleTrack): SurveyAudience[] {
   return track === "btc_se" || track === "int_se" ? ["engineer"] : ["sales", "engineer"];
 }
+
+/**
+ * The cohort channel a track's surveys are announced in: a class's `sales-`
+ * channel, which holds its Engineers as well, or an SE track's `se-` one.
+ */
+export function surveyChannelKind(track: ScheduleTrack): CohortChannelKind {
+  return `${track === "btc_se" || track === "int_se" ? "se" : "sales"}_${stageOf(track)}`;
+}
+
+/** The message that announces a day's surveys in the class's channel, linking to /intake. */
+export function surveyAnnouncementText(day: number, date: string, link: string): string {
+  return `:clipboard: The *Day ${day} survey* is out, for ${surveyDate(date)}. Please take a few minutes to rate each session and the day: <${link}|complete it here>.`;
+}
+
+/**
+ * `posted`: announced. `dry_run`: the Slack sync is not live. `no_channel`:
+ * the sync has not made the channel yet. `not_connected`: there is no Slack
+ * token. `failed`: Slack refused it, with its error.
+ */
+export type SurveySlackOutcome = {
+  channel: string;
+  status: "posted" | "dry_run" | "no_channel" | "not_connected" | "failed";
+  error?: string;
+};
 
 /** One stage-day's surveys as the scheduler shows them: which audiences have one, and how many people have answered. */
 export type SurveyDayStatus = {
@@ -143,8 +168,7 @@ export function checkSurveyAnswers(
   sessions: readonly Pick<SurveySession, "id">[],
   submission: SurveySubmission,
 ):
-  | { ok: true; sessions: SurveySessionAnswers; dayRating: number; dayChange: string }
-  | { ok: false; error: SurveyAnswerProblem } {
+  { ok: true; sessions: SurveySessionAnswers; dayRating: number; dayChange: string } | { ok: false; error: SurveyAnswerProblem } {
   const ids = new Set(sessions.map((s) => s.id));
   const extra = Object.keys(submission.sessions).find((id) => !ids.has(id));
   if (extra) return { ok: false, error: { problem: "unknown_session", sessionId: extra } };

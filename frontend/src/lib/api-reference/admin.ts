@@ -1961,7 +1961,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         summary: "Sends one track-day's surveys to everyone that track teaches.",
         access: "trainingAdmin",
         token: true,
-        notes: `On a class (btc, int) it sends the sales and the engineer survey; on an SE track (btc_se, int_se), the engineer survey. Each asks about every session that day on the class and its SE track that is taught to its audience, in start order, leaving out unstructured ones; the sessions are copied in when the survey is first made, and a later change to the schedule does not reach it. A survey already made for that day is reused, and anyone already sent it is not sent it again, so repeating the call sends only to people who have joined the class since. A survey with no sessions to ask about is made but sent to no one. Each goes to at most ${SURVEY_LIMITS.people} people; hasMore says there were more. Attendees are the class's current candidates, as the scheduler's class lists count them.`,
+        notes: `On a class (btc, int) it sends the sales and the engineer survey; on an SE track (btc_se, int_se), the engineer survey. Each asks about every session that day on the class and its SE track that is taught to its audience, in start order, leaving out unstructured ones; the sessions are copied in when the survey is first made, and a later change to the schedule does not reach it. A survey already made for that day is reused, and anyone already sent it is not sent it again, so repeating the call sends only to people who have joined the class since. A survey with no sessions to ask about is made but sent to no one. Each goes to at most ${SURVEY_LIMITS.people} people; hasMore says there were more. Attendees are the class's current candidates, as the scheduler's class lists count them. When the call makes a survey and sends it to someone, it announces the day in the class's cohort channel with a link to /intake: sales-<stage>-<mon>-<yyyy> for a class, which holds its Engineers too, se-<stage>-<mon>-<yyyy> for an SE track, with the test group's suffix while it is on. slack is null when nothing was announced; otherwise its status is posted, dry_run (the Slack sync is not live, and nothing is posted), no_channel (the sync has not made the channel), not_connected (no Slack token) or failed (with Slack's error). The surveys are sent whatever happens in Slack.`,
         params: [BOOTCAMP_ID],
         body: {
           kind: "json",
@@ -1970,7 +1970,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
             { name: "day", type: "integer", required: true, note: "from 1, a day the track runs at this bootcamp" },
           ],
         },
-        returns: `{ surveys: { id, audience: "sales" | "engineer", sessions: number, sent: number, hasMore: boolean }[], days: ${SURVEY_DAY_SHAPE}[] }`,
+        returns: `{ surveys: { id, audience: "sales" | "engineer", sessions: number, created: boolean, sent: number, hasMore: boolean }[], slack: { channel, status: "posted" | "dry_run" | "no_channel" | "not_connected" | "failed", error? } | null, days: ${SURVEY_DAY_SHAPE}[] }`,
         errors: [
           { status: 400, error: "invalid", when: "the body is not that shape" },
           { status: 404, error: "not_found", when: "no such bootcamp" },

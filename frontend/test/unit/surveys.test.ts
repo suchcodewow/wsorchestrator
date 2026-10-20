@@ -1,16 +1,19 @@
 /**
  * The daily surveys' pure rules: which of a day's sessions a survey asks
  * about, who a track's "Assign Surveys" sends one to, when the scheduler
- * counts a day as sent, and which answers are kept.
+ * counts a day as sent, which answers are kept, and where the day is announced.
  */
 
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 
+import { cohortChannels } from "@/lib/cohorts/slack-plan";
 import {
   checkSurveyAnswers,
   formatAverage,
+  surveyAnnouncementText,
   surveyAudiencesOf,
+  surveyChannelKind,
   surveyDate,
   surveyGroupLabel,
   surveyMonth,
@@ -87,6 +90,32 @@ describe("who a track's surveys go to", () => {
     assert.equal(trackDaySent(days, "btc", 2), true);
     assert.equal(trackDaySent(days, "btc", 3), false);
     assert.equal(trackDaySent(days, "int", 2), false);
+  });
+});
+
+describe("where a day's surveys are announced", () => {
+  const channelFor = (track: Parameters<typeof surveyChannelKind>[0], suffix?: string) =>
+    cohortChannels("2026-11-09", true, suffix).find((c) => c.kind === surveyChannelKind(track))?.name;
+
+  test("a class's button pings its sales- channel, which holds its Engineers too", () => {
+    assert.equal(channelFor("btc"), "sales-bootcamp-nov-2026");
+    assert.equal(channelFor("int"), "sales-intermediate-nov-2026");
+  });
+
+  test("an SE track's button pings its se- channel", () => {
+    assert.equal(channelFor("btc_se"), "se-bootcamp-nov-2026");
+    assert.equal(channelFor("int_se"), "se-intermediate-nov-2026");
+  });
+
+  test("with the test group on, the test group's channel", () => {
+    assert.equal(channelFor("btc", "test"), "sales-bootcamp-nov-2026-test");
+  });
+
+  test("the message names the day and links to /intake", () => {
+    const text = surveyAnnouncementText(2, "2026-11-10", "https://app.example/intake");
+    assert.match(text, /\*Day 2 survey\*/);
+    assert.match(text, /Tuesday, November 10/);
+    assert.match(text, /<https:\/\/app\.example\/intake\|complete it here>/);
   });
 });
 

@@ -1,11 +1,13 @@
-/** A bootcamp's daily surveys: which days have been sent one, and sending a track-day's. */
+/** A bootcamp's daily surveys: which days have been sent one, and sending a track-day's, announced in the class's Slack channel. */
 
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireCaller } from "@/lib/api-auth";
-import { audited } from "@/lib/audit";
+import { audited, noteAudit } from "@/lib/audit";
+import { appBase } from "@/lib/oauth-callback";
 import { canManageTrainingSettings, canUseTraining } from "@/lib/roles";
 import { bootcampExists } from "@/lib/scheduler/bootcamps";
+import { announceDaySurveys } from "@/lib/surveys/survey-slack";
 import { ASSIGN_STATUS_FOR, assignDaySurveys, assignSurveysSchema, surveyDays } from "@/lib/surveys/surveys";
 
 const paramsSchema = z.object({ id: z.string().uuid() });
@@ -35,5 +37,11 @@ export const POST = audited(async function POST(req: Request, { params }: Params
 
   const result = await assignDaySurveys(user.id, parsed.data.id, input.data.track, input.data.day);
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: ASSIGN_STATUS_FOR[result.error] });
-  return NextResponse.json({ surveys: result.value, days: await surveyDays(parsed.data.id) });
+
+  // Only the press that first sends a day's survey announces it, so repeating one does not ping the channel again.
+  const slack = result.value.some((v) => v.created && v.sent > 0)
+    ? await announceDaySurveys(parsed.data.id, input.data.track, input.data.day, `${appBase(req)}/intake`)
+    : null;
+  if (slack) noteAudit({ detail: { slack } });
+  return NextResponse.json({ surveys: result.value, slack, days: await surveyDays(parsed.data.id) });
 });
