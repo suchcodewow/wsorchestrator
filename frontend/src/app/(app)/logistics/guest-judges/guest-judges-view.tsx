@@ -14,7 +14,7 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
-import { CalendarPlus, ChevronRight, Loader2, Plus, Trash2 } from "lucide-react";
+import { CalendarPlus, ChevronRight, Loader2, Plus, Presentation, Trash2 } from "lucide-react";
 import { EmployeeMatches, useEmployeeSearch } from "@/components/employee-picker";
 import { HEADER_ROW, Pager, PlainHeader, SortHeader, TableSearch } from "@/components/data-table";
 import { Badge } from "@/components/ui/badge";
@@ -84,6 +84,8 @@ export function GuestJudgesView({
   const [addingCohort, setAddingCohort] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [thankYou, setThankYou] = useState<{ url: string; judges: number; withPhotos: number } | null>(null);
+  const [making, setMaking] = useState(false);
   const judgeSort = { sort: judgeQuery.sort, dir: judgeQuery.dir };
   const prospectSort = { sort: prospectQuery.sort, dir: prospectQuery.dir, prefix: PROSPECTS };
   // A search, a sort or a page turn means someone is looking: show what they asked for.
@@ -98,6 +100,25 @@ export function GuestJudgesView({
     searching: judgeQuery.q !== "",
   });
   const columns = canEdit ? 3 : 2;
+
+  async function generateThankYou() {
+    setMaking(true);
+    setError(null);
+    setThankYou(null);
+    try {
+      const res = await fetch("/api/logistics/guest-judges/thank-you", { method: "POST" });
+      const body = (await res.json().catch(() => null)) as { url?: string; judges?: number; withPhotos?: number; message?: string } | null;
+      if (res.ok && body?.url) {
+        setThankYou({ url: body.url, judges: body.judges ?? 0, withPhotos: body.withPhotos ?? 0 });
+      } else {
+        setError(body?.message ?? `Could not make the slide (${res.status}).`);
+      }
+    } catch {
+      setError("Could not reach the server.");
+    } finally {
+      setMaking(false);
+    }
+  }
 
   async function removeCohort(month: string) {
     if (!window.confirm(`Take ${formatMonth(month)} off the list of cohorts?`)) return;
@@ -144,6 +165,10 @@ export function GuestJudgesView({
         />
         {canEdit && (
           <>
+            <Button variant="outline" disabled={making} onClick={generateThankYou}>
+              {making ? <Loader2 className="animate-spin" /> : <Presentation />}
+              Generate Thank You Page
+            </Button>
             <Button variant="outline" onClick={() => setAddingCohort(true)}>
               <CalendarPlus />
               Add cohort
@@ -159,6 +184,14 @@ export function GuestJudgesView({
       {error && (
         <motion.p variants={riseChild} role="alert" className="text-sm text-destructive">
           {error}
+        </motion.p>
+      )}
+      {thankYou && (
+        <motion.p variants={riseChild} role="status" className="text-sm">
+          Made the slide with {thankYou.judges} judges ({thankYou.withPhotos} with photos) and shared it with you.{" "}
+          <a href={thankYou.url} target="_blank" rel="noreferrer" className="font-medium underline">
+            Open in Google Slides
+          </a>
         </motion.p>
       )}
 

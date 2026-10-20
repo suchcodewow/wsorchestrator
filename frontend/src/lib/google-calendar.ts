@@ -15,7 +15,14 @@ const TOKEN = "https://oauth2.googleapis.com/token";
 const API = "https://www.googleapis.com/calendar/v3";
 
 /** `calendar` itself: the sync makes a calendar and shares it, which the narrower scopes cannot. */
-export const GOOGLE_MEETING_SCOPES = ["openid", "email", "https://www.googleapis.com/auth/calendar"];
+export const GOOGLE_MEETING_SCOPES = [
+  "openid",
+  "email",
+  "https://www.googleapis.com/auth/calendar",
+  // The Guest judges thank-you slide (`lib/logistics/thank-you.ts`): a deck the account makes and shares.
+  "https://www.googleapis.com/auth/presentations",
+  "https://www.googleapis.com/auth/drive.file",
+];
 
 export class GoogleError extends Error {
   constructor(
@@ -145,10 +152,11 @@ export type CalendarClient = {
 const RETRIES = 3;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-export function calendarClient(token: string): CalendarClient {
+/** `base` is another Google API's root, for a caller that shares this client's retries and errors; Calendar's by default. */
+export function calendarClient(token: string, base: string = API): CalendarClient {
   return {
     async call<T>(method: string, path: string, options: { query?: Record<string, string>; body?: unknown } = {}): Promise<T> {
-      const url = `${API}${path}${options.query ? `?${new URLSearchParams(options.query)}` : ""}`;
+      const url = `${base}${path}${options.query ? `?${new URLSearchParams(options.query)}` : ""}`;
       for (let attempt = 0; ; attempt++) {
         let res: Response;
         try {
