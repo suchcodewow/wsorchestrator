@@ -144,10 +144,54 @@ Slack does not mind it.
 
 ### Google Meetings
 
-eVals Settings → Google Meetings sends Google Calendar invites as one Google
-account, and puts a Zoom meeting on each. Google's APIs take no password, so
-the account is connected once in the browser, and the app keeps the refresh
-token that returns (`google_connections`, sealed like the Harness tokens).
+eVals Settings → Google Meetings invites the cohort to meetings that already
+exist on the Revenue Enablement calendar
+(`c_3pt3qoc60a1cn5lre92sc9r7s0@group.calendar.google.com`). The app makes no
+meetings. An Assessments Administrator picks one of the names on the calendar
+in the next 60 days and says whom it is for: Bootcamp, Intermediate or both,
+and Sales, Engineers or both. A candidate counts as Intermediate once
+`bootcamp_history` gives them a BTC date.
+
+*Sync Now* then does the following for each picked meeting
+(`lib/evals/meeting-sync.ts`, with the rules in `lib/evals/meeting-plan.ts`):
+
+- **Invites.** Each person on the Cohorts → Current tab whom the meeting is
+  for is added to the next occurrence of it that falls before the active
+  bootcamp's start date. So is every Assessments Administrator, on any
+  occurrence that has a cohort member on it. The invite is updated with
+  `sendUpdates=all`, so Google emails each new guest. An invite whose guests
+  are already right is left alone, because updating it emails everyone on it.
+- **Who it takes off.** It takes off only the guests it added itself. Anyone
+  added by hand, or by the meeting's owner, stays.
+- **Replies.** It reads each guest's reply back from the event.
+- **Attendance.** It reads attendance from Zoom once an occurrence has been
+  over for 30 minutes.
+  - A guest Zoom saw join, by email or by full name, is done.
+  - A guest Zoom did not see is counted as missing. They are invited to the
+    next occurrence, while one is left before the bootcamp.
+  - An administrator's mark on the Current tab overrides Zoom either way.
+
+The Current tab shows one icon per picked meeting beside each name:
+
+| Icon                   | Meaning                                         |
+| ---------------------- | ----------------------------------------------- |
+| green check            | attended                                        |
+| grey check             | accepted                                        |
+| grey question mark     | not accepted yet                                |
+| red exclamation mark   | no occurrence left before their bootcamp        |
+
+**Dry run and the test group.** These work as they do on Cohort Settings →
+Slack.
+
+- A new environment starts in **dry run**. The sync logs everything it would
+  do and changes nothing. *Preview* does the same whatever the setting.
+- With the Cohorts test group on, the group is invited instead of the cohort,
+  and no administrators are. Turning the group off takes it back off the
+  invites it was given.
+
+Every run is logged with each change it made: open a run from the tab's
+*Sync log* view. Only one sync runs at a time.
+
 Setting it up in an environment:
 
 1. **The callback is already registered.** Google returns to
@@ -156,55 +200,50 @@ Setting it up in an environment:
    [One OAuth callback](#one-oauth-callback)). Nothing to add.
 2. **Enable the Calendar API** (`calendar-json.googleapis.com`) on the project
    that owns that OAuth client. `infra/admin/apis.tf` does this on apply.
-3. **Connect the account.** A platform administrator presses *Connect
-   Google account* on Admin Settings → External Connectors and signs in as the account the invites should
-   come from, allowing calendar access. `google_meetings_account` (env
-   `GOOGLE_USER`) only pre-fills that sign-in. The consent screen shows the
-   app as unverified to an account outside the OAuth client's Workspace; the
-   account's own Workspace admin may have to allow the app. Do it once per
-   environment, after the release that brings the tab: the token is sealed
-   with that environment's key and kept in its database, so one connected on
-   QA or locally does not carry over. It lasts until Google stops accepting
-   it; Sync Now then says so, and *Reconnect* is the fix.
-   **Publish the OAuth consent screen** (APIs & Services → OAuth consent
-   screen → *In production*). In *Testing* status Google expires a Calendar
-   refresh token after 7 days, and every sync after that fails.
-4. **Zoom.** Create a **General App** in the Zoom Marketplace, managed by
-   *User* (not account-level), with the user-level scopes
-   `meeting:write:meeting`, `meeting:read:meeting`,
-   `meeting:update:meeting` and `meeting:delete:meeting`, plus `user:read:user`
-   (without it Zoom answers 400 "does not contain scopes" when the app reads
-   who connected). Nothing with `:admin`: the app then reaches only the meetings of the one Zoom user who
-   authorizes it, not the company account's. It can stay unpublished. Under
-   OAuth, add `{AUTH_URL}/api/auth/callback/google` as the redirect URL (the
-   same one Google sign-in and Slack use) and, if Zoom asks, as an allow-list
-   entry. Leave Event Subscriptions and the in-client Zoom Apps SDK off: the
-   sync only calls Zoom, and Zoom never calls it. Set `zoom_client_id` on the
-   workspace and `zoom_client_secret` as a secret (`tf_zoom_client_secret`),
-   then, as a platform administrator, press *Connect Zoom user* on Admin
-   Settings → External Connectors and sign in as the user the
-   meetings should be made as, on the Zoom account the eVals administrators
-   belong to. Its tokens are kept in `zoom_connections`, sealed like the
-   Google one; Zoom rotates the refresh token on every use, so each sync
-   saves the new one. *Reconnect* is the fix if Zoom stops accepting it.
-   Without a connected user, invites go out with no Zoom link and Sync Now
-   says so. Zoom takes as an alternative host only someone with a user on that
-   Zoom account. The app cannot look them up, so Sync Now asks Zoom for them
-   all and, if it refuses one, adds them one at a time and lists each it would
-   not take; it still invites them to the calendar event.
+3. **Connect the account.**
+   - A platform administrator presses *Connect Google account* on Admin
+     Settings → External Connectors and signs in, allowing calendar access.
+   - The account must have **Make changes to events** on the Revenue
+     Enablement calendar. Without it the picker still lists the meetings, but
+     every invite fails.
+   - `google_meetings_account` (env `GOOGLE_USER`) only pre-fills the
+     sign-in.
+   - Do it once per environment. The token is sealed with that environment's
+     key and kept in its database (`google_connections`).
+   - It lasts until Google stops accepting it; *Reconnect* is the fix.
+   - **Publish the OAuth consent screen** (APIs & Services → OAuth consent
+     screen → *In production*). In *Testing* status Google expires a Calendar
+     refresh token after 7 days.
+4. **Zoom (optional; for attendance).**
+   - Create a **General App** in the Zoom Marketplace, managed by *User*. Give
+     it the user-level scopes `meeting:read:list_past_instances`,
+     `meeting:read:list_past_participants`, `meeting:delete:meeting` and
+     `user:read:user`, and nothing with `:admin`. `meeting:delete:meeting`
+     only cancels the Zoom meetings the old create-a-meeting flow made.
+   - Under OAuth, add `{AUTH_URL}/api/auth/callback/google` as the redirect
+     URL.
+   - Set `zoom_client_id` on the workspace and `zoom_client_secret` as a
+     secret (`tf_zoom_client_secret`).
+   - Press *Connect Zoom user* on Admin Settings → External Connectors, and
+     sign in as **the Zoom user who hosts the calendar's meetings**. Zoom
+     reports participants only for meetings that user hosts. For any other
+     meeting, attendance is marked by hand on the Current tab.
+   - A user connected under the old scopes must be reconnected after the
+     app's scopes change, or Zoom refuses to report attendance.
+   - Zoom rotates the refresh token on every use, and each sync saves the new
+     one.
 
-The first sync makes an "eVals Meetings" calendar on the account and gives
-each Assessments Administrator edit access to it, which emails them the
-share. That is how they edit a meeting: Google Calendar cannot let only some
-guests edit an invite. Connecting a different account is refused while any
-meeting has an invite, because the first account's calendar holds them.
-Delete those meetings first, which cancels their invites. Sharing outside a
-Workspace domain may be blocked by its admin. The sync then notes each
-administrator it could not share with, and still invites them.
+**Moving from the old flow.** Meetings made by the earlier create-a-meeting
+version (`google_meetings`) are retired on the first live sync. Their upcoming
+calendar invites and Zoom meetings are cancelled, and the rows are deleted.
+The "eVals Meetings" calendar that flow made is left on the account; delete it
+in Google Calendar if it is no longer wanted. A different Google account can
+be connected only once those invites are gone.
 
 Connect an account on **production only**. QA shares the Workspace and the
-people. A QA sync would send real invites to the real cohort, and QA's
-production import deletes the connection and the meetings for that reason.
+people, so a live QA sync would send real invites to the real cohort. For that
+reason QA's production import deletes the connections, the picked meetings,
+the sync log and the live setting.
 
 ---
 

@@ -87,6 +87,9 @@ export async function deleteTestRows(
   await query("delete from mimir_items where parent_id like $1", [like]);
   await query("delete from mimir_items where id like $1", [like]);
   await query("delete from google_meetings where created_by like $1", [like]);
+  await query("delete from meeting_selections where created_by like $1", [like]);
+  // A run outlives its user, so it goes while the user is still there to name it.
+  await query("delete from meeting_sync_runs where triggered_by like $1", [like]);
   await query("delete from employees where id like $1", [like]);
   await query("delete from users where id like $1", [like]);
   await query("delete from bootcamp_history where email like $1", [`${like}@${TEST_EMAIL_DOMAIN}`]);

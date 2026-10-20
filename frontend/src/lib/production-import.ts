@@ -195,11 +195,15 @@ const STRIP_CREDENTIALS = [
   `update accounts
       set refresh_token = null, access_token = null, id_token = null,
           expires_at = null, session_state = null`,
-  // Google Meetings' accounts (Google, and the Zoom user), and the meetings whose invites it sent to real
-  // people. Kept, a sync on QA would invite them all again from QA.
+  // Google Meetings' accounts (Google, and the Zoom user), the meetings picked on the shared calendar with
+  // whom each invite went to, and the switch that makes a sync live. Kept, a sync on QA would invite real
+  // people from QA, or take back the invites production sent.
   `delete from google_connections`,
   `delete from zoom_connections`,
   `delete from google_meetings`,
+  `delete from meeting_selections`,
+  `delete from meeting_sync_runs`,
+  `delete from evals_settings where key = 'meeting_sync_live'`,
 ];
 
 /** Nobody has access until the snapshot gives it back. */

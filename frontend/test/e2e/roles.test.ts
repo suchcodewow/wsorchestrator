@@ -405,9 +405,13 @@ const PAGES: Record<string, PageCase> = {
     path: () => "/evals-settings/google-meetings",
     expect: gated(canManageEvalsSettings),
   },
-  "/evals-settings/google-meetings?when=past": {
-    path: () => "/evals-settings/google-meetings?when=past",
+  "/evals-settings/google-meetings?view=runs": {
+    path: () => "/evals-settings/google-meetings?view=runs",
     expect: gated(canManageEvalsSettings),
+  },
+  "/evals-settings/google-meetings/runs/<unknown>": {
+    path: () => `/evals-settings/google-meetings/runs/${MISSING}`,
+    expect: () => 404,
   },
   // Everyone's front door, whatever else they can reach.
   "/welcome": {
@@ -753,8 +757,14 @@ const ROUTES: RouteCase[] = [
   { method: "POST", path: "/api/evals/google-meetings", allowed: canManageEvalsSettings, body: () => ({}) },
   { method: "PATCH", path: `/api/evals/google-meetings/${MISSING}`, allowed: canManageEvalsSettings, body: () => ({}) },
   { method: "DELETE", path: `/api/evals/google-meetings/${MISSING}`, allowed: canManageEvalsSettings },
-  // An allowed sync would call Google for real, were an account connected.
+  { method: "PUT", path: `/api/evals/google-meetings/${MISSING}/attendance`, allowed: canManageEvalsSettings, body: () => ({}) },
+  { method: "GET", path: "/api/evals/google-meetings/settings", allowed: canManageEvalsSettings },
+  { method: "PUT", path: "/api/evals/google-meetings/settings", allowed: canManageEvalsSettings, body: () => ({}) },
+  // An allowed read or sync would call Google for real, were an account connected.
+  { method: "GET", path: "/api/evals/google-meetings/calendar", allowed: canManageEvalsSettings, denyOnly: true },
+  { method: "GET", path: "/api/evals/google-meetings/sync", allowed: canManageEvalsSettings },
   { method: "POST", path: "/api/evals/google-meetings/sync", allowed: canManageEvalsSettings, denyOnly: true },
+  { method: "GET", path: `/api/evals/google-meetings/sync/${MISSING}?kind=invites`, allowed: canManageEvalsSettings },
   // A redirect to Google, or 503 without an OAuth client; the callback sends a stale state back to the tab.
   { method: "GET", path: "/api/evals/google-meetings/connect", allowed: canManageConnectors, unconfigured: true, sessionOnly: true },
   { method: "GET", path: "/api/evals/google-meetings/zoom/connect", allowed: canManageConnectors, unconfigured: true, sessionOnly: true },

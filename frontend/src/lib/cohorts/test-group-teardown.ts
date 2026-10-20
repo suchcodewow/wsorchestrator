@@ -11,7 +11,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { EVALS_SETTINGS_KEYS, evalsSettings, intakeResponses } from "@/db/schema";
 import { archiveTestChannels } from "@/lib/cohorts/slack-sync";
-import { cancelTestMeetings } from "@/lib/evals/google-meetings-sync";
+import { cancelTestMeetingInvites } from "@/lib/evals/meeting-sync";
 
 export async function takeDownTestGroup(): Promise<{
   ok: boolean;
@@ -21,7 +21,7 @@ export async function takeDownTestGroup(): Promise<{
 }> {
   const [channels, meetings] = await Promise.all([
     archiveTestChannels(),
-    cancelTestMeetings(),
+    cancelTestMeetingInvites(),
   ]);
   const failures = [...channels.failures, ...meetings.failures];
   if (failures.length === 0) {

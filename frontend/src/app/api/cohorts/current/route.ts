@@ -3,7 +3,8 @@
  * track, with each one's count and the active bootcamp. The deferred are on
  * GET /api/cohorts/deferred instead. A caller in eVals
  * also gets the scores, and the assessments they are for when the filter
- * names a stage and Sales or Engineer.
+ * names a stage and Sales or Engineer. Each member carries `meetings`: where
+ * they stand with each picked Google meeting that is for them.
  */
 
 import { NextResponse } from "next/server";
@@ -15,6 +16,7 @@ import {
   isCurrentTrack,
   listCurrentCohort,
 } from "@/lib/evals/current-cohort";
+import { meetingStatusesFor } from "@/lib/evals/google-meetings";
 import { CURRENT_COHORT_LIST } from "@/lib/list-specs";
 import { parseListQuery } from "@/lib/paging";
 import { canUseEvals, canUseTraining } from "@/lib/roles";
@@ -37,11 +39,12 @@ export async function GET(req: Request) {
     currentCohortSummary(),
     activeBootcamp(),
   ]);
+  const statuses = await meetingStatusesFor(rows);
   return NextResponse.json({
     stage,
     track,
     assessments: scoring?.scoring?.assessments ?? null,
-    members: rows,
+    members: rows.map((m) => ({ ...m, meetings: statuses.get(m.email.trim().toLowerCase()) ?? [] })),
     page,
     hasMore,
     counts,
