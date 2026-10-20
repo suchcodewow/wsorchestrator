@@ -53,10 +53,25 @@ export function DietaryView({
     <motion.div variants={staggerParent(0.05)} initial="hidden" animate="show" className="max-w-4xl space-y-6">
       <motion.div variants={riseChild} className="space-y-1.5">
         <h2 className="text-xl font-medium tracking-tight">Dietary needs</h2>
+        <p className="text-base">
+          <span className="font-semibold">{plural(counts.responded, "attendee", "attendees")}</span>{" "}
+          <span className="text-muted-foreground">registered:</span>{" "}
+          <span className="font-medium">{counts.respondedByStage.bootcamp.toLocaleString()}</span>{" "}
+          <span className="text-muted-foreground">Bootcamp,</span>{" "}
+          <span className="font-medium">{counts.respondedByStage.intermediate.toLocaleString()}</span>{" "}
+          <span className="text-muted-foreground">Intermediate</span>
+        </p>
         <p className="text-sm text-muted-foreground">
-          <span className="font-medium text-foreground">{plural(counts.withNeeds, "attendee", "attendees")}</span> of{" "}
-          {counts.responded.toLocaleString()} in the current cohort who sent a registration form, bootcamp or intermediate, of whom{" "}
-          <span className="font-medium text-foreground">{counts.byLevel[5].toLocaleString()}</span> rated their needs 5
+          <span className="font-medium text-foreground">{counts.withNeeds.toLocaleString()}</span> with dietary
+          restrictions, of whom <span className="font-medium text-foreground">{counts.byLevel[5].toLocaleString()}</span>{" "}
+          rated their needs 5
+          {counts.cohortSize > counts.responded && (
+            <>
+              {" "}
+              · {plural(counts.cohortSize - counts.responded, "more", "more")} in the current cohort{" "}
+              {counts.cohortSize - counts.responded === 1 ? "hasn't" : "haven't"} registered yet
+            </>
+          )}
         </p>
       </motion.div>
 

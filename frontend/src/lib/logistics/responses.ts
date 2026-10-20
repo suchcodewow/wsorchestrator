@@ -205,6 +205,10 @@ export async function listDietaryNeeds(query: ListQuery<DietarySort>): Promise<P
 export type DietaryCounts = {
   /** People in the current cohort who have sent either form. */
   responded: number;
+  /** Of them, how many are at each stage now: the whole group to cater for, split. */
+  respondedByStage: Record<IntakeFormId, number>;
+  /** Everyone in the current cohort, registered or not, so the page can say how many have yet to. */
+  cohortSize: number;
   /** Of them, those with dietary needs. */
   withNeeds: number;
   /** Those with needs at each level, 1 to 5; `unrated` gave no level that reads as one. */
@@ -215,9 +219,15 @@ export type DietaryCounts = {
 /** How many in the current cohort have dietary needs at each level, whatever the search. */
 export async function dietaryCounts(): Promise<DietaryCounts> {
   const { cohort, inScope } = await dietaryScope();
-  const [[totals], levels] = await Promise.all([
+  const stage = sql`coalesce(${cohort.stage}, ${latest.form})`;
+  const [[totals], levels, [size]] = await Promise.all([
     db
-      .select({ responded: count(), withNeeds: sql<number>`count(*) filter (where ${hasNeeds})::int` })
+      .select({
+        responded: count(),
+        withNeeds: sql<number>`count(*) filter (where ${hasNeeds})::int`,
+        bootcamp: sql<number>`count(*) filter (where ${stage} = 'bootcamp')::int`,
+        intermediate: sql<number>`count(*) filter (where ${stage} = 'intermediate')::int`,
+      })
       .from(latest)
       .leftJoin(cohort, eq(cohort.email, latest.email))
       .where(inScope),
@@ -227,6 +237,7 @@ export async function dietaryCounts(): Promise<DietaryCounts> {
       .leftJoin(cohort, eq(cohort.email, latest.email))
       .where(and(inScope, hasNeeds))
       .groupBy(critical),
+    db.select({ n: count() }).from(cohort),
   ]);
   const byLevel = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
   let unrated = 0;
@@ -234,5 +245,12 @@ export async function dietaryCounts(): Promise<DietaryCounts> {
     if (level && level >= 1 && level <= 5) byLevel[level as 1 | 2 | 3 | 4 | 5] = n;
     else unrated += n;
   }
-  return { responded: totals?.responded ?? 0, withNeeds: totals?.withNeeds ?? 0, byLevel, unrated };
+  return {
+    responded: totals?.responded ?? 0,
+    respondedByStage: { bootcamp: totals?.bootcamp ?? 0, intermediate: totals?.intermediate ?? 0 },
+    cohortSize: size?.n ?? 0,
+    withNeeds: totals?.withNeeds ?? 0,
+    byLevel,
+    unrated,
+  };
 }
