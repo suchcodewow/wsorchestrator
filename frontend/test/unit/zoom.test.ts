@@ -58,10 +58,14 @@ test("an answer with no new refresh token is a failure, since the old one is spe
 });
 
 test("every meeting scope and the profile scope are needed, named with or without a suffix; an answer that names none is let through", () => {
-  const all = "meeting:write:meeting meeting:read:meeting meeting:update:meeting meeting:delete:meeting user:read:user";
+  const all = "meeting:read:list_past_instances meeting:read:list_past_participants meeting:delete:meeting user:read:user";
   assert.equal(grantedScopes(all), true);
-  assert.equal(grantedScopes("meeting:write:meeting:admin meeting:read:meeting:admin meeting:update:meeting:admin meeting:delete:meeting:admin user:read:user:admin"), true);
+  assert.equal(
+    grantedScopes("meeting:read:list_past_instances:admin meeting:read:list_past_participants:admin meeting:delete:meeting:admin user:read:user:admin"),
+    true,
+  );
   assert.equal(grantedScopes(all.replace(" user:read:user", "")), false);
-  assert.equal(grantedScopes("meeting:write:meeting meeting:read:meeting"), false);
+  // A connection from before attendance was read has the old create-a-meeting scopes alone.
+  assert.equal(grantedScopes("meeting:write:meeting meeting:read:meeting meeting:update:meeting meeting:delete:meeting user:read:user"), false);
   assert.equal(grantedScopes(""), true);
 });

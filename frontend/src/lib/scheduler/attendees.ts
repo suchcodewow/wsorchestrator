@@ -9,7 +9,16 @@ import "server-only";
 
 import { and, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { AUDIENCE_TRACKS, SCHEDULE_LIMITS, bootcampHistory, employees, type ScheduleTrack, type SessionAudience } from "@/db/schema";
+import {
+  AUDIENCE_TRACKS,
+  SCHEDULE_LIMITS,
+  SURVEY_LIMITS,
+  bootcampHistory,
+  employees,
+  type ScheduleTrack,
+  type SessionAudience,
+  type SurveyAudience,
+} from "@/db/schema";
 import { IN_STAGE, isCandidate, type CandidateStage } from "@/lib/evals/current-cohort";
 import { getCandidateCutoffs } from "@/lib/evals/settings";
 import { stageOf } from "@/lib/scheduler/timeline";
@@ -32,19 +41,40 @@ export async function classAttendees(
   track: ScheduleTrack,
   audience: SessionAudience,
 ): Promise<{ attendees: GroupAttendee[]; hasMore: boolean }> {
+  const { rows, attendees } = await stageAttendees(stageOf(track), AUDIENCE_TRACKS[audience], SCHEDULE_LIMITS.groupPeople);
+  return { attendees: attendees.slice(0, SCHEDULE_LIMITS.groupPeople), hasMore: rows > SCHEDULE_LIMITS.groupPeople };
+}
+
+/**
+ * Everyone on `track` in `stage`'s class, as a daily survey is sent to them,
+ * at most `SURVEY_LIMITS.people`; `hasMore` when there are more.
+ */
+export async function surveyAttendees(
+  stage: CandidateStage,
+  track: SurveyAudience,
+): Promise<{ attendees: GroupAttendee[]; hasMore: boolean }> {
+  const { rows, attendees } = await stageAttendees(stage, [track], SURVEY_LIMITS.people);
+  return { attendees: attendees.slice(0, SURVEY_LIMITS.people), hasMore: rows > SURVEY_LIMITS.people };
+}
+
+/** `stage`'s candidates on `tracks`, by name, fetching one past `limit` rows; `rows` is how many came back. */
+async function stageAttendees(
+  stage: CandidateStage,
+  tracks: readonly ("sales" | "engineer")[],
+  limit: number,
+): Promise<{ rows: number; attendees: GroupAttendee[] }> {
   const cutoffs = await getCandidateCutoffs();
   const rows = await db
     .select({ email: e.email, fullName: e.fullName, title: e.title, track: sql<"sales" | "engineer">`${e.track}` })
     .from(e)
     .leftJoin(h, sql`${h.email} = ${e.email}`)
-    .where(and(isCandidate(cutoffs), IN_STAGE[stageOf(track)], inArray(e.track, [...AUDIENCE_TRACKS[audience]])))
+    .where(and(isCandidate(cutoffs), IN_STAGE[stage], inArray(e.track, [...tracks])))
     .orderBy(sql`lower(${e.fullName})`, e.email)
-    .limit(SCHEDULE_LIMITS.groupPeople + 1);
+    .limit(limit + 1);
   // HiBob can list one email twice; the first by name wins.
   const byEmail = new Map<string, GroupAttendee>();
   for (const r of rows) if (!byEmail.has(r.email)) byEmail.set(r.email, r);
-  const attendees = [...byEmail.values()];
-  return { attendees: attendees.slice(0, SCHEDULE_LIMITS.groupPeople), hasMore: rows.length > SCHEDULE_LIMITS.groupPeople };
+  return { rows: rows.length, attendees: [...byEmail.values()] };
 }
 
 /** Each stage's attendees on each track, by email, as `classAttendees` finds them. */

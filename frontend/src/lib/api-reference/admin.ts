@@ -1,5 +1,5 @@
-import { DIETARY_LIST, FOOD_ORDER_LIST, RECORDING_LIST, GUEST_JUDGE_LIST, INTAKE_RESPONSE_LIST, JUDGE_PROSPECT_LIST, ASSESSMENT_ATTENDEE_LIST, ASSESSMENT_LIST, AUDIT_LIST, BOOTCAMP_COHORT_LIST, BOOTCAMP_HISTORY_LIST, BOOTCAMP_LIST, BOOTCAMP_RECORD_LIST, CURRENT_COHORT_LIST, DOMAIN_LIST, EMPLOYEE_LIST, HIBOB_SYNC_LIST, HISTORY_STATUSES, JUDGE_LIST, ORGANIZATION_LIST, PREVIOUS_SESSION_LIST, SESSION_COMMENT_LIST, SESSION_TYPE_LIST, GOOGLE_MEETING_LIST, SLACK_CONTACT_LIST, SLACK_SYNC_CHANGE_LIST, SLACK_SYNC_LIST, CHANNEL_CONTACT_LIST, TITLE_LIST, USER_LIST, FACILITY_LIST, VIDEO_FEEDBACK_LIST } from "@/lib/list-specs";
-import { BOOTCAMP_LIMITS, CHECKLIST_LIMITS, EVALS_ASSESSMENT_LIMITS, FACILITY_LIMITS, FOOD_ORDER_LIMITS, GOOGLE_MEETING_LIMITS, INTAKE_LIMITS, RECORDING_LIMITS, SCHEDULE_LIMITS, VIDEO_FEEDBACK_LIMITS } from "@/db/schema";
+import { DIETARY_LIST, FOOD_ORDER_LIST, RECORDING_LIST, GUEST_JUDGE_LIST, INTAKE_RESPONSE_LIST, JUDGE_PROSPECT_LIST, ASSESSMENT_ATTENDEE_LIST, ASSESSMENT_LIST, AUDIT_LIST, BOOTCAMP_COHORT_LIST, BOOTCAMP_HISTORY_LIST, BOOTCAMP_LIST, BOOTCAMP_RECORD_LIST, CURRENT_COHORT_LIST, DOMAIN_LIST, EMPLOYEE_LIST, HIBOB_SYNC_LIST, HISTORY_STATUSES, JUDGE_LIST, ORGANIZATION_LIST, PREVIOUS_SESSION_LIST, SESSION_COMMENT_LIST, SESSION_TYPE_LIST, MEETING_SELECTION_LIST, MEETING_SYNC_CHANGE_LIST, MEETING_SYNC_LIST, SLACK_CONTACT_LIST, SLACK_SYNC_CHANGE_LIST, SLACK_SYNC_LIST, CHANNEL_CONTACT_LIST, SURVEY_RESPONSE_LIST, SURVEY_RESULT_LIST, TITLE_LIST, USER_LIST, FACILITY_LIST, VIDEO_FEEDBACK_LIST } from "@/lib/list-specs";
+import { BOOTCAMP_LIMITS, CHECKLIST_LIMITS, EVALS_ASSESSMENT_LIMITS, FACILITY_LIMITS, FOOD_ORDER_LIMITS, INTAKE_LIMITS, MEETING_SELECTION_LIMITS, RECORDING_LIMITS, SCHEDULE_LIMITS, SURVEY_LIMITS, VIDEO_FEEDBACK_LIMITS } from "@/db/schema";
 import { PAGE_SIZE } from "@/lib/paging";
 import { RECORDING_RETENTION_DAYS, UPLOAD_STALLED_MS, UPLOAD_URL_BATCH } from "@/lib/recording/video";
 import { CHECKLIST_ITEM_ROW } from "./account";
@@ -121,6 +121,12 @@ const ACTIVE_EXISTS_ERROR: EndpointError = {
   error: "active_exists",
   when: "status is active, another bootcamp already is, and completeActive does not name it; active names it",
 };
+
+const SURVEY_DAY_SHAPE = `{ stage: "bootcamp" | "intermediate", day: number, audiences: ("sales" | "engineer")[], assigned: number, answered: number }`;
+const SURVEY_SESSION_SHAPE = `{ id, track: ${TRACK_TYPE}, name, emoji, start: number, minutes: number }`;
+const MY_SURVEY_SHAPE = `{ id, stage: "bootcamp" | "intermediate", audience: "sales" | "engineer", day: number, date, sessions: ${SURVEY_SESSION_SHAPE}[], answers: { sessions: Record<string, { rating: number, feedback }>, dayRating: number, dayChange } | null, submittedAt: string | null }`;
+const SURVEY_CARD_SHAPE = `{ id, bootcampId, startDate, stage: "bootcamp" | "intermediate", audience: "sales" | "engineer", day: number, date, sessions: number, assigned: number, responses: number, average: number }`;
+const SURVEY_RESULT_SHAPE = `{ id, bootcampId, startDate, stage, audience, day: number, date, assigned: number, responses: number, average: number | null, sessions: (${SURVEY_SESSION_SHAPE} & { average: number | null, ratings: number, comments: number })[] }`;
 
 const INTAKE_QUESTION_SHAPE = `{ id, kind: "short" | "paragraph" | "choice" | "checkboxes" | "dropdown", title, description, required: boolean, options: string[], other: boolean }`;
 
@@ -360,13 +366,13 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "trainingViewer",
         token: true,
         notes:
-          "A bootcamp candidate is anyone under the Organization Leader, on the sales, engineer or deferred track or on none, with no BTC date in their bootcamp history; an intermediate candidate has a BTC date and no INT date. Either must also pass the date cutoffs in GET /api/evals/candidate-cutoffs, which cutoffs echoes. The ignored and exempt tracks are left out. A track is, first, one an administrator set by hand with PUT /api/cohorts/current/track, which overridden marks; then exempt where their history says so; then ignored for a title on the Ignored list; then deferred when their HiBob start date is fewer than deferral.days before deferral.bootcampStart, or after it; then the Sales or Engineer list their title is on. undecided is a title on no list. members never includes anyone deferred, and track cannot ask for them; they are on GET /api/cohorts/deferred. deferral echoes GET /api/evals/deferral-days. counts gives each stage on each track, deferred included; each stage's counts ignore the track filter, each track's ignore the stage filter, and neither depends on the search. activeBootcamp is the one active bootcamp, or null. Scores are shown only to a caller in eVals; for anyone else btcScore is null, scores is {}, averageScore is null and assessments is null. For a caller in eVals, assessments is null unless stage is given and track is sales or engineer; then it lists the active assessments for that stage whose audience is that track or both, by name, and each member's scores gives their average score on each of them at the active bootcamp, by assessment id, for those scored there. An intermediate assessment's scores need an active bootcamp with an intermediate class. averageScore is the mean of scores to one decimal place, or null when there are none; sorting by it puts those with none last, and without score columns it orders by name.",
+          "A bootcamp candidate is anyone under the Organization Leader, on the sales, engineer or deferred track or on none, with no BTC date in their bootcamp history; an intermediate candidate has a BTC date and no INT date. Either must also pass the date cutoffs in GET /api/evals/candidate-cutoffs, which cutoffs echoes. The ignored and exempt tracks are left out. A track is, first, one an administrator set by hand with PUT /api/cohorts/current/track, which overridden marks; then exempt where their history says so; then ignored for a title on the Ignored list; then deferred when their HiBob start date is fewer than deferral.days before deferral.bootcampStart, or after it; then the Sales or Engineer list their title is on. undecided is a title on no list. members never includes anyone deferred, and track cannot ask for them; they are on GET /api/cohorts/deferred. deferral echoes GET /api/evals/deferral-days. counts gives each stage on each track, deferred included; each stage's counts ignore the track filter, each track's ignore the stage filter, and neither depends on the search. activeBootcamp is the one active bootcamp, or null. Scores are shown only to a caller in eVals; for anyone else btcScore is null, scores is {}, averageScore is null and assessments is null. For a caller in eVals, assessments is null unless stage is given and track is sales or engineer; then it lists the active assessments for that stage whose audience is that track or both, by name, and each member's scores gives their average score on each of them at the active bootcamp, by assessment id, for those scored there. An intermediate assessment's scores need an active bootcamp with an intermediate class. averageScore is the mean of scores to one decimal place, or null when there are none; sorting by it puts those with none last, and without score columns it orders by name. meetings lists where each member stands with each Google meeting picked for their stage and track (GET /api/evals/google-meetings): attended, by Zoom or an administrator's mark; accepted or pending on the invite they hold, startsAt being when it starts; pending until the next sync invites them; or none_left with no occurrence before their bootcamp. marked is an administrator's mark, or null when Zoom decides.",
         query: [
           { name: "stage", type: `"bootcamp" | "intermediate"`, note: "only that stage; both if omitted" },
           { name: "track", type: `"sales" | "engineer" | "undecided"`, note: "only that track; all three if omitted" },
           ...listQuery(CURRENT_COHORT_LIST.sorts, "the name, email, title or track"),
         ],
-        returns: `{ stage: string | null, track: string | null, assessments: { id, name }[] | null, members: { email, fullName, title, department, site, reportsToEmail, reportsToName, startDate: "YYYY-MM-DD" | null, activeEffectiveDate: "YYYY-MM-DD" | null, track: "sales" | "engineer" | "undecided", overridden: boolean, stage: "bootcamp" | "intermediate", historyId: string | null, btcDate: "YYYY-MM-DD" | null, btcScore: number | null, scores: Record<assessment id, number>, averageScore: number | null }[], ${PAGE_FIELDS}, counts: Record<"bootcamp" | "intermediate", { sales: number, engineer: number, undecided: number, deferred: number }>, syncedAt: ISO 8601 string | null, cutoffs: { startDateOnOrAfter: "YYYY-MM-DD" | null, activeEffectiveDateAfter: "YYYY-MM-DD" | null }, deferral: { days: number, bootcampStart: "YYYY-MM-DD" | null }, activeBootcamp: { id, startDate, btcDays, intDays } | null }`,
+        returns: `{ stage: string | null, track: string | null, assessments: { id, name }[] | null, members: { email, fullName, title, department, site, reportsToEmail, reportsToName, startDate: "YYYY-MM-DD" | null, activeEffectiveDate: "YYYY-MM-DD" | null, track: "sales" | "engineer" | "undecided", overridden: boolean, stage: "bootcamp" | "intermediate", historyId: string | null, btcDate: "YYYY-MM-DD" | null, btcScore: number | null, scores: Record<assessment id, number>, averageScore: number | null, meetings: { meetingId, name, mark: "attended" | "accepted" | "pending" | "none_left", marked: boolean | null, startsAt: string | null }[] }[], ${PAGE_FIELDS}, counts: Record<"bootcamp" | "intermediate", { sales: number, engineer: number, undecided: number, deferred: number }>, syncedAt: ISO 8601 string | null, cutoffs: { startDateOnOrAfter: "YYYY-MM-DD" | null, activeEffectiveDateAfter: "YYYY-MM-DD" | null }, deferral: { days: number, bootcampStart: "YYYY-MM-DD" | null }, activeBootcamp: { id, startDate, btcDays, intDays } | null }`,
         errors: [
           { status: 400, error: "invalid_stage", when: "stage is neither bootcamp nor intermediate" },
           { status: 400, error: "invalid_track", when: "track is not sales, engineer or undecided" },
@@ -515,124 +521,201 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       {
         method: "GET",
         path: "/api/evals/google-meetings",
-        summary: "Lists the Google meetings, a page at a time, with the connected Google account and who is on every invite.",
+        summary: "Lists the meetings picked from the Revenue Enablement calendar, a page at a time, with the connected accounts and the sync's state.",
         access: "assessmentsAdmin",
         token: true,
         notes:
-          "A meeting is upcoming until it ends. groups are the Current-tab groups it invites: bootcamp_sales is the bootcamp stage on the Sales track, and so on. status is not_synced until a sync sends its invite, synced once one has, changed when it was edited since, and failed when the last sync of it failed, with syncError saying why. invited counts the guests the last sync put on the invite. connection is null until an Assessments Administrator connects a Google account, and never includes its token; running says whether a sync is under way. administrators are the Assessments Administrators, on every invite and able to edit it. groupSizes counts whom each group would invite now. counts are every upcoming and past meeting, whatever the search.",
-        query: [
-          { name: "when", type: `"upcoming" | "past"`, note: "Default upcoming." },
-          ...listQuery(GOOGLE_MEETING_LIST.sorts, "the title"),
-        ],
-        returns: `{ meetings: { id, title, startsAt, durationMinutes: 15 | 30 | 60, groups: ("bootcamp_sales" | "bootcamp_engineer" | "intermediate_sales" | "intermediate_engineer")[], zoomJoinUrl: string | null, status: "not_synced" | "synced" | "changed" | "failed", syncError: string | null, syncedAt: string | null, invited: number, addedBy: string | null }[], ${PAGE_FIELDS}, connection: { email, connectedAt, connectedBy: string | null, calendarId: string | null, lastSyncAt: string | null, lastSyncError: string | null, running: boolean } | null, zoom: { configured: boolean, connection: { email, connectedAt, connectedBy: string | null } | null }, administrators: string[], counts: { upcoming: number, past: number }, groupSizes: { bootcamp_sales, bootcamp_engineer, intermediate_sales, intermediate_engineer: number } }`,
-        errors: [{ status: 400, error: "invalid_when", when: "when is not upcoming or past" }],
+          "A picked meeting is a name on the calendar, matched to its events whatever their case or spacing, and whom in the Cohorts page's Current tab it is for: a stage (bootcamp, intermediate or both) and a track (sales, engineer or both). syncedAt is when a live sync last read its events, or null before one has; nextStartsAt, upcoming, invited and attended are as of that sync: when the next occurrence starts, how many are still to start, how many of the cohort are on one still to start, and how many attended one, by Zoom or by an administrator's mark. connection and zoom.connection are null until each is connected, and never include a token. administrators are the Assessments Administrators, added to every occurrence a cohort member is on. live says whether a sync changes the calendar (PUT /api/evals/google-meetings/settings). testGroup is the Cohorts page's test group (GET /api/cohorts/test-group). cutoff is the active bootcamp's start date, before which each person is invited, or null with none active. legacyMeetings counts the old create-a-meeting invites the next live sync cancels. meetingCount is every picked meeting, whatever the search.",
+        query: listQuery(MEETING_SELECTION_LIST.sorts, "the name"),
+        returns: `{ meetings: { id, name, stage: "bootcamp" | "intermediate" | "both", track: "sales" | "engineer" | "both", syncedAt: string | null, nextStartsAt: string | null, upcoming: number, invited: number, attended: number, addedBy: string | null, createdAt }[], ${PAGE_FIELDS}, connection: { email, connectedAt, connectedBy: string | null } | null, zoom: { configured: boolean, connection: { email, connectedAt, connectedBy: string | null } | null }, administrators: string[], live: boolean, running: boolean, testGroup: { on: boolean, suffix: string, members: number }, cutoff: "YYYY-MM-DD" | null, lastLiveSync: { finishedAt, status: "running" | "succeeded" | "skipped" | "failed", error: string | null } | null, legacyMeetings: number, meetingCount: number }`,
       },
       {
         method: "POST",
         path: "/api/evals/google-meetings",
-        summary: "Adds a Google meeting. Nothing is sent until a sync.",
+        summary: "Picks a meeting from the Revenue Enablement calendar, for a stage and a track. Nothing is sent until a sync.",
         access: "assessmentsAdmin",
         token: true,
+        notes: "name need not be on the calendar now; GET /api/evals/google-meetings/calendar lists the names that are. A name already picked, in any case or spacing, is refused.",
         body: {
           kind: "json",
           fields: [
-            { name: "title", type: "string", required: true, note: `1 to ${GOOGLE_MEETING_LIMITS.title} characters, trimmed` },
-            { name: "startsAt", type: "string", required: true, note: "ISO 8601 with an offset, not in the past" },
-            { name: "durationMinutes", type: "15 | 30 | 60", required: true },
-            {
-              name: "groups",
-              type: `("bootcamp_sales" | "bootcamp_engineer" | "intermediate_sales" | "intermediate_engineer")[]`,
-              note: "whom it invites besides the Assessments Administrators; defaults to none",
-            },
+            { name: "name", type: "string", required: true, note: `1 to ${MEETING_SELECTION_LIMITS.name} characters; trimmed, with runs of spaces made one` },
+            { name: "stage", type: `"bootcamp" | "intermediate" | "both"`, required: true },
+            { name: "track", type: `"sales" | "engineer" | "both"`, required: true },
           ],
         },
-        returns: "{ id, title }",
+        returns: "{ id, name }",
         errors: [
           { status: 400, error: "invalid", when: "the body does not parse, or a field is out of range" },
-          { status: 400, error: "in_past", when: "startsAt has passed" },
+          { status: 409, error: "duplicate", when: "that name is picked already" },
         ],
       },
       {
         method: "PATCH",
         path: "/api/evals/google-meetings/{id}",
-        summary: "Changes a Google meeting. The next sync sends the change.",
+        summary: "Changes a picked meeting's name, stage or track.",
         access: "assessmentsAdmin",
         token: true,
         params: [{ name: "id", type: "string", required: true, note: "UUID" }],
-        notes: "Any field left out is kept. A meeting can be renamed after it has ended, but not moved into the past.",
+        notes:
+          "Any field left out is kept. A new name first takes everyone the sync invited to the old name's upcoming occurrences off them, which emails them, and forgets its occurrences; the next sync reads the new name's. A new stage or track changes nothing until the next sync, which takes off anyone the meeting is no longer for. Allows 60 seconds.",
         body: {
           kind: "json",
           fields: [
-            { name: "title", type: "string", note: `1 to ${GOOGLE_MEETING_LIMITS.title} characters, trimmed` },
-            { name: "startsAt", type: "string", note: "ISO 8601 with an offset" },
-            { name: "durationMinutes", type: "15 | 30 | 60" },
-            {
-              name: "groups",
-              type: `("bootcamp_sales" | "bootcamp_engineer" | "intermediate_sales" | "intermediate_engineer")[]`,
-              note: "replaces the set",
-            },
+            { name: "name", type: "string", note: `1 to ${MEETING_SELECTION_LIMITS.name} characters; trimmed, with runs of spaces made one` },
+            { name: "stage", type: `"bootcamp" | "intermediate" | "both"` },
+            { name: "track", type: `"sales" | "engineer" | "both"` },
           ],
         },
-        returns: "{ id, title }",
+        returns: "{ id, name }",
         errors: [
           { status: 400, error: "invalid", when: "the body does not parse, or a field is out of range" },
-          { status: 400, error: "in_past", when: "startsAt changes to a time that has passed" },
           { status: 404, error: "not_found", when: "id is not a UUID, or no such meeting" },
+          { status: 409, error: "duplicate", when: "the new name is picked already" },
+          { status: 409, error: "running", when: "the name changes while a sync is under way" },
+          { status: 409, error: "not_connected", when: "the name changes, there are invites to take back, and no working Google account is connected; detail says why" },
+          { status: 502, error: "remote_failed", when: "Google refused to take an invite back; detail has its answer" },
         ],
       },
       {
         method: "DELETE",
         path: "/api/evals/google-meetings/{id}",
-        summary: "Deletes a Google meeting, first cancelling its invite and Zoom meeting.",
+        summary: "Deletes a picked meeting, first taking everyone the sync invited off its upcoming occurrences.",
         access: "assessmentsAdmin",
         token: true,
         params: [{ name: "id", type: "string", required: true, note: "UUID" }],
         notes:
-          "A meeting still to end that a sync sent is cancelled in Google Calendar, which emails every guest, and its Zoom meeting is deleted; the row goes only once both are gone. A meeting that has ended, or was never synced, is deleted with nothing sent. Allows 60 seconds.",
-        returns: "{ ok: true }",
+          "Only guests the sync added are taken off, which emails them; the calendar's events themselves stay, as do guests put there by hand. events counts the occurrences changed. Its attendance and marks go with it. Allows 60 seconds.",
+        returns: "{ ok: true, events: number }",
         errors: [
           { status: 404, error: "not_found", when: "id is not a UUID, or no such meeting" },
-          { status: 409, error: "not_connected", when: "its invite needs cancelling and no working Google account is connected; detail says why" },
-          { status: 502, error: "remote_failed", when: "Google or Zoom refused to cancel it; detail has their answer" },
+          { status: 409, error: "running", when: "a sync is under way" },
+          { status: 409, error: "not_connected", when: "there are invites to take back and no working Google account is connected; detail says why" },
+          { status: 502, error: "remote_failed", when: "Google refused to take an invite back; detail has its answer" },
         ],
       },
       {
-        method: "POST",
-        path: "/api/evals/google-meetings/sync",
-        summary: "Creates and updates the Google Calendar invite and Zoom meeting of every meeting still to end.",
+        method: "PUT",
+        path: "/api/evals/google-meetings/{id}/attendance",
+        summary: "Marks one person attended or missed for a picked meeting, over what Zoom said, or clears the mark.",
         access: "assessmentsAdmin",
         token: true,
+        params: [{ name: "id", type: "string", required: true, note: "UUID" }],
         notes:
-          "Runs as the connected Google account. The invites are on a calendar of its own, eVals Meetings, made on the first sync; every Assessments Administrator is given edit access to it, and is a guest on every invite. Each invite's guests are its groups' people on the Cohorts page's Current tab and the administrators; the sync takes off only guests it added itself. With a Zoom user connected, each meeting gets a Zoom meeting made as that user, with every administrator as an alternative host. Zoom is asked for them all at once; if it refuses one (an administrator with no user on its account), the hosts are added one at a time and notes names each it would not take. An invite or Zoom meeting already right is left alone, since a change emails every guest. One meeting failing is reported in its outcome and the sync carries on. notes lists what was skipped, such as an administrator Zoom would not take as a host. Allows 300 seconds.",
-        returns:
-          '{ ok: true, account: string, meetings: { id, title, outcome: "created" | "updated" | "unchanged" | "failed", invited: number, error?: string }[], notes: string[] }',
+          "attended true counts them as done with the meeting: the next sync takes them off any upcoming occurrence of it. false counts every occurrence of it they were on that has begun as missed, so the next sync invites them to the next one before their bootcamp. null goes back to what Zoom says. The Current tab shows the result beside their name.",
+        body: {
+          kind: "json",
+          fields: [
+            { name: "email", type: "string", required: true, note: "lowercased" },
+            { name: "attended", type: "boolean | null", required: true },
+          ],
+        },
+        returns: "{ ok: true, email, attended: boolean | null }",
         errors: [
-          { status: 409, error: "not_connected", when: "no Google account is connected" },
-          { status: 409, error: "running", when: "another sync is under way" },
-          { status: 409, error: "revoked", when: "Google no longer accepts the account's token; connect it again" },
-          { status: 502, error: "failed", when: "Google refused before any meeting was synced; detail has its answer" },
-          { status: 503, error: "not_configured", when: "AUTH_GOOGLE_ID or AUTH_GOOGLE_SECRET is unset" },
+          { status: 400, error: "invalid", when: "the body does not parse" },
+          { status: 404, error: "not_found", when: "id is not a UUID, or no such meeting" },
         ],
       },
       {
         method: "GET",
+        path: "/api/evals/google-meetings/calendar",
+        summary: "The names of the meetings on the Revenue Enablement calendar in the next 60 days, each once, to pick from.",
+        access: "assessmentsAdmin",
+        token: true,
+        notes: "Read as the connected Google account. Names that differ only in case or spacing are one. next is when the first of them starts; occurrences counts them in the 60 days. Sorted by name.",
+        returns: "{ names: { name, next, occurrences: number }[] }",
+        errors: [
+          { status: 409, error: "not_connected", when: "no Google account is connected" },
+          { status: 409, error: "not_configured", when: "AUTH_GOOGLE_ID or AUTH_GOOGLE_SECRET is unset" },
+          { status: 409, error: "revoked", when: "Google no longer accepts the account's token; connect it again" },
+          { status: 502, error: "google_error", when: "Google refused, such as an account that cannot see the calendar; detail has its answer" },
+        ],
+      },
+      {
+        method: "GET",
+        path: "/api/evals/google-meetings/settings",
+        summary: "Whether the Google Meetings sync is live or a dry run.",
+        access: "assessmentsAdmin",
+        token: true,
+        returns: "{ live: boolean }",
+      },
+      {
+        method: "PUT",
+        path: "/api/evals/google-meetings/settings",
+        summary: "Turns the Google Meetings sync live, or back to a dry run.",
+        access: "assessmentsAdmin",
+        token: true,
+        notes: "Off until an administrator turns it on. A dry run reads the calendar and Zoom and logs whom it would invite and take off, but changes nothing. QA shares production's Google Workspace, so it stays off there.",
+        body: { kind: "json", fields: [{ name: "live", type: "boolean", required: true }] },
+        returns: "{ live: boolean }",
+        errors: [{ status: 400, error: "invalid", when: "the body does not parse" }],
+      },
+      {
+        method: "GET",
+        path: "/api/evals/google-meetings/sync",
+        summary: "Lists the Google Meetings sync's log a page at a time, newest first.",
+        access: "assessmentsAdmin",
+        token: true,
+        notes:
+          "A run is skipped when it had nothing to do, with error saying why. dryRun marks a run that changed nothing, testGroup one that invited the test group in place of the cohort. unfinished marks a run that stopped at its deadline before every meeting was done; the next picks up the rest. running says whether a run is under way now, live whether a run started now would change the calendar.",
+        query: listQuery(MEETING_SYNC_LIST.sorts, "who started it, the status or the error"),
+        returns: `{ runs: { id, triggeredBy: string | null, status: "running" | "succeeded" | "skipped" | "failed", dryRun: boolean, testGroup: boolean, startedAt, finishedAt: string | null, invited, removed, attended, missed, noneLeft, failures: number, unfinished: boolean, error: string | null, notes: string[] }[], ${PAGE_FIELDS}, running: boolean, live: boolean }`,
+      },
+      {
+        method: "POST",
+        path: "/api/evals/google-meetings/sync",
+        summary: "Syncs every picked meeting with the Revenue Enablement calendar: reads who attended, and invites the cohort.",
+        access: "assessmentsAdmin",
+        token: true,
+        notes:
+          "Runs as the connected Google account, in one logged run. It reads the calendar's next 60 days and stores each event of each picked meeting's name as an occurrence, with its guests' replies and the Zoom meeting in its link. For each occurrence over for half an hour whose attendance is not known, it asks the connected Zoom user's past-meeting report who joined, matching by email and then by full name; one with no Zoom link, or no Zoom user connected, waits for an administrator's mark (PUT /api/evals/google-meetings/{id}/attendance). Then each person on the Current tab a meeting is for is invited to its next occurrence that starts before the active bootcamp does; anyone who missed theirs is invited to the next one after it, and anyone with none left is logged as none_left and not invited. Someone who attended is taken off any later occurrence, as is anyone the meeting is no longer for. Every Assessments Administrator is added to each occurrence a cohort member is on. The sync takes off only guests it added; an invite already right is left alone, since a change emails every guest. With the test group on, its members stand in for the cohort and no administrators are added. The first live run also cancels, once, the upcoming invites and Zoom meetings the old create-a-meeting flow made. With preview, or while the sync is not live, it is a dry run that logs what it would do. The run's changes are on GET /api/evals/google-meetings/sync/{id}. Allows 300 seconds.",
+        body: { kind: "json", fields: [{ name: "preview", type: "boolean", note: "a dry run whether or not the sync is live; an empty body is a sync" }] },
+        returns:
+          '{ ok: true, runId, status: "succeeded" | "skipped", dryRun: boolean, testGroup: boolean, unfinished: boolean, notes: string[], invited, removed, attended, missed, noneLeft, failures: number }',
+        errors: [
+          { status: 400, error: "invalid", when: "the body does not parse" },
+          { status: 409, error: "already_running", when: "another sync is under way" },
+          { status: 409, error: "not_connected", when: "no Google account is connected; runId names the failed run" },
+          { status: 409, error: "not_configured", when: "AUTH_GOOGLE_ID or AUTH_GOOGLE_SECRET is unset" },
+          { status: 409, error: "revoked", when: "Google no longer accepts the account's token; connect it again" },
+          { status: 502, error: "google_error", when: "Google refused before any meeting was synced; detail has its answer" },
+        ],
+      },
+      {
+        method: "GET",
+        path: "/api/evals/google-meetings/sync/{id}",
+        summary: "One Google Meetings sync run, how many of its changes are of each kind, and a page of them.",
+        access: "assessmentsAdmin",
+        token: true,
+        notes:
+          "One change per person invited to or taken off an occurrence (invited, removed), per attendance read (attended, missed), per person with no occurrence left before their bootcamp (none_left), per old invite cancelled (cancelled), and per call Google or Zoom refused (failed, with their answer in detail). occurrenceStartsAt is the occurrence it was about, or null. In a dry run each says what would have happened. fullName is the employee list's name for the email now, or null. counts is by kind, whatever the search.",
+        params: [{ name: "id", type: "string", required: true, note: "UUID" }],
+        query: [
+          { name: "kind", type: '"invites" | "attendance" | "problems"', note: "only invites sent, taken back or cancelled; only attendance read; or only refusals and people with none left. Every change if left out" },
+          ...listQuery(MEETING_SYNC_CHANGE_LIST.sorts, "the meeting, the action, the email, the name or the detail"),
+        ],
+        returns: `{ run: <as in GET /api/evals/google-meetings/sync>, counts: { all, invites, attendance, problems: number }, changes: { id, meetingName, occurrenceStartsAt: string | null, action: "invited" | "removed" | "attended" | "missed" | "none_left" | "cancelled" | "failed", email, fullName: string | null, detail: string | null, at }[], ${PAGE_FIELDS} }`,
+        errors: [{ status: 404, error: "not_found", when: "id is not a UUID, or no such run" }],
+      },
+      {
+        method: "GET",
         path: "/api/evals/google-meetings/connect",
-        summary: "Sends the browser to Google to connect the account Google Meetings sends invites from.",
+        summary: "Sends the browser to Google to connect the account Google Meetings reads the Revenue Enablement calendar and invites the cohort as.",
         access: "platform",
         token: false,
         notes:
-          "A browser link, not an API call: it redirects to Google's consent screen, asking for calendar access and a refresh token, with GOOGLE_USER as the sign-in hint when it is set. Google then sends the browser to the shared OAuth callback, GET /api/auth/callback/google, the URI already registered for sign-in. It checks the state cookie, trades the code for a refresh token, seals it, and stores it with the account's email. Reconnecting the same account replaces its token; a different one is refused while any meeting has an invite, because those invites are on the first account's calendar. It then redirects to Admin Settings → External Connectors with ?google= connected, denied, expired, failed, scope or different_account (with ?current= naming the account already connected), and writes an audit record either way.",
+          "A browser link, not an API call: it redirects to Google's consent screen, asking for calendar access and a refresh token, with GOOGLE_USER as the sign-in hint when it is set. Google then sends the browser to the shared OAuth callback, GET /api/auth/callback/google, the URI already registered for sign-in. It checks the state cookie, trades the code for a refresh token, seals it, and stores it with the account's email. Reconnecting the same account replaces its token; a different one is refused while the old create-a-meeting flow still has an invite on the first account's calendar, which only that account could cancel. The account needs permission to make changes to events on the Revenue Enablement calendar. It then redirects to Admin Settings → External Connectors with ?google= connected, denied, expired, failed, scope or different_account (with ?current= naming the account already connected), and writes an audit record either way.",
         returns: "a redirect to accounts.google.com",
         errors: [{ status: 503, error: "not_configured", when: "AUTH_GOOGLE_ID or AUTH_GOOGLE_SECRET is unset" }],
       },
       {
         method: "GET",
         path: "/api/evals/google-meetings/zoom/connect",
-        summary: "Sends the browser to Zoom to connect the user Google Meetings schedules its Zoom meetings as.",
+        summary: "Sends the browser to Zoom to connect the user whose past-meeting reports Google Meetings reads attendance from.",
         access: "platform",
         token: false,
         notes:
-          "A browser link, not an API call: it redirects to Zoom's consent screen for the user-managed Zoom app (ZOOM_CLIENT_ID), which can reach only the signing-in user's own meetings. Zoom then sends the browser to the shared OAuth callback, GET /api/auth/callback/google. It checks the state cookie, trades the code for tokens, reads the user's email, seals the tokens, and stores them; Zoom rotates the refresh token on every use, so each sync saves the new one. Reconnecting replaces the user. It then redirects to Admin Settings → External Connectors with ?zoom= connected, denied, expired, failed or scope (scope also when Zoom answers that the token lacks a scope, such as user:read:user), and writes an audit record either way.",
+          "A browser link, not an API call: it redirects to Zoom's consent screen for the user-managed Zoom app (ZOOM_CLIENT_ID), which can reach only the signing-in user's own meetings, so it reads attendance only for the calendar's meetings that user hosts. Zoom then sends the browser to the shared OAuth callback, GET /api/auth/callback/google. It checks the state cookie, trades the code for tokens, reads the user's email, seals the tokens, and stores them; Zoom rotates the refresh token on every use, so each sync saves the new one. Reconnecting replaces the user. It then redirects to Admin Settings → External Connectors with ?zoom= connected, denied, expired, failed or scope (scope also when Zoom answers that the token lacks a scope, such as user:read:user), and writes an audit record either way.",
         returns: "a redirect to zoom.us",
         errors: [{ status: 503, error: "not_configured", when: "ZOOM_CLIENT_ID or ZOOM_CLIENT_SECRET is unset" }],
       },
@@ -724,7 +807,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "platform",
         token: true,
         notes:
-          "While on, everything the app sends outside itself for the cohort goes to the test group instead: the cohort Slack sync makes its own public channels, named like the real ones with -{suffix} on the end, and invites the group to them; the intake form reminders are sent to the group; and the Google Meetings sync sends each meeting still to end as a second invite, titled with [{suffix}], to the group alone. The real cohort's channels and invites are left untouched, and the Bootcamp and Engineer Contacts are not added. It cannot be on without a suffix and at least one person, and the suffix (lowercased, letters, digits and hyphens) cannot change while it is on. Each person has a stage (bootcamp, intermediate or both): they are invited to that stage's channels and meetings, reminded about its intake form, and may fill it in at /intake, their answers kept apart and deleted when the group is turned off. Turning it off first archives the Slack channels it made (Slack's API archives; it cannot delete) and cancels the invites it sent, emailing their guests; if any of that fails it stays on and returns 502 with the failures, to try again. At most 100 people.",
+          "While on, everything the app sends outside itself for the cohort goes to the test group instead: the cohort Slack sync makes its own public channels, named like the real ones with -{suffix} on the end, and invites the group to them; the intake form reminders are sent to the group; and the Google Meetings sync invites the group to the picked meetings in place of the cohort, with no administrators. The real cohort's channels and invites are left untouched, and the Bootcamp and Engineer Contacts are not added. It cannot be on without a suffix and at least one person, and the suffix (lowercased, letters, digits and hyphens) cannot change while it is on. Each person has a stage (bootcamp, intermediate or both): they are invited to that stage's channels and meetings, reminded about its intake form, and may fill it in at /intake, their answers kept apart and deleted when the group is turned off. Turning it off first archives the Slack channels it made (Slack's API archives; it cannot delete) and takes the group off the meeting invites it was given, emailing them; if any of that fails it stays on and returns 502 with the failures, to try again. At most 100 people.",
         body: {
           kind: "json",
           fields: [
@@ -1894,7 +1977,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       {
         method: "GET",
         path: "/api/intake",
-        summary: "Reads the caller's own intake form, as /intake shows it, with the answers they last saved.",
+        summary: "Reads the caller's own intake form, as /intake/registration shows it, with the answers they last saved.",
         access: "signedIn",
         token: true,
         notes:
@@ -1931,6 +2014,119 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           { status: 400, error: "not_an_option", when: "an answer is not one the question offers, or a single-answer question was given several; questionId names it" },
           { status: 400, error: "not_a_name", when: "the preferred-name answer is not a first and a last name with one space between; questionId names it" },
         ],
+      },
+    ],
+  },
+  {
+    id: "daily-surveys",
+    title: "Daily surveys",
+    intro:
+      "The survey each attendee fills in about one day of the bootcamp: a 1 to 5 rating and optional feedback for each session they were in, then a 1 to 5 rating of the day overall and one thing they would change. A survey is one stage's class on one employee track for one day, its SE track included, since they are the same people: Bootcamp Sales, Bootcamp Engineers, Intermediate Sales, Intermediate Engineers. Each person has at most one survey a day.",
+    endpoints: [
+      {
+        method: "GET",
+        path: "/api/scheduler/bootcamps/{id}/surveys",
+        summary: "Lists the days of a bootcamp that have been sent a survey, as the scheduler's Assign Surveys buttons read them.",
+        access: "trainingViewer",
+        token: true,
+        notes:
+          "One row per stage and day with a survey, at most two stages of thirty days: audiences says which surveys that day has (a class's button sends sales and engineer, an SE track's engineer alone, so a track-day reads as sent once every audience it teaches has one), assigned how many people were sent one, and answered how many have answered.",
+        params: [BOOTCAMP_ID],
+        returns: `{ days: ${SURVEY_DAY_SHAPE}[] }`,
+        errors: [{ status: 404, error: "not_found", when: "no such bootcamp" }],
+      },
+      {
+        method: "POST",
+        path: "/api/scheduler/bootcamps/{id}/surveys",
+        summary: "Sends one track-day's surveys to everyone that track teaches.",
+        access: "trainingAdmin",
+        token: true,
+        notes: `On a class (btc, int) it sends the sales and the engineer survey; on an SE track (btc_se, int_se), the engineer survey. Each asks about every session that day on the class and its SE track that is taught to its audience, in start order, leaving out unstructured ones; the sessions are copied in when the survey is first made, and a later change to the schedule does not reach it. A survey already made for that day is reused, and anyone already sent it is not sent it again, so repeating the call sends only to people who have joined the class since. A survey with no sessions to ask about is made but sent to no one. Each goes to at most ${SURVEY_LIMITS.people} people; hasMore says there were more. Attendees are the class's current candidates, as the scheduler's class lists count them. When the call makes a survey and sends it to someone, it announces the day in the class's cohort channel with a link to /intake: sales-<stage>-<mon>-<yyyy> for a class, which holds its Engineers too, se-<stage>-<mon>-<yyyy> for an SE track, with the test group's suffix while it is on. slack is null when nothing was announced; otherwise its status is posted, dry_run (the Slack sync is not live, and nothing is posted), no_channel (the sync has not made the channel), not_connected (no Slack token) or failed (with Slack's error). The surveys are sent whatever happens in Slack.`,
+        params: [BOOTCAMP_ID],
+        body: {
+          kind: "json",
+          fields: [
+            { name: "track", type: TRACK_TYPE, required: true, note: "the track whose button was pressed" },
+            { name: "day", type: "integer", required: true, note: "from 1, a day the track runs at this bootcamp" },
+          ],
+        },
+        returns: `{ surveys: { id, audience: "sales" | "engineer", sessions: number, created: boolean, sent: number, hasMore: boolean }[], slack: { channel, status: "posted" | "dry_run" | "no_channel" | "not_connected" | "failed", error? } | null, days: ${SURVEY_DAY_SHAPE}[] }`,
+        errors: [
+          { status: 400, error: "invalid", when: "the body is not that shape" },
+          { status: 404, error: "not_found", when: "no such bootcamp" },
+          { status: 404, error: "no_such_day", when: "the track does not run that many days at this bootcamp" },
+        ],
+      },
+      {
+        method: "GET",
+        path: "/api/me/forms",
+        summary: "Lists everything the caller has been asked to fill in, as /intake shows it: their registration form and their daily surveys.",
+        access: "signedIn",
+        token: true,
+        notes: `The ones still to answer come first: the registration form, then surveys by day. Those answered follow, most recently answered first. The registration form is listed only for someone in the current cohort (see GET /api/intake) whose form has questions; a test group member in both stages has both. At most ${PAGE_SIZE} surveys are listed.`,
+        returns: '{ forms: { kind: "registration" | "survey", id, title, detail, href, completedAt: string | null }[] }',
+      },
+      {
+        method: "GET",
+        path: "/api/surveys/{id}",
+        summary: "Reads one of the caller's own daily surveys, with the answers they last saved.",
+        access: "signedIn",
+        token: true,
+        notes: "id is the caller's copy of the survey, as GET /api/me/forms lists it. answers is null until they have answered.",
+        params: [{ name: "id", type: "string", required: true, note: "the caller's survey" }],
+        returns: `${MY_SURVEY_SHAPE}`,
+        errors: [{ status: 404, error: "not_found", when: "no such survey, or it was not sent to the caller" }],
+      },
+      {
+        method: "PUT",
+        path: "/api/surveys/{id}",
+        summary: "Saves the caller's answers to one of their own daily surveys.",
+        access: "signedIn",
+        token: true,
+        notes: "Every session the survey asks about needs a rating; feedback and dayChange are trimmed and may be empty. Saving again replaces the answers given before.",
+        params: [{ name: "id", type: "string", required: true, note: "the caller's survey" }],
+        body: {
+          kind: "json",
+          fields: [
+            {
+              name: "sessions",
+              type: "Record<string, { rating: number, feedback?: string }>",
+              required: true,
+              note: `keyed by session id, one for each session the survey asks about: rating a whole number from 1 (poor) to 5 (excellent), feedback up to ${SURVEY_LIMITS.answer} characters`,
+            },
+            { name: "dayRating", type: "integer", required: true, note: "the day overall, from 1 to 5" },
+            { name: "dayChange", type: "string", note: `one thing they would change about the day, up to ${SURVEY_LIMITS.answer} characters` },
+          ],
+        },
+        returns: `${MY_SURVEY_SHAPE}`,
+        errors: [
+          { status: 400, error: "invalid", when: "the body is not that shape, or a rating is not 1 to 5" },
+          { status: 400, error: "required", when: "a session the survey asks about has no rating; sessionId names it" },
+          { status: 400, error: "unknown_session", when: "an answer is for a session the survey does not ask about; sessionId names it" },
+          { status: 404, error: "not_found", when: "no such survey, or it was not sent to the caller" },
+        ],
+      },
+      {
+        method: "GET",
+        path: "/api/survey-results",
+        summary: "Lists the daily surveys anyone has answered, as Survey Results shows them, a page at a time.",
+        access: "trainingViewer",
+        token: true,
+        notes: "A survey is listed once it has at least one response. average is the mean of the day-overall ratings; Survey Results shows it to one decimal place. date is the day the survey is about. Sorting by date puts the latest day first by default.",
+        query: listQuery(SURVEY_RESULT_LIST.sorts, 'the bootcamp\'s month and the group, as in "November 2026 Bootcamp Sales"', "desc"),
+        returns: `{ surveys: ${SURVEY_CARD_SHAPE}[], ${PAGE_FIELDS} }`,
+      },
+      {
+        method: "GET",
+        path: "/api/survey-results/{id}",
+        summary: "Reads one daily survey's results: how each session was rated, and its responses a page at a time.",
+        access: "trainingViewer",
+        token: true,
+        notes: "survey.sessions are the sessions it asks about, each with its mean rating, how many rated it, and how many left feedback on it. responses are the people who have answered, with every answer they gave.",
+        params: [{ name: "id", type: "string", required: true, note: "the survey's id, as GET /api/survey-results lists it" }],
+        query: listQuery(SURVEY_RESPONSE_LIST.sorts, "the name or email", "desc"),
+        returns: `{ survey: ${SURVEY_RESULT_SHAPE}, responses: { id, email, fullName, submittedAt, dayRating: number, dayChange, sessions: Record<string, { rating: number, feedback }> }[], ${PAGE_FIELDS} }`,
+        errors: [{ status: 404, error: "not_found", when: "no such survey" }],
       },
     ],
   },

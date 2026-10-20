@@ -38,8 +38,14 @@ export type TitleSort = (typeof TITLE_LIST.sorts)[number];
 export const SLACK_CONTACT_LIST = spec(["fullName", "email", "addedBy", "createdAt"]);
 export type SlackContactSort = (typeof SLACK_CONTACT_LIST.sorts)[number];
 
-export const GOOGLE_MEETING_LIST = spec(["startsAt", "title", "durationMinutes"]);
-export type GoogleMeetingSort = (typeof GOOGLE_MEETING_LIST.sorts)[number];
+export const MEETING_SELECTION_LIST = spec(["name", "stage", "track", "createdAt"]);
+export type MeetingSelectionSort = (typeof MEETING_SELECTION_LIST.sorts)[number];
+
+export const MEETING_SYNC_LIST = spec(["startedAt", "triggeredBy", "status"], "desc");
+export type MeetingSyncSort = (typeof MEETING_SYNC_LIST.sorts)[number];
+
+export const MEETING_SYNC_CHANGE_LIST = spec(["at", "meetingName", "action", "email"]);
+export type MeetingSyncChangeSort = (typeof MEETING_SYNC_CHANGE_LIST.sorts)[number];
 
 export const CHANNEL_CONTACT_LIST = spec(["fullName", "email", "addedBy", "createdAt"]);
 export type ChannelContactSort = (typeof CHANNEL_CONTACT_LIST.sorts)[number];
@@ -185,3 +191,11 @@ export type MimirItemSort = (typeof MIMIR_ITEM_LIST.sorts)[number];
 /** One person's Mimir progress, most recently opened first. */
 export const MIMIR_PROGRESS_LIST = spec(["lastVisit", "title", "kind", "tier"], "desc");
 export type MimirProgressSort = (typeof MIMIR_PROGRESS_LIST.sorts)[number];
+
+/** Survey Results: each daily survey with a response, newest bootcamp first. */
+export const SURVEY_RESULT_LIST = spec(["date", "average", "responses"], "desc");
+export type SurveyResultSort = (typeof SURVEY_RESULT_LIST.sorts)[number];
+
+/** One daily survey's responses, most recently answered first. */
+export const SURVEY_RESPONSE_LIST = spec(["submittedAt", "fullName", "dayRating"], "desc");
+export type SurveyResponseSort = (typeof SURVEY_RESPONSE_LIST.sorts)[number];

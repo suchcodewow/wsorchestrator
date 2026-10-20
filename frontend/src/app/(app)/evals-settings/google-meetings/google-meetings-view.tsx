@@ -1,134 +1,246 @@
 "use client";
 
 /**
- * Google Meetings: the account invites go out from, Zoom, and who is on every
- * invite, in one card; then the meetings, a page at a time, each opening to be
- * changed; and Sync Now, which sends them all to Google Calendar and Zoom.
+ * Google Meetings: the accounts the sync uses, whom it adds, and whether it
+ * is live or a dry run, in one card; then the meetings picked from the
+ * Revenue Enablement calendar, each opening to be changed, or the sync's log;
+ * and Preview and Sync Now, which add the cohort to each meeting's next
+ * occurrence before their bootcamp.
  */
 
 import { useState } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { AlertTriangle, ExternalLink, Loader2, Plus, RefreshCw, Trash2 } from "lucide-react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  Eye,
+  FlaskConical,
+  Loader2,
+  MinusCircle,
+  Plus,
+  RefreshCw,
+  Trash2,
+  User,
+  XCircle,
+} from "lucide-react";
 import { HEADER_ROW, LINK_ROW, Pager, PlainHeader, SortHeader, TableSearch, useRowLink } from "@/components/data-table";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import type { MeetingGroup } from "@/db/schema";
-import type { GoogleMeetingsOverview, MeetingWhen } from "@/lib/evals/google-meetings";
-import {
-  MEETING_GROUP_LABELS,
-  MEETING_LENGTH_LABELS,
-  isMeetingLength,
-  type MeetingStatus,
-} from "@/lib/evals/google-meetings-plan";
-import type { MeetingSyncOutcome } from "@/lib/evals/google-meetings-sync";
-import type { GoogleMeetingSort } from "@/lib/list-specs";
+import type { MeetingSyncStatus } from "@/db/schema";
+import type { GoogleMeetingsOverview } from "@/lib/evals/google-meetings";
+import { MEETING_STAGE_LABELS, MEETING_TRACK_LABELS } from "@/lib/evals/meeting-plan";
+import type { MeetingSelectionSort, MeetingSyncSort } from "@/lib/list-specs";
 import { riseChild, staggerParent } from "@/lib/motion";
 import type { ListQuery, Page } from "@/lib/paging";
 import { cn } from "@/lib/utils";
-import { formatWhen } from "../../cohort-settings/format";
+import { formatDate, formatWhen } from "../../cohort-settings/format";
 import { MeetingDialog, type EditableMeeting } from "./meeting-dialog";
 
 export type MeetingListing = EditableMeeting & {
-  zoomJoinUrl: string | null;
-  status: MeetingStatus;
-  syncError: string | null;
   syncedAt: string | null;
+  nextStartsAt: string | null;
+  upcoming: number;
   invited: number;
+  attended: number;
   addedBy: string | null;
+  createdAt: string;
 };
 
-type Overview = Omit<GoogleMeetingsOverview, "connection" | "zoom"> & {
+export type MeetingRun = {
+  id: string;
+  triggeredBy: string | null;
+  status: MeetingSyncStatus;
+  dryRun: boolean;
+  testGroup: boolean;
+  startedAt: string;
+  finishedAt: string | null;
+  invited: number;
+  removed: number;
+  attended: number;
+  missed: number;
+  noneLeft: number;
+  failures: number;
+  unfinished: boolean;
+  error: string | null;
+  notes: string[];
+};
+
+type WithDate<T, K extends keyof T> = Omit<T, K> & { [P in K]: string };
+
+export type Overview = Omit<GoogleMeetingsOverview, "connection" | "zoom" | "lastLiveSync"> & {
+  connection: WithDate<NonNullable<GoogleMeetingsOverview["connection"]>, "connectedAt"> | null;
   zoom: {
     configured: boolean;
-    connection: (Omit<NonNullable<GoogleMeetingsOverview["zoom"]["connection"]>, "connectedAt"> & { connectedAt: string }) | null;
+    connection: WithDate<NonNullable<GoogleMeetingsOverview["zoom"]["connection"]>, "connectedAt"> | null;
   };
-  connection:
-    | (Omit<NonNullable<GoogleMeetingsOverview["connection"]>, "connectedAt" | "lastSyncAt"> & {
-        connectedAt: string;
-        lastSyncAt: string | null;
-      })
-    | null;
+  lastLiveSync: WithDate<NonNullable<GoogleMeetingsOverview["lastLiveSync"]>, "finishedAt"> | null;
 };
 
-const STATUS: Record<MeetingStatus, { label: string; chip: string }> = {
-  not_synced: { label: "Not synced", chip: "bg-slate-100 text-slate-700 dark:bg-slate-400/15 dark:text-slate-300" },
-  synced: { label: "Invite sent", chip: "bg-emerald-100 text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-300" },
-  changed: { label: "Changed since sync", chip: "bg-amber-100 text-amber-800 dark:bg-amber-400/15 dark:text-amber-300" },
-  failed: { label: "Sync failed", chip: "bg-red-100 text-red-700 dark:bg-red-400/15 dark:text-red-300" },
-};
+type List =
+  | { view: "meetings"; query: ListQuery<MeetingSelectionSort>; page: Page<MeetingListing> }
+  | { view: "runs"; query: ListQuery<MeetingSyncSort>; page: Page<MeetingRun> };
 
 const SYNC_ERRORS: Record<string, string> = {
   not_connected: "Connect a Google account first, under Admin Settings → External Connectors.",
   not_configured: "The app's Google OAuth client is not set up here.",
-  running: "A sync is already running. Give it a minute.",
-  revoked: "Google no longer accepts the connected account's token. Ask a platform administrator to connect it again under Admin Settings → External Connectors.",
+  already_running: "A sync is already running — its result will appear in the sync log.",
+  revoked: "Google no longer accepts the connected account's token. A platform administrator connects it again under Admin Settings → External Connectors.",
+  google_error: "Google refused the sync.",
   forbidden: "Your own role changed — reload the page.",
 };
 
 const DELETE_ERRORS: Record<string, string> = {
   not_found: "That meeting was already deleted — reload the page.",
-  not_connected: "Its invite can't be cancelled until a Google account is connected again, under Admin Settings → External Connectors.",
-  remote_failed: "Google or Zoom would not cancel it.",
+  running: "A sync is running. Try again once it finishes.",
+  not_connected: "Its invites can't be taken back until a Google account is connected again, under Admin Settings → External Connectors.",
+  remote_failed: "Google would not take back its invites.",
   forbidden: "Your own role changed — reload the page.",
 };
 
-type SyncSummary = { meetings: MeetingSyncOutcome[]; notes: string[] };
+function message(errors: Record<string, string>, body: { error?: string; detail?: string } | null, status: number) {
+  const text = errors[body?.error ?? ""] ?? `Something went wrong (${status}).`;
+  return body?.detail ? `${text} ${body.detail}` : text;
+}
 
-export function GoogleMeetingsView({
-  query,
-  when,
-  page,
-  overview,
-}: {
-  query: ListQuery<GoogleMeetingSort>;
-  when: MeetingWhen;
-  page: Page<MeetingListing>;
-  overview: Overview;
-}) {
+function plural(n: number, one: string, many = `${one}s`) {
+  return `${n.toLocaleString()} ${n === 1 ? one : many}`;
+}
+
+/** "12 invited, 2 taken off, 5 attended, 1 missed, 3 with none left", leaving out the zeros; "No changes" for none. */
+export function meetingRunCounts(
+  run: Pick<MeetingRun, "invited" | "removed" | "attended" | "missed" | "noneLeft" | "failures" | "dryRun">,
+): string {
+  const parts = [
+    run.invited && `${run.invited.toLocaleString()} ${run.dryRun ? "to invite" : "invited"}`,
+    run.removed && `${run.removed.toLocaleString()} ${run.dryRun ? "to take off" : "taken off"}`,
+    run.attended && `${run.attended.toLocaleString()} attended`,
+    run.missed && `${run.missed.toLocaleString()} missed`,
+    run.noneLeft && `${run.noneLeft.toLocaleString()} with none left`,
+    run.failures && plural(run.failures, "failure"),
+  ].filter(Boolean);
+  return parts.length > 0 ? parts.join(", ") : "No changes";
+}
+
+export function MeetingRunResult({ run }: { run: MeetingRun }) {
+  if (run.status === "running") {
+    return (
+      <span className="flex items-center gap-1.5 text-muted-foreground">
+        <Loader2 className="size-3.5 animate-spin" />
+        Running
+      </span>
+    );
+  }
+  if (run.status === "skipped") {
+    return (
+      <span className="flex items-center gap-1.5 text-muted-foreground">
+        <MinusCircle className="size-3.5 shrink-0" />
+        {run.error ?? run.notes[0] ?? "Skipped"}
+      </span>
+    );
+  }
+  if (run.status === "succeeded") {
+    return (
+      <span className="flex items-center gap-1.5">
+        {run.failures > 0 ? (
+          <AlertTriangle className="size-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
+        ) : (
+          <CheckCircle2 className="size-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+        )}
+        {meetingRunCounts(run)}
+        {run.unfinished && <span className="text-muted-foreground">, unfinished</span>}
+      </span>
+    );
+  }
+  return (
+    <span className="flex items-start gap-1.5 text-destructive">
+      <XCircle className="mt-0.5 size-3.5 shrink-0" />
+      <span className="wrap-break-word">{run.error ?? "Failed"}</span>
+    </span>
+  );
+}
+
+const VIEWS = [
+  { view: "meetings", label: "Meetings" },
+  { view: "runs", label: "Sync log" },
+] as const;
+
+export function GoogleMeetingsView({ overview, list }: { overview: Overview; list: List }) {
   const router = useRouter();
   const pathname = usePathname();
-  const params = useSearchParams();
-  const rowLink = useRowLink();
-  const sortProps = { sort: query.sort, dir: query.dir };
-  const { connection, zoom, administrators, counts, groupSizes } = overview;
+  const { connection, zoom, administrators, live, testGroup, cutoff, lastLiveSync, legacyMeetings } = overview;
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<EditableMeeting | null>(null);
   const [deleting, setDeleting] = useState<MeetingListing | null>(null);
-  const [busy, setBusy] = useState<"sync" | "delete" | null>(null);
+  const [busy, setBusy] = useState<"sync" | "preview" | "mode" | "delete" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [summary, setSummary] = useState<SyncSummary | null>(null);
 
   function open(meeting: EditableMeeting | null) {
     setEditing(meeting);
     setDialogOpen(true);
   }
 
-  function show(next: MeetingWhen) {
-    const p = new URLSearchParams(params.toString());
-    p.delete("page");
-    if (next === "upcoming") p.delete("when");
-    else p.set("when", next);
-    const qs = p.toString();
-    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
-  }
-
-  async function syncNow() {
-    setBusy("sync");
+  /** Runs the sync, or with `preview` a dry run of it, then opens the run to show whom it invited or would have. */
+  async function sync(preview: boolean) {
+    if (
+      !preview &&
+      live &&
+      !window.confirm(
+        "Sync now? Everyone each meeting is for is added to its next occurrence before the bootcamp, and Google emails them the invite. Preview shows what it would do without doing it.",
+      )
+    ) {
+      return;
+    }
+    setBusy(preview ? "preview" : "sync");
     setError(null);
     setNotice(null);
-    setSummary(null);
     try {
-      const res = await fetch("/api/evals/google-meetings/sync", { method: "POST" });
+      const res = await fetch("/api/evals/google-meetings/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(preview ? { preview: true } : {}),
+      });
       const body = await res.json().catch(() => null);
       if (!res.ok) {
-        setError(SYNC_ERRORS[body?.error ?? ""] ?? `Sync failed (${res.status}): ${body?.detail ?? "no detail"}`);
+        setError(message(SYNC_ERRORS, body, res.status));
+        // A failed run is logged too.
+        router.refresh();
       } else {
-        setSummary({ meetings: body.meetings, notes: body.notes });
+        router.push(`/evals-settings/google-meetings/runs/${body.runId}`);
       }
-      router.refresh();
+    } catch {
+      setError("Could not reach the server.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function setLive(next: boolean) {
+    if (next === live) return;
+    if (
+      next &&
+      !window.confirm(
+        "Go live? From the next sync, Google Calendar invites go to the cohort and the Assessments Administrators, those it invited who no longer belong are taken off, and any meetings left from the old form are cancelled.",
+      )
+    ) {
+      return;
+    }
+    setBusy("mode");
+    setError(null);
+    setNotice(null);
+    try {
+      const res = await fetch("/api/evals/google-meetings/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ live: next }),
+      });
+      const body = await res.json().catch(() => null);
+      if (!res.ok) setError(message(SYNC_ERRORS, body, res.status));
+      else router.refresh();
     } catch {
       setError("Could not reach the server.");
     } finally {
@@ -144,11 +256,11 @@ export function GoogleMeetingsView({
       const res = await fetch(`/api/evals/google-meetings/${meeting.id}`, { method: "DELETE" });
       const body = await res.json().catch(() => null);
       if (!res.ok) {
-        const known = DELETE_ERRORS[body?.error ?? ""];
-        setError(known ? `${known}${body?.detail ? ` ${body.detail}` : ""}` : `Could not delete (${res.status}).`);
+        setError(message(DELETE_ERRORS, body, res.status));
         return;
       }
-      setNotice(`Deleted “${meeting.title}”${meeting.status === "not_synced" || when === "past" ? "" : " and cancelled its invite"}.`);
+      const events = typeof body?.events === "number" ? body.events : 0;
+      setNotice(`Deleted “${meeting.name}”${events > 0 ? ` and took the sync's guests off ${plural(events, "upcoming invite")}` : ""}.`);
       router.refresh();
     } catch {
       setError("Could not reach the server.");
@@ -158,87 +270,50 @@ export function GoogleMeetingsView({
     }
   }
 
-  const tally = summary && {
-    created: summary.meetings.filter((m) => m.outcome === "created").length,
-    updated: summary.meetings.filter((m) => m.outcome === "updated").length,
-    unchanged: summary.meetings.filter((m) => m.outcome === "unchanged").length,
-    failed: summary.meetings.filter((m) => m.outcome === "failed"),
-  };
+  const running = busy === "sync" || busy === "preview" || overview.running;
+  const syncLabel = busy === "sync" || (overview.running && busy === null);
 
   return (
     <motion.div variants={staggerParent(0.05)} initial="hidden" animate="show" className="space-y-6">
-      <motion.div variants={riseChild} className="flex flex-col items-start gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="space-y-1.5">
+      <motion.div variants={riseChild} className="flex flex-wrap items-start justify-between gap-4">
+        <div className="space-y-1">
           <h2 className="text-xl font-medium tracking-tight">Google Meetings</h2>
-          <p className="text-sm leading-relaxed text-muted-foreground">
-            <span className="font-medium text-foreground">
-              {counts.upcoming.toLocaleString()} upcoming {counts.upcoming === 1 ? "meeting" : "meetings"}
-            </span>
-            {connection ? <>, sent from {connection.email}</> : <>, and no Google account connected</>}
-            {connection?.lastSyncAt && <> · last synced {formatWhen(connection.lastSyncAt)}</>}
+          <p className="text-sm text-muted-foreground">
+            <span className="font-medium text-foreground">{plural(overview.meetingCount, "meeting")}</span>
+            {connection ? <>, invites from {connection.email}</> : <>, and no Google account connected</>}
+            {lastLiveSync && <> · last live sync {formatWhen(lastLiveSync.finishedAt)}</>}
           </p>
         </div>
-        <Button
-          variant="brand"
-          disabled={!connection || connection.running || busy === "sync"}
-          title={connection ? undefined : "Connect a Google account first, under Admin Settings → External Connectors"}
-          onClick={syncNow}
-        >
-          {busy === "sync" || connection?.running ? <Loader2 className="animate-spin" /> : <RefreshCw />}
-          {busy === "sync" || connection?.running ? "Syncing…" : "Sync Now"}
-        </Button>
-      </motion.div>
-
-      <motion.div variants={riseChild} className="divide-y overflow-hidden rounded-2xl border bg-card text-sm shadow-sm">
-        <div className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="space-y-0.5">
-            <div className="font-medium">Google account</div>
-            <div className="text-muted-foreground">
-              {connection ? (
-                <>
-                  {connection.email}, connected {formatWhen(connection.connectedAt)}
-                  {connection.connectedBy && <> by {connection.connectedBy}</>}
-                </>
-              ) : (
-                "None yet. A platform administrator connects it under Admin Settings → External Connectors."
-              )}
-            </div>
-          </div>
+        <div className="flex flex-wrap gap-2">
+          {/* In dry run every sync is already a preview; live, this is the way to see one first. */}
+          {live && (
+            <Button
+              variant="outline"
+              disabled={running || !connection}
+              title="A dry run: see whom a sync would invite and take off, without doing any of it"
+              onClick={() => sync(true)}
+            >
+              {busy === "preview" ? <Loader2 className="animate-spin" /> : <Eye />}
+              Preview
+            </Button>
+          )}
+          <Button
+            variant="brand"
+            // Even a dry run reads the calendar, so both need Google.
+            disabled={running || !connection}
+            title={
+              !connection
+                ? "Connect a Google account first, under Admin Settings → External Connectors"
+                : live
+                  ? undefined
+                  : "A dry run: logs whom it would invite and take off, without doing any of it"
+            }
+            onClick={() => sync(false)}
+          >
+            {syncLabel ? <Loader2 className="animate-spin" /> : <RefreshCw />}
+            {syncLabel ? "Syncing…" : "Sync Now"}
+          </Button>
         </div>
-        <div className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="space-y-0.5">
-            <div className="font-medium">Zoom user</div>
-            <div className="text-muted-foreground">
-              {zoom.connection ? (
-                <>
-                  {zoom.connection.email}, connected {formatWhen(zoom.connection.connectedAt)}
-                  {zoom.connection.connectedBy && <> by {zoom.connection.connectedBy}</>}. Each invite gets a Zoom link, with the
-                  administrators below as alternative hosts.
-                </>
-              ) : zoom.configured ? (
-                "None yet, so invites go out with no Zoom link. A platform administrator connects one under Admin Settings → External Connectors."
-              ) : (
-                "Zoom is not set up here, so invites go out with no Zoom link."
-              )}
-            </div>
-          </div>
-        </div>
-        <div className="space-y-0.5 px-5 py-4">
-          <div className="font-medium">
-            {administrators.length.toLocaleString()} Assessments {administrators.length === 1 ? "Administrator" : "Administrators"}
-          </div>
-          <div className="text-muted-foreground">
-            {administrators.length
-              ? `On every invite, and can edit it: ${administrators.join(", ")}`
-              : "Nobody holds the role, so invites go to the cohort alone."}
-          </div>
-        </div>
-        {connection?.lastSyncError && (
-          <div className="flex items-start gap-2 bg-destructive/5 px-5 py-4 text-destructive">
-            <AlertTriangle className="mt-0.5 size-4 shrink-0" />
-            <span>The last sync stopped: {connection.lastSyncError}</span>
-          </div>
-        )}
       </motion.div>
 
       {error && (
@@ -252,154 +327,168 @@ export function GoogleMeetingsView({
         </motion.p>
       )}
 
-      {tally && (
-        <motion.div variants={riseChild} initial="hidden" animate="show" className="divide-y rounded-2xl border bg-card text-sm shadow-sm">
-          <div className="px-5 py-4">
-            <span className="font-medium">
-              Synced {summary!.meetings.length.toLocaleString()} {summary!.meetings.length === 1 ? "meeting" : "meetings"}:
-            </span>{" "}
-            <span className="text-muted-foreground">
-              {tally.created} created, {tally.updated} updated, {tally.unchanged} already up to date
-              {tally.failed.length > 0 && <>, {tally.failed.length} failed</>}.
-            </span>
-          </div>
-          {tally.failed.map((m) => (
-            <div key={m.id} className="px-5 py-3 text-destructive">
-              <span className="font-medium">{m.title}:</span> {m.error}
-            </div>
-          ))}
-          {summary!.notes.map((note) => (
-            <div key={note} className="flex items-start gap-2 px-5 py-3 text-muted-foreground">
-              <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
-              <span>{note}</span>
-            </div>
-          ))}
+      {testGroup.on && (
+        <motion.div
+          variants={riseChild}
+          className="flex items-start gap-2.5 rounded-2xl border border-amber-300/70 bg-amber-50 px-5 py-4 text-sm text-amber-900 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-200"
+        >
+          <FlaskConical className="mt-0.5 size-4 shrink-0" />
+          <span>
+            The test group is on, so each sync invites its {plural(testGroup.members, "person", "people")}{" "}
+            (<span className="font-mono">-{testGroup.suffix}</span>) instead of the cohort, and no administrators. Turn it off on
+            the Cohorts page&apos;s Current tab, which takes its invites back.
+          </span>
         </motion.div>
       )}
 
-      <motion.div variants={riseChild} className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <TableSearch value={query.q} placeholder="Search by title" label="Search meetings" className="sm:flex-1" />
-        <div role="radiogroup" aria-label="Which meetings" className="flex h-9 w-fit overflow-hidden rounded-md border">
-          {(["upcoming", "past"] as const).map((value) => (
-            <button
-              key={value}
-              type="button"
-              role="radio"
-              aria-checked={when === value}
-              className={cn(
-                "px-4 text-sm transition-colors",
-                when === value
-                  ? "bg-secondary text-secondary-foreground"
-                  : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
-              )}
-              onClick={() => show(value)}
-            >
-              {value === "upcoming" ? "Upcoming" : "Past"} <span className="tnum text-xs">{counts[value].toLocaleString()}</span>
-            </button>
-          ))}
+      <motion.div variants={riseChild} className="divide-y overflow-hidden rounded-2xl border bg-card text-sm shadow-sm">
+        <div className="space-y-0.5 px-5 py-4">
+          <p className="flex items-center gap-2 font-medium">
+            Google account
+            {connection ? <Badge>Connected</Badge> : <Badge variant="secondary">Not connected</Badge>}
+          </p>
+          <p className="text-muted-foreground">
+            {connection ? (
+              <>
+                {connection.email}, connected {formatWhen(connection.connectedAt)}
+                {connection.connectedBy && <> by {connection.connectedBy}</>}. It reads the Revenue Enablement calendar and adds
+                guests to its events, so it needs “Make changes to events” there.
+              </>
+            ) : (
+              "None yet. A platform administrator connects it under Admin Settings → External Connectors."
+            )}
+          </p>
         </div>
-        <Button variant="outline" onClick={() => open(null)}>
-          <Plus />
-          New meeting
-        </Button>
+        <div className="space-y-0.5 px-5 py-4">
+          <p className="flex items-center gap-2 font-medium">
+            Zoom user
+            {zoom.connection ? <Badge>Connected</Badge> : <Badge variant="secondary">Not connected</Badge>}
+          </p>
+          <p className="text-muted-foreground">
+            {zoom.connection ? (
+              <>
+                {zoom.connection.email}, connected {formatWhen(zoom.connection.connectedAt)}
+                {zoom.connection.connectedBy && <> by {zoom.connection.connectedBy}</>}. Once an occurrence is over, the sync reads
+                who joined it from Zoom.
+              </>
+            ) : zoom.configured ? (
+              "None yet, so attendance is only what administrators mark on the Cohorts page's Current tab. A platform administrator connects one under Admin Settings → External Connectors."
+            ) : (
+              "Zoom is not set up here, so attendance is only what administrators mark on the Cohorts page's Current tab."
+            )}
+          </p>
+        </div>
+        <div className="space-y-0.5 px-5 py-4">
+          <p className="font-medium">{plural(administrators.length, "Assessments Administrator")}</p>
+          <p className="text-muted-foreground">
+            {administrators.length
+              ? `Added to each occurrence someone in the cohort is invited to: ${administrators.join(", ")}`
+              : "Nobody holds the role, so invites go to the cohort alone."}
+          </p>
+        </div>
+        <div className="space-y-0.5 px-5 py-4">
+          <p className="font-medium">Invite window</p>
+          <p className="text-muted-foreground">
+            {cutoff
+              ? `Occurrences before ${formatDate(cutoff)}, when the active bootcamp starts. Anyone who misses one is invited to the next; with none left, the Current tab shows a red mark.`
+              : "No bootcamp is active in the Scheduler, so each sync skips itself."}
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-4 px-5 py-4 sm:flex-nowrap">
+          <div className="min-w-0 space-y-0.5">
+            <p className="font-medium">Mode</p>
+            <p className="text-muted-foreground">
+              {live
+                ? "Each sync adds people to their next occurrence, takes off anyone it invited who no longer belongs, and Google emails them."
+                : "Each sync reads the calendar and Zoom and logs whom it would invite and take off, without changing any invite."}
+            </p>
+          </div>
+          <div role="radiogroup" aria-label="Mode" className="inline-flex shrink-0 items-center rounded-lg border bg-card p-0.5 shadow-xs">
+            {([
+              [false, "Dry run"],
+              [true, "Live"],
+            ] as const).map(([value, label]) => (
+              <button
+                key={label}
+                type="button"
+                role="radio"
+                aria-checked={live === value}
+                disabled={busy === "mode"}
+                onClick={() => setLive(value)}
+                className={cn(
+                  "inline-flex cursor-pointer items-center gap-1.5 rounded-md px-3 py-1.5 text-sm outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-wait",
+                  live === value
+                    ? value
+                      ? "bg-brand font-medium text-brand-foreground"
+                      : "bg-accent font-medium text-foreground"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {busy === "mode" && live !== value && <Loader2 className="size-3.5 animate-spin" />}
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+        {legacyMeetings > 0 && (
+          <div className="flex items-start gap-2 px-5 py-4 text-muted-foreground">
+            <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
+            <span>
+              {plural(legacyMeetings, "meeting")} from the old form {legacyMeetings === 1 ? "is" : "are"} still on the eVals Meetings
+              calendar. The next live sync cancels {legacyMeetings === 1 ? "its invite" : "their invites"}.
+            </span>
+          </div>
+        )}
+        {lastLiveSync?.status === "failed" && lastLiveSync.error && (
+          <div className="flex items-start gap-2 bg-destructive/5 px-5 py-4 text-destructive">
+            <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+            <span>The last live sync stopped: {lastLiveSync.error}</span>
+          </div>
+        )}
       </motion.div>
 
-      <motion.div variants={riseChild} className="overflow-hidden rounded-2xl border bg-card shadow-sm">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-200 text-sm">
-            <thead>
-              <tr className={HEADER_ROW}>
-                <SortHeader column="title" {...sortProps}>
-                  Title
-                </SortHeader>
-                <SortHeader column="startsAt" {...sortProps}>
-                  Starts
-                </SortHeader>
-                <SortHeader column="durationMinutes" {...sortProps}>
-                  Length
-                </SortHeader>
-                <PlainHeader>Invites</PlainHeader>
-                <PlainHeader>Status</PlainHeader>
-                <PlainHeader>Zoom</PlainHeader>
-                <PlainHeader className="w-16" />
-              </tr>
-            </thead>
-            <tbody>
-              {page.rows.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="px-5 py-8 text-center text-muted-foreground">
-                    {query.q ? "No meetings match that search." : when === "upcoming" ? "No upcoming meetings." : "No past meetings."}
-                  </td>
-                </tr>
+      <motion.div variants={riseChild} className="flex flex-wrap items-center gap-3">
+        <nav aria-label="Show" className="inline-flex rounded-lg border bg-card p-0.5 shadow-xs">
+          {VIEWS.map(({ view, label }) => (
+            <Link
+              key={view}
+              href={view === "meetings" ? pathname : `${pathname}?view=${view}`}
+              scroll={false}
+              aria-current={list.view === view ? "page" : undefined}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50",
+                list.view === view ? "bg-accent font-medium text-foreground" : "text-muted-foreground hover:text-foreground",
               )}
-              {page.rows.map((m) => (
-                <tr key={m.id} className={LINK_ROW} onClick={rowLink(() => open(m))}>
-                  <td className="px-5 py-3">
-                    <button type="button" onClick={() => open(m)} className="text-left font-medium group-hover:underline">
-                      {m.title}
-                    </button>
-                  </td>
-                  <td className="px-5 py-3 whitespace-nowrap text-muted-foreground">{formatWhen(m.startsAt)}</td>
-                  <td className="px-5 py-3 whitespace-nowrap text-muted-foreground">
-                    {isMeetingLength(m.durationMinutes) ? MEETING_LENGTH_LABELS[m.durationMinutes] : `${m.durationMinutes}m`}
-                  </td>
-                  <td className="px-5 py-3 text-muted-foreground">
-                    {m.groups.length ? m.groups.map((g: MeetingGroup) => MEETING_GROUP_LABELS[g]).join(", ") : "Administrators only"}
-                    {m.syncedAt && <span className="block text-xs tnum">{m.invited.toLocaleString()} invited</span>}
-                  </td>
-                  <td className="px-5 py-3">
-                    <span
-                      title={m.syncError ?? (m.syncedAt ? `Synced ${formatWhen(m.syncedAt)}` : undefined)}
-                      className={cn("inline-flex rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap", STATUS[m.status].chip)}
-                    >
-                      {STATUS[m.status].label}
-                    </span>
-                  </td>
-                  <td className="px-5 py-3">
-                    {m.zoomJoinUrl ? (
-                      <a
-                        href={m.zoomJoinUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-brand hover:underline"
-                      >
-                        Join <ExternalLink className="size-3" />
-                      </a>
-                    ) : (
-                      <span className="text-muted-foreground">—</span>
-                    )}
-                  </td>
-                  <td className="px-5 py-3">
-                    <div className="flex justify-end">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        aria-label={`Delete ${m.title}`}
-                        disabled={busy === "delete"}
-                        className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                        onClick={() => setDeleting(m)}
-                      >
-                        <Trash2 className="size-3.5" />
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <div className="border-t empty:hidden">
-          <Pager page={page} noun="meetings" />
-        </div>
+            >
+              {label}
+            </Link>
+          ))}
+        </nav>
+        {list.view === "meetings" ? (
+          <>
+            <TableSearch value={list.query.q} placeholder="Search by name" label="Search meetings" className="min-w-56 flex-1" />
+            <Button variant="outline" onClick={() => open(null)}>
+              <Plus />
+              Add meeting
+            </Button>
+          </>
+        ) : (
+          <TableSearch value={list.query.q} placeholder="Search by who, status or error" label="Search the sync log" className="min-w-56 flex-1" />
+        )}
       </motion.div>
+
+      {list.view === "meetings" ? (
+        <MeetingsTable list={list} busy={busy === "delete"} onOpen={open} onDelete={setDeleting} />
+      ) : (
+        <RunsTable list={list} />
+      )}
 
       <MeetingDialog
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         editing={editing}
-        groupSizes={groupSizes}
-        onSaved={(title) => {
-          setNotice(`Saved “${title}”. Sync Now to send it.`);
+        onSaved={(name) => {
+          setNotice(`Saved “${name}”. Sync Now to invite the cohort.`);
           router.refresh();
         }}
       />
@@ -407,13 +496,11 @@ export function GoogleMeetingsView({
       <Dialog open={deleting !== null} onOpenChange={(next) => !next && busy !== "delete" && setDeleting(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete “{deleting?.title}”?</DialogTitle>
+            <DialogTitle>Delete “{deleting?.name}”?</DialogTitle>
             <DialogDescription className="leading-relaxed">
-              {deleting?.status === "not_synced"
-                ? "Nothing was sent for it, so nobody is told."
-                : when === "past"
-                  ? "It has ended, so its invite stays in everyone's calendar and nobody is told."
-                  : "Its Google Calendar invite and Zoom meeting are cancelled, and everyone invited is told."}
+              {deleting?.syncedAt
+                ? "Everyone the sync added to its upcoming occurrences is taken off, and Google tells them. The calendar event itself stays, and so does anyone else on it. Its attendance marks on the Current tab go."
+                : "No sync has invited anyone to it, so nobody is told."}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -427,6 +514,172 @@ export function GoogleMeetingsView({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </motion.div>
+  );
+}
+
+function MeetingsTable({
+  list: { query, page },
+  busy,
+  onOpen,
+  onDelete,
+}: {
+  list: Extract<List, { view: "meetings" }>;
+  busy: boolean;
+  onOpen: (meeting: EditableMeeting) => void;
+  onDelete: (meeting: MeetingListing) => void;
+}) {
+  const rowLink = useRowLink();
+  const sortProps = { sort: query.sort, dir: query.dir };
+  return (
+    <motion.div variants={riseChild} className="overflow-hidden rounded-2xl border bg-card shadow-sm">
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-180 text-sm">
+          <thead>
+            <tr className={HEADER_ROW}>
+              <SortHeader column="name" {...sortProps}>
+                Meeting
+              </SortHeader>
+              <SortHeader column="stage" {...sortProps}>
+                Stage
+              </SortHeader>
+              <SortHeader column="track" {...sortProps}>
+                Track
+              </SortHeader>
+              <PlainHeader>Next</PlainHeader>
+              <PlainHeader>Invited</PlainHeader>
+              <PlainHeader className="w-16" />
+            </tr>
+          </thead>
+          <tbody>
+            {page.rows.length === 0 && (
+              <tr>
+                <td colSpan={6} className="px-5 py-8 text-center text-muted-foreground">
+                  {query.q ? "No meetings match that search." : "No meetings yet. Add one from the Revenue Enablement calendar."}
+                </td>
+              </tr>
+            )}
+            {page.rows.map((m) => (
+              <tr key={m.id} className={LINK_ROW} onClick={rowLink(() => onOpen(m))}>
+                <td className="px-5 py-3">
+                  <button type="button" onClick={() => onOpen(m)} className="text-left font-medium group-hover:underline">
+                    {m.name}
+                  </button>
+                  {m.addedBy && <span className="block text-xs text-muted-foreground">Added by {m.addedBy}</span>}
+                </td>
+                <td className="whitespace-nowrap px-5 py-3 text-muted-foreground">{MEETING_STAGE_LABELS[m.stage]}</td>
+                <td className="whitespace-nowrap px-5 py-3 text-muted-foreground">{MEETING_TRACK_LABELS[m.track]}</td>
+                <td className="whitespace-nowrap px-5 py-3 text-muted-foreground">
+                  {!m.syncedAt ? (
+                    "Not synced yet"
+                  ) : m.nextStartsAt ? (
+                    <>
+                      {formatWhen(m.nextStartsAt)}
+                      {m.upcoming > 1 && <span className="block text-xs tabular-nums">{m.upcoming.toLocaleString()} to come</span>}
+                    </>
+                  ) : (
+                    "None to come"
+                  )}
+                </td>
+                <td className="whitespace-nowrap px-5 py-3 tabular-nums text-muted-foreground">
+                  {m.syncedAt ? (
+                    <>
+                      {m.invited.toLocaleString()} invited
+                      <span className="block text-xs">{m.attended.toLocaleString()} attended</span>
+                    </>
+                  ) : (
+                    "—"
+                  )}
+                </td>
+                <td className="px-5 py-3">
+                  <div className="flex justify-end">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label={`Delete ${m.name}`}
+                      disabled={busy}
+                      className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                      onClick={() => onDelete(m)}
+                    >
+                      <Trash2 className="size-3.5" />
+                    </Button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="border-t empty:hidden">
+        <Pager page={page} noun="meetings" />
+      </div>
+    </motion.div>
+  );
+}
+
+function RunsTable({ list: { query, page } }: { list: Extract<List, { view: "runs" }> }) {
+  const rowLink = useRowLink();
+  const sortProps = { sort: query.sort, dir: query.dir };
+  return (
+    <motion.div variants={riseChild} className="overflow-hidden rounded-2xl border bg-card shadow-sm">
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-180 text-sm">
+          <thead>
+            <tr className={HEADER_ROW}>
+              <SortHeader column="startedAt" {...sortProps}>
+                Started
+              </SortHeader>
+              <SortHeader column="triggeredBy" {...sortProps}>
+                Triggered by
+              </SortHeader>
+              <SortHeader column="status" {...sortProps}>
+                Result
+              </SortHeader>
+              <PlainHeader className="w-40" />
+            </tr>
+          </thead>
+          <tbody>
+            {page.rows.map((run) => (
+              <tr
+                key={run.id}
+                className={`${LINK_ROW} align-top`}
+                onClick={rowLink(`/evals-settings/google-meetings/runs/${run.id}`)}
+              >
+                <td className="whitespace-nowrap px-5 py-2.5 tabular-nums">
+                  <Link href={`/evals-settings/google-meetings/runs/${run.id}`} className="group-hover:underline">
+                    {formatWhen(run.startedAt)}
+                  </Link>
+                </td>
+                <td className="whitespace-nowrap px-5 py-2.5 text-muted-foreground">
+                  <span className="flex items-center gap-1.5">
+                    <User className="size-3.5" />
+                    {run.triggeredBy ?? "Someone since removed"}
+                  </span>
+                </td>
+                <td className="px-5 py-2.5">
+                  <MeetingRunResult run={run} />
+                </td>
+                <td className="whitespace-nowrap px-5 py-2.5 text-right">
+                  <span className="inline-flex gap-1.5">
+                    {run.testGroup && <Badge variant="outline">Test group</Badge>}
+                    {run.dryRun && <Badge variant="secondary">Dry run</Badge>}
+                  </span>
+                </td>
+              </tr>
+            ))}
+            {page.rows.length === 0 && (
+              <tr>
+                <td colSpan={4} className="px-5 py-8 text-center text-muted-foreground">
+                  {query.q ? "No syncs match." : "No syncs yet."}
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+      <div className="border-t empty:hidden">
+        <Pager page={page} noun="syncs" />
+      </div>
     </motion.div>
   );
 }

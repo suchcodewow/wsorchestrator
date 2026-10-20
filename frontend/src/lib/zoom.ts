@@ -1,13 +1,14 @@
 /**
  * The Zoom OAuth and API calls Google Meetings makes, as the one Zoom user an
  * Assessments Administrator connected. The app is a user-managed General App
- * (`ZOOM_CLIENT_ID`, `ZOOM_CLIENT_SECRET`; infra/admin/app.tf) with only the
- * user-level `meeting:write:meeting`, `meeting:read:meeting`,
- * `meeting:update:meeting` and `meeting:delete:meeting` scopes, so it can reach
- * that user's meetings and no one else's. The user signs in once through
- * Zoom's consent screen; the refresh token that returns is what every later
- * sync acts with (`lib/zoom-connection.ts` stores it). Unset, or with no user
- * connected, meetings are synced to Google Calendar with no Zoom link.
+ * (`ZOOM_CLIENT_ID`, `ZOOM_CLIENT_SECRET`; infra/admin/app.tf) with only
+ * user-level scopes: the past-meeting ones, to read who joined the calendar's
+ * meetings that user hosts, and `meeting:delete:meeting`, to take down the
+ * Zoom meetings the old create-a-meeting flow made. It reaches that user's
+ * meetings and no one else's. The user signs in once through Zoom's consent
+ * screen; the refresh token that returns is what every later sync acts with
+ * (`lib/zoom-connection.ts` stores it). Unset, or with no user connected,
+ * attendance is only what an administrator marks on the Current tab.
  */
 
 import "server-only";
@@ -18,9 +19,8 @@ const API = "https://api.zoom.us/v2";
 
 /** What the app is set up with in the Zoom Marketplace; Zoom's consent screen asks for these. */
 export const ZOOM_SCOPES = [
-  "meeting:write:meeting",
-  "meeting:read:meeting",
-  "meeting:update:meeting",
+  "meeting:read:list_past_instances",
+  "meeting:read:list_past_participants",
   "meeting:delete:meeting",
   // To read the connecting user's own email (`GET /users/me`); not the account-wide `:admin` scope.
   "user:read:user",

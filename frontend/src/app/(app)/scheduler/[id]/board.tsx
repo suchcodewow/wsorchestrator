@@ -42,6 +42,9 @@ export const SCALE: Record<Density, number> = { detailed: 28 / 15, condensed: 16
 /** Each column's header, two lines tall, and the gutter's blank corner beside it. */
 const HEADER_HEIGHT = "h-17";
 
+/** Each column's footer, when there is one, and the gutter's blank corner beside it. */
+const FOOTER_HEIGHT = "h-13";
+
 const { dayStart, dayEnd } = SCHEDULE_LIMITS;
 
 export type BoardProps = {
@@ -64,6 +67,8 @@ export type BoardProps = {
   headerAction?: (column: BoardColumn) => ReactNode;
   /** Anything to show in the top-left corner, above the hours, level with each column's `headerAction`. */
   corner?: ReactNode;
+  /** Anything to show at the foot of a column, below the day's last hour. */
+  footerAction?: (column: BoardColumn) => ReactNode;
 };
 
 export function Board(props: BoardProps) {
@@ -113,6 +118,7 @@ export function Board(props: BoardProps) {
               </div>
             )}
           </div>
+          {props.footerAction && <div aria-hidden className={cn(FOOTER_HEIGHT, "border-t")} />}
         </div>
         {columns.map((c, i) => (
           <Column
@@ -240,6 +246,9 @@ function Column({
           </div>
         )}
       </div>
+      {props.footerAction && (
+        <div className={cn(FOOTER_HEIGHT, "flex items-center justify-center border-t px-3")}>{props.footerAction(column)}</div>
+      )}
     </div>
   );
 }
