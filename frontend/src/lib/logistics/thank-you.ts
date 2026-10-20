@@ -1,0 +1,84 @@
+/**
+ * The Guest judges tab's Generate Thank You Page: one Google Slides slide
+ * saying "Thank You!" over the judges' Slack photos, newest cohort first. The
+ * deck is made by the Google account connected for Google Meetings, which
+ * needs the Slides and Drive scopes (`GOOGLE_MEETING_SCOPES`), and shared with
+ * whoever asked.
+ */
+
+import "server-only";
+
+import { accessToken, calendarClient, GoogleError, oauthClient, GOOGLE_MEETING_SCOPES } from "@/lib/google-calendar";
+import { googleConnection } from "@/lib/evals/google-meetings";
+import { createThankYouDeck, DRIVE_API, SLIDES_API, type SlideJudge } from "@/lib/google-slides";
+import { thankYouJudges } from "@/lib/logistics/guest-judges";
+import { openSecret } from "@/lib/secret-box";
+import { slackClient, slackToken, SlackError } from "@/lib/slack";
+
+export type ThankYouResult =
+  | { ok: true; url: string; judges: number; withPhotos: number }
+  | { ok: false; error: "google_not_configured" | "google_not_connected" | "google_reconnect" | "slack_not_connected" | "no_judges" | "failed"; message: string };
+
+const SLACK_BUDGET_MS = 60_000;
+const PARALLEL = 4;
+
+/** Each email's Slack profile photo, or null for someone Slack has no account for. */
+async function slackPhotos(token: string, emails: string[]): Promise<Map<string, string>> {
+  const slack = slackClient(token, Date.now() + SLACK_BUDGET_MS);
+  const photos = new Map<string, string>();
+  for (let i = 0; i < emails.length; i += PARALLEL) {
+    await Promise.all(
+      emails.slice(i, i + PARALLEL).map(async (email) => {
+        try {
+          const { user } = await slack.call<{ user: { deleted?: boolean; profile?: { image_192?: string; is_custom_image?: boolean } } }>(
+            "users.lookupByEmail",
+            { email },
+          );
+          const image = user.profile?.image_192;
+          // Slack's stock avatar is a gravatar-style placeholder, not the person.
+          if (!user.deleted && image && user.profile?.is_custom_image !== false) photos.set(email, image);
+        } catch (err) {
+          if (!(err instanceof SlackError && err.error === "users_not_found")) throw err;
+        }
+      }),
+    );
+  }
+  return photos;
+}
+
+export async function generateThankYou(shareWith: string): Promise<ThankYouResult> {
+  const client = oauthClient();
+  if (!client) return { ok: false, error: "google_not_configured", message: "AUTH_GOOGLE_ID and AUTH_GOOGLE_SECRET are not set." };
+  const connection = await googleConnection();
+  if (!connection) return { ok: false, error: "google_not_connected", message: "No Google account is connected. Connect one under Admin Settings → External Connectors." };
+  const granted = new Set(connection.scope.split(" "));
+  if (!GOOGLE_MEETING_SCOPES.filter((s) => s.startsWith("https://")).every((s) => granted.has(s))) {
+    return { ok: false, error: "google_reconnect", message: `${connection.email} was connected before slides were needed. Connect the Google account again under Admin Settings → External Connectors.` };
+  }
+  const token = await slackToken();
+  if (!token) return { ok: false, error: "slack_not_connected", message: "Slack is not connected, so there are no photos to use." };
+
+  const judges = await thankYouJudges();
+  if (judges.length === 0) return { ok: false, error: "no_judges", message: "No guest judges are listed yet." };
+
+  try {
+    const emails = [...new Set(judges.flatMap((j) => (j.email ? [j.email.toLowerCase()] : [])))];
+    const photos = await slackPhotos(token, emails);
+    const people: SlideJudge[] = judges.map((j) => ({ name: j.fullName, photoUrl: (j.email && photos.get(j.email.toLowerCase())) || null }));
+
+    const refreshToken = openSecret(connection.refreshToken);
+    if (!refreshToken) return { ok: false, error: "google_reconnect", message: "The stored Google token cannot be opened here. Connect the account again." };
+    const access = await accessToken(client, refreshToken);
+    const deck = await createThankYouDeck(calendarClient(access, SLIDES_API), calendarClient(access, DRIVE_API), {
+      title: `Thank You, Guest Judges (${new Date().toISOString().slice(0, 10)})`,
+      judges: people,
+      shareWith,
+    });
+    return { ok: true, url: deck.url, judges: people.length, withPhotos: people.filter((p) => p.photoUrl).length };
+  } catch (err) {
+    if (err instanceof GoogleError && err.revoked) {
+      return { ok: false, error: "google_reconnect", message: `Google no longer accepts ${connection.email}'s token. Connect the account again.` };
+    }
+    return { ok: false, error: "failed", message: (err as Error).message };
+  }
+}

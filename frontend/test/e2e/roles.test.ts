@@ -685,6 +685,7 @@ const ROUTES: RouteCase[] = [
   { method: "DELETE", path: "/api/logistics/guest-speakers?cohort=1999-01-01&person=nobody", allowed: canManageTrainingSettings },
   { method: "POST", path: "/api/logistics/guest-speakers/cohorts", allowed: canManageTrainingSettings, body: () => ({}) },
   { method: "DELETE", path: "/api/logistics/guest-speakers/cohorts?cohort=1999-01-01", allowed: canManageTrainingSettings },
+  { method: "POST", path: "/api/logistics/guest-judges/thank-you", allowed: canManageTrainingSettings, denyOnly: true },
   { method: "GET", path: "/api/logistics/food-orders", allowed: canUseTraining },
   { method: "POST", path: "/api/logistics/food-orders", allowed: canManageTrainingSettings, body: form },
   { method: "PATCH", path: `/api/logistics/food-orders/${MISSING}`, allowed: canManageTrainingSettings, body: form },

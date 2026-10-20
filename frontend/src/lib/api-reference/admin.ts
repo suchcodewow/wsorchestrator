@@ -1819,6 +1819,21 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       },
       {
         method: "POST",
+        path: "/api/logistics/guest-judges/thank-you",
+        summary: "Makes a one-slide Google Slides deck saying Thank You! over the guest judges' Slack photos, and shares it with the caller.",
+        access: "trainingAdmin",
+        token: true,
+        notes:
+          "Takes no body. The judges are each person once, at their latest cohort, newest cohort first: a Scheduler bootcamp counts only once it is complete, a history cohort always, and at most 48 fit the slide. Photos come from Slack by each judge's email; someone with no email or no custom Slack photo shows as a name alone. The deck is owned by the Google account connected for Google Meetings, which needs the Slides and Drive scopes, so an account connected before they were asked for must be connected again.",
+        returns: "201 { url: string, judges: number, withPhotos: number }",
+        errors: [
+          { status: 404, error: "no_judges", when: "no guest judges are listed" },
+          { status: 409, error: "google_not_configured | google_not_connected | google_reconnect | slack_not_connected | no_email", when: "Google or Slack is not set up for it, or the Google account needs connecting again; message says which" },
+          { status: 502, error: "failed", when: "Google or Slack refused or could not be reached; message has their answer" },
+        ],
+      },
+      {
+        method: "POST",
         path: "/api/logistics/guest-speakers",
         summary: "Adds someone to the guest speaker history: a session they taught, commentated or judged at a month's cohort.",
         access: "trainingAdmin",
