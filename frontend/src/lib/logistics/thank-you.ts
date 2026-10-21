@@ -1,6 +1,6 @@
 /**
  * The Guest judges tab's Generate Thank You Page: one Google Slides slide
- * saying "Thank You!" over the judges' Slack photos, newest cohort first. The
+ * saying "Thank You!" over the judges' round Slack photos, the latest cohort first; anyone Slack has no photo for is left off. The
  * deck is made by the Google account connected for Google Meetings, which
  * needs the Slides and Drive scopes (`GOOGLE_MEETING_SCOPES`), and put in the
  * Drive folder `THANK_YOU_FOLDER_ID` as "BootCamp Thank You" (a deck already
@@ -13,6 +13,7 @@ import { accessToken, calendarClient, GoogleError, oauthClient, GOOGLE_MEETING_S
 import { googleConnection } from "@/lib/evals/google-meetings";
 import { createThankYouDeck, DRIVE_API, SLIDES_API, type SlideJudge } from "@/lib/google-slides";
 import { thankYouJudges } from "@/lib/logistics/guest-judges";
+import { photoLink } from "@/lib/logistics/thank-you-photo";
 import { openSecret } from "@/lib/secret-box";
 import { slackClient, slackToken, SlackError } from "@/lib/slack";
 
@@ -51,6 +52,13 @@ async function slackPhotos(token: string, emails: string[]): Promise<Map<string,
   return photos;
 }
 
+/** The app's public origin, which Google fetches the round photos from. */
+function appOrigin(): string {
+  const origin = process.env.AUTH_URL?.replace(/\/+$/, "");
+  if (!origin) throw new Error("AUTH_URL is not set, so Google cannot fetch the photos.");
+  return origin;
+}
+
 export async function generateThankYou(shareWith: string): Promise<ThankYouResult> {
   const client = oauthClient();
   if (!client) return { ok: false, error: "google_not_configured", message: "AUTH_GOOGLE_ID and AUTH_GOOGLE_SECRET are not set." };
@@ -69,7 +77,12 @@ export async function generateThankYou(shareWith: string): Promise<ThankYouResul
   try {
     const emails = [...new Set(judges.flatMap((j) => (j.email ? [j.email.toLowerCase()] : [])))];
     const photos = await slackPhotos(token, emails);
-    const people: SlideJudge[] = judges.map((j) => ({ name: j.fullName, photoUrl: (j.email && photos.get(j.email.toLowerCase())) || null }));
+    // Someone Slack has no photo for is left off the slide.
+    const people: SlideJudge[] = judges.flatMap((j) => {
+      const photo = j.email && photos.get(j.email.toLowerCase());
+      return photo ? [{ name: j.fullName, photoUrl: photoLink(appOrigin(), photo, j.times >= 2 ? "orange" : "blue"), times: j.times }] : [];
+    });
+    if (people.length === 0) return { ok: false, error: "no_judges", message: "None of the guest judges has a Slack photo." };
 
     const refreshToken = openSecret(connection.refreshToken);
     if (!refreshToken) return { ok: false, error: "google_reconnect", message: "The stored Google token cannot be opened here. Connect the account again." };
@@ -80,7 +93,7 @@ export async function generateThankYou(shareWith: string): Promise<ThankYouResul
       judges: people,
       shareWith,
     });
-    return { ok: true, url: deck.url, judges: people.length, withPhotos: people.filter((p) => p.photoUrl).length };
+    return { ok: true, url: deck.url, judges: people.length, withPhotos: people.length };
   } catch (err) {
     if (err instanceof GoogleError && err.revoked) {
       return { ok: false, error: "google_reconnect", message: `Google no longer accepts ${connection.email}'s token. Connect the account again.` };

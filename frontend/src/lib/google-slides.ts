@@ -1,6 +1,6 @@
 /**
  * The one-slide "Thank You!" deck the Guest judges tab makes: a title and a
- * grid of the judges' photos, each with a name, sized so all of them fit.
+ * grid of the judges' round photos, each with a name, sized so all of them fit.
  * `thankYouRequests` is the slide as Slides API `batchUpdate` requests, kept
  * apart from the calls so the layout can be tested without Google.
  */
@@ -11,63 +11,107 @@ import type { CalendarClient } from "@/lib/google-calendar";
 export const SLIDES_API = "https://slides.googleapis.com/v1";
 export const DRIVE_API = "https://www.googleapis.com/drive/v3";
 
-export type SlideJudge = { name: string; photoUrl: string | null };
+/** `photoUrl` is the already-round picture; someone who helped more than once (`times`) gets the 2X flame. */
+export type SlideJudge = { name: string; photoUrl: string; times: number };
 
 const EMU_PER_INCH = 914_400;
 const inch = (n: number) => Math.round(n * EMU_PER_INCH);
 // Slides' default 16:9 page, 10 x 5.625 inches.
 const PAGE = { w: 10, h: 5.625 };
-const MARGIN = 0.4;
-const TITLE_H = 0.95;
+const MARGIN = 0.3;
+const TITLE_H = 0.8;
+const MIN_FONT = 6;
+const MAX_FONT = 11;
 
-/** The columns and rows that give the largest photo, name included, to `count` judges. */
-export function gridFor(count: number): { cols: number; rows: number; cellW: number; cellH: number; photo: number } {
+/** The columns and rows that give the largest photo, a name of up to two lines under it included, to `count` judges. */
+export function gridFor(count: number): { cols: number; rows: number; cellW: number; cellH: number; photo: number; fontPt: number } {
   const areaW = PAGE.w - 2 * MARGIN;
-  const areaH = PAGE.h - TITLE_H - MARGIN - 0.1;
-  let best = { cols: 1, rows: 1, cellW: areaW, cellH: areaH, photo: 0 };
+  const areaH = PAGE.h - TITLE_H - MARGIN;
+  let best = { cols: 1, rows: 1, cellW: areaW, cellH: areaH, photo: 0, fontPt: MIN_FONT };
   for (let cols = 1; cols <= Math.max(1, count); cols++) {
     const rows = Math.ceil(Math.max(1, count) / cols);
     const cellW = areaW / cols;
     const cellH = areaH / rows;
-    // A third of the cell's height is left for the name under the photo.
-    const photo = Math.min(cellW * 0.86, cellH * 0.68);
-    if (photo > best.photo) best = { cols, rows, cellW, cellH, photo };
+    const fontPt = Math.max(MIN_FONT, Math.min(MAX_FONT, Math.floor(cellW * 8)));
+    const nameH = (2 * fontPt * 1.2) / 72 + 0.03;
+    const photo = Math.min(cellW * 0.92, cellH - nameH);
+    if (photo > best.photo) best = { cols, rows, cellW, cellH, photo, fontPt };
   }
   return best;
 }
 
-/** Requests that replace the new deck's starter slide with the thank-you slide. */
+/** Requests that replace the new deck's starter slide with the thank-you slide, `judges` in the order given. */
 export function thankYouRequests(starterSlideId: string, judges: SlideJudge[]): unknown[] {
   const slideId = "thank_you";
   const requests: unknown[] = [
     { createSlide: { objectId: slideId, slideLayoutReference: { predefinedLayout: "BLANK" } } },
     { deleteObject: { objectId: starterSlideId } },
-    textBox("title", slideId, MARGIN, 0.15, PAGE.w - 2 * MARGIN, TITLE_H - 0.15, "Thank You!", 40, true),
+    textBox("title", slideId, MARGIN, 0.1, PAGE.w - 2 * MARGIN, TITLE_H - 0.1, "Thank You!", 36, true),
   ];
-  const { cols, cellW, cellH, photo } = gridFor(judges.length);
-  const fontPt = Math.max(6, Math.min(12, Math.floor(photo * 11)));
+  const { cols, cellW, cellH, photo, fontPt } = gridFor(judges.length);
   judges.forEach((j, i) => {
     const col = i % cols;
     const row = Math.floor(i / cols);
     const x = MARGIN + col * cellW;
     const y = TITLE_H + row * cellH;
     const px = x + (cellW - photo) / 2;
-    if (j.photoUrl) {
-      requests.push({
-        createImage: {
-          objectId: `photo_${i}`,
-          url: j.photoUrl,
-          elementProperties: {
-            pageObjectId: slideId,
-            size: { width: { magnitude: inch(photo), unit: "EMU" }, height: { magnitude: inch(photo), unit: "EMU" } },
-            transform: { scaleX: 1, scaleY: 1, translateX: inch(px), translateY: inch(y), unit: "EMU" },
-          },
+    requests.push({
+      createImage: {
+        objectId: `photo_${i}`,
+        url: j.photoUrl,
+        elementProperties: {
+          pageObjectId: slideId,
+          size: { width: { magnitude: inch(photo), unit: "EMU" }, height: { magnitude: inch(photo), unit: "EMU" } },
+          transform: { scaleX: 1, scaleY: 1, translateX: inch(px), translateY: inch(y), unit: "EMU" },
         },
-      });
-    }
+      },
+    });
     requests.push(textBox(`name_${i}`, slideId, x, y + photo + 0.02, cellW, cellH - photo - 0.02, j.name, fontPt, false));
+    if (j.times >= 2) requests.push(...flame(`flame_${i}`, slideId, px + photo * 0.52, y + photo * 0.58, photo * 0.5, photo * 0.34));
   });
   return requests;
+}
+
+/** A small flame-orange badge reading "🔥2X", its corner at the photo's lower right. */
+function flame(id: string, pageId: string, x: number, y: number, w: number, h: number) {
+  const pt = Math.max(5, Math.min(10, Math.floor(h * 50)));
+  return [
+    {
+      createShape: {
+        objectId: id,
+        shapeType: "ROUND_RECTANGLE",
+        elementProperties: {
+          pageObjectId: pageId,
+          size: { width: { magnitude: inch(w), unit: "EMU" }, height: { magnitude: inch(h), unit: "EMU" } },
+          transform: { scaleX: 1, scaleY: 1, translateX: inch(x), translateY: inch(y), unit: "EMU" },
+        },
+      },
+    },
+    {
+      updateShapeProperties: {
+        objectId: id,
+        shapeProperties: {
+          shapeBackgroundFill: { solidFill: { color: { rgbColor: { red: 0.85, green: 0.2, blue: 0.05 } } } },
+          outline: { outlineFill: { solidFill: { color: { rgbColor: { red: 1, green: 1, blue: 1 } } } }, weight: { magnitude: 0.75, unit: "PT" } },
+        },
+        fields: "shapeBackgroundFill,outline",
+      },
+    },
+    { insertText: { objectId: id, text: "🔥2X" } },
+    {
+      updateTextStyle: {
+        objectId: id,
+        style: {
+          fontSize: { magnitude: pt, unit: "PT" },
+          bold: true,
+          foregroundColor: { opaqueColor: { rgbColor: { red: 1, green: 1, blue: 1 } } },
+        },
+        fields: "fontSize,bold,foregroundColor",
+      },
+    },
+    { updateParagraphStyle: { objectId: id, style: { alignment: "CENTER" }, fields: "alignment" } },
+    { updateShapeProperties: { objectId: id, shapeProperties: { contentAlignment: "MIDDLE" }, fields: "contentAlignment" } },
+  ];
 }
 
 function textBox(id: string, pageId: string, x: number, y: number, w: number, h: number, text: string, pt: number, bold: boolean) {

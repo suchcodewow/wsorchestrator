@@ -135,26 +135,28 @@ export async function listGuestJudges(query: ListQuery<GuestJudgeSort>): Promise
   );
 }
 
-/** The most judges the thank-you slide holds: more would be too small to tell apart. */
-export const THANK_YOU_MAX_JUDGES = 48;
+/** The most judges the thank-you slide asks for; the slide shrinks the photos to fit whoever Slack knows. */
+export const THANK_YOU_MAX_JUDGES = 100;
 
 /**
- * Each person who has judged, once, newest cohort first, for the thank-you
- * slide: a Scheduler bootcamp counts once it is complete, a history cohort
- * always. A person on several cohorts is listed at the latest.
+ * Each person who has judged, once, for the thank-you slide: those at the most
+ * recent cohort first, then the one before, and so on. A Scheduler bootcamp
+ * counts once it is complete, a history cohort always. `times` is how many
+ * months they helped in, listed at the latest.
  */
-export async function thankYouJudges(): Promise<{ email: string | null; fullName: string }[]> {
-  const { rows } = await db.execute<{ email: string | null; full_name: string }>(sql`
-    select email, full_name from (
-      select distinct on (coalesce(g.email, lower(g.full_name))) g.email, g.full_name, g.month
-      from ${judged} g
-      where g.source = 'history' or g.status = 'complete'
-      order by coalesce(g.email, lower(g.full_name)), g.month desc
-    ) latest
-    order by month desc, lower(full_name)
+export async function thankYouJudges(): Promise<{ email: string | null; fullName: string; times: number }[]> {
+  const { rows } = await db.execute<{ email: string | null; full_name: string; times: number }>(sql`
+    select (array_agg(g.email order by g.month desc))[1] as email,
+      (array_agg(g.full_name order by g.month desc))[1] as full_name,
+      count(distinct g.month)::int as times,
+      max(g.month) as latest
+    from ${judged} g
+    where g.source = 'history' or g.status = 'complete'
+    group by coalesce(g.email, lower(g.full_name))
+    order by latest desc, lower((array_agg(g.full_name order by g.month desc))[1])
     limit ${THANK_YOU_MAX_JUDGES}
   `);
-  return rows.map((r) => ({ email: r.email, fullName: r.full_name }));
+  return rows.map((r) => ({ email: r.email, fullName: r.full_name, times: r.times }));
 }
 
 export type JudgeProspectRow = {
@@ -242,7 +244,7 @@ export type GuestJudgeCounts = {
 export async function guestJudgeCounts(): Promise<GuestJudgeCounts> {
   const [{ rows: [judgedCounts] }, [prospects]] = await Promise.all([
     db.execute<{ judges: number; cohorts: number }>(sql`
-      select count(distinct coalesce(g.email, lower(g.full_name)))::int as judges, count(distinct g.cohort)::int as cohorts
+      select count(distinct coalesce(g.email, lower(g.full_name)))::int as judges, count(distinct g.month)::int as cohorts
       from ${judged} g
     `),
     db
