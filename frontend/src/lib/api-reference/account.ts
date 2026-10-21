@@ -704,7 +704,7 @@ export const ACCOUNT_GROUPS: EndpointGroup[] = [
         method: "GET",
         path: "/api/settings/timed-jobs",
         summary: "Lists the jobs Cloud Scheduler runs, with their schedules, switches and last runs.",
-        access: "eventAdmin",
+        access: "platform",
         token: true,
         notes: "A fixed handful of jobs, all in one response. A job that has never run has null last-run fields.",
         returns:
@@ -714,7 +714,7 @@ export const ACCOUNT_GROUPS: EndpointGroup[] = [
         method: "PATCH",
         path: "/api/settings/timed-jobs/{key}",
         summary: "Switches one scheduled job on or off.",
-        access: "eventAdmin",
+        access: "platform",
         token: true,
         notes:
           "A job that is off still gets called by Cloud Scheduler and answers { skipped: \"off\" }; it does nothing and shows as Skipped. Intake reminders share their switch with the daily reminder on Cohort Settings → Slack.",
