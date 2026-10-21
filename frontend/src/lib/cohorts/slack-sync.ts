@@ -27,7 +27,7 @@
 
 import "server-only";
 
-import { and, desc, eq, inArray, lt, ne, or, sql, type SQL } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, lt, ne, or, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import {
   EVALS_SETTINGS_KEYS,
@@ -198,7 +198,8 @@ async function finishRun(
 
 /**
  * Each email's Slack user id, or null for one Slack has no active account for,
- * or that no employee has: anyone the app reaches in Slack is in HiBob.
+ * or that is not on Cohort Settings → Organization: only someone under the
+ * Organization Leader is ever reached in Slack, so no one else is looked up.
  * Read from `employees.slack_user_id` where it can be, asking Slack only for
  * the rest; each answer is stored as it comes, so a run cut off part-way keeps
  * its progress. The intake reminders (`lib/logistics/intake-reminders.ts`)
@@ -210,7 +211,7 @@ export async function resolveSlackUsers(slack: SlackClient, emails: string[]): P
     const rows = await db
       .select({ email: employees.email, slackUserId: employees.slackUserId, lookedUpAt: employees.slackLookedUpAt })
       .from(employees)
-      .where(inArray(employees.email, emails.slice(i, i + 500)));
+      .where(and(inArray(employees.email, emails.slice(i, i + 500)), isNotNull(employees.orgDepth)));
     for (const r of rows) known.set(r.email, { id: r.slackUserId, at: r.lookedUpAt });
   }
 

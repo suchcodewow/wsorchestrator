@@ -57,6 +57,8 @@ import { addSlackContact, deleteSlackContact, listSlackContacts } from "@/lib/ev
 import { addTitles, deleteTitle, listTitles, updateTitle } from "@/lib/evals/titles";
 import { retrackOrg, setTrack, sortUndecidedTitle } from "@/lib/evals/tracks";
 import { judgePicks } from "@/lib/scheduler/judges";
+import { resolveSlackUsers } from "@/lib/cohorts/slack-sync";
+import type { SlackClient } from "@/lib/slack";
 import { getSession } from "@/lib/scheduler/schedule";
 import {
   BOOTCAMP_HISTORY_LIST,
@@ -234,6 +236,38 @@ describe("Additional Slack Contacts", () => {
     assert.deepEqual(await deleteSlackContact(rows[0]!.id), { ok: true, email: email("s-amy") });
     assert.deepEqual(await deleteSlackContact(rows[0]!.id), { ok: false, error: "not_found" });
     assert.deepEqual(await mine(), [[email("s-pat"), "Pat Slack", "admin"]]);
+  });
+});
+
+describe("Slack lookups", () => {
+  test("only Organization members are looked up, each once, and the answer is kept on their row", async () => {
+    await db.insert(employees).values([
+      { id: `${TEST_PREFIX}sl_org`, email: email("sl-org"), fullName: "In Org", raw: {}, orgDepth: 1 },
+      { id: `${TEST_PREFIX}sl_out`, email: email("sl-out"), fullName: "Out Of Org", raw: {} },
+      { id: `${TEST_PREFIX}sl_left`, email: email("sl-left"), fullName: "", raw: {}, active: false },
+    ]);
+    const asked: string[] = [];
+    const slack: SlackClient = {
+      async call<T>(_method: string, params: Record<string, string>) {
+        asked.push(params.email!);
+        return { user: { id: `U-${params.email}` } } as T;
+      },
+    };
+    const everyone = [email("sl-org"), email("sl-out"), email("sl-left"), email("sl-nobody")];
+
+    const first = await resolveSlackUsers(slack, everyone);
+    assert.deepEqual(asked, [email("sl-org")]);
+    assert.deepEqual(Object.fromEntries(first), {
+      [email("sl-org")]: `U-${email("sl-org")}`,
+      [email("sl-out")]: null,
+      [email("sl-left")]: null,
+      [email("sl-nobody")]: null,
+    });
+    const [stored] = await db.select().from(employees).where(eq(employees.id, `${TEST_PREFIX}sl_org`));
+    assert.equal(stored!.slackUserId, `U-${email("sl-org")}`);
+
+    assert.equal((await resolveSlackUsers(slack, everyone)).get(email("sl-org")), `U-${email("sl-org")}`);
+    assert.equal(asked.length, 1, "a Slack id once found is not asked for again");
   });
 });
 
