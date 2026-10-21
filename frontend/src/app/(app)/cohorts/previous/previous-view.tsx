@@ -65,7 +65,7 @@ export function PreviousView({
   first: string | null;
   /** The days the URL named as open, already fetched. */
   opened: SessionDetail[];
-  /** Whether the viewer may open a person's Bootcamp History record. */
+  /** Whether the viewer may open a person's bootcamp history record. */
   canOpenHistory: boolean;
 }) {
   const [opened, setOpened] = useState<Record<string, Opened>>(() =>

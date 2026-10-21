@@ -2,24 +2,21 @@
 
 /**
  * One person's bootcamp history row, laid out in one card: who they are, then
- * BTC and INT side by side, then when the row was last changed. Shown from
- * Bootcamp History and from Cohorts → Previous, so the page that opened it
- * says where its back link goes.
+ * BTC and INT side by side, then when the row was last changed. Opened from
+ * Cohorts → Previous, which says where its back link goes.
  */
 
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { ArrowLeft } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { BOOTCAMP_SCORE, EXEMPT_DATE } from "@/db/schema";
 import type { HistoryDetail } from "@/lib/evals/bootcamp-history";
 import { riseChild, staggerParent } from "@/lib/motion";
+import { historyClass } from "@/lib/reporting/bootcamp-values";
 import { cn } from "@/lib/utils";
-import { formatDate, formatScore, formatWhen } from "../../../cohort-settings/format";
+import { formatDate, formatWhen } from "../../../cohort-settings/format";
+import { ClassCard, Field, TRACK_LABELS } from "../../../reporting/bootcamp/class-card";
 
 type Detail = Omit<HistoryDetail, "createdAt" | "updatedAt"> & { createdAt: string; updatedAt: string };
-
-const TRACK_LABELS = { sales: "Sales", engineer: "Engineer", ignored: "Ignored title", exempt: "Exempt", deferred: "Deferred" } as const;
 
 export function HistoryDetailView({
   detail,
@@ -90,16 +87,12 @@ export function HistoryDetailView({
           <ClassCard
             name="Bootcamp"
             code="BTC"
-            date={detail.btcDate}
-            score={detail.btcScore}
-            individual={detail.btcIndividualScores}
+            summary={historyClass(detail.btcDate, detail.btcScore, detail.btcIndividualScores)}
           />
           <ClassCard
             name="Intermediate"
             code="INT"
-            date={detail.intDate}
-            score={detail.intScore}
-            individual={detail.intIndividualScores}
+            summary={historyClass(detail.intDate, detail.intScore, detail.intIndividualScores)}
           />
         </motion.div>
 
@@ -114,93 +107,4 @@ export function HistoryDetailView({
       </motion.div>
     </motion.div>
   );
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="min-w-0 space-y-1">
-      <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd className="text-sm wrap-break-word">{children}</dd>
-    </div>
-  );
-}
-
-function ClassCard({
-  name,
-  code,
-  date,
-  score,
-  individual,
-}: {
-  name: string;
-  code: string;
-  date: string | null;
-  score: number | null;
-  individual: Record<string, number> | null;
-}) {
-  const exempt = date === EXEMPT_DATE;
-  const scores = Object.entries(individual ?? {});
-
-  return (
-    <section className="flex flex-col gap-5 px-5 py-4">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h2 className="text-lg font-medium tracking-tight">{name}</h2>
-          <p className="text-xs text-muted-foreground">{code}</p>
-        </div>
-        {exempt ? (
-          <Badge variant="secondary">Exempt</Badge>
-        ) : date ? (
-          <span className="text-sm tabular-nums text-muted-foreground">{formatDate(date)}</span>
-        ) : (
-          <Badge variant="outline" className="text-muted-foreground">
-            Not attended
-          </Badge>
-        )}
-      </div>
-
-      <div className="space-y-2">
-        <div className="flex items-baseline justify-between">
-          <span className="text-xs text-muted-foreground">Overall score</span>
-          <span className="text-2xl font-medium tabular-nums">
-            {formatScore(score)}
-            {score !== null && <span className="text-sm text-muted-foreground"> / {BOOTCAMP_SCORE.max}</span>}
-          </span>
-        </div>
-        <ScoreBar score={score} />
-      </div>
-
-      {scores.length > 0 && (
-        <div className="space-y-3 border-t pt-4">
-          <h3 className="text-xs text-muted-foreground">By exercise</h3>
-          <ul className="space-y-3">
-            {scores.map(([key, value]) => (
-              <li key={key} className="space-y-1">
-                <div className="flex items-baseline justify-between gap-4 text-sm">
-                  <span className="min-w-0 wrap-break-word">{exerciseName(key)}</span>
-                  <span className="tabular-nums">{formatScore(value)}</span>
-                </div>
-                <ScoreBar score={value} thin />
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-    </section>
-  );
-}
-
-/** How far a score sits between nothing and the top of the scale. */
-function ScoreBar({ score, thin = false }: { score: number | null; thin?: boolean }) {
-  const pct = score === null ? 0 : Math.max(0, Math.min(1, score / BOOTCAMP_SCORE.max)) * 100;
-  return (
-    <div className={cn("overflow-hidden rounded-full bg-muted", thin ? "h-1" : "h-1.5")}>
-      <div className="h-full rounded-full bg-brand" style={{ width: `${pct}%` }} />
-    </div>
-  );
-}
-
-/** "Score-First Call / EMD" as the Sheet's column was named, less its prefix. */
-function exerciseName(key: string): string {
-  return key.replace(/^score-\s*/i, "") || key;
 }

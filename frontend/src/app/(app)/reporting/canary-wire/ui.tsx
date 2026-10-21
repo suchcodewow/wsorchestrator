@@ -1,6 +1,6 @@
 /**
  * The Canary Wire page's shared pieces, in the app's own vocabulary: the
- * pill buttons Bootcamp History filters with, and the status colours the run
+ * pill buttons Reporting → Bootcamp filters with, and the status colours the run
  * chips use, so a completed square is the same green as a ready workshop.
  */
 
@@ -14,7 +14,7 @@ export const PILL = cn(
   "[&_svg]:size-4 [&_svg]:shrink-0",
 );
 
-/** A pill that is switched on, as Bootcamp History's chosen status is. */
+/** A pill that is switched on, as Reporting → Bootcamp's chosen status is. */
 export const PILL_ON = "border-brand-border bg-brand-subtle text-foreground [&_svg]:text-brand";
 
 export const SELECT_PILL = cn(

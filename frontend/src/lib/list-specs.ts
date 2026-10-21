@@ -67,6 +67,15 @@ export function isHistoryStatus(value: unknown): value is HistoryStatus {
   return HISTORY_STATUSES.includes(value as HistoryStatus);
 }
 
+/** Reporting → Bootcamp: everyone with a BTC or INT record the caller may see, newest first. */
+export const BOOTCAMP_RECORD_LIST = spec(["date", "fullName", "email", "level"], "desc");
+export type BootcampRecordSort = (typeof BOOTCAMP_RECORD_LIST.sorts)[number];
+
+/** Reporting → Bootcamp's current cohort, above the records; its sort and page are prefixed `cohort`. */
+export const BOOTCAMP_COHORT_LIST = spec(["fullName", "email", "stage", "averageScore"]);
+export type BootcampCohortSort = (typeof BOOTCAMP_COHORT_LIST.sorts)[number];
+export const BOOTCAMP_COHORT_PREFIX = "cohort";
+
 export const ORGANIZATION_LIST = spec([
   "depth",
   "fullName",

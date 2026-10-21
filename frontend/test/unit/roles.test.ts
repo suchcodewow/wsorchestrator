@@ -88,7 +88,9 @@ const POLICY: Record<string, { actual: Check; expected: Check }> = {
   },
   canSeeCanaryWire: { actual: roles.canSeeCanaryWire, expected: (a) => a.platform || a.manager },
   canRefreshCanaryWire: { actual: roles.canRefreshCanaryWire, expected: platformOnly },
-  canSeeReporting: { actual: roles.canSeeReporting, expected: (a) => evals("viewer")(a) || a.platform || a.manager },
+  canSeeBootcampRecords: { actual: roles.canSeeBootcampRecords, expected: () => true },
+  canManageBootcampRecords: { actual: roles.canManageBootcampRecords, expected: evals("administrator") },
+  canSeeReporting: { actual: roles.canSeeReporting, expected: () => true },
   canScoreAssessments: { actual: roles.canScoreAssessments, expected: (a) => evals("viewer")(a) || a.judging },
   canSearchEmployees: {
     actual: roles.canSearchEmployees,
