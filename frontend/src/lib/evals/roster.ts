@@ -54,7 +54,7 @@ export type Roster = {
   unlisted: UnlistedTitle[];
 };
 
-export type EmployeeListing = Omit<Employee, "raw" | "importedAt" | "orgDepth" | "managementChain" | "track"> & {
+export type EmployeeListing = Omit<Employee, "raw" | "importedAt" | "orgDepth" | "managementChain" | "track" | "timezone"> & {
   /** Whether `fullName` is one they chose for themselves (`employee_chosen_names`) rather than their email's. */
   nameChosen: boolean;
 };

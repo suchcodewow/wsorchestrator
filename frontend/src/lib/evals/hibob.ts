@@ -20,6 +20,7 @@ import {
   cohortChannelContacts,
   employeeChosenNames,
   employees,
+  employeeTimezones,
   evalsSlackContacts,
   hibobSyncRuns,
   scheduleSessionGroups,
@@ -32,6 +33,7 @@ import {
 import { hibobAuthorization, toEmployeeRow } from "@/lib/evals/hibob-record";
 import { orgUnder } from "@/lib/evals/org";
 import { getOrgLeaderEmail } from "@/lib/evals/settings";
+import { keepSlackTimezones, keptTimezones, slackTimezones } from "@/lib/evals/timezones";
 import { trackFor } from "@/lib/evals/title-lists";
 import { titleListMap } from "@/lib/evals/titles";
 import { deferralRule, exemptEmails, trackOverrides } from "@/lib/evals/tracks";
@@ -254,6 +256,12 @@ export async function syncHibobEmployees(
         deferral,
       );
 
+    // Slack's zone for each of them under the leader who has none kept yet, before the
+    // transaction so the wait on Slack holds no lock.
+    const keptZones = await keptTimezones();
+    const wantZone = new Set(unique.filter((r) => orgDepth.has(r.id) && !keptZones.has(r.email)).map((r) => r.email));
+    const fromSlack = await slackTimezones(wantZone);
+
     await db.transaction(async (tx) => {
       // Two syncs are kept apart by the one-running index, but a revision from
       // before it (importing through the hibob_employees view) is not.
@@ -263,6 +271,13 @@ export async function syncHibobEmployees(
       const chosen = new Map(
         (await tx.select({ email: employeeChosenNames.email, fullName: employeeChosenNames.fullName }).from(employeeChosenNames)).map(
           (r) => [r.email, r.fullName],
+        ),
+      );
+      // Read under the lock too, so one the form saved mid-sync is not lost.
+      await keepSlackTimezones(tx, fromSlack);
+      const zones = new Map(
+        (await tx.select({ email: employeeTimezones.email, timezone: employeeTimezones.timezone }).from(employeeTimezones)).map(
+          (r) => [r.email, r.timezone],
         ),
       );
       await tx.delete(employees);
@@ -280,6 +295,7 @@ export async function syncHibobEmployees(
                 orgDepth: orgDepth.get(r.id) ?? null,
                 managementChain: chainOf.get(r.id)?.join(";") ?? null,
                 track: track(r),
+                timezone: zones.get(r.email) ?? null,
               })),
           );
       }

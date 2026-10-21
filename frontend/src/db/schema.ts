@@ -900,6 +900,13 @@ export const employees = pgTable(
      * lists. Set by `lib/evals/tracks.ts`.
      */
     track: text("track").$type<EmployeeTrack>(),
+    /**
+     * Their usual time zone, an IANA name such as `America/Chicago`, as kept
+     * in `employee_timezones`; null while neither Slack nor they have said.
+     * Set by the HiBob sync and by the Pre-Bootcamp form
+     * (`lib/evals/timezones.ts`).
+     */
+    timezone: text("timezone"),
   },
   (t) => [
     index("employees_email_idx").on(t.email),
@@ -984,6 +991,24 @@ export const employeeChosenNames = pgTable("employee_chosen_names", {
   /** A first and a last name, one space between (`isFirstLast`). */
   fullName: text("full_name").notNull(),
   /** Who saved it: the person themselves, at /intake. */
+  updatedBy: text("updated_by").references(() => users.id, { onDelete: "set null" }),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
+ * Where someone normally is, as an IANA time zone, which outlives the HiBob
+ * sync that rebuilds `employees` and is copied onto `employees.timezone` by
+ * it. `slack` is what Slack had for them when the sync first found them
+ * without one; `intake` is what they confirmed or changed on the Pre-Bootcamp
+ * form, which Slack never overwrites. Keyed by lowercased email.
+ */
+export const EMPLOYEE_TIMEZONE_SOURCES = ["slack", "intake"] as const;
+export type EmployeeTimezoneSource = (typeof EMPLOYEE_TIMEZONE_SOURCES)[number];
+
+export const employeeTimezones = pgTable("employee_timezones", {
+  email: text("email").primaryKey(),
+  timezone: text("timezone").notNull(),
+  source: text("source").$type<EmployeeTimezoneSource>().notNull(),
   updatedBy: text("updated_by").references(() => users.id, { onDelete: "set null" }),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

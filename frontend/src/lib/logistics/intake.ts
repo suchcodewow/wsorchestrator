@@ -9,6 +9,7 @@ import { and, desc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { intakeForms, intakeResponses, type IntakeFormId } from "@/db/schema";
 import { nameOnRecord, setChosenName } from "@/lib/evals/chosen-names";
+import { setTimezone, timezoneOnRecord } from "@/lib/evals/timezones";
 import { testGroupStageOf } from "@/lib/cohorts/test-group";
 import { cohortStageOf } from "@/lib/evals/current-cohort";
 import {
@@ -18,6 +19,8 @@ import {
   checkAnswers,
   isNameQuestion,
   lockNameQuestion,
+  lockTimezoneQuestion,
+  isTimezoneQuestion,
   type AnswerProblem,
   type IntakeAnswers,
   type IntakeForm,
@@ -25,9 +28,9 @@ import {
 
 export type IntakeFormView = IntakeForm & { updatedAt: string | null };
 
-/** A form's questions as they are asked: Pre-Bootcamp's with its name question locked in first. */
+/** A form's questions as they are asked: Pre-Bootcamp's with its name and time zone questions locked in first. */
 const asAsked = (id: IntakeFormId, questions: IntakeForm["questions"]) =>
-  id === "bootcamp" ? lockNameQuestion(questions) : questions;
+  id === "bootcamp" ? lockTimezoneQuestion(lockNameQuestion(questions)) : questions;
 
 /**
  * The saved form, or its default with a null `updatedAt` if it has never been
@@ -83,6 +86,8 @@ export type MyIntake = {
    * choose another — which the name question starts from until they answer it.
    */
   name: string | null;
+  /** The time zone the app has for them now, which the time zone question starts from until they answer it. */
+  timezone: string | null;
   /** For a test group member in both stages: both forms, to switch between; unset for everyone else. */
   testForms?: IntakeFormId[];
 };
@@ -113,9 +118,10 @@ export async function getMyIntake(email: string, want: IntakeFormId | null = nul
   const found = await intakeStageFor(email, want);
   if (!found) return null;
   const { stage } = found;
-  const [{ introduction, questions }, name, latest] = await Promise.all([
+  const [{ introduction, questions }, name, timezone, latest] = await Promise.all([
     getIntakeForm(stage),
     nameOnRecord(email),
+    timezoneOnRecord(email),
     latestAnswers(stage, email),
   ]);
 
@@ -140,6 +146,7 @@ export async function getMyIntake(email: string, want: IntakeFormId | null = nul
     savedAt: latest?.submittedAt.toISOString() ?? null,
     ...(carriedFrom ? { carriedFrom } : {}),
     name,
+    timezone,
     ...(found.both ? { testForms: ["bootcamp", "intermediate"] as IntakeFormId[] } : {}),
   };
 }
@@ -164,7 +171,8 @@ export type SaveIntakeError = AnswerProblem | { problem: "not_in_cohort" } | { p
 /**
  * Checks someone's answers against their form as it stands now and saves them
  * as their latest, under their own email; `form` says which form that was.
- * Their answer to the name question becomes their name across the app.
+ * Their answer to the name question becomes their name across the app, and
+ * their answer to the time zone question their time zone.
  */
 export async function saveMyIntake(
   email: string,
@@ -190,6 +198,9 @@ export async function saveMyIntake(
   const name = nameQuestion && checked.answers[nameQuestion.id];
   // A test answer never renames a real employee.
   if (typeof name === "string" && !test) await setChosenName(email, name, actorId);
+  const zoneQuestion = form.questions.find(isTimezoneQuestion);
+  const zone = zoneQuestion && checked.answers[zoneQuestion.id];
+  if (typeof zone === "string" && !test) await setTimezone(email, zone, actorId);
 
   return { ok: true, form: stage, savedAt: row!.submittedAt.toISOString() };
 }
