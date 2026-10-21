@@ -203,7 +203,7 @@ export function BootcampDialog({
         <DialogHeader>
           <DialogTitle>{editing ? `Bootcamp starting ${formatDate(editing.startDate)}` : "Schedule Next Bootcamp"}</DialogTitle>
           <DialogDescription className="leading-relaxed">
-            The active bootcamp&apos;s start date is the BTC and INT date its final scores are loaded with.
+            The active bootcamp&apos;s start date is the BTC and INT date that releasing its scores on Reporting → Bootcamp writes to bootcamp history.
           </DialogDescription>
         </DialogHeader>
 

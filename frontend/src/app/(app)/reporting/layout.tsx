@@ -1,4 +1,4 @@
-/** The layout for Reporting: open to Assessments Viewers and above, and to whoever may see the Canary Wire. */
+/** The layout for Reporting: open to everyone signed in, since Bootcamp shows each manager their own org. */
 
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";

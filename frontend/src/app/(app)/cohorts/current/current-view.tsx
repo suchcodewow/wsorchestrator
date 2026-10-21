@@ -61,7 +61,6 @@ import {
   Pin,
   Printer,
   RotateCcw,
-  Upload,
   Users,
   type LucideIcon,
 } from "lucide-react";
@@ -327,15 +326,6 @@ export function CurrentCohortView({
         />
         {tab === "current" && (
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs text-muted-foreground">Waits for eVals judging</span>
-            <Button variant="secondary" disabled>
-              <Upload />
-              Load Final Bootcamp Scores
-            </Button>
-            <Button variant="secondary" disabled>
-              <Upload />
-              Load Final Intermediate Scores
-            </Button>
             <Button variant="secondary" asChild>
               <a href="/cohorts/name-cards" target="_blank" rel="noopener">
                 <Printer />
@@ -586,7 +576,7 @@ function PersonDetails({ member: m, canSeeScores }: { member: CurrentCohortMembe
           "None yet"
         ) : canSeeScores ? (
           <Link
-            href={`/reporting/bootcamp-history/${m.historyId}`}
+            href={`/reporting/bootcamp/${m.historyId}`}
             onClick={(ev) => ev.stopPropagation()}
             className="underline underline-offset-2 hover:text-foreground"
           >

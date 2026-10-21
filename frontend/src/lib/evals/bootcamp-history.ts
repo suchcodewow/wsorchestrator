@@ -3,9 +3,9 @@
  *
  * This table is the record — it replaces the Bootcamp_History sheet, which
  * was imported once to start it. A bootcamp writes its scores here at the end
- * of a session, and the app only ever shows them after that: nobody edits
- * history in the UI. An upload, when one is used, writes only the columns its
- * file has.
+ * of a session, and the app shows them after that. An Assessments
+ * Administrator can correct a row from Reporting → Bootcamp. An upload, when
+ * one is used, writes only the columns its file has.
  */
 
 import "server-only";
@@ -257,8 +257,25 @@ export const historyInputSchema = z.object({
 /** An edit changes only the fields it names. */
 export const historyPatchSchema = historyInputSchema.partial();
 
+/** A class's score per exercise, by the exercise's name as the Sheet had it. */
+const individualScores = z
+  .record(z.string().trim().min(1).max(200), score.unwrap())
+  .refine((scores) => Object.keys(scores).length <= 50, "too many exercises")
+  .nullable();
+
+/**
+ * Reporting → Bootcamp's correction to someone's row: its days and each
+ * exercise's score, but never whose row it is, nor a class's overall score,
+ * which is always the mean of its exercise scores.
+ */
+export const historyCorrectionSchema = historyInputSchema
+  .omit({ email: true, btcScore: true, intScore: true })
+  .extend({ btcIndividualScores: individualScores, intIndividualScores: individualScores })
+  .partial();
+
 type HistoryInput = z.infer<typeof historyInputSchema>;
-type HistoryPatch = z.infer<typeof historyPatchSchema>;
+export type HistoryCorrection = z.infer<typeof historyCorrectionSchema>;
+type HistoryPatch = z.infer<typeof historyPatchSchema> | (HistoryCorrection & Partial<Pick<HistoryInput, "btcScore" | "intScore">>);
 
 const isUniqueViolation = (err: unknown): boolean => {
   const code = (e: unknown) => (e as { code?: unknown } | null)?.code;

@@ -1,7 +1,7 @@
 /** The tabs across the top of Reporting. */
 
-import { History, Radio, type LucideIcon } from "lucide-react";
-import { canSeeCanaryWire, canUseEvals, type Access } from "@/lib/roles";
+import { GraduationCap, Radio, type LucideIcon } from "lucide-react";
+import { canSeeBootcampRecords, canSeeCanaryWire, type Access } from "@/lib/roles";
 
 export type ReportingTab = {
   href: string;
@@ -12,7 +12,7 @@ export type ReportingTab = {
 
 export const REPORTING_TABS: ReportingTab[] = [
   { href: "/reporting/canary-wire", label: "Canary Wire", Icon: Radio, visible: canSeeCanaryWire },
-  { href: "/reporting/bootcamp-history", label: "Bootcamp History", Icon: History, visible: canUseEvals },
+  { href: "/reporting/bootcamp", label: "Bootcamp", Icon: GraduationCap, visible: canSeeBootcampRecords },
 ];
 
 export function visibleReportingTabs(access: Access): ReportingTab[] {

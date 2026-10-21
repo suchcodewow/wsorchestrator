@@ -1,4 +1,4 @@
-import { DIETARY_LIST, FOOD_ORDER_LIST, RECORDING_LIST, GUEST_JUDGE_LIST, INTAKE_RESPONSE_LIST, JUDGE_PROSPECT_LIST, ASSESSMENT_ATTENDEE_LIST, ASSESSMENT_LIST, AUDIT_LIST, BOOTCAMP_HISTORY_LIST, BOOTCAMP_LIST, CURRENT_COHORT_LIST, DOMAIN_LIST, EMPLOYEE_LIST, HIBOB_SYNC_LIST, HISTORY_STATUSES, JUDGE_LIST, ORGANIZATION_LIST, PREVIOUS_SESSION_LIST, SESSION_COMMENT_LIST, SESSION_TYPE_LIST, MEETING_SELECTION_LIST, MEETING_SYNC_CHANGE_LIST, MEETING_SYNC_LIST, SLACK_CONTACT_LIST, SLACK_SYNC_CHANGE_LIST, SLACK_SYNC_LIST, CHANNEL_CONTACT_LIST, SURVEY_RESPONSE_LIST, SURVEY_RESULT_LIST, TITLE_LIST, USER_LIST, FACILITY_LIST, VIDEO_FEEDBACK_LIST } from "@/lib/list-specs";
+import { DIETARY_LIST, FOOD_ORDER_LIST, RECORDING_LIST, GUEST_JUDGE_LIST, INTAKE_RESPONSE_LIST, JUDGE_PROSPECT_LIST, ASSESSMENT_ATTENDEE_LIST, ASSESSMENT_LIST, AUDIT_LIST, BOOTCAMP_COHORT_LIST, BOOTCAMP_HISTORY_LIST, BOOTCAMP_LIST, BOOTCAMP_RECORD_LIST, CURRENT_COHORT_LIST, DOMAIN_LIST, EMPLOYEE_LIST, HIBOB_SYNC_LIST, HISTORY_STATUSES, JUDGE_LIST, ORGANIZATION_LIST, PREVIOUS_SESSION_LIST, SESSION_COMMENT_LIST, SESSION_TYPE_LIST, MEETING_SELECTION_LIST, MEETING_SYNC_CHANGE_LIST, MEETING_SYNC_LIST, SLACK_CONTACT_LIST, SLACK_SYNC_CHANGE_LIST, SLACK_SYNC_LIST, CHANNEL_CONTACT_LIST, SURVEY_RESPONSE_LIST, SURVEY_RESULT_LIST, TITLE_LIST, USER_LIST, FACILITY_LIST, VIDEO_FEEDBACK_LIST } from "@/lib/list-specs";
 import { BOOTCAMP_LIMITS, CHECKLIST_LIMITS, EVALS_ASSESSMENT_LIMITS, FACILITY_LIMITS, FOOD_ORDER_LIMITS, INTAKE_LIMITS, MEETING_SELECTION_LIMITS, RECORDING_LIMITS, SCHEDULE_LIMITS, SURVEY_LIMITS, VIDEO_FEEDBACK_LIMITS } from "@/db/schema";
 import { PAGE_SIZE } from "@/lib/paging";
 import { RECORDING_RETENTION_DAYS, UPLOAD_STALLED_MS, UPLOAD_URL_BATCH } from "@/lib/recording/video";
@@ -881,7 +881,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "trainingAdmin",
         token: true,
         notes:
-          "Only one bootcamp may be active; the active one's start date is the BTC and INT date its final scores are loaded with. To make a new one active while another is, name that other in completeActive: it is marked complete in the same write.",
+          "Only one bootcamp may be active; the active one's start date is the BTC and INT date that releasing its scores on Reporting → Bootcamp writes to bootcamp history. To make a new one active while another is, name that other in completeActive: it is marked complete in the same write.",
         body: {
           kind: "json",
           fields: [
@@ -2262,6 +2262,113 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           { status: 404, error: "not_found", when: "no such active assessment, or the attendee is not one it applies to" },
           { status: 409, error: "no_bootcamp", when: "no bootcamp is active, or for intermediate, the active one holds no intermediate class" },
           { status: 409, error: "conflict", when: "someone else saved it since revises, or saved the first one first" },
+        ],
+      },
+    ],
+  },
+  {
+    id: "reporting-bootcamp",
+    title: "Reporting: Bootcamp",
+    intro:
+      "Everyone's BTC and INT, as Reporting → Bootcamp shows them. Any signed-in account may call these, and each caller sees only the people under them in the last HiBob sync, every level down and themselves left out; an Assessments Viewer or above sees everyone. Below Assessments Viewer, a bootcamp's BTC or INT results stay hidden until an Assessments Administrator releases that class, and the assessments behind a score are never shown.",
+    endpoints: [
+      {
+        method: "GET",
+        path: "/api/reporting/bootcamp",
+        summary: "Lists the people the caller may see with a BTC or INT record, newest class first, a page at a time.",
+        access: "signedIn",
+        token: true,
+        notes:
+          "A record is a day in bootcamp history, or a class of a completed bootcamp someone was assessed at that the caller may see. level is the furthest class attended: intermediate, else bootcamp, else exempt for someone marked exempt from every class they have a record of. date is their latest class day, null when they are only exempt. key addresses their page: their HiBob id while they are in the employee list, else their history row's id, else a submission's. fullName is null, and active false, for someone not in the employee list from the last HiBob sync. counts gives everyone the caller may see, the active and the inactive, whatever the search or status.",
+        query: [
+          ...listQuery(BOOTCAMP_RECORD_LIST.sorts, "the name or email", BOOTCAMP_RECORD_LIST.dir),
+          { name: "status", type: HISTORY_STATUSES.map((s) => `"${s}"`).join(" | "), note: "only the active or only the inactive; everyone if omitted" },
+        ],
+        returns: `{ people: { key, email, fullName: string | null, level: "intermediate" | "bootcamp" | "exempt", date: "YYYY-MM-DD" | null, active: boolean }[], ${PAGE_FIELDS}, status: "active" | "inactive" | null, counts: { total: number, active: number, inactive: number } }`,
+        errors: [{ status: 400, error: "invalid_status", when: "status is neither active nor inactive" }],
+      },
+      {
+        method: "GET",
+        path: "/api/reporting/bootcamp/cohort",
+        summary: "Returns the active bootcamp, which of its classes are released, and a page of the people in its cohort the caller may see.",
+        access: "signedIn",
+        token: true,
+        notes:
+          "stages lists the classes the caller may see the cohort of: every class the bootcamp holds for an Assessments Viewer or above, else only those released. cohort holds one row per person and class in those stages; averageScore is the mean of their submissions' averages, null with none scored, and scored how many there are. bootcamp is null, and cohort empty, when no bootcamp is active.",
+        query: listQuery(BOOTCAMP_COHORT_LIST.sorts, "the name or email", BOOTCAMP_COHORT_LIST.dir),
+        returns: `{ bootcamp: { id, startDate, intermediate: boolean, released: { bootcamp: { at, byName: string | null } | null, intermediate: { at, byName: string | null } | null } } | null, stages: ("bootcamp" | "intermediate")[], cohort: { key, email, fullName: string | null, stage: "bootcamp" | "intermediate", scored: number, averageScore: number | null }[], ${PAGE_FIELDS} }`,
+      },
+      {
+        method: "POST",
+        path: "/api/reporting/bootcamp/release",
+        summary: "Releases the active bootcamp's BTC or INT results to managers, and writes them to bootcamp history.",
+        access: "assessmentsAdmin",
+        token: true,
+        notes:
+          "From then on, managers see that class's results for the people in their org. Everyone scored in the class gets the bootcamp's start date as their BTC or INT date in bootcamp history, the mean of their submissions' averages as the class score, and each assessment's average as an exercise score; a BTC class then moves on to Intermediate on Cohorts → Current, and an INT class leaves it. written counts the history rows written. A release cannot be taken back; releasing a class already released changes nothing, writes nothing, and returns when it was.",
+        body: { kind: "json", fields: [{ name: "stage", type: '"bootcamp" | "intermediate"', required: true }] },
+        returns: "{ ok: true, stage, bootcamp: { id, startDate }, releasedAt, written: number }",
+        errors: [
+          { status: 400, error: "invalid", when: "stage is missing or neither bootcamp nor intermediate" },
+          { status: 409, error: "no_bootcamp", when: "no bootcamp is active" },
+          { status: 409, error: "no_intermediate", when: "stage is intermediate and the active bootcamp holds no intermediate class" },
+        ],
+      },
+      {
+        method: "GET",
+        path: "/api/reporting/bootcamp/people/{key}",
+        summary: "Returns one person's BTC and INT, and for an Assessments Viewer every assessment behind them.",
+        access: "signedIn",
+        token: true,
+        notes:
+          "classes is what a manager sees: each class's day, overall score and score per exercise, from bootcamp history or from that class's released assessments; a day of 2000-01-01 means exempt. records is null below Assessments Viewer. Above it, history is their bootcamp history row, or null, and submissions every assessment of them at any bootcamp, newest bootcamp first, with each criterion's score and comment; released says whether managers may see it yet.",
+        params: [{ name: "key", type: "string", required: true, note: "a key from the list: a HiBob id, a history row's id or a submission's" }],
+        returns:
+          '{ key, email, employee: { fullName, title, department, site, reportsToName, reportsToEmail, startDate, track } | null, classes: { bootcamp: ClassSummary, intermediate: ClassSummary }, records: { history: { id, btcDate, intDate, btcScore, intScore, btcIndividualScores, intIndividualScores, createdAt, updatedAt, updatedByName } | null, submissions: { id, bootcamp: { id, startDate, status }, stage, assessmentName, averageScore, positiveFeedback, constructiveFeedback, ownerName, submittedAt, updatedAt, released, scores: { criterionId, criterionName, score, comment }[] }[] } | null }, where ClassSummary is { date: string | null, score: number | null, exercises: { name, score }[] }',
+        errors: [{ status: 404, error: "not_found", when: "the key names no one, or someone the caller may not see" }],
+      },
+      {
+        method: "PATCH",
+        path: "/api/reporting/bootcamp/submissions/{id}",
+        summary: "Corrects one assessment of someone, at any bootcamp: its scores, comments and feedback.",
+        access: "assessmentsAdmin",
+        token: true,
+        notes:
+          "It keeps the criteria the assessment was scored on, their names as scored, and its owner; the audit log records who corrected it. The average follows the new scores, and the feedback the eVals form requires for that average is still required. In a class already released, the person's bootcamp history score and exercise scores for it are written again.",
+        params: [{ name: "id", type: "string", required: true, note: "the submission's id" }],
+        body: { kind: "json", fields: [
+          { name: "scores", type: "{ criterionId, score: 1 | 2 | 3 | 4, comment?: string }[]", required: true, note: `every criterion it was scored on, once each; comments up to ${EVALS_ASSESSMENT_LIMITS.comment} characters` },
+          { name: "positiveFeedback", type: "string", note: `up to ${EVALS_ASSESSMENT_LIMITS.feedback} characters` },
+          { name: "constructiveFeedback", type: "string", note: `up to ${EVALS_ASSESSMENT_LIMITS.feedback} characters` },
+          { name: "revises", type: "string", required: true, note: "the updatedAt of the version being corrected" },
+        ] },
+        returns: "{ ok: true, submission: { id, attendeeEmail, assessmentName, averageScore, updatedAt } }",
+        errors: [
+          { status: 400, error: "invalid", when: "the body is not that shape, or the scores are not exactly the criteria it was scored on" },
+          { status: 400, error: "feedback_required", when: "the average requires feedback that is empty" },
+          { status: 404, error: "not_found", when: "`id` is not a UUID, or no submission has it" },
+          { status: 409, error: "conflict", when: "someone saved it since revises" },
+        ],
+      },
+      {
+        method: "PATCH",
+        path: "/api/reporting/bootcamp/history/{id}",
+        summary: "Corrects someone's bootcamp history row: its days and exercise scores.",
+        access: "assessmentsAdmin",
+        token: true,
+        notes:
+          "Fields left out keep their value, and null clears one. A day of 2000-01-01 marks the person exempt from that class. Scores run from 1 to 4, to one decimal place; the individual scores map each exercise's column name to its score. A class's overall score cannot be set: giving its individual scores sets it to their mean, to one decimal place, and leaving them out or null keeps the one it has. The row's email cannot be changed here.",
+        params: [{ name: "id", type: "string", required: true, note: "the row's id" }],
+        body: { kind: "json", fields: [
+          { name: "btcDate", type: '"YYYY-MM-DD" | null' },
+          { name: "intDate", type: '"YYYY-MM-DD" | null' },
+          { name: "btcIndividualScores", type: "Record<string, number> | null", note: "up to 50 exercises" },
+          { name: "intIndividualScores", type: "Record<string, number> | null", note: "up to 50 exercises" },
+        ] },
+        returns: "{ ok: true }",
+        errors: [
+          { status: 400, error: "invalid", when: "a field is not that shape, or the body has any other" },
+          { status: 404, error: "not_found", when: "`id` is not a UUID, or no row has it" },
         ],
       },
     ],
