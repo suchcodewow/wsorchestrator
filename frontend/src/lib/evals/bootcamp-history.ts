@@ -1,60 +1,40 @@
 /**
  * Bootcamp history: who attended BTC and INT, and how they scored.
  *
- * This table is the record — it replaces the Bootcamp_History sheet, which
- * was imported once to start it. A bootcamp writes its scores here at the end
- * of a session, and the app shows them after that. An Assessments
- * Administrator can correct a row from Reporting → Bootcamp. An upload, when
- * one is used, writes only the columns its file has.
+ * It is kept on each person's `employees` row (`btcDate` … `historyUpdatedAt`),
+ * which replaced the Bootcamp_History sheet and the table it was imported
+ * into. A bootcamp writes its scores there when a class is released, and an
+ * Assessments Administrator can correct them from Reporting → Bootcamp.
+ * Someone with a history whom HiBob has never sent has an inactive row of
+ * their own (`ensureEmployees`), so nobody's history is lost.
  */
 
 import "server-only";
 
-import { and, asc, eq, or, sql, type AnyColumn, type SQL } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
+import { and, eq, inArray, or, sql, type AnyColumn, type SQL } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
-import {
-  BOOTCAMP_HISTORY_LIMITS,
-  BOOTCAMP_SCORE,
-  EXEMPT_DATE,
-  bootcampHistory,
-  employees,
-  users,
-  type BootcampHistory,
-  type Employee,
-} from "@/db/schema";
-import { parseHistorySheet, type HistoryField, type HistoryProblem } from "@/lib/evals/bootcamp-history-file";
-import { isIsoDay, normalEmail, roundScore } from "@/lib/evals/history-values";
+import { BOOTCAMP_SCORE, EXEMPT_DATE, employees, hasHistory, users, type Employee } from "@/db/schema";
+import { nameFromEmail } from "@/lib/evals/hibob-record";
+import { isIsoDay, roundScore } from "@/lib/evals/history-values";
 import { retrackEmployees } from "@/lib/evals/tracks";
 import type { BootcampHistorySort, HistoryStatus, PreviousSessionSort } from "@/lib/list-specs";
 import { pageWindow, toPage, type ListQuery, type Page } from "@/lib/paging";
 import { orderFor, searchAny } from "@/lib/paging-sql";
-import { readSpreadsheet } from "@/lib/spreadsheet-file";
 
-export async function listHistory(): Promise<BootcampHistory[]> {
-  return db.select().from(bootcampHistory).orderBy(asc(bootcampHistory.email));
-}
-
-/**
- * The person's name as the employee list has it. History outlives the sync,
- * so someone who has left has none. Both emails are stored lowercased.
- */
-// Spelled out, because Drizzle leaves the table off a column in a one-table
-// query, and an unqualified `email` here would mean the employee's own.
-const historyName = sql<string | null>`(select n.full_name from ${employees} n where n.email = ${bootcampHistory}.email order by n.full_name limit 1)`;
-
-/** Still at Harness: the last HiBob sync stored someone with this email. */
-const isActive = sql<boolean>`exists (select 1 from ${employees} a where a.email = ${bootcampHistory}.email)`;
+/** Their name, or null where neither HiBob nor their email gave one. */
+const historyName = sql<string | null>`nullif(${employees.fullName}, '')`;
 
 const STATUS_FILTER: Record<HistoryStatus, SQL> = {
-  active: isActive,
-  inactive: sql`not ${isActive}`,
+  active: sql`${employees.active}`,
+  inactive: sql`not ${employees.active}`,
 };
 
 const HISTORY_SORT_COLUMNS = {
-  btcDate: bootcampHistory.btcDate,
+  btcDate: employees.btcDate,
   fullName: sql`lower(${historyName})`,
-  email: bootcampHistory.email,
+  email: employees.email,
 } as const;
 
 export type HistoryListing = { id: string; email: string; fullName: string | null; btcDate: string | null };
@@ -70,15 +50,15 @@ export async function listHistoryPage(
   const { limit, offset } = pageWindow(query.page);
   const rows = await db
     .select({
-      id: bootcampHistory.id,
-      email: bootcampHistory.email,
+      id: employees.id,
+      email: employees.email,
       fullName: historyName,
-      btcDate: bootcampHistory.btcDate,
+      btcDate: employees.btcDate,
     })
-    .from(bootcampHistory)
-    .where(and(searchAny(query.q, [historyName, bootcampHistory.email]), status ? STATUS_FILTER[status] : undefined))
+    .from(employees)
+    .where(and(hasHistory, searchAny(query.q, [historyName, employees.email]), status ? STATUS_FILTER[status] : undefined))
     // A bootcamp's class shares one date, so they fall back to name order.
-    .orderBy(...orderFor(HISTORY_SORT_COLUMNS[query.sort], query.dir, sql`${HISTORY_SORT_COLUMNS.fullName} asc nulls last`, bootcampHistory.email))
+    .orderBy(...orderFor(HISTORY_SORT_COLUMNS[query.sort], query.dir, sql`${HISTORY_SORT_COLUMNS.fullName} asc nulls last`, employees.email))
     .limit(limit)
     .offset(offset);
   return toPage(rows, query.page);
@@ -86,14 +66,15 @@ export async function listHistoryPage(
 
 export type HistoryCounts = { total: number } & Record<HistoryStatus, number>;
 
-/** How many people have a history row, and how many of them are still at Harness, whatever the search. */
+/** How many people have a history, and how many of them are still at Harness, whatever the search. */
 export async function historyCounts(): Promise<HistoryCounts> {
   const [row] = await db
     .select({
       total: sql<number>`count(*)::int`,
-      active: sql<number>`(count(*) filter (where ${isActive}))::int`,
+      active: sql<number>`(count(*) filter (where ${employees.active}))::int`,
     })
-    .from(bootcampHistory);
+    .from(employees)
+    .where(hasHistory);
   const total = row?.total ?? 0;
   const active = row?.active ?? 0;
   return { total, active, inactive: total - active };
@@ -103,9 +84,9 @@ export async function historyCounts(): Promise<HistoryCounts> {
 export type PreviousSession = { date: string; bootcamp: number; intermediate: number };
 
 const SESSION_DAYS = sql`(
-  select btc_date as day, 1 as at_btc, 0 as at_int from ${bootcampHistory} where btc_date is not null and btc_date <> ${EXEMPT_DATE}
+  select btc_date as day, 1 as at_btc, 0 as at_int from ${employees} where btc_date is not null and btc_date <> ${EXEMPT_DATE}
   union all
-  select int_date, 0, 1 from ${bootcampHistory} where int_date is not null and int_date <> ${EXEMPT_DATE}
+  select int_date, 0, 1 from ${employees} where int_date is not null and int_date <> ${EXEMPT_DATE}
 )`;
 
 const SESSION_SORT_COLUMNS: Record<PreviousSessionSort, SQL> = {
@@ -139,18 +120,18 @@ export type SessionStage = "bootcamp" | "intermediate";
 export type SessionAttendee = { id: string; email: string; fullName: string | null; active: boolean };
 
 const STAGE_DATE = {
-  bootcamp: bootcampHistory.btcDate,
-  intermediate: bootcampHistory.intDate,
+  bootcamp: employees.btcDate,
+  intermediate: employees.intDate,
 } satisfies Record<SessionStage, AnyColumn>;
 
 /** One page of who attended `stage` on `date`, by name, with whoever has left after them. */
 async function listSessionAttendees(stage: SessionStage, date: string, page: number): Promise<Page<SessionAttendee>> {
   const { limit, offset } = pageWindow(page);
   const rows = await db
-    .select({ id: bootcampHistory.id, email: bootcampHistory.email, fullName: historyName, active: isActive })
-    .from(bootcampHistory)
+    .select({ id: employees.id, email: employees.email, fullName: historyName, active: employees.active })
+    .from(employees)
     .where(eq(STAGE_DATE[stage], date))
-    .orderBy(sql`${HISTORY_SORT_COLUMNS.fullName} asc nulls last`, bootcampHistory.email)
+    .orderBy(sql`${HISTORY_SORT_COLUMNS.fullName} asc nulls last`, employees.email)
     .limit(limit)
     .offset(offset);
   return toPage(rows, page);
@@ -168,238 +149,142 @@ export async function getSessionDetail(date: string, pages: Record<SessionStage,
     listSessionAttendees("bootcamp", date, pages.bootcamp),
     listSessionAttendees("intermediate", date, pages.intermediate),
     db
-      .select({ id: bootcampHistory.id })
-      .from(bootcampHistory)
-      .where(or(eq(bootcampHistory.btcDate, date), eq(bootcampHistory.intDate, date)))
+      .select({ id: employees.id })
+      .from(employees)
+      .where(or(eq(employees.btcDate, date), eq(employees.intDate, date)))
       .limit(1),
   ]);
   if (!held) return null;
   return { date, bootcamp, intermediate };
 }
 
-export type HistoryDetail = BootcampHistory & {
-  /** Who last changed the row, by name or else email; null for an import with no account, or a deleted one. */
+export type HistoryDetail = Pick<
+  Employee,
+  "id" | "email" | "btcDate" | "intDate" | "btcScore" | "intScore" | "btcIndividualScores" | "intIndividualScores"
+> & {
+  /** Their name, or null where neither HiBob nor their email gave one. */
+  fullName: string | null;
+  /** When their history was first and last written; null only for a history from before these were kept. */
+  createdAt: Date | null;
+  updatedAt: Date | null;
+  /** Who last changed it, by name or else email; null for the imported sheet, or a deleted account. */
   updatedByName: string | null;
-  /** The employee list's record for the email, or null for someone not in it. */
+  /** Who they are in HiBob now, or null for someone HiBob no longer sends, or never did. */
   employee: Pick<Employee, "fullName" | "title" | "department" | "site" | "reportsToName" | "reportsToEmail" | "startDate" | "track"> | null;
 };
 
-/** One person's whole row, with who they are from the employee list. */
+/** One person's whole history, by their employee id, with who they are in HiBob. */
 export async function getHistoryDetail(id: string): Promise<HistoryDetail | null> {
   const [row] = await db
     .select({
-      history: bootcampHistory,
+      person: employees,
       updatedByName: sql<string | null>`coalesce(nullif(${users.name}, ''), ${users.email})`,
     })
-    .from(bootcampHistory)
-    .leftJoin(users, eq(users.id, bootcampHistory.updatedBy))
-    .where(eq(bootcampHistory.id, id));
-  if (!row) return null;
-
-  const [employee] = await db
-    .select({
-      fullName: employees.fullName,
-      title: employees.title,
-      department: employees.department,
-      site: employees.site,
-      reportsToName: employees.reportsToName,
-      reportsToEmail: employees.reportsToEmail,
-      startDate: employees.startDate,
-      track: employees.track,
-    })
     .from(employees)
-    .where(eq(employees.email, row.history.email))
-    .orderBy(asc(employees.fullName))
-    .limit(1);
-
-  return { ...row.history, updatedByName: row.updatedByName, employee: employee ?? null };
+    .leftJoin(users, eq(users.id, employees.historyUpdatedBy))
+    .where(and(eq(employees.id, id), hasHistory));
+  if (!row) return null;
+  const e = row.person;
+  return {
+    id: e.id,
+    email: e.email,
+    fullName: e.fullName || null,
+    btcDate: e.btcDate,
+    intDate: e.intDate,
+    btcScore: e.btcScore,
+    intScore: e.intScore,
+    btcIndividualScores: e.btcIndividualScores,
+    intIndividualScores: e.intIndividualScores,
+    createdAt: e.historyCreatedAt,
+    updatedAt: e.historyUpdatedAt,
+    updatedByName: row.updatedByName,
+    employee: e.active
+      ? {
+          fullName: e.fullName,
+          title: e.title,
+          department: e.department,
+          site: e.site,
+          reportsToName: e.reportsToName,
+          reportsToEmail: e.reportsToEmail,
+          startDate: e.startDate,
+          track: e.track,
+        }
+      : null,
+  };
 }
 
-export type ImportError = "no_file" | "too_large" | "unreadable" | "empty" | "no_email_column" | "too_many_rows";
+export type HistoryError = "invalid" | "not_found";
 
-export type HistoryError = "invalid" | "duplicate" | "not_found";
-
-export const STATUS_FOR: Record<ImportError | HistoryError, number> = {
-  no_file: 400,
-  too_large: 413,
-  unreadable: 400,
-  empty: 400,
-  no_email_column: 400,
-  too_many_rows: 413,
+export const STATUS_FOR: Record<HistoryError, number> = {
   invalid: 400,
-  duplicate: 409,
   not_found: 404,
 };
 
-const email = z
-  .string()
-  .max(BOOTCAMP_HISTORY_LIMITS.email)
-  .transform((v, ctx) => {
-    const normal = normalEmail(v);
-    if (normal) return normal;
-    ctx.addIssue({ code: "custom", message: "not an email address" });
-    return z.NEVER;
-  });
-
 const day = z.string().refine(isIsoDay).nullable();
 
-const score = z.number().min(BOOTCAMP_SCORE.min).max(BOOTCAMP_SCORE.max).transform(roundScore).nullable();
-
-/** One person's row as a form sets it. Individual scores come from grading, not the form. */
-export const historyInputSchema = z.object({
-  email,
-  btcDate: day,
-  intDate: day,
-  btcScore: score,
-  intScore: score,
-});
-
-/** An edit changes only the fields it names. */
-export const historyPatchSchema = historyInputSchema.partial();
+const score = z.number().min(BOOTCAMP_SCORE.min).max(BOOTCAMP_SCORE.max).transform(roundScore);
 
 /** A class's score per exercise, by the exercise's name as the Sheet had it. */
 const individualScores = z
-  .record(z.string().trim().min(1).max(200), score.unwrap())
+  .record(z.string().trim().min(1).max(200), score)
   .refine((scores) => Object.keys(scores).length <= 50, "too many exercises")
   .nullable();
 
 /**
- * Reporting → Bootcamp's correction to someone's row: its days and each
- * exercise's score, but never whose row it is, nor a class's overall score,
+ * Reporting → Bootcamp's correction to someone's history: its days and each
+ * exercise's score, but never whose it is, nor a class's overall score,
  * which is always the mean of its exercise scores.
  */
-export const historyCorrectionSchema = historyInputSchema
-  .omit({ email: true, btcScore: true, intScore: true })
-  .extend({ btcIndividualScores: individualScores, intIndividualScores: individualScores })
+export const historyCorrectionSchema = z
+  .object({ btcDate: day, intDate: day, btcIndividualScores: individualScores, intIndividualScores: individualScores })
   .partial();
 
-type HistoryInput = z.infer<typeof historyInputSchema>;
 export type HistoryCorrection = z.infer<typeof historyCorrectionSchema>;
-type HistoryPatch = z.infer<typeof historyPatchSchema> | (HistoryCorrection & Partial<Pick<HistoryInput, "btcScore" | "intScore">>);
 
-const isUniqueViolation = (err: unknown): boolean => {
-  const code = (e: unknown) => (e as { code?: unknown } | null)?.code;
-  return code(err) === "23505" || code((err as { cause?: unknown } | null)?.cause) === "23505";
-};
+/** A correction, with the overall scores it works out. */
+type HistoryPatch = HistoryCorrection & { btcScore?: number | null; intScore?: number | null };
 
-export async function createHistory(
-  actorId: string,
-  input: HistoryInput,
-): Promise<{ ok: true; id: string } | { ok: false; error: HistoryError }> {
-  const [row] = await db
-    .insert(bootcampHistory)
-    .values({ ...input, updatedBy: actorId })
-    .onConflictDoNothing()
-    .returning({ id: bootcampHistory.id });
-  if (!row) return { ok: false, error: "duplicate" };
-  await retrackEmployees([input.email]);
-  return { ok: true, id: row.id };
-}
-
+/** Changes the fields `patch` names on the history of the employee `id`. */
 export async function updateHistory(
   actorId: string,
   id: string,
   patch: HistoryPatch,
-): Promise<{ ok: true } | { ok: false; error: HistoryError }> {
-  const [before] = await db
-    .select({ email: bootcampHistory.email })
-    .from(bootcampHistory)
-    .where(eq(bootcampHistory.id, id));
-  if (!before) return { ok: false, error: "not_found" };
-  try {
-    const updated = await db
-      .update(bootcampHistory)
-      .set({ ...patch, updatedBy: actorId, updatedAt: new Date() })
-      .where(eq(bootcampHistory.id, id))
-      .returning({ email: bootcampHistory.email });
-    if (updated.length === 0) return { ok: false, error: "not_found" };
-    // A new email moves the track with it.
-    await retrackEmployees([before.email, ...updated.map((u) => u.email)]);
-    return { ok: true };
-  } catch (err) {
-    // A new email that someone else already has.
-    if (isUniqueViolation(err)) return { ok: false, error: "duplicate" };
-    throw err;
-  }
+): Promise<{ ok: true; email: string } | { ok: false; error: HistoryError }> {
+  const now = new Date();
+  const [updated] = await db
+    .update(employees)
+    .set({
+      ...patch,
+      historyUpdatedBy: actorId,
+      historyUpdatedAt: now,
+      historyCreatedAt: sql`coalesce(${employees.historyCreatedAt}, ${now})`,
+    })
+    .where(and(eq(employees.id, id), hasHistory))
+    .returning({ email: employees.email });
+  if (!updated) return { ok: false, error: "not_found" };
+  await retrackEmployees([updated.email]);
+  return { ok: true, email: updated.email };
 }
 
-export async function deleteHistory(id: string): Promise<boolean> {
-  const deleted = await db
-    .delete(bootcampHistory)
-    .where(eq(bootcampHistory.id, id))
-    .returning({ email: bootcampHistory.email });
-  await retrackEmployees(deleted.map((d) => d.email));
-  return deleted.length > 0;
-}
-
-export type ImportSummary = {
-  added: number;
-  updated: number;
-  problems: HistoryProblem[];
-  ignoredColumns: string[];
-};
-
-const BATCH = 500;
-
-const EXCLUDED: Record<HistoryField, SQL> = {
-  btcDate: sql`excluded.btc_date`,
-  intDate: sql`excluded.int_date`,
-  btcScore: sql`excluded.btc_score`,
-  intScore: sql`excluded.int_score`,
-  btcIndividualScores: sql`excluded.btc_individual_scores`,
-  intIndividualScores: sql`excluded.int_individual_scores`,
-};
+type Runner = Pick<typeof db, "select" | "insert">;
 
 /**
- * Reads an uploaded sheet and stores its rows by email. Only the columns the
- * sheet has are written, so an INT-only sheet leaves BTC results alone; a
- * blank cell in one of them clears it. Emails not in the file are untouched.
+ * Gives each of `emails` (lowercased) with no `employees` row an inactive one
+ * of their own, named from the email as the HiBob sync would, so a history
+ * can be written for someone HiBob has never sent — a guest at a bootcamp,
+ * say. Should HiBob send them later, the sync carries the history onto the
+ * row it makes.
  */
-export async function importHistory(
-  actorId: string,
-  file: File | null,
-): Promise<{ ok: true; summary: ImportSummary } | { ok: false; error: ImportError }> {
-  if (!file || file.size === 0) return { ok: false, error: "no_file" };
-  if (file.size > BOOTCAMP_HISTORY_LIMITS.bytes) return { ok: false, error: "too_large" };
-
-  let parsed;
-  try {
-    parsed = parseHistorySheet(readSpreadsheet(Buffer.from(await file.arrayBuffer())));
-  } catch {
-    return { ok: false, error: "unreadable" };
-  }
-  if (!parsed.ok) return parsed;
-  if (parsed.rows.length > BOOTCAMP_HISTORY_LIMITS.rows) return { ok: false, error: "too_many_rows" };
-
-  const set = {
-    ...Object.fromEntries(parsed.columns.map((c) => [c, EXCLUDED[c]])),
-    updatedBy: sql`excluded.updated_by`,
-    updatedAt: sql`excluded.updated_at`,
-  };
-
-  let added = 0;
-  const now = new Date();
-  await db.transaction(async (tx) => {
-    for (let i = 0; i < parsed.rows.length; i += BATCH) {
-      const batch = parsed.rows.slice(i, i + BATCH).map((r) => ({ ...r, updatedBy: actorId, updatedAt: now }));
-      const written = await tx
-        .insert(bootcampHistory)
-        .values(batch)
-        .onConflictDoUpdate({ target: bootcampHistory.email, set })
-        // A row Postgres inserted, rather than updated, has no xmax yet.
-        .returning({ inserted: sql<boolean>`(xmax = 0)` });
-      added += written.filter((w) => w.inserted).length;
-    }
-  });
-  await retrackEmployees(parsed.rows.map((r) => r.email));
-
-  return {
-    ok: true,
-    summary: {
-      added,
-      updated: parsed.rows.length - added,
-      problems: parsed.problems,
-      ignoredColumns: parsed.ignoredColumns,
-    },
-  };
+export async function ensureEmployees(runner: Runner, emails: string[]): Promise<void> {
+  const wanted = [...new Set(emails)];
+  if (wanted.length === 0) return;
+  const have = new Set(
+    (await runner.select({ email: employees.email }).from(employees).where(inArray(employees.email, wanted))).map((r) => r.email),
+  );
+  const missing = wanted.filter((e) => !have.has(e));
+  if (missing.length === 0) return;
+  await runner
+    .insert(employees)
+    .values(missing.map((email) => ({ id: randomUUID(), email, fullName: nameFromEmail(email, ""), raw: {}, active: false })))
+    .onConflictDoNothing();
 }

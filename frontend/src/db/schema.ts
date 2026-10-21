@@ -847,15 +847,18 @@ export type ScrubStatus = (typeof SCRUB_STATUSES)[number];
 export type HarnessDeployedSecret = typeof harnessDeployedSecrets.$inferSelect;
 
 /**
- * Every active HiBob employee, as of the last sync. A sync replaces the whole
- * table, so someone who has left drops out. Until 0034 this was
- * `hibob_employees`, a name a view still answers to for the revision a deploy
- * replaces.
+ * Everyone HiBob has listed, kept up to date in place by each sync, and
+ * everyone with a bootcamp history from before the app, whom HiBob may never
+ * have sent. Someone HiBob stops sending stays, marked inactive. Until 0034
+ * this was `hibob_employees`.
  */
 export const employees = pgTable(
   "employees",
   {
-    /** HiBob's own id for the person. */
+    /**
+     * HiBob's own id for the person; for someone with a bootcamp history whom
+     * HiBob never sent, the id their history row had.
+     */
     id: text("id").primaryKey(),
     /** Lowercased. */
     email: text("email").notNull(),
@@ -872,7 +875,7 @@ export const employees = pgTable(
     startDate: date("start_date", { mode: "string" }),
     /** When their current position took effect — a transfer resets it. */
     activeEffectiveDate: date("active_effective_date", { mode: "string" }),
-    /** The record as HiBob sent it, less the flattened `/…` duplicates. */
+    /** The record as HiBob sent it, less the flattened `/…` duplicates; `{}` for someone HiBob never sent. */
     raw: jsonb("raw").notNull(),
     importedAt: timestamp("imported_at", { withTimezone: true })
       .notNull()
@@ -892,7 +895,7 @@ export const employees = pgTable(
     /**
      * Null for anyone not under the leader. Otherwise, first that applies:
      * the track an administrator set by hand (`trackOverride`);
-     * `exempt` when their bootcamp history marks BTC or INT exempt; `ignored`
+     * `exempt` when `btcDate` or `intDate` is `EXEMPT_DATE`; `ignored`
      * for a title on the Ignored list; `deferred` for someone who started too
      * close to the next bootcamp to attend it; then `sales` or `engineer` by
      * their title's list. Null for a title on no list. Who has `sales`,
@@ -925,9 +928,41 @@ export const employees = pgTable(
      * False once the sync no longer finds them in HiBob: they left. Their row
      * stays, with what they chose and their history, but they are in no org
      * (`orgDepth`, `managementChain` and `track` are null) and no list or
-     * picker offers them. True again if HiBob sends them again.
+     * picker offers them. True again if HiBob sends them again. False from the
+     * start for someone known only from their bootcamp history.
      */
     active: boolean("active").notNull().default(true),
+    /**
+     * Their Slack user, as `users.lookupByEmail` or the sync's pass over
+     * `users.list` last answered; null until asked, and for someone Slack has
+     * no account for, who is asked again a day after `slackLookedUpAt`.
+     * Slack ids never change, so one found is not asked again.
+     */
+    slackUserId: text("slack_user_id"),
+    slackLookedUpAt: timestamp("slack_looked_up_at", { withTimezone: true }),
+    /**
+     * Their bootcamp (BTC) and intermediate (INT) history: the days they
+     * attended and how they scored. Written when a class is released
+     * (`lib/reporting/bootcamp.ts`) and corrected from Reporting → Bootcamp.
+     * `EXEMPT_DATE` marks a class they never need to attend. Someone has a
+     * history when any of the four is set (`hasHistory`). The sync never
+     * touches these.
+     */
+    btcDate: date("btc_date", { mode: "string" }),
+    intDate: date("int_date", { mode: "string" }),
+    /** The overall BTC result, from 1 (poor) to 4 (outstanding), to one decimal place. */
+    btcScore: doublePrecision("btc_score"),
+    /** The overall INT result, scored the same way. */
+    intScore: doublePrecision("int_score"),
+    /** Score per exercise, e.g. `{"Score-Exams": 4}`. */
+    btcIndividualScores: jsonb("btc_individual_scores").$type<Record<string, number>>(),
+    intIndividualScores: jsonb("int_individual_scores").$type<Record<string, number>>(),
+    /** Who last wrote their history; null for the imported sheet, or a deleted account. */
+    historyUpdatedBy: text("history_updated_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    historyCreatedAt: timestamp("history_created_at", { withTimezone: true }),
+    historyUpdatedAt: timestamp("history_updated_at", { withTimezone: true }),
   },
   (t) => [
     index("employees_email_idx").on(t.email),
@@ -936,10 +971,15 @@ export const employees = pgTable(
       "employees_track_override_check",
       sql`${t.trackOverride} in ('sales', 'engineer', 'ignored', 'exempt', 'deferred')`,
     ),
+    check("employees_btc_score_check", sql`${t.btcScore} between 1 and 4`),
+    check("employees_int_score_check", sql`${t.intScore} between 1 and 4`),
   ],
 );
 
 export type Employee = typeof employees.$inferSelect;
+
+/** Whether an employee has a bootcamp history: any of its days or overall scores set. */
+export const hasHistory = sql<boolean>`(${employees.btcDate} is not null or ${employees.intDate} is not null or ${employees.btcScore} is not null or ${employees.intScore} is not null)`;
 
 export const HIBOB_SYNC_TRIGGERS = ["schedule", "manual"] as const;
 export type HibobSyncTrigger = (typeof HIBOB_SYNC_TRIGGERS)[number];
@@ -1112,7 +1152,8 @@ export type EvalsTitle = typeof evalsTitles.$inferSelect;
 /**
  * People added to the Slack messages sent to each attendee's team at the end
  * of a bootcamp, alongside the attendee's management chain: the Sheet's
- * "Add these email to any slack" Config column. One row per email.
+ * "Add these email to any slack" Config column. One row per email, each
+ * someone in `employees`, whose name is read from there.
  */
 export const evalsSlackContacts = pgTable(
   "evals_slack_contacts",
@@ -1120,8 +1161,6 @@ export const evalsSlackContacts = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     /** Lowercased. */
     email: text("email").notNull(),
-    /** As the employee list had it when they were added or at the last HiBob sync since; empty for someone not in it. */
-    fullName: text("full_name").notNull().default(""),
     createdBy: text("created_by").references(() => users.id, {
       onDelete: "set null",
     }),
@@ -1388,51 +1427,11 @@ export const meetingAttendanceMarks = pgTable(
   (t) => [primaryKey({ columns: [t.meetingId, t.email] }), index("meeting_attendance_marks_email_idx").on(t.email)],
 );
 
-/**
- * Who has been through bootcamp (BTC) and the intermediate event (INT), and
- * how they scored. One row per email. A date of 2000-01-01 is the sheet's
- * marker for "exempt": someone who never needs to attend.
- */
-export const bootcampHistory = pgTable(
-  "bootcamp_history",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    /** Lowercased. */
-    email: text("email").notNull(),
-    btcDate: date("btc_date", { mode: "string" }),
-    intDate: date("int_date", { mode: "string" }),
-    /** The overall BTC result, from 1 (poor) to 4 (outstanding), to one decimal place. */
-    btcScore: doublePrecision("btc_score"),
-    /** The overall INT result, scored the same way. */
-    intScore: doublePrecision("int_score"),
-    /** Score per exercise, e.g. `{"Score-Exams": 4}`. */
-    btcIndividualScores: jsonb("btc_individual_scores").$type<Record<string, number>>(),
-    intIndividualScores: jsonb("int_individual_scores").$type<Record<string, number>>(),
-    updatedBy: text("updated_by").references(() => users.id, {
-      onDelete: "set null",
-    }),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-  },
-  (t) => [
-    uniqueIndex("bootcamp_history_email_idx").on(t.email),
-    check("bootcamp_history_btc_score_check", sql`${t.btcScore} between 1 and 4`),
-    check("bootcamp_history_int_score_check", sql`${t.intScore} between 1 and 4`),
-  ],
-);
-
 /** The scores a class can give, from poor to outstanding, and the decimal places they are kept to. */
 export const BOOTCAMP_SCORE = { min: 1, max: 4, decimals: 1 } as const;
 
+/** The sheet's marker, as a BTC or INT day, for "exempt": someone who never needs to attend that class. */
 export const EXEMPT_DATE = "2000-01-01";
-
-export const BOOTCAMP_HISTORY_LIMITS = { bytes: 5 * 1024 * 1024, rows: 20_000, email: 320 } as const;
-
-export type BootcampHistory = typeof bootcampHistory.$inferSelect;
 
 /**
  * The Canary Wire's Mindtickle data: one pull of every learner's whole
@@ -1559,7 +1558,8 @@ export type Bootcamp = typeof bootcamps.$inferSelect;
 /**
  * Who is added to the active bootcamp's Slack channels beyond its cohort:
  * Bootcamp Contacts to the `sales-` channels, Engineer Contacts to the `se-`
- * ones. One row per email per kind. See `lib/cohorts/slack-sync.ts`.
+ * ones. One row per email per kind, each someone in `employees`, whose name
+ * is read from there. See `lib/cohorts/slack-sync.ts`.
  */
 export const CHANNEL_CONTACT_KINDS = ["sales", "se"] as const;
 export type ChannelContactKind = (typeof CHANNEL_CONTACT_KINDS)[number];
@@ -1571,8 +1571,6 @@ export const cohortChannelContacts = pgTable(
     kind: text("kind").$type<ChannelContactKind>().notNull(),
     /** Lowercased. */
     email: text("email").notNull(),
-    /** As the employee list had it when they were added or at the last HiBob sync since; empty for someone not in it. */
-    fullName: text("full_name").notNull().default(""),
     createdBy: text("created_by").references(() => users.id, {
       onDelete: "set null",
     }),
@@ -1615,20 +1613,6 @@ export const slackInstallation = pgTable(
   },
   (t) => [check("slack_installation_one_row", sql`${t.id}`)],
 );
-
-/**
- * Each email's Slack user, as `users.lookupByEmail` last answered; a null id
- * is someone Slack has no account for, asked again after a day. Slack ids
- * never change, so one found is not asked again.
- */
-export const slackUsers = pgTable("slack_users", {
-  /** Lowercased. */
-  email: text("email").primaryKey(),
-  slackUserId: text("slack_user_id"),
-  lookedUpAt: timestamp("looked_up_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-});
 
 /** The Slack channel id behind each cohort channel name, found or created once. */
 export const slackChannels = pgTable("slack_channels", {
@@ -1834,7 +1818,8 @@ export const meetingSyncChanges = pgTable(
 /**
  * Guest judges for one bootcamp: anyone from the employee list, added in the
  * Scheduler. While that bootcamp is active they can score its attendees on
- * the eVals page, whatever other access they hold.
+ * the eVals page, whatever other access they hold. Their names are read from
+ * `employees`.
  */
 export const bootcampJudges = pgTable(
   "bootcamp_judges",
@@ -1845,8 +1830,6 @@ export const bootcampJudges = pgTable(
       .references(() => bootcamps.id, { onDelete: "cascade" }),
     /** Lowercased. */
     email: text("email").notNull(),
-    /** As the employee list had it when they were added or at the last HiBob sync since. */
-    fullName: text("full_name").notNull().default(""),
     addedBy: text("added_by").references(() => users.id, { onDelete: "set null" }),
     addedAt: timestamp("added_at", { withTimezone: true })
       .notNull()
@@ -2055,7 +2038,8 @@ export type ScheduleSession = typeof scheduleSessions.$inferSelect;
 /**
  * Who runs a session: exactly one leader, and any other instructors. Each is
  * an administrator or a guest judge of the bootcamp when added. In a breakout
- * each has their own room.
+ * each has their own room. Names are read from `employees`, or for an
+ * administrator from their account (`lib/scheduler/schedule.ts`).
  */
 export const scheduleSessionStaff = pgTable(
   "schedule_session_staff",
@@ -2066,7 +2050,6 @@ export const scheduleSessionStaff = pgTable(
       .references(() => scheduleSessions.id, { onDelete: "cascade" }),
     /** Lowercased. */
     email: text("email").notNull(),
-    fullName: text("full_name").notNull().default(""),
     leader: boolean("leader").notNull().default(false),
     roomId: uuid("room_id").references(() => facilityRooms.id, { onDelete: "set null" }),
     position: integer("position").notNull().default(0),
@@ -2083,7 +2066,8 @@ export const scheduleSessionStaff = pgTable(
  * Who goes with whom in a breakout: each attendee taught it, by email, and
  * the instructor whose room they go to to be evaluated. An attendee is in one
  * group at most; one in none is not yet assigned. Only a breakout keeps any,
- * and only with instructors still on its staff.
+ * and only with instructors still on its staff. Names are read from
+ * `employees`.
  */
 export const scheduleSessionGroups = pgTable(
   "schedule_session_groups",
@@ -2094,8 +2078,6 @@ export const scheduleSessionGroups = pgTable(
       .references(() => scheduleSessions.id, { onDelete: "cascade" }),
     /** Lowercased. */
     email: text("email").notNull(),
-    /** As the employee list had it when they were assigned or at the last HiBob sync since. */
-    fullName: text("full_name").notNull().default(""),
     /** Lowercased; one of the session's staff. */
     instructorEmail: text("instructor_email").notNull(),
     position: integer("position").notNull().default(0),

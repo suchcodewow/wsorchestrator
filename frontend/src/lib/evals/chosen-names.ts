@@ -6,9 +6,8 @@
  *
  * - `employees`: their `full_name`, and `reports_to_name` for anyone who
  *   reports to them, so the employee list, the Cohorts page, name cards,
- *   eVals and the Slack reminders read it with nothing of their own to do;
- *   then the copies kept with judges, contacts and breakout groups
- *   (`refreshNameCopies`).
+ *   eVals, the Slack reminders, judges, contacts and breakout groups read it
+ *   with nothing of their own to do.
  * - Their account, `users.name`: the user menu, Manage users, and wherever
  *   the app names who did something. Signing in keeps it rather than taking
  *   Google's name again (`lib/google-profile.ts`).
@@ -34,7 +33,7 @@ import {
   scheduleSessionComments,
   users,
 } from "@/db/schema";
-import { refreshNameCopies, type Tx } from "@/lib/evals/hibob";
+import type { Tx } from "@/lib/evals/hibob";
 import { toEmployeeRow } from "@/lib/evals/hibob-record";
 import { normalizeName } from "@/lib/logistics/intake-values";
 
@@ -75,7 +74,6 @@ export async function setChosenName(email: string, name: string): Promise<boolea
       .set({ fullName, chosenName })
       .where(sql`lower(${employees.email}) = ${address}`);
     await tx.update(employees).set({ reportsToName: fullName }).where(eq(employees.reportsToEmail, address));
-    await refreshNameCopies(tx);
     await renameEverywhereElse(tx, address, fullName);
     return true;
   });

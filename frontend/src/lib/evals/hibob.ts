@@ -9,23 +9,19 @@
  * (`fetchHibobToEmployees`), it asks HiBob for every active employee and
  * updates `employees` from them in one transaction, so a failed sync leaves
  * the previous one in place. A row is updated, never recreated, so what the
- * app keeps on a person (chosen name, pinned track, time zone) outlasts a
- * sync; someone HiBob no longer lists stays, marked inactive.
+ * app keeps on a person (chosen name, pinned track, time zone, Slack id,
+ * bootcamp history) outlasts a sync; someone HiBob no longer lists stays,
+ * marked inactive, history and all. Judges, contacts and breakout groups read
+ * their names from here, so nothing else needs bringing up to date.
  */
 
 import "server-only";
 
-import { and, desc, eq, lt, sql } from "drizzle-orm";
+import { and, desc, eq, lt, ne, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
-  bootcampJudges,
-  cohortChannelContacts,
   employees,
-  evalsSlackContacts,
   hibobSyncRuns,
-  scheduleSessionGroups,
-  scheduleSessions,
-  scheduleSessionStaff,
   users,
   type HibobSyncStatus,
   type HibobSyncTrigger,
@@ -173,33 +169,6 @@ export type SyncResult =
 export type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 /**
- * Brings the names kept with judges, contacts and breakout groups up to date
- * with the employee list just stored, for everyone still on it, so a name
- * HiBob or `nameFromEmail` changes reads the same everywhere. A session's
- * staff follow their judge's name; an administrator on it keeps the name from
- * their account, which is the one the instructor list offers. Mentions keep
- * theirs: the text of what tagged them spells it. A name someone chooses
- * (`lib/evals/chosen-names.ts`) is spread the same way.
- */
-export async function refreshNameCopies(tx: Tx): Promise<void> {
-  for (const table of [bootcampJudges, scheduleSessionGroups, evalsSlackContacts, cohortChannelContacts]) {
-    await tx.execute(sql`
-      update ${table} t set full_name = e.full_name
-      from ${employees} e
-      where e.email = t.email and t.full_name is distinct from e.full_name`);
-  }
-  await tx.execute(sql`
-    update ${scheduleSessionStaff} st set full_name = j.full_name
-    from ${scheduleSessions} s, ${bootcampJudges} j
-    where s.id = st.session_id and j.bootcamp_id = s.bootcamp_id and j.email = st.email
-      and j.full_name <> '' and st.full_name is distinct from j.full_name
-      and not exists (
-        select 1 from ${users} u
-        where lower(u.email) = st.email and (u.training_role = 'administrator' or u.is_platform_admin)
-      )`);
-}
-
-/**
  * Brings every stored employee up to date with HiBob's current list, in place, logging the run.
  * Someone it no longer sends is marked inactive rather than removed.
  * `actorId` is whoever pressed the button, or null for the schedule.
@@ -252,7 +221,8 @@ export async function syncHibobEmployees(
       await tx.execute(sql`select pg_advisory_xact_lock(hashtext('hibob_employees'))`);
       // What the app keeps on each row, read under the lock, which saving a chosen
       // name takes too, so one saved mid-sync is not lost. Looked up by id, then by
-      // email for someone HiBob has given a new id: what they chose carries over.
+      // email for someone HiBob has given a new id, or someone it sends for the
+      // first time who already had a history: what is kept on them carries over.
       const held = await tx
         .select({
           id: employees.id,
@@ -261,8 +231,21 @@ export async function syncHibobEmployees(
           timezone: employees.timezone,
           trackPinned: employees.trackPinned,
           trackOverride: employees.trackOverride,
+          slackUserId: employees.slackUserId,
+          slackLookedUpAt: employees.slackLookedUpAt,
+          btcDate: employees.btcDate,
+          intDate: employees.intDate,
+          btcScore: employees.btcScore,
+          intScore: employees.intScore,
+          btcIndividualScores: employees.btcIndividualScores,
+          intIndividualScores: employees.intIndividualScores,
+          historyUpdatedBy: employees.historyUpdatedBy,
+          historyCreatedAt: employees.historyCreatedAt,
+          historyUpdatedAt: employees.historyUpdatedAt,
         })
-        .from(employees);
+        .from(employees)
+        // Where one email has two rows, the active one, as everywhere else.
+        .orderBy(employees.active, employees.importedAt);
       const heldById = new Map(held.map((h) => [h.id, h]));
       const heldByEmail = new Map(held.map((h) => [h.email, h]));
       // The name someone chose wins over their email's, as their own and as their reports' manager.
@@ -296,13 +279,24 @@ export async function syncHibobEmployees(
                 trackPinned: own?.trackPinned ?? false,
                 trackOverride: own?.trackOverride ?? null,
                 timezone: own?.timezone ?? fromSlack.get(r.email) ?? null,
+                slackUserId: own?.slackUserId ?? null,
+                slackLookedUpAt: own?.slackLookedUpAt ?? null,
+                btcDate: own?.btcDate ?? null,
+                intDate: own?.intDate ?? null,
+                btcScore: own?.btcScore ?? null,
+                intScore: own?.intScore ?? null,
+                btcIndividualScores: own?.btcIndividualScores ?? null,
+                intIndividualScores: own?.intIndividualScores ?? null,
+                historyUpdatedBy: own?.historyUpdatedBy ?? null,
+                historyCreatedAt: own?.historyCreatedAt ?? null,
+                historyUpdatedAt: own?.historyUpdatedAt ?? null,
               };
             }),
           )
           .onConflictDoUpdate({
             target: employees.id,
-            // Not chosenName, trackPinned or trackOverride, which are the app's own;
-            // a zone already there stays, and Slack's fills a gap.
+            // Not the chosen name, pinned track, Slack id or history, which are the
+            // app's own; a zone already there stays, and Slack's fills a gap.
             set: {
               email: sql`excluded.email`,
               fullName: sql`excluded.full_name`,
@@ -323,18 +317,19 @@ export async function syncHibobEmployees(
             },
           });
       }
-      // A row under an id HiBob no longer sends, for an email it now sends under another,
-      // has been carried onto the new row.
+      // A row under an id HiBob no longer sends, for an email it now sends under another —
+      // or one kept only for a history — has been carried onto the new row. Every row
+      // this sync wrote carries `importedAt` exactly; anything else is older, whatever
+      // the database's clock gave a row made just before (ensureEmployees).
       await tx.execute(sql`
         delete from ${employees} stale
-        where stale.imported_at < ${importedAt}
+        where stale.imported_at <> ${importedAt}
           and exists (select 1 from ${employees} n where n.email = stale.email and n.imported_at = ${importedAt})`);
       // Whoever HiBob no longer sends has left: kept, out of every org and list.
       await tx
         .update(employees)
         .set({ active: false, orgDepth: null, managementChain: null, track: null })
-        .where(and(eq(employees.active, true), lt(employees.importedAt, importedAt)));
-      await refreshNameCopies(tx);
+        .where(and(eq(employees.active, true), ne(employees.importedAt, importedAt)));
       await tx
         .update(hibobSyncRuns)
         .set({

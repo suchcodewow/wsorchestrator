@@ -15,10 +15,10 @@ import "server-only";
 import { and, eq, gt, gte, inArray, isNotNull, isNull, or, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import {
-  bootcampHistory,
   employees,
   evalsAssessments,
   evalsSubmissions,
+  hasHistory,
   type Employee,
 } from "@/db/schema";
 import { getCandidateCutoffs, getDeferralDays, type CandidateCutoffs } from "@/lib/evals/settings";
@@ -70,7 +70,7 @@ export type CurrentCohortMember = Pick<
   /** Whether an administrator set that track by hand. */
   overridden: boolean;
   stage: CandidateStage;
-  /** Their bootcamp history record; null for someone with none. */
+  /** Their employee id, for their Reporting → Bootcamp page; null for someone with no history. */
   historyId: string | null;
   /** When they passed bootcamp; null for a bootcamp candidate. */
   btcDate: string | null;
@@ -104,12 +104,11 @@ export type CurrentCohortSummary = {
 };
 
 const e = employees;
-const h = bootcampHistory;
 const a = evalsAssessments;
 const s = evalsSubmissions;
 
 const candidateTrack = sql<CandidateTrack>`coalesce(${e.track}, 'undecided')`;
-const candidateStage = sql<CandidateStage>`(case when ${h.btcDate} is null then 'bootcamp' else 'intermediate' end)`;
+const candidateStage = sql<CandidateStage>`(case when ${e.btcDate} is null then 'bootcamp' else 'intermediate' end)`;
 
 /** Every sort but `averageScore`, which depends on the score columns and is added per query. */
 const SORT_COLUMNS = {
@@ -117,13 +116,13 @@ const SORT_COLUMNS = {
   email: e.email,
   title: sql`lower(${blankAsNull(e.title)})`,
   track: candidateTrack,
-  btcDate: h.btcDate,
+  btcDate: e.btcDate,
 } as const;
 
-/** Which stage a candidate is in, read off `bootcamp_history` joined as on `employees.email`. */
+/** Which stage a candidate is in, read off their bootcamp history. */
 export const IN_STAGE: Record<CandidateStage, SQL> = {
-  bootcamp: isNull(h.btcDate),
-  intermediate: and(isNotNull(h.btcDate), isNull(h.intDate))!,
+  bootcamp: isNull(e.btcDate),
+  intermediate: and(isNotNull(e.btcDate), isNull(e.intDate))!,
 };
 
 const ON_TRACK: Record<CandidateTrack, SQL> = {
@@ -135,8 +134,8 @@ const ON_TRACK: Record<CandidateTrack, SQL> = {
 
 /**
  * In the org, in a stage, on a track still to train or none yet, and recent
- * enough by the cutoffs. Reads `employees` and `bootcamp_history`, the latter
- * left-joined on email; eVals scoring draws its attendees with it too.
+ * enough by the cutoffs. Reads `employees` alone, history and all; eVals
+ * scoring draws its attendees with it too.
  */
 export function isCandidate({ startDateOnOrAfter, activeEffectiveDateAfter }: CandidateCutoffs) {
   return and(
@@ -208,16 +207,15 @@ export async function listCurrentCohort(
       track: candidateTrack,
       overridden: e.trackPinned,
       stage: candidateStage,
-      historyId: h.id,
-      btcDate: h.btcDate,
-      btcScore: evals ? h.btcScore : sql<number | null>`null::float8`,
+      historyId: sql<string | null>`case when ${hasHistory} then ${e.id} end`,
+      btcDate: e.btcDate,
+      btcScore: evals ? e.btcScore : sql<number | null>`null::float8`,
       scores: scoring
         ? sql<Record<string, number>>`coalesce((select jsonb_object_agg(${s.assessmentId}, ${s.averageScore}) ${scoredSubmissions(scoring)}), '{}'::jsonb)`
         : sql<Record<string, number>>`'{}'::jsonb`,
       averageScore: average,
     })
     .from(e)
-    .leftJoin(h, sql`${h.email} = ${e.email}`)
     .where(
       and(
         isCandidate(cutoffs),
@@ -250,7 +248,6 @@ export async function currentCohortEmails(): Promise<
       track: sql<"sales" | "engineer">`${e.track}`,
     })
     .from(e)
-    .leftJoin(h, sql`${h.email} = ${e.email}`)
     .where(and(isCandidate(cutoffs), inArray(e.track, ["sales", "engineer"])));
 }
 
@@ -267,7 +264,6 @@ export async function currentCohortSubquery() {
       stage: candidateStage.as("cohort_stage"),
     })
     .from(e)
-    .leftJoin(h, sql`${h.email} = ${e.email}`)
     .where(and(isCandidate(cutoffs), inArray(e.track, ["sales", "engineer"])))
     .as("cohort");
 }
@@ -282,7 +278,6 @@ export async function cohortStageOf(email: string): Promise<CandidateStage | nul
   const [row] = await db
     .select({ stage: candidateStage })
     .from(e)
-    .leftJoin(h, sql`${h.email} = ${e.email}`)
     .where(
       and(
         sql`lower(${e.email}) = ${email.trim().toLowerCase()}`,
@@ -304,7 +299,6 @@ export async function currentCohortNames(): Promise<{ fullName: string; stage: C
   return db
     .select({ fullName: e.fullName, stage: candidateStage })
     .from(e)
-    .leftJoin(h, sql`${h.email} = ${e.email}`)
     .where(and(isCandidate(cutoffs), or(isNull(e.track), inArray(e.track, ["sales", "engineer"]))))
     .orderBy(candidateStage, sql`lower(${e.fullName})`, e.id);
 }
@@ -316,7 +310,6 @@ export async function currentCohortSummary(): Promise<CurrentCohortSummary> {
     db
       .select({ stage: candidateStage, track: candidateTrack, count: sql<number>`count(*)::int` })
       .from(e)
-      .leftJoin(h, sql`${h.email} = ${e.email}`)
       .where(isCandidate(cutoffs))
       .groupBy(candidateStage, candidateTrack),
     // A sync stamps every row with the same time.

@@ -10,6 +10,7 @@ import "server-only";
 import { and, eq, inArray, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { employees, guestSpeakerCohorts, guestSpeakerHistory, type BootcampStatus, type GuestSpeakerRole, type ScheduleTrack } from "@/db/schema";
+import { employeeNameOf } from "@/lib/evals/roster";
 import type { GuestJudgeSort, JudgeProspectSort } from "@/lib/list-specs";
 import {
   GUEST_JUDGE_DEPARTMENTS,
@@ -59,7 +60,7 @@ export type GuestJudgeRow = {
  * and the guest speaker history, its rows for one person and month gathered up.
  */
 const judged = sql`(
-  select j.id::text as id, j.email, coalesce(nullif(j.full_name, ''), j.email) as full_name,
+  select j.id::text as id, j.email, coalesce(nullif(${employeeNameOf(sql`j.email`)}, ''), j.email) as full_name,
     b.start_date::text as cohort, date_trunc('month', b.start_date)::date::text as month, 'scheduler' as source, null as person, b.id::text as bootcamp_id, b.status,
     coalesce((
       select json_agg(json_build_object('name', s.name, 'role', case when st.leader then 'lead' end,

@@ -11,7 +11,6 @@ import "server-only";
 import { and, asc, eq, gte, inArray, isNotNull, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
-  bootcampHistory,
   bootcamps,
   employees,
   EVALS_TITLE_LISTS,
@@ -25,11 +24,11 @@ import { getDeferralDays } from "@/lib/evals/settings";
 import { cleanTitle, titleKey, trackFor, type DeferralRule, type TrackOverride } from "@/lib/evals/title-lists";
 import { addTitles, titleListMap } from "@/lib/evals/titles";
 
-const isExempt = or(eq(bootcampHistory.btcDate, EXEMPT_DATE), eq(bootcampHistory.intDate, EXEMPT_DATE));
+const isExempt = or(eq(employees.btcDate, EXEMPT_DATE), eq(employees.intDate, EXEMPT_DATE));
 
 /** Everyone whose history marks BTC or INT exempt, by lowercased email. */
 export async function exemptEmails(): Promise<Set<string>> {
-  const rows = await db.select({ email: bootcampHistory.email }).from(bootcampHistory).where(isExempt);
+  const rows = await db.select({ email: employees.email }).from(employees).where(isExempt);
   return new Set(rows.map((r) => r.email));
 }
 
@@ -94,9 +93,9 @@ export async function retrackEmployees(emails: readonly string[]): Promise<numbe
     if (people.length === 0) continue;
     const [exemptRows, overrides] = await Promise.all([
       db
-        .select({ email: bootcampHistory.email })
-        .from(bootcampHistory)
-        .where(and(isExempt, inArray(bootcampHistory.email, batch))),
+        .select({ email: employees.email })
+        .from(employees)
+        .where(and(isExempt, inArray(employees.email, batch))),
       trackOverrides(batch),
     ]);
     const exempt = new Set(exemptRows.map((r) => r.email));

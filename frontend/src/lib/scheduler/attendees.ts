@@ -13,7 +13,6 @@ import {
   AUDIENCE_TRACKS,
   SCHEDULE_LIMITS,
   SURVEY_LIMITS,
-  bootcampHistory,
   employees,
   type ScheduleTrack,
   type SessionAudience,
@@ -31,7 +30,6 @@ export type GroupAttendee = {
 };
 
 const e = employees;
-const h = bootcampHistory;
 
 /**
  * The attendees a session on `track` for `audience` is taught to, by name,
@@ -67,7 +65,6 @@ async function stageAttendees(
   const rows = await db
     .select({ email: e.email, fullName: e.fullName, title: e.title, track: sql<"sales" | "engineer">`${e.track}` })
     .from(e)
-    .leftJoin(h, sql`${h.email} = ${e.email}`)
     .where(and(isCandidate(cutoffs), IN_STAGE[stage], inArray(e.track, [...tracks])))
     .orderBy(sql`lower(${e.fullName})`, e.email)
     .limit(limit + 1);

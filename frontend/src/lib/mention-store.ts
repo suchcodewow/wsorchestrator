@@ -116,7 +116,7 @@ export type MyMentionRow = {
   criterionName: string | null;
   attendeeEmail: string | null;
   attendeeName: string | null;
-  /** The attendee's HiBob id, for the scoring form; null if they have left the employee list. */
+  /** The attendee's employee id, for the scoring form; null if the employee list has no one by their email. */
   employeeId: string | null;
 };
 
@@ -124,7 +124,7 @@ export type MentionViewer = { email: string | null; access: Access };
 
 // The employee list keys people by HiBob id, not email, so the attendee is the first with the submission's email.
 const attendeeOf = (column: "id" | "full_name") =>
-  sql<string | null>`(select e.${sql.raw(column)} from ${employees} e where e.email = ${evalsSubmissions.attendeeEmail} order by e.id limit 1)`;
+  sql<string | null>`(select e.${sql.raw(column)} from ${employees} e where e.email = ${evalsSubmissions.attendeeEmail} order by e.active desc, e.imported_at desc, e.id limit 1)`;
 const attendeeId = attendeeOf("id");
 const attendeeName = attendeeOf("full_name");
 

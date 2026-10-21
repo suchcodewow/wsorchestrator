@@ -113,7 +113,7 @@ const FILL_ERRORS: EndpointError[] = [
 const NOT_EMPLOYEE_ERROR: EndpointError = {
   status: 400,
   error: "not_employee",
-  when: "a judge is not in the employee list; email names them",
+  when: "a judge is not at Harness, in the employee list; email names them",
 };
 
 const ACTIVE_EXISTS_ERROR: EndpointError = {
@@ -366,7 +366,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "trainingViewer",
         token: true,
         notes:
-          "A bootcamp candidate is anyone under the Organization Leader, on the sales, engineer or deferred track or on none, with no BTC date in their bootcamp history; an intermediate candidate has a BTC date and no INT date. Either must also pass the date cutoffs in GET /api/evals/candidate-cutoffs, which cutoffs echoes. The ignored and exempt tracks are left out. A track is, first, one an administrator set by hand with PUT /api/cohorts/current/track, which overridden marks; then exempt where their history says so; then ignored for a title on the Ignored list; then deferred when their HiBob start date is fewer than deferral.days before deferral.bootcampStart, or after it; then the Sales or Engineer list their title is on. undecided is a title on no list. members never includes anyone deferred, and track cannot ask for them; they are on GET /api/cohorts/deferred. deferral echoes GET /api/evals/deferral-days. counts gives each stage on each track, deferred included; each stage's counts ignore the track filter, each track's ignore the stage filter, and neither depends on the search. activeBootcamp is the one active bootcamp, or null. Scores are shown only to a caller in eVals; for anyone else btcScore is null, scores is {}, averageScore is null and assessments is null. For a caller in eVals, assessments is null unless stage is given and track is sales or engineer; then it lists the active assessments for that stage whose audience is that track or both, by name, and each member's scores gives their average score on each of them at the active bootcamp, by assessment id, for those scored there. An intermediate assessment's scores need an active bootcamp with an intermediate class. averageScore is the mean of scores to one decimal place, or null when there are none; sorting by it puts those with none last, and without score columns it orders by name. meetings lists where each member stands with each Google meeting picked for their stage and track (GET /api/evals/google-meetings): attended, by Zoom or an administrator's mark; accepted or pending on the invite they hold, startsAt being when it starts; pending until the next sync invites them; or none_left with no occurrence before their bootcamp. marked is an administrator's mark, or null when Zoom decides.",
+          "A bootcamp candidate is anyone under the Organization Leader, on the sales, engineer or deferred track or on none, with no BTC date in their bootcamp history; an intermediate candidate has a BTC date and no INT date. Either must also pass the date cutoffs in GET /api/evals/candidate-cutoffs, which cutoffs echoes. The ignored and exempt tracks are left out. A track is, first, one an administrator set by hand with PUT /api/cohorts/current/track, which overridden marks; then exempt where their history says so; then ignored for a title on the Ignored list; then deferred when their HiBob start date is fewer than deferral.days before deferral.bootcampStart, or after it; then the Sales or Engineer list their title is on. undecided is a title on no list. members never includes anyone deferred, and track cannot ask for them; they are on GET /api/cohorts/deferred. deferral echoes GET /api/evals/deferral-days. counts gives each stage on each track, deferred included; each stage's counts ignore the track filter, each track's ignore the stage filter, and neither depends on the search. activeBootcamp is the one active bootcamp, or null. Scores are shown only to a caller in eVals; for anyone else btcScore is null, scores is {}, averageScore is null and assessments is null. For a caller in eVals, assessments is null unless stage is given and track is sales or engineer; then it lists the active assessments for that stage whose audience is that track or both, by name, and each member's scores gives their average score on each of them at the active bootcamp, by assessment id, for those scored there. An intermediate assessment's scores need an active bootcamp with an intermediate class. averageScore is the mean of scores to one decimal place, or null when there are none; sorting by it puts those with none last, and without score columns it orders by name. meetings lists where each member stands with each Google meeting picked for their stage and track (GET /api/evals/google-meetings): attended, by Zoom or an administrator's mark; accepted or pending on the invite they hold, startsAt being when it starts; pending until the next sync invites them; or none_left with no occurrence before their bootcamp. marked is an administrator's mark, or null when Zoom decides. historyId is their employee id when they have a bootcamp history, for GET /api/evals/bootcamp-history/{id}, and null when they have none.",
         query: [
           { name: "stage", type: `"bootcamp" | "intermediate"`, note: "only that stage; both if omitted" },
           { name: "track", type: `"sales" | "engineer" | "undecided"`, note: "only that track; all three if omitted" },
@@ -411,7 +411,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "trainingViewer",
         token: true,
         notes:
-          "Each side is ordered by name, from the employee list, with anyone not in it last by email; fullName is null for them, and active is false for anyone not in the employee list from the last HiBob sync. id is the person's bootcamp history record, for GET /api/evals/bootcamp-history/{id}.",
+          "Each side is ordered by name, from the employee list, with anyone it has no name for last by email; fullName is null for them. active is false for anyone the last HiBob sync did not send: someone who has left, or whose history was kept without HiBob ever sending them. id is the person's employee id, for GET /api/evals/bootcamp-history/{id}.",
         params: [{ name: "date", type: "string", required: true, note: "YYYY-MM-DD" }],
         query: [
           { name: "bootcamp.page", type: "integer", note: `The bootcamp side's page, from 1. Default 1. A page holds at most ${PAGE_SIZE}.` },
@@ -478,7 +478,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "trainingAdmin",
         token: true,
         notes:
-          "Bootcamp Contacts (kind sales) are added to the active bootcamp's sales- Slack channels and Engineer Contacts (kind se) to its se- ones, beside the cohort. fullName is their name in the employee list, as of when they were added or the last HiBob sync since, and empty for someone not in it. total counts every contact of that kind, whatever the search.",
+          "Bootcamp Contacts (kind sales) are added to the active bootcamp's sales- Slack channels and Engineer Contacts (kind se) to its se- ones, beside the cohort. fullName is their name in the employee list now, and empty only if it has none. total counts every contact of that kind, whatever the search.",
         query: [
           { name: "kind", type: `"sales" | "se"`, required: true, note: "which list" },
           ...listQuery(CHANNEL_CONTACT_LIST.sorts, "the name, the email or who added them"),
@@ -493,7 +493,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "trainingAdmin",
         token: true,
         notes:
-          "The email is lowercased. If it belongs to an imported employee, their name is stored with it; anyone else is added by email alone. The next Slack sync invites them.",
+          "The email is lowercased and must belong to someone at Harness, in the employee list from the last HiBob sync: anyone the app reaches in Slack is in HiBob. fullName is their name there. The next Slack sync invites them.",
         body: {
           kind: "json",
           fields: [
@@ -504,6 +504,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         returns: `{ id, kind: "sales" | "se", email, fullName }`,
         errors: [
           { status: 400, error: "invalid", when: "the body does not parse, or email is not an email address" },
+          { status: 400, error: "not_employee", when: "nobody at Harness in the employee list has that email" },
           { status: 409, error: "duplicate", when: "that email is already a contact of that kind" },
         ],
       },
@@ -985,7 +986,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         returns: "{ id, email, fullName }",
         errors: [
           { status: 400, error: "invalid", when: "the body does not parse, or email is not an email address" },
-          { status: 400, error: "not_employee", when: "nobody in the employee list has that email" },
+          { status: 400, error: "not_employee", when: "nobody at Harness in the employee list has that email" },
           { status: 404, error: "not_found", when: "no such bootcamp" },
           { status: 409, error: "duplicate", when: "they are already a judge on it" },
         ],
@@ -2298,7 +2299,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "signedIn",
         token: true,
         notes:
-          "A record is a day in bootcamp history, or a class of a completed bootcamp someone was assessed at that the caller may see. level is the furthest class attended: intermediate, else bootcamp, else exempt for someone marked exempt from every class they have a record of. date is their latest class day, null when they are only exempt. key addresses their page: their HiBob id while they are in the employee list, else their history row's id, else a submission's. fullName is null, and active false, for someone not in the employee list from the last HiBob sync. counts gives everyone the caller may see, the active and the inactive, whatever the search or status.",
+          "A record is a day in bootcamp history, or a class of a completed bootcamp someone was assessed at that the caller may see. level is the furthest class attended: intermediate, else bootcamp, else exempt for someone marked exempt from every class they have a record of. date is their latest class day, null when they are only exempt. key addresses their page: their employee id, else, for someone assessed whom the employee list does not have, a submission's. fullName is null for someone it has no name for, and active false for anyone the last HiBob sync did not send. counts gives everyone the caller may see, the active and the inactive, whatever the search or status.",
         query: [
           ...listQuery(BOOTCAMP_RECORD_LIST.sorts, "the name or email", BOOTCAMP_RECORD_LIST.dir),
           { name: "status", type: HISTORY_STATUSES.map((s) => `"${s}"`).join(" | "), note: "only the active or only the inactive; everyone if omitted" },
@@ -2324,7 +2325,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "assessmentsAdmin",
         token: true,
         notes:
-          "From then on, managers see that class's results for the people in their org. Everyone scored in the class gets the bootcamp's start date as their BTC or INT date in bootcamp history, the mean of their submissions' averages as the class score, and each assessment's average as an exercise score; a BTC class then moves on to Intermediate on Cohorts → Current, and an INT class leaves it. written counts the history rows written. A release cannot be taken back; releasing a class already released changes nothing, writes nothing, and returns when it was.",
+          "From then on, managers see that class's results for the people in their org. Everyone scored in the class gets the bootcamp's start date as their BTC or INT date in bootcamp history, the mean of their submissions' averages as the class score, and each assessment's average as an exercise score; a BTC class then moves on to Intermediate on Cohorts → Current, and an INT class leaves it. written counts the people whose history was written; anyone scored whom HiBob has never sent gets an inactive employee record to hold it. A release cannot be taken back; releasing a class already released changes nothing, writes nothing, and returns when it was.",
         body: { kind: "json", fields: [{ name: "stage", type: '"bootcamp" | "intermediate"', required: true }] },
         returns: "{ ok: true, stage, bootcamp: { id, startDate }, releasedAt, written: number }",
         errors: [
@@ -2340,8 +2341,8 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "signedIn",
         token: true,
         notes:
-          "classes is what a manager sees: each class's day, overall score and score per exercise, from bootcamp history or from that class's released assessments; a day of 2000-01-01 means exempt. records is null below Assessments Viewer. Above it, history is their bootcamp history row, or null, and submissions every assessment of them at any bootcamp, newest bootcamp first, with each criterion's score and comment; released says whether managers may see it yet.",
-        params: [{ name: "key", type: "string", required: true, note: "a key from the list: a HiBob id, a history row's id or a submission's" }],
+          "classes is what a manager sees: each class's day, overall score and score per exercise, from bootcamp history or from that class's released assessments; a day of 2000-01-01 means exempt. records is null below Assessments Viewer. Above it, history is their bootcamp history, under their employee id, or null, and submissions every assessment of them at any bootcamp, newest bootcamp first, with each criterion's score and comment; released says whether managers may see it yet.",
+        params: [{ name: "key", type: "string", required: true, note: "a key from the list: an employee id or a submission's" }],
         returns:
           '{ key, email, employee: { fullName, title, department, site, reportsToName, reportsToEmail, startDate, track } | null, classes: { bootcamp: ClassSummary, intermediate: ClassSummary }, records: { history: { id, btcDate, intDate, btcScore, intScore, btcIndividualScores, intIndividualScores, createdAt, updatedAt, updatedByName } | null, submissions: { id, bootcamp: { id, startDate, status }, stage, assessmentName, averageScore, positiveFeedback, constructiveFeedback, ownerName, submittedAt, updatedAt, released, scores: { criterionId, criterionName, score, comment }[] }[] } | null }, where ClassSummary is { date: string | null, score: number | null, exercises: { name, score }[] }',
         errors: [{ status: 404, error: "not_found", when: "the key names no one, or someone the caller may not see" }],
@@ -2372,12 +2373,12 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       {
         method: "PATCH",
         path: "/api/reporting/bootcamp/history/{id}",
-        summary: "Corrects someone's bootcamp history row: its days and exercise scores.",
+        summary: "Corrects someone's bootcamp history: its days and exercise scores.",
         access: "assessmentsAdmin",
         token: true,
         notes:
-          "Fields left out keep their value, and null clears one. A day of 2000-01-01 marks the person exempt from that class. Scores run from 1 to 4, to one decimal place; the individual scores map each exercise's column name to its score. A class's overall score cannot be set: giving its individual scores sets it to their mean, to one decimal place, and leaving them out or null keeps the one it has. The row's email cannot be changed here.",
-        params: [{ name: "id", type: "string", required: true, note: "the row's id" }],
+          "Fields left out keep their value, and null clears one. A day of 2000-01-01 marks the person exempt from that class. Scores run from 1 to 4, to one decimal place; the individual scores map each exercise's column name to its score. A class's overall score cannot be set: giving its individual scores sets it to their mean, to one decimal place, and leaving them out or null keeps the one it has. Whose history it is cannot be changed here.",
+        params: [{ name: "id", type: "string", required: true, note: "their employee id, the history's id in GET /api/reporting/bootcamp/{key}" }],
         body: { kind: "json", fields: [
           { name: "btcDate", type: '"YYYY-MM-DD" | null' },
           { name: "intDate", type: '"YYYY-MM-DD" | null' },
@@ -2387,7 +2388,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         returns: "{ ok: true }",
         errors: [
           { status: 400, error: "invalid", when: "a field is not that shape, or the body has any other" },
-          { status: 404, error: "not_found", when: "`id` is not a UUID, or no row has it" },
+          { status: 404, error: "not_found", when: "no employee has that id, or they have no history" },
         ],
       },
     ],
@@ -2399,11 +2400,11 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       {
         method: "GET",
         path: "/api/evals/bootcamp-history",
-        summary: "Lists everyone with a bootcamp history row, newest bootcamp first, a page at a time.",
+        summary: "Lists everyone with a bootcamp history, newest bootcamp first, a page at a time.",
         access: "assessmentsViewer",
         token: true,
         notes:
-          "fullName is the person's name in the employee list from the last HiBob sync, or null for an email not in it, such as someone who has left. Someone is active while that list has their email, and inactive once it doesn't. btcDate is their bootcamp date; 2000-01-01 means they are exempt, which sorts as the oldest date. Rows that tie on the sort, such as one bootcamp's class, follow in name order, then email. counts gives everyone, the active and the inactive, whatever the search or status.",
+          "History is kept on each person's employee record; someone with a history whom HiBob has never sent has an inactive record of their own. id is that record's id. fullName is their name there, or null when it has none. Someone is active while the HiBob sync sends them, and inactive once it doesn't. btcDate is their bootcamp date; 2000-01-01 means they are exempt, which sorts as the oldest date. Rows that tie on the sort, such as one bootcamp's class, follow in name order, then email. counts gives everyone, the active and the inactive, whatever the search or status.",
         query: [
           ...listQuery(BOOTCAMP_HISTORY_LIST.sorts, "the name or email", BOOTCAMP_HISTORY_LIST.dir),
           { name: "status", type: HISTORY_STATUSES.map((s) => `"${s}"`).join(" | "), note: "only the active or only the inactive; everyone if omitted" },
@@ -2414,15 +2415,15 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       {
         method: "GET",
         path: "/api/evals/bootcamp-history/{id}",
-        summary: "Returns one person's bootcamp history row in full, with their employee record.",
+        summary: "Returns one person's bootcamp history in full, with their employee record.",
         access: "assessmentsViewer",
         token: true,
         notes:
-          "A date of 2000-01-01 means the person is exempt from that class. Scores run from 1 (poor) to 4 (outstanding), to one decimal place; btcIndividualScores and intIndividualScores map each exercise's column name to its score, or are null. updatedBy is the id of whoever last changed the row and updatedByName their name or email, both null when that account is gone. employee is null for an email not in the employee list.",
-        params: [{ name: "id", type: "string", required: true, note: "the row's id" }],
+          "A date of 2000-01-01 means the person is exempt from that class. Scores run from 1 (poor) to 4 (outstanding), to one decimal place; btcIndividualScores and intIndividualScores map each exercise's column name to its score, or are null. updatedByName is the name or email of whoever last changed it, null when that account is gone or it has not been changed since it was imported; createdAt and updatedAt are null for a history from before they were kept. employee is null for someone the last HiBob sync did not send.",
+        params: [{ name: "id", type: "string", required: true, note: "their employee id" }],
         returns:
-          `{ id, email, btcDate: string | null, intDate: string | null, btcScore: number | null, intScore: number | null, btcIndividualScores: Record<string, number> | null, intIndividualScores: Record<string, number> | null, updatedBy: string | null, updatedByName: string | null, createdAt, updatedAt, employee: { fullName, title, department, site, reportsToName, reportsToEmail, startDate: string | null, track: "sales" | "engineer" | "ignored" | "exempt" | "deferred" | null } | null }`,
-        errors: [{ status: 404, error: "not_found", when: "`id` is not a UUID, or no row has it" }],
+          `{ id, email, fullName: string | null, btcDate: string | null, intDate: string | null, btcScore: number | null, intScore: number | null, btcIndividualScores: Record<string, number> | null, intIndividualScores: Record<string, number> | null, updatedByName: string | null, createdAt: string | null, updatedAt: string | null, employee: { fullName, title, department, site, reportsToName, reportsToEmail, startDate: string | null, track: "sales" | "engineer" | "ignored" | "exempt" | "deferred" | null } | null }`,
+        errors: [{ status: 404, error: "not_found", when: "no employee has that id, or they have no history" }],
       },
     ],
   },
@@ -2714,7 +2715,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "assessmentsAdmin",
         token: true,
         notes:
-          "These people are added to the Slack messages sent to each attendee's team at the end of a bootcamp, after the attendee's management chain. fullName is their name in the employee list, as of when they were added or the last HiBob sync since, and empty for someone not in it. total counts every contact, whatever the search.",
+          "These people are added to the Slack messages sent to each attendee's team at the end of a bootcamp, after the attendee's management chain. fullName is their name in the employee list now, and empty only if it has none. total counts every contact, whatever the search.",
         query: listQuery(SLACK_CONTACT_LIST.sorts, "the name, the email or who added them"),
         returns: `{ contacts: { id, email, fullName, createdAt, addedBy: string | null }[], ${PAGE_FIELDS}, total: number }`,
       },
@@ -2725,7 +2726,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "assessmentsAdmin",
         token: true,
         notes:
-          "The email is lowercased. If it belongs to an imported employee, their name is stored with it; anyone else is added by email alone.",
+          "The email is lowercased and must belong to someone at Harness, in the employee list from the last HiBob sync: anyone the app reaches in Slack is in HiBob. fullName is their name there.",
         body: {
           kind: "json",
           fields: [{ name: "email", type: "string", required: true, note: "up to 320 characters" }],
@@ -2733,6 +2734,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         returns: "{ id, email, fullName }",
         errors: [
           { status: 400, error: "invalid", when: "the body does not parse, or email is not an email address" },
+          { status: 400, error: "not_employee", when: "nobody at Harness in the employee list has that email" },
           { status: 409, error: "duplicate", when: "that email is already a contact" },
         ],
       },

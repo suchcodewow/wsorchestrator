@@ -19,7 +19,6 @@ import { db } from "@/db";
 import {
   EVALS_ASSESSMENT_LIMITS,
   SCHEDULE_LIMITS,
-  bootcampHistory,
   employees,
   evalsAssessmentCriteria,
   evalsAssessments,
@@ -47,7 +46,6 @@ import { blankAsNull, orderFor, searchAny } from "@/lib/paging-sql";
 import { activeBootcamp, type ActiveBootcamp } from "@/lib/scheduler/bootcamps";
 
 const e = employees;
-const h = bootcampHistory;
 const s = evalsSubmissions;
 
 /** The bootcamp scoring happens at, if one is active and holds the stage's class. */
@@ -202,7 +200,6 @@ export async function listAttendees(
       ))`,
     })
     .from(e)
-    .leftJoin(h, sql`${h.email} = ${e.email}`)
     .leftJoin(s, submissionJoin(assessment.id, bootcampId))
     .where(
       and(
@@ -235,7 +232,6 @@ export async function attendeeCounts(
         : sql<number>`0`,
     })
     .from(e)
-    .leftJoin(h, sql`${h.email} = ${e.email}`)
     .leftJoin(s, submissionJoin(assessment.id, bootcampId))
     .where(await attendeeCondition(assessment));
   return { attendees: row?.attendees ?? 0, scored: row?.scored ?? 0, mine: row?.mine ?? 0 };
@@ -264,7 +260,6 @@ export async function scoringProgress(): Promise<Record<ScheduleTrack, ScoringTa
           scored: sql<number>`count(${s.id})::int`,
         })
         .from(e)
-        .leftJoin(h, sql`${h.email} = ${e.email}`)
         .innerJoin(
           a,
           and(eq(a.active, true), eq(a.stage, stage), sql`${a.audience} in ('both', ${e.track})`),
@@ -317,7 +312,6 @@ async function eligibleAttendee(assessment: ScoringAssessment, employeeId: strin
       track: sql<"sales" | "engineer">`${e.track}`,
     })
     .from(e)
-    .leftJoin(h, sql`${h.email} = ${e.email}`)
     .where(and(eq(e.id, employeeId), await attendeeCondition(assessment)));
   return row ?? null;
 }

@@ -1,8 +1,8 @@
 "use client";
 
 /**
- * One person's bootcamp history row, laid out in one card: who they are, then
- * BTC and INT side by side, then when the row was last changed. Opened from
+ * One person's bootcamp history, laid out in one card: who they are, then
+ * BTC and INT side by side, then when it was last changed. Opened from
  * Cohorts → Previous, which says where its back link goes.
  */
 
@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils";
 import { formatDate, formatWhen } from "../../../cohort-settings/format";
 import { ClassCard, Field, TRACK_LABELS } from "../../../reporting/bootcamp/class-card";
 
-type Detail = Omit<HistoryDetail, "createdAt" | "updatedAt"> & { createdAt: string; updatedAt: string };
+type Detail = Omit<HistoryDetail, "createdAt" | "updatedAt"> & { createdAt: string | null; updatedAt: string | null };
 
 export function HistoryDetailView({
   detail,
@@ -45,7 +45,7 @@ export function HistoryDetailView({
         </Link>
         <div className="space-y-1.5">
           <Heading className={cn("font-medium tracking-tight", nested ? "text-xl" : "text-3xl")}>
-            {employee?.fullName ?? detail.email}
+            {employee?.fullName || detail.fullName || detail.email}
           </Heading>
           <p className="text-sm text-muted-foreground">
             {employee ? (
@@ -54,7 +54,7 @@ export function HistoryDetailView({
                 {role && <> · {role}</>}
               </>
             ) : (
-              <>{detail.email} is not in the employee list from the last HiBob sync.</>
+              <>{detail.email} · no longer at Harness, or never in HiBob</>
             )}
           </p>
         </div>

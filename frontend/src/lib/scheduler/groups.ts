@@ -15,6 +15,7 @@ import { db } from "@/db";
 import { EVALS_SLACK_CONTACT_LIMITS, SCHEDULE_LIMITS, scheduleSessionGroups } from "@/db/schema";
 import { noteAudit } from "@/lib/audit-context";
 import { normalEmail } from "@/lib/evals/history-values";
+import { employeeNameOf } from "@/lib/evals/roster";
 import { classAttendees } from "@/lib/scheduler/attendees";
 import { getSession } from "@/lib/scheduler/schedule";
 
@@ -34,7 +35,7 @@ export async function groupsOf(sessionId: string): Promise<GroupRow[]> {
   return db
     .select({
       email: scheduleSessionGroups.email,
-      fullName: scheduleSessionGroups.fullName,
+      fullName: employeeNameOf(sql.raw("schedule_session_groups.email")),
       instructorEmail: scheduleSessionGroups.instructorEmail,
       // Spelled out: in a one-table select drizzle leaves columns unqualified, and the inner email would be the employee's.
       track: sql<string | null>`(select hr.track from employees hr where hr.email = schedule_session_groups.email limit 1)`,
@@ -90,8 +91,9 @@ export async function saveGroups(
   }
 
   const [{ attendees }, before] = await Promise.all([classAttendees(session.track, session.audience), groupsOf(sessionId)]);
-  const names = new Map([...before.map((g) => [g.email, g.fullName] as const), ...attendees.map((a) => [a.email, a.fullName] as const)]);
-  const outsider = rows.find((r) => !names.has(r.email));
+  // Someone already in a group may stay in it after leaving the class.
+  const allowed = new Set([...before.map((g) => g.email), ...attendees.map((a) => a.email)]);
+  const outsider = rows.find((r) => !allowed.has(r.email));
   if (outsider) return { ok: false, error: "not_attendee", email: outsider.email };
 
   await db.transaction(async (tx) => {
@@ -99,7 +101,7 @@ export async function saveGroups(
     if (rows.length === 0) return;
     await tx
       .insert(scheduleSessionGroups)
-      .values(rows.map((r, position) => ({ sessionId, ...r, fullName: names.get(r.email) ?? "", position })));
+      .values(rows.map((r, position) => ({ sessionId, ...r, position })));
   });
   return { ok: true, groups: await groupsOf(sessionId) };
 }

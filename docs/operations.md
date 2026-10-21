@@ -150,7 +150,7 @@ exist on the Revenue Enablement calendar
 meetings. An Assessments Administrator picks one of the names on the calendar
 in the next 60 days and says whom it is for: Bootcamp, Intermediate or both,
 and Sales, Engineers or both. A candidate counts as Intermediate once
-`bootcamp_history` gives them a BTC date.
+their bootcamp history (`employees.btc_date`) gives them a BTC date.
 
 *Sync Now* then does the following for each picked meeting
 (`lib/evals/meeting-sync.ts`, with the rules in `lib/evals/meeting-plan.ts`):

@@ -1,6 +1,6 @@
 /**
  * One attendee's bootcamp history, opened from the Previous tab: the same
- * history row Reporting → Bootcamp draws on, kept under Cohorts, with its back link to
+ * history, on their employee row, that Reporting → Bootcamp draws on, kept under Cohorts, with its back link to
  * the tab as it was left. Scores are eVals data, so it needs an Assessments Viewer
  * as well as the Cohorts layout's Training Viewer.
  */
@@ -13,7 +13,8 @@ import { canUseEvals } from "@/lib/roles";
 import { HistoryDetailView } from "./history-detail-view";
 import { previousHref } from "../open";
 
-const idSchema = z.string().uuid();
+// An employee's id: HiBob's, or the uuid kept for someone HiBob has never sent.
+const idSchema = z.string().min(1).max(64);
 
 export default async function PreviousAttendeePage({
   params,
@@ -31,7 +32,7 @@ export default async function PreviousAttendeePage({
 
   return (
     <HistoryDetailView
-      detail={{ ...detail, createdAt: detail.createdAt.toISOString(), updatedAt: detail.updatedAt.toISOString() }}
+      detail={{ ...detail, createdAt: detail.createdAt?.toISOString() ?? null, updatedAt: detail.updatedAt?.toISOString() ?? null }}
       back={{ href: previousHref(await searchParams), label: "Previous" }}
       nested
     />

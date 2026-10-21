@@ -12,10 +12,10 @@ import { z } from "zod";
 import { db } from "@/db";
 import { EVALS_SLACK_CONTACT_LIMITS, evalsSlackContacts, users } from "@/db/schema";
 import { normalEmail } from "@/lib/evals/history-values";
-import { employeeByEmail } from "@/lib/evals/roster";
+import { employeeByEmail, employeeNameOf } from "@/lib/evals/roster";
 import type { SlackContactSort } from "@/lib/list-specs";
 import { pageWindow, toPage, type ListQuery, type Page } from "@/lib/paging";
-import { blankAsNull, orderFor, searchAny } from "@/lib/paging-sql";
+import { orderFor, searchAny } from "@/lib/paging-sql";
 
 export type SlackContactRow = {
   id: string;
@@ -25,8 +25,10 @@ export type SlackContactRow = {
   addedBy: string | null;
 };
 
+const contactName = employeeNameOf(sql.raw("evals_slack_contacts.email"));
+
 const SLACK_CONTACT_SORT_COLUMNS = {
-  fullName: sql`lower(coalesce(${blankAsNull(evalsSlackContacts.fullName)}, ${evalsSlackContacts.email}))`,
+  fullName: sql`lower(coalesce(nullif(${contactName}, ''), ${evalsSlackContacts.email}))`,
   email: evalsSlackContacts.email,
   addedBy: sql`lower(coalesce(nullif(${users.name}, ''), ${users.email}))`,
   createdAt: evalsSlackContacts.createdAt,
@@ -39,7 +41,7 @@ export async function listSlackContacts(query: ListQuery<SlackContactSort>): Pro
     .select({
       id: evalsSlackContacts.id,
       email: evalsSlackContacts.email,
-      fullName: evalsSlackContacts.fullName,
+      fullName: contactName,
       createdAt: evalsSlackContacts.createdAt,
       addedByName: users.name,
       addedByEmail: users.email,
@@ -47,7 +49,7 @@ export async function listSlackContacts(query: ListQuery<SlackContactSort>): Pro
     .from(evalsSlackContacts)
     .leftJoin(users, eq(users.id, evalsSlackContacts.createdBy))
     .where(
-      searchAny(query.q, [evalsSlackContacts.fullName, evalsSlackContacts.email, users.name, users.email]),
+      searchAny(query.q, [contactName, evalsSlackContacts.email, users.name, users.email]),
     )
     .orderBy(
       ...orderFor(SLACK_CONTACT_SORT_COLUMNS[query.sort], query.dir, evalsSlackContacts.email, evalsSlackContacts.id),
@@ -67,10 +69,11 @@ export async function slackContactCount(): Promise<number> {
   return row?.count ?? 0;
 }
 
-export type SlackContactError = "invalid" | "duplicate" | "not_found";
+export type SlackContactError = "invalid" | "not_employee" | "duplicate" | "not_found";
 
 export const STATUS_FOR: Record<SlackContactError, number> = {
   invalid: 400,
+  not_employee: 400,
   duplicate: 409,
   not_found: 404,
 };
@@ -80,8 +83,8 @@ export const addSlackContactSchema = z.object({
 });
 
 /**
- * Adds one contact by email, named as the employee list has them. Someone not
- * in that list can still be added; they are listed by email alone.
+ * Adds one contact by email, named as the employee list has them; anyone
+ * messaged in Slack must be in HiBob, so `not_employee` for someone who is not.
  */
 export async function addSlackContact(
   actorId: string,
@@ -91,12 +94,13 @@ export async function addSlackContact(
   if (!email) return { ok: false, error: "invalid" };
 
   const employee = await employeeByEmail(email);
+  if (!employee) return { ok: false, error: "not_employee" };
   const [row] = await db
     .insert(evalsSlackContacts)
-    .values({ email, fullName: employee?.fullName ?? "", createdBy: actorId })
+    .values({ email, createdBy: actorId })
     .onConflictDoNothing()
-    .returning({ id: evalsSlackContacts.id, email: evalsSlackContacts.email, fullName: evalsSlackContacts.fullName });
-  return row ? { ok: true, contact: row } : { ok: false, error: "duplicate" };
+    .returning({ id: evalsSlackContacts.id, email: evalsSlackContacts.email });
+  return row ? { ok: true, contact: { ...row, fullName: employee.fullName } } : { ok: false, error: "duplicate" };
 }
 
 export async function deleteSlackContact(
