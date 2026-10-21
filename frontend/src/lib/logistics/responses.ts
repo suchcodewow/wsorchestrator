@@ -170,7 +170,8 @@ export type DietaryRow = {
 export async function listDietaryNeeds(query: ListQuery<DietarySort>): Promise<Page<DietaryRow>> {
   const { limit, offset } = pageWindow(query.page);
   const { cohort, inScope } = await dietaryScope();
-  const name = sql<string | null>`coalesce(nullif(${answer(DIETARY_QUESTION_IDS.name)}, ''), ${named.fullName})`;
+  // The name on their record already shows a preferred first name; the answer is only a first name.
+  const name = sql<string | null>`${named.fullName}`;
   const needs = answer(DIETARY_QUESTION_IDS.needs);
   const sortColumn = {
     critical,

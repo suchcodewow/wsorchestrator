@@ -1752,7 +1752,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "trainingAdmin",
         token: true,
         params: [INTAKE_FORM_PARAM],
-        notes: "Until it is first saved this is the default form, with updatedAt null: each as the Google Form it replaces asked it: Pre-Bootcamp's introduction and seven questions, Pre-Intermediate's introduction and five. A form has no title of its own; /intake heads it Bootcamp Registration or Intermediate Registration.",
+        notes: "Until it is first saved this is the default form, with updatedAt null: each as the Google Form it replaces asked it: Pre-Bootcamp's introduction and six questions, Pre-Intermediate's introduction and five. Pre-Bootcamp's preferred-name and time zone questions are automatic: /intake asks everyone them first, so they are never in this form. A form has no title of its own; /intake heads it Bootcamp Registration or Intermediate Registration.",
         returns: `{ introduction: string, questions: ${INTAKE_QUESTION_SHAPE}[], updatedAt: string | null }`,
         errors: [{ status: 404, error: "not_found", when: "form is neither bootcamp nor intermediate" }],
       },
@@ -1764,7 +1764,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         token: true,
         params: [INTAKE_FORM_PARAM],
         notes:
-          "Answers already saved keep the question ids they were given under; a question removed stops being asked. Pre-Bootcamp's preferred-name question saves each person's answer into the database as their name, so it is locked: whatever is sent, it is kept first, put back if left out, and changed only in its title, staying a required short answer with no description.",
+          "Answers already saved keep the question ids they were given under; a question removed stops being asked. Pre-Bootcamp's preferred-name and time zone questions (ids preferred-name and timezone) are automatic: /intake always asks them first, and they cannot be edited or removed, so on Pre-Bootcamp any sent with those ids are dropped rather than saved.",
         body: { kind: "json", fields: INTAKE_FORM_FIELDS },
         returns: `{ introduction: string, questions: ${INTAKE_QUESTION_SHAPE}[], updatedAt: string }`,
         errors: [
@@ -2001,9 +2001,9 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "signedIn",
         token: true,
         notes:
-          "The form is the one for the caller's stage of the current cohort (the Cohorts page's Current tab, Sales and Engineer tracks): bootcamp, headed Bootcamp Registration, for a bootcamp candidate, and intermediate, Intermediate Registration, for an intermediate one. answers is empty and savedAt null until they have saved any, except on intermediate for someone who answered bootcamp before: answers then starts from their bootcamp dietary answers, and carriedFrom says when those were saved. name is the name the app has for them now, the one their email gives until they choose another, which the preferred-name question starts from until they answer it; null for an email no employee has. While the cohort test group is on (PUT /api/cohorts/test-group), a person in it gets the form for the stage they were given there; one given both picks with ?form=bootcamp or ?form=intermediate (bootcamp by default), and testForms lists the two. Their answers are marked as test answers and deleted when the group is turned off, and never change their name.",
+          "The form is the one for the caller's stage of the current cohort (the Cohorts page's Current tab, Sales and Engineer tracks): bootcamp, headed Bootcamp Registration, for a bootcamp candidate, and intermediate, Intermediate Registration, for an intermediate one. answers is empty and savedAt null until they have saved any, except on intermediate for someone who answered bootcamp before: answers then starts from their bootcamp dietary answers, and carriedFrom says when those were saved. name is the first name of the preferred name they have chosen, which the preferred-name question starts from until they answer it; null if they have none, and the question then starts blank. For bootcamp, questions open with the automatic preferred-name and timezone questions, then the form's own, and an earlier answer saved as a full name starts from its first name. For bootcamp, introduction opens with the line \"Bootcamp takes place from 8:00AM {first day} to 12:00PM {last day}.\" from the next bootcamp's dates (the active one, else the soonest scheduled), then the introduction saved in Logistics settings; canDefer is true, and the page asks them to sign up or defer (POST /api/intake/defer) before it shows the questions. canDefer is false for intermediate. While the cohort test group is on (PUT /api/cohorts/test-group), a person in it gets the form for the stage they were given there; one given both picks with ?form=bootcamp or ?form=intermediate (bootcamp by default), and testForms lists the two. Their answers are marked as test answers and deleted when the group is turned off, and never change their name.",
         query: [{ name: "form", type: "bootcamp | intermediate", note: "which form, for a test group member in both stages; ignored for anyone else" }],
-        returns: `{ form: "bootcamp" | "intermediate", heading, introduction: string, questions: ${INTAKE_QUESTION_SHAPE}[], answers: Record<string, string | string[]>, savedAt: string | null, carriedFrom?: { form: "bootcamp", savedAt }, name: string | null, testForms?: ("bootcamp" | "intermediate")[] }`,
+        returns: `{ form: "bootcamp" | "intermediate", heading, introduction: string, canDefer: boolean, questions: ${INTAKE_QUESTION_SHAPE}[], answers: Record<string, string | string[]>, savedAt: string | null, carriedFrom?: { form: "bootcamp", savedAt }, name: string | null, testForms?: ("bootcamp" | "intermediate")[] }`,
         errors: [{ status: 404, error: "not_in_cohort", when: "the caller is not in the current cohort" }],
       },
       {
@@ -2013,7 +2013,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "signedIn",
         token: true,
         notes:
-          "Saved under the caller's own email, to the form for their stage, as GET /api/intake reads it. Answers are checked against the form as it stands now: trimmed, blanks dropped, and any for a question not on it ignored. A test group member in both stages saves to the form named by ?form=. Saving again replaces their answers; the ones before are kept, but only the latest is listed or counted. The answer to the preferred-name question (while it is a short or paragraph answer) must be a first and a last name with one space between, its stray spaces closed up, and becomes their name wherever the app shows one: their employee record, as their reports' manager, judges, contacts, breakout groups, name cards, their account (which signing in with Google then keeps), and the names kept with comments, checklist items, transcripts, mentions they made and the guest speaker history. A mention of them keeps the name its text spells, and the audit trail keeps the name it recorded. Giving the name their email gives clears a name chosen before. The HiBob sync keeps a chosen name.",
+          "Saved under the caller's own email, to the form for their stage, as GET /api/intake reads it. Answers are checked against the form as it stands now: trimmed, blanks dropped, and any for a question not on it ignored. A test group member in both stages saves to the form named by ?form=. Saving again replaces their answers; the ones before are kept, but only the latest is listed or counted. The preferred-name question is optional: left blank, it changes nothing. The answer to it (while it is a short or paragraph answer), when given, must be a single first name with no spaces (letters, apostrophes, hyphens or dots). It is saved as the preferred name on their employee record, separate from their official first and last name, which is not changed; the app shows the preferred first name with their official last name, so Sam given by Samuel Rivera is saved as Sam and shown as Sam Rivera. That is their name wherever the app shows one: their employee record, as their reports' manager, judges, contacts, breakout groups, name cards, their account (which signing in with Google then keeps), and the names kept with comments, checklist items, transcripts, mentions they made and the guest speaker history. A mention of them keeps the name its text spells, and the audit trail keeps the name it recorded. Giving the first name their email gives clears a preferred name chosen before. The HiBob sync keeps the preferred name.",
         body: {
           kind: "json",
           fields: [
@@ -2032,7 +2032,22 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           { status: 409, error: "no_questions", when: "their form has no questions yet, so there is nothing to answer" },
           { status: 400, error: "required", when: "a required question has no answer; questionId names it" },
           { status: 400, error: "not_an_option", when: "an answer is not one the question offers, or a single-answer question was given several; questionId names it" },
-          { status: 400, error: "not_a_name", when: "the preferred-name answer is not a first and a last name with one space between; questionId names it" },
+          { status: 400, error: "not_a_name", when: "the preferred-name answer is not a single first name, with no spaces; questionId names it" },
+        ],
+      },
+      {
+        method: "POST",
+        path: "/api/intake/defer",
+        summary: "Defers the caller from Pre-Bootcamp to the next bootcamp.",
+        access: "signedIn",
+        token: true,
+        notes:
+          "It is the Defer button on /intake/registration, after the caller confirms. Their track becomes Deferred, the same change as choosing it on the Employees page, which takes them off the Current tab and out of the form; it stays until an administrator sets the track back to automatic. The page then tells them to look out for a message about the next session. A test group member (see PUT /api/cohorts/test-group) is not deferred: nothing changes, and deferred is false. A test group member in both stages names the form with ?form=bootcamp. Audited as the track change, or, for a test group member, as a test defer.",
+        query: [{ name: "form", type: "bootcamp | intermediate", note: "which form, for a test group member in both stages; ignored for anyone else" }],
+        returns: "{ deferred: boolean }",
+        errors: [
+          { status: 404, error: "not_in_cohort", when: "the caller is not in the current cohort" },
+          { status: 409, error: "not_bootcamp", when: "the caller's form is Pre-Intermediate: only Pre-Bootcamp can be deferred" },
         ],
       },
     ],
@@ -2522,7 +2537,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "employeeSearch",
         token: true,
         notes:
-          "Training administrators read it to pick a bootcamp's guest judges. fullName and reportsToName are first and last name as the person's email spells them (first.last@), using HiBob's spelling of each word it has, unless the person chose another on the Pre-Bootcamp form, when nameChosen is true and that one is used; HiBob's full name is kept only for an email that is not first.last. total counts every stored employee, whatever the search.",
+          "Training administrators read it to pick a bootcamp's guest judges. fullName and reportsToName are first and last name as the person's email spells them (first.last@), using HiBob's spelling of each word it has, with the first name replaced by the preferred first name the person gave on the Pre-Bootcamp form, when nameChosen is true (their official name is not changed); HiBob's full name is kept only for an email that is not first.last. total counts every stored employee, whatever the search.",
         query: [
           {
             name: "match",

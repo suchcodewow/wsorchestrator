@@ -723,6 +723,7 @@ const ROUTES: RouteCase[] = [
   { method: "GET", path: `/api/logistics/food-orders/${MISSING}/pdf`, allowed: canUseTraining },
   { method: "GET", path: "/api/intake", allowed: true },
   { method: "PUT", path: "/api/intake", allowed: true, body: () => ({}) },
+  { method: "POST", path: "/api/intake/defer", allowed: true },
   { method: "GET", path: "/api/me/forms", allowed: true },
   { method: "GET", path: `/api/surveys/${MISSING}`, allowed: true },
   { method: "PUT", path: `/api/surveys/${MISSING}`, allowed: true, body: () => ({}) },

@@ -46,8 +46,13 @@ export async function trackOverrides(emails?: readonly string[]): Promise<Map<st
  * soonest scheduled one that has not started yet.
  */
 export async function nextBootcampStart(): Promise<string | null> {
+  return (await nextBootcamp())?.startDate ?? null;
+}
+
+/** `nextBootcampStart`, with how many days its Bootcamp class runs. */
+export async function nextBootcamp(): Promise<{ startDate: string; btcDays: number } | null> {
   const [next] = await db
-    .select({ startDate: bootcamps.startDate })
+    .select({ startDate: bootcamps.startDate, btcDays: bootcamps.btcDays })
     .from(bootcamps)
     .where(
       or(
@@ -57,7 +62,7 @@ export async function nextBootcampStart(): Promise<string | null> {
     )
     .orderBy(sql`(${bootcamps.status} = 'active') desc`, asc(bootcamps.startDate))
     .limit(1);
-  return next?.startDate ?? null;
+  return next ?? null;
 }
 
 /** The deferral window against the next bootcamp, or null when either is missing. */

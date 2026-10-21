@@ -911,8 +911,9 @@ export const employees = pgTable(
      */
     timezone: text("timezone"),
     /**
-     * The name they chose for themselves on the Pre-Bootcamp form, which
-     * `fullName` shows in place of the one their email gives. Null while they
+     * The preferred first name they gave on the Pre-Bootcamp form. `fullName`
+     * shows it with their official last name in place of the first name their
+     * email gives; their official name stays in `raw`. Null while they
      * have not chosen another (`lib/evals/chosen-names.ts`). The sync keeps it.
      */
     chosenName: text("chosen_name"),

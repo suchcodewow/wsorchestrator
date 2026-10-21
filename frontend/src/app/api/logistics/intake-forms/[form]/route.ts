@@ -3,7 +3,7 @@
 import { NextResponse } from "next/server";
 import { requireCaller } from "@/lib/api-auth";
 import { audited, noteAudit } from "@/lib/audit";
-import { getIntakeForm, saveIntakeForm } from "@/lib/logistics/intake";
+import { getEditableIntakeForm, saveIntakeForm } from "@/lib/logistics/intake";
 import { INTAKE_FORM_LABELS, intakeFormSchema, isIntakeFormId } from "@/lib/logistics/intake-values";
 import { canManageTrainingSettings } from "@/lib/roles";
 
@@ -15,7 +15,7 @@ export async function GET(req: Request, { params }: Ctx) {
 
   const { form } = await params;
   if (!isIntakeFormId(form)) return NextResponse.json({ error: "not_found" }, { status: 404 });
-  return NextResponse.json(await getIntakeForm(form));
+  return NextResponse.json(await getEditableIntakeForm(form));
 }
 
 export const PUT = audited(async function PUT(req: Request, { params }: Ctx) {

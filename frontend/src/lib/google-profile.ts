@@ -73,7 +73,7 @@ export async function syncGoogleProfile(
   // Aliased by hand: Drizzle writes bare column names, and inside the subquery a bare
   // "email" would be the employee's own, matching every account.
   const name = sql`coalesce(
-    (select c.chosen_name from ${employees} c where lower(c.email) = lower("users"."email") and c.chosen_name is not null limit 1),
+    (select c.full_name from ${employees} c where lower(c.email) = lower("users"."email") and c.chosen_name is not null limit 1),
     ${google || null},
     "users"."name"
   )`;

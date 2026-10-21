@@ -5,22 +5,33 @@
 
 import "server-only";
 
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { intakeForms, intakeResponses, type IntakeFormId } from "@/db/schema";
-import { nameOnRecord, setChosenName } from "@/lib/evals/chosen-names";
+import {
+  employees,
+  intakeForms,
+  intakeResponses,
+  type IntakeFormId,
+} from "@/db/schema";
+import {
+  chosenNameOnRecord,
+  setChosenName,
+} from "@/lib/evals/chosen-names";
 import { setTimezone, timezoneOnRecord } from "@/lib/evals/timezones";
 import { testGroupStageOf } from "@/lib/cohorts/test-group";
 import { cohortStageOf } from "@/lib/evals/current-cohort";
+import { nextBootcamp, setTrack } from "@/lib/evals/tracks";
 import {
   DEFAULT_INTAKE_FORMS,
   INTAKE_FORM_HEADINGS,
   carriedAnswers,
   checkAnswers,
+  firstNameOf,
   isNameQuestion,
-  lockNameQuestion,
-  lockTimezoneQuestion,
   isTimezoneQuestion,
+  withAutomaticQuestions,
+  withBootcampDates,
+  withoutAutomaticQuestions,
   type AnswerProblem,
   type IntakeAnswers,
   type IntakeForm,
@@ -28,33 +39,52 @@ import {
 
 export type IntakeFormView = IntakeForm & { updatedAt: string | null };
 
-/** A form's questions as they are asked: Pre-Bootcamp's with its name and time zone questions locked in first. */
-const asAsked = (id: IntakeFormId, questions: IntakeForm["questions"]) =>
-  id === "bootcamp" ? lockTimezoneQuestion(lockNameQuestion(questions)) : questions;
-
 /**
- * The saved form, or its default with a null `updatedAt` if it has never been
- * saved. Pre-Bootcamp's name question is locked in as it is read, so one
- * saved before it was locked reads the same as one saved since.
+ * The form as the form builder keeps it, or its default with a null
+ * `updatedAt` if it has never been saved. Pre-Bootcamp's automatic questions,
+ * the name and the time zone, are never part of it, even in a form saved
+ * while they were.
  */
-export async function getIntakeForm(id: IntakeFormId): Promise<IntakeFormView> {
-  const [row] = await db.select().from(intakeForms).where(eq(intakeForms.id, id));
+export async function getEditableIntakeForm(
+  id: IntakeFormId,
+): Promise<IntakeFormView> {
+  const [row] = await db
+    .select()
+    .from(intakeForms)
+    .where(eq(intakeForms.id, id));
   if (!row) {
     const { introduction, questions } = DEFAULT_INTAKE_FORMS[id];
-    return { introduction, questions: asAsked(id, questions), updatedAt: null };
+    return { introduction, questions, updatedAt: null };
   }
-  return { introduction: row.introduction, questions: asAsked(id, row.questions), updatedAt: row.updatedAt.toISOString() };
+  return {
+    introduction: row.introduction,
+    questions: withoutAutomaticQuestions(id, row.questions),
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
+/**
+ * The form as it is asked: the saved one (`getEditableIntakeForm`), with
+ * Pre-Bootcamp's automatic name and time zone questions in front of its own.
+ */
+export async function getIntakeForm(id: IntakeFormId): Promise<IntakeFormView> {
+  const form = await getEditableIntakeForm(id);
+  return { ...form, questions: withAutomaticQuestions(id, form.questions) };
 }
 
 /**
  * Replaces the whole form. Answers already saved keep the question ids they
- * were given under. On Pre-Bootcamp the name question is locked in whatever
- * was sent: first, and changed only in its title (`lockNameQuestion`).
+ * were given under. On Pre-Bootcamp, the automatic questions are dropped
+ * from whatever was sent: they are asked without being saved.
  */
-export async function saveIntakeForm(actorId: string, id: IntakeFormId, form: IntakeForm): Promise<IntakeFormView> {
+export async function saveIntakeForm(
+  actorId: string,
+  id: IntakeFormId,
+  form: IntakeForm,
+): Promise<IntakeFormView> {
   const values = {
     introduction: form.introduction,
-    questions: asAsked(id, form.questions),
+    questions: withoutAutomaticQuestions(id, form.questions),
     updatedBy: actorId,
     updatedAt: new Date(),
   };
@@ -62,7 +92,7 @@ export async function saveIntakeForm(actorId: string, id: IntakeFormId, form: In
     .insert(intakeForms)
     .values({ id, ...values })
     .onConflictDoUpdate({ target: intakeForms.id, set: values });
-  return getIntakeForm(id);
+  return getEditableIntakeForm(id);
 }
 
 /** Someone's form, with the answers they last saved to it; `answers` is empty and `savedAt` null until they have. */
@@ -70,8 +100,13 @@ export type MyIntake = {
   form: IntakeFormId;
   /** "Bootcamp Registration" or "Intermediate Registration". */
   heading: string;
-  /** Shown above the first question; empty for none. */
+  /**
+   * Shown above the first question; empty for none. Pre-Bootcamp's opens with
+   * the dates of the next bootcamp, then the introduction saved in Logistics settings.
+   */
   introduction: string;
+  /** Whether they are asked to sign up for the next bootcamp or defer to the one after: Pre-Bootcamp only. */
+  canDefer: boolean;
   questions: IntakeForm["questions"];
   answers: IntakeAnswers;
   savedAt: string | null;
@@ -81,10 +116,7 @@ export type MyIntake = {
    * it yet, starts from their Pre-Bootcamp dietary needs. Unset otherwise.
    */
   carriedFrom?: { form: IntakeFormId; savedAt: string };
-  /**
-   * The name the app has for them now — the one their email gives, until they
-   * choose another — which the name question starts from until they answer it.
-   */
+  /** The preferred name they chose, which the name question starts from until they answer it; null if they have none. */
   name: string | null;
   /** The time zone the app has for them now, which the time zone question starts from until they answer it. */
   timezone: string | null;
@@ -106,7 +138,11 @@ async function intakeStageFor(
   if (real) return { stage: real, test: false, both: false };
   const given = await testGroupStageOf(email);
   if (!given) return null;
-  return { stage: given === "both" ? (want ?? "bootcamp") : given, test: true, both: given === "both" };
+  return {
+    stage: given === "both" ? (want ?? "bootcamp") : given,
+    test: true,
+    both: given === "both",
+  };
 }
 
 /**
@@ -114,49 +150,123 @@ async function intakeStageFor(
  * candidate, Pre-Intermediate for an intermediate one — with their last
  * answers to it, or null for someone not in the current cohort.
  */
-export async function getMyIntake(email: string, want: IntakeFormId | null = null): Promise<MyIntake | null> {
+export async function getMyIntake(
+  email: string,
+  want: IntakeFormId | null = null,
+): Promise<MyIntake | null> {
   const found = await intakeStageFor(email, want);
   if (!found) return null;
   const { stage } = found;
-  const [{ introduction, questions }, name, timezone, latest] = await Promise.all([
-    getIntakeForm(stage),
-    nameOnRecord(email),
-    timezoneOnRecord(email),
-    latestAnswers(stage, email),
-  ]);
+  const [{ introduction, questions }, name, timezone, latest, bootcamp] =
+    await Promise.all([
+      getIntakeForm(stage),
+      chosenNameOnRecord(email),
+      timezoneOnRecord(email),
+      latestAnswers(stage, email),
+      stage === "bootcamp" ? nextBootcamp() : null,
+    ]);
 
   // Someone at intermediate who answered Pre-Bootcamp in an earlier cohort starts from what lasts of that.
   let carriedFrom: MyIntake["carriedFrom"];
   let answers = latest?.answers ?? {};
   if (!latest && stage === "intermediate") {
     const earlier = await latestAnswers("bootcamp", email);
-    const carried = earlier ? carriedAnswers({ introduction, questions }, earlier.answers) : {};
+    const carried = earlier
+      ? carriedAnswers({ introduction, questions }, earlier.answers)
+      : {};
     if (earlier && Object.keys(carried).length > 0) {
       answers = carried;
-      carriedFrom = { form: "bootcamp", savedAt: earlier.submittedAt.toISOString() };
+      carriedFrom = {
+        form: "bootcamp",
+        savedAt: earlier.submittedAt.toISOString(),
+      };
     }
   }
+
+  // The name question holds a first name; an answer saved when it took a full name starts from its first.
+  const nameQuestion = questions.find(isNameQuestion);
+  const savedName = nameQuestion && answers[nameQuestion.id];
+  if (nameQuestion && typeof savedName === "string")
+    answers = { ...answers, [nameQuestion.id]: firstNameOf(savedName) };
 
   return {
     form: stage,
     heading: INTAKE_FORM_HEADINGS[stage],
-    introduction,
+    introduction: withBootcampDates(introduction, bootcamp),
+    canDefer: stage === "bootcamp",
     questions,
     answers,
     savedAt: latest?.submittedAt.toISOString() ?? null,
     ...(carriedFrom ? { carriedFrom } : {}),
-    name,
+    name: name ? firstNameOf(name) : null,
     timezone,
-    ...(found.both ? { testForms: ["bootcamp", "intermediate"] as IntakeFormId[] } : {}),
+    ...(found.both
+      ? { testForms: ["bootcamp", "intermediate"] as IntakeFormId[] }
+      : {}),
   };
+}
+
+/**
+ * Pre-Bootcamp's introduction as the cohort sees it, for a preview: led by
+ * the next bootcamp's dates, as `getMyIntake` has it.
+ */
+export async function previewIntroduction(
+  id: IntakeFormId,
+  introduction: string,
+): Promise<string> {
+  return id === "bootcamp"
+    ? withBootcampDates(introduction, await nextBootcamp())
+    : introduction;
+}
+
+/**
+ * Moves `email` from Pre-Bootcamp to the Deferred track, to wait for the
+ * bootcamp after the next. They are then off the Current tab, so no longer
+ * asked the form. A test group member's deferral is acknowledged, not made:
+ * no real employee's track changes for a test.
+ */
+export async function deferMyIntake(
+  actorId: string,
+  email: string,
+  want: IntakeFormId | null = null,
+): Promise<
+  | { ok: true; test: boolean }
+  | { ok: false; error: "not_in_cohort" | "not_bootcamp" }
+> {
+  const found = await intakeStageFor(email, want);
+  if (!found) return { ok: false, error: "not_in_cohort" };
+  if (found.stage !== "bootcamp") return { ok: false, error: "not_bootcamp" };
+  if (found.test) return { ok: true, test: true };
+  const set = await setTrack(actorId, email.trim().toLowerCase(), "deferred");
+  return set.ok
+    ? { ok: true, test: false }
+    : { ok: false, error: "not_in_cohort" };
+}
+
+/** Whether `email`'s track is Deferred, which is how someone who deferred their Pre-Bootcamp reads afterwards. */
+export async function isDeferredEmployee(email: string): Promise<boolean> {
+  const [row] = await db
+    .select({ track: employees.track })
+    .from(employees)
+    .where(sql`lower(${employees.email}) = ${email.trim().toLowerCase()}`)
+    .limit(1);
+  return row?.track === "deferred";
 }
 
 /** The answers `email` last saved to `form`, and when; undefined if they never have. */
 async function latestAnswers(form: IntakeFormId, email: string) {
   const [row] = await db
-    .select({ answers: intakeResponses.answers, submittedAt: intakeResponses.submittedAt })
+    .select({
+      answers: intakeResponses.answers,
+      submittedAt: intakeResponses.submittedAt,
+    })
     .from(intakeResponses)
-    .where(and(eq(intakeResponses.form, form), eq(intakeResponses.email, email.toLowerCase())))
+    .where(
+      and(
+        eq(intakeResponses.form, form),
+        eq(intakeResponses.email, email.toLowerCase()),
+      ),
+    )
     .orderBy(desc(intakeResponses.submittedAt))
     .limit(1);
   return row;
@@ -166,7 +276,8 @@ async function latestAnswers(form: IntakeFormId, email: string) {
  * `no_questions`: their form asks nothing yet. Saving would count them as
  * having answered it, and so never remind them once it does ask something.
  */
-export type SaveIntakeError = AnswerProblem | { problem: "not_in_cohort" } | { problem: "no_questions" };
+export type SaveIntakeError =
+  AnswerProblem | { problem: "not_in_cohort" } | { problem: "no_questions" };
 
 /**
  * Checks someone's answers against their form as it stands now and saves them
@@ -178,25 +289,38 @@ export async function saveMyIntake(
   email: string,
   answers: IntakeAnswers,
   want: IntakeFormId | null = null,
-): Promise<{ ok: true; form: IntakeFormId; savedAt: string } | { ok: false; error: SaveIntakeError }> {
+): Promise<
+  | { ok: true; form: IntakeFormId; savedAt: string }
+  | { ok: false; error: SaveIntakeError }
+> {
   const found = await intakeStageFor(email, want);
   if (!found) return { ok: false, error: { problem: "not_in_cohort" } };
   const { stage, test } = found;
 
   const form = await getIntakeForm(stage);
-  if (form.questions.length === 0) return { ok: false, error: { problem: "no_questions" } };
+  if (form.questions.length === 0)
+    return { ok: false, error: { problem: "no_questions" } };
   const checked = checkAnswers(form, answers);
   if (!checked.ok) return checked;
 
+  // The answer is a preferred first name, kept as given. It goes in the preferred name field on their
+  // record, which shows it in place of their first name; their official name is not changed.
+  const nameQuestion = form.questions.find(isNameQuestion);
+  const preferred = nameQuestion && checked.answers[nameQuestion.id];
+
   const [row] = await db
     .insert(intakeResponses)
-    .values({ form: stage, email: email.toLowerCase(), answers: checked.answers, test })
+    .values({
+      form: stage,
+      email: email.toLowerCase(),
+      answers: checked.answers,
+      test,
+    })
     .returning({ submittedAt: intakeResponses.submittedAt });
 
-  const nameQuestion = form.questions.find(isNameQuestion);
-  const name = nameQuestion && checked.answers[nameQuestion.id];
   // A test answer never renames a real employee.
-  if (typeof name === "string" && !test) await setChosenName(email, name);
+  if (typeof preferred === "string" && !test)
+    await setChosenName(email, preferred);
   const zoneQuestion = form.questions.find(isTimezoneQuestion);
   const zone = zoneQuestion && checked.answers[zoneQuestion.id];
   if (typeof zone === "string" && !test) await setTimezone(email, zone);
@@ -205,24 +329,38 @@ export async function saveMyIntake(
 }
 
 /** Which of `emails`, lowercased, have saved answers to `form`. */
-export async function answeredIntake(form: IntakeFormId, emails: string[]): Promise<Set<string>> {
+export async function answeredIntake(
+  form: IntakeFormId,
+  emails: string[],
+): Promise<Set<string>> {
   if (emails.length === 0) return new Set();
   const rows = await db
     .selectDistinct({ email: intakeResponses.email })
     .from(intakeResponses)
-    .where(and(eq(intakeResponses.form, form), inArray(intakeResponses.email, emails)));
+    .where(
+      and(
+        eq(intakeResponses.form, form),
+        inArray(intakeResponses.email, emails),
+      ),
+    );
   return new Set(rows.map((r) => r.email));
 }
 
 /** One form's answers someone last saved, as the Cohorts page shows them under the person. */
-export type IntakeOnFile = { form: IntakeFormId; submittedAt: string; answers: IntakeAnswers };
+export type IntakeOnFile = {
+  form: IntakeFormId;
+  submittedAt: string;
+  answers: IntakeAnswers;
+};
 
 /**
  * Each of `emails`' latest answers to each form, Pre-Bootcamp first: someone
  * at intermediate who answered both has two. Only the emails asked for, so a
  * page of the Cohorts table costs one query.
  */
-export async function latestIntakesOf(emails: string[]): Promise<Record<string, IntakeOnFile[]>> {
+export async function latestIntakesOf(
+  emails: string[],
+): Promise<Record<string, IntakeOnFile[]>> {
   const lower = [...new Set(emails.map((e) => e.toLowerCase()))];
   if (lower.length === 0) return {};
   const rows = await db
@@ -234,16 +372,29 @@ export async function latestIntakesOf(emails: string[]): Promise<Record<string, 
     })
     .from(intakeResponses)
     .where(inArray(intakeResponses.email, lower))
-    .orderBy(intakeResponses.email, intakeResponses.form, desc(intakeResponses.submittedAt));
+    .orderBy(
+      intakeResponses.email,
+      intakeResponses.form,
+      desc(intakeResponses.submittedAt),
+    );
   const byEmail: Record<string, IntakeOnFile[]> = {};
   for (const r of rows) {
-    (byEmail[r.email] ??= []).push({ form: r.form, answers: r.answers, submittedAt: r.submittedAt.toISOString() });
+    (byEmail[r.email] ??= []).push({
+      form: r.form,
+      answers: r.answers,
+      submittedAt: r.submittedAt.toISOString(),
+    });
   }
   return byEmail;
 }
 
 /** Both forms' questions as they stand now, to label answers with. */
-export async function intakeQuestionsByForm(): Promise<Record<IntakeFormId, IntakeForm["questions"]>> {
-  const [bootcamp, intermediate] = await Promise.all([getIntakeForm("bootcamp"), getIntakeForm("intermediate")]);
+export async function intakeQuestionsByForm(): Promise<
+  Record<IntakeFormId, IntakeForm["questions"]>
+> {
+  const [bootcamp, intermediate] = await Promise.all([
+    getIntakeForm("bootcamp"),
+    getIntakeForm("intermediate"),
+  ]);
   return { bootcamp: bootcamp.questions, intermediate: intermediate.questions };
 }
