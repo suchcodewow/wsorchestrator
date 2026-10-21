@@ -42,7 +42,9 @@ import {
   listHistoryPage,
   updateHistory,
 } from "@/lib/evals/bootcamp-history";
+import { setChosenName } from "@/lib/evals/chosen-names";
 import { hibobServiceUser, listHibobSyncRuns, syncHibobEmployees } from "@/lib/evals/hibob";
+import { toEmployeeRow } from "@/lib/evals/hibob-record";
 import { currentCohortSummary, listCurrentCohort, type CandidateStage } from "@/lib/evals/current-cohort";
 import { listOrganizationMembers, loadRoster } from "@/lib/evals/roster";
 import {
@@ -543,7 +545,7 @@ describe("HiBob sync", () => {
       assert.ok((await sync()).ok);
       await db
         .update(employees)
-        .set({ chosenName: "Kay Keep", fullName: "Kay Keep", trackPinned: true, trackOverride: "engineer", timezone: "Europe/Paris" })
+        .set({ chosenName: "Kay", fullName: "Kay", trackPinned: true, trackOverride: "engineer", timezone: "Europe/Paris" })
         .where(eq(employees.email, email("keep")));
 
       stubHibob(200, [person("1", "root", ""), person("2", "keep", "root")]);
@@ -551,8 +553,32 @@ describe("HiBob sync", () => {
       const [row] = await db.select().from(employees).where(eq(employees.email, email("keep")));
       assert.deepEqual(
         [row!.chosenName, row!.fullName, row!.trackPinned, row!.track, row!.timezone, row!.active],
-        ["Kay Keep", "Kay Keep", true, "engineer", "Europe/Paris", true],
+        ["Kay", "Kay", true, "engineer", "Europe/Paris", true],
       );
+    });
+  });
+
+  test("a preferred first name is kept apart from the official name, which a sync keeps too", async () => {
+    configure();
+    await withSettings({ orgLeaderEmail: email("root"), ...SHEET_CUTOFFS, deferralDays: "0" }, async () => {
+      stubHibob(200, [person("1", "root", ""), person("2", "pat.rowe", "root")]);
+      assert.ok((await sync()).ok);
+      const read = async () => (await db.select().from(employees).where(eq(employees.email, email("pat.rowe"))))[0]!;
+
+      assert.equal(await setChosenName(email("pat.rowe"), "Patty"), true);
+      let row = await read();
+      assert.deepEqual([row.chosenName, row.fullName], ["Patty", "Patty Rowe"]);
+      assert.equal(toEmployeeRow(row.raw)?.fullName, "Pat Rowe");
+
+      stubHibob(200, [person("1", "root", ""), person("2", "pat.rowe", "root")]);
+      assert.ok((await sync()).ok);
+      row = await read();
+      assert.deepEqual([row.chosenName, row.fullName], ["Patty", "Patty Rowe"]);
+
+      // Giving the official first name back clears the preferred one.
+      assert.equal(await setChosenName(email("pat.rowe"), "Pat"), true);
+      row = await read();
+      assert.deepEqual([row.chosenName, row.fullName], [null, "Pat Rowe"]);
     });
   });
 

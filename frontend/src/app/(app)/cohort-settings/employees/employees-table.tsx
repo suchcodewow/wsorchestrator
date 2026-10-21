@@ -84,7 +84,7 @@ export function EmployeesTable({
                     {p.fullName}
                     {p.nameChosen && (
                       <span
-                        title="The name they chose on the Pre-Bootcamp form, in place of the one their email gives"
+                        title="They gave a preferred first name on the Pre-Bootcamp form, shown in place of the one their email gives"
                         className="ml-2 rounded-full border px-1.5 py-0.5 text-xs font-normal text-muted-foreground"
                       >
                         Chosen

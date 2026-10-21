@@ -27,6 +27,7 @@ import {
   type HibobSyncTrigger,
 } from "@/db/schema";
 import { hibobAuthorization, toEmployeeRow } from "@/lib/evals/hibob-record";
+import { firstNameOf, preferredFullName } from "@/lib/logistics/intake-values";
 import { orgUnder } from "@/lib/evals/org";
 import { getOrgLeaderEmail } from "@/lib/evals/settings";
 import { emailsWithTimezone, slackTimezones } from "@/lib/evals/timezones";
@@ -248,7 +249,7 @@ export async function syncHibobEmployees(
         .orderBy(employees.active, employees.importedAt);
       const heldById = new Map(held.map((h) => [h.id, h]));
       const heldByEmail = new Map(held.map((h) => [h.email, h]));
-      // The name someone chose wins over their email's, as their own and as their reports' manager.
+      // A preferred first name replaces the first name their email gives, as their own and as their reports' manager.
       const chosen = new Map(held.filter((h) => h.chosenName).map((h) => [h.email, h.chosenName!]));
       for (let i = 0; i < unique.length; i += BATCH) {
         await tx
@@ -258,8 +259,10 @@ export async function syncHibobEmployees(
               const own = heldById.get(r.id) ?? heldByEmail.get(r.email);
               return {
                 ...r,
-                fullName: own?.chosenName ?? r.fullName,
-                reportsToName: chosen.get(r.reportsToEmail) ?? r.reportsToName,
+                fullName: own?.chosenName ? preferredFullName(r.fullName, firstNameOf(own.chosenName)) : r.fullName,
+                reportsToName: chosen.has(r.reportsToEmail)
+                  ? preferredFullName(r.reportsToName, firstNameOf(chosen.get(r.reportsToEmail)!))
+                  : r.reportsToName,
                 importedAt,
                 orgDepth: orgDepth.get(r.id) ?? null,
                 managementChain: chainOf.get(r.id)?.join(";") ?? null,
