@@ -240,11 +240,10 @@ describe("Additional Slack Contacts", () => {
 });
 
 describe("Slack lookups", () => {
-  test("only Organization members are looked up, each once, and the answer is kept on their row", async () => {
+  test("any employee is looked up, in the Organization or not, once, and the answer is kept on their row", async () => {
     await db.insert(employees).values([
       { id: `${TEST_PREFIX}sl_org`, email: email("sl-org"), fullName: "In Org", raw: {}, orgDepth: 1 },
       { id: `${TEST_PREFIX}sl_out`, email: email("sl-out"), fullName: "Out Of Org", raw: {} },
-      { id: `${TEST_PREFIX}sl_left`, email: email("sl-left"), fullName: "", raw: {}, active: false },
     ]);
     const asked: string[] = [];
     const slack: SlackClient = {
@@ -253,21 +252,20 @@ describe("Slack lookups", () => {
         return { user: { id: `U-${params.email}` } } as T;
       },
     };
-    const everyone = [email("sl-org"), email("sl-out"), email("sl-left"), email("sl-nobody")];
+    const everyone = [email("sl-org"), email("sl-out"), email("sl-nobody")];
 
     const first = await resolveSlackUsers(slack, everyone);
-    assert.deepEqual(asked, [email("sl-org")]);
+    assert.deepEqual(asked, [email("sl-org"), email("sl-out")], "someone no employee has is not asked about");
     assert.deepEqual(Object.fromEntries(first), {
       [email("sl-org")]: `U-${email("sl-org")}`,
-      [email("sl-out")]: null,
-      [email("sl-left")]: null,
+      [email("sl-out")]: `U-${email("sl-out")}`,
       [email("sl-nobody")]: null,
     });
-    const [stored] = await db.select().from(employees).where(eq(employees.id, `${TEST_PREFIX}sl_org`));
-    assert.equal(stored!.slackUserId, `U-${email("sl-org")}`);
+    const [stored] = await db.select().from(employees).where(eq(employees.id, `${TEST_PREFIX}sl_out`));
+    assert.equal(stored!.slackUserId, `U-${email("sl-out")}`);
 
-    assert.equal((await resolveSlackUsers(slack, everyone)).get(email("sl-org")), `U-${email("sl-org")}`);
-    assert.equal(asked.length, 1, "a Slack id once found is not asked for again");
+    assert.equal((await resolveSlackUsers(slack, everyone)).get(email("sl-out")), `U-${email("sl-out")}`);
+    assert.equal(asked.length, 2, "a Slack id once found is not asked for again");
   });
 });
 

@@ -933,10 +933,9 @@ export const employees = pgTable(
      */
     active: boolean("active").notNull().default(true),
     /**
-     * Their Slack user, as `users.lookupByEmail` last answered; asked only of
-     * Organization members, as the cohort Slack sync reaches them. Null until
-     * asked, and for someone Slack has no account for, who is asked again a
-     * day after `slackLookedUpAt`.
+     * Their Slack user, as `users.lookupByEmail` or the sync's pass over
+     * `users.list` last answered; null until asked, and for someone Slack has
+     * no account for, who is asked again a day after `slackLookedUpAt`.
      * Slack ids never change, so one found is not asked again.
      */
     slackUserId: text("slack_user_id"),
