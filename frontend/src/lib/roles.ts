@@ -205,6 +205,9 @@ export const canManageSignInDomains = (access: Access) => access.platform;
  */
 export const canManageConnectors = (access: Access) => access.platform;
 
+/** Admin Settings → Timed Jobs: switching a scheduled job off stops it for everyone, so only a platform administrator may. */
+export const canManageTimedJobs = (access: Access) => access.platform;
+
 /** The cohort test group sends real Slack and calendar traffic, so only a platform administrator turns it on or off. */
 export const canManageTestGroup = (access: Access) => access.platform;
 

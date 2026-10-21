@@ -105,6 +105,7 @@ const POLICY: Record<string, { actual: Check; expected: Check }> = {
   canManageSignInDomains: { actual: roles.canManageSignInDomains, expected: platformOnly },
   canManageConnectors: { actual: roles.canManageConnectors, expected: platformOnly },
   canManageTestGroup: { actual: roles.canManageTestGroup, expected: platformOnly },
+  canManageTimedJobs: { actual: roles.canManageTimedJobs, expected: platformOnly },
   canViewAuditTrail: { actual: roles.canViewAuditTrail, expected: platformOnly },
   canImpersonate: { actual: roles.canImpersonate, expected: platformOnly },
 
