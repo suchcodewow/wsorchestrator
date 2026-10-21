@@ -51,8 +51,8 @@ export default async function BootcampPersonPage({
         records: records && {
           history: records.history && {
             ...records.history,
-            createdAt: records.history.createdAt.toISOString(),
-            updatedAt: records.history.updatedAt.toISOString(),
+            createdAt: records.history.createdAt?.toISOString() ?? null,
+            updatedAt: records.history.updatedAt?.toISOString() ?? null,
           },
           submissions: records.submissions.map((s) => ({
             ...s,

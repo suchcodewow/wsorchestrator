@@ -18,6 +18,10 @@ import {
   responsesFormOf,
   INTAKE_NAME_QUESTION_ID,
   LOCKED_NAME_QUESTION,
+  LOCKED_TIMEZONE_QUESTION,
+  INTAKE_TIMEZONE_QUESTION_ID,
+  lockTimezoneQuestion,
+  isTimezoneQuestion,
   checkAnswers,
   isLockedQuestion,
   lockNameQuestion,
@@ -46,11 +50,11 @@ describe("the default form", () => {
     assert.ok(intakeFormSchema.safeParse(DEFAULT_INTAKE_FORM).success);
   });
 
-  test("asks the Google Form's seven questions, three of them required", () => {
-    assert.equal(DEFAULT_INTAKE_FORM.questions.length, 7);
+  test("asks the Google Form's seven questions and a time zone, four of them required", () => {
+    assert.equal(DEFAULT_INTAKE_FORM.questions.length, 8);
     assert.deepEqual(
       DEFAULT_INTAKE_FORM.questions.filter((q) => q.required).map((q) => q.id),
-      ["preferred-name", "dietary", "dietary-critical"],
+      ["preferred-name", "timezone", "dietary", "dietary-critical"],
     );
   });
 
@@ -284,6 +288,39 @@ describe("the locked name question", () => {
     assert.equal(lockNameQuestion([other, LOCKED_NAME_QUESTION])[0]!.id, INTAKE_NAME_QUESTION_ID);
     assert.deepEqual(lockNameQuestion([other]), [LOCKED_NAME_QUESTION, other]);
     assert.deepEqual(lockNameQuestion([{ ...LOCKED_NAME_QUESTION, title: "  " }])[0], LOCKED_NAME_QUESTION);
+  });
+});
+
+describe("the locked time zone question", () => {
+  const other = DEFAULT_INTAKE_FORM.questions.find((q) => q.id === "attend")!;
+  const zone = LOCKED_TIMEZONE_QUESTION;
+  const name = LOCKED_NAME_QUESTION;
+
+  test("comes second on the default Pre-Bootcamp form", () => {
+    assert.equal(DEFAULT_INTAKE_FORM.questions[1]!.id, INTAKE_TIMEZONE_QUESTION_ID);
+    assert.deepEqual(lockTimezoneQuestion(lockNameQuestion(DEFAULT_INTAKE_FORM.questions)), DEFAULT_INTAKE_FORM.questions);
+  });
+
+  test("is locked on Pre-Bootcamp only", () => {
+    assert.ok(isLockedQuestion("bootcamp", zone));
+    assert.ok(!isLockedQuestion("intermediate", zone));
+  });
+
+  test("keeps a new title, undoes other changes, and returns after the name when removed", () => {
+    const altered = { ...zone, title: "Where are you?", kind: "short" as const, required: false };
+    assert.ok(!isTimezoneQuestion(altered));
+    assert.deepEqual(lockTimezoneQuestion([name, other, altered]), [name, { ...zone, title: "Where are you?" }, other]);
+    assert.deepEqual(lockTimezoneQuestion([name, other]), [name, zone, other]);
+  });
+
+  test("takes an IANA time zone, though it stores no options, and nothing else", () => {
+    const form = { introduction: "", questions: [zone] };
+    assert.ok(intakeFormSchema.safeParse(form).success);
+    assert.deepEqual(checkAnswers(form, { timezone: "America/Chicago" }), { ok: true, answers: { timezone: "America/Chicago" } });
+    assert.deepEqual(checkAnswers(form, { timezone: "Mars/Olympus" }), {
+      ok: false,
+      error: { questionId: "timezone", problem: "not_an_option" },
+    });
   });
 });
 

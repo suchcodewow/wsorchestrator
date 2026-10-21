@@ -3,7 +3,7 @@
 import { eq, sql } from "drizzle-orm";
 import type { Profile } from "next-auth";
 import { db } from "@/db";
-import { employeeChosenNames, users } from "@/db/schema";
+import { employees, users } from "@/db/schema";
 
 const PEOPLE_ME_PHOTOS = "https://people.googleapis.com/v1/people/me?personFields=photos";
 
@@ -71,9 +71,9 @@ export async function syncGoogleProfile(
   const google = profile.name?.trim();
   // A chosen name, if they have one, and otherwise Google's; with neither, the name already stored.
   // Aliased by hand: Drizzle writes bare column names, and inside the subquery a bare
-  // "email" would be the chosen name's own, matching every account.
+  // "email" would be the employee's own, matching every account.
   const name = sql`coalesce(
-    (select c.full_name from ${employeeChosenNames} c where c.email = lower("users"."email")),
+    (select c.chosen_name from ${employees} c where lower(c.email) = lower("users"."email") and c.chosen_name is not null limit 1),
     ${google || null},
     "users"."name"
   )`;

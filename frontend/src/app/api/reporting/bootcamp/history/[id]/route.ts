@@ -1,4 +1,4 @@
-/** An Assessments Administrator's correction to someone's bootcamp history row: its days and scores, never whose it is. */
+/** An Assessments Administrator's correction to someone's bootcamp history, by their employee id: its days and scores, never whose it is. */
 
 import { NextResponse } from "next/server";
 import { z } from "zod";
@@ -8,7 +8,8 @@ import { STATUS_FOR, historyCorrectionSchema } from "@/lib/evals/bootcamp-histor
 import { correctHistory } from "@/lib/reporting/bootcamp";
 import { canManageBootcampRecords } from "@/lib/roles";
 
-const idSchema = z.string().uuid();
+// HiBob's id, or the uuid kept for someone HiBob has never sent.
+const idSchema = z.string().min(1).max(64);
 
 export const PATCH = audited(async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { error, user } = await requireCaller(req, canManageBootcampRecords);

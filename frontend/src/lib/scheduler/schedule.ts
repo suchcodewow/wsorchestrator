@@ -48,6 +48,7 @@ import {
 } from "@/db/schema";
 import { noteAudit } from "@/lib/audit-context";
 import { normalEmail } from "@/lib/evals/history-values";
+import { employeeNameOf } from "@/lib/evals/roster";
 import { taggerOf } from "@/lib/mention-store";
 import { classLists, type ClassLists } from "@/lib/scheduler/attendees";
 import { roomsOf as facilityRoomsOf, type RoomRow } from "@/lib/scheduler/facilities";
@@ -140,9 +141,16 @@ export type Schedule = {
 
 // Spelled out, because Drizzle leaves the table off a column in a one-table
 // query, and an unqualified `id` inside these would mean the staff row's own.
+// Named as the instructor pool names them: an administrator by their account,
+// a judge as the employee list has them.
 const staffJson = sql<StaffRow[]>`coalesce((
   select json_agg(json_build_object(
-    'email', st.email, 'fullName', st.full_name, 'leader', st.leader, 'roomId', st.room_id
+    'email', st.email,
+    'fullName', coalesce(
+      (select nullif(u.name, '') from users u where lower(u.email) = st.email order by u.id limit 1),
+      nullif(${employeeNameOf(sql`st.email`)}, ''),
+      st.email),
+    'leader', st.leader, 'roomId', st.room_id
   ) order by st.leader desc, st.position, st.email)
   from ${scheduleSessionStaff} st where st.session_id = ${scheduleSessions}.id
 ), '[]'::json)`;
@@ -549,7 +557,9 @@ async function pruneGroups(tx: Tx, sessionId: string, next: Staffing, audience: 
 async function writeStaff(tx: Tx, sessionId: string, staff: StaffRow[]): Promise<void> {
   await tx.delete(scheduleSessionStaff).where(eq(scheduleSessionStaff.sessionId, sessionId));
   if (staff.length === 0) return;
-  await tx.insert(scheduleSessionStaff).values(staff.map((s, position) => ({ sessionId, ...s, position })));
+  await tx
+    .insert(scheduleSessionStaff)
+    .values(staff.map(({ email, leader, roomId }, position) => ({ sessionId, email, leader, roomId, position })));
 }
 
 const label = (bootcamp: ScheduleBootcamp, s: { name: string; track: ScheduleTrack; day: number }) =>
@@ -885,7 +895,9 @@ async function writeSchedule(
         .insert(scheduleSessions)
         .values(batch.map((s) => ({ ...s, staff: undefined, bootcampId, createdBy: actorId })))
         .returning({ id: scheduleSessions.id });
-      const staff = batch.flatMap((s, j) => s.staff.map((p, position) => ({ sessionId: made[j]!.id, ...p, position })));
+      const staff = batch.flatMap((s, j) =>
+        s.staff.map(({ email, leader, roomId }, position) => ({ sessionId: made[j]!.id, email, leader, roomId, position })),
+      );
       if (staff.length > 0) await tx.insert(scheduleSessionStaff).values(staff);
     }
 

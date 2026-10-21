@@ -7,7 +7,7 @@
 
 import "server-only";
 
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { employees } from "@/db/schema";
 
@@ -16,7 +16,7 @@ export async function isManagerNow(email: string | null | undefined): Promise<bo
   const [row] = await db
     .select({ id: employees.id })
     .from(employees)
-    .where(eq(employees.reportsToEmail, sql`lower(${email})`))
+    .where(and(eq(employees.active, true), eq(employees.reportsToEmail, sql`lower(${email})`)))
     .limit(1);
   return Boolean(row);
 }

@@ -10,6 +10,7 @@ import "server-only";
 import { and, eq, inArray, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { employees, guestSpeakerCohorts, guestSpeakerHistory, type BootcampStatus, type GuestSpeakerRole, type ScheduleTrack } from "@/db/schema";
+import { employeeNameOf } from "@/lib/evals/roster";
 import type { GuestJudgeSort, JudgeProspectSort } from "@/lib/list-specs";
 import {
   GUEST_JUDGE_DEPARTMENTS,
@@ -59,7 +60,7 @@ export type GuestJudgeRow = {
  * and the guest speaker history, its rows for one person and month gathered up.
  */
 const judged = sql`(
-  select j.id::text as id, j.email, coalesce(nullif(j.full_name, ''), j.email) as full_name,
+  select j.id::text as id, j.email, coalesce(nullif(${employeeNameOf(sql`j.email`)}, ''), j.email) as full_name,
     b.start_date::text as cohort, date_trunc('month', b.start_date)::date::text as month, 'scheduler' as source, null as person, b.id::text as bootcamp_id, b.status,
     coalesce((
       select json_agg(json_build_object('name', s.name, 'role', case when st.leader then 'lead' end,
@@ -182,10 +183,11 @@ const location = sql<string | null>`nullif(${employees.raw} -> 'humanReadable' -
 
 // Written out in full: on a query of `employees` alone Drizzle leaves its columns
 // unqualified, and a bare "email" in here would be the report's own.
-const reports = sql<number>`(select count(*)::int from employees r where r.reports_to_email = "employees"."email")`;
+const reports = sql<number>`(select count(*)::int from employees r where r.reports_to_email = "employees"."email" and r.active)`;
 
 /** A sales or sales engineering leader in the employee list who has never been on a bootcamp's guest judges. */
 const isProspect = and(
+  eq(employees.active, true),
   inArray(employees.department, [...GUEST_JUDGE_DEPARTMENTS]),
   sql`${reports} > 0`,
   sql`not exists (select 1 from bootcamp_judges j where j.email = "employees"."email")`,

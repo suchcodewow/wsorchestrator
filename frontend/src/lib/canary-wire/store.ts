@@ -9,7 +9,7 @@ import "server-only";
 
 import { desc, isNotNull, ne } from "drizzle-orm";
 import { db } from "@/db";
-import { EXEMPT_DATE, bootcampHistory, canaryWireSnapshots, employees } from "@/db/schema";
+import { EXEMPT_DATE, canaryWireSnapshots, employees } from "@/db/schema";
 import { accountability, type History } from "@/lib/canary-wire/exemptions";
 import { managersOf, onlyOrg, orgOf, withHiBob, type Person } from "@/lib/canary-wire/people";
 import type { CanaryWireScope } from "@/lib/canary-wire/scope";
@@ -64,9 +64,9 @@ async function peopleByEmail(): Promise<Map<string, Person>> {
 async function history(): Promise<History> {
   const [btc, starts] = await Promise.all([
     db
-      .select({ email: bootcampHistory.email, btcDate: bootcampHistory.btcDate })
-      .from(bootcampHistory)
-      .where(isNotNull(bootcampHistory.btcDate)),
+      .select({ email: employees.email, btcDate: employees.btcDate })
+      .from(employees)
+      .where(isNotNull(employees.btcDate)),
     db.select({ email: employees.email, startDate: employees.startDate }).from(employees).where(isNotNull(employees.startDate)),
   ]);
   const real = btc.map((r) => r.btcDate!).filter((d) => d !== EXEMPT_DATE).sort();

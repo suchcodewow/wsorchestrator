@@ -3,8 +3,8 @@
 /**
  * Everything Assessments sees behind a person's BTC and INT: each assessment,
  * by class, with every criterion's score and comment and both feedback boxes;
- * and their bootcamp history row. With Edit on, an Assessments Administrator
- * corrects any of it in place, one assessment or row at a time.
+ * and their bootcamp history. With Edit on, an Assessments Administrator
+ * corrects any of it in place, one assessment or the history at a time.
  */
 
 import { useState } from "react";
@@ -305,19 +305,25 @@ function FeedbackBox({
 
 type ClassFields = "btc" | "int";
 
-/** Their bootcamp history row, BTC and INT: the day, the overall score and each exercise's. */
+/** Their bootcamp history, BTC and INT: the day, the overall score and each exercise's. */
 export function HistoryRecord({ history, editing }: { history: ViewHistory; editing: boolean }) {
   return (
     <div className="divide-y overflow-hidden rounded-2xl border bg-card shadow-sm">
       <div className="space-y-0.5 px-5 py-4">
         <h4 className="font-medium">Bootcamp history</h4>
         <p className="text-xs text-muted-foreground">
-          Last changed {formatWhen(history.updatedAt)}
-          {history.updatedByName && <> by {history.updatedByName}</>}
+          {history.updatedAt ? (
+            <>
+              Last changed {formatWhen(history.updatedAt)}
+              {history.updatedByName && <> by {history.updatedByName}</>}
+            </>
+          ) : (
+            "Unchanged since it was imported"
+          )}
         </p>
       </div>
       {editing ? (
-        <HistoryForm key={history.updatedAt} history={history} />
+        <HistoryForm key={history.updatedAt ?? ""} history={history} />
       ) : (
         <div className="grid divide-y md:grid-cols-2 md:divide-x md:divide-y-0">
           {(["btc", "int"] as const).map((side) => (

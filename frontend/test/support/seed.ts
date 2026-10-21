@@ -7,7 +7,6 @@ import { randomBytes } from "node:crypto";
 import { eq, sql } from "drizzle-orm";
 import { db, pool } from "@/db";
 import {
-  bootcampHistory,
   bootcampJudges,
   bootcamps,
   employees,
@@ -60,9 +59,15 @@ export function testScope(name: string) {
       .onConflictDoUpdate({ target: users.id, set: { email: address, ...roles } });
     if (access.judging) {
       const bootcampId = await activeBootcampFor(id);
-      await db.insert(bootcampJudges).values({ bootcampId, email: address, fullName: key }).onConflictDoNothing();
+      // A judge must be at Harness, so they are on the employee list too.
+      await db
+        .insert(employees)
+        .values({ id: `${id}_judge`, email: address, fullName: key, raw: {} })
+        .onConflictDoUpdate({ target: employees.id, set: { email: address, active: true } });
+      await db.insert(bootcampJudges).values({ bootcampId, email: address }).onConflictDoNothing();
     } else {
       await db.delete(bootcampJudges).where(eq(bootcampJudges.email, address));
+      await db.delete(employees).where(eq(employees.id, `${id}_judge`));
     }
     // Managing people isn't stored on the user either: HiBob decides it, so a
     // manager is given one employee who reports to them.
@@ -89,15 +94,20 @@ export function testScope(name: string) {
     return address;
   }
 
-  /** A bootcamp history row; its email carries the scope, so cleanup finds it. */
+  /**
+   * Someone with a bootcamp history whom HiBob does not send: an inactive
+   * employee row holding it, as the history kept for someone who left. The id
+   * and email carry the scope, so cleanup finds it; returns the id.
+   */
   async function createHistory(key: string): Promise<string> {
-    const email = `${TEST_PREFIX}${scope}${key}@${TEST_EMAIL_DOMAIN}`.toLowerCase();
-    const [row] = await db
-      .insert(bootcampHistory)
-      .values({ email, btcDate: "2026-03-02", btcScore: 3.3, btcIndividualScores: { "Score-Exams": 4 } })
-      .onConflictDoUpdate({ target: bootcampHistory.email, set: { btcScore: 3.3 } })
-      .returning({ id: bootcampHistory.id });
-    return row!.id;
+    const id = `${TEST_PREFIX}${scope}${key}`;
+    const email = `${id}@${TEST_EMAIL_DOMAIN}`.toLowerCase();
+    const history = { btcDate: "2026-03-02", btcScore: 3.3, btcIndividualScores: { "Score-Exams": 4 } };
+    await db
+      .insert(employees)
+      .values({ id, email, fullName: "", raw: {}, active: false, ...history })
+      .onConflictDoUpdate({ target: employees.id, set: history });
+    return id;
   }
 
   /** An active bootcamp assessment with one criterion, made by `userId` so cleanup finds it. */

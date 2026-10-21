@@ -36,7 +36,7 @@ import {
   slackChannels,
   slackSyncChanges,
   slackSyncRuns,
-  slackUsers,
+  employees,
   users,
   type SlackSyncAction,
   type SlackSyncScope,
@@ -197,18 +197,20 @@ async function finishRun(
 /* ------------------------------------------------------------------ */
 
 /**
- * Each email's Slack user id, or null for one Slack has no active account for.
- * Read from `slack_users` where it can be, asking Slack only for the rest; each
- * answer is stored as it comes, so a run cut off part-way keeps its progress.
- * The intake reminders (`lib/logistics/intake-reminders.ts`) find people by it too.
+ * Each email's Slack user id, or null for one Slack has no active account for,
+ * or that no employee has: anyone the app reaches in Slack is in HiBob.
+ * Read from `employees.slack_user_id` where it can be, asking Slack only for
+ * the rest; each answer is stored as it comes, so a run cut off part-way keeps
+ * its progress. The intake reminders (`lib/logistics/intake-reminders.ts`)
+ * find people by it too.
  */
 export async function resolveSlackUsers(slack: SlackClient, emails: string[]): Promise<Map<string, string | null>> {
-  const known = new Map<string, { id: string | null; at: Date }>();
+  const known = new Map<string, { id: string | null; at: Date | null }>();
   for (let i = 0; i < emails.length; i += 500) {
     const rows = await db
-      .select()
-      .from(slackUsers)
-      .where(inArray(slackUsers.email, emails.slice(i, i + 500)));
+      .select({ email: employees.email, slackUserId: employees.slackUserId, lookedUpAt: employees.slackLookedUpAt })
+      .from(employees)
+      .where(inArray(employees.email, emails.slice(i, i + 500)));
     for (const r of rows) known.set(r.email, { id: r.slackUserId, at: r.lookedUpAt });
   }
 
@@ -216,7 +218,11 @@ export async function resolveSlackUsers(slack: SlackClient, emails: string[]): P
   const ids = new Map<string, string | null>();
   for (const email of emails) {
     const cached = known.get(email);
-    if (cached && (cached.id || cached.at.getTime() > retryBefore)) {
+    if (!cached) {
+      ids.set(email, null);
+      continue;
+    }
+    if (cached.at && (cached.id || cached.at.getTime() > retryBefore)) {
       ids.set(email, cached.id);
       continue;
     }
@@ -228,10 +234,7 @@ export async function resolveSlackUsers(slack: SlackClient, emails: string[]): P
       if (err instanceof SlackError && err.error === "users_not_found") id = null;
       else throw err;
     }
-    await db
-      .insert(slackUsers)
-      .values({ email, slackUserId: id, lookedUpAt: new Date() })
-      .onConflictDoUpdate({ target: slackUsers.email, set: { slackUserId: id, lookedUpAt: new Date() } });
+    await db.update(employees).set({ slackUserId: id, slackLookedUpAt: new Date() }).where(eq(employees.email, email));
     ids.set(email, id);
   }
   return ids;

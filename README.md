@@ -504,8 +504,8 @@ placeholder; **eVals settings** holds what it will draw on:
   Current tab shows where each person stands. It starts in dry run and follows
   the Cohorts test group, as Cohort Settings → Slack does. Setting it up is in
   [docs/operations.md](docs/operations.md#google-meetings).
-- **HiBob**: syncs HiBob's active employees into the `employees` table, replacing
-  the previous sync, every day at 3:00 AM Eastern and whenever **Sync HiBob
+- **HiBob**: syncs HiBob's active employees into the `employees` table,
+  updating each row in place and marking anyone it no longer sends inactive, every day at 3:00 AM Eastern and whenever **Sync HiBob
   Now** is pressed. Every run, scheduled or manual, is logged on the tab with
   its count or error. The service user comes from the deployment, not the page:
   `hibob_userid` and `hibob_token` on the IaCM workspace (the token as the
@@ -520,11 +520,14 @@ placeholder; **eVals settings** holds what it will draw on:
 - **Automatic Sales Titles**, **Automatic Engineer Titles** and **Ignored
   Titles**: the job titles that put someone on each list. Each title can be on
   only one list, and case doesn't matter.
-- **Attendee Tracking**: bootcamp (BTC) and INT history, one row per email.
-  This table replaced the `Bootcamp_History` sheet and is the record now, so
-  people are added and edited here. An **Exempt** switch stores the sheet's
-  `2000-01-01` marker. The old sheet can still be uploaded: rows are matched
-  by email and only the file's own columns are written.
+
+Bootcamp (BTC) and INT history is kept on each person's `employees` row
+(`btc_date` … `history_updated_at`), which replaced the `Bootcamp_History`
+sheet for good. Releasing a class on Reporting → Bootcamp writes it, and an
+Assessments Administrator corrects it there; `2000-01-01` still marks someone
+exempt. Someone with a history whom HiBob has never sent has an inactive row of
+their own, and someone HiBob stops sending stays, inactive, so no history is
+lost. Each row also keeps the Slack user id the Slack sync looked up for them.
 
 | Role                          | Adds                                                            |
 | ----------------------------- | --------------------------------------------------------------- |

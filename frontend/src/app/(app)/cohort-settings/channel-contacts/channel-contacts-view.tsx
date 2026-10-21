@@ -49,6 +49,7 @@ const COLUMNS: { column: ChannelContactSort; label: string }[] = [
 
 const ERRORS: Record<string, string> = {
   invalid: "Pick someone from the list, or type a full email address.",
+  not_employee: "Only someone at Harness, in the employee list from HiBob, can be added.",
   duplicate: "That person is already on this list.",
   not_found: "That contact was already removed — reload the page.",
   forbidden: "Your own role changed — reload the page.",

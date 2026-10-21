@@ -1,14 +1,13 @@
 /**
  * The name someone chose for themselves on the Pre-Bootcamp form, which the
  * app shows in place of the one their email gives. It is kept in
- * `employee_chosen_names` and written straight away wherever a name of theirs
+ * `employees.chosen_name` and written straight away wherever a name of theirs
  * is shown:
  *
  * - `employees`: their `full_name`, and `reports_to_name` for anyone who
  *   reports to them, so the employee list, the Cohorts page, name cards,
- *   eVals and the Slack reminders read it with nothing of their own to do;
- *   then the copies kept with judges, contacts and breakout groups
- *   (`refreshNameCopies`).
+ *   eVals, the Slack reminders, judges, contacts and breakout groups read it
+ *   with nothing of their own to do.
  * - Their account, `users.name`: the user menu, Manage users, and wherever
  *   the app names who did something. Signing in keeps it rather than taking
  *   Google's name again (`lib/google-profile.ts`).
@@ -18,7 +17,7 @@
  *
  * Two kinds of record keep the name they were made with: a mention of them,
  * whose text spells it, and the audit trail, which is history. The HiBob
- * sync, which rewrites `employees`, applies a chosen name again each time.
+ * sync leaves `chosen_name` alone and keeps `full_name` to it.
  */
 
 import "server-only";
@@ -26,7 +25,6 @@ import "server-only";
 import { eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
-  employeeChosenNames,
   employees,
   evalsTranscripts,
   guestSpeakerHistory,
@@ -35,7 +33,7 @@ import {
   scheduleSessionComments,
   users,
 } from "@/db/schema";
-import { refreshNameCopies, type Tx } from "@/lib/evals/hibob";
+import type { Tx } from "@/lib/evals/hibob";
 import { toEmployeeRow } from "@/lib/evals/hibob-record";
 import { normalizeName } from "@/lib/logistics/intake-values";
 
@@ -53,14 +51,14 @@ export async function nameOnRecord(email: string): Promise<string | null> {
 /**
  * Makes `name` the one the app shows for `email`. The name their email gives
  * (`nameFromEmail`, from what HiBob last sent) needs no row, so choosing it
- * deletes theirs. Returns whether they are an employee; nothing is kept for
+ * clears theirs. Returns whether they are an employee; nothing is kept for
  * an email no employee has.
  */
-export async function setChosenName(email: string, name: string, actorId: string | null): Promise<boolean> {
+export async function setChosenName(email: string, name: string): Promise<boolean> {
   const address = email.toLowerCase();
   const fullName = normalizeName(name);
   return db.transaction(async (tx) => {
-    // The HiBob sync's lock: it rewrites `employees`, and reads chosen names, under it.
+    // The HiBob sync's lock: it updates `employees`, and reads chosen names, under it.
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext('hibob_employees'))`);
     const [employee] = await tx
       .select({ raw: employees.raw })
@@ -70,21 +68,12 @@ export async function setChosenName(email: string, name: string, actorId: string
     if (!employee) return false;
 
     const fromEmail = toEmployeeRow(employee.raw)?.fullName;
-    if (fullName === fromEmail) {
-      await tx.delete(employeeChosenNames).where(eq(employeeChosenNames.email, address));
-    } else {
-      await tx
-        .insert(employeeChosenNames)
-        .values({ email: address, fullName, updatedBy: actorId })
-        .onConflictDoUpdate({
-          target: employeeChosenNames.email,
-          set: { fullName, updatedBy: actorId, updatedAt: new Date() },
-        });
-    }
-
-    await tx.update(employees).set({ fullName }).where(sql`lower(${employees.email}) = ${address}`);
+    const chosenName = fullName === fromEmail ? null : fullName;
+    await tx
+      .update(employees)
+      .set({ fullName, chosenName })
+      .where(sql`lower(${employees.email}) = ${address}`);
     await tx.update(employees).set({ reportsToName: fullName }).where(eq(employees.reportsToEmail, address));
-    await refreshNameCopies(tx);
     await renameEverywhereElse(tx, address, fullName);
     return true;
   });

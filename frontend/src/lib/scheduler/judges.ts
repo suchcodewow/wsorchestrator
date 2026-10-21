@@ -11,10 +11,10 @@ import { z } from "zod";
 import { db } from "@/db";
 import { BOOTCAMP_LIMITS, EVALS_SLACK_CONTACT_LIMITS, bootcampJudges, bootcamps, employees, users } from "@/db/schema";
 import { normalEmail } from "@/lib/evals/history-values";
-import { employeeByEmail } from "@/lib/evals/roster";
+import { employeeByEmail, employeeNameOf } from "@/lib/evals/roster";
 import type { JudgeSort } from "@/lib/list-specs";
 import { pageWindow, toPage, type ListQuery, type Page } from "@/lib/paging";
-import { blankAsNull, orderFor, searchAny } from "@/lib/paging-sql";
+import { orderFor, searchAny } from "@/lib/paging-sql";
 
 export type JudgeRow = {
   id: string;
@@ -24,8 +24,10 @@ export type JudgeRow = {
   addedBy: string | null;
 };
 
+const judgeName = employeeNameOf(sql.raw("bootcamp_judges.email"));
+
 const SORT_COLUMNS = {
-  fullName: sql`lower(coalesce(${blankAsNull(bootcampJudges.fullName)}, ${bootcampJudges.email}))`,
+  fullName: sql`lower(coalesce(nullif(${judgeName}, ''), ${bootcampJudges.email}))`,
   email: bootcampJudges.email,
   addedBy: sql`lower(coalesce(nullif(${users.name}, ''), ${users.email}))`,
   addedAt: bootcampJudges.addedAt,
@@ -38,7 +40,7 @@ export async function listJudges(bootcampId: string, query: ListQuery<JudgeSort>
     .select({
       id: bootcampJudges.id,
       email: bootcampJudges.email,
-      fullName: bootcampJudges.fullName,
+      fullName: judgeName,
       addedAt: bootcampJudges.addedAt,
       addedByName: users.name,
       addedByEmail: users.email,
@@ -48,7 +50,7 @@ export async function listJudges(bootcampId: string, query: ListQuery<JudgeSort>
     .where(
       and(
         eq(bootcampJudges.bootcampId, bootcampId),
-        searchAny(query.q, [bootcampJudges.fullName, bootcampJudges.email, users.name, users.email]),
+        searchAny(query.q, [judgeName, bootcampJudges.email, users.name, users.email]),
       ),
     )
     .orderBy(...orderFor(SORT_COLUMNS[query.sort], query.dir, bootcampJudges.email, bootcampJudges.id))
@@ -87,8 +89,8 @@ export type JudgePick = { email: string; fullName: string };
 
 /**
  * The employees `emails` name, lowercased and each once, for a bootcamp's
- * whole set of judges; `not_employee` names the first one the employee list
- * does not have.
+ * whole set of judges; `not_employee` names the first one HiBob does not send,
+ * whether they were never in it or have left.
  */
 export async function resolveJudges(
   emails: string[],
@@ -101,7 +103,7 @@ export async function resolveJudges(
   const found = await db
     .select({ email: sql<string>`lower(${employees.email})`, fullName: employees.fullName })
     .from(employees)
-    .where(inArray(sql`lower(${employees.email})`, wanted));
+    .where(and(inArray(sql`lower(${employees.email})`, wanted), eq(employees.active, true)));
   const byEmail = new Map(found.map((e) => [e.email, e.fullName]));
   const missing = wanted.find((e) => !byEmail.has(e));
   if (missing) return { ok: false, error: "not_employee", email: missing };
@@ -130,17 +132,17 @@ export async function setJudges(
   if (judges.length === 0) return;
   await tx
     .insert(bootcampJudges)
-    .values(judges.map((j) => ({ bootcampId, email: j.email, fullName: j.fullName, addedBy: actorId })))
+    .values(judges.map((j) => ({ bootcampId, email: j.email, addedBy: actorId })))
     .onConflictDoNothing();
 }
 
 /** A bootcamp's judges by name, as its dialog edits them. */
 export async function judgePicks(bootcampId: string): Promise<JudgePick[]> {
   return db
-    .select({ email: bootcampJudges.email, fullName: bootcampJudges.fullName })
+    .select({ email: bootcampJudges.email, fullName: judgeName })
     .from(bootcampJudges)
     .where(eq(bootcampJudges.bootcampId, bootcampId))
-    .orderBy(sql`lower(coalesce(${blankAsNull(bootcampJudges.fullName)}, ${bootcampJudges.email}))`, bootcampJudges.email)
+    .orderBy(SORT_COLUMNS.fullName, bootcampJudges.email)
     .limit(BOOTCAMP_LIMITS.judges);
 }
 
@@ -161,10 +163,10 @@ export async function addJudge(
 
   const [row] = await db
     .insert(bootcampJudges)
-    .values({ bootcampId, email, fullName: employee.fullName, addedBy: actorId })
+    .values({ bootcampId, email, addedBy: actorId })
     .onConflictDoNothing()
-    .returning({ id: bootcampJudges.id, email: bootcampJudges.email, fullName: bootcampJudges.fullName });
-  return row ? { ok: true, judge: row } : { ok: false, error: "duplicate" };
+    .returning({ id: bootcampJudges.id, email: bootcampJudges.email });
+  return row ? { ok: true, judge: { ...row, fullName: employee.fullName } } : { ok: false, error: "duplicate" };
 }
 
 export async function removeJudge(

@@ -2,8 +2,8 @@
  * Reporting → Bootcamp: everyone's BTC and INT records, for every signed-in
  * user, each seeing only as much as they may.
  *
- * A record is a bootcamp history row (the imported sheet) or an eVals
- * submission. An Assessments Viewer or above sees every record and every
+ * A record is someone's bootcamp history, kept on their `employees` row, or
+ * an eVals submission. An Assessments Viewer or above sees every record and every
  * submission's scores and comments. Anyone else sees only the people below
  * them in HiBob's reporting lines — read live, so it follows each sync — and
  * of a bootcamp's submissions only the stages an Assessments Administrator
@@ -19,10 +19,10 @@ import { db } from "@/db";
 import {
   EVALS_ASSESSMENT_LIMITS,
   EXEMPT_DATE,
-  bootcampHistory,
   bootcamps,
   employees,
   evalsAssessmentCriteria,
+  hasHistory,
   evalsAssessments,
   evalsSubmissionScores,
   evalsSubmissions,
@@ -31,7 +31,7 @@ import {
   type Employee,
 } from "@/db/schema";
 import { averageScore, requiredFeedback, wholeScore } from "@/lib/evals/assessment-values";
-import { updateHistory, type HistoryCorrection, type HistoryError } from "@/lib/evals/bootcamp-history";
+import { ensureEmployees, updateHistory, type HistoryCorrection, type HistoryError } from "@/lib/evals/bootcamp-history";
 import { isCandidate } from "@/lib/evals/current-cohort";
 import { getCandidateCutoffs } from "@/lib/evals/settings";
 import { retrackEmployees } from "@/lib/evals/tracks";
@@ -61,17 +61,19 @@ export function readerOf(caller: { access: Access; email: string | null }): Boot
 /**
  * True when the reader may see the person `email` (lowercased): anyone, for
  * an Assessments Viewer; else someone whose chain of managers in the last
- * HiBob sync reaches the reader, the reader themself left out. `union` stops a
- * loop in the reporting lines.
+ * HiBob sync reaches the reader, the reader themself left out. Only people
+ * HiBob still sends count, so someone who has left reaches no one, and a
+ * former report of the reader's is out of reach. `union` stops a loop in the
+ * reporting lines.
  */
 function inReach(reader: BootcampReader, email: SQL): SQL {
   if (reader.all) return sql`true`;
   if (!reader.email) return sql`false`;
   return sql`(${email} <> ${reader.email} and ${email} in (
     with recursive org(email) as (
-      select m.email from ${employees} m where m.reports_to_email = ${reader.email}
+      select m.email from ${employees} m where m.reports_to_email = ${reader.email} and m.active
       union
-      select r.email from ${employees} r join org on r.reports_to_email = org.email
+      select r.email from ${employees} r join org on r.reports_to_email = org.email where r.active
     )
     select email from org))`;
 }
@@ -89,9 +91,9 @@ function released(reader: BootcampReader): SQL {
  */
 function pastRecords(reader: BootcampReader): SQL {
   return sql`(
-    select h.email, 'bootcamp'::text as stage, h.btc_date as day from ${bootcampHistory} h where h.btc_date is not null
+    select h.email, 'bootcamp'::text as stage, h.btc_date as day from ${employees} h where h.btc_date is not null
     union all
-    select h.email, 'intermediate', h.int_date from ${bootcampHistory} h where h.int_date is not null
+    select h.email, 'intermediate', h.int_date from ${employees} h where h.int_date is not null
     union all
     select distinct s.attendee_email, a.stage, b.start_date
       from ${evalsSubmissions} s
@@ -102,16 +104,15 @@ function pastRecords(reader: BootcampReader): SQL {
 }
 
 const nameOf = (email: SQL) =>
-  sql`(select n.full_name from ${employees} n where n.email = ${email} order by n.full_name limit 1)`;
+  sql`(select nullif(n.full_name, '') from ${employees} n where n.email = ${email} order by n.active desc, n.full_name limit 1)`;
 
 /**
- * How a person's page is addressed: their HiBob id while they are in the
- * employee list, else their history row's id, else one of their submissions'.
- * `resolvePerson` reads any of the three back.
+ * How a person's page is addressed: their employee id, else, for someone
+ * scored at a bootcamp with no employee row, one of their submissions'.
+ * `resolvePerson` reads either back.
  */
 const keyOf = (email: SQL) => sql`coalesce(
-  (select n.id from ${employees} n where n.email = ${email} order by n.id limit 1),
-  (select h.id::text from ${bootcampHistory} h where h.email = ${email}),
+  (select n.id from ${employees} n where n.email = ${email} order by n.active desc, n.id limit 1),
   (select min(s.id::text) from ${evalsSubmissions} s where s.attendee_email = ${email}))`;
 
 const ATTENDED = (stage: ReleaseStage) => sql`bool_or(r.stage = ${stage} and r.day <> ${EXEMPT_DATE})`;
@@ -125,7 +126,7 @@ function people(reader: BootcampReader): SQL {
            (case when ${ATTENDED("intermediate")} then 2 when ${ATTENDED("bootcamp")} then 1 else 0 end) as rank,
            (max(r.day) filter (where r.day <> ${EXEMPT_DATE}))::text as date,
            ${nameOf(sql`r.email`)} as full_name,
-           exists (select 1 from ${employees} n where n.email = r.email) as active,
+           coalesce((select bool_or(n.active) from ${employees} n where n.email = r.email), false) as active,
            ${keyOf(sql`r.email`)} as key
       from ${pastRecords(reader)} r
      where ${inReach(reader, sql`r.email`)}
@@ -149,7 +150,7 @@ export type BootcampRecordRow = {
   level: BootcampLevel;
   /** Their latest BTC or INT day; null when every class they have is exempt. */
   date: string | null;
-  /** In the employee list from the last HiBob sync. */
+  /** Sent by the last HiBob sync: still at Harness. */
   active: boolean;
 };
 
@@ -266,9 +267,9 @@ export async function listCohort(
     with candidates as (
       select ${employees.email} as email,
              -- A BTC date from this bootcamp's own release still counts them in its BTC class.
-             (case when ${bootcampHistory.btcDate} is null or ${bootcampHistory.btcDate} >= ${bootcamp.startDate}
+             (case when ${employees.btcDate} is null or ${employees.btcDate} >= ${bootcamp.startDate}
                    then 'bootcamp' else 'intermediate' end) as stage
-        from ${employees} left join ${bootcampHistory} on ${bootcampHistory.email} = ${employees.email}
+        from ${employees}
        where ${and(isCandidate(cutoffs), inArray(employees.track, ["sales", "engineer"]))}
       union
       select s.attendee_email, a.stage
@@ -303,7 +304,7 @@ export const RELEASE_STATUS_FOR: Record<ReleaseError, number> = { no_bootcamp: 4
 /**
  * Releases one class of the active bootcamp to managers, from now on, and
  * completes it: everyone scored in that class gets the bootcamp's start date
- * as their BTC or INT date in `bootcamp_history`, with the mean of their
+ * as their BTC or INT date in their history, with the mean of their
  * submissions' averages as the class score and each assessment's average as
  * an exercise score. That moves a BTC class on to Intermediate on Cohorts →
  * Current, and takes an INT class off it. Once released it stays so;
@@ -348,11 +349,11 @@ export async function releaseScores(
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 /**
- * Writes one class of `bootcamp` into `bootcamp_history` for everyone scored
- * in it, or only for `only`: its start date, the mean of their submissions'
- * averages, and each assessment's average by name. Creates the row for
- * someone with none; leaves the other class's columns alone. Returns whose
- * rows it wrote.
+ * Writes one class of `bootcamp` into the history of everyone scored in it,
+ * or only of `only`: its start date, the mean of their submissions' averages,
+ * and each assessment's average by name. Someone scored with no employee row
+ * gets an inactive one (`ensureEmployees`); the other class's columns are left
+ * alone. Returns whose histories it wrote.
  */
 async function writeClassHistory(
   tx: Tx,
@@ -365,45 +366,46 @@ async function writeClassHistory(
     stage === "bootcamp"
       ? [sql.raw("btc_date"), sql.raw("btc_score"), sql.raw("btc_individual_scores")]
       : [sql.raw("int_date"), sql.raw("int_score"), sql.raw("int_individual_scores")];
-  const { rows } = await tx.execute<{ email: string }>(sql`
-    insert into ${bootcampHistory} (email, ${date}, ${score}, ${exercises}, updated_by)
-    select lower(s.attendee_email), ${bootcamp.startDate}::date,
-           round(avg(s.average_score)::numeric, 1)::float8,
-           jsonb_object_agg(s.assessment_name, s.average_score),
-           ${actorId}
+  const scored = sql`
+    select lower(s.attendee_email) as email, round(avg(s.average_score)::numeric, 1)::float8 as score,
+           jsonb_object_agg(s.assessment_name, s.average_score) as exercises
       from ${evalsSubmissions} s join ${evalsAssessments} a on a.id = s.assessment_id
      where s.bootcamp_id = ${bootcamp.id} and a.stage = ${stage}
        ${only ? sql`and lower(s.attendee_email) = ${only.toLowerCase()}` : sql``}
-     group by lower(s.attendee_email)
-    on conflict (email) do update
-       set ${date} = excluded.${date}, ${score} = excluded.${score}, ${exercises} = excluded.${exercises},
-           updated_by = excluded.updated_by, updated_at = now()
-    returning email`);
+     group by lower(s.attendee_email)`;
+  const { rows: people } = await tx.execute<{ email: string }>(sql`select x.email from (${scored}) x`);
+  await ensureEmployees(tx, people.map((p) => p.email));
+  // Onto the one row per email the app reads first: the active one, else the latest.
+  const { rows } = await tx.execute<{ email: string }>(sql`
+    update ${employees} e
+       set ${date} = ${bootcamp.startDate}::date, ${score} = x.score, ${exercises} = x.exercises,
+           history_updated_by = ${actorId}, history_updated_at = now(),
+           history_created_at = coalesce(e.history_created_at, now())
+      from (${scored}) x
+     where e.id = (select n.id from ${employees} n where n.email = x.email
+                    order by n.active desc, n.imported_at desc, n.id limit 1)
+    returning e.email`);
   return rows.map((r) => r.email);
 }
 
 const uuidSchema = z.string().uuid();
 
 /**
- * The email a person's key (see `keyOf`) stands for: a history row's id, a
- * submission's, or a HiBob id. Null for none of them.
+ * The email a person's key (see `keyOf`) stands for: an employee id or a
+ * submission's. Null for neither.
  */
 async function resolvePerson(key: string): Promise<string | null> {
+  if (key.length > 64) return null;
+  const [employee] = await db.select({ email: employees.email }).from(employees).where(eq(employees.id, key));
+  if (employee) return employee.email;
   if (uuidSchema.safeParse(key).success) {
-    const [history] = await db
-      .select({ email: bootcampHistory.email })
-      .from(bootcampHistory)
-      .where(eq(bootcampHistory.id, key));
-    if (history) return history.email;
     const [submission] = await db
       .select({ email: evalsSubmissions.attendeeEmail })
       .from(evalsSubmissions)
       .where(eq(evalsSubmissions.id, key));
     if (submission) return submission.email;
   }
-  if (key.length > 64) return null;
-  const [employee] = await db.select({ email: employees.email }).from(employees).where(eq(employees.id, key));
-  return employee?.email ?? null;
+  return null;
 }
 
 export type PersonEmployee = Pick<
@@ -433,7 +435,7 @@ export type PersonSubmission = {
   scores: SubmissionScore[];
 };
 
-/** Their bootcamp history row, whole. */
+/** Their bootcamp history, whole; `id` is their employee id. */
 export type PersonHistory = {
   id: string;
   btcDate: string | null;
@@ -442,15 +444,16 @@ export type PersonHistory = {
   intScore: number | null;
   btcIndividualScores: Record<string, number> | null;
   intIndividualScores: Record<string, number> | null;
-  createdAt: Date;
-  updatedAt: Date;
+  /** Null only for a history from before these were kept. */
+  createdAt: Date | null;
+  updatedAt: Date | null;
   updatedByName: string | null;
 };
 
 export type BootcampPerson = {
   key: string;
   email: string;
-  /** From the last HiBob sync; null for someone no longer in it. */
+  /** As HiBob last sent them; null for someone it no longer sends, or never did. */
   employee: PersonEmployee | null;
   /** BTC and INT as a manager sees them. */
   classes: Record<ReleaseStage, ClassSummary>;
@@ -485,25 +488,27 @@ export async function getBootcampPerson(reader: BootcampReader, key: string): Pr
         track: employees.track,
       })
       .from(employees)
-      .where(eq(employees.email, email))
+      .where(and(eq(employees.email, email), eq(employees.active, true)))
       .orderBy(asc(employees.fullName))
       .limit(1),
     db
       .select({
-        id: bootcampHistory.id,
-        btcDate: bootcampHistory.btcDate,
-        intDate: bootcampHistory.intDate,
-        btcScore: bootcampHistory.btcScore,
-        intScore: bootcampHistory.intScore,
-        btcIndividualScores: bootcampHistory.btcIndividualScores,
-        intIndividualScores: bootcampHistory.intIndividualScores,
-        createdAt: bootcampHistory.createdAt,
-        updatedAt: bootcampHistory.updatedAt,
+        id: employees.id,
+        btcDate: employees.btcDate,
+        intDate: employees.intDate,
+        btcScore: employees.btcScore,
+        intScore: employees.intScore,
+        btcIndividualScores: employees.btcIndividualScores,
+        intIndividualScores: employees.intIndividualScores,
+        createdAt: employees.historyCreatedAt,
+        updatedAt: employees.historyUpdatedAt,
         updatedByName: sql<string | null>`coalesce(nullif(${users.name}, ''), ${users.email})`,
       })
-      .from(bootcampHistory)
-      .leftJoin(users, eq(users.id, bootcampHistory.updatedBy))
-      .where(eq(bootcampHistory.email, email)),
+      .from(employees)
+      .leftJoin(users, eq(users.id, employees.historyUpdatedBy))
+      .where(and(eq(employees.email, email), hasHistory))
+      .orderBy(desc(employees.active), desc(employees.importedAt))
+      .limit(1),
     db
       .select({
         id: s.id,
@@ -571,7 +576,7 @@ export async function getBootcampPerson(reader: BootcampReader, key: string): Pr
 
 /**
  * One class as a manager sees it: the newest bootcamp they were scored at in
- * it, unless their history row has a later day; an exempt marker gives way to
+ * it, unless their history has a later day; an exempt marker gives way to
  * any class they were scored at.
  */
 function classFor(
@@ -720,7 +725,7 @@ export async function editSubmission(
 }
 
 /**
- * Corrects someone's bootcamp history row; says whose it was, for the audit
+ * Corrects someone's bootcamp history, by their employee id; says whose it was, for the audit
  * trail. A class given exercise scores takes their mean as its overall
  * score; one given none, or not named, keeps the overall score it has.
  */
@@ -735,12 +740,9 @@ export async function correctHistory(
   };
   const btc = derived(correction.btcIndividualScores);
   const int = derived(correction.intIndividualScores);
-  const result = await updateHistory(actorId, id, {
+  return updateHistory(actorId, id, {
     ...correction,
     ...("score" in btc ? { btcScore: btc.score } : {}),
     ...("score" in int ? { intScore: int.score } : {}),
   });
-  if (!result.ok) return result;
-  const [row] = await db.select({ email: bootcampHistory.email }).from(bootcampHistory).where(eq(bootcampHistory.id, id));
-  return row ? { ok: true, email: row.email } : { ok: false, error: "not_found" };
 }

@@ -6,13 +6,11 @@
 
 import "server-only";
 
-import { and, desc, eq, isNotNull, sql } from "drizzle-orm";
+import { and, desc, eq, isNotNull, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import {
-  bootcampHistory,
   employees,
   hibobSyncRuns,
-  type BootcampHistory,
   type Employee,
   type EvalsTitleList,
 } from "@/db/schema";
@@ -54,8 +52,11 @@ export type Roster = {
   unlisted: UnlistedTitle[];
 };
 
-export type EmployeeListing = Omit<Employee, "raw" | "importedAt" | "orgDepth" | "managementChain" | "track"> & {
-  /** Whether `fullName` is one they chose for themselves (`employee_chosen_names`) rather than their email's. */
+export type EmployeeListing = Pick<
+  Employee,
+  "id" | "email" | "fullName" | "title" | "department" | "site" | "reportsToEmail" | "reportsToName" | "startDate" | "activeEffectiveDate"
+> & {
+  /** Whether `fullName` is one they chose for themselves (`employees.chosen_name`) rather than their email's. */
   nameChosen: boolean;
 };
 
@@ -70,8 +71,7 @@ const EMPLOYEE_COLUMNS = {
   reportsToName: employees.reportsToName,
   startDate: employees.startDate,
   activeEffectiveDate: employees.activeEffectiveDate,
-  // Qualified by hand: Drizzle writes a bare `"email"` here, which inside the subquery would mean its own.
-  nameChosen: sql<boolean>`exists (select 1 from employee_chosen_names c where c.email = lower("employees"."email"))`,
+  nameChosen: sql<boolean>`${employees.chosenName} is not null`,
 };
 
 const EMPLOYEE_SORT_COLUMNS = {
@@ -117,14 +117,14 @@ export async function listEmployees(
   const rows = await db
     .select(EMPLOYEE_COLUMNS)
     .from(employees)
-    .where(searchAny(query.q, searched))
+    .where(and(eq(employees.active, true), searchAny(query.q, searched)))
     .orderBy(...orderFor(EMPLOYEE_SORT_COLUMNS[query.sort], query.dir, employees.fullName, employees.id))
     .limit(limit)
     .offset(offset);
   return toPage(rows, query.page);
 }
 
-/** How many employees are stored, and when the sync that stored them ran. */
+/** How many current employees are stored, and when the sync that stored them ran. */
 export async function employeeSummary(): Promise<{ count: number; syncedAt: Date | null }> {
   const [row] = await db
     .select({
@@ -132,19 +132,37 @@ export async function employeeSummary(): Promise<{ count: number; syncedAt: Date
       // A sync stamps every row with the same time.
       syncedAt: sql<string | null>`max(${employees.importedAt})`,
     })
-    .from(employees);
+    .from(employees)
+    .where(eq(employees.active, true));
   return { count: row?.count ?? 0, syncedAt: row?.syncedAt ? new Date(row.syncedAt) : null };
 }
 
-/** One employee's name, by email, or null — the Organization Leader as the picker shows it. */
+/**
+ * Someone still at Harness, by email, with their name, or null — the
+ * Organization Leader as the picker shows them, or a judge or contact being
+ * added, each of whom must be in HiBob.
+ */
 export async function employeeByEmail(email: string): Promise<{ email: string; fullName: string } | null> {
   if (!email) return null;
   const [row] = await db
     .select({ email: employees.email, fullName: employees.fullName })
     .from(employees)
-    .where(sql`lower(${employees.email}) = ${email.toLowerCase()}`)
+    .where(and(sql`lower(${employees.email}) = ${email.toLowerCase()}`, eq(employees.active, true)))
     .limit(1);
   return row ?? null;
+}
+
+/**
+ * The name the employee list has for the lowercased email in `email`, or ''
+ * for none: for the lists that name people by email alone — judges, contacts,
+ * session staff and groups. Someone who has left keeps the name they had.
+ * `email` is spelled out with its table (`sql.raw("bootcamp_judges.email")`):
+ * in a one-table select drizzle leaves a column unqualified, and inside this
+ * it would then be the employee's own.
+ */
+export function employeeNameOf(email: SQL): SQL<string> {
+  return sql<string>`coalesce((select nullif(n.full_name, '') from ${employees} n where n.email = ${email}
+    order by n.active desc, n.imported_at desc, n.id limit 1), '')`;
 }
 
 export type OrganizationSummary = {
@@ -159,9 +177,8 @@ export type OrganizationSummary = {
 /** Someone the last sync found under the Organization Leader, as the Organization tab lists them. */
 export type OrganizationMember = Pick<
   Employee,
-  "email" | "fullName" | "title" | "department" | "reportsToEmail" | "reportsToName" | "track"
-> &
-  Pick<BootcampHistory, "btcDate" | "btcScore" | "intDate" | "intScore"> & {
+  "email" | "fullName" | "title" | "department" | "reportsToEmail" | "reportsToName" | "track" | "btcDate" | "btcScore" | "intDate" | "intScore"
+> & {
   /** Links between this person and the leader, counting the leader. */
   depth: number;
   /** Lowercased; whom the sync that stored them worked `depth` out for. */
@@ -178,10 +195,10 @@ const ORGANIZATION_SORT_COLUMNS = {
   department: sql`lower(${blankAsNull(employees.department)})`,
   reportsToName: sql`lower(coalesce(${blankAsNull(employees.reportsToName)}, ${blankAsNull(employees.reportsToEmail)}))`,
   track: employees.track,
-  btcDate: bootcampHistory.btcDate,
-  btcScore: bootcampHistory.btcScore,
-  intDate: bootcampHistory.intDate,
-  intScore: bootcampHistory.intScore,
+  btcDate: employees.btcDate,
+  btcScore: employees.btcScore,
+  intDate: employees.intDate,
+  intScore: employees.intScore,
 } as const;
 
 /** Whom the latest successful sync worked `employees.org_depth` out for, or null if none has. */
@@ -219,15 +236,12 @@ export async function listOrganizationMembers(
         track: e.track,
         depth: sql<number>`${e.orgDepth}`,
         managementChain: sql<string>`coalesce(${e.managementChain}, '')`,
-        btcDate: bootcampHistory.btcDate,
-        btcScore: bootcampHistory.btcScore,
-        intDate: bootcampHistory.intDate,
-        intScore: bootcampHistory.intScore,
+        btcDate: e.btcDate,
+        btcScore: e.btcScore,
+        intDate: e.intDate,
+        intScore: e.intScore,
       })
       .from(e)
-      // Both emails are stored lowercased. The sync rebuilds employees, so
-      // results are kept in bootcamp_history and joined here.
-      .leftJoin(bootcampHistory, eq(bootcampHistory.email, e.email))
       .where(
         and(
           isNotNull(e.orgDepth),
@@ -260,7 +274,7 @@ export async function organizationSummary(): Promise<OrganizationSummary> {
 }
 
 export async function loadRoster(rootEmail?: string): Promise<Roster> {
-  const [staff, lists, history, configuredLeader] = await Promise.all([
+  const [staff, lists, configuredLeader] = await Promise.all([
     db
       .select({
         id: employees.id,
@@ -273,33 +287,23 @@ export async function loadRoster(rootEmail?: string): Promise<Roster> {
         reportsToName: employees.reportsToName,
         startDate: employees.startDate,
         activeEffectiveDate: employees.activeEffectiveDate,
+        btcDate: employees.btcDate,
+        intDate: employees.intDate,
       })
-      .from(employees),
+      .from(employees)
+      .where(eq(employees.active, true)),
     titleListMap(),
-    db
-      .select({
-        email: bootcampHistory.email,
-        btcDate: bootcampHistory.btcDate,
-        intDate: bootcampHistory.intDate,
-      })
-      .from(bootcampHistory),
     rootEmail ? Promise.resolve(rootEmail) : getOrgLeaderEmail(),
   ]);
 
-  const historyByEmail = new Map(history.map((h) => [h.email, h]));
   const root = configuredLeader.toLowerCase();
 
   const people = orgUnder(staff, root)
-    .map(({ chain, ...person }): RosterPerson => {
-      const h = historyByEmail.get(person.email);
-      return {
-        ...person,
-        depth: chain.length,
-        list: listForTitle(person.title, lists),
-        btcDate: h?.btcDate ?? null,
-        intDate: h?.intDate ?? null,
-      };
-    })
+    .map(({ chain, ...person }): RosterPerson => ({
+      ...person,
+      depth: chain.length,
+      list: listForTitle(person.title, lists),
+    }))
     .sort((a, b) => a.fullName.localeCompare(b.fullName));
 
   const counts = new Map<string, UnlistedTitle>();

@@ -33,7 +33,7 @@ export const PUT = audited(async function PUT(req: Request) {
   if (!user.email) return NextResponse.json(NOT_IN_COHORT, { status: 404 });
 
   const want = new URL(req.url).searchParams.get("form");
-  const result = await saveMyIntake(user.email, parsed.data.answers, user.id, isIntakeFormId(want) ? want : null);
+  const result = await saveMyIntake(user.email, parsed.data.answers, isIntakeFormId(want) ? want : null);
   if (!result.ok) {
     const { error: problem } = result;
     if (problem.problem === "not_in_cohort") return NextResponse.json(NOT_IN_COHORT, { status: 404 });

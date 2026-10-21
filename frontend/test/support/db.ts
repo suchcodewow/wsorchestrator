@@ -90,9 +90,9 @@ export async function deleteTestRows(
   await query("delete from meeting_selections where created_by like $1", [like]);
   // A run outlives its user, so it goes while the user is still there to name it.
   await query("delete from meeting_sync_runs where triggered_by like $1", [like]);
-  await query("delete from employees where id like $1", [like]);
+  // A history written for someone HiBob never sent has an id of its own, but the scoped email.
+  await query("delete from employees where id like $1 or email like $2", [like, `${like}@${TEST_EMAIL_DOMAIN}`]);
   await query("delete from users where id like $1", [like]);
-  await query("delete from bootcamp_history where email like $1", [`${like}@${TEST_EMAIL_DOMAIN}`]);
 }
 
 function redact(url: string): string {

@@ -26,7 +26,7 @@ export const RELEASE_LABELS: Record<ReleaseStage, string> = {
 /**
  * One class as a manager sees it: when they attended, how they did overall,
  * and how on each exercise. From the newest of their eVals submissions and
- * their bootcamp history row, whichever is the later class.
+ * their bootcamp history, whichever is the later class.
  */
 export type ClassSummary = {
   /** The class's day; `EXEMPT_DATE` for someone exempt; null for someone who has not attended. */
@@ -45,7 +45,7 @@ export function exerciseName(key: string): string {
   return key.replace(/^score-\s*/i, "") || key;
 }
 
-/** A bootcamp history row's side of one class. */
+/** One class's side of someone's bootcamp history. */
 export function historyClass(
   date: string | null,
   score: number | null,

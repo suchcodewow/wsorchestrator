@@ -1,7 +1,7 @@
 /**
  * The parts of eVals settings that decide without the database: reading a
  * HiBob employee, walking reporting lines up to the org root, matching titles
- * to lists, and reading a Bootcamp_History sheet.
+ * to lists, and the values a bootcamp history holds.
  *
  * The HiBob record is shaped like a real `people/search` answer with
  * `humanReadable: "APPEND"` — the numeric title code nested, the flattened
@@ -11,13 +11,11 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 
-import { parseHistorySheet } from "@/lib/evals/bootcamp-history-file";
 import { hibobAuthorization, nameFromEmail, toEmployeeRow } from "@/lib/evals/hibob-record";
 import { inScoreRange, isIsoDay, normalEmail, roundScore } from "@/lib/evals/history-values";
 import { formatScore } from "@/app/(app)/cohort-settings/format";
 import { orgUnder, ORG_ROOT_EMAIL } from "@/lib/evals/org";
 import { cleanTitle, isDeferred, listForTitle, splitTitles, titleKey, trackFor } from "@/lib/evals/title-lists";
-import type { Cell } from "@/lib/spreadsheet-file";
 
 describe("toEmployeeRow", () => {
   const record = {
@@ -259,138 +257,5 @@ describe("history values", () => {
     assert.equal(inScoreRange(0.99), false);
     assert.equal(inScoreRange(4.01), false);
     assert.equal(inScoreRange(Number.NaN), false);
-  });
-});
-
-describe("parseHistorySheet", () => {
-  const HEADER: Cell[] = [
-    "email",
-    "BTCDate",
-    "INTDate",
-    "BTCScore",
-    "INTScore",
-    "BTCIndividualScores",
-    "INTIndividualScores",
-  ];
-  const sheet = (...rows: Cell[][]) => ({ rows: [HEADER, ...rows], date1904: false });
-
-  test("reads every column of a real-looking row", () => {
-    const parsed = parseHistorySheet(
-      sheet(["Pat.Doe@harness.io", 46182.125, "2026-08-04", 4, "3", '{"Score-Exams":4,"Score-Lab":4.5}', null]),
-    );
-    assert.ok(parsed.ok);
-    assert.deepEqual(parsed.rows, [
-      {
-        email: "pat.doe@harness.io",
-        btcDate: "2026-06-09",
-        intDate: "2026-08-04",
-        btcScore: 4,
-        intScore: 3,
-        btcIndividualScores: { "Score-Exams": 4, "Score-Lab": 4.5 },
-        intIndividualScores: null,
-      },
-    ]);
-    assert.deepEqual(parsed.columns, [
-      "btcDate",
-      "intDate",
-      "btcScore",
-      "intScore",
-      "btcIndividualScores",
-      "intIndividualScores",
-    ]);
-    assert.deepEqual(parsed.problems, []);
-    assert.deepEqual(parsed.ignoredColumns, []);
-  });
-
-  test("reads the exempt marker, US-style dates, and a serial written as text", () => {
-    const parsed = parseHistorySheet(sheet(["a@x.com", 36526, "6/9/2026 3:00:00"], ["b@x.com", "46182.125", "0"]));
-    assert.ok(parsed.ok);
-    assert.equal(parsed.rows[0]!.btcDate, "2000-01-01");
-    assert.equal(parsed.rows[0]!.intDate, "2026-06-09");
-    assert.equal(parsed.rows.length, 1);
-    assert.deepEqual(parsed.problems, [{ row: 3, message: "b@x.com: unreadable INTDate" }]);
-  });
-
-  test("finds columns by name in any order and case, and reports the rest", () => {
-    const parsed = parseHistorySheet({
-      rows: [
-        [null, null],
-        ["Notes", "int_date", "EMAIL"],
-        ["hi", "2026-01-05", "a@x.com"],
-      ],
-      date1904: false,
-    });
-    assert.ok(parsed.ok);
-    assert.deepEqual(parsed.ignoredColumns, ["Notes"]);
-    // Only INTDate is written; the stored BTC results are the sheet's to leave alone.
-    assert.deepEqual(parsed.columns, ["intDate"]);
-    assert.equal(parsed.rows[0]!.intDate, "2026-01-05");
-    assert.equal(parsed.rows[0]!.btcDate, null);
-  });
-
-  test("skips blank rows silently and bad ones with a reason, naming the sheet's row", () => {
-    const parsed = parseHistorySheet(
-      sheet(
-        [null, null, null],
-        ["not-an-email", 46000],
-        [null, 46000],
-        ["b@x.com", "someday", null, "high"],
-        ["c@x.com", null, null, null, null, "[1,2]"],
-        ["d@x.com", "2026-02-30"],
-      ),
-    );
-    assert.ok(parsed.ok);
-    assert.deepEqual(parsed.rows, []);
-    assert.deepEqual(parsed.problems, [
-      { row: 3, message: "“not-an-email” is not an email address" },
-      { row: 4, message: "no email" },
-      { row: 5, message: "b@x.com: unreadable BTCDate, BTCScore" },
-      { row: 6, message: "c@x.com: unreadable BTCIndividualScores" },
-      { row: 7, message: "d@x.com: unreadable BTCDate" },
-    ]);
-  });
-
-  test("takes a class score from 1 to 4, to one decimal place", () => {
-    const parsed = parseHistorySheet(
-      sheet(
-        ["a@x.com", null, null, 1, "4"],
-        ["b@x.com", null, null, 0],
-        ["c@x.com", null, null, 5],
-        ["d@x.com", null, null, 3.5, "3.25"],
-        ["e@x.com", null, null, 3.0, 4.01],
-        ["f@x.com", null, null, "3.0"],
-      ),
-    );
-    assert.ok(parsed.ok);
-    assert.deepEqual(
-      parsed.rows.map((r) => [r.btcScore, r.intScore]),
-      [
-        [1, 4],
-        [3.5, 3.3],
-        [3, null],
-      ],
-    );
-    assert.deepEqual(
-      parsed.problems.map((p) => p.message),
-      ["b@x.com: unreadable BTCScore", "c@x.com: unreadable BTCScore", "e@x.com: unreadable INTScore"],
-    );
-  });
-
-  test("keeps the later of two rows for one email, and says so", () => {
-    const parsed = parseHistorySheet(sheet(["a@x.com", null, null, 1], ["A@x.com", null, null, 2]));
-    assert.ok(parsed.ok);
-    assert.deepEqual(
-      parsed.rows.map((r) => r.btcScore),
-      [2],
-    );
-    assert.deepEqual(parsed.problems, [{ row: 3, message: "a@x.com is also on row 2; this later row is the one kept" }]);
-  });
-
-  test("refuses a sheet with no email column, or nothing in it", () => {
-    assert.deepEqual(parseHistorySheet({ rows: [["name"], ["Pat"]], date1904: false }), {
-      ok: false,
-      error: "no_email_column",
-    });
-    assert.deepEqual(parseHistorySheet({ rows: [[], [null]], date1904: false }), { ok: false, error: "empty" });
   });
 });

@@ -5,6 +5,7 @@
  */
 
 import { z } from "zod";
+import { isTimeZone } from "@/lib/timezones";
 import {
   INTAKE_FORM_IDS,
   INTAKE_LIMITS,
@@ -90,6 +91,12 @@ export const DEFAULT_INTAKE_FORM: IntakeForm = {
       id: "preferred-name",
       kind: "short",
       title: "What name would you like instructors and classmates to use?",
+      required: true,
+    }),
+    question({
+      id: "timezone",
+      kind: "dropdown",
+      title: "Please confirm the time zone you normally work in.",
       required: true,
     }),
     question({
@@ -206,6 +213,14 @@ export const DIETARY_QUESTION_IDS = {
 } as const;
 
 /**
+ * The question whose answer becomes the person's time zone
+ * (`employees.timezone`), asked as a list of every IANA zone rather than the
+ * options a question stores, so it keeps none. It is locked on Pre-Bootcamp
+ * like the name question, and starts from the zone the app already has for them.
+ */
+export const INTAKE_TIMEZONE_QUESTION_ID = "timezone";
+
+/**
  * The question whose answer becomes the person's name across the app — on
  * their employee record, name cards and everywhere else — rather than only an
  * answer. It must be a first and a last name (`isFirstLast`), and starts from
@@ -237,9 +252,31 @@ export const LOCKED_NAME_QUESTION: IntakeQuestion = DEFAULT_INTAKE_FORM.question
   (q) => q.id === INTAKE_NAME_QUESTION_ID,
 )!;
 
-/** Whether `q` is the locked name question on form `form`: only its title may be edited. */
+/** Whether `q` is one of the locked questions, the name's or the time zone's, on form `form`: only its title may be edited. */
 export function isLockedQuestion(form: IntakeFormId, q: Pick<IntakeQuestion, "id">): boolean {
-  return form === "bootcamp" && q.id === INTAKE_NAME_QUESTION_ID;
+  return form === "bootcamp" && (q.id === INTAKE_NAME_QUESTION_ID || q.id === INTAKE_TIMEZONE_QUESTION_ID);
+}
+
+/** Whether `q` is the time zone question, whose answer is the person's time zone. */
+export function isTimezoneQuestion(q: Pick<IntakeQuestion, "id" | "kind">): boolean {
+  return q.id === INTAKE_TIMEZONE_QUESTION_ID && q.kind === "dropdown";
+}
+
+/** The time zone question as Pre-Bootcamp always asks it. */
+export const LOCKED_TIMEZONE_QUESTION: IntakeQuestion = DEFAULT_INTAKE_FORM.questions.find(
+  (q) => q.id === INTAKE_TIMEZONE_QUESTION_ID,
+)!;
+
+/**
+ * `questions` with the time zone question locked in straight after the name
+ * question, as `LOCKED_TIMEZONE_QUESTION` has it, keeping only the title it
+ * was given (or the default's). Apply after `lockNameQuestion`.
+ */
+export function lockTimezoneQuestion(questions: IntakeQuestion[]): IntakeQuestion[] {
+  const given = questions.find((q) => q.id === INTAKE_TIMEZONE_QUESTION_ID)?.title.trim();
+  const rest = questions.filter((q) => q.id !== INTAKE_TIMEZONE_QUESTION_ID);
+  const at = rest.length > 0 && rest[0]!.id === INTAKE_NAME_QUESTION_ID ? 1 : 0;
+  return [...rest.slice(0, at), { ...LOCKED_TIMEZONE_QUESTION, title: given || LOCKED_TIMEZONE_QUESTION.title }, ...rest.slice(at)];
 }
 
 /**
@@ -303,7 +340,7 @@ const questionSchema = z
     options: HAS_OPTIONS.has(q.kind) ? q.options : [],
     other: HAS_OTHER.has(q.kind) && q.other,
   }))
-  .refine((q) => !HAS_OPTIONS.has(q.kind) || q.options.length > 0, "a list question needs an option")
+  .refine((q) => !HAS_OPTIONS.has(q.kind) || q.options.length > 0 || isTimezoneQuestion(q), "a list question needs an option")
   .refine((q) => new Set(q.options).size === q.options.length, "options repeat");
 
 export const intakeFormSchema = z
@@ -353,7 +390,9 @@ export function checkAnswers(
       continue;
     }
 
-    if (HAS_OPTIONS.has(q.kind)) {
+    if (isTimezoneQuestion(q)) {
+      if (values.length > 1 || !isTimeZone(values[0])) return { ok: false, error: { questionId: q.id, problem: "not_an_option" } };
+    } else if (HAS_OPTIONS.has(q.kind)) {
       const outside = values.filter((v) => !q.options.includes(v));
       const single = q.kind !== "checkboxes";
       if ((single && values.length > 1) || outside.length > (q.other ? 1 : 0)) {

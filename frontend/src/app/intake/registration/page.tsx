@@ -44,6 +44,7 @@ export default async function RegistrationPage({
       answers: {},
       savedAt: null,
       name: null,
+      timezone: null,
     };
     previewing = true;
   } else {

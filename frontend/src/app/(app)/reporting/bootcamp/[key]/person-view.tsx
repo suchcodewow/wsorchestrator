@@ -22,7 +22,7 @@ export type ViewSubmission = Omit<PersonSubmission, "submittedAt" | "updatedAt">
   submittedAt: string;
   updatedAt: string;
 };
-export type ViewHistory = Omit<PersonHistory, "createdAt" | "updatedAt"> & { createdAt: string; updatedAt: string };
+export type ViewHistory = Omit<PersonHistory, "createdAt" | "updatedAt"> & { createdAt: string | null; updatedAt: string | null };
 
 export type ViewPerson = {
   email: string;
@@ -94,7 +94,7 @@ export function PersonView({ person, canEdit, back }: { person: ViewPerson; canE
               <h3 className="text-base font-medium tracking-tight">Assessments</h3>
               <p className="text-sm text-muted-foreground">
                 {records.submissions.length} {records.submissions.length === 1 ? "assessment" : "assessments"}
-                {records.history && " · a bootcamp history row"}
+                {records.history && " · a bootcamp history"}
               </p>
             </div>
             {canEdit && (

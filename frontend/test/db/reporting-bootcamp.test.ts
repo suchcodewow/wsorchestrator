@@ -20,7 +20,7 @@ import { and, eq } from "drizzle-orm";
 process.env.AUTH_SECRET ||= "reporting-bootcamp-test-secret-reporting-b";
 
 import { db } from "@/db";
-import { bootcampHistory, bootcamps, employees, evalsAssessmentCriteria, evalsSubmissions, evalsSubmissionScores } from "@/db/schema";
+import { bootcamps, employees, evalsAssessmentCriteria, evalsSubmissions, evalsSubmissionScores } from "@/db/schema";
 import { historyCorrectionSchema } from "@/lib/evals/bootcamp-history";
 import { IN_STAGE, isCandidate } from "@/lib/evals/current-cohort";
 import { getCandidateCutoffs } from "@/lib/evals/settings";
@@ -66,11 +66,13 @@ async function employee(key: string, reportsTo: string | null) {
   });
 }
 
-async function history(key: string, values: Partial<typeof bootcampHistory.$inferInsert>) {
+/** Gives the employee `key` a bootcamp history, and returns their id, which is the history's too. */
+async function history(key: string, values: Partial<typeof employees.$inferInsert>) {
   const [row] = await db
-    .insert(bootcampHistory)
-    .values({ email: emailOf(key), ...values })
-    .returning({ id: bootcampHistory.id });
+    .update(employees)
+    .set(values)
+    .where(eq(employees.id, `${SCOPED}${key}`))
+    .returning({ id: employees.id });
   return row!.id;
 }
 
@@ -231,17 +233,16 @@ describe("releasing a class", () => {
 
   test("completes the class: writes its day and scores to bootcamp history, which moves them on to Intermediate", async () => {
     const bootcamp = (await cohortBootcamp())!;
-    const [row] = await db.select().from(bootcampHistory).where(eq(bootcampHistory.email, emailOf("newcomer")));
+    const [row] = await db.select().from(employees).where(eq(employees.id, `${SCOPED}newcomer`));
     assert.equal(row?.btcDate, bootcamp.startDate);
     assert.equal(row?.btcScore, 3);
     assert.deepEqual(row?.btcIndividualScores, { [`${SCOPED}Demo day`]: 3 });
     assert.equal(row?.intDate, null);
-    assert.equal(row?.updatedBy, admin.id);
+    assert.equal(row?.historyUpdatedBy, admin.id);
 
     const [candidate] = await db
       .select({ id: employees.id })
       .from(employees)
-      .leftJoin(bootcampHistory, eq(bootcampHistory.email, employees.email))
       .where(and(eq(employees.id, `${SCOPED}newcomer`), isCandidate(await getCandidateCutoffs()), IN_STAGE.intermediate));
     assert.ok(candidate, "an Intermediate candidate on Cohorts → Current");
   });
@@ -280,7 +281,7 @@ describe("an administrator's corrections", () => {
     });
     assert.ok(saved.ok);
     assert.equal(saved.submission.averageScore, 4);
-    const [written] = await db.select().from(bootcampHistory).where(eq(bootcampHistory.email, emailOf("newcomer")));
+    const [written] = await db.select().from(employees).where(eq(employees.id, `${SCOPED}newcomer`));
     assert.equal(written?.btcScore, 4, "the class is released, so its history follows the edit");
     assert.deepEqual(written?.btcIndividualScores, { [`${SCOPED}Demo day`]: 4 });
 
@@ -301,23 +302,23 @@ describe("an administrator's corrections", () => {
     );
   });
 
-  test("correct a history row's days and exercise scores, saying whose it was; the overall score follows them", async () => {
+  test("correct someone's history: its days and exercise scores, saying whose it was; the overall score follows them", async () => {
     const result = await correctHistory(admin.id, historyIds.rep, {
       intDate: "2026-09-14",
       intIndividualScores: { "Score-Demo": 3.5, "Score-Exams": 2.8 },
     });
     assert.deepEqual(result, { ok: true, email: emailOf("rep") });
-    const [row] = await db.select().from(bootcampHistory).where(eq(bootcampHistory.id, historyIds.rep));
+    const [row] = await db.select().from(employees).where(eq(employees.id, historyIds.rep));
     assert.equal(row?.intDate, "2026-09-14");
     assert.equal(row?.intScore, 3.2, "the mean of 3.5 and 2.8, to one decimal place");
     assert.deepEqual(row?.intIndividualScores, { "Score-Demo": 3.5, "Score-Exams": 2.8 });
     assert.equal(row?.btcScore, 2.8, "a class left out keeps its overall score");
-    assert.equal(row?.updatedBy, admin.id);
+    assert.equal(row?.historyUpdatedBy, admin.id);
     assert.equal((await seen(manager()))[emailOf("rep")], "intermediate");
 
     // A class with no exercise scores keeps the overall score the Sheet gave it.
     assert.ok((await correctHistory(admin.id, historyIds.outsider, { btcIndividualScores: null })).ok);
-    const [outsider] = await db.select().from(bootcampHistory).where(eq(bootcampHistory.id, historyIds.outsider));
+    const [outsider] = await db.select().from(employees).where(eq(employees.id, historyIds.outsider));
     assert.equal(outsider?.btcScore, 3.6);
 
     assert.equal(historyCorrectionSchema.strict().safeParse({ btcScore: 3 }).success, false, "an overall score is never set");

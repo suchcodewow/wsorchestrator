@@ -15,7 +15,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { INTAKE_LIMITS, type IntakeQuestion } from "@/db/schema";
 import type { MyIntake } from "@/lib/logistics/intake";
-import { HAS_OPTIONS, isFirstLast, isNameQuestion, type IntakeAnswers } from "@/lib/logistics/intake-values";
+import { timeZoneLabel, timeZoneNames } from "@/lib/timezones";
+import { HAS_OPTIONS, isFirstLast, isNameQuestion, isTimezoneQuestion, type IntakeAnswers } from "@/lib/logistics/intake-values";
 import { riseChild, staggerParent } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 
@@ -59,6 +60,9 @@ function startingFrom(intake: MyIntake): { answers: IntakeAnswers; others: Recor
   // The name question starts from the name the app already has for them.
   const nameQuestion = intake.questions.find(isNameQuestion);
   if (nameQuestion && answers[nameQuestion.id] === undefined && intake.name) answers[nameQuestion.id] = intake.name;
+  // The time zone question starts from the zone the app already has for them.
+  const zoneQuestion = intake.questions.find(isTimezoneQuestion);
+  if (zoneQuestion && answers[zoneQuestion.id] === undefined && intake.timezone) answers[zoneQuestion.id] = intake.timezone;
   return { answers, others };
 }
 
@@ -192,6 +196,11 @@ export function IntakeFormFiller({ intake, preview }: { intake: MyIntake; previe
                   Your first and last name, like Sam Rivera. It is the name on your name card and everywhere else here.
                 </p>
               )}
+              {isTimezoneQuestion(q) && (
+                <p className="text-sm text-muted-foreground">
+                  It is used to schedule your sessions, and starts from the time zone your Slack profile has. Change it if it is wrong.
+                </p>
+              )}
             </div>
             <Answer
               question={q}
@@ -268,6 +277,22 @@ function Answer({
         maxLength={INTAKE_LIMITS.answer}
         onChange={(e) => onChange(e.target.value)}
       />
+    );
+  }
+
+  if (isTimezoneQuestion(q)) {
+    const current = typeof value === "string" ? value : "";
+    const zones = timeZoneNames();
+    if (current && !zones.includes(current)) zones.push(current);
+    return (
+      <select aria-label={q.title} value={current} onChange={(e) => onChange(e.target.value)} className={SELECT}>
+        <option value="">Choose</option>
+        {zones.map((z) => (
+          <option key={z} value={z}>
+            {timeZoneLabel(z)}
+          </option>
+        ))}
+      </select>
     );
   }
 
