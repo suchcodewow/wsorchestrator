@@ -54,8 +54,8 @@ export type Roster = {
   unlisted: UnlistedTitle[];
 };
 
-export type EmployeeListing = Omit<Employee, "raw" | "importedAt" | "orgDepth" | "managementChain" | "track" | "timezone"> & {
-  /** Whether `fullName` is one they chose for themselves (`employee_chosen_names`) rather than their email's. */
+export type EmployeeListing = Omit<Employee, "raw" | "importedAt" | "orgDepth" | "managementChain" | "track" | "timezone" | "chosenName" | "trackPinned" | "trackOverride" | "active"> & {
+  /** Whether `fullName` is one they chose for themselves (`employees.chosen_name`) rather than their email's. */
   nameChosen: boolean;
 };
 
@@ -70,8 +70,7 @@ const EMPLOYEE_COLUMNS = {
   reportsToName: employees.reportsToName,
   startDate: employees.startDate,
   activeEffectiveDate: employees.activeEffectiveDate,
-  // Qualified by hand: Drizzle writes a bare `"email"` here, which inside the subquery would mean its own.
-  nameChosen: sql<boolean>`exists (select 1 from employee_chosen_names c where c.email = lower("employees"."email"))`,
+  nameChosen: sql<boolean>`${employees.chosenName} is not null`,
 };
 
 const EMPLOYEE_SORT_COLUMNS = {
@@ -117,14 +116,14 @@ export async function listEmployees(
   const rows = await db
     .select(EMPLOYEE_COLUMNS)
     .from(employees)
-    .where(searchAny(query.q, searched))
+    .where(and(eq(employees.active, true), searchAny(query.q, searched)))
     .orderBy(...orderFor(EMPLOYEE_SORT_COLUMNS[query.sort], query.dir, employees.fullName, employees.id))
     .limit(limit)
     .offset(offset);
   return toPage(rows, query.page);
 }
 
-/** How many employees are stored, and when the sync that stored them ran. */
+/** How many current employees are stored, and when the sync that stored them ran. */
 export async function employeeSummary(): Promise<{ count: number; syncedAt: Date | null }> {
   const [row] = await db
     .select({
@@ -132,7 +131,8 @@ export async function employeeSummary(): Promise<{ count: number; syncedAt: Date
       // A sync stamps every row with the same time.
       syncedAt: sql<string | null>`max(${employees.importedAt})`,
     })
-    .from(employees);
+    .from(employees)
+    .where(eq(employees.active, true));
   return { count: row?.count ?? 0, syncedAt: row?.syncedAt ? new Date(row.syncedAt) : null };
 }
 
@@ -274,7 +274,8 @@ export async function loadRoster(rootEmail?: string): Promise<Roster> {
         startDate: employees.startDate,
         activeEffectiveDate: employees.activeEffectiveDate,
       })
-      .from(employees),
+      .from(employees)
+      .where(eq(employees.active, true)),
     titleListMap(),
     db
       .select({

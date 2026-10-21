@@ -177,7 +177,6 @@ export type SaveIntakeError = AnswerProblem | { problem: "not_in_cohort" } | { p
 export async function saveMyIntake(
   email: string,
   answers: IntakeAnswers,
-  actorId: string | null,
   want: IntakeFormId | null = null,
 ): Promise<{ ok: true; form: IntakeFormId; savedAt: string } | { ok: false; error: SaveIntakeError }> {
   const found = await intakeStageFor(email, want);
@@ -197,10 +196,10 @@ export async function saveMyIntake(
   const nameQuestion = form.questions.find(isNameQuestion);
   const name = nameQuestion && checked.answers[nameQuestion.id];
   // A test answer never renames a real employee.
-  if (typeof name === "string" && !test) await setChosenName(email, name, actorId);
+  if (typeof name === "string" && !test) await setChosenName(email, name);
   const zoneQuestion = form.questions.find(isTimezoneQuestion);
   const zone = zoneQuestion && checked.answers[zoneQuestion.id];
-  if (typeof zone === "string" && !test) await setTimezone(email, zone, actorId);
+  if (typeof zone === "string" && !test) await setTimezone(email, zone);
 
   return { ok: true, form: stage, savedAt: row!.submittedAt.toISOString() };
 }

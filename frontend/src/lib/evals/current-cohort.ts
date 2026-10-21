@@ -17,7 +17,6 @@ import { db } from "@/db";
 import {
   bootcampHistory,
   employees,
-  employeeTrackOverrides,
   evalsAssessments,
   evalsSubmissions,
   type Employee,
@@ -106,7 +105,6 @@ export type CurrentCohortSummary = {
 
 const e = employees;
 const h = bootcampHistory;
-const o = employeeTrackOverrides;
 const a = evalsAssessments;
 const s = evalsSubmissions;
 
@@ -208,7 +206,7 @@ export async function listCurrentCohort(
       startDate: e.startDate,
       activeEffectiveDate: e.activeEffectiveDate,
       track: candidateTrack,
-      overridden: sql<boolean>`(${o.email} is not null)`,
+      overridden: e.trackPinned,
       stage: candidateStage,
       historyId: h.id,
       btcDate: h.btcDate,
@@ -220,7 +218,6 @@ export async function listCurrentCohort(
     })
     .from(e)
     .leftJoin(h, sql`${h.email} = ${e.email}`)
-    .leftJoin(o, sql`${o.email} = ${e.email}`)
     .where(
       and(
         isCandidate(cutoffs),

@@ -13,7 +13,7 @@
 
 import "../support/test-env";
 
-import { after, afterEach, before, describe, test } from "node:test";
+import { after, afterEach, before, beforeEach, describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { eq, inArray, like } from "drizzle-orm";
 
@@ -25,7 +25,6 @@ import {
   bootcampJudges,
   bootcamps,
   employees,
-  employeeTrackOverrides,
   EVALS_SETTINGS_KEYS,
   evalsSettings,
   evalsSlackContacts,
@@ -109,7 +108,6 @@ async function clearOwnRows() {
   await db.delete(bootcampHistory).where(like(bootcampHistory.email, `%@${TEST_EMAIL_DOMAIN}`));
   await db.delete(evalsSlackContacts).where(like(evalsSlackContacts.email, `%@${TEST_EMAIL_DOMAIN}`));
   await db.delete(employees).where(like(employees.id, `${TEST_PREFIX}%`));
-  await db.delete(employeeTrackOverrides).where(like(employeeTrackOverrides.email, `%@${TEST_EMAIL_DOMAIN}`));
 }
 
 before(async () => {
@@ -405,6 +403,12 @@ describe("bootcamp history edits", () => {
 });
 
 describe("HiBob sync", () => {
+  // A sync keeps whoever it no longer lists, as inactive, so each test starts from an empty list.
+  // The whole table is put back in `after`.
+  beforeEach(async () => {
+    await db.delete(employees);
+  });
+
   const person = (id: string, name: string, manager: string, title = "", dates: Record<string, string | null> = {}) => ({
     id,
     email: email(name),
@@ -486,7 +490,7 @@ describe("HiBob sync", () => {
     assert.match(logged.error ?? "", /hibob_userid and hibob_token/);
   });
 
-  test("replaces every employee, logs the count, and the roster walks up to the root", async () => {
+  test("updates the employees in place, logs the count, and the roster walks up to the root", async () => {
     configure();
     const calls = stubHibob(200, [
       person("1", "root", "ceo"),
@@ -506,7 +510,17 @@ describe("HiBob sync", () => {
     const second = await sync();
     assert.ok(second.ok);
     assert.equal(second.count, 2);
-    assert.equal((await db.select().from(employees)).length, 2);
+    // Those the sync no longer lists stay, as inactive.
+    const kept = await db.select().from(employees);
+    assert.deepEqual(
+      kept.map((e) => [e.email.split("@")[0], e.active]).sort(),
+      [
+        ["ae", true],
+        ["outsider", false],
+        ["root", true],
+        ["vp", false],
+      ],
+    );
 
     const logged = await run(second.runId);
     assert.equal(logged.status, "succeeded");
@@ -523,8 +537,30 @@ describe("HiBob sync", () => {
     );
   });
 
+  test("a sync keeps a chosen name, a pinned track and a time zone, and fills an empty zone only", async () => {
+    configure();
+    await withSettings({ orgLeaderEmail: email("root"), ...SHEET_CUTOFFS, deferralDays: "0" }, async () => {
+      stubHibob(200, [person("1", "root", ""), person("2", "keep", "root")]);
+      assert.ok((await sync()).ok);
+      await db
+        .update(employees)
+        .set({ chosenName: "Kay Keep", fullName: "Kay Keep", trackPinned: true, trackOverride: "engineer", timezone: "Europe/Paris" })
+        .where(eq(employees.email, email("keep")));
+
+      stubHibob(200, [person("1", "root", ""), person("2", "keep", "root")]);
+      assert.ok((await sync()).ok);
+      const [row] = await db.select().from(employees).where(eq(employees.email, email("keep")));
+      assert.deepEqual(
+        [row!.chosenName, row!.fullName, row!.trackPinned, row!.track, row!.timezone, row!.active],
+        ["Kay Keep", "Kay Keep", true, "engineer", "Europe/Paris", true],
+      );
+    });
+  });
+
   test("a failed sync keeps the last one and records why", async () => {
     configure();
+    stubHibob(200, [person("1", "root", ""), person("3", "ae", "root", T("Account Executive"))]);
+    assert.ok((await sync()).ok);
     stubHibob(500);
     const failed = await sync();
     assert.equal(!failed.ok && failed.error, "bad_response");
@@ -952,11 +988,11 @@ describe("HiBob sync", () => {
         Object.fromEntries(
           (
             await db
-              .select({ email: employees.email, track: employees.track, pinned: employeeTrackOverrides.email })
+              .select({ email: employees.email, track: employees.track, pinned: employees.trackPinned })
               .from(employees)
-              .leftJoin(employeeTrackOverrides, eq(employeeTrackOverrides.email, employees.email))
           )
-            .filter((e) => e.email !== email("root"))
+            // Earlier tests' people stay in the table, no longer active, after a sync.
+            .filter((e) => e.email.startsWith("h-"))
             .map((e) => [e.email.split("@")[0], `${e.track ?? "undecided"}${e.pinned ? " (pinned)" : ""}`]),
         );
       const listOf = async (title: string) =>

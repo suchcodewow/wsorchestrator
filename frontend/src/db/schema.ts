@@ -891,7 +891,7 @@ export const employees = pgTable(
     managementChain: text("management_chain"),
     /**
      * Null for anyone not under the leader. Otherwise, first that applies:
-     * the track an administrator set by hand (`employee_track_overrides`);
+     * the track an administrator set by hand (`trackOverride`);
      * `exempt` when their bootcamp history marks BTC or INT exempt; `ignored`
      * for a title on the Ignored list; `deferred` for someone who started too
      * close to the next bootcamp to attend it; then `sales` or `engineer` by
@@ -901,16 +901,41 @@ export const employees = pgTable(
      */
     track: text("track").$type<EmployeeTrack>(),
     /**
-     * Their usual time zone, an IANA name such as `America/Chicago`, as kept
-     * in `employee_timezones`; null while neither Slack nor they have said.
-     * Set by the HiBob sync and by the Pre-Bootcamp form
-     * (`lib/evals/timezones.ts`).
+     * Their usual time zone, an IANA name such as `America/Chicago`; null
+     * until Slack or they say. The HiBob sync fills it from Slack where it is
+     * null and never replaces one; the Pre-Bootcamp form's time zone question
+     * sets it (`lib/evals/timezones.ts`).
      */
     timezone: text("timezone"),
+    /**
+     * The name they chose for themselves on the Pre-Bootcamp form, which
+     * `fullName` shows in place of the one their email gives. Null while they
+     * have not chosen another (`lib/evals/chosen-names.ts`). The sync keeps it.
+     */
+    chosenName: text("chosen_name"),
+    /**
+     * Whether `trackOverride` was set by hand, which is separate from it being
+     * null: a person pinned to "undecided" has a null override. Set by
+     * `lib/evals/tracks.ts`; the sync keeps it and applies it to `track`.
+     */
+    trackPinned: boolean("track_pinned").notNull().default(false),
+    /** The track an administrator set by hand, while `trackPinned`; null for undecided. */
+    trackOverride: text("track_override").$type<EmployeeTrack>(),
+    /**
+     * False once the sync no longer finds them in HiBob: they left. Their row
+     * stays, with what they chose and their history, but they are in no org
+     * (`orgDepth`, `managementChain` and `track` are null) and no list or
+     * picker offers them. True again if HiBob sends them again.
+     */
+    active: boolean("active").notNull().default(true),
   },
   (t) => [
     index("employees_email_idx").on(t.email),
     index("employees_reports_to_idx").on(t.reportsToEmail),
+    check(
+      "employees_track_override_check",
+      sql`${t.trackOverride} in ('sales', 'engineer', 'ignored', 'exempt', 'deferred')`,
+    ),
   ],
 );
 
@@ -969,69 +994,6 @@ export type EvalsTitleList = (typeof EVALS_TITLE_LISTS)[number];
 /** An employee's track: a title list's, `exempt`, or `deferred`; see `employees.track` for which wins. */
 export const EMPLOYEE_TRACKS = [...EVALS_TITLE_LISTS, "exempt", "deferred"] as const;
 export type EmployeeTrack = (typeof EMPLOYEE_TRACKS)[number];
-
-/**
- * A track an administrator set for one person by hand, which outranks every
- * rule and outlives the sync that rebuilds `employees`. A null track keeps
- * them undecided. Keyed by lowercased email, since a sync replaces HiBob ids'
- * rows wholesale.
- */
-/**
- * The name someone chose for themselves, which the app shows in place of the
- * one their email gives (`nameFromEmail`): as `employees.full_name`, and so on
- * name cards and everywhere else that reads it. Set from the Pre-Bootcamp
- * form's name question (`INTAKE_NAME_QUESTION_ID`); the HiBob sync applies it
- * again each time it rewrites `employees`. Only a name other than the email's
- * is kept: choosing that one again deletes the row. See
- * `lib/evals/chosen-names.ts`.
- */
-export const employeeChosenNames = pgTable("employee_chosen_names", {
-  /** Lowercased. */
-  email: text("email").primaryKey(),
-  /** A first and a last name, one space between (`isFirstLast`). */
-  fullName: text("full_name").notNull(),
-  /** Who saved it: the person themselves, at /intake. */
-  updatedBy: text("updated_by").references(() => users.id, { onDelete: "set null" }),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
-/**
- * Where someone normally is, as an IANA time zone, which outlives the HiBob
- * sync that rebuilds `employees` and is copied onto `employees.timezone` by
- * it. `slack` is what Slack had for them when the sync first found them
- * without one; `intake` is what they confirmed or changed on the Pre-Bootcamp
- * form, which Slack never overwrites. Keyed by lowercased email.
- */
-export const EMPLOYEE_TIMEZONE_SOURCES = ["slack", "intake"] as const;
-export type EmployeeTimezoneSource = (typeof EMPLOYEE_TIMEZONE_SOURCES)[number];
-
-export const employeeTimezones = pgTable("employee_timezones", {
-  email: text("email").primaryKey(),
-  timezone: text("timezone").notNull(),
-  source: text("source").$type<EmployeeTimezoneSource>().notNull(),
-  updatedBy: text("updated_by").references(() => users.id, { onDelete: "set null" }),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
-export const employeeTrackOverrides = pgTable(
-  "employee_track_overrides",
-  {
-    email: text("email").primaryKey(),
-    track: text("track").$type<EmployeeTrack>(),
-    updatedBy: text("updated_by").references(() => users.id, {
-      onDelete: "set null",
-    }),
-    updatedAt: timestamp("updated_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-  },
-  (t) => [
-    check(
-      "employee_track_overrides_track_check",
-      sql`${t.track} in ('sales', 'engineer', 'ignored', 'exempt', 'deferred')`,
-    ),
-  ],
-);
 
 /**
  * eVals-wide settings with exactly one value each, such as the organization

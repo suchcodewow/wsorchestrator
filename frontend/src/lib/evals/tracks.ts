@@ -14,7 +14,6 @@ import {
   bootcampHistory,
   bootcamps,
   employees,
-  employeeTrackOverrides,
   EVALS_TITLE_LISTS,
   evalsTitles,
   EXEMPT_DATE,
@@ -37,9 +36,9 @@ export async function exemptEmails(): Promise<Set<string>> {
 /** The tracks administrators set by hand, by lowercased email; only these emails' when given. */
 export async function trackOverrides(emails?: readonly string[]): Promise<Map<string, TrackOverride>> {
   const rows = await db
-    .select({ email: employeeTrackOverrides.email, track: employeeTrackOverrides.track })
-    .from(employeeTrackOverrides)
-    .where(emails ? inArray(employeeTrackOverrides.email, [...emails]) : undefined);
+    .select({ email: employees.email, track: employees.trackOverride })
+    .from(employees)
+    .where(and(eq(employees.trackPinned, true), emails ? inArray(employees.email, [...emails]) : undefined));
   return new Map(rows.map((r) => [r.email, { track: r.track }]));
 }
 
@@ -187,14 +186,12 @@ async function placeTitle(
   return { title, from: null };
 }
 
-async function pin(actorId: string, email: string, track: EmployeeTrack | null) {
-  await db
-    .insert(employeeTrackOverrides)
-    .values({ email, track, updatedBy: actorId })
-    .onConflictDoUpdate({
-      target: employeeTrackOverrides.email,
-      set: { track, updatedBy: actorId, updatedAt: new Date() },
-    });
+async function pin(email: string, track: EmployeeTrack | null) {
+  await db.update(employees).set({ trackPinned: true, trackOverride: track }).where(eq(employees.email, email));
+}
+
+async function unpin(email: string) {
+  await db.update(employees).set({ trackPinned: false, trackOverride: null }).where(eq(employees.email, email));
 }
 
 /**
@@ -234,32 +231,31 @@ export async function setTrack(
         ),
       );
     const before = await tracksOf();
-    await db.delete(employeeTrackOverrides).where(eq(employeeTrackOverrides.email, lower));
+    await unpin(lower);
     const placed = await placeTitle(actorId, title, choice);
     if (placed) moved = { ...placed, list: choice };
     await retrackEmployees(holders);
     const [after] = await db.select({ track: employees.track }).from(employees).where(eq(employees.email, lower));
     if (after?.track !== choice) {
-      await pin(actorId, lower, choice);
+      await pin(lower, choice);
       await retrackEmployees([lower]);
     }
     const now = await tracksOf();
     retracked = holders.filter((e) => before.get(e) !== now.get(e)).length;
   } else if (choice === "automatic") {
-    await db.delete(employeeTrackOverrides).where(eq(employeeTrackOverrides.email, lower));
+    await unpin(lower);
     retracked = await retrackEmployees([lower]);
   } else {
-    await pin(actorId, lower, choice === "undecided" ? null : choice);
+    await pin(lower, choice === "undecided" ? null : choice);
     retracked = await retrackEmployees([lower]);
   }
 
   const [now] = await db
-    .select({ track: employees.track, overridden: employeeTrackOverrides.email })
+    .select({ track: employees.track, overridden: employees.trackPinned })
     .from(employees)
-    .leftJoin(employeeTrackOverrides, eq(employeeTrackOverrides.email, employees.email))
     .where(and(isNotNull(employees.orgDepth), eq(employees.email, lower)));
   const track = now?.track ?? null;
-  const overridden = now?.overridden != null;
+  const overridden = now?.overridden ?? false;
   noteAudit({
     detail: { choice, from: person.track ?? "undecided", to: track ?? "undecided", overridden, title: moved, retracked },
   });

@@ -1,37 +1,37 @@
 /**
- * Where each employee normally is, as an IANA time zone. It is kept in
- * `employee_timezones`, which outlives the HiBob sync that rewrites
- * `employees`, and copied onto `employees.timezone` by it:
+ * Where each employee normally is, as an IANA time zone, in
+ * `employees.timezone`:
  *
- * - The sync gives anyone under the Organization Leader who has none the one
- *   Slack has for them (`slackTimezones`), once; it never replaces one
- *   already kept.
+ * - The HiBob sync gives anyone under the Organization Leader who has none
+ *   the one Slack has for them (`slackTimezones`); it never replaces one
+ *   already there.
  * - Their answer to the Pre-Bootcamp form's time zone question replaces
- *   whatever is kept (`setTimezone`).
+ *   whatever is there (`setTimezone`).
  */
 
 import "server-only";
 
-import { eq, sql } from "drizzle-orm";
+import { isNotNull, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { employeeTimezones, employees } from "@/db/schema";
+import { employees } from "@/db/schema";
 import { slackClient, SlackError, SlackOutOfTime, slackToken } from "@/lib/slack";
 import { isTimeZone } from "@/lib/timezones";
 
 const SLACK_BUDGET_MS = 60_000;
 
-/** Each person's zone kept so far, by lowercased email. */
-export async function keptTimezones(): Promise<Map<string, string>> {
-  const rows = await db.select({ email: employeeTimezones.email, timezone: employeeTimezones.timezone }).from(employeeTimezones);
-  return new Map(rows.map((r) => [r.email, r.timezone]));
+/** Everyone who has a time zone already, by lowercased email. */
+export async function emailsWithTimezone(): Promise<Set<string>> {
+  const rows = await db.select({ email: employees.email }).from(employees).where(isNotNull(employees.timezone));
+  return new Set(rows.map((r) => r.email));
 }
 
 /** The zone the app has for `email` now; null for someone it has none for. */
 export async function timezoneOnRecord(email: string): Promise<string | null> {
   const [row] = await db
-    .select({ timezone: employeeTimezones.timezone })
-    .from(employeeTimezones)
-    .where(eq(employeeTimezones.email, email.toLowerCase()));
+    .select({ timezone: employees.timezone })
+    .from(employees)
+    .where(sql`lower(${employees.email}) = ${email.toLowerCase()}`)
+    .limit(1);
   return row?.timezone ?? null;
 }
 
@@ -71,41 +71,14 @@ export async function slackTimezones(emails: Set<string>): Promise<Map<string, s
 }
 
 /**
- * Writes Slack's zones for people with none kept, inside the sync's
- * transaction. One kept meanwhile, such as an answer to the form, stays.
- */
-export async function keepSlackTimezones(
-  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
-  fromSlack: Map<string, string>,
-): Promise<void> {
-  const rows = [...fromSlack].map(([email, timezone]) => ({ email, timezone, source: "slack" as const }));
-  for (let i = 0; i < rows.length; i += 500) {
-    await tx.insert(employeeTimezones).values(rows.slice(i, i + 500)).onConflictDoNothing();
-  }
-}
-
-/**
  * Makes `timezone` the one the app has for `email`. Returns whether they are
- * an employee; nothing is kept for an email no employee has.
+ * an employee.
  */
-export async function setTimezone(email: string, timezone: string, actorId: string | null): Promise<boolean> {
-  const address = email.toLowerCase();
-  return db.transaction(async (tx) => {
-    // The HiBob sync's lock: it rewrites `employees`, and reads these, under it.
-    await tx.execute(sql`select pg_advisory_xact_lock(hashtext('hibob_employees'))`);
-    const updated = await tx
-      .update(employees)
-      .set({ timezone })
-      .where(sql`lower(${employees.email}) = ${address}`)
-      .returning({ id: employees.id });
-    if (updated.length === 0) return false;
-    await tx
-      .insert(employeeTimezones)
-      .values({ email: address, timezone, source: "intake", updatedBy: actorId })
-      .onConflictDoUpdate({
-        target: employeeTimezones.email,
-        set: { timezone, source: "intake", updatedBy: actorId, updatedAt: new Date() },
-      });
-    return true;
-  });
+export async function setTimezone(email: string, timezone: string): Promise<boolean> {
+  const updated = await db
+    .update(employees)
+    .set({ timezone })
+    .where(sql`lower(${employees.email}) = ${email.toLowerCase()}`)
+    .returning({ id: employees.id });
+  return updated.length > 0;
 }

@@ -7,8 +7,10 @@
  * at 3 AM Eastern (Cloud Scheduler, see infra/admin/scheduler.tf) and whenever
  * an eVals administrator asks. Like the Apps Script it replaces
  * (`fetchHibobToEmployees`), it asks HiBob for every active employee and
- * rewrites the whole table — here in one transaction, so a failed sync leaves
- * the previous one in place.
+ * updates `employees` from them in one transaction, so a failed sync leaves
+ * the previous one in place. A row is updated, never recreated, so what the
+ * app keeps on a person (chosen name, pinned track, time zone) outlasts a
+ * sync; someone HiBob no longer lists stays, marked inactive.
  */
 
 import "server-only";
@@ -18,9 +20,7 @@ import { db } from "@/db";
 import {
   bootcampJudges,
   cohortChannelContacts,
-  employeeChosenNames,
   employees,
-  employeeTimezones,
   evalsSlackContacts,
   hibobSyncRuns,
   scheduleSessionGroups,
@@ -33,10 +33,10 @@ import {
 import { hibobAuthorization, toEmployeeRow } from "@/lib/evals/hibob-record";
 import { orgUnder } from "@/lib/evals/org";
 import { getOrgLeaderEmail } from "@/lib/evals/settings";
-import { keepSlackTimezones, keptTimezones, slackTimezones } from "@/lib/evals/timezones";
+import { emailsWithTimezone, slackTimezones } from "@/lib/evals/timezones";
 import { trackFor } from "@/lib/evals/title-lists";
 import { titleListMap } from "@/lib/evals/titles";
-import { deferralRule, exemptEmails, trackOverrides } from "@/lib/evals/tracks";
+import { deferralRule, exemptEmails } from "@/lib/evals/tracks";
 import type { HibobSyncSort } from "@/lib/list-specs";
 import { pageWindow, toPage, type ListQuery, type Page } from "@/lib/paging";
 import { orderFor, searchAny } from "@/lib/paging-sql";
@@ -200,7 +200,8 @@ export async function refreshNameCopies(tx: Tx): Promise<void> {
 }
 
 /**
- * Replaces every stored employee with HiBob's current list, logging the run.
+ * Brings every stored employee up to date with HiBob's current list, in place, logging the run.
+ * Someone it no longer sends is marked inactive rather than removed.
  * `actorId` is whoever pressed the button, or null for the schedule.
  */
 export async function syncHibobEmployees(
@@ -237,68 +238,102 @@ export async function syncHibobEmployees(
     // Each of them gets a track as things stand now: one set by hand first,
     // then exempt by their history, then an ignored title, then deferred if
     // they started too close to the next bootcamp, then their title's list.
-    const [lists, exempt, overrides, deferral] = await Promise.all([
-      titleListMap(),
-      exemptEmails(),
-      trackOverrides(),
-      deferralRule(),
-    ]);
-    const track = (r: (typeof unique)[number]) =>
-      trackFor(
-        {
-          inOrg: orgDepth.has(r.id),
-          title: r.title,
-          exempt: exempt.has(r.email),
-          startDate: r.startDate,
-          override: overrides.get(r.email),
-        },
-        lists,
-        deferral,
-      );
+    const [lists, exempt, deferral] = await Promise.all([titleListMap(), exemptEmails(), deferralRule()]);
 
-    // Slack's zone for each of them under the leader who has none kept yet, before the
+    // Slack's zone for each of them under the leader who has none yet, before the
     // transaction so the wait on Slack holds no lock.
-    const keptZones = await keptTimezones();
-    const wantZone = new Set(unique.filter((r) => orgDepth.has(r.id) && !keptZones.has(r.email)).map((r) => r.email));
+    const haveZone = await emailsWithTimezone();
+    const wantZone = new Set(unique.filter((r) => orgDepth.has(r.id) && !haveZone.has(r.email)).map((r) => r.email));
     const fromSlack = await slackTimezones(wantZone);
 
     await db.transaction(async (tx) => {
       // Two syncs are kept apart by the one-running index, but a revision from
       // before it (importing through the hibob_employees view) is not.
       await tx.execute(sql`select pg_advisory_xact_lock(hashtext('hibob_employees'))`);
-      // Read under the lock, which saving a chosen name takes too, so one saved mid-sync is not lost.
+      // What the app keeps on each row, read under the lock, which saving a chosen
+      // name takes too, so one saved mid-sync is not lost. Looked up by id, then by
+      // email for someone HiBob has given a new id: what they chose carries over.
+      const held = await tx
+        .select({
+          id: employees.id,
+          email: employees.email,
+          chosenName: employees.chosenName,
+          timezone: employees.timezone,
+          trackPinned: employees.trackPinned,
+          trackOverride: employees.trackOverride,
+        })
+        .from(employees);
+      const heldById = new Map(held.map((h) => [h.id, h]));
+      const heldByEmail = new Map(held.map((h) => [h.email, h]));
       // The name someone chose wins over their email's, as their own and as their reports' manager.
-      const chosen = new Map(
-        (await tx.select({ email: employeeChosenNames.email, fullName: employeeChosenNames.fullName }).from(employeeChosenNames)).map(
-          (r) => [r.email, r.fullName],
-        ),
-      );
-      // Read under the lock too, so one the form saved mid-sync is not lost.
-      await keepSlackTimezones(tx, fromSlack);
-      const zones = new Map(
-        (await tx.select({ email: employeeTimezones.email, timezone: employeeTimezones.timezone }).from(employeeTimezones)).map(
-          (r) => [r.email, r.timezone],
-        ),
-      );
-      await tx.delete(employees);
+      const chosen = new Map(held.filter((h) => h.chosenName).map((h) => [h.email, h.chosenName!]));
       for (let i = 0; i < unique.length; i += BATCH) {
         await tx
           .insert(employees)
           .values(
-            unique
-              .slice(i, i + BATCH)
-              .map((r) => ({
+            unique.slice(i, i + BATCH).map((r) => {
+              const own = heldById.get(r.id) ?? heldByEmail.get(r.email);
+              return {
                 ...r,
-                fullName: chosen.get(r.email) ?? r.fullName,
+                fullName: own?.chosenName ?? r.fullName,
                 reportsToName: chosen.get(r.reportsToEmail) ?? r.reportsToName,
                 importedAt,
                 orgDepth: orgDepth.get(r.id) ?? null,
                 managementChain: chainOf.get(r.id)?.join(";") ?? null,
-                track: track(r),
-                timezone: zones.get(r.email) ?? null,
-              })),
-          );
+                track: trackFor(
+                  {
+                    inOrg: orgDepth.has(r.id),
+                    title: r.title,
+                    exempt: exempt.has(r.email),
+                    startDate: r.startDate,
+                    override: own?.trackPinned ? { track: own.trackOverride } : undefined,
+                  },
+                  lists,
+                  deferral,
+                ),
+                active: true,
+                chosenName: own?.chosenName ?? null,
+                trackPinned: own?.trackPinned ?? false,
+                trackOverride: own?.trackOverride ?? null,
+                timezone: own?.timezone ?? fromSlack.get(r.email) ?? null,
+              };
+            }),
+          )
+          .onConflictDoUpdate({
+            target: employees.id,
+            // Not chosenName, trackPinned or trackOverride, which are the app's own;
+            // a zone already there stays, and Slack's fills a gap.
+            set: {
+              email: sql`excluded.email`,
+              fullName: sql`excluded.full_name`,
+              title: sql`excluded.title`,
+              department: sql`excluded.department`,
+              site: sql`excluded.site`,
+              reportsToEmail: sql`excluded.reports_to_email`,
+              reportsToName: sql`excluded.reports_to_name`,
+              startDate: sql`excluded.start_date`,
+              activeEffectiveDate: sql`excluded.active_effective_date`,
+              raw: sql`excluded.raw`,
+              importedAt: sql`excluded.imported_at`,
+              orgDepth: sql`excluded.org_depth`,
+              managementChain: sql`excluded.management_chain`,
+              track: sql`excluded.track`,
+              active: sql`true`,
+              timezone: sql`coalesce(${employees.timezone}, excluded.timezone)`,
+            },
+          });
       }
+      // A row under an id HiBob no longer sends, for an email it now sends under another,
+      // has been carried onto the new row.
+      await tx.execute(sql`
+        delete from ${employees} stale
+        where stale.imported_at < ${importedAt}
+          and exists (select 1 from ${employees} n where n.email = stale.email and n.imported_at = ${importedAt})`);
+      // Whoever HiBob no longer sends has left: kept, out of every org and list.
+      await tx
+        .update(employees)
+        .set({ active: false, orgDepth: null, managementChain: null, track: null })
+        .where(and(eq(employees.active, true), lt(employees.importedAt, importedAt)));
       await refreshNameCopies(tx);
       await tx
         .update(hibobSyncRuns)

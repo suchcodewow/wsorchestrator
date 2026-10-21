@@ -2,7 +2,7 @@
 
 import "server-only";
 
-import { eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { employees, EVALS_SETTINGS_KEYS, evalsSettings } from "@/db/schema";
 import { ORG_ROOT_EMAIL } from "@/lib/evals/org";
@@ -27,7 +27,7 @@ export async function setOrgLeaderEmail(
   const [employee] = await db
     .select({ email: employees.email })
     .from(employees)
-    .where(eq(employees.email, lower));
+    .where(and(eq(employees.email, lower), eq(employees.active, true)));
   if (!employee) return { ok: false, error: "not_an_employee" };
 
   await db

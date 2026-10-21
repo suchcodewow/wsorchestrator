@@ -182,10 +182,11 @@ const location = sql<string | null>`nullif(${employees.raw} -> 'humanReadable' -
 
 // Written out in full: on a query of `employees` alone Drizzle leaves its columns
 // unqualified, and a bare "email" in here would be the report's own.
-const reports = sql<number>`(select count(*)::int from employees r where r.reports_to_email = "employees"."email")`;
+const reports = sql<number>`(select count(*)::int from employees r where r.reports_to_email = "employees"."email" and r.active)`;
 
 /** A sales or sales engineering leader in the employee list who has never been on a bootcamp's guest judges. */
 const isProspect = and(
+  eq(employees.active, true),
   inArray(employees.department, [...GUEST_JUDGE_DEPARTMENTS]),
   sql`${reports} > 0`,
   sql`not exists (select 1 from bootcamp_judges j where j.email = "employees"."email")`,
