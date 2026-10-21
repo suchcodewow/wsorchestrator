@@ -1,7 +1,7 @@
 /**
  * Whose Canary Wire a caller sees. A manager opens on their own org — them
  * and everyone under them — and may switch to everyone; anyone else who can
- * see the page (a platform administrator) sees everyone. The page and the API
+ * see the page (an Assessments Viewer or above) sees everyone. The page and the API
  * both decide here, from `?scope=`, so a token can't see more than the page.
  */
 

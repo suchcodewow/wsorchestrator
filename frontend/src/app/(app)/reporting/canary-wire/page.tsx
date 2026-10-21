@@ -1,4 +1,4 @@
-/** Canary Wire: monthly Mindtickle completion by manager, for people managers and platform administrators. */
+/** Canary Wire: monthly Mindtickle completion by manager, for people managers and Assessments Viewers and above. */
 
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";

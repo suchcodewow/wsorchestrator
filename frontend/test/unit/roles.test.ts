@@ -86,7 +86,7 @@ const POLICY: Record<string, { actual: Check; expected: Check }> = {
     actual: roles.canManageEvalsSettings,
     expected: evals("administrator"),
   },
-  canSeeCanaryWire: { actual: roles.canSeeCanaryWire, expected: (a) => a.platform || a.manager },
+  canSeeCanaryWire: { actual: roles.canSeeCanaryWire, expected: (a) => a.manager || evals("viewer")(a) },
   canRefreshCanaryWire: { actual: roles.canRefreshCanaryWire, expected: platformOnly },
   canSeeBootcampRecords: { actual: roles.canSeeBootcampRecords, expected: () => true },
   canManageBootcampRecords: { actual: roles.canManageBootcampRecords, expected: evals("administrator") },
