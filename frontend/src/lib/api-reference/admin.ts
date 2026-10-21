@@ -1910,12 +1910,31 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "trainingAdmin",
         token: true,
         notes:
-          "Takes no body. The judges are each person once, at their latest cohort, newest cohort first: a Scheduler bootcamp counts only once it is complete, a history cohort always, and at most 48 fit the slide. Photos come from Slack by each judge's email; someone with no email or no custom Slack photo shows as a name alone. The deck is owned by the Google account connected for Google Meetings; a deck of the same name already in the folder is trashed first. That account needs the Slides and Drive scopes, so an account connected before they were asked for must be connected again.",
-        returns: "201 { url: string, judges: number, withPhotos: number }",
+          "Takes no body. The judges are each person once, at their latest cohort, latest cohort first: a Scheduler bootcamp counts only once it is complete, a history cohort always, and at most 100 are looked up. Photos come from Slack by each judge's email; someone with no email or no custom Slack photo is left off the slide, and the photos shrink to fit everyone else. Each photo is a circle with a light blue ring, orange for someone who helped in two or more months, who also gets a 🔥2X badge. Google fetches the circles from the public, signed, 15-minute photo link on this app, so AUTH_URL must be its public origin. The deck is owned by the Google account connected for Google Meetings; a deck of the same name already in the folder is trashed first. That account needs the Slides and Drive scopes, so an account connected before they were asked for must be connected again.",
+        returns: "201 { url: string, judges: number, withPhotos: number }, both counts being the people on the slide",
         errors: [
-          { status: 404, error: "no_judges", when: "no guest judges are listed" },
+          { status: 404, error: "no_judges", when: "no guest judges are listed, or Slack has a photo for none of them" },
           { status: 409, error: "google_not_configured | google_not_connected | google_reconnect | slack_not_connected | no_email", when: "Google or Slack is not set up for it, or the Google account needs connecting again; message says which" },
           { status: 502, error: "failed", when: "Google or Slack refused or could not be reached; message has their answer" },
+        ],
+      },
+      {
+        method: "GET",
+        path: "/api/logistics/guest-judges/thank-you/photo",
+        summary: "A guest judge's Slack photo as a PNG circle with a coloured ring, for the thank-you slide.",
+        access: "public",
+        token: true,
+        notes: "Made for Google Slides to fetch: the link comes from the thank-you slide's POST and is signed, good for 15 minutes, and only for a Slack or Gravatar image.",
+        query: [
+          { name: "src", type: "string", required: true, note: "the Slack image URL" },
+          { name: "ring", type: `"blue" | "orange"`, required: true },
+          { name: "exp", type: "number", required: true, note: "when the link expires, in milliseconds since 1970" },
+          { name: "sig", type: "string", required: true, note: "the signature over the other three" },
+        ],
+        returns: "image/png",
+        errors: [
+          { status: 404, error: "not_found", when: "the signature is wrong, the link has expired or the image is gone" },
+          { status: 502, error: "unavailable", when: "Slack could not be reached" },
         ],
       },
       {
