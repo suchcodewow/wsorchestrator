@@ -6,7 +6,7 @@
 
 import "server-only";
 
-import { and, desc, eq, isNotNull, sql, type SQL } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import {
   employees,
@@ -254,6 +254,77 @@ export async function listOrganizationMembers(
     syncedLeaderEmail(),
   ]);
   return toPage(rows.map((r) => ({ ...r, leaderEmail: leaderEmail ?? "" })), query.page);
+}
+
+/** What the Organization tab shows when a row is opened: what HiBob and Slack hold on one person, and nothing from assessments. */
+export type OrganizationDetail = {
+  email: string;
+  title: string;
+  department: string;
+  site: string;
+  reportsToName: string;
+  reportsToEmail: string;
+  startDate: string | null;
+  activeEffectiveDate: string | null;
+  timezone: string | null;
+  slackUserId: string | null;
+  slackLookedUpAt: string | null;
+  importedAt: string;
+  /** The HiBob record's fields, nested ones named by their path, as label and value. */
+  hibob: { label: string; value: string }[];
+};
+
+/** Fields whose name says they belong to an assessment, which the details never show. */
+const ASSESSMENT_KEY = /btc|int(ermediate)?(date|score)|score|assess|bootcamp|track/i;
+
+function flattenRecord(value: unknown, path: string[], out: { label: string; value: string }[]) {
+  if (value === null || value === undefined || value === "") return;
+  if (Array.isArray(value)) {
+    if (value.length) out.push({ label: path.join(" › "), value: value.map((v) => (typeof v === "object" ? JSON.stringify(v) : String(v))).join(", ") });
+    return;
+  }
+  if (typeof value === "object") {
+    for (const [k, v] of Object.entries(value)) {
+      if (!ASSESSMENT_KEY.test(k)) flattenRecord(v, [...path, k], out);
+    }
+    return;
+  }
+  out.push({ label: path.join(" › "), value: String(value) });
+}
+
+/** The details for the people on one Organization page, by email — at most a page's worth. */
+export async function organizationDetails(emails: string[]): Promise<Record<string, OrganizationDetail>> {
+  if (emails.length === 0) return {};
+  const rows = await db
+    .select({
+      email: employees.email,
+      title: employees.title,
+      department: employees.department,
+      site: employees.site,
+      reportsToName: employees.reportsToName,
+      reportsToEmail: employees.reportsToEmail,
+      startDate: employees.startDate,
+      activeEffectiveDate: employees.activeEffectiveDate,
+      timezone: employees.timezone,
+      slackUserId: employees.slackUserId,
+      slackLookedUpAt: employees.slackLookedUpAt,
+      importedAt: employees.importedAt,
+      raw: employees.raw,
+    })
+    .from(employees)
+    .where(and(isNotNull(employees.orgDepth), inArray(employees.email, emails)));
+  const out: Record<string, OrganizationDetail> = {};
+  for (const { raw, slackLookedUpAt, importedAt, ...r } of rows) {
+    const hibob: { label: string; value: string }[] = [];
+    flattenRecord(raw, [], hibob);
+    out[r.email] = {
+      ...r,
+      slackLookedUpAt: slackLookedUpAt?.toISOString() ?? null,
+      importedAt: importedAt.toISOString(),
+      hibob,
+    };
+  }
+  return out;
 }
 
 /** How many the Organization tab lists, and whether they are still for the configured leader. */

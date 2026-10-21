@@ -3,7 +3,7 @@
  * the Organization Leader set on the Automation tab, a page at a time.
  */
 
-import { employeeByEmail, listOrganizationMembers, organizationSummary } from "@/lib/evals/roster";
+import { employeeByEmail, listOrganizationMembers, organizationDetails, organizationSummary } from "@/lib/evals/roster";
 import { ORGANIZATION_LIST } from "@/lib/list-specs";
 import { parseListQuery } from "@/lib/paging";
 import { OrganizationTable } from "./organization-table";
@@ -15,11 +15,13 @@ export default async function OrganizationPage({
 }) {
   const query = parseListQuery(await searchParams, ORGANIZATION_LIST);
   const [page, summary] = await Promise.all([listOrganizationMembers(query), organizationSummary()]);
+  const details = await organizationDetails(page.rows.map((m) => m.email));
   const leader = summary.leaderEmail ? await employeeByEmail(summary.leaderEmail) : null;
   return (
     <OrganizationTable
       query={query}
       page={page}
+      details={details}
       count={summary.count}
       leaderEmail={summary.leaderEmail}
       leaderName={leader?.fullName ?? null}
