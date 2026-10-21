@@ -373,7 +373,7 @@ function HistoryForm({ history }: { history: ViewHistory }) {
     return {
       exempt: date === EXEMPT_DATE,
       date: date === EXEMPT_DATE ? "" : (date ?? ""),
-      score: score === null ? "" : String(score),
+      score,
       individual: Object.entries(individual ?? {}).map(([name, value]) => ({ name, value: String(value) })),
     };
   };
@@ -383,18 +383,23 @@ function HistoryForm({ history }: { history: ViewHistory }) {
     setSides((all) => ({ ...all, [side]: { ...all[side], ...change } }));
   }
 
-  const valid = (["btc", "int"] as const).every(
-    (side) =>
-      inRange(scoreOf(sides[side].score)) &&
-      sides[side].individual.every((x) => x.value.trim() !== "" && inRange(scoreOf(x.value))),
+  const valid = (["btc", "int"] as const).every((side) =>
+    sides[side].individual.every((x) => x.value.trim() !== "" && inRange(scoreOf(x.value))),
   );
+
+  /** The mean of the exercise scores as typed; the stored score for a class with none, or while one is not a score. */
+  function overall(side: ClassFields): number | null {
+    const s = sides[side];
+    const values = s.individual.map((x) => scoreOf(x.value));
+    if (values.length === 0 || !values.every((n) => n !== null && inRange(n))) return s.score;
+    return averageScore(values as number[]);
+  }
 
   function body() {
     const out: Record<string, unknown> = {};
     for (const side of ["btc", "int"] as const) {
       const s = sides[side];
       out[`${side}Date`] = s.exempt ? EXEMPT_DATE : s.date || null;
-      out[`${side}Score`] = scoreOf(s.score);
       out[`${side}IndividualScores`] =
         s.individual.length === 0 ? null : Object.fromEntries(s.individual.map((x) => [x.name, Number(x.value)]));
     }
@@ -419,19 +424,15 @@ function HistoryForm({ history }: { history: ViewHistory }) {
                     onChange={(e) => set(side, { date: e.target.value })}
                   />
                 </label>
-                <label className="space-y-1 text-xs text-muted-foreground">
+                <div className="space-y-1 text-xs text-muted-foreground">
                   Overall score
-                  <Input
-                    type="number"
-                    inputMode="decimal"
-                    min={BOOTCAMP_SCORE.min}
-                    max={BOOTCAMP_SCORE.max}
-                    step={0.1}
-                    value={s.score}
-                    aria-invalid={!inRange(scoreOf(s.score))}
-                    onChange={(e) => set(side, { score: e.target.value })}
-                  />
-                </label>
+                  <p
+                    className="flex h-9 items-center text-sm tabular-nums text-foreground"
+                    title={s.individual.length > 0 ? "The mean of the exercise scores" : undefined}
+                  >
+                    {formatScore(overall(side))}
+                  </p>
+                </div>
               </div>
               <label className="flex items-center gap-2 text-sm">
                 <input

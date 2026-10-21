@@ -264,17 +264,18 @@ const individualScores = z
   .nullable();
 
 /**
- * Reporting → Bootcamp's correction to someone's row: its days and scores,
- * each exercise's among them, but never whose row it is.
+ * Reporting → Bootcamp's correction to someone's row: its days and each
+ * exercise's score, but never whose row it is, nor a class's overall score,
+ * which is always the mean of its exercise scores.
  */
 export const historyCorrectionSchema = historyInputSchema
-  .omit({ email: true })
+  .omit({ email: true, btcScore: true, intScore: true })
   .extend({ btcIndividualScores: individualScores, intIndividualScores: individualScores })
   .partial();
 
 type HistoryInput = z.infer<typeof historyInputSchema>;
 export type HistoryCorrection = z.infer<typeof historyCorrectionSchema>;
-type HistoryPatch = z.infer<typeof historyPatchSchema> | HistoryCorrection;
+type HistoryPatch = z.infer<typeof historyPatchSchema> | (HistoryCorrection & Partial<Pick<HistoryInput, "btcScore" | "intScore">>);
 
 const isUniqueViolation = (err: unknown): boolean => {
   const code = (e: unknown) => (e as { code?: unknown } | null)?.code;

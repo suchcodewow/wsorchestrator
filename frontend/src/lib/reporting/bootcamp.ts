@@ -719,13 +719,27 @@ export async function editSubmission(
   });
 }
 
-/** Corrects someone's bootcamp history row; says whose it was, for the audit trail. */
+/**
+ * Corrects someone's bootcamp history row; says whose it was, for the audit
+ * trail. A class given exercise scores takes their mean as its overall
+ * score; one given none, or not named, keeps the overall score it has.
+ */
 export async function correctHistory(
   actorId: string,
   id: string,
   correction: HistoryCorrection,
 ): Promise<{ ok: true; email: string } | { ok: false; error: HistoryError }> {
-  const result = await updateHistory(actorId, id, correction);
+  const derived = (scores: Record<string, number> | null | undefined) => {
+    const mean = scores ? averageScore(Object.values(scores)) : null;
+    return mean === null ? {} : { score: mean };
+  };
+  const btc = derived(correction.btcIndividualScores);
+  const int = derived(correction.intIndividualScores);
+  const result = await updateHistory(actorId, id, {
+    ...correction,
+    ...("score" in btc ? { btcScore: btc.score } : {}),
+    ...("score" in int ? { intScore: int.score } : {}),
+  });
   if (!result.ok) return result;
   const [row] = await db.select({ email: bootcampHistory.email }).from(bootcampHistory).where(eq(bootcampHistory.id, id));
   return row ? { ok: true, email: row.email } : { ok: false, error: "not_found" };

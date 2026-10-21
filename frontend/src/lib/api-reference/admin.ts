@@ -2353,17 +2353,15 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       {
         method: "PATCH",
         path: "/api/reporting/bootcamp/history/{id}",
-        summary: "Corrects someone's bootcamp history row: its days and scores.",
+        summary: "Corrects someone's bootcamp history row: its days and exercise scores.",
         access: "assessmentsAdmin",
         token: true,
         notes:
-          "Fields left out keep their value, and null clears one. A day of 2000-01-01 marks the person exempt from that class. Scores run from 1 to 4, to one decimal place; the individual scores map each exercise's column name to its score. The row's email cannot be changed here.",
+          "Fields left out keep their value, and null clears one. A day of 2000-01-01 marks the person exempt from that class. Scores run from 1 to 4, to one decimal place; the individual scores map each exercise's column name to its score. A class's overall score cannot be set: giving its individual scores sets it to their mean, to one decimal place, and leaving them out or null keeps the one it has. The row's email cannot be changed here.",
         params: [{ name: "id", type: "string", required: true, note: "the row's id" }],
         body: { kind: "json", fields: [
           { name: "btcDate", type: '"YYYY-MM-DD" | null' },
           { name: "intDate", type: '"YYYY-MM-DD" | null' },
-          { name: "btcScore", type: "number | null" },
-          { name: "intScore", type: "number | null" },
           { name: "btcIndividualScores", type: "Record<string, number> | null", note: "up to 50 exercises" },
           { name: "intIndividualScores", type: "Record<string, number> | null", note: "up to 50 exercises" },
         ] },
