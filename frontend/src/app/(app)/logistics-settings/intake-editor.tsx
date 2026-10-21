@@ -203,29 +203,27 @@ export function IntakeEditor({
           <p className="text-xs text-muted-foreground">
             {introduction.length.toLocaleString()} of{" "}
             {INTAKE_LIMITS.introduction.toLocaleString()} characters. Line
-            breaks show as written.
+            breaks show as written; wrap words in **double asterisks** for bold.
           </p>
         </motion.section>
-        {id === "bootcamp" && (
-          <motion.p
-            variants={riseChild}
-            className="px-5 py-4 text-sm text-muted-foreground"
-          >
-            The form always opens with the dates of the next Bootcamp and this
-            introduction, then the Sign-Up and Defer buttons. Once someone signs
-            up, it asks their preferred first name (optional) and to confirm
-            their time zone, then the questions below. Those two are automatic
-            and are not edited here.
-          </motion.p>
-        )}
+        <motion.p
+          variants={riseChild}
+          className="px-5 py-4 text-sm text-muted-foreground"
+        >
+          The form always opens with the dates of the next{" "}
+          {id === "bootcamp" ? "Bootcamp" : "Intermediate"} class and this
+          introduction, then the Sign-Up and Defer buttons. Once someone signs
+          up, it asks their preferred first name (optional) and to confirm their
+          time zone, then the questions below. Those two are automatic and are
+          not edited here.
+        </motion.p>
         {questions.length === 0 && (
           <motion.p
             variants={riseChild}
             className="px-5 py-8 text-center text-sm text-muted-foreground"
           >
-            {id === "bootcamp"
-              ? "No questions of its own yet. Everyone is still asked their preferred name and time zone."
-              : "No questions yet. Until it has one, nobody is asked this form or reminded about it."}
+            No questions of its own yet. Everyone is still asked their preferred
+            name and time zone.
           </motion.p>
         )}
 

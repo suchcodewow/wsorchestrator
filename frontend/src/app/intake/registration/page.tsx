@@ -13,7 +13,7 @@ import { auth, signInPath } from "@/auth";
 import {
   getIntakeForm,
   getMyIntake,
-  isDeferredEmployee,
+  deferredStageOf,
   previewIntroduction,
   type MyIntake,
 } from "@/lib/logistics/intake";
@@ -52,7 +52,7 @@ export default async function RegistrationPage({
       form: preview,
       heading: INTAKE_FORM_HEADINGS[preview],
       introduction: await previewIntroduction(preview, introduction),
-      canDefer: preview === "bootcamp",
+      canDefer: true,
       questions,
       answers: {},
       savedAt: null,
@@ -70,9 +70,9 @@ export default async function RegistrationPage({
   }
 
   const deferred =
-    !mine &&
-    !!session.user.email &&
-    (await isDeferredEmployee(session.user.email));
+    !mine && session.user.email
+      ? await deferredStageOf(session.user.email)
+      : null;
 
   return (
     <IntakeShell session={session} back={!previewing}>
@@ -99,7 +99,9 @@ export default async function RegistrationPage({
         </nav>
       )}
       {deferred ? (
-        <Notice heading="You are deferred to the next Bootcamp">
+        <Notice
+          heading={`You are deferred to the next ${deferred === "intermediate" ? "Intermediate" : "Bootcamp"}`}
+        >
           Be on the lookout for a message about the next session.
         </Notice>
       ) : !mine ? (

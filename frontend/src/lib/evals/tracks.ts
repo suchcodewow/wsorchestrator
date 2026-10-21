@@ -65,6 +65,29 @@ export async function nextBootcamp(): Promise<{ startDate: string; btcDays: numb
   return next ?? null;
 }
 
+/**
+ * The next intermediate class: the active bootcamp's if it holds one, else the
+ * soonest scheduled one that has not started yet and holds one. It runs from
+ * the bootcamp's first day for `intDays` days, which can differ from `btcDays`.
+ */
+export async function nextIntermediate(): Promise<{ startDate: string; intDays: number } | null> {
+  const [next] = await db
+    .select({ startDate: bootcamps.startDate, intDays: bootcamps.intDays })
+    .from(bootcamps)
+    .where(
+      and(
+        isNotNull(bootcamps.intDays),
+        or(
+          eq(bootcamps.status, "active"),
+          and(eq(bootcamps.status, "scheduled"), gte(bootcamps.startDate, sql`current_date`)),
+        ),
+      ),
+    )
+    .orderBy(sql`(${bootcamps.status} = 'active') desc`, asc(bootcamps.startDate))
+    .limit(1);
+  return next && next.intDays !== null ? { startDate: next.startDate, intDays: next.intDays } : null;
+}
+
 /** The deferral window against the next bootcamp, or null when either is missing. */
 export async function deferralRule(): Promise<DeferralRule | null> {
   const [days, bootcampStart] = await Promise.all([getDeferralDays(), nextBootcampStart()]);

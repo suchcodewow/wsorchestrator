@@ -9,10 +9,47 @@ import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 
 import { normalizeHeader, planImport, readTimestamp } from "@/lib/logistics/intake-import-plan";
-import { DEFAULT_INTAKE_FORMS } from "@/lib/logistics/intake-values";
 import type { IntakeQuestion } from "@/db/schema";
 
-const INTERMEDIATE = DEFAULT_INTAKE_FORMS.intermediate.questions;
+const question = (q: Partial<IntakeQuestion> & Pick<IntakeQuestion, "id" | "kind" | "title">): IntakeQuestion => ({
+  description: "",
+  required: false,
+  options: [],
+  other: false,
+  ...q,
+});
+
+/** The questions the November 2026 Intermediate registration asked, which Pre-Intermediate no longer holds by default. */
+const INTERMEDIATE: IntakeQuestion[] = [
+  question({
+    id: "attend",
+    kind: "choice",
+    title: "Intermediate takes place in-person on November 17 - 19, will you be there",
+    options: ["Yes - I'm there!", "No - I can't make it."],
+    other: true,
+  }),
+  question({
+    id: "dietary",
+    kind: "dropdown",
+    title:
+      "Are there any dietary restrictions that we should try to accommodate? (check yes for vegetarian, vegan, allergies, etc. and describe in the following field)",
+    required: true,
+    options: ["Yes", "No"],
+  }),
+  question({ id: "dietary-needs", kind: "paragraph", title: "If yes, please describe your dietary needs." }),
+  question({
+    id: "dietary-critical",
+    kind: "paragraph",
+    title: "On a scale of 1 to 5, how critical are your dietary/allergy needs?",
+  }),
+  question({
+    id: "concerns",
+    kind: "short",
+    title: "Any other concerns or special considerations we should be aware of? Write them in here.",
+    description:
+      "If you have received a copy of the Harness Value Framework V2.0 please bring it to training. If not, we will provide you with one.\n\nYou will need to pass an Intermediate entrance exam, so make sure to complete your pre-work in advance to prepare!",
+  }),
+];
 
 /** The headers of the November 2026 Intermediate registration's responses sheet, as Google writes them. */
 const HEADERS = [

@@ -13,8 +13,10 @@ import {
   DEFAULT_INTAKE_FORMS,
   PREFERRED_NAME_TITLE,
   bootcampDatesLine,
+  intermediateDatesLine,
   withBootcampDates,
-  DIETARY_QUESTION_IDS,
+  withIntermediateDates,
+  splitBold,
   CARRIED_TO_INTERMEDIATE,
   carriedAnswers,
   questionsOfBoth,
@@ -121,13 +123,13 @@ describe("the Pre-Bootcamp dates line", () => {
   test("runs from 8:00AM the first day to 12:00PM the last, for the days the class runs", () => {
     assert.equal(
       bootcampDatesLine("2026-11-17", 4),
-      "Bootcamp takes place from 8:00AM Tuesday, November 17 to 12:00PM Friday, November 20.",
+      "Bootcamp takes place from **8:00AM Tuesday, November 17** to **12:00PM Friday, November 20**.",
     );
   });
 
   test("is one day long when the class runs one day or the count is missing", () => {
     const one =
-      "Bootcamp takes place from 8:00AM Tuesday, November 17 to 12:00PM Tuesday, November 17.";
+      "Bootcamp takes place from **8:00AM Tuesday, November 17** to **12:00PM Tuesday, November 17**.";
     assert.equal(bootcampDatesLine("2026-11-17", 1), one);
     assert.equal(bootcampDatesLine("2026-11-17", 0), one);
   });
@@ -135,7 +137,7 @@ describe("the Pre-Bootcamp dates line", () => {
   test("crosses a month end", () => {
     assert.equal(
       bootcampDatesLine("2026-11-30", 3),
-      "Bootcamp takes place from 8:00AM Monday, November 30 to 12:00PM Wednesday, December 2.",
+      "Bootcamp takes place from **8:00AM Monday, November 30** to **12:00PM Wednesday, December 2**.",
     );
   });
 
@@ -148,44 +150,72 @@ describe("the Pre-Bootcamp dates line", () => {
   });
 });
 
+describe("the Pre-Intermediate dates line", () => {
+  test("runs from 8:00AM the bootcamp's first day to 12:00PM the last day of the Intermediate class, which can end sooner", () => {
+    assert.equal(
+      intermediateDatesLine("2026-11-17", 2),
+      "Intermediate takes place from **8:00AM Tuesday, November 17** to **12:00PM Wednesday, November 18**.",
+    );
+    assert.equal(
+      intermediateDatesLine("2026-11-17", 3),
+      "Intermediate takes place from **8:00AM Tuesday, November 17** to **12:00PM Thursday, November 19**.",
+    );
+  });
+
+  test("leads the introduction, and stands alone without one or without a next class", () => {
+    const next = { startDate: "2026-11-17", intDays: 3 };
+    const line = intermediateDatesLine(next.startDate, next.intDays);
+    assert.equal(
+      withIntermediateDates("Welcome.", next),
+      `${line}\n\nWelcome.`,
+    );
+    assert.equal(withIntermediateDates("", next), line);
+    assert.equal(withIntermediateDates("Welcome.", null), "Welcome.");
+  });
+});
+
+describe("bold markup", () => {
+  test("splits text wrapped in double asterisks from the rest", () => {
+    assert.deepEqual(
+      splitBold("Starts **8:00AM Tuesday** and ends **noon**."),
+      [
+        { text: "Starts ", bold: false },
+        { text: "8:00AM Tuesday", bold: true },
+        { text: " and ends ", bold: false },
+        { text: "noon", bold: true },
+        { text: ".", bold: false },
+      ],
+    );
+  });
+
+  test("leaves plain text, and an unmatched marker, as written", () => {
+    assert.deepEqual(splitBold("Plain."), [{ text: "Plain.", bold: false }]);
+    assert.equal(
+      splitBold("a ** b")
+        .map((part) => part.text)
+        .join(""),
+      "a ** b",
+    );
+  });
+});
+
 describe("the default Pre-Intermediate form", () => {
   const form = DEFAULT_INTAKE_FORMS.intermediate;
 
-  test("is one the editor could have saved, introduction and all", () => {
+  test("is one the editor could have saved", () => {
     assert.ok(intakeFormSchema.safeParse(form).success);
-    assert.match(form.introduction, /^Intermediate Training takes place/);
-    assert.match(form.introduction, /"All or Nothing"/);
   });
 
-  test("asks the Google Form's five questions, only the dietary one required", () => {
-    assert.deepEqual(
-      form.questions.map((q) => q.id),
-      ["attend", "dietary", "dietary-needs", "dietary-critical", "concerns"],
-    );
-    assert.deepEqual(
-      form.questions.filter((q) => q.required).map((q) => q.id),
-      ["dietary"],
-    );
+  test("has no questions or introduction of its own: the dates and automatic questions are all it asks", () => {
+    assert.equal(form.questions.length, 0);
+    assert.equal(form.introduction, "");
   });
 
-  test("asks the dietary questions under the ids the Logistics page reads, as Pre-Bootcamp does", () => {
-    // Both groups are catered for together, so their answers must line up.
-    const ids = new Set(form.questions.map((q) => q.id));
-    for (const id of [
-      DIETARY_QUESTION_IDS.has,
-      DIETARY_QUESTION_IDS.needs,
-      DIETARY_QUESTION_IDS.critical,
-    ]) {
-      assert.ok(ids.has(id), id);
-      assert.ok(
-        DEFAULT_INTAKE_FORM.questions.some((q) => q.id === id),
-        id,
-      );
-    }
-  });
-
-  test("asks no name question, so it saves no one's name", () => {
-    assert.ok(!form.questions.some((q) => q.id === DIETARY_QUESTION_IDS.name));
+  test("asks the automatic name and time zone, as Pre-Bootcamp does", () => {
+    assert.deepEqual(withAutomaticQuestions("intermediate", form.questions), [
+      PREFERRED_NAME_QUESTION,
+      TIMEZONE_QUESTION,
+    ]);
   });
 });
 
@@ -501,11 +531,15 @@ describe("the automatic questions", () => {
     assert.deepEqual(withoutAutomaticQuestions("bootcamp", saved), [attend]);
   });
 
-  test("are Pre-Bootcamp's only: Pre-Intermediate is as saved", () => {
-    assert.deepEqual(withAutomaticQuestions("intermediate", [attend]), [
+  test("lead Pre-Intermediate the same way", () => {
+    assert.deepEqual(withAutomaticQuestions("intermediate", saved), [
+      PREFERRED_NAME_QUESTION,
+      TIMEZONE_QUESTION,
       attend,
     ]);
-    assert.deepEqual(withoutAutomaticQuestions("intermediate", saved), saved);
+    assert.deepEqual(withoutAutomaticQuestions("intermediate", saved), [
+      attend,
+    ]);
   });
 
   test("ask for an IANA time zone, though the question stores no options, and nothing else", () => {
@@ -533,10 +567,20 @@ describe("what Pre-Intermediate carries over from Pre-Bootcamp", () => {
     "dietary-critical": "5",
     concerns: "Arriving late on day one",
   };
+  const dietary = DEFAULT_INTAKE_FORM.questions.filter((q) =>
+    (CARRIED_TO_INTERMEDIATE as readonly string[]).includes(q.id),
+  );
 
-  test("is the dietary answers only: what lasts from one cohort to the next", () => {
+  test("is nothing while Pre-Intermediate asks no questions of its own", () => {
     assert.deepEqual(
       carriedAnswers(DEFAULT_INTAKE_FORMS.intermediate, bootcampAnswers),
+      {},
+    );
+  });
+
+  test("is the dietary answers only, for the dietary questions an administrator adds", () => {
+    assert.deepEqual(
+      carriedAnswers({ introduction: "", questions: dietary }, bootcampAnswers),
       {
         dietary: "Yes",
         "dietary-needs": "Peanut allergy",
@@ -545,12 +589,10 @@ describe("what Pre-Intermediate carries over from Pre-Bootcamp", () => {
     );
   });
 
-  test("leaves out a carried question the intermediate form no longer asks, and an answer never given", () => {
+  test("leaves out a carried question the intermediate form does not ask, and an answer never given", () => {
     const fewer = {
-      ...DEFAULT_INTAKE_FORMS.intermediate,
-      questions: DEFAULT_INTAKE_FORMS.intermediate.questions.filter(
-        (q) => q.id !== "dietary-critical",
-      ),
+      introduction: "",
+      questions: dietary.filter((q) => q.id !== "dietary-critical"),
     };
     assert.deepEqual(carriedAnswers(fewer, { dietary: "No" }), {
       dietary: "No",
@@ -586,14 +628,13 @@ describe("listing both forms' responses together", () => {
       ids,
       DEFAULT_INTAKE_FORMS.bootcamp.questions.map((q) => q.id),
     );
-    // Every intermediate question is one Pre-Bootcamp asks too, under Pre-Bootcamp's wording.
     const attend = columns.find((q) => q.id === "attend")!;
     assert.match(attend.title, /^Sales Bootcamp/);
   });
 
   test("adds a question only Pre-Intermediate asks after Pre-Bootcamp's", () => {
     const hotel = {
-      ...DEFAULT_INTAKE_FORMS.intermediate.questions[0]!,
+      ...DEFAULT_INTAKE_FORMS.bootcamp.questions[0]!,
       id: "hotel-nights",
       title: "Hotel nights",
     };

@@ -29,6 +29,7 @@ import {
   isFirstName,
   isNameQuestion,
   isTimezoneQuestion,
+  splitBold,
   type IntakeAnswers,
 } from "@/lib/logistics/intake-values";
 import { riseChild, staggerParent } from "@/lib/motion";
@@ -52,12 +53,27 @@ const ERRORS: Record<string, string> = {
   not_an_option:
     "One of your answers is not one the form offers. The form may have changed: reload the page.",
   not_a_name: "Give a first name only: letters, with no spaces.",
-  not_bootcamp: "Only the Bootcamp registration can be deferred.",
 };
 
 /** Said once they have deferred, and to anyone already deferred who opens the page. */
-const DEFERRED_HEADING = "You are deferred to the next Bootcamp";
 const DEFERRED_BODY = "Be on the lookout for a message about the next session.";
+
+/** `text` with whatever is wrapped in `**` shown in bold; the form's dates line is. */
+function Rich({ text }: { text: string }) {
+  return (
+    <>
+      {splitBold(text).map((part, i) =>
+        part.bold ? (
+          <strong key={i} className="font-semibold">
+            {part.text}
+          </strong>
+        ) : (
+          <span key={i}>{part.text}</span>
+        ),
+      )}
+    </>
+  );
+}
 
 /**
  * Saved answers as the inputs hold them: one a list question does not offer
@@ -121,8 +137,9 @@ export function IntakeFormFiller({
   const [error, setError] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState(intake.savedAt);
   const [justSaved, setJustSaved] = useState(false);
-  // A Bootcamp candidate who has not answered yet chooses first: sign up, which
-  // shows the questions, or defer. Someone who already answered has signed up.
+  // Someone who has not answered yet chooses first: sign up, which shows the
+  // questions, or defer. Someone who already answered has signed up.
+  const stage = intake.form === "intermediate" ? "Intermediate" : "Bootcamp";
   const [phase, setPhase] = useState<"choose" | "form" | "deferred">(
     intake.canDefer && !intake.savedAt ? "choose" : "form",
   );
@@ -233,29 +250,10 @@ export function IntakeFormFiller({
       noValidate
       className="space-y-6"
     >
-      <motion.div variants={riseChild} className="space-y-2">
+      <motion.div variants={riseChild}>
         <h1 className="text-3xl font-medium tracking-tight">
           {intake.heading}
         </h1>
-        {intake.introduction && (
-          <p className="whitespace-pre-line text-sm leading-relaxed text-muted-foreground">
-            {intake.introduction}
-          </p>
-        )}
-        {savedAt && (
-          <p className="text-sm text-muted-foreground">
-            Answered {new Date(savedAt).toLocaleString()}. Change anything below
-            and save again.
-          </p>
-        )}
-        {!savedAt && intake.carriedFrom && (
-          <p className="rounded-lg border border-brand-border bg-brand-subtle px-4 py-3 text-sm">
-            We&apos;ve filled in your dietary needs from your Bootcamp
-            registration on{" "}
-            {new Date(intake.carriedFrom.savedAt).toLocaleDateString()}. Update
-            anything that&apos;s changed, then submit.
-          </p>
-        )}
       </motion.div>
 
       {preview && (
@@ -268,51 +266,15 @@ export function IntakeFormFiller({
         </motion.p>
       )}
 
-      {phase === "choose" && (
-        <motion.div
-          variants={riseChild}
-          className="flex flex-wrap items-center gap-3"
-        >
-          <Button
-            type="button"
-            variant="brand"
-            onClick={() => setPhase("form")}
-          >
-            Sign-Up for Bootcamp
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => setConfirming(true)}
-          >
-            Defer
-          </Button>
-        </motion.div>
-      )}
-
-      {phase === "deferred" && (
-        <motion.div
-          variants={riseChild}
-          role="status"
-          className="space-y-1 rounded-2xl border bg-card px-5 py-4 shadow-sm"
-        >
-          <p className="flex items-center gap-2 text-sm font-medium">
-            <CheckCircle2 className="size-4 text-brand" />
-            {DEFERRED_HEADING}
-          </p>
-          <p className="text-sm text-muted-foreground">{DEFERRED_BODY}</p>
-        </motion.div>
-      )}
-
       <Dialog
         open={confirming}
         onOpenChange={(open) => !deferring && setConfirming(open)}
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Defer to the next Bootcamp?</DialogTitle>
+            <DialogTitle>Defer to the next {stage}?</DialogTitle>
             <DialogDescription>
-              You will not attend this Bootcamp. You will be moved to the next
+              You will not attend this {stage}. You will be moved to the next
               one, and the training team will message you about it.
             </DialogDescription>
           </DialogHeader>
@@ -343,15 +305,69 @@ export function IntakeFormFiller({
         </DialogContent>
       </Dialog>
 
-      {phase === "form" && (
-        <motion.div
-          variants={staggerParent(0.04)}
-          className="divide-y overflow-hidden rounded-2xl border bg-card shadow-sm"
-        >
-          {intake.questions.map((q) => (
-            <motion.fieldset
+      <motion.div
+        variants={riseChild}
+        className="divide-y overflow-hidden rounded-2xl border bg-card shadow-sm"
+      >
+        {(intake.introduction ||
+          savedAt ||
+          (!savedAt && intake.carriedFrom)) && (
+          <div className="space-y-3 px-5 py-4 text-sm leading-relaxed">
+            {intake.introduction && (
+              <p className="whitespace-pre-line">
+                <Rich text={intake.introduction} />
+              </p>
+            )}
+            {savedAt && (
+              <p className="text-muted-foreground">
+                Answered {new Date(savedAt).toLocaleString()}. Change anything
+                below and save again.
+              </p>
+            )}
+            {!savedAt && intake.carriedFrom && (
+              <p className="rounded-lg border border-brand-border bg-brand-subtle px-4 py-3">
+                We&apos;ve filled in your dietary needs from your Bootcamp
+                registration on{" "}
+                {new Date(intake.carriedFrom.savedAt).toLocaleDateString()}.
+                Update anything that&apos;s changed, then submit.
+              </p>
+            )}
+          </div>
+        )}
+
+        {phase === "choose" && (
+          <div className="flex flex-wrap items-center gap-3 px-5 py-4">
+            <Button
+              type="button"
+              variant="brand"
+              onClick={() => setPhase("form")}
+            >
+              Sign-Up for {stage}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setConfirming(true)}
+            >
+              Defer
+            </Button>
+          </div>
+        )}
+
+        {phase === "deferred" && (
+          <div role="status" className="space-y-1 px-5 py-4">
+            <p className="flex items-center gap-2 text-sm font-medium">
+              <CheckCircle2 className="size-4 text-brand" />
+              You are deferred to the next {stage}
+            </p>
+            <p className="text-sm text-muted-foreground">{DEFERRED_BODY}</p>
+          </div>
+        )}
+
+        {phase === "form" &&
+          intake.questions.map((q) => (
+            <fieldset
               key={q.id}
-              variants={riseChild}
               className={cn(
                 "space-y-3 px-5 py-4",
                 missing.has(q.id) && "bg-destructive/5",
@@ -371,8 +387,9 @@ export function IntakeFormFiller({
                 {isNameQuestion(q) && (
                   <p className="text-sm text-muted-foreground">
                     Optional. Give only a first name, with no spaces, like Sam.
-                    It is saved as your preferred name and used on your name card
-                    and everywhere else here; your official name is not changed.
+                    It is saved as your preferred name and used on your name
+                    card and everywhere else here; your official name is not
+                    changed.
                   </p>
                 )}
                 {isTimezoneQuestion(q) && (
@@ -396,10 +413,9 @@ export function IntakeFormFiller({
                     : "This question needs an answer."}
                 </p>
               )}
-            </motion.fieldset>
+            </fieldset>
           ))}
-        </motion.div>
-      )}
+      </motion.div>
 
       {phase === "form" && error && (
         <motion.p

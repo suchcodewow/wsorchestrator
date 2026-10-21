@@ -164,56 +164,14 @@ export const DEFAULT_INTAKE_FORM: IntakeForm = {
 };
 
 /**
- * The November 2026 Intermediate registration, as the Google Form it replaces
- * asked it. It stays the same from cohort to cohort but for its dates. Its
- * dietary questions keep Pre-Bootcamp's ids, so the Logistics page reads both
- * forms' answers as one list; it asks no name, so its people are listed under
- * the name the app has for them.
+ * Pre-Intermediate until it is first saved: no questions of its own, so it is
+ * asked what every form is (`withAutomaticQuestions`) and whatever Logistics
+ * settings adds. Its introduction opens with the next intermediate class's
+ * dates (`withIntermediateDates`), so it keeps no dates of its own.
  */
 export const DEFAULT_INTERMEDIATE_FORM: IntakeForm = {
-  introduction:
-    'Intermediate Training takes place on November 17 - 19 in Dallas, Texas.\n\n1) We strictly enforce an "All or Nothing" model where every person must attend all of Intermediate, no exceptions, even for customer meetings.\n\n2) You will not be able to step out for any reason during Intermediate sessions throughout the day.\n\n3) If you already know that you will be on PTO any of the days between November 17 -20 you should mark "No" in this form.\n\n4) If you\'re traveling from EMEA or APAC, you are allowed to arrive on Sunday November 15th to adjust to the time zone prior to Intermediate Day 1. We recommend you do so if your schedule permits; we want you to be fresh and ready come Tuesday morning. We also understand many may not have flight options available Wednesday evening, so please mark on the form exactly which nights you will need a hotel for.\n\n5) No departure flights before 2PM PST on Thursday, November 19.\n\nPlease discuss with your manager if anything above may prevent you from attending Intermediate.\n\nAlso, please input accurate responses below as they help us plan our agenda, hotel blocks, and catered meals.',
-  questions: [
-    question({
-      id: "attend",
-      kind: "choice",
-      title:
-        "Intermediate takes place in-person on November 17 - 19, will you be there",
-      required: false,
-      options: ["Yes - I'm there!", "No - I can't make it."],
-      other: true,
-    }),
-    question({
-      id: "dietary",
-      kind: "dropdown",
-      title:
-        "Are there any dietary restrictions that we should try to accommodate? (check yes for vegetarian, vegan, allergies, etc. and describe in the following field)",
-      required: true,
-      options: ["Yes", "No"],
-    }),
-    question({
-      id: "dietary-needs",
-      kind: "paragraph",
-      title: "If yes, please describe your dietary needs.",
-      required: false,
-    }),
-    question({
-      id: "dietary-critical",
-      kind: "paragraph",
-      title:
-        "On a scale of 1 to 5, how critical are your dietary/allergy needs?",
-      required: false,
-    }),
-    question({
-      id: "concerns",
-      kind: "short",
-      title:
-        "Any other concerns or special considerations we should be aware of? Write them in here.",
-      description:
-        "If you have received a copy of the Harness Value Framework V2.0 please bring it to training. If not, we will provide you with one.\n\nYou will need to pass an Intermediate entrance exam, so make sure to complete your pre-work in advance to prepare!",
-      required: false,
-    }),
-  ],
+  introduction: "",
+  questions: [],
 };
 
 /** Each form until it is first saved, as the Google Forms they replace asked them. */
@@ -237,7 +195,7 @@ export const DIETARY_QUESTION_IDS = {
 /**
  * The question whose answer becomes the person's time zone
  * (`employees.timezone`), asked as a list of every IANA zone rather than the
- * options a question stores, so it keeps none. It is automatic on Pre-Bootcamp
+ * options a question stores, so it keeps none. It is automatic on both forms
  * like the name question, and starts from the zone the app already has for them.
  */
 export const INTAKE_TIMEZONE_QUESTION_ID = "timezone";
@@ -263,16 +221,38 @@ const DAY_FORMAT = new Intl.DateTimeFormat("en-US", {
 });
 
 /**
- * The line Pre-Bootcamp opens with, from the next bootcamp's first day
- * (`YYYY-MM-DD`) and how many days its Bootcamp class runs: it starts at
- * 8:00AM on the first and ends at 12:00PM on the last.
+ * The class's dates as its form opens with them, from its first day
+ * (`YYYY-MM-DD`) and how many days it runs: it starts at 8:00AM on the first
+ * and ends at 12:00PM on the last. The times and days are wrapped in `**` so
+ * the form shows them in bold (`splitBold`).
  */
-export function bootcampDatesLine(startDate: string, btcDays: number): string {
+function classDatesLine(
+  name: string,
+  startDate: string,
+  days: number,
+): string {
   const first = new Date(`${startDate}T00:00:00Z`);
-  const last = new Date(
-    first.getTime() + (Math.max(btcDays, 1) - 1) * 86_400_000,
-  );
-  return `Bootcamp takes place from 8:00AM ${DAY_FORMAT.format(first)} to 12:00PM ${DAY_FORMAT.format(last)}.`;
+  const last = new Date(first.getTime() + (Math.max(days, 1) - 1) * 86_400_000);
+  return `${name} takes place from **8:00AM ${DAY_FORMAT.format(first)}** to **12:00PM ${DAY_FORMAT.format(last)}**.`;
+}
+
+/** Pre-Bootcamp's opening line, from the next bootcamp's first day and how many days its Bootcamp class runs. */
+export function bootcampDatesLine(startDate: string, btcDays: number): string {
+  return classDatesLine("Bootcamp", startDate, btcDays);
+}
+
+/** Pre-Intermediate's opening line, from the next intermediate class's first day and how many days it runs, which may differ from the Bootcamp class's. */
+export function intermediateDatesLine(
+  startDate: string,
+  intDays: number,
+): string {
+  return classDatesLine("Intermediate", startDate, intDays);
+}
+
+/** `introduction` led by `line`, or as it is when there is no class to give dates for. */
+function withDatesLine(introduction: string, line: string | null): string {
+  if (!line) return introduction;
+  return introduction.trim() ? `${line}\n\n${introduction}` : line;
 }
 
 /** `introduction` led by the line giving `bootcamp`'s dates, or as it is when there is no next bootcamp. */
@@ -280,9 +260,38 @@ export function withBootcampDates(
   introduction: string,
   bootcamp: { startDate: string; btcDays: number } | null,
 ): string {
-  if (!bootcamp) return introduction;
-  const dates = bootcampDatesLine(bootcamp.startDate, bootcamp.btcDays);
-  return introduction.trim() ? `${dates}\n\n${introduction}` : dates;
+  return withDatesLine(
+    introduction,
+    bootcamp && bootcampDatesLine(bootcamp.startDate, bootcamp.btcDays),
+  );
+}
+
+/** `introduction` led by the line giving the next intermediate class's dates, or as it is when there is none. */
+export function withIntermediateDates(
+  introduction: string,
+  intermediate: { startDate: string; intDays: number } | null,
+): string {
+  return withDatesLine(
+    introduction,
+    intermediate &&
+      intermediateDatesLine(intermediate.startDate, intermediate.intDays),
+  );
+}
+
+/**
+ * `text` cut at its `**bold**` marks: each piece, and whether it is the
+ * bold one. Marks that do not pair are left as written.
+ */
+export function splitBold(text: string): { text: string; bold: boolean }[] {
+  const parts: { text: string; bold: boolean }[] = [];
+  let at = 0;
+  for (const m of text.matchAll(/\*\*(.+?)\*\*/gs)) {
+    if (m.index > at) parts.push({ text: text.slice(at, m.index), bold: false });
+    parts.push({ text: m[1]!, bold: true });
+    at = m.index + m[0].length;
+  }
+  if (at < text.length) parts.push({ text: text.slice(at), bold: false });
+  return parts;
 }
 
 /** A name as it is stored: trimmed, with runs of spaces closed up to one. */
@@ -313,7 +322,7 @@ export function firstNameOf(name: string): string {
 /**
  * The name question as Pre-Bootcamp asks it of everyone: optional, a first
  * name only, and left blank unless they already have a preferred name. It is
- * automatic: the form builder neither shows nor stores it.
+ * automatic on both forms: the form builder neither shows nor stores it.
  */
 export const PREFERRED_NAME_QUESTION: IntakeQuestion = question({
   id: INTAKE_NAME_QUESTION_ID,
@@ -337,38 +346,34 @@ export function isTimezoneQuestion(
   return q.id === INTAKE_TIMEZONE_QUESTION_ID && q.kind === "dropdown";
 }
 
-/** Whether `q` is one of Pre-Bootcamp's automatic questions, which no form saves. */
+/** Whether `q` is one of the automatic questions, which no form saves. */
 function isAutomatic(q: Pick<IntakeQuestion, "id">): boolean {
   return (
     q.id === INTAKE_NAME_QUESTION_ID || q.id === INTAKE_TIMEZONE_QUESTION_ID
   );
 }
 
-/** `questions` as the form builder keeps them: Pre-Bootcamp's automatic questions taken out, whatever was saved or sent. */
+/** `questions` as the form builder keeps them: the automatic questions taken out, whatever was saved or sent. */
 export function withoutAutomaticQuestions(
-  form: IntakeFormId,
+  _form: IntakeFormId,
   questions: IntakeQuestion[],
 ): IntakeQuestion[] {
-  return form === "bootcamp"
-    ? questions.filter((q) => !isAutomatic(q))
-    : questions;
+  return questions.filter((q) => !isAutomatic(q));
 }
 
 /**
- * `questions` as a form asks them: Pre-Bootcamp's led by the name and time
- * zone questions, as they always are, then the form's own.
+ * `questions` as a form asks them: led by the name and time zone questions,
+ * as every form is, then the form's own.
  */
 export function withAutomaticQuestions(
   form: IntakeFormId,
   questions: IntakeQuestion[],
 ): IntakeQuestion[] {
-  return form === "bootcamp"
-    ? [
-        PREFERRED_NAME_QUESTION,
-        TIMEZONE_QUESTION,
-        ...withoutAutomaticQuestions(form, questions),
-      ]
-    : questions;
+  return [
+    PREFERRED_NAME_QUESTION,
+    TIMEZONE_QUESTION,
+    ...withoutAutomaticQuestions(form, questions),
+  ];
 }
 
 /** Whether `q` is the name question, so its answer is the person's name. */

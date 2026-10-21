@@ -20,7 +20,7 @@ import {
 import { setTimezone, timezoneOnRecord } from "@/lib/evals/timezones";
 import { testGroupStageOf } from "@/lib/cohorts/test-group";
 import { cohortStageOf } from "@/lib/evals/current-cohort";
-import { nextBootcamp, setTrack } from "@/lib/evals/tracks";
+import { nextBootcamp, nextIntermediate, setTrack } from "@/lib/evals/tracks";
 import {
   DEFAULT_INTAKE_FORMS,
   INTAKE_FORM_HEADINGS,
@@ -31,6 +31,7 @@ import {
   isTimezoneQuestion,
   withAutomaticQuestions,
   withBootcampDates,
+  withIntermediateDates,
   withoutAutomaticQuestions,
   type AnswerProblem,
   type IntakeAnswers,
@@ -41,8 +42,8 @@ export type IntakeFormView = IntakeForm & { updatedAt: string | null };
 
 /**
  * The form as the form builder keeps it, or its default with a null
- * `updatedAt` if it has never been saved. Pre-Bootcamp's automatic questions,
- * the name and the time zone, are never part of it, even in a form saved
+ * `updatedAt` if it has never been saved. The automatic questions, the name
+ * and the time zone, are never part of it, even in a form saved
  * while they were.
  */
 export async function getEditableIntakeForm(
@@ -65,7 +66,7 @@ export async function getEditableIntakeForm(
 
 /**
  * The form as it is asked: the saved one (`getEditableIntakeForm`), with
- * Pre-Bootcamp's automatic name and time zone questions in front of its own.
+ * the automatic name and time zone questions in front of its own.
  */
 export async function getIntakeForm(id: IntakeFormId): Promise<IntakeFormView> {
   const form = await getEditableIntakeForm(id);
@@ -74,7 +75,7 @@ export async function getIntakeForm(id: IntakeFormId): Promise<IntakeFormView> {
 
 /**
  * Replaces the whole form. Answers already saved keep the question ids they
- * were given under. On Pre-Bootcamp, the automatic questions are dropped
+ * were given under. The automatic questions are dropped
  * from whatever was sent: they are asked without being saved.
  */
 export async function saveIntakeForm(
@@ -101,11 +102,12 @@ export type MyIntake = {
   /** "Bootcamp Registration" or "Intermediate Registration". */
   heading: string;
   /**
-   * Shown above the first question; empty for none. Pre-Bootcamp's opens with
-   * the dates of the next bootcamp, then the introduction saved in Logistics settings.
+   * Shown above the first question; empty for none. It opens with the dates of
+   * the next class, Bootcamp's or Intermediate's, then the introduction saved
+   * in Logistics settings. The dates are in `**bold**`.
    */
   introduction: string;
-  /** Whether they are asked to sign up for the next bootcamp or defer to the one after: Pre-Bootcamp only. */
+  /** Whether they are asked to sign up for the next class of their stage or defer to the one after: both forms. */
   canDefer: boolean;
   questions: IntakeForm["questions"];
   answers: IntakeAnswers;
@@ -157,13 +159,12 @@ export async function getMyIntake(
   const found = await intakeStageFor(email, want);
   if (!found) return null;
   const { stage } = found;
-  const [{ introduction, questions }, name, timezone, latest, bootcamp] =
+  const [{ introduction, questions }, name, timezone, latest] =
     await Promise.all([
       getIntakeForm(stage),
       chosenNameOnRecord(email),
       timezoneOnRecord(email),
       latestAnswers(stage, email),
-      stage === "bootcamp" ? nextBootcamp() : null,
     ]);
 
   // Someone at intermediate who answered Pre-Bootcamp in an earlier cohort starts from what lasts of that.
@@ -192,8 +193,8 @@ export async function getMyIntake(
   return {
     form: stage,
     heading: INTAKE_FORM_HEADINGS[stage],
-    introduction: withBootcampDates(introduction, bootcamp),
-    canDefer: stage === "bootcamp",
+    introduction: await previewIntroduction(stage, introduction),
+    canDefer: true,
     questions,
     answers,
     savedAt: latest?.submittedAt.toISOString() ?? null,
@@ -207,8 +208,8 @@ export async function getMyIntake(
 }
 
 /**
- * Pre-Bootcamp's introduction as the cohort sees it, for a preview: led by
- * the next bootcamp's dates, as `getMyIntake` has it.
+ * A form's introduction as the cohort sees it: led by the dates of the next
+ * class of its stage, as `getMyIntake` has it. Also for a preview.
  */
 export async function previewIntroduction(
   id: IntakeFormId,
@@ -216,13 +217,13 @@ export async function previewIntroduction(
 ): Promise<string> {
   return id === "bootcamp"
     ? withBootcampDates(introduction, await nextBootcamp())
-    : introduction;
+    : withIntermediateDates(introduction, await nextIntermediate());
 }
 
 /**
- * Moves `email` from Pre-Bootcamp to the Deferred track, to wait for the
- * bootcamp after the next. They are then off the Current tab, so no longer
- * asked the form. A test group member's deferral is acknowledged, not made:
+ * Moves `email` from Pre-Bootcamp or Pre-Intermediate to the Deferred track,
+ * to wait for the class after the next. They are then off the Current tab, so
+ * no longer asked the form. A test group member's deferral is acknowledged, not made:
  * no real employee's track changes for a test.
  */
 export async function deferMyIntake(
@@ -231,11 +232,10 @@ export async function deferMyIntake(
   want: IntakeFormId | null = null,
 ): Promise<
   | { ok: true; test: boolean }
-  | { ok: false; error: "not_in_cohort" | "not_bootcamp" }
+  | { ok: false; error: "not_in_cohort" }
 > {
   const found = await intakeStageFor(email, want);
   if (!found) return { ok: false, error: "not_in_cohort" };
-  if (found.stage !== "bootcamp") return { ok: false, error: "not_bootcamp" };
   if (found.test) return { ok: true, test: true };
   const set = await setTrack(actorId, email.trim().toLowerCase(), "deferred");
   return set.ok
@@ -243,14 +243,22 @@ export async function deferMyIntake(
     : { ok: false, error: "not_in_cohort" };
 }
 
-/** Whether `email`'s track is Deferred, which is how someone who deferred their Pre-Bootcamp reads afterwards. */
-export async function isDeferredEmployee(email: string): Promise<boolean> {
+/**
+ * The stage `email` deferred from, if their track is Deferred, which is how
+ * someone who deferred their registration reads afterwards: Bootcamp if they
+ * have no Bootcamp date yet, else Intermediate (the stage rule of the Cohorts
+ * page). Null for anyone not deferred.
+ */
+export async function deferredStageOf(
+  email: string,
+): Promise<IntakeFormId | null> {
   const [row] = await db
-    .select({ track: employees.track })
+    .select({ track: employees.track, btcDate: employees.btcDate })
     .from(employees)
     .where(sql`lower(${employees.email}) = ${email.trim().toLowerCase()}`)
     .limit(1);
-  return row?.track === "deferred";
+  if (row?.track !== "deferred") return null;
+  return row.btcDate === null ? "bootcamp" : "intermediate";
 }
 
 /** The answers `email` last saved to `form`, and when; undefined if they never have. */
