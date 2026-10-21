@@ -157,10 +157,13 @@ export const canManageEvalsSettings = (access: Access) =>
 
 /**
  * Reporting → Canary Wire names ~300 people and who is behind on training:
- * for people managers, who use it to follow up with their org, and platform
- * administrators. A manager opens on their own org and can switch to everyone.
+ * for people managers, who use it to follow up with their org, platform
+ * administrators, and Assessments Viewers and above, who already see everyone
+ * on Reporting → Bootcamp. A manager opens on their own org and can switch to
+ * everyone; the others see everyone.
  */
-export const canSeeCanaryWire = (access: Access) => access.platform || access.manager;
+export const canSeeCanaryWire = (access: Access) =>
+  access.manager || canUseEvals(access);
 
 /** Starts a Canary Wire pull by hand. It pulls every two hours on its own; this is for testing. */
 export const canRefreshCanaryWire = (access: Access) => access.platform;

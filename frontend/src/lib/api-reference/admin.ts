@@ -2431,7 +2431,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
     id: "canary-wire",
     title: "Canary Wire",
     intro:
-      "Monthly Canary Wire completion in Mindtickle, by manager, as Reporting → Canary Wire shows it. It names everyone in the three Canary Wire role groups and who is behind, so it is for people managers — anyone HiBob has reporting to them — and platform administrators. A manager sees their own org by default: themselves and everyone under them, every level down.",
+      "Monthly Canary Wire completion in Mindtickle, by manager, as Reporting → Canary Wire shows it. It names everyone in the three Canary Wire role groups and who is behind, so it is for people managers — anyone HiBob has reporting to them — and Assessments Viewers and above, who see everyone. A manager sees their own org by default: themselves and everyone under them, every level down.",
     endpoints: [
       {
         method: "GET",

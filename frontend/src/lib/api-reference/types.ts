@@ -24,7 +24,7 @@ export type Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
  *   assessmentsAdmin Assessments Administrator         (canManageEvalsSettings, canManageIris)
  *   employeeSearch Assessments or Training Administrator (canSearchEmployees)
  *   scorer       Assessments Viewer or above, or a guest judge on the active bootcamp (canScoreAssessments)
- *   canaryWire   a people manager (by HiBob), or Platform Administrator (canSeeCanaryWire)
+ *   canaryWire   a people manager (by HiBob), or Assessments Viewer or above (canSeeCanaryWire)
  *   userAdmin    an administrator in any area          (canManageUsers)
  *   platform     Platform Administrator                (canManageBackups, canManageSignInDomains, canDeleteUsers)
  *   internal     not for people: Cloud Scheduler or runner OIDC, or Auth.js
@@ -63,7 +63,7 @@ export const ACCESS_LABELS: Record<AccessKey, string> = {
   assessmentsAdmin: ASSESSMENTS_ROLE_LABELS.administrator,
   employeeSearch: `${ASSESSMENTS_ROLE_LABELS.administrator} or ${TRAINING_ROLE_LABELS.administrator}`,
   scorer: `${ASSESSMENTS_ROLE_LABELS.viewer} or above, or a guest judge on the active bootcamp`,
-  canaryWire: `A people manager (someone HiBob has reporting to them), or ${PLATFORM_ADMIN_LABEL}`,
+  canaryWire: `A people manager (someone HiBob has reporting to them), or an ${ASSESSMENTS_ROLE_LABELS.viewer} or above`,
   userAdmin: "An administrator in any area",
   platform: PLATFORM_ADMIN_LABEL,
   internal: "Internal",
