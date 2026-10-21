@@ -106,18 +106,20 @@ export async function createThankYouDeck(
       q: `name = '${input.title.replace(/['\\]/g, "\\$&")}' and '${input.folderId}' in parents and mimeType = 'application/vnd.google-apps.presentation' and trashed = false`,
       fields: "files(id)",
       pageSize: "100",
+      supportsAllDrives: "true",
+      includeItemsFromAllDrives: "true",
     },
   });
-  for (const file of old?.files ?? []) await drive.call("PATCH", `/files/${file.id}`, { body: { trashed: true } });
+  for (const file of old?.files ?? []) await drive.call("PATCH", `/files/${file.id}`, { query: { supportsAllDrives: "true" }, body: { trashed: true } });
   const deck = await slides.call<{ presentationId: string; slides: { objectId: string }[] }>("POST", "/presentations", {
     body: { title: input.title },
   });
   await slides.call("POST", `/presentations/${deck.presentationId}:batchUpdate`, {
     body: { requests: thankYouRequests(deck.slides[0].objectId, input.judges).flat() },
   });
-  await drive.call("PATCH", `/files/${deck.presentationId}`, { query: { addParents: input.folderId, removeParents: "root" } });
+  await drive.call("PATCH", `/files/${deck.presentationId}`, { query: { addParents: input.folderId, removeParents: "root", supportsAllDrives: "true" } });
   await drive.call("POST", `/files/${deck.presentationId}/permissions`, {
-    query: { sendNotificationEmail: "false" },
+    query: { sendNotificationEmail: "false", supportsAllDrives: "true" },
     body: { type: "user", role: "writer", emailAddress: input.shareWith },
   });
   return { id: deck.presentationId, url: `https://docs.google.com/presentation/d/${deck.presentationId}/edit` };
