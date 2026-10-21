@@ -12,6 +12,11 @@ import {
   DEFAULT_INTAKE_FORM,
   DEFAULT_INTAKE_FORMS,
   PREFERRED_NAME_TITLE,
+  DIETARY_ITEMS,
+  DIETARY_KEYS,
+  DIETARY_OTHER,
+  DIETARY_QUESTION,
+  isDietaryQuestion,
   bootcampDatesLine,
   intermediateDatesLine,
   withBootcampDates,
@@ -96,11 +101,11 @@ describe("the default form", () => {
     assert.ok(intakeFormSchema.safeParse(DEFAULT_INTAKE_FORM).success);
   });
 
-  test("asks the Google Form's questions, two of them required, and not the automatic name and time zone", () => {
-    assert.equal(DEFAULT_INTAKE_FORM.questions.length, 6);
+  test("asks the Google Form's questions, none of them required, and not the automatic name, time zone and dietary checklist", () => {
+    assert.equal(DEFAULT_INTAKE_FORM.questions.length, 3);
     assert.deepEqual(
       DEFAULT_INTAKE_FORM.questions.filter((q) => q.required).map((q) => q.id),
-      ["dietary", "dietary-critical"],
+      [],
     );
     assert.deepEqual(
       withoutAutomaticQuestions("bootcamp", DEFAULT_INTAKE_FORM.questions),
@@ -211,10 +216,11 @@ describe("the default Pre-Intermediate form", () => {
     assert.equal(form.introduction, "");
   });
 
-  test("asks the automatic name and time zone, as Pre-Bootcamp does", () => {
+  test("asks the automatic name, time zone and dietary checklist, as Pre-Bootcamp does", () => {
     assert.deepEqual(withAutomaticQuestions("intermediate", form.questions), [
       PREFERRED_NAME_QUESTION,
       TIMEZONE_QUESTION,
+      DIETARY_QUESTION,
     ]);
   });
 });
@@ -505,24 +511,27 @@ describe("the automatic questions", () => {
     PREFERRED_NAME_QUESTION,
     attend,
     { ...TIMEZONE_QUESTION, title: "Where are you?" },
+    { ...DIETARY_QUESTION, title: "Anything to eat?" },
   ];
 
-  test("lead Pre-Bootcamp as it is asked: the name, then the time zone, then its own questions", () => {
+  test("lead Pre-Bootcamp as it is asked: the name, the time zone, the dietary checklist, then its own questions", () => {
     const asked = withAutomaticQuestions(
       "bootcamp",
       DEFAULT_INTAKE_FORM.questions,
     );
-    assert.deepEqual(asked.slice(0, 2), [
+    assert.deepEqual(asked.slice(0, 3), [
       PREFERRED_NAME_QUESTION,
       TIMEZONE_QUESTION,
+      DIETARY_QUESTION,
     ]);
-    assert.deepEqual(asked.slice(2), DEFAULT_INTAKE_FORM.questions);
+    assert.deepEqual(asked.slice(3), DEFAULT_INTAKE_FORM.questions);
   });
 
   test("are asked once, whatever a saved form still holds of them", () => {
     assert.deepEqual(withAutomaticQuestions("bootcamp", saved), [
       PREFERRED_NAME_QUESTION,
       TIMEZONE_QUESTION,
+      DIETARY_QUESTION,
       attend,
     ]);
   });
@@ -535,6 +544,7 @@ describe("the automatic questions", () => {
     assert.deepEqual(withAutomaticQuestions("intermediate", saved), [
       PREFERRED_NAME_QUESTION,
       TIMEZONE_QUESTION,
+      DIETARY_QUESTION,
       attend,
     ]);
     assert.deepEqual(withoutAutomaticQuestions("intermediate", saved), [
@@ -558,54 +568,139 @@ describe("the automatic questions", () => {
   });
 });
 
-describe("what Pre-Intermediate carries over from Pre-Bootcamp", () => {
-  const bootcampAnswers = {
-    "preferred-name": "Pat Example",
-    attend: "Yes - I'm there!",
-    dietary: "Yes",
-    "dietary-needs": "Peanut allergy",
-    "dietary-critical": "5",
-    concerns: "Arriving late on day one",
-  };
-  const dietary = DEFAULT_INTAKE_FORM.questions.filter((q) =>
-    (CARRIED_TO_INTERMEDIATE as readonly string[]).includes(q.id),
-  );
+describe("the dietary checklist", () => {
+  const form = { introduction: "", questions: [DIETARY_QUESTION] };
+  const { restrictions, critical, other } = DIETARY_KEYS;
 
-  test("is nothing while Pre-Intermediate asks no questions of its own", () => {
-    assert.deepEqual(
-      carriedAnswers(DEFAULT_INTAKE_FORMS.intermediate, bootcampAnswers),
-      {},
-    );
+  test("is the allergies, then the dietary and religious items, with Other last, none required", () => {
+    assert.ok(isDietaryQuestion(DIETARY_QUESTION));
+    assert.ok(intakeFormSchema.safeParse(form).success);
+    assert.equal(DIETARY_QUESTION.required, false);
+    assert.equal(DIETARY_ITEMS.at(-1), DIETARY_OTHER);
+    assert.deepEqual(DIETARY_QUESTION.options, [...DIETARY_ITEMS]);
+    assert.equal(new Set(DIETARY_ITEMS).size, DIETARY_ITEMS.length);
   });
 
-  test("is the dietary answers only, for the dietary questions an administrator adds", () => {
+  test("is skipped whole, or answered with nothing checked", () => {
+    assert.deepEqual(checkAnswers(form, {}), { ok: true, answers: {} });
+    assert.deepEqual(checkAnswers(form, { [restrictions]: [] }), {
+      ok: true,
+      answers: {},
+    });
+  });
+
+  test("keeps what is checked in the checklist's order, once each, and the critical marks among them", () => {
     assert.deepEqual(
-      carriedAnswers({ introduction: "", questions: dietary }, bootcampAnswers),
+      checkAnswers(form, {
+        [restrictions]: ["Vegan", "Peanuts", "Vegan", "Dairy"],
+        [critical]: ["Peanuts"],
+      }),
       {
-        dietary: "Yes",
-        "dietary-needs": "Peanut allergy",
-        "dietary-critical": "5",
+        ok: true,
+        answers: {
+          [restrictions]: ["Dairy", "Peanuts", "Vegan"],
+          [critical]: ["Peanuts"],
+        },
       },
     );
   });
 
-  test("leaves out a carried question the intermediate form does not ask, and an answer never given", () => {
-    const fewer = {
-      introduction: "",
-      questions: dietary.filter((q) => q.id !== "dietary-critical"),
+  test("rejects an item the checklist does not have, and a critical mark on one not checked", () => {
+    const notAnOption = {
+      ok: false,
+      error: { questionId: restrictions, problem: "not_an_option" },
     };
-    assert.deepEqual(carriedAnswers(fewer, { dietary: "No" }), {
-      dietary: "No",
+    assert.deepEqual(
+      checkAnswers(form, { [restrictions]: ["Dairy", "Mustard"] }),
+      notAnOption,
+    );
+    assert.deepEqual(
+      checkAnswers(form, { [restrictions]: ["Dairy"], [critical]: ["Eggs"] }),
+      notAnOption,
+    );
+  });
+
+  test("needs words for Other where it is checked, and drops them where it is not", () => {
+    assert.deepEqual(
+      checkAnswers(form, { [restrictions]: [DIETARY_OTHER], [other]: "  " }),
+      {
+        ok: false,
+        error: { questionId: restrictions, problem: "required" },
+      },
+    );
+    assert.deepEqual(
+      checkAnswers(form, {
+        [restrictions]: [DIETARY_OTHER],
+        [critical]: [DIETARY_OTHER],
+        [other]: " Cilantro ",
+      }),
+      {
+        ok: true,
+        answers: {
+          [restrictions]: [DIETARY_OTHER],
+          [critical]: [DIETARY_OTHER],
+          [other]: "Cilantro",
+        },
+      },
+    );
+    assert.deepEqual(
+      checkAnswers(form, { [restrictions]: ["Dairy"], [other]: "Cilantro" }),
+      { ok: true, answers: { [restrictions]: ["Dairy"] } },
+    );
+  });
+
+  test("takes one write-in, not several", () => {
+    assert.deepEqual(
+      checkAnswers(form, {
+        [restrictions]: [DIETARY_OTHER],
+        [other]: ["Cilantro", "Mint"],
+      }),
+      {
+        ok: false,
+        error: { questionId: restrictions, problem: "not_an_option" },
+      },
+    );
+  });
+});
+
+describe("what Pre-Intermediate carries over from Pre-Bootcamp", () => {
+  const bootcampAnswers = {
+    "preferred-name": "Pat Example",
+    attend: "Yes - I'm there!",
+    [DIETARY_KEYS.restrictions]: ["Peanuts", DIETARY_OTHER],
+    [DIETARY_KEYS.critical]: ["Peanuts"],
+    [DIETARY_KEYS.other]: "Cilantro",
+    concerns: "Arriving late on day one",
+  };
+  const asked = {
+    introduction: "",
+    questions: withAutomaticQuestions("intermediate", []),
+  };
+
+  test("is the dietary checklist's three answers, for a form that asks it, and nothing else", () => {
+    assert.deepEqual(carriedAnswers(asked, bootcampAnswers), {
+      [DIETARY_KEYS.restrictions]: ["Peanuts", DIETARY_OTHER],
+      [DIETARY_KEYS.critical]: ["Peanuts"],
+      [DIETARY_KEYS.other]: "Cilantro",
     });
   });
 
-  test("is only questions Pre-Bootcamp asks too", () => {
-    for (const id of CARRIED_TO_INTERMEDIATE) {
-      assert.ok(
-        DEFAULT_INTAKE_FORM.questions.some((q) => q.id === id),
-        id,
-      );
-    }
+  test("is nothing for a form that does not ask the checklist, and leaves out an answer never given", () => {
+    assert.deepEqual(
+      carriedAnswers(DEFAULT_INTAKE_FORMS.intermediate, bootcampAnswers),
+      {},
+    );
+    assert.deepEqual(
+      carriedAnswers(asked, { [DIETARY_KEYS.restrictions]: ["Dairy"] }),
+      { [DIETARY_KEYS.restrictions]: ["Dairy"] },
+    );
+  });
+
+  test("is only answers Pre-Bootcamp's automatic checklist stores", () => {
+    assert.deepEqual(
+      [...CARRIED_TO_INTERMEDIATE].sort(),
+      Object.values(DIETARY_KEYS).sort(),
+    );
   });
 });
 

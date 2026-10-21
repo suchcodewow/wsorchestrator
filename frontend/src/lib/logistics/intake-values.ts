@@ -107,8 +107,8 @@ export const PREFERRED_NAME_TITLE =
 
 /**
  * The November 2026 Sales Bootcamp registration, as the Google Form it replaces
- * asked it. Its name and time zone questions are not here: they are automatic
- * (`withAutomaticQuestions`).
+ * asked it. Its name, time zone and dietary questions are not here: they are
+ * automatic (`withAutomaticQuestions`).
  */
 export const DEFAULT_INTAKE_FORM: IntakeForm = {
   introduction:
@@ -122,26 +122,6 @@ export const DEFAULT_INTAKE_FORM: IntakeForm = {
       required: false,
       options: ["Yes - I'm there!", "No - I can't make it."],
       other: true,
-    }),
-    question({
-      id: "dietary",
-      kind: "dropdown",
-      title:
-        "Are there any dietary restrictions that we should try to accommodate? (check yes for vegetarian, vegan, allergies, etc. and describe in the following field)",
-      required: true,
-      options: ["Yes", "No"],
-    }),
-    question({
-      id: "dietary-needs",
-      kind: "paragraph",
-      title: "If yes, please describe your dietary needs.",
-      required: false,
-    }),
-    question({
-      id: "dietary-critical",
-      kind: "short",
-      title: "On a scale of 1 to 5, how critical are your dietary needs",
-      required: true,
     }),
     question({
       id: "concerns",
@@ -181,16 +161,64 @@ export const DEFAULT_INTAKE_FORMS: Record<IntakeFormId, IntakeForm> = {
 };
 
 /**
- * The questions the Logistics page reads dietary needs from, on both forms.
- * Editing their wording keeps them; removing one and adding another in its
- * place does not, since the new question gets a new id.
+ * The question whose answer becomes the person's preferred first name; see
+ * `INTAKE_NAME_QUESTION_ID`.
  */
-export const DIETARY_QUESTION_IDS = {
-  has: "dietary",
-  needs: "dietary-needs",
-  critical: "dietary-critical",
-  name: "preferred-name",
+const NAME_QUESTION_ID = "preferred-name";
+
+/**
+ * The automatic dietary question and the answers the Dietary needs page reads,
+ * on both forms. The question stores three answers: `restrictions`, every item
+ * they checked; `critical`, the checked items they also marked Critical, which
+ * is a subset of `restrictions`; and `other`, what they wrote in when they
+ * checked "Other".
+ */
+export const DIETARY_KEYS = {
+  restrictions: "dietary-restrictions",
+  critical: "dietary-restrictions-critical",
+  other: "dietary-restrictions-other",
 } as const;
+
+/** The item that asks for a write-in. */
+export const DIETARY_OTHER = "Other";
+
+/** The dietary checklist's groups, in the order the form lists them. */
+export const DIETARY_GROUPS: readonly {
+  label: string;
+  items: readonly string[];
+}[] = [
+  {
+    label: "Allergies",
+    items: [
+      "Dairy",
+      "Gluten / wheat",
+      "Peanuts",
+      "Tree nuts",
+      "Shellfish",
+      "Eggs",
+      "Soy",
+      "Fish",
+    ],
+  },
+  {
+    label: "Dietary and religious",
+    items: [
+      "Vegetarian",
+      "Vegan",
+      "Kosher",
+      "Halal",
+      "Pescatarian",
+      "No pork",
+      "Low sodium",
+      DIETARY_OTHER,
+    ],
+  },
+];
+
+/** Every dietary item, in the order the form lists them. */
+export const DIETARY_ITEMS: readonly string[] = DIETARY_GROUPS.flatMap(
+  (g) => g.items,
+);
 
 /**
  * The question whose answer becomes the person's time zone
@@ -208,7 +236,7 @@ export const INTAKE_TIMEZONE_QUESTION_ID = "timezone";
  * starts from the preferred name they already have. Only a short or paragraph
  * question with this id counts.
  */
-export const INTAKE_NAME_QUESTION_ID = DIETARY_QUESTION_IDS.name;
+export const INTAKE_NAME_QUESTION_ID = NAME_QUESTION_ID;
 
 /** One name: a letter, then letters, apostrophes, hyphens or dots, as in O'Neil, Mary-Kate or St. */
 const ONE_NAME = /^\p{L}[\p{L}\p{M}'’.-]*$/u;
@@ -346,10 +374,36 @@ export function isTimezoneQuestion(
   return q.id === INTAKE_TIMEZONE_QUESTION_ID && q.kind === "dropdown";
 }
 
+/**
+ * The dietary question as Pre-Bootcamp asks it of everyone: a checklist of
+ * allergies and dietary or religious needs, each of which they may also mark
+ * Critical, with a write-in for "Other". Optional, and automatic like the name.
+ * The form shows it as its own checklist (`DIETARY_GROUPS`), so its options
+ * are the flat list of items.
+ */
+export const DIETARY_QUESTION: IntakeQuestion = question({
+  id: DIETARY_KEYS.restrictions,
+  kind: "checkboxes",
+  title: "Do you have any dietary restrictions or allergies we should plan for?",
+  description:
+    "Check all that apply. Also check \u201cCritical\u201d if it's a medical need, such as a severe allergy.",
+  required: false,
+  options: [...DIETARY_ITEMS],
+});
+
+/** Whether `q` is the dietary question, whose answers are the three in `DIETARY_KEYS`. */
+export function isDietaryQuestion(
+  q: Pick<IntakeQuestion, "id" | "kind">,
+): boolean {
+  return q.id === DIETARY_KEYS.restrictions && q.kind === "checkboxes";
+}
+
 /** Whether `q` is one of the automatic questions, which no form saves. */
 function isAutomatic(q: Pick<IntakeQuestion, "id">): boolean {
   return (
-    q.id === INTAKE_NAME_QUESTION_ID || q.id === INTAKE_TIMEZONE_QUESTION_ID
+    q.id === INTAKE_NAME_QUESTION_ID ||
+    q.id === INTAKE_TIMEZONE_QUESTION_ID ||
+    q.id === DIETARY_KEYS.restrictions
   );
 }
 
@@ -362,8 +416,8 @@ export function withoutAutomaticQuestions(
 }
 
 /**
- * `questions` as a form asks them: led by the name and time zone questions,
- * as every form is, then the form's own.
+ * `questions` as a form asks them: led by the name, time zone and dietary
+ * questions, as every form is, then the form's own.
  */
 export function withAutomaticQuestions(
   form: IntakeFormId,
@@ -372,6 +426,7 @@ export function withAutomaticQuestions(
   return [
     PREFERRED_NAME_QUESTION,
     TIMEZONE_QUESTION,
+    DIETARY_QUESTION,
     ...withoutAutomaticQuestions(form, questions),
   ];
 }
@@ -393,9 +448,9 @@ export function isNameQuestion(
  * will attend, starts blank. Only a question on both forms is carried.
  */
 export const CARRIED_TO_INTERMEDIATE = [
-  DIETARY_QUESTION_IDS.has,
-  DIETARY_QUESTION_IDS.needs,
-  DIETARY_QUESTION_IDS.critical,
+  DIETARY_KEYS.restrictions,
+  DIETARY_KEYS.critical,
+  DIETARY_KEYS.other,
 ] as const;
 
 /** `answers` cut down to what `CARRIED_TO_INTERMEDIATE` carries, for the questions `form` asks. */
@@ -406,13 +461,12 @@ export function carriedAnswers(
   const asked = new Set(form.questions.map((q) => q.id));
   const kept: IntakeAnswers = {};
   for (const id of CARRIED_TO_INTERMEDIATE) {
-    if (asked.has(id) && answers[id] !== undefined) kept[id] = answers[id]!;
+    // The critical marks and the write-in are asked with the checklist.
+    if (asked.has(DIETARY_KEYS.restrictions) && answers[id] !== undefined)
+      kept[id] = answers[id]!;
   }
   return kept;
 }
-
-/** How critical a dietary need is, 1 to 5; 5 is an allergy or a religious restriction. */
-export const DIETARY_LEVELS = [5, 4, 3, 2, 1] as const;
 
 const questionSchema = z
   .object({
@@ -476,6 +530,53 @@ export type AnswerProblem = {
   problem: "required" | "not_an_option" | "not_a_name";
 };
 
+/** The trimmed, non-blank values of an answer, whether it came as one string or a list. */
+function valuesOf(raw: string | string[] | undefined): string[] {
+  return (Array.isArray(raw) ? raw : raw === undefined ? [] : [raw])
+    .map((v) => v.trim())
+    .filter((v) => v.length > 0);
+}
+
+/**
+ * The dietary question's three answers as they will be stored: items in the
+ * checklist's order without repeats, the critical ones only if they are among
+ * them, and the write-in only if "Other" is checked, where it is required.
+ * An item outside the checklist, or a critical mark on one not checked, is
+ * `not_an_option`.
+ */
+function checkDietary(
+  q: IntakeQuestion,
+  answers: IntakeAnswers,
+): { ok: true; answers: IntakeAnswers } | { ok: false; error: AnswerProblem } {
+  const bad = (problem: AnswerProblem["problem"]) => ({
+    ok: false as const,
+    error: { questionId: q.id, problem },
+  });
+  const checked = new Set(valuesOf(answers[DIETARY_KEYS.restrictions]));
+  const marked = new Set(valuesOf(answers[DIETARY_KEYS.critical]));
+  const other = valuesOf(answers[DIETARY_KEYS.other]);
+  if (
+    [...checked].some((v) => !DIETARY_ITEMS.includes(v)) ||
+    [...marked].some((v) => !checked.has(v)) ||
+    other.length > 1
+  )
+    return bad("not_an_option");
+
+  const kept: IntakeAnswers = {};
+  const items = DIETARY_ITEMS.filter((v) => checked.has(v));
+  if (items.length === 0) {
+    return q.required ? bad("required") : { ok: true, answers: kept };
+  }
+  kept[DIETARY_KEYS.restrictions] = items;
+  const critical = items.filter((v) => marked.has(v));
+  if (critical.length > 0) kept[DIETARY_KEYS.critical] = critical;
+  if (checked.has(DIETARY_OTHER)) {
+    if (other.length === 0) return bad("required");
+    kept[DIETARY_KEYS.other] = other[0]!;
+  }
+  return { ok: true, answers: kept };
+}
+
 /**
  * The answers as they will be stored — trimmed, blanks dropped, and only for
  * questions on the form — or the first question that is wrong. An answer
@@ -488,10 +589,13 @@ export function checkAnswers(
 ): { ok: true; answers: IntakeAnswers } | { ok: false; error: AnswerProblem } {
   const kept: IntakeAnswers = {};
   for (const q of form.questions) {
-    const raw = answers[q.id];
-    const values = (Array.isArray(raw) ? raw : raw === undefined ? [] : [raw])
-      .map((v) => v.trim())
-      .filter((v) => v.length > 0);
+    if (isDietaryQuestion(q)) {
+      const dietary = checkDietary(q, answers);
+      if (!dietary.ok) return dietary;
+      Object.assign(kept, dietary.answers);
+      continue;
+    }
+    const values = valuesOf(answers[q.id]);
 
     if (values.length === 0) {
       if (q.required)

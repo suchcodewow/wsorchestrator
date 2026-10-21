@@ -25,7 +25,11 @@ import { INTAKE_LIMITS, type IntakeQuestion } from "@/db/schema";
 import type { MyIntake } from "@/lib/logistics/intake";
 import { timeZoneChoices } from "@/lib/timezones";
 import {
+  DIETARY_GROUPS,
+  DIETARY_KEYS,
+  DIETARY_OTHER,
   HAS_OPTIONS,
+  isDietaryQuestion,
   isFirstName,
   isNameQuestion,
   isTimezoneQuestion,
@@ -86,6 +90,13 @@ function startingFrom(intake: MyIntake): {
   const answers: IntakeAnswers = {};
   const others: Record<string, string> = {};
   for (const q of intake.questions) {
+    if (isDietaryQuestion(q)) {
+      for (const key of Object.values(DIETARY_KEYS)) {
+        const held = intake.answers[key];
+        if (held !== undefined) answers[key] = held;
+      }
+      continue;
+    }
     const saved = intake.answers[q.id];
     if (saved === undefined) continue;
     if (!HAS_OPTIONS.has(q.kind) || !q.other) {
@@ -107,6 +118,18 @@ function startingFrom(intake: MyIntake): {
   if (zoneQuestion && answers[zoneQuestion.id] === undefined && intake.timezone)
     answers[zoneQuestion.id] = intake.timezone;
   return { answers, others };
+}
+
+/** Whether `q` is the dietary question with "Other" checked and nothing written in for it. */
+function unwrittenOther(q: IntakeQuestion, answers: IntakeAnswers): boolean {
+  if (!isDietaryQuestion(q)) return false;
+  const checked = answers[DIETARY_KEYS.restrictions];
+  const written = answers[DIETARY_KEYS.other];
+  return (
+    Array.isArray(checked) &&
+    checked.includes(DIETARY_OTHER) &&
+    (typeof written !== "string" || written.trim() === "")
+  );
 }
 
 /** The name question's answer, when there is one and it is not a single first name. */
@@ -179,6 +202,12 @@ export function IntakeFormFiller({
   function payload(): IntakeAnswers {
     const out: IntakeAnswers = {};
     for (const q of intake.questions) {
+      if (isDietaryQuestion(q)) {
+        for (const key of Object.values(DIETARY_KEYS)) {
+          if (answers[key] !== undefined) out[key] = answers[key]!;
+        }
+        continue;
+      }
       const a = answers[q.id];
       if (a === undefined) continue;
       const other = (others[q.id] ?? "").trim();
@@ -205,6 +234,12 @@ export function IntakeFormFiller({
     });
     setMissing(new Set(unanswered.map((q) => q.id)));
     if (unanswered.length > 0) {
+      setError(ERRORS.required!);
+      return;
+    }
+    const unwritten = intake.questions.find((q) => unwrittenOther(q, out));
+    if (unwritten) {
+      setMissing(new Set([unwritten.id]));
       setError(ERRORS.required!);
       return;
     }
@@ -399,18 +434,28 @@ export function IntakeFormFiller({
                   </p>
                 )}
               </div>
-              <Answer
-                question={q}
-                value={answers[q.id]}
-                other={others[q.id] ?? ""}
-                onChange={(v) => setAnswers((a) => ({ ...a, [q.id]: v }))}
-                onOther={(v) => setOthers((o) => ({ ...o, [q.id]: v }))}
-              />
+              {isDietaryQuestion(q) ? (
+                <DietaryChecklist
+                  title={q.title}
+                  answers={answers}
+                  onChange={(patch) => setAnswers((a) => ({ ...a, ...patch }))}
+                />
+              ) : (
+                <Answer
+                  question={q}
+                  value={answers[q.id]}
+                  other={others[q.id] ?? ""}
+                  onChange={(v) => setAnswers((a) => ({ ...a, [q.id]: v }))}
+                  onOther={(v) => setOthers((o) => ({ ...o, [q.id]: v }))}
+                />
+              )}
               {missing.has(q.id) && (
                 <p className="text-xs text-destructive">
                   {badName(q, answers[q.id])
                     ? "Enter a first name only: letters, with no spaces."
-                    : "This question needs an answer."}
+                    : isDietaryQuestion(q)
+                      ? "Write in what your other need is."
+                      : "This question needs an answer."}
                 </p>
               )}
             </fieldset>
@@ -491,6 +536,114 @@ function TimeZoneSelect({
         </option>
       ))}
     </select>
+  );
+}
+
+/**
+ * The dietary checklist: each allergy and dietary or religious need, with a
+ * Critical box beside it. Marking something Critical checks it, and
+ * unchecking it clears its mark, so Critical is always a subset of what is
+ * checked. "Other" asks for what the need is.
+ */
+function DietaryChecklist({
+  title,
+  answers,
+  onChange,
+}: {
+  title: string;
+  answers: IntakeAnswers;
+  onChange: (patch: IntakeAnswers) => void;
+}) {
+  const list = (key: string) => {
+    const held = answers[key];
+    return Array.isArray(held) ? held : [];
+  };
+  const checked = new Set(list(DIETARY_KEYS.restrictions));
+  const critical = new Set(list(DIETARY_KEYS.critical));
+  const other =
+    typeof answers[DIETARY_KEYS.other] === "string"
+      ? (answers[DIETARY_KEYS.other] as string)
+      : "";
+
+  const check = (item: string, on: boolean) => {
+    const nextChecked = new Set(checked);
+    const nextCritical = new Set(critical);
+    if (on) nextChecked.add(item);
+    else {
+      nextChecked.delete(item);
+      nextCritical.delete(item);
+    }
+    onChange({
+      [DIETARY_KEYS.restrictions]: [...nextChecked],
+      [DIETARY_KEYS.critical]: [...nextCritical],
+    });
+  };
+  const mark = (item: string, on: boolean) => {
+    const nextChecked = new Set(checked);
+    const nextCritical = new Set(critical);
+    if (on) {
+      nextChecked.add(item);
+      nextCritical.add(item);
+    } else nextCritical.delete(item);
+    onChange({
+      [DIETARY_KEYS.restrictions]: [...nextChecked],
+      [DIETARY_KEYS.critical]: [...nextCritical],
+    });
+  };
+
+  return (
+    <div
+      role="group"
+      aria-label={title}
+      className="overflow-hidden rounded-lg border"
+    >
+      <div className="grid grid-cols-[1fr_4.5rem] items-center border-b bg-muted/50 px-4 py-2 text-xs font-medium">
+        <span className="text-muted-foreground">Restriction</span>
+        <span className="text-center text-destructive">Critical</span>
+      </div>
+      {DIETARY_GROUPS.map((group) => (
+        <div key={group.label} className="divide-y">
+          <p className="border-b bg-muted/30 px-4 py-1.5 text-xs font-medium text-muted-foreground">
+            {group.label}
+          </p>
+          {group.items.map((item) => (
+            <div key={item}>
+              <div className="grid grid-cols-[1fr_4.5rem] items-center px-4 py-2">
+                <label className="flex cursor-pointer items-center gap-2.5 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={checked.has(item)}
+                    onChange={(e) => check(item, e.target.checked)}
+                    className="size-4 shrink-0 accent-brand"
+                  />
+                  {item}
+                </label>
+                <input
+                  type="checkbox"
+                  aria-label={`${item}: critical`}
+                  checked={critical.has(item)}
+                  onChange={(e) => mark(item, e.target.checked)}
+                  className="mx-auto size-4 shrink-0 accent-destructive"
+                />
+              </div>
+              {item === DIETARY_OTHER && checked.has(item) && (
+                <div className="px-4 pb-3">
+                  <Input
+                    aria-label="Other dietary restriction or allergy"
+                    placeholder="What is it?"
+                    value={other}
+                    maxLength={INTAKE_LIMITS.answer}
+                    onChange={(e) =>
+                      onChange({ [DIETARY_KEYS.other]: e.target.value })
+                    }
+                  />
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
   );
 }
 

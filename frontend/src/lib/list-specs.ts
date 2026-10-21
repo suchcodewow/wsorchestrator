@@ -114,15 +114,30 @@ export type FacilitySort = (typeof FACILITY_LIST.sorts)[number];
 export const INTAKE_RESPONSE_LIST = spec(["submittedAt", "name", "email"], "desc");
 export type IntakeResponseSort = (typeof INTAKE_RESPONSE_LIST.sorts)[number];
 
-/** Each attendee's dietary needs, the most critical first. */
-export const DIETARY_LIST = spec(["critical", "name", "email", "submittedAt"], "desc");
+/**
+ * Who wrote in "Other" on the dietary checklist, by name: one list for those who
+ * marked it Critical and one for those who did not, each paged under its own prefix.
+ */
+export const WRITE_IN_LIST = spec(["name", "email", "stage"]);
+export const CRITICAL_WRITE_IN_PREFIX = "criticalOther";
+export const WRITE_IN_PREFIX = "other";
+export type WriteInSort = (typeof WRITE_IN_LIST.sorts)[number];
+
+/** Which attendees the Dietary needs page counts: everyone, or just the Bootcamp or Intermediate group. */
+export const DIETARY_STAGES = ["all", "bootcamp", "intermediate"] as const;
+export type DietaryStage = (typeof DIETARY_STAGES)[number];
+
+/** The stage a Dietary needs URL asks for, from `stage`; everyone for one that asks none or anything else. */
+export function dietaryStageOf(value: unknown): DietaryStage {
+  const one = Array.isArray(value) ? value[0] : value;
+  return DIETARY_STAGES.includes(one as DietaryStage) ? (one as DietaryStage) : "all";
+}
 
 /** Who in the current cohort has yet to send either registration form, by name. */
 export const UNREGISTERED_LIST = spec(["name", "email", "stage"]);
 /** The URL prefix that list sorts and pages under, beside the Dietary needs list on the same page. */
 export const UNREGISTERED_PREFIX = "unregistered";
 export type UnregisteredSort = (typeof UNREGISTERED_LIST.sorts)[number];
-export type DietarySort = (typeof DIETARY_LIST.sorts)[number];
 
 /** Food orders, the soonest to arrive first. */
 export const FOOD_ORDER_LIST = spec(["arrivesAt", "vendor", "updatedAt"]);

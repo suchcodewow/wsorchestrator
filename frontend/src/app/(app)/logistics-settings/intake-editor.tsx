@@ -213,9 +213,9 @@ export function IntakeEditor({
           The form always opens with the dates of the next{" "}
           {id === "bootcamp" ? "Bootcamp" : "Intermediate"} class and this
           introduction, then the Sign-Up and Defer buttons. Once someone signs
-          up, it asks their preferred first name (optional) and to confirm their
-          time zone, then the questions below. Those two are automatic and are
-          not edited here.
+          up, it asks their preferred first name (optional), to confirm their time
+          zone and about dietary restrictions and allergies, then the questions
+          below. Those three are automatic and are not edited here.
         </motion.p>
         {questions.length === 0 && (
           <motion.p
@@ -223,7 +223,7 @@ export function IntakeEditor({
             className="px-5 py-8 text-center text-sm text-muted-foreground"
           >
             No questions of its own yet. Everyone is still asked their preferred
-            name and time zone.
+            name, time zone and dietary needs.
           </motion.p>
         )}
 
