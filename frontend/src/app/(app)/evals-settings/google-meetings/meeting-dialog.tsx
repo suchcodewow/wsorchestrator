@@ -223,7 +223,7 @@ export function MeetingDialog({
             {calendarError && <p className="text-xs text-destructive">{calendarError}</p>}
           </motion.div>
 
-          <motion.div variants={riseChild} className="grid gap-4 sm:grid-cols-2">
+          <motion.div variants={riseChild} className="grid gap-4">
             <Choice id="gm-stage" label="Stage" values={MEETING_STAGES} labels={MEETING_STAGE_LABELS} value={stage} onChange={setStage} />
             <Choice id="gm-track" label="Track" values={MEETING_TRACKS} labels={MEETING_TRACK_LABELS} value={track} onChange={setTrack} />
           </motion.div>
