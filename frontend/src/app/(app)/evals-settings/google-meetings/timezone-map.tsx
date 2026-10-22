@@ -17,7 +17,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { TIMEZONE_HOURS, timezoneRangeLabel } from "@/lib/evals/meeting-plan";
+import { TIMEZONE_HOURS, offsetInRange, timezoneRangeLabel } from "@/lib/evals/meeting-plan";
 import { cn } from "@/lib/utils";
 import { WORLD_LAND_PATH, WORLD_VIEWBOX } from "./world-land";
 
@@ -55,26 +55,22 @@ const SELECT =
 
 const hourLabel = (h: number) => `UTC${h < 0 ? "-" : "+"}${Math.abs(h)}`;
 
-/** Dot positions for `n` people in a band: columns filled top to bottom, packed tighter until they all fit. */
-function dots(
-  x: number,
-  width: number,
-  n: number,
-): { cx: number; cy: number; r: number }[] {
-  const top = BAR_HEIGHT + BAR_GAP + 3;
+/** Dot positions for `n` people in a band: columns filled top to bottom, each centred on the map's middle, packed tighter until they all fit. */
+function dots(x: number, width: number, n: number): { cx: number; cy: number; r: number }[] {
+  const middle = BAR_HEIGHT + BAR_GAP + WORLD_VIEWBOX.height / 2;
   const room = WORLD_VIEWBOX.height - 6;
-  let step = 4.6;
+  let step = 7;
   const rowsOf = (st: number) => Math.max(1, Math.floor(room / st));
   const colsOf = (st: number) => Math.max(1, Math.floor((width - 2) / st));
   while (step > 1.6 && rowsOf(step) * colsOf(step) < n) step -= 0.2;
   const rows = rowsOf(step);
   const used = Math.min(colsOf(step), Math.ceil(n / rows));
   const left = x + (width - (used - 1) * step) / 2;
-  return Array.from({ length: n }, (_, i) => ({
-    cx: left + Math.floor(i / rows) * step,
-    cy: top + step / 2 + (i % rows) * step,
-    r: Math.min(2.2, step * 0.42),
-  }));
+  return Array.from({ length: n }, (_, i) => {
+    const col = Math.floor(i / rows);
+    const inColumn = Math.min(rows, n - col * rows);
+    return { cx: left + col * step, cy: middle + ((i % rows) - (inColumn - 1) / 2) * step, r: Math.min(3.2, step * 0.45) };
+  });
 }
 
 /** A band is 15° wide, centred on its offset's meridian; the ends are cut by the map's edge. */
@@ -104,7 +100,7 @@ export function TimezoneMap({
   const [anchor, setAnchor] = useState<number | null>(null);
   const counts = coverage?.byHour ?? {};
   const people = coverage?.people ?? {};
-  const inRange = (h: number) => h >= from && h <= to;
+  const inRange = (h: number) => offsetInRange(h, from, to);
   const covered = HOURS.filter((h) => (counts[h] ?? 0) > 0);
   const reached = covered
     .filter(inRange)
@@ -116,7 +112,7 @@ export function TimezoneMap({
       setAnchor(hour);
       onChange(hour, hour);
     } else {
-      onChange(Math.min(anchor, hour), Math.max(anchor, hour));
+      onChange(anchor, hour);
       setAnchor(null);
     }
   }
@@ -233,8 +229,8 @@ export function TimezoneMap({
         <div className="grid grid-cols-2 gap-3">
           {(
             [
-              ["From", from, (h: number) => onChange(h, Math.max(h, to))],
-              ["To", to, (h: number) => onChange(Math.min(h, from), h)],
+              ["From", from, (h: number) => onChange(h, to)],
+              ["To", to, (h: number) => onChange(from, h)],
             ] as const
           ).map(([label, value, set]) => (
             <div key={label} className="grid gap-1.5">

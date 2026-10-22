@@ -191,11 +191,11 @@ export const STATUS_FOR: Record<MeetingSelectionError, number> = {
 
 const offsetHours = z.number().int().min(TIMEZONE_HOURS.min).max(TIMEZONE_HOURS.max);
 
-/** Both ends or neither, the first not after the second. */
+/** Both ends or neither; a first after the second wraps through the date line. */
 function timezoneRangeValid(v: { timezoneFrom?: number | null; timezoneTo?: number | null }): boolean {
   const from = v.timezoneFrom ?? null;
   const to = v.timezoneTo ?? null;
-  return (from === null) === (to === null) && (from === null || to === null || from <= to);
+  return (from === null) === (to === null);
 }
 
 export const meetingSelectionSchema = z

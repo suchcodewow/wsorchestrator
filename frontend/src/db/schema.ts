@@ -1313,7 +1313,8 @@ export const meetingSelections = pgTable(
     track: text("track").$type<MeetingTrack>().notNull(),
     /**
      * The UTC offsets, in whole hours, the meeting covers: only people whose
-     * time zone falls in `timezoneFrom`..`timezoneTo` are invited. Both null
+     * time zone falls in `timezoneFrom`..`timezoneTo` are invited, running
+     * east through the date line when the first is after the second. Both null
      * for no filter (`lib/evals/meeting-plan.ts`).
      */
     timezoneFrom: integer("timezone_from"),
@@ -1336,7 +1337,7 @@ export const meetingSelections = pgTable(
     check("meeting_selections_track_check", sql`${t.track} in ('sales', 'engineer', 'both')`),
     check(
       "meeting_selections_timezone_check",
-      sql`(${t.timezoneFrom} is null and ${t.timezoneTo} is null) or (${t.timezoneFrom} between -12 and 14 and ${t.timezoneTo} between -12 and 14 and ${t.timezoneFrom} <= ${t.timezoneTo})`,
+      sql`(${t.timezoneFrom} is null and ${t.timezoneTo} is null) or (${t.timezoneFrom} between -12 and 14 and ${t.timezoneTo} between -12 and 14)`,
     ),
   ],
 );

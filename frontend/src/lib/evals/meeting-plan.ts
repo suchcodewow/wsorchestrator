@@ -72,6 +72,11 @@ export function hasTimezoneRange(range: TimezoneRange): range is { timezoneFrom:
   return typeof range.timezoneFrom === "number" && typeof range.timezoneTo === "number";
 }
 
+/** Whether offset `hour` is in `from`..`to`; a `from` after `to` runs east through the date line, so +9 to -6 holds +9..+14 and -12..-6. */
+export function offsetInRange(hour: number, from: number, to: number): boolean {
+  return from <= to ? hour >= from && hour <= to : hour >= from || hour <= to;
+}
+
 /** `UTC-8 to UTC-5`, or `UTC+1` for a single hour. */
 export function timezoneRangeLabel(from: number, to: number): string {
   const one = (h: number) => `UTC${h < 0 ? "-" : "+"}${Math.abs(h)}`;
@@ -84,7 +89,7 @@ export function inTimezoneRange(zone: string | null | undefined, range: Timezone
   if (!zone) return false;
   try {
     const hour = offsetHour(zone, at);
-    return hour >= range.timezoneFrom && hour <= range.timezoneTo;
+    return offsetInRange(hour, range.timezoneFrom, range.timezoneTo);
   } catch {
     return false;
   }

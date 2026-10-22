@@ -225,6 +225,14 @@ test("a time zone range leaves out anyone outside it, or with no zone", () => {
   assert.equal(inTimezoneRange(null, range, JULY), false);
   assert.equal(inTimezoneRange("not a zone", range, JULY), false);
   // No range: everyone, zone or not.
+  // A first after the second runs east through the date line: +9 to -6.
+  const wrapped = { timezoneFrom: 9, timezoneTo: -6 };
+  assert.equal(inTimezoneRange("Asia/Tokyo", wrapped, JULY), true);
+  assert.equal(inTimezoneRange("Pacific/Auckland", wrapped, JULY), true);
+  assert.equal(inTimezoneRange("America/Denver", wrapped, JULY), true);
+  assert.equal(inTimezoneRange("America/Chicago", wrapped, JULY), false);
+  assert.equal(inTimezoneRange("America/New_York", wrapped, JULY), false);
+  assert.equal(inTimezoneRange("Europe/London", wrapped, JULY), false);
   assert.equal(inTimezoneRange(null, { timezoneFrom: null, timezoneTo: null }, JULY), true);
   assert.equal(hasTimezoneRange({}), false);
 });
@@ -244,5 +252,6 @@ test("the time zone range narrows a meeting's audience", () => {
 test("a time zone range reads as a person would say it", () => {
   assert.equal(timezoneRangeLabel(-8, -5), "UTC-8 to UTC-5");
   assert.equal(timezoneRangeLabel(1, 1), "UTC+1");
+  assert.equal(timezoneRangeLabel(9, -6), "UTC+9 to UTC-6");
   assert.equal(timezoneRangeLabel(0, 3), "UTC+0 to UTC+3");
 });
