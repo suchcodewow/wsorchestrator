@@ -17,7 +17,12 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { TIMEZONE_HOURS, offsetInRange, timezoneRangeLabel } from "@/lib/evals/meeting-plan";
+import {
+  TIMEZONE_HOURS,
+  offsetHour,
+  offsetInRange,
+  timezoneRangeLabel,
+} from "@/lib/evals/meeting-plan";
 import { cn } from "@/lib/utils";
 import { WORLD_LAND_PATH, WORLD_VIEWBOX } from "./world-land";
 
@@ -56,7 +61,11 @@ const SELECT =
 const hourLabel = (h: number) => `UTC${h < 0 ? "-" : "+"}${Math.abs(h)}`;
 
 /** Dot positions for `n` people in a band: columns filled top to bottom, each centred on the map's middle, packed tighter until they all fit. */
-function dots(x: number, width: number, n: number): { cx: number; cy: number; r: number }[] {
+function dots(
+  x: number,
+  width: number,
+  n: number,
+): { cx: number; cy: number; r: number }[] {
   const middle = BAR_HEIGHT + BAR_GAP + WORLD_VIEWBOX.height / 2;
   const room = WORLD_VIEWBOX.height - 6;
   let step = 7;
@@ -69,7 +78,11 @@ function dots(x: number, width: number, n: number): { cx: number; cy: number; r:
   return Array.from({ length: n }, (_, i) => {
     const col = Math.floor(i / rows);
     const inColumn = Math.min(rows, n - col * rows);
-    return { cx: left + col * step, cy: middle + ((i % rows) - (inColumn - 1) / 2) * step, r: Math.min(3.2, step * 0.45) };
+    return {
+      cx: left + col * step,
+      cy: middle + ((i % rows) - (inColumn - 1) / 2) * step,
+      r: Math.min(3.2, step * 0.45),
+    };
   });
 }
 
@@ -98,6 +111,11 @@ export function TimezoneMap({
   onChange: (from: number, to: number) => void;
 }) {
   const [anchor, setAnchor] = useState<number | null>(null);
+  // The bands are UTC offsets, so while the US is on daylight time the land slides one band east to keep each place under its own band.
+  const landShift =
+    offsetHour("America/New_York", meetingAt ?? new Date()) === -4
+      ? 360 / 24
+      : 0;
   const counts = coverage?.byHour ?? {};
   const people = coverage?.people ?? {};
   const inRange = (h: number) => offsetInRange(h, from, to);
@@ -154,7 +172,16 @@ export function TimezoneMap({
             );
           })}
           <g transform={`translate(0 ${BAR_HEIGHT + BAR_GAP})`}>
-            <path d={WORLD_LAND_PATH} className="fill-muted-foreground/30" />
+            <path
+              d={WORLD_LAND_PATH}
+              transform={`translate(${landShift} 0)`}
+              className="fill-muted-foreground/30"
+            />
+            <path
+              d={WORLD_LAND_PATH}
+              transform={`translate(${landShift - WORLD_VIEWBOX.width} 0)`}
+              className="fill-muted-foreground/30"
+            />
             {MAP_HOURS.map((h) => {
               const { x, width } = band(h);
               const n = counts[h] ?? 0;
