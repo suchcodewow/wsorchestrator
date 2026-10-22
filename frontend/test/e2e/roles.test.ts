@@ -786,6 +786,7 @@ const ROUTES: RouteCase[] = [
   { method: "PUT", path: "/api/evals/google-meetings/settings", allowed: canManageEvalsSettings, body: () => ({}) },
   // An allowed read or sync would call Google for real, were an account connected.
   { method: "GET", path: "/api/evals/google-meetings/calendar", allowed: canManageEvalsSettings, denyOnly: true },
+  { method: "GET", path: "/api/evals/google-meetings/timezones?stage=both&track=both", allowed: canManageEvalsSettings },
   { method: "GET", path: "/api/evals/google-meetings/sync", allowed: canManageEvalsSettings },
   { method: "POST", path: "/api/evals/google-meetings/sync", allowed: canManageEvalsSettings, denyOnly: true },
   { method: "GET", path: `/api/evals/google-meetings/sync/${MISSING}?kind=invites`, allowed: canManageEvalsSettings },

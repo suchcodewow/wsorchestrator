@@ -8,6 +8,10 @@ import {
   audienceLabel,
   audienceOf,
   cleanMeetingName,
+  hasTimezoneRange,
+  inTimezoneRange,
+  offsetHour,
+  timezoneRangeLabel,
   joinedFrom,
   meetingKey,
   meetingMark,
@@ -198,4 +202,47 @@ test("the Current tab's mark", () => {
   assert.equal(meetingMark({ attended: false, response: "needsAction", invited: true, anyLeft: false }), "pending");
   assert.equal(meetingMark({ attended: false, response: null, invited: false, anyLeft: true }), "pending");
   assert.equal(meetingMark({ attended: false, response: null, invited: false, anyLeft: false }), "none_left");
+});
+
+const JULY = new Date("2026-07-15T12:00:00Z");
+const JANUARY = new Date("2026-01-15T12:00:00Z");
+
+test("a time zone is a whole-hour UTC offset, half hours rounding east", () => {
+  assert.equal(offsetHour("America/Chicago", JULY), -5);
+  assert.equal(offsetHour("America/Chicago", JANUARY), -6);
+  assert.equal(offsetHour("Asia/Kolkata", JULY), 6);
+  assert.equal(offsetHour("America/St_Johns", JULY), -2);
+  assert.equal(offsetHour("UTC", JULY), 0);
+});
+
+test("a time zone range leaves out anyone outside it, or with no zone", () => {
+  const range = { timezoneFrom: -8, timezoneTo: -5 };
+  assert.ok(hasTimezoneRange(range));
+  assert.equal(inTimezoneRange("America/Los_Angeles", range, JULY), true);
+  assert.equal(inTimezoneRange("America/Chicago", range, JULY), true);
+  assert.equal(inTimezoneRange("America/New_York", range, JULY), false);
+  assert.equal(inTimezoneRange("Europe/London", range, JULY), false);
+  assert.equal(inTimezoneRange(null, range, JULY), false);
+  assert.equal(inTimezoneRange("not a zone", range, JULY), false);
+  // No range: everyone, zone or not.
+  assert.equal(inTimezoneRange(null, { timezoneFrom: null, timezoneTo: null }, JULY), true);
+  assert.equal(hasTimezoneRange({}), false);
+});
+
+test("the time zone range narrows a meeting's audience", () => {
+  const cohort: Member[] = [
+    { email: "a@harness.io", stage: "bootcamp", track: "sales", timezone: "America/Los_Angeles" },
+    { email: "b@harness.io", stage: "bootcamp", track: "sales", timezone: "Europe/London" },
+    { email: "c@harness.io", stage: "bootcamp", track: "sales", timezone: null },
+    { email: "d@harness.io", stage: "bootcamp", track: "engineer", timezone: "America/Los_Angeles" },
+  ];
+  const meeting = { stage: "bootcamp", track: "sales", timezoneFrom: -8, timezoneTo: -7 } as const;
+  assert.deepEqual(audienceOf(meeting, cohort, JULY), ["a@harness.io"]);
+  assert.deepEqual(audienceOf({ ...meeting, timezoneFrom: null, timezoneTo: null }, cohort, JULY), ["a@harness.io", "b@harness.io", "c@harness.io"]);
+});
+
+test("a time zone range reads as a person would say it", () => {
+  assert.equal(timezoneRangeLabel(-8, -5), "UTC-8 to UTC-5");
+  assert.equal(timezoneRangeLabel(1, 1), "UTC+1");
+  assert.equal(timezoneRangeLabel(0, 3), "UTC+0 to UTC+3");
 });

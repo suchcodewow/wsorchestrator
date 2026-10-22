@@ -12,9 +12,13 @@
  * is left before the bootcamp. An administrator's mark overrides Zoom either
  * way. Every Assessments Administrator is invited to each upcoming
  * occurrence a cohort member is on.
+ *
+ * A meeting may also cover a range of UTC offsets, in whole hours; then only
+ * people whose time zone falls inside it are among those it is for.
  */
 
 import type { MeetingAttendance, MeetingInviteRole, MeetingStage, MeetingTrack } from "@/db/schema";
+import { utcOffsetMinutes } from "@/lib/timezones";
 
 export const MEETING_STAGE_LABELS: Record<MeetingStage, string> = {
   bootcamp: "Bootcamp",
@@ -45,7 +49,46 @@ export function cleanMeetingName(name: string): string {
   return name.trim().replace(/\s+/g, " ");
 }
 
-export type Member = { email: string; stage: "bootcamp" | "intermediate"; track: "sales" | "engineer" };
+export type Member = {
+  email: string;
+  stage: "bootcamp" | "intermediate";
+  track: "sales" | "engineer";
+  /** An IANA zone such as `America/Chicago`; null or missing when the app has none for them. */
+  timezone?: string | null;
+};
+
+/** The UTC offsets, in whole hours, a meeting covers; both null or missing for no filter. */
+export type TimezoneRange = { timezoneFrom?: number | null; timezoneTo?: number | null };
+
+export const TIMEZONE_HOURS = { min: -12, max: 14 } as const;
+
+/** `zone`'s UTC offset at `at` as a whole hour, half hours rounding toward the east: India is +6, Newfoundland -3. */
+export function offsetHour(zone: string, at: Date): number {
+  return Math.round(utcOffsetMinutes(zone, at) / 60);
+}
+
+/** Whether `range` filters at all. */
+export function hasTimezoneRange(range: TimezoneRange): range is { timezoneFrom: number; timezoneTo: number } {
+  return typeof range.timezoneFrom === "number" && typeof range.timezoneTo === "number";
+}
+
+/** `UTC-8 to UTC-5`, or `UTC+1` for a single hour. */
+export function timezoneRangeLabel(from: number, to: number): string {
+  const one = (h: number) => `UTC${h < 0 ? "-" : "+"}${Math.abs(h)}`;
+  return from === to ? one(from) : `${one(from)} to ${one(to)}`;
+}
+
+/** Whether someone in `zone` is inside `range`; anyone with no known zone is outside a range, and inside none. */
+export function inTimezoneRange(zone: string | null | undefined, range: TimezoneRange, at: Date): boolean {
+  if (!hasTimezoneRange(range)) return true;
+  if (!zone) return false;
+  try {
+    const hour = offsetHour(zone, at);
+    return hour >= range.timezoneFrom && hour <= range.timezoneTo;
+  } catch {
+    return false;
+  }
+}
 
 const normal = (email: string) => email.trim().toLowerCase();
 
@@ -93,14 +136,26 @@ export function mergeAttendees(
   return [...kept, ...added];
 }
 
-/** Whether a picked meeting is for someone in this stage and on this track. */
-export function meetingIsFor(meeting: { stage: MeetingStage; track: MeetingTrack }, member: Pick<Member, "stage" | "track">): boolean {
-  return (meeting.stage === "both" || meeting.stage === member.stage) && (meeting.track === "both" || meeting.track === member.track);
+/** Whether a picked meeting is for someone in this stage and on this track, and in its time zones when it has any. */
+export function meetingIsFor(
+  meeting: { stage: MeetingStage; track: MeetingTrack } & TimezoneRange,
+  member: Pick<Member, "stage" | "track" | "timezone">,
+  at: Date = new Date(),
+): boolean {
+  return (
+    (meeting.stage === "both" || meeting.stage === member.stage) &&
+    (meeting.track === "both" || meeting.track === member.track) &&
+    inTimezoneRange(member.timezone, meeting, at)
+  );
 }
 
 /** The people a picked meeting is for, lowercased, each once, sorted. */
-export function audienceOf(meeting: { stage: MeetingStage; track: MeetingTrack }, cohort: readonly Member[]): string[] {
-  return [...new Set(cohort.filter((m) => meetingIsFor(meeting, m)).map((m) => normal(m.email)))].filter(Boolean).sort();
+export function audienceOf(
+  meeting: { stage: MeetingStage; track: MeetingTrack } & TimezoneRange,
+  cohort: readonly Member[],
+  at: Date = new Date(),
+): string[] {
+  return [...new Set(cohort.filter((m) => meetingIsFor(meeting, m, at)).map((m) => normal(m.email)))].filter(Boolean).sort();
 }
 
 export type PlanOccurrence = {

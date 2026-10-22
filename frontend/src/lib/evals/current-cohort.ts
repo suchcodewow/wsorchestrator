@@ -237,7 +237,7 @@ export async function listCurrentCohort(
  * page, since the sync needs all of them; it is one email per candidate.
  */
 export async function currentCohortEmails(): Promise<
-  { email: string; fullName: string; stage: CandidateStage; track: "sales" | "engineer" }[]
+  { email: string; fullName: string; stage: CandidateStage; track: "sales" | "engineer"; timezone: string | null }[]
 > {
   const cutoffs = await getCandidateCutoffs();
   return db
@@ -246,9 +246,34 @@ export async function currentCohortEmails(): Promise<
       fullName: e.fullName,
       stage: candidateStage,
       track: sql<"sales" | "engineer">`${e.track}`,
+      timezone: e.timezone,
     })
     .from(e)
     .where(and(isCandidate(cutoffs), inArray(e.track, ["sales", "engineer"])));
+}
+
+/**
+ * How many of the Sales and Engineer candidates in `stage` and on `track`
+ * ("both" for either) have each time zone on record; `timezone` is null for
+ * those with none. One row per zone, not per person.
+ */
+export async function currentCohortZones(
+  stage: CandidateStage | "both",
+  track: "sales" | "engineer" | "both",
+): Promise<{ timezone: string | null; people: number }[]> {
+  const cutoffs = await getCandidateCutoffs();
+  return db
+    .select({ timezone: e.timezone, people: sql<number>`count(*)::int` })
+    .from(e)
+    .where(
+      and(
+        isCandidate(cutoffs),
+        stage === "both" ? undefined : IN_STAGE[stage],
+        track === "both" ? inArray(e.track, ["sales", "engineer"]) : eq(e.track, track),
+      ),
+    )
+    .groupBy(e.timezone)
+    .limit(1_000);
 }
 
 /**

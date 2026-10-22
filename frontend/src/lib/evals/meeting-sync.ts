@@ -34,6 +34,7 @@ import "server-only";
 import { and, eq, gt, inArray, lt, notInArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
+  employees,
   googleMeetings,
   meetingAttendanceMarks,
   meetingInvites,
@@ -49,6 +50,7 @@ import {
   type MeetingSyncStatus,
 } from "@/db/schema";
 import { forgetTestArtifact, outboundCohort, testArtifacts } from "@/lib/cohorts/test-group";
+import { PAGE_SIZE } from "@/lib/paging";
 import {
   assessmentAdministratorEmails,
   getMeetingSyncLive,
@@ -378,7 +380,7 @@ type Context = {
   now: Date;
   timeZone: string;
   listed: CalendarEvent[];
-  cohort: { email: string; fullName: string; stage: "bootcamp" | "intermediate"; track: "sales" | "engineer" }[];
+  cohort: { email: string; fullName: string; stage: "bootcamp" | "intermediate"; track: "sales" | "engineer"; timezone?: string | null }[];
   administrators: string[];
   cutoff: string | null;
   log: RunLog;
@@ -583,7 +585,7 @@ async function syncMeeting(ctx: Context, meeting: MeetingSelection): Promise<voi
   );
   const mode = invites.filter((inv) => inv.test === ctx.testGroup);
   const plan = planMeeting({
-    audience: audienceOf(meeting, ctx.cohort),
+    audience: audienceOf(meeting, ctx.cohort, ctx.now),
     occurrences: occurrences.map(
       (occ): PlanOccurrence => ({ id: occ.id, startsAt: occ.startsAt, startDate: occ.startDate, attendanceRead: occ.attendanceReadAt !== null }),
     ),
@@ -744,6 +746,19 @@ export type MeetingSyncResult =
     } & Tally)
   | { ok: false; runId: string | null; error: MeetingSyncError; detail?: string };
 
+/** `cohort` with each person's time zone from the employee record, for the test group, which carries none. */
+async function withTimezones<T extends { email: string }>(cohort: readonly T[]): Promise<(T & { timezone: string | null })[]> {
+  const emails = [...new Set(cohort.map((m) => m.email))];
+  if (emails.length === 0) return [];
+  const rows = await db
+    .select({ email: sql<string>`lower(${employees.email})`, timezone: employees.timezone })
+    .from(employees)
+    .where(inArray(sql`lower(${employees.email})`, emails))
+    .limit(PAGE_SIZE);
+  const zones = new Map(rows.map((r) => [r.email, r.timezone]));
+  return cohort.map((m) => ({ ...m, timezone: zones.get(m.email) ?? null }));
+}
+
 /**
  * One run, logged. `actorId` is whoever pressed the button; `deadline` is when
  * it must stop by, as `Date.now()` counts. `preview` makes it a dry run
@@ -751,7 +766,9 @@ export type MeetingSyncResult =
  */
 export async function runMeetingSync(actorId: string | null, deadline: number, { preview = false } = {}): Promise<MeetingSyncResult> {
   const dryRun = preview || !(await getMeetingSyncLive());
-  const { cohort, group } = await outboundCohort();
+  const { cohort: outbound, group } = await outboundCohort();
+  // A test group member has no stage or track of their own on record, but their time zone is the employee record's.
+  const cohort = group.on ? await withTimezones(outbound) : outbound;
   const runId = await startRun(actorId, dryRun, group.on);
   if (!runId) return { ok: false, runId: null, error: "already_running" };
 
