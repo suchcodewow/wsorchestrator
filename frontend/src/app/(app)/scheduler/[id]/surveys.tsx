@@ -5,15 +5,19 @@
  * track. A manager presses it to send that day's surveys to the class; it
  * then reads "Surveys Sent", for everyone, with how many have answered. The
  * server announces them in the class's Slack channel; the manager is told
- * only when that did not happen.
+ * only when that did not happen. An eye beside each, for everyone who can
+ * see the schedule, previews the survey it sends.
  */
 
 import { useState, type ReactNode } from "react";
-import { Check, ClipboardList, Loader2 } from "lucide-react";
+import { Check, ClipboardList, Eye, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import type { SessionRow } from "@/lib/scheduler/schedule";
 import { TRACK_LABELS, stageOf } from "@/lib/scheduler/timeline";
 import { trackDaySent, type SurveyDayStatus, type SurveySlackOutcome } from "@/lib/surveys/survey-values";
 import type { BoardColumn } from "./board";
+import { SurveyPreview } from "./survey-preview";
 
 const ERRORS: Record<string, string> = {
   impersonating: "You are viewing the app as someone else, so surveys cannot be sent.",
@@ -40,14 +44,17 @@ function slackNotice({ channel, status, error }: SurveySlackOutcome): string | n
 export function useSurveyButtons({
   bootcampId,
   days,
+  sessions,
   canManage,
   onNotice,
 }: {
   bootcampId: string;
   days: SurveyDayStatus[];
+  /** Every session on the schedule, as it now stands, for the preview. */
+  sessions: SessionRow[];
   canManage: boolean;
   onNotice: (message: string) => void;
-}): { dayButton: (column: BoardColumn) => ReactNode } {
+}): { dayButton: (column: BoardColumn) => ReactNode; preview: ReactNode } {
   const [sent, setSent] = useState(days);
   // A refresh of the page brings days that replace what was kept here.
   const [seen, setSeen] = useState(days);
@@ -56,6 +63,7 @@ export function useSurveyButtons({
     setSent(days);
   }
   const [busy, setBusy] = useState<string | null>(null);
+  const [previewing, setPreviewing] = useState<BoardColumn | null>(null);
 
   async function assign(column: BoardColumn) {
     setBusy(column.key);
@@ -85,34 +93,67 @@ export function useSurveyButtons({
     }
   }
 
+  const previewButton = (column: BoardColumn, label: string) => (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-7 text-muted-foreground"
+            aria-label={`Preview the survey for ${label}`}
+            onClick={() => setPreviewing(column)}
+          >
+            <Eye className="size-3.5" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>Preview survey</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+
   return {
+    preview: (
+      <SurveyPreview
+        column={previewing}
+        sessions={sessions}
+        sent={previewing ? trackDaySent(sent, previewing.track, previewing.day) : false}
+        onClose={() => setPreviewing(null)}
+      />
+    ),
     dayButton: (column) => {
       const label = `${TRACK_LABELS[column.track]}, Day ${column.day}`;
       if (trackDaySent(sent, column.track, column.day)) {
         const status = sent.find((d) => d.day === column.day && d.stage === stageOf(column.track));
         return (
-          <span
-            className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground"
-            title={status ? `${status.answered} of ${status.assigned} answered` : undefined}
-          >
-            <Check className="size-3.5 text-emerald-600 dark:text-emerald-400" />
-            Surveys Sent
+          <span className="flex items-center gap-1.5">
+            <span
+              className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground"
+              title={status ? `${status.answered} of ${status.assigned} answered` : undefined}
+            >
+              <Check className="size-3.5 text-emerald-600 dark:text-emerald-400" />
+              Surveys Sent
+            </span>
+            {previewButton(column, label)}
           </span>
         );
       }
-      if (!canManage) return null;
+      if (!canManage) return previewButton(column, label);
       return (
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-7 text-xs"
-          disabled={busy !== null}
-          aria-label={`Assign surveys for ${label}`}
-          onClick={() => void assign(column)}
-        >
-          {busy === column.key ? <Loader2 className="size-3.5 animate-spin" /> : <ClipboardList className="size-3.5" />}
-          Assign Surveys
-        </Button>
+        <span className="flex items-center gap-1.5">
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 text-xs"
+            disabled={busy !== null}
+            aria-label={`Assign surveys for ${label}`}
+            onClick={() => void assign(column)}
+          >
+            {busy === column.key ? <Loader2 className="size-3.5 animate-spin" /> : <ClipboardList className="size-3.5" />}
+            Assign Surveys
+          </Button>
+          {previewButton(column, label)}
+        </span>
       );
     },
   };

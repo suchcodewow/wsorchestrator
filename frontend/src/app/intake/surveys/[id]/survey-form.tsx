@@ -178,18 +178,21 @@ export function SurveyFiller({ survey }: { survey: MySurvey }) {
 }
 
 /** A required 1 to 5 rating, as a row of numbered choices from Poor to Excellent. */
-function Rating({
+export function Rating({
   name,
   question,
   value,
   missing,
   onChange,
+  disabled = false,
 }: {
   name: string;
   question: string;
   value: number | undefined;
   missing: boolean;
   onChange: (value: number) => void;
+  /** Shown but not answerable, as in the scheduler's preview. */
+  disabled?: boolean;
 }) {
   return (
     <div role="radiogroup" aria-label={question} aria-required className="space-y-2">
@@ -205,6 +208,7 @@ function Rating({
               name={name}
               value={r}
               checked={value === r}
+              disabled={disabled}
               onChange={() => onChange(r)}
               className="peer sr-only"
             />
@@ -226,11 +230,21 @@ function Rating({
   );
 }
 
-function Feedback({ question, value, onChange }: { question: string; value: string; onChange: (value: string) => void }) {
+export function Feedback({
+  question,
+  value,
+  onChange,
+  disabled = false,
+}: {
+  question: string;
+  value: string;
+  onChange: (value: string) => void;
+  disabled?: boolean;
+}) {
   return (
     <label className="block space-y-2">
       <span className="block text-sm">{question}</span>
-      <Textarea value={value} maxLength={SURVEY_LIMITS.answer} onChange={(e) => onChange(e.target.value)} />
+      <Textarea value={value} maxLength={SURVEY_LIMITS.answer} disabled={disabled} onChange={(e) => onChange(e.target.value)} />
     </label>
   );
 }
