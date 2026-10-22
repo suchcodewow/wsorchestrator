@@ -289,11 +289,7 @@ export function MeetingDialog({
             />
               <span className="text-sm text-muted-foreground">days</span>
             </div>
-            <p className="text-xs text-muted-foreground">
-              {minDays === 0
-                ? "Each person is invited to the first occurrence on or after their start date."
-                : `Each person is invited to the first occurrence ${minDays} ${minDays === 1 ? "day" : "days"} or more after their start date, or the last one before the bootcamp when none is.`}
-            </p>
+            <p className="text-xs text-muted-foreground">Tenure is ignored if no valid meetings available before in-person session.</p>
           </motion.div>
 
           <motion.div variants={riseChild} className="grid gap-3">
