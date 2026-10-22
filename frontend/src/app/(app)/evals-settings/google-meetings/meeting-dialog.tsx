@@ -273,7 +273,7 @@ export function MeetingDialog({
 
           <motion.div variants={riseChild} className="grid gap-1.5">
             <label htmlFor="gm-min-days" className="text-sm font-medium">
-              Tenure from start date until this meeting is scheduled
+              Minimum tenure for an attendee before scheduling
             </label>
             <div className="flex items-center gap-2">
               <input
