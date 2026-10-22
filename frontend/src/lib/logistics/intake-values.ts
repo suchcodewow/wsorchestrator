@@ -210,9 +210,9 @@ export const DIETARY_GROUPS: readonly {
       "Pescatarian",
       "No pork",
       "Low sodium",
-      DIETARY_OTHER,
     ],
   },
+  { label: "Other", items: [DIETARY_OTHER] },
 ];
 
 /** Every dietary item, in the order the form lists them. */
