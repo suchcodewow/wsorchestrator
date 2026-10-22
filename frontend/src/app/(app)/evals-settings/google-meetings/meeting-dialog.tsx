@@ -110,8 +110,7 @@ export function MeetingDialog({
   const [filterZones, setFilterZones] = useState(false);
   const [zoneFrom, setZoneFrom] = useState(DEFAULT_RANGE.from);
   const [zoneTo, setZoneTo] = useState(DEFAULT_RANGE.to);
-  const [loaded, setLoaded] = useState<{ stage: MeetingStage; track: MeetingTrack; coverage: TimezoneCoverage } | null>(null);
-  const coverage = loaded?.stage === stage && loaded.track === track ? loaded.coverage : null;
+  const [loaded, setLoaded] = useState<{ stage: MeetingStage; track: MeetingTrack; at: string; coverage: TimezoneCoverage } | null>(null);
   const [names, setNames] = useState<CalendarName[] | null>(null);
   const [calendarError, setCalendarError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -152,26 +151,30 @@ export function MeetingDialog({
     }
   }
 
+  const options = names ?? [];
+  const next = options.find((n) => meetingKey(n.name) === meetingKey(name))?.next;
+  const meetingAt = next && !Number.isNaN(new Date(next).getTime()) ? new Date(next) : null;
+  // Daylight saving moves offsets, so the map reads them when the meeting starts.
+  const at = meetingAt?.toISOString() ?? "";
+  const coverage = loaded?.stage === stage && loaded.track === track && loaded.at === at ? loaded.coverage : null;
+
   // The map shows who the stage and track cover, so it is read again when either changes.
   useEffect(() => {
     if (!open || !filterZones) return;
     let current = true;
     const done = (coverage: TimezoneCoverage | null) => {
-      if (current) setLoaded({ stage, track, coverage: coverage ?? { byHour: {}, people: {}, unknown: 0, total: 0 } });
+      if (current) setLoaded({ stage, track, at, coverage: coverage ?? { byHour: {}, people: {}, unknown: 0, total: 0 } });
     };
-    fetch(`/api/evals/google-meetings/timezones?stage=${stage}&track=${track}`)
+    fetch(`/api/evals/google-meetings/timezones?stage=${stage}&track=${track}${at ? `&at=${encodeURIComponent(at)}` : ""}`)
       .then((res) => (res.ok ? res.json() : null))
       .then(done)
       .catch(() => done(null));
     return () => {
       current = false;
     };
-  }, [open, filterZones, stage, track]);
+  }, [open, filterZones, stage, track, at]);
 
   // A meeting picked earlier keeps its name in the list, even once it is off the calendar.
-  const options = names ?? [];
-  const next = options.find((n) => meetingKey(n.name) === meetingKey(name))?.next;
-  const meetingAt = next && !Number.isNaN(new Date(next).getTime()) ? new Date(next) : null;
   const listed = editing && !options.some((n) => meetingKey(n.name) === meetingKey(editing.name));
 
   async function save() {

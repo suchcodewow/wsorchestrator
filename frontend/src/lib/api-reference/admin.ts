@@ -627,10 +627,11 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         summary: "The people a stage and track cover, by UTC offset, for choosing a meeting's time zone range.",
         access: "assessmentsAdmin",
         token: true,
-        notes: "Counts the Current tab's Sales and Engineer candidates in that stage and on that track, by the whole-hour UTC offset their time zone on record has today; half hours round toward the east. people has their names under the same offsets, sorted by name. unknown is those with no time zone on record, who a time zone range leaves out.",
+        notes: "Counts the Current tab's Sales and Engineer candidates in that stage and on that track, by the whole-hour UTC offset their time zone on record has at `at` (default now); half hours round toward the east. people has their names under the same offsets, sorted by name. unknown is those with no time zone on record, who a time zone range leaves out.",
         query: [
           { name: "stage", type: `"bootcamp" | "intermediate" | "both"`, required: true },
           { name: "track", type: `"sales" | "engineer" | "both"`, required: true },
+          { name: "at", type: "ISO 8601 timestamp", note: "when to read each time zone's UTC offset, which daylight saving moves; the picked meeting's start. Default: now" },
         ],
         returns: "{ byHour: { [offset: string]: number }, people: { [offset: string]: string[] }, unknown: number, total: number }",
         errors: [{ status: 400, error: "invalid", when: "stage or track is missing or not one of the values" }],

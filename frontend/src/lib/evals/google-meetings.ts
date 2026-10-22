@@ -135,8 +135,8 @@ export async function listMeetingSelections(query: ListQuery<MeetingSelectionSor
 export async function meetingTimezoneCoverage(
   stage: MeetingStage,
   track: MeetingTrack,
+  at: Date = new Date(),
 ): Promise<{ byHour: Record<string, number>; people: Record<string, string[]>; unknown: number; total: number }> {
-  const now = new Date();
   const byHour: Record<string, number> = {};
   const people: Record<string, string[]> = {};
   let unknown = 0;
@@ -145,7 +145,7 @@ export async function meetingTimezoneCoverage(
     total += 1;
     let hour: number | null = null;
     try {
-      hour = timezone ? offsetHour(timezone, now) : null;
+      hour = timezone ? offsetHour(timezone, at) : null;
     } catch {
       hour = null;
     }

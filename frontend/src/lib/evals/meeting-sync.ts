@@ -585,7 +585,8 @@ async function syncMeeting(ctx: Context, meeting: MeetingSelection): Promise<voi
   );
   const mode = invites.filter((inv) => inv.test === ctx.testGroup);
   const plan = planMeeting({
-    audience: audienceOf(meeting, ctx.cohort, ctx.now),
+    // Offsets change with daylight saving, so who is in a range is read at the next occurrence, not today.
+    audience: audienceOf(meeting, ctx.cohort, upcoming.reduce((first, occ) => (occ.startsAt < first ? occ.startsAt : first), upcoming[0]?.startsAt ?? ctx.now)),
     occurrences: occurrences.map(
       (occ): PlanOccurrence => ({ id: occ.id, startsAt: occ.startsAt, startDate: occ.startDate, attendanceRead: occ.attendanceReadAt !== null }),
     ),
