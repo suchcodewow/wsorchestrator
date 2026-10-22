@@ -131,7 +131,13 @@ export function ScheduleView({
     viewerEmail,
     instructors: schedule.instructors,
   });
-  const surveyButtons = useSurveyButtons({ bootcampId: bootcamp.id, days: surveys, canManage, onNotice: setNotice });
+  const surveyButtons = useSurveyButtons({
+    bootcampId: bootcamp.id,
+    days: surveys,
+    sessions: everyDay(days).flat(),
+    canManage,
+    onNotice: setNotice,
+  });
 
   const tracks = SCHEDULE_TRACKS.filter((t) => (trackDays(t, bootcamp) ?? 0) > 0);
   const dayCount = Math.max(bootcamp.btcDays, bootcamp.intDays ?? 0);
@@ -620,6 +626,8 @@ export function ScheduleView({
           </DndContext>
         )}
       </motion.div>
+
+      {surveyButtons.preview}
 
       <SessionDialog
         target={target}
