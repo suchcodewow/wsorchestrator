@@ -51,22 +51,27 @@ describe("timeZoneChoices", () => {
     assert.equal(utcOffsetMinutes("UTC", november), 0);
   });
 
-  test("lists one zone per offset, in offset order rather than name order", () => {
-    assert.equal(new Set(offsets).size, offsets.length);
+  test("lists every zone, in offset order and then name order", () => {
+    assert.equal(choices.length, timeZoneNames().length);
     assert.deepEqual(offsets, [...offsets].sort((a, b) => a - b));
-    assert.ok(choices.length < timeZoneNames().length / 4);
   });
 
-  test("stands for an offset with a well-known zone, labelled with that offset", () => {
-    const chicago = choices.find((c) => utcOffsetMinutes(c.value, november) === -360)!;
-    assert.equal(chicago.value, "America/Chicago");
+  test("keeps zones that share an offset today apart, so a no-DST zone stays choosable", () => {
+    const summer = new Date("2026-07-15T12:00:00Z");
+    const values = timeZoneChoices(summer).map((c) => c.value);
+    assert.ok(values.includes("America/Phoenix"));
+    assert.ok(values.includes("America/Los_Angeles"));
+    assert.equal(utcOffsetMinutes("America/Phoenix", summer), utcOffsetMinutes("America/Los_Angeles", summer));
+  });
+
+  test("labels a zone with its offset", () => {
+    const chicago = choices.find((c) => c.value === "America/Chicago")!;
     assert.equal(chicago.label, "(UTC-06:00) America/Chicago");
   });
 
-  test("stands for its own offset with the person's zone, so choosing nothing changes nothing", () => {
-    const mine = timeZoneChoices(november, "America/Regina").find((c) => c.value === "America/Regina");
-    assert.ok(mine);
-    assert.equal(timeZoneChoices(november, "America/Chicago").length, choices.length);
+  test("lists the person's zone even when the runtime knows it only as an alias", () => {
+    const alias = timeZoneChoices(november, "Asia/Calcutta").find((c) => c.value === "Asia/Calcutta");
+    assert.ok(alias);
   });
 
   test("every value it offers is a zone the intake answer accepts", () => {
