@@ -160,9 +160,10 @@ Each run does the following for each picked meeting
 - **Invites.** Each person on the Cohorts → Current tab whom the meeting is
   for is added to the next occurrence of it that falls before the active
   bootcamp's start date. So is every Assessments Administrator, on any
-  occurrence that has a cohort member on it. The invite is updated with
-  `sendUpdates=all`, so Google emails each new guest. An invite whose guests
-  are already right is left alone, because updating it emails everyone on it.
+  occurrence that has a cohort member on it. Every change to the calendar is
+  sent with `sendUpdates=none`, so Google emails no one: a new guest finds the
+  invite on their calendar, and one taken off simply loses it. An invite whose
+  guests are already right is left alone.
 - **Who it takes off.** It takes off only the guests it added itself. Anyone
   added by hand, or by the meeting's owner, stays.
 - **Replies.** It reads each guest's reply back from the event.

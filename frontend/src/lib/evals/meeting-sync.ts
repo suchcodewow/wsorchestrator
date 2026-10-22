@@ -26,7 +26,9 @@
  * The first live run also cancels, once, the upcoming invites and Zoom
  * meetings the old create-a-meeting flow made, and forgets them.
  *
- * Changing an invite emails every guest, so one already right is left alone.
+ * Google never emails anyone about a change the sync makes: every write to the
+ * calendar is sent with sendUpdates=none, so a guest finds the invite on their
+ * calendar rather than in their inbox. An invite already right is left alone.
  * The sync takes off an invite only those it put there.
  */
 
@@ -211,9 +213,9 @@ function googleFailure(err: unknown, account: string): NotConnected {
   return { ok: false, error: "google_error", message: (err as Error).message };
 }
 
-/** Sets an event's guests, emailing them; Google numbers each instance of a recurring one on its own. */
+/** Sets an event's guests without emailing anyone; Google numbers each instance of a recurring one on its own. */
 async function patchGuests(calendar: CalendarClient, eventId: string, attendees: CalendarAttendee[]): Promise<void> {
-  await calendar.call("PATCH", `${events}/${enc(eventId)}`, { query: { sendUpdates: "all" }, body: { attendees } });
+  await calendar.call("PATCH", `${events}/${enc(eventId)}`, { query: { sendUpdates: "none" }, body: { attendees } });
 }
 
 /** Takes `emails` off one event, leaving everyone else; an event gone already has no one to take off. */
@@ -504,6 +506,11 @@ async function storeReplies(occurrences: readonly Occurrence[], invites: Invite[
  * not known, and marks each of the run's members invited to it attended or
  * missed. One with no Zoom link, or that Zoom will not report on, stays
  * unknown until an administrator marks it on the Current tab.
+ *
+ * A run reads only its own mode's invites, the test group's or the cohort's,
+ * so an occurrence is marked read only once every member invited to it, in
+ * either mode, has an answer. Otherwise a test-group run would leave the
+ * cohort's invites unread for good, and the plan would count them missed.
  */
 async function readAttendance(ctx: Context, meeting: MeetingSelection, occurrences: Occurrence[], invites: Invite[]): Promise<void> {
   const mode = invites.filter((inv) => inv.test === ctx.testGroup && inv.role === "member");
@@ -551,7 +558,8 @@ async function readAttendance(ctx: Context, meeting: MeetingSelection, occurrenc
       read.push({ email: inv.email, attendance });
       ctx.log.note({ meetingName: meeting.name, occurrenceStartsAt: occ.startsAt, action: attendance, email: inv.email });
     }
-    occ.attendanceReadAt = ctx.now;
+    const allRead = invites.every((inv) => inv.occurrenceId !== occ.id || inv.role !== "member" || inv.attendance !== null);
+    if (allRead) occ.attendanceReadAt = ctx.now;
     if (!ctx.dryRun) {
       if (read.length > 0) {
         await db.execute(sql`
@@ -559,7 +567,7 @@ async function readAttendance(ctx: Context, meeting: MeetingSelection, occurrenc
           from jsonb_to_recordset(${JSON.stringify(read)}::jsonb) as x(email text, attendance text)
           where i.occurrence_id = ${occ.id}::uuid and i.email = x.email`);
       }
-      await db.update(meetingOccurrences).set({ attendanceReadAt: ctx.now }).where(eq(meetingOccurrences.id, occ.id));
+      if (allRead) await db.update(meetingOccurrences).set({ attendanceReadAt: ctx.now }).where(eq(meetingOccurrences.id, occ.id));
     }
   }
 }
@@ -702,8 +710,8 @@ async function syncMeeting(ctx: Context, meeting: MeetingSelection): Promise<voi
 /* ------------------------------------------------------------------ */
 
 /**
- * Cancels the upcoming invites and Zoom meetings the old flow made, emailing
- * their guests, and forgets every meeting it made. A dry run lists those it
+ * Cancels the upcoming invites and Zoom meetings the old flow made, without
+ * emailing their guests, and forgets every meeting it made. A dry run lists those it
  * would cancel. One Google or Zoom refuses stays, and is tried next run.
  */
 async function cancelLegacyMeetings(ctx: Context, calendarId: string | null): Promise<void> {
@@ -716,7 +724,7 @@ async function cancelLegacyMeetings(ctx: Context, calendarId: string | null): Pr
     try {
       if (live && meeting.googleEventId && calendarId) {
         await ctx.calendar
-          .call("DELETE", `/calendars/${enc(calendarId)}/events/${enc(meeting.googleEventId)}`, { query: { sendUpdates: "all" } })
+          .call("DELETE", `/calendars/${enc(calendarId)}/events/${enc(meeting.googleEventId)}`, { query: { sendUpdates: "none" } })
           .catch((err) => {
             if (!(err instanceof GoogleError && err.gone)) throw err;
           });
@@ -869,7 +877,7 @@ export async function runMeetingSync(
 
 /**
  * Takes everyone the sync put on a meeting's upcoming occurrences off them,
- * emailing them, before the meeting is deleted or renamed. Nothing to take
+ * without emailing them, before the meeting is deleted or renamed. Nothing to take
  * off needs no Google account.
  */
 export async function takeMeetingGuestsOff(
@@ -968,7 +976,7 @@ async function cancelLegacyTestArtifacts(): Promise<{ cancelled: number; failure
   for (const { key, ref } of artifacts) {
     try {
       if (ref && connection.calendarId) {
-        await calendar.call("DELETE", `/calendars/${enc(connection.calendarId)}/events/${enc(ref)}`, { query: { sendUpdates: "all" } });
+        await calendar.call("DELETE", `/calendars/${enc(connection.calendarId)}/events/${enc(ref)}`, { query: { sendUpdates: "none" } });
         cancelled++;
       }
     } catch (err) {

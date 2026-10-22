@@ -403,7 +403,7 @@ describe("Sync Now", () => {
     assert.ok(guests.includes(admin.email), "the administrator is");
     assert.ok(!fake.guests("e2").includes(salesEmail), "to one occurrence only");
     const patch = fake.calls.find((c) => c.method === "PATCH")!;
-    assert.equal(patch.url.searchParams.get("sendUpdates"), "all");
+    assert.equal(patch.url.searchParams.get("sendUpdates"), "none", "Google emails no one");
     assert.deepEqual(
       (await invitesOf(id)).filter((i) => i.email === salesEmail || i.email === admin.email).map((i) => [i.eventId, i.email, i.role]).sort(),
       [
@@ -529,6 +529,28 @@ describe("Sync Now", () => {
     assert.deepEqual(await invitesOf(id), []);
   });
 
+  test("reading the test group's attendance leaves the cohort's unread, to be read when the group is off", async () => {
+    await connect();
+    const id = await pick("both", "both");
+    const tester = `${TEST_PREFIX}tester@${TEST_EMAIL_DOMAIN}`;
+    const occurrenceId = await pastOccurrence(id, salesEmail);
+    await db.insert(meetingInvites).values({ occurrenceId, email: tester, role: "member", test: true });
+    fake.participants.set("/abc//def==", [{ name: "Tester", user_email: tester }]);
+    await saveTestGroup(admin.id, { on: true, suffix: "test", members: [{ email: tester, fullName: "Tester", stage: "both" }] });
+
+    await sync_ok();
+    const attendance = async () => new Map((await invitesOf(id)).filter((i) => i.eventId === "past2").map((i) => [i.email, i.attendance]));
+    const readAt = async () => (await db.select({ at: meetingOccurrences.attendanceReadAt }).from(meetingOccurrences).where(eq(meetingOccurrences.id, occurrenceId)))[0]!.at;
+    assert.equal((await attendance()).get(tester), "attended");
+    assert.equal((await attendance()).get(salesEmail), null, "the cohort's invite is not the test group's to read");
+    assert.equal(await readAt(), null, "so the occurrence is not marked read");
+
+    await saveTestGroup(admin.id, { on: false });
+    await sync_ok();
+    assert.equal((await attendance()).get(salesEmail), "missed", "read from Zoom once the group is off");
+    assert.notEqual(await readAt(), null);
+  });
+
   test("deleting a meeting first takes back only the invites the sync sent", async () => {
     await connect();
     const id = await pick();
@@ -550,7 +572,7 @@ describe("Sync Now", () => {
       .insert(googleMeetings)
       .values({ title: `${TEST_PREFIX}Old`, startsAt: new Date(Date.now() + DAY), durationMinutes: 30, googleEventId: "old1", zoomMeetingId: "555", createdBy: admin.id });
     const result = await sync_ok();
-    assert.ok(fake.calls.some((c) => c.method === "DELETE" && c.url.pathname.endsWith("/events/old1") && c.url.searchParams.get("sendUpdates") === "all"));
+    assert.ok(fake.calls.some((c) => c.method === "DELETE" && c.url.pathname.endsWith("/events/old1") && c.url.searchParams.get("sendUpdates") === "none"));
     assert.ok(fake.calls.some((c) => c.method === "DELETE" && c.url.pathname === "/v2/meetings/555"));
     const changes = await listMeetingSyncChanges(result.runId, { ...MEETING_SYNC_CHANGE_LIST, q: `${TEST_PREFIX}Old`, page: 1 });
     assert.deepEqual(

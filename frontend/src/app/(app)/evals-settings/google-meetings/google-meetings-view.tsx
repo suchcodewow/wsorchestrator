@@ -192,7 +192,7 @@ export function GoogleMeetingsView({ overview, list }: { overview: Overview; lis
       !preview &&
       live &&
       !window.confirm(
-        "Sync now? Everyone each meeting is for is added to its next occurrence before the bootcamp, and Google emails them the invite. Preview shows what it would do without doing it.",
+        "Sync now? Everyone each meeting is for is added to its next occurrence before the bootcamp, where it shows up on their calendar without an email. Preview shows what it would do without doing it.",
       )
     ) {
       return;
@@ -401,7 +401,7 @@ export function GoogleMeetingsView({ overview, list }: { overview: Overview; lis
             <p className="font-medium">Mode</p>
             <p className="text-muted-foreground">
               {live
-                ? "Each sync adds people to their next occurrence, takes off anyone it invited who no longer belongs, and Google emails them."
+                ? "Each sync adds people to their next occurrence, and takes off anyone it invited who no longer belongs. Google emails no one about it."
                 : "Each sync reads the calendar and Zoom and logs whom it would invite and take off, without changing any invite."}
             </p>
           </div>
