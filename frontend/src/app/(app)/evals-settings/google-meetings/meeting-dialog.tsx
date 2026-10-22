@@ -289,7 +289,7 @@ export function MeetingDialog({
             />
               <span className="text-sm text-muted-foreground">days</span>
             </div>
-            <p className="text-xs text-muted-foreground">Tenure is ignored if no valid meetings available before in-person session.</p>
+            <p className="text-xs text-muted-foreground">Tenure rule is ignored if it precludes someone attending before bootcamp.</p>
           </motion.div>
 
           <motion.div variants={riseChild} className="grid gap-3">
