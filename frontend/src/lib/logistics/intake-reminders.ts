@@ -5,9 +5,9 @@
  * whose form has no questions is sent nothing.
  *
  * The cohort Slack sync sends them (`lib/cohorts/slack-sync.ts`), and logs
- * them with everything else it does: once a day from Cloud Scheduler
- * (infra/admin/scheduler.tf), and with Sync Slack Now on Cohort Settings →
- * Slack. In the sync's dry run they are logged, not sent. Nothing is sent at
+ * them with everything else it does: after the channels, in the run that
+ * follows each scheduled HiBob sync (infra/admin/scheduler.tf), and with
+ * Sync Now on Cohort Settings → Slack. In the sync's dry run they are logged, not sent. Nothing is sent at
  * all until a Training Administrator turns the daily reminder on, beside the
  * sync's other settings on Cohort Settings → Slack, and then at most once per
  * America/New_York day, so a retried or second run does not message anyone

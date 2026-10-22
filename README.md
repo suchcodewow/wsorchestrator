@@ -497,7 +497,8 @@ placeholder; **eVals settings** holds what it will draw on:
 
 - **Google Meetings**: meetings picked from the Revenue Enablement calendar's
   next 60 days, each for Bootcamp, Intermediate or both and Sales, Engineers
-  or both. The app makes no meetings. **Sync Now** adds each Current-tab
+  or both. The app makes no meetings. The sync, every day at 4:00 AM Eastern
+  and whenever **Sync Now** is pressed, adds each Current-tab
   person a meeting is for, and every Assessments Administrator, to its next
   occurrence before the bootcamp. Zoom (or an administrator's mark) says who
   attended, and anyone who missed is invited to the next occurrence. The
@@ -505,7 +506,7 @@ placeholder; **eVals settings** holds what it will draw on:
   the Cohorts test group, as Cohort Settings → Slack does. Setting it up is in
   [docs/operations.md](docs/operations.md#google-meetings).
 - **HiBob**: syncs HiBob's active employees into the `employees` table,
-  updating each row in place and marking anyone it no longer sends inactive, every day at 3:00 AM Eastern and whenever **Sync HiBob
+  updating each row in place and marking anyone it no longer sends inactive, every day at 3:00 AM Eastern and whenever **Sync
   Now** is pressed. Every run, scheduled or manual, is logged on the tab with
   its count or error. The service user comes from the deployment, not the page:
   `hibob_userid` and `hibob_token` on the IaCM workspace (the token as the
@@ -609,7 +610,7 @@ reporting to them it is shown greyed out, on everyone. A row of dots beside
 each rep shows their share of their lineup finished in each of the last six
 months, whichever month is picked, with the detail on hover, and the page
 exports either the month on screen or that six-month history as CSV.
-**Refresh now**, which
+**Sync Now**, which
 pulls Mindtickle by hand rather than waiting for the two-hourly pull, is for
 platform administrators.
 

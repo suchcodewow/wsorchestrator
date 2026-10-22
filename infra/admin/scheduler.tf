@@ -77,35 +77,36 @@ resource "google_cloud_scheduler_job" "hibob_sync" {
 }
 
 locals {
-  intake_reminders_audience = "workshop-orchestrator/intake-reminders"
-  intake_reminders_url = format(
-    "%s/api/logistics/intake-reminders/scheduled",
+  meeting_sync_audience = "workshop-orchestrator/meeting-sync"
+  meeting_sync_url = format(
+    "%s/api/evals/google-meetings/sync/scheduled",
     trimsuffix(var.app_url != "" ? var.app_url : google_cloud_run_v2_service.app.uri, "/"),
   )
 }
 
-# Slack the current cohort's stragglers a link to their intake form once a
-# day. The app sends nothing until a Training Administrator turns reminders
-# on in Cohort Settings → Slack, which QA, sharing production's Slack
-# workspace, leaves off; it also sends at most once a day, so a retry is safe.
-resource "google_cloud_scheduler_job" "intake_reminders" {
-  name    = "intake-reminders-trigger"
+# Run eVals Settings → Google Meetings' sync once a day: read the Revenue
+# Enablement calendar and Zoom attendance, then invite the cohort. The app
+# keeps it a dry run until an Assessments Administrator turns it live, which
+# QA, sharing production's Google Workspace, leaves off. One run at a time,
+# so a retry that overlaps a run starts nothing.
+resource "google_cloud_scheduler_job" "meeting_sync" {
+  name    = "meeting-sync-trigger"
   project = var.admin_project_id
   region  = var.region
 
-  schedule  = var.intake_reminders_schedule
+  schedule  = var.meeting_sync_schedule
   time_zone = "America/New_York"
 
-  # The route allows 300 seconds and stops sending at 270.
+  # The route allows 300 seconds and stops at 270.
   attempt_deadline = "300s"
 
   http_target {
     http_method = "POST"
-    uri         = local.intake_reminders_url
+    uri         = local.meeting_sync_url
 
     oidc_token {
       service_account_email = google_service_account.scheduler.email
-      audience              = local.intake_reminders_audience
+      audience              = local.meeting_sync_audience
     }
   }
 

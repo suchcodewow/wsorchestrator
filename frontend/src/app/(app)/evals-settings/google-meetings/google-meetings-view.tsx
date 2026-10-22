@@ -14,6 +14,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   AlertTriangle,
+  CalendarClock,
   CheckCircle2,
   Eye,
   FlaskConical,
@@ -51,6 +52,7 @@ export type MeetingListing = EditableMeeting & {
 
 export type MeetingRun = {
   id: string;
+  trigger: "schedule" | "manual";
   triggeredBy: string | null;
   status: MeetingSyncStatus;
   dryRun: boolean;
@@ -658,8 +660,17 @@ function RunsTable({ list: { query, page } }: { list: Extract<List, { view: "run
                 </td>
                 <td className="whitespace-nowrap px-5 py-2.5 text-muted-foreground">
                   <span className="flex items-center gap-1.5">
-                    <User className="size-3.5" />
-                    {run.triggeredBy ?? "Someone since removed"}
+                    {run.trigger === "schedule" ? (
+                      <>
+                        <CalendarClock className="size-3.5" />
+                        Schedule
+                      </>
+                    ) : (
+                      <>
+                        <User className="size-3.5" />
+                        {run.triggeredBy ?? "Someone since removed"}
+                      </>
+                    )}
                   </span>
                 </td>
                 <td className="px-5 py-2.5">

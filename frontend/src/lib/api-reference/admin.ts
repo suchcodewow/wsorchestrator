@@ -681,7 +681,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         notes:
           "A run is skipped when it had nothing to do, with error saying why. dryRun marks a run that changed nothing, testGroup one that invited the test group in place of the cohort. unfinished marks a run that stopped at its deadline before every meeting was done; the next picks up the rest. running says whether a run is under way now, live whether a run started now would change the calendar.",
         query: listQuery(MEETING_SYNC_LIST.sorts, "who started it, the status or the error"),
-        returns: `{ runs: { id, triggeredBy: string | null, status: "running" | "succeeded" | "skipped" | "failed", dryRun: boolean, testGroup: boolean, startedAt, finishedAt: string | null, invited, removed, attended, missed, noneLeft, failures: number, unfinished: boolean, error: string | null, notes: string[] }[], ${PAGE_FIELDS}, running: boolean, live: boolean }`,
+        returns: `{ runs: { id, trigger: "schedule" | "manual", triggeredBy: string | null, status: "running" | "succeeded" | "skipped" | "failed", dryRun: boolean, testGroup: boolean, startedAt, finishedAt: string | null, invited, removed, attended, missed, noneLeft, failures: number, unfinished: boolean, error: string | null, notes: string[] }[], ${PAGE_FIELDS}, running: boolean, live: boolean }`,
       },
       {
         method: "POST",
@@ -2524,7 +2524,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       {
         method: "POST",
         path: "/api/evals/canary-wire/pull",
-        summary: "Starts a pull from Mindtickle now (Refresh now), rather than waiting for the next two-hourly one.",
+        summary: "Starts a pull from Mindtickle now (Sync Now), rather than waiting for the next two-hourly one.",
         access: "platform",
         token: true,
         notes:
@@ -3134,18 +3134,20 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       },
       {
         method: "POST",
-        path: "/api/logistics/intake-reminders/scheduled",
-        summary: "Sends the intake form's daily Slack reminder for Cloud Scheduler.",
+        path: "/api/evals/google-meetings/sync/scheduled",
+        summary: "Runs the daily Google Meetings sync for Cloud Scheduler.",
         access: "internal",
         token: false,
         notes:
-          "Accepts only a Google-signed OIDC token for INTAKE_REMINDERS_AUDIENCE from the INTAKE_REMINDERS_INVOKER service account; either unset refuses every call. Starts no run while the daily reminder is off (PUT /api/cohorts/slack/settings) or once today's (America/New_York) have gone out, so a retried call messages nobody twice. Otherwise a run of the cohort Slack sync with scope reminders, as POST /api/cohorts/slack/sync sends them, and a dry run while the sync is. Allows 300 seconds.",
-        returns: `{ skipped: "off" | "already_sent" } | <as POST /api/cohorts/slack/sync answers>`,
+          "Called daily at 4:00 AM America/New_York. Accepts only a Google-signed OIDC token for MEETING_SYNC_AUDIENCE from the MEETING_SYNC_INVOKER service account; either unset refuses every call. The same run as POST /api/evals/google-meetings/sync without preview, logged with trigger schedule, and a dry run while the sync is not live. Starts no run while the job is switched off on Admin Settings → Timed Jobs. Allows 300 seconds.",
+        returns: `{ skipped: "off" } | <as POST /api/evals/google-meetings/sync answers>`,
         errors: [
           { status: 401, error: "unauthorized", when: "the OIDC token is missing, invalid or from someone else" },
-          { status: 409, error: "already_running", when: "another sync is running" },
-          { status: 409, error: "not_configured", when: "there is no Slack bot token" },
-          { status: 502, error: "slack_error", when: "Slack refused the token, as for a missing scope" },
+          { status: 409, error: "already_running", when: "another sync is under way" },
+          { status: 409, error: "not_connected", when: "no Google account is connected; runId names the failed run" },
+          { status: 409, error: "not_configured", when: "AUTH_GOOGLE_ID or AUTH_GOOGLE_SECRET is unset" },
+          { status: 409, error: "revoked", when: "Google no longer accepts the account's token; connect it again" },
+          { status: 502, error: "google_error", when: "Google refused before any meeting was synced; detail has its answer" },
         ],
       },
       {
@@ -3155,7 +3157,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "internal",
         token: false,
         notes:
-          "Accepts only a Google-signed OIDC token for HIBOB_SYNC_AUDIENCE from the HIBOB_SYNC_INVOKER service account; either unset refuses every call. Same sync as the manual one. A successful sync is followed by the cohort Slack sync's channels, as POST /api/cohorts/slack/sync syncs them, without its reminders, which go out on their own schedule; its result is slack, and its failure does not fail this call. Allows 300 seconds.",
+          "Accepts only a Google-signed OIDC token for HIBOB_SYNC_AUDIENCE from the HIBOB_SYNC_INVOKER service account; either unset refuses every call. Same sync as the manual one. A successful sync is followed by the cohort Slack sync, as POST /api/cohorts/slack/sync runs it: the channels, then the day's intake form reminders, which go out at most once a day and only while the daily reminder is on (PUT /api/cohorts/slack/settings); its result is slack, and its failure does not fail this call. Allows 300 seconds.",
         returns: "{ count: number, skipped: number, slack: <as POST /api/cohorts/slack/sync answers, or { ok: false, error, detail }> }",
         errors: [
           { status: 401, error: "unauthorized", when: "the OIDC token is missing, invalid or from someone else" },

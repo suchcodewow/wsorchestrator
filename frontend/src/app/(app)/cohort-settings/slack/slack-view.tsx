@@ -3,7 +3,7 @@
 /**
  * The Slack app's install, the active bootcamp's Slack channels, the intake
  * form's reminders, whether the sync is live or a dry run, the Preview and
- * Sync Slack Now buttons, and every run's result, each linking to what it
+ * Sync Now buttons, and every run's result, each linking to what it
  * did and sent, and to whom.
  */
 
@@ -291,7 +291,7 @@ export function SlackSyncView({
             onClick={() => sync(false)}
           >
             {syncLabel ? <Loader2 className="animate-spin" /> : <RefreshCw />}
-            {syncLabel ? "Syncing…" : "Sync Slack Now"}
+            {syncLabel ? "Syncing…" : "Sync Now"}
           </Button>
         </div>
       </motion.div>
@@ -356,10 +356,10 @@ export function SlackSyncView({
             </p>
             <p className="text-sm text-muted-foreground">
               {!reminders.on
-                ? "Nobody is reminded to fill in their intake form, on the schedule or by Sync Slack Now."
+                ? "Nobody is reminded to fill in their intake form, on the schedule or by Sync Now."
                 : reminders.sentToday
                   ? "Today's have gone out; the next go out tomorrow, to whoever has still not answered their intake form."
-                  : "Once a day, and with Sync Slack Now, everyone in the current cohort who has not answered their intake form gets a direct message linking to it."}
+                  : "Once a day, right after the channels are synced, and with Sync Now, everyone in the current cohort who has not answered their intake form gets a direct message linking to it."}
             </p>
           </div>
           <Button

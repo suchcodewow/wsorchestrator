@@ -217,7 +217,7 @@ async function pick(stage: "bootcamp" | "intermediate" | "both" = "bootcamp", tr
   return made.meeting.id;
 }
 
-const sync = (preview = false) => runMeetingSync(admin.id, Date.now() + 60_000, { preview });
+const sync = (preview = false) => runMeetingSync("manual", admin.id, Date.now() + 60_000, { preview });
 
 async function sync_ok(preview = false) {
   const result = await sync(preview);

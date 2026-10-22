@@ -145,10 +145,10 @@ resource "google_cloud_run_v2_service" "app" {
             HIBOB_SYNC_AUDIENCE = local.hibob_sync_audience
             HIBOB_SYNC_INVOKER  = google_service_account.scheduler.email
           },
-          # Who may call the daily intake reminders (see scheduler.tf).
+          # Who may call the daily Google Meetings sync (see scheduler.tf).
           {
-            INTAKE_REMINDERS_AUDIENCE = local.intake_reminders_audience
-            INTAKE_REMINDERS_INVOKER  = google_service_account.scheduler.email
+            MEETING_SYNC_AUDIENCE = local.meeting_sync_audience
+            MEETING_SYNC_INVOKER  = google_service_account.scheduler.email
           },
           # The Slack app behind Add to Slack. Its client secret is
           # secret-backed, below.

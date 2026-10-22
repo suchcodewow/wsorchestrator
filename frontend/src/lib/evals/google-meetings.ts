@@ -33,6 +33,7 @@ import {
   type MeetingStage,
   type MeetingSyncAction,
   type MeetingSyncStatus,
+  type MeetingSyncTrigger,
   type MeetingTrack,
 } from "@/db/schema";
 import { getTestGroup } from "@/lib/cohorts/test-group";
@@ -473,6 +474,8 @@ export async function meetingStatusesFor(
 
 export type MeetingSyncRunSummary = {
   id: string;
+  trigger: MeetingSyncTrigger;
+  /** Who pressed Sync Now; null for a scheduled run. */
   triggeredBy: string | null;
   status: MeetingSyncStatus;
   dryRun: boolean;
@@ -494,12 +497,13 @@ const r = meetingSyncRuns;
 
 const RUN_SORT_COLUMNS = {
   startedAt: r.startedAt,
-  triggeredBy: sql`lower(coalesce(nullif(${users.name}, ''), ${users.email}))`,
+  triggeredBy: sql`lower(case when ${r.trigger} = 'schedule' then 'Schedule' else coalesce(nullif(${users.name}, ''), ${users.email}) end)`,
   status: r.status,
 } as const;
 
 const runColumns = {
   id: r.id,
+  trigger: r.trigger,
   triggeredByName: users.name,
   triggeredByEmail: users.email,
   status: r.status,
@@ -538,7 +542,7 @@ export async function listMeetingSyncRuns(query: ListQuery<MeetingSyncSort>): Pr
     .select(runColumns)
     .from(r)
     .leftJoin(users, eq(users.id, r.triggeredBy))
-    .where(searchAny(query.q, [users.name, users.email, r.status, r.error]))
+    .where(searchAny(query.q, [users.name, users.email, r.trigger, r.status, r.error]))
     .orderBy(...orderFor(RUN_SORT_COLUMNS[query.sort], query.dir, desc(r.startedAt), r.id))
     .limit(limit)
     .offset(offset);

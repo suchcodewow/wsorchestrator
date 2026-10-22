@@ -1,6 +1,7 @@
 /**
- * Sync Now on eVals Settings → Google Meetings, as the connected Google
- * account, in one logged run:
+ * The Google Meetings sync, as the connected Google account, in one logged
+ * run: daily on the schedule (`app/api/evals/google-meetings/sync/scheduled`),
+ * and with Sync Now on eVals Settings → Google Meetings.
  *
  * 1. Reads the Revenue Enablement calendar's next 60 days, and stores each
  *    event of every picked meeting's name as one of its occurrences, with the
@@ -48,6 +49,7 @@ import {
   type MeetingSelection,
   type MeetingSyncAction,
   type MeetingSyncStatus,
+  type MeetingSyncTrigger,
 } from "@/db/schema";
 import { forgetTestArtifact, outboundCohort, testArtifacts } from "@/lib/cohorts/test-group";
 import { PAGE_SIZE } from "@/lib/paging";
@@ -240,11 +242,11 @@ async function closeStaleRuns(): Promise<void> {
 }
 
 /** Opens a run, or null if one is already running — the partial unique index allows one. */
-async function startRun(actorId: string | null, dryRun: boolean, testGroup: boolean): Promise<string | null> {
+async function startRun(trigger: MeetingSyncTrigger, actorId: string | null, dryRun: boolean, testGroup: boolean): Promise<string | null> {
   await closeStaleRuns();
   const [run] = await db
     .insert(meetingSyncRuns)
-    .values({ triggeredBy: actorId, dryRun, testGroup })
+    .values({ trigger, triggeredBy: actorId, dryRun, testGroup })
     .onConflictDoNothing()
     .returning({ id: meetingSyncRuns.id });
   return run?.id ?? null;
@@ -767,12 +769,17 @@ async function withEmployeeRecord<T extends { email: string }>(cohort: readonly 
  * it must stop by, as `Date.now()` counts. `preview` makes it a dry run
  * whether or not the sync is live.
  */
-export async function runMeetingSync(actorId: string | null, deadline: number, { preview = false } = {}): Promise<MeetingSyncResult> {
+export async function runMeetingSync(
+  trigger: MeetingSyncTrigger,
+  actorId: string | null,
+  deadline: number,
+  { preview = false } = {},
+): Promise<MeetingSyncResult> {
   const dryRun = preview || !(await getMeetingSyncLive());
   const { cohort: outbound, group } = await outboundCohort();
   // A test group member has no stage or track of their own on record, but their time zone and start date are the employee record's.
   const cohort = group.on ? await withEmployeeRecord(outbound) : outbound;
-  const runId = await startRun(actorId, dryRun, group.on);
+  const runId = await startRun(trigger, actorId, dryRun, group.on);
   if (!runId) return { ok: false, runId: null, error: "already_running" };
 
   const notes: string[] = [];

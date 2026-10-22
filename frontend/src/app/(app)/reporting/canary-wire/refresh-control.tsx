@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * How the Canary Wire's pull from Mindtickle stands, and Refresh now.
+ * How the Canary Wire's pull from Mindtickle stands, and Sync Now.
  *
  * Cloud Scheduler pulls every two hours on its own and takes the steps; this
  * only shows how far one has got and reloads the month when it ends. Refresh
@@ -121,7 +121,7 @@ export function RefreshControl({ configured, initial }: { configured: boolean; i
           }
         >
           <RefreshCw />
-          Refresh now
+          Sync Now
         </button>
       )}
       {(error || failed) && (

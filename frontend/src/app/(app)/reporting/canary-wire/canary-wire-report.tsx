@@ -36,7 +36,7 @@ export function CanaryWireReport({
   configured: boolean;
   /** Someone with a downline, who may narrow to it; for anyone else the switch is greyed out on Everyone. */
   canSwitchScope: boolean;
-  /** Refresh now, for testing: platform administrators. */
+  /** Sync Now, for testing: platform administrators. */
   canRefresh: boolean;
 }) {
   const router = useRouter();
@@ -56,7 +56,7 @@ export function CanaryWireReport({
   if (!view.hasSnapshot) {
     notes.unshift(
       configured
-        ? `No Mindtickle data yet. It is pulled every two hours${canRefresh ? ", or use Refresh now; a pull takes about 15 minutes" : ""}.`
+        ? `No Mindtickle data yet. It is pulled every two hours${canRefresh ? ", or use Sync Now; a pull takes about 15 minutes" : ""}.`
         : "No Mindtickle data yet, and Mindtickle isn't configured on this server: MT_API_KEY or MT_SECRET_KEY is unset.",
     );
   } else if (!view.hasData) {

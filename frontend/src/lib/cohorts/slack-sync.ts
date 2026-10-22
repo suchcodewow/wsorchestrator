@@ -10,9 +10,8 @@
  * - Messages: the intake form's reminders that are due, one direct message
  *   to each person (see `lib/logistics/intake-reminders.ts` for whom, and when).
  *
- * The channels are synced after each scheduled HiBob sync, the reminders on
- * a schedule of their own, and both with Sync Slack Now on Cohort Settings'
- * Slack tab.
+ * Both run after each scheduled HiBob sync, the channels first and then the
+ * reminders, and both with Sync Now on Cohort Settings' Slack tab.
  *
  * Until an administrator turns it live, every run is a dry run: it reads
  * Slack and logs what it would do and send, and to whom, but invites,

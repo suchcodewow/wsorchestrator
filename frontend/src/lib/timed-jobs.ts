@@ -3,10 +3,6 @@
  * whether a job is switched on, and how its last run went. The jobs
  * themselves are listed in `timed-jobs-registry.ts`; the two Cloud Run jobs
  * (reaper, scheduler) do the same in `runner/src/db.ts`.
- *
- * Intake reminders already had a switch, on Cohort Settings → Slack, so its
- * state is read from and written to that setting rather than a second one
- * that could disagree.
  */
 
 import "server-only";
@@ -14,7 +10,6 @@ import "server-only";
 import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { timedJobs, type TimedJobStatus } from "@/db/schema";
-import { getIntakeRemindersOn, setIntakeRemindersOn } from "@/lib/logistics/intake-reminders";
 import { TIMED_JOBS, timedJobDef, type TimedJobDef } from "@/lib/timed-jobs-registry";
 
 export type TimedJobRow = TimedJobDef & {
@@ -25,10 +20,7 @@ export type TimedJobRow = TimedJobDef & {
   lastDetail: string | null;
 };
 
-const INTAKE_KEY = "intake-reminders";
-
 export async function isTimedJobEnabled(key: string): Promise<boolean> {
-  if (key === INTAKE_KEY) return getIntakeRemindersOn();
   const [row] = await db.select({ enabled: timedJobs.enabled }).from(timedJobs).where(eq(timedJobs.key, key));
   return row?.enabled ?? true;
 }
@@ -41,12 +33,11 @@ export async function listTimedJobs(): Promise<TimedJobRow[]> {
     .where(inArray(timedJobs.key, TIMED_JOBS.map((job) => job.key)))
     .limit(100);
   const byKey = new Map(rows.map((row) => [row.key, row]));
-  const intakeOn = await getIntakeRemindersOn();
   return TIMED_JOBS.map((job) => {
     const row = byKey.get(job.key);
     return {
       ...job,
-      enabled: job.key === INTAKE_KEY ? intakeOn : (row?.enabled ?? true),
+      enabled: row?.enabled ?? true,
       lastStartedAt: row?.lastStartedAt?.toISOString() ?? null,
       lastFinishedAt: row?.lastFinishedAt?.toISOString() ?? null,
       lastStatus: row?.lastStatus ?? null,
@@ -58,13 +49,10 @@ export async function listTimedJobs(): Promise<TimedJobRow[]> {
 /** Switches a job on or off, or false for a key that is not a job. */
 export async function setTimedJobEnabled(actorId: string, key: string, enabled: boolean): Promise<boolean> {
   if (!timedJobDef(key)) return false;
-  if (key === INTAKE_KEY) await setIntakeRemindersOn(actorId, enabled);
-  else {
-    await db
-      .insert(timedJobs)
-      .values({ key, enabled, updatedBy: actorId })
-      .onConflictDoUpdate({ target: timedJobs.key, set: { enabled, updatedBy: actorId, updatedAt: new Date() } });
-  }
+  await db
+    .insert(timedJobs)
+    .values({ key, enabled, updatedBy: actorId })
+    .onConflictDoUpdate({ target: timedJobs.key, set: { enabled, updatedBy: actorId, updatedAt: new Date() } });
   return true;
 }
 

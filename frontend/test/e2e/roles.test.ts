@@ -1000,12 +1000,12 @@ describe("the scheduled Canary Wire pull", () => {
   });
 });
 
-describe("the scheduled intake reminders", () => {
+describe("the scheduled Google Meetings sync", () => {
   test("refuses every session and a forged token", async () => {
     const wrong: string[] = [];
     const forged = { bearer: "not-a-google-token" };
     for (const who of [SIGNED_OUT, ...PERSONA_NAMES, forged]) {
-      const { status } = await send(who, "POST", "/api/logistics/intake-reminders/scheduled");
+      const { status } = await send(who, "POST", "/api/evals/google-meetings/sync/scheduled");
       if (status !== 401) wrong.push(`${who === forged ? "forged token" : label(who as Who)}: got ${status}`);
     }
     assert.deepEqual(wrong, []);

@@ -105,11 +105,10 @@ it alone; unarchive it or rename it.
 and is sent by the cohort Slack sync.** One run of the sync does everything
 the bot does: the channels above, and a direct message to everyone in the
 current cohort (Cohorts → Current, Sales and Engineer tracks) who has not
-saved answers to their stage's form at /intake. Cloud Scheduler job
-`intake-reminders-trigger` (`intake_reminders_schedule`, 10:00 AM Eastern by
-default) calls `/api/logistics/intake-reminders/scheduled`, which starts a
-reminders-only run; the 3 AM run after HiBob does channels only; *Sync Slack
-Now* on Cohort Settings → Slack does both. Reminders go out only once a
+saved answers to their stage's form at /intake. The run that follows the
+3 AM HiBob sync does both, the channels and then the reminders, and so does
+*Sync Now* on Cohort Settings → Slack. A run whose channels use up its time
+stops there, and that day's reminders wait for the next run. Reminders go out only once a
 Training Administrator turns the *Daily reminder* on, under *Mode* on
 Cohort Settings → Slack, which also shows how many have answered each form,
 at most once per Eastern day however many runs there are, and never for a
@@ -152,7 +151,10 @@ in the next 60 days and says whom it is for: Bootcamp, Intermediate or both,
 and Sales, Engineers or both. A candidate counts as Intermediate once
 their bootcamp history (`employees.btc_date`) gives them a BTC date.
 
-*Sync Now* then does the following for each picked meeting
+The sync runs every day at 4:00 AM Eastern, from Cloud Scheduler job
+`meeting-sync-trigger` (`meeting_sync_schedule`), and whenever someone
+presses *Sync Now*. Admin Settings → Timed Jobs can switch the daily run off.
+Each run does the following for each picked meeting
 (`lib/evals/meeting-sync.ts`, with the rules in `lib/evals/meeting-plan.ts`):
 
 - **Invites.** Each person on the Cohorts → Current tab whom the meeting is
