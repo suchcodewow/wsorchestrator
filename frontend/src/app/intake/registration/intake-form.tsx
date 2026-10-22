@@ -419,12 +419,6 @@ export function IntakeFormFiller({
                     {q.description}
                   </p>
                 )}
-                {isTimezoneQuestion(q) && (
-                  <p className="text-sm text-muted-foreground">
-                    It is used to schedule your sessions, and starts from the
-                    time zone your Slack profile has. Change it if it is wrong.
-                  </p>
-                )}
               </div>
               {isDietaryQuestion(q) ? (
                 <DietaryChecklist
