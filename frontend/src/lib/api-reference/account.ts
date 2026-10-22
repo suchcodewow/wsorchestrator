@@ -703,27 +703,36 @@ export const ACCOUNT_GROUPS: EndpointGroup[] = [
       {
         method: "GET",
         path: "/api/settings/timed-jobs",
-        summary: "Lists the jobs Cloud Scheduler runs, with their schedules, switches and last runs.",
+        summary: "Lists the timed jobs, with their schedules, switches and last runs.",
         access: "platform",
         token: true,
-        notes: "A fixed handful of jobs, all in one response. A job that has never run has null last-run fields.",
+        notes:
+          "A fixed handful of jobs, all in one response. via \"dispatcher\" is one of the app's own jobs, started by POST /api/settings/timed-jobs/tick on the schedule PATCH sets; via \"cloud-scheduler\" is the reaper or the scheduler, whose schedule is set in Terraform. cron, timeZone and schedule are what the job runs on; defaultCron and defaultTimeZone what it runs on unless changed, and custom whether it has been. nextRunAt is null when it does not fall due in the coming year. A job that has never run has null last-run fields.",
         returns:
-          '{ jobs: { key, name, summary, cron, timeZone, schedule, resource, offWarning?: string, enabled: boolean, lastStartedAt: string | null, lastFinishedAt: string | null, lastStatus: "running" | "succeeded" | "failed" | "skipped" | null, lastDetail: string | null }[] }',
+          '{ jobs: { key, name, summary, via: "dispatcher" | "cloud-scheduler", cron, timeZone, schedule, defaultCron, defaultTimeZone, custom: boolean, nextRunAt: string | null, resource, offWarning?: string, enabled: boolean, lastStartedAt: string | null, lastFinishedAt: string | null, lastStatus: "running" | "succeeded" | "failed" | "skipped" | null, lastDetail: string | null }[] }',
       },
       {
         method: "PATCH",
         path: "/api/settings/timed-jobs/{key}",
-        summary: "Switches one scheduled job on or off.",
+        summary: "Switches one timed job on or off, sets when it runs, or both.",
         access: "platform",
         token: true,
         notes:
-          "A job that is off still gets called by Cloud Scheduler and answers { skipped: \"off\" }; it does nothing and shows as Skipped. Intake reminders share their switch with the daily reminder on Cohort Settings → Slack.",
+          "A job that is off still falls due and answers { skipped: \"off\" }; it does nothing and shows as Skipped. schedule is a five-field cron, numbers only, read in an IANA time zone; every minute it names must be a multiple of 5, since jobs are started every five minutes, and it must fall due within the coming year. null, or the job's default, puts it back on the default. A new schedule counts from now: a time already past is not caught up on. Only a job with via \"dispatcher\" takes one. Intake form reminders follow the HiBob sync's cohort Slack sync, so they keep its schedule.",
         params: [{ name: "key", type: "string", required: true, note: "the job's key, as GET /api/settings/timed-jobs lists it" }],
-        body: { kind: "json", fields: [{ name: "enabled", type: "boolean", required: true }] },
+        body: {
+          kind: "json",
+          fields: [
+            { name: "enabled", type: "boolean", required: false, note: "at least one of enabled and schedule" },
+            { name: "schedule", type: "{ cron: string, timeZone: string } | null", required: false },
+          ],
+        },
         returns: "{ ok: true }",
         errors: [
-          { status: 400, error: "invalid_enabled", when: "enabled is not true or false" },
+          { status: 400, error: "invalid_enabled", when: "neither field is given, or enabled is not true or false" },
+          { status: 400, error: "invalid_schedule", when: "schedule cannot be run; detail says why" },
           { status: 404, error: "not_found", when: "no such job" },
+          { status: 409, error: "fixed_schedule", when: "the job's schedule is set in Terraform" },
         ],
       },
     ],

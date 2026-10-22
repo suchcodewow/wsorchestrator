@@ -576,6 +576,7 @@ const ROUTES: RouteCase[] = [
   { method: "DELETE", path: `/api/settings/repos/${MISSING}`, allowed: canManageSettings },
   { method: "GET", path: "/api/settings/timed-jobs", allowed: canManageTimedJobs },
   { method: "PATCH", path: "/api/settings/timed-jobs/missing", allowed: canManageTimedJobs, body: () => ({ enabled: true }) },
+  { method: "PATCH", path: "/api/settings/timed-jobs/missing", allowed: canManageTimedJobs, body: () => ({ schedule: null }) },
   { method: "POST", path: `/api/me/harness-tokens/${MISSING}/deploy`, allowed: canManageSettings, body: () => ({}) },
   { method: "POST", path: `/api/me/harness-tokens/${MISSING}/scrub`, allowed: canManageSettings },
 
@@ -974,38 +975,14 @@ describe("the shared OAuth callback", () => {
   });
 });
 
-describe("the scheduled HiBob sync", () => {
+describe("the Timed Jobs dispatcher's tick", () => {
   // Cloud Scheduler's OIDC token is the only way in: no session, and no token
   // that is not Google's, gets past it.
   test("refuses every session and a forged token", async () => {
     const wrong: string[] = [];
     const forged = { bearer: "not-a-google-token" };
     for (const who of [SIGNED_OUT, ...PERSONA_NAMES, forged]) {
-      const { status } = await send(who, "POST", "/api/evals/hibob/sync/scheduled");
-      if (status !== 401) wrong.push(`${who === forged ? "forged token" : label(who as Who)}: got ${status}`);
-    }
-    assert.deepEqual(wrong, []);
-  });
-});
-
-describe("the scheduled Canary Wire pull", () => {
-  test("refuses every session and a forged token", async () => {
-    const wrong: string[] = [];
-    const forged = { bearer: "not-a-google-token" };
-    for (const who of [SIGNED_OUT, ...PERSONA_NAMES, forged]) {
-      const { status } = await send(who, "POST", "/api/evals/canary-wire/pull/scheduled");
-      if (status !== 401) wrong.push(`${who === forged ? "forged token" : label(who as Who)}: got ${status}`);
-    }
-    assert.deepEqual(wrong, []);
-  });
-});
-
-describe("the scheduled Google Meetings sync", () => {
-  test("refuses every session and a forged token", async () => {
-    const wrong: string[] = [];
-    const forged = { bearer: "not-a-google-token" };
-    for (const who of [SIGNED_OUT, ...PERSONA_NAMES, forged]) {
-      const { status } = await send(who, "POST", "/api/evals/google-meetings/sync/scheduled");
+      const { status } = await send(who, "POST", "/api/settings/timed-jobs/tick");
       if (status !== 401) wrong.push(`${who === forged ? "forged token" : label(who as Who)}: got ${status}`);
     }
     assert.deepEqual(wrong, []);

@@ -1,4 +1,4 @@
-/** The jobs Cloud Scheduler runs, with whether each is on and how its last run went. */
+/** The timed jobs, with when each runs, whether it is on and how its last run went. */
 
 import { NextResponse } from "next/server";
 import { requireCaller } from "@/lib/api-auth";

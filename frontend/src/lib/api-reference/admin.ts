@@ -3120,52 +3120,16 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       },
       {
         method: "POST",
-        path: "/api/evals/canary-wire/pull/scheduled",
-        summary: "Starts the Canary Wire's two-hourly pull, or takes it a step further, for Cloud Scheduler.",
+        path: "/api/settings/timed-jobs/tick",
+        summary: "Starts each of the app's own timed jobs that has fallen due, for Cloud Scheduler.",
         access: "internal",
         token: false,
         notes:
-          "Called every five minutes for the first half hour of every even hour. Accepts only a Google-signed OIDC token for CANARY_WIRE_PULL_AUDIENCE from the CANARY_WIRE_PULL_INVOKER service account; either unset refuses every call. Works on a pull already running, including one a closed page left halfway; otherwise starts one unless one started in the last 90 minutes, whatever became of it, so a failure is retried two hours later rather than every five minutes. Allows 300 seconds.",
-        returns: "{ outcome: \"advanced\" | \"started\" | \"fresh\", pull: { id, trigger: \"manual\" | \"schedule\", status: \"running\" | \"succeeded\" | \"failed\", message, done: number, total: number, error: string | null, startedAt, updatedAt, finishedAt: string | null, startedByName: string | null, working: boolean } | null }",
+          "Called every five minutes. Accepts only a Google-signed OIDC token for TIMED_JOBS_AUDIENCE from the TIMED_JOBS_INVOKER service account; either unset refuses every call. Starts, side by side, every job GET /api/settings/timed-jobs lists with via \"dispatcher\" whose schedule fell due in the last 30 minutes and after the time it was last started for; that time is claimed first, so a retried or doubled call starts nothing twice, and a time missed by more than 30 minutes is skipped rather than run late. Each job runs the same code as its Sync Now button, logged with trigger schedule: the HiBob sync and then the cohort Slack sync as POST /api/cohorts/slack/sync runs it, with the day's intake form reminders; the Google Meetings sync as POST /api/evals/google-meetings/sync without preview, so a dry run while the sync is not live and on the test group's invites while it is on; and a step of the Canary Wire's pull. A job switched off is recorded as skipped and answers { skipped: \"off\" }. Answers 502, with the same body, if any job it started failed, so Cloud Scheduler's history shows it. Allows 300 seconds.",
+        returns:
+          "{ ran: { key: string, status: number, body: <as that job's own route answers, or { skipped: string }> }[] }; an empty ran when nothing was due",
         errors: [
           { status: 401, error: "unauthorized", when: "the OIDC token is missing, invalid or from someone else" },
-          { status: 409, error: "not_configured", when: "Mindtickle's key pair or tenant is unset" },
-        ],
-      },
-      {
-        method: "POST",
-        path: "/api/evals/google-meetings/sync/scheduled",
-        summary: "Runs the daily Google Meetings sync for Cloud Scheduler.",
-        access: "internal",
-        token: false,
-        notes:
-          "Called daily at 4:00 AM America/New_York. Accepts only a Google-signed OIDC token for MEETING_SYNC_AUDIENCE from the MEETING_SYNC_INVOKER service account; either unset refuses every call. The same run as POST /api/evals/google-meetings/sync without preview, logged with trigger schedule, and a dry run while the sync is not live. Starts no run while the job is switched off on Admin Settings → Timed Jobs. Allows 300 seconds.",
-        returns: `{ skipped: "off" } | <as POST /api/evals/google-meetings/sync answers>`,
-        errors: [
-          { status: 401, error: "unauthorized", when: "the OIDC token is missing, invalid or from someone else" },
-          { status: 409, error: "already_running", when: "another sync is under way" },
-          { status: 409, error: "not_connected", when: "no Google account is connected; runId names the failed run" },
-          { status: 409, error: "not_configured", when: "AUTH_GOOGLE_ID or AUTH_GOOGLE_SECRET is unset" },
-          { status: 409, error: "revoked", when: "Google no longer accepts the account's token; connect it again" },
-          { status: 502, error: "google_error", when: "Google refused before any meeting was synced; detail has its answer" },
-        ],
-      },
-      {
-        method: "POST",
-        path: "/api/evals/hibob/sync/scheduled",
-        summary: "Runs the daily HiBob sync for Cloud Scheduler.",
-        access: "internal",
-        token: false,
-        notes:
-          "Accepts only a Google-signed OIDC token for HIBOB_SYNC_AUDIENCE from the HIBOB_SYNC_INVOKER service account; either unset refuses every call. Same sync as the manual one. A successful sync is followed by the cohort Slack sync, as POST /api/cohorts/slack/sync runs it: the channels, then the day's intake form reminders, which go out at most once a day and only while the daily reminder is on (PUT /api/cohorts/slack/settings); its result is slack, and its failure does not fail this call. Allows 300 seconds.",
-        returns: "{ count: number, skipped: number, slack: <as POST /api/cohorts/slack/sync answers, or { ok: false, error, detail }> }",
-        errors: [
-          { status: 401, error: "unauthorized", when: "the OIDC token is missing, invalid or from someone else" },
-          { status: 409, error: "already_running", when: "another sync is running" },
-          { status: 409, error: "not_configured", when: "the deployment has no HiBob service user or token" },
-          { status: 422, error: "rejected", when: "HiBob refused the credentials" },
-          { status: 502, error: "unreachable", when: "HiBob could not be reached" },
-          { status: 502, error: "bad_response", when: "HiBob answered with an error or no employee list" },
         ],
       },
       {

@@ -1054,8 +1054,8 @@ export const evalsSettings = pgTable("evals_settings", {
 });
 
 /**
- * What the Timed Jobs tab shows and sets for each job Cloud Scheduler runs:
- * whether it is switched on, and how its last run went. One row per job,
+ * What the Timed Jobs tab shows and sets for each timed job: whether it is
+ * switched on, when it runs, and how its last run went. One row per job,
  * keyed by `lib/timed-jobs-registry.ts`'s key and made the first time the job
  * runs or is switched; a job with no row is on and has never run. Only the
  * last run is kept here. Each job's own history stays where it already is.
@@ -1066,6 +1066,12 @@ export type TimedJobStatus = (typeof TIMED_JOB_STATUSES)[number];
 export const timedJobs = pgTable("timed_jobs", {
   key: text("key").primaryKey(),
   enabled: boolean("enabled").notNull().default(true),
+  /** A dispatched job's schedule, set on the Timed Jobs tab; null runs it on the registry's default. */
+  cron: text("cron"),
+  /** The IANA zone `cron` is read in; null with `cron`. */
+  timeZone: text("time_zone"),
+  /** The latest time the dispatcher started it for, so a tick, or a retried one, never starts it twice for one time. */
+  scheduledFor: timestamp("scheduled_for", { withTimezone: true }),
   lastStartedAt: timestamp("last_started_at", { withTimezone: true }),
   lastFinishedAt: timestamp("last_finished_at", { withTimezone: true }),
   lastStatus: text("last_status", { enum: TIMED_JOB_STATUSES }),

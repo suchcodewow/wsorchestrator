@@ -3,8 +3,9 @@
  * their whole history, so a single pull fills every month — but ~300 learners
  * under Mindtickle's rate limit take ~15 minutes, longer than any request may
  * run. So a pull goes in steps: each works for at most `STEP_MS`, saves where
- * it got to in `canary_wire_pulls.state`, and lets go. Cloud Scheduler starts
- * one every two hours and takes its steps (`scheduledStep`); a pull started
+ * it got to in `canary_wire_pulls.state`, and lets go. The Timed Jobs
+ * dispatcher starts one every two hours and takes its steps (`scheduledStep`),
+ * on the schedule Admin Settings → Timed Jobs sets; a pull started
  * by hand, for testing, is stepped by the page that started it.
  *
  * A step holds a lease on the pull while it works, so two never fetch at
@@ -327,8 +328,8 @@ const progressMessage = (s: PullState) => `Fetching progress: ${s.next} of ${s.l
 export type ScheduledOutcome = "advanced" | "started" | "fresh" | "not_configured";
 
 /**
- * What Cloud Scheduler does each time it calls — every five minutes for the
- * first half hour of every even hour: work on a pull already running, or
+ * What the Timed Jobs dispatcher does each time the pull falls due — by
+ * default every five minutes for the first half hour of every even hour: work on a pull already running, or
  * start one if none started in the last `SCHEDULE_GAP_MS`. A pull that fails
  * isn't retried until the next even hour, so a revoked key costs one attempt
  * every two hours.

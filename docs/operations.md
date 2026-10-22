@@ -141,6 +141,23 @@ an entry there and a start route that calls `startOAuth`
 (`lib/oauth-callback.ts`). The "google" in the path is Auth.js's provider id;
 Slack does not mind it.
 
+### Timed jobs
+
+Admin Settings → Timed Jobs lists every job that runs on a timer. The
+reaper and the workshop scheduler are Cloud Run jobs with a Cloud Scheduler
+job each (`tf-reaper-trigger`, `tf-scheduler-trigger`), and their schedule is
+set in Terraform. The app's own jobs (the HiBob sync, with the cohort Slack
+sync and intake reminders after it; the Google Meetings sync; the Canary
+Wire's pull) have one Cloud Scheduler job between them, `timed-jobs-tick`,
+which calls `/api/settings/timed-jobs/tick` every five minutes with an OIDC
+token for the scheduler service account. The app starts whichever has fallen
+due on the schedule kept in `timed_jobs` (set on the tab; the registry's
+default until then), claiming each time first so a retried tick starts
+nothing twice. A time missed by more than 30 minutes, say while a deploy
+rolled, is skipped rather than run late. Each job runs the same code as its
+Sync Now button, so it is a dry run while its sync is not live and follows
+the test group while it is on.
+
 ### Google Meetings
 
 eVals Settings → Google Meetings invites the cohort to meetings that already
@@ -151,9 +168,10 @@ in the next 60 days and says whom it is for: Bootcamp, Intermediate or both,
 and Sales, Engineers or both. A candidate counts as Intermediate once
 their bootcamp history (`employees.btc_date`) gives them a BTC date.
 
-The sync runs every day at 4:00 AM Eastern, from Cloud Scheduler job
-`meeting-sync-trigger` (`meeting_sync_schedule`), and whenever someone
-presses *Sync Now*. Admin Settings → Timed Jobs can switch the daily run off.
+The sync runs every day at 4:00 AM Eastern, started by the
+[timed jobs](#timed-jobs) dispatcher, and whenever someone presses *Sync
+Now*. Admin Settings → Timed Jobs can switch the daily run off or change when
+it runs.
 Each run does the following for each picked meeting
 (`lib/evals/meeting-sync.ts`, with the rules in `lib/evals/meeting-plan.ts`):
 

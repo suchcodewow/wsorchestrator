@@ -1,6 +1,6 @@
 /**
  * The Google Meetings sync, as the connected Google account, in one logged
- * run: daily on the schedule (`app/api/evals/google-meetings/sync/scheduled`),
+ * run: on its schedule (Admin Settings → Timed Jobs, `lib/timed-job-runs.ts`),
  * and with Sync Now on eVals Settings → Google Meetings.
  *
  * 1. Reads the Revenue Enablement calendar's next 60 days, and stores each

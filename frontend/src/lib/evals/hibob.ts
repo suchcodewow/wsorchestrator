@@ -4,7 +4,7 @@
  * The service user comes from the deployment — `hibob_userid` and `hibob_token`
  * in terraform.tfvars, which reach the app as `HIBOB_SERVICE_USER_ID` and
  * `HIBOB_TOKEN` — not from anything entered in the app. A sync runs every day
- * at 3 AM Eastern (Cloud Scheduler, see infra/admin/scheduler.tf) and whenever
+ * at 3 AM Eastern (the Timed Jobs dispatcher, `lib/timed-job-runs.ts`) and whenever
  * an eVals administrator asks. Like the Apps Script it replaces
  * (`fetchHibobToEmployees`), it asks HiBob for every active employee and
  * updates `employees` from them in one transaction, so a failed sync leaves

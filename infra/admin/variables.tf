@@ -185,24 +185,6 @@ variable "mindtickle_secret_key" {
   default     = ""
 }
 
-variable "canary_wire_pull_schedule" {
-  description = "Cron for the Canary Wire's Mindtickle pull, in America/New_York. Every five minutes for the first half hour of every even hour: the first call starts a pull and the rest take its steps, ~15 minutes in all; the app starts no second pull within 90 minutes of one."
-  type        = string
-  default     = "0,5,10,15,20,25,30 */2 * * *"
-}
-
-variable "meeting_sync_schedule" {
-  description = "Cron for the daily Google Meetings sync on eVals Settings → Google Meetings, in America/New_York."
-  type        = string
-  default     = "0 4 * * *"
-}
-
-variable "hibob_sync_schedule" {
-  description = "Cron for the daily HiBob employee sync, in America/New_York. The cohort Slack sync follows it: the channels, then the day's intake form reminders."
-  type        = string
-  default     = "0 3 * * *"
-}
-
 variable "harness_base_url" {
   description = "Harness base URL. Change for a non-SaaS or non-prod cluster (e.g. https://app.harness.io/gratis)."
   type        = string
