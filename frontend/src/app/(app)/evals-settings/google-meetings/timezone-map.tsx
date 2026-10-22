@@ -17,7 +17,12 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { TIMEZONE_HOURS, offsetInRange, timezoneRangeLabel } from "@/lib/evals/meeting-plan";
+import {
+  TIMEZONE_HOURS,
+  offsetHour,
+  offsetInRange,
+  timezoneRangeLabel,
+} from "@/lib/evals/meeting-plan";
 import { cn } from "@/lib/utils";
 import { WORLD_LAND_PATH, WORLD_VIEWBOX } from "./world-land";
 
@@ -38,6 +43,35 @@ function localHour(at: Date, hour: number): number {
   return (((at.getUTCHours() + at.getUTCMinutes() / 60 + hour) % 24) + 24) % 24;
 }
 
+/** Familiar zones whose name for the date shows what the UTC bands mean there: PDT sits on UTC-7 beside Arizona's MST. */
+const NAMED_ZONES: [zone: string, locale: string][] = [
+  ["America/Los_Angeles", "en-US"],
+  ["America/Phoenix", "en-US"],
+  ["America/Denver", "en-US"],
+  ["America/Chicago", "en-US"],
+  ["America/New_York", "en-US"],
+  ["Europe/London", "en-GB"],
+  ["Europe/Paris", "en-GB"],
+];
+
+/** Each UTC offset's zone names at `at`, such as -7: PDT and MST. */
+function zoneNames(at: Date): Record<number, string[]> {
+  const out: Record<number, string[]> = {};
+  for (const [zone, locale] of NAMED_ZONES) {
+    const name = new Intl.DateTimeFormat(locale, {
+      timeZone: zone,
+      timeZoneName: "short",
+    })
+      .formatToParts(at)
+      .find((p) => p.type === "timeZoneName")?.value;
+    if (!name) continue;
+    const hour = offsetHour(zone, at);
+    const list = (out[hour] ??= []);
+    if (!list.includes(name)) list.push(name);
+  }
+  return out;
+}
+
 const clock = (t: number) => {
   const h = Math.floor(t);
   const m = Math.round((t - h) * 60);
@@ -56,7 +90,11 @@ const SELECT =
 const hourLabel = (h: number) => `UTC${h < 0 ? "-" : "+"}${Math.abs(h)}`;
 
 /** Dot positions for `n` people in a band: columns filled top to bottom, each centred on the map's middle, packed tighter until they all fit. */
-function dots(x: number, width: number, n: number): { cx: number; cy: number; r: number }[] {
+function dots(
+  x: number,
+  width: number,
+  n: number,
+): { cx: number; cy: number; r: number }[] {
   const middle = BAR_HEIGHT + BAR_GAP + WORLD_VIEWBOX.height / 2;
   const room = WORLD_VIEWBOX.height - 6;
   let step = 7;
@@ -69,7 +107,11 @@ function dots(x: number, width: number, n: number): { cx: number; cy: number; r:
   return Array.from({ length: n }, (_, i) => {
     const col = Math.floor(i / rows);
     const inColumn = Math.min(rows, n - col * rows);
-    return { cx: left + col * step, cy: middle + ((i % rows) - (inColumn - 1) / 2) * step, r: Math.min(3.2, step * 0.45) };
+    return {
+      cx: left + col * step,
+      cy: middle + ((i % rows) - (inColumn - 1) / 2) * step,
+      r: Math.min(3.2, step * 0.45),
+    };
   });
 }
 
@@ -98,6 +140,7 @@ export function TimezoneMap({
   onChange: (from: number, to: number) => void;
 }) {
   const [anchor, setAnchor] = useState<number | null>(null);
+  const names = zoneNames(meetingAt ?? new Date());
   const counts = coverage?.byHour ?? {};
   const people = coverage?.people ?? {};
   const inRange = (h: number) => offsetInRange(h, from, to);
@@ -121,7 +164,7 @@ export function TimezoneMap({
     <TooltipProvider>
       <div className="grid gap-3">
         <svg
-          viewBox={`0 0 ${WORLD_VIEWBOX.width} ${WORLD_VIEWBOX.height + 14 + BAR_HEIGHT + BAR_GAP}`}
+          viewBox={`0 0 ${WORLD_VIEWBOX.width} ${WORLD_VIEWBOX.height + 24 + BAR_HEIGHT + BAR_GAP}`}
           role="group"
           aria-label="Time zones the meeting covers"
           className="w-full rounded-md border bg-field"
@@ -204,6 +247,17 @@ export function TimezoneMap({
                         {people[h]?.[i] ?? "Unknown"}
                       </TooltipContent>
                     </Tooltip>
+                  ))}
+                  {names[h]?.map((name, i) => (
+                    <text
+                      key={name}
+                      x={x + width / 2}
+                      y={WORLD_VIEWBOX.height + 17 + i * 6}
+                      textAnchor="middle"
+                      className="pointer-events-none fill-muted-foreground text-[5px]"
+                    >
+                      {name}
+                    </text>
                   ))}
                   {h % 3 === 0 && (
                     <text
