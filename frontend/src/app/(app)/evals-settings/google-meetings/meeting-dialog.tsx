@@ -25,6 +25,7 @@ export type EditableMeeting = {
   track: MeetingTrack;
   timezoneFrom: number | null;
   timezoneTo: number | null;
+  minDaysAfterStart: number;
 };
 
 /** Where the range starts when the filter is first ticked: the Americas. */
@@ -107,6 +108,7 @@ export function MeetingDialog({
   const [name, setName] = useState("");
   const [stage, setStage] = useState<MeetingStage>("bootcamp");
   const [track, setTrack] = useState<MeetingTrack>("both");
+  const [minDays, setMinDays] = useState(0);
   const [filterZones, setFilterZones] = useState(false);
   const [zoneFrom, setZoneFrom] = useState(DEFAULT_RANGE.from);
   const [zoneTo, setZoneTo] = useState(DEFAULT_RANGE.to);
@@ -143,6 +145,7 @@ export function MeetingDialog({
       setName(editing?.name ?? "");
       setStage(editing?.stage ?? "bootcamp");
       setTrack(editing?.track ?? "both");
+      setMinDays(editing?.minDaysAfterStart ?? 0);
       setFilterZones(editing?.timezoneFrom != null && editing?.timezoneTo != null);
       setZoneFrom(editing?.timezoneFrom ?? DEFAULT_RANGE.from);
       setZoneTo(editing?.timezoneTo ?? DEFAULT_RANGE.to);
@@ -195,7 +198,7 @@ export function MeetingDialog({
       const res = await fetch(editing ? `/api/evals/google-meetings/${editing.id}` : "/api/evals/google-meetings", {
         method: editing ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, stage, track, timezoneFrom: filterZones ? zoneFrom : null, timezoneTo: filterZones ? zoneTo : null }),
+        body: JSON.stringify({ name, stage, track, timezoneFrom: filterZones ? zoneFrom : null, timezoneTo: filterZones ? zoneTo : null, minDaysAfterStart: minDays }),
       });
       const body = await res.json().catch(() => null);
       if (!res.ok) {
@@ -266,6 +269,28 @@ export function MeetingDialog({
           <motion.div variants={riseChild} className="grid gap-4">
             <Choice id="gm-stage" label="Stage" values={MEETING_STAGES} labels={MEETING_STAGE_LABELS} value={stage} onChange={setStage} />
             <Choice id="gm-track" label="Track" values={MEETING_TRACKS} labels={MEETING_TRACK_LABELS} value={track} onChange={setTrack} />
+          </motion.div>
+
+          <motion.div variants={riseChild} className="grid gap-1.5">
+            <label htmlFor="gm-min-days" className="text-sm font-medium">
+              Days after start date
+            </label>
+            <input
+              id="gm-min-days"
+              type="number"
+              min={0}
+              max={365}
+              step={1}
+              value={minDays}
+              disabled={pending}
+              onChange={(e) => setMinDays(Math.min(365, Math.max(0, Math.trunc(Number(e.target.value)) || 0)))}
+              className={cn(SELECT, "w-28 tabular-nums")}
+            />
+            <p className="text-xs text-muted-foreground">
+              {minDays === 0
+                ? "Each person is invited to the first occurrence on or after their start date."
+                : `Each person is invited to the first occurrence ${minDays} ${minDays === 1 ? "day" : "days"} or more after their start date, or the last one before the bootcamp when none is.`}
+            </p>
           </motion.div>
 
           <motion.div variants={riseChild} className="grid gap-3">

@@ -13,6 +13,10 @@
  * way. Every Assessments Administrator is invited to each upcoming
  * occurrence a cohort member is on.
  *
+ * A meeting may also hold back from people who started recently: it offers
+ * each the first occurrence on or after their start date plus a number of
+ * days, or, when none is left before the bootcamp, the last one there is.
+ *
  * A meeting may also cover a range of UTC offsets, in whole hours; then only
  * people whose time zone falls inside it are among those it is for.
  */
@@ -55,7 +59,16 @@ export type Member = {
   track: "sales" | "engineer";
   /** An IANA zone such as `America/Chicago`; null or missing when the app has none for them. */
   timezone?: string | null;
+  /** The day they started, `YYYY-MM-DD`; null or missing when the record has none. */
+  startDate?: string | null;
 };
+
+/** `date` (`YYYY-MM-DD`) plus `days`, in the same form. */
+export function addDays(date: string, days: number): string {
+  const d = new Date(`${date}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
 
 /** The UTC offsets, in whole hours, a meeting covers; both null or missing for no filter. */
 export type TimezoneRange = { timezoneFrom?: number | null; timezoneTo?: number | null };
@@ -204,7 +217,8 @@ export type MeetingPlan = {
  * group's, or the cohort's), and only `role: "member"` ones are read here;
  * `marks` are administrators' word, email to attended. An occurrence is
  * offered only if it starts after `now` and on a day before `cutoff`, the
- * bootcamp's start date.
+ * bootcamp's start date. A person not yet invited gets the first of those on
+ * or after their start date plus `minDaysAfterStart`, else the last of them.
  */
 export function planMeeting(input: {
   audience: readonly string[];
@@ -213,6 +227,10 @@ export function planMeeting(input: {
   marks: ReadonlyMap<string, boolean>;
   now: Date;
   cutoff: string;
+  /** Days after a person's start date before an occurrence suits them; 0 asks nothing more than the start date itself. */
+  minDaysAfterStart?: number;
+  /** Each person's start date, lowercased email to `YYYY-MM-DD`; someone with none is offered the first occurrence there is. */
+  startDates?: ReadonlyMap<string, string | null>;
 }): MeetingPlan {
   const byId = new Map(input.occurrences.map((o) => [o.id, o]));
   const upcoming = [...input.occurrences]
@@ -253,7 +271,11 @@ export function planMeeting(input: {
       continue;
     }
     const lastBegun = Math.max(-Infinity, ...begun.map(({ at }) => at.startsAt.getTime()));
-    const next = upcoming.find((o) => o.startsAt.getTime() > lastBegun);
+    const after = upcoming.filter((o) => o.startsAt.getTime() > lastBegun);
+    const started = input.startDates?.get(email);
+    const earliest = started ? addDays(started, input.minDaysAfterStart ?? 0) : null;
+    // Nothing late enough before the bootcamp: the last occurrence there is.
+    const next = after.find((o) => earliest === null || o.startDate >= earliest) ?? after.at(-1);
     outcomes.set(email, next ? { kind: "invite", occurrenceId: next.id, afterMiss: begun.length > 0 } : { kind: "none_left" });
   }
 

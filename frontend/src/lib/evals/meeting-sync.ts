@@ -380,7 +380,7 @@ type Context = {
   now: Date;
   timeZone: string;
   listed: CalendarEvent[];
-  cohort: { email: string; fullName: string; stage: "bootcamp" | "intermediate"; track: "sales" | "engineer"; timezone?: string | null }[];
+  cohort: { email: string; fullName: string; stage: "bootcamp" | "intermediate"; track: "sales" | "engineer"; timezone?: string | null; startDate?: string | null }[];
   administrators: string[];
   cutoff: string | null;
   log: RunLog;
@@ -595,6 +595,8 @@ async function syncMeeting(ctx: Context, meeting: MeetingSelection): Promise<voi
     now: ctx.now,
     // With no bootcamp active the run stops before here; the guard is for the type.
     cutoff: ctx.cutoff ?? "9999-12-31",
+    minDaysAfterStart: meeting.minDaysAfterStart,
+    startDates: new Map(ctx.cohort.map((m) => [m.email.trim().toLowerCase(), m.startDate ?? null])),
   });
 
   // Who should be on each upcoming occurrence once the plan is carried out, in this mode.
@@ -747,17 +749,17 @@ export type MeetingSyncResult =
     } & Tally)
   | { ok: false; runId: string | null; error: MeetingSyncError; detail?: string };
 
-/** `cohort` with each person's time zone from the employee record, for the test group, which carries none. */
-async function withTimezones<T extends { email: string }>(cohort: readonly T[]): Promise<(T & { timezone: string | null })[]> {
+/** `cohort` with each person's time zone and start date from the employee record, for the test group, which carries neither. */
+async function withEmployeeRecord<T extends { email: string }>(cohort: readonly T[]): Promise<(T & { timezone: string | null; startDate: string | null })[]> {
   const emails = [...new Set(cohort.map((m) => m.email))];
   if (emails.length === 0) return [];
   const rows = await db
-    .select({ email: sql<string>`lower(${employees.email})`, timezone: employees.timezone })
+    .select({ email: sql<string>`lower(${employees.email})`, timezone: employees.timezone, startDate: employees.startDate })
     .from(employees)
     .where(inArray(sql`lower(${employees.email})`, emails))
     .limit(PAGE_SIZE);
-  const zones = new Map(rows.map((r) => [r.email, r.timezone]));
-  return cohort.map((m) => ({ ...m, timezone: zones.get(m.email) ?? null }));
+  const records = new Map(rows.map((r) => [r.email, r]));
+  return cohort.map((m) => ({ ...m, timezone: records.get(m.email)?.timezone ?? null, startDate: records.get(m.email)?.startDate ?? null }));
 }
 
 /**
@@ -768,8 +770,8 @@ async function withTimezones<T extends { email: string }>(cohort: readonly T[]):
 export async function runMeetingSync(actorId: string | null, deadline: number, { preview = false } = {}): Promise<MeetingSyncResult> {
   const dryRun = preview || !(await getMeetingSyncLive());
   const { cohort: outbound, group } = await outboundCohort();
-  // A test group member has no stage or track of their own on record, but their time zone is the employee record's.
-  const cohort = group.on ? await withTimezones(outbound) : outbound;
+  // A test group member has no stage or track of their own on record, but their time zone and start date are the employee record's.
+  const cohort = group.on ? await withEmployeeRecord(outbound) : outbound;
   const runId = await startRun(actorId, dryRun, group.on);
   if (!runId) return { ok: false, runId: null, error: "already_running" };
 

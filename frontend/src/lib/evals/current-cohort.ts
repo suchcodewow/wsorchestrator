@@ -237,7 +237,7 @@ export async function listCurrentCohort(
  * page, since the sync needs all of them; it is one email per candidate.
  */
 export async function currentCohortEmails(): Promise<
-  { email: string; fullName: string; stage: CandidateStage; track: "sales" | "engineer"; timezone: string | null }[]
+  { email: string; fullName: string; stage: CandidateStage; track: "sales" | "engineer"; timezone: string | null; startDate: string | null }[]
 > {
   const cutoffs = await getCandidateCutoffs();
   return db
@@ -247,6 +247,7 @@ export async function currentCohortEmails(): Promise<
       stage: candidateStage,
       track: sql<"sales" | "engineer">`${e.track}`,
       timezone: e.timezone,
+      startDate: e.startDate,
     })
     .from(e)
     .where(and(isCandidate(cutoffs), inArray(e.track, ["sales", "engineer"])));

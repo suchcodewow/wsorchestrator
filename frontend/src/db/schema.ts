@@ -1319,6 +1319,12 @@ export const meetingSelections = pgTable(
      */
     timezoneFrom: integer("timezone_from"),
     timezoneTo: integer("timezone_to"),
+    /**
+     * Days after a person's start date before the meeting suits them: the sync
+     * offers each person the first occurrence on or after their start date plus
+     * this, or the last one before the bootcamp when none is (`lib/evals/meeting-plan.ts`).
+     */
+    minDaysAfterStart: integer("min_days_after_start").notNull().default(0),
     /** When a live sync last read the calendar for it; null until one has. */
     syncedAt: timestamp("synced_at", { withTimezone: true }),
     createdBy: text("created_by").references(() => users.id, {
@@ -1335,6 +1341,7 @@ export const meetingSelections = pgTable(
     uniqueIndex("meeting_selections_name_idx").on(sql`lower(${t.name})`),
     check("meeting_selections_stage_check", sql`${t.stage} in ('bootcamp', 'intermediate', 'both')`),
     check("meeting_selections_track_check", sql`${t.track} in ('sales', 'engineer', 'both')`),
+    check("meeting_selections_min_days_check", sql`${t.minDaysAfterStart} between 0 and 365`),
     check(
       "meeting_selections_timezone_check",
       sql`(${t.timezoneFrom} is null and ${t.timezoneTo} is null) or (${t.timezoneFrom} between -12 and 14 and ${t.timezoneTo} between -12 and 14)`,

@@ -61,6 +61,8 @@ export type MeetingSelectionRow = {
   /** The whole-hour UTC offsets it covers; both null when it is for every time zone. */
   timezoneFrom: number | null;
   timezoneTo: number | null;
+  /** Days after someone's start date before this meeting suits them. */
+  minDaysAfterStart: number;
   syncedAt: Date | null;
   /** When the next occurrence starts, as of the last live sync; null with none to come. */
   nextStartsAt: Date | null;
@@ -97,6 +99,7 @@ export async function listMeetingSelections(query: ListQuery<MeetingSelectionSor
       track: s.track,
       timezoneFrom: s.timezoneFrom,
       timezoneTo: s.timezoneTo,
+      minDaysAfterStart: s.minDaysAfterStart,
       syncedAt: s.syncedAt,
       createdAt: s.createdAt,
       nextStartsAt: sql<Date | null>`(select min(${o.startsAt}) from ${o} where ${o.meetingId} = ${s.id} and ${o.startsAt} > now())`.mapWith(
@@ -189,6 +192,8 @@ export const STATUS_FOR: Record<MeetingSelectionError, number> = {
   running: 409,
 };
 
+const daysAfterStart = z.number().int().min(0).max(365);
+
 const offsetHours = z.number().int().min(TIMEZONE_HOURS.min).max(TIMEZONE_HOURS.max);
 
 /** Both ends or neither; a first after the second wraps through the date line. */
@@ -207,6 +212,8 @@ export const meetingSelectionSchema = z
     /** The whole-hour UTC offsets covered; both null (or left out) for every time zone. */
     timezoneFrom: offsetHours.nullish(),
     timezoneTo: offsetHours.nullish(),
+    /** Days after a person's start date before the meeting suits them; 0 when left out. */
+    minDaysAfterStart: daysAfterStart.optional(),
   })
   .refine(timezoneRangeValid);
 
@@ -219,6 +226,7 @@ export const meetingSelectionPatchSchema = z
     track: z.enum(MEETING_TRACKS),
     timezoneFrom: offsetHours.nullable(),
     timezoneTo: offsetHours.nullable(),
+    minDaysAfterStart: daysAfterStart,
   })
   .partial()
   .refine((v) => (v.timezoneFrom === undefined) === (v.timezoneTo === undefined) && timezoneRangeValid(v));
@@ -230,7 +238,7 @@ export async function createMeetingSelection(actorId: string, input: MeetingSele
   try {
     const [row] = await db
       .insert(s)
-      .values({ ...input, timezoneFrom: input.timezoneFrom ?? null, timezoneTo: input.timezoneTo ?? null, createdBy: actorId })
+      .values({ ...input, timezoneFrom: input.timezoneFrom ?? null, timezoneTo: input.timezoneTo ?? null, minDaysAfterStart: input.minDaysAfterStart ?? 0, createdBy: actorId })
       .returning({ id: s.id, name: s.name });
     return { ok: true, meeting: row! };
   } catch (err) {
@@ -254,13 +262,15 @@ export async function updateMeetingSelection(id: string, patch: z.infer<typeof m
     track: patch.track ?? current.track,
     timezoneFrom: patch.timezoneFrom === undefined ? current.timezoneFrom : patch.timezoneFrom,
     timezoneTo: patch.timezoneTo === undefined ? current.timezoneTo : patch.timezoneTo,
+    minDaysAfterStart: patch.minDaysAfterStart ?? current.minDaysAfterStart,
   };
   if (
     next.name === current.name &&
     next.stage === current.stage &&
     next.track === current.track &&
     next.timezoneFrom === current.timezoneFrom &&
-    next.timezoneTo === current.timezoneTo
+    next.timezoneTo === current.timezoneTo &&
+    next.minDaysAfterStart === current.minDaysAfterStart
   ) {
     return { ok: true, meeting: { id, name: current.name } };
   }

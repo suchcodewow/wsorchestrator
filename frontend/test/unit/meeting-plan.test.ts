@@ -16,6 +16,7 @@ import {
   meetingKey,
   meetingMark,
   mergeAttendees,
+  addDays,
   planMeeting,
   sameGuests,
   zoomMeetingIdIn,
@@ -100,6 +101,52 @@ test("someone not yet invited is invited to the next occurrence still to start",
   const { outcomes, remove } = plan(["a@harness.io"], []);
   assert.deepEqual(outcomes.get("a@harness.io"), { kind: "invite", occurrenceId: "next", afterMiss: false });
   assert.deepEqual(remove, []);
+});
+
+const withStart = (days: number, startDate: string | null, occurrences = ALL) =>
+  planMeeting({
+    audience: ["a@harness.io"],
+    occurrences,
+    invites: [],
+    marks: new Map(),
+    now: NOW,
+    cutoff: CUTOFF,
+    minDaysAfterStart: days,
+    startDates: new Map([["a@harness.io", startDate]]),
+  }).outcomes.get("a@harness.io");
+
+test("addDays moves a date across month ends", () => {
+  assert.equal(addDays("2026-10-28", 5), "2026-11-02");
+  assert.equal(addDays("2026-10-28", 0), "2026-10-28");
+});
+
+test("a start date plus the days holds back an occurrence that comes too soon", () => {
+  assert.deepEqual(withStart(0, "2026-10-21"), { kind: "invite", occurrenceId: "next", afterMiss: false });
+  assert.deepEqual(withStart(3, "2026-10-21"), { kind: "invite", occurrenceId: "later", afterMiss: false });
+  // On the day it falls exactly: 22 + 7 = 29.
+  assert.deepEqual(withStart(7, "2026-10-22"), { kind: "invite", occurrenceId: "later", afterMiss: false });
+});
+
+test("with none late enough before the bootcamp, the last one there is", () => {
+  assert.deepEqual(withStart(30, "2026-10-21"), { kind: "invite", occurrenceId: "later", afterMiss: false });
+});
+
+test("someone with no start date is offered the first occurrence", () => {
+  assert.deepEqual(withStart(30, null), { kind: "invite", occurrenceId: "next", afterMiss: false });
+});
+
+test("someone already invited stays where they are whatever the days", () => {
+  const { outcomes } = planMeeting({
+    audience: ["a@harness.io"],
+    occurrences: ALL,
+    invites: [invite("next", "a@harness.io")],
+    marks: new Map(),
+    now: NOW,
+    cutoff: CUTOFF,
+    minDaysAfterStart: 5,
+    startDates: new Map([["a@harness.io", "2026-10-21"]]),
+  });
+  assert.deepEqual(outcomes.get("a@harness.io"), { kind: "invited", occurrenceId: "next" });
 });
 
 test("someone already invited to an occurrence still to come stays on it", () => {

@@ -573,6 +573,7 @@ function MeetingsTable({
                   {m.timezoneFrom !== null && m.timezoneTo !== null && (
                     <span className="block text-xs tabular-nums">{timezoneRangeLabel(m.timezoneFrom, m.timezoneTo)}</span>
                   )}
+                  {m.minDaysAfterStart > 0 && <span className="block text-xs tabular-nums">{m.minDaysAfterStart}+ days after start</span>}
                 </td>
                 <td className="whitespace-nowrap px-5 py-3 text-muted-foreground">
                   {!m.syncedAt ? (
