@@ -8,10 +8,15 @@ import {
   audienceLabel,
   audienceOf,
   cleanMeetingName,
+  hasTimezoneRange,
+  inTimezoneRange,
+  offsetHour,
+  timezoneRangeLabel,
   joinedFrom,
   meetingKey,
   meetingMark,
   mergeAttendees,
+  addDays,
   planMeeting,
   sameGuests,
   zoomMeetingIdIn,
@@ -96,6 +101,52 @@ test("someone not yet invited is invited to the next occurrence still to start",
   const { outcomes, remove } = plan(["a@harness.io"], []);
   assert.deepEqual(outcomes.get("a@harness.io"), { kind: "invite", occurrenceId: "next", afterMiss: false });
   assert.deepEqual(remove, []);
+});
+
+const withStart = (days: number, startDate: string | null, occurrences = ALL) =>
+  planMeeting({
+    audience: ["a@harness.io"],
+    occurrences,
+    invites: [],
+    marks: new Map(),
+    now: NOW,
+    cutoff: CUTOFF,
+    minDaysAfterStart: days,
+    startDates: new Map([["a@harness.io", startDate]]),
+  }).outcomes.get("a@harness.io");
+
+test("addDays moves a date across month ends", () => {
+  assert.equal(addDays("2026-10-28", 5), "2026-11-02");
+  assert.equal(addDays("2026-10-28", 0), "2026-10-28");
+});
+
+test("a start date plus the days holds back an occurrence that comes too soon", () => {
+  assert.deepEqual(withStart(0, "2026-10-21"), { kind: "invite", occurrenceId: "next", afterMiss: false });
+  assert.deepEqual(withStart(3, "2026-10-21"), { kind: "invite", occurrenceId: "later", afterMiss: false });
+  // On the day it falls exactly: 22 + 7 = 29.
+  assert.deepEqual(withStart(7, "2026-10-22"), { kind: "invite", occurrenceId: "later", afterMiss: false });
+});
+
+test("with none late enough before the bootcamp, the last one there is", () => {
+  assert.deepEqual(withStart(30, "2026-10-21"), { kind: "invite", occurrenceId: "later", afterMiss: false });
+});
+
+test("someone with no start date is offered the first occurrence", () => {
+  assert.deepEqual(withStart(30, null), { kind: "invite", occurrenceId: "next", afterMiss: false });
+});
+
+test("someone already invited stays where they are whatever the days", () => {
+  const { outcomes } = planMeeting({
+    audience: ["a@harness.io"],
+    occurrences: ALL,
+    invites: [invite("next", "a@harness.io")],
+    marks: new Map(),
+    now: NOW,
+    cutoff: CUTOFF,
+    minDaysAfterStart: 5,
+    startDates: new Map([["a@harness.io", "2026-10-21"]]),
+  });
+  assert.deepEqual(outcomes.get("a@harness.io"), { kind: "invited", occurrenceId: "next" });
 });
 
 test("someone already invited to an occurrence still to come stays on it", () => {
@@ -198,4 +249,56 @@ test("the Current tab's mark", () => {
   assert.equal(meetingMark({ attended: false, response: "needsAction", invited: true, anyLeft: false }), "pending");
   assert.equal(meetingMark({ attended: false, response: null, invited: false, anyLeft: true }), "pending");
   assert.equal(meetingMark({ attended: false, response: null, invited: false, anyLeft: false }), "none_left");
+});
+
+const JULY = new Date("2026-07-15T12:00:00Z");
+const JANUARY = new Date("2026-01-15T12:00:00Z");
+
+test("a time zone is a whole-hour UTC offset, half hours rounding east", () => {
+  assert.equal(offsetHour("America/Chicago", JULY), -5);
+  assert.equal(offsetHour("America/Chicago", JANUARY), -6);
+  assert.equal(offsetHour("Asia/Kolkata", JULY), 6);
+  assert.equal(offsetHour("America/St_Johns", JULY), -2);
+  assert.equal(offsetHour("UTC", JULY), 0);
+});
+
+test("a time zone range leaves out anyone outside it, or with no zone", () => {
+  const range = { timezoneFrom: -8, timezoneTo: -5 };
+  assert.ok(hasTimezoneRange(range));
+  assert.equal(inTimezoneRange("America/Los_Angeles", range, JULY), true);
+  assert.equal(inTimezoneRange("America/Chicago", range, JULY), true);
+  assert.equal(inTimezoneRange("America/New_York", range, JULY), false);
+  assert.equal(inTimezoneRange("Europe/London", range, JULY), false);
+  assert.equal(inTimezoneRange(null, range, JULY), false);
+  assert.equal(inTimezoneRange("not a zone", range, JULY), false);
+  // No range: everyone, zone or not.
+  // A first after the second runs east through the date line: +9 to -6.
+  const wrapped = { timezoneFrom: 9, timezoneTo: -6 };
+  assert.equal(inTimezoneRange("Asia/Tokyo", wrapped, JULY), true);
+  assert.equal(inTimezoneRange("Pacific/Auckland", wrapped, JULY), true);
+  assert.equal(inTimezoneRange("America/Denver", wrapped, JULY), true);
+  assert.equal(inTimezoneRange("America/Chicago", wrapped, JULY), false);
+  assert.equal(inTimezoneRange("America/New_York", wrapped, JULY), false);
+  assert.equal(inTimezoneRange("Europe/London", wrapped, JULY), false);
+  assert.equal(inTimezoneRange(null, { timezoneFrom: null, timezoneTo: null }, JULY), true);
+  assert.equal(hasTimezoneRange({}), false);
+});
+
+test("the time zone range narrows a meeting's audience", () => {
+  const cohort: Member[] = [
+    { email: "a@harness.io", stage: "bootcamp", track: "sales", timezone: "America/Los_Angeles" },
+    { email: "b@harness.io", stage: "bootcamp", track: "sales", timezone: "Europe/London" },
+    { email: "c@harness.io", stage: "bootcamp", track: "sales", timezone: null },
+    { email: "d@harness.io", stage: "bootcamp", track: "engineer", timezone: "America/Los_Angeles" },
+  ];
+  const meeting = { stage: "bootcamp", track: "sales", timezoneFrom: -8, timezoneTo: -7 } as const;
+  assert.deepEqual(audienceOf(meeting, cohort, JULY), ["a@harness.io"]);
+  assert.deepEqual(audienceOf({ ...meeting, timezoneFrom: null, timezoneTo: null }, cohort, JULY), ["a@harness.io", "b@harness.io", "c@harness.io"]);
+});
+
+test("a time zone range reads as a person would say it", () => {
+  assert.equal(timezoneRangeLabel(-8, -5), "UTC-8 to UTC-5");
+  assert.equal(timezoneRangeLabel(1, 1), "UTC+1");
+  assert.equal(timezoneRangeLabel(9, -6), "UTC+9 to UTC-6");
+  assert.equal(timezoneRangeLabel(0, 3), "UTC+0 to UTC+3");
 });

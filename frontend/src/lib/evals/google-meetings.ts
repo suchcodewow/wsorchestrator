@@ -13,6 +13,7 @@ import { and, desc, eq, gt, inArray, isNotNull, lt, sql, type SQL } from "drizzl
 import { z } from "zod";
 import { db } from "@/db";
 import {
+  employees,
   EVALS_SETTINGS_KEYS,
   evalsSettings,
   GOOGLE_CONNECTION_KEY,
@@ -35,7 +36,8 @@ import {
   type MeetingTrack,
 } from "@/db/schema";
 import { getTestGroup } from "@/lib/cohorts/test-group";
-import { cleanMeetingName, meetingIsFor, meetingMark, type MeetingMark } from "@/lib/evals/meeting-plan";
+import { currentCohortPeople } from "@/lib/evals/current-cohort";
+import { cleanMeetingName, meetingIsFor, meetingMark, offsetHour, TIMEZONE_HOURS, type MeetingMark } from "@/lib/evals/meeting-plan";
 import type { MeetingSelectionSort, MeetingSyncChangeSort, MeetingSyncSort } from "@/lib/list-specs";
 import { PAGE_SIZE, pageWindow, toPage, type ListQuery, type Page } from "@/lib/paging";
 import { orderFor, searchAny } from "@/lib/paging-sql";
@@ -56,6 +58,11 @@ export type MeetingSelectionRow = {
   name: string;
   stage: MeetingStage;
   track: MeetingTrack;
+  /** The whole-hour UTC offsets it covers; both null when it is for every time zone. */
+  timezoneFrom: number | null;
+  timezoneTo: number | null;
+  /** Days after someone's start date before this meeting suits them. */
+  minDaysAfterStart: number;
   syncedAt: Date | null;
   /** When the next occurrence starts, as of the last live sync; null with none to come. */
   nextStartsAt: Date | null;
@@ -90,6 +97,9 @@ export async function listMeetingSelections(query: ListQuery<MeetingSelectionSor
       name: s.name,
       stage: s.stage,
       track: s.track,
+      timezoneFrom: s.timezoneFrom,
+      timezoneTo: s.timezoneTo,
+      minDaysAfterStart: s.minDaysAfterStart,
       syncedAt: s.syncedAt,
       createdAt: s.createdAt,
       nextStartsAt: sql<Date | null>`(select min(${o.startsAt}) from ${o} where ${o.meetingId} = ${s.id} and ${o.startsAt} > now())`.mapWith(
@@ -118,6 +128,37 @@ export async function listMeetingSelections(query: ListQuery<MeetingSelectionSor
     rows.map(({ addedByName, addedByEmail, ...row }) => ({ ...row, addedBy: addedByName ?? addedByEmail })),
     query.page,
   );
+}
+
+/**
+ * For the timezone map in the meeting dialog: how many of the people a stage
+ * and track cover are in each whole-hour UTC offset today, and how many have
+ * no time zone on record, who a time zone filter leaves out.
+ */
+export async function meetingTimezoneCoverage(
+  stage: MeetingStage,
+  track: MeetingTrack,
+  at: Date = new Date(),
+): Promise<{ byHour: Record<string, number>; people: Record<string, string[]>; unknown: number; total: number }> {
+  const byHour: Record<string, number> = {};
+  const people: Record<string, string[]> = {};
+  let unknown = 0;
+  let total = 0;
+  for (const { fullName, timezone } of await currentCohortPeople(stage, track)) {
+    total += 1;
+    let hour: number | null = null;
+    try {
+      hour = timezone ? offsetHour(timezone, at) : null;
+    } catch {
+      hour = null;
+    }
+    if (hour === null) unknown += 1;
+    else {
+      byHour[hour] = (byHour[hour] ?? 0) + 1;
+      (people[hour] ??= []).push(fullName);
+    }
+  }
+  return { byHour, people, unknown, total };
 }
 
 export async function meetingSelectionCount(): Promise<number> {
@@ -151,16 +192,44 @@ export const STATUS_FOR: Record<MeetingSelectionError, number> = {
   running: 409,
 };
 
-export const meetingSelectionSchema = z.object({
-  /** As the calendar names its events; GET /calendar lists them. */
-  name: z.string().trim().min(1).max(MEETING_SELECTION_LIMITS.name).transform(cleanMeetingName),
-  stage: z.enum(MEETING_STAGES),
-  track: z.enum(MEETING_TRACKS),
-});
+const daysAfterStart = z.number().int().min(0).max(365);
+
+const offsetHours = z.number().int().min(TIMEZONE_HOURS.min).max(TIMEZONE_HOURS.max);
+
+/** Both ends or neither; a first after the second wraps through the date line. */
+function timezoneRangeValid(v: { timezoneFrom?: number | null; timezoneTo?: number | null }): boolean {
+  const from = v.timezoneFrom ?? null;
+  const to = v.timezoneTo ?? null;
+  return (from === null) === (to === null);
+}
+
+export const meetingSelectionSchema = z
+  .object({
+    /** As the calendar names its events; GET /calendar lists them. */
+    name: z.string().trim().min(1).max(MEETING_SELECTION_LIMITS.name).transform(cleanMeetingName),
+    stage: z.enum(MEETING_STAGES),
+    track: z.enum(MEETING_TRACKS),
+    /** The whole-hour UTC offsets covered; both null (or left out) for every time zone. */
+    timezoneFrom: offsetHours.nullish(),
+    timezoneTo: offsetHours.nullish(),
+    /** Days after a person's start date before the meeting suits them; 0 when left out. */
+    minDaysAfterStart: daysAfterStart.optional(),
+  })
+  .refine(timezoneRangeValid);
 
 export type MeetingSelectionInput = z.infer<typeof meetingSelectionSchema>;
 
-export const meetingSelectionPatchSchema = meetingSelectionSchema.partial();
+export const meetingSelectionPatchSchema = z
+  .object({
+    name: z.string().trim().min(1).max(MEETING_SELECTION_LIMITS.name).transform(cleanMeetingName),
+    stage: z.enum(MEETING_STAGES),
+    track: z.enum(MEETING_TRACKS),
+    timezoneFrom: offsetHours.nullable(),
+    timezoneTo: offsetHours.nullable(),
+    minDaysAfterStart: daysAfterStart,
+  })
+  .partial()
+  .refine((v) => (v.timezoneFrom === undefined) === (v.timezoneTo === undefined) && timezoneRangeValid(v));
 
 type Saved = { ok: true; meeting: { id: string; name: string } } | { ok: false; error: MeetingSelectionError };
 
@@ -169,7 +238,7 @@ export async function createMeetingSelection(actorId: string, input: MeetingSele
   try {
     const [row] = await db
       .insert(s)
-      .values({ ...input, createdBy: actorId })
+      .values({ ...input, timezoneFrom: input.timezoneFrom ?? null, timezoneTo: input.timezoneTo ?? null, minDaysAfterStart: input.minDaysAfterStart ?? 0, createdBy: actorId })
       .returning({ id: s.id, name: s.name });
     return { ok: true, meeting: row! };
   } catch (err) {
@@ -187,8 +256,22 @@ export async function createMeetingSelection(actorId: string, input: MeetingSele
 export async function updateMeetingSelection(id: string, patch: z.infer<typeof meetingSelectionPatchSchema>): Promise<Saved> {
   const current = await meetingSelection(id);
   if (!current) return { ok: false, error: "not_found" };
-  const next = { name: patch.name ?? current.name, stage: patch.stage ?? current.stage, track: patch.track ?? current.track };
-  if (next.name === current.name && next.stage === current.stage && next.track === current.track) {
+  const next = {
+    name: patch.name ?? current.name,
+    stage: patch.stage ?? current.stage,
+    track: patch.track ?? current.track,
+    timezoneFrom: patch.timezoneFrom === undefined ? current.timezoneFrom : patch.timezoneFrom,
+    timezoneTo: patch.timezoneTo === undefined ? current.timezoneTo : patch.timezoneTo,
+    minDaysAfterStart: patch.minDaysAfterStart ?? current.minDaysAfterStart,
+  };
+  if (
+    next.name === current.name &&
+    next.stage === current.stage &&
+    next.track === current.track &&
+    next.timezoneFrom === current.timezoneFrom &&
+    next.timezoneTo === current.timezoneTo &&
+    next.minDaysAfterStart === current.minDaysAfterStart
+  ) {
     return { ok: true, meeting: { id, name: current.name } };
   }
   try {
@@ -313,13 +396,19 @@ export async function meetingStatusesFor(
   people: readonly { email: string; stage: "bootcamp" | "intermediate"; track: string | null }[],
 ): Promise<Map<string, PersonMeetingStatus[]>> {
   const out = new Map<string, PersonMeetingStatus[]>();
-  const members = people
+  const candidates = people
     .filter((p): p is { email: string; stage: "bootcamp" | "intermediate"; track: "sales" | "engineer" } => p.track === "sales" || p.track === "engineer")
     .map((p) => ({ ...p, email: p.email.trim().toLowerCase() }));
-  if (members.length === 0) return out;
+  if (candidates.length === 0) return out;
+  const zones = new Map(
+    (await db.select({ email: sql<string>`lower(${employees.email})`, timezone: employees.timezone }).from(employees).where(inArray(sql`lower(${employees.email})`, candidates.map((c) => c.email))).limit(PAGE_SIZE))
+      .map((r) => [r.email, r.timezone]),
+  );
+  const members = candidates.map((c) => ({ ...c, timezone: zones.get(c.email) ?? null }));
+  const now = new Date();
 
   const selections = await db
-    .select({ id: s.id, name: s.name, stage: s.stage, track: s.track })
+    .select({ id: s.id, name: s.name, stage: s.stage, track: s.track, timezoneFrom: s.timezoneFrom, timezoneTo: s.timezoneTo })
     .from(s)
     .where(isNotNull(s.syncedAt))
     .orderBy(sql`lower(${s.name})`)
@@ -361,7 +450,7 @@ export async function meetingStatusesFor(
   for (const member of members) {
     const list: PersonMeetingStatus[] = [];
     for (const meeting of selections) {
-      if (!meetingIsFor(meeting, member)) continue;
+      if (!meetingIsFor(meeting, member, now)) continue;
       const key = `${meeting.id} ${member.email}`;
       const h = heldBy.get(key);
       const marked = markOf.get(key) ?? null;

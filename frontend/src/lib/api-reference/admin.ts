@@ -526,9 +526,9 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "assessmentsAdmin",
         token: true,
         notes:
-          "A picked meeting is a name on the calendar, matched to its events whatever their case or spacing, and whom in the Cohorts page's Current tab it is for: a stage (bootcamp, intermediate or both) and a track (sales, engineer or both). syncedAt is when a live sync last read its events, or null before one has; nextStartsAt, upcoming, invited and attended are as of that sync: when the next occurrence starts, how many are still to start, how many of the cohort are on one still to start, and how many attended one, by Zoom or by an administrator's mark. connection and zoom.connection are null until each is connected, and never include a token. administrators are the Assessments Administrators, added to every occurrence a cohort member is on. live says whether a sync changes the calendar (PUT /api/evals/google-meetings/settings). testGroup is the Cohorts page's test group (GET /api/cohorts/test-group). cutoff is the active bootcamp's start date, before which each person is invited, or null with none active. legacyMeetings counts the old create-a-meeting invites the next live sync cancels. meetingCount is every picked meeting, whatever the search.",
+          "A picked meeting is a name on the calendar, matched to its events whatever their case or spacing, and whom in the Cohorts page's Current tab it is for: a stage (bootcamp, intermediate or both) and a track (sales, engineer or both), and optionally a range of UTC offsets, timezoneFrom to timezoneTo in whole hours (both null for every time zone), and minDaysAfterStart, how many days after a person's start date the meeting suits them: the sync invites each person to the first occurrence on or after their start date plus that many days, or to the last one before the bootcamp when none is. syncedAt is when a live sync last read its events, or null before one has; nextStartsAt, upcoming, invited and attended are as of that sync: when the next occurrence starts, how many are still to start, how many of the cohort are on one still to start, and how many attended one, by Zoom or by an administrator's mark. connection and zoom.connection are null until each is connected, and never include a token. administrators are the Assessments Administrators, added to every occurrence a cohort member is on. live says whether a sync changes the calendar (PUT /api/evals/google-meetings/settings). testGroup is the Cohorts page's test group (GET /api/cohorts/test-group). cutoff is the active bootcamp's start date, before which each person is invited, or null with none active. legacyMeetings counts the old create-a-meeting invites the next live sync cancels. meetingCount is every picked meeting, whatever the search.",
         query: listQuery(MEETING_SELECTION_LIST.sorts, "the name"),
-        returns: `{ meetings: { id, name, stage: "bootcamp" | "intermediate" | "both", track: "sales" | "engineer" | "both", syncedAt: string | null, nextStartsAt: string | null, upcoming: number, invited: number, attended: number, addedBy: string | null, createdAt }[], ${PAGE_FIELDS}, connection: { email, connectedAt, connectedBy: string | null } | null, zoom: { configured: boolean, connection: { email, connectedAt, connectedBy: string | null } | null }, administrators: string[], live: boolean, running: boolean, testGroup: { on: boolean, suffix: string, members: number }, cutoff: "YYYY-MM-DD" | null, lastLiveSync: { finishedAt, status: "running" | "succeeded" | "skipped" | "failed", error: string | null } | null, legacyMeetings: number, meetingCount: number }`,
+        returns: `{ meetings: { id, name, stage: "bootcamp" | "intermediate" | "both", track: "sales" | "engineer" | "both", timezoneFrom: number | null, timezoneTo: number | null, minDaysAfterStart: number, syncedAt: string | null, nextStartsAt: string | null, upcoming: number, invited: number, attended: number, addedBy: string | null, createdAt }[], ${PAGE_FIELDS}, connection: { email, connectedAt, connectedBy: string | null } | null, zoom: { configured: boolean, connection: { email, connectedAt, connectedBy: string | null } | null }, administrators: string[], live: boolean, running: boolean, testGroup: { on: boolean, suffix: string, members: number }, cutoff: "YYYY-MM-DD" | null, lastLiveSync: { finishedAt, status: "running" | "succeeded" | "skipped" | "failed", error: string | null } | null, legacyMeetings: number, meetingCount: number }`,
       },
       {
         method: "POST",
@@ -536,13 +536,16 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         summary: "Picks a meeting from the Revenue Enablement calendar, for a stage and a track. Nothing is sent until a sync.",
         access: "assessmentsAdmin",
         token: true,
-        notes: "name need not be on the calendar now; GET /api/evals/google-meetings/calendar lists the names that are. A name already picked, in any case or spacing, is refused.",
+        notes: "name need not be on the calendar now; GET /api/evals/google-meetings/calendar lists the names that are. A name already picked, in any case or spacing, is refused. With a time zone range, only people whose time zone on record has a UTC offset inside it today (half hours round toward the east) are invited; anyone with no time zone on record is left out.",
         body: {
           kind: "json",
           fields: [
             { name: "name", type: "string", required: true, note: `1 to ${MEETING_SELECTION_LIMITS.name} characters; trimmed, with runs of spaces made one` },
             { name: "stage", type: `"bootcamp" | "intermediate" | "both"`, required: true },
             { name: "track", type: `"sales" | "engineer" | "both"`, required: true },
+            { name: "timezoneFrom", type: "integer | null", note: "-12 to 14: the first UTC offset, in whole hours, the meeting covers; give it with timezoneTo, or both null (the default) for every time zone" },
+            { name: "timezoneTo", type: "integer | null", note: "-12 to 14; before timezoneFrom it runs the long way round, so 9 to -6 covers +9 east through the date line to -6" },
+            { name: "minDaysAfterStart", type: "integer", note: "0 to 365, 0 by default: the days after a person's start date before an occurrence suits them; when none left before the bootcamp does, they are invited to the last one" },
           ],
         },
         returns: "{ id, name }",
@@ -559,13 +562,16 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         token: true,
         params: [{ name: "id", type: "string", required: true, note: "UUID" }],
         notes:
-          "Any field left out is kept. A new name first takes everyone the sync invited to the old name's upcoming occurrences off them, which emails them, and forgets its occurrences; the next sync reads the new name's. A new stage or track changes nothing until the next sync, which takes off anyone the meeting is no longer for. Allows 60 seconds.",
+          "Any field left out is kept. A new name first takes everyone the sync invited to the old name's upcoming occurrences off them, which emails them, and forgets its occurrences; the next sync reads the new name's. A new stage, track or time zone range changes nothing until the next sync, which takes off anyone the meeting is no longer for. Allows 60 seconds.",
         body: {
           kind: "json",
           fields: [
             { name: "name", type: "string", note: `1 to ${MEETING_SELECTION_LIMITS.name} characters; trimmed, with runs of spaces made one` },
             { name: "stage", type: `"bootcamp" | "intermediate" | "both"` },
             { name: "track", type: `"sales" | "engineer" | "both"` },
+            { name: "timezoneFrom", type: "integer | null", note: "-12 to 14; send it with timezoneTo, and null for both to cover every time zone again" },
+            { name: "timezoneTo", type: "integer | null", note: "-12 to 14; before timezoneFrom it runs the long way round, so 9 to -6 covers +9 east through the date line to -6" },
+            { name: "minDaysAfterStart", type: "integer", note: "0 to 365: the days after a person's start date before an occurrence suits them" },
           ],
         },
         returns: "{ id, name }",
@@ -616,6 +622,21 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           { status: 400, error: "invalid", when: "the body does not parse" },
           { status: 404, error: "not_found", when: "id is not a UUID, or no such meeting" },
         ],
+      },
+      {
+        method: "GET",
+        path: "/api/evals/google-meetings/timezones",
+        summary: "The people a stage and track cover, by UTC offset, for choosing a meeting's time zone range.",
+        access: "assessmentsAdmin",
+        token: true,
+        notes: "Counts the Current tab's Sales and Engineer candidates in that stage and on that track, by the whole-hour UTC offset their time zone on record has at `at` (default now); half hours round toward the east. people has their names under the same offsets, sorted by name. unknown is those with no time zone on record, who a time zone range leaves out.",
+        query: [
+          { name: "stage", type: `"bootcamp" | "intermediate" | "both"`, required: true },
+          { name: "track", type: `"sales" | "engineer" | "both"`, required: true },
+          { name: "at", type: "ISO 8601 timestamp", note: "when to read each time zone's UTC offset, which daylight saving moves; the picked meeting's start. Default: now" },
+        ],
+        returns: "{ byHour: { [offset: string]: number }, people: { [offset: string]: string[] }, unknown: number, total: number }",
+        errors: [{ status: 400, error: "invalid", when: "stage or track is missing or not one of the values" }],
       },
       {
         method: "GET",

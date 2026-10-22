@@ -237,7 +237,7 @@ export async function listCurrentCohort(
  * page, since the sync needs all of them; it is one email per candidate.
  */
 export async function currentCohortEmails(): Promise<
-  { email: string; fullName: string; stage: CandidateStage; track: "sales" | "engineer" }[]
+  { email: string; fullName: string; stage: CandidateStage; track: "sales" | "engineer"; timezone: string | null; startDate: string | null }[]
 > {
   const cutoffs = await getCandidateCutoffs();
   return db
@@ -246,9 +246,35 @@ export async function currentCohortEmails(): Promise<
       fullName: e.fullName,
       stage: candidateStage,
       track: sql<"sales" | "engineer">`${e.track}`,
+      timezone: e.timezone,
+      startDate: e.startDate,
     })
     .from(e)
     .where(and(isCandidate(cutoffs), inArray(e.track, ["sales", "engineer"])));
+}
+
+/**
+ * Each current-cohort candidate in `stage` and on `track` ("both" for either)
+ * with the time zone on record, null for those with none: the names behind the
+ * time zone map on the Google meetings tab.
+ */
+export async function currentCohortPeople(
+  stage: CandidateStage | "both",
+  track: "sales" | "engineer" | "both",
+): Promise<{ fullName: string; timezone: string | null }[]> {
+  const cutoffs = await getCandidateCutoffs();
+  return db
+    .select({ fullName: e.fullName, timezone: e.timezone })
+    .from(e)
+    .where(
+      and(
+        isCandidate(cutoffs),
+        stage === "both" ? undefined : IN_STAGE[stage],
+        track === "both" ? inArray(e.track, ["sales", "engineer"]) : eq(e.track, track),
+      ),
+    )
+    .orderBy(sql`lower(${e.fullName})`)
+    .limit(1_000);
 }
 
 /**

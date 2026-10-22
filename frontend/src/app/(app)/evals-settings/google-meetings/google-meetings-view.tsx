@@ -31,7 +31,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { MeetingSyncStatus } from "@/db/schema";
 import type { GoogleMeetingsOverview } from "@/lib/evals/google-meetings";
-import { MEETING_STAGE_LABELS, MEETING_TRACK_LABELS } from "@/lib/evals/meeting-plan";
+import { MEETING_STAGE_LABELS, MEETING_TRACK_LABELS, timezoneRangeLabel } from "@/lib/evals/meeting-plan";
 import type { MeetingSelectionSort, MeetingSyncSort } from "@/lib/list-specs";
 import { riseChild, staggerParent } from "@/lib/motion";
 import type { ListQuery, Page } from "@/lib/paging";
@@ -568,7 +568,13 @@ function MeetingsTable({
                   {m.addedBy && <span className="block text-xs text-muted-foreground">Added by {m.addedBy}</span>}
                 </td>
                 <td className="whitespace-nowrap px-5 py-3 text-muted-foreground">{MEETING_STAGE_LABELS[m.stage]}</td>
-                <td className="whitespace-nowrap px-5 py-3 text-muted-foreground">{MEETING_TRACK_LABELS[m.track]}</td>
+                <td className="whitespace-nowrap px-5 py-3 text-muted-foreground">
+                  {MEETING_TRACK_LABELS[m.track]}
+                  {m.timezoneFrom !== null && m.timezoneTo !== null && (
+                    <span className="block text-xs tabular-nums">{timezoneRangeLabel(m.timezoneFrom, m.timezoneTo)}</span>
+                  )}
+                  {m.minDaysAfterStart > 0 && <span className="block text-xs tabular-nums">{m.minDaysAfterStart}+ days after start</span>}
+                </td>
                 <td className="whitespace-nowrap px-5 py-3 text-muted-foreground">
                   {!m.syncedAt ? (
                     "Not synced yet"
