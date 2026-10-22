@@ -250,9 +250,6 @@ export function TimezoneMap({
                 {HOURS.map((h) => (
                   <option key={h} value={h}>
                     {hourLabel(h)}
-                    {(counts[h] ?? 0) > 0
-                      ? ` — ${counts[h]!.toLocaleString()}`
-                      : ""}
                   </option>
                 ))}
               </select>
