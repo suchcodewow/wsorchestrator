@@ -503,9 +503,9 @@ export function IntakeFormFiller({
 }
 
 /**
- * The time zone picker: one zone per UTC offset, in order of the offset. The
- * list is fixed from the zone the form opened with, so choosing one does not
- * reshuffle it; a zone the person already has stands for its own offset.
+ * The time zone picker: every zone, in order of the offset. The list is fixed
+ * from the zone the form opened with, which it always includes, so the zone
+ * Slack gave them is never swapped for a near neighbour.
  */
 function TimeZoneSelect({
   title,
@@ -518,7 +518,7 @@ function TimeZoneSelect({
 }) {
   const [opened] = useState(value);
   const choices = useMemo(() => timeZoneChoices(new Date(), opened), [opened]);
-  // A zone picked from this list is already in it; the opened one may be since replaced by another on its offset.
+  // The list holds every zone and the opened one, so only a value the form never offered (a stale answer) falls back.
   const shown = choices.some((c) => c.value === value)
     ? value
     : (choices.find((c) => c.value === opened)?.value ?? "");
