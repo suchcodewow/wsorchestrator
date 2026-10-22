@@ -273,9 +273,10 @@ export function MeetingDialog({
 
           <motion.div variants={riseChild} className="grid gap-1.5">
             <label htmlFor="gm-min-days" className="text-sm font-medium">
-              Days after start date
+              Tenure from start date until this meeting is scheduled
             </label>
-            <input
+            <div className="flex items-center gap-2">
+              <input
               id="gm-min-days"
               type="number"
               min={0}
@@ -286,6 +287,8 @@ export function MeetingDialog({
               onChange={(e) => setMinDays(Math.min(365, Math.max(0, Math.trunc(Number(e.target.value)) || 0)))}
               className={cn(SELECT, "w-28 tabular-nums")}
             />
+              <span className="text-sm text-muted-foreground">days</span>
+            </div>
             <p className="text-xs text-muted-foreground">
               {minDays === 0
                 ? "Each person is invited to the first occurrence on or after their start date."
