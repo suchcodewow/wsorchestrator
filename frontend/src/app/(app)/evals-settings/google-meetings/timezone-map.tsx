@@ -2,8 +2,8 @@
 
 /**
  * A small world map cut into time zone bands, one per whole-hour UTC offset.
- * A band is tinted when someone the meeting is for lives in it; the ones in
- * the chosen range are solid. Click a band to start a range and another to
+ * Each person the meeting is for is an orange dot in their band; the bands in
+ * the chosen range are tinted. Click a band to start a range and another to
  * end it; the From and To lists beside the map set the same range, and reach
  * the offsets east of UTC+12 that the map has no room to draw.
  */
@@ -22,6 +22,20 @@ const SELECT =
   "h-9 w-full rounded-md border border-input bg-field px-2 text-sm text-foreground shadow-xs outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50";
 
 const hourLabel = (h: number) => `UTC${h < 0 ? "-" : "+"}${Math.abs(h)}`;
+
+/** Dot positions for `n` people in a band: a grid from the top, packed tighter until they all fit. */
+function dots(x: number, width: number, n: number): { cx: number; cy: number }[] {
+  const inner = width - 2;
+  let step = 3;
+  let cols = Math.max(1, Math.floor(inner / step) + 1);
+  while (step > 1.3 && cols * (Math.floor((WORLD_VIEWBOX.height - 14) / step) + 1) < n) {
+    step -= 0.2;
+    cols = Math.max(1, Math.floor(inner / step) + 1);
+  }
+  const used = Math.min(cols, n);
+  const left = x + (width - (used - 1) * step) / 2;
+  return Array.from({ length: n }, (_, i) => ({ cx: left + (i % cols) * step, cy: 12 + Math.floor(i / cols) * step }));
+}
 
 /** A band is 15° wide, centred on its offset's meridian; the ends are cut by the map's edge. */
 function band(hour: number): { x: number; width: number } {
@@ -95,12 +109,15 @@ export function TimezoneMap({
                 className={cn(
                   "stroke-border/60 outline-none focus-visible:stroke-ring focus-visible:stroke-2",
                   disabled ? "cursor-default" : "cursor-pointer hover:fill-brand/40",
-                  selected ? "fill-brand/55" : n > 0 ? "fill-brand/15" : "fill-transparent",
+                  selected ? "fill-brand/30" : "fill-transparent",
                 )}
                 strokeWidth={0.4}
               >
                 <title>{`${hourLabel(h)}: ${n.toLocaleString()} ${n === 1 ? "person" : "people"}`}</title>
               </rect>
+              {dots(x, width, n).map((d, i) => (
+                <circle key={i} cx={d.cx} cy={d.cy} r={1.1} className="pointer-events-none fill-orange-500" />
+              ))}
               {h % 3 === 0 && (
                 <text
                   x={x + width / 2}
