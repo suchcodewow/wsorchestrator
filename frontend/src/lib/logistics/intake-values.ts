@@ -101,9 +101,9 @@ const question = (
   ...q,
 });
 
-/** The name question as Pre-Bootcamp asks it; the migration that put it on saved forms spells it the same. */
+/** The name question as Pre-Bootcamp asks it. */
 export const PREFERRED_NAME_TITLE =
-  "Do you have a preferred name you would like classmates and instructors to use?";
+  "Do you have a preferred first name you would like classmates and instructors to use?";
 
 /**
  * The November 2026 Sales Bootcamp registration, as the Google Form it replaces

@@ -419,14 +419,6 @@ export function IntakeFormFiller({
                     {q.description}
                   </p>
                 )}
-                {isNameQuestion(q) && (
-                  <p className="text-sm text-muted-foreground">
-                    Optional. Give only a first name, with no spaces, like Sam.
-                    It is saved as your preferred name and used on your name
-                    card and everywhere else here; your official name is not
-                    changed.
-                  </p>
-                )}
                 {isTimezoneQuestion(q) && (
                   <p className="text-sm text-muted-foreground">
                     It is used to schedule your sessions, and starts from the
@@ -667,6 +659,7 @@ function Answer({
     return (
       <Input
         aria-label={q.title}
+        placeholder={isNameQuestion(q) ? "Optional" : undefined}
         value={(value as string) ?? ""}
         maxLength={INTAKE_LIMITS.answer}
         // A first name has no spaces, so none can be typed or pasted into it.
