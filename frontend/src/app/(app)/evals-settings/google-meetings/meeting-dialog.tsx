@@ -157,7 +157,7 @@ export function MeetingDialog({
     if (!open || !filterZones) return;
     let current = true;
     const done = (coverage: TimezoneCoverage | null) => {
-      if (current) setLoaded({ stage, track, coverage: coverage ?? { byHour: {}, unknown: 0, total: 0 } });
+      if (current) setLoaded({ stage, track, coverage: coverage ?? { byHour: {}, people: {}, unknown: 0, total: 0 } });
     };
     fetch(`/api/evals/google-meetings/timezones?stage=${stage}&track=${track}`)
       .then((res) => (res.ok ? res.json() : null))
@@ -170,6 +170,8 @@ export function MeetingDialog({
 
   // A meeting picked earlier keeps its name in the list, even once it is off the calendar.
   const options = names ?? [];
+  const next = options.find((n) => meetingKey(n.name) === meetingKey(name))?.next;
+  const meetingAt = next && !Number.isNaN(new Date(next).getTime()) ? new Date(next) : null;
   const listed = editing && !options.some((n) => meetingKey(n.name) === meetingKey(editing.name));
 
   async function save() {
@@ -277,6 +279,7 @@ export function MeetingDialog({
             {filterZones && (
               <TimezoneMap
                 coverage={coverage}
+                meetingAt={meetingAt}
                 from={zoneFrom}
                 to={zoneTo}
                 disabled={pending}

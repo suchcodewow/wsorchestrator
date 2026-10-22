@@ -36,7 +36,7 @@ import {
   type MeetingTrack,
 } from "@/db/schema";
 import { getTestGroup } from "@/lib/cohorts/test-group";
-import { currentCohortZones } from "@/lib/evals/current-cohort";
+import { currentCohortPeople } from "@/lib/evals/current-cohort";
 import { cleanMeetingName, meetingIsFor, meetingMark, offsetHour, TIMEZONE_HOURS, type MeetingMark } from "@/lib/evals/meeting-plan";
 import type { MeetingSelectionSort, MeetingSyncChangeSort, MeetingSyncSort } from "@/lib/list-specs";
 import { PAGE_SIZE, pageWindow, toPage, type ListQuery, type Page } from "@/lib/paging";
@@ -132,23 +132,30 @@ export async function listMeetingSelections(query: ListQuery<MeetingSelectionSor
  * and track cover are in each whole-hour UTC offset today, and how many have
  * no time zone on record, who a time zone filter leaves out.
  */
-export async function meetingTimezoneCoverage(stage: MeetingStage, track: MeetingTrack): Promise<{ byHour: Record<string, number>; unknown: number; total: number }> {
+export async function meetingTimezoneCoverage(
+  stage: MeetingStage,
+  track: MeetingTrack,
+): Promise<{ byHour: Record<string, number>; people: Record<string, string[]>; unknown: number; total: number }> {
   const now = new Date();
   const byHour: Record<string, number> = {};
+  const people: Record<string, string[]> = {};
   let unknown = 0;
   let total = 0;
-  for (const { timezone, people } of await currentCohortZones(stage, track)) {
-    total += people;
+  for (const { fullName, timezone } of await currentCohortPeople(stage, track)) {
+    total += 1;
     let hour: number | null = null;
     try {
       hour = timezone ? offsetHour(timezone, now) : null;
     } catch {
       hour = null;
     }
-    if (hour === null) unknown += people;
-    else byHour[hour] = (byHour[hour] ?? 0) + people;
+    if (hour === null) unknown += 1;
+    else {
+      byHour[hour] = (byHour[hour] ?? 0) + 1;
+      (people[hour] ??= []).push(fullName);
+    }
   }
-  return { byHour, unknown, total };
+  return { byHour, people, unknown, total };
 }
 
 export async function meetingSelectionCount(): Promise<number> {

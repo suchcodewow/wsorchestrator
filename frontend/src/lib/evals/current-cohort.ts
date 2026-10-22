@@ -253,17 +253,17 @@ export async function currentCohortEmails(): Promise<
 }
 
 /**
- * How many of the Sales and Engineer candidates in `stage` and on `track`
- * ("both" for either) have each time zone on record; `timezone` is null for
- * those with none. One row per zone, not per person.
+ * Each current-cohort candidate in `stage` and on `track` ("both" for either)
+ * with the time zone on record, null for those with none: the names behind the
+ * time zone map on the Google meetings tab.
  */
-export async function currentCohortZones(
+export async function currentCohortPeople(
   stage: CandidateStage | "both",
   track: "sales" | "engineer" | "both",
-): Promise<{ timezone: string | null; people: number }[]> {
+): Promise<{ fullName: string; timezone: string | null }[]> {
   const cutoffs = await getCandidateCutoffs();
   return db
-    .select({ timezone: e.timezone, people: sql<number>`count(*)::int` })
+    .select({ fullName: e.fullName, timezone: e.timezone })
     .from(e)
     .where(
       and(
@@ -272,7 +272,7 @@ export async function currentCohortZones(
         track === "both" ? inArray(e.track, ["sales", "engineer"]) : eq(e.track, track),
       ),
     )
-    .groupBy(e.timezone)
+    .orderBy(sql`lower(${e.fullName})`)
     .limit(1_000);
 }
 
