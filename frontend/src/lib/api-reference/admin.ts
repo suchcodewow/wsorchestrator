@@ -49,7 +49,7 @@ const KIND_TYPE = `"main" | "breakout" | "unstructured"`;
 const AUDIENCE_TYPE = `"both" | "sales" | "engineers"`;
 const COLOR_TYPE = `"slate" | "red" | "orange" | "amber" | "green" | "teal" | "blue" | "violet" | "pink"`;
 const RECORDING_TAKE_SHAPE = `{ takeId, contributor, startedAt, durationMs: number | null, bytes: number, kinds: ("camera" | "screen")[], status: "uploading" | "assembling" | "ready" | "failed", stalled: boolean }`;
-const VIDEO_FEEDBACK_SHAPE = `{ id, rating: "up" | "down", video: { kind: "mimir_concept" | "recording", id, label }, positionSeconds: number, comment: string | null, user: { id, name, email } | null, createdAt }`;
+const VIDEO_FEEDBACK_SHAPE = `{ id, rating: "up" | "down", video: { kind: "mimir_concept" | "recording", id, label }, positionSeconds: number, comment: string | null, status: "pending" | "accepted" | "ignored", user: { id, name, email } | null, createdAt }`;
 const RECORDING_TRACK_SHAPE =`{ id, takeId, kind: "camera" | "screen", mimeType, startedAt, offsetMs: number, contributor, status: "uploading" | "assembling" | "ready" | "failed", chunks: number | null, durationMs: number | null, fileBytes: number | null, error: string | null, lastChunkAt: string | null, stalled: boolean }`;
 
 const MINUTES_NOTE = `a multiple of ${SCHEDULE_LIMITS.slot} from ${SCHEDULE_LIMITS.slot} to ${SCHEDULE_LIMITS.maxMinutes}`;
@@ -1767,9 +1767,31 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         summary: "Lists each Mimir video that has feedback with its counts of thumbs up and thumbs down, and of each that came with a comment, a page at a time, by video name.",
         access: "trainingAdmin",
         token: true,
-        notes: "Only Mimir concept videos are counted. A comment is a thumb saved with words; the counts of thumbs include them. label is the video's name when it was last rated.",
+        notes: "Only Mimir concept videos are counted. A comment is a thumb saved with words; the counts of thumbs include them. accepted is how many comments an administrator has accepted. label is the video's name when it was last rated.",
         query: listQuery(VIDEO_FEEDBACK_SUMMARY_LIST.sorts, "the video's name"),
-        returns: `{ videos: { conceptId, label, up: number, upComments: number, down: number, downComments: number }[], ${PAGE_FIELDS} }`,
+        returns: `{ videos: { conceptId, label, up: number, upComments: number, down: number, downComments: number, accepted: number }[], ${PAGE_FIELDS} }`,
+      },
+      {
+        method: "PATCH",
+        path: "/api/video-feedback/{id}",
+        summary: "Edits a comment's words, or accepts or ignores it.",
+        access: "assessmentsAdmin",
+        token: true,
+        params: [{ name: "id", type: "string", required: true, note: "the feedback's id" }],
+        notes: "Only a thumb that came with a comment can be changed. Send comment, status, or both; the audit trail keeps the words before and after. A video with accepted comments is the one Mimir Feedback offers to regenerate.",
+        body: {
+          kind: "json",
+          fields: [
+            { name: "comment", type: "string", note: `1 to ${VIDEO_FEEDBACK_LIMITS.comment} characters, trimmed` },
+            { name: "status", type: `"pending" | "accepted" | "ignored"` },
+          ],
+        },
+        returns: `{ feedback: ${VIDEO_FEEDBACK_SHAPE} }`,
+        errors: [
+          { status: 400, error: "invalid", when: "neither field is sent, or one is blank or out of range" },
+          { status: 404, error: "not_found", when: "no feedback has that id" },
+          { status: 409, error: "no_comment", when: "the feedback is a thumb with no comment" },
+        ],
       },
     ],
   },

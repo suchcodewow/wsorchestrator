@@ -17,6 +17,7 @@ import {
   videoFeedback,
   type VideoFeedbackKind,
   type VideoFeedbackRating,
+  type VideoFeedbackStatus,
 } from "@/db/schema";
 import type { VideoFeedbackSort, VideoFeedbackSummarySort } from "@/lib/list-specs";
 import { getMap } from "@/lib/mimir/map/content";
@@ -73,6 +74,7 @@ export type VideoFeedbackRow = {
   video: { kind: VideoFeedbackKind; id: string; label: string };
   positionSeconds: number;
   comment: string | null;
+  status: VideoFeedbackStatus;
   user: { id: string; name: string | null; email: string | null } | null;
   createdAt: string;
 };
@@ -86,6 +88,7 @@ function toRow(r: Selected): VideoFeedbackRow {
     video: { kind: r.videoKind, id: (r.conceptId ?? r.recordingTrackId)!, label: r.videoLabel },
     positionSeconds: r.positionSeconds,
     comment: r.comment,
+    status: r.status,
     user: r.userId ? { id: r.userId, name: r.userName, email: r.userEmail } : null,
     createdAt: r.createdAt.toISOString(),
   };
@@ -125,6 +128,7 @@ export async function listVideoFeedback(
       rating: videoFeedback.rating,
       positionSeconds: videoFeedback.positionSeconds,
       comment: videoFeedback.comment,
+      status: videoFeedback.status,
       createdAt: videoFeedback.createdAt,
       userName: users.name,
       userEmail: users.email,
@@ -153,6 +157,8 @@ export type VideoFeedbackSummaryRow = {
   upComments: number;
   down: number;
   downComments: number;
+  /** Comments an administrator has accepted: any, and the video can be regenerated. */
+  accepted: number;
 };
 
 const COUNTS = {
@@ -160,6 +166,7 @@ const COUNTS = {
   upComments: sql<number>`count(*) filter (where ${videoFeedback.rating} = 'up' and ${isNotNull(videoFeedback.comment)})::int`,
   down: sql<number>`count(*) filter (where ${videoFeedback.rating} = 'down')::int`,
   downComments: sql<number>`count(*) filter (where ${videoFeedback.rating} = 'down' and ${isNotNull(videoFeedback.comment)})::int`,
+  accepted: sql<number>`count(*) filter (where ${videoFeedback.status} = 'accepted')::int`,
 };
 
 const SUMMARY_SORT_COLUMNS = {
@@ -188,4 +195,37 @@ export async function listVideoFeedbackSummary(
     rows.map((r) => ({ ...r, conceptId: r.conceptId! })),
     query.page,
   );
+}
+
+export type VideoFeedbackEdit = { comment?: string; status?: VideoFeedbackStatus };
+
+/**
+ * An administrator's edit to a comment's words or its status. Only a row that
+ * has a comment can be changed: "not_found" if there is no such row,
+ * "no_comment" if it is a bare thumb. Returns the row as it was too, for the audit.
+ */
+export async function updateVideoFeedback(
+  id: string,
+  edit: VideoFeedbackEdit,
+): Promise<{ before: VideoFeedbackRow; after: VideoFeedbackRow } | "not_found" | "no_comment"> {
+  if (!isUuid(id)) return "not_found";
+  const read = async () => {
+    const [row] = await db
+      .select({ f: videoFeedback, userName: users.name, userEmail: users.email })
+      .from(videoFeedback)
+      .leftJoin(users, eq(users.id, videoFeedback.userId))
+      .where(eq(videoFeedback.id, id));
+    return row ? toRow({ ...row.f, userName: row.userName, userEmail: row.userEmail }) : null;
+  };
+  const before = await read();
+  if (!before) return "not_found";
+  if (before.comment === null) return "no_comment";
+  await db
+    .update(videoFeedback)
+    .set({
+      ...(edit.comment !== undefined ? { comment: edit.comment } : {}),
+      ...(edit.status ? { status: edit.status } : {}),
+    })
+    .where(eq(videoFeedback.id, id));
+  return { before, after: (await read())! };
 }

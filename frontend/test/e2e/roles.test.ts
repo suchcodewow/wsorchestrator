@@ -745,6 +745,7 @@ const ROUTES: RouteCase[] = [
   { method: "GET", path: "/api/video-feedback", allowed: canManageTrainingSettings },
   { method: "GET", path: "/api/video-feedback/summary", allowed: canManageTrainingSettings },
   { method: "POST", path: "/api/video-feedback", allowed: true, body: () => ({}) },
+  { method: "PATCH", path: `/api/video-feedback/${MISSING}`, allowed: canManageEvalsSettings, body: () => ({ status: "ignored" }) },
 
   // eVals
   { method: "GET", path: "/api/evals/bootcamp-history", allowed: canUseEvals },

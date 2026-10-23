@@ -3258,6 +3258,10 @@ export type VideoFeedbackKind = (typeof VIDEO_FEEDBACK_KINDS)[number];
 export const VIDEO_FEEDBACK_RATINGS = ["up", "down"] as const;
 export type VideoFeedbackRating = (typeof VIDEO_FEEDBACK_RATINGS)[number];
 
+/** What an administrator has decided about a comment: waiting, to act on, or to set aside. */
+export const VIDEO_FEEDBACK_STATUSES = ["pending", "accepted", "ignored"] as const;
+export type VideoFeedbackStatus = (typeof VIDEO_FEEDBACK_STATUSES)[number];
+
 export const VIDEO_FEEDBACK_LIMITS = {
   comment: 2000,
   /** The longest video anything here plays, in seconds: the same bound as a Mimir progress report. */
@@ -3285,6 +3289,8 @@ export const videoFeedback = pgTable(
     /** Where the video was, in seconds, when the thumb or comment button was pressed. */
     positionSeconds: doublePrecision("position_seconds").notNull(),
     comment: text("comment"),
+    /** Only a comment is accepted or ignored; a bare thumb stays pending. */
+    status: text("status").$type<VideoFeedbackStatus>().notNull().default("pending"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
@@ -3293,6 +3299,7 @@ export const videoFeedback = pgTable(
     index("video_feedback_recording_track_id_idx").on(t.recordingTrackId),
     check("video_feedback_video_kind_check", sql`${t.videoKind} in ('mimir_concept', 'recording')`),
     check("video_feedback_rating_check", sql`${t.rating} in ('up', 'down')`),
+    check("video_feedback_status_check", sql`${t.status} in ('pending', 'accepted', 'ignored')`),
     check(
       "video_feedback_video_check",
       sql`(${t.videoKind} = 'mimir_concept' and ${t.conceptId} is not null) or (${t.videoKind} = 'recording' and ${t.recordingTrackId} is not null)`,
