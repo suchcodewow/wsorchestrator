@@ -1,17 +1,24 @@
 "use client";
 
-/** Each job Cloud Scheduler runs, with its schedule, how it last ran, and a switch. */
+/**
+ * Each timed job, with its schedule, how it last ran, and a switch. The app's
+ * own jobs can be given a schedule here; the reaper's and the scheduler's are
+ * set in Terraform.
+ */
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { CheckCircle2, CircleDashed, Loader2, MinusCircle, XCircle } from "lucide-react";
+import { CheckCircle2, CircleDashed, Loader2, MinusCircle, Pencil, XCircle } from "lucide-react";
 import { HEADER_ROW, PlainHeader } from "@/components/data-table";
 import { PillSwitch } from "@/components/pill-switch";
+import { Button } from "@/components/ui/button";
 import type { TimedJobStatus } from "@/db/schema";
+import { zoneName } from "@/lib/cron";
 import { riseChild, staggerParent } from "@/lib/motion";
 import type { TimedJobRow } from "@/lib/timed-jobs";
 import { cn } from "@/lib/utils";
+import { ScheduleDialog } from "./schedule-dialog";
 
 const WHEN = new Intl.DateTimeFormat("en-US", {
   timeZone: "America/New_York",
@@ -35,6 +42,7 @@ export function TimedJobsView({ jobs }: { jobs: TimedJobRow[] }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [editing, setEditing] = useState<TimedJobRow | null>(null);
   const on = jobs.filter((job) => job.enabled).length;
 
   async function toggle(job: TimedJobRow, enabled: boolean) {
@@ -99,10 +107,25 @@ export function TimedJobsView({ jobs }: { jobs: TimedJobRow[] }) {
                       )}
                     </td>
                     <td className="px-5 py-3 text-muted-foreground">
-                      <div>{job.schedule}</div>
+                      <div className="text-foreground">{job.schedule}</div>
                       <div className="font-mono text-xs">
-                        {job.cron} · {job.timeZone}
+                        {job.cron} · {zoneName(job.timeZone)}
                       </div>
+                      {job.nextRunAt && job.enabled && <div className="text-xs">Next: {WHEN.format(new Date(job.nextRunAt))}</div>}
+                      {job.via === "dispatcher" ? (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="-ml-3 mt-1"
+                          title={`Change when ${job.name} runs`}
+                          onClick={() => setEditing(job)}
+                        >
+                          <Pencil />
+                          Edit schedule
+                        </Button>
+                      ) : (
+                        <div className="mt-1 text-xs">Set in Terraform</div>
+                      )}
                     </td>
                     <td className="px-5 py-3 text-muted-foreground">
                       {job.lastStartedAt ? WHEN.format(new Date(job.lastStartedAt)) : "Never"}
@@ -139,6 +162,17 @@ export function TimedJobsView({ jobs }: { jobs: TimedJobRow[] }) {
           </table>
         </div>
       </motion.div>
+
+      {editing && (
+        <ScheduleDialog
+          job={editing}
+          onClose={() => setEditing(null)}
+          onSaved={() => {
+            setEditing(null);
+            router.refresh();
+          }}
+        />
+      )}
     </motion.div>
   );
 }

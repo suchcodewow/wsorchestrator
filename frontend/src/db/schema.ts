@@ -1054,8 +1054,8 @@ export const evalsSettings = pgTable("evals_settings", {
 });
 
 /**
- * What the Timed Jobs tab shows and sets for each job Cloud Scheduler runs:
- * whether it is switched on, and how its last run went. One row per job,
+ * What the Timed Jobs tab shows and sets for each timed job: whether it is
+ * switched on, when it runs, and how its last run went. One row per job,
  * keyed by `lib/timed-jobs-registry.ts`'s key and made the first time the job
  * runs or is switched; a job with no row is on and has never run. Only the
  * last run is kept here. Each job's own history stays where it already is.
@@ -1066,6 +1066,12 @@ export type TimedJobStatus = (typeof TIMED_JOB_STATUSES)[number];
 export const timedJobs = pgTable("timed_jobs", {
   key: text("key").primaryKey(),
   enabled: boolean("enabled").notNull().default(true),
+  /** A dispatched job's schedule, set on the Timed Jobs tab; null runs it on the registry's default. */
+  cron: text("cron"),
+  /** The IANA zone `cron` is read in; null with `cron`. */
+  timeZone: text("time_zone"),
+  /** The latest time the dispatcher started it for, so a tick, or a retried one, never starts it twice for one time. */
+  scheduledFor: timestamp("scheduled_for", { withTimezone: true }),
   lastStartedAt: timestamp("last_started_at", { withTimezone: true }),
   lastFinishedAt: timestamp("last_finished_at", { withTimezone: true }),
   lastStatus: text("last_status", { enum: TIMED_JOB_STATUSES }),
@@ -1761,11 +1767,16 @@ export const slackSyncChanges = pgTable(
 export const MEETING_SYNC_STATUSES = ["running", "succeeded", "skipped", "failed"] as const;
 export type MeetingSyncStatus = (typeof MEETING_SYNC_STATUSES)[number];
 
-/** One press of Sync Now on eVals Settings → Google Meetings, and how it ended. */
+export const MEETING_SYNC_TRIGGERS = ["schedule", "manual"] as const;
+export type MeetingSyncTrigger = (typeof MEETING_SYNC_TRIGGERS)[number];
+
+/** One run of the Google Meetings sync, on the schedule or from Sync Now on eVals Settings → Google Meetings, and how it ended. */
 export const meetingSyncRuns = pgTable(
   "meeting_sync_runs",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    trigger: text("trigger").$type<MeetingSyncTrigger>().notNull().default("manual"),
+    /** Who pressed the button; null for a scheduled run. */
     triggeredBy: text("triggered_by").references(() => users.id, {
       onDelete: "set null",
     }),
@@ -1800,6 +1811,7 @@ export const meetingSyncRuns = pgTable(
     uniqueIndex("meeting_sync_runs_one_running_idx")
       .on(t.status)
       .where(sql`${t.status} = 'running'`),
+    check("meeting_sync_runs_trigger_check", sql`${t.trigger} in ('schedule', 'manual')`),
     check(
       "meeting_sync_runs_status_check",
       sql`${t.status} in ('running', 'succeeded', 'skipped', 'failed')`,

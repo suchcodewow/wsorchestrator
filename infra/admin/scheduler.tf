@@ -38,112 +38,42 @@ locals {
   # Any string will do as long as the app checks for the same one; a URL would
   # tie it to the host, and the app's URL is derived from the service this
   # value is an env var of.
-  hibob_sync_audience = "workshop-orchestrator/hibob-sync"
+  timed_jobs_audience = "workshop-orchestrator/timed-jobs"
 
   # app_url when set: with it, the app 308s every other host to it, and
   # Cloud Scheduler does not follow redirects.
-  hibob_sync_url = format(
-    "%s/api/evals/hibob/sync/scheduled",
+  timed_jobs_tick_url = format(
+    "%s/api/settings/timed-jobs/tick",
     trimsuffix(var.app_url != "" ? var.app_url : google_cloud_run_v2_service.app.uri, "/"),
   )
 }
 
-# Sync eVals' employees from HiBob once a day. Unlike the jobs above this calls
-# the app itself, which is public: the OIDC token is not for Cloud Run's IAM but
-# for the app, which accepts it only from the scheduler SA with this audience.
-# Each run logs itself on eVals settings' HiBob tab, including a failed one.
-resource "google_cloud_scheduler_job" "hibob_sync" {
-  name    = "hibob-sync-trigger"
+# Start the app's own timed jobs: the HiBob sync and the cohort Slack sync
+# after it, the Google Meetings sync, and the Canary Wire's pull. Each one's
+# schedule is set on Admin Settings → Timed Jobs and kept in the app's
+# database; this calls the app every five minutes and it starts whichever
+# fell due, claiming each time so a retry starts nothing twice. Unlike the
+# jobs above this calls the app itself, which is public: the OIDC token is not
+# for Cloud Run's IAM but for the app, which accepts it only from the
+# scheduler SA with this audience.
+resource "google_cloud_scheduler_job" "timed_jobs_tick" {
+  name    = "timed-jobs-tick"
   project = var.admin_project_id
   region  = var.region
 
-  schedule  = var.hibob_sync_schedule
-  time_zone = "America/New_York"
+  schedule  = "*/5 * * * *"
+  time_zone = "Etc/UTC"
 
-  # HiBob takes several seconds to send ~1,500 employees; the route allows 180.
+  # The route allows 300 seconds and stops its jobs at 270.
   attempt_deadline = "300s"
 
   http_target {
     http_method = "POST"
-    uri         = local.hibob_sync_url
+    uri         = local.timed_jobs_tick_url
 
     oidc_token {
       service_account_email = google_service_account.scheduler.email
-      audience              = local.hibob_sync_audience
-    }
-  }
-
-  depends_on = [google_project_service.admin]
-}
-
-locals {
-  intake_reminders_audience = "workshop-orchestrator/intake-reminders"
-  intake_reminders_url = format(
-    "%s/api/logistics/intake-reminders/scheduled",
-    trimsuffix(var.app_url != "" ? var.app_url : google_cloud_run_v2_service.app.uri, "/"),
-  )
-}
-
-# Slack the current cohort's stragglers a link to their intake form once a
-# day. The app sends nothing until a Training Administrator turns reminders
-# on in Cohort Settings → Slack, which QA, sharing production's Slack
-# workspace, leaves off; it also sends at most once a day, so a retry is safe.
-resource "google_cloud_scheduler_job" "intake_reminders" {
-  name    = "intake-reminders-trigger"
-  project = var.admin_project_id
-  region  = var.region
-
-  schedule  = var.intake_reminders_schedule
-  time_zone = "America/New_York"
-
-  # The route allows 300 seconds and stops sending at 270.
-  attempt_deadline = "300s"
-
-  http_target {
-    http_method = "POST"
-    uri         = local.intake_reminders_url
-
-    oidc_token {
-      service_account_email = google_service_account.scheduler.email
-      audience              = local.intake_reminders_audience
-    }
-  }
-
-  depends_on = [google_project_service.admin]
-}
-
-locals {
-  canary_wire_pull_audience = "workshop-orchestrator/canary-wire-pull"
-  canary_wire_pull_url = format(
-    "%s/api/evals/canary-wire/pull/scheduled",
-    trimsuffix(var.app_url != "" ? var.app_url : google_cloud_run_v2_service.app.uri, "/"),
-  )
-}
-
-# Pull Reporting → Canary Wire from Mindtickle every two hours. A pull takes
-# ~15 minutes and a call may run five, so the job fires in a burst: the first
-# call starts the pull and each after it takes a step, each saving where it
-# got to. Calls once it has finished do nothing. Only with a Mindtickle tenant
-# set, like the secrets it needs.
-resource "google_cloud_scheduler_job" "canary_wire_pull" {
-  count   = var.mindtickle_company_id != "" ? 1 : 0
-  name    = "canary-wire-pull-trigger"
-  project = var.admin_project_id
-  region  = var.region
-
-  schedule  = var.canary_wire_pull_schedule
-  time_zone = "America/New_York"
-
-  # The route allows 300 seconds and works for 240 of them.
-  attempt_deadline = "300s"
-
-  http_target {
-    http_method = "POST"
-    uri         = local.canary_wire_pull_url
-
-    oidc_token {
-      service_account_email = google_service_account.scheduler.email
-      audience              = local.canary_wire_pull_audience
+      audience              = local.timed_jobs_audience
     }
   }
 

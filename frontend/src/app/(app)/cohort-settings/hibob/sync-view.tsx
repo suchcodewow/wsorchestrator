@@ -1,6 +1,6 @@
 "use client";
 
-/** The Sync HiBob Now button, where the credentials come from, and every run's result. */
+/** The Sync Now button, where the credentials come from, and every run's result. */
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -95,7 +95,7 @@ export function HibobSyncView({
         <h2 className="text-xl font-medium tracking-tight">HiBob sync</h2>
         <Button variant="brand" disabled={running} onClick={syncNow}>
           {running ? <Loader2 className="animate-spin" /> : <RefreshCw />}
-          {running ? "Syncing…" : "Sync HiBob Now"}
+          {running ? "Syncing…" : "Sync Now"}
         </Button>
       </motion.div>
 

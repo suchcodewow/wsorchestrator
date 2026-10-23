@@ -46,7 +46,7 @@ export const POST = audited(async function POST(req: Request) {
   }
   if (!parsed.success) return NextResponse.json({ error: "invalid" }, { status: 400 });
 
-  const result = await runMeetingSync(user.id, started + DEADLINE_MS, { preview: parsed.data.preview === true });
+  const result = await runMeetingSync("manual", user.id, started + DEADLINE_MS, { preview: parsed.data.preview === true });
   if (result.runId) noteAudit({ target: result.runId });
   if (!result.ok) {
     return NextResponse.json(

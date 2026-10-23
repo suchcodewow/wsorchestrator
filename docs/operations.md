@@ -105,11 +105,10 @@ it alone; unarchive it or rename it.
 and is sent by the cohort Slack sync.** One run of the sync does everything
 the bot does: the channels above, and a direct message to everyone in the
 current cohort (Cohorts → Current, Sales and Engineer tracks) who has not
-saved answers to their stage's form at /intake. Cloud Scheduler job
-`intake-reminders-trigger` (`intake_reminders_schedule`, 10:00 AM Eastern by
-default) calls `/api/logistics/intake-reminders/scheduled`, which starts a
-reminders-only run; the 3 AM run after HiBob does channels only; *Sync Slack
-Now* on Cohort Settings → Slack does both. Reminders go out only once a
+saved answers to their stage's form at /intake. The run that follows the
+3 AM HiBob sync does both, the channels and then the reminders, and so does
+*Sync Now* on Cohort Settings → Slack. A run whose channels use up its time
+stops there, and that day's reminders wait for the next run. Reminders go out only once a
 Training Administrator turns the *Daily reminder* on, under *Mode* on
 Cohort Settings → Slack, which also shows how many have answered each form,
 at most once per Eastern day however many runs there are, and never for a
@@ -142,6 +141,23 @@ an entry there and a start route that calls `startOAuth`
 (`lib/oauth-callback.ts`). The "google" in the path is Auth.js's provider id;
 Slack does not mind it.
 
+### Timed jobs
+
+Admin Settings → Timed Jobs lists every job that runs on a timer. The
+reaper and the workshop scheduler are Cloud Run jobs with a Cloud Scheduler
+job each (`tf-reaper-trigger`, `tf-scheduler-trigger`), and their schedule is
+set in Terraform. The app's own jobs (the HiBob sync, with the cohort Slack
+sync and intake reminders after it; the Google Meetings sync; the Canary
+Wire's pull) have one Cloud Scheduler job between them, `timed-jobs-tick`,
+which calls `/api/settings/timed-jobs/tick` every five minutes with an OIDC
+token for the scheduler service account. The app starts whichever has fallen
+due on the schedule kept in `timed_jobs` (set on the tab; the registry's
+default until then), claiming each time first so a retried tick starts
+nothing twice. A time missed by more than 30 minutes, say while a deploy
+rolled, is skipped rather than run late. Each job runs the same code as its
+Sync Now button, so it is a dry run while its sync is not live and follows
+the test group while it is on.
+
 ### Google Meetings
 
 eVals Settings → Google Meetings invites the cohort to meetings that already
@@ -152,15 +168,20 @@ in the next 60 days and says whom it is for: Bootcamp, Intermediate or both,
 and Sales, Engineers or both. A candidate counts as Intermediate once
 their bootcamp history (`employees.btc_date`) gives them a BTC date.
 
-*Sync Now* then does the following for each picked meeting
+The sync runs every day at 4:00 AM Eastern, started by the
+[timed jobs](#timed-jobs) dispatcher, and whenever someone presses *Sync
+Now*. Admin Settings → Timed Jobs can switch the daily run off or change when
+it runs.
+Each run does the following for each picked meeting
 (`lib/evals/meeting-sync.ts`, with the rules in `lib/evals/meeting-plan.ts`):
 
 - **Invites.** Each person on the Cohorts → Current tab whom the meeting is
   for is added to the next occurrence of it that falls before the active
   bootcamp's start date. So is every Assessments Administrator, on any
-  occurrence that has a cohort member on it. The invite is updated with
-  `sendUpdates=all`, so Google emails each new guest. An invite whose guests
-  are already right is left alone, because updating it emails everyone on it.
+  occurrence that has a cohort member on it. Every change to the calendar is
+  sent with `sendUpdates=none`, so Google emails no one: a new guest finds the
+  invite on their calendar, and one taken off simply loses it. An invite whose
+  guests are already right is left alone.
 - **Who it takes off.** It takes off only the guests it added itself. Anyone
   added by hand, or by the meeting's owner, stays.
 - **Replies.** It reads each guest's reply back from the event.

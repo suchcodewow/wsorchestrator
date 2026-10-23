@@ -1,4 +1,4 @@
-/** The jobs Cloud Scheduler runs: their schedules, last runs and switches. */
+/** The timed jobs: their schedules, last runs and switches. */
 
 import { listTimedJobs } from "@/lib/timed-jobs";
 import { TimedJobsView } from "./timed-jobs-view";

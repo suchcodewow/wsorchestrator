@@ -14,6 +14,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   AlertTriangle,
+  CalendarClock,
   CheckCircle2,
   Eye,
   FlaskConical,
@@ -51,6 +52,7 @@ export type MeetingListing = EditableMeeting & {
 
 export type MeetingRun = {
   id: string;
+  trigger: "schedule" | "manual";
   triggeredBy: string | null;
   status: MeetingSyncStatus;
   dryRun: boolean;
@@ -190,7 +192,7 @@ export function GoogleMeetingsView({ overview, list }: { overview: Overview; lis
       !preview &&
       live &&
       !window.confirm(
-        "Sync now? Everyone each meeting is for is added to its next occurrence before the bootcamp, and Google emails them the invite. Preview shows what it would do without doing it.",
+        "Sync now? Everyone each meeting is for is added to its next occurrence before the bootcamp, where it shows up on their calendar without an email. Preview shows what it would do without doing it.",
       )
     ) {
       return;
@@ -399,7 +401,7 @@ export function GoogleMeetingsView({ overview, list }: { overview: Overview; lis
             <p className="font-medium">Mode</p>
             <p className="text-muted-foreground">
               {live
-                ? "Each sync adds people to their next occurrence, takes off anyone it invited who no longer belongs, and Google emails them."
+                ? "Each sync adds people to their next occurrence, and takes off anyone it invited who no longer belongs. Google emails no one about it."
                 : "Each sync reads the calendar and Zoom and logs whom it would invite and take off, without changing any invite."}
             </p>
           </div>
@@ -658,8 +660,17 @@ function RunsTable({ list: { query, page } }: { list: Extract<List, { view: "run
                 </td>
                 <td className="whitespace-nowrap px-5 py-2.5 text-muted-foreground">
                   <span className="flex items-center gap-1.5">
-                    <User className="size-3.5" />
-                    {run.triggeredBy ?? "Someone since removed"}
+                    {run.trigger === "schedule" ? (
+                      <>
+                        <CalendarClock className="size-3.5" />
+                        Schedule
+                      </>
+                    ) : (
+                      <>
+                        <User className="size-3.5" />
+                        {run.triggeredBy ?? "Someone since removed"}
+                      </>
+                    )}
                   </span>
                 </td>
                 <td className="px-5 py-2.5">

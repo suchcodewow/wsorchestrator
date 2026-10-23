@@ -94,7 +94,7 @@ export function MeetingRunView({
         </h2>
         <div className="space-y-1 text-sm">
           <p className="text-muted-foreground">
-            By {run.triggeredBy ?? "someone since removed"}
+            {run.trigger === "schedule" ? "On the schedule" : `By ${run.triggeredBy ?? "someone since removed"}`}
             {run.dryRun && ": no invite was changed, and each row says what would have been"}
           </p>
           <MeetingRunResult run={run} />

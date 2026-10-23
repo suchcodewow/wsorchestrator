@@ -562,7 +562,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         token: true,
         params: [{ name: "id", type: "string", required: true, note: "UUID" }],
         notes:
-          "Any field left out is kept. A new name first takes everyone the sync invited to the old name's upcoming occurrences off them, which emails them, and forgets its occurrences; the next sync reads the new name's. A new stage, track or time zone range changes nothing until the next sync, which takes off anyone the meeting is no longer for. Allows 60 seconds.",
+          "Any field left out is kept. A new name first takes everyone the sync invited to the old name's upcoming occurrences off them, without emailing them, and forgets its occurrences; the next sync reads the new name's. A new stage, track or time zone range changes nothing until the next sync, which takes off anyone the meeting is no longer for. Allows 60 seconds.",
         body: {
           kind: "json",
           fields: [
@@ -592,7 +592,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         token: true,
         params: [{ name: "id", type: "string", required: true, note: "UUID" }],
         notes:
-          "Only guests the sync added are taken off, which emails them; the calendar's events themselves stay, as do guests put there by hand. events counts the occurrences changed. Its attendance and marks go with it. Allows 60 seconds.",
+          "Only guests the sync added are taken off, and no one is emailed; the calendar's events themselves stay, as do guests put there by hand. events counts the occurrences changed. Its attendance and marks go with it. Allows 60 seconds.",
         returns: "{ ok: true, events: number }",
         errors: [
           { status: 404, error: "not_found", when: "id is not a UUID, or no such meeting" },
@@ -681,7 +681,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         notes:
           "A run is skipped when it had nothing to do, with error saying why. dryRun marks a run that changed nothing, testGroup one that invited the test group in place of the cohort. unfinished marks a run that stopped at its deadline before every meeting was done; the next picks up the rest. running says whether a run is under way now, live whether a run started now would change the calendar.",
         query: listQuery(MEETING_SYNC_LIST.sorts, "who started it, the status or the error"),
-        returns: `{ runs: { id, triggeredBy: string | null, status: "running" | "succeeded" | "skipped" | "failed", dryRun: boolean, testGroup: boolean, startedAt, finishedAt: string | null, invited, removed, attended, missed, noneLeft, failures: number, unfinished: boolean, error: string | null, notes: string[] }[], ${PAGE_FIELDS}, running: boolean, live: boolean }`,
+        returns: `{ runs: { id, trigger: "schedule" | "manual", triggeredBy: string | null, status: "running" | "succeeded" | "skipped" | "failed", dryRun: boolean, testGroup: boolean, startedAt, finishedAt: string | null, invited, removed, attended, missed, noneLeft, failures: number, unfinished: boolean, error: string | null, notes: string[] }[], ${PAGE_FIELDS}, running: boolean, live: boolean }`,
       },
       {
         method: "POST",
@@ -690,7 +690,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "assessmentsAdmin",
         token: true,
         notes:
-          "Runs as the connected Google account, in one logged run. It reads the calendar's next 60 days and stores each event of each picked meeting's name as an occurrence, with its guests' replies and the Zoom meeting in its link. For each occurrence over for half an hour whose attendance is not known, it asks the connected Zoom user's past-meeting report who joined, matching by email and then by full name; one with no Zoom link, or no Zoom user connected, waits for an administrator's mark (PUT /api/evals/google-meetings/{id}/attendance). Then each person on the Current tab a meeting is for is invited to its next occurrence that starts before the active bootcamp does; anyone who missed theirs is invited to the next one after it, and anyone with none left is logged as none_left and not invited. Someone who attended is taken off any later occurrence, as is anyone the meeting is no longer for. Every Assessments Administrator is added to each occurrence a cohort member is on. The sync takes off only guests it added; an invite already right is left alone, since a change emails every guest. With the test group on, its members stand in for the cohort and no administrators are added. The first live run also cancels, once, the upcoming invites and Zoom meetings the old create-a-meeting flow made. With preview, or while the sync is not live, it is a dry run that logs what it would do. The run's changes are on GET /api/evals/google-meetings/sync/{id}. Allows 300 seconds.",
+          "Runs as the connected Google account, in one logged run. It reads the calendar's next 60 days and stores each event of each picked meeting's name as an occurrence, with its guests' replies and the Zoom meeting in its link. For each occurrence over for half an hour whose attendance is not known, it asks the connected Zoom user's past-meeting report who joined, matching by email and then by full name; one with no Zoom link, or no Zoom user connected, waits for an administrator's mark (PUT /api/evals/google-meetings/{id}/attendance). Then each person on the Current tab a meeting is for is invited to its next occurrence that starts before the active bootcamp does; anyone who missed theirs is invited to the next one after it, and anyone with none left is logged as none_left and not invited. Someone who attended is taken off any later occurrence, as is anyone the meeting is no longer for. Every Assessments Administrator is added to each occurrence a cohort member is on. The sync takes off only guests it added; an invite already right is left alone. Every change is sent to Google with sendUpdates=none, so no guest is emailed about an invite, a removal or a cancellation. With the test group on, its members stand in for the cohort and no administrators are added. The first live run also cancels, once, the upcoming invites and Zoom meetings the old create-a-meeting flow made. With preview, or while the sync is not live, it is a dry run that logs what it would do. The run's changes are on GET /api/evals/google-meetings/sync/{id}. Allows 300 seconds.",
         body: { kind: "json", fields: [{ name: "preview", type: "boolean", note: "a dry run whether or not the sync is live; an empty body is a sync" }] },
         returns:
           '{ ok: true, runId, status: "succeeded" | "skipped", dryRun: boolean, testGroup: boolean, unfinished: boolean, notes: string[], invited, removed, attended, missed, noneLeft, failures: number }',
@@ -829,7 +829,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "platform",
         token: true,
         notes:
-          "While on, everything the app sends outside itself for the cohort goes to the test group instead: the cohort Slack sync makes its own public channels, named like the real ones with -{suffix} on the end, and invites the group to them; the intake form reminders are sent to the group; and the Google Meetings sync invites the group to the picked meetings in place of the cohort, with no administrators. The real cohort's channels and invites are left untouched, and the Bootcamp and Engineer Contacts are not added. It cannot be on without a suffix and at least one person, and the suffix (lowercased, letters, digits and hyphens) cannot change while it is on. Each person has a stage (bootcamp, intermediate or both): they are invited to that stage's channels and meetings, reminded about its intake form, and may fill it in at /intake, their answers kept apart and deleted when the group is turned off. Turning it off first archives the Slack channels it made (Slack's API archives; it cannot delete) and takes the group off the meeting invites it was given, emailing them; if any of that fails it stays on and returns 502 with the failures, to try again. At most 100 people.",
+          "While on, everything the app sends outside itself for the cohort goes to the test group instead: the cohort Slack sync makes its own public channels, named like the real ones with -{suffix} on the end, and invites the group to them; the intake form reminders are sent to the group; and the Google Meetings sync invites the group to the picked meetings in place of the cohort, with no administrators. The real cohort's channels and invites are left untouched, and the Bootcamp and Engineer Contacts are not added. It cannot be on without a suffix and at least one person, and the suffix (lowercased, letters, digits and hyphens) cannot change while it is on. Each person has a stage (bootcamp, intermediate or both): they are invited to that stage's channels and meetings, reminded about its intake form, and may fill it in at /intake, their answers kept apart and deleted when the group is turned off. Turning it off first archives the Slack channels it made (Slack's API archives; it cannot delete) and takes the group off the meeting invites it was given, without emailing them; if any of that fails it stays on and returns 502 with the failures, to try again. At most 100 people.",
         body: {
           kind: "json",
           fields: [
@@ -2524,7 +2524,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       {
         method: "POST",
         path: "/api/evals/canary-wire/pull",
-        summary: "Starts a pull from Mindtickle now (Refresh now), rather than waiting for the next two-hourly one.",
+        summary: "Starts a pull from Mindtickle now (Sync Now), rather than waiting for the next two-hourly one.",
         access: "platform",
         token: true,
         notes:
@@ -3120,50 +3120,16 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       },
       {
         method: "POST",
-        path: "/api/evals/canary-wire/pull/scheduled",
-        summary: "Starts the Canary Wire's two-hourly pull, or takes it a step further, for Cloud Scheduler.",
+        path: "/api/settings/timed-jobs/tick",
+        summary: "Starts each of the app's own timed jobs that has fallen due, for Cloud Scheduler.",
         access: "internal",
         token: false,
         notes:
-          "Called every five minutes for the first half hour of every even hour. Accepts only a Google-signed OIDC token for CANARY_WIRE_PULL_AUDIENCE from the CANARY_WIRE_PULL_INVOKER service account; either unset refuses every call. Works on a pull already running, including one a closed page left halfway; otherwise starts one unless one started in the last 90 minutes, whatever became of it, so a failure is retried two hours later rather than every five minutes. Allows 300 seconds.",
-        returns: "{ outcome: \"advanced\" | \"started\" | \"fresh\", pull: { id, trigger: \"manual\" | \"schedule\", status: \"running\" | \"succeeded\" | \"failed\", message, done: number, total: number, error: string | null, startedAt, updatedAt, finishedAt: string | null, startedByName: string | null, working: boolean } | null }",
+          "Called every five minutes. Accepts only a Google-signed OIDC token for TIMED_JOBS_AUDIENCE from the TIMED_JOBS_INVOKER service account; either unset refuses every call. Starts, side by side, every job GET /api/settings/timed-jobs lists with via \"dispatcher\" whose schedule fell due in the last 30 minutes and after the time it was last started for; that time is claimed first, so a retried or doubled call starts nothing twice, and a time missed by more than 30 minutes is skipped rather than run late. Each job runs the same code as its Sync Now button, logged with trigger schedule: the HiBob sync and then the cohort Slack sync as POST /api/cohorts/slack/sync runs it, with the day's intake form reminders; the Google Meetings sync as POST /api/evals/google-meetings/sync without preview, so a dry run while the sync is not live and on the test group's invites while it is on; and a step of the Canary Wire's pull. A job switched off is recorded as skipped and answers { skipped: \"off\" }. Answers 502, with the same body, if any job it started failed, so Cloud Scheduler's history shows it. Allows 300 seconds.",
+        returns:
+          "{ ran: { key: string, status: number, body: <as that job's own route answers, or { skipped: string }> }[] }; an empty ran when nothing was due",
         errors: [
           { status: 401, error: "unauthorized", when: "the OIDC token is missing, invalid or from someone else" },
-          { status: 409, error: "not_configured", when: "Mindtickle's key pair or tenant is unset" },
-        ],
-      },
-      {
-        method: "POST",
-        path: "/api/logistics/intake-reminders/scheduled",
-        summary: "Sends the intake form's daily Slack reminder for Cloud Scheduler.",
-        access: "internal",
-        token: false,
-        notes:
-          "Accepts only a Google-signed OIDC token for INTAKE_REMINDERS_AUDIENCE from the INTAKE_REMINDERS_INVOKER service account; either unset refuses every call. Starts no run while the daily reminder is off (PUT /api/cohorts/slack/settings) or once today's (America/New_York) have gone out, so a retried call messages nobody twice. Otherwise a run of the cohort Slack sync with scope reminders, as POST /api/cohorts/slack/sync sends them, and a dry run while the sync is. Allows 300 seconds.",
-        returns: `{ skipped: "off" | "already_sent" } | <as POST /api/cohorts/slack/sync answers>`,
-        errors: [
-          { status: 401, error: "unauthorized", when: "the OIDC token is missing, invalid or from someone else" },
-          { status: 409, error: "already_running", when: "another sync is running" },
-          { status: 409, error: "not_configured", when: "there is no Slack bot token" },
-          { status: 502, error: "slack_error", when: "Slack refused the token, as for a missing scope" },
-        ],
-      },
-      {
-        method: "POST",
-        path: "/api/evals/hibob/sync/scheduled",
-        summary: "Runs the daily HiBob sync for Cloud Scheduler.",
-        access: "internal",
-        token: false,
-        notes:
-          "Accepts only a Google-signed OIDC token for HIBOB_SYNC_AUDIENCE from the HIBOB_SYNC_INVOKER service account; either unset refuses every call. Same sync as the manual one. A successful sync is followed by the cohort Slack sync's channels, as POST /api/cohorts/slack/sync syncs them, without its reminders, which go out on their own schedule; its result is slack, and its failure does not fail this call. Allows 300 seconds.",
-        returns: "{ count: number, skipped: number, slack: <as POST /api/cohorts/slack/sync answers, or { ok: false, error, detail }> }",
-        errors: [
-          { status: 401, error: "unauthorized", when: "the OIDC token is missing, invalid or from someone else" },
-          { status: 409, error: "already_running", when: "another sync is running" },
-          { status: 409, error: "not_configured", when: "the deployment has no HiBob service user or token" },
-          { status: 422, error: "rejected", when: "HiBob refused the credentials" },
-          { status: 502, error: "unreachable", when: "HiBob could not be reached" },
-          { status: 502, error: "bad_response", when: "HiBob answered with an error or no employee list" },
         ],
       },
       {

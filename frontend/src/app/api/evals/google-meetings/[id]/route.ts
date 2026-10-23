@@ -1,6 +1,6 @@
 /**
  * Changes or deletes one picked meeting. Renaming or deleting one first takes
- * everyone the sync invited off its upcoming occurrences, emailing them;
+ * everyone the sync invited off its upcoming occurrences, without emailing them;
  * neither is allowed while a sync is running.
  */
 

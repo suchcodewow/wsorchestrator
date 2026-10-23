@@ -1,8 +1,13 @@
 /**
- * Every job Cloud Scheduler runs, for the Timed Jobs tab. Pure, so the page,
- * the API reference and the unit test can all read it; the schedule text
- * repeats `infra/admin/scheduler.tf`, and `test/unit/timed-jobs.test.ts`
- * fails when the two disagree.
+ * Every timed job, for the Timed Jobs tab. Pure, so the page, the API
+ * reference and the unit test can all read it.
+ *
+ * Two kinds. The Cloud Run jobs (reaper, scheduler) have a Cloud Scheduler
+ * job each, so their schedule is the one in `infra/admin/scheduler.tf` and
+ * `test/unit/timed-jobs.test.ts` fails when the two disagree. The app's own
+ * jobs are started by its dispatcher (`lib/timed-jobs.ts`), which Cloud
+ * Scheduler's `timed-jobs-tick` calls every five minutes; their schedule here
+ * is only the default, which an administrator can change on the tab.
  */
 
 export type TimedJobDef = {
@@ -10,17 +15,25 @@ export type TimedJobDef = {
   name: string;
   /** What the job does, in a sentence. */
   summary: string;
-  /** The cron expression exactly as scheduler.tf has it. */
+  /**
+   * `dispatcher` for the app's own jobs, whose schedule is kept in the
+   * database and can be changed; `cloud-scheduler` for one Terraform fixes.
+   */
+  via: "dispatcher" | "cloud-scheduler";
+  /** The cron expression: scheduler.tf's exactly, or the dispatcher's default. */
   cron: string;
   /** IANA zone the cron is read in. */
   timeZone: string;
-  /** The schedule in words. */
+  /** The default schedule in words. */
   schedule: string;
-  /** The Terraform resource that runs it. */
+  /** The Cloud Scheduler job that calls it, or the dispatcher's tick. */
   resource: string;
   /** What switching it off costs, shown beside the switch while it is off. */
   offWarning?: string;
 };
+
+/** The Cloud Scheduler job that calls the dispatcher. */
+export const TICK_RESOURCE = "timed-jobs-tick";
 
 export const TIMED_JOBS: readonly TimedJobDef[] = [
   {
@@ -30,6 +43,7 @@ export const TIMED_JOBS: readonly TimedJobDef[] = [
     cron: "*/5 * * * *",
     timeZone: "UTC",
     schedule: "Every 5 minutes",
+    via: "cloud-scheduler",
     resource: "tf-reaper-trigger",
     offWarning: "Expired workshops are not torn down while this is off, and keep costing money.",
   },
@@ -40,35 +54,39 @@ export const TIMED_JOBS: readonly TimedJobDef[] = [
     cron: "*/5 * * * *",
     timeZone: "UTC",
     schedule: "Every 5 minutes",
+    via: "cloud-scheduler",
     resource: "tf-scheduler-trigger",
     offWarning: "Scheduled workshops are not started while this is off, so they are not ready on time.",
   },
   {
     key: "hibob-sync",
     name: "HiBob sync",
-    summary: "Syncs employees from HiBob, then the cohort Slack channels.",
+    summary: "Syncs employees from HiBob, then the cohort Slack channels, then sends the day's intake form reminders.",
     cron: "0 3 * * *",
     timeZone: "America/New_York",
     schedule: "Daily at 3:00 AM Eastern",
-    resource: "hibob-sync-trigger",
+    via: "dispatcher",
+    resource: TICK_RESOURCE,
   },
   {
-    key: "intake-reminders",
-    name: "Intake reminders",
-    summary: "Sends the daily Slack reminder to anyone yet to answer their intake form.",
-    cron: "0 10 * * *",
+    key: "google-meetings-sync",
+    name: "Google Meetings sync",
+    summary: "Reads the Revenue Enablement calendar and Zoom attendance, then invites the cohort to its meetings.",
+    cron: "0 4 * * *",
     timeZone: "America/New_York",
-    schedule: "Daily at 10:00 AM Eastern",
-    resource: "intake-reminders-trigger",
+    schedule: "Daily at 4:00 AM Eastern",
+    via: "dispatcher",
+    resource: TICK_RESOURCE,
   },
   {
     key: "canary-wire-pull",
     name: "Canary Wire pull",
-    summary: "Pulls completions from Mindtickle, a step at a time.",
+    summary: "Pulls completions from Mindtickle, a step at a time: a pull takes three or four runs five minutes apart, so a schedule needs a burst like the default's.",
     cron: "0,5,10,15,20,25,30 */2 * * *",
     timeZone: "America/New_York",
     schedule: "Every 5 minutes for the first half hour of every second hour, Eastern",
-    resource: "canary-wire-pull-trigger",
+    via: "dispatcher",
+    resource: TICK_RESOURCE,
   },
 ];
 

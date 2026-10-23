@@ -137,18 +137,13 @@ resource "google_cloud_run_v2_service" "app" {
           length(var.harness_infra_orgs) > 0
           ? { HARNESS_INFRA_ORGS = join(",", var.harness_infra_orgs) }
           : {},
-          # The HiBob service user, and who may call the scheduled sync: the
-          # scheduler's OIDC token must carry this audience and this email
-          # (see scheduler.tf). The token itself is secret-backed, below.
+          # The HiBob service user. The token itself is secret-backed, below.
           var.hibob_userid != "" ? { HIBOB_SERVICE_USER_ID = var.hibob_userid } : {},
+          # Who may call the Timed Jobs dispatcher's tick: the scheduler's OIDC
+          # token must carry this audience and this email (see scheduler.tf).
           {
-            HIBOB_SYNC_AUDIENCE = local.hibob_sync_audience
-            HIBOB_SYNC_INVOKER  = google_service_account.scheduler.email
-          },
-          # Who may call the daily intake reminders (see scheduler.tf).
-          {
-            INTAKE_REMINDERS_AUDIENCE = local.intake_reminders_audience
-            INTAKE_REMINDERS_INVOKER  = google_service_account.scheduler.email
+            TIMED_JOBS_AUDIENCE = local.timed_jobs_audience
+            TIMED_JOBS_INVOKER  = google_service_account.scheduler.email
           },
           # The Slack app behind Add to Slack. Its client secret is
           # secret-backed, below.
@@ -156,13 +151,11 @@ resource "google_cloud_run_v2_service" "app" {
             SLACK_APP_CLIENT_ID = var.slack_app_client_id
             SLACK_APP_ID        = var.slack_app_id
           } : {},
-          # The Canary Wire's Mindtickle tenant, and who may call its scheduled
-          # pull (see scheduler.tf). The key pair is secret-backed, below.
+          # The Canary Wire's Mindtickle tenant. The key pair is secret-backed,
+          # below.
           var.mindtickle_company_id != "" ? {
-            MT_COMPANY_ID             = var.mindtickle_company_id
-            MT_REGION                 = var.mindtickle_region
-            CANARY_WIRE_PULL_AUDIENCE = local.canary_wire_pull_audience
-            CANARY_WIRE_PULL_INVOKER  = google_service_account.scheduler.email
+            MT_COMPANY_ID = var.mindtickle_company_id
+            MT_REGION     = var.mindtickle_region
           } : {},
           # Google Meetings: the account to offer at sign-in, and the Zoom app
           # its meetings are made through. The Zoom secret is secret-backed, below.
