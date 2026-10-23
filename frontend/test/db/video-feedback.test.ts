@@ -132,7 +132,7 @@ describe("the summary of each Mimir video", () => {
     return page.rows.find((r) => r.conceptId === "alpha");
   };
 
-  test("counts thumbs up and down, and those with a comment, and leaves out recordings", async () => {
+  test("counts smiley and confused ratings, and those with a comment, and leaves out recordings", async () => {
     const before = (await summaryOf()) ?? { up: 0, upComments: 0, down: 0, downComments: 0 };
     const alpha = (await findVideo(viewer.access, { kind: "mimir_concept", id: "alpha" }))!;
     if (alpha === "forbidden") return assert.fail("anyone may rate a concept");

@@ -1,5 +1,5 @@
 /**
- * Each Mimir video that has feedback, with how many thumbs up and down it has
+ * Each Mimir video that has feedback, with how many smiley and confused ratings it has
  * and how many of them came with a comment, for Mimir Settings → Mimir
  * Feedback. A video's own feedback is `GET /api/video-feedback`.
  */

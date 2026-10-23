@@ -1,6 +1,6 @@
 /**
- * Thumbs up and thumbs down on videos. `POST` is the buttons over a player:
- * one thumb, where the video was, and the comment if one was written. `GET`
+ * Smiley and confused ratings on videos. `POST` is the buttons over a player:
+ * one rating, where the video was, and the comment if one was written. `GET`
  * reads it all back a page at a time, for Training Administrators.
  */
 
