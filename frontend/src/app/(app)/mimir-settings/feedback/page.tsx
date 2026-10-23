@@ -1,5 +1,5 @@
 /**
- * The Mimir Feedback tab: each video with feedback and its counts of thumbs, a
+ * The Mimir Feedback tab: each video with feedback and its counts of ratings, a
  * page at a time. Assessments Administrators can also edit, accept and ignore comments.
  */
 

@@ -3269,9 +3269,9 @@ export const VIDEO_FEEDBACK_LIMITS = {
 } as const;
 
 /**
- * One thumbs up or thumbs down on a video, from the buttons over the player:
+ * One smiley or confused rating on a video, from the buttons over the player:
  * who gave it, which video, where in it they were, and what they wrote if
- * they used the comment button beside the thumb. Every click is its own row.
+ * they used the comment button beside the face. Every click is its own row.
  * A Mimir concept is a key into the imported map, not a foreign key; a
  * recording's stream is, so its feedback goes when the take is deleted.
  * `videoLabel` is the video's name when the feedback was given.
@@ -3286,10 +3286,10 @@ export const videoFeedback = pgTable(
     recordingTrackId: uuid("recording_track_id").references(() => recordingTracks.id, { onDelete: "cascade" }),
     videoLabel: text("video_label").notNull().default(""),
     rating: text("rating").$type<VideoFeedbackRating>().notNull(),
-    /** Where the video was, in seconds, when the thumb or comment button was pressed. */
+    /** Where the video was, in seconds, when the face or comment button was pressed. */
     positionSeconds: doublePrecision("position_seconds").notNull(),
     comment: text("comment"),
-    /** Only a comment is accepted or ignored; a bare thumb stays pending. */
+    /** Only a comment is accepted or ignored; a bare rating stays pending. */
     status: text("status").$type<VideoFeedbackStatus>().notNull().default("pending"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },

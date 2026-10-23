@@ -1,5 +1,5 @@
 /**
- * Thumbs up and thumbs down on videos, from the buttons over every player:
+ * Smiley and confused ratings on videos, from the buttons over every player:
  * which video it was, checked against what the caller may watch, and the
  * feedback read back a page at a time.
  *
@@ -50,7 +50,7 @@ export async function findVideo(access: Access, ref: VideoRef): Promise<FoundVid
 
 export type NewVideoFeedback = { rating: VideoFeedbackRating; position: number; comment: string | null };
 
-/** One row: every press of a thumb, or save of a comment, is its own. */
+/** One row: every press of a face, or save of a comment, is its own. */
 export async function recordVideoFeedback(userId: string, video: FoundVideo, input: NewVideoFeedback) {
   const [row] = await db
     .insert(videoFeedback)
@@ -149,7 +149,7 @@ export async function listVideoFeedback(
   return toPage(rows.map(toRow), query.page);
 }
 
-/** One Mimir concept's video and how it has been rated. A comment is a thumb that came with words. */
+/** One Mimir concept's video and how it has been rated. A comment is a rating that came with words. */
 export type VideoFeedbackSummaryRow = {
   conceptId: string;
   label: string;
@@ -202,7 +202,7 @@ export type VideoFeedbackEdit = { comment?: string; status?: VideoFeedbackStatus
 /**
  * An administrator's edit to a comment's words or its status. Only a row that
  * has a comment can be changed: "not_found" if there is no such row,
- * "no_comment" if it is a bare thumb. Returns the row as it was too, for the audit.
+ * "no_comment" if it is a bare rating. Returns the row as it was too, for the audit.
  */
 export async function updateVideoFeedback(
   id: string,

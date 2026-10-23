@@ -2,7 +2,7 @@
 
 /**
  * Feedback on Mimir's videos: one row for each video that has any, with its
- * thumbs up and thumbs down and how many of each came with a comment. A row
+ * smiley and confused faces and how many of each came with a comment. A row
  * opens to that video's feedback, in the order of the video; a line of it plays
  * the video from five seconds before that point. Whoever may moderate can also
  * edit a comment and accept or ignore it, and a video with accepted comments
@@ -12,8 +12,9 @@
 import { Fragment, useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
-import { Check, ChevronRight, Loader2, MessageSquare, Pencil, RefreshCw, ThumbsDown, ThumbsUp, X } from "lucide-react";
+import { Check, ChevronRight, Loader2, MessageSquare, Pencil, RefreshCw, X } from "lucide-react";
 import { HEADER_ROW, LINK_ROW, Pager, SortHeader, TableSearch, useRowLink } from "@/components/data-table";
+import { RATING_LABELS, RatingFace } from "@/components/rating-face";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { VIDEO_FEEDBACK_LIMITS, type VideoFeedbackStatus } from "@/db/schema";
@@ -31,9 +32,9 @@ const LEAD_SECONDS = 5;
 
 const COLUMNS: { column: VideoFeedbackSummarySort; label: string; className?: string }[] = [
   { column: "video", label: "Video" },
-  { column: "up", label: "Thumbs up", className: "text-right" },
+  { column: "up", label: "Smiley", className: "text-right" },
   { column: "upComments", label: "With comment", className: "text-right" },
-  { column: "down", label: "Thumbs down", className: "text-right" },
+  { column: "down", label: "Confused", className: "text-right" },
   { column: "downComments", label: "With comment", className: "text-right" },
 ];
 
@@ -295,9 +296,9 @@ function Line({
         {formatDuration(f.positionSeconds * 1000)}
       </span>
       {f.rating === "up" ? (
-        <ThumbsUp aria-label="Thumbs up" className="mt-0.5 size-4 shrink-0 text-emerald-600" />
+        <RatingFace rating="up" aria-label={RATING_LABELS.up} className="mt-0.5 size-4 shrink-0 text-green-600" />
       ) : (
-        <ThumbsDown aria-label="Thumbs down" className="mt-0.5 size-4 shrink-0 text-red-600" />
+        <RatingFace rating="down" aria-label={RATING_LABELS.down} className="mt-0.5 size-4 shrink-0 text-orange-500" />
       )}
       <div className="min-w-0 flex-1 space-y-2">
         {editing ? (

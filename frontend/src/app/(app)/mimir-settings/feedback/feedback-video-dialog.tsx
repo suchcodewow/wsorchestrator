@@ -2,7 +2,7 @@
 
 /**
  * Plays a Mimir video from where a piece of feedback was left. It is for
- * reading feedback, so it has no thumbs of its own and does not report the
+ * reading feedback, so it has no rating buttons of its own and does not report the
  * viewer's place: watching here leaves their progress on the concept alone.
  */
 

@@ -1720,12 +1720,12 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
     id: "video-feedback",
     title: "Video feedback",
     intro:
-      "Thumbs up and thumbs down on videos. Every player in the app — a Mimir concept's video, and each stream of a recorded take — has a thumbs up and a thumbs down over it, each with a comment button beside it. A thumb is saved as it is pressed; the comment button pauses the video, and saving the comment saves the thumb with it and plays on. Every press is its own row, so the same person can rate the same video more than once.",
+      "Smiley and confused faces on videos (rating up is the green smiley, down the orange confused face). Every player in the app — a Mimir concept's video, and each stream of a recorded take — has both faces over it, each with a comment button beside it. A rating is saved as it is pressed; the comment button pauses the video, and saving the comment saves the rating with it and plays on. Every press is its own row, so the same person can rate the same video more than once.",
     endpoints: [
       {
         method: "POST",
         path: "/api/video-feedback",
-        summary: "Saves a thumbs up or thumbs down on a video, where it was, and an optional comment.",
+        summary: "Saves a smiley (up) or confused (down) rating on a video, where it was, and an optional comment.",
         access: "signedIn",
         token: true,
         notes:
@@ -1756,7 +1756,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         query: [
           ...listQuery(VIDEO_FEEDBACK_LIST.sorts, "the video's name, the comment, or the name or email of who gave it", "desc"),
           { name: "kind", type: `"mimir_concept" | "recording"`, note: "only feedback on that kind of video" },
-          { name: "rating", type: `"up" | "down"`, note: "only thumbs up, or only thumbs down" },
+          { name: "rating", type: `"up" | "down"`, note: "only smiley (up), or only confused (down)" },
           { name: "video", type: "string", note: "only feedback on the video with this id; read only alongside kind" },
         ],
         returns: `{ feedback: ${VIDEO_FEEDBACK_SHAPE}[], ${PAGE_FIELDS} }`,
@@ -1764,10 +1764,10 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       {
         method: "GET",
         path: "/api/video-feedback/summary",
-        summary: "Lists each Mimir video that has feedback with its counts of thumbs up and thumbs down, and of each that came with a comment, a page at a time, by video name.",
+        summary: "Lists each Mimir video that has feedback with its counts of smiley and confused ratings, and of each that came with a comment, a page at a time, by video name.",
         access: "trainingAdmin",
         token: true,
-        notes: "Only Mimir concept videos are counted. A comment is a thumb saved with words; the counts of thumbs include them. accepted is how many comments an administrator has accepted. label is the video's name when it was last rated.",
+        notes: "Only Mimir concept videos are counted. A comment is a rating saved with words; the counts of ratings include them. accepted is how many comments an administrator has accepted. label is the video's name when it was last rated.",
         query: listQuery(VIDEO_FEEDBACK_SUMMARY_LIST.sorts, "the video's name"),
         returns: `{ videos: { conceptId, label, up: number, upComments: number, down: number, downComments: number, accepted: number }[], ${PAGE_FIELDS} }`,
       },
@@ -1778,7 +1778,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "assessmentsAdmin",
         token: true,
         params: [{ name: "id", type: "string", required: true, note: "the feedback's id" }],
-        notes: "Only a thumb that came with a comment can be changed. Send comment, status, or both; the audit trail keeps the words before and after. A video with accepted comments is the one Mimir Feedback offers to regenerate.",
+        notes: "Only a rating that came with a comment can be changed. Send comment, status, or both; the audit trail keeps the words before and after. A video with accepted comments is the one Mimir Feedback offers to regenerate.",
         body: {
           kind: "json",
           fields: [
@@ -1790,7 +1790,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         errors: [
           { status: 400, error: "invalid", when: "neither field is sent, or one is blank or out of range" },
           { status: 404, error: "not_found", when: "no feedback has that id" },
-          { status: 409, error: "no_comment", when: "the feedback is a thumb with no comment" },
+          { status: 409, error: "no_comment", when: "the feedback is a rating with no comment" },
         ],
       },
     ],

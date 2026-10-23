@@ -1,11 +1,11 @@
 "use client";
 
 /**
- * A video with feedback buttons: a green thumbs up and a red thumbs down, each
+ * A video with feedback buttons: a green smiley face and an orange confused face, each
  * with a square comment button tucked behind it. In a `VideoPlayerDialog` they
- * sit centred in its title bar; elsewhere they float over the video's top corner. A thumb is saved the moment it
+ * sit centred in its title bar; elsewhere they float over the video's top corner. A rating is saved the moment it
  * is pressed, with where the video was. A comment button pauses the video and
- * opens a small box beside it; saving the comment saves that thumb with it,
+ * opens a small box beside it; saving the comment saves that rating with it,
  * closes the box and plays on. Cancelling saves nothing and plays on too.
  * Every player in the app is one of these, so feedback works the same
  * everywhere.
@@ -27,8 +27,13 @@ import {
   type RefObject,
 } from "react";
 import { createPortal } from "react-dom";
-import { Loader2, MessageSquarePlus, ThumbsDown, ThumbsUp } from "lucide-react";
+import { Loader2, MessageSquarePlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  RATING_LABELS,
+  RATING_TEXT_TONES,
+  RatingFace,
+} from "@/components/rating-face";
 import { FeedbackSlotContext } from "@/components/video-player-dialog";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -49,13 +54,8 @@ import { cn } from "@/lib/utils";
 /** The video feedback is filed against: a Mimir concept's id, or a recording stream's. */
 export type FeedbackTarget = { kind: VideoFeedbackKind; id: string };
 
-/** How long a saved thumb stays lit. */
+/** How long a saved rating stays lit. */
 const SAVED_MS = 2_000;
-
-const RATING_LABELS: Record<VideoFeedbackRating, string> = {
-  up: "Thumbs up",
-  down: "Thumbs down",
-};
 
 type Composing = {
   rating: VideoFeedbackRating;
@@ -133,7 +133,7 @@ function FeedbackBar({
     timer.current = setTimeout(() => setSaved(null), SAVED_MS);
   }
 
-  async function thumb(rating: VideoFeedbackRating) {
+  async function rate(rating: VideoFeedbackRating) {
     const el = video.current;
     if (!el) return;
     setSending(rating);
@@ -184,7 +184,7 @@ function FeedbackBar({
           const tone =
             rating === "up"
               ? "bg-green-600 hover:bg-green-500"
-              : "bg-red-600 hover:bg-red-500";
+              : "bg-orange-500 hover:bg-orange-400";
           return (
             <div key={rating} className="flex items-center">
               <OverlayButton
@@ -195,16 +195,12 @@ function FeedbackBar({
                   "relative z-10 size-9 rounded-full shadow-md ring-2 ring-background",
                   tone,
                 )}
-                onClick={() => void thumb(rating)}
+                onClick={() => void rate(rating)}
               >
                 {sending === rating ? (
                   <Loader2 className="animate-spin" />
-                ) : rating === "up" ? (
-                  <ThumbsUp className={cn(saved === "up" && "fill-current")} />
                 ) : (
-                  <ThumbsDown
-                    className={cn(saved === "down" && "fill-current")}
-                  />
+                  <RatingFace rating={rating} />
                 )}
               </OverlayButton>
               <OverlayButton
@@ -337,7 +333,6 @@ function CommentBox({
     else onClose(composing.rating);
   }
 
-  const Icon = composing.rating === "up" ? ThumbsUp : ThumbsDown;
   return (
     <form
       ref={box}
@@ -350,7 +345,10 @@ function CommentBox({
       }}
     >
       <p className="flex items-center gap-1.5 font-medium">
-        <Icon className="size-3.5" />
+        <RatingFace
+          rating={composing.rating}
+          className={cn("size-3.5", RATING_TEXT_TONES[composing.rating])}
+        />
         {RATING_LABELS[composing.rating]} at{" "}
         <span className="tabular-nums">
           {formatDuration(composing.position * 1000)}
