@@ -18,11 +18,11 @@ import { eq, inArray } from "drizzle-orm";
 
 import { db } from "@/db";
 import { mimirMap, videoFeedback } from "@/db/schema";
-import { VIDEO_FEEDBACK_LIST } from "@/lib/list-specs";
+import { VIDEO_FEEDBACK_LIST, VIDEO_FEEDBACK_SUMMARY_LIST } from "@/lib/list-specs";
 import { importMap } from "@/lib/mimir/map/content";
 import { MAP_ID } from "@/lib/mimir/map/schema";
 import { deleteTake, registerTrack } from "@/lib/recording/recordings";
-import { findVideo, listVideoFeedback, recordVideoFeedback } from "@/lib/video-feedback";
+import { findVideo, listVideoFeedback, listVideoFeedbackSummary, recordVideoFeedback } from "@/lib/video-feedback";
 import { PERSONAS } from "../support/access";
 import { mapFixture } from "../support/mimir-map";
 import { testScope, type TestUser } from "../support/seed";
@@ -123,5 +123,48 @@ describe("saving and reading back", () => {
 
     await deleteTake(takeId);
     assert.deepEqual(await db.select().from(videoFeedback).where(eq(videoFeedback.id, row.id)), []);
+  });
+});
+
+describe("the summary of each Mimir video", () => {
+  const summaryOf = async () => {
+    const page = await listVideoFeedbackSummary({ ...VIDEO_FEEDBACK_SUMMARY_LIST, q: "", page: 1 });
+    return page.rows.find((r) => r.conceptId === "alpha");
+  };
+
+  test("counts thumbs up and down, and those with a comment, and leaves out recordings", async () => {
+    const before = (await summaryOf()) ?? { up: 0, upComments: 0, down: 0, downComments: 0 };
+    const alpha = (await findVideo(viewer.access, { kind: "mimir_concept", id: "alpha" }))!;
+    if (alpha === "forbidden") return assert.fail("anyone may rate a concept");
+    const rows = [
+      await recordVideoFeedback(viewer.id, alpha, { rating: "up", position: 30, comment: `${MARK} late` }),
+      await recordVideoFeedback(viewer.id, alpha, { rating: "up", position: 3, comment: null }),
+      await recordVideoFeedback(viewer.id, alpha, { rating: "down", position: 9, comment: `${MARK} early` }),
+    ];
+    feedbackIds.push(...rows.map((r) => r.id));
+    const recording = (await findVideo(admin.access, { kind: "recording", id: trackId }))!;
+    if (recording === "forbidden") return assert.fail("an administrator may rate a recording");
+    feedbackIds.push((await recordVideoFeedback(admin.id, recording, { rating: "up", position: 1, comment: null })).id);
+
+    const after = (await summaryOf())!;
+    assert.equal(after.label, "Alpha");
+    assert.equal(after.up - before.up, 2);
+    assert.equal(after.upComments - before.upComments, 1);
+    assert.equal(after.down - before.down, 1);
+    assert.equal(after.downComments - before.downComments, 1);
+
+    const all = await listVideoFeedbackSummary({ ...VIDEO_FEEDBACK_SUMMARY_LIST, q: "", page: 1 });
+    assert.ok(all.rows.every((r) => r.conceptId !== trackId));
+  });
+
+  test("one video's feedback reads back from the start of the video to its end", async () => {
+    const page = await listVideoFeedback(
+      { ...VIDEO_FEEDBACK_LIST, sort: "position", dir: "asc", q: viewer.email, page: 1 },
+      { kind: "mimir_concept", video: "alpha" },
+    );
+    const positions = page.rows.map((r) => r.positionSeconds);
+    assert.deepEqual(positions, [...positions].sort((a, b) => a - b));
+    assert.ok(page.rows.length >= 3);
+    assert.ok(page.rows.every((r) => r.video.id === "alpha"));
   });
 });

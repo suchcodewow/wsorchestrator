@@ -9,7 +9,7 @@
  */
 
 import "server-only";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, isNotNull, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   recordingTracks,
@@ -18,7 +18,7 @@ import {
   type VideoFeedbackKind,
   type VideoFeedbackRating,
 } from "@/db/schema";
-import type { VideoFeedbackSort } from "@/lib/list-specs";
+import type { VideoFeedbackSort, VideoFeedbackSummarySort } from "@/lib/list-specs";
 import { getMap } from "@/lib/mimir/map/content";
 import { pageWindow, toPage, type ListQuery, type Page } from "@/lib/paging";
 import { blankAsNull, orderFor, searchAny } from "@/lib/paging-sql";
@@ -96,9 +96,17 @@ const SORT_COLUMNS = {
   video: sql`lower(${videoFeedback.videoLabel})`,
   user: sql`lower(coalesce(${blankAsNull(users.name)}, ${users.email}))`,
   rating: videoFeedback.rating,
+  position: videoFeedback.positionSeconds,
 };
 
-export type VideoFeedbackFilter = { kind?: VideoFeedbackKind; rating?: VideoFeedbackRating };
+/** `video` is one video's id, and means something only with the `kind` it is the id of. */
+export type VideoFeedbackFilter = { kind?: VideoFeedbackKind; rating?: VideoFeedbackRating; video?: string };
+
+function videoIs(filter: VideoFeedbackFilter) {
+  if (!filter.kind || !filter.video) return undefined;
+  if (filter.kind === "mimir_concept") return eq(videoFeedback.conceptId, filter.video);
+  return isUuid(filter.video) ? eq(videoFeedback.recordingTrackId, filter.video) : sql`false`;
+}
 
 /** Feedback a page at a time, the newest first; searched by video, comment, and who gave it. */
 export async function listVideoFeedback(
@@ -127,6 +135,7 @@ export async function listVideoFeedback(
       and(
         filter.kind ? eq(videoFeedback.videoKind, filter.kind) : undefined,
         filter.rating ? eq(videoFeedback.rating, filter.rating) : undefined,
+        videoIs(filter),
         searchAny(query.q, [videoFeedback.videoLabel, videoFeedback.comment, users.name, users.email]),
       ),
     )
@@ -134,4 +143,49 @@ export async function listVideoFeedback(
     .limit(limit)
     .offset(offset);
   return toPage(rows.map(toRow), query.page);
+}
+
+/** One Mimir concept's video and how it has been rated. A comment is a thumb that came with words. */
+export type VideoFeedbackSummaryRow = {
+  conceptId: string;
+  label: string;
+  up: number;
+  upComments: number;
+  down: number;
+  downComments: number;
+};
+
+const COUNTS = {
+  up: sql<number>`count(*) filter (where ${videoFeedback.rating} = 'up')::int`,
+  upComments: sql<number>`count(*) filter (where ${videoFeedback.rating} = 'up' and ${isNotNull(videoFeedback.comment)})::int`,
+  down: sql<number>`count(*) filter (where ${videoFeedback.rating} = 'down')::int`,
+  downComments: sql<number>`count(*) filter (where ${videoFeedback.rating} = 'down' and ${isNotNull(videoFeedback.comment)})::int`,
+};
+
+const SUMMARY_SORT_COLUMNS = {
+  video: sql`lower(max(${videoFeedback.videoLabel}))`,
+  ...COUNTS,
+};
+
+/** Every Mimir video with feedback, a page at a time, with its counts; searched by the video's name. */
+export async function listVideoFeedbackSummary(
+  query: ListQuery<VideoFeedbackSummarySort>,
+): Promise<Page<VideoFeedbackSummaryRow>> {
+  const { limit, offset } = pageWindow(query.page);
+  const rows = await db
+    .select({
+      conceptId: videoFeedback.conceptId,
+      label: sql<string>`(array_agg(${videoFeedback.videoLabel} order by ${videoFeedback.createdAt} desc))[1]`,
+      ...COUNTS,
+    })
+    .from(videoFeedback)
+    .where(and(eq(videoFeedback.videoKind, "mimir_concept"), searchAny(query.q, [videoFeedback.videoLabel])))
+    .groupBy(videoFeedback.conceptId)
+    .orderBy(...orderFor(SUMMARY_SORT_COLUMNS[query.sort], query.dir, videoFeedback.conceptId))
+    .limit(limit)
+    .offset(offset);
+  return toPage(
+    rows.map((r) => ({ ...r, conceptId: r.conceptId! })),
+    query.page,
+  );
 }

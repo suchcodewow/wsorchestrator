@@ -1,4 +1,4 @@
-import { FOOD_ORDER_LIST, RECORDING_LIST, GUEST_JUDGE_LIST, INTAKE_RESPONSE_LIST, JUDGE_PROSPECT_LIST, ASSESSMENT_ATTENDEE_LIST, ASSESSMENT_LIST, AUDIT_LIST, BOOTCAMP_COHORT_LIST, BOOTCAMP_HISTORY_LIST, BOOTCAMP_LIST, BOOTCAMP_RECORD_LIST, CURRENT_COHORT_LIST, DOMAIN_LIST, EMPLOYEE_LIST, HIBOB_SYNC_LIST, HISTORY_STATUSES, JUDGE_LIST, ORGANIZATION_LIST, PREVIOUS_SESSION_LIST, SESSION_COMMENT_LIST, SESSION_TYPE_LIST, MEETING_SELECTION_LIST, MEETING_SYNC_CHANGE_LIST, MEETING_SYNC_LIST, SLACK_CONTACT_LIST, SLACK_SYNC_CHANGE_LIST, SLACK_SYNC_LIST, CHANNEL_CONTACT_LIST, SURVEY_RESPONSE_LIST, SURVEY_RESULT_LIST, TITLE_LIST, USER_LIST, FACILITY_LIST, VIDEO_FEEDBACK_LIST } from "@/lib/list-specs";
+import { FOOD_ORDER_LIST, RECORDING_LIST, GUEST_JUDGE_LIST, INTAKE_RESPONSE_LIST, JUDGE_PROSPECT_LIST, ASSESSMENT_ATTENDEE_LIST, ASSESSMENT_LIST, AUDIT_LIST, BOOTCAMP_COHORT_LIST, BOOTCAMP_HISTORY_LIST, BOOTCAMP_LIST, BOOTCAMP_RECORD_LIST, CURRENT_COHORT_LIST, DOMAIN_LIST, EMPLOYEE_LIST, HIBOB_SYNC_LIST, HISTORY_STATUSES, JUDGE_LIST, ORGANIZATION_LIST, PREVIOUS_SESSION_LIST, SESSION_COMMENT_LIST, SESSION_TYPE_LIST, MEETING_SELECTION_LIST, MEETING_SYNC_CHANGE_LIST, MEETING_SYNC_LIST, SLACK_CONTACT_LIST, SLACK_SYNC_CHANGE_LIST, SLACK_SYNC_LIST, CHANNEL_CONTACT_LIST, SURVEY_RESPONSE_LIST, SURVEY_RESULT_LIST, TITLE_LIST, USER_LIST, FACILITY_LIST, VIDEO_FEEDBACK_LIST, VIDEO_FEEDBACK_SUMMARY_LIST } from "@/lib/list-specs";
 import { BOOTCAMP_LIMITS, CHECKLIST_LIMITS, EVALS_ASSESSMENT_LIMITS, FACILITY_LIMITS, FOOD_ORDER_LIMITS, INTAKE_LIMITS, MEETING_SELECTION_LIMITS, RECORDING_LIMITS, SCHEDULE_LIMITS, SURVEY_LIMITS, VIDEO_FEEDBACK_LIMITS } from "@/db/schema";
 import { PAGE_SIZE } from "@/lib/paging";
 import { RECORDING_RETENTION_DAYS, UPLOAD_STALLED_MS, UPLOAD_URL_BATCH } from "@/lib/recording/video";
@@ -1757,8 +1757,19 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           ...listQuery(VIDEO_FEEDBACK_LIST.sorts, "the video's name, the comment, or the name or email of who gave it", "desc"),
           { name: "kind", type: `"mimir_concept" | "recording"`, note: "only feedback on that kind of video" },
           { name: "rating", type: `"up" | "down"`, note: "only thumbs up, or only thumbs down" },
+          { name: "video", type: "string", note: "only feedback on the video with this id; read only alongside kind" },
         ],
         returns: `{ feedback: ${VIDEO_FEEDBACK_SHAPE}[], ${PAGE_FIELDS} }`,
+      },
+      {
+        method: "GET",
+        path: "/api/video-feedback/summary",
+        summary: "Lists each Mimir video that has feedback with its counts of thumbs up and thumbs down, and of each that came with a comment, a page at a time, by video name.",
+        access: "trainingAdmin",
+        token: true,
+        notes: "Only Mimir concept videos are counted. A comment is a thumb saved with words; the counts of thumbs include them. label is the video's name when it was last rated.",
+        query: listQuery(VIDEO_FEEDBACK_SUMMARY_LIST.sorts, "the video's name"),
+        returns: `{ videos: { conceptId, label, up: number, upComments: number, down: number, downComments: number }[], ${PAGE_FIELDS} }`,
       },
     ],
   },

@@ -148,8 +148,12 @@ export const RECORDING_LIST = spec(["startedAt", "contributor"], "desc");
 export type RecordingSort = (typeof RECORDING_LIST.sorts)[number];
 
 /** Thumbs up and down on videos, with their comments, the newest first. */
-export const VIDEO_FEEDBACK_LIST = spec(["createdAt", "video", "user", "rating"], "desc");
+export const VIDEO_FEEDBACK_LIST = spec(["createdAt", "video", "user", "rating", "position"], "desc");
 export type VideoFeedbackSort = (typeof VIDEO_FEEDBACK_LIST.sorts)[number];
+
+/** Mimir Settings → Mimir Feedback: each video with feedback, with its counts of thumbs. */
+export const VIDEO_FEEDBACK_SUMMARY_LIST = spec(["video", "up", "upComments", "down", "downComments"]);
+export type VideoFeedbackSummarySort = (typeof VIDEO_FEEDBACK_SUMMARY_LIST.sorts)[number];
 
 /** Each guest judge on each bootcamp they judged, the latest bootcamp first. */
 export const GUEST_JUDGE_LIST = spec(["cohort", "name", "sessions"], "desc");
