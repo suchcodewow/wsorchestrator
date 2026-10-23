@@ -22,6 +22,7 @@ export async function GET(req: Request) {
   const filter: VideoFeedbackFilter = {
     kind: VIDEO_FEEDBACK_KINDS.find((k) => k === params.get("kind")),
     rating: VIDEO_FEEDBACK_RATINGS.find((r) => r === params.get("rating")),
+    video: params.get("video") || undefined,
   };
   const { rows, page, hasMore } = await listVideoFeedback(parseListQuery(params, VIDEO_FEEDBACK_LIST), filter);
   return NextResponse.json({ feedback: rows, page, hasMore });

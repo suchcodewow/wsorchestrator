@@ -391,6 +391,7 @@ const PAGES: Record<string, PageCase> = {
   "/mimir-settings/content/<one>": { path: () => `/mimir-settings/content/${mimirItemId}`, expect: gated(canManageMimir) },
   "/mimir-settings/content/<unknown>": { path: () => `/mimir-settings/content/${MISSING}`, expect: () => 404 },
   "/mimir-settings/coaching": { path: () => "/mimir-settings/coaching", expect: gated(canManageMimir) },
+  "/mimir-settings/feedback": { path: () => "/mimir-settings/feedback", expect: gated(canManageMimir) },
   "/evals-settings": {
     path: () => "/evals-settings",
     expect: (a) => (canManageEvalsSettings(a) ? { to: EVALS_SETTINGS_TABS[0]!.href } : 404),
@@ -742,6 +743,7 @@ const ROUTES: RouteCase[] = [
 
   // Video feedback: anyone signed in rates what they can watch; reading it back is a Training Administrator's
   { method: "GET", path: "/api/video-feedback", allowed: canManageTrainingSettings },
+  { method: "GET", path: "/api/video-feedback/summary", allowed: canManageTrainingSettings },
   { method: "POST", path: "/api/video-feedback", allowed: true, body: () => ({}) },
 
   // eVals
