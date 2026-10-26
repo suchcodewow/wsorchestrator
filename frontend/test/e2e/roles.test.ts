@@ -465,6 +465,7 @@ const PAGES: Record<string, PageCase> = {
   "/me/api-tokens": { path: () => "/me/api-tokens", expect: () => 200 },
   "/inbox": { path: () => "/inbox", expect: () => 200 },
   "/labs": { path: () => "/labs", expect: () => 200, signedOut: 200 },
+  "/mindtickle-test": { path: () => "/mindtickle-test", expect: () => 200, signedOut: 200 },
   // Any signed-in account: someone outside the current cohort is told it is not theirs.
   "/intake": { path: () => "/intake", expect: () => 200 },
   "/intake/registration": { path: () => "/intake/registration", expect: () => 200 },
