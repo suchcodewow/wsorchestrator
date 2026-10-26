@@ -155,6 +155,10 @@ export type VideoFeedbackSort = (typeof VIDEO_FEEDBACK_LIST.sorts)[number];
 export const VIDEO_FEEDBACK_SUMMARY_LIST = spec(["video", "up", "upComments", "down", "downComments"]);
 export type VideoFeedbackSummarySort = (typeof VIDEO_FEEDBACK_SUMMARY_LIST.sorts)[number];
 
+/** Mimir Studio's decks and videos, the newest first. */
+export const MIMIR_STUDIO_JOB_LIST = spec(["createdAt", "kind", "label", "status"], "desc");
+export type MimirStudioJobSort = (typeof MIMIR_STUDIO_JOB_LIST.sorts)[number];
+
 /** Each guest judge on each bootcamp they judged, the latest bootcamp first. */
 export const GUEST_JUDGE_LIST = spec(["cohort", "name", "sessions"], "desc");
 export type GuestJudgeSort = (typeof GUEST_JUDGE_LIST.sorts)[number];

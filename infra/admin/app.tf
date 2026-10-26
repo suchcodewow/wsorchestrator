@@ -99,6 +99,9 @@ resource "google_cloud_run_v2_service" "app" {
           # Where async recordings are kept; derived from the resource, like
           # the instance above, so it is always this deployment's own bucket.
           { RECORDINGS_BUCKET = google_storage_bucket.recordings.name },
+          # The job Mimir Studio's uploads and Regenerate buttons start; unset,
+          # the app says the studio is not set up. See studio.tf.
+          local.studio_enabled ? { MIMIR_STUDIO_JOB = google_cloud_run_v2_job.studio[0].name } : {},
           # Anything but production puts a badge in the header.
           var.environment != "production" ? { APP_ENVIRONMENT = var.environment } : {},
           var.app_url != "" ? { AUTH_URL = var.app_url } : {},

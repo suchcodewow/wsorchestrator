@@ -23,6 +23,7 @@ export type Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
  *   assessmentsViewer Assessments Viewer or above      (canUseEvals, canTakeIris)
  *   assessmentsAdmin Assessments Administrator         (canManageEvalsSettings, canManageIris)
  *   employeeSearch Assessments or Training Administrator (canSearchEmployees)
+ *   mimirStudio  Assessments and Training Administrator (canRunMimirStudio)
  *   scorer       Assessments Viewer or above, or a guest judge on the active bootcamp (canScoreAssessments)
  *   canaryWire   a people manager (by HiBob), or Assessments Viewer or above (canSeeCanaryWire)
  *   userAdmin    an administrator in any area          (canManageUsers)
@@ -43,6 +44,7 @@ export type AccessKey =
   | "assessmentsViewer"
   | "assessmentsAdmin"
   | "employeeSearch"
+  | "mimirStudio"
   | "scorer"
   | "canaryWire"
   | "userAdmin"
@@ -62,6 +64,7 @@ export const ACCESS_LABELS: Record<AccessKey, string> = {
   assessmentsViewer: `${ASSESSMENTS_ROLE_LABELS.viewer} or above`,
   assessmentsAdmin: ASSESSMENTS_ROLE_LABELS.administrator,
   employeeSearch: `${ASSESSMENTS_ROLE_LABELS.administrator} or ${TRAINING_ROLE_LABELS.administrator}`,
+  mimirStudio: `${ASSESSMENTS_ROLE_LABELS.administrator} and ${TRAINING_ROLE_LABELS.administrator}`,
   scorer: `${ASSESSMENTS_ROLE_LABELS.viewer} or above, or a guest judge on the active bootcamp`,
   canaryWire: `A people manager (someone HiBob has reporting to them), or an ${ASSESSMENTS_ROLE_LABELS.viewer} or above`,
   userAdmin: "An administrator in any area",

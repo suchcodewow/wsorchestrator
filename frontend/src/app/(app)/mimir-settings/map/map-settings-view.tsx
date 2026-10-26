@@ -13,6 +13,7 @@ import { useRouter } from "next/navigation";
 import { Check, Loader2, TriangleAlert, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatWhen } from "../../cohort-settings/format";
+import { DeckPanel, type DeckDraft, type DeckJob } from "./deck-panel";
 
 const ERRORS: Record<string, string> = {
   no_file: "Choose a file to import.",
@@ -28,7 +29,16 @@ function clock(seconds: number) {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
 
-export function MapSettingsView({ summary, videos }: { summary: { importedAt: string; concepts: number; slides: number } | null; videos: Video[] }) {
+export function MapSettingsView({
+  summary,
+  videos,
+  studio,
+}: {
+  summary: { importedAt: string; concepts: number; slides: number } | null;
+  videos: Video[];
+  /** Mimir Studio's deck panel, for those who may run it. */
+  studio: { configured: boolean; job: DeckJob | null; draft: DeckDraft | null } | null;
+}) {
   const router = useRouter();
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
@@ -94,6 +104,8 @@ export function MapSettingsView({ summary, videos }: { summary: { importedAt: st
           )}
         </div>
       </section>
+
+      {studio && <DeckPanel {...studio} />}
 
       {videos.length > 0 && (
         <section className="overflow-hidden rounded-2xl border bg-card shadow-sm">

@@ -188,6 +188,14 @@ export const canScoreAssessments = (access: Access) => canUseEvals(access) || ac
 export const canSearchEmployees = (access: Access) =>
   canManageEvalsSettings(access) || canManageTrainingSettings(access);
 
+/**
+ * Mimir Studio: uploads a new slide deck for a new concept map, and makes a
+ * concept's video again. It sits in Mimir Settings, which is for Training
+ * Administrators, and acts on the comments only Assessments Administrators
+ * moderate, so it takes both.
+ */
+export const canRunMimirStudio = (access: Access) => canManageMimir(access) && canManageEvalsSettings(access);
+
 // Iris, part of the assessments area.
 
 /** Takes the placement tests: an Assessments Viewer or above. */
