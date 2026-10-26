@@ -297,15 +297,17 @@ open "https://app.harness.io/ng/account/8mh-FIIHQUapLuB6K0Cd-w/all/orgs/operatio
 
 **Roll production back** by running `deploy_production` with `sha=<older-sha>`,
 `allow_rollback=true` and `run_infra=false`.
-Only a commit QA built can be chosen, which in practice is any commit merged
-since QA existed.
+Only a commit whose image is still in QA's registry can be chosen. Each
+registry keeps the ten newest builds of each image (`registry.tf`), so that is
+the last ten merges to `main`.
 
 **Roll QA back** by reverting the commit on `main` through a PR.
 
 `make deploy TAG=<older-sha>` still works as **break-glass** for production. It
 reads the local `admin_control_plane` outputs, needs the operator's own GCP
-rights on the production project, and skips preflight. Use it only when
-Harness is down.
+rights on the production project, and skips preflight. It can reach the last
+ten production releases, the ones still in production's registry. Use it only
+when Harness is down.
 
 Rolling back the image does **not** roll back the schema. That is safe in the
 one direction the migrations are written for — they are additive, so an older
