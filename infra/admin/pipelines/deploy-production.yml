@@ -290,6 +290,14 @@ pipeline:
                         crane copy "${QA_REPO}/${image}:${TAG}" "${REPO}/${image}:${TAG}"
                         crane tag "${REPO}/${image}:${TAG}" latest
                       done
+                      # Mimir Studio's image, from the commit that added it on.
+                      # A tag from before then has none, and is still released.
+                      if crane manifest "${QA_REPO}/studio:${TAG}" >/dev/null 2>&1; then
+                        crane copy "${QA_REPO}/studio:${TAG}" "${REPO}/studio:${TAG}"
+                        crane tag "${REPO}/studio:${TAG}" latest
+                      else
+                        echo "no ${QA_REPO}/studio:${TAG}; mimir-studio keeps its image"
+                      fi
               - step:
                   type: Run
                   name: Check Out Promoted Commit
@@ -520,6 +528,17 @@ pipeline:
                                 --project "$GCP_PROJECT" --region "$REGION" \
                                 --image "$REPO/runner:$TAG"
                             done
+
+                            # mimir-studio exists only where both of its keys
+                            # are set (studio.tf), and a tag from before it has
+                            # no studio image; either way it is left alone.
+                            if gcloud run jobs describe mimir-studio \
+                                --project "$GCP_PROJECT" --region "$REGION" >/dev/null 2>&1 \
+                              && gcloud artifacts docker images describe "$REPO/studio:$TAG" >/dev/null 2>&1; then
+                              gcloud run jobs update mimir-studio \
+                                --project "$GCP_PROJECT" --region "$REGION" \
+                                --image "$REPO/studio:$TAG"
+                            fi
             rollbackSteps:
               - stepGroup:
                   name: Cloud Run Rollback

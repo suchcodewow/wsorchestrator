@@ -60,3 +60,18 @@ pipeline:
                       cd frontend
                       npm ci --no-audit --no-fund --silent
                       npm run verify
+              # After the frontend's, whose node_modules resolve the two files
+              # the studio shares with it.
+              - step:
+                  type: Run
+                  name: Typecheck Studio
+                  identifier: verify_studio
+                  timeout: 10m
+                  spec:
+                    shell: Sh
+                    image: mirror.gcr.io/library/node:22-slim
+                    command: |
+                      set -eu
+                      cd scripts/explainer-video
+                      npm ci --no-audit --no-fund --silent
+                      npm run typecheck

@@ -12,6 +12,7 @@ import "server-only";
 import { and, eq, isNotNull, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
+  mimirMap,
   recordingTracks,
   users,
   videoFeedback,
@@ -21,6 +22,7 @@ import {
 } from "@/db/schema";
 import type { VideoFeedbackSort, VideoFeedbackSummarySort } from "@/lib/list-specs";
 import { getMap } from "@/lib/mimir/map/content";
+import { MAP_ID } from "@/lib/mimir/map/schema";
 import { pageWindow, toPage, type ListQuery, type Page } from "@/lib/paging";
 import { blankAsNull, orderFor, searchAny } from "@/lib/paging-sql";
 import { canUseTraining, type Access } from "@/lib/roles";
@@ -149,15 +151,21 @@ export async function listVideoFeedback(
   return toPage(rows.map(toRow), query.page);
 }
 
-/** One Mimir concept's video and how it has been rated. A comment is a rating that came with words. */
+/**
+ * One Mimir concept and how its video has been rated. A comment is a rating
+ * that came with words. A concept with no video yet has no ratings; one with
+ * ratings that has since left the map is still listed, with `inMap` false.
+ */
 export type VideoFeedbackSummaryRow = {
   conceptId: string;
   label: string;
+  inMap: boolean;
+  hasVideo: boolean;
   up: number;
   upComments: number;
   down: number;
   downComments: number;
-  /** Comments an administrator has accepted: any, and the video can be regenerated. */
+  /** Comments an administrator has accepted and no regeneration has taken in yet. */
   accepted: number;
 };
 
@@ -170,31 +178,49 @@ const COUNTS = {
 };
 
 const SUMMARY_SORT_COLUMNS = {
-  video: sql`lower(max(${videoFeedback.videoLabel}))`,
-  ...COUNTS,
+  video: sql`lower(r.label)`,
+  up: sql`r.up`,
+  upComments: sql`r."upComments"`,
+  down: sql`r.down`,
+  downComments: sql`r."downComments"`,
 };
 
-/** Every Mimir video with feedback, a page at a time, with its counts; searched by the video's name. */
+/** Every concept on the Mimir map, and any other with feedback, a page at a time, with its counts; searched by the concept's name. */
 export async function listVideoFeedbackSummary(
   query: ListQuery<VideoFeedbackSummarySort>,
 ): Promise<Page<VideoFeedbackSummaryRow>> {
   const { limit, offset } = pageWindow(query.page);
-  const rows = await db
-    .select({
-      conceptId: videoFeedback.conceptId,
-      label: sql<string>`(array_agg(${videoFeedback.videoLabel} order by ${videoFeedback.createdAt} desc))[1]`,
-      ...COUNTS,
-    })
-    .from(videoFeedback)
-    .where(and(eq(videoFeedback.videoKind, "mimir_concept"), searchAny(query.q, [videoFeedback.videoLabel])))
-    .groupBy(videoFeedback.conceptId)
-    .orderBy(...orderFor(SUMMARY_SORT_COLUMNS[query.sort], query.dir, videoFeedback.conceptId))
-    .limit(limit)
-    .offset(offset);
-  return toPage(
-    rows.map((r) => ({ ...r, conceptId: r.conceptId! })),
-    query.page,
-  );
+  const where = and(sql`true`, searchAny(query.q, [sql`r.label`]));
+  const order = orderFor(SUMMARY_SORT_COLUMNS[query.sort], query.dir, sql`r."conceptId"`);
+  const { rows } = await db.execute<VideoFeedbackSummaryRow>(sql`
+    with concepts as (
+      select e.c->>'id' as concept_id, e.c->>'name' as label, jsonb_typeof(e.c->'video') = 'object' as has_video
+        from ${mimirMap}, jsonb_array_elements(${mimirMap.content}->'concepts') as e(c)
+       where ${mimirMap.id} = ${MAP_ID}
+    ), counts as (
+      select ${videoFeedback.conceptId} as concept_id,
+             (array_agg(${videoFeedback.videoLabel} order by ${videoFeedback.createdAt} desc))[1] as label,
+             ${COUNTS.up} as up, ${COUNTS.upComments} as up_comments,
+             ${COUNTS.down} as down, ${COUNTS.downComments} as down_comments,
+             ${COUNTS.accepted} as accepted
+        from ${videoFeedback}
+       where ${videoFeedback.videoKind} = 'mimir_concept'
+       group by ${videoFeedback.conceptId}
+    ), r as (
+      select coalesce(c.concept_id, f.concept_id) as "conceptId",
+             coalesce(c.label, f.label) as label,
+             c.concept_id is not null as "inMap",
+             coalesce(c.has_video, false) as "hasVideo",
+             coalesce(f.up, 0) as up, coalesce(f.up_comments, 0) as "upComments",
+             coalesce(f.down, 0) as down, coalesce(f.down_comments, 0) as "downComments",
+             coalesce(f.accepted, 0) as accepted
+        from concepts c full outer join counts f on f.concept_id = c.concept_id
+    )
+    select r.* from r
+     where ${where}
+     order by ${sql.join(order, sql`, `)}
+     limit ${limit} offset ${offset}`);
+  return toPage(rows, query.page);
 }
 
 export type VideoFeedbackEdit = { comment?: string; status?: VideoFeedbackStatus };
@@ -228,4 +254,24 @@ export async function updateVideoFeedback(
     })
     .where(eq(videoFeedback.id, id));
   return { before, after: (await read())! };
+}
+
+/**
+ * A concept's accepted comments, in the order they come in the video, for a
+ * regeneration to take in: at most `limit`, the earliest kept.
+ */
+export async function acceptedComments(conceptId: string, limit: number) {
+  return db
+    .select({ id: videoFeedback.id, position: videoFeedback.positionSeconds, rating: videoFeedback.rating, comment: videoFeedback.comment })
+    .from(videoFeedback)
+    .where(
+      and(
+        eq(videoFeedback.videoKind, "mimir_concept"),
+        eq(videoFeedback.conceptId, conceptId),
+        eq(videoFeedback.status, "accepted"),
+        isNotNull(videoFeedback.comment),
+      ),
+    )
+    .orderBy(videoFeedback.positionSeconds, videoFeedback.createdAt)
+    .limit(limit);
 }

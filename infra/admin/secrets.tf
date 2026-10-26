@@ -32,6 +32,8 @@ locals {
     nonsensitive(var.deepgram_api_key != "") ? ["deepgram-api-key"] : [],
     # Likewise Claude's, for Mimir's coach.
     nonsensitive(var.anthropic_api_key != "") ? ["anthropic-api-key"] : [],
+    # Likewise ElevenLabs', for Mimir Studio's narration.
+    nonsensitive(var.eleven_labs_token != "") ? ["eleven-labs-token"] : [],
     # Likewise the Slack bot token.
     nonsensitive(var.slack_bot_token != "") ? ["slack-bot-token"] : [],
     # Gated on the Slack app's client id, as Mindtickle's is on its tenant.
@@ -58,6 +60,7 @@ locals {
     "hibob-token"                = var.hibob_token
     "deepgram-api-key"           = var.deepgram_api_key
     "anthropic-api-key"          = var.anthropic_api_key
+    "eleven-labs-token"          = var.eleven_labs_token
     "slack-bot-token"            = var.slack_bot_token
     "slack-app-client-secret"    = var.slack_app_client_secret
     "mindtickle-api-key"         = var.mindtickle_api_key

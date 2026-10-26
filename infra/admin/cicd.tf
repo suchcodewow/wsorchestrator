@@ -33,7 +33,7 @@ locals {
 
 resource "google_project_iam_member" "build_deploy" {
   for_each = var.enable_cicd ? toset([
-    "roles/run.admin",       # update the app service and the three jobs
+    "roles/run.admin",       # update the app service and the jobs
     "roles/cloudsql.client", # open a cloud-sql-proxy connection for migrations
     # The Harness Cloud Run deploy and rollback steps read the service's
     # instance count from Cloud Monitoring once traffic has moved, and fail the
@@ -53,6 +53,7 @@ resource "google_service_account_iam_member" "build_acts_as" {
   for_each = var.enable_cicd ? {
     app    = google_service_account.app.name
     runner = google_service_account.runner.name
+    studio = google_service_account.studio.name
   } : {}
 
   service_account_id = each.value

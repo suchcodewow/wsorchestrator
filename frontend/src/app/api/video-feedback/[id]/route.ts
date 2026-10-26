@@ -8,7 +8,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireEvalsAdministrator } from "@/lib/api-auth";
 import { audited, noteAudit } from "@/lib/audit";
-import { VIDEO_FEEDBACK_LIMITS, VIDEO_FEEDBACK_STATUSES } from "@/db/schema";
+import { VIDEO_FEEDBACK_LIMITS } from "@/db/schema";
 import { updateVideoFeedback } from "@/lib/video-feedback";
 
 type Params = { params: Promise<{ id: string }> };
@@ -16,7 +16,8 @@ type Params = { params: Promise<{ id: string }> };
 const editSchema = z
   .object({
     comment: z.string().trim().min(1).max(VIDEO_FEEDBACK_LIMITS.comment).optional(),
-    status: z.enum(VIDEO_FEEDBACK_STATUSES).optional(),
+    // "applied" is set only by a regeneration that took the comment in.
+    status: z.enum(["pending", "accepted", "ignored"]).optional(),
   })
   .refine((v) => v.comment !== undefined || v.status !== undefined);
 

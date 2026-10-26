@@ -41,6 +41,7 @@ import {
   canManageIris,
   canManageLabGuides,
   canManageMimir,
+  canRunMimirStudio,
   canManageTrainingSettings,
   canManageSettings,
   canManageConnectors,
@@ -464,6 +465,7 @@ const PAGES: Record<string, PageCase> = {
   "/me/api-tokens": { path: () => "/me/api-tokens", expect: () => 200 },
   "/inbox": { path: () => "/inbox", expect: () => 200 },
   "/labs": { path: () => "/labs", expect: () => 200, signedOut: 200 },
+  "/mindtickle-test": { path: () => "/mindtickle-test", expect: () => 200, signedOut: 200 },
   // Any signed-in account: someone outside the current cohort is told it is not theirs.
   "/intake": { path: () => "/intake", expect: () => 200 },
   "/intake/registration": { path: () => "/intake/registration", expect: () => 200 },
@@ -874,6 +876,16 @@ const ROUTES: RouteCase[] = [
   { method: "POST", path: "/api/mimir/coach", allowed: true, body: () => ({}) },
   // Each persona's own coach conversation, which none of them has.
   { method: "DELETE", path: "/api/mimir/coach", allowed: true },
+
+  // Mimir Studio: reading decks into the map and making videos, for whoever is both an Assessments and a Training Administrator.
+  { method: "POST", path: "/api/mimir/studio/decks", allowed: canRunMimirStudio, body: () => ({}) },
+  { method: "POST", path: `/api/mimir/studio/decks/${MISSING}/start`, allowed: canRunMimirStudio },
+  { method: "GET", path: `/api/mimir/studio/decks/${MISSING}/slides/1`, allowed: canRunMimirStudio },
+  { method: "POST", path: `/api/mimir/studio/decks/${MISSING}/publish`, allowed: canRunMimirStudio },
+  { method: "POST", path: `/api/mimir/studio/decks/${MISSING}/discard`, allowed: canRunMimirStudio },
+  { method: "POST", path: `/api/mimir/studio/concepts/${MISSING}/regenerate`, allowed: canRunMimirStudio },
+  { method: "GET", path: "/api/mimir/studio/jobs", allowed: canRunMimirStudio },
+  { method: "GET", path: `/api/mimir/studio/jobs/${MISSING}`, allowed: canRunMimirStudio },
 
   // The archived Mimir library, which the archive pages still read: the library and coach are everyone's; the content and settings, Training Administrators'.
   { method: "GET", path: "/api/mimir/items?kind=capability", allowed: true },

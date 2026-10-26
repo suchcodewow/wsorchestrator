@@ -158,6 +158,18 @@ rolled, is skipped rather than run late. Each job runs the same code as its
 Sync Now button, so it is a dry run while its sync is not live and follows
 the test group while it is on.
 
+### Mimir Studio
+
+Mimir Settings → Map takes a new slide deck and Mimir Settings → Mimir
+Feedback has a Regenerate button for each concept. Both start the
+`mimir-studio` Cloud Run job (`infra/admin/studio.tf`) with the job's row id.
+The job spends the Claude and ElevenLabs keys, so it exists only where both
+`anthropic_api_key` and `eleven_labs_token` are set. What it works from is in
+the recordings bucket under `mimir/studio/`, its finished videos sit beside
+the others, and none of it is in git. Setting a deployment up, the one-time
+`seed-reference` upload and running it locally are in
+[scripts/explainer-video/studio/README.md](../scripts/explainer-video/studio/README.md).
+
 ### Google Meetings
 
 eVals Settings → Google Meetings invites the cohort to meetings that already
