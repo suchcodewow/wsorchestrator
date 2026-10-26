@@ -234,7 +234,19 @@ resource "google_cloud_run_v2_service" "app" {
         }
       }
 
+      # Request-based billing: CPU is allocated only while a request is in
+      # flight, and the warm min instance is billed at the idle rate between
+      # them. The provider leaves CPU always on once `limits` is declared
+      # unless this says otherwise, which billed one full vCPU around the
+      # clock for a service whose median CPU is near zero. Nothing here works
+      # after its response is sent: the timed-jobs tick and the Canary Wire
+      # pull run inside their requests, and a recording's join happens before
+      # answering (see `frontend/src/lib/recording/recordings.ts`). What
+      # `after()` still does — the recordings purge and chunk clean-up — waits
+      # for the next request, and the bucket's lifecycle rules catch anything
+      # it never gets to.
       resources {
+        cpu_idle = true
         limits = {
           cpu    = "1"
           memory = "512Mi"
