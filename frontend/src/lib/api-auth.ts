@@ -15,6 +15,7 @@ import {
   canManageMimir,
   canManageSettings,
   canRefreshCanaryWire,
+  canRunMimirStudio,
   canSeeCanaryWire,
   canUseEvals,
   type Access,
@@ -101,6 +102,11 @@ export function requireEvalsAdministrator(req: Request) {
 /** A Training Administrator, for Mimir Settings. */
 export function requireMimirAdministrator(req: Request) {
   return requireCaller(req, canManageMimir);
+}
+
+/** A Training and Assessments Administrator, for Mimir Studio. */
+export function requireMimirStudio(req: Request) {
+  return requireCaller(req, canRunMimirStudio);
 }
 
 /** A people manager or platform administrator, for Reporting → Canary Wire. */

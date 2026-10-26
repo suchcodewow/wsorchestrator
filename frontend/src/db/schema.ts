@@ -3258,8 +3258,11 @@ export type VideoFeedbackKind = (typeof VIDEO_FEEDBACK_KINDS)[number];
 export const VIDEO_FEEDBACK_RATINGS = ["up", "down"] as const;
 export type VideoFeedbackRating = (typeof VIDEO_FEEDBACK_RATINGS)[number];
 
-/** What an administrator has decided about a comment: waiting, to act on, or to set aside. */
-export const VIDEO_FEEDBACK_STATUSES = ["pending", "accepted", "ignored"] as const;
+/**
+ * What an administrator has decided about a comment: waiting, to act on, or to
+ * set aside; `applied` once a regenerated video has taken it into account.
+ */
+export const VIDEO_FEEDBACK_STATUSES = ["pending", "accepted", "ignored", "applied"] as const;
 export type VideoFeedbackStatus = (typeof VIDEO_FEEDBACK_STATUSES)[number];
 
 export const VIDEO_FEEDBACK_LIMITS = {
@@ -3299,10 +3302,73 @@ export const videoFeedback = pgTable(
     index("video_feedback_recording_track_id_idx").on(t.recordingTrackId),
     check("video_feedback_video_kind_check", sql`${t.videoKind} in ('mimir_concept', 'recording')`),
     check("video_feedback_rating_check", sql`${t.rating} in ('up', 'down')`),
-    check("video_feedback_status_check", sql`${t.status} in ('pending', 'accepted', 'ignored')`),
+    check("video_feedback_status_check", sql`${t.status} in ('pending', 'accepted', 'ignored', 'applied')`),
     check(
       "video_feedback_video_check",
       sql`(${t.videoKind} = 'mimir_concept' and ${t.conceptId} is not null) or (${t.videoKind} = 'recording' and ${t.recordingTrackId} is not null)`,
     ),
+  ],
+);
+
+/**
+ * Mimir Studio's work: a new slide deck turned into a draft concept map
+ * (`deck`), or one concept's video made again (`video`). Each runs as the
+ * `mimir-studio` Cloud Run job (`scripts/explainer-video/studio/`), which
+ * reports back by updating its row.
+ *
+ * A deck job is `uploading` until its file is in the bucket, then `queued`,
+ * `running`, and `ready` with the draft in `result`; an administrator then
+ * `published` or `discarded` it. A video job goes from `queued` to
+ * `succeeded`. Either can end `failed`, with `error`.
+ */
+export const MIMIR_STUDIO_JOB_KINDS = ["deck", "video"] as const;
+export type MimirStudioJobKind = (typeof MIMIR_STUDIO_JOB_KINDS)[number];
+
+export const MIMIR_STUDIO_JOB_STATUSES = ["uploading", "queued", "running", "ready", "succeeded", "failed", "published", "discarded"] as const;
+export type MimirStudioJobStatus = (typeof MIMIR_STUDIO_JOB_STATUSES)[number];
+
+/** The statuses of a job still under way: only one deck at a time, and one video per concept. */
+export const MIMIR_STUDIO_ACTIVE: MimirStudioJobStatus[] = ["uploading", "queued", "running"];
+
+export const mimirStudioJobs = pgTable(
+  "mimir_studio_jobs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    kind: text("kind").$type<MimirStudioJobKind>().notNull(),
+    status: text("status").$type<MimirStudioJobStatus>().notNull(),
+    /** The concept a video job makes the video for; null for a deck. */
+    conceptId: text("concept_id"),
+    /** The concept's name when the job was asked for. */
+    label: text("label").notNull().default(""),
+    /** What the job was given: the deck's file name and size, or the notes a video is made with. */
+    input: jsonb("input").$type<Record<string, unknown>>().notNull().default({}),
+    /** What it made: the draft map, or the new video's object and length. */
+    result: jsonb("result").$type<Record<string, unknown>>(),
+    /** The step it is on, in a few words. */
+    progress: text("progress"),
+    error: text("error"),
+    /** The Cloud Run execution it runs as, once started. */
+    execution: text("execution"),
+    requestedBy: text("requested_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("mimir_studio_jobs_created_at_idx").on(t.createdAt),
+    index("mimir_studio_jobs_concept_id_idx").on(t.conceptId),
+    uniqueIndex("mimir_studio_jobs_one_deck_idx")
+      .on(t.kind)
+      .where(sql`${t.kind} = 'deck' and ${t.status} in ('uploading', 'queued', 'running')`),
+    uniqueIndex("mimir_studio_jobs_one_video_idx")
+      .on(t.conceptId)
+      .where(sql`${t.kind} = 'video' and ${t.status} in ('uploading', 'queued', 'running')`),
+    check("mimir_studio_jobs_kind_check", sql`${t.kind} in ('deck', 'video')`),
+    check(
+      "mimir_studio_jobs_status_check",
+      sql`${t.status} in ('uploading', 'queued', 'running', 'ready', 'succeeded', 'failed', 'published', 'discarded')`,
+    ),
+    check("mimir_studio_jobs_concept_check", sql`(${t.kind} = 'deck') = (${t.conceptId} is null)`),
   ],
 );

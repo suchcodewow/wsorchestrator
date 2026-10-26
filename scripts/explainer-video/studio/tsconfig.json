@@ -1,0 +1,7 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "paths": { "@/db/schema": ["./stubs/db-schema.d.ts"] }
+  },
+  "include": ["."]
+}

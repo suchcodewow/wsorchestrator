@@ -1,24 +1,26 @@
 "use client";
 
 /**
- * Feedback on Mimir's videos: one row for each video that has any, with its
- * smiley and confused faces and how many of each came with a comment. A row
- * opens to that video's feedback, in the order of the video; a line of it plays
- * the video from five seconds before that point. Whoever may moderate can also
- * edit a comment and accept or ignore it, and a video with accepted comments
- * offers Regenerate, which does nothing yet.
+ * Feedback on Mimir's videos: one row for each concept on the map, with its
+ * video's smiley and confused faces and how many of each came with a comment.
+ * A row opens to that video's feedback, in the order of the video; a line of it
+ * plays the video from five seconds before that point. Whoever may moderate
+ * can also edit a comment and accept or ignore it. A concept with accepted
+ * comments offers Regenerate, and one with no video Generate, to whoever may
+ * run Mimir Studio.
  */
 
 import { Fragment, useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
-import { Check, ChevronRight, Loader2, MessageSquare, Pencil, RefreshCw, X } from "lucide-react";
+import { Check, ChevronRight, Loader2, MessageSquare, Pencil, X } from "lucide-react";
 import { HEADER_ROW, LINK_ROW, Pager, SortHeader, TableSearch, useRowLink } from "@/components/data-table";
 import { RATING_LABELS, RatingFace } from "@/components/rating-face";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { VIDEO_FEEDBACK_LIMITS, type VideoFeedbackStatus } from "@/db/schema";
 import type { VideoFeedbackSummarySort } from "@/lib/list-specs";
+import type { StudioJobBrief } from "@/lib/mimir/studio/jobs";
 import { riseChild, staggerParent } from "@/lib/motion";
 import type { ListQuery, Page } from "@/lib/paging";
 import { formatDuration } from "@/lib/recording/format";
@@ -26,12 +28,15 @@ import type { VideoFeedbackRow, VideoFeedbackSummaryRow } from "@/lib/video-feed
 import { cn } from "@/lib/utils";
 import { formatWhen } from "../../cohort-settings/format";
 import { FeedbackVideoDialog } from "./feedback-video-dialog";
+import { jobActive, RegenerateButton } from "./regenerate-button";
 
 /** How far before a comment its video opens. */
 const LEAD_SECONDS = 5;
+/** How often the page asks again while a video is being made. */
+const REFRESH_MS = 15_000;
 
 const COLUMNS: { column: VideoFeedbackSummarySort; label: string; className?: string }[] = [
-  { column: "video", label: "Video" },
+  { column: "video", label: "Concept" },
   { column: "up", label: "Smiley", className: "text-right" },
   { column: "upComments", label: "With comment", className: "text-right" },
   { column: "down", label: "Confused", className: "text-right" },
@@ -39,22 +44,34 @@ const COLUMNS: { column: VideoFeedbackSummarySort; label: string; className?: st
 ];
 
 type Playing = { conceptId: string; name: string; startAt: number };
+type SummaryRow = VideoFeedbackSummaryRow & { job: StudioJobBrief | null };
 
 export function FeedbackView({
   query,
   page,
   canModerate,
+  canRegenerate,
 }: {
   query: ListQuery<VideoFeedbackSummarySort>;
-  page: Page<VideoFeedbackSummaryRow>;
+  page: Page<SummaryRow>;
   /** Whether the viewer may edit comments and accept or ignore them. */
   canModerate: boolean;
+  /** Whether the viewer may have Mimir Studio make a video. */
+  canRegenerate: boolean;
 }) {
+  const router = useRouter();
   const rowLink = useRowLink();
   const [open, setOpen] = useState<string | null>(null);
   const [playing, setPlaying] = useState<Playing | null>(null);
-  const [regenerating, setRegenerating] = useState<string | null>(null);
   const sortProps = { sort: query.sort, dir: query.dir };
+  const making = page.rows.some((r) => jobActive(r.job));
+  const columns = COLUMNS.length + (canRegenerate ? 1 : 0);
+
+  useEffect(() => {
+    if (!making) return;
+    const timer = setInterval(() => router.refresh(), REFRESH_MS);
+    return () => clearInterval(timer);
+  }, [making, router]);
 
   return (
     <motion.div variants={staggerParent(0.04)} initial="hidden" animate="show" className="space-y-6">
@@ -63,7 +80,7 @@ export function FeedbackView({
       </motion.div>
 
       <motion.div variants={riseChild}>
-        <TableSearch value={query.q} placeholder="Search videos" label="Search videos" />
+        <TableSearch value={query.q} placeholder="Search concepts" label="Search concepts" />
       </motion.div>
 
       <motion.div variants={riseChild} className="overflow-hidden rounded-2xl border bg-card shadow-sm">
@@ -76,14 +93,14 @@ export function FeedbackView({
                     {label}
                   </SortHeader>
                 ))}
-                {canModerate && <th className="px-5 py-2.5" />}
+                {canRegenerate && <th className="px-5 py-2.5" />}
               </tr>
             </thead>
             <tbody>
               {page.rows.length === 0 && (
                 <tr>
-                  <td colSpan={COLUMNS.length + (canModerate ? 1 : 0)} className="px-5 py-8 text-center text-muted-foreground">
-                    {query.q ? "Nothing matches that search." : "No one has rated a Mimir video yet."}
+                  <td colSpan={columns} className="px-5 py-8 text-center text-muted-foreground">
+                    {query.q ? "Nothing matches that search." : "The Mimir map has no concepts yet."}
                   </td>
                 </tr>
               )}
@@ -103,32 +120,29 @@ export function FeedbackView({
                           <ChevronRight className={cn("size-4 shrink-0 transition-transform", expanded && "rotate-90")} />
                           <span className="truncate">{r.label}</span>
                         </button>
+                        {!r.inMap ? (
+                          <span className="ml-2 rounded-full bg-muted px-2 py-0.5 text-xs font-normal text-muted-foreground">Not on the map</span>
+                        ) : (
+                          !r.hasVideo && (
+                            <span className="ml-2 rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-normal text-amber-700 dark:text-amber-400">No video</span>
+                          )
+                        )}
                       </td>
                       <Count n={r.up} />
                       <Count n={r.upComments} />
                       <Count n={r.down} />
                       <Count n={r.downComments} />
-                      {canModerate && (
+                      {canRegenerate && (
                         <td className="px-5 py-3 text-right">
-                          {r.accepted > 0 && (
-                            <div className="flex flex-col items-end gap-1">
-                              <Button variant="outline" size="sm" onClick={() => setRegenerating(r.conceptId)}>
-                                <RefreshCw />
-                                Regenerate
-                              </Button>
-                              {regenerating === r.conceptId && (
-                                <span role="status" className="text-xs text-muted-foreground">
-                                  Regenerating isn&apos;t built yet; nothing was changed.
-                                </span>
-                              )}
-                            </div>
+                          {r.inMap && (
+                            <RegenerateButton conceptId={r.conceptId} name={r.label} hasVideo={r.hasVideo} accepted={r.accepted} job={r.job} />
                           )}
                         </td>
                       )}
                     </tr>
                     {expanded && (
                       <tr className="border-b bg-muted/20 last:border-b-0">
-                        <td colSpan={COLUMNS.length + (canModerate ? 1 : 0)} className="p-0">
+                        <td colSpan={columns} className="p-0">
                           <Details
                             conceptId={r.conceptId}
                             canModerate={canModerate}
@@ -150,7 +164,7 @@ export function FeedbackView({
           </table>
         </div>
         <div className="border-t empty:hidden">
-          <Pager page={page} noun="videos" />
+          <Pager page={page} noun="concepts" />
         </div>
       </motion.div>
 
@@ -169,7 +183,10 @@ const STATUS_STYLES: Record<VideoFeedbackStatus, string> = {
   pending: "",
   accepted: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
   ignored: "bg-muted text-muted-foreground",
+  applied: "bg-sky-500/15 text-sky-700 dark:text-sky-400",
 };
+
+const STATUS_LABELS: Record<VideoFeedbackStatus, string> = { pending: "", accepted: "Accepted", ignored: "Ignored", applied: "Applied" };
 
 /** One video's feedback from its start to its end, fetched when the row opens and a page at a time after. */
 function Details({
@@ -349,7 +366,7 @@ function Line({
       </div>
       {f.comment !== null && f.status !== "pending" && (
         <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-xs font-medium", STATUS_STYLES[f.status])}>
-          {f.status === "accepted" ? "Accepted" : "Ignored"}
+          {STATUS_LABELS[f.status]}
         </span>
       )}
       {canModerate && f.comment !== null && !editing && (

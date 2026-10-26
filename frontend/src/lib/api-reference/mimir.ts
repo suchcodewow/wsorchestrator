@@ -6,7 +6,8 @@ import {
   MIMIR_REFLECTION_MAX,
   MIMIR_SETTING_MAX,
 } from "@/db/schema";
-import { MIMIR_ITEM_LIST, MIMIR_PROGRESS_LIST } from "@/lib/list-specs";
+import { MIMIR_ITEM_LIST, MIMIR_PROGRESS_LIST, MIMIR_STUDIO_JOB_LIST } from "@/lib/list-specs";
+import { DECK_MAX_BYTES, VIDEO_NOTES_MAX } from "@/lib/mimir/studio/shapes";
 import { PAGE_FIELDS, listQuery } from "./paging";
 import type { EndpointGroup, Field } from "./types";
 
@@ -39,6 +40,9 @@ const ITEM_FIELDS: Field[] = [
     note: "The fields only some kinds use: badge, role, tag, buyer, scenario, salesAngle, strength, advantages, watchOut, headline, url, loop, group, why, followUp, seeAlso, forKind (strings), number, featured, and cats, mods and aliases (string lists; aliases are the forms of a glossary term that link to it). Any other key is refused.",
   },
 ];
+const JOB_ID: Field = { name: "id", type: "string", required: true, note: "the job's id" };
+const JOB_SHAPE = `{ id, kind: "deck" | "video", status: "uploading" | "queued" | "running" | "ready" | "succeeded" | "failed" | "published" | "discarded", conceptId: string | null, label, input, result: object | null, progress: string | null, error: string | null, requestedBy: string | null, createdAt, startedAt: string | null, finishedAt: string | null, updatedAt }`;
+const DIFF_SHAPE = "{ added: { id, name, level }[], removed: { id, name, hadVideo }[], changed: { id, name, was: string | null, what: string[] }[], unchanged: number, slides: { was, now } }";
 const ITEM_ERRORS = [
   { status: 400, error: "invalid", when: "the body does not parse" },
   { status: 400, error: "bad_parent", when: "parentId names no item, or one this kind may not sit under" },
@@ -289,6 +293,138 @@ export const MIMIR_GROUPS: EndpointGroup[] = [
         },
         returns: "{ ok: true }",
         errors: [{ status: 400, error: "invalid", when: "the body does not parse" }],
+      },
+    ],
+  },
+  {
+    id: "mimir-studio",
+    title: "Mimir Studio",
+    intro:
+      "Making the Mimir map and its videos with Claude. A new slide deck is read into a draft of the map, which is checked against the live one and then published or thrown away; a concept's video is written, narrated and rendered by the explainer standards, taking in the accepted comments on the video before it. Each runs as a job on the mimir-studio Cloud Run job, which reports its progress on the job's row; at most one deck is under way at a time, and one video per concept. A job that stops reporting for four hours is marked failed.",
+    endpoints: [
+      {
+        method: "POST",
+        path: "/api/mimir/studio/decks",
+        summary: "Makes a job for a new slide deck and returns a link to upload the file to.",
+        access: "mimirStudio",
+        token: true,
+        notes:
+          "uploadUrl is a signed Cloud Storage link, good for an hour, to PUT the .pptx to directly; then POST start. The job waits in uploading until then, and counts as the deck under way.",
+        body: {
+          kind: "json",
+          fields: [
+            { name: "fileName", type: "string", required: true, note: "ends in .pptx, at most 200 characters" },
+            { name: "bytes", type: "integer", required: true, note: `the file's size, at most ${DECK_MAX_BYTES / 1024 / 1024} MB` },
+          ],
+        },
+        returns: `{ job: ${JOB_SHAPE}, uploadUrl: string }, with 201`,
+        errors: [
+          { status: 400, error: "invalid", when: "a field is missing or out of range" },
+          { status: 400, error: "not_pptx", when: "fileName does not end in .pptx" },
+          { status: 409, error: "busy", when: "another deck is under way" },
+          { status: 503, error: "not_configured", when: "this deployment has no bucket or no studio job" },
+        ],
+      },
+      {
+        method: "POST",
+        path: "/api/mimir/studio/decks/{id}/start",
+        summary: "Sets an uploaded deck's job going.",
+        access: "mimirStudio",
+        token: true,
+        notes:
+          "The studio turns every slide into a picture, reads its text and notes, and has Claude write a new map of 100, 200 and 300-level concepts from them, keeping the live concepts' ids wherever they still fit. The job is then ready, with the draft in its result. started is false when the studio could not be started; the job is then failed, with why.",
+        params: [JOB_ID],
+        returns: `{ job: ${JOB_SHAPE}, started: boolean }`,
+        errors: [
+          { status: 404, error: "not_found", when: "no deck job has that id" },
+          { status: 409, error: "not_uploading", when: "the job has already been started, or has ended" },
+          { status: 409, error: "no_file", when: "the file is not in the bucket yet" },
+          { status: 503, error: "not_configured", when: "this deployment has no bucket" },
+        ],
+      },
+      {
+        method: "GET",
+        path: "/api/mimir/studio/decks/{id}/slides/{n}",
+        summary: "Redirects to one slide's picture in a deck's draft.",
+        access: "mimirStudio",
+        token: true,
+        notes: "The redirect goes to a signed Cloud Storage link, good for an hour. The pictures go once the draft is published or thrown away.",
+        params: [JOB_ID, { name: "n", type: "number", required: true, note: "the slide's number, 1 to 200" }],
+        returns: "a 302 to the JPEG",
+        errors: [
+          { status: 404, error: "not_found", when: "no deck job has that id, or n is not a slide number" },
+          { status: 404, error: "missing", when: "the draft has no picture of that slide" },
+          { status: 503, error: "not_configured", when: "this deployment has no bucket" },
+        ],
+      },
+      {
+        method: "POST",
+        path: "/api/mimir/studio/decks/{id}/publish",
+        summary: "Publishes a read deck: its slides and map replace the live ones.",
+        access: "mimirStudio",
+        token: true,
+        notes:
+          "The slide pictures are copied over the map's first, and a live picture the deck has no slide for is deleted. Each concept the draft keeps keeps its video as it is now and everyone's progress on it; a concept the draft drops goes, with its video, from the map. diff is what changed.",
+        params: [JOB_ID],
+        returns: `{ job: ${JOB_SHAPE}, diff: ${DIFF_SHAPE} }`,
+        errors: [
+          { status: 404, error: "not_found", when: "no deck job has that id" },
+          { status: 409, error: "not_ready", when: "the job is not ready to publish" },
+          { status: 409, error: "invalid", when: "the job's draft does not fit the map's shape" },
+          { status: 503, error: "not_configured", when: "this deployment has no bucket" },
+        ],
+      },
+      {
+        method: "POST",
+        path: "/api/mimir/studio/decks/{id}/discard",
+        summary: "Throws away a deck's draft, or a deck that never finished uploading or failed, with its file.",
+        access: "mimirStudio",
+        token: true,
+        params: [JOB_ID],
+        returns: `{ job: ${JOB_SHAPE} }`,
+        errors: [
+          { status: 404, error: "not_found", when: "no deck job has that id" },
+          { status: 409, error: "not_ready", when: "the job is running, or already published or discarded" },
+        ],
+      },
+      {
+        method: "POST",
+        path: "/api/mimir/studio/concepts/{id}/regenerate",
+        summary: "Has Claude make a concept's video afresh, or its first.",
+        access: "mimirStudio",
+        token: true,
+        notes: `The job is given every accepted comment on the concept's video (up to ${VIDEO_NOTES_MAX}), each as where in the video it was made, the rating and the words, and writes the script and scenes by the explainer standards, starting from what the last video was made from. When it succeeds the concept's video is the new one, under a new name, so a page still playing the old one is not cut off, and those comments are marked applied. started is false when the studio could not be started; the job is then failed, with why.`,
+        params: [{ name: "id", type: "string", required: true, note: "the concept's id" }],
+        returns: `{ job: ${JOB_SHAPE}, started: boolean }, with 201`,
+        errors: [
+          { status: 404, error: "not_found", when: "no concept on the map has that id" },
+          { status: 409, error: "busy", when: "a video for this concept is already under way" },
+          { status: 503, error: "not_configured", when: "this deployment has no bucket or no studio job" },
+        ],
+      },
+      {
+        method: "GET",
+        path: "/api/mimir/studio/jobs",
+        summary: "Lists Mimir Studio's jobs, decks and videos, a page at a time, the newest first.",
+        access: "mimirStudio",
+        token: true,
+        query: [
+          { name: "kind", type: `"deck" | "video"`, note: "only that kind of job" },
+          { name: "concept", type: "string", note: "only video jobs for the concept with this id" },
+          ...listQuery(MIMIR_STUDIO_JOB_LIST.sorts, "the deck's file name or the concept's name", "desc"),
+        ],
+        returns: `{ jobs: ${JOB_SHAPE}[], ${PAGE_FIELDS} }`,
+      },
+      {
+        method: "GET",
+        path: "/api/mimir/studio/jobs/{id}",
+        summary: "Returns one Mimir Studio job and, for a deck ready to publish, what publishing it would change.",
+        access: "mimirStudio",
+        token: true,
+        notes: "diff is null unless the job is a deck that is ready. A ready deck's result holds the draft map, its slide count and Claude's summary of what changed; a finished video's, its object, length in seconds and Claude's report.",
+        params: [JOB_ID],
+        returns: `{ job: ${JOB_SHAPE}, diff: ${DIFF_SHAPE} | null }`,
+        errors: [{ status: 404, error: "not_found", when: "no job has that id" }],
       },
     ],
   },

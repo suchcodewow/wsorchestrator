@@ -96,6 +96,10 @@ const POLICY: Record<string, { actual: Check; expected: Check }> = {
     actual: roles.canSearchEmployees,
     expected: (a) => evals("administrator")(a) || training("administrator")(a),
   },
+  canRunMimirStudio: {
+    actual: roles.canRunMimirStudio,
+    expected: (a) => evals("administrator")(a) && training("administrator")(a),
+  },
 
   // Iris is part of the assessments area: a viewer takes it, an administrator runs it.
   canTakeIris: { actual: roles.canTakeIris, expected: evals("viewer") },

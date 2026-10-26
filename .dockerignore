@@ -1,0 +1,15 @@
+# Only the mimir-studio image (scripts/explainer-video/Dockerfile) builds from
+# the repository root; the app and the runner build from their own folders.
+# Let in what it copies and nothing else.
+*
+!scripts/explainer-video/
+!frontend/src/lib/mimir/map/schema.ts
+!frontend/src/lib/mimir/studio/shapes.ts
+
+# The engine's working folders hold the course's content and never go in an image.
+scripts/explainer-video/node_modules
+scripts/explainer-video/source
+scripts/explainer-video/content
+scripts/explainer-video/public
+scripts/explainer-video/out
+scripts/explainer-video/src/videos

@@ -108,10 +108,23 @@ variable "deepgram_api_key" {
 }
 
 variable "anthropic_api_key" {
-  description = "Claude API key for Mimir's coaching chat. Stored in Secret Manager as anthropic-api-key and read by the app alone. Empty leaves the coach off: the Mimir library still works, and the coach says it is not set up."
+  description = "Claude API key for Mimir's coaching chat. Stored in Secret Manager as anthropic-api-key and read by the app and, for writing videos, the mimir-studio job. Empty leaves the coach off: the Mimir library still works, and the coach says it is not set up."
   type        = string
   sensitive   = true
   default     = ""
+}
+
+variable "eleven_labs_token" {
+  description = "ElevenLabs API key the mimir-studio job narrates Mimir's explainer videos with. Stored in Secret Manager as eleven-labs-token; only that job uses it. With anthropic_api_key it turns Mimir Studio on (studio.tf); empty leaves the job out, and Mimir Settings says the studio is not set up."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "studio_image" {
+  description = "Container image for the mimir-studio job (scripts/explainer-video/Dockerfile). Defaults to a placeholder so the first apply succeeds; the deploy pipelines point the job at the real one."
+  type        = string
+  default     = "us-docker.pkg.dev/cloudrun/container/hello"
 }
 
 variable "slack_app_client_id" {

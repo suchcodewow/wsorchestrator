@@ -147,6 +147,21 @@ pipeline:
                       cd frontend
                       npm ci --no-audit --no-fund --silent
                       npm run verify
+              # After the frontend's, whose node_modules resolve the two files
+              # the studio shares with it.
+              - step:
+                  type: Run
+                  name: Typecheck Studio
+                  identifier: verify_studio
+                  timeout: 10m
+                  spec:
+                    shell: Sh
+                    image: mirror.gcr.io/library/node:22-slim
+                    command: |
+                      set -eu
+                      cd scripts/explainer-video
+                      npm ci --no-audit --no-fund --silent
+                      npm run typecheck
         when:
           pipelineStatus: Success
           condition: <+pipeline.variables.verify> == "true"
@@ -237,7 +252,7 @@ pipeline:
                       - name: TAG
                       - name: BUILD_TIME
                       - name: BUILD_MESSAGE_B64
-              # The two images share nothing, so they build side by side.
+              # The images share nothing, so they build side by side.
               - parallel:
                   - step:
                       type: BuildAndPushGAR
@@ -271,6 +286,23 @@ pipeline:
                           - latest
                         dockerfile: runner/Dockerfile
                         context: runner
+                  # Mimir Studio's job. Its Dockerfile takes two files from
+                  # frontend/, so it builds from the repository root; the root
+                  # .dockerignore keeps everything else out.
+                  - step:
+                      type: BuildAndPushGAR
+                      name: Build and Push Studio
+                      identifier: build_push_studio
+                      spec:
+                        connectorRef: gcp_qa_build_sa
+                        host: us-central1-docker.pkg.dev
+                        projectID: harnessevents-qa
+                        imageName: workshop-orchestrator/studio
+                        tags:
+                          - <+codebase.shortCommitSha>
+                          - latest
+                        dockerfile: scripts/explainer-video/Dockerfile
+                        context: .
               - step:
                   type: Run
                   name: Fetch Database URL
@@ -510,6 +542,15 @@ pipeline:
                                 --project "$GCP_PROJECT" --region "$REGION" \
                                 --image "$REPO/runner:$TAG"
                             done
+
+                            # mimir-studio exists only where both of its keys
+                            # are set (studio.tf), so a missing job is skipped.
+                            if gcloud run jobs describe mimir-studio \
+                                --project "$GCP_PROJECT" --region "$REGION" >/dev/null 2>&1; then
+                              gcloud run jobs update mimir-studio \
+                                --project "$GCP_PROJECT" --region "$REGION" \
+                                --image "$REPO/studio:$TAG"
+                            fi
             rollbackSteps:
               - stepGroup:
                   name: Cloud Run Rollback
