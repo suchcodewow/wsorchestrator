@@ -343,13 +343,13 @@ export function sameGuests(a: readonly CalendarAttendee[], b: readonly CalendarA
 }
 
 /** Where someone stands with one meeting on the Current tab. */
-export const MEETING_MARKS = ["attended", "accepted", "pending", "none_left"] as const;
+export const MEETING_MARKS = ["attended", "accepted", "pending", "uninvited", "none_left"] as const;
 export type MeetingMark = (typeof MEETING_MARKS)[number];
 
 /**
  * The icon the Current tab shows: attended; else accepted or not yet on the
  * invite they hold; else, with no occurrence left before their bootcamp,
- * `none_left`; else `pending` until the next sync invites them.
+ * `none_left`; else `uninvited` until the next sync invites them.
  */
 export function meetingMark(input: {
   attended: boolean;
@@ -360,5 +360,5 @@ export function meetingMark(input: {
 }): MeetingMark {
   if (input.attended) return "attended";
   if (input.invited) return input.response === "accepted" ? "accepted" : "pending";
-  return input.anyLeft ? "pending" : "none_left";
+  return input.anyLeft ? "uninvited" : "none_left";
 }

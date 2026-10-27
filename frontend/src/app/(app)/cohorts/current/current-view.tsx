@@ -27,6 +27,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import type {
   CandidateStage,
@@ -51,6 +52,7 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
+  Circle,
   CircleAlert,
   CircleCheck,
   CircleHelp,
@@ -712,10 +714,11 @@ const MARKS: Record<MeetingMark, { Icon: LucideIcon; className: string; label: s
   attended: { Icon: CircleCheck, className: "text-emerald-600 dark:text-emerald-400", label: "Attended" },
   accepted: { Icon: Check, className: "text-muted-foreground", label: "Accepted" },
   pending: { Icon: CircleHelp, className: "text-muted-foreground", label: "Not accepted" },
+  uninvited: { Icon: Circle, className: "text-muted-foreground", label: "Not invited yet" },
   none_left: { Icon: CircleAlert, className: "text-red-600 dark:text-red-400", label: "None left before their bootcamp" },
 };
 
-/** An icon per meeting; for an eVals administrator, each opens a menu that marks them attended or missed over what Zoom said. */
+/** An icon per meeting; for an eVals administrator, each opens a menu that marks them complete (after a confirmation) or missed over what Zoom said. */
 function MeetingMarks({
   member,
   meetings,
@@ -729,6 +732,7 @@ function MeetingMarks({
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState<{ meetingId: string; name: string } | null>(null);
   if (meetings.length === 0) return null;
 
   async function mark(meetingId: string, attended: boolean | null) {
@@ -763,7 +767,7 @@ function MeetingMarks({
               ? `${m.marked ? "attended" : "missed"}, marked by an administrator`
               : m.mark !== "attended" && m.startsAt
                 ? `${label}, ${formatWhen(m.startsAt)}`
-                : m.mark === "pending"
+                : m.mark === "uninvited"
                   ? "Not invited yet; the next sync invites them"
                   : label;
           const icon =
@@ -816,9 +820,12 @@ function MeetingMarks({
                   <span className="block text-xs text-muted-foreground">{member.fullName}</span>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem disabled={m.marked === true} onSelect={() => void mark(m.meetingId, true)}>
+                <DropdownMenuItem
+                  disabled={m.marked === true}
+                  onSelect={() => setConfirming({ meetingId: m.meetingId, name: m.name })}
+                >
                   <CircleCheck />
-                  Mark attended
+                  Mark complete
                 </DropdownMenuItem>
                 <DropdownMenuItem disabled={m.marked === false} onSelect={() => void mark(m.meetingId, false)}>
                   <CircleAlert />
@@ -834,6 +841,31 @@ function MeetingMarks({
             </DropdownMenu>
           );
         })}
+        <Dialog open={confirming !== null} onOpenChange={(open) => !open && setConfirming(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Mark {member.fullName} complete?</DialogTitle>
+              <DialogDescription>
+                {member.fullName} counts as having attended {confirming?.name}, whatever Zoom said or whether they have
+                been invited. They are not invited to it, and any upcoming invite they hold is taken off at the next
+                sync. You can undo this from the same menu.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setConfirming(null)}>
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  if (confirming) void mark(confirming.meetingId, true);
+                  setConfirming(null);
+                }}
+              >
+                Mark complete
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </span>
     </TooltipProvider>
   );

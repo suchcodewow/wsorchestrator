@@ -389,9 +389,9 @@ export type PersonMeetingStatus = {
 
 /**
  * For each of a page's people, where they stand with each picked meeting that
- * is for them and has had a live sync: attended, accepted, not yet answered,
- * or with no occurrence left before the active bootcamp. Test-group invites
- * are left out; the Current tab is the real cohort.
+ * is for them: attended, accepted, not yet answered, not yet invited (all a
+ * meeting that has never synced has), or with no occurrence left before the
+ * active bootcamp. Test-group invites are left out; the Current tab is the real cohort.
  */
 export async function meetingStatusesFor(
   people: readonly { email: string; stage: "bootcamp" | "intermediate"; track: string | null }[],
@@ -409,9 +409,8 @@ export async function meetingStatusesFor(
   const now = new Date();
 
   const selections = await db
-    .select({ id: s.id, name: s.name, stage: s.stage, track: s.track, timezoneFrom: s.timezoneFrom, timezoneTo: s.timezoneTo })
+    .select({ id: s.id, name: s.name, stage: s.stage, track: s.track, timezoneFrom: s.timezoneFrom, timezoneTo: s.timezoneTo, syncedAt: s.syncedAt })
     .from(s)
-    .where(isNotNull(s.syncedAt))
     .orderBy(sql`lower(${s.name})`)
     .limit(PAGE_SIZE);
   if (selections.length === 0) return out;
@@ -459,7 +458,8 @@ export async function meetingStatusesFor(
         attended: marked === true || (marked === null && Boolean(h?.attended)),
         response: h?.response ?? null,
         invited: Boolean(h?.invited),
-        anyLeft: anyLeft.has(meeting.id),
+        // A meeting that has never synced has no occurrences stored yet, which is not the same as none being left.
+        anyLeft: meeting.syncedAt === null || anyLeft.has(meeting.id),
       });
       list.push({ meetingId: meeting.id, name: meeting.name, mark, marked, startsAt: h?.startsAt ? new Date(h.startsAt) : null });
     }
