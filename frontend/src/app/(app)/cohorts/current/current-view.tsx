@@ -51,6 +51,7 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
+  Circle,
   CircleAlert,
   CircleCheck,
   CircleHelp,
@@ -712,6 +713,7 @@ const MARKS: Record<MeetingMark, { Icon: LucideIcon; className: string; label: s
   attended: { Icon: CircleCheck, className: "text-emerald-600 dark:text-emerald-400", label: "Attended" },
   accepted: { Icon: Check, className: "text-muted-foreground", label: "Accepted" },
   pending: { Icon: CircleHelp, className: "text-muted-foreground", label: "Not accepted" },
+  uninvited: { Icon: Circle, className: "text-muted-foreground", label: "Not invited yet" },
   none_left: { Icon: CircleAlert, className: "text-red-600 dark:text-red-400", label: "None left before their bootcamp" },
 };
 
@@ -763,7 +765,7 @@ function MeetingMarks({
               ? `${m.marked ? "attended" : "missed"}, marked by an administrator`
               : m.mark !== "attended" && m.startsAt
                 ? `${label}, ${formatWhen(m.startsAt)}`
-                : m.mark === "pending"
+                : m.mark === "uninvited"
                   ? "Not invited yet; the next sync invites them"
                   : label;
           const icon =

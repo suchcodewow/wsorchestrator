@@ -247,7 +247,7 @@ test("the Current tab's mark", () => {
   assert.equal(meetingMark({ attended: true, response: null, invited: false, anyLeft: false }), "attended");
   assert.equal(meetingMark({ attended: false, response: "accepted", invited: true, anyLeft: true }), "accepted");
   assert.equal(meetingMark({ attended: false, response: "needsAction", invited: true, anyLeft: false }), "pending");
-  assert.equal(meetingMark({ attended: false, response: null, invited: false, anyLeft: true }), "pending");
+  assert.equal(meetingMark({ attended: false, response: null, invited: false, anyLeft: true }), "uninvited");
   assert.equal(meetingMark({ attended: false, response: null, invited: false, anyLeft: false }), "none_left");
 });
 
