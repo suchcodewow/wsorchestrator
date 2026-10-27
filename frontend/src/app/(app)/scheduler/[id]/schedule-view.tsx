@@ -625,6 +625,7 @@ export function ScheduleView({
         types={types}
         canManage={canManage}
         viewerId={viewerId}
+        problems={showIssues && target?.mode === "edit" ? (flagged.get(target.session.id) ?? []) : []}
         flush={flush}
         onChanged={afterChange}
       />
