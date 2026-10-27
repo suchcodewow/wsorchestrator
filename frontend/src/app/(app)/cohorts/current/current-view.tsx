@@ -672,7 +672,7 @@ function TrackMenu({
       <DropdownMenuTrigger
         disabled={disabled}
         aria-label={`Track for ${member.fullName}`}
-        className="-mx-2 flex cursor-pointer items-center gap-1 rounded-md px-2 outline-none transition-colors hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-wait"
+        className="flex cursor-pointer items-center gap-1.5 rounded-md border border-input bg-background px-2 py-1 shadow-xs outline-none transition-colors hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-wait"
       >
         <TrackLabel member={member} />
         {busy ? (
