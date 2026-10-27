@@ -12,7 +12,7 @@
  */
 
 import { useMemo, useState, type KeyboardEvent } from "react";
-import { ChevronDown, Crown, Loader2, Trash2 } from "lucide-react";
+import { AlertTriangle, ChevronDown, Crown, Loader2, Trash2 } from "lucide-react";
 import { SessionLookFields, type SessionLook } from "@/components/session-look-fields";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -100,6 +100,7 @@ export function SessionDialog({
   types,
   canManage,
   viewerId,
+  problems,
   flush,
   onChanged,
 }: {
@@ -116,6 +117,8 @@ export function SessionDialog({
   types: SessionTypeRow[];
   canManage: boolean;
   viewerId: string;
+  /** What the schedule page flags on this session; empty while its alerts are off. */
+  problems: string[];
   /** Saves any rearranging still waiting, so this save lands on top of it. */
   flush: () => Promise<boolean>;
   onChanged: () => Promise<void>;
@@ -340,6 +343,17 @@ export function SessionDialog({
             {end > SCHEDULE_LIMITS.dayEnd && ` · ${formatLength(end - SCHEDULE_LIMITS.dayEnd)} past 5 PM`}
           </p>
         </DialogHeader>
+
+        {problems.length > 0 && (
+          <ul className="space-y-1 rounded-lg border border-red-300/60 bg-red-50/60 px-3 py-2 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/20 dark:text-red-400">
+            {problems.map((p) => (
+              <li key={p} className="flex items-start gap-2">
+                <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+                {p}
+              </li>
+            ))}
+          </ul>
+        )}
 
         {tabs.length > 1 && (
           <div role="tablist" aria-label="Session" onKeyDown={onTabKey} className="-mt-1 flex gap-1 border-b">

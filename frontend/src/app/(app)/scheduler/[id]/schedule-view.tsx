@@ -33,7 +33,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { SCHEDULE_LIMITS, SCHEDULE_TRACKS, type ScheduleTrack } from "@/db/schema";
 import { riseChild, staggerParent } from "@/lib/motion";
 import type { ChecklistDayCount } from "@/lib/scheduler/checklist";
-import { findIssues, tally, type Spot } from "@/lib/scheduler/issues";
+import { findIssues, tally } from "@/lib/scheduler/issues";
 import type { CopySource, Schedule, SessionRow } from "@/lib/scheduler/schedule";
 import type { SessionTypeRow } from "@/lib/scheduler/session-types";
 import type { SurveyDayStatus } from "@/lib/surveys/survey-values";
@@ -501,9 +501,9 @@ export function ScheduleView({
                 <TooltipTrigger asChild>
                   <button
                     onClick={() => setShowIssues(!showIssues)}
-                    aria-expanded={showIssues}
-                    aria-label={`${issues.length} issue${issues.length === 1 ? "" : "s"}`}
-                    className="inline-flex items-center gap-1 rounded-full bg-red-500/10 px-2 py-1 font-medium text-red-700 tabular-nums hover:bg-red-500/15 dark:text-red-400"
+                    aria-pressed={showIssues}
+                    aria-label={`${showIssues ? "Hide" : "Show"} ${issues.length} issue${issues.length === 1 ? "" : "s"} on the calendar`}
+                    className={`inline-flex items-center gap-1 rounded-full px-2 py-1 font-medium tabular-nums ${showIssues ? "bg-red-500/20 text-red-700 hover:bg-red-500/25 dark:text-red-400" : "bg-muted text-muted-foreground hover:bg-muted/70"}`}
                   >
                     <AlertTriangle className="size-4" />
                     {issues.length}
@@ -519,7 +519,7 @@ export function ScheduleView({
                     ))}
                   </ul>
                   {issues.length > ISSUES_IN_TOOLTIP && (
-                    <div className="mt-1.5 text-muted-foreground">{issues.length - ISSUES_IN_TOOLTIP} more; click to list them all</div>
+                    <div className="mt-1.5 text-muted-foreground">{issues.length - ISSUES_IN_TOOLTIP} more</div>
                   )}
                 </TooltipContent>
               </Tooltip>
@@ -542,24 +542,6 @@ export function ScheduleView({
             Dismiss
           </button>
         </motion.div>
-      )}
-
-      {showIssues && issues.length > 0 && (
-        <motion.ul variants={riseChild} className="divide-y rounded-xl border border-red-300/60 bg-red-50/60 text-sm dark:border-red-900/60 dark:bg-red-950/20">
-          {issues.map((i) => (
-            <li key={i.key} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 px-4 py-2">
-              <span className="font-medium text-red-700 dark:text-red-400">{i.lead}</span>
-              {i.spots.map((spot, n) => (
-                <span key={spot.sessionId} className="contents">
-                  {n > 0 && <span className="text-muted-foreground">and</span>}
-                  <button className="underline-offset-2 hover:underline" onClick={() => jump(spot)}>
-                    {describeClash(spot)}
-                  </button>
-                </span>
-              ))}
-            </li>
-          ))}
-        </motion.ul>
       )}
 
       {sessionCount === 0 && canManage && sources.length > 0 && (
@@ -590,7 +572,7 @@ export function ScheduleView({
             <Board
               columns={columns}
               density={boardDensity}
-              issues={flagged}
+              issues={showIssues ? flagged : NO_ISSUES}
               dimmed={notMine}
               roomNames={roomNames}
               canManage={canManage}
@@ -611,7 +593,7 @@ export function ScheduleView({
                     start={active.start}
                     scale={SCALE[boardDensity]}
                     density={boardDensity}
-                    issues={flagged}
+                    issues={showIssues ? flagged : NO_ISSUES}
                     roomNames={roomNames}
                     canManage={false}
                     resizingId={null}
@@ -643,6 +625,7 @@ export function ScheduleView({
         types={types}
         canManage={canManage}
         viewerId={viewerId}
+        problems={showIssues && target?.mode === "edit" ? (flagged.get(target.session.id) ?? []) : []}
         flush={flush}
         onChanged={afterChange}
       />
@@ -670,15 +653,6 @@ export function ScheduleView({
       )}
     </motion.div>
   );
-
-  /** Shows the day a session with an issue is on, and opens it. */
-  function jump(c: Spot) {
-    if (view === "week") setTrack(c.track);
-    else setDay(c.day);
-    const at = locate(days, c.sessionId);
-    const session = at ? dayOf(days, at.key)[at.index] : undefined;
-    if (session) setTarget({ mode: "edit", session });
-  }
 }
 
 /** The column under the pointer; for a card moved by keyboard, the one it overlaps most. */
@@ -688,6 +662,7 @@ const underPointer: CollisionDetection = (args) => {
 };
 
 const ISSUES_IN_TOOLTIP = 8;
+const NO_ISSUES = new Map<string, string[]>();
 
 function SaveBadge({ save, onRetry }: { save: SaveState; onRetry: () => void }) {
   if (save.state === "error") {
