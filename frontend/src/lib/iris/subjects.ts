@@ -1,5 +1,5 @@
 /**
- * The eight Iris subjects, the three tracks that weight them, and what a
+ * The eight Diagnostic subjects, the three tracks that weight them, and what a
  * placement routes someone to. Pure and free of any answer key, so the pages
  * share it with the server.
  */

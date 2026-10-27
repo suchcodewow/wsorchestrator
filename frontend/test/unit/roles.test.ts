@@ -14,7 +14,7 @@
  * - Training roles are ranked viewer < administrator; no training role is no
  *   training access.
  * - eVals roles are ranked the same way, and are independent of the training area's.
- * - Iris has no roles of its own: an assessments viewer takes it, and an
+ * - Diagnostic has no roles of its own: an assessments viewer takes it, and an
  *   assessments administrator runs it.
  * - A platform administrator is an administrator in every area whatever their
  *   stored roles say, and alone runs backups and sign-in domains, and grants
@@ -101,7 +101,7 @@ const POLICY: Record<string, { actual: Check; expected: Check }> = {
     expected: (a) => evals("administrator")(a) && training("administrator")(a),
   },
 
-  // Iris is part of the assessments area: a viewer takes it, an administrator runs it.
+  // Diagnostic is part of the assessments area: a viewer takes it, an administrator runs it.
   canTakeIris: { actual: roles.canTakeIris, expected: evals("viewer") },
   canManageIris: { actual: roles.canManageIris, expected: evals("administrator") },
 
@@ -207,20 +207,20 @@ describe("the areas are independent", () => {
     assert.equal(roles.canManageUsers(a), true);
   });
 
-  test("an Assessments Administrator runs Iris: everyone's results, the answer key and question review", () => {
+  test("an Assessments Administrator runs Diagnostic: everyone's results, the answer key and question review", () => {
     const a = PERSONAS.assessmentsAdmin;
     assert.equal(roles.canTakeIris(a), true);
     assert.equal(roles.canManageIris(a), true);
   });
 
-  test("an Assessments Viewer takes Iris but cannot see its console or manage anyone", () => {
+  test("an Assessments Viewer takes Diagnostic but cannot see its console or manage anyone", () => {
     const a = PERSONAS.assessmentsViewer;
     assert.equal(roles.canTakeIris(a), true);
     assert.equal(roles.canManageIris(a), false);
     assert.equal(roles.canManageUsers(a), false);
   });
 
-  test("Iris comes with no other area's role", () => {
+  test("Diagnostic comes with no other area's role", () => {
     for (const p of ["eventAdmin", "trainingAdmin", "guestJudge", "peopleManager"] as const) {
       assert.equal(roles.canTakeIris(PERSONAS[p]), false, p);
     }

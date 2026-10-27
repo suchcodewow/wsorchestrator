@@ -67,7 +67,7 @@ export type AssessmentsRole = (typeof ASSESSMENTS_ROLES)[number];
 export const assessmentsRole = pgEnum("evals_role", ASSESSMENTS_ROLES);
 
 /**
- * The roles Iris had while it was an area of its own. Iris is part of the
+ * The roles Diagnostic had, as Iris, while it was an area of its own. It is part of the
  * assessments area now — an Assessments Viewer takes it, an Administrator
  * runs it — and the 20261008 migration moved everyone's Iris role into their
  * Assessments role. The columns stay, unread, so an older build still runs
@@ -2491,7 +2491,7 @@ export type RunLog = typeof runLogs.$inferSelect;
 export type RunResource = typeof runResources.$inferSelect;
 export type RunStatus = (typeof runStatus.enumValues)[number];
 
-// ─── Iris ───────────────────────────────────────────────────────────────────
+// ─── Diagnostic ───────────────────────────────────────────────────────────────────
 // Adaptive placement tests. The questions live in code (lib/iris/items.ts);
 // these tables hold who takes them, what they answered, and which questions
 // are approved.
@@ -2812,7 +2812,7 @@ export type MimirRepRole = (typeof MIMIR_REP_ROLES)[number];
 export const MIMIR_COACH_STYLES = ["socratic", "direct"] as const;
 export type MimirCoachStyle = (typeof MIMIR_COACH_STYLES)[number];
 
-/** What one person has told Mimir about themselves, for the coach. Kept apart from Iris's track. */
+/** What one person has told Mimir about themselves, for the coach. Kept apart from the Diagnostic track. */
 export const mimirProfiles = pgTable(
   "mimir_profiles",
   {

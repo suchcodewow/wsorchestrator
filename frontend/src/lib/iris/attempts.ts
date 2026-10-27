@@ -1,5 +1,5 @@
 /**
- * Taking an Iris test. The engine runs here, not in the browser: a taker is
+ * Taking a Diagnostic test. The engine runs here, not in the browser: a taker is
  * sent one question at a time without its answer, posts their choice, and is
  * graded against the bank. A sitting in progress is stored, so leaving and
  * coming back resumes it rather than starting a fresh, rerollable run.
@@ -81,7 +81,7 @@ export type MyIris = {
 
 /**
  * Someone's own view: their track and where they are with each subject.
- * `withLevels` adds the placement of each finished subject, and is for Iris
+ * `withLevels` adds the placement of each finished subject, and is for Diagnostic
  * administrators only; a taker is never told their level.
  */
 export async function myIris(userId: string, form: Form = "A", withLevels = false): Promise<MyIris> {

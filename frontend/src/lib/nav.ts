@@ -187,7 +187,7 @@ export const NAV_SECTIONS: NavSection[] = [
         description: "Score attendees on bootcamp and intermediate assessments.",
         visible: canScoreAssessments,
       },
-      { href: "/iris", hasTabs: true, label: "Iris", Icon: Eye, description: "Adaptive placement tests.", visible: canTakeIris },
+      { href: "/diagnostic", hasTabs: true, label: "Diagnostic", Icon: Eye, description: "Adaptive placement tests.", visible: canTakeIris },
       {
         href: "/reporting",
         hasTabs: true,

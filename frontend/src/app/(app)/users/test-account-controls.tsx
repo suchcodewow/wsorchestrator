@@ -181,7 +181,7 @@ export function CreateTestAccountDialog() {
               </div>
               <p className="text-xs text-muted-foreground">
                 {source
-                  ? `Starts with ${source.fullName}'s roles, theme and calendar settings, and Iris track, copied once, or no roles if they have never signed in. Not their test results or progress.`
+                  ? `Starts with ${source.fullName}'s roles, theme and calendar settings, and Diagnostic track, copied once, or no roles if they have never signed in. Not their test results or progress.`
                   : "Without one, it starts with no roles; set them in the table."}
               </p>
             </div>
@@ -195,7 +195,7 @@ export function CreateTestAccountDialog() {
                   id="test-account-name"
                   value={name}
                   maxLength={TEST_ACCOUNT_LIMITS.name}
-                  placeholder="Iris tester, SDR track"
+                  placeholder="Diagnostic tester, SDR track"
                   onChange={(e) => setName(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") void submit();
@@ -320,7 +320,7 @@ export function ResetTestAccountButton({
           <DialogHeader>
             <DialogTitle>Reset {who}?</DialogTitle>
             <DialogDescription>
-              Everything that is its own goes, as if it were deleted: Iris
+              Everything that is its own goes, as if it were deleted: Diagnostic
               sittings and track, progress, tokens and settings. It keeps its
               name, address and roles. Anything it wrote elsewhere stays, with
               no author.

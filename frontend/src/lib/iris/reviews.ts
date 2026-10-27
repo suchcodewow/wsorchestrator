@@ -1,5 +1,5 @@
 /**
- * Which Iris questions are approved. A decision belongs to the version it was
+ * Which Diagnostic questions are approved. A decision belongs to the version it was
  * made on, so a reworded question goes back to draft by itself; a question
  * nobody has reviewed is a draft. Only approved questions are served live.
  */

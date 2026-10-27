@@ -209,7 +209,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
             {
               name: "role",
               type: `"viewer" | "administrator" | null`,
-              note: "required when area is training or assessments; null removes access. The assessments role covers Iris too: a viewer takes it, an administrator runs it.",
+              note: "required when area is training or assessments; null removes access. The assessments role covers Diagnostic too: a viewer takes it, an administrator runs it.",
             },
             { name: "value", type: "boolean", note: "required when area is platform" },
           ],
@@ -320,7 +320,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "platform",
         token: false,
         notes:
-          "Its address is generated on test-account.invalid, which no Google account can have, so nobody can sign in as it. With copyFrom it starts with the roles in each area, theme and calendar settings, and Iris track of the account with that address, copied once; an employee who has never signed in has no account, so it starts with no roles, as they would. Their Iris sittings, Mimir progress and Harness credentials are not copied, nor being a manager or a guest judge, which follow from their own address. Change its roles afterwards with PATCH /api/users/{id}, and delete it with DELETE /api/users/{id}.",
+          "Its address is generated on test-account.invalid, which no Google account can have, so nobody can sign in as it. With copyFrom it starts with the roles in each area, theme and calendar settings, and Diagnostic track of the account with that address, copied once; an employee who has never signed in has no account, so it starts with no roles, as they would. Their Diagnostic sittings, Mimir progress and Harness credentials are not copied, nor being a manager or a guest judge, which follow from their own address. Change its roles afterwards with PATCH /api/users/{id}, and delete it with DELETE /api/users/{id}.",
         body: {
           kind: "json",
           fields: [
@@ -344,7 +344,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "platform",
         token: false,
         notes:
-          "Everything that is the account's own goes, as if it were deleted, Iris sittings and track included, and it comes back with the same id, name, address and roles. What it authored elsewhere stays, unattributed.",
+          "Everything that is the account's own goes, as if it were deleted, Diagnostic sittings and track included, and it comes back with the same id, name, address and roles. What it authored elsewhere stays, unattributed.",
         params: [{ name: "id", type: "string", required: true, note: "the test account's id" }],
         returns: "{ ok: true }",
         errors: [

@@ -1,5 +1,5 @@
 /**
- * Taking an Iris test, and what Iris administrators read back, against a real
+ * Taking a Diagnostic test, and what Diagnostic administrators read back, against a real
  * database.
  *
  * The rules, restated here independently of `lib/iris`:

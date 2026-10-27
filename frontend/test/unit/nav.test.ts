@@ -55,13 +55,13 @@ const EXPECTED_SIDEBAR: Record<Persona, string[]> = {
   eventAdmin: [...HOME, ...EVENTS_ADMIN, ...MIMIR_ONLY, ...ACCOUNT, "[Administration]", "Manage users"],
   trainingViewer: [...HOME, "[Training]", "Scheduler", "Cohorts", "Logistics", "Async Recordings", "Survey Results", ...MIMIR_ONLY, ...ACCOUNT],
   trainingAdmin: [...HOME, ...TRAINING_ADMIN, "[Assessments]", "Reporting", ...MIMIR_ADMIN, ...ACCOUNT, "[Administration]", "Manage users"],
-  // Iris is part of the assessments area: a viewer takes it, an administrator runs it.
-  assessmentsViewer: [...HOME, "[Assessments]", "eVals", "Iris", "Reporting", "Mimir", ...ACCOUNT],
+  // Diagnostic is part of the assessments area: a viewer takes it, an administrator runs it.
+  assessmentsViewer: [...HOME, "[Assessments]", "eVals", "Diagnostic", "Reporting", "Mimir", ...ACCOUNT],
   assessmentsAdmin: [
     ...HOME,
     "[Assessments]",
     "eVals",
-    "Iris",
+    "Diagnostic",
     "Reporting",
     "eVals settings",
     "Mimir",
@@ -78,7 +78,7 @@ const EXPECTED_SIDEBAR: Record<Persona, string[]> = {
     ...TRAINING_ADMIN,
     "[Assessments]",
     "eVals",
-    "Iris",
+    "Diagnostic",
     "Reporting",
     "eVals settings",
     ...MIMIR_ADMIN,

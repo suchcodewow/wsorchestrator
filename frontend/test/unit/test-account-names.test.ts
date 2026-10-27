@@ -40,6 +40,6 @@ describe("pickCharacterName", () => {
   });
 
   test("ignores names that aren't characters'", () => {
-    assert.ok(pickCharacterName(["Iris tester", "e2e"]));
+    assert.ok(pickCharacterName(["Diagnostic tester", "e2e"]));
   });
 });

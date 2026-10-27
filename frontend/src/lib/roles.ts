@@ -14,7 +14,7 @@ import {
  * platform administrator counts as an administrator in every area, whatever
  * their stored per-area roles say — so read roles through `eventRoleOf`,
  * `trainingRoleOf` and `assessmentsRoleOf`, never off this object directly.
- * Iris is part of the assessments area, not an area of its own.
+ * Diagnostic is part of the assessments area, not an area of its own.
  */
 export type Access = {
   event: EventRole;
@@ -71,9 +71,9 @@ export const ASSESSMENTS_ROLE_LABELS: Record<AssessmentsRole, string> = {
 };
 
 export const ASSESSMENTS_ROLE_DESCRIPTIONS: Record<AssessmentsRole, string> = {
-  viewer: "Sees and scores assessments, eVals among them, and takes the Iris placement tests.",
+  viewer: "Sees and scores assessments, eVals among them, and takes the Diagnostic placement tests.",
   administrator:
-    "Also manages eVals settings and Google meetings, sees everyone's Iris results and reviews its questions, and manages everyone's assessments role.",
+    "Also manages eVals settings and Google meetings, sees everyone's Diagnostic results and reviews its questions, and manages everyone's assessments role.",
 };
 
 export const NO_ASSESSMENTS_ACCESS_LABEL = "No assessments access";
@@ -196,7 +196,7 @@ export const canSearchEmployees = (access: Access) =>
  */
 export const canRunMimirStudio = (access: Access) => canManageMimir(access) && canManageEvalsSettings(access);
 
-// Iris, part of the assessments area.
+// Diagnostic, part of the assessments area.
 
 /** Takes the placement tests: an Assessments Viewer or above. */
 export const canTakeIris = (access: Access) => assessmentsAtLeast(access, "viewer");

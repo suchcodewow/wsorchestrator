@@ -49,7 +49,7 @@ export function testAccountMayChange(endpoint: { token: boolean } | null | undef
   return testAccountsAllowed() && endpoint?.token === true;
 }
 
-/** `Iris tester` → `iris-tester-3fa9c1@test-account.invalid`; the suffix keeps two of a name apart. */
+/** `Diagnostic tester` → `diagnostic-tester-3fa9c1@test-account.invalid`; the suffix keeps two of a name apart. */
 export function testAccountEmail(name: string, suffix = randomBytes(3).toString("hex")): string {
   const slug = name
     .normalize("NFKD")
@@ -76,8 +76,8 @@ export type CreateTestAccountError = "production" | "forbidden" | "invalid" | "s
 /**
  * A new test account. With `copyFrom`, an address, it starts as a copy of the
  * account with that address, once: its roles in each area, its theme and
- * calendar settings, and its Iris track. Nothing else comes over: not their
- * Iris sittings or Mimir progress, not their Harness credentials, and not
+ * calendar settings, and its Diagnostic track. Nothing else comes over: not their
+ * Diagnostic sittings or Mimir progress, not their Harness credentials, and not
  * being a manager or a guest judge, which follow from a person's own address.
  * An employee who has never signed in has no account to copy, so it starts as
  * they would: with no roles. Without `copyFrom`, the same, and the Users page
@@ -176,7 +176,7 @@ export type ResetTestAccountError = "production" | "forbidden" | "not_found" | "
 /**
  * Gives a test account a fresh start: everything that is its own goes, as if
  * it had been deleted, and it comes straight back with the same id, name,
- * address and roles. Its Iris sittings and track go with it, so it can take
+ * address and roles. Its Diagnostic sittings and track go with it, so it can take
  * the same test again. What it authored elsewhere stays, unattributed, as it
  * does when any account is deleted.
  */

@@ -6,7 +6,7 @@
  * the platform flag × judging or not × managing people or not is 360 people,
  * few enough to check each one. A new role added to `EVENT_ROLES`,
  * `TRAINING_ROLES` or `ASSESSMENTS_ROLES` is picked up here without anyone
- * remembering to. Iris has no roles of its own: it is part of assessments.
+ * remembering to. Diagnostic has no roles of its own: it is part of assessments.
  */
 
 import { ASSESSMENTS_ROLES, EVENT_ROLES, TRAINING_ROLES } from "@/db/schema";

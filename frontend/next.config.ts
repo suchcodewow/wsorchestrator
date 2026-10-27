@@ -12,6 +12,9 @@ const nextConfig: NextConfig = {
       { source: "/reporting/bootcamp-history/:id", destination: "/reporting/bootcamp/:id", permanent: true },
       // The history tab became the dots beside each rep on the Canary Wire.
       { source: "/reporting/canary-wire-history", destination: "/reporting/canary-wire", permanent: true },
+      // Iris was renamed Diagnostic.
+      { source: "/iris", destination: "/diagnostic", permanent: true },
+      { source: "/iris/:path*", destination: "/diagnostic/:path*", permanent: true },
     ];
   },
   experimental: {

@@ -4,7 +4,7 @@
  * The rules:
  * 1. Only a platform administrator makes or resets one, and never on production.
  * 2. One is made with no roles, on the reserved domain, flagged as a test account.
- * 3. A reset takes everything that is its own (Iris track and sittings
+ * 3. A reset takes everything that is its own (Diagnostic track and sittings
  *    included) and keeps its id, name, address and roles.
  * 4. A real account is never reset, and neither is one that owns an event.
  * 5. Only test accounts are found to view as, and none on production.
@@ -77,9 +77,9 @@ const asProduction = async <T>(fn: () => Promise<T>): Promise<T> => {
 
 describe("createTestAccount", () => {
   test("makes a flagged account with no roles on the reserved domain", async () => {
-    const account = await make("  Iris tester  ");
+    const account = await make("  Diagnostic tester  ");
     const [row] = await db.select().from(users).where(eq(users.id, account.id));
-    assert.equal(row!.name, "Iris tester");
+    assert.equal(row!.name, "Diagnostic tester");
     assert.ok(row!.email!.endsWith(`@${TEST_ACCOUNT_DOMAIN}`), row!.email!);
     assert.deepEqual(
       [row!.isTestAccount, row!.eventRole, row!.trainingRole, row!.assessmentsRole, row!.isPlatformAdmin],
@@ -87,7 +87,7 @@ describe("createTestAccount", () => {
     );
   });
 
-  test("copies another account's roles, settings and Iris track, once, and nothing else", async () => {
+  test("copies another account's roles, settings and Diagnostic track, once, and nothing else", async () => {
     const source = await scope.createUser("source", { ...PERSONAS.manager, training: "viewer", assessments: "viewer" });
     await db.update(users).set({ themePreference: "dark", calendarScope: "all" }).where(eq(users.id, source.id));
     await setTrack(source.id, "SE");
@@ -147,7 +147,7 @@ describe("createTestAccount", () => {
 });
 
 describe("resetTestAccount", () => {
-  test("takes its Iris track and sittings, and keeps who it is", async () => {
+  test("takes its Diagnostic track and sittings, and keeps who it is", async () => {
     const account = await flagged("reset");
     await setTrack(account.id, "SDR");
     const started = await startSitting(account.id, "sdlc", "A", "preview");

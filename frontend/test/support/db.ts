@@ -56,7 +56,7 @@ export async function assertScratchDatabase(url = testDatabaseUrl()): Promise<vo
  * and the rest cascade from the user. Audit rows outlive a deleted user by
  * design, so the suite's own are deleted by actor first. Judges are found by
  * email; a bootcamp or assessment the suite made, by its creator, along with
- * any scores given or transcripts filed at it or on it. Iris sittings cascade
+ * any scores given or transcripts filed at it or on it. Diagnostic sittings cascade
  * from the user; question reviews they made are deleted by reviewer. Mimir
  * items are found by id, which carries the same prefix.
  */

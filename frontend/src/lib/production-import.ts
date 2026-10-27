@@ -155,7 +155,7 @@ export const userSnapshotSchema = z.object({
   eventRole: z.string(),
   trainingRole: z.string().nullable(),
   evalsRole: z.string().nullable(),
-  // Optional, so a snapshot taken before Iris existed still restores.
+  // Optional, so a snapshot taken before Diagnostic existed still restores.
   irisRole: z.string().nullable().default(null),
   isPlatformAdmin: z.boolean(),
   calendarScope: z.string(),
