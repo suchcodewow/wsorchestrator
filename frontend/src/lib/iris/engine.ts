@@ -1,5 +1,5 @@
 /**
- * The Iris adaptive placement engine, ported from Project Iris with its
+ * The Diagnostic adaptive placement engine, ported from Project Iris with its
  * simulation-validated parameters unchanged: start at Intermediate, two right
  * in a row moves up a level and two wrong moves down, 10 to 14 questions, then
  * up to 3 tiebreak questions when the level above the placement sits between

@@ -1,4 +1,4 @@
-/** Simulated Iris takers, for checking the engine against the real bank. */
+/** Simulated Diagnostic takers, for checking the engine against the real bank. */
 
 import { ENGINE, drawItem, newRunState, placementOf, submit, type Asked, type IrisItem, type Level } from "@/lib/iris/engine";
 

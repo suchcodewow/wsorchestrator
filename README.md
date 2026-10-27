@@ -534,16 +534,17 @@ lost. Each row also keeps the Slack user id the Slack sync looked up for them.
 | Role                          | Adds                                                            |
 | ----------------------------- | --------------------------------------------------------------- |
 | *(none)*                      | Nothing. What everyone starts as.                               |
-| **Assessments Viewer**        | The **eVals** page, and **Iris**: takes the placement tests.    |
-| **Assessments Administrator** | Sets everyone's Assessments role on **Manage users**; **eVals settings**, including **Google Meetings**; and Iris's console: everyone's results, the answer key, and approving and rejecting questions. |
+| **Assessments Viewer**        | The **eVals** page, and **Diagnostic**: takes the placement tests.    |
+| **Assessments Administrator** | Sets everyone's Assessments role on **Manage users**; **eVals settings**, including **Google Meetings**; and Diagnostic's console: everyone's results, the answer key, and approving and rejecting questions. |
 
-**Iris** — adaptive placement tests for new GTM hires: eight subjects, each
+**Diagnostic** — adaptive placement tests for new GTM hires: eight subjects, each
 taken once per form, which place someone Beginner, Intermediate or Advanced so
 enablement can route their training. Takers never see their own level. Part of
 the assessments area, with no roles of its own: an Assessments Viewer takes the
-tests and an Assessments Administrator runs them. (It had its own Iris Taker
-and Iris Administrator roles until October 2026; the migration that removed
-them gave everyone the higher of their two roles.)
+tests and an Assessments Administrator runs them. (It was called Iris until
+October 2026, with its own Iris Taker and Iris Administrator roles until the
+migration that removed them gave everyone the higher of their two roles. Its
+database tables and code still use the name `iris`.)
 
 **Mimir** — the GTM reference library and an AI coach, carried over from the
 Learning Hub prototype. Under **Training**, for everyone who can sign in,
@@ -554,7 +555,7 @@ glossary. On
 each card the coach (Claude, server-side) explains, quizzes or roleplays, and
 says when the rep has shown real command of it; with the rep's own one-line
 takeaway that makes the card mastered. Each person's progress and
-conversations are their own, kept apart from Iris. **Mimir Settings**, for
+conversations are their own, kept apart from Diagnostic. **Mimir Settings**, for
 Training Administrators, edits the content and the coaching settings.
 
 The content is not in this repository, which is public. It lives in the

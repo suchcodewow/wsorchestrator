@@ -1,5 +1,5 @@
 /**
- * The Iris engine and question bank.
+ * The Diagnostic engine and question bank.
  *
  * The accuracy floors are Project Iris's own measurements of this engine
  * (84% of true Beginners, 88% of Intermediates and 92% of Advanced placed

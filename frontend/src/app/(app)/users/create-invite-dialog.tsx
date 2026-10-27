@@ -196,7 +196,7 @@ export function CreateInviteDialog({ viewerAccess }: { viewerAccess: Access }) {
                     {
                       value: NONE,
                       label: NO_ASSESSMENTS_ACCESS_LABEL,
-                      description: "Cannot see eVals or Iris.",
+                      description: "Cannot see eVals or Diagnostic.",
                     },
                     ...ASSESSMENTS_ROLES.map((r) => ({
                       value: r,

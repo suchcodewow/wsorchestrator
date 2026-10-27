@@ -304,23 +304,30 @@ const PAGES: Record<string, PageCase> = {
     path: () => `/evals/bootcamp/${assessmentId}/0`,
     expect: () => 404,
   },
-  "/iris": {
-    path: () => "/iris",
-    expect: (a) => (canTakeIris(a) ? { to: "/iris/tests" } : 404),
+  // Iris was renamed Diagnostic; old links still land, for anyone and before sign-in.
+  "/iris": { path: () => "/iris", expect: () => ({ to: "/diagnostic" }), signedOut: { to: "/diagnostic" } },
+  "/iris/<a deeper page>": {
+    path: () => "/iris/questions",
+    expect: () => ({ to: "/diagnostic/questions" }),
+    signedOut: { to: "/diagnostic/questions" },
   },
-  "/iris/tests": { path: () => "/iris/tests", expect: gated(canTakeIris) },
-  "/iris/tests/<a subject>": { path: () => "/iris/tests/sdlc", expect: gated(canTakeIris) },
-  "/iris/tests/<a subject>?mode=preview": {
-    path: () => "/iris/tests/sdlc?mode=preview",
+  "/diagnostic": {
+    path: () => "/diagnostic",
+    expect: (a) => (canTakeIris(a) ? { to: "/diagnostic/tests" } : 404),
+  },
+  "/diagnostic/tests": { path: () => "/diagnostic/tests", expect: gated(canTakeIris) },
+  "/diagnostic/tests/<a subject>": { path: () => "/diagnostic/tests/sdlc", expect: gated(canTakeIris) },
+  "/diagnostic/tests/<a subject>?mode=preview": {
+    path: () => "/diagnostic/tests/sdlc?mode=preview",
     expect: gated(canManageIris),
   },
-  "/iris/tests/<unknown>": { path: () => "/iris/tests/nonsense", expect: () => 404 },
-  "/iris/cohort": { path: () => "/iris/cohort", expect: gated(canManageIris) },
-  "/iris/cohort?view=charts": { path: () => "/iris/cohort?view=charts&q=e2e", expect: gated(canManageIris) },
-  "/iris/cohort/<a person>": { path: () => `/iris/cohort/${people.assessmentsViewer.id}`, expect: gated(canManageIris) },
-  "/iris/cohort/<unknown>": { path: () => `/iris/cohort/${MISSING}`, expect: () => 404 },
-  "/iris/questions": { path: () => "/iris/questions", expect: gated(canManageIris) },
-  "/iris/questions?subject": { path: () => "/iris/questions?subject=compete&level=3&status=draft", expect: gated(canManageIris) },
+  "/diagnostic/tests/<unknown>": { path: () => "/diagnostic/tests/nonsense", expect: () => 404 },
+  "/diagnostic/cohort": { path: () => "/diagnostic/cohort", expect: gated(canManageIris) },
+  "/diagnostic/cohort?view=charts": { path: () => "/diagnostic/cohort?view=charts&q=e2e", expect: gated(canManageIris) },
+  "/diagnostic/cohort/<a person>": { path: () => `/diagnostic/cohort/${people.assessmentsViewer.id}`, expect: gated(canManageIris) },
+  "/diagnostic/cohort/<unknown>": { path: () => `/diagnostic/cohort/${MISSING}`, expect: () => 404 },
+  "/diagnostic/questions": { path: () => "/diagnostic/questions", expect: gated(canManageIris) },
+  "/diagnostic/questions?subject": { path: () => "/diagnostic/questions?subject=compete&level=3&status=draft", expect: gated(canManageIris) },
   "/reporting": {
     path: () => "/reporting",
     expect: (a) => (canSeeReporting(a) ? { to: visibleReportingTabs(a)[0]!.href } : 404),
@@ -583,26 +590,26 @@ const ROUTES: RouteCase[] = [
   { method: "POST", path: `/api/me/harness-tokens/${MISSING}/deploy`, allowed: canManageSettings, body: () => ({}) },
   { method: "POST", path: `/api/me/harness-tokens/${MISSING}/scrub`, allowed: canManageSettings },
 
-  // Iris
-  { method: "GET", path: "/api/iris/me", allowed: canTakeIris },
-  { method: "PUT", path: "/api/iris/me/track", allowed: canTakeIris, body: () => ({}) },
-  { method: "POST", path: "/api/iris/sittings", allowed: canTakeIris, body: () => ({}) },
+  // Diagnostic
+  { method: "GET", path: "/api/diagnostic/me", allowed: canTakeIris },
+  { method: "PUT", path: "/api/diagnostic/me/track", allowed: canTakeIris, body: () => ({}) },
+  { method: "POST", path: "/api/diagnostic/sittings", allowed: canTakeIris, body: () => ({}) },
   // A taker gets past the gate but not into a preview, which is the console's.
   {
     method: "POST",
-    path: "/api/iris/sittings",
+    path: "/api/diagnostic/sittings",
     allowed: canManageIris,
     body: () => ({ subject: "sdlc", mode: "preview" }),
     denyOnly: true,
   },
-  { method: "GET", path: `/api/iris/sittings/${MISSING}`, allowed: canTakeIris },
-  { method: "POST", path: `/api/iris/sittings/${MISSING}/answers`, allowed: canTakeIris, body: () => ({}) },
-  { method: "GET", path: "/api/iris/cohort", allowed: canManageIris },
-  { method: "GET", path: `/api/iris/cohort/${MISSING}`, allowed: canManageIris },
-  { method: "DELETE", path: `/api/iris/cohort/${MISSING}`, allowed: canManageIris },
-  { method: "GET", path: "/api/iris/questions?subject=sdlc", allowed: canManageIris },
-  { method: "PUT", path: "/api/iris/questions/no-such-item/review", allowed: canManageIris, body: () => ({}) },
-  { method: "POST", path: "/api/iris/questions/approve-drafts", allowed: canManageIris, body: () => ({}) },
+  { method: "GET", path: `/api/diagnostic/sittings/${MISSING}`, allowed: canTakeIris },
+  { method: "POST", path: `/api/diagnostic/sittings/${MISSING}/answers`, allowed: canTakeIris, body: () => ({}) },
+  { method: "GET", path: "/api/diagnostic/cohort", allowed: canManageIris },
+  { method: "GET", path: `/api/diagnostic/cohort/${MISSING}`, allowed: canManageIris },
+  { method: "DELETE", path: `/api/diagnostic/cohort/${MISSING}`, allowed: canManageIris },
+  { method: "GET", path: "/api/diagnostic/questions?subject=sdlc", allowed: canManageIris },
+  { method: "PUT", path: "/api/diagnostic/questions/no-such-item/review", allowed: canManageIris, body: () => ({}) },
+  { method: "POST", path: "/api/diagnostic/questions/approve-drafts", allowed: canManageIris, body: () => ({}) },
 
   // Cohorts
   { method: "GET", path: "/api/cohorts/current", allowed: canUseTraining },
@@ -1151,7 +1158,7 @@ describe("PATCH /api/users/:id", () => {
     });
   });
 
-  test("Iris is no longer an area of its own: an Iris role is refused, and the assessments role carries it", async () => {
+  test("Diagnostic is no longer an area of its own: a Diagnostic role is refused, and the assessments role carries it", async () => {
     const target = await scope.createUser("u_target7", PERSONAS.operator);
     assert.equal((await patch("assessmentsAdmin", target.id, { area: "iris", role: "taker" })).status, 400);
     assert.equal((await patch("platform", target.id, { area: "iris", role: "administrator" })).status, 400);
@@ -1222,16 +1229,16 @@ describe("PATCH /api/users/:id", () => {
   });
 });
 
-describe("an Iris sitting, over HTTP", () => {
+describe("a Diagnostic sitting, over HTTP", () => {
   // Grading is on the server, and only an Assessments Administrator is told the level.
   async function sit(who: Persona) {
-    assert.equal((await send(who, "PUT", "/api/iris/me/track", { track: "AE" })).status, 200);
-    const started = await send(who, "POST", "/api/iris/sittings", { subject: "pipegen" });
+    assert.equal((await send(who, "PUT", "/api/diagnostic/me/track", { track: "AE" })).status, 200);
+    const started = await send(who, "POST", "/api/diagnostic/sittings", { subject: "pipegen" });
     assert.equal(started.status, 201, started.body);
     let sitting = JSON.parse(started.body).sitting as { attemptId: string; number: number; question: object };
     for (let guard = 0; guard < 20; guard++) {
       assert.deepEqual(Object.keys(sitting.question).sort(), ["options", "stem"], "no id, answer or level is sent");
-      const res = await send(who, "POST", `/api/iris/sittings/${sitting.attemptId}/answers`, {
+      const res = await send(who, "POST", `/api/diagnostic/sittings/${sitting.attemptId}/answers`, {
         number: sitting.number,
         choice: -1,
       });
@@ -1245,18 +1252,18 @@ describe("an Iris sitting, over HTTP", () => {
   }
 
   const pipegen = async (who: Persona) =>
-    (JSON.parse((await send(who, "GET", "/api/iris/me")).body).subjects as { key: string; placement?: number }[]).find(
+    (JSON.parse((await send(who, "GET", "/api/diagnostic/me")).body).subjects as { key: string; placement?: number }[]).find(
       (s) => s.key === "pipegen",
     );
 
   test("a taker is told the sitting is over, never their level", async () => {
-    assert.equal((await send("assessmentsAdmin", "POST", "/api/iris/questions/approve-drafts", { subject: "pipegen" })).status, 200);
+    assert.equal((await send("assessmentsAdmin", "POST", "/api/diagnostic/questions/approve-drafts", { subject: "pipegen" })).status, 200);
     const done = await sit("assessmentsViewer");
     assert.ok(!("placement" in done) && !("confidence" in done), JSON.stringify(done));
     assert.ok(!("placement" in (await pipegen("assessmentsViewer"))!));
   });
 
-  test("an Iris administrator sees their own level", async () => {
+  test("a Diagnostic administrator sees their own level", async () => {
     const done = await sit("assessmentsAdmin");
     assert.equal(done.placement, 1, "\"I don't know\" throughout places Beginner");
     assert.equal((await pipegen("assessmentsAdmin"))?.placement, 1);
@@ -1341,13 +1348,13 @@ describe("invite links", () => {
     assert.equal((await send({ cookie }, "GET", EVALS_TABS[0]!.href)).status, 200);
   });
 
-  test("an assessments link opens Iris too", async () => {
+  test("an assessments link opens Diagnostic too", async () => {
     const path = await link("assessmentsAdmin", { eventRole: null, trainingRole: null, assessmentsRole: "viewer" });
     const newcomer = await scope.createUser("inv_iris", PERSONAS.nobody);
     const cookie = await createSession(newcomer.id);
     const res = await accept(cookie, path.split("/").pop()!);
     assert.equal(res.status, 200, res.body);
-    assert.equal((await send({ cookie }, "GET", "/iris/tests")).status, 200);
+    assert.equal((await send({ cookie }, "GET", "/diagnostic/tests")).status, 200);
   });
 
   test("a link that grants nothing, or platform administration, is not made", async () => {
@@ -1355,7 +1362,7 @@ describe("invite links", () => {
       { eventRole: "none", trainingRole: null },
       { eventRole: null, trainingRole: null },
       { eventRole: null, trainingRole: null, assessmentsRole: null },
-      // Iris has no role of its own to grant any more.
+      // Diagnostic has no role of its own to grant any more.
       { eventRole: null, trainingRole: null, assessmentsRole: null, irisRole: "taker" },
       { eventRole: "operator", trainingRole: null, platform: true },
     ]) {

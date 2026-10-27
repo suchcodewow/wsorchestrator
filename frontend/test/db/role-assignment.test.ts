@@ -12,7 +12,7 @@
  * The rules, in the order they apply:
  * 1. `self`            — nobody changes their own roles.
  * 2. `forbidden`       — the actor does not administer that area (event and
- *                        training, eVals and Iris administrators, their own area only; the
+ *                        training, eVals and Diagnostic administrators, their own area only; the
  *                        platform flag, platform administrators only).
  * 3. `not_found`       — no such user.
  * 4. `platform_target` — only a platform administrator touches another one.

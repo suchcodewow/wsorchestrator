@@ -1,4 +1,4 @@
-/** The Iris placement tests: taking them, and what Assessments Administrators read and review. */
+/** The Diagnostic placement tests: taking them, and what Assessments Administrators read and review. */
 
 import { IRIS_NOTE_MAX } from "@/db/schema";
 import { IRIS_COHORT_LIST } from "@/lib/list-specs";
@@ -14,13 +14,13 @@ const SITTING_ID: Field = { name: "id", type: "string", required: true, note: "t
 export const IRIS_GROUPS: EndpointGroup[] = [
   {
     id: "iris",
-    title: "Iris",
+    title: "Diagnostic",
     intro:
       "Adaptive placement tests, one per subject. The engine runs on the server: a taker is sent one question at a time without its answer, and posts a choice to get the next. Takers never see their placement.",
     endpoints: [
       {
         method: "GET",
-        path: "/api/iris/me",
+        path: "/api/diagnostic/me",
         summary: "Returns your track and where you are with each subject.",
         access: "assessmentsViewer",
         token: true,
@@ -32,7 +32,7 @@ export const IRIS_GROUPS: EndpointGroup[] = [
       },
       {
         method: "PUT",
-        path: "/api/iris/me/track",
+        path: "/api/diagnostic/me/track",
         summary: "Sets the track you sell in, which weights your overall score.",
         access: "assessmentsViewer",
         token: true,
@@ -42,7 +42,7 @@ export const IRIS_GROUPS: EndpointGroup[] = [
       },
       {
         method: "POST",
-        path: "/api/iris/sittings",
+        path: "/api/diagnostic/sittings",
         summary: "Starts a sitting of one subject, or picks up the one in progress.",
         access: "assessmentsViewer",
         token: true,
@@ -67,7 +67,7 @@ export const IRIS_GROUPS: EndpointGroup[] = [
       },
       {
         method: "GET",
-        path: "/api/iris/sittings/{id}",
+        path: "/api/diagnostic/sittings/{id}",
         summary: "Returns the question on screen in one of your open sittings.",
         access: "assessmentsViewer",
         token: true,
@@ -77,7 +77,7 @@ export const IRIS_GROUPS: EndpointGroup[] = [
       },
       {
         method: "POST",
-        path: "/api/iris/sittings/{id}/answers",
+        path: "/api/diagnostic/sittings/{id}/answers",
         summary: "Answers the question on screen and returns the next one.",
         access: "assessmentsViewer",
         token: true,
@@ -102,7 +102,7 @@ export const IRIS_GROUPS: EndpointGroup[] = [
       },
       {
         method: "GET",
-        path: "/api/iris/cohort",
+        path: "/api/diagnostic/cohort",
         summary: "Lists everyone with a finished live sitting on one form, with their placements, a page at a time.",
         access: "assessmentsAdmin",
         token: true,
@@ -114,7 +114,7 @@ export const IRIS_GROUPS: EndpointGroup[] = [
       },
       {
         method: "GET",
-        path: "/api/iris/cohort/{id}",
+        path: "/api/diagnostic/cohort/{id}",
         summary: "Returns one person's live sittings on one form, each with every answer in order.",
         access: "assessmentsAdmin",
         token: true,
@@ -128,8 +128,8 @@ export const IRIS_GROUPS: EndpointGroup[] = [
       },
       {
         method: "DELETE",
-        path: "/api/iris/cohort/{id}",
-        summary: "Deletes every Iris sitting one person has, so they can take the subjects again.",
+        path: "/api/diagnostic/cohort/{id}",
+        summary: "Deletes every Diagnostic sitting one person has, so they can take the subjects again.",
         access: "assessmentsAdmin",
         token: true,
         notes: "Every subject, every form, finished or not. Irreversible.",
@@ -139,7 +139,7 @@ export const IRIS_GROUPS: EndpointGroup[] = [
       },
       {
         method: "GET",
-        path: "/api/iris/questions",
+        path: "/api/diagnostic/questions",
         summary: "Lists one subject's questions on one form, with their keys, reviews and live statistics.",
         access: "assessmentsAdmin",
         token: true,
@@ -162,7 +162,7 @@ export const IRIS_GROUPS: EndpointGroup[] = [
       },
       {
         method: "PUT",
-        path: "/api/iris/questions/{id}/review",
+        path: "/api/diagnostic/questions/{id}/review",
         summary: "Approves, rejects or returns to draft one question's current version.",
         access: "assessmentsAdmin",
         token: true,
@@ -183,7 +183,7 @@ export const IRIS_GROUPS: EndpointGroup[] = [
       },
       {
         method: "POST",
-        path: "/api/iris/questions/approve-drafts",
+        path: "/api/diagnostic/questions/approve-drafts",
         summary: "Approves every draft question on one subject and form at once.",
         access: "assessmentsAdmin",
         token: true,

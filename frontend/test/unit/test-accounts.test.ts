@@ -21,7 +21,7 @@ afterEach(() => {
 
 describe("testAccountEmail", () => {
   test("is the name, made safe, on the reserved domain", () => {
-    assert.equal(testAccountEmail("Iris tester, SDR track", "abc123"), `iris-tester-sdr-track-abc123@${TEST_ACCOUNT_DOMAIN}`);
+    assert.equal(testAccountEmail("Diagnostic tester, SDR track", "abc123"), `diagnostic-tester-sdr-track-abc123@${TEST_ACCOUNT_DOMAIN}`);
     assert.equal(testAccountEmail("  Zoë  ", "abc123"), `zoe-abc123@${TEST_ACCOUNT_DOMAIN}`);
   });
 

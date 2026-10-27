@@ -6,7 +6,7 @@ import { COHORT_SETTINGS_TABS } from "@/app/(app)/cohort-settings/tabs";
 import { COHORTS_TABS } from "@/app/(app)/cohorts/tabs";
 import { EVALS_SETTINGS_TABS } from "@/app/(app)/evals-settings/tabs";
 import { EVALS_TABS } from "@/app/(app)/evals/tabs";
-import { IRIS_TABS } from "@/app/(app)/iris/tabs";
+import { IRIS_TABS } from "@/app/(app)/diagnostic/tabs";
 import { LOGISTICS_SETTINGS_TABS } from "@/app/(app)/logistics-settings/tabs";
 import { LOGISTICS_TABS } from "@/app/(app)/logistics/tabs";
 import { MY_SETTINGS_TABS } from "@/app/(app)/me/tabs";

@@ -257,7 +257,7 @@ export const MIMIR_GROUPS: EndpointGroup[] = [
         summary: "Sets your role and how you like to be coached.",
         access: "signedIn",
         token: true,
-        notes: "Kept apart from your Iris track. Conversations already under way keep the prompt they started with.",
+        notes: "Kept apart from your Diagnostic track. Conversations already under way keep the prompt they started with.",
         body: {
           kind: "json",
           fields: [

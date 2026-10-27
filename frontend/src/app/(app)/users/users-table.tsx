@@ -387,7 +387,7 @@ export function UsersTable({
                               {
                                 value: NO_ASSESSMENTS,
                                 label: NO_ASSESSMENTS_ACCESS_LABEL,
-                                description: "Cannot see assessments or Iris.",
+                                description: "Cannot see assessments or Diagnostic.",
                               },
                               ...ASSESSMENTS_ROLES.map((r) => ({
                                 value: r,

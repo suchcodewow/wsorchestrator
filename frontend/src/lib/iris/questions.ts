@@ -21,7 +21,7 @@ export type ItemStats = {
   medianMs: number | null;
 };
 
-/** Iris's reading of an item's numbers; only meaningful once enough people have answered it. */
+/** The Diagnostic's reading of an item's numbers; only meaningful once enough people have answered it. */
 export type Calibration =
   | { kind: "needs_responses"; more: number }
   | { kind: "too_easy" | "too_hard" | "healthy" }
