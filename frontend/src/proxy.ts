@@ -1,8 +1,9 @@
-/** The edge middleware: one canonical origin, and asset misses. */
+/** The edge middleware: one canonical origin, asset misses, and a framed page's session. */
 
 import { readdirSync } from "node:fs";
 import { join } from "node:path";
 import { NextResponse, type NextRequest } from "next/server";
+import { withFrameSession } from "@/lib/frame-cookie";
 import { REQUEST_PATH_HEADER } from "@/lib/request-path";
 
 function canonicalRedirect(request: NextRequest): NextResponse | null {
@@ -49,11 +50,15 @@ function assetMiss(request: NextRequest): NextResponse | null {
   });
 }
 
-/** Hand the requested path to the render, for post-sign-in returns. */
+/**
+ * Hand the requested path to the render, for post-sign-in returns, and a
+ * framed page's session to Auth.js (`src/lib/frame-cookie.ts`).
+ */
 function withRequestPath(request: NextRequest): NextResponse {
   const headers = new Headers(request.headers);
   const { pathname, search } = request.nextUrl;
   headers.set(REQUEST_PATH_HEADER, `${pathname}${search}`);
+  withFrameSession(headers, request.method);
 
   return NextResponse.next({ request: { headers } });
 }

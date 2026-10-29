@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { returnPath } from "@/lib/request-path";
 import { AmbientBackdrop } from "@/components/ambient-backdrop";
 import { BrandMark } from "@/components/brand-mark";
+import { FramedSignIn } from "./framed-sign-in";
 import { SignInHero } from "./signin-hero";
 
 const CAPABILITIES = [
@@ -89,24 +90,26 @@ export default async function SignInPage({
             </div>
           )}
 
-          <form
-            data-anim
-            className={problem ? "mt-5" : "mt-8"}
-            action={async () => {
-              "use server";
-              const hd = await googleHostedDomain();
-              await signIn(
-                "google",
-                { redirectTo: target },
-                hd ? { hd } : undefined,
-              );
-            }}
-          >
-            <Button type="submit" variant="brand" size="lg" className="group w-full">
-              Continue with Google
-              <ArrowRight className="transition-transform duration-200 group-hover:translate-x-0.5" />
-            </Button>
-          </form>
+          <FramedSignIn target={target} className={problem ? "mt-5" : "mt-8"}>
+            <form
+              data-anim
+              className={problem ? "mt-5" : "mt-8"}
+              action={async () => {
+                "use server";
+                const hd = await googleHostedDomain();
+                await signIn(
+                  "google",
+                  { redirectTo: target },
+                  hd ? { hd } : undefined,
+                );
+              }}
+            >
+              <Button type="submit" variant="brand" size="lg" className="group w-full">
+                Continue with Google
+                <ArrowRight className="transition-transform duration-200 group-hover:translate-x-0.5" />
+              </Button>
+            </form>
+          </FramedSignIn>
 
           <p data-anim className="mt-4 text-center text-xs text-muted-foreground">
             Organizers sign in with their Workspace account.

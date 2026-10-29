@@ -245,7 +245,7 @@ export function ScormProbe() {
 
       <div className="flex flex-wrap gap-2">
         <Button size="sm" onClick={() => void copyReport()}>
-          {copied === "copied" ? "Copied" : "Copy report"}
+          {copied === null ? "Copy report" : copied === "copied" ? "Copied" : "Clipboard blocked: copy the report below"}
         </Button>
         {frame && !frame.framed && (
           <a href="/api/scorm-probe/package" className={buttonVariants({ size: "sm", variant: "outline" })}>

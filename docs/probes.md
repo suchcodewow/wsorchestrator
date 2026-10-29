@@ -54,6 +54,11 @@ To run it, download the package from `/scorm-probe` (outside a frame) or from
 Mindtickle as SCORM content and open it as a learner. **Copy report** gathers
 everything the page shows.
 
+**Found so far:** in Chrome inside Mindtickle, `Lax` cookies are dropped,
+`None` and `Partitioned` ones are kept, and a popup opens and sees the app's
+session. The frame sign-in (`frontend/src/lib/frame-cookie.ts`) is built on
+that finding and is permanent; deleting the probe leaves it in place.
+
 | Delete                                                        | What it is                                          |
 | ------------------------------------------------------------- | --------------------------------------------------- |
 | `frontend/src/lib/scorm-probe.ts`                             | The manifest and the shell                          |
