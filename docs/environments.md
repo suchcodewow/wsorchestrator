@@ -12,7 +12,7 @@ database, secrets and identities.
 | Harness IaCM workspace | `admin_control_plane` | `qa_control_plane` |
 | Identity that applies it | `tf-admin-sa@administration-459416` (connector `gcp_tf_admin`) | `tf-admin-qa@harnessevents-qa` (connector `gcp_tf_admin_qa`) |
 | Identity that builds and deploys it | `build-sa@administration-459416` (connector `gcp_build_sa`) | `build-sa@harnessevents-qa` (connector `gcp_qa_build_sa`) |
-| Deployed by | `deploy_production`: run by hand | `deploy_qa`: every push to `main` |
+| Deployed by | `deploy_production`: run by hand, or started by `deploy_qa` for a merge that asks for it ([Releasing from a merge](#releasing-from-a-merge)) | `deploy_qa`: every push to `main` |
 | Workspace OU for attendees | `/` (one OU per run under it) | `/QA` |
 | Header badge | none | amber `qa` |
 
@@ -73,7 +73,8 @@ branch ──PR──▶ verify (required check) ──merge──▶ main
                                                    │
                                      QA: qa.harnessevents.io
                                                    │
-                            deploy_production (by hand)
+                deploy_production (by hand, or started by deploy_qa
+                 when the merge carries `Release: production`)
                                                    │
                                    production: harnessevents.io
 ```
@@ -107,6 +108,74 @@ deploy_production with sha=<older sha>, allow_rollback=true, run_infra=false
 
 Rolling back never reverts migrations. That is safe because migrations are
 additive: an older image simply ignores newer columns.
+
+## Releasing from a merge
+
+A merge can ask to go to production as soon as QA has it. Put the trailer in
+the last paragraph of the squash commit message, which GitHub fills from the
+PR's commits and lets you edit in the merge box:
+
+```
+Release: production
+Release-Infra: false      (optional; the default is true, as on deploy_production)
+```
+
+`deploy_qa`'s last stage, Release Production, then starts `deploy_production`
+for that exact commit, with `run_infra` from `Release-Infra`, `apply_infra=true`
+and `allow_rollback=false`. It runs only when all of these hold:
+
+- the run was started by the push to `main` (a manual run or a re-run of an
+  old commit never releases);
+- `deploy=true`, and the Deploy stage succeeded;
+- the commit is the merge commit of a pull request into `main`, and GitHub
+  says that pull request was merged by someone in the pipeline variable
+  `release_mergers` (default `suchcodewow`). Who wrote the PR or the trailer
+  does not matter; who pressed merge does;
+- QA answers 200 at `/signin` within two minutes.
+
+A trailer that fails the merger check, or one on a commit pushed without a
+PR, is logged as ignored and the run still succeeds. A bad `Release-Infra`, a
+GitHub error or an unhealthy QA fails the run instead: QA is deployed and
+production was not started. `deploy_production` is started asynchronously, so
+`deploy_qa` finishes (and releases its Queue) without waiting for it; the log
+of the Release Production stage links the production run.
+
+`deploy_production` itself is unchanged. Its preflight applies exactly as it
+does to a run by hand, and it has no approval stage, so **merging with the
+trailer is releasing**.
+
+Things to know:
+
+- **The trailer reaches the squash message from any commit on the branch.**
+  The repository fills squash messages from the PR's commits, so a
+  `Release: production` line anyone wrote in a branch commit is in the merge
+  unless the merger deletes it. Read the message before merging.
+- **Auto-merge counts as the person who enabled it.** A merge an agent
+  enables with the owner's `gh` login is recorded as the owner's, so the
+  merger check does not stop an agent. CLAUDE.md forbids agents from adding
+  the trailer unless asked in so many words.
+- **It starts as a service account, not as the merger.** The token is the
+  project secret `deploy_production_trigger_token`, belonging to the
+  account-level service account `deploy_production_trigger`. It can execute
+  and view `deploy_production` and nothing else: it cannot edit any pipeline,
+  run `deploy_qa` or `verify`, or touch `qa_control_plane`. The production run
+  is recorded as that account's, with the PR, the merger and the `deploy_qa`
+  run in its notes.
+
+The setup, already in place. The service account sits at account scope
+because `deploy_production` uses the account connectors `harnessImage` and
+`Account_GCP_Connector`, and Harness will not give a project-level principal
+an account-level role.
+
+| Scope | Role | Resource group | Grants |
+| --- | --- | --- | --- |
+| Project `operations/orchestrator` | `deploy_production_trigger` | `deploy_production_trigger` | Execute and view the `deploy_production` pipeline; view the `admin_control_plane` workspace; access the project's connectors, secrets, services, environments, templates and files, which a run resolves as its executor |
+| Account | `deploy_production_trigger_connectors` | `deploy_production_trigger_connectors` | View and access the connectors `harnessImage` and `Account_GCP_Connector` only |
+
+The token is `deploy_qa_release`, under the API key of the same name. To
+replace it, mint a new token on that key and update the secret's value.
+To add someone who may release by merging, edit `release_mergers` in the
+pipeline (and its mirror). It is deliberately not a runtime input.
 
 ## What the two share, and why that matters
 
@@ -309,6 +378,7 @@ about 20 MB and the whole run took about ten seconds.
 | Deploy QA | Anyone who can merge | The `deploy_qa_on_push_main` trigger |
 | Run a Harness pipeline | Project group `orchestrator_developers` (Pipeline Executor + Project Viewer) | Harness RBAC |
 | Deploy production | Anyone who can run `deploy_production` | Harness RBAC on the project |
+| Release production by merging | Someone in `release_mergers` (default `suchcodewow`) who merges a PR whose squash message carries `Release: production` | `deploy_qa`'s Release Production stage, which asks GitHub who merged; the service account behind `deploy_production_trigger_token` |
 | Read QA's logs, database and secrets | `developer_members` in `qa_control_plane` | GCP IAM on `harnessevents-qa` |
 | Import a production backup into QA | Anyone who can manage backups on QA | `canManageBackups`, plus typing QA's instance name |
 | Import production into a local database | Anyone who can read production's `database-url` secret and connect to its instance (Shawn, as of 2026-10-03) | GCP IAM on production's project |
@@ -319,6 +389,13 @@ about 20 MB and the whole run took about ten seconds.
   approval stage was removed on 2026-09-30. Harness account administrators
   (about 18 people) and anyone given Pipeline Executor on the project can run
   `deploy_production`, and so can release.
+- **A merge can release.** Anyone in `release_mergers` who merges a PR with
+  `Release: production` in its squash message releases it, with no further
+  step. The trailer can come from any commit on the branch, and a merge an
+  agent makes with an allowlisted person's `gh` login counts as theirs.
+  Anyone who can edit `deploy_qa` can widen `release_mergers`, and anyone
+  who can read the project's secrets can use
+  `deploy_production_trigger_token` to start `deploy_production` directly.
 - **Group `300@harnessevents.io` holds `roles/owner` on production's GCP
   project.** Any member can deploy with `gcloud` directly and skip Harness
   altogether. Anyone added to that group has production access.

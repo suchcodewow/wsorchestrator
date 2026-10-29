@@ -113,6 +113,18 @@ own, so a run you start is recorded as theirs. Do not change the ruleset or
 who can run `deploy_production` either. The full flow is in
 [docs/environments.md](docs/environments.md).
 
+A merge can also release. `deploy_qa` starts `deploy_production` when the
+merged commit's message ends with the trailer `Release: production` and the
+merger is in `release_mergers`. A merge you make or auto-merge you enable with
+the owner's `gh` login counts as the owner's, so that check does not stop you.
+Never write `Release: production` or `Release-Infra:` in a commit, a squash
+message or a PR body unless the user asks for that release in so many words.
+Before you merge or enable auto-merge on a PR, check its commits for either
+line and tell the user if you find one; the squash message picks it up from
+any commit on the branch. Never edit `release_mergers` or use
+`deploy_production_trigger_token`. See
+[Releasing from a merge](docs/environments.md#releasing-from-a-merge).
+
 **QA is not a sandbox either.** It shares the Harness account, the AWS
 organization, the Azure subscription and the Google Workspace with production.
 A QA workshop run creates real orgs, accounts and users. Prefer runs with no
