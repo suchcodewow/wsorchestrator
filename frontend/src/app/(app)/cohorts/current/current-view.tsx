@@ -10,8 +10,9 @@
  * through every sync until they hand it back to the rules. A row opens to show the rest of what the sync knows about them.
  * With one stage and Sales or Engineer picked, an eVals viewer also sees a
  * column per assessment for that stage and track, after their average.
- * Beside each name on the Current tab is a mark for each picked Google meeting
- * that is for them, and an eVals administrator can override what Zoom said.
+ * Under each name on the Current tab is an RSVP mark if they saved their
+ * stage's registration form, then a mark for each picked Google meeting that
+ * is for them, and an eVals administrator can override what Zoom said.
  */
 
 import { HEADER_ROW, Pager, PlainHeader, SortHeader, TableSearch } from "@/components/data-table";
@@ -404,7 +405,7 @@ export function CurrentCohortView({
                       )}
                     >
                       <td className="px-5 py-2.5 font-medium">
-                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <div className="flex flex-col items-start gap-1">
                           <button
                             type="button"
                             aria-expanded={expanded}
@@ -422,6 +423,7 @@ export function CurrentCohortView({
                           </button>
                           <MeetingMarks
                             member={m}
+                            rsvp={tab === "current" ? (intakes[m.email.toLowerCase()] ?? []).find((i) => i.form === m.stage) : undefined}
                             meetings={meetings[m.email.trim().toLowerCase()] ?? []}
                             canMark={canMarkAttendance}
                             onError={setError}
@@ -545,7 +547,7 @@ function TrackLabel({ member }: { member: CurrentCohortMember }) {
       ) : (
         label
       )}
-      {member.overridden && <Pin className="size-3 text-muted-foreground" aria-label="Set by an administrator" />}
+      {member.overridden && member.track !== "deferred" && <Pin className="size-3 text-muted-foreground" aria-label="Set by an administrator" />}
     </span>
   );
 }
@@ -672,7 +674,7 @@ function TrackMenu({
       <DropdownMenuTrigger
         disabled={disabled}
         aria-label={`Track for ${member.fullName}`}
-        className="flex cursor-pointer items-center gap-1.5 rounded-md border border-input bg-background px-2 py-1 shadow-xs outline-none transition-colors hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-wait"
+        className="flex cursor-pointer items-center gap-1.5 rounded-md border border-input px-2 py-1 outline-none transition-colors hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-wait"
       >
         <TrackLabel member={member} />
         {busy ? (
@@ -718,14 +720,36 @@ const MARKS: Record<MeetingMark, { Icon: LucideIcon; className: string; label: s
   none_left: { Icon: CircleAlert, className: "text-red-600 dark:text-red-400", label: "None left before their bootcamp" },
 };
 
-/** An icon per meeting; for an eVals administrator, each opens a menu that marks them complete (after a confirmation) or missed over what Zoom said. */
+/** A white sealed envelope on a green disc: they saved their stage's registration form, so they RSVP'd to the session. */
+function RsvpIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className={cn("size-4", className)}>
+      <circle cx="12" cy="12" r="12" className="fill-emerald-600 dark:fill-emerald-500" />
+      <g fill="none" stroke="white" strokeWidth="1.6" strokeLinejoin="round">
+        <rect x="5.5" y="7.25" width="13" height="9.5" rx="1.5" />
+        <path d="M5.9 7.7 10.6 12.3M18.1 7.7 13.4 12.3" />
+      </g>
+      <circle cx="12" cy="12.9" r="2.1" fill="white" />
+    </svg>
+  );
+}
+
+/**
+ * Under the name: the RSVP mark first, when they saved their stage's
+ * registration form, then an icon per meeting; for an eVals administrator,
+ * each meeting's opens a menu that marks them complete (after a confirmation)
+ * or missed over what Zoom said.
+ */
 function MeetingMarks({
   member,
+  rsvp,
   meetings,
   canMark,
   onError,
 }: {
   member: CurrentCohortMember;
+  /** Their latest answers to the form for their stage, if they saved any. */
+  rsvp: IntakeOnFile | undefined;
   meetings: MemberMeetings[string];
   canMark: boolean;
   onError: (error: string | null) => void;
@@ -733,7 +757,8 @@ function MeetingMarks({
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<{ meetingId: string; name: string } | null>(null);
-  if (meetings.length === 0) return null;
+  if (!rsvp && meetings.length === 0) return null;
+  const rsvpDetail = rsvp && `RSVP'd to ${member.stage === "bootcamp" ? "Bootcamp" : "Intermediate"}, ${formatWhen(rsvp.submittedAt)}`;
 
   async function mark(meetingId: string, attended: boolean | null) {
     setBusy(meetingId);
@@ -759,7 +784,21 @@ function MeetingMarks({
   return (
     <TooltipProvider>
       {/* React bubbles the menu's clicks through its portal, so they stop here rather than toggling the row. */}
-      <span className="flex items-center gap-0.5" onClick={(ev) => ev.stopPropagation()}>
+      <span className="flex flex-wrap items-center gap-0.5 pl-4.5" onClick={(ev) => ev.stopPropagation()}>
+        {rsvpDetail && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span
+                tabIndex={0}
+                aria-label={rsvpDetail}
+                className="rounded-sm p-0.5 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              >
+                <RsvpIcon />
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>{rsvpDetail}</TooltipContent>
+          </Tooltip>
+        )}
         {meetings.map((m) => {
           const { Icon, className, label } = MARKS[m.mark];
           const detail =

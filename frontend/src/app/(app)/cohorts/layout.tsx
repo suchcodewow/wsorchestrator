@@ -17,12 +17,13 @@ export default async function CohortsLayout({ children }: { children: React.Reac
   // Everyone the Current tab lists, bootcamp and intermediate, whatever its filter.
   const { counts } = await currentCohortSummary();
   const currentCount = CURRENT_TRACKS.reduce((n, t) => n + counts.bootcamp[t] + counts.intermediate[t], 0);
+  const deferredCount = counts.bootcamp.deferred + counts.intermediate.deferred;
 
   return (
     <div className="space-y-8">
       <h1 className="text-3xl font-medium tracking-tight">Cohorts</h1>
 
-      <CohortsTabs currentCount={currentCount} />
+      <CohortsTabs currentCount={currentCount} deferredCount={deferredCount} />
 
       {children}
     </div>
