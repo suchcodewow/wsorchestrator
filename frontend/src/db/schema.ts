@@ -681,6 +681,23 @@ export const ALLOWED_DOMAIN_LIMITS = { domain: 253, note: 200 } as const;
 
 export type AllowedEmailDomain = typeof allowedEmailDomains.$inferSelect;
 
+/** The sites allowed to show the app in a frame; see `src/lib/frame-domains.ts`. */
+export const allowedFrameDomains = pgTable(
+  "allowed_frame_domains",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    domain: text("domain").notNull(),
+    note: text("note").notNull().default(""),
+    createdBy: text("created_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [uniqueIndex("allowed_frame_domains_domain_idx").on(t.domain)],
+);
+
 export const ORG_SECRET_KINDS = ["text", "file"] as const;
 export type OrgSecretKind = (typeof ORG_SECRET_KINDS)[number];
 

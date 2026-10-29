@@ -252,7 +252,7 @@ export const NAV_SECTIONS: NavSection[] = [
         hasTabs: true,
         label: "Admin Settings",
         Icon: Settings,
-        description: "Who may sign in, and the connected Google, Zoom and Slack accounts.",
+        description: "Who may sign in, which sites may frame the app, and the connected Google, Zoom and Slack accounts.",
         visible: canManageSignInDomains,
       },
       {

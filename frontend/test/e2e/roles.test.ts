@@ -572,6 +572,10 @@ const ROUTES: RouteCase[] = [
   { method: "POST", path: "/api/settings/domains", allowed: canManageSignInDomains, body: () => ({}), sessionOnly: true },
   { method: "PATCH", path: `/api/settings/domains/${MISSING}`, allowed: canManageSignInDomains, body: () => ({}), sessionOnly: true },
   { method: "DELETE", path: `/api/settings/domains/${MISSING}`, allowed: canManageSignInDomains, sessionOnly: true },
+  { method: "GET", path: "/api/settings/frame-domains", allowed: canManageSignInDomains },
+  { method: "POST", path: "/api/settings/frame-domains", allowed: canManageSignInDomains, body: () => ({}), sessionOnly: true },
+  { method: "PATCH", path: `/api/settings/frame-domains/${MISSING}`, allowed: canManageSignInDomains, body: () => ({}), sessionOnly: true },
+  { method: "DELETE", path: `/api/settings/frame-domains/${MISSING}`, allowed: canManageSignInDomains, sessionOnly: true },
 
   // Event administration
   { method: "GET", path: "/api/settings/org-secrets", allowed: canManageSettings },

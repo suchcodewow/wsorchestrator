@@ -201,6 +201,11 @@ export type HibobSyncSort = (typeof HIBOB_SYNC_LIST.sorts)[number];
 export const DOMAIN_LIST = spec(["domain", "note", "addedBy"]);
 export type DomainSort = (typeof DOMAIN_LIST.sorts)[number];
 
+export const FRAME_DOMAIN_LIST = spec(["domain", "note", "addedBy"]);
+export type FrameDomainSort = (typeof FRAME_DOMAIN_LIST.sorts)[number];
+/** It shares the Allowed Domains tab with DOMAIN_LIST, so its sort and page are prefixed. */
+export const FRAME_DOMAIN_PREFIX = "frame";
+
 export const REPO_LIST = spec(["identifier", "providerRepo", "scope", "addedBy"]);
 export type RepoSort = (typeof REPO_LIST.sorts)[number];
 

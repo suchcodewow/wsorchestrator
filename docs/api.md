@@ -94,6 +94,7 @@ escalate itself:
 | `/api/backups/**` | Taking, restoring and importing backups |
 | `PATCH`/`DELETE /api/users/[id]`, `POST /api/users/invites`, `POST /api/invites/accept`, `POST /api/users/test-accounts`, `POST /api/users/test-accounts/[id]/reset` | Granting roles and creating accounts |
 | `POST /api/settings/domains`, `PATCH`/`DELETE /api/settings/domains/[id]` | Who can sign in at all |
+| `POST /api/settings/frame-domains`, `PATCH`/`DELETE /api/settings/frame-domains/[id]` | Which sites can put the app, signed in, inside their own page |
 | `GET /api/cohorts/slack/install`, `GET /api/evals/google-meetings/connect`, `GET /api/evals/google-meetings/zoom/connect` | Admin Settings → External Connectors: each hands the app a standing token for an outside account and ends in a browser; platform administrators only |
 | `/api/tokens/**` | Minting tokens (a token must not be able to mint its own replacement) |
 | `POST /api/frame-session/ticket` | Signing in a page framed by another site: the ticket stands for the session that asked for it |
@@ -102,8 +103,9 @@ escalate itself:
 | `GET /api/evals/google-meetings/zoom/connect` | Connecting the Zoom user whose meetings' attendance the sync reads: a browser sign-in, and a standing token for the app |
 | `GET /api/auth/callback/google` with a `wo.` state | The one OAuth callback the connections above return to, shared with Auth.js's sign-in (see `frontend/src/lib/oauth-callback.ts`) |
 
-You can still *read* users (`GET /api/users`) and sign-in domains
-(`GET /api/settings/domains`) with a token.
+You can still *read* users (`GET /api/users`), sign-in domains
+(`GET /api/settings/domains`) and frame domains
+(`GET /api/settings/frame-domains`) with a token.
 
 To make a new route session-only, call `auth()` directly instead of going
 through `requireCaller`. Then mark it `sessionOnly: true` in the e2e matrix
@@ -125,7 +127,7 @@ add it to the table above.
 | My settings (theme, calendar scope) | `GET`/`PATCH /api/me` |
 | Account menu → View as an employee | `GET /api/me/impersonation`; the search is `GET /api/evals/employees?match=person` |
 | Users | `GET /api/users` |
-| Admin settings (sign-in domains) | `GET /api/settings/domains` |
+| Admin settings → Allowed Domains | `GET /api/settings/domains`, `GET /api/settings/frame-domains` |
 | eVals → Bootcamp / Intermediate | `GET /api/evals/scoring?stage=bootcamp\|intermediate` |
 | eVals → an assessment's attendees | `GET /api/evals/scoring/[assessmentId]` |
 | eVals → an attendee's scoring form | `GET /api/evals/scoring/[assessmentId]/[employeeId]` |

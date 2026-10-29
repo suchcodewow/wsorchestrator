@@ -141,6 +141,18 @@ an entry there and a start route that calls `startOAuth`
 (`lib/oauth-callback.ts`). The "google" in the path is Auth.js's provider id;
 Slack does not mind it.
 
+### Which sites may frame the app
+
+Every page goes out with `Content-Security-Policy: frame-ancestors 'self' …`,
+built by the proxy from **Admin Settings → Allowed Domains → Allowed iFrame
+Domains** (`src/lib/frame-domains.ts`). Each listed domain also allows its
+subdomains. With no rows, only the app's own pages may frame it, so a new
+deployment refuses Mindtickle until someone adds its domain. Each instance
+reads the list at most every 30 seconds, so a change can take that long to
+reach every instance. When a site is refused, the browser's console names the
+ancestor that was refused, and that is the domain to add. A frame nested inside
+another frame needs every site in the chain listed.
+
 ### Timed jobs
 
 Admin Settings → Timed Jobs lists every job that runs on a timer. The

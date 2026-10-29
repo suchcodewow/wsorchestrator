@@ -1,9 +1,13 @@
-/** The edge middleware: one canonical origin, asset misses, and a framed page's session. */
+/**
+ * The edge middleware: one canonical origin, asset misses, a framed page's
+ * session, and which sites may frame the app at all.
+ */
 
 import { readdirSync } from "node:fs";
 import { join } from "node:path";
 import { NextResponse, type NextRequest } from "next/server";
 import { withFrameSession } from "@/lib/frame-cookie";
+import { frameAncestorsPolicy } from "@/lib/frame-domains";
 import { REQUEST_PATH_HEADER } from "@/lib/request-path";
 
 function canonicalRedirect(request: NextRequest): NextResponse | null {
@@ -52,18 +56,21 @@ function assetMiss(request: NextRequest): NextResponse | null {
 
 /**
  * Hand the requested path to the render, for post-sign-in returns, and a
- * framed page's session to Auth.js (`src/lib/frame-cookie.ts`).
+ * framed page's session to Auth.js (`src/lib/frame-cookie.ts`). The response
+ * names the sites allowed to frame it (`src/lib/frame-domains.ts`).
  */
-function withRequestPath(request: NextRequest): NextResponse {
+async function withRequestPath(request: NextRequest): Promise<NextResponse> {
   const headers = new Headers(request.headers);
   const { pathname, search } = request.nextUrl;
   headers.set(REQUEST_PATH_HEADER, `${pathname}${search}`);
   withFrameSession(headers, request.method);
 
-  return NextResponse.next({ request: { headers } });
+  const response = NextResponse.next({ request: { headers } });
+  response.headers.set("Content-Security-Policy", await frameAncestorsPolicy());
+  return response;
 }
 
-export function proxy(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   return (
     canonicalRedirect(request) ?? assetMiss(request) ?? withRequestPath(request)
   );
