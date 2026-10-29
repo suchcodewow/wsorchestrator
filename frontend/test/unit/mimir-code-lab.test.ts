@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 
 import { diffHunks, diffStats, lineDiff } from "@/lib/mimir/code-lab/diff";
 import { highlightHtml } from "@/lib/mimir/code-lab/highlight";
-import { START_CODE, TASKS, cleanBranchName, fakeHash } from "@/lib/mimir/code-lab/scenario";
+import { START_CODE, TASKS, cleanBranchName, fakeHash, pageHtml } from "@/lib/mimir/code-lab/scenario";
 
 const task = (id: string) => TASKS.find((t) => t.id === id)!;
 
@@ -90,7 +90,31 @@ describe("the ticket's tasks", () => {
   test("each is done by the change its hint describes", () => {
     assert.ok(task("headline").done(START_CODE.replace("10% off", "20% off")));
     assert.ok(task("button-text").done(START_CODE.replace(">Shop now<", ">Shop the sale<")));
-    assert.ok(task("button-colour").done(START_CODE.replace("--button: #2563eb", "--button: orange")));
+    assert.ok(task("button-colour").done(START_CODE.replace("background: royalblue", "background: orange")));
+  });
+
+  test("each points at the code it changes", () => {
+    const at = (id: string, code = START_CODE) => {
+      const range = task(id).locate(code);
+      return range && code.slice(...range);
+    };
+    assert.equal(at("headline"), "10%");
+    assert.equal(at("button-text"), "Shop now");
+    assert.equal(at("button-colour"), "royalblue");
+    assert.equal(at("headline", START_CODE.replace("10% off", "Big savings")), "Spring Sale: Big savings");
+    assert.equal(at("button-text", START_CODE.replace(">Shop now<", "><")), "");
+    assert.equal(at("button-colour", START_CODE.replace("background: royalblue;", "")), null);
+  });
+
+  test("the banner's colour doesn't count for the button", () => {
+    assert.ok(!task("button-colour").done(START_CODE.replace("background: darkgreen", "background: orange")));
+  });
+
+  test("the preview fills in the stylesheet the page links, and only that", () => {
+    const page = pageHtml(START_CODE);
+    assert.doesNotMatch(page, /shop\.css/);
+    assert.match(page, /\.products \{ display: flex/);
+    assert.equal(pageHtml(START_CODE.replace(/<link[^>]*>\n/, "")), START_CODE.replace(/<link[^>]*>\n/, ""));
   });
 
   test("20% elsewhere on the page doesn't count for the headline", () => {

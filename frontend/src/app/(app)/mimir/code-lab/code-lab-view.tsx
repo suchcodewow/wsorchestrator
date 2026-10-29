@@ -3,14 +3,15 @@
 /**
  * The Code Lab: a pretend change to a pretend shop's home page, from ticket to
  * merge, for someone who has never written code. Make a branch; edit the page
- * on the left and see it change on the right; review the diff and commit it;
+ * on the left and see it change on the right, with each of the ticket's asks
+ * pointing at the code it changes; review the diff and commit it;
  * push; open a pull request; watch the checks pass and a reviewer approve; and
  * merge. Every step shows the git command it stands for. Nothing leaves the
  * browser and nothing is kept: reloading the page starts again.
  */
 
 import "./code-lab.css";
-import { useDeferredValue, useEffect, useState } from "react";
+import { useDeferredValue, useEffect, useRef, useState } from "react";
 import {
   Check,
   CloudUpload,
@@ -21,6 +22,7 @@ import {
   GitCommitHorizontal,
   GitMerge,
   GitPullRequest,
+  Hand,
   Loader2,
   RotateCcw,
   Ticket,
@@ -29,8 +31,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { diffStats, lineDiff } from "@/lib/mimir/code-lab/diff";
-import { FILE, REPO, START_CODE, SUGGESTED_BRANCH, TASKS, TICKET, cleanBranchName, fakeHash } from "@/lib/mimir/code-lab/scenario";
+import { FILE, REPO, START_CODE, SUGGESTED_BRANCH, TASKS, TICKET, cleanBranchName, fakeHash, pageHtml } from "@/lib/mimir/code-lab/scenario";
 import { cn } from "@/lib/utils";
 import { CodeEditor } from "./code-editor";
 import { DiffView } from "./diff-view";
@@ -39,6 +42,9 @@ import { PR_NUMBER, PullRequestPage, type Commit } from "./pull-request";
 
 type Stage = "branch" | "edit" | "commit" | "push" | "pr" | "review" | "merged";
 const ORDER: Stage[] = ["branch", "edit", "commit", "push", "pr", "review", "merged"];
+
+/** The stepper along the top. Hidden for now; the boxes say where you are. */
+const SHOW_STEPPER = false;
 
 const STEPS: { label: string; Icon: LucideIcon; stages: Stage[] }[] = [
   { label: "Branch", Icon: GitBranch, stages: ["branch"] },
@@ -80,20 +86,23 @@ export function CodeLabView({ author }: { author: string }) {
 
   return (
     <div className="cl space-y-5">
-      <TicketCard code={code} branch={branch} commits={commits.length} pushed={pushed} merged={stage === "merged"} />
-      <Stepper stage={stage} />
+      <Welcome />
+      <TicketCard />
+      {SHOW_STEPPER && <Stepper stage={stage} />}
 
-      {stage === "branch" && (
-        <BranchStep
-          value={branchInput}
-          onChange={setBranchInput}
-          onCreate={(name) => {
-            setBranch(name);
-            say({ cmd: `git switch -c ${name}`, out: `Switched to a new branch '${name}'` });
-            setStage("edit");
-          }}
-        />
-      )}
+      <BranchStep
+        value={branchInput}
+        onChange={setBranchInput}
+        branch={branch}
+        commits={commits.length}
+        pushed={pushed}
+        merged={stage === "merged"}
+        onCreate={(name) => {
+          setBranch(name);
+          say({ cmd: `git switch -c ${name}`, out: `Switched to a new branch '${name}'` });
+          setStage("edit");
+        }}
+      />
 
       {stage === "edit" && branch && (
         <EditStep
@@ -184,42 +193,33 @@ export function CodeLabView({ author }: { author: string }) {
   );
 }
 
-function TicketCard({ code, branch, commits, pushed, merged }: { code: string; branch: string | null; commits: number; pushed: number; merged: boolean }) {
+function Welcome() {
   return (
-    <div className="grid rounded-2xl border bg-card shadow-sm lg:grid-cols-[minmax(0,1fr)_auto] lg:divide-x max-lg:divide-y">
-      <div className="space-y-3 px-5 py-4">
-        <div className="flex flex-wrap items-center gap-2 text-sm">
-          <Ticket className="size-4 text-brand" />
-          <span className="font-mono text-xs text-muted-foreground">{TICKET.id}</span>
-          <span className="font-medium">{TICKET.title}</span>
-          <span className="text-xs text-muted-foreground">· from {TICKET.from}</span>
-        </div>
-        <p className="text-sm text-muted-foreground">{TICKET.body}</p>
-        <ul className="grid gap-1.5 text-sm sm:grid-cols-3">
-          {TASKS.map((t) => {
-            const done = t.done(code);
-            return (
-              <li key={t.id} className="flex items-start gap-2">
-                <span
-                  className={cn(
-                    "mt-0.5 grid size-4 shrink-0 place-items-center rounded-full border",
-                    done ? "border-brand bg-brand text-brand-foreground" : "border-muted-foreground/40",
-                  )}
-                >
-                  {done && <Check className="size-3" strokeWidth={3} />}
-                </span>
-                <span className={cn(done && "text-muted-foreground line-through")}>{t.label}</span>
-              </li>
-            );
-          })}
-        </ul>
+    <div className="flex gap-3 rounded-2xl border border-brand-border bg-brand-subtle px-5 py-4 text-sm">
+      <Hand className="mt-0.5 size-4 shrink-0 text-brand" />
+      <p className="max-w-3xl">
+        <span className="font-medium">Hey there!</span> Welcome to your first day as a software developer at the Greenleaf Shop. We’re super busy here
+        working on our Spring Sale. Jump right in and help Jordan. He submitted the ticket below asking for updates to our website.
+      </p>
+    </div>
+  );
+}
+
+function TicketCard() {
+  return (
+    <div className="space-y-3 rounded-2xl border bg-card px-5 py-4 shadow-sm">
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        <Ticket className="size-4 text-brand" />
+        <span className="font-mono text-xs text-muted-foreground">{TICKET.id}</span>
+        <span className="font-medium">{TICKET.title}</span>
+        <span className="text-xs text-muted-foreground">· from {TICKET.from}</span>
       </div>
-      <div className="flex flex-col justify-center gap-1 overflow-x-auto px-5 py-4">
-        <span className="text-xs font-medium text-muted-foreground">
-          {REPO} · {merged ? "merged" : branch ? `${pushed} of ${commits} commit${commits === 1 ? "" : "s"} pushed` : "on main"}
-        </span>
-        <HistoryGraph branch={branch} commits={commits} pushed={pushed} merged={merged} />
-      </div>
+      <p className="text-sm text-muted-foreground">{TICKET.body}</p>
+      <ul className="list-disc space-y-0.5 pl-5 text-sm marker:text-muted-foreground">
+        {TASKS.map((t) => (
+          <li key={t.id}>{t.label}</li>
+        ))}
+      </ul>
     </div>
   );
 }
@@ -253,48 +253,106 @@ function Stepper({ stage }: { stage: Stage }) {
   );
 }
 
-/** The card a step sits in: what the step is and why, then its controls. */
-function StepCard({ title, why, children, className }: { title: string; why: React.ReactNode; children: React.ReactNode; className?: string }) {
+/** The card a step sits in: what the step is and why, anything that explains it further, then its controls. */
+function StepCard({
+  title,
+  why,
+  info,
+  children,
+  className,
+}: {
+  title: string;
+  why: React.ReactNode;
+  info?: React.ReactNode;
+  children: React.ReactNode;
+  className?: string;
+}) {
   return (
-    <section className={cn("divide-y rounded-2xl border bg-card shadow-sm", className)}>
-      <div className="space-y-1 px-5 py-4">
-        <h2 className="text-lg font-medium tracking-tight">{title}</h2>
-        <p className="max-w-3xl text-sm text-muted-foreground">{why}</p>
+    <section className={cn("divide-y overflow-hidden rounded-2xl border bg-card shadow-sm", className)}>
+      <div className="space-y-3 bg-brand-subtle/50 px-5 py-4">
+        <div className="space-y-1">
+          <h2 className="text-lg font-medium tracking-tight">{title}</h2>
+          <p className="max-w-3xl text-sm text-muted-foreground">{why}</p>
+        </div>
+        {info}
       </div>
       {children}
     </section>
   );
 }
 
-function BranchStep({ value, onChange, onCreate }: { value: string; onChange: (v: string) => void; onCreate: (name: string) => void }) {
+function BranchStep({
+  value,
+  onChange,
+  branch,
+  commits,
+  pushed,
+  merged,
+  onCreate,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  /** The branch once it is made; until then the box asks for its name. */
+  branch: string | null;
+  commits: number;
+  pushed: number;
+  merged: boolean;
+  onCreate: (name: string) => void;
+}) {
   const name = cleanBranchName(value);
   return (
     <StepCard
-      title="Make a branch"
+      title="Create a branch"
       why={
         <>
-          <code className="text-foreground">main</code> is the code that runs the live website, so nobody edits it directly. A branch is your own copy to
-          change safely; nothing you do there reaches customers until it is reviewed and merged back.
+          It’s important to make changes in your own safe space. When developing, this is usually called “creating a branch”: sort of like a “branch”
+          sprouting off the main tree “trunk”. It’s very similar to team members making a copy of a Google Slides deck so they don’t interfere with each
+          other as they make changes.
         </>
       }
+      info={
+        <div className="flex flex-col gap-1 overflow-x-auto">
+          <span className="text-xs font-medium text-muted-foreground">
+            {REPO} ·{" "}
+            {merged
+              ? "merged into main"
+              : !branch
+                ? "on main"
+                : commits === 0
+                  ? "new branch, nothing committed yet"
+                  : `${pushed} of ${commits} commit${commits === 1 ? "" : "s"} pushed`}
+          </span>
+          <HistoryGraph branch={branch} commits={commits} pushed={pushed} merged={merged} />
+        </div>
+      }
     >
-      <form
-        className="flex flex-wrap items-end gap-3 px-5 py-4"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (name) onCreate(name);
-        }}
-      >
-        <label className="grid min-w-64 grow gap-1.5 text-sm sm:max-w-md">
-          <span className="font-medium">Branch name</span>
-          <Input value={value} onChange={(e) => onChange(e.target.value)} className="font-mono" spellCheck={false} />
-        </label>
-        <Button type="submit" variant="brand" disabled={!name}>
-          <GitBranch />
-          Create branch
-        </Button>
-        <p className="basis-full text-xs text-muted-foreground">Teams usually put the ticket number in the name, so anyone can tell what the branch is for.</p>
-      </form>
+      {branch ? (
+        <div className="flex items-center gap-2 px-5 py-3 text-sm">
+          <Check className="size-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+          <span>
+            You’re working on <code className="rounded bg-muted px-1.5 py-0.5 text-xs">{branch}</code>, your own copy of{" "}
+            <code className="rounded bg-muted px-1.5 py-0.5 text-xs">main</code>.
+          </span>
+        </div>
+      ) : (
+        <form
+          className="flex flex-wrap items-end gap-3 px-5 py-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (name) onCreate(name);
+          }}
+        >
+          <label className="grid min-w-64 grow gap-1.5 text-sm sm:max-w-md">
+            <span className="font-medium">Branch name</span>
+            <Input value={value} onChange={(e) => onChange(e.target.value)} className="font-mono" spellCheck={false} />
+          </label>
+          <Button type="submit" variant="brand" disabled={!name}>
+            <GitBranch />
+            Create branch
+          </Button>
+          <p className="basis-full text-xs text-muted-foreground">Teams usually put the ticket number in the name, so anyone can tell what the branch is for.</p>
+        </form>
+      )}
     </StepCard>
   );
 }
@@ -320,14 +378,62 @@ function EditStep({
   onNext: (stage: "push" | "pr") => void;
 }) {
   const [view, setView] = useState<"preview" | "changes">("preview");
+  const [pointing, setPointing] = useState<string | null>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const preview = useDeferredValue(code);
+  const highlight = TASKS.find((t) => t.id === pointing)?.locate(code) ?? null;
   const { added, removed } = diffStats(lineDiff(committed, code));
   const changed = added + removed > 0;
 
   return (
     <StepCard
-      title="Change the code"
-      why="Edit the page on the left; the right shows what a visitor would see. The ticket's checklist ticks itself off as you go. Stuck? Each item's hint is under the editor."
+      title="Implement Jordan’s changes"
+      why="Here is the code from the main “trunk” ready for your updates! On the right, you can see a preview of how your code updates will impact the view. Neat, right? The changes to make are shown below. Hover over a change for a hint."
+      info={
+        <TooltipProvider>
+          <ul className="grid gap-2 sm:grid-cols-3">
+            {TASKS.map((t) => {
+              const done = t.done(code);
+              return (
+                <li key={t.id}>
+                  <Tooltip onOpenChange={(open) => setPointing((p) => (open ? t.id : p === t.id ? null : p))}>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          // Put the cursor on the code to change, so typing replaces it.
+                          const range = t.locate(code);
+                          const input = inputRef.current;
+                          if (!range || !input) return;
+                          input.focus({ preventScroll: true });
+                          input.setSelectionRange(...range);
+                        }}
+                        className="flex size-full cursor-pointer items-start gap-2 rounded-lg border bg-card px-3 py-2 text-left text-sm transition-colors hover:border-brand-border data-[state=delayed-open]:border-brand-border data-[state=instant-open]:border-brand-border"
+                      >
+                        <span
+                          className={cn(
+                            "mt-0.5 grid size-4 shrink-0 place-items-center rounded-full border",
+                            done ? "border-emerald-600 bg-emerald-600 text-white dark:border-emerald-500 dark:bg-emerald-500" : "border-muted-foreground/40",
+                          )}
+                        >
+                          {done && <Check className="size-3" strokeWidth={3} />}
+                        </span>
+                        <span>{t.label}</span>
+                        <span className="sr-only">{done ? " (done)" : " (to do)"}</span>
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="max-w-sm space-y-1.5">
+                      <p>{t.hint}</p>
+                      <pre className="rounded bg-muted px-2 py-1 font-mono text-[11px] whitespace-pre-wrap">{t.suggestion}</pre>
+                      <p className="text-muted-foreground">Click to put your cursor there.</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </li>
+              );
+            })}
+          </ul>
+        </TooltipProvider>
+      }
     >
       <div className="grid lg:grid-cols-2 lg:divide-x max-lg:divide-y">
         <div className="min-w-0">
@@ -339,7 +445,14 @@ function EditStep({
               {branch}
             </span>
           </div>
-          <CodeEditor value={code} onChange={onChange} label={`Code editor for ${FILE}`} className="h-[30rem]" />
+          <CodeEditor
+            value={code}
+            onChange={onChange}
+            label={`Code editor for ${FILE}`}
+            highlight={highlight}
+            inputRef={inputRef}
+            className="h-[30rem]"
+          />
         </div>
         <div className="flex min-w-0 flex-col">
           <div className="flex items-center gap-1 border-b px-2 py-1" role="tablist" aria-label="Result">
@@ -374,11 +487,6 @@ function EditStep({
           )}
         </div>
       </div>
-      <ul className="grid gap-x-6 gap-y-1 px-5 py-3 text-xs text-muted-foreground sm:grid-cols-3">
-        {TASKS.map((t) => (
-          <li key={t.id}>{t.hint}</li>
-        ))}
-      </ul>
       <div className="flex flex-wrap items-center gap-3 px-5 py-4">
         <span className="text-sm text-muted-foreground tnum">
           {changed ? `${added} added, ${removed} removed since your last commit` : "No changes since your last commit"}
@@ -407,7 +515,8 @@ function EditStep({
 }
 
 /**
- * A page in a pretend browser window. Scripts never run in it: the frame is
+ * The shop's page in a pretend browser window, with its stylesheet filled in.
+ * Scripts never run in it: the frame is
  * sandboxed. A frame goes blank while it loads new content, so a change loads
  * in a hidden second frame and the page shown swaps to it once it has loaded.
  */
@@ -433,7 +542,7 @@ function BrowserFrame({ code, address, className }: { code: string; address: str
               key={f.id}
               title={`What ${address} shows`}
               sandbox=""
-              srcDoc={f.code}
+              srcDoc={pageHtml(f.code)}
               onLoad={() => setFrames((fs) => fs.slice(Math.max(0, fs.findIndex((g) => g.id === f.id))))}
               className={cn("absolute inset-0 size-full", k > 0 && "invisible")}
               aria-hidden={k > 0 || undefined}
