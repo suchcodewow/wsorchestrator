@@ -16,7 +16,7 @@ import {
   readXlsx,
   unzip,
 } from "@/lib/spreadsheet-file";
-import { zip } from "@/lib/zip";
+import { zip } from "../support/zip";
 
 function workbook({
   sheet,

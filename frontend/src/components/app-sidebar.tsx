@@ -66,7 +66,7 @@ export function AppSidebar({
     <TooltipProvider>
       <aside
         className={cn(
-          "hidden shrink-0 flex-col overflow-hidden border-r border-border/70 bg-background/50 backdrop-blur-xl transition-[width] duration-200 ease-out lg:flex",
+          "hidden shrink-0 flex-col overflow-hidden border-r border-border/70 bg-background/50 backdrop-blur-xl transition-[width] duration-200 ease-out lg:flex framed:hidden",
           collapsed ? "w-16" : "w-64",
           sticky && "lg:sticky lg:top-14 lg:h-[calc(100vh-3.5rem)] lg:self-start",
         )}

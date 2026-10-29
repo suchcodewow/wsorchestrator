@@ -1,4 +1,4 @@
-/** Packs entries into a ZIP archive: the .xlsx fixtures in the spreadsheet tests, and the SCORM probe's package. */
+/** Packs entries into a ZIP archive, for building .xlsx fixtures. */
 
 import { deflateRawSync } from "node:zlib";
 

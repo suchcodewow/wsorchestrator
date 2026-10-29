@@ -2,6 +2,8 @@
 @import "tw-animate-css";
 
 @custom-variant dark (&:is(.dark *));
+/* Inside another site's frame (src/lib/framed.ts): the page shows its content alone. */
+@custom-variant framed (&:is([data-framed] *));
 
 :root {
   --radius: 0.625rem;
