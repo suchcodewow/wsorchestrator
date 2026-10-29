@@ -5,6 +5,15 @@
 /* Inside another site's frame (src/lib/framed.ts): the page shows its content alone. */
 @custom-variant framed (&:is([data-framed] *));
 
+/*
+ * A framed section opens at its tabs: the heading and anything else above the
+ * tab row (src/components/tab-nav.tsx) is hidden. Outside any layer, so a
+ * `flex` on the heading cannot bring it back.
+ */
+[data-framed] :has(~ [data-tab-nav]) {
+  display: none;
+}
+
 :root {
   --radius: 0.625rem;
   --background: oklch(1 0 0);
