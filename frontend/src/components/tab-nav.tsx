@@ -26,8 +26,15 @@ export function TabNav({
   const pathname = usePathname();
   const favorites = useFavoriteTabs();
 
+  // Every section's layout stacks heading, tabs and content in `space-y-8`.
+  // The tabs sit closer to the heading above (-mt-4) and a little closer to
+  // the content below (mb-6); framed, the heading is hidden, so no pull-up.
   return (
-    <nav className="flex flex-wrap gap-1 border-b" aria-label={label} data-tab-nav="">
+    <nav
+      className="-mt-4 mb-6 flex flex-wrap gap-1 border-b framed:mt-0"
+      aria-label={label}
+      data-tab-nav=""
+    >
       {tabs.map(({ href, label: text, Icon, count }) => {
         const active = pathname === href || pathname.startsWith(`${href}/`);
         const starred = favorites?.has(href) ?? false;

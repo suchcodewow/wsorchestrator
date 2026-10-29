@@ -10,9 +10,10 @@
  * through every sync until they hand it back to the rules. A row opens to show the rest of what the sync knows about them.
  * With one stage and Sales or Engineer picked, an eVals viewer also sees a
  * column per assessment for that stage and track, after their average.
- * Under each name on the Current tab is an RSVP mark if they saved their
- * stage's registration form, then a mark for each picked Google meeting that
- * is for them, and an eVals administrator can override what Zoom said.
+ * The Current tab's Attendance column, beside each name, holds an RSVP mark if
+ * they saved their stage's registration form, then a mark for each picked
+ * Google meeting that is for them, and an eVals administrator can override
+ * what Zoom said.
  */
 
 import { HEADER_ROW, Pager, PlainHeader, SortHeader, TableSearch } from "@/components/data-table";
@@ -199,7 +200,9 @@ export function CurrentCohortView({
   // No bootcamp candidate has a BTC date yet.
   const showBtcDate = filter.stage !== "bootcamp";
   const columns = showBtcDate ? COLUMNS : COLUMNS.filter((c) => c.column !== "btcDate");
-  const columnCount = columns.length + (scoreColumns ? scoreColumns.length + 1 : 0);
+  // The RSVP and meeting marks are the Current tab's; the Deferred tab has none.
+  const showAttendance = tab === "current";
+  const columnCount = columns.length + (showAttendance ? 1 : 0) + (scoreColumns ? scoreColumns.length + 1 : 0);
   // Each row counts within the other row's pick; the Deferred tab has only the deferred to count.
   const stageCount = (stage: CandidateStage) =>
     tab === "deferred"
@@ -374,9 +377,12 @@ export function CurrentCohortView({
             <thead>
               <tr className={HEADER_ROW}>
                 {columns.map((c) => (
-                  <SortHeader key={c.column} column={c.column} sort={query.sort} dir={query.dir}>
-                    {c.label}
-                  </SortHeader>
+                  <Fragment key={c.column}>
+                    <SortHeader column={c.column} sort={query.sort} dir={query.dir}>
+                      {c.label}
+                    </SortHeader>
+                    {c.column === "fullName" && showAttendance && <PlainHeader>Attendance</PlainHeader>}
+                  </Fragment>
                 ))}
                 {scoreColumns && (
                   <>
@@ -405,31 +411,33 @@ export function CurrentCohortView({
                       )}
                     >
                       <td className="px-5 py-2.5 font-medium">
-                        <div className="flex flex-col items-start gap-1">
-                          <button
-                            type="button"
-                            aria-expanded={expanded}
-                            aria-controls={`person-${m.email}`}
-                            onClick={(ev) => {
-                              ev.stopPropagation();
-                              toggleOpen(m.email);
-                            }}
-                            className="-mx-1 flex cursor-pointer items-center gap-1.5 rounded-md px-1 text-left outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                          >
-                            <ChevronRight
-                              className={cn("size-3.5 shrink-0 text-muted-foreground transition-transform", expanded && "rotate-90")}
-                            />
-                            {m.fullName}
-                          </button>
+                        <button
+                          type="button"
+                          aria-expanded={expanded}
+                          aria-controls={`person-${m.email}`}
+                          onClick={(ev) => {
+                            ev.stopPropagation();
+                            toggleOpen(m.email);
+                          }}
+                          className="-mx-1 flex cursor-pointer items-center gap-1.5 rounded-md px-1 text-left outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                        >
+                          <ChevronRight
+                            className={cn("size-3.5 shrink-0 text-muted-foreground transition-transform", expanded && "rotate-90")}
+                          />
+                          {m.fullName}
+                        </button>
+                      </td>
+                      {showAttendance && (
+                        <td className="px-5 py-1.5">
                           <MeetingMarks
                             member={m}
-                            rsvp={tab === "current" ? (intakes[m.email.toLowerCase()] ?? []).find((i) => i.form === m.stage) : undefined}
+                            rsvp={(intakes[m.email.toLowerCase()] ?? []).find((i) => i.form === m.stage)}
                             meetings={meetings[m.email.trim().toLowerCase()] ?? []}
                             canMark={canMarkAttendance}
                             onError={setError}
                           />
-                        </div>
-                      </td>
+                        </td>
+                      )}
                       {/* React bubbles the menu's clicks through its portal, so they stop here rather than toggling the row. */}
                       <td className="px-5 py-1.5" onClick={(ev) => ev.stopPropagation()}>
                         {canSetTrack ? (
@@ -735,7 +743,7 @@ function RsvpIcon({ className }: { className?: string }) {
 }
 
 /**
- * Under the name: the RSVP mark first, when they saved their stage's
+ * The Attendance cell: the RSVP mark first, when they saved their stage's
  * registration form, then an icon per meeting; for an eVals administrator,
  * each meeting's opens a menu that marks them complete (after a confirmation)
  * or missed over what Zoom said.
@@ -782,9 +790,11 @@ function MeetingMarks({
   }
 
   return (
-    <TooltipProvider>
+    // A hoverable tip spans its neighbours, so sliding onto the next icon would
+    // count as heading for the open tip and keep it rather than show the next.
+    <TooltipProvider disableHoverableContent>
       {/* React bubbles the menu's clicks through its portal, so they stop here rather than toggling the row. */}
-      <span className="flex flex-wrap items-center gap-0.5 pl-4.5" onClick={(ev) => ev.stopPropagation()}>
+      <span className="flex flex-wrap items-center gap-0.5" onClick={(ev) => ev.stopPropagation()}>
         {rsvpDetail && (
           <Tooltip>
             <TooltipTrigger asChild>

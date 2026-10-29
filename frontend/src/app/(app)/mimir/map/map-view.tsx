@@ -240,18 +240,11 @@ export function MapView({
   };
 
   const concepts = layout.concepts;
-  const mastered = full.concepts.filter((c) => stateOf(c.id).mastered).length;
 
   return (
     <div className="mm space-y-6">
       <div className="space-y-3">
         <h2 className="text-xl font-medium tracking-tight">{map.title}</h2>
-        <p className="text-sm text-muted-foreground tnum">
-          <span className="font-medium text-foreground">
-            {mastered} of {full.concepts.length}
-          </span>{" "}
-          concepts mastered
-        </p>
         <div className="flex flex-wrap items-center gap-2 text-[13px]" role="group" aria-label="Filter the map by slide section">
           {map.sections.map((s) => {
             const on = filter === s.name;
