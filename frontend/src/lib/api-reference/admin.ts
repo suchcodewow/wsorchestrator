@@ -1,4 +1,4 @@
-import { FOOD_ORDER_LIST, RECORDING_LIST, GUEST_JUDGE_LIST, INTAKE_RESPONSE_LIST, JUDGE_PROSPECT_LIST, ASSESSMENT_ATTENDEE_LIST, ASSESSMENT_LIST, AUDIT_LIST, BOOTCAMP_COHORT_LIST, BOOTCAMP_HISTORY_LIST, BOOTCAMP_LIST, BOOTCAMP_RECORD_LIST, CURRENT_COHORT_LIST, DOMAIN_LIST, EMPLOYEE_LIST, HIBOB_SYNC_LIST, HISTORY_STATUSES, JUDGE_LIST, ORGANIZATION_LIST, PREVIOUS_SESSION_LIST, SESSION_COMMENT_LIST, SESSION_TYPE_LIST, MEETING_SELECTION_LIST, MEETING_SYNC_CHANGE_LIST, MEETING_SYNC_LIST, SLACK_CONTACT_LIST, SLACK_SYNC_CHANGE_LIST, SLACK_SYNC_LIST, CHANNEL_CONTACT_LIST, SURVEY_RESPONSE_LIST, SURVEY_RESULT_LIST, TITLE_LIST, USER_LIST, FACILITY_LIST, VIDEO_FEEDBACK_LIST, VIDEO_FEEDBACK_SUMMARY_LIST } from "@/lib/list-specs";
+import { FOOD_ORDER_LIST, RECORDING_LIST, GUEST_JUDGE_LIST, INTAKE_RESPONSE_LIST, JUDGE_PROSPECT_LIST, ASSESSMENT_ATTENDEE_LIST, ASSESSMENT_LIST, AUDIT_LIST, BOOTCAMP_COHORT_LIST, BOOTCAMP_HISTORY_LIST, BOOTCAMP_LIST, BOOTCAMP_RECORD_LIST, CURRENT_COHORT_LIST, DOMAIN_LIST, EMPLOYEE_LIST, FRAME_DOMAIN_LIST, HIBOB_SYNC_LIST, HISTORY_STATUSES, JUDGE_LIST, ORGANIZATION_LIST, PREVIOUS_SESSION_LIST, SESSION_COMMENT_LIST, SESSION_TYPE_LIST, MEETING_SELECTION_LIST, MEETING_SYNC_CHANGE_LIST, MEETING_SYNC_LIST, SLACK_CONTACT_LIST, SLACK_SYNC_CHANGE_LIST, SLACK_SYNC_LIST, CHANNEL_CONTACT_LIST, SURVEY_RESPONSE_LIST, SURVEY_RESULT_LIST, TITLE_LIST, USER_LIST, FACILITY_LIST, VIDEO_FEEDBACK_LIST, VIDEO_FEEDBACK_SUMMARY_LIST } from "@/lib/list-specs";
 import { BOOTCAMP_LIMITS, CHECKLIST_LIMITS, EVALS_ASSESSMENT_LIMITS, FACILITY_LIMITS, FOOD_ORDER_LIMITS, INTAKE_LIMITS, MEETING_SELECTION_LIMITS, RECORDING_LIMITS, SCHEDULE_LIMITS, SURVEY_LIMITS, VIDEO_FEEDBACK_LIMITS } from "@/db/schema";
 import { PAGE_SIZE } from "@/lib/paging";
 import { RECORDING_RETENTION_DAYS, UPLOAD_STALLED_MS, UPLOAD_URL_BATCH } from "@/lib/recording/video";
@@ -2991,6 +2991,71 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           { status: 404, error: "not_found", when: "no such domain" },
           { status: 409, error: "self_lockout", when: "the change would leave you unable to sign in" },
         ],
+      },
+      {
+        method: "GET",
+        path: "/api/settings/frame-domains",
+        summary: "Lists the sites allowed to show the app in a frame, a page at a time.",
+        access: "platform",
+        token: true,
+        notes:
+          "Every page's Content-Security-Policy is frame-ancestors 'self' plus each of these domains and its subdomains; with none, only the app's own pages may frame it.",
+        query: listQuery(FRAME_DOMAIN_LIST.sorts, "the domain, the note or who added it"),
+        returns: `{ domains: { id, domain, note, createdAt, addedBy: string | null }[], ${PAGE_FIELDS} }`,
+      },
+      {
+        method: "POST",
+        path: "/api/settings/frame-domains",
+        summary: "Allows a site to show the app in a frame.",
+        access: "platform",
+        token: false,
+        notes:
+          "The domain is lowercased, and a URL or a leading *. is reduced to its domain. Subdomains are always allowed with it. Other instances pick the change up within 30 seconds.",
+        body: {
+          kind: "json",
+          fields: [
+            { name: "domain", type: "string", required: true, note: "up to 253 characters" },
+            { name: "note", type: "string", note: "up to 200 characters" },
+          ],
+        },
+        returns: "{ ok: true }",
+        errors: [
+          { status: 400, error: "invalid", when: "the body does not parse, or the domain is not a valid domain" },
+          { status: 409, error: "duplicate", when: "the domain is already listed" },
+        ],
+      },
+      {
+        method: "PATCH",
+        path: "/api/settings/frame-domains/{id}",
+        summary: "Changes a frame domain and its note.",
+        access: "platform",
+        token: false,
+        notes: "Sending no note clears it.",
+        params: [{ name: "id", type: "string", required: true }],
+        body: {
+          kind: "json",
+          fields: [
+            { name: "domain", type: "string", required: true, note: "up to 253 characters" },
+            { name: "note", type: "string", note: "up to 200 characters" },
+          ],
+        },
+        returns: "{ ok: true }",
+        errors: [
+          { status: 400, error: "invalid", when: "the body does not parse, or the domain is not a valid domain" },
+          { status: 404, error: "not_found", when: "no such domain" },
+          { status: 409, error: "duplicate", when: "another entry has that domain" },
+        ],
+      },
+      {
+        method: "DELETE",
+        path: "/api/settings/frame-domains/{id}",
+        summary: "Stops a site from showing the app in a frame.",
+        access: "platform",
+        token: false,
+        notes: "Frames already open keep the page they loaded; the next page they load is refused.",
+        params: [{ name: "id", type: "string", required: true }],
+        returns: "{ ok: true }",
+        errors: [{ status: 404, error: "not_found", when: "no such domain" }],
       },
       {
         method: "GET",

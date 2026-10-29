@@ -1,8 +1,10 @@
 "use client";
 
 /**
- * The email domains allowed to sign in: the deployment's own, then a page of
- * those added here, searched and sorted by the database.
+ * The Allowed Domains tab: the email domains allowed to sign in, then the
+ * sites allowed to show the app in a frame. Each is the deployment's own, if
+ * any, then a page of those added here, searched and sorted by the database;
+ * the one search box serves both.
  */
 
 import { useState } from "react";
@@ -11,11 +13,11 @@ import { motion } from "framer-motion";
 import { Check, Loader2, Lock, Pencil, Plus, Trash2, X } from "lucide-react";
 import { HEADER_ROW, Pager, PlainHeader, SortHeader, TableSearch } from "@/components/data-table";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ALLOWED_DOMAIN_LIMITS } from "@/db/schema";
 import { normalizeDomain } from "@/lib/email-domains";
-import type { DomainSort } from "@/lib/list-specs";
+import { normalizeFrameDomain } from "@/lib/frame-ancestors";
+import { FRAME_DOMAIN_PREFIX, type DomainSort, type FrameDomainSort } from "@/lib/list-specs";
 import { riseChild, staggerParent } from "@/lib/motion";
 import type { ListQuery, Page } from "@/lib/paging";
 
@@ -43,15 +45,80 @@ function message(error: string | undefined, status: number) {
 export function DomainsView({
   query,
   page,
-  envDomains: allEnvDomains,
+  envDomains,
   viewerEmail,
-  viewerExempt,
+  frameQuery,
+  framePage,
 }: {
   query: ListQuery<DomainSort>;
   page: Page<DomainRow>;
   envDomains: string[];
   viewerEmail: string;
-  viewerExempt: boolean;
+  frameQuery: ListQuery<FrameDomainSort>;
+  framePage: Page<DomainRow>;
+}) {
+  return (
+    <motion.div
+      variants={staggerParent(0.05)}
+      initial="hidden"
+      animate="show"
+      className="space-y-6"
+    >
+      <motion.div variants={riseChild}>
+        <TableSearch value={query.q} placeholder="Search by domain, note or who added it" label="Search domains" />
+      </motion.div>
+
+      <motion.div variants={riseChild} className="space-y-4">
+        <h2 className="text-xl font-medium tracking-tight">Sign-in domains</h2>
+        <DomainTable
+          query={query}
+          page={page}
+          api="/api/settings/domains"
+          normalize={normalizeDomain}
+          notePlaceholder="Why it's allowed (optional)"
+          envDomains={envDomains}
+          viewerEmail={viewerEmail}
+        />
+      </motion.div>
+
+      <motion.div variants={riseChild} className="space-y-4">
+        <h2 className="text-xl font-medium tracking-tight">Allowed iFrame Domains</h2>
+        <DomainTable
+          query={frameQuery}
+          page={framePage}
+          prefix={FRAME_DOMAIN_PREFIX}
+          api="/api/settings/frame-domains"
+          normalize={normalizeFrameDomain}
+          notePlaceholder="The site that frames the app (optional)"
+          placeholder="mindtickle.com"
+        />
+      </motion.div>
+    </motion.div>
+  );
+}
+
+/** One editable list of domains: the deployment's own on top, then a page of those added here. */
+function DomainTable({
+  query,
+  page,
+  prefix,
+  api,
+  normalize,
+  notePlaceholder,
+  placeholder = "example.com",
+  envDomains: allEnvDomains = [],
+  viewerEmail,
+}: {
+  query: ListQuery<DomainSort | FrameDomainSort>;
+  page: Page<DomainRow>;
+  prefix?: string;
+  api: string;
+  normalize: (value: string) => string | null;
+  notePlaceholder: string;
+  placeholder?: string;
+  envDomains?: string[];
+  /** Marks the viewer's own domain, on the list that decides who signs in. */
+  viewerEmail?: string;
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -60,7 +127,7 @@ export function DomainsView({
   const [adding, setAdding] = useState(false);
 
   const domains = page.rows;
-  const sortProps = { sort: query.sort, dir: query.dir };
+  const sortProps = { sort: query.sort, dir: query.dir, prefix };
   // The deployment's own come from its configuration, not the database: a
   // handful, shown above the first page.
   const q = query.q.toLowerCase();
@@ -94,34 +161,14 @@ export function DomainsView({
   }
 
   return (
-    <motion.div
-      variants={staggerParent(0.05)}
-      initial="hidden"
-      animate="show"
-      className="space-y-6"
-    >
-      <motion.div variants={riseChild}>
-        <h2 className="text-xl font-medium tracking-tight">Sign-in domains</h2>
-      </motion.div>
-
-      <motion.div variants={riseChild}>
-        <TableSearch value={query.q} placeholder="Search by domain, note or who added it" label="Search domains" />
-      </motion.div>
-
+    <>
       {error && (
-        <motion.p
-          variants={riseChild}
-          role="alert"
-          className="text-sm text-destructive"
-        >
+        <p role="alert" className="text-sm text-destructive">
           {error}
-        </motion.p>
+        </p>
       )}
 
-      <motion.div
-        variants={riseChild}
-        className="overflow-hidden rounded-2xl border bg-card shadow-sm"
-      >
+      <div className="overflow-hidden rounded-2xl border bg-card shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full min-w-160 text-sm">
             <thead>
@@ -149,9 +196,12 @@ export function DomainsView({
                     key={row.id}
                     row={row}
                     busy={busy === row.id}
+                    normalize={normalize}
+                    placeholder={placeholder}
+                    notePlaceholder={notePlaceholder}
                     onCancel={() => setEditing(null)}
                     onSave={async (values) => {
-                      const ok = await send(row.id, `/api/settings/domains/${row.id}`, {
+                      const ok = await send(row.id, `${api}/${row.id}`, {
                         method: "PATCH",
                         body: JSON.stringify(values),
                       });
@@ -165,7 +215,7 @@ export function DomainsView({
                   >
                     <td className="px-5 py-3 font-mono font-medium">
                       {row.domain}
-                      {viewerEmail.endsWith(`@${row.domain}`) && (
+                      {viewerEmail?.endsWith(`@${row.domain}`) && (
                         <span className="ml-2 font-sans text-xs font-normal text-muted-foreground">
                           yours
                         </span>
@@ -198,7 +248,7 @@ export function DomainsView({
                           disabled={busy === row.id}
                           className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                           onClick={() =>
-                            send(row.id, `/api/settings/domains/${row.id}`, {
+                            send(row.id, `${api}/${row.id}`, {
                               method: "DELETE",
                             })
                           }
@@ -218,9 +268,12 @@ export function DomainsView({
               {adding ? (
                 <EditRow
                   busy={busy === "new"}
+                  normalize={normalize}
+                  placeholder={placeholder}
+                  notePlaceholder={notePlaceholder}
                   onCancel={() => setAdding(false)}
                   onSave={async (values) => {
-                    const ok = await send("new", "/api/settings/domains", {
+                    const ok = await send("new", api, {
                       method: "POST",
                       body: JSON.stringify(values),
                     });
@@ -249,41 +302,10 @@ export function DomainsView({
           </table>
         </div>
         <div className="border-t empty:hidden">
-          <Pager page={page} noun="domains" />
+          <Pager page={page} noun="domains" prefix={prefix} />
         </div>
-      </motion.div>
-
-      <motion.div variants={riseChild}>
-        <Card>
-          <CardContent className="grid gap-2 py-5 text-sm text-muted-foreground">
-            <p>
-              <span className="font-medium text-foreground">
-                You can&apos;t lock yourself out.
-              </span>{" "}
-              {viewerExempt ? (
-                <>
-                  Your address is in <code>SITE_ADMIN_EMAILS</code>, so you can
-                  sign in whatever this list says.
-                </>
-              ) : (
-                <>
-                  A change that would leave{" "}
-                  <span className="font-mono">{viewerEmail}</span> unable to sign
-                  in is refused.
-                </>
-              )}
-            </p>
-            <p>
-              <span className="font-medium text-foreground">
-                Existing sessions keep working.
-              </span>{" "}
-              Removing a domain blocks the next sign-in but does not end
-              sessions already open.
-            </p>
-          </CardContent>
-        </Card>
-      </motion.div>
-    </motion.div>
+      </div>
+    </>
   );
 }
 
@@ -309,18 +331,24 @@ function EnvRow({ domain }: { domain: string }) {
 function EditRow({
   row,
   busy,
+  normalize,
+  placeholder,
+  notePlaceholder,
   onSave,
   onCancel,
 }: {
   row?: DomainRow;
   busy: boolean;
+  normalize: (value: string) => string | null;
+  placeholder: string;
+  notePlaceholder: string;
   onSave: (values: { domain: string; note: string }) => void;
   onCancel: () => void;
 }) {
   const [domain, setDomain] = useState(row?.domain ?? "");
   const [note, setNote] = useState(row?.note ?? "");
 
-  const valid = normalizeDomain(domain) !== null;
+  const valid = normalize(domain) !== null;
 
   function submit() {
     if (!valid || busy) return;
@@ -334,7 +362,7 @@ function EditRow({
           autoFocus
           value={domain}
           maxLength={ALLOWED_DOMAIN_LIMITS.domain}
-          placeholder="example.com"
+          placeholder={placeholder}
           aria-label="Domain"
           spellCheck={false}
           className="font-mono"
@@ -349,7 +377,7 @@ function EditRow({
         <Input
           value={note}
           maxLength={ALLOWED_DOMAIN_LIMITS.note}
-          placeholder="Why it's allowed (optional)"
+          placeholder={notePlaceholder}
           aria-label="Note"
           onChange={(e) => setNote(e.target.value)}
           onKeyDown={(e) => {
