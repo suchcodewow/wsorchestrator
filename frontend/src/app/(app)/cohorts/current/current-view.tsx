@@ -790,7 +790,9 @@ function MeetingMarks({
   }
 
   return (
-    <TooltipProvider>
+    // A hoverable tip spans its neighbours, so sliding onto the next icon would
+    // count as heading for the open tip and keep it rather than show the next.
+    <TooltipProvider disableHoverableContent>
       {/* React bubbles the menu's clicks through its portal, so they stop here rather than toggling the row. */}
       <span className="flex flex-wrap items-center gap-0.5" onClick={(ev) => ev.stopPropagation()}>
         {rsvpDetail && (
