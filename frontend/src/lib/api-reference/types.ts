@@ -96,7 +96,7 @@ export type Endpoint = {
   notes?: string;
   params?: Field[];
   query?: Field[];
-  body?: { kind: "json" | "multipart"; fields: Field[] };
+  body?: { kind: "json" | "multipart" | "form"; fields: Field[] };
   /** Shape of a success body, short: "{ runs: Run[] }", "204 No Content". */
   returns: string;
   /** Status codes past the 401/403 gate. */

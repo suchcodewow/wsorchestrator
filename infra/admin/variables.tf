@@ -198,6 +198,36 @@ variable "mindtickle_secret_key" {
   default     = ""
 }
 
+variable "lti_client_id" {
+  description = "The client id Mindtickle gave this environment's registration as an LTI 1.3 tool, whose login URL is {AUTH_URL}/api/lti/login and launch URL {AUTH_URL}/api/lti/launch. Not secret. Empty leaves the LTI launch off: its routes answer 503. Each environment is its own registration, so QA and production differ."
+  type        = string
+  default     = ""
+}
+
+variable "lti_issuer" {
+  description = "The issuer (iss) Mindtickle's LTI 1.3 launches carry, from the same registration as lti_client_id."
+  type        = string
+  default     = ""
+}
+
+variable "lti_auth_url" {
+  description = "Mindtickle's LTI 1.3 OIDC authorization endpoint, from the same registration as lti_client_id."
+  type        = string
+  default     = ""
+}
+
+variable "lti_jwks_url" {
+  description = "Mindtickle's public keyset (JWKS) URL, which LTI 1.3 launches are verified against, from the same registration as lti_client_id."
+  type        = string
+  default     = ""
+}
+
+variable "lti_deployment_ids" {
+  description = "The LTI deployment ids to accept launches from. Empty accepts any deployment of the registration, and the launch page says so."
+  type        = list(string)
+  default     = []
+}
+
 variable "harness_base_url" {
   description = "Harness base URL. Change for a non-SaaS or non-prod cluster (e.g. https://app.harness.io/gratis)."
   type        = string

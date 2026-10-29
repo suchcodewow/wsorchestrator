@@ -853,6 +853,11 @@ const ROUTES: RouteCase[] = [
   { method: "POST", path: "/api/components/validate", allowed: canContributeComponents, body: () => ({}) },
 
   // Event guides
+  // LTI launch: anyone gets past the gate, and the e2e server has no platform configured.
+  { method: "GET", path: "/api/lti/login", allowed: "public", unconfigured: true },
+  { method: "POST", path: "/api/lti/login", allowed: "public", body: () => ({}), unconfigured: true },
+  { method: "POST", path: "/api/lti/launch", allowed: "public", body: () => ({}), unconfigured: true },
+
   { method: "GET", path: "/api/lab-guides", allowed: "public" },
   { method: "GET", path: `/api/lab-guides/${MISSING}`, allowed: "public" },
   { method: "POST", path: "/api/lab-guides", allowed: canManageLabGuides, body: () => ({}) },

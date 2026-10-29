@@ -160,6 +160,15 @@ resource "google_cloud_run_v2_service" "app" {
             MT_COMPANY_ID = var.mindtickle_company_id
             MT_REGION     = var.mindtickle_region
           } : {},
+          # Mindtickle's LTI 1.3 registration of the app as a tool. None of it
+          # is secret: the platform's keys are public.
+          var.lti_client_id != "" ? {
+            LTI_CLIENT_ID      = var.lti_client_id
+            LTI_ISSUER         = var.lti_issuer
+            LTI_AUTH_URL       = var.lti_auth_url
+            LTI_JWKS_URL       = var.lti_jwks_url
+            LTI_DEPLOYMENT_IDS = join(",", var.lti_deployment_ids)
+          } : {},
           # Google Meetings: the account to offer at sign-in, and the Zoom app
           # its meetings are made through. The Zoom secret is secret-backed, below.
           var.google_meetings_account != "" ? { GOOGLE_USER = var.google_meetings_account } : {},

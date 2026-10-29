@@ -58,5 +58,6 @@ export const GROUPS: EndpointGroup[] = [
   "users",
   "platform",
   "audit",
+  "lti",
   "internal",
 ].map((id) => byId(ALL, id));
