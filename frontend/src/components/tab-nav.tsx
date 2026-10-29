@@ -27,7 +27,7 @@ export function TabNav({
   const favorites = useFavoriteTabs();
 
   return (
-    <nav className="flex flex-wrap gap-1 border-b" aria-label={label}>
+    <nav className="flex flex-wrap gap-1 border-b" aria-label={label} data-tab-nav="">
       {tabs.map(({ href, label: text, Icon, count }) => {
         const active = pathname === href || pathname.startsWith(`${href}/`);
         const starred = favorites?.has(href) ?? false;
