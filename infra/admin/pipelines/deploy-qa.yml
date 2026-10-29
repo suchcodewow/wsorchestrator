@@ -8,11 +8,15 @@ pipeline:
     both images into QA's registry, migrate QA's database, and roll QA's Cloud
     Run. https://qa.harnessevents.io, GCP project harnessevents-qa.
 
-    Nothing here can reach production. The IaCM workspace (qa_control_plane)
-    authenticates as tf-admin-qa and the build steps as QA's build-sa, and
-    neither holds a role outside the orchestrator-qa folder. Production is
-    deploy_production, run by hand, which promotes the image this pipeline
-    built — so a commit reaches production only after it has run here.
+    Nothing here can deploy to production. The IaCM workspace
+    (qa_control_plane) authenticates as tf-admin-qa and the build steps as
+    QA's build-sa, and neither holds a role outside the orchestrator-qa
+    folder. Production is deploy_production, which promotes the image this
+    pipeline built — so a commit reaches production only after it has run
+    here. This pipeline can only *start* deploy_production, from its last
+    stage, and only for a merge whose commit message carries the trailer
+    `Release: production` and whose pull request was merged by someone in
+    release_mergers.
 
     Stage order:
       1. Queue — one QA deploy at a time. Two merges in quick succession would
@@ -33,6 +37,15 @@ pipeline:
          the native Cloud Run steps, points the runner jobs at the new image,
          and on failure routes traffic back to the revision that was serving.
          See "Cloud Run deploys" in DEPLOY.md.
+      6. Release Production — only on a push-triggered run whose Deploy stage
+         succeeded, and only when the commit carries `Release: production`.
+         It looks up the pull request that produced the commit, ignores the
+         trailer unless its merger is in release_mergers, checks QA answers,
+         and then starts deploy_production for this exact commit through the
+         Harness API, as the service account whose token is the secret
+         deploy_production_trigger_token. It does not wait: deploy_production
+         queues and runs on its own, and its preflight applies unchanged.
+         See "Releasing from a merge" in docs/environments.md.
 
     Images come from mirror.gcr.io and gcr.io, never Docker Hub (rate limits on
     Harness Cloud's shared IPs).
@@ -91,6 +104,20 @@ pipeline:
       type: String
       required: false
       value: tf-runner tf-reaper tf-scheduler
+    # Not runtime inputs: a run cannot widen who may release from a merge.
+    - name: release_mergers
+      type: String
+      description: "GitHub logins, space- or comma-separated, whose merges may release with the trailer \"Release: production\"."
+      required: false
+      value: suchcodewow
+    - name: github_repo
+      type: String
+      required: false
+      value: suchcodewow/wsorchestrator
+    - name: qa_url
+      type: String
+      required: false
+      value: https://qa.harnessevents.io
   stages:
     - stage:
         name: Queue
@@ -236,22 +263,42 @@ pipeline:
                     # script before the shell sees it. Base64 because buildArgs
                     # is comma-joined — see frontend/src/lib/build-info.ts.
                     # TAG is the image tag the deploy stage asks the service
-                    # artifact for.
+                    # artifact for. RELEASE and RELEASE_INFRA are the commit's
+                    # release trailers, read from the clone for the same
+                    # reason; only the release_production stage acts on them,
+                    # after it has checked who merged the pull request.
                     command: |
                       set -eu
                       apk add --no-cache git >/dev/null
                       git config --global --add safe.directory "$(pwd)"
                       export TAG="$SHORT_SHA"
                       echo "TAG=$TAG"
+                      export FULL_SHA="$(git rev-parse HEAD)"
+                      echo "FULL_SHA=$FULL_SHA"
                       export BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
                       echo "BUILD_TIME=$BUILD_TIME"
                       SUBJECT="$(git log -1 --pretty=%s 2>/dev/null | cut -c1-120 || true)"
                       export BUILD_MESSAGE_B64="$(printf '%s' "$SUBJECT" | base64 | tr -d '\n')"
                       echo "BUILD_MESSAGE_B64=$BUILD_MESSAGE_B64"
+                      # The last value of a trailer in the message's final
+                      # paragraph; git matches the key case-insensitively.
+                      trailer() {
+                        git log -1 --format="%(trailers:key=$1,valueonly)" 2>/dev/null \
+                          | sed '/^$/d' | tail -n 1 | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]'
+                      }
+                      export RELEASE="$(trailer Release)"
+                      [ -n "$RELEASE" ] || RELEASE=none
+                      echo "RELEASE=$RELEASE"
+                      export RELEASE_INFRA="$(trailer Release-Infra)"
+                      [ -n "$RELEASE_INFRA" ] || RELEASE_INFRA=true
+                      echo "RELEASE_INFRA=$RELEASE_INFRA"
                     outputVariables:
                       - name: TAG
+                      - name: FULL_SHA
                       - name: BUILD_TIME
                       - name: BUILD_MESSAGE_B64
+                      - name: RELEASE
+                      - name: RELEASE_INFRA
               # The images share nothing, so they build side by side.
               - parallel:
                   - step:
@@ -583,3 +630,160 @@ pipeline:
         when:
           pipelineStatus: Success
           condition: <+pipeline.variables.deploy> == "true"
+    - stage:
+        name: Release Production
+        identifier: release_production
+        description: |
+          Starts deploy_production for this commit when its message carries
+          the trailer `Release: production` and its pull request was merged by
+          someone in release_mergers. Push-triggered runs only, so neither a
+          manual run nor a re-run of an old commit releases. A trailer from
+          anyone else, or on a commit pushed without a pull request, is logged
+          and ignored, and the stage succeeds. A failure here (GitHub or QA not
+          answering, a bad Release-Infra) fails the run: QA is deployed, and
+          production has not been started.
+        type: CI
+        spec:
+          cloneCodebase: false
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec: {}
+          execution:
+            steps:
+              - step:
+                  type: Run
+                  name: Check Merger and QA
+                  identifier: check
+                  timeout: 10m
+                  spec:
+                    shell: Sh
+                    image: mirror.gcr.io/library/alpine:3.20
+                    envVariables:
+                      SHA: <+pipeline.stages.build_migrate.spec.execution.steps.resolve_build_info.output.outputVariables.FULL_SHA>
+                      RELEASE_INFRA: <+pipeline.stages.build_migrate.spec.execution.steps.resolve_build_info.output.outputVariables.RELEASE_INFRA>
+                      RELEASERS: <+pipeline.variables.release_mergers>
+                      GITHUB_REPO: <+pipeline.variables.github_repo>
+                      GITHUB_TOKEN: <+secrets.getValue("github_pat_wsorchestrator")>
+                      QA_URL: <+pipeline.variables.qa_url>
+                    command: |
+                      set -euo pipefail
+                      apk add --no-cache curl jq >/dev/null
+                      fail() { echo "::: REFUSED: $*" >&2; exit 1; }
+                      gh_api() {
+                        curl -fsS --retry 3 -H "Authorization: Bearer $GITHUB_TOKEN" \
+                          -H "Accept: application/vnd.github+json" "https://api.github.com/repos/$GITHUB_REPO/$1"
+                      }
+                      lower() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]'; }
+                      allowed() {
+                        [ -n "$1" ] || return 1
+                        for r in $(printf '%s' "$RELEASERS" | tr ',' ' '); do
+                          [ "$(lower "$r")" = "$(lower "$1")" ] && return 0
+                        done
+                        return 1
+                      }
+
+                      case "$RELEASE_INFRA" in
+                        true|false) ;;
+                        *) fail "Release-Infra must be true or false, not \"$RELEASE_INFRA\"" ;;
+                      esac
+
+                      HONOURED=no
+                      PR=none
+                      MERGED_BY=none
+                      gh_api "commits/$SHA/pulls" > /tmp/pulls.json || fail "GitHub did not say which pull request produced $SHA"
+                      FOUND="$(jq -r --arg sha "$SHA" '[.[] | select(.merge_commit_sha == $sha and .base.ref == "main")][0].number // empty' /tmp/pulls.json)"
+                      if [ -z "$FOUND" ]; then
+                        echo "::: Release trailer ignored: $SHA is not the merge of a pull request into main"
+                      else
+                        PR="$FOUND"
+                        # merged_by is only on the single-PR endpoint; the list
+                        # above returns it as null.
+                        gh_api "pulls/$PR" > /tmp/pr.json || fail "GitHub did not return pull request #$PR"
+                        MERGED_BY="$(jq -r --arg sha "$SHA" 'if .merged and .merge_commit_sha == $sha then .merged_by.login // "" else "" end' /tmp/pr.json)"
+                        if allowed "$MERGED_BY"; then
+                          HONOURED=yes
+                          echo "#$PR was merged by $MERGED_BY, who is in release_mergers"
+                        else
+                          echo "::: Release trailer ignored: #$PR was merged by ${MERGED_BY:-nobody}, who is not in release_mergers ($RELEASERS)"
+                          [ -n "$MERGED_BY" ] || MERGED_BY=none
+                        fi
+                      fi
+
+                      if [ "$HONOURED" = yes ]; then
+                        # /signin renders the root layout, which reads the
+                        # database, so a 200 means the new revision serves.
+                        CODE=000
+                        for _ in $(seq 1 12); do
+                          CODE="$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "$QA_URL/signin" || true)"
+                          [ "$CODE" = 200 ] && break
+                          sleep 10
+                        done
+                        [ "$CODE" = 200 ] || fail "$QA_URL/signin answered $CODE, so production was not started"
+                        echo "QA answers 200 at $QA_URL/signin"
+                      fi
+                      export HONOURED PR MERGED_BY
+                    outputVariables:
+                      - name: HONOURED
+                      - name: PR
+                      - name: MERGED_BY
+              - step:
+                  type: Run
+                  name: Start deploy_production
+                  identifier: start_production
+                  timeout: 5m
+                  spec:
+                    shell: Sh
+                    image: mirror.gcr.io/library/alpine:3.20
+                    envVariables:
+                      SHA: <+pipeline.stages.build_migrate.spec.execution.steps.resolve_build_info.output.outputVariables.FULL_SHA>
+                      RUN_INFRA: <+pipeline.stages.build_migrate.spec.execution.steps.resolve_build_info.output.outputVariables.RELEASE_INFRA>
+                      PR: <+steps.check.output.outputVariables.PR>
+                      MERGED_BY: <+steps.check.output.outputVariables.MERGED_BY>
+                      HARNESS_TOKEN: <+secrets.getValue("deploy_production_trigger_token")>
+                      ACCOUNT: <+account.identifier>
+                      ORG: <+org.identifier>
+                      PROJECT: <+project.identifier>
+                      QA_RUN: <+pipeline.executionUrl>
+                    # The service account behind HARNESS_TOKEN can execute
+                    # deploy_production and nothing else. The owner's PAT
+                    # (tf_harness_api_key) must never be used here.
+                    command: |
+                      set -euo pipefail
+                      apk add --no-cache curl jq >/dev/null
+                      cat > /tmp/inputs.yaml <<INPUTS
+                      pipeline:
+                        identifier: deploy_production
+                        variables:
+                          - name: sha
+                            type: String
+                            value: "$SHA"
+                          - name: run_infra
+                            type: String
+                            value: "$RUN_INFRA"
+                          - name: apply_infra
+                            type: String
+                            value: "true"
+                          - name: allow_rollback
+                            type: String
+                            value: "false"
+                      INPUTS
+                      cat /tmp/inputs.yaml
+                      NOTES="$(printf 'Release: production from #%s, merged by %s. deploy_qa run: %s' "$PR" "$MERGED_BY" "$QA_RUN" | jq -sRr @uri)"
+                      BASE="https://app.harness.io/gateway/pipeline/api/pipeline/execute/deploy_production"
+                      curl -fsS -X POST -H "x-api-key: $HARNESS_TOKEN" -H 'Content-Type: application/yaml' \
+                        --data-binary @/tmp/inputs.yaml \
+                        "$BASE?accountIdentifier=$ACCOUNT&orgIdentifier=$ORG&projectIdentifier=$PROJECT&notesForPipelineExecution=$NOTES" \
+                        > /tmp/started.json || { cat /tmp/started.json >&2 || true; echo "::: deploy_production was not started" >&2; exit 1; }
+                      RUN_ID="$(jq -r '.data.planExecution.uuid // empty' /tmp/started.json)"
+                      [ -n "$RUN_ID" ] || { cat /tmp/started.json >&2; echo "::: no execution id in Harness's answer" >&2; exit 1; }
+                      echo "started deploy_production for $SHA (run_infra=$RUN_INFRA):"
+                      echo "https://app.harness.io/ng/account/$ACCOUNT/all/orgs/$ORG/projects/$PROJECT/pipelines/deploy_production/executions/$RUN_ID/pipeline"
+                  when:
+                    stageStatus: Success
+                    condition: <+steps.check.output.outputVariables.HONOURED> == "yes"
+        when:
+          pipelineStatus: Success
+          condition: <+pipeline.variables.deploy> == "true" && <+pipeline.triggerType> == "WEBHOOK" && <+pipeline.stages.deploy.status> == "SUCCEEDED" && <+pipeline.stages.build_migrate.spec.execution.steps.resolve_build_info.output.outputVariables.RELEASE> == "production"

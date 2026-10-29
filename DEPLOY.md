@@ -88,11 +88,16 @@ merge to main ─▶ deploy_qa                 (trigger deploy_qa_on_push_main)
        ├─ 3. Build and migrate (as build-sa@harnessevents-qa)
        │      ├─ build app + runner, push to QA's Artifact Registry
        │      └─ db-migrate   ← before the new image is live
-       └─ 4. Deploy           CD stage: env qa, infra qa_cloud_run
-              ├─ record the serving revision, roll the app, update the jobs
-              └─ on failure: traffic back to the recorded revision
+       ├─ 4. Deploy           CD stage: env qa, infra qa_cloud_run
+       │      ├─ record the serving revision, roll the app, update the jobs
+       │      └─ on failure: traffic back to the recorded revision
+       └─ 5. Release Production  only for a push whose merge carries
+              │                  `Release: production`, merged by release_mergers
+              ├─ ask GitHub who merged it; check QA answers 200
+              └─ start deploy_production for this sha, without waiting
 
-by hand ─▶ deploy_production               (sha = qa by default)
+by hand, or from ─▶ deploy_production      (sha = qa by default)
+deploy_qa's stage 5
        ├─ 0. Queue            one deploy_production at a time
        ├─ 1. Preflight        resolve the commit; refuse if QA never built it,
        │                      it is not on main, or it is older than prod
@@ -119,7 +124,10 @@ permissions.
 `deploy_qa` takes four variables, each defaulting to the full path: `verify`,
 `run_infra`, `apply_infra` and `deploy`. Running it by hand against a branch
 with `deploy=false` and `apply_infra=false` exercises the pipeline without
-changing QA.
+changing QA. A run by hand never releases production, whatever the commit
+says: Release Production runs only for the push trigger. It also has three
+fixed variables that are not runtime inputs: `release_mergers`,
+`github_repo` and `qa_url`.
 
 `deploy_production` takes:
 
@@ -132,7 +140,12 @@ changing QA.
 
 **Who can release.** Whoever can start `deploy_production` in Harness can
 release: there is no approval stage, and a run that passes preflight goes
-straight to production. That is Harness RBAC, not this repo. See
+straight to production. That is Harness RBAC, not this repo. So can someone
+in `deploy_qa`'s `release_mergers` (default `suchcodewow`), by merging a PR
+whose squash message ends with the trailer `Release: production`; `deploy_qa`
+then starts `deploy_production` as the service account behind the secret
+`deploy_production_trigger_token`. See
+[Releasing from a merge](docs/environments.md#releasing-from-a-merge). See
 [docs/environments.md](docs/environments.md#who-can-do-what). The approval
 stage was removed on 2026-09-30; its `prod_deployers` user group still exists
 but gates nothing.
