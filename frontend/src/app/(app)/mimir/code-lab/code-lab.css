@@ -90,6 +90,28 @@
   color: transparent;
   caret-color: var(--foreground);
 }
+/* The highlight sits in its own copy of the text under the code, so the code's colours show through it. Both are positioned, so they paint in this order. */
+.cl-code {
+  position: relative;
+}
+.cl-marks {
+  position: absolute;
+  inset: 0;
+  color: transparent;
+  pointer-events: none;
+}
+.cl-mark {
+  color: transparent;
+  background: color-mix(in oklab, var(--callout-warning) 28%, transparent);
+  border-radius: 3px;
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--callout-warning) 70%, transparent);
+  animation: cl-mark-in 0.5s ease-out;
+}
+@keyframes cl-mark-in {
+  from {
+    box-shadow: 0 0 0 6px color-mix(in oklab, var(--callout-warning) 0%, transparent);
+  }
+}
 .cl-input::selection {
   background: color-mix(in oklab, var(--brand) 30%, transparent);
 }
