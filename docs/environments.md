@@ -155,21 +155,27 @@ Things to know:
   merger check does not stop an agent. CLAUDE.md forbids agents from adding
   the trailer unless asked in so many words.
 - **It starts as a service account, not as the merger.** The token is the
-  project secret `deploy_production_trigger_token`, belonging to a service
-  account whose only role is executing `deploy_production`. The production run
+  project secret `deploy_production_trigger_token`, belonging to the
+  account-level service account `deploy_production_trigger`. It can execute
+  and view `deploy_production` and nothing else: it cannot edit any pipeline,
+  run `deploy_qa` or `verify`, or touch `qa_control_plane`. The production run
   is recorded as that account's, with the PR, the merger and the `deploy_qa`
-  run in its notes. Until that secret exists, an honoured trailer fails the
-  Release Production stage and nothing reaches production.
+  run in its notes.
 
-One-time setup, by the project owner:
+The setup, already in place. The service account sits at account scope
+because `deploy_production` uses the account connectors `harnessImage` and
+`Account_GCP_Connector`, and Harness will not give a project-level principal
+an account-level role.
 
-1. Create a service account in the project, with a role that can execute
-   (and view) only the `deploy_production` pipeline, through a resource group
-   holding just that pipeline.
-2. Create an API key and token for it, and store the token as the project
-   secret `deploy_production_trigger_token`.
-3. To add someone who may release by merging, edit `release_mergers` in the
-   pipeline (and its mirror). It is deliberately not a runtime input.
+| Scope | Role | Resource group | Grants |
+| --- | --- | --- | --- |
+| Project `operations/orchestrator` | `deploy_production_trigger` | `deploy_production_trigger` | Execute and view the `deploy_production` pipeline; view the `admin_control_plane` workspace; access the project's connectors, secrets, services, environments, templates and files, which a run resolves as its executor |
+| Account | `deploy_production_trigger_connectors` | `deploy_production_trigger_connectors` | View and access the connectors `harnessImage` and `Account_GCP_Connector` only |
+
+The token is `deploy_qa_release`, under the API key of the same name. To
+replace it, mint a new token on that key and update the secret's value.
+To add someone who may release by merging, edit `release_mergers` in the
+pipeline (and its mirror). It is deliberately not a runtime input.
 
 ## What the two share, and why that matters
 
