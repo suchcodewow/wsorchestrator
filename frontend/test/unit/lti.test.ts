@@ -1,4 +1,6 @@
 /**
+ * TEMPORARY PROBE: delete with everything else docs/probes.md lists for it.
+ *
  * The LTI 1.3 launch from Mindtickle: the login initiation's checks, the
  * authorization redirect it builds, and every check `verifyLaunch` makes on
  * the id_token. Tokens are signed here with a throwaway RSA key and checked

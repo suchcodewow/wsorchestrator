@@ -1,6 +1,8 @@
 "use client";
 
 /**
+ * TEMPORARY PROBE: delete with everything else docs/probes.md lists for it.
+ *
  * Loaded inside a Mindtickle frame, shows everything the embedding page gives
  * this one: the URL it loaded us with, the referrer, every message it posts,
  * and the replies to probes we post up to it. Nothing here establishes a

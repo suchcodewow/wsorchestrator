@@ -199,7 +199,7 @@ variable "mindtickle_secret_key" {
 }
 
 variable "lti_client_id" {
-  description = "The client id Mindtickle gave this environment's registration as an LTI 1.3 tool, whose login URL is {AUTH_URL}/api/lti/login and launch URL {AUTH_URL}/api/lti/launch. Not secret. Empty leaves the LTI launch off: its routes answer 503. Each environment is its own registration, so QA and production differ."
+  description = "Temporary probe (docs/probes.md). The client id Mindtickle gave this environment's registration as an LTI 1.3 tool, whose login URL is {AUTH_URL}/api/lti/login and launch URL {AUTH_URL}/api/lti/launch. Not secret. Empty leaves the LTI launch off: its routes answer 503. Each environment is its own registration, so QA and production differ."
   type        = string
   default     = ""
 }

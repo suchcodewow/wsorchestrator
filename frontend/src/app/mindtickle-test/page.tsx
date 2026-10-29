@@ -1,4 +1,8 @@
-/** A public frame to try Mindtickle's postMessage identity handshake. */
+/**
+ * TEMPORARY PROBE: delete with everything else docs/probes.md lists for it.
+ *
+ * A public frame to try Mindtickle's postMessage identity handshake.
+ */
 
 import type { Metadata } from "next";
 import { MindtickleTest } from "./mindtickle-test";

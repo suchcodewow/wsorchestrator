@@ -1,4 +1,6 @@
 /**
+ * TEMPORARY PROBE: delete with everything else docs/probes.md lists for it.
+ *
  * An LTI 1.3 launch from Mindtickle, as a tool: the third-party initiated
  * login (`/api/lti/login`) and the signed launch it ends in
  * (`/api/lti/launch`). For now the launch only verifies the platform's

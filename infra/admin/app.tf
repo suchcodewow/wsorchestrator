@@ -160,8 +160,8 @@ resource "google_cloud_run_v2_service" "app" {
             MT_COMPANY_ID = var.mindtickle_company_id
             MT_REGION     = var.mindtickle_region
           } : {},
-          # Mindtickle's LTI 1.3 registration of the app as a tool. None of it
-          # is secret: the platform's keys are public.
+          # Temporary probe (docs/probes.md): Mindtickle's LTI 1.3 registration
+          # of the app as a tool. None of it is secret: the platform's keys are public.
           var.lti_client_id != "" ? {
             LTI_CLIENT_ID      = var.lti_client_id
             LTI_ISSUER         = var.lti_issuer

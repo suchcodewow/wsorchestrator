@@ -1,4 +1,6 @@
 /**
+ * TEMPORARY PROBE: delete with everything else docs/probes.md lists for it.
+ *
  * The page a launch answers with, inside Mindtickle's iframe: each check and
  * every claim the id_token carried. Plain HTML from the route handler, since
  * the launch is a cross-site form POST that a React page cannot receive.

@@ -1,4 +1,6 @@
 /**
+ * TEMPORARY PROBE: delete with everything else docs/probes.md lists for it.
+ *
  * LTI 1.3 third-party initiated login (`lib/lti.ts`, step 1 to 2). Mindtickle
  * sends the browser here, by GET or by a form POST, and it is sent straight
  * on to Mindtickle's authorization endpoint with a state and nonce, which

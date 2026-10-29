@@ -1,4 +1,6 @@
 /**
+ * TEMPORARY PROBE: delete with everything else docs/probes.md lists for it.
+ *
  * LTI 1.3 launch (`lib/lti.ts`, steps 3 and 4). Mindtickle posts the signed
  * id_token here; it is verified and every claim is shown, logged and audited,
  * so we can see what Mindtickle sends before anything is built on it. It
