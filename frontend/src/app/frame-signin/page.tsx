@@ -20,7 +20,7 @@ export default async function FrameSignInPage() {
       <div className="w-full max-w-sm rounded-2xl border bg-card p-8 shadow-xl">
         <div className="flex items-center gap-2.5">
           <BrandMark />
-          <span className="font-medium tracking-tight">Event Orchestrator</span>
+          <span className="font-medium tracking-tight">Harness Events</span>
         </div>
         <div className="mt-6">
           {session?.user ? (

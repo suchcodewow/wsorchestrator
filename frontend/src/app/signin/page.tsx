@@ -1,7 +1,7 @@
 /** The sign-in page. */
 
 import { redirect } from "next/navigation";
-import { AlertTriangle, ArrowRight, CalendarClock, Cloud, Users } from "lucide-react";
+import { Activity, AlertTriangle, ArrowRight, CalendarDays, FlaskConical } from "lucide-react";
 import { auth, googleHostedDomain, signIn } from "@/auth";
 import { Button } from "@/components/ui/button";
 import { returnPath } from "@/lib/request-path";
@@ -11,9 +11,9 @@ import { FramedSignIn } from "./framed-sign-in";
 import { SignInHero } from "./signin-hero";
 
 const CAPABILITIES = [
-  { Icon: CalendarClock, text: "Schedule events on a calendar" },
-  { Icon: Users, text: "Accounts provisioned per attendee" },
-  { Icon: Cloud, text: "Cloud environments torn down on a timer" },
+  { Icon: CalendarDays, text: "Plan workshops and bootcamps" },
+  { Icon: Activity, text: "Follow every event as it runs" },
+  { Icon: FlaskConical, text: "Record how everyone scored" },
 ];
 
 function errorMessage(error: string | undefined): string | null {
@@ -53,19 +53,19 @@ export default async function SignInPage({
         >
           <div data-anim className="flex items-center gap-2.5">
             <BrandMark />
-            <span className="font-medium tracking-tight">Event Orchestrator</span>
+            <span className="font-medium tracking-tight">Harness Events</span>
           </div>
 
           <h1
             data-anim
             className="mt-7 text-3xl font-medium tracking-tight text-balance"
           >
-            Ephemeral cloud events, on a schedule.
+            Event Planning, Management, and Scoring.
           </h1>
 
           <p data-anim className="mt-3 text-sm leading-relaxed text-muted-foreground">
-            Book a workshop or a challenge, and its accounts and cloud projects
-            build and clean themselves up on schedule.
+            Workshops and challenges arrive with their labs and clouds ready,
+            and bootcamps run on schedule across your facilities.
           </p>
 
           <ul data-anim className="mt-7 space-y-3">
