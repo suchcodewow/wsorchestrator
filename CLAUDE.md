@@ -296,3 +296,4 @@ docker exec workshoporchestrator-postgres-1 psql -U postgres -d workshops_agent 
 | [docs/harness.md](docs/harness.md)           | Harness API access and the pipeline/trigger traps                                                                                      |
 | [docs/evals-port.md](docs/evals-port.md)     | Every feature of the eVals Google Sheet and whether it is ported, partial, or still to decide; update a row when you port one          |
 | [docs/api.md](docs/api.md)                   | Personal access tokens, which routes take one, and the session-only exceptions; the endpoint reference itself is `/api`                |
+| [docs/probes.md](docs/probes.md)             | Temporary Mindtickle probes (LTI, SCORM, postMessage): every file each touches, and how to delete one                                  |

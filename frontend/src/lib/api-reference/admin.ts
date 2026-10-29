@@ -3130,6 +3130,116 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
     ],
   },
   {
+    id: "lti",
+    title: "LTI launch",
+    intro:
+      "A temporary probe (docs/probes.md), to be deleted if Mindtickle cannot act as an LTI platform. Mindtickle opens the app as an LTI 1.3 tool through these two, in a browser inside its iframe. For now the launch only verifies Mindtickle's id_token and shows what it carries; it signs nobody in. Configured by LTI_ISSUER, LTI_CLIENT_ID, LTI_AUTH_URL and LTI_JWKS_URL, from Mindtickle's registration of the tool, and optionally LTI_DEPLOYMENT_IDS; with any of the four unset, each answers 503 not_configured.",
+    endpoints: [
+      {
+        method: "GET",
+        path: "/api/lti/login",
+        summary: "Starts an LTI 1.3 launch: Mindtickle's third-party initiated login.",
+        access: "public",
+        token: true,
+        notes:
+          "A browser link from Mindtickle, not an API call. Redirects (302) to LTI_AUTH_URL asking for an id_token by form_post to POST /api/lti/launch, with a fresh state and nonce. The nonce is kept for ten minutes in a cookie named lti_state_{state}, scoped to the launch path and set SameSite=None; Secure; Partitioned so that it survives inside the iframe.",
+        query: [
+          { name: "iss", type: "string", required: true, note: "must be LTI_ISSUER" },
+          { name: "login_hint", type: "string", required: true, note: "passed back to Mindtickle as is" },
+          { name: "target_link_uri", type: "string", required: true },
+          { name: "lti_message_hint", type: "string", note: "passed back to Mindtickle as is" },
+          { name: "client_id", type: "string", note: "must be LTI_CLIENT_ID when given" },
+          { name: "lti_deployment_id", type: "string" },
+        ],
+        returns: "302 to Mindtickle's authorization endpoint",
+        errors: [
+          { status: 400, error: "missing_parameter", when: "iss, login_hint or target_link_uri is missing" },
+          { status: 400, error: "unknown_issuer", when: "iss is not LTI_ISSUER" },
+          { status: 400, error: "unknown_client", when: "client_id is given and is not LTI_CLIENT_ID" },
+          { status: 503, error: "not_configured", when: "the platform is not configured" },
+        ],
+      },
+      {
+        method: "POST",
+        path: "/api/lti/login",
+        summary: "Starts an LTI 1.3 launch, as GET /api/lti/login does, from a form post.",
+        access: "public",
+        token: true,
+        notes: "The same parameters as GET /api/lti/login, and the same answers. Audited, with login_hint as the target.",
+        body: {
+          kind: "form",
+          fields: [
+            { name: "iss", type: "string", required: true, note: "must be LTI_ISSUER" },
+            { name: "login_hint", type: "string", required: true },
+            { name: "target_link_uri", type: "string", required: true },
+            { name: "lti_message_hint", type: "string" },
+            { name: "client_id", type: "string", note: "must be LTI_CLIENT_ID when given" },
+            { name: "lti_deployment_id", type: "string" },
+          ],
+        },
+        returns: "302 to Mindtickle's authorization endpoint",
+        errors: [
+          { status: 400, error: "invalid_body", when: "the body is not a form" },
+          { status: 400, error: "missing_parameter", when: "iss, login_hint or target_link_uri is missing" },
+          { status: 400, error: "unknown_issuer", when: "iss is not LTI_ISSUER" },
+          { status: 400, error: "unknown_client", when: "client_id is given and is not LTI_CLIENT_ID" },
+          { status: 503, error: "not_configured", when: "the platform is not configured" },
+        ],
+      },
+      {
+        method: "POST",
+        path: "/api/lti/launch",
+        summary: "Receives an LTI 1.3 launch and shows whether its id_token checks out, and every claim in it.",
+        access: "public",
+        token: true,
+        notes:
+          "Mindtickle's form post, the end of GET /api/lti/login. Checks the RS256 signature against LTI_JWKS_URL, the issuer, the audience (and azp), the lifetime with a minute's leeway, the nonce against the state's cookie, the deployment (against LTI_DEPLOYMENT_IDS when it is set), the LTI version and the message type. Answers an HTML page, which only Mindtickle and the app may frame, listing each check and the claims; when the signature fails, the claims shown are unverified. The checks and claims are also logged and audited, with the email (or sub) as the target; the token itself is never stored. The state's cookie is cleared, so a nonce serves one launch. Nobody is signed in.",
+        body: {
+          kind: "form",
+          fields: [
+            { name: "id_token", type: "string", note: "the signed launch; required unless error is given" },
+            { name: "state", type: "string", note: "from GET /api/lti/login" },
+            { name: "error", type: "string", note: "Mindtickle's reason for not granting the launch, such as login_required" },
+            { name: "error_description", type: "string" },
+          ],
+        },
+        returns: "HTML: 200 when every check passes, 400 when any fails or Mindtickle sent an error",
+        errors: [
+          { status: 400, error: "missing_id_token", when: "neither id_token nor error was sent" },
+          { status: 503, error: "not_configured", when: "the platform is not configured" },
+        ],
+      },
+    ],
+  },
+  {
+    id: "scorm-probe",
+    title: "SCORM probe",
+    intro:
+      "A temporary probe (docs/probes.md), to be deleted once it has shown what a SCORM package inside Mindtickle can learn. The package frames the public page /scorm-probe, which reports what the shell read from Mindtickle's SCORM API, the shell's origin, and which cookies and sessions survive in the frame. Nobody is signed in.",
+    endpoints: [
+      {
+        method: "GET",
+        path: "/api/scorm-probe/package",
+        summary: "Downloads the SCORM 1.2 package to upload to Mindtickle.",
+        access: "public",
+        token: true,
+        notes:
+          "A zip of imsmanifest.xml and an index.html shell that frames {AUTH_URL}/scorm-probe and posts to it, and accepts messages from, that origin only. The shell finds the SCORM API (1.2's API, else 2004's API_1484_11), initializes it, and posts the learner's id, name and lesson status to the page when it says it is ready; when the page asks, it sets the lesson completed and commits. It holds nothing but the app's address.",
+        returns: "application/zip, as an attachment named scorm-probe-{host}.zip",
+      },
+      {
+        method: "GET",
+        path: "/api/scorm-probe/cookies",
+        summary: "Says which of the probe's three cookies arrived, and sets all three again.",
+        access: "public",
+        token: true,
+        notes:
+          "Called twice by /scorm-probe, so the second answer is what survives in the frame. The cookies are scorm_probe_lax (SameSite=Lax), scorm_probe_none (SameSite=None) and scorm_probe_partitioned (SameSite=None; Partitioned), each Secure and HttpOnly, scoped to this path, for ten minutes.",
+        returns: "{ arrived: { lax: boolean, none: boolean, partitioned: boolean } }",
+      },
+    ],
+  },
+  {
     id: "internal",
     title: "Internal",
     endpoints: [

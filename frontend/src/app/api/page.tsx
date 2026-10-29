@@ -187,7 +187,9 @@ function EndpointCard({ e }: { e: Endpoint }) {
             title={
               e.body.kind === "multipart"
                 ? "Form data (multipart)"
-                : "JSON body"
+                : e.body.kind === "form"
+                  ? "Form data (urlencoded)"
+                  : "JSON body"
             }
             fields={e.body.fields}
           />
