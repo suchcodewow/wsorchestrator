@@ -24,7 +24,7 @@ export async function SiteHeader({
   const environment = deploymentEnvironment();
 
   return (
-    <header className="sticky top-0 z-40 border-b border-border/70 bg-background/70 backdrop-blur-xl">
+    <header className="sticky top-0 z-40 border-b border-border/70 bg-background/70 backdrop-blur-xl framed:hidden">
       <div className={cn("mx-auto flex h-14 items-center gap-4 px-6", width)}>
         <Link
           href="/"

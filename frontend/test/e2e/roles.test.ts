@@ -472,8 +472,6 @@ const PAGES: Record<string, PageCase> = {
   "/me/api-tokens": { path: () => "/me/api-tokens", expect: () => 200 },
   "/inbox": { path: () => "/inbox", expect: () => 200 },
   "/labs": { path: () => "/labs", expect: () => 200, signedOut: 200 },
-  "/mindtickle-test": { path: () => "/mindtickle-test", expect: () => 200, signedOut: 200 },
-  "/scorm-probe": { path: () => "/scorm-probe", expect: () => 200, signedOut: 200 },
   "/frame-signin": { path: () => "/frame-signin", expect: () => 200, signedOut: 200 },
   // Any signed-in account: someone outside the current cohort is told it is not theirs.
   "/intake": { path: () => "/intake", expect: () => 200 },
@@ -854,18 +852,11 @@ const ROUTES: RouteCase[] = [
   { method: "POST", path: `/api/component-sets/${MISSING}/approve`, allowed: canPublishComponents },
   { method: "POST", path: "/api/components/validate", allowed: canContributeComponents, body: () => ({}) },
 
-  // Event guides
-  // LTI launch: anyone gets past the gate, and the e2e server has no platform configured.
-  { method: "GET", path: "/api/lti/login", allowed: "public", unconfigured: true },
-  { method: "POST", path: "/api/lti/login", allowed: "public", body: () => ({}), unconfigured: true },
-  { method: "POST", path: "/api/lti/launch", allowed: "public", body: () => ({}), unconfigured: true },
-  // SCORM probe: public, and changes nothing.
-  { method: "GET", path: "/api/scorm-probe/package", allowed: "public" },
-  { method: "GET", path: "/api/scorm-probe/cookies", allowed: "public" },
   // Frame sign-in: the popup's ticket, and the claim a framed page trades it in with.
   { method: "POST", path: "/api/frame-session/ticket", allowed: true, sessionOnly: true },
   { method: "POST", path: "/api/frame-session/claim", allowed: "public", body: () => ({}) },
 
+  // Event guides
   { method: "GET", path: "/api/lab-guides", allowed: "public" },
   { method: "GET", path: `/api/lab-guides/${MISSING}`, allowed: "public" },
   { method: "POST", path: "/api/lab-guides", allowed: canManageLabGuides, body: () => ({}) },

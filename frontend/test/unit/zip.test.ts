@@ -1,6 +1,5 @@
 /**
- * The hand-rolled ZIP writer the spreadsheet tests build their .xlsx files with,
- * and the SCORM probe its package.
+ * The hand-rolled ZIP writer the spreadsheet tests build their .xlsx files with.
  *
  * It is ~90 lines of byte offsets written without a library, and the only
  * symptom of an off-by-one is an archive that some unzip tools open and others
@@ -14,7 +13,7 @@ import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { crc32, inflateRawSync } from "node:zlib";
 
-import { zip, type ZipEntry } from "@/lib/zip";
+import { zip, type ZipEntry } from "../support/zip";
 
 type Read = {
   path: string;

@@ -158,6 +158,24 @@ rolled, is skipped rather than run late. Each job runs the same code as its
 Sync Now button, so it is a dry run while its sync is not live and follows
 the test group while it is on.
 
+### Inside a Mindtickle frame
+
+Mindtickle shows the app by framing any of its URLs in an ordinary
+`<iframe>`; there is no package or LTI registration. A framed page shows
+only its content, with no header or sidebar, and is always light: the inline
+theme script marks `<html>` with `data-framed` before the first paint
+(`lib/framed.ts`, the `framed:` variant in `globals.css`). The user's
+light, dark or system preference is untouched, and so is the `theme` cookie
+their own tabs paint from.
+
+The session cookie is `SameSite=Lax`, so a framed page arrives signed out,
+and Google will not be framed. Its sign-in button opens `/frame-signin` in a
+popup instead, which hands the frame a one-minute ticket for a session of its
+own in a `Partitioned` cookie. How that session is kept, and why the framing
+site cannot make changes with it, is in `lib/frame-cookie.ts`. It works in
+Chrome and Firefox. A browser that keeps no cookies for a frame on another
+site gets a link to open the app in its own tab.
+
 ### Mimir Studio
 
 Mimir Settings → Map takes a new slide deck and Mimir Settings → Mimir

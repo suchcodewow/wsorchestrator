@@ -11,9 +11,9 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FRAME_SIGNIN_PATH, FRAME_TICKET_MESSAGE } from "@/lib/frame-cookie";
+import { isFramed } from "@/lib/framed";
 
 const subscribeNothing = () => () => {};
-const isFramed = () => window.parent !== window;
 
 type State = "idle" | "waiting" | "claiming";
 
