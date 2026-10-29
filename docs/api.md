@@ -96,6 +96,7 @@ escalate itself:
 | `POST /api/settings/domains`, `PATCH`/`DELETE /api/settings/domains/[id]` | Who can sign in at all |
 | `GET /api/cohorts/slack/install`, `GET /api/evals/google-meetings/connect`, `GET /api/evals/google-meetings/zoom/connect` | Admin Settings → External Connectors: each hands the app a standing token for an outside account and ends in a browser; platform administrators only |
 | `/api/tokens/**` | Minting tokens (a token must not be able to mint its own replacement) |
+| `POST /api/frame-session/ticket` | Signing in a page framed by another site: the ticket stands for the session that asked for it |
 | `/api/me/impersonation` | Viewing the app as an employee, which changes what a browser session is; a token has no session to change |
 | `GET /api/evals/google-meetings/connect` | Connecting the Google account that adds the cohort to the Revenue Enablement calendar's meetings: a browser sign-in, and a standing token for the app |
 | `GET /api/evals/google-meetings/zoom/connect` | Connecting the Zoom user whose meetings' attendance the sync reads: a browser sign-in, and a standing token for the app |

@@ -474,6 +474,7 @@ const PAGES: Record<string, PageCase> = {
   "/labs": { path: () => "/labs", expect: () => 200, signedOut: 200 },
   "/mindtickle-test": { path: () => "/mindtickle-test", expect: () => 200, signedOut: 200 },
   "/scorm-probe": { path: () => "/scorm-probe", expect: () => 200, signedOut: 200 },
+  "/frame-signin": { path: () => "/frame-signin", expect: () => 200, signedOut: 200 },
   // Any signed-in account: someone outside the current cohort is told it is not theirs.
   "/intake": { path: () => "/intake", expect: () => 200 },
   "/intake/registration": { path: () => "/intake/registration", expect: () => 200 },
@@ -861,6 +862,9 @@ const ROUTES: RouteCase[] = [
   // SCORM probe: public, and changes nothing.
   { method: "GET", path: "/api/scorm-probe/package", allowed: "public" },
   { method: "GET", path: "/api/scorm-probe/cookies", allowed: "public" },
+  // Frame sign-in: the popup's ticket, and the claim a framed page trades it in with.
+  { method: "POST", path: "/api/frame-session/ticket", allowed: true, sessionOnly: true },
+  { method: "POST", path: "/api/frame-session/claim", allowed: "public", body: () => ({}) },
 
   { method: "GET", path: "/api/lab-guides", allowed: "public" },
   { method: "GET", path: `/api/lab-guides/${MISSING}`, allowed: "public" },

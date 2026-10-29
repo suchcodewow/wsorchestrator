@@ -206,6 +206,35 @@ export const ACCOUNT_GROUPS: EndpointGroup[] = [
         returns: "{ impersonating: null, impersonator: null }",
       },
       {
+        method: "POST",
+        path: "/api/frame-session/ticket",
+        summary: "Issues a one-minute ticket that signs in a page framed by another site, such as a Mindtickle course.",
+        access: "signedIn",
+        token: false,
+        notes:
+          "Session only: the sign-in popup at /frame-signin asks for it and posts it to the framed page that opened it. The ticket works once, within 60 seconds, and stands for you to POST /api/frame-session/claim. Refused with 403 `impersonating` while viewing the app as someone else.",
+        returns: "{ token: string, expiresIn: 60 }",
+      },
+      {
+        method: "POST",
+        path: "/api/frame-session/claim",
+        summary: "Trades a frame sign-in ticket for a session of the framed page's own.",
+        access: "public",
+        token: true,
+        notes:
+          "Starts a new 30-day session for the ticket's user and sets it in a `__Host-frame-session` cookie that is `SameSite=None; Partitioned`, so the browser sends it only to this app framed under the same site. The app reads that cookie as the session on GET and HEAD, and on other methods only when they come from its own pages. The ticket is used up even if the response is lost.",
+        body: {
+          kind: "json",
+          fields: [{ name: "token", type: "string", required: true, note: "the ticket from POST /api/frame-session/ticket" }],
+        },
+        returns: "{ email: string | null, name: string | null }",
+        errors: [
+          { status: 400, error: "invalid_body", when: "token is missing or longer than 200 characters" },
+          { status: 403, error: "cross_site", when: "a browser sent it from another site's page" },
+          { status: 410, error: "expired", when: "the ticket is unknown, already used, or past its 60 seconds" },
+        ],
+      },
+      {
         method: "GET",
         path: "/api/tokens",
         summary: "Lists your personal access tokens, including expired and revoked ones.",
