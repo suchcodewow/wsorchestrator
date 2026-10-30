@@ -651,7 +651,7 @@ function PrFormStep({
           <span className="text-xs font-medium text-muted-foreground">
             {branch} → main · {commits.length} commit{commits.length === 1 ? "" : "s"}, 1 file changed
           </span>
-          <HistoryGraph branch={branch} commits={commits.length} pushed={pushed} merged={false} requested />
+          <HistoryGraph branch={branch} commits={commits.length} pushed={pushed} merged={false} requested production />
         </div>
       }
     >
