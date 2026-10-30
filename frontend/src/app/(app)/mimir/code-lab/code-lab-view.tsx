@@ -13,6 +13,7 @@
 import "./code-lab.css";
 import { useDeferredValue, useEffect, useRef, useState } from "react";
 import {
+  ArrowRight,
   Check,
   CloudUpload,
   Code,
@@ -22,10 +23,10 @@ import {
   GitCommitHorizontal,
   GitMerge,
   GitPullRequest,
-  Hand,
   Loader2,
   RotateCcw,
   Ticket,
+  Timer,
   type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -86,7 +87,10 @@ export function CodeLabView({ author }: { author: string }) {
 
   return (
     <div className="cl space-y-5">
-      <Welcome />
+      <p className="-mb-2 flex items-center gap-1.5 text-sm text-muted-foreground">
+        <Timer className="size-4" />
+        5–7 minutes
+      </p>
       <TicketCard />
       {SHOW_STEPPER && <Stepper stage={stage} />}
 
@@ -193,34 +197,35 @@ export function CodeLabView({ author }: { author: string }) {
   );
 }
 
-function Welcome() {
-  return (
-    <div className="flex gap-3 rounded-2xl border border-brand-border bg-brand-subtle px-5 py-4 text-sm">
-      <Hand className="mt-0.5 size-4 shrink-0 text-brand" />
-      <p className="max-w-3xl">
-        <span className="font-medium">Hey there!</span> Welcome to your first day as a software developer at the Greenleaf Shop. We’re super busy here
-        working on our Spring Sale. Jump right in and help Jordan. He submitted the ticket below asking for updates to our website.
-      </p>
-    </div>
-  );
-}
-
+/** The welcome, attached to the ticket it introduces the way a step's explanation sits on top of its step. */
 function TicketCard() {
   return (
-    <div className="space-y-3 rounded-2xl border bg-card px-5 py-4 shadow-sm">
-      <div className="flex flex-wrap items-center gap-2 text-sm">
-        <Ticket className="size-4 text-brand" />
-        <span className="font-mono text-xs text-muted-foreground">{TICKET.id}</span>
-        <span className="font-medium">{TICKET.title}</span>
-        <span className="text-xs text-muted-foreground">· from {TICKET.from}</span>
+    <section className="divide-y overflow-hidden rounded-2xl border bg-card shadow-sm">
+      <div className="flex gap-3 bg-brand-subtle/50 px-5 py-4 text-sm">
+        {/* Lucide has no waving hand, and its open palm reads as "stop". */}
+        <span className="text-base leading-5" aria-hidden>
+          👋
+        </span>
+        <p className="max-w-3xl">
+          <span className="font-medium">Hey there!</span> Welcome to your first day as a software developer at the Greenleaf Shop. We’re super busy here
+          working on our Spring Sale. Jump right in and help Jordan. He submitted the ticket below asking for updates to our website.
+        </p>
       </div>
-      <p className="text-sm text-muted-foreground">{TICKET.body}</p>
-      <ul className="list-disc space-y-0.5 pl-5 text-sm marker:text-muted-foreground">
-        {TASKS.map((t) => (
-          <li key={t.id}>{t.label}</li>
-        ))}
-      </ul>
-    </div>
+      <div className="space-y-3 px-5 py-4">
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          <Ticket className="size-4 text-brand" />
+          <span className="font-mono text-xs text-muted-foreground">{TICKET.id}</span>
+          <span className="font-medium">{TICKET.title}</span>
+          <span className="text-xs text-muted-foreground">· from {TICKET.from}</span>
+        </div>
+        <p className="text-sm text-muted-foreground">{TICKET.body}</p>
+        <ul className="list-disc space-y-0.5 pl-5 text-sm marker:text-muted-foreground">
+          {TASKS.map((t) => (
+            <li key={t.id}>{t.label}</li>
+          ))}
+        </ul>
+      </div>
+    </section>
   );
 }
 
@@ -384,6 +389,7 @@ function EditStep({
   const highlight = TASKS.find((t) => t.id === pointing)?.locate(code) ?? null;
   const { added, removed } = diffStats(lineDiff(committed, code));
   const changed = added + removed > 0;
+  const allDone = TASKS.every((t) => t.done(code));
 
   return (
     <StepCard
@@ -487,27 +493,26 @@ function EditStep({
           )}
         </div>
       </div>
-      <div className="flex flex-wrap items-center gap-3 px-5 py-4">
-        <span className="text-sm text-muted-foreground tnum">
-          {changed ? `${added} added, ${removed} removed since your last commit` : "No changes since your last commit"}
-        </span>
-        <div className="ml-auto flex flex-wrap gap-2">
-          {changed && (
-            <Button variant="ghost" onClick={onReset}>
-              <RotateCcw />
-              Undo all changes
-            </Button>
-          )}
-          {next && !changed && (
-            <Button variant="outline" onClick={() => onNext(next)}>
+      <div className="flex flex-wrap items-center gap-2 px-5 py-4">
+        {changed && (
+          <Button variant="ghost" onClick={onReset}>
+            <RotateCcw />
+            Undo all changes
+          </Button>
+        )}
+        <div className="ml-auto">
+          {/* Once everything is committed, carry on from there rather than to an empty commit. */}
+          {next && !changed ? (
+            <Button variant="brand" onClick={() => onNext(next)}>
               {next === "push" ? <CloudUpload /> : <GitPullRequest />}
               {next === "push" ? "Continue to push" : "Continue to pull request"}
             </Button>
+          ) : (
+            <Button variant="brand" disabled={!changed || !allDone} onClick={onReview}>
+              Continue
+              <ArrowRight />
+            </Button>
           )}
-          <Button variant="brand" disabled={!changed} onClick={onReview}>
-            <GitCommitHorizontal />
-            Review and commit
-          </Button>
         </div>
       </div>
     </StepCard>
@@ -560,8 +565,8 @@ function CommitStep({ before, after, onBack, onCommit }: { before: string; after
   const trimmed = message.trim();
   return (
     <StepCard
-      title="Review and commit"
-      why="A commit is a saved snapshot of your change with a note saying why you made it. Red lines are what you took out, green lines what you put in. Check them before you save, the way a reviewer will."
+      title="Commit your change"
+      why="Committing the change saves your changes as a snapshot. Below, you can see how that commit snapshot looks. Lines of code you changed show as the old line removed (minus sign) and the new line added (plus sign). A commit message is just a note indicating why you made the change."
     >
       <div className="px-5 py-4">
         <DiffView before={before} after={after} file={FILE} />
@@ -575,7 +580,7 @@ function CommitStep({ before, after, onBack, onCommit }: { before: string; after
       >
         <label className="grid min-w-64 grow gap-1.5 text-sm">
           <span className="font-medium">Commit message</span>
-          <Input value={message} onChange={(e) => setMessage(e.target.value)} placeholder={`${TICKET.id}: Update the spring sale banner to 20% off`} autoFocus />
+          <Input value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Update the spring sale banner to 20% off" autoFocus />
         </label>
         <div className="flex gap-2">
           <Button type="button" variant="ghost" onClick={onBack}>
