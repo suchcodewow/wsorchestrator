@@ -95,7 +95,7 @@ const cookies = {} as Record<Persona, string>;
 const tokens = {} as Record<Persona, string>;
 const ownRun = {} as Record<Persona, string>;
 let aliceRun: string;
-let historyId: string;
+let alumnusId: string;
 let assessmentId: string;
 let bootcampId: string;
 let mimirItemId: string;
@@ -106,7 +106,7 @@ before(async () => {
 
   const alice = await scope.createUser("alice", PERSONAS.operator);
   aliceRun = await createRun(alice.id, "Alice's workshop");
-  historyId = await scope.createHistory("history");
+  alumnusId = await scope.createAlumnus(alice.id, "alumnus");
   assessmentId = await scope.createAssessment(alice.id, "e2e assessment");
   mimirItemId = await scope.createMimirItem("mimir");
   // The scoring pages need an active bootcamp.
@@ -257,11 +257,6 @@ const PAGES: Record<string, PageCase> = {
   },
   "/logistics/dietary?searched": { path: () => "/logistics/dietary?stage=intermediate&q=x&criticalOther.sort=name&other.sort=email&unregistered.sort=email", expect: gated(canUseTraining) },
   "/cohorts/previous?open=<a day>": { path: () => "/cohorts/previous?open=2026-09-14", expect: gated(canUseTraining) },
-  "/cohorts/previous/<a record>": {
-    path: () => `/cohorts/previous/${historyId}`,
-    expect: gated((a) => canUseTraining(a) && canUseEvals(a)),
-  },
-  "/cohorts/previous/<unknown>": { path: () => `/cohorts/previous/${MISSING}`, expect: () => 404 },
   "/cohort-settings": {
     path: () => "/cohort-settings",
     expect: (a) => (canManageTrainingSettings(a) ? { to: visibleCohortSettingsTabs(a)[0]!.href } : 404),
@@ -345,7 +340,7 @@ const PAGES: Record<string, PageCase> = {
   },
   // No persona is in the employee list, so the record is in nobody's org; only Assessments sees it.
   "/reporting/bootcamp/<a record>": {
-    path: () => `/reporting/bootcamp/${historyId}`,
+    path: () => `/reporting/bootcamp/${alumnusId}`,
     expect: gated(canUseEvals),
   },
   "/reporting/bootcamp/<unknown>": {
@@ -763,8 +758,6 @@ const ROUTES: RouteCase[] = [
   { method: "PATCH", path: `/api/video-feedback/${MISSING}`, allowed: canManageEvalsSettings, body: () => ({ status: "ignored" }) },
 
   // eVals
-  { method: "GET", path: "/api/evals/bootcamp-history", allowed: canUseEvals },
-  { method: "GET", path: `/api/evals/bootcamp-history/${MISSING}`, allowed: canUseEvals },
 
   // Reporting → Bootcamp: anyone reads their own org; only an Assessments Administrator releases or corrects
   { method: "GET", path: "/api/reporting/bootcamp", allowed: canSeeBootcampRecords },
@@ -772,7 +765,6 @@ const ROUTES: RouteCase[] = [
   { method: "GET", path: `/api/reporting/bootcamp/people/${MISSING}`, allowed: canSeeBootcampRecords },
   { method: "POST", path: "/api/reporting/bootcamp/release", allowed: canManageBootcampRecords, body: () => ({}) },
   { method: "PATCH", path: `/api/reporting/bootcamp/submissions/${MISSING}`, allowed: canManageBootcampRecords, body: () => ({}) },
-  { method: "PATCH", path: `/api/reporting/bootcamp/history/${MISSING}`, allowed: canManageBootcampRecords, body: () => ({ email: "x" }) },
   { method: "GET", path: "/api/evals/canary-wire", allowed: canSeeCanaryWire },
   // No Mindtickle key on the e2e server: starting is refused as not_configured, and a step finds no pull.
   { method: "GET", path: "/api/evals/canary-wire/history", allowed: canSeeCanaryWire },

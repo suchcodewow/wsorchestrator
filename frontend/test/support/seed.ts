@@ -4,7 +4,7 @@
  */
 
 import { randomBytes } from "node:crypto";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { db, pool } from "@/db";
 import {
   bootcampJudges,
@@ -12,6 +12,7 @@ import {
   employees,
   evalsAssessmentCriteria,
   evalsAssessments,
+  evalsSubmissions,
   mimirItems,
   sessions,
   users,
@@ -95,18 +96,72 @@ export function testScope(name: string) {
   }
 
   /**
-   * Someone with a bootcamp history whom HiBob does not send: an inactive
-   * employee row holding it, as the history kept for someone who left. The id
-   * and email carry the scope, so cleanup finds it; returns the id.
+   * `email` attended the `stage` class held on `day`, scoring `score`: a
+   * submission at a complete bootcamp of that day whose class is released,
+   * which is all attendance is. The bootcamp and assessment are made by
+   * `userId`, so cleanup finds them; calling it again for the same class
+   * sets the score. Returns the submission's id.
    */
-  async function createHistory(key: string): Promise<string> {
+  async function createAttendance(
+    userId: string,
+    email: string,
+    stage: "bootcamp" | "intermediate",
+    day: string,
+    score = 3,
+  ): Promise<string> {
+    const released =
+      stage === "bootcamp"
+        ? { btcReleasedAt: new Date(), btcReleasedBy: userId }
+        : { intReleasedAt: new Date(), intReleasedBy: userId };
+    let [bootcamp] = await db
+      .select({ id: bootcamps.id })
+      .from(bootcamps)
+      .where(and(eq(bootcamps.createdBy, userId), eq(bootcamps.startDate, day), eq(bootcamps.status, "complete")));
+    if (bootcamp) await db.update(bootcamps).set(released).where(eq(bootcamps.id, bootcamp.id));
+    else
+      [bootcamp] = await db
+        .insert(bootcamps)
+        .values({ startDate: day, btcDays: 4, intDays: 3, status: "complete", createdBy: userId, ...released })
+        .returning({ id: bootcamps.id });
+    const name = `${stage} attendance`;
+    let [assessment] = await db
+      .select({ id: evalsAssessments.id })
+      .from(evalsAssessments)
+      .where(and(eq(evalsAssessments.createdBy, userId), eq(evalsAssessments.name, name)));
+    if (!assessment)
+      [assessment] = await db
+        .insert(evalsAssessments)
+        .values({ name, stage, audience: "both", active: false, createdBy: userId })
+        .returning({ id: evalsAssessments.id });
+    const [row] = await db
+      .insert(evalsSubmissions)
+      .values({
+        bootcampId: bootcamp!.id,
+        assessmentId: assessment!.id,
+        attendeeEmail: email.toLowerCase(),
+        assessmentName: name,
+        averageScore: score,
+        ownerId: userId,
+      })
+      .onConflictDoUpdate({
+        target: [evalsSubmissions.bootcampId, evalsSubmissions.assessmentId, evalsSubmissions.attendeeEmail],
+        set: { averageScore: score },
+      })
+      .returning({ id: evalsSubmissions.id });
+    return row!.id;
+  }
+
+  /**
+   * Someone who attended a past bootcamp but whom HiBob does not send: an
+   * inactive employee row, as kept for someone who left, with a BTC class on
+   * 2026-03-02 made by `userId`. The id and email carry the scope, so cleanup
+   * finds it; returns the id.
+   */
+  async function createAlumnus(userId: string, key: string): Promise<string> {
     const id = `${TEST_PREFIX}${scope}${key}`;
     const email = `${id}@${TEST_EMAIL_DOMAIN}`.toLowerCase();
-    const history = { btcDate: "2026-03-02", btcScore: 3.3, btcIndividualScores: { "Score-Exams": 4 } };
-    await db
-      .insert(employees)
-      .values({ id, email, fullName: "", raw: {}, active: false, ...history })
-      .onConflictDoUpdate({ target: employees.id, set: history });
+    await db.insert(employees).values({ id, email, fullName: "", raw: {}, active: false }).onConflictDoNothing();
+    await createAttendance(userId, email, "bootcamp", "2026-03-02", 3.3);
     return id;
   }
 
@@ -138,7 +193,8 @@ export function testScope(name: string) {
   return {
     createUser,
     createEmployee,
-    createHistory,
+    createAttendance,
+    createAlumnus,
     createAssessment,
     activeBootcamp,
     createMimirItem,

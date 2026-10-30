@@ -13,7 +13,6 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 
-import { EXEMPT_DATE } from "@/db/schema";
 import { MODULE_URL_TEMPLATE, SERIES_LINKS } from "@/lib/canary-wire/config";
 import { accountability } from "@/lib/canary-wire/exemptions";
 import { managersOf, onlyOrg, orgOf, withHiBob, type Person } from "@/lib/canary-wire/people";
@@ -72,14 +71,18 @@ function pull(): CanaryWireSnapshot {
   };
 }
 
-/** Bootcamp history and HiBob as `accountability` reads them. */
+/** In place of a BTC date: their track is pinned Exempt. */
+const EXEMPT = "exempt";
+
+/** Attended BTCs, exempt tracks and HiBob as `accountability` reads them. */
 const known = (btc: [string, string][], starts: [string, string][] = [], historyBegins: string | null = null) => ({
-  btcDates: new Map(btc),
+  btcDates: new Map(btc.filter(([, day]) => day !== EXEMPT)),
+  exempt: new Set(btc.filter(([, day]) => day === EXEMPT).map(([email]) => email)),
   startDates: new Map(starts),
   historyBegins,
 });
 
-const everyoneAccountable = accountability(known(pull().learners.map((l) => [l.email, EXEMPT_DATE])));
+const everyoneAccountable = accountability(known(pull().learners.map((l) => [l.email, EXEMPT])));
 
 describe("months", () => {
   test("a first full month is the next one, unless the day is the 1st", () => {
@@ -117,7 +120,7 @@ describe("accountability", () => {
     known(
       [
         ["aug@harness.io", "2026-08-12"],
-        ["veteran@harness.io", EXEMPT_DATE],
+        ["veteran@harness.io", EXEMPT],
         ["first@harness.io", "2025-04-01"],
       ],
       [
@@ -181,7 +184,7 @@ describe("completion by learner", () => {
     const snap = pull();
     // Give Ada both AE modules done; Bo keeps one of two.
     snap.progress["ada@harness.io"]!["m-obj"] = { state: "Completed", on: "2026-09-11", at: "2026-09-11T10:00:00Z" };
-    const view = monthView(snap, "September 2026", accountability(known(snap.learners.filter((l) => l.email !== "cy@harness.io").map((l) => [l.email, EXEMPT_DATE]))));
+    const view = monthView(snap, "September 2026", accountability(known(snap.learners.filter((l) => l.email !== "cy@harness.io").map((l) => [l.email, EXEMPT]))));
     const ae = view.roles.find((r) => r.role === AE)!;
     // Cy is pre-bootcamp: out of the rate, counted as exempt.
     assert.deepEqual([ae.learners, ae.finished, ae.pct, ae.exempt], [2, 1, 50, 1]);
@@ -285,7 +288,7 @@ describe("history", () => {
   });
 
   test("a month someone didn't count yet is marked, not a 0%", () => {
-    const standing = accountability(known(pull().learners.filter((l) => l.email !== "bo@harness.io").map((l) => [l.email, EXEMPT_DATE])));
+    const standing = accountability(known(pull().learners.filter((l) => l.email !== "bo@harness.io").map((l) => [l.email, EXEMPT])));
     const h = historyView(twoMonths(), ["September 2026", "October 2026"], standing);
     const bo = h.teams.flatMap((t) => t.directs).find((d) => d.email === "bo@harness.io")!;
     assert.deepEqual(bo.marks.map((m) => [m.pct, m.exempt]), [[null, true], [null, true]]);
@@ -387,7 +390,7 @@ describe("monthView", () => {
 
   test("pre-bootcamp: unstarted work leaves the lineup, finished work stays uncounted", () => {
     // Bo has no bootcamp on record; everyone else is exempt from it.
-    const pre = accountability(known(pull().learners.filter((l) => l.email !== "bo@harness.io").map((l) => [l.email, EXEMPT_DATE])));
+    const pre = accountability(known(pull().learners.filter((l) => l.email !== "bo@harness.io").map((l) => [l.email, EXEMPT])));
     const v = monthView(pull(), "September 2026", pre);
     const bo = v.teams.flatMap((t) => t.directs).find((d) => d.email === "bo@harness.io")!;
     assert.deepEqual([bo.exempt, bo.assigned, bo.pct], [true, 0, null]);

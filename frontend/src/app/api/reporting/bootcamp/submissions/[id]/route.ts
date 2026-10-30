@@ -1,4 +1,4 @@
-/** An Assessments Administrator's correction to one assessment of someone: its scores, comments and feedback. */
+/** An Assessments Administrator's correction to one assessment of someone: its scores, comments and feedback, or the score itself for one with no criteria. */
 
 import { NextResponse } from "next/server";
 import { z } from "zod";

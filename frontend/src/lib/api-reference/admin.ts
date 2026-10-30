@@ -1,5 +1,5 @@
-import { FOOD_ORDER_LIST, RECORDING_LIST, GUEST_JUDGE_LIST, INTAKE_RESPONSE_LIST, JUDGE_PROSPECT_LIST, ASSESSMENT_ATTENDEE_LIST, ASSESSMENT_LIST, AUDIT_LIST, BOOTCAMP_COHORT_LIST, BOOTCAMP_HISTORY_LIST, BOOTCAMP_LIST, BOOTCAMP_RECORD_LIST, CURRENT_COHORT_LIST, DOMAIN_LIST, EMPLOYEE_LIST, FRAME_DOMAIN_LIST, HIBOB_SYNC_LIST, HISTORY_STATUSES, JUDGE_LIST, ORGANIZATION_LIST, PREVIOUS_SESSION_LIST, SESSION_COMMENT_LIST, SESSION_TYPE_LIST, MEETING_SELECTION_LIST, MEETING_SYNC_CHANGE_LIST, MEETING_SYNC_LIST, SLACK_CONTACT_LIST, SLACK_SYNC_CHANGE_LIST, SLACK_SYNC_LIST, CHANNEL_CONTACT_LIST, SURVEY_RESPONSE_LIST, SURVEY_RESULT_LIST, TITLE_LIST, USER_LIST, FACILITY_LIST, VIDEO_FEEDBACK_LIST, VIDEO_FEEDBACK_SUMMARY_LIST } from "@/lib/list-specs";
-import { BOOTCAMP_LIMITS, CHECKLIST_LIMITS, EVALS_ASSESSMENT_LIMITS, FACILITY_LIMITS, FOOD_ORDER_LIMITS, INTAKE_LIMITS, MEETING_SELECTION_LIMITS, RECORDING_LIMITS, SCHEDULE_LIMITS, SURVEY_LIMITS, VIDEO_FEEDBACK_LIMITS } from "@/db/schema";
+import { FOOD_ORDER_LIST, RECORDING_LIST, GUEST_JUDGE_LIST, INTAKE_RESPONSE_LIST, JUDGE_PROSPECT_LIST, ASSESSMENT_ATTENDEE_LIST, ASSESSMENT_LIST, AUDIT_LIST, BOOTCAMP_COHORT_LIST, BOOTCAMP_LIST, BOOTCAMP_RECORD_LIST, CURRENT_COHORT_LIST, DOMAIN_LIST, EMPLOYEE_LIST, FRAME_DOMAIN_LIST, HIBOB_SYNC_LIST, HISTORY_STATUSES, JUDGE_LIST, ORGANIZATION_LIST, PREVIOUS_SESSION_LIST, SESSION_COMMENT_LIST, SESSION_TYPE_LIST, MEETING_SELECTION_LIST, MEETING_SYNC_CHANGE_LIST, MEETING_SYNC_LIST, SLACK_CONTACT_LIST, SLACK_SYNC_CHANGE_LIST, SLACK_SYNC_LIST, CHANNEL_CONTACT_LIST, SURVEY_RESPONSE_LIST, SURVEY_RESULT_LIST, TITLE_LIST, USER_LIST, FACILITY_LIST, VIDEO_FEEDBACK_LIST, VIDEO_FEEDBACK_SUMMARY_LIST } from "@/lib/list-specs";
+import { BOOTCAMP_LIMITS, BOOTCAMP_SCORE, CHECKLIST_LIMITS, EVALS_ASSESSMENT_LIMITS, FACILITY_LIMITS, FOOD_ORDER_LIMITS, INTAKE_LIMITS, MEETING_SELECTION_LIMITS, RECORDING_LIMITS, SCHEDULE_LIMITS, SURVEY_LIMITS, VIDEO_FEEDBACK_LIMITS } from "@/db/schema";
 import { PAGE_SIZE } from "@/lib/paging";
 import { RECORDING_RETENTION_DAYS, UPLOAD_STALLED_MS, UPLOAD_URL_BATCH } from "@/lib/recording/video";
 import { CHECKLIST_ITEM_ROW } from "./account";
@@ -366,13 +366,13 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "trainingViewer",
         token: true,
         notes:
-          "A bootcamp candidate is anyone under the Organization Leader, on the sales, engineer or deferred track or on none, with no BTC date in their bootcamp history; an intermediate candidate has a BTC date and no INT date. Either must also pass the date cutoffs in GET /api/evals/candidate-cutoffs, which cutoffs echoes. The ignored and exempt tracks are left out. A track is, first, one an administrator set by hand with PUT /api/cohorts/current/track, which overridden marks; then exempt where their history says so; then ignored for a title on the Ignored list; then deferred when their HiBob start date is fewer than deferral.days before deferral.bootcampStart, or after it; then the Sales or Engineer list their title is on. undecided is a title on no list. members never includes anyone deferred, and track cannot ask for them; they are on GET /api/cohorts/deferred. deferral echoes GET /api/evals/deferral-days. counts gives each stage on each track, deferred included; each stage's counts ignore the track filter, each track's ignore the stage filter, and neither depends on the search. activeBootcamp is the one active bootcamp, or null. Scores are shown only to a caller in eVals; for anyone else btcScore is null, scores is {}, averageScore is null and assessments is null. For a caller in eVals, assessments is null unless stage is given and track is sales or engineer; then it lists the active assessments for that stage whose audience is that track or both, by name, and each member's scores gives their average score on each of them at the active bootcamp, by assessment id, for those scored there. An intermediate assessment's scores need an active bootcamp with an intermediate class. averageScore is the mean of scores to one decimal place, or null when there are none; sorting by it puts those with none last, and without score columns it orders by name. meetings lists where each member stands with each Google meeting picked for their stage and track (GET /api/evals/google-meetings): attended, by Zoom or an administrator's mark; accepted or pending on the invite they hold, startsAt being when it starts; uninvited until the next sync invites them; or none_left with no occurrence before their bootcamp. marked is an administrator's mark, or null when Zoom decides. historyId is their employee id when they have a bootcamp history, for GET /api/evals/bootcamp-history/{id}, and null when they have none.",
+          "A bootcamp candidate is anyone under the Organization Leader, on the sales, engineer or deferred track or on none, who has attended no BTC; an intermediate candidate has attended a BTC and no INT. Someone attended a class when they were assessed in it at a bootcamp whose class has since been released (POST /api/reporting/bootcamp/release). Either must also pass the date cutoffs in GET /api/evals/candidate-cutoffs, which cutoffs echoes. The ignored and exempt tracks are left out. A track is, first, one an administrator set by hand with PUT /api/cohorts/current/track, which overridden marks, exempt among them; then ignored for a title on the Ignored list; then deferred when their HiBob start date is fewer than deferral.days before deferral.bootcampStart, or after it; then the Sales or Engineer list their title is on. undecided is a title on no list. members never includes anyone deferred, and track cannot ask for them; they are on GET /api/cohorts/deferred. deferral echoes GET /api/evals/deferral-days. counts gives each stage on each track, deferred included; each stage's counts ignore the track filter, each track's ignore the stage filter, and neither depends on the search. activeBootcamp is the one active bootcamp, or null. Scores are shown only to a caller in eVals; for anyone else btcScore is null, scores is {}, averageScore is null and assessments is null. For a caller in eVals, assessments is null unless stage is given and track is sales or engineer; then it lists the active assessments for that stage whose audience is that track or both, by name, and each member's scores gives their average score on each of them at the active bootcamp, by assessment id, for those scored there. An intermediate assessment's scores need an active bootcamp with an intermediate class. averageScore is the mean of scores to one decimal place, or null when there are none; sorting by it puts those with none last, and without score columns it orders by name. meetings lists where each member stands with each Google meeting picked for their stage and track (GET /api/evals/google-meetings): attended, by Zoom or an administrator's mark; accepted or pending on the invite they hold, startsAt being when it starts; uninvited until the next sync invites them; or none_left with no occurrence before their bootcamp. marked is an administrator's mark, or null when Zoom decides. recordKey is the key of their page on GET /api/reporting/bootcamp/people/{key} once they have attended a BTC, and null before. btcDate is the day of the latest BTC they attended, and btcScore the mean of their assessments there.",
         query: [
           { name: "stage", type: `"bootcamp" | "intermediate"`, note: "only that stage; both if omitted" },
           { name: "track", type: `"sales" | "engineer" | "undecided"`, note: "only that track; all three if omitted" },
           ...listQuery(CURRENT_COHORT_LIST.sorts, "the name, email, title or track"),
         ],
-        returns: `{ stage: string | null, track: string | null, assessments: { id, name }[] | null, members: { email, fullName, title, department, site, reportsToEmail, reportsToName, startDate: "YYYY-MM-DD" | null, activeEffectiveDate: "YYYY-MM-DD" | null, track: "sales" | "engineer" | "undecided", overridden: boolean, stage: "bootcamp" | "intermediate", historyId: string | null, btcDate: "YYYY-MM-DD" | null, btcScore: number | null, scores: Record<assessment id, number>, averageScore: number | null, meetings: { meetingId, name, mark: "attended" | "accepted" | "pending" | "uninvited" | "none_left", marked: boolean | null, startsAt: string | null }[] }[], ${PAGE_FIELDS}, counts: Record<"bootcamp" | "intermediate", { sales: number, engineer: number, undecided: number, deferred: number }>, syncedAt: ISO 8601 string | null, cutoffs: { startDateOnOrAfter: "YYYY-MM-DD" | null, activeEffectiveDateAfter: "YYYY-MM-DD" | null }, deferral: { days: number, bootcampStart: "YYYY-MM-DD" | null }, activeBootcamp: { id, startDate, btcDays, intDays } | null }`,
+        returns: `{ stage: string | null, track: string | null, assessments: { id, name }[] | null, members: { email, fullName, title, department, site, reportsToEmail, reportsToName, startDate: "YYYY-MM-DD" | null, activeEffectiveDate: "YYYY-MM-DD" | null, track: "sales" | "engineer" | "undecided", overridden: boolean, stage: "bootcamp" | "intermediate", recordKey: string | null, btcDate: "YYYY-MM-DD" | null, btcScore: number | null, scores: Record<assessment id, number>, averageScore: number | null, meetings: { meetingId, name, mark: "attended" | "accepted" | "pending" | "uninvited" | "none_left", marked: boolean | null, startsAt: string | null }[] }[], ${PAGE_FIELDS}, counts: Record<"bootcamp" | "intermediate", { sales: number, engineer: number, undecided: number, deferred: number }>, syncedAt: ISO 8601 string | null, cutoffs: { startDateOnOrAfter: "YYYY-MM-DD" | null, activeEffectiveDateAfter: "YYYY-MM-DD" | null }, deferral: { days: number, bootcampStart: "YYYY-MM-DD" | null }, activeBootcamp: { id, startDate, btcDays, intDays } | null }`,
         errors: [
           { status: 400, error: "invalid_stage", when: "stage is neither bootcamp nor intermediate" },
           { status: 400, error: "invalid_track", when: "track is not sales, engineer or undecided" },
@@ -390,7 +390,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           { name: "stage", type: `"bootcamp" | "intermediate"`, note: "only that stage; both if omitted" },
           ...listQuery(CURRENT_COHORT_LIST.sorts, "the name, email, title or track"),
         ],
-        returns: `{ stage: string | null, members: { email, fullName, title, department, site, reportsToEmail, reportsToName, startDate: "YYYY-MM-DD" | null, activeEffectiveDate: "YYYY-MM-DD" | null, track: "deferred", overridden: boolean, stage: "bootcamp" | "intermediate", historyId: string | null, btcDate: "YYYY-MM-DD" | null, btcScore: number | null, scores: {}, averageScore: null }[], ${PAGE_FIELDS}, counts: { bootcamp: number, intermediate: number }, syncedAt: ISO 8601 string | null, cutoffs: { startDateOnOrAfter: "YYYY-MM-DD" | null, activeEffectiveDateAfter: "YYYY-MM-DD" | null }, deferral: { days: number, bootcampStart: "YYYY-MM-DD" | null }, activeBootcamp: { id, startDate, btcDays, intDays } | null }`,
+        returns: `{ stage: string | null, members: { email, fullName, title, department, site, reportsToEmail, reportsToName, startDate: "YYYY-MM-DD" | null, activeEffectiveDate: "YYYY-MM-DD" | null, track: "deferred", overridden: boolean, stage: "bootcamp" | "intermediate", recordKey: string | null, btcDate: "YYYY-MM-DD" | null, btcScore: number | null, scores: {}, averageScore: null }[], ${PAGE_FIELDS}, counts: { bootcamp: number, intermediate: number }, syncedAt: ISO 8601 string | null, cutoffs: { startDateOnOrAfter: "YYYY-MM-DD" | null, activeEffectiveDateAfter: "YYYY-MM-DD" | null }, deferral: { days: number, bootcampStart: "YYYY-MM-DD" | null }, activeBootcamp: { id, startDate, btcDays, intDays } | null }`,
         errors: [{ status: 400, error: "invalid_stage", when: "stage is neither bootcamp nor intermediate" }],
       },
       {
@@ -400,7 +400,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "trainingViewer",
         token: true,
         notes:
-          "A day is a session when anyone's bootcamp history has it as their BTC or INT date; 2000-01-01, which marks someone exempt, is never one. bootcamp and intermediate count the people with that BTC date and that INT date. total and first count every session, whatever page is asked for; first is null when there are none.",
+          "A day is a session when it is the start of a bootcamp whose BTC or INT class has been released and someone was assessed in it. bootcamp and intermediate count the people assessed in each class. total and first count every session, whatever page is asked for; first is null when there are none.",
         query: listQuery(PREVIOUS_SESSION_LIST.sorts, "nothing", "desc").filter((f) => f.name !== "q"),
         returns: `{ sessions: { date: "YYYY-MM-DD", bootcamp: number, intermediate: number }[], ${PAGE_FIELDS}, total: number, first: "YYYY-MM-DD" | null }`,
       },
@@ -411,16 +411,16 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "trainingViewer",
         token: true,
         notes:
-          "Each side is ordered by name, from the employee list, with anyone it has no name for last by email; fullName is null for them. active is false for anyone the last HiBob sync did not send: someone who has left, or whose history was kept without HiBob ever sending them. id is the person's employee id, for GET /api/evals/bootcamp-history/{id}.",
+          "Each side is ordered by name, from the employee list, with anyone it has no name for last by email; fullName is null for them. active is false for anyone the last HiBob sync did not send: someone who has left, or whom HiBob never sent. key addresses their page, for GET /api/reporting/bootcamp/people/{key}.",
         params: [{ name: "date", type: "string", required: true, note: "YYYY-MM-DD" }],
         query: [
           { name: "bootcamp.page", type: "integer", note: `The bootcamp side's page, from 1. Default 1. A page holds at most ${PAGE_SIZE}.` },
           { name: "intermediate.page", type: "integer", note: `The intermediate side's page, the same way.` },
         ],
-        returns: `{ date: "YYYY-MM-DD", bootcamp: { rows: { id, email, fullName: string | null, active: boolean }[], ${PAGE_FIELDS} }, intermediate: the same }`,
+        returns: `{ date: "YYYY-MM-DD", bootcamp: { rows: { key, email, fullName: string | null, active: boolean }[], ${PAGE_FIELDS} }, intermediate: the same }`,
         errors: [
           { status: 400, error: "invalid_date", when: "date is not a real YYYY-MM-DD day" },
-          { status: 404, error: "not_found", when: "no one's BTC or INT date is that day, as for 2000-01-01" },
+          { status: 404, error: "not_found", when: "no released class was held that day" },
         ],
       },
       {
@@ -430,7 +430,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "trainingAdmin",
         token: true,
         notes:
-          "sales, engineer and ignored put the person's title on that list, moving it off another list if it is on one, and re-track everyone in the org who holds it, compared as the lists compare titles; title says where it went, and is null when it was on that list already or the person has no title. Anyone else with the title whose track was set by hand keeps it. The person is also pinned to the choice where the rules still give them something else, such as exempt history or a late start, and always when they have no title. undecided, deferred and exempt pin just this person; deferred moves them from the Current tab to the Deferred tab. A pin holds through every later sync, title-list change and bootcamp change, until automatic hands the person back to the rules; exempt here does not change their bootcamp history. ignored and exempt take people off the Current tab. track in the response is the one the person has now, overridden whether they are pinned, and retracked how many people's tracks changed, the person included.",
+          "sales, engineer and ignored put the person's title on that list, moving it off another list if it is on one, and re-track everyone in the org who holds it, compared as the lists compare titles; title says where it went, and is null when it was on that list already or the person has no title. Anyone else with the title whose track was set by hand keeps it. The person is also pinned to the choice where the rules still give them something else, such as a late start, and always when they have no title. undecided, deferred and exempt pin just this person; deferred moves them from the Current tab to the Deferred tab. A pin holds through every later sync, title-list change and bootcamp change, until automatic hands the person back to the rules. ignored and exempt take people off the Current tab. track in the response is the one the person has now, overridden whether they are pinned, and retracked how many people's tracks changed, the person included.",
         body: {
           kind: "json",
           fields: [
@@ -903,7 +903,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "trainingAdmin",
         token: true,
         notes:
-          "Only one bootcamp may be active; the active one's start date is the BTC and INT date that releasing its scores on Reporting → Bootcamp writes to bootcamp history. To make a new one active while another is, name that other in completeActive: it is marked complete in the same write.",
+          "Only one bootcamp may be active; releasing its BTC or INT scores on Reporting → Live Sessions is what marks everyone assessed in that class as having attended it. To make a new one active while another is, name that other in completeActive: it is marked complete in the same write.",
         body: {
           kind: "json",
           fields: [
@@ -2383,7 +2383,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
     id: "reporting-bootcamp",
     title: "Reporting: Bootcamp",
     intro:
-      "Everyone's BTC and INT, as Reporting → Bootcamp shows them. Any signed-in account may call these, and each caller sees only the people under them in the last HiBob sync, every level down and themselves left out; an Assessments Viewer or above sees everyone. Below Assessments Viewer, a bootcamp's BTC or INT results stay hidden until an Assessments Administrator releases that class, and the assessments behind a score are never shown.",
+      "Everyone's BTC and INT, as Reporting → Live Sessions shows them. Any signed-in account may call these, and each caller sees only the people under them in the last HiBob sync, every level down and themselves left out; an Assessments Viewer or above sees everyone. Below Assessments Viewer, a bootcamp's BTC or INT results stay hidden until an Assessments Administrator releases that class, and the assessments behind a score are never shown.",
     endpoints: [
       {
         method: "GET",
@@ -2392,12 +2392,12 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "signedIn",
         token: true,
         notes:
-          "A record is a day in bootcamp history, or a class of a completed bootcamp someone was assessed at that the caller may see. level is the furthest class attended: intermediate, else bootcamp, else exempt for someone marked exempt from every class they have a record of. date is their latest class day, null when they are only exempt. key addresses their page: their employee id, else, for someone assessed whom the employee list does not have, a submission's. fullName is null for someone it has no name for, and active false for anyone the last HiBob sync did not send. counts gives everyone the caller may see, the active and the inactive, whatever the search or status.",
+          "A record is a class someone was assessed in that the caller may see: once it is released, or for an Assessments Viewer also once its bootcamp is complete. level is the furthest class attended: intermediate, else bootcamp. date is their latest class day. key addresses their page: their employee id, else, for someone assessed whom the employee list does not have, a submission's. fullName is null for someone it has no name for, and active false for anyone the last HiBob sync did not send. counts gives everyone the caller may see, the active and the inactive, whatever the search or status.",
         query: [
           ...listQuery(BOOTCAMP_RECORD_LIST.sorts, "the name or email", BOOTCAMP_RECORD_LIST.dir),
           { name: "status", type: HISTORY_STATUSES.map((s) => `"${s}"`).join(" | "), note: "only the active or only the inactive; everyone if omitted" },
         ],
-        returns: `{ people: { key, email, fullName: string | null, level: "intermediate" | "bootcamp" | "exempt", date: "YYYY-MM-DD" | null, active: boolean }[], ${PAGE_FIELDS}, status: "active" | "inactive" | null, counts: { total: number, active: number, inactive: number } }`,
+        returns: `{ people: { key, email, fullName: string | null, level: "intermediate" | "bootcamp", date: "YYYY-MM-DD", active: boolean }[], ${PAGE_FIELDS}, status: "active" | "inactive" | null, counts: { total: number, active: number, inactive: number } }`,
         errors: [{ status: 400, error: "invalid_status", when: "status is neither active nor inactive" }],
       },
       {
@@ -2414,11 +2414,11 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       {
         method: "POST",
         path: "/api/reporting/bootcamp/release",
-        summary: "Releases the active bootcamp's BTC or INT results to managers, and writes them to bootcamp history.",
+        summary: "Releases the active bootcamp's BTC or INT results to managers, which marks everyone assessed in that class as having attended it.",
         access: "assessmentsAdmin",
         token: true,
         notes:
-          "From then on, managers see that class's results for the people in their org. Everyone scored in the class gets the bootcamp's start date as their BTC or INT date in bootcamp history, the mean of their submissions' averages as the class score, and each assessment's average as an exercise score; a BTC class then moves on to Intermediate on Cohorts → Current, and an INT class leaves it. written counts the people whose history was written; anyone scored whom HiBob has never sent gets an inactive employee record to hold it. A release cannot be taken back; releasing a class already released changes nothing, writes nothing, and returns when it was.",
+          "From then on, managers see that class's results for the people in their org. Everyone scored in the class has attended it from then on: a BTC class moves on to Intermediate on Cohorts → Current, and an INT class leaves it. written counts the people scored in it. A release cannot be taken back; releasing a class already released changes nothing, writes nothing, and returns when it was.",
         body: { kind: "json", fields: [{ name: "stage", type: '"bootcamp" | "intermediate"', required: true }] },
         returns: "{ ok: true, stage, bootcamp: { id, startDate }, releasedAt, written: number }",
         errors: [
@@ -2434,10 +2434,10 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "signedIn",
         token: true,
         notes:
-          "classes is what a manager sees: each class's day, overall score and score per exercise, from bootcamp history or from that class's released assessments; a day of 2000-01-01 means exempt. records is null below Assessments Viewer. Above it, history is their bootcamp history, under their employee id, or null, and submissions every assessment of them at any bootcamp, newest bootcamp first, with each criterion's score and comment; released says whether managers may see it yet.",
+          "classes is what a manager sees: each class's day, overall score and score per exercise, from the latest released class of it they were assessed in. records is null below Assessments Viewer. Above it, submissions is every assessment of them at any bootcamp, newest bootcamp first, with each criterion's score and comment; released says whether managers may see it yet.",
         params: [{ name: "key", type: "string", required: true, note: "a key from the list: an employee id or a submission's" }],
         returns:
-          '{ key, email, employee: { fullName, title, department, site, reportsToName, reportsToEmail, startDate, track } | null, classes: { bootcamp: ClassSummary, intermediate: ClassSummary }, records: { history: { id, btcDate, intDate, btcScore, intScore, btcIndividualScores, intIndividualScores, createdAt, updatedAt, updatedByName } | null, submissions: { id, bootcamp: { id, startDate, status }, stage, assessmentName, averageScore, positiveFeedback, constructiveFeedback, ownerName, submittedAt, updatedAt, released, scores: { criterionId, criterionName, score, comment }[] }[] } | null }, where ClassSummary is { date: string | null, score: number | null, exercises: { name, score }[] }',
+          '{ key, email, employee: { fullName, title, department, site, reportsToName, reportsToEmail, startDate, track } | null, classes: { bootcamp: ClassSummary, intermediate: ClassSummary }, records: { submissions: { id, bootcamp: { id, startDate, status }, stage, assessmentName, averageScore, positiveFeedback, constructiveFeedback, ownerName, submittedAt, updatedAt, released, scores: { criterionId, criterionName, score, comment }[] }[] } | null }, where ClassSummary is { date: string | null, score: number | null, exercises: { name, score }[] }',
         errors: [{ status: 404, error: "not_found", when: "the key names no one, or someone the caller may not see" }],
       },
       {
@@ -2447,12 +2447,13 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "assessmentsAdmin",
         token: true,
         notes:
-          "It keeps the criteria the assessment was scored on, their names as scored, and its owner; the audit log records who corrected it. The average follows the new scores, and the feedback the eVals form requires for that average is still required. In a class already released, the person's bootcamp history score and exercise scores for it are written again.",
+          "It keeps the criteria the assessment was scored on, their names as scored, and its owner; the audit log records who corrected it. The average follows the new scores, and the feedback the eVals form requires for that average is still required. An assessment with no criteria, as those imported from the old bootcamp history are, takes scores as [] and its averageScore directly, and requires no feedback.",
         params: [{ name: "id", type: "string", required: true, note: "the submission's id" }],
         body: { kind: "json", fields: [
           { name: "scores", type: "{ criterionId, score: 1 | 2 | 3 | 4, comment?: string }[]", required: true, note: `every criterion it was scored on, once each; comments up to ${EVALS_ASSESSMENT_LIMITS.comment} characters` },
           { name: "positiveFeedback", type: "string", note: `up to ${EVALS_ASSESSMENT_LIMITS.feedback} characters` },
           { name: "constructiveFeedback", type: "string", note: `up to ${EVALS_ASSESSMENT_LIMITS.feedback} characters` },
+          { name: "averageScore", type: "number", note: `${BOOTCAMP_SCORE.min} to ${BOOTCAMP_SCORE.max}, to one decimal place; only for an assessment with no criteria, and required for one` },
           { name: "revises", type: "string", required: true, note: "the updatedAt of the version being corrected" },
         ] },
         returns: "{ ok: true, submission: { id, attendeeEmail, assessmentName, averageScore, updatedAt } }",
@@ -2462,61 +2463,6 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           { status: 404, error: "not_found", when: "`id` is not a UUID, or no submission has it" },
           { status: 409, error: "conflict", when: "someone saved it since revises" },
         ],
-      },
-      {
-        method: "PATCH",
-        path: "/api/reporting/bootcamp/history/{id}",
-        summary: "Corrects someone's bootcamp history: its days and exercise scores.",
-        access: "assessmentsAdmin",
-        token: true,
-        notes:
-          "Fields left out keep their value, and null clears one. A day of 2000-01-01 marks the person exempt from that class. Scores run from 1 to 4, to one decimal place; the individual scores map each exercise's column name to its score. A class's overall score cannot be set: giving its individual scores sets it to their mean, to one decimal place, and leaving them out or null keeps the one it has. Whose history it is cannot be changed here.",
-        params: [{ name: "id", type: "string", required: true, note: "their employee id, the history's id in GET /api/reporting/bootcamp/{key}" }],
-        body: { kind: "json", fields: [
-          { name: "btcDate", type: '"YYYY-MM-DD" | null' },
-          { name: "intDate", type: '"YYYY-MM-DD" | null' },
-          { name: "btcIndividualScores", type: "Record<string, number> | null", note: "up to 50 exercises" },
-          { name: "intIndividualScores", type: "Record<string, number> | null", note: "up to 50 exercises" },
-        ] },
-        returns: "{ ok: true }",
-        errors: [
-          { status: 400, error: "invalid", when: "a field is not that shape, or the body has any other" },
-          { status: 404, error: "not_found", when: "no employee has that id, or they have no history" },
-        ],
-      },
-    ],
-  },
-  {
-    id: "bootcamp-history",
-    title: "Bootcamp history",
-    endpoints: [
-      {
-        method: "GET",
-        path: "/api/evals/bootcamp-history",
-        summary: "Lists everyone with a bootcamp history, newest bootcamp first, a page at a time.",
-        access: "assessmentsViewer",
-        token: true,
-        notes:
-          "History is kept on each person's employee record; someone with a history whom HiBob has never sent has an inactive record of their own. id is that record's id. fullName is their name there, or null when it has none. Someone is active while the HiBob sync sends them, and inactive once it doesn't. btcDate is their bootcamp date; 2000-01-01 means they are exempt, which sorts as the oldest date. Rows that tie on the sort, such as one bootcamp's class, follow in name order, then email. counts gives everyone, the active and the inactive, whatever the search or status.",
-        query: [
-          ...listQuery(BOOTCAMP_HISTORY_LIST.sorts, "the name or email", BOOTCAMP_HISTORY_LIST.dir),
-          { name: "status", type: HISTORY_STATUSES.map((s) => `"${s}"`).join(" | "), note: "only the active or only the inactive; everyone if omitted" },
-        ],
-        returns: `{ history: { id, email, fullName: string | null, btcDate: "YYYY-MM-DD" | null }[], ${PAGE_FIELDS}, status: "active" | "inactive" | null, counts: { total: number, active: number, inactive: number } }`,
-        errors: [{ status: 400, error: "invalid_status", when: "status is neither active nor inactive" }],
-      },
-      {
-        method: "GET",
-        path: "/api/evals/bootcamp-history/{id}",
-        summary: "Returns one person's bootcamp history in full, with their employee record.",
-        access: "assessmentsViewer",
-        token: true,
-        notes:
-          "A date of 2000-01-01 means the person is exempt from that class. Scores run from 1 (poor) to 4 (outstanding), to one decimal place; btcIndividualScores and intIndividualScores map each exercise's column name to its score, or are null. updatedByName is the name or email of whoever last changed it, null when that account is gone or it has not been changed since it was imported; createdAt and updatedAt are null for a history from before they were kept. employee is null for someone the last HiBob sync did not send.",
-        params: [{ name: "id", type: "string", required: true, note: "their employee id" }],
-        returns:
-          `{ id, email, fullName: string | null, btcDate: string | null, intDate: string | null, btcScore: number | null, intScore: number | null, btcIndividualScores: Record<string, number> | null, intIndividualScores: Record<string, number> | null, updatedByName: string | null, createdAt: string | null, updatedAt: string | null, employee: { fullName, title, department, site, reportsToName, reportsToEmail, startDate: string | null, track: "sales" | "engineer" | "ignored" | "exempt" | "deferred" | null } | null }`,
-        errors: [{ status: 404, error: "not_found", when: "no employee has that id, or they have no history" }],
       },
     ],
   },
@@ -2533,7 +2479,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "canaryWire",
         token: true,
         notes:
-          "Built from the newest pull and today's exemptions, so a past month counts whoever was accountable then. A rep is pre-bootcamp, and counted in no rate, until the month after their BTC date in bootcamp history; BTC marked exempt counts in every month. With no BTC date, someone whose HiBob start date is before the first real BTC date on record counts in every month, since bootcamp history doesn't go back far enough to have them; anyone else with none counts in none. None of this applies to SDRs, who never attend bootcamp: they count from their first full month at Harness by HiBob's start date (starting October 2 counts from November, October 1 from October), and in every month with no start date. Names, titles and managers are the HiBob sync's (the employee list), matched by email, with Mindtickle's for anyone HiBob doesn't have; an IC is someone nobody in HiBob reports to. Rates are percentages to one place, null when nothing is owed. A role's and the totals' rates are in people: of the learners who owe something this month, the share who finished everything they owe. A team's and a rep's are in modules. A cell is keyed by module label: accountable cells are counted, exempt ones are pre-bootcamp work and off-role ones (neither) are another edition's module, shown but not counted. atPt is the event's moment in Pacific, empty when only the day is known. lastActivity is the newest completion in the month's content. hasSnapshot is false until the first pull from Mindtickle has finished, and every list is then empty. With format=csv, the same month as a CSV download, one row per rep.",
+          "Built from the newest pull and today's exemptions, so a past month counts whoever was accountable then. A rep is pre-bootcamp, and counted in no rate, until the month after the first BTC they attended (a released class they were assessed in); someone pinned to the exempt track on Cohorts → Current counts in every month. With no BTC, someone whose HiBob start date is before the first BTC on record counts in every month, since the records don't go back far enough to have them; anyone else with none counts in none. None of this applies to SDRs, who never attend bootcamp: they count from their first full month at Harness by HiBob's start date (starting October 2 counts from November, October 1 from October), and in every month with no start date. Names, titles and managers are the HiBob sync's (the employee list), matched by email, with Mindtickle's for anyone HiBob doesn't have; an IC is someone nobody in HiBob reports to. Rates are percentages to one place, null when nothing is owed. A role's and the totals' rates are in people: of the learners who owe something this month, the share who finished everything they owe. A team's and a rep's are in modules. A cell is keyed by module label: accountable cells are counted, exempt ones are pre-bootcamp work and off-role ones (neither) are another edition's module, shown but not counted. atPt is the event's moment in Pacific, empty when only the day is known. lastActivity is the newest completion in the month's content. hasSnapshot is false until the first pull from Mindtickle has finished, and every list is then empty. With format=csv, the same month as a CSV download, one row per rep.",
         query: [
           { name: "month", type: "string", note: 'a month the picker offers, "September 2026"; the newest month anybody has worked in if omitted' },
           { name: "format", type: '"csv"', note: "a CSV download instead of JSON" },
@@ -2634,7 +2580,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "assessmentsAdmin",
         token: true,
         notes:
-          "depth counts the links between a person and the leader, the leader included. managementChain is the emails of their managers, from the direct one up to and including the leader, joined with semicolons and no spaces. track is the one an administrator set by hand, if any; otherwise exempt when the person's bootcamp history marks BTC or INT exempt, ignored for a title on the Ignored list, deferred when they started too close to the next bootcamp (see GET /api/evals/deferral-days), or else the Sales or Engineer list their title is on, or null for a title on no list. btcDate, btcScore, intDate and intScore are from their bootcamp history, null where there is none; a date of 2000-01-01 means they are exempt from that class, and a score runs from 1 (poor) to 4 (outstanding), to one decimal place. The list is as of the last sync; current is false once a different leader has been set since, until the next sync runs. total counts everyone listed, whatever the search.",
+          "depth counts the links between a person and the leader, the leader included. managementChain is the emails of their managers, from the direct one up to and including the leader, joined with semicolons and no spaces. track is the one an administrator set by hand, if any; otherwise ignored for a title on the Ignored list, deferred when they started too close to the next bootcamp (see GET /api/evals/deferral-days), or else the Sales or Engineer list their title is on, or null for a title on no list. btcDate and intDate are the day of the latest BTC and INT they attended (a released class they were assessed in), null where there is none; btcScore and intScore are the mean of their assessments there, from 1 (poor) to 4 (outstanding), to one decimal place. The list is as of the last sync; current is false once a different leader has been set since, until the next sync runs. total counts everyone listed, whatever the search.",
         query: listQuery(ORGANIZATION_LIST.sorts, "the name, email, title, department, track, or the manager's name or email"),
         returns: `{ members: { email, fullName, title, department, reportsToEmail, reportsToName, track: "sales" | "engineer" | "ignored" | "exempt" | "deferred" | null, depth, leaderEmail, managementChain: string, btcDate, btcScore, intDate, intScore }[], ${PAGE_FIELDS}, total: number, leaderEmail: string | null, current: boolean }`,
       },
@@ -2923,7 +2869,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "assessmentsAdmin",
         token: true,
         notes:
-          "Someone whose HiBob start date is fewer than days before bootcampStart, or after it, is on the deferred track rather than their title list's; an ignored title, exempt history or a track set by hand still comes first. A blank start date is never deferred. 0 turns deferral off. Until one is saved, days is the Google Sheet's 14. bootcampStart is the active bootcamp's start, else the soonest scheduled one starting today or later, or null when there is none, which also leaves no one deferred.",
+          "Someone whose HiBob start date is fewer than days before bootcampStart, or after it, is on the deferred track rather than their title list's; an ignored title or a track set by hand still comes first. A blank start date is never deferred. 0 turns deferral off. Until one is saved, days is the Google Sheet's 14. bootcampStart is the active bootcamp's start, else the soonest scheduled one starting today or later, or null when there is none, which also leaves no one deferred.",
         returns: `{ days: number, bootcampStart: "YYYY-MM-DD" | null }`,
       },
       {

@@ -1,5 +1,5 @@
 /**
- * Keeping `employees.track` in step with bootcamp history, the title lists,
+ * Keeping `employees.track` in step with the title lists,
  * the deferral window, the next bootcamp and the tracks administrators set
  * by hand. The sync sets every track as it stores the org; a change to any
  * of those afterwards resets the tracks it touches here, so none waits for
@@ -15,7 +15,6 @@ import {
   employees,
   EVALS_TITLE_LISTS,
   evalsTitles,
-  EXEMPT_DATE,
   type EmployeeTrack,
   type EvalsTitleList,
 } from "@/db/schema";
@@ -23,14 +22,6 @@ import { noteAudit } from "@/lib/audit-context";
 import { getDeferralDays } from "@/lib/evals/settings";
 import { cleanTitle, titleKey, trackFor, type DeferralRule, type TrackOverride } from "@/lib/evals/title-lists";
 import { addTitles, titleListMap } from "@/lib/evals/titles";
-
-const isExempt = or(eq(employees.btcDate, EXEMPT_DATE), eq(employees.intDate, EXEMPT_DATE));
-
-/** Everyone whose history marks BTC or INT exempt, by lowercased email. */
-export async function exemptEmails(): Promise<Set<string>> {
-  const rows = await db.select({ email: employees.email }).from(employees).where(isExempt);
-  return new Set(rows.map((r) => r.email));
-}
 
 /** The tracks administrators set by hand, by lowercased email; only these emails' when given. */
 export async function trackOverrides(emails?: readonly string[]): Promise<Map<string, TrackOverride>> {
@@ -97,8 +88,8 @@ export async function deferralRule(): Promise<DeferralRule | null> {
 const BATCH = 100;
 
 /**
- * Resets the track of the org members with these emails, from their history,
- * the lists, the deferral rule and any track set by hand, as they all stand.
+ * Resets the track of the org members with these emails, from the lists,
+ * the deferral rule and any track set by hand, as they all stand.
  * Returns how many tracks changed.
  */
 export async function retrackEmployees(emails: readonly string[]): Promise<number> {
@@ -119,20 +110,12 @@ export async function retrackEmployees(emails: readonly string[]): Promise<numbe
       .from(employees)
       .where(and(isNotNull(employees.orgDepth), inArray(employees.email, batch)));
     if (people.length === 0) continue;
-    const [exemptRows, overrides] = await Promise.all([
-      db
-        .select({ email: employees.email })
-        .from(employees)
-        .where(and(isExempt, inArray(employees.email, batch))),
-      trackOverrides(batch),
-    ]);
-    const exempt = new Set(exemptRows.map((r) => r.email));
+    const overrides = await trackOverrides(batch);
     for (const p of people) {
       const track = trackFor(
         {
           inOrg: true,
           title: p.title,
-          exempt: exempt.has(p.email),
           startDate: p.startDate,
           override: overrides.get(p.email),
         },
@@ -227,8 +210,8 @@ async function unpin(email: string) {
  * Sales, Engineer and Ignored are title lists: picking one puts the person's
  * title on it, moving it off another list if need be, and retracks everyone
  * in the org who holds that title. The person themselves is pinned to the
- * choice only where the rules still give them something else, such as exempt
- * history or a late start; anyone else with the title who was set by hand
+ * choice only where the rules still give them something else, such as a late
+ * start; anyone else with the title who was set by hand
  * keeps that. Undecided, Deferred and Exempt pin just this person, until
  * someone picks `automatic`. A pin lasts through every sync.
  */

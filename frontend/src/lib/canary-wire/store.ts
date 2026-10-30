@@ -1,15 +1,15 @@
 /**
  * The Canary Wire's stored pull, and the month view built from it with
- * bootcamp history and the HiBob sync: who people are and whom they report
+ * the Bootcamp classes people attended and the HiBob sync: who people are and whom they report
  * to, and when they started. Reporting → Canary Wire and
  * `GET /api/evals/canary-wire` both read through `canaryWireView`.
  */
 
 import "server-only";
 
-import { desc, isNotNull, ne } from "drizzle-orm";
+import { and, desc, eq, isNotNull, ne, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { EXEMPT_DATE, canaryWireSnapshots, employees } from "@/db/schema";
+import { bootcamps, canaryWireSnapshots, employees, evalsAssessments, evalsSubmissions } from "@/db/schema";
 import { accountability, type History } from "@/lib/canary-wire/exemptions";
 import { managersOf, onlyOrg, orgOf, withHiBob, type Person } from "@/lib/canary-wire/people";
 import type { CanaryWireScope } from "@/lib/canary-wire/scope";
@@ -60,20 +60,27 @@ async function peopleByEmail(): Promise<Map<string, Person>> {
   return new Map(rows.map((r) => [r.email, r]));
 }
 
-/** What bootcamp history and HiBob say about who has been through bootcamp. */
+/** What the released Bootcamp classes, the pinned tracks and HiBob say about who has been through bootcamp. */
 async function history(): Promise<History> {
-  const [btc, starts] = await Promise.all([
+  const [btc, exempt, starts] = await Promise.all([
     db
-      .select({ email: employees.email, btcDate: employees.btcDate })
+      .select({ email: evalsSubmissions.attendeeEmail, btcDate: sql<string>`min(${bootcamps.startDate})::text` })
+      .from(evalsSubmissions)
+      .innerJoin(evalsAssessments, eq(evalsAssessments.id, evalsSubmissions.assessmentId))
+      .innerJoin(bootcamps, eq(bootcamps.id, evalsSubmissions.bootcampId))
+      .where(and(eq(evalsAssessments.stage, "bootcamp"), isNotNull(bootcamps.btcReleasedAt)))
+      .groupBy(evalsSubmissions.attendeeEmail),
+    db
+      .select({ email: employees.email })
       .from(employees)
-      .where(isNotNull(employees.btcDate)),
+      .where(and(eq(employees.trackPinned, true), eq(employees.trackOverride, "exempt"))),
     db.select({ email: employees.email, startDate: employees.startDate }).from(employees).where(isNotNull(employees.startDate)),
   ]);
-  const real = btc.map((r) => r.btcDate!).filter((d) => d !== EXEMPT_DATE).sort();
   return {
-    btcDates: new Map(btc.map((r) => [r.email, r.btcDate!])),
+    btcDates: new Map(btc.map((r) => [r.email, r.btcDate])),
+    exempt: new Set(exempt.map((r) => r.email)),
     startDates: new Map(starts.map((r) => [r.email, r.startDate!])),
-    historyBegins: real[0] ?? null,
+    historyBegins: btc.map((r) => r.btcDate).sort()[0] ?? null,
   };
 }
 

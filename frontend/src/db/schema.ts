@@ -911,8 +911,8 @@ export const employees = pgTable(
     managementChain: text("management_chain"),
     /**
      * Null for anyone not under the leader. Otherwise, first that applies:
-     * the track an administrator set by hand (`trackOverride`);
-     * `exempt` when `btcDate` or `intDate` is `EXEMPT_DATE`; `ignored`
+     * the track an administrator set by hand (`trackOverride`), which is
+     * how someone is made `exempt`; `ignored`
      * for a title on the Ignored list; `deferred` for someone who started too
      * close to the next bootcamp to attend it; then `sales` or `engineer` by
      * their title's list. Null for a title on no list. Who has `sales`,
@@ -947,7 +947,7 @@ export const employees = pgTable(
      * stays, with what they chose and their history, but they are in no org
      * (`orgDepth`, `managementChain` and `track` are null) and no list or
      * picker offers them. True again if HiBob sends them again. False from the
-     * start for someone known only from their bootcamp history.
+     * start for someone the old bootcamp history added.
      */
     active: boolean("active").notNull().default(true),
     /**
@@ -959,12 +959,11 @@ export const employees = pgTable(
     slackUserId: text("slack_user_id"),
     slackLookedUpAt: timestamp("slack_looked_up_at", { withTimezone: true }),
     /**
-     * Their bootcamp (BTC) and intermediate (INT) history: the days they
-     * attended and how they scored. Written when a class is released
-     * (`lib/reporting/bootcamp.ts`) and corrected from Reporting → Bootcamp.
-     * `EXEMPT_DATE` marks a class they never need to attend. Someone has a
-     * history when any of the four is set (`hasHistory`). The sync never
-     * touches these.
+     * Unused: the bootcamp (BTC) and intermediate (INT) history these held
+     * became submissions in released bootcamps
+     * (`drizzle/20261030174105_bootcamp_history_to_assessments.sql`), and
+     * who attended a class is now `lib/evals/attendance.ts`. Nothing reads or
+     * writes them; they are dropped after one release.
      */
     btcDate: date("btc_date", { mode: "string" }),
     intDate: date("int_date", { mode: "string" }),
@@ -995,9 +994,6 @@ export const employees = pgTable(
 );
 
 export type Employee = typeof employees.$inferSelect;
-
-/** Whether an employee has a bootcamp history: any of its days or overall scores set. */
-export const hasHistory = sql<boolean>`(${employees.btcDate} is not null or ${employees.intDate} is not null or ${employees.btcScore} is not null or ${employees.intScore} is not null)`;
 
 export const HIBOB_SYNC_TRIGGERS = ["schedule", "manual"] as const;
 export type HibobSyncTrigger = (typeof HIBOB_SYNC_TRIGGERS)[number];
@@ -1472,9 +1468,6 @@ export const meetingAttendanceMarks = pgTable(
 
 /** The scores a class can give, from poor to outstanding, and the decimal places they are kept to. */
 export const BOOTCAMP_SCORE = { min: 1, max: 4, decimals: 1 } as const;
-
-/** The sheet's marker, as a BTC or INT day, for "exempt": someone who never needs to attend that class. */
-export const EXEMPT_DATE = "2000-01-01";
 
 /**
  * The Canary Wire's Mindtickle data: one pull of every learner's whole
@@ -2325,6 +2318,7 @@ export const evalsSubmissions = pgTable(
   (t) => [
     uniqueIndex("evals_submissions_one_idx").on(t.bootcampId, t.assessmentId, t.attendeeEmail),
     index("evals_submissions_assessment_idx").on(t.assessmentId),
+    index("evals_submissions_attendee_email_idx").on(t.attendeeEmail),
     check("evals_submissions_average_check", sql`${t.averageScore} between 1 and 4`),
   ],
 );

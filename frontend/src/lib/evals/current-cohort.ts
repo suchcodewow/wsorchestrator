@@ -1,7 +1,8 @@
 /**
  * The Cohorts page's Current and Deferred tabs: the org members still to
- * train. Someone with no BTC date is a bootcamp candidate; someone with a BTC
- * date and no INT date is an intermediate candidate. Anyone on the ignored or
+ * train. Someone who has not attended a BTC class is a bootcamp candidate;
+ * someone who has, and has not attended an INT class, is an intermediate
+ * candidate (`lib/evals/attendance.ts`). Anyone on the ignored or
  * exempt track is left out; a title on no list is listed as undecided until
  * someone sorts it, and someone who started too close to the next bootcamp is
  * deferred, which puts them on the Deferred tab rather than Current. Read from `employees.track`, so it is as fresh as the last
@@ -12,15 +13,10 @@
 
 import "server-only";
 
-import { and, eq, gt, gte, inArray, isNotNull, isNull, or, sql, type SQL } from "drizzle-orm";
+import { and, eq, gt, gte, inArray, isNotNull, isNull, not, or, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db";
-import {
-  employees,
-  evalsAssessments,
-  evalsSubmissions,
-  hasHistory,
-  type Employee,
-} from "@/db/schema";
+import { employees, evalsAssessments, evalsSubmissions, type Employee } from "@/db/schema";
+import { attended, classDate, classScore } from "@/lib/evals/attendance";
 import { getCandidateCutoffs, getDeferralDays, type CandidateCutoffs } from "@/lib/evals/settings";
 import { nextBootcampStart } from "@/lib/evals/tracks";
 import type { CurrentCohortSort } from "@/lib/list-specs";
@@ -70,11 +66,11 @@ export type CurrentCohortMember = Pick<
   /** Whether an administrator set that track by hand. */
   overridden: boolean;
   stage: CandidateStage;
-  /** Their employee id, for their Reporting → Bootcamp page; null for someone with no history. */
-  historyId: string | null;
-  /** When they passed bootcamp; null for a bootcamp candidate. */
+  /** Their employee id, for their Reporting → Live Sessions page; null for someone who has attended no class. */
+  recordKey: string | null;
+  /** The day of the BTC class they attended; null for a bootcamp candidate. */
   btcDate: string | null;
-  /** Their overall BTC result; null until scored, and for a caller outside eVals. */
+  /** How they did at it overall; null for a bootcamp candidate, and for a caller outside eVals. */
   btcScore: number | null;
   /** Their score on each of `CohortScoring.assessments` at its bootcamp, by assessment id; only those scored. */
   scores: Record<string, number>;
@@ -108,7 +104,10 @@ const a = evalsAssessments;
 const s = evalsSubmissions;
 
 const candidateTrack = sql<CandidateTrack>`coalesce(${e.track}, 'undecided')`;
-const candidateStage = sql<CandidateStage>`(case when ${e.btcDate} is null then 'bootcamp' else 'intermediate' end)`;
+const attendedBtc = attended("bootcamp", sql`${e.email}`);
+const attendedInt = attended("intermediate", sql`${e.email}`);
+const candidateStage = sql<CandidateStage>`(case when ${attendedBtc} then 'intermediate' else 'bootcamp' end)`;
+const btcDate = classDate("bootcamp", sql`${e.email}`);
 
 /** Every sort but `averageScore`, which depends on the score columns and is added per query. */
 const SORT_COLUMNS = {
@@ -116,13 +115,13 @@ const SORT_COLUMNS = {
   email: e.email,
   title: sql`lower(${blankAsNull(e.title)})`,
   track: candidateTrack,
-  btcDate: e.btcDate,
+  btcDate,
 } as const;
 
-/** Which stage a candidate is in, read off their bootcamp history. */
+/** Which stage a candidate is in, by the classes they have attended. */
 export const IN_STAGE: Record<CandidateStage, SQL> = {
-  bootcamp: isNull(e.btcDate),
-  intermediate: and(isNotNull(e.btcDate), isNull(e.intDate))!,
+  bootcamp: not(attendedBtc),
+  intermediate: and(attendedBtc, not(attendedInt))!,
 };
 
 const ON_TRACK: Record<CandidateTrack, SQL> = {
@@ -134,7 +133,7 @@ const ON_TRACK: Record<CandidateTrack, SQL> = {
 
 /**
  * In the org, in a stage, on a track still to train or none yet, and recent
- * enough by the cutoffs. Reads `employees` alone, history and all; eVals
+ * enough by the cutoffs. Reads `employees` and who attended what; eVals
  * scoring draws its attendees with it too.
  */
 export function isCandidate({ startDateOnOrAfter, activeEffectiveDateAfter }: CandidateCutoffs) {
@@ -207,9 +206,9 @@ export async function listCurrentCohort(
       track: candidateTrack,
       overridden: e.trackPinned,
       stage: candidateStage,
-      historyId: sql<string | null>`case when ${hasHistory} then ${e.id} end`,
-      btcDate: e.btcDate,
-      btcScore: evals ? e.btcScore : sql<number | null>`null::float8`,
+      recordKey: sql<string | null>`case when ${attendedBtc} then ${e.id} end`,
+      btcDate,
+      btcScore: evals ? classScore("bootcamp", sql`${e.email}`) : sql<number | null>`null::float8`,
       scores: scoring
         ? sql<Record<string, number>>`coalesce((select jsonb_object_agg(${s.assessmentId}, ${s.averageScore}) ${scoredSubmissions(scoring)}), '{}'::jsonb)`
         : sql<Record<string, number>>`'{}'::jsonb`,

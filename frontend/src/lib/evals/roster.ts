@@ -1,7 +1,6 @@
 /**
- * Everyone under the org root, with the list their title is on and their
- * bootcamp history — what the HiBob tab shows, and what candidate loading
- * will read.
+ * Everyone under the org root, with the list their title is on — what the
+ * HiBob tab shows, and what candidate loading will read.
  */
 
 import "server-only";
@@ -14,6 +13,7 @@ import {
   type Employee,
   type EvalsTitleList,
 } from "@/db/schema";
+import { classDate, classScore } from "@/lib/evals/attendance";
 import { orgUnder } from "@/lib/evals/org";
 import type { EmployeeSort, OrganizationSort } from "@/lib/list-specs";
 import { pageWindow, toPage, type ListQuery, type Page } from "@/lib/paging";
@@ -36,8 +36,6 @@ export type RosterPerson = {
   /** How many managers sit between this person and the org root, counting the root. */
   depth: number;
   list: EvalsTitleList | null;
-  btcDate: string | null;
-  intDate: string | null;
 };
 
 export type UnlistedTitle = { title: string; count: number };
@@ -177,14 +175,26 @@ export type OrganizationSummary = {
 /** Someone the last sync found under the Organization Leader, as the Organization tab lists them. */
 export type OrganizationMember = Pick<
   Employee,
-  "email" | "fullName" | "title" | "department" | "reportsToEmail" | "reportsToName" | "track" | "btcDate" | "btcScore" | "intDate" | "intScore"
+  "email" | "fullName" | "title" | "department" | "reportsToEmail" | "reportsToName" | "track"
 > & {
+  /** The day of the latest BTC and INT they attended, and how they did there; null for none. */
+  btcDate: string | null;
+  btcScore: number | null;
+  intDate: string | null;
+  intScore: number | null;
   /** Links between this person and the leader, counting the leader. */
   depth: number;
   /** Lowercased; whom the sync that stored them worked `depth` out for. */
   leaderEmail: string;
   /** Their managers' emails, the direct one first and the leader last, joined with `;`. */
   managementChain: string;
+};
+
+const ATTENDED = {
+  btcDate: classDate("bootcamp", sql`${employees.email}`),
+  btcScore: classScore("bootcamp", sql`${employees.email}`),
+  intDate: classDate("intermediate", sql`${employees.email}`),
+  intScore: classScore("intermediate", sql`${employees.email}`),
 };
 
 const ORGANIZATION_SORT_COLUMNS = {
@@ -195,10 +205,7 @@ const ORGANIZATION_SORT_COLUMNS = {
   department: sql`lower(${blankAsNull(employees.department)})`,
   reportsToName: sql`lower(coalesce(${blankAsNull(employees.reportsToName)}, ${blankAsNull(employees.reportsToEmail)}))`,
   track: employees.track,
-  btcDate: employees.btcDate,
-  btcScore: employees.btcScore,
-  intDate: employees.intDate,
-  intScore: employees.intScore,
+  ...ATTENDED,
 } as const;
 
 /** Whom the latest successful sync worked `employees.org_depth` out for, or null if none has. */
@@ -215,7 +222,7 @@ async function syncedLeaderEmail(): Promise<string | null> {
 /**
  * One page of the Organization tab: the employees the last HiBob sync found
  * reporting up to the Organization Leader, which is those it gave an
- * `org_depth`, each with their BTC and INT dates and scores. Read from what the sync stored rather than recomputed here,
+ * `org_depth`, each with the BTC and INT they attended. Read from what the sync stored rather than recomputed here,
  * because the chain is only ever as fresh as the last sync — recomputing on
  * every page view would silently show a chain HiBob has not actually synced yet.
  */
@@ -236,10 +243,7 @@ export async function listOrganizationMembers(
         track: e.track,
         depth: sql<number>`${e.orgDepth}`,
         managementChain: sql<string>`coalesce(${e.managementChain}, '')`,
-        btcDate: e.btcDate,
-        btcScore: e.btcScore,
-        intDate: e.intDate,
-        intScore: e.intScore,
+        ...ATTENDED,
       })
       .from(e)
       .where(
@@ -358,8 +362,6 @@ export async function loadRoster(rootEmail?: string): Promise<Roster> {
         reportsToName: employees.reportsToName,
         startDate: employees.startDate,
         activeEffectiveDate: employees.activeEffectiveDate,
-        btcDate: employees.btcDate,
-        intDate: employees.intDate,
       })
       .from(employees)
       .where(eq(employees.active, true)),
