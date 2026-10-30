@@ -78,7 +78,7 @@ export async function scoringAssessment(id: string): Promise<ScoringAssessment |
 }
 
 /** The criteria an assessment still asks, in order; at most `EVALS_ASSESSMENT_LIMITS.criteria`. */
-async function askedCriteria(assessmentId: string) {
+export async function askedCriteria(assessmentId: string) {
   return db
     .select({
       id: evalsAssessmentCriteria.id,
@@ -390,7 +390,12 @@ export async function scoringTarget(
   assessmentId: string,
   employeeId: string,
 ): Promise<
-  | { ok: true; assessment: ScoringAssessment; bootcamp: ActiveBootcamp; attendee: { id: string; email: string } }
+  | {
+      ok: true;
+      assessment: ScoringAssessment;
+      bootcamp: ActiveBootcamp;
+      attendee: { id: string; email: string; fullName: string };
+    }
   | { ok: false; error: "not_found" | "no_bootcamp" }
 > {
   const assessment = await scoringAssessment(assessmentId);
@@ -398,7 +403,7 @@ export async function scoringTarget(
   const [bootcamp, attendee] = await Promise.all([scoringBootcamp(assessment.stage), eligibleAttendee(assessment, employeeId)]);
   if (!attendee) return { ok: false, error: "not_found" };
   if (!bootcamp) return { ok: false, error: "no_bootcamp" };
-  return { ok: true, assessment, bootcamp, attendee: { id: attendee.id, email: attendee.email } };
+  return { ok: true, assessment, bootcamp, attendee: { id: attendee.id, email: attendee.email, fullName: attendee.fullName } };
 }
 
 const L = EVALS_ASSESSMENT_LIMITS;

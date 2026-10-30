@@ -2313,6 +2313,30 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         ],
       },
       {
+        method: "POST",
+        path: "/api/evals/scoring/{assessmentId}/{employeeId}/transcripts/{transcriptId}/review",
+        summary: "Asks Claude to read one filed transcript against the assessment's criteria, and returns a short note for each.",
+        access: "scorer",
+        token: true,
+        notes:
+          "Claude Opus 5.5 is sent the assessment's name, the attendee's name, every criterion still asked with its description, and the transcript; it is told not to score. Nothing is saved: the scoring form appends each summary on a new line of that criterion's comment, and the judge saves the form as usual. comments follows the order of the criteria, one per criterion at most; a criterion Claude wrote nothing for has none. Takes up to two minutes.",
+        params: [
+          { name: "assessmentId", type: "string", required: true, note: "UUID" },
+          { name: "employeeId", type: "string", required: true, note: "the employee's HiBob id" },
+          { name: "transcriptId", type: "string", required: true, note: "UUID; the id of a transcript filed for them, not its recordingId" },
+        ],
+        returns: "{ comments: { criterionId, summary }[] }",
+        errors: [
+          { status: 404, error: "not_found", when: "an id is not that shape, no such active assessment, the attendee is not one it applies to, or no such transcript is filed for them at the active bootcamp" },
+          { status: 409, error: "no_bootcamp", when: "no bootcamp is active, or for intermediate, the active one holds no intermediate class" },
+          { status: 409, error: "empty", when: "the transcript has no text: nothing was heard" },
+          { status: 409, error: "no_criteria", when: "the assessment asks no criteria" },
+          { status: 422, error: "refused", when: "Claude declined to review it" },
+          { status: 502, error: "upstream", when: "Claude could not be reached, ran out of time, or answered with something unreadable" },
+          { status: 503, error: "unconfigured", when: "no ANTHROPIC_API_KEY is set on this deployment" },
+        ],
+      },
+      {
         method: "PUT",
         path: "/api/evals/scoring/{assessmentId}/{employeeId}",
         summary: "Saves one attendee's submission at the active bootcamp, making the caller its owner.",

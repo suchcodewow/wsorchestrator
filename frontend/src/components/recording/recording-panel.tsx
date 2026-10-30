@@ -12,6 +12,7 @@ import Link from "next/link";
 import { Loader2, Mic, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatDuration } from "@/lib/recording/format";
+import type { StoredRecording } from "@/lib/recording/store";
 import { LevelMeter, useAudioLevel } from "./level-meter";
 import { RecordingList, useRecordings } from "./recording-list";
 import type { useRecorder } from "./use-recorder";
@@ -22,6 +23,7 @@ export function RecordingPanel({
   subject,
   version,
   onChanged,
+  actions,
   children,
 }: {
   recorder: ReturnType<typeof useRecorder>;
@@ -30,6 +32,8 @@ export function RecordingPanel({
   /** Bumped by the page whenever a recording is saved, to list it. */
   version: number;
   onChanged: () => void;
+  /** More controls for each finished recording, shown first in its row. */
+  actions?: (recording: StoredRecording) => ReactNode;
   /** Shown between the controls and the recordings, such as their transcripts. */
   children?: ReactNode;
 }) {
@@ -88,7 +92,7 @@ export function RecordingPanel({
       )}
 
       {children}
-      <RecordingList recordings={saved} onDeleted={onChanged} />
+      <RecordingList recordings={saved} onDeleted={onChanged} actions={actions} />
     </div>
   );
 }

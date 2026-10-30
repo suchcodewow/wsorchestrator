@@ -13,13 +13,17 @@
  * filed with the assessment when it stops, and read on the Transcripts tab so
  * it does not push the scores down the page. Submit stops the recording and
  * waits for its transcript before it sends the scores.
+ *
+ * Once a recording's transcript is filed, Ask Claude has Claude read it
+ * against every criterion and appends its note to each comment, on a new
+ * line after whatever is there. Nothing is saved until Submit.
  */
 
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { ArrowLeft, ClipboardList, FileText, Info, Loader2, Send } from "lucide-react";
+import { ArrowLeft, ClipboardList, FileText, Info, Loader2, Send, Sparkles } from "lucide-react";
 import { MentionTextarea } from "@/components/mention-textarea";
 import { RecordingPanel } from "@/components/recording/recording-panel";
 import { useLiveTranscript } from "@/components/recording/use-live-transcript";
@@ -36,8 +40,9 @@ import {
   wholeScore,
 } from "@/lib/evals/assessment-values";
 import type { ScoringForm } from "@/lib/evals/scoring";
+import { appendSummary, type ReviewComment } from "@/lib/evals/transcript-review-values";
 import { mentionsIn, type MentionPick } from "@/lib/mentions";
-import { evalSubject } from "@/lib/recording/store";
+import { evalSubject, type StoredRecording } from "@/lib/recording/store";
 import { riseChild, staggerParent } from "@/lib/motion";
 import type { ActiveBootcamp } from "@/lib/scheduler/bootcamps";
 import { cn } from "@/lib/utils";
@@ -60,6 +65,17 @@ const ERRORS: Record<string, string> = {
   not_found: "This assessment or attendee can no longer be scored — go back to the list.",
   conflict: "Someone else saved this assessment while you had it open. Reload to see their version.",
   forbidden: "You can no longer score — reload the page.",
+};
+
+const REVIEW_ERRORS: Record<string, string> = {
+  empty: "Nothing was heard in this recording, so Claude has nothing to review.",
+  no_criteria: "This assessment asks no criteria.",
+  no_bootcamp: ERRORS.no_bootcamp!,
+  not_found: "This transcript is no longer filed for them. Reload the page.",
+  refused: "Claude declined to review this transcript.",
+  upstream: "Claude could not review it just now. Try again.",
+  unconfigured: "Claude is not set up on this deployment.",
+  forbidden: ERRORS.forbidden!,
 };
 
 export function ScoringFormView({
@@ -90,6 +106,9 @@ export function ScoringFormView({
   // Set once Submit has said a transcript is missing; the next Submit saves the scores anyway.
   const [warned, setWarned] = useState(false);
   const [tab, setTab] = useState<"scoring" | "transcripts">("scoring");
+  // The recording whose transcript Claude is reading, and what came of the last read.
+  const [reviewing, setReviewing] = useState<string | null>(null);
+  const [review, setReview] = useState<{ error: boolean; text: string } | null>(null);
   const subject = evalSubject(assessment.id, attendee.id);
   const [recordingsVersion, setRecordingsVersion] = useState(0);
   const transcripts = useAssessmentTranscripts({
@@ -134,6 +153,61 @@ export function ScoringFormView({
 
   function set(id: string, patch: Partial<Entry>) {
     setEntries((all) => ({ ...all, [id]: { ...all[id]!, ...patch } }));
+  }
+
+  async function askClaude(transcript: ClientTranscript) {
+    setReviewing(transcript.recordingId);
+    setReview(null);
+    try {
+      const res = await fetch(
+        `/api/evals/scoring/${assessment.id}/${encodeURIComponent(attendee.id)}/transcripts/${transcript.id}/review`,
+        { method: "POST" },
+      );
+      const body = await res.json().catch(() => null);
+      if (!res.ok) {
+        setReview({ error: true, text: REVIEW_ERRORS[body?.error ?? ""] ?? `Claude could not review it (${res.status}).` });
+        return;
+      }
+      const added = ((body?.comments ?? []) as ReviewComment[]).filter((c) => entries[c.criterionId]);
+      setEntries((all) => {
+        const next = { ...all };
+        for (const { criterionId, summary } of added) {
+          next[criterionId] = {
+            ...next[criterionId]!,
+            comment: appendSummary(next[criterionId]!.comment, summary, EVALS_ASSESSMENT_LIMITS.comment),
+          };
+        }
+        return next;
+      });
+      setReview({
+        error: false,
+        text:
+          added.length === 0
+            ? "Claude had nothing to add."
+            : `Claude added a note to ${added.length} of ${criteria.length} ${criteria.length === 1 ? "comment" : "comments"}. Read and edit them before you submit.`,
+      });
+    } catch {
+      setReview({ error: true, text: "Could not reach the server." });
+    } finally {
+      setReviewing(null);
+    }
+  }
+
+  function askClaudeButton(r: StoredRecording) {
+    const filed = transcripts.transcripts.find((t) => t.recordingId === r.id);
+    const heard = Boolean(filed?.text.trim());
+    return (
+      <Button
+        variant="ghost"
+        size="sm"
+        disabled={!filed || !heard || reviewing !== null}
+        title={!filed ? "Waiting for its transcript" : !heard ? "Nothing was heard in this recording" : undefined}
+        onClick={() => filed && askClaude(filed)}
+      >
+        {reviewing === r.id ? <Loader2 className="animate-spin" /> : <Sparkles />}
+        Ask Claude
+      </Button>
+    );
   }
 
   async function submit() {
@@ -303,7 +377,21 @@ export function ScoringFormView({
             subject={subject}
             version={recordingsVersion}
             onChanged={() => setRecordingsVersion((v) => v + 1)}
+            actions={bootcamp ? askClaudeButton : undefined}
           />
+          {reviewing && (
+            <p role="status" className="text-sm text-muted-foreground">
+              Claude is reading the transcript…
+            </p>
+          )}
+          {review && (
+            <p
+              role={review.error ? "alert" : "status"}
+              className={cn("text-sm", review.error ? "text-destructive" : "text-muted-foreground")}
+            >
+              {review.text}
+            </p>
+          )}
         </motion.section>
 
         {criteria.map((c, i) => {
@@ -387,7 +475,7 @@ export function ScoringFormView({
 
       <motion.div variants={riseChild}>
         <div className="flex items-center gap-3">
-          <Button variant="brand" disabled={!canSubmit || busy !== null} onClick={submit}>
+          <Button variant="brand" disabled={!canSubmit || busy !== null || reviewing !== null} onClick={submit}>
             {busy ? <Loader2 className="animate-spin" /> : <Send />}
             Submit
           </Button>

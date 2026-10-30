@@ -55,6 +55,12 @@ export async function listTranscripts(filing: TranscriptFiling): Promise<Transcr
   return db.select(COLUMNS).from(t).where(filedAs(filing)).orderBy(asc(t.recordedAt), asc(t.id)).limit(MAX_TRANSCRIPTS);
 }
 
+/** One transcript, only if it is filed under `filing`. */
+export async function getTranscript(filing: TranscriptFiling, id: string): Promise<Transcript | null> {
+  const [row] = await db.select(COLUMNS).from(t).where(and(filedAs(filing), eq(t.id, id)));
+  return row ?? null;
+}
+
 export type TranscriptInput = { recordingId: string; recordedAt: Date; durationMs: number; audio: Blob };
 
 export type TranscriptError =

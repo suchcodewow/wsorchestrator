@@ -2,7 +2,7 @@
 
 /** The recordings this browser holds for one subject: play, download or delete each. */
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Download, Loader2, Play, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { extensionFor, formatBytes, formatDuration } from "@/lib/recording/format";
@@ -44,21 +44,32 @@ export function useRecordings(ownerId: string, subject: string, version: number)
 export function RecordingList({
   recordings,
   onDeleted,
+  actions,
 }: {
   recordings: StoredRecording[];
   onDeleted: () => void;
+  /** More controls for a recording, shown first in its row. */
+  actions?: (recording: StoredRecording) => ReactNode;
 }) {
   if (recordings.length === 0) return null;
   return (
     <ul className="divide-y rounded-lg border">
       {recordings.map((r) => (
-        <RecordingRow key={r.id} recording={r} onDeleted={onDeleted} />
+        <RecordingRow key={r.id} recording={r} onDeleted={onDeleted} actions={actions?.(r)} />
       ))}
     </ul>
   );
 }
 
-function RecordingRow({ recording: r, onDeleted }: { recording: StoredRecording; onDeleted: () => void }) {
+function RecordingRow({
+  recording: r,
+  onDeleted,
+  actions,
+}: {
+  recording: StoredRecording;
+  onDeleted: () => void;
+  actions?: ReactNode;
+}) {
   const [url, setUrl] = useState<string | null>(null);
   const [busy, setBusy] = useState<"play" | "download" | "delete" | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -114,6 +125,7 @@ function RecordingRow({ recording: r, onDeleted }: { recording: StoredRecording;
           </span>
         )}
         <div className="ml-auto flex gap-1">
+          {actions}
           {!url && (
             <Button variant="ghost" size="sm" disabled={busy !== null} onClick={() => act("play")}>
               {busy === "play" ? <Loader2 className="animate-spin" /> : <Play />}

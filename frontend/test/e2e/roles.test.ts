@@ -838,6 +838,11 @@ const ROUTES: RouteCase[] = [
   { method: "GET", path: `/api/evals/scoring/${MISSING}/0`, allowed: canScoreAssessments },
   { method: "PUT", path: `/api/evals/scoring/${MISSING}/0`, allowed: canScoreAssessments, body: () => ({}) },
   { method: "POST", path: `/api/evals/scoring/${MISSING}/0/transcripts`, allowed: canScoreAssessments, body: form },
+  {
+    method: "POST",
+    path: `/api/evals/scoring/${MISSING}/0/transcripts/${MISSING}/review`,
+    allowed: canScoreAssessments,
+  },
 
   // Users
   { method: "GET", path: "/api/users", allowed: canManageUsers },
