@@ -6,7 +6,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { ArrowRight, CheckCircle2, Circle, Lightbulb, Loader2, Lock, PlayCircle } from "lucide-react";
+import { ArrowRight, CheckCircle2, Circle, Clock, Lightbulb, Loader2, Lock, PlayCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { MyIris, SubjectStatus } from "@/lib/iris/attempts";
 import type { Level } from "@/lib/iris/engine";
@@ -20,6 +20,7 @@ const STATUS_ICON: Record<SubjectStatus, React.ReactNode> = {
   in_progress: <PlayCircle className="size-5 text-brand" />,
   available: <Circle className="size-5 text-muted-foreground/60" />,
   unavailable: <Lock className="size-4.5 text-muted-foreground/50" />,
+  coming_soon: <Clock className="size-4.5 text-muted-foreground/40" />,
 };
 
 export function TestsView({ mine, selfId }: { mine: MyIris; selfId: string | null }) {
@@ -28,7 +29,7 @@ export function TestsView({ mine, selfId }: { mine: MyIris; selfId: string | nul
       <motion.div variants={riseChild} className="space-y-1.5">
         <h2 className="text-xl font-medium tracking-tight">Placement tests</h2>
         <p className="text-sm text-muted-foreground tnum">
-          {mine.completed} of {mine.subjects.length} done
+          {mine.completed} of {mine.open} done
           {mine.track && <> · {TRACK_LABELS[mine.track]}</>}
         </p>
       </motion.div>
@@ -63,11 +64,14 @@ export function TestsView({ mine, selfId }: { mine: MyIris; selfId: string | nul
         aria-disabled={!mine.track}
       >
         {mine.subjects.map((s) => (
-          <div key={s.key} className="flex items-center gap-4 px-5 py-4">
+          <div
+            key={s.key}
+            className={cn("flex items-center gap-4 px-5 py-4", s.status === "coming_soon" && "text-muted-foreground")}
+          >
             <span className="flex size-5 shrink-0 items-center justify-center">{STATUS_ICON[s.status]}</span>
             <div className="min-w-0 flex-1">
               <p className="font-medium">{s.name}</p>
-              <p className="text-muted-foreground">{s.blurb}</p>
+              {s.blurb && <p className="text-muted-foreground">{s.blurb}</p>}
             </div>
             <SubjectAction subject={s.key} status={s.status} placement={s.placement} selfId={selfId} />
           </div>
@@ -103,6 +107,7 @@ function SubjectAction({
     );
   }
   if (status === "unavailable") return <span className="text-muted-foreground">Not open yet</span>;
+  if (status === "coming_soon") return <span className="text-muted-foreground">Coming soon</span>;
   return (
     <Button asChild variant={status === "in_progress" ? "brand" : "outline"} size="sm">
       <Link href={`/diagnostic/tests/${subject}`}>

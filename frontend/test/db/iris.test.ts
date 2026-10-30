@@ -21,13 +21,23 @@ import assert from "node:assert/strict";
 import { eq } from "drizzle-orm";
 
 import { db } from "@/db";
-import { irisAttempts, irisItemReviews } from "@/db/schema";
-import { answer, myIris, openSitting, setTrack, startSitting, withoutLevel, type SittingView } from "@/lib/iris/attempts";
+import { irisAttempts, irisItemReviews, irisResponses } from "@/db/schema";
+import {
+  answer,
+  myIris,
+  openSitting,
+  setTrack,
+  shuffledOrder,
+  startSitting,
+  withoutLevel,
+  type SittingView,
+} from "@/lib/iris/attempts";
 import { clearResults, cohortSummary, listCohort, personDetail } from "@/lib/iris/cohort";
 import { IDK } from "@/lib/iris/engine";
 import { IRIS_ITEMS } from "@/lib/iris/items";
 import { listQuestions } from "@/lib/iris/questions";
 import { ITEMS_BY_ID, approveDrafts, poolFor, setReviews } from "@/lib/iris/reviews";
+import { SUBJECTS } from "@/lib/iris/subjects";
 import { IRIS_COHORT_LIST } from "@/lib/list-specs";
 import { PERSONAS } from "../support/access";
 import { testScope, type TestUser } from "../support/seed";
@@ -51,17 +61,23 @@ after(async () => {
   await scope.tearDown();
 });
 
-/** The question on screen, which only the server knows: a taker is never sent its id. */
-async function onScreen(attemptId: string): Promise<string> {
-  const [row] = await db.select({ itemId: irisAttempts.currentItemId }).from(irisAttempts).where(eq(irisAttempts.id, attemptId));
-  return row!.itemId!;
+/** The question on screen and the order its options are shown in, which only the server knows. */
+async function onScreen(attemptId: string): Promise<{ itemId: string; order: number[] }> {
+  const [row] = await db
+    .select({ itemId: irisAttempts.currentItemId, order: irisAttempts.optionOrder })
+    .from(irisAttempts)
+    .where(eq(irisAttempts.id, attemptId));
+  return { itemId: row!.itemId!, order: row!.order! };
 }
 
-/** Answers every question the way `pick` says until the sitting ends. */
+/** Answers every question the way `pick` says, as an original option A–D, until the sitting ends. */
 async function finish(user: TestUser, first: SittingView, pick: (itemId: string) => number) {
   let sitting = first;
   for (let guard = 0; guard < 30; guard++) {
-    const choice = pick(await onScreen(sitting.attemptId));
+    const { itemId, order } = await onScreen(sitting.attemptId);
+    const original = pick(itemId);
+    // The taker answers by where the option sits on their screen.
+    const choice = original === IDK ? IDK : order.indexOf(original);
     const res = await answer(user.id, sitting.attemptId, sitting.number, choice, seeded(guard));
     assert.ok(res.ok, JSON.stringify(res));
     if (res.done) return res;
@@ -78,7 +94,9 @@ describe("before any question is approved", () => {
     await setTrack(taker.id, "AE");
     assert.deepEqual(await startSitting(taker.id, "sdlc", "A", "live"), { ok: false, error: "not_ready" });
     const mine = await myIris(taker.id);
-    assert.ok(mine.subjects.every((s) => s.status === "unavailable"));
+    assert.ok(mine.subjects.every((s) => s.status === (SUBJECTS[s.key].comingSoon ? "coming_soon" : "unavailable")));
+    assert.equal(mine.open, 5, "the four coming subjects are left out of the count");
+    assert.deepEqual(await startSitting(taker.id, "tools", "A", "live"), { ok: false, error: "not_ready" });
   });
 
   test("a preview can still run, on drafts", async () => {
@@ -106,12 +124,33 @@ describe("a live sitting", () => {
     assert.ok(res.ok);
     assert.deepEqual(Object.keys(res.sitting.question).sort(), ["options", "stem"]);
     assert.equal(res.sitting.number, 1);
-    const item = ITEMS_BY_ID.get(await onScreen(res.sitting.attemptId))!;
+    const item = ITEMS_BY_ID.get((await onScreen(res.sitting.attemptId)).itemId)!;
     assert.equal(item.level, 2, "it starts at Intermediate");
     const sent = JSON.stringify(res);
     assert.ok(!sent.includes(item.rationale), "no explanation");
     assert.ok(!sent.includes(item.id), "no id, which spells the level");
     assert.ok(!/"answer"|"level"|"rationale"|-l[123]-/.test(sent), sent);
+  });
+
+  test("shows each question's options in a shuffled order, and grades and stores by the original", async () => {
+    const shuffler = await scope.createUser("shuffler", PERSONAS.assessmentsViewer);
+    await setTrack(shuffler.id, "AE");
+    const start = await startSitting(shuffler.id, "sdlc", "A", "live", seeded(42));
+    assert.ok(start.ok);
+    const { itemId, order } = await onScreen(start.sitting.attemptId);
+    const item = ITEMS_BY_ID.get(itemId)!;
+    assert.deepEqual([...order].sort(), [0, 1, 2, 3]);
+    assert.deepEqual(start.sitting.question.options, order.map((i) => item.options[i]));
+    // Answer the key by where it sits on screen.
+    const res = await answer(shuffler.id, start.sitting.attemptId, 1, order.indexOf(item.answer));
+    assert.ok(res.ok);
+    const [stored] = await db.select().from(irisResponses).where(eq(irisResponses.attemptId, start.sitting.attemptId));
+    assert.equal(stored!.correct, true);
+    assert.equal(stored!.choice, item.answer, "stored as the original option, so statistics stay in A–D");
+    // Over many sittings the key lands in every position.
+    const seen = new Set<number>();
+    for (let k = 0; k < 40; k++) seen.add(shuffledOrder(seeded(k)).indexOf(0));
+    assert.deepEqual([...seen].sort(), [0, 1, 2, 3]);
   });
 
   test("resumes where it was left, and refuses a stale or impossible answer", async () => {
@@ -204,23 +243,23 @@ describe("a group answering at once", () => {
 
 describe("reviews", () => {
   test("an approval made on an older version leaves the question a draft", async () => {
-    const item = IRIS_ITEMS.find((i) => i.subject === "industry")!;
+    const item = IRIS_ITEMS.find((i) => i.subject === "companies")!;
     await db
       .insert(irisItemReviews)
       .values({ itemId: item.id, itemVersion: "1.0", status: "approved", reviewerId: admin.id })
       .onConflictDoUpdate({ target: irisItemReviews.itemId, set: { itemVersion: "1.0", status: "approved" } });
-    const [row] = await listQuestions("industry", "A").then((rows) => rows.filter((r) => r.id === item.id));
+    const [row] = await listQuestions("companies", "A").then((rows) => rows.filter((r) => r.id === item.id));
     assert.equal(row!.review.status, "draft");
   });
 
   test("a rejected question is left out of previews and live sittings", async () => {
-    const item = IRIS_ITEMS.find((i) => i.subject === "cotm")!;
+    const item = IRIS_ITEMS.find((i) => i.subject === "champion")!;
     assert.deepEqual(await setReviews(admin.id, [{ id: item.id, status: "rejected", note: "two keys" }]), {
       ok: true,
       written: 1,
     });
-    assert.ok(!(await poolFor("cotm", "A", "preview")).some((i) => i.id === item.id));
-    const [row] = (await listQuestions("cotm", "A", { status: "rejected" })).filter((r) => r.id === item.id);
+    assert.ok(!(await poolFor("champion", "A", "preview")).some((i) => i.id === item.id));
+    const [row] = (await listQuestions("champion", "A", { status: "rejected" })).filter((r) => r.id === item.id);
     assert.equal(row!.review.note, "two keys");
   });
 
@@ -249,7 +288,7 @@ describe("what administrators read back", () => {
     const summary = await cohortSummary("A", "iris_");
     assert.equal(summary.people, 2);
     assert.deepEqual(summary.subjects.sdlc, { median: 1, placed: 2, levels: { 1: 1, 2: 0, 3: 1 } });
-    assert.deepEqual(summary.subjects.industry, { median: null, placed: 0, levels: { 1: 0, 2: 0, 3: 0 } });
+    assert.deepEqual(summary.subjects.companies, { median: null, placed: 0, levels: { 1: 0, 2: 0, 3: 0 } });
     assert.deepEqual(summary.weakest, ["sdlc"]);
     assert.deepEqual((await cohortSummary("A", "no-such-person")).weakest, []);
   });

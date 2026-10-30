@@ -322,7 +322,7 @@ const PAGES: Record<string, PageCase> = {
   "/diagnostic/cohort/<a person>": { path: () => `/diagnostic/cohort/${people.assessmentsViewer.id}`, expect: gated(canManageIris) },
   "/diagnostic/cohort/<unknown>": { path: () => `/diagnostic/cohort/${MISSING}`, expect: () => 404 },
   "/diagnostic/questions": { path: () => "/diagnostic/questions", expect: gated(canManageIris) },
-  "/diagnostic/questions?subject": { path: () => "/diagnostic/questions?subject=compete&level=3&status=draft", expect: gated(canManageIris) },
+  "/diagnostic/questions?subject": { path: () => "/diagnostic/questions?subject=champion&level=3&status=draft", expect: gated(canManageIris) },
   "/reporting": {
     path: () => "/reporting",
     expect: (a) => (canSeeReporting(a) ? { to: visibleReportingTabs(a)[0]!.href } : 404),

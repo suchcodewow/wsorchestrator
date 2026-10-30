@@ -166,12 +166,14 @@ export function SittingScreen({
                 <LevelBadge level={state.placement} />
                 {state.confidence && <span className="text-muted-foreground">{state.confidence} confidence</span>}
               </div>
-              <div className="px-4 py-3">
-                <p className="text-xs font-medium text-muted-foreground">
-                  Routes to · {LEVEL_LABELS[state.placement]} tier
-                </p>
-                <p className="mt-1">{TRAINING[subject][state.placement]}</p>
-              </div>
+              {TRAINING[subject] && (
+                <div className="px-4 py-3">
+                  <p className="text-xs font-medium text-muted-foreground">
+                    Routes to · {LEVEL_LABELS[state.placement]} tier
+                  </p>
+                  <p className="mt-1">{TRAINING[subject][state.placement]}</p>
+                </div>
+              )}
               <p className="px-4 py-3 text-xs text-muted-foreground">
                 {mode === "preview"
                   ? "A preview, so this is not recorded anywhere."
