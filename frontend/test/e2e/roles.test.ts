@@ -377,6 +377,8 @@ const PAGES: Record<string, PageCase> = {
   "/mimir/chat": { path: () => "/mimir/chat", expect: () => 200 },
   "/mimir/map": { path: () => "/mimir/map", expect: () => 200 },
   "/mimir/map?play=<unknown>": { path: () => `/mimir/map?play=${MISSING}`, expect: () => 200 },
+  "/mimir/videos": { path: () => "/mimir/videos", expect: () => 200 },
+  "/mimir/code-lab": { path: () => "/mimir/code-lab", expect: () => 200 },
   // The previous Mimir, kept to read, for Training Administrators.
   "/mimir-archive": {
     path: () => "/mimir-archive",
@@ -836,6 +838,11 @@ const ROUTES: RouteCase[] = [
   { method: "GET", path: `/api/evals/scoring/${MISSING}/0`, allowed: canScoreAssessments },
   { method: "PUT", path: `/api/evals/scoring/${MISSING}/0`, allowed: canScoreAssessments, body: () => ({}) },
   { method: "POST", path: `/api/evals/scoring/${MISSING}/0/transcripts`, allowed: canScoreAssessments, body: form },
+  {
+    method: "POST",
+    path: `/api/evals/scoring/${MISSING}/0/transcripts/${MISSING}/review`,
+    allowed: canScoreAssessments,
+  },
 
   // Users
   { method: "GET", path: "/api/users", allowed: canManageUsers },
