@@ -9,16 +9,18 @@
 
 import "server-only";
 
-import { and, desc, eq, gt, inArray, isNotNull, lt, sql, type SQL } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNotNull, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
 import {
+  bootcamps,
   employees,
   EVALS_SETTINGS_KEYS,
   evalsSettings,
   GOOGLE_CONNECTION_KEY,
   googleConnections,
   googleMeetings,
+  intakeResponses,
   MEETING_SELECTION_LIMITS,
   MEETING_STAGES,
   MEETING_TRACKS,
@@ -38,7 +40,17 @@ import {
 } from "@/db/schema";
 import { getTestGroup } from "@/lib/cohorts/test-group";
 import { currentCohortPeople } from "@/lib/evals/current-cohort";
-import { cleanMeetingName, meetingIsFor, meetingMark, offsetHour, TIMEZONE_HOURS, type MeetingMark } from "@/lib/evals/meeting-plan";
+import {
+  bootcampLastDay,
+  cleanMeetingName,
+  inviteWindow,
+  meetingIsFor,
+  meetingMark,
+  offsetHour,
+  TIMEZONE_HOURS,
+  type MeetingBootcamp,
+  type MeetingMark,
+} from "@/lib/evals/meeting-plan";
 import type { MeetingSelectionSort, MeetingSyncChangeSort, MeetingSyncSort } from "@/lib/list-specs";
 import { PAGE_SIZE, pageWindow, toPage, type ListQuery, type Page } from "@/lib/paging";
 import { orderFor, searchAny } from "@/lib/paging-sql";
@@ -64,6 +76,8 @@ export type MeetingSelectionRow = {
   timezoneTo: number | null;
   /** Days after someone's start date before this meeting suits them. */
   minDaysAfterStart: number;
+  /** Whether each person is invited to every occurrence offered to them, not one at a time. */
+  allOccurrences: boolean;
   syncedAt: Date | null;
   /** When the next occurrence starts, as of the last live sync; null with none to come. */
   nextStartsAt: Date | null;
@@ -81,6 +95,26 @@ const s = meetingSelections;
 const o = meetingOccurrences;
 const i = meetingInvites;
 const k = meetingAttendanceMarks;
+
+/**
+ * The active bootcamp, with its last day and the start of the next scheduled
+ * bootcamp after it that holds an intermediate class; null with none active.
+ */
+export async function meetingBootcamp(): Promise<MeetingBootcamp | null> {
+  const active = await activeBootcamp();
+  if (!active) return null;
+  const [next] = await db
+    .select({ startDate: bootcamps.startDate })
+    .from(bootcamps)
+    .where(and(eq(bootcamps.status, "scheduled"), isNotNull(bootcamps.intDays), gt(bootcamps.startDate, active.startDate)))
+    .orderBy(bootcamps.startDate)
+    .limit(1);
+  return {
+    startDate: active.startDate,
+    lastDay: bootcampLastDay(active.startDate, active.btcDays, active.intDays),
+    nextIntermediate: next?.startDate ?? null,
+  };
+}
 
 const SORT_COLUMNS = {
   name: sql`lower(${s.name})`,
@@ -101,6 +135,7 @@ export async function listMeetingSelections(query: ListQuery<MeetingSelectionSor
       timezoneFrom: s.timezoneFrom,
       timezoneTo: s.timezoneTo,
       minDaysAfterStart: s.minDaysAfterStart,
+      allOccurrences: s.allOccurrences,
       syncedAt: s.syncedAt,
       createdAt: s.createdAt,
       nextStartsAt: sql<Date | null>`(select min(${o.startsAt}) from ${o} where ${o.meetingId} = ${s.id} and ${o.startsAt} > now())`.mapWith(
@@ -215,6 +250,8 @@ export const meetingSelectionSchema = z
     timezoneTo: offsetHours.nullish(),
     /** Days after a person's start date before the meeting suits them; 0 when left out. */
     minDaysAfterStart: daysAfterStart.optional(),
+    /** Every occurrence until their class, not one at a time; false when left out. */
+    allOccurrences: z.boolean().optional(),
   })
   .refine(timezoneRangeValid);
 
@@ -228,6 +265,7 @@ export const meetingSelectionPatchSchema = z
     timezoneFrom: offsetHours.nullable(),
     timezoneTo: offsetHours.nullable(),
     minDaysAfterStart: daysAfterStart,
+    allOccurrences: z.boolean(),
   })
   .partial()
   .refine((v) => (v.timezoneFrom === undefined) === (v.timezoneTo === undefined) && timezoneRangeValid(v));
@@ -239,7 +277,7 @@ export async function createMeetingSelection(actorId: string, input: MeetingSele
   try {
     const [row] = await db
       .insert(s)
-      .values({ ...input, timezoneFrom: input.timezoneFrom ?? null, timezoneTo: input.timezoneTo ?? null, minDaysAfterStart: input.minDaysAfterStart ?? 0, createdBy: actorId })
+      .values({ ...input, timezoneFrom: input.timezoneFrom ?? null, timezoneTo: input.timezoneTo ?? null, minDaysAfterStart: input.minDaysAfterStart ?? 0, allOccurrences: input.allOccurrences ?? false, createdBy: actorId })
       .returning({ id: s.id, name: s.name });
     return { ok: true, meeting: row! };
   } catch (err) {
@@ -264,6 +302,7 @@ export async function updateMeetingSelection(id: string, patch: z.infer<typeof m
     timezoneFrom: patch.timezoneFrom === undefined ? current.timezoneFrom : patch.timezoneFrom,
     timezoneTo: patch.timezoneTo === undefined ? current.timezoneTo : patch.timezoneTo,
     minDaysAfterStart: patch.minDaysAfterStart ?? current.minDaysAfterStart,
+    allOccurrences: patch.allOccurrences ?? current.allOccurrences,
   };
   if (
     next.name === current.name &&
@@ -271,7 +310,8 @@ export async function updateMeetingSelection(id: string, patch: z.infer<typeof m
     next.track === current.track &&
     next.timezoneFrom === current.timezoneFrom &&
     next.timezoneTo === current.timezoneTo &&
-    next.minDaysAfterStart === current.minDaysAfterStart
+    next.minDaysAfterStart === current.minDaysAfterStart &&
+    next.allOccurrences === current.allOccurrences
   ) {
     return { ok: true, meeting: { id, name: current.name } };
   }
@@ -390,22 +430,35 @@ export type PersonMeetingStatus = {
 /**
  * For each of a page's people, where they stand with each picked meeting that
  * is for them: attended, accepted, not yet answered, not yet invited (all a
- * meeting that has never synced has), or with no occurrence left before the
- * active bootcamp. Test-group invites are left out; the Current tab is the real cohort.
+ * meeting that has never synced has), or with no occurrence left in their
+ * window: before the active bootcamp, or for an Intermediate meeting they will
+ * take after it, between its last day and the next intermediate class.
+ * Test-group invites and RSVPs are left out; the Current tab is the real cohort.
  */
 export async function meetingStatusesFor(
-  people: readonly { email: string; stage: "bootcamp" | "intermediate"; track: string | null }[],
+  people: readonly { email: string; stage: "bootcamp" | "intermediate"; track: string | null; btcDate?: string | null }[],
 ): Promise<Map<string, PersonMeetingStatus[]>> {
   const out = new Map<string, PersonMeetingStatus[]>();
   const candidates = people
-    .filter((p): p is { email: string; stage: "bootcamp" | "intermediate"; track: "sales" | "engineer" } => p.track === "sales" || p.track === "engineer")
+    .filter((p): p is typeof p & { track: "sales" | "engineer" } => p.track === "sales" || p.track === "engineer")
     .map((p) => ({ ...p, email: p.email.trim().toLowerCase() }));
   if (candidates.length === 0) return out;
-  const zones = new Map(
-    (await db.select({ email: sql<string>`lower(${employees.email})`, timezone: employees.timezone }).from(employees).where(inArray(sql`lower(${employees.email})`, candidates.map((c) => c.email))).limit(PAGE_SIZE))
-      .map((r) => [r.email, r.timezone]),
-  );
-  const members = candidates.map((c) => ({ ...c, timezone: zones.get(c.email) ?? null }));
+  const emails = [...new Set(candidates.map((c) => c.email))];
+  const [zones, rsvps] = await Promise.all([
+    db
+      .select({ email: sql<string>`lower(${employees.email})`, timezone: employees.timezone })
+      .from(employees)
+      .where(inArray(sql`lower(${employees.email})`, emails))
+      .limit(PAGE_SIZE)
+      .then((rows) => new Map(rows.map((r) => [r.email, r.timezone]))),
+    db
+      .selectDistinct({ email: intakeResponses.email })
+      .from(intakeResponses)
+      .where(and(eq(intakeResponses.form, "bootcamp"), eq(intakeResponses.test, false), inArray(intakeResponses.email, emails)))
+      .limit(PAGE_SIZE)
+      .then((rows) => new Set(rows.map((r) => r.email))),
+  ]);
+  const members = candidates.map((c) => ({ ...c, timezone: zones.get(c.email) ?? null, rsvpd: rsvps.has(c.email) }));
   const now = new Date();
 
   const selections = await db
@@ -415,14 +468,18 @@ export async function meetingStatusesFor(
     .limit(PAGE_SIZE);
   if (selections.length === 0) return out;
   const ids = selections.map((m) => m.id);
-  const emails = [...new Set(members.map((m) => m.email))];
 
-  const cutoff = (await activeBootcamp())?.startDate ?? null;
+  const bootcamp = await meetingBootcamp();
+  // The two windows anyone can have: before the bootcamp, and after it until the next intermediate class.
+  const before = bootcamp ? inviteWindow("bootcamp", { stage: "bootcamp" }, bootcamp) : null;
+  const after = bootcamp ? inviteWindow("intermediate", { stage: "bootcamp" }, bootcamp) : null;
+  const inWindow = (w: typeof before) =>
+    w ? sql<boolean>`bool_or(${o.startDate} < ${w.cutoff} ${w.notBefore ? sql`and ${o.startDate} >= ${w.notBefore}` : sql``})` : sql<boolean>`true`;
   const [left, held, marks] = await Promise.all([
     db
-      .select({ meetingId: o.meetingId })
+      .select({ meetingId: o.meetingId, before: inWindow(before), after: inWindow(after) })
       .from(o)
-      .where(and(inArray(o.meetingId, ids), gt(o.startsAt, sql`now()`), cutoff ? lt(o.startDate, cutoff) : undefined))
+      .where(and(inArray(o.meetingId, ids), gt(o.startsAt, sql`now()`)))
       .groupBy(o.meetingId),
     db
       .select({
@@ -443,7 +500,7 @@ export async function meetingStatusesFor(
       .from(k)
       .where(and(inArray(k.meetingId, ids), inArray(k.email, emails))),
   ]);
-  const anyLeft = new Set(left.map((r) => r.meetingId));
+  const leftIn = new Map(left.map((r) => [r.meetingId, r]));
   const heldBy = new Map(held.map((r) => [`${r.meetingId} ${r.email}`, r]));
   const markOf = new Map(marks.map((r) => [`${r.meetingId} ${r.email}`, r.attended]));
 
@@ -454,12 +511,14 @@ export async function meetingStatusesFor(
       const key = `${meeting.id} ${member.email}`;
       const h = heldBy.get(key);
       const marked = markOf.get(key) ?? null;
+      const window = bootcamp ? inviteWindow(meeting.stage, member, bootcamp) : null;
+      const remaining = leftIn.get(meeting.id);
       const mark = meetingMark({
         attended: marked === true || (marked === null && Boolean(h?.attended)),
         response: h?.response ?? null,
         invited: Boolean(h?.invited),
         // A meeting that has never synced has no occurrences stored yet, which is not the same as none being left.
-        anyLeft: meeting.syncedAt === null || anyLeft.has(meeting.id),
+        anyLeft: meeting.syncedAt === null || Boolean(remaining && (window?.notBefore ? remaining.after : remaining.before)),
       });
       list.push({ meetingId: meeting.id, name: meeting.name, mark, marked, startsAt: h?.startsAt ? new Date(h.startsAt) : null });
     }

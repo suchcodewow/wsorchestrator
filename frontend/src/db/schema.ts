@@ -1307,7 +1307,7 @@ export const zoomConnections = pgTable("zoom_connections", {
 export const ZOOM_CONNECTION_KEY = "meetings";
 
 /** Which stage of the Cohorts page's Current tab a calendar meeting is for. */
-export const MEETING_STAGES = ["bootcamp", "intermediate", "both"] as const;
+export const MEETING_STAGES = ["bootcamp", "intermediate"] as const;
 export type MeetingStage = (typeof MEETING_STAGES)[number];
 
 /** Which employee track a calendar meeting is for. */
@@ -1344,6 +1344,11 @@ export const meetingSelections = pgTable(
      * this, or the last one before the bootcamp when none is (`lib/evals/meeting-plan.ts`).
      */
     minDaysAfterStart: integer("min_days_after_start").notNull().default(0),
+    /**
+     * Whether each person is invited to every occurrence in their window rather
+     * than to one at a time until they attend (`lib/evals/meeting-plan.ts`).
+     */
+    allOccurrences: boolean("all_occurrences").notNull().default(false),
     /** When a live sync last read the calendar for it; null until one has. */
     syncedAt: timestamp("synced_at", { withTimezone: true }),
     createdBy: text("created_by").references(() => users.id, {
@@ -1358,7 +1363,7 @@ export const meetingSelections = pgTable(
   },
   (t) => [
     uniqueIndex("meeting_selections_name_idx").on(sql`lower(${t.name})`),
-    check("meeting_selections_stage_check", sql`${t.stage} in ('bootcamp', 'intermediate', 'both')`),
+    check("meeting_selections_stage_check", sql`${t.stage} in ('bootcamp', 'intermediate')`),
     check("meeting_selections_track_check", sql`${t.track} in ('sales', 'engineer', 'both')`),
     check("meeting_selections_min_days_check", sql`${t.minDaysAfterStart} between 0 and 365`),
     check(

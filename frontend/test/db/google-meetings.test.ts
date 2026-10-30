@@ -32,6 +32,7 @@ import {
   GOOGLE_CONNECTION_KEY,
   googleConnections,
   googleMeetings,
+  intakeResponses,
   meetingInvites,
   meetingOccurrences,
   meetingSelections,
@@ -211,8 +212,8 @@ async function connect({ zoom = true }: { zoom?: boolean } = {}) {
   }
 }
 
-async function pick(stage: "bootcamp" | "intermediate" | "both" = "bootcamp", track: "sales" | "engineer" | "both" = "sales", name = NAME) {
-  const made = await createMeetingSelection(admin.id, { name, stage, track });
+async function pick(stage: "bootcamp" | "intermediate" = "bootcamp", track: "sales" | "engineer" | "both" = "sales", name = NAME, allOccurrences = false) {
+  const made = await createMeetingSelection(admin.id, { name, stage, track, allOccurrences });
   assert.ok(made.ok);
   return made.meeting.id;
 }
@@ -311,12 +312,12 @@ after(async () => {
 
 describe("picked meetings", () => {
   test("are listed by name, and a name already picked is refused whatever its case", async () => {
-    await pick("both", "engineer");
+    await pick("intermediate", "engineer");
     assert.deepEqual(await createMeetingSelection(admin.id, { name: NAME.toUpperCase(), stage: "bootcamp", track: "sales" }), { ok: false, error: "duplicate" });
     const page = await listMeetingSelections({ ...MEETING_SELECTION_LIST, q: TEST_PREFIX, page: 1 });
     assert.deepEqual(
       page.rows.map((r) => [r.name, r.stage, r.track, r.syncedAt]),
-      [[NAME, "both", "engineer", null]],
+      [[NAME, "intermediate", "engineer", null]],
     );
   });
 
@@ -417,6 +418,46 @@ describe("Sync Now", () => {
     assert.deepEqual(fake.writes(), [], "an invite already right is left alone");
   });
 
+  test("all meetings invites to every occurrence before the bootcamp, and one at a time takes the extras back", async () => {
+    await connect();
+    const id = await pick("bootcamp", "sales", NAME, true);
+    event("e1", 1);
+    event("e2", 5);
+    await sync_ok();
+    assert.ok(fake.guests("e1").includes(salesEmail) && fake.guests("e2").includes(salesEmail), "on both");
+    assert.ok(fake.guests("e2").includes(admin.email), "with the administrator on each");
+
+    assert.ok((await updateMeetingSelection(id, { allOccurrences: false })).ok);
+    await sync_ok();
+    assert.ok(fake.guests("e1").includes(salesEmail), "keeps the first");
+    assert.ok(!fake.guests("e2").includes(salesEmail), "and loses the rest");
+  });
+
+  test("an intermediate meeting invites a bootcamp candidate only once they RSVP, and only after the bootcamp", async (t) => {
+    const [row] = await db.select({ btcDays: bootcamps.btcDays, intDays: bootcamps.intDays }).from(bootcamps).where(eq(bootcamps.id, bootcamp.id));
+    const lastDay = new Date(`${bootcamp.startDate}T00:00:00Z`).getTime() + (Math.max(row!.btcDays, row!.intDays ?? 0, 1) - 1) * DAY;
+    const afterDays = Math.ceil((lastDay - Date.now()) / DAY) + 2;
+    if (afterDays > 55) return t.skip("the active bootcamp ends past the calendar's 60 days");
+    await connect();
+    const id = await pick("intermediate", "sales");
+    event("e1", 1);
+    event("e2", afterDays);
+    try {
+      await sync_ok();
+      assert.ok(!fake.guests("e1").includes(salesEmail) && !fake.guests("e2").includes(salesEmail), "not before they RSVP");
+
+      await db.insert(intakeResponses).values({ form: "bootcamp", email: salesEmail, answers: {} });
+      await sync_ok();
+      assert.ok(!fake.guests("e1").includes(salesEmail), "not before the bootcamp");
+      assert.ok(fake.guests("e2").includes(salesEmail), "but after it");
+      const [status] = (await meetingStatusesFor([{ email: salesEmail, stage: "bootcamp", track: "sales" }])).get(salesEmail)!;
+      assert.equal(status?.meetingId, id);
+      assert.equal(status?.mark, "pending");
+    } finally {
+      await db.delete(intakeResponses).where(eq(intakeResponses.email, salesEmail));
+    }
+  });
+
   test("a guest's reply is read back, and shows on the Current tab", async () => {
     await connect();
     const id = await pick();
@@ -508,7 +549,7 @@ describe("Sync Now", () => {
 
   test("the test group stands in for the cohort, with no administrators, and turning it off takes its invites back", async () => {
     await connect();
-    const id = await pick("both", "both");
+    const id = await pick("bootcamp", "both");
     event("e1", 1);
     const tester = `${TEST_PREFIX}tester@${TEST_EMAIL_DOMAIN}`;
     await saveTestGroup(admin.id, { on: true, suffix: "test", members: [{ email: tester, fullName: "Tester", stage: "both" }] });
@@ -531,7 +572,7 @@ describe("Sync Now", () => {
 
   test("reading the test group's attendance leaves the cohort's unread, to be read when the group is off", async () => {
     await connect();
-    const id = await pick("both", "both");
+    const id = await pick("bootcamp", "both");
     const tester = `${TEST_PREFIX}tester@${TEST_EMAIL_DOMAIN}`;
     const occurrenceId = await pastOccurrence(id, salesEmail);
     await db.insert(meetingInvites).values({ occurrenceId, email: tester, role: "member", test: true });

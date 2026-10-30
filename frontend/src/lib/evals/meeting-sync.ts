@@ -9,10 +9,13 @@
  * 2. For each occurrence over for half an hour whose attendance is not known,
  *    asks the connected Zoom user who joined.
  * 3. Invites each person on the Cohorts page's Current tab whom a meeting is
- *    for to its next occurrence before the active bootcamp starts, and anyone
- *    who missed theirs to the next one after it (`meeting-plan.ts` has the
- *    rules), with every Assessments Administrator on each occurrence a cohort
- *    member is on.
+ *    for to its next occurrence in their window, and anyone who missed theirs
+ *    to the next one after it, or to every occurrence in it when the meeting
+ *    is set to all meetings (`meeting-plan.ts` has the rules), with every
+ *    Assessments Administrator on each occurrence a cohort member is on. The
+ *    window is before the active bootcamp starts, except for an Intermediate
+ *    meeting's people who take the bootcamp first, who RSVP'd to it: theirs
+ *    runs from after its last day to the next intermediate class.
  *
  * With the test group on, the test group stands in for the cohort, its
  * invites are marked as its own, and administrators are not invited; turning
@@ -39,6 +42,7 @@ import { db } from "@/db";
 import {
   employees,
   googleMeetings,
+  intakeResponses,
   meetingAttendanceMarks,
   meetingInvites,
   meetingOccurrences,
@@ -59,6 +63,7 @@ import {
   assessmentAdministratorEmails,
   getMeetingSyncLive,
   googleConnection,
+  meetingBootcamp,
   meetingSelectionsAfter,
   SYNC_STALE_MS,
   upcomingSyncedGuests,
@@ -66,22 +71,24 @@ import {
 } from "@/lib/evals/google-meetings";
 import {
   administratorsFor,
-  audienceOf,
+  inviteWindowLabel,
   joinedFrom,
   meetingKey,
   mergeAttendees,
   planMeeting,
   sameGuests,
+  windowsFor,
   zoomMeetingIdIn,
   type CalendarAttendee,
   type CalendarEvent,
+  type MeetingBootcamp,
   type PlanInvite,
   type PlanOccurrence,
   type ZoomParticipant,
 } from "@/lib/evals/meeting-plan";
 import { accessToken, calendarClient, GoogleError, oauthClient, type CalendarClient } from "@/lib/google-calendar";
 import { openSecret } from "@/lib/secret-box";
-import { activeBootcamp } from "@/lib/scheduler/bootcamps";
+import { classDate } from "@/lib/evals/attendance";
 import { ZoomError, type ZoomClient } from "@/lib/zoom";
 import { connectedZoom } from "@/lib/zoom-connection";
 
@@ -384,9 +391,19 @@ type Context = {
   now: Date;
   timeZone: string;
   listed: CalendarEvent[];
-  cohort: { email: string; fullName: string; stage: "bootcamp" | "intermediate"; track: "sales" | "engineer"; timezone?: string | null; startDate?: string | null }[];
+  cohort: {
+    email: string;
+    fullName: string;
+    stage: "bootcamp" | "intermediate";
+    track: "sales" | "engineer";
+    timezone?: string | null;
+    startDate?: string | null;
+    rsvpd?: boolean;
+    btcDate?: string | null;
+  }[];
   administrators: string[];
-  cutoff: string | null;
+  /** The active bootcamp, which decides each person's window; with none the run stops before planning. */
+  bootcamp: MeetingBootcamp | null;
   log: RunLog;
   notes: string[];
   /** Notes said once a run, not once a meeting. */
@@ -594,17 +611,26 @@ async function syncMeeting(ctx: Context, meeting: MeetingSelection): Promise<voi
     ).map((m) => [m.email, m.attended]),
   );
   const mode = invites.filter((inv) => inv.test === ctx.testGroup);
+  // With no bootcamp active the run stops before here; the guard is for the type.
+  const bootcamp = ctx.bootcamp ?? { startDate: "9999-12-31", lastDay: "9999-12-31", nextIntermediate: null };
+  // Offsets change with daylight saving, so who is in a range is read at the next occurrence, not today.
+  const windows = windowsFor(
+    meeting,
+    ctx.cohort,
+    bootcamp,
+    upcoming.reduce((first, occ) => (occ.startsAt < first ? occ.startsAt : first), upcoming[0]?.startsAt ?? ctx.now),
+  );
   const plan = planMeeting({
-    // Offsets change with daylight saving, so who is in a range is read at the next occurrence, not today.
-    audience: audienceOf(meeting, ctx.cohort, upcoming.reduce((first, occ) => (occ.startsAt < first ? occ.startsAt : first), upcoming[0]?.startsAt ?? ctx.now)),
+    audience: [...windows.keys()],
     occurrences: occurrences.map(
       (occ): PlanOccurrence => ({ id: occ.id, startsAt: occ.startsAt, startDate: occ.startDate, attendanceRead: occ.attendanceReadAt !== null }),
     ),
     invites: mode,
     marks,
     now: ctx.now,
-    // With no bootcamp active the run stops before here; the guard is for the type.
-    cutoff: ctx.cutoff ?? "9999-12-31",
+    cutoff: bootcamp.startDate,
+    windows,
+    allOccurrences: meeting.allOccurrences,
     minDaysAfterStart: meeting.minDaysAfterStart,
     startDates: new Map(ctx.cohort.map((m) => [m.email.trim().toLowerCase(), m.startDate ?? null])),
   });
@@ -612,25 +638,25 @@ async function syncMeeting(ctx: Context, meeting: MeetingSelection): Promise<voi
   // Who should be on each upcoming occurrence once the plan is carried out, in this mode.
   const add: { occurrenceId: string; email: string; role: MeetingInviteRole }[] = [];
   const drop = new Set(plan.remove.map((inv) => `${inv.occurrenceId} ${inv.email}`));
+  for (const inv of plan.invite) {
+    add.push({ occurrenceId: inv.occurrenceId, email: inv.email, role: "member" });
+    ctx.log.note({
+      meetingName: meeting.name,
+      occurrenceStartsAt: byId.get(inv.occurrenceId)!.startsAt,
+      action: "invited",
+      email: inv.email,
+      detail: inv.afterMiss ? "Missed an earlier one." : null,
+    });
+  }
   for (const [email, outcome] of plan.outcomes) {
-    if (outcome.kind === "invite") {
-      add.push({ occurrenceId: outcome.occurrenceId, email, role: "member" });
-      const occ = byId.get(outcome.occurrenceId)!;
-      ctx.log.note({
-        meetingName: meeting.name,
-        occurrenceStartsAt: occ.startsAt,
-        action: "invited",
-        email,
-        detail: outcome.afterMiss ? "Missed an earlier one." : null,
-      });
-    } else if (outcome.kind === "none_left") {
-      ctx.log.note({
-        meetingName: meeting.name,
-        action: "none_left",
-        email,
-        detail: `No occurrence is left before the bootcamp starts on ${ctx.cutoff}.`,
-      });
-    }
+    if (outcome.kind !== "none_left") continue;
+    const window = windows.get(email);
+    ctx.log.note({
+      meetingName: meeting.name,
+      action: "none_left",
+      email,
+      detail: `No occurrence is left ${window ? inviteWindowLabel(window) : `before the bootcamp starts on ${bootcamp.startDate}`}.`,
+    });
   }
   for (const inv of plan.remove) {
     ctx.log.note({ meetingName: meeting.name, occurrenceStartsAt: byId.get(inv.occurrenceId)?.startsAt, action: "removed", email: inv.email });
@@ -773,6 +799,41 @@ async function withEmployeeRecord<T extends { email: string }>(cohort: readonly 
 }
 
 /**
+ * `cohort` with whether each person RSVP'd to the coming bootcamp (saved its
+ * intake form, in this run's mode) and the day of the latest Bootcamp class
+ * they attended, which together decide when an Intermediate meeting is theirs.
+ */
+async function withClassRecord<T extends { email: string }>(
+  cohort: readonly T[],
+  test: boolean,
+): Promise<(T & { rsvpd: boolean; btcDate: string | null })[]> {
+  const emails = [...new Set(cohort.map((m) => m.email.trim().toLowerCase()))];
+  const rsvpd = new Set<string>();
+  const btcDates = new Map<string, string | null>();
+  for (let n = 0; n < emails.length; n += PAGE_SIZE) {
+    const batch = emails.slice(n, n + PAGE_SIZE);
+    const [rsvps, classes] = await Promise.all([
+      db
+        .selectDistinct({ email: intakeResponses.email })
+        .from(intakeResponses)
+        .where(and(eq(intakeResponses.form, "bootcamp"), eq(intakeResponses.test, test), inArray(intakeResponses.email, batch)))
+        .limit(PAGE_SIZE),
+      db
+        .select({ email: sql<string>`lower(${employees.email})`, btcDate: classDate("bootcamp", sql`lower(${employees.email})`) })
+        .from(employees)
+        .where(inArray(sql`lower(${employees.email})`, batch))
+        .limit(PAGE_SIZE),
+    ]);
+    for (const r of rsvps) rsvpd.add(r.email);
+    for (const r of classes) btcDates.set(r.email, r.btcDate);
+  }
+  return cohort.map((m) => {
+    const email = m.email.trim().toLowerCase();
+    return { ...m, rsvpd: rsvpd.has(email), btcDate: btcDates.get(email) ?? null };
+  });
+}
+
+/**
  * One run, logged. `actorId` is whoever pressed the button; `deadline` is when
  * it must stop by, as `Date.now()` counts. `preview` makes it a dry run
  * whether or not the sync is live.
@@ -786,7 +847,7 @@ export async function runMeetingSync(
   const dryRun = preview || !(await getMeetingSyncLive());
   const { cohort: outbound, group } = await outboundCohort();
   // A test group member has no stage or track of their own on record, but their time zone and start date are the employee record's.
-  const cohort = group.on ? await withEmployeeRecord(outbound) : outbound;
+  const cohort = await withClassRecord(group.on ? await withEmployeeRecord(outbound) : outbound, group.on);
   const runId = await startRun(trigger, actorId, dryRun, group.on);
   if (!runId) return { ok: false, runId: null, error: "already_running" };
 
@@ -800,7 +861,7 @@ export async function runMeetingSync(
     }
     const { connection, calendar } = connected;
     const now = new Date();
-    const bootcamp = await activeBootcamp();
+    const bootcamp = await meetingBootcamp();
     const ctx: Context = {
       calendar,
       zoom: (await connectedZoom())?.client ?? null,
@@ -811,7 +872,7 @@ export async function runMeetingSync(
       listed: [],
       cohort,
       administrators: group.on ? [] : await assessmentAdministratorEmails(),
-      cutoff: bootcamp?.startDate ?? null,
+      bootcamp,
       log,
       notes,
       noted: new Set(),
