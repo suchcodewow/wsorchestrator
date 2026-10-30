@@ -87,7 +87,7 @@ export function CodeLabView({ author }: { author: string }) {
 
   return (
     <div className="cl space-y-5">
-      <p className="-mb-2 flex items-center gap-1.5 text-sm text-muted-foreground">
+      <p className="mb-3 flex items-center gap-1.5 text-sm text-muted-foreground">
         <Timer className="size-4" />
         5–7 minutes
       </p>
