@@ -60,7 +60,6 @@ import {
   CircleHelp,
   CircleMinus,
   CircleX,
-  Clock,
   Code,
   GraduationCap,
   Handshake,
@@ -721,13 +720,6 @@ const INSTANCE_MARKS: Record<MeetingInstance["mark"], { Icon: LucideIcon; classN
   uninvited: { ...MARKS.uninvited, label: "Not invited yet; the next sync adds them to this one" },
 };
 
-/** The hollow circle's tip, after the meeting's name: the occurrence the next sync would invite them to, in their own time when the app has it. */
-function nextInvite(m: MemberMeetings[string][number]): string {
-  if (!m.startsAt) return "Not invited yet; it has not synced, so the next sync reads its occurrences from Google and picks one for them";
-  const when = m.timezone && m.endsAt ? inZone(m.timezone, m.startsAt, m.endsAt) : null;
-  return `Not invited yet; the next sync invites them to the one on ${when ? `${when.day}, ${when.time}, their time` : formatWhen(m.startsAt)}`;
-}
-
 /** "Tue, Nov 10" and "7:00 AM – 8:00 AM CST" for an occurrence, read in `zone`. */
 function inZone(zone: string, startsAt: string, endsAt: string): { day: string; time: string } {
   const start = new Date(startsAt);
@@ -741,75 +733,29 @@ function inZone(zone: string, startsAt: string, endsAt: string): { day: string; 
   };
 }
 
-/** An orange clock for anyone with a meeting to come outside 9 to 5 where they are; its tip lists each, in their own time. */
-function OutOfHours({ meetings }: { meetings: MemberMeetings[string] }) {
-  const zone = meetings.find((m) => m.outOfHours)?.timezone;
-  if (!zone) return null;
-  // A meeting that invites to every occurrence lists each one outside the day; any other, the one occurrence it has.
-  const late = meetings.flatMap((m) =>
-    m.instances
-      ? m.instances
-          .filter((x) => x.outOfHours)
-          .map((x) => ({ key: `${m.meetingId} ${x.startsAt}`, name: m.name, ...x, predicted: x.mark === "uninvited" }))
-      : m.outOfHours && m.startsAt && m.endsAt
-        ? [{ key: m.meetingId, name: m.name, startsAt: m.startsAt, endsAt: m.endsAt, predicted: m.predicted }]
-        : [],
-  );
-  const rows = late.map((m) => ({ ...m, ...inZone(zone, m.startsAt, m.endsAt) }));
-  const label = `Outside 9 to 5 in ${zone}: ${rows.map((r) => `${r.name}, ${r.day}, ${r.time}${r.predicted ? " (not invited yet)" : ""}`).join("; ")}`;
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <span
-          tabIndex={0}
-          aria-label={label}
-          className="rounded-sm p-0.5 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-        >
-          <Clock className="size-4 text-orange-600 dark:text-orange-400" />
-        </span>
-      </TooltipTrigger>
-      <TooltipContent>
-        <span className="block font-medium">Outside 9 to 5 in {zone}</span>
-        {rows.map((r) => (
-          <span key={r.key} className="mt-1 block">
-            <span className="font-medium">{r.name}</span>: {r.day}, {r.time}
-            {r.predicted && <span className="text-muted-foreground"> (not invited yet)</span>}
-          </span>
-        ))}
-      </TooltipContent>
-    </Tooltip>
-  );
+/** "Tue, Nov 10, 7:00 AM – 8:00 AM CST" in the attendee's own time zone; the viewer's when the app has none for them, or one the runtime does not know. */
+function occurrenceWhen(zone: string | null, startsAt: string, endsAt: string): string {
+  if (!zone) return formatWhen(startsAt);
+  try {
+    const { day, time } = inZone(zone, startsAt, endsAt);
+    return `${day}, ${time}`;
+  } catch {
+    return formatWhen(startsAt);
+  }
 }
 
-/** One occurrence of a meeting that invites to all of them; its tip gives the day, how they stand, and their own time when it falls outside 9 to 5. */
-function MeetingInstanceMark({
-  name,
-  timezone,
-  instance: x,
-}: {
-  name: string;
-  timezone: string | null;
-  instance: NonNullable<MemberMeetings[string][number]["instances"]>[number];
-}) {
+/** An occurrence still to come that runs outside 9 to 5 where the attendee is. */
+const OUT_OF_HOURS = "text-orange-600 dark:text-orange-400";
+
+/** What one occurrence of a meeting that invites to all of them shows: its icon, orange outside 9 to 5, and the words for it. */
+function instanceMark(name: string, timezone: string | null, x: NonNullable<MemberMeetings[string][number]["instances"]>[number]) {
   const { Icon, className, label } = INSTANCE_MARKS[x.mark];
-  const late = x.outOfHours && timezone ? inZone(timezone, x.startsAt, x.endsAt) : null;
-  const detail = `${formatWhen(x.startsAt)}: ${label}${late ? `; outside 9 to 5 in ${timezone}, ${late.day}, ${late.time}` : ""}`;
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <span
-          tabIndex={0}
-          aria-label={`${name}, ${detail}`}
-          className="rounded-sm p-0.5 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-        >
-          <Icon className={cn("size-3.5", className, late && "text-orange-600 dark:text-orange-400")} />
-        </span>
-      </TooltipTrigger>
-      <TooltipContent>
-        <span className="font-medium">{name}</span>, {detail}
-      </TooltipContent>
-    </Tooltip>
-  );
+  const when = occurrenceWhen(timezone, x.startsAt, x.endsAt);
+  return {
+    when,
+    spoken: `${name}: ${when}, ${label}${x.outOfHours ? ", outside 9 to 5 where they are" : ""}`,
+    icon: <Icon className={cn("size-3.5", className, x.outOfHours && OUT_OF_HOURS)} />,
+  };
 }
 
 /** A white sealed envelope on a green disc: they saved their stage's registration form, so they RSVP'd to the session. */
@@ -895,99 +841,104 @@ function MeetingMarks({
         )}
         {meetings.map((m) => {
           const { Icon, className, label } = MARKS[m.mark];
-          const detail =
-            m.marked !== null
-              ? `${m.marked ? "attended" : "missed"}, marked by an administrator`
-              : m.mark === "uninvited"
-                ? nextInvite(m)
-                : m.mark !== "attended" && m.startsAt
-                  ? `${label}, ${formatWhen(m.startsAt)}`
-                  : label;
-          const icon =
-            busy === m.meetingId ? (
-              <Loader2 className="size-4 animate-spin text-muted-foreground" />
-            ) : (
-              <Icon className={cn("size-4", className)} />
+          const status = m.marked !== null ? `${m.marked ? "attended" : "missed"}, marked by an administrator` : label;
+          const when = m.startsAt && m.endsAt ? occurrenceWhen(m.timezone, m.startsAt, m.endsAt) : null;
+          const spoken = `${m.name}: ${when ? `${when}, ` : ""}${status}${!m.instances && m.outOfHours ? ", outside 9 to 5 where they are" : ""}`;
+          const instances = m.instances ?? [];
+          const size = instances.length > 0 ? "size-3.5" : "size-4";
+          const spinner = <Loader2 className={cn(size, "animate-spin text-muted-foreground")} />;
+          // Every mark of a meeting is a way to its one menu: the attendance an administrator overrides is the meeting's, not an occurrence's.
+          const control = (key: string, spokenAs: string, shown: string, icon: React.ReactElement) => {
+            const tip = (
+              <TooltipContent>
+                <span className="block font-medium">{m.name}</span>
+                {shown}
+              </TooltipContent>
             );
-          const tip = (
-            <TooltipContent>
-              <span className="font-medium">{m.name}</span>: {detail}
-            </TooltipContent>
-          );
-          // A meeting that invites to every occurrence puts each after its own mark, in a pill, so the series reads as one.
-          const grouped = (control: React.ReactElement) =>
-            m.instances ? (
-              <span key={m.meetingId} className="inline-flex items-center gap-0.5 rounded-full border px-1">
-                {control}
-                {m.instances.length > 0 && <span aria-hidden="true" className="mx-0.5 h-3 w-px bg-border" />}
-                {m.instances.map((x) => (
-                  <MeetingInstanceMark key={x.startsAt} name={m.name} timezone={m.timezone} instance={x} />
-                ))}
-              </span>
-            ) : (
-              control
-            );
-          if (!canMark) {
-            return grouped(
-              <Tooltip key={m.meetingId}>
-                <TooltipTrigger asChild>
-                  <span
-                    tabIndex={0}
-                    aria-label={`${m.name}: ${detail}`}
-                    className="rounded-sm p-0.5 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                  >
-                    {icon}
-                  </span>
-                </TooltipTrigger>
-                {tip}
-              </Tooltip>
-            );
-          }
-          return grouped(
-            <DropdownMenu key={m.meetingId}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <DropdownMenuTrigger asChild>
-                    <button
-                      type="button"
-                      aria-label={`${m.name}: ${detail}`}
-                      disabled={busy !== null}
-                      className="cursor-pointer rounded-sm p-0.5 outline-none hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50"
+            if (!canMark) {
+              return (
+                <Tooltip key={key}>
+                  <TooltipTrigger asChild>
+                    <span
+                      tabIndex={0}
+                      aria-label={spokenAs}
+                      className="rounded-sm p-0.5 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
                     >
                       {icon}
-                    </button>
-                  </DropdownMenuTrigger>
-                </TooltipTrigger>
-                {tip}
-              </Tooltip>
-              <DropdownMenuContent align="start" className="w-60">
-                <DropdownMenuLabel className="font-normal">
-                  <span className="font-medium">{m.name}</span>
-                  <span className="block text-xs text-muted-foreground">{member.fullName}</span>
-                </DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  disabled={m.marked === true}
-                  onSelect={() => setConfirming({ meetingId: m.meetingId, name: m.name })}
-                >
-                  <CircleCheck />
-                  Mark complete
-                </DropdownMenuItem>
-                <DropdownMenuItem disabled={m.marked === false} onSelect={() => void mark(m.meetingId, false)}>
-                  <CircleAlert />
-                  Mark missed
-                </DropdownMenuItem>
-                {m.marked !== null && (
-                  <DropdownMenuItem onSelect={() => void mark(m.meetingId, null)}>
-                    <RotateCcw />
-                    Go by Zoom again
+                    </span>
+                  </TooltipTrigger>
+                  {tip}
+                </Tooltip>
+              );
+            }
+            return (
+              <DropdownMenu key={key}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        type="button"
+                        aria-label={spokenAs}
+                        disabled={busy !== null}
+                        className="cursor-pointer rounded-sm p-0.5 outline-none hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                      >
+                        {icon}
+                      </button>
+                    </DropdownMenuTrigger>
+                  </TooltipTrigger>
+                  {tip}
+                </Tooltip>
+                <DropdownMenuContent align="start" className="w-60">
+                  <DropdownMenuLabel className="font-normal">
+                    <span className="font-medium">{m.name}</span>
+                    <span className="block text-xs text-muted-foreground">{member.fullName}</span>
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    disabled={m.marked === true}
+                    onSelect={() => setConfirming({ meetingId: m.meetingId, name: m.name })}
+                  >
+                    <CircleCheck />
+                    Mark complete
                   </DropdownMenuItem>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
+                  <DropdownMenuItem disabled={m.marked === false} onSelect={() => void mark(m.meetingId, false)}>
+                    <CircleAlert />
+                    Mark missed
+                  </DropdownMenuItem>
+                  {m.marked !== null && (
+                    <DropdownMenuItem onSelect={() => void mark(m.meetingId, null)}>
+                      <RotateCcw />
+                      Go by Zoom again
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            );
+          };
+          const own = control(
+            m.meetingId,
+            spoken,
+            when ?? status,
+            busy === m.meetingId ? (
+              spinner
+            ) : (
+              // A meeting that invites to every occurrence turns each of those orange, not its own mark.
+              <Icon className={cn(size, className, !m.instances && m.outOfHours && OUT_OF_HOURS)} />
+            ),
+          );
+          // A series that has run out needs nothing from anyone, so it shows nothing, unless an administrator's word is there to undo.
+          if (instances.length === 0) return m.mark === "finished" && m.marked === null ? null : own;
+          // The occurrences say how the series stands, in a pill so it reads as one. Its own mark would read as one more, so it shows only for an administrator's word, which no occurrence carries.
+          return (
+            <span key={m.meetingId} className="inline-flex items-center gap-0.5 rounded-full border px-1">
+              {m.marked !== null && own}
+              {instances.map((x, n) => {
+                const shown = instanceMark(m.name, m.timezone, x);
+                return control(x.startsAt, shown.spoken, shown.when, busy === m.meetingId && m.marked === null && n === 0 ? spinner : shown.icon);
+              })}
+            </span>
           );
         })}
-        <OutOfHours meetings={meetings} />
         <Dialog open={confirming !== null} onOpenChange={(open) => !open && setConfirming(null)}>
           <DialogContent>
             <DialogHeader>

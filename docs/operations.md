@@ -242,7 +242,11 @@ The Current tab shows one icon per picked meeting beside each name:
 | grey check             | accepted                                        |
 | grey question mark     | not accepted yet                                |
 | red exclamation mark   | no occurrence left before their bootcamp        |
-| grey minus sign        | none left of an every-occurrence meeting; fine  |
+
+A meeting that invites to every occurrence shows one icon per occurrence
+instead, in a rounded border, and any icon opens its attendance menu. With
+none left and none to show, it shows nothing. An occurrence still to come that
+runs outside 9 to 5 in the person's time zone is orange.
 
 **Dry run and the test group.** These work as they do on Cohort Settings →
 Slack.
