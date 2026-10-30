@@ -4,7 +4,8 @@
  * The repository's history as the Code Lab goes: main's commits along the top,
  * the branch dropping off it with a dot for each commit, hollow until pushed,
  * and the merge back into main at the end. Before the merge, a pull request
- * shows as the same curve dashed, an arrow asking to join main.
+ * shows as the same curve dashed, an arrow asking to join main. Main can end
+ * in an arrow to production, where whatever joins it goes next.
  */
 
 import { cn } from "@/lib/utils";
@@ -17,6 +18,7 @@ const R = 5;
 /** Roughly how wide one character of the 10px mono labels is, so the branch's name fits. */
 const LABEL_CH = 6.2;
 const PR_LABEL = "pull request";
+const PROD_LABEL = "production";
 
 export function HistoryGraph({
   branch,
@@ -24,6 +26,7 @@ export function HistoryGraph({
   pushed,
   merged,
   requested = false,
+  production = false,
   className,
 }: {
   /** The branch's name, or null before it is made. */
@@ -33,6 +36,8 @@ export function HistoryGraph({
   merged: boolean;
   /** Draw the pull request: the merge the branch is asking for. */
   requested?: boolean;
+  /** End main in an arrow to production. */
+  production?: boolean;
   className?: string;
 }) {
   const x = (k: number) => 16 + k * STEP;
@@ -45,7 +50,10 @@ export function HistoryGraph({
   const arrowX = mergeX - R - 3;
   const labelEnd = branch ? forkX + STEP + branch.length * LABEL_CH + 8 : 0;
   const requestEnd = asking ? mergeX + 10 + PR_LABEL.length * LABEL_CH : 0;
-  const width = Math.ceil(Math.max(mergeX + 16, labelEnd, requestEnd, 260));
+  // Production sits a step past the merge, so the arrow reads as where main goes next.
+  const prodX = mergeX + STEP;
+  const prodEnd = production ? prodX + 6 + PROD_LABEL.length * LABEL_CH + 4 : 0;
+  const width = Math.ceil(Math.max(mergeX + 16, labelEnd, requestEnd, prodEnd, 260));
 
   return (
     <svg
@@ -56,11 +64,19 @@ export function HistoryGraph({
       role="img"
       aria-label={
         branch
-          ? `main, with branch ${branch}: ${commits} commit${commits === 1 ? "" : "s"}, ${pushed} pushed${merged ? ", merged into main" : asking ? ", asking to merge into main" : ""}`
+          ? `main, with branch ${branch}: ${commits} commit${commits === 1 ? "" : "s"}, ${pushed} pushed${merged ? ", merged into main" : asking ? ", asking to merge into main" : ""}${production ? "; main goes to production" : ""}`
           : "main, with no branch yet"
       }
     >
-      <line x1={x(0)} y1={MAIN_Y} x2={width - 4} y2={MAIN_Y} className="stroke-muted-foreground/50" strokeWidth={2} />
+      <line x1={x(0)} y1={MAIN_Y} x2={production ? prodX - 7 : width - 4} y2={MAIN_Y} className="stroke-muted-foreground/50" strokeWidth={2} />
+      {production && (
+        <>
+          <path d={`M${prodX},${MAIN_Y} l-8,-5 v10 z`} className="fill-muted-foreground" />
+          <text x={prodX + 6} y={MAIN_Y + 3.5} className="fill-muted-foreground font-mono text-[10px] font-medium">
+            {PROD_LABEL}
+          </text>
+        </>
+      )}
       {branch && (
         <>
           <path
