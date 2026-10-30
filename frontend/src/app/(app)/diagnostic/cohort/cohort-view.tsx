@@ -7,7 +7,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { HEADER_ROW, LINK_ROW, Pager, PlainHeader, SortHeader, TableSearch, useRowLink } from "@/components/data-table";
 import type { CohortRow, CohortSummary } from "@/lib/iris/cohort";
-import { LEVEL_LABELS, SUBJECTS, SUBJECT_KEYS, bandOf } from "@/lib/iris/subjects";
+import { LEVEL_LABELS, SUBJECTS, OPEN_SUBJECT_KEYS, bandOf } from "@/lib/iris/subjects";
 import type { IrisCohortSort } from "@/lib/list-specs";
 import { riseChild, staggerParent } from "@/lib/motion";
 import type { ListQuery, Page } from "@/lib/paging";
@@ -17,10 +17,10 @@ import { Radar } from "../radar";
 
 type Row = Omit<CohortRow, "finishedAt"> & { finishedAt: string };
 
-const COLUMNS = 6 + SUBJECT_KEYS.length;
+const COLUMNS = 6 + OPEN_SUBJECT_KEYS.length;
 
-const AXES = SUBJECT_KEYS.map((k) => SUBJECTS[k].short);
-const valuesOf = (r: Row) => SUBJECT_KEYS.map((k) => r.placements[k] ?? null);
+const AXES = OPEN_SUBJECT_KEYS.map((k) => SUBJECTS[k].short);
+const valuesOf = (r: Row) => OPEN_SUBJECT_KEYS.map((k) => r.placements[k] ?? null);
 
 export function CohortView({
   query,
@@ -68,7 +68,7 @@ export function CohortView({
                     Done
                   </SortHeader>
                   <PlainHeader>Overall</PlainHeader>
-                  {SUBJECT_KEYS.map((k) => (
+                  {OPEN_SUBJECT_KEYS.map((k) => (
                     <PlainHeader key={k}>{SUBJECTS[k].short}</PlainHeader>
                   ))}
                   <SortHeader column="finishedAt" {...sortProps}>
@@ -97,7 +97,7 @@ export function CohortView({
                       </td>
                       <td className="px-5 py-3 text-muted-foreground">{r.track ?? "—"}</td>
                       <td className="px-5 py-3 text-muted-foreground tnum">
-                        {r.completed} of {SUBJECT_KEYS.length}
+                        {r.completed} of {OPEN_SUBJECT_KEYS.length}
                       </td>
                       <td className="px-5 py-3 whitespace-nowrap">
                         {r.composite === null ? (
@@ -109,7 +109,7 @@ export function CohortView({
                           </>
                         )}
                       </td>
-                      {SUBJECT_KEYS.map((k) => (
+                      {OPEN_SUBJECT_KEYS.map((k) => (
                         <td key={k} className="px-3 py-3">
                           {r.placements[k] ? (
                             <LevelBadge level={r.placements[k]} />
@@ -169,7 +169,7 @@ function ViewSwitch({ view }: { view: "table" | "charts" }) {
 
 /** The whole cohort first, every shape over the median, then a radar per person against that median. */
 function CohortCharts({ rows, summary, q }: { rows: Row[]; summary: CohortSummary; q: string }) {
-  const medians = SUBJECT_KEYS.map((k) => summary.subjects[k].median);
+  const medians = OPEN_SUBJECT_KEYS.map((k) => summary.subjects[k].median);
   const lowest = summary.weakest.length ? summary.subjects[summary.weakest[0]!].median : null;
 
   if (rows.length === 0) {
@@ -189,7 +189,7 @@ function CohortCharts({ rows, summary, q }: { rows: Row[]; summary: CohortSummar
         <span className="inline-flex items-center gap-1.5">
           <span className="w-3.5 border-t-2 border-dashed border-muted-foreground" /> Cohort median
         </span>
-        <span>Rings: Beginner · Intermediate · Advanced</span>
+        <span>Rings: 101 · 201 · 301</span>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -202,7 +202,7 @@ function CohortCharts({ rows, summary, q }: { rows: Row[]; summary: CohortSummar
           <p className="text-xs text-muted-foreground">
             {lowest && lowest < 3
               ? `Weakest: ${summary.weakest.map((k) => SUBJECTS[k].short).join(", ")} (median ${LEVEL_LABELS[lowest]})`
-              : "Advanced in every subject"}
+              : "301 in every subject"}
           </p>
           <div className="mx-auto mt-3 max-w-72 px-2">
             <Radar
@@ -236,7 +236,7 @@ function CohortCharts({ rows, summary, q }: { rows: Row[]; summary: CohortSummar
                 )}
               </p>
               <p className="text-xs text-muted-foreground tnum">
-                {r.completed} of {SUBJECT_KEYS.length} done
+                {r.completed} of {OPEN_SUBJECT_KEYS.length} done
               </p>
               <div className="mx-auto mt-3 max-w-72 px-2">
                 <Radar

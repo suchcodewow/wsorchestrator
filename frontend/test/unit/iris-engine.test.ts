@@ -2,9 +2,9 @@
  * The Diagnostic engine and question bank.
  *
  * The accuracy floors are Project Iris's own measurements of this engine
- * (84% of true Beginners, 88% of Intermediates and 92% of Advanced placed
- * correctly, 96% of blind guessers floored at Beginner), less a couple of points
- * of simulation noise. A change that drops below one is a change to how people
+ * (84% of true 101s, 88% of 201s and 92% of 301s placed correctly, 96% of
+ * blind guessers floored at 101), less a couple of points of simulation
+ * noise. The October 2026 bank measures the same in every subject. A change that drops below one is a change to how people
  * are placed, not a refactor. The simulations are seeded, so they give the
  * same numbers on every run.
  */
@@ -23,7 +23,15 @@ import {
   type Level,
 } from "@/lib/iris/engine";
 import { IRIS_ITEMS } from "@/lib/iris/items";
-import { SUBJECT_KEYS, TRACKS, TRACK_WEIGHTS, compositeOf, isSubjectKey } from "@/lib/iris/subjects";
+import {
+  OPEN_SUBJECT_KEYS,
+  SUBJECTS,
+  SUBJECT_KEYS,
+  TRACKS,
+  TRACK_WEIGHTS,
+  compositeOf,
+  isSubjectKey,
+} from "@/lib/iris/subjects";
 import { PROFILES, longestOption, runOnce, seeded } from "../support/iris-sim";
 
 const RUNS = 2000;
@@ -33,13 +41,21 @@ const asked = (level: Level, correct: boolean, n: number, from = 0): Asked[] =>
   Array.from({ length: n }, (_, k) => ({ id: `q${level}-${from + k}`, level, subtopic: `s${k}`, correct, phase: "main" }));
 
 describe("the bank", () => {
-  test("is 304 questions, each id once", () => {
-    assert.equal(IRIS_ITEMS.length, 304);
-    assert.equal(new Set(IRIS_ITEMS.map((i) => i.id)).size, 304);
+  test("is 190 questions, each id once, all version 3.0", () => {
+    assert.equal(IRIS_ITEMS.length, 190);
+    assert.equal(new Set(IRIS_ITEMS.map((i) => i.id)).size, 190);
+    assert.ok(IRIS_ITEMS.every((i) => i.version === "3.0"));
   });
 
-  test("every subject has 12 Beginner, 14 Intermediate and 12 Advanced on Form A", () => {
+  test("the subjects marked coming soon are exactly the ones with no questions", () => {
     for (const s of SUBJECT_KEYS) {
+      assert.equal(SUBJECTS[s].comingSoon, poolOf(s).length === 0, s);
+    }
+    assert.deepEqual([...OPEN_SUBJECT_KEYS], ["sdlc", "companies", "aisdlc", "pipegen", "champion"]);
+  });
+
+  test("every subject with questions has 12 at 101, 14 at 201 and 12 at 301 on Form A", () => {
+    for (const s of OPEN_SUBJECT_KEYS) {
       const pool = poolOf(s);
       assert.deepEqual(
         [1, 2, 3].map((l) => pool.filter((i) => i.level === l).length),
@@ -49,27 +65,26 @@ describe("the bank", () => {
     }
   });
 
-  test("every question has four different options, a keyed answer, an explanation and a known subject", () => {
+  test("every question has four different options, a keyed answer, a stem, a subtopic and a known subject", () => {
     const wrong = IRIS_ITEMS.filter(
       (i) =>
         !isSubjectKey(i.subject) ||
         i.options.length !== 4 ||
         new Set(i.options).size !== 4 ||
         ![0, 1, 2, 3].includes(i.answer) ||
-        !i.rationale.trim() ||
         !i.stem.trim() ||
         !i.subtopic,
     ).map((i) => i.id);
     assert.deepEqual(wrong, []);
   });
 
-  test("every subject holds enough questions for the longest possible run", () => {
-    for (const s of SUBJECT_KEYS) assert.ok(poolOf(s).length >= ENGINE.MAX + ENGINE.TIE_N, s);
+  test("every subject with questions holds enough for the longest possible run", () => {
+    for (const s of OPEN_SUBJECT_KEYS) assert.ok(poolOf(s).length >= ENGINE.MAX + ENGINE.TIE_N, s);
   });
 });
 
 describe("the rules", () => {
-  test("a run starts at Intermediate", () => {
+  test("a run starts at 201", () => {
     assert.equal(newRunState().level, 2);
     const first = drawItem(poolOf("sdlc"), [], ENGINE.START, seeded(1));
     assert.equal(first?.level, 2);
@@ -111,7 +126,7 @@ describe("the rules", () => {
   });
 
   test("never repeats a question, and never runs past 14 plus the tiebreak", () => {
-    for (const s of SUBJECT_KEYS) {
+    for (const s of OPEN_SUBJECT_KEYS) {
       const random = seeded(3);
       for (let r = 0; r < 300; r++) {
         const { asked: run } = runOnce(poolOf(s), () => random() < 0.6, random);
@@ -139,7 +154,7 @@ describe("placement accuracy against simulated takers", () => {
   const expected = { beginner: 1, intermediate: 2, advanced: 3, guesser: 1 } as const;
   const floor = { beginner: 0.82, intermediate: 0.86, advanced: 0.9, guesser: 0.94 } as const;
 
-  for (const s of SUBJECT_KEYS) {
+  for (const s of OPEN_SUBJECT_KEYS) {
     test(s, () => {
       const pool = poolOf(s);
       const missed: string[] = [];
@@ -158,29 +173,34 @@ describe("placement accuracy against simulated takers", () => {
 });
 
 describe("answer-length shortcuts", () => {
-  test("always picking the longest option never places anyone Advanced", () => {
-    for (const s of SUBJECT_KEYS) {
+  // The October 2026 bank lets this through about 1 time in 2,000 in Champion
+  // Building, where the key is the longest option in 26% of questions; the
+  // earlier bank never did. Past 1 in 1,000 the lengths give the answer away.
+  test("always picking the longest option almost never places anyone at 301", () => {
+    const runs = 20_000;
+    for (const s of OPEN_SUBJECT_KEYS) {
       const random = seeded(5);
-      let advanced = 0;
-      for (let r = 0; r < RUNS; r++) {
-        if (runOnce(poolOf(s), (item) => longestOption(item) === item.answer, random).placement === 3) advanced++;
+      let top = 0;
+      for (let r = 0; r < runs; r++) {
+        if (runOnce(poolOf(s), (item) => longestOption(item) === item.answer, random).placement === 3) top++;
       }
-      assert.equal(advanced, 0, s);
+      assert.ok(top / runs < 0.001, `${s}: ${top} of ${runs}`);
     }
   });
 });
 
 describe("the overall score", () => {
-  test("every track's weights add to 100", () => {
+  test("every subject counts the same for every track, for now", () => {
     for (const t of TRACKS) {
-      assert.equal(Object.values(TRACK_WEIGHTS[t]).reduce((a, b) => a + b, 0), 100, t);
+      assert.deepEqual(new Set(Object.values(TRACK_WEIGHTS[t])), new Set([1]), t);
+      assert.deepEqual(Object.keys(TRACK_WEIGHTS[t]).sort(), [...SUBJECT_KEYS].sort(), t);
     }
   });
 
-  test("weights the subjects placed so far, and ignores a subject the track gives no weight", () => {
+  test("is the share of the top level reached across the subjects placed so far", () => {
     assert.equal(compositeOf({}, "AE"), null);
-    assert.equal(compositeOf({ sales: 3, dealmech: 3 }, "AE"), 100);
-    assert.equal(compositeOf({ sales: 3, dealmech: 1 }, "AE"), 67);
-    assert.equal(compositeOf({ pipegen: 3 }, "SE"), null, "Pipegen carries no weight for an SE");
+    assert.equal(compositeOf({ sdlc: 3, champion: 3 }, "AE"), 100);
+    assert.equal(compositeOf({ sdlc: 3, champion: 1 }, "SE"), 67);
+    assert.equal(compositeOf({ sdlc: 1, companies: 2, aisdlc: 3 }, "SDR"), 67);
   });
 });

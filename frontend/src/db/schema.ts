@@ -2548,12 +2548,16 @@ export const irisAttempts = pgTable(
     tieLeft: integer("tie_left").notNull().default(0),
     /** The question on screen; null once the sitting is over. */
     currentItemId: text("current_item_id"),
+    /** The order the question on screen shows its options in, as indexes into A–D; null shows them A–D. */
+    optionOrder: integer("option_order").array(),
     shownAt: timestamp("shown_at", { withTimezone: true }),
     startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
     finishedAt: timestamp("finished_at", { withTimezone: true }),
     placement: integer("placement"),
     confidence: text("confidence"),
     questions: integer("questions").notNull().default(0),
+    /** Which question bank the sitting was on; the October 2026 redo cleared everything before it. */
+    questionSet: text("question_set").notNull().default("2026-10"),
   },
   (t) => [
     uniqueIndex("iris_attempts_one_live_idx")
