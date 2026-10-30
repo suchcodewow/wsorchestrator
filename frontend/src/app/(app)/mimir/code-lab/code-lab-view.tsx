@@ -15,6 +15,7 @@ import { useDeferredValue, useEffect, useRef, useState } from "react";
 import {
   ArrowRight,
   Check,
+  ChevronRight,
   CloudUpload,
   Code,
   Eye,
@@ -87,26 +88,27 @@ export function CodeLabView({ author }: { author: string }) {
 
   return (
     <div className="cl space-y-5">
-      <p className="mb-3 flex items-center gap-1.5 text-sm text-muted-foreground">
-        <Timer className="size-4" />
-        5–7 minutes
-      </p>
-      <TicketCard />
       {SHOW_STEPPER && <Stepper stage={stage} />}
 
-      <BranchStep
-        value={branchInput}
-        onChange={setBranchInput}
-        branch={branch}
-        commits={commits.length}
-        pushed={pushed}
-        merged={stage === "merged"}
-        onCreate={(name) => {
-          setBranch(name);
-          say({ cmd: `git switch -c ${name}`, out: `Switched to a new branch '${name}'` });
-          setStage("edit");
-        }}
-      />
+      {/* The introduction and the branch box make way for the work once the branch exists. */}
+      {!branch && (
+        <>
+          <p className="mb-3 flex items-center gap-1.5 text-sm text-muted-foreground">
+            <Timer className="size-4" />
+            5–7 minutes
+          </p>
+          <TicketCard />
+          <BranchStep
+            value={branchInput}
+            onChange={setBranchInput}
+            onCreate={(name) => {
+              setBranch(name);
+              say({ cmd: `git switch -c ${name}`, out: `Switched to a new branch '${name}'` });
+              setStage("edit");
+            }}
+          />
+        </>
+      )}
 
       {stage === "edit" && branch && (
         <EditStep
@@ -288,19 +290,10 @@ function StepCard({
 function BranchStep({
   value,
   onChange,
-  branch,
-  commits,
-  pushed,
-  merged,
   onCreate,
 }: {
   value: string;
   onChange: (v: string) => void;
-  /** The branch once it is made; until then the box asks for its name. */
-  branch: string | null;
-  commits: number;
-  pushed: number;
-  merged: boolean;
   onCreate: (name: string) => void;
 }) {
   const name = cleanBranchName(value);
@@ -316,47 +309,28 @@ function BranchStep({
       }
       info={
         <div className="flex flex-col gap-1 overflow-x-auto">
-          <span className="text-xs font-medium text-muted-foreground">
-            {REPO} ·{" "}
-            {merged
-              ? "merged into main"
-              : !branch
-                ? "on main"
-                : commits === 0
-                  ? "new branch, nothing committed yet"
-                  : `${pushed} of ${commits} commit${commits === 1 ? "" : "s"} pushed`}
-          </span>
-          <HistoryGraph branch={branch} commits={commits} pushed={pushed} merged={merged} />
+          <span className="text-xs font-medium text-muted-foreground">{REPO} · on main</span>
+          <HistoryGraph branch={null} commits={0} pushed={0} merged={false} />
         </div>
       }
     >
-      {branch ? (
-        <div className="flex items-center gap-2 px-5 py-3 text-sm">
-          <Check className="size-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
-          <span>
-            You’re working on <code className="rounded bg-muted px-1.5 py-0.5 text-xs">{branch}</code>, your own copy of{" "}
-            <code className="rounded bg-muted px-1.5 py-0.5 text-xs">main</code>.
-          </span>
-        </div>
-      ) : (
-        <form
-          className="flex flex-wrap items-end gap-3 px-5 py-4"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (name) onCreate(name);
-          }}
-        >
-          <label className="grid min-w-64 grow gap-1.5 text-sm sm:max-w-md">
-            <span className="font-medium">Branch name</span>
-            <Input value={value} onChange={(e) => onChange(e.target.value)} className="font-mono" spellCheck={false} />
-          </label>
-          <Button type="submit" variant="brand" disabled={!name}>
-            <GitBranch />
-            Create branch
-          </Button>
-          <p className="basis-full text-xs text-muted-foreground">Teams usually put the ticket number in the name, so anyone can tell what the branch is for.</p>
-        </form>
-      )}
+      <form
+        className="flex flex-wrap items-end gap-3 px-5 py-4"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (name) onCreate(name);
+        }}
+      >
+        <label className="grid min-w-64 grow gap-1.5 text-sm sm:max-w-md">
+          <span className="font-medium">Branch name</span>
+          <Input value={value} onChange={(e) => onChange(e.target.value)} className="font-mono" spellCheck={false} />
+        </label>
+        <Button type="submit" variant="brand" disabled={!name}>
+          <GitBranch />
+          Create branch
+        </Button>
+        <p className="basis-full text-xs text-muted-foreground">Teams usually put the ticket number in the name, so anyone can tell what the branch is for.</p>
+      </form>
     </StepCard>
   );
 }
@@ -739,25 +713,39 @@ function MergedStep({ code, onRestart }: { code: string; onRestart: () => void }
 }
 
 function Terminal({ log }: { log: LogLine[] }) {
+  const [open, setOpen] = useState(false);
   if (log.length === 0) return null;
   return (
     <section className="overflow-hidden rounded-2xl border bg-zinc-950 text-zinc-100 shadow-sm" aria-label="Behind the scenes">
-      <div className="border-b border-white/10 px-5 py-2 text-xs font-medium text-zinc-400">Behind the scenes: the git commands each step stands for</div>
-      <pre className="max-h-64 overflow-auto px-5 py-3 font-mono text-xs leading-relaxed">
-        {log.map((l, k) => (
-          <span key={k} className="block">
-            {l.cmd.startsWith("#") ? (
-              <span className="text-zinc-500">{l.cmd}</span>
-            ) : (
-              <>
-                <span className="text-emerald-400">$ </span>
-                {l.cmd}
-              </>
-            )}
-            {l.out && <span className="block text-zinc-400">{l.out}</span>}
-          </span>
-        ))}
-      </pre>
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+        className={cn(
+          "flex w-full cursor-pointer items-center gap-1.5 px-5 py-2 text-left text-xs font-medium text-zinc-400 transition-colors hover:text-zinc-200",
+          open && "border-b border-white/10",
+        )}
+      >
+        <ChevronRight className={cn("size-3.5 shrink-0 transition-transform", open && "rotate-90")} />
+        Behind the scenes: the git commands each step stands for
+      </button>
+      {open && (
+        <pre className="max-h-64 overflow-auto px-5 py-3 font-mono text-xs leading-relaxed">
+          {log.map((l, k) => (
+            <span key={k} className="block">
+              {l.cmd.startsWith("#") ? (
+                <span className="text-zinc-500">{l.cmd}</span>
+              ) : (
+                <>
+                  <span className="text-emerald-400">$ </span>
+                  {l.cmd}
+                </>
+              )}
+              {l.out && <span className="block text-zinc-400">{l.out}</span>}
+            </span>
+          ))}
+        </pre>
+      )}
     </section>
   );
 }
