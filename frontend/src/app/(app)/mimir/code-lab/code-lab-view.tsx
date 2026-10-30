@@ -10,8 +10,23 @@
  * browser and nothing is kept: reloading the page starts again.
  */
 
-import "./code-lab.css";
-import { useDeferredValue, useEffect, useRef, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { diffStats, lineDiff } from "@/lib/mimir/code-lab/diff";
+import {
+  FILE,
+  REPO,
+  START_CODE,
+  SUGGESTED_BRANCH,
+  TASKS,
+  TICKET,
+  cleanBranchName,
+  fakeHash,
+  pageHtml,
+} from "@/lib/mimir/code-lab/scenario";
+import { cn } from "@/lib/utils";
 import {
   ArrowRight,
   Check,
@@ -30,14 +45,9 @@ import {
   Timer,
   type LucideIcon,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { diffStats, lineDiff } from "@/lib/mimir/code-lab/diff";
-import { FILE, REPO, START_CODE, SUGGESTED_BRANCH, TASKS, TICKET, cleanBranchName, fakeHash, pageHtml } from "@/lib/mimir/code-lab/scenario";
-import { cn } from "@/lib/utils";
+import { useDeferredValue, useEffect, useRef, useState } from "react";
 import { CodeEditor } from "./code-editor";
+import "./code-lab.css";
 import { DiffView } from "./diff-view";
 import { HistoryGraph } from "./history-graph";
 import { PR_NUMBER, PullRequestPage, type Commit } from "./pull-request";
@@ -185,7 +195,13 @@ export function CodeLabView({ author }: { author: string }) {
           commits={commits}
           baseCode={START_CODE}
           onMerge={() => {
-            say({ cmd: `# Merged pull request #${PR_NUMBER} into main` }, { cmd: "git switch main && git pull", out: `Updating ${MAIN_HASH}..${fakeHash(`merge:${commits.at(-1)!.hash}`)}\nFast-forward\n ${FILE} | changed` });
+            say(
+              { cmd: `# Merged pull request #${PR_NUMBER} into main` },
+              {
+                cmd: "git switch main && git pull",
+                out: `Updating ${MAIN_HASH}..${fakeHash(`merge:${commits.at(-1)!.hash}`)}\nFast-forward\n ${FILE} | changed`,
+              },
+            );
             setStage("merged");
           }}
         />
@@ -208,8 +224,9 @@ function TicketCard() {
           👋
         </span>
         <p className="max-w-3xl">
-          <span className="font-medium">Hey there!</span> Welcome to your first day as a software developer at the Greenleaf Shop. We’re super busy here
-          working on our Spring Sale. Jump right in and help Jordan. He submitted the ticket below asking for updates to our website.
+          <span className="font-medium">Hey there!</span> Welcome to your first day as a software developer at the Greenleaf Shop.
+          We’re super busy here working on our Spring Sale. Jump right in and help Jordan. He submitted the ticket below asking
+          for updates to our website.
         </p>
       </div>
       <div className="space-y-3 px-5 py-4">
@@ -302,9 +319,9 @@ function BranchStep({
       title="Create a branch"
       why={
         <>
-          It’s important to make changes in your own safe space. When developing, this is usually called “creating a branch”: sort of like a “branch”
-          sprouting off the main tree “trunk”. It’s very similar to team members making a copy of a Google Slides deck so they don’t interfere with each
-          other as they make changes.
+          It’s important to make changes in your own safe space. When developing, this is usually called “creating a branch”: sort
+          of like a “branch” sprouting off the main tree “trunk”. It’s very similar to team members making a copy of a Google
+          Slides deck so they don’t interfere with each other as they make changes.
         </>
       }
       info={
@@ -329,7 +346,9 @@ function BranchStep({
           <GitBranch />
           Create branch
         </Button>
-        <p className="basis-full text-xs text-muted-foreground">Teams usually put the ticket number in the name, so anyone can tell what the branch is for.</p>
+        <p className="basis-full text-xs text-muted-foreground">
+          Teams usually put the ticket number in the name, so anyone can tell what the branch is for.
+        </p>
       </form>
     </StepCard>
   );
@@ -392,7 +411,9 @@ function EditStep({
                         <span
                           className={cn(
                             "mt-0.5 grid size-4 shrink-0 place-items-center rounded-full border",
-                            done ? "border-emerald-600 bg-emerald-600 text-white dark:border-emerald-500 dark:bg-emerald-500" : "border-muted-foreground/40",
+                            done
+                              ? "border-emerald-600 bg-emerald-600 text-white dark:border-emerald-500 dark:bg-emerald-500"
+                              : "border-muted-foreground/40",
                           )}
                         >
                           {done && <Check className="size-3" strokeWidth={3} />}
@@ -521,7 +542,16 @@ function BrowserFrame({ code, address, className }: { code: string; address: str
               title={`What ${address} shows`}
               sandbox=""
               srcDoc={pageHtml(f.code)}
-              onLoad={() => setFrames((fs) => fs.slice(Math.max(0, fs.findIndex((g) => g.id === f.id))))}
+              onLoad={() =>
+                setFrames((fs) =>
+                  fs.slice(
+                    Math.max(
+                      0,
+                      fs.findIndex((g) => g.id === f.id),
+                    ),
+                  ),
+                )
+              }
               className={cn("absolute inset-0 size-full", k > 0 && "invisible")}
               aria-hidden={k > 0 || undefined}
               tabIndex={k > 0 ? -1 : undefined}
@@ -533,7 +563,17 @@ function BrowserFrame({ code, address, className }: { code: string; address: str
   );
 }
 
-function CommitStep({ before, after, onBack, onCommit }: { before: string; after: string; onBack: () => void; onCommit: (message: string) => void }) {
+function CommitStep({
+  before,
+  after,
+  onBack,
+  onCommit,
+}: {
+  before: string;
+  after: string;
+  onBack: () => void;
+  onCommit: (message: string) => void;
+}) {
   const [message, setMessage] = useState("");
   const trimmed = message.trim();
   return (
@@ -553,7 +593,12 @@ function CommitStep({ before, after, onBack, onCommit }: { before: string; after
       >
         <label className="grid min-w-64 grow gap-1.5 text-sm">
           <span className="font-medium">Commit message</span>
-          <Input value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Update the spring sale banner to 20% off" autoFocus />
+          <Input
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            placeholder="Update the spring sale banner to 20% off"
+            autoFocus
+          />
         </label>
         <div className="flex gap-2">
           <Button type="button" variant="ghost" onClick={onBack}>
@@ -564,7 +609,9 @@ function CommitStep({ before, after, onBack, onCommit }: { before: string; after
             Commit
           </Button>
         </div>
-        <p className="basis-full text-xs text-muted-foreground">Say what changed and why, in a line. Months from now, this is how someone finds out.</p>
+        <p className="basis-full text-xs text-muted-foreground">
+          Say what changed and why, in a line. Months from now, this is how someone finds out.
+        </p>
       </form>
     </StepCard>
   );
@@ -587,9 +634,9 @@ function PushStep({
       title="Push your branch"
       why={
         <>
-          Your commit is saved, but only the copy on your computer. Pushing the branch copies your change up to the code repository. Once it is there,
-          teammates can also review the change (often called a peer review), and pipelines can access the code to build and deploy. Click the “Push{" "}
-          {branch}” button.
+          Your commit is saved, but only the copy on your computer. Pushing the branch copies your change up to the code
+          repository. Once it is there, teammates can also review the change (often called a peer review), and pipelines can
+          access the code to build and deploy. Click the “Push {branch}” button.
         </>
       }
     >
@@ -599,7 +646,9 @@ function PushStep({
             <GitCommitHorizontal className="size-4 shrink-0 text-brand" />
             <span className="min-w-0 grow truncate">{c.message}</span>
             <code className="shrink-0 text-xs text-muted-foreground">{c.hash}</code>
-            <span className={cn("w-24 shrink-0 text-right text-xs", k < pushed ? "text-muted-foreground" : "font-medium text-brand")}>
+            <span
+              className={cn("w-24 shrink-0 text-right text-xs", k < pushed ? "text-muted-foreground" : "font-medium text-brand")}
+            >
               {k < pushed ? "on Harness Code" : "only on laptop"}
             </span>
           </div>
@@ -641,9 +690,10 @@ function PrFormStep({
       title="Open a pull request"
       why={
         <>
-          A pull request is when you ask for your branch to get pulled back into the main branch. (If you’re thinking “gosh, that’s not how trees work”,
-          that’s valid. Apparently developers don’t get outside much.) But <code className="text-foreground">main</code> is the branch in most companies
-          that eventually deploys into the real customer environment. So click “Open pull request” to say your changes are ready to get pulled into main.
+          A pull request is when you ask for your branch to get pulled back into the main branch. (If you’re thinking “gosh,
+          that’s not how tree branches work”, that’s valid. Apparently developers don’t get outside much.) But{" "}
+          <code className="text-foreground">main</code> is the branch in most companies that eventually deploys into the real
+          customer environment. So click “Open pull request” to say your changes are ready to get pulled into main.
         </>
       }
       info={
@@ -693,13 +743,18 @@ function MergedStep({ code, onRestart }: { code: string; onRestart: () => void }
         title={live ? "Merged! Deployed" : "Merged! Deploying…"}
         why={
           <>
-            Your branch is now part of <code className="text-foreground">main</code>. Merging started the pipeline, which tested the code again and{" "}
-            {live ? "deployed it to the live site." : "is deploying it to the live site."} From ticket to customers, nobody copied a file by hand.
+            Your branch is now part of <code className="text-foreground">main</code>. Merging started the pipeline, which tested
+            the code again and {live ? "deployed it to the live site." : "is deploying it to the live site."} From ticket to
+            customers, nobody copied a file by hand.
           </>
         }
       >
         <div className="flex items-center gap-3 px-5 py-3 text-sm">
-          {live ? <Check className="size-4 text-emerald-600 dark:text-emerald-400" /> : <Loader2 className="size-4 animate-spin text-brand" />}
+          {live ? (
+            <Check className="size-4 text-emerald-600 dark:text-emerald-400" />
+          ) : (
+            <Loader2 className="size-4 animate-spin text-brand" />
+          )}
           <span>{live ? "Deployed to production by Harness CD" : "Harness CD is deploying main to production…"}</span>
         </div>
       </StepCard>
