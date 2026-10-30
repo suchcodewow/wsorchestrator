@@ -2,10 +2,9 @@
 
 /**
  * The gear loader from the moment a link to another page is clicked until
- * that page arrives. A `loading.tsx` cannot do this alone: its fallback only
- * shows when the segment under it changes, so a tab inside a layout (Cohorts'
- * Current and Deferred) never reaches the one under `(app)`, and without a
- * prefetch it arrives in the same response as the page it stands in for.
+ * that page arrives. Keep this rather than a `loading.tsx` under `(app)`: that
+ * sends a 200 before a page's gate runs, so a page someone may not see answers
+ * 200 and shows its 404 or redirect in the browser, which `test/e2e` fails on.
  *
  * Only a change of path counts. A search, a sort or a pager link rewrites the
  * query string of the page already up, and hiding the page for that would
