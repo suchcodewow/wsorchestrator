@@ -472,6 +472,39 @@ describe("Sync Now", () => {
     assert.equal(status!.mark, "accepted");
   });
 
+  test("the Current tab gives someone not yet invited the occurrence the next sync would pick, and flags one outside 9 to 5", async () => {
+    await connect();
+    const id = await pick();
+    // 13:00 to 14:00 UTC two days out: before 9:00 in Chicago, mid-afternoon in London.
+    const day = new Date(Date.now() + 2 * DAY).toISOString().slice(0, 10);
+    const startsAt = `${day}T13:00:00.000Z`;
+    event("e1", 2, NAME, { start: { dateTime: startsAt }, end: { dateTime: `${day}T14:00:00.000Z` } });
+    event("e2", 5);
+    await sync_ok();
+    // As if they joined the cohort after this sync: on no invite yet.
+    const [occ] = await db.select({ id: meetingOccurrences.id }).from(meetingOccurrences).where(and(eq(meetingOccurrences.meetingId, id), eq(meetingOccurrences.eventId, "e1")));
+    await db.delete(meetingInvites).where(and(eq(meetingInvites.occurrenceId, occ!.id), eq(meetingInvites.email, salesEmail)));
+    const status = async () => (await meetingStatusesFor([{ email: salesEmail, stage: "bootcamp", track: "sales" }])).get(salesEmail)![0]!;
+    try {
+      await db.update(employees).set({ timezone: "America/Chicago" }).where(eq(employees.email, salesEmail));
+      const chicago = await status();
+      assert.deepEqual([chicago.mark, chicago.predicted, chicago.startsAt?.toISOString(), chicago.timezone, chicago.outOfHours], ["uninvited", true, startsAt, "America/Chicago", true]);
+
+      await db.update(employees).set({ timezone: "Europe/London" }).where(eq(employees.email, salesEmail));
+      assert.equal((await status()).outOfHours, false);
+
+      await db.update(employees).set({ timezone: null }).where(eq(employees.email, salesEmail));
+      const none = await status();
+      assert.deepEqual([none.predicted, none.outOfHours], [true, false]);
+
+      await sync_ok();
+      const invited = await status();
+      assert.deepEqual([invited.mark, invited.predicted, invited.startsAt?.toISOString()], ["pending", false, startsAt], "the sync invites them to the one predicted");
+    } finally {
+      await db.update(employees).set({ timezone: null }).where(eq(employees.email, salesEmail));
+    }
+  });
+
   test("someone Zoom did not see join is counted missing and invited to the next occurrence", async () => {
     await connect();
     const id = await pick();

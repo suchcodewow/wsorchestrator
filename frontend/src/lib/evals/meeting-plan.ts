@@ -156,6 +156,26 @@ export function inviteWindowLabel(window: InviteWindow): string {
   return `from ${window.notBefore}, after the bootcamp, until the next intermediate class on ${window.cutoff}`;
 }
 
+/** Whether an occurrence starting on `startDate` (`YYYY-MM-DD`) falls in `window`. */
+export function inWindow(startDate: string, window: InviteWindow): boolean {
+  return startDate < window.cutoff && (window.notBefore === null || startDate >= window.notBefore);
+}
+
+/**
+ * The occurrence someone not yet invited gets from those `offered` to them,
+ * soonest first: the first on or after their start date plus
+ * `minDaysAfterStart`, else, with nothing late enough in the window, the last.
+ * Someone with no start date gets the first.
+ */
+export function firstSuiting<T extends { startDate: string }>(
+  offered: readonly T[],
+  startDate: string | null | undefined,
+  minDaysAfterStart = 0,
+): T | undefined {
+  const earliest = startDate ? addDays(startDate, minDaysAfterStart) : null;
+  return offered.find((o) => earliest === null || o.startDate >= earliest) ?? offered.at(-1);
+}
+
 /** A guest as Google Calendar lists one; everything it returns is sent back untouched. */
 export type CalendarAttendee = {
   email: string;
@@ -320,7 +340,7 @@ export function planMeeting(input: {
   const toCome = [...input.occurrences].filter((o) => o.startsAt > input.now).sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
   const offeredTo = (email: string) => {
     const window = input.windows?.get(email) ?? { notBefore: null, cutoff: input.cutoff };
-    return toCome.filter((o) => o.startDate < window.cutoff && (window.notBefore === null || o.startDate >= window.notBefore));
+    return toCome.filter((o) => inWindow(o.startDate, window));
   };
   const memberInvites = input.invites.filter((i) => i.role === "member" && byId.has(i.occurrenceId));
   const invitesOf = new Map<string, PlanInvite[]>();
@@ -341,9 +361,7 @@ export function planMeeting(input: {
     const future = open.filter(({ at }) => at.startsAt > input.now).sort((a, b) => a.at.startsAt.getTime() - b.at.startsAt.getTime());
     const attended = mark === true || (mark === undefined && mine.some(({ invite }) => invite.attendance === "attended"));
     const started = input.startDates?.get(email);
-    const earliest = started ? addDays(started, input.minDaysAfterStart ?? 0) : null;
-    // Nothing late enough in the window: the last occurrence there is.
-    const firstOf = (from: readonly PlanOccurrence[]) => from.find((o) => earliest === null || o.startDate >= earliest) ?? from.at(-1);
+    const firstOf = (from: readonly PlanOccurrence[]) => firstSuiting(from, started, input.minDaysAfterStart);
 
     if (input.allOccurrences) {
       // Once they attend, they are done with the meeting, as with one at a time.
@@ -474,4 +492,27 @@ export function meetingMark(input: {
   if (input.attended) return "attended";
   if (input.invited) return input.response === "accepted" ? "accepted" : "pending";
   return input.anyLeft ? "uninvited" : "none_left";
+}
+
+/** The working day, in whole hours on a 24-hour clock, that the Current tab holds each meeting to in a person's own time zone. */
+export const WORKING_HOURS = { from: 9, to: 17 } as const;
+
+/**
+ * Whether an occurrence from `startsAt` to `endsAt` runs outside the working
+ * day in `zone`: it starts before 9:00 there, ends after 17:00, or ends on a
+ * later day. Null when `zone` is missing or not one the runtime knows.
+ */
+export function outsideWorkingHours(zone: string | null | undefined, startsAt: Date, endsAt: Date): boolean | null {
+  if (!zone) return null;
+  const local = (at: Date) => {
+    const shifted = new Date(at.getTime() + utcOffsetMinutes(zone, at) * 60_000);
+    return { day: shifted.toISOString().slice(0, 10), minutes: shifted.getUTCHours() * 60 + shifted.getUTCMinutes() };
+  };
+  try {
+    const start = local(startsAt);
+    const end = local(endsAt);
+    return start.minutes < WORKING_HOURS.from * 60 || end.day !== start.day || end.minutes > WORKING_HOURS.to * 60;
+  } catch {
+    return null;
+  }
 }
