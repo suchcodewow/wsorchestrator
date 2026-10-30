@@ -1,7 +1,7 @@
 /**
  * eVals settings against a real database: the title lists' one-list-per-title
- * rule (a case-insensitive unique index), the bootcamp history kept on each
- * employee, and the HiBob sync that updates the employee list and logs each run.
+ * rule (a case-insensitive unique index), the HiBob sync that updates the
+ * employee list and logs each run, and the tracks it and administrators set.
  *
  * HiBob itself is replaced by a stubbed `fetch`, and its credentials by
  * environment variables. A sync empties `employees`, so the table is saved
@@ -25,23 +25,16 @@ import {
   bootcamps,
   employees,
   EVALS_SETTINGS_KEYS,
+  evalsAssessments,
   evalsSettings,
   evalsSlackContacts,
+  evalsSubmissions,
   evalsTitles,
-  EXEMPT_DATE,
   hibobSyncRuns,
   scheduleSessionGroups,
   scheduleSessions,
   scheduleSessionStaff,
 } from "@/db/schema";
-import {
-  ensureEmployees,
-  getHistoryDetail,
-  historyCorrectionSchema,
-  historyCounts,
-  listHistoryPage,
-  updateHistory,
-} from "@/lib/evals/bootcamp-history";
 import { setChosenName } from "@/lib/evals/chosen-names";
 import { hibobServiceUser, listHibobSyncRuns, syncHibobEmployees } from "@/lib/evals/hibob";
 import { toEmployeeRow } from "@/lib/evals/hibob-record";
@@ -63,15 +56,12 @@ import { resolveSlackUsers } from "@/lib/cohorts/slack-sync";
 import type { SlackClient } from "@/lib/slack";
 import { getSession } from "@/lib/scheduler/schedule";
 import {
-  BOOTCAMP_HISTORY_LIST,
   BOOTCAMP_LIST,
   CURRENT_COHORT_LIST,
   HIBOB_SYNC_LIST,
   ORGANIZATION_LIST,
   SLACK_CONTACT_LIST,
   TITLE_LIST,
-  type BootcampHistorySort,
-  type HistoryStatus,
   type TitleSort,
 } from "@/lib/list-specs";
 import {
@@ -271,132 +261,20 @@ describe("Slack lookups", () => {
   });
 });
 
-describe("bootcamp history page", () => {
-  const page = (q: string, sort: BootcampHistorySort = "fullName", status: HistoryStatus | null = null) =>
-    listHistoryPage({ ...BOOTCAMP_HISTORY_LIST, sort, dir: "asc", q, page: 1 }, status);
-
-  test("lists each person by the employee list's name, sinking those it lacks, and finds them by either", async () => {
-    await db.insert(employees).values([
-      {
-        id: `${TEST_PREFIX}history`,
-        email: email("h-ann"),
-        fullName: "Ann History",
-        title: "Solutions Engineer",
-        raw: {},
-        btcDate: "2026-03-02",
-        btcScore: 3.3,
-        historyUpdatedBy: admin.id,
-      },
-      // Someone HiBob no longer sends keeps their history on an inactive row.
-      { id: `${TEST_PREFIX}history_zed`, email: email("h-zed"), fullName: "", raw: {}, active: false, intScore: 2 },
-      // Someone with no history is not listed at all.
-      { id: `${TEST_PREFIX}history_none`, email: email("h-none"), fullName: "No History", raw: {} },
-    ]);
-
-    const rows = (r: Awaited<ReturnType<typeof page>>) => r.rows.map((h) => [h.email, h.fullName]);
-    assert.deepEqual(rows(await page("h-")), [
-      [email("h-ann"), "Ann History"],
-      [email("h-zed"), null],
-    ]);
-    assert.deepEqual(rows(await page("ann hist")), [[email("h-ann"), "Ann History"]]);
-  });
-
-  test("lists the newest bootcamp first by default, with no date last", async () => {
-    const newest = await listHistoryPage({ ...BOOTCAMP_HISTORY_LIST, q: "h-", page: 1 });
-    assert.equal(BOOTCAMP_HISTORY_LIST.sort, "btcDate");
-    assert.deepEqual(
-      newest.rows.map((h) => [h.email, h.btcDate]),
-      [
-        [email("h-ann"), "2026-03-02"],
-        [email("h-zed"), null],
-      ],
-    );
-  });
-
-  test("narrows to the people still in the employee list, or to those not, and counts both", async () => {
-    const emails = async (status: HistoryStatus) => (await page("h-", "email", status)).rows.map((h) => h.email);
-    assert.deepEqual(await emails("active"), [email("h-ann")]);
-    assert.deepEqual(await emails("inactive"), [email("h-zed")]);
-
-    const counts = await historyCounts();
-    assert.ok(counts.active >= 1 && counts.inactive >= 1);
-    assert.equal(counts.active + counts.inactive, counts.total);
-  });
-
-  test("a record holds the whole history, who changed it, and who they are in HiBob", async () => {
-    const [ann, zed] = (await page("h-", "email")).rows;
-    const detail = await getHistoryDetail(ann!.id);
-    assert.ok(detail);
-    assert.equal(detail.btcDate, "2026-03-02");
-    assert.equal(detail.btcScore, 3.3);
-    assert.equal(detail.updatedByName, "admin");
-    assert.equal(detail.employee?.title, "Solutions Engineer");
-
-    assert.equal((await getHistoryDetail(zed!.id))?.employee, null);
-    assert.equal(await getHistoryDetail(`${TEST_PREFIX}history_none`), null);
-    assert.equal(await getHistoryDetail("00000000-0000-4000-8000-000000000000"), null);
-  });
-});
-
-describe("bootcamp history edits", () => {
-  test("an edit changes only what it names, keeps the individual scores, and says who made it", async () => {
-    const id = `${TEST_PREFIX}edited`;
-    await db.insert(employees).values({
-      id,
-      email: email("edited"),
-      fullName: "Ed Ited",
-      raw: {},
-      btcScore: 3,
-      btcIndividualScores: { "Score-Lab": 3 },
-    });
-
-    assert.deepEqual(await updateHistory(admin.id, id, historyCorrectionSchema.parse({ intDate: EXEMPT_DATE })), {
-      ok: true,
-      email: email("edited"),
-    });
-    const after = await getHistoryDetail(id);
-    assert.equal(after?.intDate, EXEMPT_DATE);
-    assert.equal(after?.btcScore, 3);
-    assert.deepEqual(after?.btcIndividualScores, { "Score-Lab": 3 });
-    assert.equal(after?.updatedByName, "admin");
-    assert.ok(after?.createdAt && after.updatedAt);
-  });
-
-  test("someone with no history, or no row, is not found", async () => {
-    await db.insert(employees).values({ id: `${TEST_PREFIX}blank`, email: email("blank"), fullName: "Blank", raw: {} });
-    for (const id of [`${TEST_PREFIX}blank`, "00000000-0000-4000-8000-000000000000"]) {
-      assert.deepEqual(await updateHistory(admin.id, id, { intScore: 1 }), { ok: false, error: "not_found" });
-    }
-  });
-
-  test("someone HiBob has never sent gets an inactive row of their own, and no one gets two", async () => {
-    const guest = email("Guest.Speaker").toLowerCase();
-    await ensureEmployees(db, [guest, email("edited"), guest]);
-    const rows = await db.select().from(employees).where(inArray(employees.email, [guest, email("edited")]));
-    assert.equal(rows.length, 2);
-    const made = rows.find((r) => r.email === guest)!;
-    assert.deepEqual([made.active, made.fullName], [false, "Guest Speaker"]);
-    await db.delete(employees).where(eq(employees.id, made.id));
-  });
-
-  test("a correction's values are checked", () => {
-    const parse = (v: unknown) => historyCorrectionSchema.safeParse(v);
-    assert.equal(parse({ btcDate: "2026-02-30" }).success, false);
-    assert.equal(parse({ btcIndividualScores: { Lab: "4" } }).success, false);
-    for (const score of [0, 5, 4.01]) assert.equal(parse({ btcIndividualScores: { Lab: score } }).success, false);
-    // Never whose history it is.
-    assert.deepEqual(historyCorrectionSchema.parse({ email: email("x"), btcScore: 2 }), {});
-    const decimal = parse({ intIndividualScores: { Lab: 3.25 } });
-    assert.ok(decimal.success);
-    assert.deepEqual(decimal.data.intIndividualScores, { Lab: 3.3 });
-  });
-});
-
 describe("HiBob sync", () => {
   // A sync keeps whoever it no longer lists, as inactive, so each test starts from an empty list.
   // The whole table is put back in `after`.
   beforeEach(async () => {
     await db.delete(employees);
+    // And the classes `giveClasses` gave, which live on submissions rather than employees.
+    await db
+      .delete(evalsSubmissions)
+      .where(
+        inArray(
+          evalsSubmissions.assessmentId,
+          db.select({ id: evalsAssessments.id }).from(evalsAssessments).where(eq(evalsAssessments.createdBy, admin.id)),
+        ),
+      );
   });
 
   const person = (id: string, name: string, manager: string, title = "", dates: Record<string, string | null> = {}) => ({
@@ -460,14 +338,29 @@ describe("HiBob sync", () => {
     return result;
   }
 
+  /** Has each person attend the classes held on these days, as releasing them would. */
+  async function giveClasses(classes: { name: string; btcDate?: string; intDate?: string }[]) {
+    for (const { name, btcDate, intDate } of classes) {
+      if (btcDate) await scope.createAttendance(admin.id, email(name), "bootcamp", btcDate);
+      if (intDate) await scope.createAttendance(admin.id, email(name), "intermediate", intDate);
+    }
+  }
+
   /**
-   * Gives each person a bootcamp history, as a released bootcamp would: on
-   * their employee row, or an inactive one of their own until HiBob sends them.
+   * Pins each person exempt, as Cohorts → Current's track menu does, on a row
+   * of their own that the first sync to send them takes over.
    */
-  async function giveHistory(histories: { name: string; btcDate?: string; intDate?: string }[]) {
-    for (const { name, ...dates } of histories) {
-      await ensureEmployees(db, [email(name)]);
-      await db.update(employees).set(dates).where(eq(employees.email, email(name)));
+  async function pinExempt(names: string[]) {
+    for (const name of names) {
+      await db.insert(employees).values({
+        id: `${TEST_PREFIX}${name}`,
+        email: email(name),
+        fullName: name,
+        raw: {},
+        active: false,
+        trackPinned: true,
+        trackOverride: "exempt",
+      });
     }
   }
 
@@ -529,12 +422,11 @@ describe("HiBob sync", () => {
     assert.equal(logged.triggeredBy, "admin");
     assert.ok(logged.finishedAt);
 
-    await giveHistory([{ name: "ae", btcDate: "2026-03-01" }]);
     const roster = await loadRoster(email("root"));
     assert.equal(roster.rootFound, true);
     assert.deepEqual(
-      roster.people.map((p) => [p.email, p.depth, p.list, p.btcDate]),
-      [[email("ae"), 1, "sales", "2026-03-01"]],
+      roster.people.map((p) => [p.email, p.depth, p.list]),
+      [[email("ae"), 1, "sales"]],
     );
   });
 
@@ -682,7 +574,7 @@ describe("HiBob sync", () => {
     }
   });
 
-  test("the sync gives each org member a track, exempt where their history says, and edits keep it", async () => {
+  test("the sync gives each org member a track, exempt where pinned so, and automatic hands them back to the rules", async () => {
     configure();
     // The sync walks down from the configured leader; put it back after.
     const key = EVALS_SETTINGS_KEYS.orgLeaderEmail;
@@ -694,10 +586,8 @@ describe("HiBob sync", () => {
     try {
       await addTitles(admin.id, "sales", [T("Track AE")]);
       await addTitles(admin.id, "engineer", [T("Track SE")]);
-      await giveHistory([
-        { name: "t-btc", btcDate: "2000-01-01" },
-        { name: "t-int", btcDate: "2026-03-01", intDate: "2000-01-01" },
-      ]);
+      await pinExempt(["t-btc", "t-int"]);
+      await giveClasses([{ name: "t-int", btcDate: "2026-03-01" }]);
       stubHibob(200, [
         person("1", "root", ""),
         person("2", "t-ae", "root", T("Track AE")),
@@ -721,14 +611,11 @@ describe("HiBob sync", () => {
         "t-out": null,
       });
 
-      // An edit to someone's history moves their track at once, either way.
-      const idOf = async (name: string) =>
-        (await db.select({ id: employees.id }).from(employees).where(eq(employees.email, email(name))))[0]!.id;
-      assert.deepEqual(await updateHistory(admin.id, await idOf("t-btc"), { btcDate: "2026-04-01" }), {
-        ok: true,
-        email: email("t-btc"),
-      });
-      assert.ok((await updateHistory(admin.id, await idOf("t-int"), { intDate: null })).ok);
+      // Exempt lasts through the next sync, and goes only when someone picks automatic.
+      assert.ok((await sync()).ok);
+      assert.equal((await tracks())["t-btc"], "exempt");
+      assert.ok((await setTrack(admin.id, email("t-btc"), "automatic")).ok);
+      assert.ok((await setTrack(admin.id, email("t-int"), "automatic")).ok);
       assert.deepEqual(await tracks(), {
         root: null,
         "t-ae": "sales",
@@ -781,7 +668,7 @@ describe("HiBob sync", () => {
     configure();
     await withSettings({ orgLeaderEmail: email("root"), ...SHEET_CUTOFFS }, async () => {
       await addTitles(admin.id, "sales", [T("Cand AE")]);
-      await giveHistory([
+      await giveClasses([
         { name: "c-int", btcDate: "2026-03-01" },
         { name: "c-done", btcDate: "2026-03-01", intDate: "2026-04-01" },
       ]);
@@ -861,7 +748,7 @@ describe("HiBob sync", () => {
     configure();
     await withSettings({ orgLeaderEmail: email("root"), ...SHEET_CUTOFFS }, async () => {
       await addTitles(admin.id, "sales", [T("Cut AE")]);
-      await giveHistory([{ name: "k-int-old", btcDate: "2026-03-01" }]);
+      await giveClasses([{ name: "k-int-old", btcDate: "2026-03-01" }]);
       const ae = T("Cut AE");
       stubHibob(200, [
         person("1", "root", ""),
@@ -916,7 +803,7 @@ describe("HiBob sync", () => {
     await withSettings({ orgLeaderEmail: email("root"), ...SHEET_CUTOFFS, deferralDays: "14" }, async () => {
       await addTitles(admin.id, "sales", [T("Def AE")]);
       await addTitles(admin.id, "ignored", [T("Def Ignored")]);
-      await giveHistory([{ name: "d-exempt", btcDate: "2000-01-01" }]);
+      await pinExempt(["d-exempt"]);
       const made = await createBootcamp(admin.id, { startDate: "2026-11-02", btcDays: 5, intDays: null, status: "active" });
       assert.ok(made.ok);
       try {
@@ -986,7 +873,7 @@ describe("HiBob sync", () => {
     await withSettings({ orgLeaderEmail: email("root"), ...SHEET_CUTOFFS, deferralDays: "0" }, async () => {
       await addTitles(admin.id, "sales", [T("Hand AE")]);
       await addTitles(admin.id, "ignored", [T("Hand Ignored")]);
-      await giveHistory([{ name: "h-exempt", btcDate: EXEMPT_DATE }]);
+      await pinExempt(["h-exempt"]);
       const people = [
         person("1", "root", ""),
         person("2", "h-ae", "root", T("Hand AE")),
@@ -1014,7 +901,7 @@ describe("HiBob sync", () => {
       const listOf = async (title: string) =>
         (await db.select({ list: evalsTitles.list }).from(evalsTitles).where(eq(evalsTitles.title, T(title))))[0]?.list;
 
-      // An undecided title goes on the list, and everyone holding it follows; exempt history still wins.
+      // An undecided title goes on the list, and everyone holding it follows; a pinned exempt stays.
       assert.deepEqual(await setTrack(admin.id, email("h-mystery"), "sales"), {
         ok: true,
         result: {
@@ -1034,10 +921,13 @@ describe("HiBob sync", () => {
       assert.equal(moved.result.retracked, 2);
       assert.equal(await listOf("Hand Mystery"), "engineer");
 
-      // Where the rules still disagree, the person is pinned to the choice as well.
+      // Picking a list for someone pinned exempt unpins them, and their title moves with them.
       const exempt = await setTrack(admin.id, email("h-exempt"), "sales");
       assert.ok(exempt.ok);
-      assert.deepEqual([exempt.result.track, exempt.result.overridden, exempt.result.retracked], ["sales", true, 3]);
+      assert.deepEqual(
+        [exempt.result.track, exempt.result.overridden, exempt.result.title?.from, exempt.result.retracked],
+        ["sales", false, "engineer", 3],
+      );
 
       // A title on the list already moves nothing, and hands a pinned person back to it.
       assert.ok((await setTrack(admin.id, email("h-ae"), "deferred")).ok);
@@ -1061,7 +951,7 @@ describe("HiBob sync", () => {
         "h-ignored": "sales",
         "h-mystery": "sales",
         "h-mystery2": "sales",
-        "h-exempt": "sales (pinned)",
+        "h-exempt": "sales",
         "h-blank": "engineer (pinned)",
         "h-out": "undecided",
       };
@@ -1072,9 +962,11 @@ describe("HiBob sync", () => {
       assert.deepEqual(await tracks(), expected);
 
       assert.ok((await setTrack(admin.id, email("h-ae2"), "automatic")).ok);
+      assert.ok((await setTrack(admin.id, email("h-exempt"), "exempt")).ok);
+      assert.equal((await tracks())["h-exempt"], "exempt (pinned)");
       assert.ok((await setTrack(admin.id, email("h-exempt"), "automatic")).ok);
       const after = await tracks();
-      assert.deepEqual([after["h-ae2"], after["h-exempt"]], ["sales", "exempt"]);
+      assert.deepEqual([after["h-ae2"], after["h-exempt"]], ["sales", "sales"]);
     });
   });
 

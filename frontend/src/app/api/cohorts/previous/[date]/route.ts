@@ -2,7 +2,7 @@
 
 import { NextResponse } from "next/server";
 import { requireCaller } from "@/lib/api-auth";
-import { getSessionDetail } from "@/lib/evals/bootcamp-history";
+import { getSessionDetail } from "@/lib/evals/previous-sessions";
 import { isIsoDay } from "@/lib/evals/history-values";
 import { SESSION_ATTENDEE_LIST } from "@/lib/list-specs";
 import { parseListQuery } from "@/lib/paging";

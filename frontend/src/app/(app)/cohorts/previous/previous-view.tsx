@@ -4,8 +4,8 @@
  * One row per day BTC or INT was held, with how many attended each. A row
  * opens in place to who attended: bootcamp on one side, intermediate on the
  * other, each fetched a page at a time the first time it is opened. The open
- * days are kept in the URL, and a person's page is opened under Cohorts with
- * that URL's parameters, so its back link and Back both return here as it was.
+ * days are kept in the URL, so Back from a person's page on Reporting → Live
+ * Sessions returns here as it was.
  */
 
 import { Fragment, useEffect, useEffectEvent, useState } from "react";
@@ -16,7 +16,7 @@ import { ChevronRight, GraduationCap, Loader2, Users, type LucideIcon } from "lu
 import { HEADER_ROW, Pager, PlainHeader, SortHeader } from "@/components/data-table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import type { PreviousSession, SessionAttendee, SessionDetail, SessionStage } from "@/lib/evals/bootcamp-history";
+import type { PreviousSession, SessionAttendee, SessionDetail, SessionStage } from "@/lib/evals/previous-sessions";
 import type { PreviousSessionSort } from "@/lib/list-specs";
 import { riseChild, staggerParent } from "@/lib/motion";
 import { listParam, withParams, type ListQuery, type Page } from "@/lib/paging";
@@ -56,7 +56,7 @@ export function PreviousView({
   total,
   first,
   opened: preopened,
-  canOpenHistory,
+  canOpenPerson,
 }: {
   query: ListQuery<PreviousSessionSort>;
   page: Page<PreviousSession>;
@@ -65,8 +65,8 @@ export function PreviousView({
   first: string | null;
   /** The days the URL named as open, already fetched. */
   opened: SessionDetail[];
-  /** Whether the viewer may open a person's bootcamp history record. */
-  canOpenHistory: boolean;
+  /** Whether the viewer may open a person's page on Reporting → Live Sessions. */
+  canOpenPerson: boolean;
 }) {
   const [opened, setOpened] = useState<Record<string, Opened>>(() =>
     Object.fromEntries(preopened.map((detail) => [detail.date, { detail, loading: null, error: null }])),
@@ -142,7 +142,7 @@ export function PreviousView({
   }
 
   return (
-    <motion.div variants={staggerParent(0.05)} initial="hidden" animate="show" className="space-y-4">
+    <motion.div variants={staggerParent(0.05)} initial="hidden" animate="show" className="space-y-3">
       <motion.div variants={riseChild} className="space-y-1.5">
         <h2 className="text-xl font-medium tracking-tight">Previous</h2>
         {first && (
@@ -185,14 +185,14 @@ export function PreviousView({
                       onClick={() => toggle(s.date)}
                       className={cn("cursor-pointer border-b transition-colors last:border-b-0 hover:bg-muted/30", open && "bg-muted/20")}
                     >
-                      <td className="py-2.5 pl-3 pr-0 sm:pl-5">
+                      <td className="py-2 pl-3 pr-0 sm:pl-5">
                         {open?.loading === "both" ? (
                           <Loader2 className="size-4 animate-spin text-muted-foreground" />
                         ) : (
                           <ChevronRight className={cn("size-4 text-muted-foreground transition-transform", open && "rotate-90")} />
                         )}
                       </td>
-                      <td className={cn("whitespace-nowrap py-2.5 font-medium tabular-nums", CELL_X)}>
+                      <td className={cn("whitespace-nowrap py-2 font-medium tabular-nums", CELL_X)}>
                         <button
                           type="button"
                           aria-expanded={!!open}
@@ -206,8 +206,8 @@ export function PreviousView({
                           {formatDate(s.date)}
                         </button>
                       </td>
-                      <td className={cn("py-2.5 tabular-nums text-muted-foreground", CELL_X)}>{s.bootcamp.toLocaleString()}</td>
-                      <td className={cn("py-2.5 tabular-nums text-muted-foreground", CELL_X)}>{s.intermediate.toLocaleString()}</td>
+                      <td className={cn("py-2 tabular-nums text-muted-foreground", CELL_X)}>{s.bootcamp.toLocaleString()}</td>
+                      <td className={cn("py-2 tabular-nums text-muted-foreground", CELL_X)}>{s.intermediate.toLocaleString()}</td>
                     </tr>
                     {open && open.loading !== "both" && (
                       <tr id={panel} className="border-b bg-muted/10 last:border-b-0">
@@ -227,7 +227,7 @@ export function PreviousView({
                                   count={s[stage]}
                                   attendees={open.detail![stage]}
                                   loading={open.loading === stage}
-                                  personHref={canOpenHistory ? (id) => withParams(`${pathname}/${id}`, params) : null}
+                                  personHref={canOpenPerson ? (key) => `/reporting/bootcamp/${key}` : null}
                                   onMore={() => more(s.date, stage)}
                                 />
                               ))}
@@ -242,7 +242,7 @@ export function PreviousView({
               {page.rows.length === 0 && (
                 <tr>
                   <td colSpan={COLUMNS.length + 1} className="px-5 py-8 text-center text-muted-foreground">
-                    {page.page > 1 ? "No sessions on this page." : "No bootcamp history yet."}
+                    {page.page > 1 ? "No sessions on this page." : "No released classes yet."}
                   </td>
                 </tr>
               )}
@@ -271,8 +271,8 @@ function AttendeeList({
   count: number;
   attendees: Page<SessionAttendee>;
   loading: boolean;
-  /** Where a person's record opens, or null when the viewer may not open one. */
-  personHref: ((id: string) => string) | null;
+  /** Where a person's page opens, or null when the viewer may not open one. */
+  personHref: ((key: string) => string) | null;
   onMore: () => void;
 }) {
   return (
@@ -287,12 +287,12 @@ function AttendeeList({
       ) : (
         <ul className="divide-y">
           {attendees.rows.map((a) => (
-            <li key={a.id} className="flex items-center gap-2 px-4 py-2">
+            <li key={a.key} className="flex items-center gap-2 px-4 py-2">
               <span className="min-w-0 flex-1">
                 <span className="block truncate font-medium">
                   {personHref ? (
                     <Link
-                      href={personHref(a.id)}
+                      href={personHref(a.key)}
                       className="underline-offset-2 outline-none hover:underline focus-visible:underline"
                     >
                       {a.fullName ?? a.email}

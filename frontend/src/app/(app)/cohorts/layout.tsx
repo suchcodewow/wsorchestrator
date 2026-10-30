@@ -20,7 +20,7 @@ export default async function CohortsLayout({ children }: { children: React.Reac
   const deferredCount = counts.bootcamp.deferred + counts.intermediate.deferred;
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <h1 className="text-3xl font-medium tracking-tight">Cohorts</h1>
 
       <CohortsTabs currentCount={currentCount} deferredCount={deferredCount} />

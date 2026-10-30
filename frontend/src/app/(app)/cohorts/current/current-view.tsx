@@ -170,7 +170,7 @@ export function CurrentCohortView({
   activeBootcamp: ActiveBootcamp | null;
   /** Whether the viewer may set anyone's track. */
   canSetTrack: boolean;
-  /** Whether the viewer is in eVals, whose scores and bootcamp history records these are. */
+  /** Whether the viewer is in eVals, whose scores and Live Sessions records these are. */
   canSeeScores: boolean;
   /** The Current tab's meeting marks; none on the Deferred tab. */
   meetings?: MemberMeetings;
@@ -261,7 +261,7 @@ export function CurrentCohortView({
   }
 
   return (
-    <motion.div variants={staggerParent(0.05)} initial="hidden" animate="show" className="space-y-4">
+    <motion.div variants={staggerParent(0.05)} initial="hidden" animate="show" className="space-y-3">
       <motion.div variants={riseChild}>
         <p className="text-sm leading-relaxed text-muted-foreground">
           {tab === "deferred" ? (
@@ -410,7 +410,7 @@ export function CurrentCohortView({
                         expanded ? "border-b-0 bg-muted/30" : "last:border-b-0",
                       )}
                     >
-                      <td className="px-5 py-2.5 font-medium">
+                      <td className="px-5 py-2 font-medium">
                         <button
                           type="button"
                           aria-expanded={expanded}
@@ -428,7 +428,7 @@ export function CurrentCohortView({
                         </button>
                       </td>
                       {showAttendance && (
-                        <td className="px-5 py-1.5">
+                        <td className="px-5 py-1">
                           <MeetingMarks
                             member={m}
                             rsvp={(intakes[m.email.toLowerCase()] ?? []).find((i) => i.form === m.stage)}
@@ -439,7 +439,7 @@ export function CurrentCohortView({
                         </td>
                       )}
                       {/* React bubbles the menu's clicks through its portal, so they stop here rather than toggling the row. */}
-                      <td className="px-5 py-1.5" onClick={(ev) => ev.stopPropagation()}>
+                      <td className="px-5 py-1" onClick={(ev) => ev.stopPropagation()}>
                         {canSetTrack ? (
                           <TrackMenu
                             member={m}
@@ -452,15 +452,15 @@ export function CurrentCohortView({
                         )}
                       </td>
                       {showBtcDate && (
-                        <td className="whitespace-nowrap px-5 py-2.5 tabular-nums text-muted-foreground">
+                        <td className="whitespace-nowrap px-5 py-2 tabular-nums text-muted-foreground">
                           {formatDate(m.btcDate)}
                         </td>
                       )}
                       {scoreColumns && (
                         <>
-                          <td className="px-5 py-2.5 text-right font-medium tabular-nums">{score(m.averageScore)}</td>
+                          <td className="px-5 py-2 text-right font-medium tabular-nums">{score(m.averageScore)}</td>
                           {scoreColumns.map((a) => (
-                            <td key={a.id} className="px-5 py-2.5 text-right tabular-nums text-muted-foreground">
+                            <td key={a.id} className="px-5 py-2 text-right tabular-nums text-muted-foreground">
                               {score(m.scores[a.id])}
                             </td>
                           ))}
@@ -549,7 +549,7 @@ function Counter({
 function TrackLabel({ member }: { member: CurrentCohortMember }) {
   const label = CHOICE_LABELS[member.track];
   return (
-    <span className="inline-flex items-center gap-1.5 py-1">
+    <span className="inline-flex items-center gap-1.5">
       {member.track === "deferred" ? (
         <Badge variant="secondary">{label}</Badge>
       ) : (
@@ -560,7 +560,7 @@ function TrackLabel({ member }: { member: CurrentCohortMember }) {
   );
 }
 
-/** Everything the row leaves out, from the last HiBob sync and their bootcamp history. */
+/** Everything the row leaves out, from the last HiBob sync and the classes they attended. */
 function score(value: number | null | undefined): string {
   return value == null ? "—" : value.toFixed(1);
 }
@@ -583,12 +583,12 @@ function PersonDetails({ member: m, canSeeScores }: { member: CurrentCohortMembe
       <Field label="Stage">{m.stage === "bootcamp" ? "Bootcamp" : "Intermediate"}</Field>
       <Field label="Track set by">{m.overridden ? "An administrator" : "The rules"}</Field>
       {canSeeScores && <Field label="BTC score">{score(m.btcScore)}</Field>}
-      <Field label="Bootcamp history">
-        {!m.historyId ? (
+      <Field label="Live Sessions">
+        {!m.recordKey ? (
           "None yet"
         ) : canSeeScores ? (
           <Link
-            href={`/reporting/bootcamp/${m.historyId}`}
+            href={`/reporting/bootcamp/${m.recordKey}`}
             onClick={(ev) => ev.stopPropagation()}
             className="underline underline-offset-2 hover:text-foreground"
           >
@@ -682,7 +682,7 @@ function TrackMenu({
       <DropdownMenuTrigger
         disabled={disabled}
         aria-label={`Track for ${member.fullName}`}
-        className="flex cursor-pointer items-center gap-1.5 rounded-md border border-input px-2 py-1 outline-none transition-colors hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-wait"
+        className="flex w-32 cursor-pointer items-center justify-between gap-1.5 rounded-md border border-input px-2 py-0.5 outline-none transition-colors hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-wait"
       >
         <TrackLabel member={member} />
         {busy ? (

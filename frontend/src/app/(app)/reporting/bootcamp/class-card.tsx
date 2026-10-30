@@ -2,12 +2,12 @@
 
 /**
  * One class as a manager sees it, BTC or INT: the day, the overall score and
- * each exercise's. Shared by Reporting → Bootcamp and Cohorts → Previous.
+ * each exercise's, on Reporting → Live Sessions.
  */
 
 import { Badge } from "@/components/ui/badge";
 import { BOOTCAMP_SCORE } from "@/db/schema";
-import { isExempt, type ClassSummary } from "@/lib/reporting/bootcamp-values";
+import type { BootcampLevel, ClassSummary } from "@/lib/reporting/bootcamp-values";
 import { cn } from "@/lib/utils";
 import { formatDate, formatScore } from "../../cohort-settings/format";
 
@@ -28,8 +28,21 @@ export function Field({ label, children }: { label: string; children: React.Reac
   );
 }
 
-export function ClassCard({ name, code, summary }: { name: string; code: string; summary: ClassSummary }) {
-  const { date, score, exercises } = summary;
+export function ClassCard({
+  name,
+  code,
+  summary,
+  whole = false,
+}: {
+  name: string;
+  code: string;
+  summary: ClassSummary;
+  /** Rounds every score to a whole number, as a manager sees them. */
+  whole?: boolean;
+}) {
+  const { date, exercises } = summary;
+  const shown = (n: number | null) => (whole && n !== null ? Math.round(n) : n);
+  const score = shown(summary.score);
 
   return (
     <section className="flex flex-col gap-5 px-5 py-4">
@@ -38,9 +51,7 @@ export function ClassCard({ name, code, summary }: { name: string; code: string;
           <h2 className="text-lg font-medium tracking-tight">{name}</h2>
           <p className="text-xs text-muted-foreground">{code}</p>
         </div>
-        {isExempt(date) ? (
-          <Badge variant="secondary">Exempt</Badge>
-        ) : date ? (
+        {date ? (
           <span className="text-sm tabular-nums text-muted-foreground">{formatDate(date)}</span>
         ) : (
           <Badge variant="outline" className="text-muted-foreground">
@@ -68,9 +79,9 @@ export function ClassCard({ name, code, summary }: { name: string; code: string;
               <li key={`${exercise.name}-${i}`} className="space-y-1">
                 <div className="flex items-baseline justify-between gap-4 text-sm">
                   <span className="min-w-0 wrap-break-word">{exercise.name}</span>
-                  <span className="tabular-nums">{formatScore(exercise.score)}</span>
+                  <span className="tabular-nums">{formatScore(shown(exercise.score))}</span>
                 </div>
-                <ScoreBar score={exercise.score} thin />
+                <ScoreBar score={shown(exercise.score)} thin />
               </li>
             ))}
           </ul>
@@ -91,8 +102,7 @@ export function ScoreBar({ score, thin = false }: { score: number | null; thin?:
 }
 
 /** The furthest class someone has been to, as a chip: INT in green, BTC in blue. */
-export function LevelChip({ level }: { level: "intermediate" | "bootcamp" | "exempt" }) {
-  if (level === "exempt") return <Badge variant="secondary">Exempt</Badge>;
+export function LevelChip({ level }: { level: BootcampLevel }) {
   return (
     <Badge
       variant="outline"

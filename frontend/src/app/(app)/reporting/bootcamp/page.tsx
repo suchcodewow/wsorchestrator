@@ -21,7 +21,7 @@ import {
 import { canManageBootcampRecords } from "@/lib/roles";
 import { BootcampView } from "./bootcamp-view";
 
-export const metadata: Metadata = { title: "Bootcamp" };
+export const metadata: Metadata = { title: "Live Sessions" };
 
 export default async function BootcampPage({
   searchParams,

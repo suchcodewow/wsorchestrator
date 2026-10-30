@@ -208,7 +208,7 @@ exist on the Revenue Enablement calendar
 meetings. An Assessments Administrator picks one of the names on the calendar
 in the next 60 days and says whom it is for: Bootcamp, Intermediate or both,
 and Sales, Engineers or both. A candidate counts as Intermediate once
-their bootcamp history (`employees.btc_date`) gives them a BTC date.
+they have attended a released BTC class (`lib/evals/attendance.ts`).
 
 The sync runs every day at 4:00 AM Eastern, started by the
 [timed jobs](#timed-jobs) dispatcher, and whenever someone presses *Sync

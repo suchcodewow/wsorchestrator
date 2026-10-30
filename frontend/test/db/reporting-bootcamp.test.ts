@@ -1,14 +1,13 @@
 /**
- * Reporting → Bootcamp against a real database: who a reader may see, as
- * HiBob's reporting lines say today; what a manager sees of the active
+ * Reporting → Live Sessions against a real database: who a reader may see,
+ * as HiBob's reporting lines say today; what a manager sees of the active
  * bootcamp before and after its release; and an administrator's corrections.
  *
  * The org is employees whose ids carry the scope: a manager M, a lead L under
  * them and a rep R under L, and an outsider O under no one. Releasing touches
  * the active bootcamp, which may be someone else's in the scratch database, so
- * its release columns are put back afterwards. Releasing also writes the
- * class to bootcamp history for everyone scored in it, which is only the
- * newcomer here, whose row goes with the scope's.
+ * its release columns are put back afterwards. Everyone else's classes are
+ * at complete bootcamps of the suite's own, released when made.
  */
 
 import "../support/test-env";
@@ -21,20 +20,19 @@ process.env.AUTH_SECRET ||= "reporting-bootcamp-test-secret-reporting-b";
 
 import { db } from "@/db";
 import { bootcamps, employees, evalsAssessmentCriteria, evalsSubmissions, evalsSubmissionScores } from "@/db/schema";
-import { historyCorrectionSchema } from "@/lib/evals/bootcamp-history";
 import { IN_STAGE, isCandidate } from "@/lib/evals/current-cohort";
 import { getCandidateCutoffs } from "@/lib/evals/settings";
 import { BOOTCAMP_COHORT_LIST, BOOTCAMP_RECORD_LIST } from "@/lib/list-specs";
 import {
   bootcampRecordCounts,
   cohortBootcamp,
-  correctHistory,
   editSubmission,
   getBootcampPerson,
   listBootcampRecords,
   listCohort,
   readerOf,
   releaseScores,
+  submissionEditSchema,
   visibleStages,
 } from "@/lib/reporting/bootcamp";
 import { PERSONAS } from "../support/access";
@@ -48,7 +46,8 @@ const emailOf = (key: string) => `${SCOPED}${key}@${TEST_EMAIL_DOMAIN}`;
 let admin: TestUser;
 let bootcampId: string;
 let submissionId: string;
-let historyIds: Record<"lead" | "rep" | "outsider", string>;
+/** The rep's BTC, carried over from the Sheet with no criteria. */
+let repSubmissionId: string;
 let restoreRelease: Pick<typeof bootcamps.$inferSelect, "btcReleasedAt" | "btcReleasedBy" | "intReleasedAt" | "intReleasedBy">;
 
 const manager = () => readerOf({ access: PERSONAS.nobody, email: emailOf("manager") });
@@ -64,16 +63,6 @@ async function employee(key: string, reportsTo: string | null) {
     reportsToEmail: reportsTo ? emailOf(reportsTo) : "",
     raw: {},
   });
-}
-
-/** Gives the employee `key` a bootcamp history, and returns their id, which is the history's too. */
-async function history(key: string, values: Partial<typeof employees.$inferInsert>) {
-  const [row] = await db
-    .update(employees)
-    .set(values)
-    .where(eq(employees.id, `${SCOPED}${key}`))
-    .returning({ id: employees.id });
-  return row!.id;
 }
 
 /** Everyone the reader may see who belongs to this suite, by email, with their level. */
@@ -102,11 +91,10 @@ before(async () => {
   await employee("lead", "manager");
   await employee("rep", "lead");
   await employee("outsider", null);
-  historyIds = {
-    lead: await history("lead", { btcDate: "2025-03-03", btcScore: 3.1, intDate: "2025-09-08", intScore: 3.4 }),
-    rep: await history("rep", { btcDate: "2026-03-02", btcScore: 2.8, btcIndividualScores: { "Score-Exams": 3 } }),
-    outsider: await history("outsider", { btcDate: "2026-03-02", btcScore: 3.6 }),
-  };
+  await scope.createAttendance(admin.id, emailOf("lead"), "bootcamp", "2025-03-03", 3.1);
+  await scope.createAttendance(admin.id, emailOf("lead"), "intermediate", "2025-09-08", 3.4);
+  repSubmissionId = await scope.createAttendance(admin.id, emailOf("rep"), "bootcamp", "2026-03-02", 2.8);
+  await scope.createAttendance(admin.id, emailOf("outsider"), "bootcamp", "2026-03-02", 3.6);
 
   // The newcomer is scored at the active bootcamp, which nobody below Assessments sees until it is released.
   // They are a bootcamp candidate on Cohorts → Current too, so that releasing moves them on.
@@ -177,14 +165,19 @@ describe("who a reader sees", () => {
   });
 
   test("a person's page is not found for someone outside the reader's org, and shows a manager no assessments", async () => {
-    assert.equal(await getBootcampPerson(manager(), historyIds.outsider), null);
-    const person = await getBootcampPerson(manager(), historyIds.rep);
+    assert.equal(await getBootcampPerson(manager(), `${SCOPED}outsider`), null);
+    const person = await getBootcampPerson(manager(), `${SCOPED}rep`);
     assert.equal(person?.email, emailOf("rep"));
     assert.equal(person?.records, null);
-    assert.deepEqual(person?.classes.bootcamp, { date: "2026-03-02", score: 2.8, exercises: [{ name: "Exams", score: 3 }] });
+    assert.deepEqual(person?.classes.bootcamp, {
+      date: "2026-03-02",
+      score: 2.8,
+      exercises: [{ name: "bootcamp attendance", score: 2.8 }],
+    });
+    assert.equal(person?.classes.intermediate.date, null);
 
-    const full = await getBootcampPerson(viewer(), historyIds.rep);
-    assert.equal(full?.records?.history?.id, historyIds.rep);
+    const full = await getBootcampPerson(viewer(), `${SCOPED}rep`);
+    assert.deepEqual(full?.records?.submissions.map((x) => x.id), [repSubmissionId]);
   });
 });
 
@@ -231,14 +224,11 @@ describe("releasing a class", () => {
     assert.equal(newcomer.records, null);
   });
 
-  test("completes the class: writes its day and scores to bootcamp history, which moves them on to Intermediate", async () => {
+  test("completes the class: everyone scored in it has attended it, which moves them on to Intermediate", async () => {
     const bootcamp = (await cohortBootcamp())!;
-    const [row] = await db.select().from(employees).where(eq(employees.id, `${SCOPED}newcomer`));
-    assert.equal(row?.btcDate, bootcamp.startDate);
-    assert.equal(row?.btcScore, 3);
-    assert.deepEqual(row?.btcIndividualScores, { [`${SCOPED}Demo day`]: 3 });
-    assert.equal(row?.intDate, null);
-    assert.equal(row?.historyUpdatedBy, admin.id);
+    const newcomer = (await getBootcampPerson(manager(), `${SCOPED}newcomer`))!;
+    assert.equal(newcomer.classes.bootcamp.date, bootcamp.startDate);
+    assert.equal(newcomer.classes.intermediate.date, null);
 
     const [candidate] = await db
       .select({ id: employees.id })
@@ -281,9 +271,8 @@ describe("an administrator's corrections", () => {
     });
     assert.ok(saved.ok);
     assert.equal(saved.submission.averageScore, 4);
-    const [written] = await db.select().from(employees).where(eq(employees.id, `${SCOPED}newcomer`));
-    assert.equal(written?.btcScore, 4, "the class is released, so its history follows the edit");
-    assert.deepEqual(written?.btcIndividualScores, { [`${SCOPED}Demo day`]: 4 });
+    const forManager = (await getBootcampPerson(manager(), `${SCOPED}newcomer`))!;
+    assert.equal(forManager.classes.bootcamp.score, 4, "the class is released, so a manager sees the edit");
 
     const person = (await getBootcampPerson(viewer(), submissionId))!;
     const [shown] = person.records!.submissions;
@@ -302,30 +291,26 @@ describe("an administrator's corrections", () => {
     );
   });
 
-  test("correct someone's history: its days and exercise scores, saying whose it was; the overall score follows them", async () => {
-    const result = await correctHistory(admin.id, historyIds.rep, {
-      intDate: "2026-09-14",
-      intIndividualScores: { "Score-Demo": 3.5, "Score-Exams": 2.8 },
-    });
-    assert.deepEqual(result, { ok: true, email: emailOf("rep") });
-    const [row] = await db.select().from(employees).where(eq(employees.id, historyIds.rep));
-    assert.equal(row?.intDate, "2026-09-14");
-    assert.equal(row?.intScore, 3.2, "the mean of 3.5 and 2.8, to one decimal place");
-    assert.deepEqual(row?.intIndividualScores, { "Score-Demo": 3.5, "Score-Exams": 2.8 });
-    assert.equal(row?.btcScore, 2.8, "a class left out keeps its overall score");
-    assert.equal(row?.historyUpdatedBy, admin.id);
-    assert.equal((await seen(manager()))[emailOf("rep")], "intermediate");
+  test("set the score of an assessment scored on no criteria directly, with no feedback required", async () => {
+    const [before] = await db.select().from(evalsSubmissions).where(eq(evalsSubmissions.id, repSubmissionId));
+    const revises = before!.updatedAt.toISOString();
+    const edit = { scores: [], positiveFeedback: "", constructiveFeedback: "", revises };
 
-    // A class with no exercise scores keeps the overall score the Sheet gave it.
-    assert.ok((await correctHistory(admin.id, historyIds.outsider, { btcIndividualScores: null })).ok);
-    const [outsider] = await db.select().from(employees).where(eq(employees.id, historyIds.outsider));
-    assert.equal(outsider?.btcScore, 3.6);
+    assert.deepEqual(await editSubmission(admin.id, repSubmissionId, edit), { ok: false, error: "invalid" });
+    assert.equal(
+      submissionEditSchema.safeParse({ ...edit, averageScore: 3.25 }).success,
+      false,
+      "one decimal place at most",
+    );
 
-    assert.equal(historyCorrectionSchema.strict().safeParse({ btcScore: 3 }).success, false, "an overall score is never set");
+    const saved = await editSubmission(admin.id, repSubmissionId, { ...edit, averageScore: 1.5 });
+    assert.ok(saved.ok);
+    assert.equal(saved.submission.averageScore, 1.5);
+    assert.equal((await getBootcampPerson(manager(), `${SCOPED}rep`))?.classes.bootcamp.score, 1.5);
 
-    assert.deepEqual(await correctHistory(admin.id, crypto.randomUUID(), { btcDate: null }), {
+    assert.deepEqual(await editSubmission(admin.id, repSubmissionId, { ...edit, averageScore: 2 }), {
       ok: false,
-      error: "not_found",
+      error: "conflict",
     });
   });
 });

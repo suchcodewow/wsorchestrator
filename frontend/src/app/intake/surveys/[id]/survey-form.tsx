@@ -202,7 +202,7 @@ export function Rating({
       </p>
       <div className="flex items-start gap-2">
         {RATINGS.map((r) => (
-          <label key={r} className="flex w-14 flex-col items-center gap-1">
+          <label key={r} className="relative flex w-14 flex-col items-center gap-1">
             <input
               type="radio"
               name={name}
