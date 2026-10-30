@@ -1114,3 +1114,71 @@
     flex-shrink: 0;
   }
 }
+
+/*
+ * The page loader: the logo gear bouncing along a road that scrolls left, so
+ * it reads as rolling to the right. The road and the gear share one 0.75s
+ * beat. The bounce is a near-zero move on an absurd bezier (both control
+ * points at 900), which overshoots it into a hop that lands on every beat.
+ */
+@layer components {
+  .gear-loader {
+    /* A navigation that answers at once never shows it. */
+    animation: gear-loader-appear 0.2s ease-out 0.3s both;
+  }
+
+  .gear-loader-road {
+    position: relative;
+    height: 60px;
+    aspect-ratio: 2;
+    border-bottom: 3px solid transparent;
+    background: linear-gradient(90deg, var(--muted-foreground) 50%, transparent 0) -25% 100% / 50% 3px repeat-x
+      border-box;
+    animation: gear-loader-road 0.75s linear infinite;
+  }
+
+  .gear-loader-hop {
+    position: absolute;
+    inset: auto 40% 0;
+    aspect-ratio: 1;
+    color: var(--brand);
+    animation: gear-loader-hop 0.75s cubic-bezier(0, 900, 1, 900) infinite;
+  }
+
+  .gear-loader-hop > svg {
+    width: 100%;
+    height: 100%;
+    animation: gear-turn 0.75s linear infinite;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .gear-loader-road,
+    .gear-loader-hop,
+    .gear-loader-hop > svg {
+      animation: none;
+    }
+  }
+}
+
+@keyframes gear-loader-appear {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes gear-loader-road {
+  to {
+    background-position: -125% 100%;
+  }
+}
+
+@keyframes gear-loader-hop {
+  0%,
+  2% {
+    bottom: 0%;
+  }
+  98%,
+  to {
+    bottom: 0.1%;
+  }
+}
