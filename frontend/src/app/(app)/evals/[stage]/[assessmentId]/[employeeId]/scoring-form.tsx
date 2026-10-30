@@ -14,9 +14,10 @@
  * it does not push the scores down the page. Submit stops the recording and
  * waits for its transcript before it sends the scores.
  *
- * Once a recording's transcript is filed, Ask Claude has Claude read it
+ * Once a recording's transcript is filed, AI Comments has Claude read it
  * against every criterion and appends its note to each comment, on a new
- * line after whatever is there. Nothing is saved until Submit.
+ * line after whatever is there, between [AI start] and [AI END]. Nothing is
+ * saved until Submit.
  */
 
 import { useState } from "react";
@@ -205,7 +206,7 @@ export function ScoringFormView({
         onClick={() => filed && askClaude(filed)}
       >
         {reviewing === r.id ? <Loader2 className="animate-spin" /> : <Sparkles />}
-        Ask Claude
+        AI Comments
       </Button>
     );
   }

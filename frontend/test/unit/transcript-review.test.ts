@@ -70,19 +70,28 @@ describe("readReview", () => {
 });
 
 describe("appendSummary", () => {
-  test("an empty comment becomes the summary", () => {
-    assert.equal(appendSummary("", "Asked about release pain.", 4000), "Asked about release pain.");
+  test("an empty comment becomes the marked summary", () => {
+    assert.equal(appendSummary("", "Asked about release pain.", 4000), "[AI start] Asked about release pain. [AI END]");
   });
 
-  test("a written comment gets the summary on a new line", () => {
-    assert.equal(appendSummary("Strong opener.\n\n", "Asked about release pain.", 4000), "Strong opener.\nAsked about release pain.");
+  test("a written comment gets the marked summary on a new line", () => {
+    assert.equal(
+      appendSummary("Strong opener.\n\n", "Asked about release pain.", 4000),
+      "Strong opener.\n[AI start] Asked about release pain. [AI END]",
+    );
   });
 
   test("an empty summary leaves the comment alone", () => {
     assert.equal(appendSummary("Strong opener.  ", " ", 4000), "Strong opener.  ");
   });
 
-  test("never runs past the comment's limit", () => {
-    assert.equal(appendSummary("abc", "defgh", 6), "abc\nde");
+  test("a long summary is shortened so it still ends in [AI END]", () => {
+    const out = appendSummary("abc", "defgh", 26);
+    assert.equal(out, "abc\n[AI start] de [AI END]");
+    assert.equal(out.length, 26);
+  });
+
+  test("with no room for the markers, nothing is added", () => {
+    assert.equal(appendSummary("abc", "defgh", 24), "abc");
   });
 });
