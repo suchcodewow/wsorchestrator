@@ -125,29 +125,6 @@ any commit on the branch. Never edit `release_mergers` or use
 `deploy_production_trigger_token`. See
 [Releasing from a merge](docs/environments.md#releasing-from-a-merge).
 
-When the user does ask ("merge this and release it to production"), put the
-trailer in the squash message you set when enabling auto-merge. Keep it out of
-the branch's commits and the PR body, so it reaches only the merge they asked
-for:
-
-```bash
-gh pr merge <n> --auto --squash --subject "<title> (#<n>)" --body-file msg.txt
-```
-
-`msg.txt` is the summary, a blank line, then one final paragraph holding every
-trailer: `Co-Authored-By: …`, `Release: production`, and `Release-Infra: false`
-when nothing under `infra/` changed since production's last release (the
-default, true, runs `tofu apply` on production). Before enabling, check it with
-`git interpret-trailers --parse < msg.txt`. Afterwards, read it back from
-`gh pr view <n> --json autoMergeRequest`.
-
-After the merge, `deploy_qa` takes 10–15 minutes. `QueuedGlobalInfraCapacityReached`
-only means it is waiting for a build machine. Its Release Production stage
-starts a `deploy_production` run whose notes name the PR and the merger,
-recorded as the `deploy_production_trigger` service account. Watch that run to
-its end and tell the user how it finished. If a stage failed, say so; do not
-start `deploy_production` again yourself.
-
 **QA is not a sandbox either.** It shares the Harness account, the AWS
 organization, the Azure subscription and the Google Workspace with production.
 A QA workshop run creates real orgs, accounts and users. Prefer runs with no
