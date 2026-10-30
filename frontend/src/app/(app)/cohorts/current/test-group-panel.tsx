@@ -182,7 +182,13 @@ export function TestGroupPanel({
       )}
 
       {canManage && (
-        <div className="space-y-4 rounded-2xl border bg-card px-5 py-3 shadow-sm">
+        <div
+          className={
+            editing
+              ? "space-y-4 rounded-2xl border bg-card px-5 py-3 shadow-sm"
+              : undefined
+          }
+        >
           <div className="flex items-center gap-3">
             <PillSwitch
               label="Use test group"
