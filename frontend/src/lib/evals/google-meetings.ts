@@ -82,7 +82,7 @@ export type MeetingSelectionRow = {
   /** Whether each person is invited to every occurrence offered to them, not one at a time. */
   allOccurrences: boolean;
   syncedAt: Date | null;
-  /** When the next occurrence starts, as of the last live sync; null with none to come. */
+  /** When the next occurrence starts, as of the last sync; null with none to come. */
   nextStartsAt: Date | null;
   /** Occurrences still to start. */
   upcoming: number;
@@ -577,8 +577,8 @@ export async function meetingStatusesFor(
         attended: marked === true || (marked === null && Boolean(h?.attended)),
         response: h?.response ?? null,
         invited: Boolean(h?.invited),
-        // A meeting that has never synced has no occurrences stored yet, which is not the same as none being left.
-        anyLeft: meeting.syncedAt === null || offered.length > 0,
+        // A meeting no sync has read has no occurrences stored yet, which is not the same as none being left.
+        anyLeft: (meeting.syncedAt === null && !upcomingOf.has(meeting.id)) || offered.length > 0,
       });
       let at: { startsAt: Date; endsAt: Date } | null = null;
       if (mark === "uninvited") {

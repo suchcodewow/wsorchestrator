@@ -247,7 +247,9 @@ The Current tab shows one icon per picked meeting beside each name:
 Slack.
 
 - A new environment starts in **dry run**. The sync logs everything it would
-  do and changes nothing. *Preview* does the same whatever the setting.
+  do, invites no one and writes nothing to Google or Zoom. It does store the
+  occurrences it read, so the Current tab can list them. *Preview* does the
+  same whatever the setting.
 - With the Cohorts test group on, the group is invited instead of the cohort,
   and no administrators are. Turning the group off takes it back off the
   invites it was given.
