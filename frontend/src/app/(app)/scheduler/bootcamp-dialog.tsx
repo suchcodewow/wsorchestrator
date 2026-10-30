@@ -4,8 +4,8 @@
  * The form that schedules a bootcamp, or changes one already scheduled, with
  * its guest judges. The judges are saved with the bootcamp, so Cancel leaves
  * them as they were. Making it active while another is asks first, and on yes
- * marks that other one complete in the same save. A new bootcamp can start
- * its schedule as a copy of an earlier one's.
+ * marks that other one complete in the same save. A new bootcamp starts with
+ * an empty schedule, or a copy of an earlier one's if one is picked.
  */
 
 import { useEffect, useState } from "react";
@@ -99,7 +99,7 @@ export function BootcampDialog({
       setIntDays(String(editing?.intDays ?? BOOTCAMP_DEFAULTS.intDays));
       setStatus(editing?.status ?? "scheduled");
       setFacilityId(editing ? (editing.facilityId ?? "") : (facilities.length === 1 ? facilities[0]!.id : ""));
-      setCopyFrom(editing ? "" : (sources[0]?.id ?? ""));
+      setCopyFrom("");
       setJudges(editing ? null : []);
       setJudgesError(null);
       setConfirming(null);

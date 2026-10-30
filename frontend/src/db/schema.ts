@@ -1592,7 +1592,7 @@ export const bootcamps = pgTable(
 
 /** `judges` caps the guest judges one bootcamp's dialog sets at once; it is not a column. */
 export const BOOTCAMP_LIMITS = { minDays: 1, maxDays: 30, judges: 50 } as const;
-export const BOOTCAMP_DEFAULTS = { btcDays: 4, intDays: 3 } as const;
+export const BOOTCAMP_DEFAULTS = { btcDays: 4, intDays: 4 } as const;
 
 export type Bootcamp = typeof bootcamps.$inferSelect;
 

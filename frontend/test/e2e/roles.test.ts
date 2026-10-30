@@ -927,6 +927,7 @@ const ROUTES: RouteCase[] = [
   { method: "PATCH", path: "/api/me", allowed: true, body: () => ({ themePreference: "bogus" }) },
   // Each part is left out for a persona without its area, rather than refused.
   { method: "GET", path: "/api/welcome/live-training", allowed: true },
+  { method: "GET", path: "/api/welcome/upcoming-sessions", allowed: true },
   { method: "GET", path: "/api/me/impersonation", allowed: true, sessionOnly: true },
   { method: "POST", path: "/api/me/impersonation", allowed: canImpersonate, body: () => ({}), sessionOnly: true },
   // Nobody here is impersonating anyone, so ending it changes nothing.

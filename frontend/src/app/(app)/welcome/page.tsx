@@ -1,7 +1,7 @@
 /**
- * The front door, for everyone: for someone in Training or Assessments, the
- * steps of running a live training session, each with where it stands now;
- * then Mimir, since everyone can use it. The sidebar has every other page.
+ * The front door, for everyone: the upcoming bootcamps; for someone in
+ * Training or Assessments, the steps of running a live training session,
+ * each with where it stands now; then Mimir, since everyone can use it. The sidebar has every other page.
  */
 
 import type { Metadata } from "next";
@@ -14,7 +14,9 @@ import { Button } from "@/components/ui/button";
 import { mapSummary } from "@/lib/mimir/map/summary";
 import { canSeeLiveTraining, liveTraining } from "@/lib/live-training";
 import { canUseMimir, hasNoAccess } from "@/lib/roles";
+import { upcomingBootcamps } from "@/lib/scheduler/bootcamps";
 import { LiveTrainingSteps } from "./live-training";
+import { UpcomingSessions } from "./upcoming-sessions";
 
 export const metadata: Metadata = { title: "Welcome" };
 
@@ -26,9 +28,10 @@ export default async function WelcomePage() {
   const { access } = session.user;
 
   const mimir = canUseMimir(access);
-  const [summary, live] = await Promise.all([
+  const [summary, live, upcoming] = await Promise.all([
     mimir ? mapSummary(session.user.id) : null,
     canSeeLiveTraining(access) ? liveTraining(access) : null,
+    upcomingBootcamps(),
   ]);
   const firstName = session.user.name?.split(" ")[0];
 
@@ -40,6 +43,8 @@ export default async function WelcomePage() {
           Signed in as <span className="font-medium text-foreground">{session.user.email}</span>
         </p>
       </div>
+
+      <UpcomingSessions sessions={upcoming} />
 
       {live && <LiveTrainingSteps {...live} />}
 
