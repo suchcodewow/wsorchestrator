@@ -40,7 +40,7 @@ export function SurveyPreview({
 }) {
   return (
     <Dialog open={column !== null} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="flex max-w-2xl flex-col overflow-hidden">
         {column && <Body key={column.key} column={column} sessions={sessions} sent={sent} />}
       </DialogContent>
     </Dialog>
@@ -83,7 +83,7 @@ function Body({ column, sessions, sent }: { column: BoardColumn; sessions: Sessi
         </div>
       )}
 
-      <div className="max-h-[60vh] divide-y overflow-y-auto rounded-2xl border bg-card">
+      <div className="min-h-0 divide-y overflow-y-auto rounded-2xl border bg-card">
         {asked.map((s) => (
           <div key={s.id} className="space-y-4 px-5 py-4">
             <div className="space-y-0.5">
