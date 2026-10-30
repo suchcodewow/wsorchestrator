@@ -113,7 +113,7 @@ export function BootcampView({
     <motion.div variants={staggerParent(0.05)} initial="hidden" animate="show" className="max-w-4xl space-y-6">
       <motion.div variants={riseChild} className="flex flex-wrap items-start justify-between gap-4">
         <div className="space-y-1.5">
-          <h2 className="text-xl font-medium tracking-tight">Bootcamp</h2>
+          <h2 className="text-xl font-medium tracking-tight">Live Sessions</h2>
           <p className="text-sm leading-relaxed text-muted-foreground">
             <span className="font-medium text-foreground">
               {counts.total.toLocaleString()} {counts.total === 1 ? "person" : "people"}
@@ -264,7 +264,7 @@ export function BootcampView({
       )}
 
       <motion.section variants={riseChild} className="space-y-3">
-        {bootcamp && cohort && <h3 className="text-base font-medium tracking-tight">Records</h3>}
+        {bootcamp && cohort && <h3 className="text-base font-medium tracking-tight">History</h3>}
         <div className="overflow-hidden rounded-2xl border bg-card shadow-sm">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">

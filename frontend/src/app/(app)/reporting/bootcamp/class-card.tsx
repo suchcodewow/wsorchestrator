@@ -2,7 +2,7 @@
 
 /**
  * One class as a manager sees it, BTC or INT: the day, the overall score and
- * each exercise's. Shared by Reporting → Bootcamp and Cohorts → Previous.
+ * each exercise's. Shared by Reporting → Live Sessions and Cohorts → Previous.
  */
 
 import { Badge } from "@/components/ui/badge";
@@ -28,8 +28,21 @@ export function Field({ label, children }: { label: string; children: React.Reac
   );
 }
 
-export function ClassCard({ name, code, summary }: { name: string; code: string; summary: ClassSummary }) {
-  const { date, score, exercises } = summary;
+export function ClassCard({
+  name,
+  code,
+  summary,
+  whole = false,
+}: {
+  name: string;
+  code: string;
+  summary: ClassSummary;
+  /** Rounds every score to a whole number, as a manager sees them. */
+  whole?: boolean;
+}) {
+  const { date, exercises } = summary;
+  const shown = (n: number | null) => (whole && n !== null ? Math.round(n) : n);
+  const score = shown(summary.score);
 
   return (
     <section className="flex flex-col gap-5 px-5 py-4">
@@ -68,9 +81,9 @@ export function ClassCard({ name, code, summary }: { name: string; code: string;
               <li key={`${exercise.name}-${i}`} className="space-y-1">
                 <div className="flex items-baseline justify-between gap-4 text-sm">
                   <span className="min-w-0 wrap-break-word">{exercise.name}</span>
-                  <span className="tabular-nums">{formatScore(exercise.score)}</span>
+                  <span className="tabular-nums">{formatScore(shown(exercise.score))}</span>
                 </div>
-                <ScoreBar score={exercise.score} thin />
+                <ScoreBar score={shown(exercise.score)} thin />
               </li>
             ))}
           </ul>

@@ -13,7 +13,7 @@ import { getBootcampPerson, readerOf } from "@/lib/reporting/bootcamp";
 import { canManageBootcampRecords } from "@/lib/roles";
 import { PersonView } from "./person-view";
 
-export const metadata: Metadata = { title: "Bootcamp" };
+export const metadata: Metadata = { title: "Live Sessions" };
 
 export default async function BootcampPersonPage({
   params,

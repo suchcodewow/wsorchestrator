@@ -12,7 +12,7 @@ export type ReportingTab = {
 
 export const REPORTING_TABS: ReportingTab[] = [
   { href: "/reporting/canary-wire", label: "Canary Wire", Icon: Radio, visible: canSeeCanaryWire },
-  { href: "/reporting/bootcamp", label: "Bootcamp", Icon: GraduationCap, visible: canSeeBootcampRecords },
+  { href: "/reporting/bootcamp", label: "Live Sessions", Icon: GraduationCap, visible: canSeeBootcampRecords },
 ];
 
 export function visibleReportingTabs(access: Access): ReportingTab[] {
