@@ -14,13 +14,14 @@
  *
  * Each concept with a video has a play button, a ring that fills as the video
  * is watched. A concept the coach has marked as known shows a check, and one it
- * has asked you to watch is flagged "Recommended".
+ * has asked you to watch is flagged "Recommended". The video library links
+ * here with ?show=<concept> to open the map on that concept.
  */
 
 import "./map.css";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Check, Star } from "lucide-react";
+import { Check } from "lucide-react";
 import { anchorFloating } from "@/lib/floating";
 import {
   CONCEPT_H,
@@ -30,9 +31,9 @@ import {
   type MapLayout,
   type PlacedConcept,
 } from "@/lib/mimir/map/layout";
-import { NO_STATE, ringFraction, type ConceptState, type MapLevel, type PublicMap } from "@/lib/mimir/map/schema";
+import { NO_STATE, type ConceptState, type MapLevel, type PublicMap } from "@/lib/mimir/map/schema";
 import { cn } from "@/lib/utils";
-import { ProgressRing } from "./progress-ring";
+import { PlayButton } from "./play-button";
 import { VideoDialog } from "./video-dialog";
 
 type Sel = { type: "slide"; id: number } | { type: "concept"; id: string } | { type: "group"; id: string } | { type: "level"; id: MapLevel };
@@ -92,10 +93,13 @@ export function MapView({
   // The coach links here with ?play=<concept>: that concept's video opens at once, and the parameter comes off the address.
   const wanted = params.get("play");
   const startWith = wanted && videos && byId.get(wanted)?.video ? wanted : null;
+  // The video library links here with ?show=<concept>: that concept is clicked and scrolled to.
+  const shown = params.get("show");
+  const startOn = startWith ?? (shown && byId.has(shown) ? shown : null);
 
   const [states, setStates] = useState(initialStates);
   const [hover, setHover] = useState<Pointed | null>(null);
-  const [locked, setLocked] = useState<Sel | null>(startWith ? { type: "concept", id: startWith } : null);
+  const [locked, setLocked] = useState<Sel | null>(startOn ? { type: "concept", id: startOn } : null);
   const [playing, setPlaying] = useState<string | null>(startWith);
   // A clicked slide drops every concept it does not need.
   const onlySlide = locked?.type === "slide" ? locked.id : null;
@@ -140,8 +144,18 @@ export function MapView({
   }, []);
 
   useEffect(() => {
-    if (params.get("play")) router.replace("/mimir/map", { scroll: false });
+    if (params.get("play") || params.get("show")) router.replace("/mimir/map", { scroll: false });
   }, [params, router]);
+
+  // Bring the concept the page opened on into view, once the map has its width.
+  const toShow = useRef(startOn);
+  useEffect(() => {
+    const el = scroller.current;
+    const target = toShow.current && layout.concepts.find((k) => k.id === toShow.current);
+    if (!el || !room || !target) return;
+    toShow.current = null;
+    el.scrollTo({ left: Math.max(0, target.x - el.clientWidth / 2) });
+  }, [layout, room]);
 
   useEffect(() => {
     const onKey = (e: globalThis.KeyboardEvent) => {
@@ -202,42 +216,6 @@ export function MapView({
     el?.classList.remove("mm-dragging");
     drag.current = null;
   }
-
-  function focusConcept(c: PlacedConcept) {
-    // A concept outside the section being shown needs the whole map back to be found on it.
-    const visible = !filter || layout.concepts.some((k) => k.id === c.id);
-    if (!visible) setFilter(null);
-    setLocked({ type: "concept", id: c.id });
-    const target = visible ? layout.concepts.find((k) => k.id === c.id) : full.concepts.find((k) => k.id === c.id);
-    const el = scroller.current;
-    if (target) el?.scrollTo({ left: Math.max(0, target.x - el.clientWidth / 2), behavior: "smooth" });
-    el?.scrollIntoView({ block: "start", behavior: "smooth" });
-  }
-
-  const playButton = (c: PlacedConcept, size: number, label?: string) => {
-    if (!c.video) return null;
-    const st = stateOf(c.id);
-    const fraction = ringFraction(st, c.video.seconds);
-    const pct = Math.round(fraction * 100);
-    const what = st.completed ? "Watched. Play again" : pct > 0 ? `Resume (${pct}% watched)` : "Play video";
-    return (
-      <button
-        type="button"
-        className="mm-play"
-        style={levelVar(c.level)}
-        disabled={!videos}
-        title={videos ? what : "Videos aren't set up on this server"}
-        aria-label={`${what}: ${c.name}`}
-        onClick={(e) => {
-          e.stopPropagation();
-          setPlaying(c.id);
-        }}
-      >
-        <ProgressRing fraction={fraction} completed={st.completed} size={size} />
-        {label && <span className="text-sm font-medium text-foreground">{label}</span>}
-      </button>
-    );
-  };
 
   const concepts = layout.concepts;
 
@@ -354,7 +332,11 @@ export function MapView({
                 </span>
                 {st.recommended && <span className="mm-flag">★ Recommended</span>}
                 {st.mastered && <Check className="mm-done size-3.5" strokeWidth={3} aria-hidden />}
-                {c.video && <div className="mm-play-slot">{playButton(c, 30)}</div>}
+                {c.video && (
+                  <div className="mm-play-slot">
+                    <PlayButton concept={c} state={st} videos={videos} size={30} onPlay={setPlaying} />
+                  </div>
+                )}
               </div>
             );
           })}
@@ -386,77 +368,6 @@ export function MapView({
           ))}
         </div>
       </div>
-
-      <section className="space-y-4">
-        <h2 className="text-xl font-medium tracking-tight">What each concept means</h2>
-        {map.levels.map((l) => (
-          <div key={l.level} className="space-y-3">
-            <div>
-              <h3 className="flex items-center text-lg font-semibold">
-                <i className="mm-dot" style={{ background: `var(--l${l.level})` }} />
-                {l.name}
-              </h3>
-              {l.blurb && <p className="text-sm text-muted-foreground">{l.blurb}</p>}
-            </div>
-            {full.groups
-              .filter((g) => g.level === l.level)
-              .map((g) => (
-                <div key={g.index} className="space-y-2">
-                  <div>
-                    <h4 className="text-[15px] font-semibold">
-                      {g.name}
-                      {g.sub ? ` (${g.sub})` : ""}
-                    </h4>
-                    {groupBlurb(g.id) && <p className="text-sm text-muted-foreground">{groupBlurb(g.id)}</p>}
-                  </div>
-                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                    {g.concepts.map((id) => {
-                      const c = byId.get(id);
-                      if (!c) return null;
-                      const st = stateOf(c.id);
-                      return (
-                        <article
-                          key={c.id}
-                          className={cn(
-                            "flex flex-col gap-2 rounded-xl border border-l-[5px] bg-card p-4",
-                            lit?.concepts.has(c.id) && "outline-2 outline-offset-0 outline-foreground",
-                            st.recommended && "border-[var(--flag)]",
-                          )}
-                          style={{ borderLeftColor: `var(--l${c.level})`, ...levelVar(c.level) }}
-                        >
-                          <div className="flex items-start justify-between gap-2">
-                            <h5 className="font-semibold">{c.name}</h5>
-                            <div className="flex shrink-0 items-center gap-1.5 text-xs font-medium">
-                              {st.mastered && (
-                                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-emerald-700 dark:text-emerald-400">
-                                  <Check className="size-3" strokeWidth={3} /> Mastered
-                                </span>
-                              )}
-                              {st.recommended && (
-                                <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-amber-700 dark:text-amber-400">
-                                  <Star className="size-3 fill-current" /> Recommended
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                          <p className="text-xs text-muted-foreground tnum">
-                            Study #{c.study} · {c.slides.length} {c.slides.length === 1 ? "slide" : "slides"}: {c.slides.join(", ")}
-                          </p>
-                          <div className="mt-auto flex flex-wrap items-center gap-3 pt-1">
-                            {playButton(c, 34, "Play video")}
-                            <button type="button" className="text-xs font-medium text-muted-foreground underline-offset-2 hover:text-foreground hover:underline" onClick={() => focusConcept(c)}>
-                              Show on the map
-                            </button>
-                          </div>
-                        </article>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
-          </div>
-        ))}
-      </section>
 
       {hover && <Popup pointed={hover} full={full} map={map} hasImage={hasImage} stateOf={stateOf} levelName={levelName} groupName={groupName} groupBlurb={groupBlurb} />}
 

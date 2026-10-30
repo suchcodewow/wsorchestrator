@@ -1,7 +1,7 @@
 /**
  * The layout for Mimir: a coach that walks you through the course, the map
- * of the course with a video for each concept, and the Code Lab, a pretend
- * code change from branch to merge. Open to everyone signed in.
+ * of the course, a library of the video for each concept, and hands-on experiences,
+ * such as a pretend code change from branch to merge. Open to everyone signed in.
  * What you have mastered and watched is yours, and kept between visits.
  */
 
