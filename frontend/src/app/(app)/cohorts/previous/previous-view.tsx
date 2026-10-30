@@ -142,7 +142,7 @@ export function PreviousView({
   }
 
   return (
-    <motion.div variants={staggerParent(0.05)} initial="hidden" animate="show" className="space-y-4">
+    <motion.div variants={staggerParent(0.05)} initial="hidden" animate="show" className="space-y-3">
       <motion.div variants={riseChild} className="space-y-1.5">
         <h2 className="text-xl font-medium tracking-tight">Previous</h2>
         {first && (
@@ -185,14 +185,14 @@ export function PreviousView({
                       onClick={() => toggle(s.date)}
                       className={cn("cursor-pointer border-b transition-colors last:border-b-0 hover:bg-muted/30", open && "bg-muted/20")}
                     >
-                      <td className="py-2.5 pl-3 pr-0 sm:pl-5">
+                      <td className="py-2 pl-3 pr-0 sm:pl-5">
                         {open?.loading === "both" ? (
                           <Loader2 className="size-4 animate-spin text-muted-foreground" />
                         ) : (
                           <ChevronRight className={cn("size-4 text-muted-foreground transition-transform", open && "rotate-90")} />
                         )}
                       </td>
-                      <td className={cn("whitespace-nowrap py-2.5 font-medium tabular-nums", CELL_X)}>
+                      <td className={cn("whitespace-nowrap py-2 font-medium tabular-nums", CELL_X)}>
                         <button
                           type="button"
                           aria-expanded={!!open}
@@ -206,8 +206,8 @@ export function PreviousView({
                           {formatDate(s.date)}
                         </button>
                       </td>
-                      <td className={cn("py-2.5 tabular-nums text-muted-foreground", CELL_X)}>{s.bootcamp.toLocaleString()}</td>
-                      <td className={cn("py-2.5 tabular-nums text-muted-foreground", CELL_X)}>{s.intermediate.toLocaleString()}</td>
+                      <td className={cn("py-2 tabular-nums text-muted-foreground", CELL_X)}>{s.bootcamp.toLocaleString()}</td>
+                      <td className={cn("py-2 tabular-nums text-muted-foreground", CELL_X)}>{s.intermediate.toLocaleString()}</td>
                     </tr>
                     {open && open.loading !== "both" && (
                       <tr id={panel} className="border-b bg-muted/10 last:border-b-0">
