@@ -2,12 +2,12 @@
 
 /**
  * One class as a manager sees it, BTC or INT: the day, the overall score and
- * each exercise's. Shared by Reporting → Live Sessions and Cohorts → Previous.
+ * each exercise's, on Reporting → Live Sessions.
  */
 
 import { Badge } from "@/components/ui/badge";
 import { BOOTCAMP_SCORE } from "@/db/schema";
-import { isExempt, type ClassSummary } from "@/lib/reporting/bootcamp-values";
+import type { BootcampLevel, ClassSummary } from "@/lib/reporting/bootcamp-values";
 import { cn } from "@/lib/utils";
 import { formatDate, formatScore } from "../../cohort-settings/format";
 
@@ -51,9 +51,7 @@ export function ClassCard({
           <h2 className="text-lg font-medium tracking-tight">{name}</h2>
           <p className="text-xs text-muted-foreground">{code}</p>
         </div>
-        {isExempt(date) ? (
-          <Badge variant="secondary">Exempt</Badge>
-        ) : date ? (
+        {date ? (
           <span className="text-sm tabular-nums text-muted-foreground">{formatDate(date)}</span>
         ) : (
           <Badge variant="outline" className="text-muted-foreground">
@@ -104,8 +102,7 @@ export function ScoreBar({ score, thin = false }: { score: number | null; thin?:
 }
 
 /** The furthest class someone has been to, as a chip: INT in green, BTC in blue. */
-export function LevelChip({ level }: { level: "intermediate" | "bootcamp" | "exempt" }) {
-  if (level === "exempt") return <Badge variant="secondary">Exempt</Badge>;
+export function LevelChip({ level }: { level: BootcampLevel }) {
   return (
     <Badge
       variant="outline"

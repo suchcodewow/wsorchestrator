@@ -1,10 +1,11 @@
 "use client";
 
 /**
- * Everything Assessments sees behind a person's BTC and INT: each assessment,
- * by class, with every criterion's score and comment and both feedback boxes;
- * and their bootcamp history. With Edit on, an Assessments Administrator
- * corrects any of it in place, one assessment or the history at a time.
+ * Everything Assessments sees behind a person's INT and BTC: each assessment,
+ * by class, with every criterion's score and comment and both feedback boxes.
+ * With Edit on, an Assessments Administrator corrects any of it in place, one
+ * assessment at a time; one with no criteria, as the old bootcamp history
+ * left, has its score set directly.
  */
 
 import { useState } from "react";
@@ -14,7 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { BOOTCAMP_SCORE, EVALS_ASSESSMENT_LIMITS, EXEMPT_DATE } from "@/db/schema";
+import { BOOTCAMP_SCORE, EVALS_ASSESSMENT_LIMITS } from "@/db/schema";
 import {
   CONSTRUCTIVE_REQUIRED_NOTE,
   CRITERION_SCORES,
@@ -24,17 +25,16 @@ import {
   requiredFeedback,
   wholeScore,
 } from "@/lib/evals/assessment-values";
-import { exerciseName, STAGE_CODES } from "@/lib/reporting/bootcamp-values";
+import { STAGE_CODES } from "@/lib/reporting/bootcamp-values";
 import { cn } from "@/lib/utils";
-import { formatDate, formatHistoryDate, formatScore, formatWhen } from "../../../cohort-settings/format";
+import { formatDate, formatScore, formatWhen } from "../../../cohort-settings/format";
 import { Field } from "../class-card";
-import type { ViewHistory, ViewSubmission } from "./person-view";
+import type { ViewSubmission } from "./person-view";
 
 const SAVE_ERRORS: Record<string, string> = {
   conflict: "Someone changed this since the page loaded. Reload to see their version.",
   feedback_required: "This average needs the feedback marked required.",
   invalid: "Something here isn't valid; check each field.",
-  duplicate: "Someone else already has a row with that email.",
   not_found: "This has been removed.",
 };
 
@@ -71,10 +71,14 @@ function useSave() {
   return { save, pending, error };
 }
 
-/** One card per class someone was assessed in, the newest bootcamp first, as fetched. */
+/** One card per class someone was assessed in: INT before BTC, each newest bootcamp first, as fetched. */
 export function SubmissionGroups({ submissions, editing }: { submissions: ViewSubmission[]; editing: boolean }) {
   const groups: { key: string; first: ViewSubmission; items: ViewSubmission[] }[] = [];
-  for (const s of submissions) {
+  const ordered = [
+    ...submissions.filter((s) => s.stage === "intermediate"),
+    ...submissions.filter((s) => s.stage !== "intermediate"),
+  ];
+  for (const s of ordered) {
     const key = `${s.bootcamp.id}:${s.stage}`;
     const group = groups.find((g) => g.key === key);
     if (group) group.items.push(s);
@@ -174,14 +178,27 @@ function SubmissionForm({ submission: s }: { submission: ViewSubmission }) {
   const [scores, setScores] = useState(() => s.scores.map((c) => ({ ...c })));
   const [positive, setPositive] = useState(s.positiveFeedback);
   const [constructive, setConstructive] = useState(s.constructiveFeedback);
+  // An assessment with no criteria, as the old bootcamp history left, takes its score as typed.
+  const direct = s.scores.length === 0;
+  const [typed, setTyped] = useState(s.averageScore === null ? "" : String(s.averageScore));
 
-  const average = averageScore(scores.map((c) => c.score));
-  const needed = average === null ? null : requiredFeedback(wholeScore(average));
+  const typedScore = Number(typed);
+  const typedValid =
+    typed.trim() !== "" &&
+    Number.isFinite(typedScore) &&
+    typedScore >= BOOTCAMP_SCORE.min &&
+    typedScore <= BOOTCAMP_SCORE.max &&
+    Number(typedScore.toFixed(1)) === typedScore;
+  const average = direct ? (typedValid ? typedScore : null) : averageScore(scores.map((c) => c.score));
+  const needed = direct || average === null ? null : requiredFeedback(wholeScore(average));
   const missing =
-    (needed === "positive" && !positive.trim()) || (needed === "constructive" && !constructive.trim());
+    (direct && !typedValid) ||
+    (needed === "positive" && !positive.trim()) ||
+    (needed === "constructive" && !constructive.trim());
   const changed =
     positive !== s.positiveFeedback ||
     constructive !== s.constructiveFeedback ||
+    (direct && typedScore !== s.averageScore) ||
     scores.some((c, i) => c.score !== s.scores[i]!.score || c.comment !== s.scores[i]!.comment);
 
   function set(i: number, change: Partial<{ score: number; comment: string }>) {
@@ -191,6 +208,22 @@ function SubmissionForm({ submission: s }: { submission: ViewSubmission }) {
   return (
     <section className="space-y-4 px-5 py-4">
       <SubmissionHeading submission={s} average={average} />
+      {direct && (
+        <label className="flex flex-wrap items-center justify-between gap-3 text-sm">
+          Score
+          <Input
+            type="number"
+            inputMode="decimal"
+            min={BOOTCAMP_SCORE.min}
+            max={BOOTCAMP_SCORE.max}
+            step={0.1}
+            value={typed}
+            aria-invalid={!typedValid}
+            onChange={(e) => setTyped(e.target.value)}
+            className="w-24 shrink-0"
+          />
+        </label>
+      )}
       <ul className="space-y-4">
         {scores.map((c, i) => (
           <li key={c.criterionId} className="space-y-2">
@@ -253,6 +286,7 @@ function SubmissionForm({ submission: s }: { submission: ViewSubmission }) {
               scores: scores.map(({ criterionId, score, comment }) => ({ criterionId, score, comment })),
               positiveFeedback: positive,
               constructiveFeedback: constructive,
+              ...(direct && { averageScore: typedScore }),
               revises: s.updatedAt,
             })
           }
@@ -260,6 +294,11 @@ function SubmissionForm({ submission: s }: { submission: ViewSubmission }) {
           {pending ? <Loader2 className="animate-spin" /> : <Save />}
           Save
         </Button>
+        {direct && !typedValid && (
+          <p className="text-sm text-muted-foreground">
+            Scores run from {BOOTCAMP_SCORE.min} to {BOOTCAMP_SCORE.max}, to one decimal place.
+          </p>
+        )}
         {error && (
           <p role="alert" className="text-sm text-destructive">
             {error}
@@ -299,206 +338,6 @@ function FeedbackBox({
         maxLength={EVALS_ASSESSMENT_LIMITS.feedback}
         onChange={(e) => onChange(e.target.value)}
       />
-    </div>
-  );
-}
-
-type ClassFields = "btc" | "int";
-
-/** Their bootcamp history, BTC and INT: the day, the overall score and each exercise's. */
-export function HistoryRecord({ history, editing }: { history: ViewHistory; editing: boolean }) {
-  return (
-    <div className="divide-y overflow-hidden rounded-2xl border bg-card shadow-sm">
-      <div className="space-y-0.5 px-5 py-4">
-        <h4 className="font-medium">Bootcamp history</h4>
-        <p className="text-xs text-muted-foreground">
-          {history.updatedAt ? (
-            <>
-              Last changed {formatWhen(history.updatedAt)}
-              {history.updatedByName && <> by {history.updatedByName}</>}
-            </>
-          ) : (
-            "Unchanged since it was imported"
-          )}
-        </p>
-      </div>
-      {editing ? (
-        <HistoryForm key={history.updatedAt ?? ""} history={history} />
-      ) : (
-        <div className="grid divide-y md:grid-cols-2 md:divide-x md:divide-y-0">
-          {(["btc", "int"] as const).map((side) => (
-            <HistorySide key={side} history={history} side={side} />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-const SIDE_NAMES: Record<ClassFields, string> = { btc: "BTC", int: "INT" };
-
-function sideOf(history: ViewHistory, side: ClassFields) {
-  return side === "btc"
-    ? { date: history.btcDate, score: history.btcScore, individual: history.btcIndividualScores }
-    : { date: history.intDate, score: history.intScore, individual: history.intIndividualScores };
-}
-
-function HistorySide({ history, side }: { history: ViewHistory; side: ClassFields }) {
-  const { date, score, individual } = sideOf(history, side);
-  const exercises = Object.entries(individual ?? {});
-  return (
-    <section className="space-y-3 px-5 py-4">
-      <dl className="grid grid-cols-2 gap-4">
-        <Field label={`${SIDE_NAMES[side]} day`}>{formatHistoryDate(date)}</Field>
-        <Field label={`${SIDE_NAMES[side]} score`}>{formatScore(score)}</Field>
-      </dl>
-      {exercises.length > 0 && (
-        <ul className="space-y-1.5 border-t pt-3 text-sm">
-          {exercises.map(([name, value]) => (
-            <li key={name} className="flex items-baseline justify-between gap-4">
-              <span className="min-w-0 wrap-break-word">{exerciseName(name)}</span>
-              <span className="tabular-nums">{formatScore(value)}</span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
-  );
-}
-
-/** A score field's text as a number, or null when blank; NaN when it is not a number. */
-const scoreOf = (text: string) => (text.trim() === "" ? null : Number(text));
-
-const inRange = (n: number | null) =>
-  n === null || (Number.isFinite(n) && n >= BOOTCAMP_SCORE.min && n <= BOOTCAMP_SCORE.max);
-
-function HistoryForm({ history }: { history: ViewHistory }) {
-  const { save, pending, error } = useSave();
-  const initial = (side: ClassFields) => {
-    const { date, score, individual } = sideOf(history, side);
-    return {
-      exempt: date === EXEMPT_DATE,
-      date: date === EXEMPT_DATE ? "" : (date ?? ""),
-      score,
-      individual: Object.entries(individual ?? {}).map(([name, value]) => ({ name, value: String(value) })),
-    };
-  };
-  const [sides, setSides] = useState({ btc: initial("btc"), int: initial("int") });
-
-  function set(side: ClassFields, change: Partial<(typeof sides)["btc"]>) {
-    setSides((all) => ({ ...all, [side]: { ...all[side], ...change } }));
-  }
-
-  const valid = (["btc", "int"] as const).every((side) =>
-    sides[side].individual.every((x) => x.value.trim() !== "" && inRange(scoreOf(x.value))),
-  );
-
-  /** The mean of the exercise scores as typed; the stored score for a class with none, or while one is not a score. */
-  function overall(side: ClassFields): number | null {
-    const s = sides[side];
-    const values = s.individual.map((x) => scoreOf(x.value));
-    if (values.length === 0 || !values.every((n) => n !== null && inRange(n))) return s.score;
-    return averageScore(values as number[]);
-  }
-
-  function body() {
-    const out: Record<string, unknown> = {};
-    for (const side of ["btc", "int"] as const) {
-      const s = sides[side];
-      out[`${side}Date`] = s.exempt ? EXEMPT_DATE : s.date || null;
-      out[`${side}IndividualScores`] =
-        s.individual.length === 0 ? null : Object.fromEntries(s.individual.map((x) => [x.name, Number(x.value)]));
-    }
-    return out;
-  }
-
-  return (
-    <div className="space-y-4 px-5 py-4">
-      <div className="grid gap-6 md:grid-cols-2">
-        {(["btc", "int"] as const).map((side) => {
-          const s = sides[side];
-          return (
-            <fieldset key={side} className="min-w-0 space-y-3">
-              <legend className="mb-2 text-sm font-medium">{SIDE_NAMES[side]}</legend>
-              <div className="grid grid-cols-2 gap-3">
-                <label className="space-y-1 text-xs text-muted-foreground">
-                  Day
-                  <Input
-                    type="date"
-                    value={s.date}
-                    disabled={s.exempt}
-                    onChange={(e) => set(side, { date: e.target.value })}
-                  />
-                </label>
-                <div className="space-y-1 text-xs text-muted-foreground">
-                  Overall score
-                  <p
-                    className="flex h-9 items-center text-sm tabular-nums text-foreground"
-                    title={s.individual.length > 0 ? "The mean of the exercise scores" : undefined}
-                  >
-                    {formatScore(overall(side))}
-                  </p>
-                </div>
-              </div>
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={s.exempt}
-                  onChange={(e) => set(side, { exempt: e.target.checked })}
-                  className="size-4 accent-brand"
-                />
-                Exempt
-              </label>
-              {s.individual.length > 0 && (
-                <ul className="space-y-2 border-t pt-3">
-                  {s.individual.map((x, i) => (
-                    <li key={x.name} className="flex items-center justify-between gap-3 text-sm">
-                      <span className="min-w-0 wrap-break-word">{exerciseName(x.name)}</span>
-                      <Input
-                        type="number"
-                        inputMode="decimal"
-                        min={BOOTCAMP_SCORE.min}
-                        max={BOOTCAMP_SCORE.max}
-                        step={0.1}
-                        aria-label={`${SIDE_NAMES[side]} ${exerciseName(x.name)} score`}
-                        value={x.value}
-                        aria-invalid={x.value.trim() === "" || !inRange(scoreOf(x.value))}
-                        onChange={(e) =>
-                          set(side, {
-                            individual: s.individual.map((y, j) => (j === i ? { ...y, value: e.target.value } : y)),
-                          })
-                        }
-                        className="w-20 shrink-0"
-                      />
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </fieldset>
-          );
-        })}
-      </div>
-      <div className="flex flex-wrap items-center gap-3">
-        <Button
-          size="sm"
-          variant="brand"
-          disabled={!valid || pending}
-          onClick={() => void save(`/api/reporting/bootcamp/history/${history.id}`, body())}
-        >
-          {pending ? <Loader2 className="animate-spin" /> : <Save />}
-          Save
-        </Button>
-        {!valid && (
-          <p className="text-sm text-muted-foreground">
-            Scores run from {BOOTCAMP_SCORE.min} to {BOOTCAMP_SCORE.max}.
-          </p>
-        )}
-        {error && (
-          <p role="alert" className="text-sm text-destructive">
-            {error}
-          </p>
-        )}
-      </div>
     </div>
   );
 }

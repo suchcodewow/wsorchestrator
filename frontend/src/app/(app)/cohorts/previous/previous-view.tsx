@@ -4,8 +4,8 @@
  * One row per day BTC or INT was held, with how many attended each. A row
  * opens in place to who attended: bootcamp on one side, intermediate on the
  * other, each fetched a page at a time the first time it is opened. The open
- * days are kept in the URL, and a person's page is opened under Cohorts with
- * that URL's parameters, so its back link and Back both return here as it was.
+ * days are kept in the URL, so Back from a person's page on Reporting → Live
+ * Sessions returns here as it was.
  */
 
 import { Fragment, useEffect, useEffectEvent, useState } from "react";
@@ -16,7 +16,7 @@ import { ChevronRight, GraduationCap, Loader2, Users, type LucideIcon } from "lu
 import { HEADER_ROW, Pager, PlainHeader, SortHeader } from "@/components/data-table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import type { PreviousSession, SessionAttendee, SessionDetail, SessionStage } from "@/lib/evals/bootcamp-history";
+import type { PreviousSession, SessionAttendee, SessionDetail, SessionStage } from "@/lib/evals/previous-sessions";
 import type { PreviousSessionSort } from "@/lib/list-specs";
 import { riseChild, staggerParent } from "@/lib/motion";
 import { listParam, withParams, type ListQuery, type Page } from "@/lib/paging";
@@ -56,7 +56,7 @@ export function PreviousView({
   total,
   first,
   opened: preopened,
-  canOpenHistory,
+  canOpenPerson,
 }: {
   query: ListQuery<PreviousSessionSort>;
   page: Page<PreviousSession>;
@@ -65,8 +65,8 @@ export function PreviousView({
   first: string | null;
   /** The days the URL named as open, already fetched. */
   opened: SessionDetail[];
-  /** Whether the viewer may open a person's bootcamp history record. */
-  canOpenHistory: boolean;
+  /** Whether the viewer may open a person's page on Reporting → Live Sessions. */
+  canOpenPerson: boolean;
 }) {
   const [opened, setOpened] = useState<Record<string, Opened>>(() =>
     Object.fromEntries(preopened.map((detail) => [detail.date, { detail, loading: null, error: null }])),
@@ -227,7 +227,7 @@ export function PreviousView({
                                   count={s[stage]}
                                   attendees={open.detail![stage]}
                                   loading={open.loading === stage}
-                                  personHref={canOpenHistory ? (id) => withParams(`${pathname}/${id}`, params) : null}
+                                  personHref={canOpenPerson ? (key) => `/reporting/bootcamp/${key}` : null}
                                   onMore={() => more(s.date, stage)}
                                 />
                               ))}
@@ -242,7 +242,7 @@ export function PreviousView({
               {page.rows.length === 0 && (
                 <tr>
                   <td colSpan={COLUMNS.length + 1} className="px-5 py-8 text-center text-muted-foreground">
-                    {page.page > 1 ? "No sessions on this page." : "No bootcamp history yet."}
+                    {page.page > 1 ? "No sessions on this page." : "No released classes yet."}
                   </td>
                 </tr>
               )}
@@ -271,8 +271,8 @@ function AttendeeList({
   count: number;
   attendees: Page<SessionAttendee>;
   loading: boolean;
-  /** Where a person's record opens, or null when the viewer may not open one. */
-  personHref: ((id: string) => string) | null;
+  /** Where a person's page opens, or null when the viewer may not open one. */
+  personHref: ((key: string) => string) | null;
   onMore: () => void;
 }) {
   return (
@@ -287,12 +287,12 @@ function AttendeeList({
       ) : (
         <ul className="divide-y">
           {attendees.rows.map((a) => (
-            <li key={a.id} className="flex items-center gap-2 px-4 py-2">
+            <li key={a.key} className="flex items-center gap-2 px-4 py-2">
               <span className="min-w-0 flex-1">
                 <span className="block truncate font-medium">
                   {personHref ? (
                     <Link
-                      href={personHref(a.id)}
+                      href={personHref(a.key)}
                       className="underline-offset-2 outline-none hover:underline focus-visible:underline"
                     >
                       {a.fullName ?? a.email}

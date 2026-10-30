@@ -1,9 +1,9 @@
 /**
- * Reporting → Bootcamp: everyone's BTC and INT records, for every signed-in
- * user, each seeing only as much as they may.
+ * Reporting → Live Sessions: everyone's BTC and INT classes, for every
+ * signed-in user, each seeing only as much as they may.
  *
- * A record is someone's bootcamp history, kept on their `employees` row, or
- * an eVals submission. An Assessments Viewer or above sees every record and every
+ * A record is an eVals submission; a class someone attended is the
+ * submissions they have in it. An Assessments Viewer or above sees every
  * submission's scores and comments. Anyone else sees only the people below
  * them in HiBob's reporting lines — read live, so it follows each sync — and
  * of a bootcamp's submissions only the stages an Assessments Administrator
@@ -17,12 +17,11 @@ import { and, asc, desc, eq, inArray, isNull, sql, type SQL } from "drizzle-orm"
 import { z } from "zod";
 import { db } from "@/db";
 import {
+  BOOTCAMP_SCORE,
   EVALS_ASSESSMENT_LIMITS,
-  EXEMPT_DATE,
   bootcamps,
   employees,
   evalsAssessmentCriteria,
-  hasHistory,
   evalsAssessments,
   evalsSubmissionScores,
   evalsSubmissions,
@@ -31,21 +30,14 @@ import {
   type Employee,
 } from "@/db/schema";
 import { averageScore, requiredFeedback, wholeScore } from "@/lib/evals/assessment-values";
-import { ensureEmployees, updateHistory, type HistoryCorrection, type HistoryError } from "@/lib/evals/bootcamp-history";
+import { attended } from "@/lib/evals/attendance";
 import { isCandidate } from "@/lib/evals/current-cohort";
 import { getCandidateCutoffs } from "@/lib/evals/settings";
 import { retrackEmployees } from "@/lib/evals/tracks";
 import type { BootcampCohortSort, BootcampRecordSort, HistoryStatus } from "@/lib/list-specs";
 import { PAGE_SIZE, pageWindow, toPage, type ListQuery, type Page } from "@/lib/paging";
 import { orderFor, searchAny } from "@/lib/paging-sql";
-import {
-  NOT_ATTENDED,
-  historyClass,
-  isExempt,
-  type BootcampLevel,
-  type ClassSummary,
-  type ReleaseStage,
-} from "@/lib/reporting/bootcamp-values";
+import { NOT_ATTENDED, type BootcampLevel, type ClassSummary, type ReleaseStage } from "@/lib/reporting/bootcamp-values";
 import { canUseEvals, type Access } from "@/lib/roles";
 
 /**
@@ -78,32 +70,22 @@ function inReach(reader: BootcampReader, email: SQL): SQL {
     select email from org))`;
 }
 
-/** A submission at bootcamp `b` for assessment `a` may be shown: always to a viewer, else once its stage is released. */
-function released(reader: BootcampReader): SQL {
-  if (reader.all) return sql`true`;
-  return sql`(case a.stage when 'bootcamp' then b.btc_released_at is not null else b.int_released_at is not null end)`;
-}
-
 /**
- * Every record the reader may see, past the current cohort: one row per
- * class someone has a history date for, and per class of a finished bootcamp
- * they were scored at. The exempt marker is kept, as a class with no day.
+ * Every record the reader may see: one row per class someone was scored in,
+ * once it is released, or for a viewer also once its bootcamp is finished.
  */
 function pastRecords(reader: BootcampReader): SQL {
+  const stageReleased = sql`(case a.stage when 'bootcamp' then b.btc_released_at is not null else b.int_released_at is not null end)`;
   return sql`(
-    select h.email, 'bootcamp'::text as stage, h.btc_date as day from ${employees} h where h.btc_date is not null
-    union all
-    select h.email, 'intermediate', h.int_date from ${employees} h where h.int_date is not null
-    union all
-    select distinct s.attendee_email, a.stage, b.start_date
+    select distinct s.attendee_email as email, a.stage, b.start_date as day
       from ${evalsSubmissions} s
       join ${evalsAssessments} a on a.id = s.assessment_id
       join ${bootcamps} b on b.id = s.bootcamp_id
-     where b.status = 'complete' and ${released(reader)}
+     where ${reader.all ? sql`(${stageReleased} or b.status = 'complete')` : stageReleased}
   )`;
 }
 
-const nameOf = (email: SQL) =>
+export const nameOf = (email: SQL) =>
   sql`(select nullif(n.full_name, '') from ${employees} n where n.email = ${email} order by n.active desc, n.full_name limit 1)`;
 
 /**
@@ -111,20 +93,19 @@ const nameOf = (email: SQL) =>
  * scored at a bootcamp with no employee row, one of their submissions'.
  * `resolvePerson` reads either back.
  */
-const keyOf = (email: SQL) => sql`coalesce(
+export const keyOf = (email: SQL) => sql`coalesce(
   (select n.id from ${employees} n where n.email = ${email} order by n.active desc, n.id limit 1),
   (select min(s.id::text) from ${evalsSubmissions} s where s.attendee_email = ${email}))`;
 
-const ATTENDED = (stage: ReleaseStage) => sql`bool_or(r.stage = ${stage} and r.day <> ${EXEMPT_DATE})`;
+const ATTENDED_INT = sql`bool_or(r.stage = 'intermediate')`;
 
 /** One row per person in reach with a past record: their level, latest class day, name, key and whether they are still here. */
 function people(reader: BootcampReader): SQL {
   return sql`(
     select r.email,
-           (case when ${ATTENDED("intermediate")} then 'intermediate'
-                 when ${ATTENDED("bootcamp")} then 'bootcamp' else 'exempt' end) as level,
-           (case when ${ATTENDED("intermediate")} then 2 when ${ATTENDED("bootcamp")} then 1 else 0 end) as rank,
-           (max(r.day) filter (where r.day <> ${EXEMPT_DATE}))::text as date,
+           (case when ${ATTENDED_INT} then 'intermediate' else 'bootcamp' end) as level,
+           (case when ${ATTENDED_INT} then 2 else 1 end) as rank,
+           max(r.day)::text as date,
            ${nameOf(sql`r.email`)} as full_name,
            coalesce((select bool_or(n.active) from ${employees} n where n.email = r.email), false) as active,
            ${keyOf(sql`r.email`)} as key
@@ -148,8 +129,8 @@ export type BootcampRecordRow = {
   email: string;
   fullName: string | null;
   level: BootcampLevel;
-  /** Their latest BTC or INT day; null when every class they have is exempt. */
-  date: string | null;
+  /** Their latest BTC or INT day. */
+  date: string;
   /** Sent by the last HiBob sync: still at Harness. */
   active: boolean;
 };
@@ -266,9 +247,9 @@ export async function listCohort(
   const { rows } = await db.execute<CohortRow>(sql`
     with candidates as (
       select ${employees.email} as email,
-             -- A BTC date from this bootcamp's own release still counts them in its BTC class.
-             (case when ${employees.btcDate} is null or ${employees.btcDate} >= ${bootcamp.startDate}
-                   then 'bootcamp' else 'intermediate' end) as stage
+             -- Releasing this bootcamp's own BTC class still counts them in it.
+             (case when ${attended("bootcamp", sql`${employees.email}`, { before: bootcamp.startDate })}
+                   then 'intermediate' else 'bootcamp' end) as stage
         from ${employees}
        where ${and(isCandidate(cutoffs), inArray(employees.track, ["sales", "engineer"]))}
       union
@@ -303,12 +284,11 @@ export const RELEASE_STATUS_FOR: Record<ReleaseError, number> = { no_bootcamp: 4
 
 /**
  * Releases one class of the active bootcamp to managers, from now on, and
- * completes it: everyone scored in that class gets the bootcamp's start date
- * as their BTC or INT date in their history, with the mean of their
- * submissions' averages as the class score and each assessment's average as
- * an exercise score. That moves a BTC class on to Intermediate on Cohorts →
- * Current, and takes an INT class off it. Once released it stays so;
- * releasing again changes nothing, and says when it was.
+ * completes it: everyone scored in that class has attended it
+ * (`lib/evals/attendance.ts`). That moves a BTC class on to Intermediate on
+ * Cohorts → Current, and takes an INT class off it. Once released it stays
+ * so; releasing again changes nothing, and says when it was. `written`
+ * counts the people scored in it.
  */
 export async function releaseScores(
   actorId: string,
@@ -335,57 +315,19 @@ export async function releaseScores(
       .set({ [atColumn]: now, [byColumn]: actorId, updatedAt: now })
       .where(and(eq(bootcamps.id, bootcamp.id), isNull(bootcamps[atColumn])))
       .returning({ at: bootcamps[atColumn] });
-    // Someone else released it between our read and our write, and wrote the history with it.
+    // Someone else released it between our read and our write.
     if (!row) return null;
-    return { releasedAt: row.at ?? now, emails: await writeClassHistory(tx, done, stage, actorId) };
+    const { rows: scored } = await tx.execute<{ email: string }>(sql`
+      select distinct s.attendee_email as email
+        from ${evalsSubmissions} s join ${evalsAssessments} a on a.id = s.assessment_id
+       where s.bootcamp_id = ${bootcamp.id} and a.stage = ${stage}`);
+    return { releasedAt: row.at ?? now, emails: scored.map((r) => r.email) };
   });
   if (!result) {
     return { ok: true, bootcamp: done, releasedAt: (await cohortBootcamp())?.released[stage]?.at ?? now, written: 0 };
   }
   await retrackEmployees(result.emails);
   return { ok: true, bootcamp: done, releasedAt: result.releasedAt, written: result.emails.length };
-}
-
-type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
-
-/**
- * Writes one class of `bootcamp` into the history of everyone scored in it,
- * or only of `only`: its start date, the mean of their submissions' averages,
- * and each assessment's average by name. Someone scored with no employee row
- * gets an inactive one (`ensureEmployees`); the other class's columns are left
- * alone. Returns whose histories it wrote.
- */
-async function writeClassHistory(
-  tx: Tx,
-  bootcamp: { id: string; startDate: string },
-  stage: ReleaseStage,
-  actorId: string,
-  only?: string,
-): Promise<string[]> {
-  const [date, score, exercises] =
-    stage === "bootcamp"
-      ? [sql.raw("btc_date"), sql.raw("btc_score"), sql.raw("btc_individual_scores")]
-      : [sql.raw("int_date"), sql.raw("int_score"), sql.raw("int_individual_scores")];
-  const scored = sql`
-    select lower(s.attendee_email) as email, round(avg(s.average_score)::numeric, 1)::float8 as score,
-           jsonb_object_agg(s.assessment_name, s.average_score) as exercises
-      from ${evalsSubmissions} s join ${evalsAssessments} a on a.id = s.assessment_id
-     where s.bootcamp_id = ${bootcamp.id} and a.stage = ${stage}
-       ${only ? sql`and lower(s.attendee_email) = ${only.toLowerCase()}` : sql``}
-     group by lower(s.attendee_email)`;
-  const { rows: people } = await tx.execute<{ email: string }>(sql`select x.email from (${scored}) x`);
-  await ensureEmployees(tx, people.map((p) => p.email));
-  // Onto the one row per email the app reads first: the active one, else the latest.
-  const { rows } = await tx.execute<{ email: string }>(sql`
-    update ${employees} e
-       set ${date} = ${bootcamp.startDate}::date, ${score} = x.score, ${exercises} = x.exercises,
-           history_updated_by = ${actorId}, history_updated_at = now(),
-           history_created_at = coalesce(e.history_created_at, now())
-      from (${scored}) x
-     where e.id = (select n.id from ${employees} n where n.email = x.email
-                    order by n.active desc, n.imported_at desc, n.id limit 1)
-    returning e.email`);
-  return rows.map((r) => r.email);
 }
 
 const uuidSchema = z.string().uuid();
@@ -435,21 +377,6 @@ export type PersonSubmission = {
   scores: SubmissionScore[];
 };
 
-/** Their bootcamp history, whole; `id` is their employee id. */
-export type PersonHistory = {
-  id: string;
-  btcDate: string | null;
-  intDate: string | null;
-  btcScore: number | null;
-  intScore: number | null;
-  btcIndividualScores: Record<string, number> | null;
-  intIndividualScores: Record<string, number> | null;
-  /** Null only for a history from before these were kept. */
-  createdAt: Date | null;
-  updatedAt: Date | null;
-  updatedByName: string | null;
-};
-
 export type BootcampPerson = {
   key: string;
   email: string;
@@ -457,8 +384,8 @@ export type BootcampPerson = {
   employee: PersonEmployee | null;
   /** BTC and INT as a manager sees them. */
   classes: Record<ReleaseStage, ClassSummary>;
-  /** Null for a reader outside Assessments: the record behind `classes`, which only Assessments sees. */
-  records: { history: PersonHistory | null; submissions: PersonSubmission[] } | null;
+  /** Null for a reader outside Assessments: the submissions behind `classes`, which only Assessments sees. */
+  records: { submissions: PersonSubmission[] } | null;
 };
 
 /**
@@ -475,7 +402,7 @@ export async function getBootcampPerson(reader: BootcampReader, key: string): Pr
   }
 
   const s = evalsSubmissions;
-  const [[employee], [history], submitted] = await Promise.all([
+  const [[employee], submitted] = await Promise.all([
     db
       .select({
         fullName: employees.fullName,
@@ -490,24 +417,6 @@ export async function getBootcampPerson(reader: BootcampReader, key: string): Pr
       .from(employees)
       .where(and(eq(employees.email, email), eq(employees.active, true)))
       .orderBy(asc(employees.fullName))
-      .limit(1),
-    db
-      .select({
-        id: employees.id,
-        btcDate: employees.btcDate,
-        intDate: employees.intDate,
-        btcScore: employees.btcScore,
-        intScore: employees.intScore,
-        btcIndividualScores: employees.btcIndividualScores,
-        intIndividualScores: employees.intIndividualScores,
-        createdAt: employees.historyCreatedAt,
-        updatedAt: employees.historyUpdatedAt,
-        updatedByName: sql<string | null>`coalesce(nullif(${users.name}, ''), ${users.email})`,
-      })
-      .from(employees)
-      .leftJoin(users, eq(users.id, employees.historyUpdatedBy))
-      .where(and(eq(employees.email, email), hasHistory))
-      .orderBy(desc(employees.active), desc(employees.importedAt))
       .limit(1),
     db
       .select({
@@ -533,10 +442,7 @@ export async function getBootcampPerson(reader: BootcampReader, key: string): Pr
   ]);
   const visible = reader.all ? submitted : submitted.filter((x) => x.released);
 
-  const classes = {
-    bootcamp: classFor("bootcamp", history ? historyClass(history.btcDate, history.btcScore, history.btcIndividualScores) : null, visible),
-    intermediate: classFor("intermediate", history ? historyClass(history.intDate, history.intScore, history.intIndividualScores) : null, visible),
-  };
+  const classes = { bootcamp: classFor("bootcamp", visible), intermediate: classFor("intermediate", visible) };
   if (!reader.all) return { key, email, employee: employee ?? null, classes, records: null };
 
   const ids = visible.map((x) => x.id);
@@ -567,44 +473,35 @@ export async function getBootcampPerson(reader: BootcampReader, key: string): Pr
     email,
     employee: employee ?? null,
     classes,
-    records: {
-      history: history ?? null,
-      submissions: visible.map((x) => ({ ...x, scores: scoresOf.get(x.id) ?? [] })),
-    },
+    records: { submissions: visible.map((x) => ({ ...x, scores: scoresOf.get(x.id) ?? [] })) },
   };
 }
 
-/**
- * One class as a manager sees it: the newest bootcamp they were scored at in
- * it, unless their history has a later day; an exempt marker gives way to
- * any class they were scored at.
- */
+/** One class as a manager sees it: the newest bootcamp they were scored at in it. */
 function classFor(
   stage: ReleaseStage,
-  fromHistory: ClassSummary | null,
   submitted: { bootcamp: { id: string; startDate: string }; stage: ReleaseStage; assessmentName: string; averageScore: number }[],
 ): ClassSummary {
   const inStage = submitted.filter((x) => x.stage === stage);
   // Newest bootcamp first, as fetched.
   const newest = inStage[0]?.bootcamp;
-  const scored = newest ? inStage.filter((x) => x.bootcamp.id === newest.id) : [];
-  const fromEvals: ClassSummary | null = newest
-    ? {
-        date: newest.startDate,
-        score: averageScore(scored.map((x) => x.averageScore)),
-        exercises: scored.map((x) => ({ name: x.assessmentName, score: x.averageScore })),
-      }
-    : null;
-
-  if (!fromHistory?.date) return fromEvals ?? NOT_ATTENDED;
-  if (!fromEvals) return fromHistory;
-  if (isExempt(fromHistory.date)) return fromEvals;
-  return fromEvals.date! >= fromHistory.date ? fromEvals : fromHistory;
+  if (!newest) return NOT_ATTENDED;
+  const scored = inStage.filter((x) => x.bootcamp.id === newest.id);
+  return {
+    date: newest.startDate,
+    score: averageScore(scored.map((x) => x.averageScore)),
+    exercises: scored.map((x) => ({ name: x.assessmentName, score: x.averageScore })),
+  };
 }
 
 const L = EVALS_ASSESSMENT_LIMITS;
 
-/** An administrator's correction to a submission: every criterion it was scored on, and both feedback boxes. */
+/**
+ * An administrator's correction to a submission: every criterion it was
+ * scored on, and both feedback boxes. A submission scored on no criteria,
+ * such as one carried over from the old bootcamp history, takes its average
+ * as `averageScore` instead.
+ */
 export const submissionEditSchema = z.object({
   scores: z
     .array(
@@ -614,8 +511,16 @@ export const submissionEditSchema = z.object({
         comment: z.string().trim().max(L.comment).default(""),
       }),
     )
-    .min(1)
-    .max(L.criteria),
+    .max(L.criteria)
+    .default([]),
+  averageScore: z
+    .number()
+    .min(BOOTCAMP_SCORE.min)
+    .max(BOOTCAMP_SCORE.max)
+    .refine((n) => Number(n.toFixed(BOOTCAMP_SCORE.decimals)) === n, {
+      message: `at most ${BOOTCAMP_SCORE.decimals} decimal place`,
+    })
+    .optional(),
   positiveFeedback: z.string().trim().max(L.feedback).default(""),
   constructiveFeedback: z.string().trim().max(L.feedback).default(""),
   /** The `updatedAt` of the version this corrects. */
@@ -637,8 +542,8 @@ export const SUBMISSION_EDIT_STATUS_FOR: Record<SubmissionEditError, number> = {
  * Corrects a submission's scores, comments and feedback in place, at any
  * bootcamp. It keeps the criteria it was scored on, their names as scored,
  * its owner and its tags; the average follows the new scores, and the
- * feedback the eVals form requires for it still is. In a class already
- * released, the person's history for that class is written again.
+ * feedback the eVals form requires for it still is. A submission with no
+ * criteria takes the average it is given, and no feedback is required of it.
  */
 export async function editSubmission(
   actorId: string,
@@ -656,15 +561,8 @@ export async function editSubmission(
         attendeeEmail: s.attendeeEmail,
         assessmentName: s.assessmentName,
         updatedAt: s.updatedAt,
-        stage: evalsAssessments.stage,
-        bootcampId: bootcamps.id,
-        startDate: bootcamps.startDate,
-        btcReleasedAt: bootcamps.btcReleasedAt,
-        intReleasedAt: bootcamps.intReleasedAt,
       })
       .from(s)
-      .innerJoin(evalsAssessments, eq(evalsAssessments.id, s.assessmentId))
-      .leftJoin(bootcamps, eq(bootcamps.id, s.bootcampId))
       .where(eq(s.id, id))
       .for("update", { of: s });
     if (!current) return { ok: false as const, error: "not_found" as const };
@@ -679,9 +577,11 @@ export async function editSubmission(
     if (given.size !== input.scores.length || given.size !== scored.length || scored.some((c) => !given.has(c.criterionId))) {
       return { ok: false as const, error: "invalid" as const };
     }
+    // Scored on criteria, the average is theirs; scored on none, it is the one given.
+    if ((scored.length > 0) === (input.averageScore !== undefined)) return { ok: false as const, error: "invalid" as const };
 
-    const average = averageScore(input.scores.map((sc) => sc.score))!;
-    const needed = requiredFeedback(wholeScore(average));
+    const average = scored.length > 0 ? averageScore(input.scores.map((sc) => sc.score))! : input.averageScore!;
+    const needed = scored.length > 0 ? requiredFeedback(wholeScore(average)) : null;
     if (needed === "constructive" && !input.constructiveFeedback) return { ok: false as const, error: "feedback_required" as const };
     if (needed === "positive" && !input.positiveFeedback) return { ok: false as const, error: "feedback_required" as const };
 
@@ -695,21 +595,17 @@ export async function editSubmission(
         updatedAt: now,
       })
       .where(eq(s.id, id));
-    await tx.delete(evalsSubmissionScores).where(eq(evalsSubmissionScores.submissionId, id));
-    await tx.insert(evalsSubmissionScores).values(
-      scored.map((c) => ({
-        submissionId: id,
-        criterionId: c.criterionId,
-        criterionName: c.criterionName,
-        score: given.get(c.criterionId)!.score,
-        comment: given.get(c.criterionId)!.comment,
-      })),
-    );
-    // A released class has had its history written; keep that in step with the edit.
-    const releasedAt = current.stage === "bootcamp" ? current.btcReleasedAt : current.intReleasedAt;
-    if (current.bootcampId && current.startDate && releasedAt) {
-      const bootcamp = { id: current.bootcampId, startDate: current.startDate };
-      await writeClassHistory(tx, bootcamp, current.stage, actorId, current.attendeeEmail);
+    if (scored.length > 0) {
+      await tx.delete(evalsSubmissionScores).where(eq(evalsSubmissionScores.submissionId, id));
+      await tx.insert(evalsSubmissionScores).values(
+        scored.map((c) => ({
+          submissionId: id,
+          criterionId: c.criterionId,
+          criterionName: c.criterionName,
+          score: given.get(c.criterionId)!.score,
+          comment: given.get(c.criterionId)!.comment,
+        })),
+      );
     }
     return {
       ok: true as const,
@@ -721,28 +617,5 @@ export async function editSubmission(
         updatedAt: now,
       },
     };
-  });
-}
-
-/**
- * Corrects someone's bootcamp history, by their employee id; says whose it was, for the audit
- * trail. A class given exercise scores takes their mean as its overall
- * score; one given none, or not named, keeps the overall score it has.
- */
-export async function correctHistory(
-  actorId: string,
-  id: string,
-  correction: HistoryCorrection,
-): Promise<{ ok: true; email: string } | { ok: false; error: HistoryError }> {
-  const derived = (scores: Record<string, number> | null | undefined) => {
-    const mean = scores ? averageScore(Object.values(scores)) : null;
-    return mean === null ? {} : { score: mean };
-  };
-  const btc = derived(correction.btcIndividualScores);
-  const int = derived(correction.intIndividualScores);
-  return updateHistory(actorId, id, {
-    ...correction,
-    ...("score" in btc ? { btcScore: btc.score } : {}),
-    ...("score" in int ? { intScore: int.score } : {}),
   });
 }

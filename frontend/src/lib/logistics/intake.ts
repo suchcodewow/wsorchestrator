@@ -17,6 +17,7 @@ import {
   chosenNameOnRecord,
   setChosenName,
 } from "@/lib/evals/chosen-names";
+import { attended } from "@/lib/evals/attendance";
 import { setTimezone, timezoneOnRecord } from "@/lib/evals/timezones";
 import { testGroupStageOf } from "@/lib/cohorts/test-group";
 import { cohortStageOf } from "@/lib/evals/current-cohort";
@@ -246,19 +247,19 @@ export async function deferMyIntake(
 /**
  * The stage `email` deferred from, if their track is Deferred, which is how
  * someone who deferred their registration reads afterwards: Bootcamp if they
- * have no Bootcamp date yet, else Intermediate (the stage rule of the Cohorts
- * page). Null for anyone not deferred.
+ * have not attended a Bootcamp class yet, else Intermediate (the stage rule of
+ * the Cohorts page). Null for anyone not deferred.
  */
 export async function deferredStageOf(
   email: string,
 ): Promise<IntakeFormId | null> {
   const [row] = await db
-    .select({ track: employees.track, btcDate: employees.btcDate })
+    .select({ track: employees.track, attendedBtc: attended("bootcamp", sql`${employees.email}`) })
     .from(employees)
     .where(sql`lower(${employees.email}) = ${email.trim().toLowerCase()}`)
     .limit(1);
   if (row?.track !== "deferred") return null;
-  return row.btcDate === null ? "bootcamp" : "intermediate";
+  return row.attendedBtc ? "intermediate" : "bootcamp";
 }
 
 /** The answers `email` last saved to `form`, and when; undefined if they never have. */

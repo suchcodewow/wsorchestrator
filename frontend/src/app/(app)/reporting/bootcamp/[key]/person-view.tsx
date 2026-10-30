@@ -13,23 +13,22 @@ import { motion } from "framer-motion";
 import { ArrowLeft, Eye, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { riseChild, staggerParent } from "@/lib/motion";
-import type { PersonEmployee, PersonHistory, PersonSubmission } from "@/lib/reporting/bootcamp";
+import type { PersonEmployee, PersonSubmission } from "@/lib/reporting/bootcamp";
 import type { ClassSummary, ReleaseStage } from "@/lib/reporting/bootcamp-values";
 import { formatDate } from "../../../cohort-settings/format";
 import { ClassCard, Field, TRACK_LABELS } from "../class-card";
-import { HistoryRecord, SubmissionGroups } from "./assessments";
+import { SubmissionGroups } from "./assessments";
 
 export type ViewSubmission = Omit<PersonSubmission, "submittedAt" | "updatedAt"> & {
   submittedAt: string;
   updatedAt: string;
 };
-export type ViewHistory = Omit<PersonHistory, "createdAt" | "updatedAt"> & { createdAt: string | null; updatedAt: string | null };
 
 export type ViewPerson = {
   email: string;
   employee: PersonEmployee | null;
   classes: Record<ReleaseStage, ClassSummary>;
-  records: { history: ViewHistory | null; submissions: ViewSubmission[] } | null;
+  records: { submissions: ViewSubmission[] } | null;
 };
 
 export function PersonView({ person, canEdit, back }: { person: ViewPerson; canEdit: boolean; back: string }) {
@@ -86,7 +85,6 @@ export function PersonView({ person, canEdit, back }: { person: ViewPerson; canE
               <h3 className="text-base font-medium tracking-tight">Administration View</h3>
               <p className="text-sm text-muted-foreground">
                 {records.submissions.length} {records.submissions.length === 1 ? "assessment" : "assessments"}
-                {records.history && " · a bootcamp history"}
               </p>
             </div>
             {canEdit && (
@@ -98,8 +96,7 @@ export function PersonView({ person, canEdit, back }: { person: ViewPerson; canE
           </div>
 
           <SubmissionGroups submissions={records.submissions} editing={editing} />
-          {records.history && <HistoryRecord history={records.history} editing={editing} />}
-          {records.submissions.length === 0 && !records.history && (
+          {records.submissions.length === 0 && (
             <p className="rounded-2xl border bg-card px-5 py-8 text-center text-sm text-muted-foreground shadow-sm">
               No assessments on file.
             </p>

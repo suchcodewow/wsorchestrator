@@ -5,7 +5,7 @@
  */
 
 import { auth } from "@/auth";
-import { getSessionDetail, listPreviousSessions, previousSessionsSummary } from "@/lib/evals/bootcamp-history";
+import { getSessionDetail, listPreviousSessions, previousSessionsSummary } from "@/lib/evals/previous-sessions";
 import { PREVIOUS_SESSION_LIST } from "@/lib/list-specs";
 import { parseListQuery } from "@/lib/paging";
 import { canUseEvals } from "@/lib/roles";
@@ -32,7 +32,7 @@ export default async function PreviousCohortsPage({
       total={summary.sessions}
       first={summary.first}
       opened={opened.filter((d) => d !== null)}
-      canOpenHistory={session?.user ? canUseEvals(session.user.access) : false}
+      canOpenPerson={session?.user ? canUseEvals(session.user.access) : false}
     />
   );
 }

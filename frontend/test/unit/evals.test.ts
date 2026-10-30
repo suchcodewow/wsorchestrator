@@ -187,14 +187,14 @@ describe("title lists", () => {
     assert.equal(listForTitle("", lists), null);
   });
 
-  test("give a track only in the org, and exempt over any list", () => {
+  test("give a track only in the org, and exempt only by hand", () => {
     const lists = new Map([["account executive", "sales" as const]]);
-    const ae = { inOrg: true, title: "Account Executive", exempt: false };
+    const ae = { inOrg: true, title: "Account Executive" };
     assert.equal(trackFor(ae, lists), "sales");
-    assert.equal(trackFor({ ...ae, exempt: true }, lists), "exempt");
-    assert.equal(trackFor({ ...ae, title: "Director", exempt: true }, lists), "exempt");
+    assert.equal(trackFor({ ...ae, override: { track: "exempt" } }, lists), "exempt");
+    assert.equal(trackFor({ ...ae, title: "Director", override: { track: "exempt" } }, lists), "exempt");
     assert.equal(trackFor({ ...ae, title: "Director" }, lists), null);
-    assert.equal(trackFor({ ...ae, inOrg: false, exempt: true }, lists), null);
+    assert.equal(trackFor({ ...ae, inOrg: false, override: { track: "exempt" } }, lists), null);
   });
 
   test("defer anyone who started fewer than the window's days before the bootcamp, or after it", () => {
@@ -207,19 +207,19 @@ describe("title lists", () => {
     assert.equal(isDeferred("2026-10-30", { ...rule, days: 0 }), false);
   });
 
-  test("a track set by hand wins, then exempt, then an ignored title, then deferral, then the title's list", () => {
+  test("a track set by hand wins, then an ignored title, then deferral, then the title's list", () => {
     const lists = new Map([
       ["account executive", "sales" as const],
       ["intern", "ignored" as const],
     ]);
     const rule = { bootcampStart: "2026-11-02", days: 14 };
-    const fresh = { inOrg: true, title: "Account Executive", exempt: false, startDate: "2026-10-30" };
+    const fresh = { inOrg: true, title: "Account Executive", startDate: "2026-10-30" };
     assert.equal(trackFor(fresh, lists), "sales");
     assert.equal(trackFor(fresh, lists, rule), "deferred");
     assert.equal(trackFor({ ...fresh, title: "Director" }, lists, rule), "deferred");
     assert.equal(trackFor({ ...fresh, title: "Intern" }, lists, rule), "ignored");
-    assert.equal(trackFor({ ...fresh, exempt: true }, lists, rule), "exempt");
-    assert.equal(trackFor({ ...fresh, exempt: true, override: { track: "engineer" } }, lists, rule), "engineer");
+    assert.equal(trackFor({ ...fresh, override: { track: "exempt" } }, lists, rule), "exempt");
+    assert.equal(trackFor({ ...fresh, title: "Intern", override: { track: "engineer" } }, lists, rule), "engineer");
     assert.equal(trackFor({ ...fresh, override: { track: null } }, lists, rule), null);
     assert.equal(trackFor({ ...fresh, inOrg: false, override: { track: "sales" } }, lists, rule), null);
   });

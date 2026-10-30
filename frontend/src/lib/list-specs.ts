@@ -56,10 +56,7 @@ export type SlackSyncSort = (typeof SLACK_SYNC_LIST.sorts)[number];
 export const SLACK_SYNC_CHANGE_LIST = spec(["at", "channelName", "action", "email"]);
 export type SlackSyncChangeSort = (typeof SLACK_SYNC_CHANGE_LIST.sorts)[number];
 
-export const BOOTCAMP_HISTORY_LIST =spec(["btcDate", "fullName", "email"], "desc");
-export type BootcampHistorySort = (typeof BOOTCAMP_HISTORY_LIST.sorts)[number];
-
-/** Bootcamp history narrowed to people still in the employee list, or to those not. */
+/** Reporting → Live Sessions narrowed to people still in the employee list, or to those not. */
 export const HISTORY_STATUSES = ["active", "inactive"] as const;
 export type HistoryStatus = (typeof HISTORY_STATUSES)[number];
 
@@ -67,11 +64,11 @@ export function isHistoryStatus(value: unknown): value is HistoryStatus {
   return HISTORY_STATUSES.includes(value as HistoryStatus);
 }
 
-/** Reporting → Bootcamp: everyone with a BTC or INT record the caller may see, newest first. */
+/** Reporting → Live Sessions: everyone with a released BTC or INT the caller may see, newest first. */
 export const BOOTCAMP_RECORD_LIST = spec(["date", "fullName", "email", "level"], "desc");
 export type BootcampRecordSort = (typeof BOOTCAMP_RECORD_LIST.sorts)[number];
 
-/** Reporting → Bootcamp's current cohort, above the records; its sort and page are prefixed `cohort`. */
+/** Reporting → Live Sessions' current cohort, above the history; its sort and page are prefixed `cohort`. */
 export const BOOTCAMP_COHORT_LIST = spec(["fullName", "email", "stage", "averageScore"]);
 export type BootcampCohortSort = (typeof BOOTCAMP_COHORT_LIST.sorts)[number];
 export const BOOTCAMP_COHORT_PREFIX = "cohort";

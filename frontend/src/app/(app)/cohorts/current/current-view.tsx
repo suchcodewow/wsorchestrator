@@ -170,7 +170,7 @@ export function CurrentCohortView({
   activeBootcamp: ActiveBootcamp | null;
   /** Whether the viewer may set anyone's track. */
   canSetTrack: boolean;
-  /** Whether the viewer is in eVals, whose scores and bootcamp history records these are. */
+  /** Whether the viewer is in eVals, whose scores and Live Sessions records these are. */
   canSeeScores: boolean;
   /** The Current tab's meeting marks; none on the Deferred tab. */
   meetings?: MemberMeetings;
@@ -560,7 +560,7 @@ function TrackLabel({ member }: { member: CurrentCohortMember }) {
   );
 }
 
-/** Everything the row leaves out, from the last HiBob sync and their bootcamp history. */
+/** Everything the row leaves out, from the last HiBob sync and the classes they attended. */
 function score(value: number | null | undefined): string {
   return value == null ? "—" : value.toFixed(1);
 }
@@ -583,12 +583,12 @@ function PersonDetails({ member: m, canSeeScores }: { member: CurrentCohortMembe
       <Field label="Stage">{m.stage === "bootcamp" ? "Bootcamp" : "Intermediate"}</Field>
       <Field label="Track set by">{m.overridden ? "An administrator" : "The rules"}</Field>
       {canSeeScores && <Field label="BTC score">{score(m.btcScore)}</Field>}
-      <Field label="Bootcamp history">
-        {!m.historyId ? (
+      <Field label="Live Sessions">
+        {!m.recordKey ? (
           "None yet"
         ) : canSeeScores ? (
           <Link
-            href={`/reporting/bootcamp/${m.historyId}`}
+            href={`/reporting/bootcamp/${m.recordKey}`}
             onClick={(ev) => ev.stopPropagation()}
             className="underline underline-offset-2 hover:text-foreground"
           >

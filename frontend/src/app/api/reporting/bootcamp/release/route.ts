@@ -1,7 +1,7 @@
 /**
  * Releases the active bootcamp's BTC or INT scores to managers: from now on,
- * Reporting → Bootcamp shows that class's results below Assessments Viewer,
- * and everyone scored in it has the class written to bootcamp history.
+ * Reporting → Live Sessions shows that class's results below Assessments
+ * Viewer, and everyone scored in it has attended it.
  * Releasing a class already released changes nothing.
  */
 

@@ -1,6 +1,6 @@
 /**
- * One person on Reporting → Bootcamp: their BTC and INT as a manager sees
- * them, and for Assessments every assessment behind that, which an
+ * One person on Reporting → Live Sessions: their INT and BTC as a manager
+ * sees them, and for Assessments every assessment behind that, which an
  * administrator can correct. 404 for someone the reader may not see.
  */
 
@@ -49,11 +49,6 @@ export default async function BootcampPersonPage({
         employee: person.employee,
         classes: person.classes,
         records: records && {
-          history: records.history && {
-            ...records.history,
-            createdAt: records.history.createdAt?.toISOString() ?? null,
-            updatedAt: records.history.updatedAt?.toISOString() ?? null,
-          },
           submissions: records.submissions.map((s) => ({
             ...s,
             submittedAt: s.submittedAt.toISOString(),

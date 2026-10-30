@@ -523,13 +523,17 @@ placeholder; **eVals settings** holds what it will draw on:
   Titles**: the job titles that put someone on each list. Each title can be on
   only one list, and case doesn't matter.
 
-Bootcamp (BTC) and INT history is kept on each person's `employees` row
-(`btc_date` … `history_updated_at`), which replaced the `Bootcamp_History`
-sheet for good. Releasing a class on Reporting → Bootcamp writes it, and an
-Assessments Administrator corrects it there; `2000-01-01` still marks someone
-exempt. Someone with a history whom HiBob has never sent has an inactive row of
-their own, and someone HiBob stops sending stays, inactive, so no history is
-lost. Each row also keeps the Slack user id the Slack sync looked up for them.
+Who attended Bootcamp (BTC) and Intermediate (INT) is read from eVals
+assessments: someone attended a class when they have a submission for an
+assessment of that stage at a bootcamp whose class has been released on
+Reporting → Live Sessions (`lib/evals/attendance.ts`). The old per-person
+history columns on `employees` (`btc_date` … `history_updated_at`) were turned
+into assessments by a migration and are no longer read or written. Someone who
+never needs a class is exempt: an `exempt` track pinned from the Track column
+on Cohorts → Current. Someone with assessments whom HiBob has never sent has an
+inactive row of their own, and someone HiBob stops sending stays, inactive, so
+no record is lost. Each row also keeps the Slack user id the Slack sync looked
+up for them.
 
 | Role                          | Adds                                                            |
 | ----------------------------- | --------------------------------------------------------------- |

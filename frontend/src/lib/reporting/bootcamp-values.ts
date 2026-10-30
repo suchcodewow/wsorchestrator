@@ -3,7 +3,7 @@
  * the page's client components can use them.
  */
 
-import { EXEMPT_DATE, type EvalsAssessmentStage } from "@/db/schema";
+import type { EvalsAssessmentStage } from "@/db/schema";
 
 export const RELEASE_STAGES = ["bootcamp", "intermediate"] as const satisfies readonly EvalsAssessmentStage[];
 export type ReleaseStage = (typeof RELEASE_STAGES)[number];
@@ -12,8 +12,8 @@ export function isReleaseStage(value: unknown): value is ReleaseStage {
   return RELEASE_STAGES.includes(value as ReleaseStage);
 }
 
-/** The furthest someone has got: INT, else BTC, else only an exempt marker. */
-export const BOOTCAMP_LEVELS = ["intermediate", "bootcamp", "exempt"] as const;
+/** The furthest someone has got: INT, else BTC. */
+export const BOOTCAMP_LEVELS = ["intermediate", "bootcamp"] as const;
 export type BootcampLevel = (typeof BOOTCAMP_LEVELS)[number];
 
 export const STAGE_CODES: Record<ReleaseStage, string> = { bootcamp: "BTC", intermediate: "INT" };
@@ -25,11 +25,11 @@ export const RELEASE_LABELS: Record<ReleaseStage, string> = {
 
 /**
  * One class as a manager sees it: when they attended, how they did overall,
- * and how on each exercise. From the newest of their eVals submissions and
- * their bootcamp history, whichever is the later class.
+ * and how on each exercise. From their submissions at the newest bootcamp
+ * they were scored at in that class.
  */
 export type ClassSummary = {
-  /** The class's day; `EXEMPT_DATE` for someone exempt; null for someone who has not attended. */
+  /** The class's day; null for someone who has not attended. */
   date: string | null;
   /** From 1 to 4, to one decimal place; null when unscored. */
   score: number | null;
@@ -37,23 +37,3 @@ export type ClassSummary = {
 };
 
 export const NOT_ATTENDED: ClassSummary = { date: null, score: null, exercises: [] };
-
-export const isExempt = (date: string | null) => date === EXEMPT_DATE;
-
-/** "Score-First Call / EMD", as the Sheet's column was named, less its prefix. */
-export function exerciseName(key: string): string {
-  return key.replace(/^score-\s*/i, "") || key;
-}
-
-/** One class's side of someone's bootcamp history. */
-export function historyClass(
-  date: string | null,
-  score: number | null,
-  individual: Record<string, number> | null,
-): ClassSummary {
-  return {
-    date,
-    score,
-    exercises: Object.entries(individual ?? {}).map(([key, value]) => ({ name: exerciseName(key), score: value })),
-  };
-}

@@ -75,15 +75,14 @@ export type TrackOverride = { track: EmployeeTrack | null };
 
 /**
  * An employee's track, first that applies: none outside the org; the one an
- * administrator set by hand; `exempt` when their bootcamp history says so;
- * `ignored` for a title on the Ignored list; `deferred` when they started
+ * administrator set by hand, which is the only way to `exempt`; `ignored` for
+ * a title on the Ignored list; `deferred` when they started
  * too close to the next bootcamp; otherwise their title's list, or none.
  */
 export function trackFor(
   person: {
     inOrg: boolean;
     title: string;
-    exempt: boolean;
     startDate?: string | null;
     override?: TrackOverride | null;
   },
@@ -92,7 +91,6 @@ export function trackFor(
 ): EmployeeTrack | null {
   if (!person.inOrg) return null;
   if (person.override) return person.override.track;
-  if (person.exempt) return "exempt";
   const list = listForTitle(person.title, lists);
   if (list === "ignored") return list;
   if (isDeferred(person.startDate ?? null, deferral)) return "deferred";
