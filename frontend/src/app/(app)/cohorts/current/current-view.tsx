@@ -58,6 +58,7 @@ import {
   CircleAlert,
   CircleCheck,
   CircleHelp,
+  Clock,
   Code,
   GraduationCap,
   Handshake,
@@ -138,7 +139,17 @@ function useFilterParams() {
 /** Where each person stands with each picked Google meeting that is for them, by lowercased email. */
 export type MemberMeetings = Record<
   string,
-  { meetingId: string; name: string; mark: MeetingMark; marked: boolean | null; startsAt: string | null }[]
+  {
+    meetingId: string;
+    name: string;
+    mark: MeetingMark;
+    marked: boolean | null;
+    startsAt: string | null;
+    endsAt: string | null;
+    predicted: boolean;
+    timezone: string | null;
+    outOfHours: boolean;
+  }[]
 >;
 
 export function CurrentCohortView({
@@ -728,6 +739,50 @@ const MARKS: Record<MeetingMark, { Icon: LucideIcon; className: string; label: s
   none_left: { Icon: CircleAlert, className: "text-red-600 dark:text-red-400", label: "None left before their bootcamp" },
 };
 
+/** "Tue, Nov 10" and "7:00 AM – 8:00 AM CST" for an occurrence, read in `zone`. */
+function inZone(zone: string, startsAt: string, endsAt: string): { day: string; time: string } {
+  const start = new Date(startsAt);
+  // Built by hand, with plain spaces: the server's ICU and the browser's space a range differently, which fails hydration.
+  const format = (at: Date, options: Intl.DateTimeFormatOptions) =>
+    new Intl.DateTimeFormat("en-US", { timeZone: zone, ...options }).format(at).replace(/\s/g, " ");
+  const clock = { hour: "numeric", minute: "2-digit" } as const;
+  return {
+    day: format(start, { weekday: "short", month: "short", day: "numeric" }),
+    time: `${format(start, clock)} – ${format(new Date(endsAt), { ...clock, timeZoneName: "short" })}`,
+  };
+}
+
+/** An orange clock for anyone with a meeting to come outside 9 to 5 where they are; its tip lists each, in their own time. */
+function OutOfHours({ meetings }: { meetings: MemberMeetings[string] }) {
+  const late = meetings.filter((m) => m.outOfHours && m.timezone && m.startsAt && m.endsAt);
+  if (late.length === 0) return null;
+  const zone = late[0]!.timezone!;
+  const rows = late.map((m) => ({ ...m, ...inZone(zone, m.startsAt!, m.endsAt!) }));
+  const label = `Outside 9 to 5 in ${zone}: ${rows.map((r) => `${r.name}, ${r.day}, ${r.time}${r.predicted ? " (not invited yet)" : ""}`).join("; ")}`;
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          tabIndex={0}
+          aria-label={label}
+          className="rounded-sm p-0.5 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+        >
+          <Clock className="size-4 text-orange-600 dark:text-orange-400" />
+        </span>
+      </TooltipTrigger>
+      <TooltipContent>
+        <span className="block font-medium">Outside 9 to 5 in {zone}</span>
+        {rows.map((r) => (
+          <span key={r.meetingId} className="mt-1 block">
+            <span className="font-medium">{r.name}</span>: {r.day}, {r.time}
+            {r.predicted && <span className="text-muted-foreground"> (not invited yet)</span>}
+          </span>
+        ))}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
 /** A white sealed envelope on a green disc: they saved their stage's registration form, so they RSVP'd to the session. */
 function RsvpIcon({ className }: { className?: string }) {
   return (
@@ -814,11 +869,13 @@ function MeetingMarks({
           const detail =
             m.marked !== null
               ? `${m.marked ? "attended" : "missed"}, marked by an administrator`
-              : m.mark !== "attended" && m.startsAt
-                ? `${label}, ${formatWhen(m.startsAt)}`
-                : m.mark === "uninvited"
-                  ? "Not invited yet; the next sync invites them"
-                  : label;
+              : m.predicted && m.startsAt
+                ? `Not invited yet; the next sync invites them to the one on ${formatWhen(m.startsAt)}`
+                : m.mark !== "attended" && m.startsAt
+                  ? `${label}, ${formatWhen(m.startsAt)}`
+                  : m.mark === "uninvited"
+                    ? "Not invited yet; the next sync invites them"
+                    : label;
           const icon =
             busy === m.meetingId ? (
               <Loader2 className="size-4 animate-spin text-muted-foreground" />
@@ -890,6 +947,7 @@ function MeetingMarks({
             </DropdownMenu>
           );
         })}
+        <OutOfHours meetings={meetings} />
         <Dialog open={confirming !== null} onOpenChange={(open) => !open && setConfirming(null)}>
           <DialogContent>
             <DialogHeader>

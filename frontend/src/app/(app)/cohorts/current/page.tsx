@@ -51,7 +51,11 @@ export default async function CurrentCohortPage({
   const meetings: MemberMeetings = Object.fromEntries(
     [...statuses].map(([email, list]) => [
       email,
-      list.map((m) => ({ ...m, startsAt: m.startsAt?.toISOString() ?? null })),
+      list.map((m) => ({
+        ...m,
+        startsAt: m.startsAt?.toISOString() ?? null,
+        endsAt: m.endsAt?.toISOString() ?? null,
+      })),
     ]),
   );
   const intakes = await latestIntakesOf(page.rows.map((m) => m.email));
