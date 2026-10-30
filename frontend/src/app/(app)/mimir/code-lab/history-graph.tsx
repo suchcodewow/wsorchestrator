@@ -3,7 +3,8 @@
 /**
  * The repository's history as the Code Lab goes: main's commits along the top,
  * the branch dropping off it with a dot for each commit, hollow until pushed,
- * and the merge back into main at the end.
+ * and the merge back into main at the end. Before the merge, a pull request
+ * shows as the same curve dashed, an arrow asking to join main.
  */
 
 import { cn } from "@/lib/utils";
@@ -15,12 +16,14 @@ const MAIN_COMMITS = 3;
 const R = 5;
 /** Roughly how wide one character of the 10px mono labels is, so the branch's name fits. */
 const LABEL_CH = 6.2;
+const PR_LABEL = "pull request";
 
 export function HistoryGraph({
   branch,
   commits,
   pushed,
   merged,
+  requested = false,
   className,
 }: {
   /** The branch's name, or null before it is made. */
@@ -28,6 +31,8 @@ export function HistoryGraph({
   commits: number;
   pushed: number;
   merged: boolean;
+  /** Draw the pull request: the merge the branch is asking for. */
+  requested?: boolean;
   className?: string;
 }) {
   const x = (k: number) => 16 + k * STEP;
@@ -35,8 +40,12 @@ export function HistoryGraph({
   const branchX = (k: number) => forkX + STEP * (k + 1);
   const lastX = commits > 0 ? branchX(commits - 1) : forkX + STEP;
   const mergeX = lastX + STEP;
+  const asking = Boolean(branch) && requested && !merged;
+  // The arrow stops short of the merge it asks for, so its head shows.
+  const arrowX = mergeX - R - 3;
   const labelEnd = branch ? forkX + STEP + branch.length * LABEL_CH + 8 : 0;
-  const width = Math.ceil(Math.max(mergeX + 16, labelEnd, 260));
+  const requestEnd = asking ? mergeX + 10 + PR_LABEL.length * LABEL_CH : 0;
+  const width = Math.ceil(Math.max(mergeX + 16, labelEnd, requestEnd, 260));
 
   return (
     <svg
@@ -47,7 +56,7 @@ export function HistoryGraph({
       role="img"
       aria-label={
         branch
-          ? `main, with branch ${branch}: ${commits} commit${commits === 1 ? "" : "s"}, ${pushed} pushed${merged ? ", merged into main" : ""}`
+          ? `main, with branch ${branch}: ${commits} commit${commits === 1 ? "" : "s"}, ${pushed} pushed${merged ? ", merged into main" : asking ? ", asking to merge into main" : ""}`
           : "main, with no branch yet"
       }
     >
@@ -68,6 +77,21 @@ export function HistoryGraph({
               className="stroke-brand"
               strokeWidth={2}
             />
+          )}
+          {asking && (
+            <>
+              <path
+                d={`M${lastX},${BRANCH_Y} C${lastX + STEP / 2},${BRANCH_Y} ${lastX + STEP / 2},${MAIN_Y} ${arrowX},${MAIN_Y}`}
+                fill="none"
+                className="stroke-brand"
+                strokeWidth={2}
+                strokeDasharray="4 3"
+              />
+              <path d={`M${arrowX + 3},${MAIN_Y} l-7,-4.5 v9 z`} className="fill-brand" />
+              <text x={mergeX + 10} y={(MAIN_Y + BRANCH_Y) / 2 + 4} className="fill-brand font-mono text-[10px] font-medium">
+                {PR_LABEL}
+              </text>
+            </>
           )}
           <text x={forkX + STEP} y={BRANCH_Y + 16} className="fill-brand font-mono text-[10px]">
             {branch}
@@ -91,6 +115,7 @@ export function HistoryGraph({
         />
       ))}
       {merged && <circle cx={mergeX} cy={MAIN_Y} r={R + 1} className="fill-brand" />}
+      {asking && <circle cx={mergeX} cy={MAIN_Y} r={R + 1} strokeWidth={1.5} strokeDasharray="2 2" className="fill-card stroke-brand" />}
     </svg>
   );
 }
