@@ -58,6 +58,7 @@ import {
   CircleAlert,
   CircleCheck,
   CircleHelp,
+  CircleMinus,
   CircleX,
   Clock,
   Code,
@@ -709,6 +710,7 @@ const MARKS: Record<MeetingMark, { Icon: LucideIcon; className: string; label: s
   pending: { Icon: CircleHelp, className: "text-muted-foreground", label: "Not accepted" },
   uninvited: { Icon: Circle, className: "text-muted-foreground", label: "Not invited yet" },
   none_left: { Icon: CircleAlert, className: "text-red-600 dark:text-red-400", label: "None left before their bootcamp" },
+  finished: { Icon: CircleMinus, className: "text-muted-foreground", label: "None left; nothing more is needed" },
 };
 
 const INSTANCE_MARKS: Record<MeetingInstance["mark"], { Icon: LucideIcon; className: string; label: string }> = {

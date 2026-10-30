@@ -20,7 +20,8 @@
  * occurrence a cohort member is on.
  *
  * A meeting may instead invite each person to every occurrence offered to
- * them, whether or not they have attended one.
+ * them, whether or not they have attended one. Its series simply ends, so
+ * having none left is no problem, as it is for a meeting they must attend once.
  *
  * A meeting may also hold back from people who started recently: it offers
  * each the first occurrence on or after their start date plus a number of
@@ -295,7 +296,9 @@ export type MemberOutcome =
   /** Their occurrence is over and who joined it is not known yet. */
   | { kind: "waiting"; occurrenceId: string }
   /** No occurrence is left in their window. */
-  | { kind: "none_left" };
+  | { kind: "none_left" }
+  /** No occurrence is left in their window of a meeting that invites to all of them, which needs nothing more. */
+  | { kind: "finished" };
 
 /** A member invite to add. */
 export type PlanAdd = { email: string; occurrenceId: string; afterMiss: boolean };
@@ -377,7 +380,7 @@ export function planMeeting(input: {
       if (attended) outcomes.set(email, { kind: "attended" });
       else if (kept && (adding.length === 0 || kept.at.startsAt < adding[0]!.startsAt)) outcomes.set(email, { kind: "invited", occurrenceId: kept.invite.occurrenceId });
       else if (adding.length > 0) outcomes.set(email, { kind: "invite", occurrenceId: adding[0]!.id, afterMiss });
-      else outcomes.set(email, { kind: "none_left" });
+      else outcomes.set(email, { kind: "finished" });
       continue;
     }
 
@@ -474,13 +477,14 @@ export function sameGuests(a: readonly CalendarAttendee[], b: readonly CalendarA
 }
 
 /** Where someone stands with one meeting on the Current tab. */
-export const MEETING_MARKS = ["attended", "accepted", "pending", "uninvited", "none_left"] as const;
+export const MEETING_MARKS = ["attended", "accepted", "pending", "uninvited", "none_left", "finished"] as const;
 export type MeetingMark = (typeof MEETING_MARKS)[number];
 
 /**
  * The icon the Current tab shows: attended; else accepted or not yet on the
  * invite they hold; else, with no occurrence left before their bootcamp,
- * `none_left`; else `uninvited` until the next sync invites them.
+ * `none_left`, or `finished` for a meeting that invites to all of them, which
+ * is no problem; else `uninvited` until the next sync invites them.
  */
 export function meetingMark(input: {
   attended: boolean;
@@ -488,10 +492,13 @@ export function meetingMark(input: {
   response: string | null;
   invited: boolean;
   anyLeft: boolean;
+  /** Whether the meeting invites each person to every occurrence, not one at a time. */
+  allOccurrences?: boolean;
 }): MeetingMark {
   if (input.attended) return "attended";
   if (input.invited) return input.response === "accepted" ? "accepted" : "pending";
-  return input.anyLeft ? "uninvited" : "none_left";
+  if (input.anyLeft) return "uninvited";
+  return input.allOccurrences ? "finished" : "none_left";
 }
 
 /** The working day, in whole hours on a 24-hour clock, that the Current tab holds each meeting to in a person's own time zone. */

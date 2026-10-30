@@ -292,6 +292,12 @@ test("all meetings invites them to every occurrence left in their window", () =>
   assert.deepEqual(remove, []);
 });
 
+test("all meetings has them finished, not short of one, with none left in their window", () => {
+  const { outcomes, invite: added } = allOf([], [], []);
+  assert.deepEqual(outcomes.get("a@harness.io"), { kind: "finished" });
+  assert.deepEqual(added, []);
+});
+
 test("all meetings adds only what they do not hold, and leaves what they do", () => {
   const { outcomes, invite: added, remove } = allOf([invite("next", "a@harness.io")]);
   assert.deepEqual(outcomes.get("a@harness.io"), { kind: "invited", occurrenceId: "next" });
@@ -373,6 +379,8 @@ test("the Current tab's mark", () => {
   assert.equal(meetingMark({ attended: false, response: "needsAction", invited: true, anyLeft: false }), "pending");
   assert.equal(meetingMark({ attended: false, response: null, invited: false, anyLeft: true }), "uninvited");
   assert.equal(meetingMark({ attended: false, response: null, invited: false, anyLeft: false }), "none_left");
+  assert.equal(meetingMark({ attended: false, response: null, invited: false, anyLeft: false, allOccurrences: true }), "finished");
+  assert.equal(meetingMark({ attended: false, response: null, invited: false, anyLeft: true, allOccurrences: true }), "uninvited");
 });
 
 const JULY = new Date("2026-07-15T12:00:00Z");

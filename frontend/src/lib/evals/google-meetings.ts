@@ -463,7 +463,8 @@ const UPCOMING_LIMIT = PAGE_SIZE;
  * is for them: attended, accepted, not yet answered, not yet invited (all a
  * meeting that has never synced has), or with no occurrence left in their
  * window: before the active bootcamp, or for an Intermediate meeting they will
- * take after it, between its last day and the next intermediate class.
+ * take after it, between its last day and the next intermediate class; for a
+ * meeting that invites to every occurrence that last is merely finished.
  * Someone not yet invited is given the occurrence the next sync would invite
  * them to, picked as the sync picks it. A meeting that invites to every
  * occurrence also lists each one they hold and each the sync would add. Each
@@ -579,6 +580,7 @@ export async function meetingStatusesFor(
         invited: Boolean(h?.invited),
         // A meeting no sync has read has no occurrences stored yet, which is not the same as none being left.
         anyLeft: (meeting.syncedAt === null && !upcomingOf.has(meeting.id)) || offered.length > 0,
+        allOccurrences: meeting.allOccurrences,
       });
       let at: { startsAt: Date; endsAt: Date } | null = null;
       if (mark === "uninvited") {

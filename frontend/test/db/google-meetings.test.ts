@@ -640,6 +640,20 @@ describe("Sync Now", () => {
     assert.deepEqual([status!.meetingId, status!.mark], [id, "none_left"]);
   });
 
+  test("a meeting that invites to every occurrence raises no alert with none left before the bootcamp", async () => {
+    await connect();
+    const id = await pick("bootcamp", "sales", NAME, true);
+    // On the bootcamp's first day: too late.
+    const late = Math.ceil((Date.parse(`${bootcamp.startDate}T12:00:00Z`) - Date.now()) / DAY);
+    event("late", late);
+    const result = await sync_ok();
+    assert.ok(!fake.guests("late").includes(salesEmail));
+    const problems = await listMeetingSyncChanges(result.runId, { ...MEETING_SYNC_CHANGE_LIST, q: salesEmail, page: 1 }, "problems");
+    assert.deepEqual(problems.rows, []);
+    const [status] = (await meetingStatusesFor([{ email: salesEmail, stage: "bootcamp", track: "sales" }])).get(salesEmail)!;
+    assert.deepEqual([status!.meetingId, status!.mark], [id, "finished"]);
+  });
+
   test("a guest added by hand stays when the meeting stops being for them", async () => {
     await connect();
     const id = await pick();
