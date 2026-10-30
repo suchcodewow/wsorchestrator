@@ -39,6 +39,7 @@ import type {
   CurrentCohortMember,
   CurrentTrack,
 } from "@/lib/evals/current-cohort";
+import type { MeetingInstance } from "@/lib/evals/google-meetings";
 import type { MeetingMark } from "@/lib/evals/meeting-plan";
 import type { IntakeFormId, IntakeQuestion } from "@/db/schema";
 import type { SetTrackResult, TrackChoice } from "@/lib/evals/tracks";
@@ -57,6 +58,7 @@ import {
   CircleAlert,
   CircleCheck,
   CircleHelp,
+  CircleX,
   Clock,
   Code,
   GraduationCap,
@@ -148,6 +150,8 @@ export type MemberMeetings = Record<
     predicted: boolean;
     timezone: string | null;
     outOfHours: boolean;
+    /** Every occurrence of a meeting that invites to all of them; null for one taken one at a time. */
+    instances: { startsAt: string; endsAt: string; mark: MeetingInstance["mark"]; outOfHours: boolean }[] | null;
   }[]
 >;
 
@@ -707,6 +711,21 @@ const MARKS: Record<MeetingMark, { Icon: LucideIcon; className: string; label: s
   none_left: { Icon: CircleAlert, className: "text-red-600 dark:text-red-400", label: "None left before their bootcamp" },
 };
 
+const INSTANCE_MARKS: Record<MeetingInstance["mark"], { Icon: LucideIcon; className: string; label: string }> = {
+  attended: MARKS.attended,
+  missed: { Icon: CircleX, className: "text-red-600 dark:text-red-400", label: "Missed" },
+  accepted: MARKS.accepted,
+  pending: MARKS.pending,
+  uninvited: { ...MARKS.uninvited, label: "Not invited yet; the next sync adds them to this one" },
+};
+
+/** The hollow circle's tip, after the meeting's name: the occurrence the next sync would invite them to, in their own time when the app has it. */
+function nextInvite(m: MemberMeetings[string][number]): string {
+  if (!m.startsAt) return "Not invited yet; it has not synced, so the next sync reads its occurrences from Google and picks one for them";
+  const when = m.timezone && m.endsAt ? inZone(m.timezone, m.startsAt, m.endsAt) : null;
+  return `Not invited yet; the next sync invites them to the one on ${when ? `${when.day}, ${when.time}, their time` : formatWhen(m.startsAt)}`;
+}
+
 /** "Tue, Nov 10" and "7:00 AM – 8:00 AM CST" for an occurrence, read in `zone`. */
 function inZone(zone: string, startsAt: string, endsAt: string): { day: string; time: string } {
   const start = new Date(startsAt);
@@ -722,10 +741,19 @@ function inZone(zone: string, startsAt: string, endsAt: string): { day: string; 
 
 /** An orange clock for anyone with a meeting to come outside 9 to 5 where they are; its tip lists each, in their own time. */
 function OutOfHours({ meetings }: { meetings: MemberMeetings[string] }) {
-  const late = meetings.filter((m) => m.outOfHours && m.timezone && m.startsAt && m.endsAt);
-  if (late.length === 0) return null;
-  const zone = late[0]!.timezone!;
-  const rows = late.map((m) => ({ ...m, ...inZone(zone, m.startsAt!, m.endsAt!) }));
+  const zone = meetings.find((m) => m.outOfHours)?.timezone;
+  if (!zone) return null;
+  // A meeting that invites to every occurrence lists each one outside the day; any other, the one occurrence it has.
+  const late = meetings.flatMap((m) =>
+    m.instances
+      ? m.instances
+          .filter((x) => x.outOfHours)
+          .map((x) => ({ key: `${m.meetingId} ${x.startsAt}`, name: m.name, ...x, predicted: x.mark === "uninvited" }))
+      : m.outOfHours && m.startsAt && m.endsAt
+        ? [{ key: m.meetingId, name: m.name, startsAt: m.startsAt, endsAt: m.endsAt, predicted: m.predicted }]
+        : [],
+  );
+  const rows = late.map((m) => ({ ...m, ...inZone(zone, m.startsAt, m.endsAt) }));
   const label = `Outside 9 to 5 in ${zone}: ${rows.map((r) => `${r.name}, ${r.day}, ${r.time}${r.predicted ? " (not invited yet)" : ""}`).join("; ")}`;
   return (
     <Tooltip>
@@ -741,11 +769,42 @@ function OutOfHours({ meetings }: { meetings: MemberMeetings[string] }) {
       <TooltipContent>
         <span className="block font-medium">Outside 9 to 5 in {zone}</span>
         {rows.map((r) => (
-          <span key={r.meetingId} className="mt-1 block">
+          <span key={r.key} className="mt-1 block">
             <span className="font-medium">{r.name}</span>: {r.day}, {r.time}
             {r.predicted && <span className="text-muted-foreground"> (not invited yet)</span>}
           </span>
         ))}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+/** One occurrence of a meeting that invites to all of them; its tip gives the day, how they stand, and their own time when it falls outside 9 to 5. */
+function MeetingInstanceMark({
+  name,
+  timezone,
+  instance: x,
+}: {
+  name: string;
+  timezone: string | null;
+  instance: NonNullable<MemberMeetings[string][number]["instances"]>[number];
+}) {
+  const { Icon, className, label } = INSTANCE_MARKS[x.mark];
+  const late = x.outOfHours && timezone ? inZone(timezone, x.startsAt, x.endsAt) : null;
+  const detail = `${formatWhen(x.startsAt)}: ${label}${late ? `; outside 9 to 5 in ${timezone}, ${late.day}, ${late.time}` : ""}`;
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          tabIndex={0}
+          aria-label={`${name}, ${detail}`}
+          className="rounded-sm p-0.5 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+        >
+          <Icon className={cn("size-3.5", className, late && "text-orange-600 dark:text-orange-400")} />
+        </span>
+      </TooltipTrigger>
+      <TooltipContent>
+        <span className="font-medium">{name}</span>, {detail}
       </TooltipContent>
     </Tooltip>
   );
@@ -837,13 +896,11 @@ function MeetingMarks({
           const detail =
             m.marked !== null
               ? `${m.marked ? "attended" : "missed"}, marked by an administrator`
-              : m.predicted && m.startsAt
-                ? `Not invited yet; the next sync invites them to the one on ${formatWhen(m.startsAt)}`
+              : m.mark === "uninvited"
+                ? nextInvite(m)
                 : m.mark !== "attended" && m.startsAt
                   ? `${label}, ${formatWhen(m.startsAt)}`
-                  : m.mark === "uninvited"
-                    ? "Not invited yet; the next sync invites them"
-                    : label;
+                  : label;
           const icon =
             busy === m.meetingId ? (
               <Loader2 className="size-4 animate-spin text-muted-foreground" />
@@ -855,8 +912,21 @@ function MeetingMarks({
               <span className="font-medium">{m.name}</span>: {detail}
             </TooltipContent>
           );
+          // A meeting that invites to every occurrence puts each after its own mark, in a pill, so the series reads as one.
+          const grouped = (control: React.ReactElement) =>
+            m.instances ? (
+              <span key={m.meetingId} className="inline-flex items-center gap-0.5 rounded-full border px-1">
+                {control}
+                {m.instances.length > 0 && <span aria-hidden="true" className="mx-0.5 h-3 w-px bg-border" />}
+                {m.instances.map((x) => (
+                  <MeetingInstanceMark key={x.startsAt} name={m.name} timezone={m.timezone} instance={x} />
+                ))}
+              </span>
+            ) : (
+              control
+            );
           if (!canMark) {
-            return (
+            return grouped(
               <Tooltip key={m.meetingId}>
                 <TooltipTrigger asChild>
                   <span
@@ -871,7 +941,7 @@ function MeetingMarks({
               </Tooltip>
             );
           }
-          return (
+          return grouped(
             <DropdownMenu key={m.meetingId}>
               <Tooltip>
                 <TooltipTrigger asChild>
