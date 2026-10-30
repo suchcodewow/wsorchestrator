@@ -8,7 +8,7 @@ import { ArrowLeft } from "lucide-react";
 import { HEADER_ROW, PlainHeader } from "@/components/data-table";
 import type { CohortSummary, DetailAnswer, DetailSitting, PersonDetail } from "@/lib/iris/cohort";
 import { ENGINE, LEVELS, type Level } from "@/lib/iris/engine";
-import { LEVEL_LABELS, SUBJECTS, SUBJECT_KEYS, TRACK_LABELS, TRAINING, bandOf } from "@/lib/iris/subjects";
+import { LEVEL_LABELS, SUBJECTS, OPEN_SUBJECT_KEYS, TRACK_LABELS, TRAINING, bandOf } from "@/lib/iris/subjects";
 import { riseChild, staggerParent } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { LevelBadge } from "../../level-badge";
@@ -38,7 +38,7 @@ export function PersonView({ detail, summary }: { detail: Detail; summary: Cohor
           <h2 className="text-xl font-medium tracking-tight">{who}</h2>
           <p className="text-sm text-muted-foreground tnum">
             {detail.name && detail.email && <>{detail.email} · </>}
-            {detail.track ? TRACK_LABELS[detail.track] : "No track"} · {finished} of {SUBJECT_KEYS.length} done
+            {detail.track ? TRACK_LABELS[detail.track] : "No track"} · {finished} of {OPEN_SUBJECT_KEYS.length} done
             {detail.composite !== null && (
               <>
                 {" "}
@@ -76,14 +76,14 @@ function ShapeCard({ detail, summary }: { detail: Detail; summary: CohortSummary
   const placed = new Map(
     detail.sittings.filter((s) => s.finishedAt && s.placement).map((s) => [s.subject, s.placement as Level]),
   );
-  const values = SUBJECT_KEYS.map((k) => placed.get(k) ?? null);
-  const medians = SUBJECT_KEYS.map((k) => summary.subjects[k].median);
+  const values = OPEN_SUBJECT_KEYS.map((k) => placed.get(k) ?? null);
+  const medians = OPEN_SUBJECT_KEYS.map((k) => summary.subjects[k].median);
 
   return (
     <div className="grid gap-6 overflow-hidden rounded-2xl border bg-card p-5 text-sm shadow-sm md:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] md:items-center">
       <div className="mx-auto w-full max-w-md px-6">
         <Radar
-          axes={SUBJECT_KEYS.map((k) => SUBJECTS[k].short)}
+          axes={OPEN_SUBJECT_KEYS.map((k) => SUBJECTS[k].short)}
           series={[
             { values: medians, variant: "median" },
             { values, variant: "person" },
@@ -103,7 +103,7 @@ function ShapeCard({ detail, summary }: { detail: Detail; summary: CohortSummary
           </span>
         </div>
         <div className="divide-y rounded-lg border">
-          {SUBJECT_KEYS.map((k) => {
+          {OPEN_SUBJECT_KEYS.map((k) => {
             const mine = placed.get(k);
             const median = summary.subjects[k].median;
             return (
@@ -148,12 +148,12 @@ function SittingCard({ sitting }: { sitting: Sitting }) {
         </div>
       )}
 
-      {sitting.placement && sitting.finishedAt && (
+      {sitting.placement && sitting.finishedAt && TRAINING[sitting.subject] && (
         <div className="px-5 py-4">
           <p className="text-xs font-medium text-muted-foreground">
             Routes to · {LEVEL_LABELS[sitting.placement as Level]} tier
           </p>
-          <p className="mt-1">{TRAINING[sitting.subject][sitting.placement as Level]}</p>
+          <p className="mt-1">{TRAINING[sitting.subject]![sitting.placement as Level]}</p>
         </div>
       )}
 

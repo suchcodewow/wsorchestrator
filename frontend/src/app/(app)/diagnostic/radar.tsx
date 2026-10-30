@@ -1,6 +1,5 @@
 /**
- * A radar of placements across the subjects, on Beginner, Intermediate and
- * Advanced rings. A subject not taken is left out of the shape rather than
+ * A radar of placements across the subjects, on 101, 201 and 301 rings. A subject not taken is left out of the shape rather than
  * drawn at zero, and its label greyed, so it never reads as a low score.
  */
 

@@ -1,62 +1,78 @@
 /**
- * The eight Diagnostic subjects, the three tracks that weight them, and what a
+ * The nine Diagnostic subjects, the three tracks that weight them, and what a
  * placement routes someone to. Pure and free of any answer key, so the pages
  * share it with the server.
  */
 
 import type { Form, Level } from "@/lib/iris/engine";
 
-export const SUBJECT_KEYS = ["sdlc", "industry", "sales", "dealmech", "cotm", "techai", "pipegen", "compete"] as const;
+export const SUBJECT_KEYS = [
+  "sdlc",
+  "companies",
+  "aisdlc",
+  "pipegen",
+  "champion",
+  "harness",
+  "messaging",
+  "qualification",
+  "tools",
+] as const;
 export type SubjectKey = (typeof SUBJECT_KEYS)[number];
 
-export const SUBJECTS: Record<SubjectKey, { name: string; short: string; blurb: string }> = {
+export type Subject = {
+  name: string;
+  short: string;
+  /** What it covers; null for a subject whose questions are not written yet. */
+  blurb: string | null;
+  /** Listed so takers know it is coming, but it has no questions yet. The bank test keeps this true. */
+  comingSoon: boolean;
+};
+
+export const SUBJECTS: Record<SubjectKey, Subject> = {
   sdlc: {
-    name: "SDLC Foundations",
+    name: "SDLC",
     short: "SDLC",
     blurb: "How software gets built, tested, secured, shipped and run.",
+    comingSoon: false,
   },
-  industry: {
-    name: "The Software Industry",
-    short: "Industry",
-    blurb: "Market structure, buyer personas, budget, vendor landscape.",
+  companies: {
+    name: "Companies that serve the SDLC",
+    short: "Companies",
+    blurb: "The DevOps and DevSecOps vendors you will meet in deals, and how their tools overlap.",
+    comingSoon: false,
   },
-  sales: {
-    name: "Sales Fundamentals",
-    short: "Sales",
-    blurb: "Discovery, value selling, forecasting, negotiation, hygiene.",
-  },
-  dealmech: {
-    name: "Discovery & Deal Mechanics",
-    short: "Deals",
-    blurb: "Qualification, champions, landing zones, multithreading, paper.",
-  },
-  cotm: {
-    name: "Command of the Message",
-    short: "CotM",
-    blurb: "Value drivers, differentiators, proof points, talk track.",
-  },
-  techai: {
-    name: "Technology & AI",
-    short: "Tech & AI",
-    blurb: "Models and agents, AI in the lifecycle, risk and governance.",
+  aisdlc: {
+    name: "How AI has changed the SDLC",
+    short: "AI SDLC",
+    blurb: "AI coding tools and agents, where they change delivery, and the risks they bring.",
+    comingSoon: false,
   },
   pipegen: {
-    name: "Pipegen",
+    name: "Pipeline Generation",
     short: "Pipegen",
-    blurb: "Territory planning, triggers, outbound quality, conversion.",
+    blurb: "Territory planning, triggers, outbound quality and conversion.",
+    comingSoon: false,
   },
-  compete: {
-    name: "Competitive Landscape",
-    short: "Compete",
-    blurb: "Category map, win themes, loss patterns, trap setting.",
+  champion: {
+    name: "Champion Building",
+    short: "Champions",
+    blurb: "Recognizing, developing and validating a champion who will advocate for you.",
+    comingSoon: false,
   },
+  harness: { name: "Harness Solution", short: "Harness", blurb: null, comingSoon: true },
+  messaging: { name: "Messaging", short: "Messaging", blurb: null, comingSoon: true },
+  qualification: { name: "Qualification", short: "Qualification", blurb: null, comingSoon: true },
+  tools: { name: "Tools", short: "Tools", blurb: null, comingSoon: true },
 };
+
+/** The subjects with questions, in order: what can be taken, and what charts and tables show. */
+export const OPEN_SUBJECT_KEYS = SUBJECT_KEYS.filter((k) => !SUBJECTS[k].comingSoon);
 
 export function isSubjectKey(value: unknown): value is SubjectKey {
   return SUBJECT_KEYS.includes(value as SubjectKey);
 }
 
-export const LEVEL_LABELS: Record<Level, string> = { 1: "Beginner", 2: "Intermediate", 3: "Advanced" };
+export const LEVEL_LABELS: Record<Level, string> = { 1: "101", 2: "201", 3: "301" };
 
 export const FORM_LABELS: Record<Form, string> = { A: "Form A", B: "Form B" };
 export const FORM_USES: Record<Form, string> = { A: "entry and day 90 recheck", B: "day 30 checkpoint" };
@@ -74,12 +90,11 @@ export function isTrack(value: unknown): value is Track {
   return TRACKS.includes(value as Track);
 }
 
+/** Every subject counts the same for every track, until real weights are decided. */
+const EQUAL = Object.fromEntries(SUBJECT_KEYS.map((k) => [k, 1])) as Record<SubjectKey, number>;
+
 /** How much each subject counts toward someone's overall score, by track. */
-export const TRACK_WEIGHTS: Record<Track, Record<SubjectKey, number>> = {
-  AE: { sdlc: 10, industry: 10, sales: 20, dealmech: 20, cotm: 15, techai: 10, pipegen: 10, compete: 5 },
-  SE: { sdlc: 25, industry: 10, sales: 5, dealmech: 10, cotm: 15, techai: 20, pipegen: 0, compete: 15 },
-  SDR: { sdlc: 10, industry: 15, sales: 10, dealmech: 5, cotm: 20, techai: 10, pipegen: 25, compete: 5 },
-};
+export const TRACK_WEIGHTS: Record<Track, Record<SubjectKey, number>> = { AE: EQUAL, SE: EQUAL, SDR: EQUAL };
 
 /** The weighted share of the top level reached across the subjects placed so far, 0–100; null before any weighted subject. */
 export function compositeOf(placements: Partial<Record<SubjectKey, Level>>, track: Track): number | null {
@@ -104,46 +119,16 @@ export function bandOf(composite: number | null): string {
   return "Advanced";
 }
 
-/** Where a placement routes someone. Placeholder tiers until the content exists. */
-export const TRAINING: Record<SubjectKey, Record<Level, string>> = {
+/** Where a placement routes someone, for the subjects that have a route yet. Placeholder tiers until the content exists. */
+export const TRAINING: Partial<Record<SubjectKey, Record<Level, string>>> = {
   sdlc: {
     1: "Foundational SDLC track. Build, test, deploy, secure, operate explained from zero. Does not exist yet and is the first content to build.",
     2: "Existing SDLC material, reorganised into scored modules: CD problems, GitOps overview, SDLC whiteboard.",
     3: "Application under pressure. Toolchain teardowns from real customer calls, plus whiteboarding a broken delivery process live.",
   },
-  industry: {
-    1: "Foundational market and persona primer. Net new.",
-    2: "Analyst material and persona discovery guides, taught rather than filed.",
-    3: "Executive-level consolidation and budget conversations. Live sessions.",
-  },
-  sales: {
-    1: "Selling craft basics. Net new; nothing is taught today.",
-    2: "Stage criteria and forecast discipline, plus discovery technique. Mostly net new.",
-    3: "Committee close plans and negotiation. Live role play.",
-  },
-  dealmech: {
-    1: "Qualification and champion basics. Net new.",
-    2: "Champion testing, landing zones, paper process. Net new as instruction.",
-    3: "Multithreading sequence and trap placement. Deal clinics.",
-  },
-  cotm: {
-    1: "Value driver primer before certification. Small gap to close.",
-    2: "EMD talk track and certification path. Exists today.",
-    3: "Message reassembly for unfamiliar personas. Yoodli role play.",
-  },
-  techai: {
-    1: "General AI literacy. What a model is, what an agent is. Net new.",
-    2: "AI in the lifecycle and the downstream pressure of generated code.",
-    3: "Agentic workflows, governance, evaluating vendor claims.",
-  },
   pipegen: {
     1: "Tooling and activity expectations. Closest existing tier.",
     2: "Territory planning, triggers, outbound quality. Net new for AEs.",
     3: "Conversion analysis and coaching others. Net new.",
-  },
-  compete: {
-    1: "Category map and who threatens what. From existing battlecards.",
-    2: "Win themes and standard objections. Battlecards turned into modules.",
-    3: "Homegrown displacement and loss pattern recognition. Deal clinics.",
   },
 };

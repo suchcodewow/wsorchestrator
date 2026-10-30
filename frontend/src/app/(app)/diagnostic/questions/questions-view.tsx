@@ -17,7 +17,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { IRIS_NOTE_MAX, type IrisReviewStatus } from "@/db/schema";
 import { ENGINE, LEVELS, type Level } from "@/lib/iris/engine";
 import type { Calibration, QuestionRow } from "@/lib/iris/questions";
-import { LEVEL_LABELS, SUBJECTS, SUBJECT_KEYS, type SubjectKey } from "@/lib/iris/subjects";
+import { LEVEL_LABELS, SUBJECTS, OPEN_SUBJECT_KEYS, type SubjectKey } from "@/lib/iris/subjects";
 import { riseChild, staggerParent } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { LevelBadge } from "../level-badge";
@@ -80,7 +80,7 @@ export function QuestionsView({
   return (
     <motion.div variants={staggerParent(0.04)} initial="hidden" animate="show" className="space-y-6">
       <motion.nav variants={riseChild} className="flex flex-wrap gap-1.5" aria-label="Subjects">
-        {SUBJECT_KEYS.map((k) => (
+        {OPEN_SUBJECT_KEYS.map((k) => (
           <Link
             key={k}
             href={hrefFor(k, null, null)}
@@ -315,7 +315,9 @@ function ReviewDialog({ row, onClose }: { row: Row | null; onClose: () => void }
 
             <div className="rounded-lg bg-muted/40 px-4 py-3 text-sm">
               <p className="text-xs font-medium text-muted-foreground">Why it is the answer</p>
-              <p className="mt-1">{row.rationale}</p>
+              <p className={cn("mt-1", !row.rationale && "text-muted-foreground")}>
+                {row.rationale || "No explanation yet."}
+              </p>
             </div>
 
             <label className="grid gap-1.5 text-sm">

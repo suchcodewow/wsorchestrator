@@ -206,7 +206,8 @@ export async function personDetail(userId: string, form: Form): Promise<PersonDe
 
   const sittings: DetailSitting[] = [];
   // One query per sitting keeps each to at most 17 rows.
-  for (const a of attempts) {
+  // A sitting on a subject that is no longer offered is left out rather than shown nameless.
+  for (const a of attempts.filter((a) => isSubjectKey(a.subject))) {
     const responses = await db
       .select()
       .from(irisResponses)

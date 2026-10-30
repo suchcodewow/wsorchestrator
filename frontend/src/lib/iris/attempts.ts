@@ -36,7 +36,11 @@ import { SUBJECTS, SUBJECT_KEYS, type SubjectKey, type Track } from "@/lib/iris/
  */
 export type Question = { stem: string; options: readonly string[] };
 
-export const toQuestion = (item: IrisItem): Question => ({ stem: item.stem, options: item.options });
+/** What a taker is sent: the wording, and the options in the order shown to them. */
+export const toQuestion = (item: IrisItem, order: readonly number[] = [0, 1, 2, 3]): Question => ({
+  stem: item.stem,
+  options: order.map((i) => item.options[i]!),
+});
 
 export type SittingView = {
   attemptId: string;
@@ -50,8 +54,27 @@ export type SittingView = {
   question: Question;
 };
 
+/** A random order for a question's four options, as indexes into A–D. */
+export function shuffledOrder(random: () => number = Math.random): number[] {
+  const order = [0, 1, 2, 3];
+  for (let i = order.length - 1; i > 0; i--) {
+    const j = Math.floor(random() * (i + 1));
+    [order[i], order[j]] = [order[j]!, order[i]!];
+  }
+  return order;
+}
+
+/** Whether the question on screen is still in the bank: one from a bank since replaced is not. */
+const onBank = (attempt: Pick<IrisAttempt, "currentItemId">) =>
+  attempt.currentItemId !== null && ITEMS_BY_ID.has(attempt.currentItemId);
+
+/** The order the question on screen is shown in; A–D when none was stored. */
+const orderOf = (attempt: Pick<IrisAttempt, "optionOrder">) =>
+  attempt.optionOrder?.length === 4 ? attempt.optionOrder : [0, 1, 2, 3];
+
 function viewOf(attempt: IrisAttempt): SittingView {
   const item = ITEMS_BY_ID.get(attempt.currentItemId!)!;
+  const order = orderOf(attempt);
   return {
     attemptId: attempt.id,
     subject: attempt.subject as SubjectKey,
@@ -59,11 +82,13 @@ function viewOf(attempt: IrisAttempt): SittingView {
     mode: attempt.mode as "live" | "preview",
     number: attempt.questions + 1,
     progress: Math.min(100, Math.round((attempt.questions / ENGINE.MAX) * 100)),
-    question: toQuestion(item),
+    // Each taker sees the options in their own order, so an answer cannot be passed on as a letter.
+    question: toQuestion(item, order),
   };
 }
 
-export type SubjectStatus = "available" | "in_progress" | "completed" | "unavailable";
+/** `unavailable`: has questions, too few approved yet. `coming_soon`: has no questions yet. */
+export type SubjectStatus = "available" | "in_progress" | "completed" | "unavailable" | "coming_soon";
 
 export type MyIris = {
   track: Track | null;
@@ -71,12 +96,14 @@ export type MyIris = {
   subjects: {
     key: SubjectKey;
     name: string;
-    blurb: string;
+    blurb: string | null;
     status: SubjectStatus;
     /** Only for an Assessments Administrator looking at their own; a taker never gets it. */
     placement?: Level;
   }[];
   completed: number;
+  /** How many subjects have questions, so "3 of 5 done" leaves out the ones still coming. */
+  open: number;
 };
 
 /**
@@ -95,7 +122,9 @@ export async function myIris(userId: string, form: Form = "A", withLevels = fals
 
   const subjects = SUBJECT_KEYS.map((key) => {
     const sitting = bySubject.get(key);
-    const status: SubjectStatus = sitting
+    const status: SubjectStatus = SUBJECTS[key].comingSoon
+      ? "coming_soon"
+      : sitting
       ? sitting.finishedAt
         ? "completed"
         : "in_progress"
@@ -110,6 +139,7 @@ export async function myIris(userId: string, form: Form = "A", withLevels = fals
     form,
     subjects,
     completed: subjects.filter((s) => s.status === "completed").length,
+    open: subjects.filter((s) => s.status !== "coming_soon").length,
   };
 }
 
@@ -150,7 +180,9 @@ export async function startSitting(
         isNull(irisAttempts.finishedAt),
       ),
     );
-  if (open) return { ok: true, sitting: viewOf(open), resumed: true };
+  if (open && onBank(open)) return { ok: true, sitting: viewOf(open), resumed: true };
+  // An open sitting on a question no longer in the bank cannot be resumed: start over.
+  if (open) await db.delete(irisAttempts).where(eq(irisAttempts.id, open.id));
 
   if (mode === "live") {
     const [done] = await db
@@ -174,7 +206,16 @@ export async function startSitting(
 
   const [created] = await db
     .insert(irisAttempts)
-    .values({ userId, subject, form, mode, level: ENGINE.START, currentItemId: first.id, shownAt: new Date() })
+    .values({
+      userId,
+      subject,
+      form,
+      mode,
+      level: ENGINE.START,
+      currentItemId: first.id,
+      optionOrder: shuffledOrder(random),
+      shownAt: new Date(),
+    })
     .onConflictDoNothing()
     .returning();
   // Two tabs starting the same live subject at once: the second finds the first's.
@@ -188,7 +229,7 @@ export async function openSitting(userId: string, attemptId: string): Promise<Si
     .select()
     .from(irisAttempts)
     .where(and(eq(irisAttempts.id, attemptId), eq(irisAttempts.userId, userId)));
-  return attempt && !attempt.finishedAt ? viewOf(attempt) : null;
+  return attempt && !attempt.finishedAt && onBank(attempt) ? viewOf(attempt) : null;
 }
 
 /**
@@ -247,10 +288,13 @@ export async function answer(
       .for("update");
     if (!attempt) return { ok: false, error: "not_found" };
     if (attempt.finishedAt || !attempt.currentItemId) return { ok: false, error: "finished" };
+    if (!onBank(attempt)) return { ok: false, error: "not_found" };
     if (attempt.questions + 1 !== number) return { ok: false, error: "stale", sitting: viewOf(attempt) };
 
     const item = ITEMS_BY_ID.get(attempt.currentItemId)!;
-    const correct = choice !== IDK && choice === item.answer;
+    // `choice` is a position on screen; the original option it shows is what is graded and stored.
+    const original = choice === IDK ? IDK : orderOf(attempt)[choice]!;
+    const correct = original !== IDK && original === item.answer;
     const history = await tx
       .select({
         id: irisResponses.itemId,
@@ -282,7 +326,7 @@ export async function answer(
       itemVersion: item.version,
       level: item.level,
       subtopic: item.subtopic,
-      choice,
+      choice: original,
       correct,
       ms,
       phase: step.phase,
@@ -302,7 +346,7 @@ export async function answer(
     if (step.next) {
       const [updated] = await tx
         .update(irisAttempts)
-        .set({ ...engine, currentItemId: step.next.id, shownAt: now })
+        .set({ ...engine, currentItemId: step.next.id, optionOrder: shuffledOrder(random), shownAt: now })
         .where(eq(irisAttempts.id, attempt.id))
         .returning();
       return { ok: true, done: false, sitting: viewOf(updated!) };
@@ -316,6 +360,7 @@ export async function answer(
       .set({
         ...engine,
         currentItemId: null,
+        optionOrder: null,
         shownAt: null,
         finishedAt: now,
         placement,

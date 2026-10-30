@@ -541,9 +541,13 @@ up for them.
 | **Assessments Viewer**        | The **eVals** page, and **Diagnostic**: takes the placement tests.    |
 | **Assessments Administrator** | Sets everyone's Assessments role on **Manage users**; **eVals settings**, including **Google Meetings**; and Diagnostic's console: everyone's results, the answer key, and approving and rejecting questions. |
 
-**Diagnostic** — adaptive placement tests for new GTM hires: eight subjects, each
-taken once per form, which place someone Beginner, Intermediate or Advanced so
-enablement can route their training. Takers never see their own level. Part of
+**Diagnostic** — adaptive placement tests for new GTM hires, each subject taken
+once per form, which place someone at 101, 201 or 301 so enablement can route
+their training. Nine subjects: SDLC, Companies that serve the SDLC, How AI has
+changed the SDLC, Pipeline Generation and Champion Building have questions (the
+October 2026 bank, 38 each); Harness Solution, Messaging, Qualification and
+Tools are listed as coming soon. Each taker sees a question's options in their
+own shuffled order. Takers never see their own level. Part of
 the assessments area, with no roles of its own: an Assessments Viewer takes the
 tests and an Assessments Administrator runs them. (It was called Iris until
 October 2026, with its own Iris Taker and Iris Administrator roles until the
