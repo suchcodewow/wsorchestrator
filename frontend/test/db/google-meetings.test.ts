@@ -234,6 +234,16 @@ async function invitesOf(meetingId: string) {
     .where(eq(meetingOccurrences.meetingId, meetingId));
 }
 
+/** The calendar events stored as a meeting's occurrences, soonest first. */
+async function occurrenceEvents(meetingId: string) {
+  const rows = await db
+    .select({ eventId: meetingOccurrences.eventId })
+    .from(meetingOccurrences)
+    .where(eq(meetingOccurrences.meetingId, meetingId))
+    .orderBy(meetingOccurrences.startsAt);
+  return rows.map((r) => r.eventId);
+}
+
 /** An occurrence that is over, stored as an earlier sync would have, with `email` invited to it. */
 async function pastOccurrence(meetingId: string, email: string, daysAgo = 2) {
   const startsAt = new Date(Date.now() - daysAgo * DAY);
@@ -373,7 +383,7 @@ describe("Sync Now", () => {
     assert.equal(result.ok ? null : result.error, "already_running");
   });
 
-  test("a dry run logs whom it would invite, and changes nothing", async () => {
+  test("a dry run logs whom it would invite, stores the occurrences it read, and changes no invite", async () => {
     await connect();
     const id = await pick();
     event("e1", 1);
@@ -381,6 +391,7 @@ describe("Sync Now", () => {
     assert.equal(result.dryRun, true);
     assert.deepEqual(fake.writes(), []);
     assert.deepEqual(await invitesOf(id), []);
+    assert.deepEqual(await occurrenceEvents(id), ["e1"]);
     const [row] = await db.select({ syncedAt: meetingSelections.syncedAt }).from(meetingSelections).where(eq(meetingSelections.id, id));
     assert.equal(row!.syncedAt, null);
     const changes = await listMeetingSyncChanges(result.runId, { ...MEETING_SYNC_CHANGE_LIST, q: salesEmail, page: 1 });
@@ -388,6 +399,49 @@ describe("Sync Now", () => {
       changes.rows.map((c) => [c.action, c.email]),
       [["invited", salesEmail]],
     );
+  });
+
+  test("after a dry run the Current tab lists every occurrence of a meeting that invites to all of them, and a live run invites to the same ones", async () => {
+    await connect();
+    const id = await pick("bootcamp", "sales", NAME, true);
+    event("e1", 1);
+    event("e2", 2);
+    event("e3", 3);
+    await sync_ok(true);
+    const [status] = (await meetingStatusesFor([{ email: salesEmail, stage: "bootcamp", track: "sales" }])).get(salesEmail)!;
+    assert.equal(status!.mark, "uninvited");
+    assert.equal(status!.predicted, true);
+    assert.deepEqual(status!.instances?.map((x) => x.mark), ["uninvited", "uninvited", "uninvited"]);
+    assert.deepEqual(fake.writes(), []);
+
+    await sync_ok();
+    assert.deepEqual(await occurrenceEvents(id), ["e1", "e2", "e3"]);
+    const mine = (await invitesOf(id)).filter((inv) => inv.email === salesEmail).map((inv) => inv.eventId);
+    assert.deepEqual(mine.sort(), ["e1", "e2", "e3"]);
+  });
+
+  test("a dry run forgets an occurrence no longer on the calendar", async () => {
+    await connect();
+    const id = await pick();
+    event("e1", 1);
+    event("e2", 8);
+    await sync_ok(true);
+    fake.events.delete("e2");
+    await sync_ok(true);
+    assert.deepEqual(await occurrenceEvents(id), ["e1"]);
+  });
+
+  test("after a dry run, someone with no occurrence in their window has none left", async (t) => {
+    await connect();
+    const id = await pick();
+    const [row] = await db.select({ btcDays: bootcamps.btcDays, intDays: bootcamps.intDays }).from(bootcamps).where(eq(bootcamps.id, bootcamp.id));
+    const lastDay = new Date(`${bootcamp.startDate}T00:00:00Z`).getTime() + (Math.max(row!.btcDays, row!.intDays ?? 0, 1) - 1) * DAY;
+    const afterDays = Math.ceil((lastDay - Date.now()) / DAY) + 2;
+    if (afterDays > 55) return t.skip("the active bootcamp ends past the calendar's 60 days");
+    event("e1", afterDays);
+    await sync_ok(true);
+    const statuses = (await meetingStatusesFor([{ email: salesEmail, stage: "bootcamp", track: "sales" }])).get(salesEmail)!;
+    assert.equal(statuses.find((x) => x.meetingId === id)!.mark, "none_left");
   });
 
   test("invites whom the meeting is for to its next occurrence, with the administrators, and sends nothing twice", async () => {

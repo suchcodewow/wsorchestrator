@@ -581,15 +581,15 @@ function MeetingsTable({
                   {m.minDaysAfterStart > 0 && <span className="block text-xs tabular-nums">{m.minDaysAfterStart}+ days after start</span>}
                 </td>
                 <td className="whitespace-nowrap px-5 py-3 text-muted-foreground">
-                  {!m.syncedAt ? (
-                    "Not synced yet"
-                  ) : m.nextStartsAt ? (
+                  {m.nextStartsAt ? (
                     <>
                       {formatWhen(m.nextStartsAt)}
                       {m.upcoming > 1 && <span className="block text-xs tabular-nums">{m.upcoming.toLocaleString()} to come</span>}
                     </>
-                  ) : (
+                  ) : m.syncedAt ? (
                     "None to come"
+                  ) : (
+                    "Not synced yet"
                   )}
                 </td>
                 <td className="whitespace-nowrap px-5 py-3 tabular-nums text-muted-foreground">
