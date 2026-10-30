@@ -505,6 +505,28 @@ describe("Sync Now", () => {
     }
   });
 
+  test("the Current tab lists every occurrence of a meeting that invites to all of them, with how each stands", async () => {
+    await connect();
+    const id = await pick("bootcamp", "sales", NAME, true);
+    await pastOccurrence(id, salesEmail);
+    fake.participants.set("/abc//def==", [{ name: "Someone Else", user_email: `else@${TEST_EMAIL_DOMAIN}` }]);
+    event("e1", 2);
+    event("e2", 5);
+    await sync_ok();
+    // As if the sync had not reached e2 for them yet: the next one adds it.
+    const [occ] = await db.select({ id: meetingOccurrences.id }).from(meetingOccurrences).where(and(eq(meetingOccurrences.meetingId, id), eq(meetingOccurrences.eventId, "e2")));
+    await db.delete(meetingInvites).where(and(eq(meetingInvites.occurrenceId, occ!.id), eq(meetingInvites.email, salesEmail)));
+    const [status] = (await meetingStatusesFor([{ email: salesEmail, stage: "bootcamp", track: "sales" }])).get(salesEmail)!;
+    assert.equal(status!.mark, "pending");
+    assert.deepEqual(status!.instances?.map((x) => x.mark), ["missed", "pending", "uninvited"]);
+    const starts = status!.instances!.map((x) => x.startsAt.getTime());
+    assert.deepEqual(starts, [...starts].sort((a, b) => a - b), "soonest first");
+
+    assert.ok((await updateMeetingSelection(id, { allOccurrences: false })).ok);
+    const [single] = (await meetingStatusesFor([{ email: salesEmail, stage: "bootcamp", track: "sales" }])).get(salesEmail)!;
+    assert.equal(single!.instances, null, "one at a time has no instances");
+  });
+
   test("someone Zoom did not see join is counted missing and invited to the next occurrence", async () => {
     await connect();
     const id = await pick();

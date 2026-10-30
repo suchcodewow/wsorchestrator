@@ -437,7 +437,21 @@ export type PersonMeetingStatus = {
   predicted: boolean;
   /** Their time zone, which `outOfHours` is read in; null when the app has none for them. */
   timezone: string | null;
-  /** Whether that occurrence is still to come and runs outside 9:00 to 17:00 in `timezone`. */
+  /** Whether that occurrence is still to come and runs outside 9:00 to 17:00 in `timezone`; for `instances`, whether any does. */
+  outOfHours: boolean;
+  /** For a meeting that invites to every occurrence, each one they hold and each the next sync would add, soonest first; null otherwise. */
+  instances: MeetingInstance[] | null;
+};
+
+/**
+ * One occurrence of a meeting that invites to all of them, for one person:
+ * attended or missed once Zoom has been read; accepted or pending on an invite
+ * not yet read; uninvited for one the next sync would invite them to.
+ */
+export type MeetingInstance = {
+  startsAt: Date;
+  endsAt: Date;
+  mark: "attended" | "missed" | "accepted" | "pending" | "uninvited";
   outOfHours: boolean;
 };
 
@@ -451,8 +465,9 @@ const UPCOMING_LIMIT = PAGE_SIZE;
  * window: before the active bootcamp, or for an Intermediate meeting they will
  * take after it, between its last day and the next intermediate class.
  * Someone not yet invited is given the occurrence the next sync would invite
- * them to, picked as the sync picks it. Each occurrence still to come is held
- * to their working day in their own time zone.
+ * them to, picked as the sync picks it. A meeting that invites to every
+ * occurrence also lists each one they hold and each the sync would add. Each
+ * occurrence still to come is held to their working day in their own time zone.
  * Test-group invites and RSVPs are left out; the Current tab is the real cohort.
  */
 export async function meetingStatusesFor(
@@ -514,7 +529,7 @@ export async function meetingStatusesFor(
     // With no bootcamp, no window, so nothing is offered to anyone.
     before && after
       ? db
-          .select({ meetingId: o.meetingId, startsAt: o.startsAt, endsAt: o.endsAt, startDate: o.startDate })
+          .select({ id: o.id, meetingId: o.meetingId, startsAt: o.startsAt, endsAt: o.endsAt, startDate: o.startDate })
           .from(o)
           .where(and(inArray(o.meetingId, ids), gt(o.startsAt, sql`now()`), sql`(${windowSql(before)} or ${windowSql(after)})`))
           .orderBy(o.startsAt)
@@ -531,6 +546,9 @@ export async function meetingStatusesFor(
         endsAt: sql<string | null>`(array_agg(${o.endsAt} order by ${o.startsAt}) filter (where ${open}))[1]`,
         // The sync offers someone who missed one only those after it.
         lastBegun: sql<string | null>`max(${o.startsAt}) filter (where ${o.startsAt} <= now())`,
+        instances: sql<{ id: string; startsAt: string; endsAt: string; attendance: string | null; response: string | null }[]>`json_agg(
+          json_build_object('id', ${o.id}, 'startsAt', ${o.startsAt}, 'endsAt', ${o.endsAt}, 'attendance', ${i.attendance}, 'response', ${i.responseStatus})
+          order by ${o.startsAt})`,
       })
       .from(i)
       .innerJoin(o, eq(o.id, i.occurrenceId))
@@ -575,6 +593,25 @@ export async function meetingStatusesFor(
       } else if (mark !== "attended" && h?.startsAt && h.endsAt) {
         at = { startsAt: new Date(h.startsAt), endsAt: new Date(h.endsAt) };
       }
+      const outside = (startsAt: Date, endsAt: Date) => startsAt > now && outsideWorkingHours(member.timezone, startsAt, endsAt) === true;
+      let instances: MeetingInstance[] | null = null;
+      if (meeting.allOccurrences) {
+        const found: (Omit<MeetingInstance, "outOfHours"> & { id: string })[] = (h?.instances ?? []).map((x) => ({
+          id: x.id,
+          startsAt: new Date(x.startsAt),
+          endsAt: new Date(x.endsAt),
+          mark: x.attendance === "attended" || x.attendance === "missed" ? x.attendance : x.response === "accepted" ? "accepted" : "pending",
+        }));
+        // As the sync adds them: from the first that suits them, every one offered that they do not hold, until they attend.
+        const first = mark === "attended" ? undefined : firstSuiting(offered, member.startDate, meeting.minDaysAfterStart);
+        const heldIds = new Set(found.map((x) => x.id));
+        for (const occ of first ? offered.filter((occ) => occ.startsAt >= first.startsAt && !heldIds.has(occ.id)) : []) {
+          found.push({ id: occ.id, startsAt: occ.startsAt, endsAt: occ.endsAt, mark: "uninvited" });
+        }
+        instances = found
+          .sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime())
+          .map(({ startsAt, endsAt, mark }) => ({ startsAt, endsAt, mark, outOfHours: outside(startsAt, endsAt) }));
+      }
       list.push({
         meetingId: meeting.id,
         name: meeting.name,
@@ -584,7 +621,8 @@ export async function meetingStatusesFor(
         endsAt: at?.endsAt ?? null,
         predicted: mark === "uninvited" && at !== null,
         timezone: member.timezone,
-        outOfHours: at !== null && at.startsAt > now && outsideWorkingHours(member.timezone, at.startsAt, at.endsAt) === true,
+        outOfHours: instances ? instances.some((x) => x.outOfHours) : at !== null && outside(at.startsAt, at.endsAt),
+        instances,
       });
     }
     out.set(member.email, list);

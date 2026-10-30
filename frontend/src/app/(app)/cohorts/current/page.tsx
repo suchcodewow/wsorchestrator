@@ -46,6 +46,7 @@ export default async function CurrentCohortPage({
         ...m,
         startsAt: m.startsAt?.toISOString() ?? null,
         endsAt: m.endsAt?.toISOString() ?? null,
+        instances: m.instances?.map((x) => ({ ...x, startsAt: x.startsAt.toISOString(), endsAt: x.endsAt.toISOString() })) ?? null,
       })),
     ]),
   );
