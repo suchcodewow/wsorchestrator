@@ -14,6 +14,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, ChevronsUpDown, Loader2, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useStartNavigation } from "@/components/navigation-pending";
 import { useDebouncedSearch } from "@/components/use-debounced-search";
 import { listParam, pageRange, type Page, type SortDir } from "@/lib/paging";
 import { cn } from "@/lib/utils";
@@ -150,12 +151,16 @@ const ROW_CONTROLS = "a, button, input, select, textarea, label, [role=button], 
  */
 export function useRowLink() {
   const router = useRouter();
+  const startNavigation = useStartNavigation();
   return (target: string | (() => void)) => (e: MouseEvent<HTMLTableRowElement>) => {
     if ((e.target as HTMLElement).closest(ROW_CONTROLS)) return;
     if (window.getSelection()?.toString()) return;
     if (typeof target === "function") target();
     else if (e.metaKey || e.ctrlKey) window.open(target, "_blank", "noopener");
-    else router.push(target);
+    else {
+      startNavigation(target);
+      router.push(target);
+    }
   };
 }
 

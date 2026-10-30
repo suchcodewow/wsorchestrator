@@ -1182,3 +1182,20 @@
     bottom: 0.1%;
   }
 }
+
+/*
+ * While NavigationPending waits on a page, the one being left stays put for
+ * as long as the loader takes to fade in, so a quick page swaps straight over
+ * without a flash of the gear, then gives the space to it.
+ */
+@layer components {
+  [data-navigating] > .nav-pending-page {
+    animation: nav-pending-hide 0s linear 0.3s forwards;
+  }
+}
+
+@keyframes nav-pending-hide {
+  to {
+    visibility: hidden;
+  }
+}
