@@ -688,27 +688,33 @@ function MergedStep({ code, onRestart }: { code: string; onRestart: () => void }
     return () => clearTimeout(t);
   }, []);
   return (
-    <StepCard
-      title={live ? "Your change is live" : "Merged! Deploying…"}
-      why={
-        <>
-          Your branch is now part of <code className="text-foreground">main</code>. Merging started the pipeline, which tested the code again and{" "}
-          {live ? "deployed it to the live site." : "is deploying it to the live site."} From ticket to customers, nobody copied a file by hand.
-        </>
-      }
-    >
-      <div className="flex items-center gap-3 px-5 py-3 text-sm">
-        {live ? <Check className="size-4 text-emerald-600 dark:text-emerald-400" /> : <Loader2 className="size-4 animate-spin text-brand" />}
-        <span>{live ? "Deployed to production by Harness CD" : "Harness CD is deploying main to production…"}</span>
-      </div>
-      {live && <BrowserFrame code={code} address="greenleaf.shop" className="h-[26rem]" />}
-      <div className="flex justify-end px-5 py-4">
-        <Button variant="outline" onClick={onRestart}>
-          <RotateCcw />
-          Start over
-        </Button>
-      </div>
-    </StepCard>
+    <>
+      <StepCard
+        title={live ? "Merged! Deployed" : "Merged! Deploying…"}
+        why={
+          <>
+            Your branch is now part of <code className="text-foreground">main</code>. Merging started the pipeline, which tested the code again and{" "}
+            {live ? "deployed it to the live site." : "is deploying it to the live site."} From ticket to customers, nobody copied a file by hand.
+          </>
+        }
+      >
+        <div className="flex items-center gap-3 px-5 py-3 text-sm">
+          {live ? <Check className="size-4 text-emerald-600 dark:text-emerald-400" /> : <Loader2 className="size-4 animate-spin text-brand" />}
+          <span>{live ? "Deployed to production by Harness CD" : "Harness CD is deploying main to production…"}</span>
+        </div>
+      </StepCard>
+      {live && (
+        <StepCard title="Your change is live" why="Anyone who visits the shop now sees the spring sale the way you wrote it.">
+          <BrowserFrame code={code} address="greenleaf.shop" className="h-[26rem]" />
+          <div className="flex justify-end px-5 py-4">
+            <Button variant="outline" onClick={onRestart}>
+              <RotateCcw />
+              Start over
+            </Button>
+          </div>
+        </StepCard>
+      )}
+    </>
   );
 }
 
