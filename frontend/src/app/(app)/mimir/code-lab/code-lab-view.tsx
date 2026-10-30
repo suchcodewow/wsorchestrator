@@ -147,7 +147,6 @@ export function CodeLabView({ author }: { author: string }) {
           branch={branch}
           commits={commits}
           pushed={pushed}
-          onMore={() => setStage("edit")}
           onPushed={() => {
             say({
               cmd: pushed === 0 ? `git push -u origin ${branch}` : "git push",
@@ -166,7 +165,7 @@ export function CodeLabView({ author }: { author: string }) {
         <PrFormStep
           branch={branch}
           commits={commits}
-          onBack={() => setStage("edit")}
+          pushed={pushed}
           onOpen={(title, body) => {
             setPr({ title, body });
             say({ cmd: `# Opened pull request #${PR_NUMBER} in Harness Code: ${branch} → main` });
@@ -566,7 +565,7 @@ function CommitStep({ before, after, onBack, onCommit }: { before: string; after
   return (
     <StepCard
       title="Commit your change"
-      why="Committing the change saves your changes as a snapshot. Below, you can see how that commit snapshot looks. Lines of code you changed show as the old line removed (minus sign) and the new line added (plus sign). A commit message is just a note indicating why you made the change."
+      why="Committing the change saves your changes as a snapshot. Below, you can see how that commit snapshot looks. Lines of code you changed show as the old line removed (minus sign) and the new line added (plus sign). Type a commit message indicating why you made the change, then click Commit."
     >
       <div className="px-5 py-4">
         <DiffView before={before} after={after} file={FILE} />
@@ -601,20 +600,24 @@ function PushStep({
   branch,
   commits,
   pushed,
-  onMore,
   onPushed,
 }: {
   branch: string;
   commits: Commit[];
   pushed: number;
-  onMore: () => void;
   onPushed: () => void;
 }) {
   const [pushing, setPushing] = useState(false);
   return (
     <StepCard
       title="Push your branch"
-      why="Your commit is saved, but only on your laptop. Pushing uploads the branch to the team's repository in Harness Code, where teammates and the pipeline can see it."
+      why={
+        <>
+          Your commit is saved, but only the copy on your computer. Pushing the branch copies your change up to the code repository. Once it is there,
+          teammates can also review the change (often called a peer review), and pipelines can access the code to build and deploy. Click the “Push{" "}
+          {branch}” button.
+        </>
+      }
     >
       <div className="divide-y text-sm">
         {commits.map((c, k) => (
@@ -629,9 +632,6 @@ function PushStep({
         ))}
       </div>
       <div className="flex flex-wrap items-center justify-end gap-2 px-5 py-4">
-        <Button variant="ghost" onClick={onMore} disabled={pushing}>
-          Make another change
-        </Button>
         <Button
           variant="brand"
           disabled={pushing}
@@ -651,12 +651,12 @@ function PushStep({
 function PrFormStep({
   branch,
   commits,
-  onBack,
+  pushed,
   onOpen,
 }: {
   branch: string;
   commits: Commit[];
-  onBack: () => void;
+  pushed: number;
   onOpen: (title: string, body: string) => void;
 }) {
   const [title, setTitle] = useState(commits.length === 1 ? commits[0]!.message : TICKET.title);
@@ -667,19 +667,20 @@ function PrFormStep({
       title="Open a pull request"
       why={
         <>
-          A pull request asks the team to merge your branch into <code className="text-foreground">main</code>. It shows them exactly what changed, runs
-          the automated checks, and is where a reviewer approves or asks for changes.
+          A pull request is when you ask for your branch to get pulled back into the main branch. (If you’re thinking “gosh, that’s not how trees work”,
+          that’s valid. Apparently developers don’t get outside much.) But <code className="text-foreground">main</code> is the branch in most companies
+          that eventually deploys into the real customer environment. So click “Open pull request” to say your changes are ready to get pulled into main.
         </>
       }
+      info={
+        <div className="flex flex-col gap-1 overflow-x-auto">
+          <span className="text-xs font-medium text-muted-foreground">
+            {branch} → main · {commits.length} commit{commits.length === 1 ? "" : "s"}, 1 file changed
+          </span>
+          <HistoryGraph branch={branch} commits={commits.length} pushed={pushed} merged={false} requested />
+        </div>
+      }
     >
-      <div className="flex flex-wrap items-center gap-2 px-5 py-3 text-sm">
-        <code className="rounded bg-muted px-1.5 py-0.5 text-xs">main</code>
-        <span className="text-muted-foreground">←</span>
-        <code className="rounded bg-muted px-1.5 py-0.5 text-xs">{branch}</code>
-        <span className="text-xs text-muted-foreground">
-          · {commits.length} commit{commits.length === 1 ? "" : "s"}, 1 file changed
-        </span>
-      </div>
       <form
         className="grid gap-4 px-5 py-4"
         onSubmit={(e) => {
@@ -696,9 +697,6 @@ function PrFormStep({
           <Textarea value={body} onChange={(e) => setBody(e.target.value)} rows={4} />
         </label>
         <div className="flex flex-wrap justify-end gap-2">
-          <Button type="button" variant="ghost" onClick={onBack}>
-            Make another change
-          </Button>
           <Button type="submit" variant="brand" disabled={!trimmed}>
             <GitPullRequest />
             Open pull request

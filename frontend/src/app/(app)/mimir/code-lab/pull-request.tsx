@@ -8,7 +8,7 @@
  */
 
 import { useEffect, useState } from "react";
-import { Check, CircleDashed, GitMerge, GitPullRequest, Loader2 } from "lucide-react";
+import { Check, CircleDashed, GitMerge, GitPullRequest, Loader2, PartyPopper, UserRoundCog } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FILE, TASKS } from "@/lib/mimir/code-lab/scenario";
 import { cn } from "@/lib/utils";
@@ -24,7 +24,7 @@ const CHECKS = [
   { name: "Preview deploy", by: "Harness CD", ms: 1500 },
 ];
 const REVIEW_MS = 1800;
-const REVIEWER = { name: "Alex Rivera", role: "Engineering lead", initials: "AR" };
+const REVIEWER = { name: "Alex Rivera", role: "Team lead", initials: "AR" };
 
 export const PR_NUMBER = 142;
 
@@ -144,6 +144,34 @@ export function PullRequestPage({
               );
             })}
           </div>
+
+          {allPassed && (
+            <div className="flex gap-3 rounded-xl border border-brand-border bg-brand-subtle px-5 py-4 text-sm">
+              <PartyPopper className="mt-0.5 size-4 shrink-0 text-brand" />
+              <div className="max-w-3xl space-y-1">
+                <h3 className="font-medium">Great job on your first change!</h3>
+                <p>
+                  In modern companies, automatic checks make sure your changes are safe. In our example, you only saw the code for the spring sale, but a
+                  developer could have reached anything in the application and done something dangerous by accident. With your change confirmed safe, your
+                  job is done! On to the next ticket.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {approved && (
+            <div className="flex gap-3 rounded-xl border border-orange-500/40 bg-orange-500/10 px-5 py-4 text-sm">
+              <UserRoundCog className="mt-0.5 size-4 shrink-0 text-orange-600 dark:text-orange-400" />
+              <div className="max-w-3xl space-y-1">
+                <h3 className="font-medium text-orange-800 dark:text-orange-300">Persona: Team Lead</h3>
+                <p>
+                  You’ve just become a different person: the team lead. You can tell by the snappy new box colour. As team lead, you might be responsible
+                  for double-checking code your team wrote, a peer review. You’d confirm all the automatic checks worked, then compare the change against
+                  Jordan’s ticket. In this case it was solid, so you write a note like the one below. Go ahead and click “Merge pull request”.
+                </p>
+              </div>
+            </div>
+          )}
 
           {approved && (
             <div className="rounded-xl border bg-card">
