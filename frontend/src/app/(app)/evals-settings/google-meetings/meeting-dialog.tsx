@@ -2,8 +2,9 @@
 
 /**
  * Picking a meeting from the Revenue Enablement calendar, or changing one:
- * which of the names on it in the next 60 days, and whom in the cohort it is
- * for, by stage and by track.
+ * which of the names on it in the next 60 days, whom in the cohort it is
+ * for, by stage and by track, and whether each is invited to one occurrence
+ * or to every one until their class.
  */
 
 import { useEffect, useState } from "react";
@@ -26,7 +27,11 @@ export type EditableMeeting = {
   timezoneFrom: number | null;
   timezoneTo: number | null;
   minDaysAfterStart: number;
+  allOccurrences: boolean;
 };
+
+type Count = "one" | "all";
+const COUNTS: readonly Count[] = ["one", "all"];
 
 /** Where the range starts when the filter is first ticked: the Americas. */
 const DEFAULT_RANGE = { from: -8, to: -5 };
@@ -109,6 +114,7 @@ export function MeetingDialog({
   const [stage, setStage] = useState<MeetingStage>("bootcamp");
   const [track, setTrack] = useState<MeetingTrack>("both");
   const [minDays, setMinDays] = useState(0);
+  const [count, setCount] = useState<Count>("one");
   const [filterZones, setFilterZones] = useState(false);
   const [zoneFrom, setZoneFrom] = useState(DEFAULT_RANGE.from);
   const [zoneTo, setZoneTo] = useState(DEFAULT_RANGE.to);
@@ -146,6 +152,7 @@ export function MeetingDialog({
       setStage(editing?.stage ?? "bootcamp");
       setTrack(editing?.track ?? "both");
       setMinDays(editing?.minDaysAfterStart ?? 0);
+      setCount(editing?.allOccurrences ? "all" : "one");
       setFilterZones(editing?.timezoneFrom != null && editing?.timezoneTo != null);
       setZoneFrom(editing?.timezoneFrom ?? DEFAULT_RANGE.from);
       setZoneTo(editing?.timezoneTo ?? DEFAULT_RANGE.to);
@@ -198,7 +205,7 @@ export function MeetingDialog({
       const res = await fetch(editing ? `/api/evals/google-meetings/${editing.id}` : "/api/evals/google-meetings", {
         method: editing ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, stage, track, timezoneFrom: filterZones ? zoneFrom : null, timezoneTo: filterZones ? zoneTo : null, minDaysAfterStart: minDays }),
+        body: JSON.stringify({ name, stage, track, timezoneFrom: filterZones ? zoneFrom : null, timezoneTo: filterZones ? zoneTo : null, minDaysAfterStart: minDays, allOccurrences: count === "all" }),
       });
       const body = await res.json().catch(() => null);
       if (!res.ok) {
@@ -268,6 +275,14 @@ export function MeetingDialog({
 
           <motion.div variants={riseChild} className="grid gap-4">
             <Choice id="gm-stage" label="Stage" values={MEETING_STAGES} labels={MEETING_STAGE_LABELS} value={stage} onChange={setStage} />
+            <Choice
+              id="gm-count"
+              label="Invite to"
+              values={COUNTS}
+              labels={{ one: "1 meeting", all: `All meetings until ${MEETING_STAGE_LABELS[stage]}` }}
+              value={count}
+              onChange={setCount}
+            />
             <Choice id="gm-track" label="Track" values={MEETING_TRACKS} labels={MEETING_TRACK_LABELS} value={track} onChange={setTrack} />
           </motion.div>
 
@@ -289,7 +304,7 @@ export function MeetingDialog({
             />
               <span className="text-sm text-muted-foreground">days</span>
             </div>
-            <p className="text-xs text-muted-foreground">Tenure rule is ignored if it precludes someone attending before bootcamp.</p>
+            <p className="text-xs text-muted-foreground">Tenure rule is ignored if it would leave someone no meeting to attend before their class.</p>
           </motion.div>
 
           <motion.div variants={riseChild} className="grid gap-3">

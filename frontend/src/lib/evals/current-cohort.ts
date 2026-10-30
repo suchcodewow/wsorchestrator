@@ -15,7 +15,7 @@ import "server-only";
 
 import { and, eq, gt, gte, inArray, isNotNull, isNull, not, or, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db";
-import { employees, evalsAssessments, evalsSubmissions, type Employee } from "@/db/schema";
+import { employees, evalsAssessments, evalsSubmissions, intakeResponses, type Employee } from "@/db/schema";
 import { attended, classDate, classScore } from "@/lib/evals/attendance";
 import { getCandidateCutoffs, getDeferralDays, type CandidateCutoffs } from "@/lib/evals/settings";
 import { nextBootcampStart } from "@/lib/evals/tracks";
@@ -253,12 +253,14 @@ export async function currentCohortEmails(): Promise<
 }
 
 /**
- * Each current-cohort candidate in `stage` and on `track` ("both" for either)
- * with the time zone on record, null for those with none: the names behind the
- * time zone map on the Google meetings tab.
+ * Each current-cohort candidate a Google meeting for `stage` and on `track`
+ * ("both" for either) is for, with the time zone on record, null for those
+ * with none: the names behind the time zone map on the Google meetings tab.
+ * An Intermediate meeting is also for those in the Bootcamp stage who have
+ * RSVP'd, by saving the Bootcamp intake form.
  */
 export async function currentCohortPeople(
-  stage: CandidateStage | "both",
+  stage: CandidateStage,
   track: "sales" | "engineer" | "both",
 ): Promise<{ fullName: string; timezone: string | null }[]> {
   const cutoffs = await getCandidateCutoffs();
@@ -268,7 +270,15 @@ export async function currentCohortPeople(
     .where(
       and(
         isCandidate(cutoffs),
-        stage === "both" ? undefined : IN_STAGE[stage],
+        stage === "intermediate"
+          ? or(
+              IN_STAGE.intermediate,
+              and(
+                IN_STAGE.bootcamp,
+                sql`exists (select 1 from ${intakeResponses} where ${intakeResponses.form} = 'bootcamp' and not ${intakeResponses.test} and ${intakeResponses.email} = lower(${e.email}))`,
+              ),
+            )
+          : IN_STAGE[stage],
         track === "both" ? inArray(e.track, ["sales", "engineer"]) : eq(e.track, track),
       ),
     )

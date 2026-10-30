@@ -569,7 +569,10 @@ function MeetingsTable({
                   </button>
                   {m.addedBy && <span className="block text-xs text-muted-foreground">Added by {m.addedBy}</span>}
                 </td>
-                <td className="whitespace-nowrap px-5 py-3 text-muted-foreground">{MEETING_STAGE_LABELS[m.stage]}</td>
+                <td className="whitespace-nowrap px-5 py-3 text-muted-foreground">
+                  {MEETING_STAGE_LABELS[m.stage]}
+                  {m.allOccurrences && <span className="block text-xs">All meetings until {MEETING_STAGE_LABELS[m.stage]}</span>}
+                </td>
                 <td className="whitespace-nowrap px-5 py-3 text-muted-foreground">
                   {MEETING_TRACK_LABELS[m.track]}
                   {m.timezoneFrom !== null && m.timezoneTo !== null && (
