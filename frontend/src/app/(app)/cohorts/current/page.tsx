@@ -1,13 +1,7 @@
 /** The Current tab: the bootcamp and intermediate candidates not deferred, in one table, narrowed by stage and track, a page at a time. */
 
 import { auth } from "@/auth";
-import {
-  cohortScoring,
-  currentCohortSummary,
-  isCandidateStage,
-  isCurrentTrack,
-  listCurrentCohort,
-} from "@/lib/evals/current-cohort";
+import { currentCohortSummary, isCandidateStage, isCurrentTrack, listCurrentCohort } from "@/lib/evals/current-cohort";
 import { meetingStatusesFor } from "@/lib/evals/google-meetings";
 import { CURRENT_COHORT_LIST } from "@/lib/list-specs";
 import { parseListQuery } from "@/lib/paging";
@@ -36,12 +30,9 @@ export default async function CurrentCohortPage({
     track: isCurrentTrack(params.track) ? params.track : null,
   };
   const session = await auth();
-  const canSeeScores = session?.user ? canUseEvals(session.user.access) : false;
-  const scoring = canSeeScores
-    ? { scoring: await cohortScoring(filter) }
-    : undefined;
+  const canOpenRecord = session?.user ? canUseEvals(session.user.access) : false;
   const [page, summary, active, testGroup, intakeQuestions] = await Promise.all([
-    listCurrentCohort(filter, query, scoring),
+    listCurrentCohort(filter, query),
     currentCohortSummary(),
     activeBootcamp(),
     getTestGroup(),
@@ -69,13 +60,12 @@ export default async function CurrentCohortPage({
         filter={filter}
         page={page}
         counts={summary.counts}
-        assessments={scoring?.scoring?.assessments ?? null}
         deferral={summary.deferral}
         activeBootcamp={active}
         canSetTrack={
           session?.user ? canManageTrainingSettings(session.user.access) : false
         }
-        canSeeScores={canSeeScores}
+        canOpenRecord={canOpenRecord}
         meetings={meetings}
         canMarkAttendance={
           session?.user ? canManageEvalsSettings(session.user.access) : false

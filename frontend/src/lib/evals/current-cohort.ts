@@ -15,14 +15,13 @@ import "server-only";
 
 import { and, eq, gt, gte, inArray, isNotNull, isNull, not, or, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db";
-import { employees, evalsAssessments, evalsSubmissions, intakeResponses, type Employee } from "@/db/schema";
-import { attended, classDate, classScore } from "@/lib/evals/attendance";
+import { employees, intakeResponses, type Employee } from "@/db/schema";
+import { attended, classDate } from "@/lib/evals/attendance";
 import { getCandidateCutoffs, getDeferralDays, type CandidateCutoffs } from "@/lib/evals/settings";
 import { nextBootcampStart } from "@/lib/evals/tracks";
 import type { CurrentCohortSort } from "@/lib/list-specs";
-import { PAGE_SIZE, pageWindow, toPage, type ListQuery, type Page } from "@/lib/paging";
+import { pageWindow, toPage, type ListQuery, type Page } from "@/lib/paging";
 import { blankAsNull, orderFor, searchAny } from "@/lib/paging-sql";
-import { activeBootcamp } from "@/lib/scheduler/bootcamps";
 
 export const CANDIDATE_STAGES = ["bootcamp", "intermediate"] as const;
 export type CandidateStage = (typeof CANDIDATE_STAGES)[number];
@@ -70,21 +69,7 @@ export type CurrentCohortMember = Pick<
   recordKey: string | null;
   /** The day of the BTC class they attended; null for a bootcamp candidate. */
   btcDate: string | null;
-  /** How they did at it overall; null for a bootcamp candidate, and for a caller outside eVals. */
-  btcScore: number | null;
-  /** Their score on each of `CohortScoring.assessments` at its bootcamp, by assessment id; only those scored. */
-  scores: Record<string, number>;
-  /** The mean of `scores`, to one decimal place; null when there are none. */
-  averageScore: number | null;
 };
-
-/**
- * The score columns: the active assessments for one stage and one trained
- * track, in the eVals page's order, and the bootcamp their scores were given
- * at. That is the active bootcamp, or null when there is none or it holds no
- * intermediate class for an intermediate stage, which leaves every score empty.
- */
-export type CohortScoring = { bootcampId: string | null; assessments: { id: string; name: string }[] };
 
 /** How many candidates are in each stage on each track, whatever the search or filter. */
 export type CurrentCohortCounts = Record<CandidateStage, Record<CandidateTrack, number>>;
@@ -100,8 +85,6 @@ export type CurrentCohortSummary = {
 };
 
 const e = employees;
-const a = evalsAssessments;
-const s = evalsSubmissions;
 
 const candidateTrack = sql<CandidateTrack>`coalesce(${e.track}, 'undecided')`;
 const attendedBtc = attended("bootcamp", sql`${e.email}`);
@@ -109,7 +92,6 @@ const attendedInt = attended("intermediate", sql`${e.email}`);
 const candidateStage = sql<CandidateStage>`(case when ${attendedBtc} then 'intermediate' else 'bootcamp' end)`;
 const btcDate = classDate("bootcamp", sql`${e.email}`);
 
-/** Every sort but `averageScore`, which depends on the score columns and is added per query. */
 const SORT_COLUMNS = {
   fullName: sql`lower(${e.fullName})`,
   email: e.email,
@@ -146,52 +128,17 @@ export function isCandidate({ startDateOnOrAfter, activeEffectiveDateAfter }: Ca
   );
 }
 
-/** Null unless the filter names a stage and Sales or Engineer: assessments are set per stage and per audience. */
-export async function cohortScoring(filter: CurrentCohortFilter): Promise<CohortScoring | null> {
-  const { stage, track } = filter;
-  if (!stage || (track !== "sales" && track !== "engineer")) return null;
-  const [assessments, bootcamp] = await Promise.all([
-    db
-      .select({ id: a.id, name: a.name })
-      .from(a)
-      .where(and(eq(a.active, true), eq(a.stage, stage), inArray(a.audience, [track, "both"])))
-      .orderBy(sql`lower(${a.name})`, a.id)
-      .limit(PAGE_SIZE),
-    activeBootcamp(),
-  ]);
-  const holdsStage = bootcamp !== null && (stage === "bootcamp" || bootcamp.intDays !== null);
-  return { bootcampId: holdsStage ? bootcamp.id : null, assessments };
-}
-
-/** Their submissions at the scoring bootcamp for the scoring assessments, as a correlated subquery's `from … where`. */
-function scoredSubmissions({ bootcampId, assessments }: CohortScoring) {
-  return sql`from ${s} where ${s.attendeeEmail} = ${e.email} and ${s.bootcampId} = ${bootcampId}
-    and ${inArray(
-      s.assessmentId,
-      assessments.map((x) => x.id),
-    )}`;
-}
-
 /**
  * One page of candidates, in one stage and on one track when the filter
- * names them; without a track, everyone not deferred. The search matches the name, email, title or track. Scores are
- * eVals' to show: `evals` is set only for a caller in eVals, and without it
- * `btcScore` is null and `scores` empty; its `scoring` fills `scores` and
- * `averageScore`.
+ * names them; without a track, everyone not deferred. The search matches the name, email, title or track. No
+ * scores: Cohorts shows who is in them, and eVals and Reporting show how they did.
  */
 export async function listCurrentCohort(
   filter: CurrentCohortFilter,
   query: ListQuery<CurrentCohortSort>,
-  evals?: { scoring: CohortScoring | null },
 ): Promise<Page<CurrentCohortMember>> {
   const { limit, offset } = pageWindow(query.page);
   const cutoffs = await getCandidateCutoffs();
-  const scoring = evals?.scoring?.bootcampId && evals.scoring.assessments.length > 0 ? evals.scoring : null;
-  // Without score columns every average is null, so sorting by it falls through to the name.
-  const average = scoring
-    ? sql<number | null>`(select round(avg(${s.averageScore})::numeric, 1)::float8 ${scoredSubmissions(scoring)})`
-    : sql<number | null>`null::float8`;
-  const sortColumns = { ...SORT_COLUMNS, averageScore: average };
   const rows = await db
     .select({
       email: e.email,
@@ -208,11 +155,6 @@ export async function listCurrentCohort(
       stage: candidateStage,
       recordKey: sql<string | null>`case when ${attendedBtc} then ${e.id} end`,
       btcDate,
-      btcScore: evals ? classScore("bootcamp", sql`${e.email}`) : sql<number | null>`null::float8`,
-      scores: scoring
-        ? sql<Record<string, number>>`coalesce((select jsonb_object_agg(${s.assessmentId}, ${s.averageScore}) ${scoredSubmissions(scoring)}), '{}'::jsonb)`
-        : sql<Record<string, number>>`'{}'::jsonb`,
-      averageScore: average,
     })
     .from(e)
     .where(
@@ -223,7 +165,7 @@ export async function listCurrentCohort(
         searchAny(query.q, [e.fullName, e.email, e.title, candidateTrack]),
       ),
     )
-    .orderBy(...orderFor(sortColumns[query.sort], query.dir, sql`lower(${e.fullName})`, e.id))
+    .orderBy(...orderFor(SORT_COLUMNS[query.sort], query.dir, sql`lower(${e.fullName})`, e.id))
     .limit(limit)
     .offset(offset);
   return toPage(rows, query.page);
