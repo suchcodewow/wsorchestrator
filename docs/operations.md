@@ -242,6 +242,7 @@ The Current tab shows one icon per picked meeting beside each name:
 | grey check             | accepted                                        |
 | grey question mark     | not accepted yet                                |
 | red exclamation mark   | no occurrence left before their bootcamp        |
+| grey minus sign        | none left of an every-occurrence meeting; fine  |
 
 **Dry run and the test group.** These work as they do on Cohort Settings →
 Slack.
