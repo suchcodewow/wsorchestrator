@@ -4,7 +4,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { CalendarPlus, ChevronRight, Loader2, Pencil, Trash2 } from "lucide-react";
 import { HEADER_ROW, LINK_ROW, Pager, PlainHeader, SortHeader, useRowLink } from "@/components/data-table";
@@ -20,12 +20,15 @@ import { BootcampDialog, STATUS_BADGES, STATUS_LABELS } from "./bootcamp-dialog"
 
 export function SchedulerView({
   query,
+  showComplete,
   page,
   canManage,
   facilities,
   sources,
 }: {
   query: ListQuery<BootcampSort>;
+  /** Whether bootcamps that have run are listed. */
+  showComplete: boolean;
   page: Page<BootcampRow>;
   canManage: boolean;
   facilities: { id: string; name: string }[];
@@ -34,6 +37,8 @@ export function SchedulerView({
 }) {
   const router = useRouter();
   const rowLink = useRowLink();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<BootcampRow | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -44,6 +49,15 @@ export function SchedulerView({
   function open(row: BootcampRow | null) {
     setEditing(row);
     setDialogOpen(true);
+  }
+
+  function toggleComplete(on: boolean) {
+    const next = new URLSearchParams(searchParams.toString());
+    if (on) next.set("complete", "1");
+    else next.delete("complete");
+    next.delete("page");
+    const qs = next.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
   }
 
   async function remove(row: BootcampRow) {
@@ -68,14 +82,23 @@ export function SchedulerView({
 
   return (
     <motion.div variants={staggerParent(0.05)} initial="hidden" animate="show" className="space-y-4">
-      {canManage && (
-        <motion.div variants={riseChild} className="flex justify-end">
+      <motion.div variants={riseChild} className="flex items-center justify-between gap-4">
+        <label className="inline-flex cursor-pointer items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={showComplete}
+            onChange={(e) => toggleComplete(e.target.checked)}
+            className="size-4 cursor-pointer accent-primary"
+          />
+          Show complete
+        </label>
+        {canManage && (
           <Button variant="brand" onClick={() => open(null)}>
             <CalendarPlus />
             Schedule Next Bootcamp
           </Button>
-        </motion.div>
-      )}
+        )}
+      </motion.div>
 
       {error && (
         <motion.p variants={riseChild} role="alert" className="text-sm text-destructive">

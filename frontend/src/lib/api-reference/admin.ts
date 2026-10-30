@@ -895,7 +895,10 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "trainingViewer",
         token: true,
         notes: "intDays is null for a bootcamp with no intermediate class. At most one bootcamp is active; complete is one that has run.",
-        query: listQuery(BOOTCAMP_LIST.sorts, "the status, the facility, or who created it"),
+        query: [
+          ...listQuery(BOOTCAMP_LIST.sorts, "the status, the facility, or who created it"),
+          { name: "complete", type: '"true" | "false"', note: "false leaves out bootcamps with status complete. Default true." },
+        ],
         returns: `{ bootcamps: { id, startDate: "YYYY-MM-DD", btcDays: number, intDays: number | null, status: "scheduled" | "active" | "complete", facilityId: string | null, facilityName: string | null, createdBy: string | null, createdAt: ISO 8601 string }[], ${PAGE_FIELDS} }`,
       },
       {

@@ -22,10 +22,12 @@ export default async function SchedulerPage({
   if (!session?.user) redirect(await signInPath());
   if (!canUseTraining(session.user.access)) notFound();
 
-  const query = parseListQuery(await searchParams, BOOTCAMP_LIST);
+  const params = await searchParams;
+  const query = parseListQuery(params, BOOTCAMP_LIST);
+  const showComplete = params.complete === "1";
   const canManage = canManageTrainingSettings(session.user.access);
   const [page, facilities, sources] = await Promise.all([
-    listBootcamps(query),
+    listBootcamps(query, showComplete),
     canManage ? facilityPicks() : [],
     canManage ? copySources(null) : [],
   ]);
@@ -35,6 +37,7 @@ export default async function SchedulerPage({
       <h1 className="text-3xl font-medium tracking-tight">Scheduler</h1>
       <SchedulerView
         query={query}
+        showComplete={showComplete}
         page={page}
         canManage={canManage}
         facilities={facilities}

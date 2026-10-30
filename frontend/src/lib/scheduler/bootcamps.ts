@@ -62,8 +62,11 @@ const SORT_COLUMNS = {
   createdBy: sql`lower(${createdBy})`,
 } as const;
 
-/** One page of bootcamps, latest first by default. The search matches the status, the facility or who created it. */
-export async function listBootcamps(query: ListQuery<BootcampSort>): Promise<Page<BootcampRow>> {
+/**
+ * One page of bootcamps, latest first by default. The search matches the status, the facility or who created it.
+ * `includeComplete` false leaves out those that have run.
+ */
+export async function listBootcamps(query: ListQuery<BootcampSort>, includeComplete = true): Promise<Page<BootcampRow>> {
   const { limit, offset } = pageWindow(query.page);
   const rows = await db
     .select({
@@ -80,7 +83,12 @@ export async function listBootcamps(query: ListQuery<BootcampSort>): Promise<Pag
     .from(bootcamps)
     .leftJoin(users, eq(users.id, bootcamps.createdBy))
     .leftJoin(facilities, eq(facilities.id, bootcamps.facilityId))
-    .where(searchAny(query.q, [bootcamps.status, users.name, users.email, facilities.name]))
+    .where(
+      and(
+        searchAny(query.q, [bootcamps.status, users.name, users.email, facilities.name]),
+        includeComplete ? undefined : ne(bootcamps.status, "complete"),
+      ),
+    )
     .orderBy(...orderFor(SORT_COLUMNS[query.sort], query.dir, sql`${bootcamps.startDate} desc`, bootcamps.id))
     .limit(limit)
     .offset(offset);
