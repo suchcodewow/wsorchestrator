@@ -8,8 +8,8 @@
  * deferred, under the stage row alone, and the Current tab everyone else.
  * An administrator sets anyone's track from the Track column, and it holds
  * through every sync until they hand it back to the rules. A row opens to show the rest of what the sync knows about them.
- * With one stage and Sales or Engineer picked, an eVals viewer also sees a
- * column per assessment for that stage and track, after their average.
+ * No view shows a score: Cohorts is who is in them, and eVals and Reporting
+ * are how they did.
  * The Current tab's Attendance column, beside each name, holds an RSVP mark if
  * they saved their stage's registration form, then a mark for each picked
  * Google meeting that is for them, and an eVals administrator can override
@@ -34,7 +34,6 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import type {
   CandidateStage,
   CandidateTrack,
-  CohortScoring,
   CurrentCohortCounts,
   CurrentCohortFilter,
   CurrentCohortMember,
@@ -147,11 +146,10 @@ export function CurrentCohortView({
   filter,
   page,
   counts,
-  assessments,
   deferral,
   activeBootcamp,
   canSetTrack,
-  canSeeScores,
+  canOpenRecord,
   meetings = {},
   canMarkAttendance = false,
   intakes,
@@ -164,14 +162,12 @@ export function CurrentCohortView({
   page: Page<CurrentCohortMember>;
   /** Everyone in each stage on each track, whatever the search or filter. */
   counts: CurrentCohortCounts;
-  /** A column each, after the average; null for none, as for a viewer outside eVals or a filter without one stage and Sales or Engineer. */
-  assessments: CohortScoring["assessments"] | null;
   deferral: { days: number; bootcampStart: string | null };
   activeBootcamp: ActiveBootcamp | null;
   /** Whether the viewer may set anyone's track. */
   canSetTrack: boolean;
-  /** Whether the viewer is in eVals, whose scores and Live Sessions records these are. */
-  canSeeScores: boolean;
+  /** Whether the viewer is in eVals, whose Live Sessions records these are. */
+  canOpenRecord: boolean;
   /** The Current tab's meeting marks; none on the Deferred tab. */
   meetings?: MemberMeetings;
   /** Whether the viewer may say someone attended or missed a meeting, over what Zoom said. */
@@ -196,13 +192,12 @@ export function CurrentCohortView({
     });
   }
 
-  const scoreColumns = assessments && assessments.length > 0 ? assessments : null;
   // No bootcamp candidate has a BTC date yet.
   const showBtcDate = filter.stage !== "bootcamp";
   const columns = showBtcDate ? COLUMNS : COLUMNS.filter((c) => c.column !== "btcDate");
   // The RSVP and meeting marks are the Current tab's; the Deferred tab has none.
   const showAttendance = tab === "current";
-  const columnCount = columns.length + (showAttendance ? 1 : 0) + (scoreColumns ? scoreColumns.length + 1 : 0);
+  const columnCount = columns.length + (showAttendance ? 1 : 0);
   // Each row counts within the other row's pick; the Deferred tab has only the deferred to count.
   const stageCount = (stage: CandidateStage) =>
     tab === "deferred"
@@ -384,18 +379,6 @@ export function CurrentCohortView({
                     {c.column === "fullName" && showAttendance && <PlainHeader>Attendance</PlainHeader>}
                   </Fragment>
                 ))}
-                {scoreColumns && (
-                  <>
-                    <SortHeader column="averageScore" sort={query.sort} dir={query.dir} className="text-right">
-                      Average
-                    </SortHeader>
-                    {scoreColumns.map((a) => (
-                      <PlainHeader key={a.id} className="min-w-24 text-right">
-                        {a.name}
-                      </PlainHeader>
-                    ))}
-                  </>
-                )}
               </tr>
             </thead>
             <tbody>
@@ -456,21 +439,11 @@ export function CurrentCohortView({
                           {formatDate(m.btcDate)}
                         </td>
                       )}
-                      {scoreColumns && (
-                        <>
-                          <td className="px-5 py-2 text-right font-medium tabular-nums">{score(m.averageScore)}</td>
-                          {scoreColumns.map((a) => (
-                            <td key={a.id} className="px-5 py-2 text-right tabular-nums text-muted-foreground">
-                              {score(m.scores[a.id])}
-                            </td>
-                          ))}
-                        </>
-                      )}
                     </tr>
                     {expanded && (
                       <tr id={`person-${m.email}`} className="border-b bg-muted/30 last:border-b-0">
                         <td colSpan={columnCount} className="px-5 pt-1 pb-4 pl-10">
-                          <PersonDetails member={m} canSeeScores={canSeeScores} />
+                          <PersonDetails member={m} canOpenRecord={canOpenRecord} />
                           <Registrations
                             stage={m.stage}
                             intakes={intakes[m.email.toLowerCase()] ?? []}
@@ -561,11 +534,7 @@ function TrackLabel({ member }: { member: CurrentCohortMember }) {
 }
 
 /** Everything the row leaves out, from the last HiBob sync and the classes they attended. */
-function score(value: number | null | undefined): string {
-  return value == null ? "—" : value.toFixed(1);
-}
-
-function PersonDetails({ member: m, canSeeScores }: { member: CurrentCohortMember; canSeeScores: boolean }) {
+function PersonDetails({ member: m, canOpenRecord }: { member: CurrentCohortMember; canOpenRecord: boolean }) {
   return (
     <dl className="grid grid-cols-2 gap-x-8 gap-y-3 lg:grid-cols-4">
       <Field label="Email">{m.email}</Field>
@@ -582,11 +551,10 @@ function PersonDetails({ member: m, canSeeScores }: { member: CurrentCohortMembe
       <Field label="In position since">{formatDate(m.activeEffectiveDate)}</Field>
       <Field label="Stage">{m.stage === "bootcamp" ? "Bootcamp" : "Intermediate"}</Field>
       <Field label="Track set by">{m.overridden ? "An administrator" : "The rules"}</Field>
-      {canSeeScores && <Field label="BTC score">{score(m.btcScore)}</Field>}
       <Field label="Live Sessions">
         {!m.recordKey ? (
           "None yet"
-        ) : canSeeScores ? (
+        ) : canOpenRecord ? (
           <Link
             href={`/reporting/bootcamp/${m.recordKey}`}
             onClick={(ev) => ev.stopPropagation()}

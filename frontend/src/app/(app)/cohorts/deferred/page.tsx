@@ -19,9 +19,9 @@ export default async function DeferredCohortPage({
   // A hand-typed stage that isn't one shows both, as a bad sort does.
   const filter = { stage: isCandidateStage(params.stage) ? params.stage : null, track: "deferred" as const };
   const session = await auth();
-  const canSeeScores = session?.user ? canUseEvals(session.user.access) : false;
+  const canOpenRecord = session?.user ? canUseEvals(session.user.access) : false;
   const [page, summary, active, intakeQuestions] = await Promise.all([
-    listCurrentCohort(filter, query, canSeeScores ? { scoring: null } : undefined),
+    listCurrentCohort(filter, query),
     currentCohortSummary(),
     activeBootcamp(),
     intakeQuestionsByForm(),
@@ -34,11 +34,10 @@ export default async function DeferredCohortPage({
       filter={filter}
       page={page}
       counts={summary.counts}
-      assessments={null}
       deferral={summary.deferral}
       activeBootcamp={active}
       canSetTrack={session?.user ? canManageTrainingSettings(session.user.access) : false}
-      canSeeScores={canSeeScores}
+      canOpenRecord={canOpenRecord}
       intakes={intakes}
       intakeQuestions={intakeQuestions}
     />
