@@ -1141,7 +1141,12 @@ export const EVALS_SETTINGS_KEYS = {
   testGroupMembers: "test_group_members",
   /** `true` to let the Google Meetings sync change calendar invites; anything else is a dry run. */
   meetingSyncLive: "meeting_sync_live",
+  /** JSON `{ email, fullName }[]`, at most `MEETING_FACILITATORS_MAX`: who the sync adds to each occurrence a cohort member is on. */
+  meetingFacilitators: "meeting_facilitators",
 } as const;
+
+/** Most people the Google Meetings sync adds to every occurrence. */
+export const MEETING_FACILITATORS_MAX = 100;
 
 /** Most people the test group holds. */
 export const TEST_GROUP_MAX_MEMBERS = 100;
@@ -1406,6 +1411,7 @@ export const meetingOccurrences = pgTable(
 
 export type MeetingOccurrence = typeof meetingOccurrences.$inferSelect;
 
+/** `administrator` is a meeting facilitator: the stored value predates the name. */
 export const MEETING_INVITE_ROLES = ["member", "administrator"] as const;
 export type MeetingInviteRole = (typeof MEETING_INVITE_ROLES)[number];
 

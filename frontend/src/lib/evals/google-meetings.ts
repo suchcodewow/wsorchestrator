@@ -21,6 +21,7 @@ import {
   googleConnections,
   googleMeetings,
   intakeResponses,
+  MEETING_FACILITATORS_MAX,
   MEETING_SELECTION_LIMITS,
   MEETING_STAGES,
   MEETING_TRACKS,
@@ -892,19 +893,43 @@ export async function listMeetingSyncChanges(
 /* Who is on every invite                                              */
 /* ------------------------------------------------------------------ */
 
+export type MeetingFacilitator = { email: string; fullName: string };
+
+/** Lowercased, each once, in email order, and no more than the most there can be. */
+function cleanFacilitators(list: readonly MeetingFacilitator[]): MeetingFacilitator[] {
+  const byEmail = new Map(list.map((a) => [a.email.trim().toLowerCase(), a.fullName]));
+  return [...byEmail]
+    .filter(([email]) => email)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([email, fullName]) => ({ email, fullName }))
+    .slice(0, MEETING_FACILITATORS_MAX);
+}
+
 /**
- * Everyone who holds the Assessments Administrator role, lowercased. A
- * platform administrator counts as one inside the app, but is not invited
- * unless they hold the role too: these are the people who run the meetings.
+ * The meeting facilitators picked on the Google Meetings tab: the sync
+ * adds them to each occurrence a cohort member is on. Holding the Assessments
+ * Administrator role neither puts anyone here nor keeps them here.
  */
-export async function assessmentAdministratorEmails(): Promise<string[]> {
-  const rows = await db
-    .select({ email: sql<string>`lower(${users.email})` })
-    .from(users)
-    .where(and(eq(users.assessmentsRole, "administrator"), isNotNull(users.email)))
-    .orderBy(sql`lower(${users.email})`)
-    .limit(PAGE_SIZE);
-  return rows.map((row) => row.email);
+export async function getMeetingFacilitators(): Promise<MeetingFacilitator[]> {
+  const [row] = await db.select({ value: evalsSettings.value }).from(evalsSettings).where(eq(evalsSettings.key, EVALS_SETTINGS_KEYS.meetingFacilitators));
+  try {
+    const parsed: unknown = JSON.parse(row?.value ?? "[]");
+    if (!Array.isArray(parsed)) return [];
+    return cleanFacilitators(
+      parsed.flatMap((a) => (a && typeof a.email === "string" ? [{ email: a.email, fullName: typeof a.fullName === "string" ? a.fullName : "" }] : [])),
+    );
+  } catch {
+    return [];
+  }
+}
+
+export async function setMeetingFacilitators(actorId: string, facilitators: readonly MeetingFacilitator[]): Promise<MeetingFacilitator[]> {
+  const value = JSON.stringify(cleanFacilitators(facilitators));
+  await db
+    .insert(evalsSettings)
+    .values({ key: EVALS_SETTINGS_KEYS.meetingFacilitators, value, updatedBy: actorId })
+    .onConflictDoUpdate({ target: evalsSettings.key, set: { value, updatedBy: actorId, updatedAt: new Date() } });
+  return getMeetingFacilitators();
 }
 
 /* ------------------------------------------------------------------ */
@@ -979,7 +1004,7 @@ export type GoogleMeetingsOverview = {
   /** Attendance is read from Zoom only when the app is set up and a Zoom user is connected. */
   zoom: { configured: boolean; connection: ZoomConnectionStatus | null };
   /** Guests on every occurrence a cohort member is invited to. */
-  administrators: string[];
+  facilitators: MeetingFacilitator[];
   live: boolean;
   running: boolean;
   testGroup: { on: boolean; suffix: string; members: number };
@@ -993,10 +1018,10 @@ export type GoogleMeetingsOverview = {
 };
 
 export async function googleMeetingsOverview(): Promise<GoogleMeetingsOverview> {
-  const [connection, zoomConnection, administrators, live, running, group, bootcamp, lastLiveSync, legacy, meetingCount] = await Promise.all([
+  const [connection, zoomConnection, facilitators, live, running, group, bootcamp, lastLiveSync, legacy, meetingCount] = await Promise.all([
     googleConnectionStatus(),
     zoomConnectionStatus(),
-    assessmentAdministratorEmails(),
+    getMeetingFacilitators(),
     getMeetingSyncLive(),
     meetingSyncInProgress(),
     getTestGroup(),
@@ -1008,7 +1033,7 @@ export async function googleMeetingsOverview(): Promise<GoogleMeetingsOverview> 
   return {
     connection,
     zoom: { configured: zoomApp() !== null, connection: zoomConnection },
-    administrators,
+    facilitators,
     live,
     running,
     testGroup: { on: group.on, suffix: group.suffix, members: group.members.length },

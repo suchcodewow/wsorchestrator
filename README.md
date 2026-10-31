@@ -499,7 +499,7 @@ placeholder; **eVals settings** holds what it will draw on:
   next 60 days, each for Bootcamp, Intermediate or both and Sales, Engineers
   or both. The app makes no meetings. The sync, every day at 4:00 AM Eastern
   and whenever **Sync Now** is pressed, adds each Current-tab
-  person a meeting is for, and every Assessments Administrator, to its next
+  person a meeting is for, and every meeting facilitator picked on the tab, to its next
   occurrence before the bootcamp. Zoom (or an administrator's mark) says who
   attended, and anyone who missed is invited to the next occurrence. The
   Current tab shows where each person stands. It starts in dry run and follows
