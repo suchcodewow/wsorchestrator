@@ -38,7 +38,7 @@ import { riseChild, staggerParent } from "@/lib/motion";
 import type { ListQuery, Page } from "@/lib/paging";
 import { cn } from "@/lib/utils";
 import { formatDate, formatWhen } from "../../cohort-settings/format";
-import { AdministratorsSection } from "./administrators-section";
+import { FacilitatorsSection } from "./facilitators-section";
 import { MeetingDialog, type EditableMeeting } from "./meeting-dialog";
 
 export type MeetingListing = EditableMeeting & {
@@ -173,7 +173,7 @@ const VIEWS = [
 export function GoogleMeetingsView({ overview, list }: { overview: Overview; list: List }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { connection, zoom, administrators, live, testGroup, cutoff, lastLiveSync, legacyMeetings } = overview;
+  const { connection, zoom, facilitators, live, testGroup, cutoff, lastLiveSync, legacyMeetings } = overview;
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<EditableMeeting | null>(null);
@@ -227,7 +227,7 @@ export function GoogleMeetingsView({ overview, list }: { overview: Overview; lis
     if (
       next &&
       !window.confirm(
-        "Go live? From the next sync, Google Calendar invites go to the cohort and the Assessments Administrators, those it invited who no longer belong are taken off, and any meetings left from the old form are cancelled.",
+        "Go live? From the next sync, Google Calendar invites go to the cohort and the meeting facilitators, those it invited who no longer belong are taken off, and any meetings left from the old form are cancelled.",
       )
     ) {
       return;
@@ -338,7 +338,7 @@ export function GoogleMeetingsView({ overview, list }: { overview: Overview; lis
           <FlaskConical className="mt-0.5 size-4 shrink-0" />
           <span>
             The test group is on, so each sync invites its {plural(testGroup.members, "person", "people")}{" "}
-            (<span className="font-mono">-{testGroup.suffix}</span>) instead of the cohort, and no administrators. Turn it off on
+            (<span className="font-mono">-{testGroup.suffix}</span>) instead of the cohort, and no facilitators. Turn it off on
             the Cohorts page&apos;s Current tab, which takes its invites back.
           </span>
         </motion.div>
@@ -367,7 +367,7 @@ export function GoogleMeetingsView({ overview, list }: { overview: Overview; lis
             </p>
           </div>
         )}
-        <AdministratorsSection administrators={administrators} />
+        <FacilitatorsSection facilitators={facilitators} />
         <div className="space-y-0.5 px-5 py-4">
           <p className="font-medium">Invite window</p>
           <p className="text-muted-foreground">

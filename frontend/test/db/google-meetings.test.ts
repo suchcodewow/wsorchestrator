@@ -49,8 +49,8 @@ import {
   meetingStatusesFor,
   saveGoogleConnection,
   setAttendanceMark,
-  getMeetingAdministrators,
-  setMeetingAdministrators,
+  getMeetingFacilitators,
+  setMeetingFacilitators,
   setMeetingSyncLive,
   updateMeetingSelection,
   type GoogleConnection,
@@ -272,7 +272,7 @@ before(async () => {
   await scope.setUp();
   [saved] = await db.select().from(googleConnections).where(eq(googleConnections.key, GOOGLE_CONNECTION_KEY));
   [savedZoom] = await db.select().from(zoomConnections).where(eq(zoomConnections.key, ZOOM_CONNECTION_KEY));
-  const keys = [EVALS_SETTINGS_KEYS.meetingSyncLive, EVALS_SETTINGS_KEYS.meetingAdministrators, EVALS_SETTINGS_KEYS.testGroupOn, EVALS_SETTINGS_KEYS.testGroupMembers, EVALS_SETTINGS_KEYS.testGroupSuffix];
+  const keys = [EVALS_SETTINGS_KEYS.meetingSyncLive, EVALS_SETTINGS_KEYS.meetingFacilitators, EVALS_SETTINGS_KEYS.testGroupOn, EVALS_SETTINGS_KEYS.testGroupMembers, EVALS_SETTINGS_KEYS.testGroupSuffix];
   savedSettings = await db.select().from(evalsSettings).where(inArray(evalsSettings.key, keys));
   await db.delete(employees).where(like(employees.id, `${TEST_PREFIX}%`));
   admin = await scope.createUser("admin", PERSONAS.assessmentsAdmin);
@@ -303,7 +303,7 @@ beforeEach(async () => {
   await db.delete(zoomConnections).where(eq(zoomConnections.key, ZOOM_CONNECTION_KEY));
   await saveTestGroup(admin.id, { on: false });
   await setMeetingSyncLive(admin.id, true);
-  await setMeetingAdministrators(admin.id, [{ email: admin.email, fullName: "Admin" }]);
+  await setMeetingFacilitators(admin.id, [{ email: admin.email, fullName: "Admin" }]);
 });
 
 after(async () => {
@@ -313,7 +313,7 @@ after(async () => {
   if (saved) await db.insert(googleConnections).values(saved);
   await db.delete(zoomConnections).where(eq(zoomConnections.key, ZOOM_CONNECTION_KEY));
   if (savedZoom) await db.insert(zoomConnections).values(savedZoom);
-  const keys = [EVALS_SETTINGS_KEYS.meetingSyncLive, EVALS_SETTINGS_KEYS.meetingAdministrators, EVALS_SETTINGS_KEYS.testGroupOn, EVALS_SETTINGS_KEYS.testGroupMembers, EVALS_SETTINGS_KEYS.testGroupSuffix];
+  const keys = [EVALS_SETTINGS_KEYS.meetingSyncLive, EVALS_SETTINGS_KEYS.meetingFacilitators, EVALS_SETTINGS_KEYS.testGroupOn, EVALS_SETTINGS_KEYS.testGroupMembers, EVALS_SETTINGS_KEYS.testGroupSuffix];
   await db.delete(evalsSettings).where(inArray(evalsSettings.key, keys));
   if (savedSettings.length > 0) await db.insert(evalsSettings).values(savedSettings);
   if (bootcamp?.movedFrom) await db.update(bootcamps).set({ startDate: bootcamp.movedFrom }).where(eq(bootcamps.id, bootcamp.id));
@@ -447,7 +447,7 @@ describe("Sync Now", () => {
     assert.equal(statuses.find((x) => x.meetingId === id)!.mark, "none_left");
   });
 
-  test("invites whom the meeting is for to its next occurrence, with the administrators, and sends nothing twice", async () => {
+  test("invites whom the meeting is for to its next occurrence, with the facilitators, and sends nothing twice", async () => {
     await connect();
     const id = await pick();
     event("e1", 1);
@@ -458,7 +458,7 @@ describe("Sync Now", () => {
     const guests = fake.guests("e1");
     assert.ok(guests.includes(salesEmail), "the Bootcamp Sales candidate is invited");
     assert.ok(!guests.includes(engineerEmail), "an engineer is not");
-    assert.ok(guests.includes(admin.email), "the administrator is");
+    assert.ok(guests.includes(admin.email), "the facilitator is");
     assert.ok(!fake.guests("e2").includes(salesEmail), "to one occurrence only");
     const patch = fake.calls.find((c) => c.method === "PATCH")!;
     assert.equal(patch.url.searchParams.get("sendUpdates"), "none", "Google emails no one");
@@ -482,7 +482,7 @@ describe("Sync Now", () => {
     event("e2", 5);
     await sync_ok();
     assert.ok(fake.guests("e1").includes(salesEmail) && fake.guests("e2").includes(salesEmail), "on both");
-    assert.ok(fake.guests("e2").includes(admin.email), "with the administrator on each");
+    assert.ok(fake.guests("e2").includes(admin.email), "with the facilitator on each");
 
     assert.ok((await updateMeetingSelection(id, { allOccurrences: false })).ok);
     await sync_ok();
@@ -806,36 +806,36 @@ describe("Sync Now", () => {
     assert.deepEqual([status!.leaving?.why, status!.leaving?.occurrences.length], ["extra", 1]);
   });
 
-  test("whoever is picked is added like an administrator, and whoever is removed is taken off, whatever their role", async () => {
+  test("a facilitator is added to each occurrence, and taken off once removed, whatever their role", async () => {
     await connect();
     await pick();
     event("e1", 1);
     const picked = `${TEST_PREFIX}Picked@${TEST_EMAIL_DOMAIN}`;
-    await setMeetingAdministrators(admin.id, [{ email: picked, fullName: "Picked" }]);
+    await setMeetingFacilitators(admin.id, [{ email: picked, fullName: "Picked" }]);
     await sync_ok();
     const guests = fake.guests("e1");
     assert.ok(guests.includes(picked.toLowerCase()), "someone with no role is added");
     assert.ok(!guests.includes(admin.email), "and the role alone adds nobody");
 
-    await setMeetingAdministrators(admin.id, []);
+    await setMeetingFacilitators(admin.id, []);
     await sync_ok();
     assert.ok(!fake.guests("e1").includes(picked.toLowerCase()));
     assert.ok(fake.guests("e1").includes(salesEmail), "the cohort stays");
   });
 
-  test("the administrators are lowercased, listed once and in order", async () => {
-    await setMeetingAdministrators(admin.id, [
+  test("the facilitators are lowercased, listed once and in order", async () => {
+    await setMeetingFacilitators(admin.id, [
       { email: "Zed@Harness.io", fullName: "Zed" },
       { email: "amy@harness.io", fullName: "Amy" },
       { email: "zed@harness.io", fullName: "Zed Again" },
     ]);
-    assert.deepEqual(await getMeetingAdministrators(), [
+    assert.deepEqual(await getMeetingFacilitators(), [
       { email: "amy@harness.io", fullName: "Amy" },
       { email: "zed@harness.io", fullName: "Zed Again" },
     ]);
   });
 
-  test("the test group stands in for the cohort, with no administrators, and turning it off takes its invites back", async () => {
+  test("the test group stands in for the cohort, with no facilitators, and turning it off takes its invites back", async () => {
     await connect();
     const id = await pick("bootcamp", "both");
     event("e1", 1);

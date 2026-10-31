@@ -4,7 +4,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  administratorsFor,
+  facilitatorsFor,
   audienceLabel,
   audienceOf,
   bootcampLastDay,
@@ -389,8 +389,8 @@ test("one meeting at a time takes them off the extra invites all meetings gave",
   );
 });
 
-test("administrators go on each occurrence a member is on, and none other", () => {
-  const admins = administratorsFor(
+test("facilitators go on each occurrence a member is on, and none other", () => {
+  const admins = facilitatorsFor(
     ["next", "later"],
     new Map([["next", new Set(["a@harness.io", "admin.two@harness.io"])]]),
     ["Admin.One@harness.io", "admin.two@harness.io", "admin.one@harness.io"],

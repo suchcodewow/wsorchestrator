@@ -6,23 +6,23 @@
 
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { MEETING_ADMINISTRATORS_MAX } from "@/db/schema";
+import { MEETING_FACILITATORS_MAX } from "@/db/schema";
 import { requireEvalsAdministrator } from "@/lib/api-auth";
 import { audited, noteAudit } from "@/lib/audit";
-import { getMeetingAdministrators, setMeetingAdministrators } from "@/lib/evals/google-meetings";
+import { getMeetingFacilitators, setMeetingFacilitators } from "@/lib/evals/google-meetings";
 
 const bodySchema = z
   .object({
-    administrators: z
+    facilitators: z
       .array(z.object({ email: z.string().trim().toLowerCase().email().max(320), fullName: z.string().trim().max(200) }).strict())
-      .max(MEETING_ADMINISTRATORS_MAX),
+      .max(MEETING_FACILITATORS_MAX),
   })
   .strict();
 
 export async function GET(req: Request) {
   const { error } = await requireEvalsAdministrator(req);
   if (error) return error;
-  return NextResponse.json({ administrators: await getMeetingAdministrators() });
+  return NextResponse.json({ facilitators: await getMeetingFacilitators() });
 }
 
 export const PUT = audited(async function PUT(req: Request) {
@@ -33,12 +33,12 @@ export const PUT = audited(async function PUT(req: Request) {
   if (!parsed.success) {
     return NextResponse.json({ error: "invalid" }, { status: 400 });
   }
-  const before = await getMeetingAdministrators();
-  const administrators = await setMeetingAdministrators(user.id, parsed.data.administrators);
+  const before = await getMeetingFacilitators();
+  const facilitators = await setMeetingFacilitators(user.id, parsed.data.facilitators);
   noteAudit({
-    target: "google_meetings_administrators",
-    targetLabel: "Assessments Administrators",
-    detail: { was: before.map((a) => a.email), now: administrators.map((a) => a.email) },
+    target: "google_meetings_facilitators",
+    targetLabel: "Meeting facilitators",
+    detail: { was: before.map((a) => a.email), now: facilitators.map((a) => a.email) },
   });
-  return NextResponse.json({ administrators });
+  return NextResponse.json({ facilitators });
 });

@@ -20,8 +20,8 @@
  * invited to the next one after it straight away, and stay a declined guest on
  * the one they turned down, which is how a later sync knows not to offer it
  * again. Accepting it after all makes the later invite the spare one. Every
- * Assessments Administrator is invited to each upcoming occurrence a cohort
- * member is on.
+ * meeting facilitator is invited to each upcoming occurrence a cohort member
+ * is on.
  *
  * A meeting may instead invite each person to every occurrence offered to
  * them, whether or not they have attended one. Its series simply ends, so
@@ -432,20 +432,20 @@ export function planMeeting(input: {
 }
 
 /**
- * The administrators each upcoming occurrence should have: all of them on one
+ * The facilitators each upcoming occurrence should have: all of them on one
  * a cohort member is on after the plan, none on one no member is. The
  * organizer and the members themselves are left out.
  */
-export function administratorsFor(
+export function facilitatorsFor(
   occurrenceIds: readonly string[],
   memberEmailsOn: ReadonlyMap<string, ReadonlySet<string>>,
-  administrators: readonly string[],
+  facilitators: readonly string[],
 ): Map<string, string[]> {
-  const admins = [...new Set(administrators.map(normal))].filter(Boolean).sort();
+  const everyone = [...new Set(facilitators.map(normal))].filter(Boolean).sort();
   return new Map(
     occurrenceIds.map((id) => {
       const members = memberEmailsOn.get(id) ?? new Set<string>();
-      return [id, members.size > 0 ? admins.filter((a) => !members.has(a)) : []];
+      return [id, members.size > 0 ? everyone.filter((a) => !members.has(a)) : []];
     }),
   );
 }

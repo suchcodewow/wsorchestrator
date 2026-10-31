@@ -219,9 +219,9 @@ Each run does the following for each picked meeting
 
 - **Invites.** Each person on the Cohorts → Current tab whom the meeting is
   for is added to the next occurrence of it that falls before the active
-  bootcamp's start date. So is everyone on the tab's Assessments Administrators
-  list, on any occurrence that has a cohort member on it. That list is its
-  own, not the role. Every change to the calendar is
+  bootcamp's start date. So is every meeting facilitator, picked on the tab,
+  on any occurrence that has a cohort member on it. They are a list of their
+  own, not the Assessments Administrator role. Every change to the calendar is
   sent with `sendUpdates=none`, so Google emails no one: a new guest finds the
   invite on their calendar, and one taken off simply loses it. An invite whose
   guests are already right is left alone.

@@ -1,11 +1,11 @@
 -- Who the Google Meetings sync adds to every occurrence stops being whoever
--- holds the Assessments Administrator role and becomes a list picked on the
--- tab. It starts as those people, so the next sync changes no invite.
+-- holds the Assessments Administrator role and becomes the meeting facilitators,
+-- picked on the tab. They start as those people, so the next sync changes no invite.
 begin;
 
 insert into evals_settings (key, value)
 select
-  'meeting_administrators',
+  'meeting_facilitators',
   coalesce(json_agg(json_build_object('email', email, 'fullName', full_name) order by email)::text, '[]')
 from (
   select lower(email) as email, coalesce(max(name), '') as full_name

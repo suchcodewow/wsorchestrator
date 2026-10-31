@@ -12,13 +12,13 @@
  *    for to its next occurrence in their window, and anyone who missed or
  *    declined theirs to the next one after it, or to every occurrence in it when the meeting
  *    is set to all meetings (`meeting-plan.ts` has the rules), with every
- *    administrator picked on the tab on each occurrence a cohort member is on. The
+ *    meeting facilitator on each occurrence a cohort member is on. The
  *    window is before the active bootcamp starts, except for an Intermediate
  *    meeting's people who take the bootcamp first, who RSVP'd to it: theirs
  *    runs from after its last day to the next intermediate class.
  *
  * With the test group on, the test group stands in for the cohort, its
- * invites are marked as its own, and administrators are not invited; turning
+ * invites are marked as its own, and facilitators are not invited; turning
  * the group off takes its invites away (`cancelTestMeetingInvites`).
  *
  * Until an administrator turns it live, every run is a dry run: it reads the
@@ -61,7 +61,7 @@ import {
 import { forgetTestArtifact, outboundCohort, testArtifacts } from "@/lib/cohorts/test-group";
 import { PAGE_SIZE } from "@/lib/paging";
 import {
-  getMeetingAdministrators,
+  getMeetingFacilitators,
   getMeetingSyncLive,
   googleConnection,
   meetingBootcamp,
@@ -71,7 +71,7 @@ import {
   type GoogleConnection,
 } from "@/lib/evals/google-meetings";
 import {
-  administratorsFor,
+  facilitatorsFor,
   inviteWindowLabel,
   joinedFrom,
   meetingKey,
@@ -402,7 +402,7 @@ type Context = {
     rsvpd?: boolean;
     btcDate?: string | null;
   }[];
-  administrators: string[];
+  facilitators: string[];
   /** The active bootcamp, which decides each person's window; with none the run stops before planning. */
   bootcamp: MeetingBootcamp | null;
   log: RunLog;
@@ -660,13 +660,13 @@ async function syncMeeting(ctx: Context, meeting: MeetingSelection): Promise<voi
     membersOn.set(inv.occurrenceId, (membersOn.get(inv.occurrenceId) ?? new Set()).add(inv.email));
   }
   if (!ctx.testGroup) {
-    const admins = administratorsFor(
+    const facilitators = facilitatorsFor(
       upcoming.map((occ) => occ.id),
       membersOn,
-      ctx.administrators,
+      ctx.facilitators,
     );
     for (const occ of upcoming) {
-      const want = new Set(admins.get(occ.id) ?? []);
+      const want = new Set(facilitators.get(occ.id) ?? []);
       const have = mode.filter((inv) => inv.occurrenceId === occ.id && inv.role === "administrator");
       for (const email of want) if (!have.some((inv) => inv.email === email)) add.push({ occurrenceId: occ.id, email, role: "administrator" });
       for (const inv of have) if (!want.has(inv.email) && inv.attendance === null) drop.add(`${inv.occurrenceId} ${inv.email}`);
@@ -863,13 +863,13 @@ export async function runMeetingSync(
       timeZone: "UTC",
       listed: [],
       cohort,
-      administrators: group.on ? [] : (await getMeetingAdministrators()).map((a) => a.email),
+      facilitators: group.on ? [] : (await getMeetingFacilitators()).map((a) => a.email),
       bootcamp,
       log,
       notes,
       noted: new Set(),
     };
-    if (group.on) notes.push("The test group is on, so only its members are invited, and administrators are not.");
+    if (group.on) notes.push("The test group is on, so only its members are invited, and facilitators are not.");
 
     let unfinished = false;
     /** Nothing to sync: no meeting picked, or no bootcamp to invite anyone before. */
