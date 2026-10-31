@@ -1141,7 +1141,12 @@ export const EVALS_SETTINGS_KEYS = {
   testGroupMembers: "test_group_members",
   /** `true` to let the Google Meetings sync change calendar invites; anything else is a dry run. */
   meetingSyncLive: "meeting_sync_live",
+  /** JSON `{ email, fullName }[]`, at most `MEETING_ADMINISTRATORS_MAX`: who the sync adds to each occurrence a cohort member is on. */
+  meetingAdministrators: "meeting_administrators",
 } as const;
+
+/** Most people the Google Meetings sync adds to every occurrence. */
+export const MEETING_ADMINISTRATORS_MAX = 100;
 
 /** Most people the test group holds. */
 export const TEST_GROUP_MAX_MEMBERS = 100;

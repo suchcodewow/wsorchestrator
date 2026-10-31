@@ -12,7 +12,7 @@
  *    for to its next occurrence in their window, and anyone who missed or
  *    declined theirs to the next one after it, or to every occurrence in it when the meeting
  *    is set to all meetings (`meeting-plan.ts` has the rules), with every
- *    Assessments Administrator on each occurrence a cohort member is on. The
+ *    administrator picked on the tab on each occurrence a cohort member is on. The
  *    window is before the active bootcamp starts, except for an Intermediate
  *    meeting's people who take the bootcamp first, who RSVP'd to it: theirs
  *    runs from after its last day to the next intermediate class.
@@ -61,7 +61,7 @@ import {
 import { forgetTestArtifact, outboundCohort, testArtifacts } from "@/lib/cohorts/test-group";
 import { PAGE_SIZE } from "@/lib/paging";
 import {
-  assessmentAdministratorEmails,
+  getMeetingAdministrators,
   getMeetingSyncLive,
   googleConnection,
   meetingBootcamp,
@@ -863,7 +863,7 @@ export async function runMeetingSync(
       timeZone: "UTC",
       listed: [],
       cohort,
-      administrators: group.on ? [] : await assessmentAdministratorEmails(),
+      administrators: group.on ? [] : (await getMeetingAdministrators()).map((a) => a.email),
       bootcamp,
       log,
       notes,

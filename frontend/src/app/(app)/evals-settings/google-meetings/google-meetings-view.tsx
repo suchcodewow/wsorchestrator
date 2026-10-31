@@ -1,8 +1,8 @@
 "use client";
 
 /**
- * Google Meetings: the accounts the sync uses, whom it adds, and whether it
- * is live or a dry run, in one card; then the meetings picked from the
+ * Google Meetings: any account the sync still needs connected, whom it adds,
+ * and whether it is live or a dry run, in one card; then the meetings picked from the
  * Revenue Enablement calendar, each opening to be changed, or the sync's log;
  * and Preview and Sync Now, which add the cohort to each meeting's next
  * occurrence before their bootcamp.
@@ -38,6 +38,7 @@ import { riseChild, staggerParent } from "@/lib/motion";
 import type { ListQuery, Page } from "@/lib/paging";
 import { cn } from "@/lib/utils";
 import { formatDate, formatWhen } from "../../cohort-settings/format";
+import { AdministratorsSection } from "./administrators-section";
 import { MeetingDialog, type EditableMeeting } from "./meeting-dialog";
 
 export type MeetingListing = EditableMeeting & {
@@ -344,50 +345,29 @@ export function GoogleMeetingsView({ overview, list }: { overview: Overview; lis
       )}
 
       <motion.div variants={riseChild} className="divide-y overflow-hidden rounded-2xl border bg-card text-sm shadow-sm">
-        <div className="space-y-0.5 px-5 py-4">
-          <p className="flex items-center gap-2 font-medium">
-            Google account
-            {connection ? <Badge>Connected</Badge> : <Badge variant="secondary">Not connected</Badge>}
-          </p>
-          <p className="text-muted-foreground">
-            {connection ? (
-              <>
-                {connection.email}, connected {formatWhen(connection.connectedAt)}
-                {connection.connectedBy && <> by {connection.connectedBy}</>}. It reads the Revenue Enablement calendar and adds
-                guests to its events, so it needs “Make changes to events” there.
-              </>
-            ) : (
-              "None yet. A platform administrator connects it under Admin Settings → External Connectors."
-            )}
-          </p>
-        </div>
-        <div className="space-y-0.5 px-5 py-4">
-          <p className="flex items-center gap-2 font-medium">
-            Zoom user
-            {zoom.connection ? <Badge>Connected</Badge> : <Badge variant="secondary">Not connected</Badge>}
-          </p>
-          <p className="text-muted-foreground">
-            {zoom.connection ? (
-              <>
-                {zoom.connection.email}, connected {formatWhen(zoom.connection.connectedAt)}
-                {zoom.connection.connectedBy && <> by {zoom.connection.connectedBy}</>}. Once an occurrence is over, the sync reads
-                who joined it from Zoom.
-              </>
-            ) : zoom.configured ? (
-              "None yet, so attendance is only what administrators mark on the Cohorts page's Current tab. A platform administrator connects one under Admin Settings → External Connectors."
-            ) : (
-              "Zoom is not set up here, so attendance is only what administrators mark on the Cohorts page's Current tab."
-            )}
-          </p>
-        </div>
-        <div className="space-y-0.5 px-5 py-4">
-          <p className="font-medium">{plural(administrators.length, "Assessments Administrator")}</p>
-          <p className="text-muted-foreground">
-            {administrators.length
-              ? `Added to each occurrence someone in the cohort is invited to: ${administrators.join(", ")}`
-              : "Nobody holds the role, so invites go to the cohort alone."}
-          </p>
-        </div>
+        {!connection && (
+          <div className="space-y-0.5 px-5 py-4">
+            <p className="flex items-center gap-2 font-medium">
+              Google account
+              <Badge variant="secondary">Not connected</Badge>
+            </p>
+            <p className="text-muted-foreground">None yet. A platform administrator connects it under Admin Settings → External Connectors.</p>
+          </div>
+        )}
+        {!zoom.connection && (
+          <div className="space-y-0.5 px-5 py-4">
+            <p className="flex items-center gap-2 font-medium">
+              Zoom user
+              <Badge variant="secondary">Not connected</Badge>
+            </p>
+            <p className="text-muted-foreground">
+              {zoom.configured
+                ? "None yet, so attendance is only what administrators mark on the Cohorts page's Current tab. A platform administrator connects one under Admin Settings → External Connectors."
+                : "Zoom is not set up here, so attendance is only what administrators mark on the Cohorts page's Current tab."}
+            </p>
+          </div>
+        )}
+        <AdministratorsSection administrators={administrators} />
         <div className="space-y-0.5 px-5 py-4">
           <p className="font-medium">Invite window</p>
           <p className="text-muted-foreground">
