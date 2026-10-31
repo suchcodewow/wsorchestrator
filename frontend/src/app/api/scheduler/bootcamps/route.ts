@@ -12,7 +12,8 @@ export async function GET(req: Request) {
   const { error } = await requireCaller(req, canUseTraining);
   if (error) return error;
 
-  const { rows, page, hasMore } = await listBootcamps(parseListQuery(new URL(req.url).searchParams, BOOTCAMP_LIST));
+  const params = new URL(req.url).searchParams;
+  const { rows, page, hasMore } = await listBootcamps(parseListQuery(params, BOOTCAMP_LIST), params.get("complete") !== "false");
   return NextResponse.json({ bootcamps: rows, page, hasMore });
 }
 

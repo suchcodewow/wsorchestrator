@@ -243,11 +243,18 @@ The Current tab shows one icon per picked meeting beside each name:
 | grey question mark     | not accepted yet                                |
 | red exclamation mark   | no occurrence left before their bootcamp        |
 
+A meeting that invites to every occurrence shows one icon per occurrence
+instead, in a rounded border, and any icon opens its attendance menu. With
+none left and none to show, it shows nothing. An occurrence still to come that
+runs outside 9 to 5 in the person's time zone is orange.
+
 **Dry run and the test group.** These work as they do on Cohort Settings →
 Slack.
 
 - A new environment starts in **dry run**. The sync logs everything it would
-  do and changes nothing. *Preview* does the same whatever the setting.
+  do, invites no one and writes nothing to Google or Zoom. It does store the
+  occurrences it read, so the Current tab can list them. *Preview* does the
+  same whatever the setting.
 - With the Cohorts test group on, the group is invited instead of the cohort,
   and no administrators are. Turning the group off takes it back off the
   invites it was given.

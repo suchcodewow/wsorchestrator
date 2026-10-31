@@ -22,9 +22,10 @@
  * the group off takes its invites away (`cancelTestMeetingInvites`).
  *
  * Until an administrator turns it live, every run is a dry run: it reads the
- * calendar and Zoom and logs whom it would invite and take off, but changes
- * nothing. Preview makes any run a dry run. QA shares production's Google
- * Workspace, so QA stays in dry run.
+ * calendar and Zoom and logs whom it would invite and take off, but writes
+ * nothing to either and changes no invite. It does store the occurrences it
+ * read, so the Current tab can list them. Preview makes any run a dry run. QA
+ * shares production's Google Workspace, so QA stays in dry run.
  *
  * The first live run also cancels, once, the upcoming invites and Zoom
  * meetings the old create-a-meeting flow made, and forgets them.
@@ -419,8 +420,8 @@ function noteOnce(ctx: Context, key: string, text: string): void {
 /**
  * The meeting's occurrences: those stored, brought up to date with the
  * calendar, and those new on it. One still to start that is no longer on the
- * calendar was cancelled or moved, and goes. A dry run changes nothing and
- * gives a new one a stand-in id.
+ * calendar was cancelled or moved, and goes. A dry run does this too: they are
+ * the app's own copy of the calendar, and the Current tab lists them.
  */
 async function occurrencesOf(ctx: Context, meeting: MeetingSelection): Promise<Occurrence[]> {
   const key = meetingKey(meeting.name);
@@ -437,31 +438,29 @@ async function occurrencesOf(ctx: Context, meeting: MeetingSelection): Promise<O
     };
   };
 
-  if (!ctx.dryRun) {
-    if (listed.length > 0) {
-      await db
-        .insert(meetingOccurrences)
-        .values(listed.map((e) => ({ meetingId: meeting.id, ...fields(e) })))
-        .onConflictDoUpdate({
-          target: [meetingOccurrences.meetingId, meetingOccurrences.eventId],
-          set: {
-            startsAt: sql`excluded.starts_at`,
-            endsAt: sql`excluded.ends_at`,
-            startDate: sql`excluded.start_date`,
-            zoomMeetingId: sql`excluded.zoom_meeting_id`,
-          },
-        });
-    }
+  if (listed.length > 0) {
     await db
-      .delete(meetingOccurrences)
-      .where(
-        and(
-          eq(meetingOccurrences.meetingId, meeting.id),
-          gt(meetingOccurrences.startsAt, ctx.now),
-          listed.length > 0 ? notInArray(meetingOccurrences.eventId, listed.map((e) => e.id)) : undefined,
-        ),
-      );
+      .insert(meetingOccurrences)
+      .values(listed.map((e) => ({ meetingId: meeting.id, ...fields(e) })))
+      .onConflictDoUpdate({
+        target: [meetingOccurrences.meetingId, meetingOccurrences.eventId],
+        set: {
+          startsAt: sql`excluded.starts_at`,
+          endsAt: sql`excluded.ends_at`,
+          startDate: sql`excluded.start_date`,
+          zoomMeetingId: sql`excluded.zoom_meeting_id`,
+        },
+      });
   }
+  await db
+    .delete(meetingOccurrences)
+    .where(
+      and(
+        eq(meetingOccurrences.meetingId, meeting.id),
+        gt(meetingOccurrences.startsAt, ctx.now),
+        listed.length > 0 ? notInArray(meetingOccurrences.eventId, listed.map((e) => e.id)) : undefined,
+      ),
+    );
 
   const stored = await db
     .select()
@@ -469,21 +468,11 @@ async function occurrencesOf(ctx: Context, meeting: MeetingSelection): Promise<O
     .where(eq(meetingOccurrences.meetingId, meeting.id))
     .orderBy(meetingOccurrences.startsAt)
     .limit(1_000);
-  const out: Occurrence[] = [];
-  for (const row of stored) {
-    const event = byEvent.get(row.eventId);
-    if (ctx.dryRun && !event && row.startsAt > ctx.now) continue;
-    out.push({ ...row, ...(event && ctx.dryRun ? fields(event) : {}), event });
-  }
-  if (ctx.dryRun) {
-    const known = new Set(stored.map((r) => r.eventId));
-    for (const e of listed) if (!known.has(e.id)) out.push({ id: `new:${e.id}`, ...fields(e), attendanceReadAt: null, event: e });
-  }
-  return out.sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
+  return stored.map((row) => ({ ...row, event: byEvent.get(row.eventId) }));
 }
 
 async function invitesOn(occurrences: readonly Occurrence[]): Promise<Invite[]> {
-  const ids = occurrences.filter((occ) => !occ.id.startsWith("new:")).map((occ) => occ.id);
+  const ids = occurrences.map((occ) => occ.id);
   if (ids.length === 0) return [];
   const rows = await db
     .select({
@@ -504,7 +493,7 @@ async function invitesOn(occurrences: readonly Occurrence[]): Promise<Invite[]> 
 /** Copies each guest's reply from the calendar onto the invite the sync holds for them. */
 async function storeReplies(occurrences: readonly Occurrence[], invites: Invite[]): Promise<void> {
   for (const occ of occurrences) {
-    if (!occ.event || occ.id.startsWith("new:")) continue;
+    if (!occ.event) continue;
     const replies = new Map((occ.event.attendees ?? []).map((a) => [a.email.trim().toLowerCase(), a.responseStatus ?? null]));
     const changed = invites
       .filter((inv) => inv.occurrenceId === occ.id && replies.has(inv.email) && replies.get(inv.email) !== inv.responseStatus)

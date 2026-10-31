@@ -43,10 +43,13 @@ import { currentCohortPeople } from "@/lib/evals/current-cohort";
 import {
   bootcampLastDay,
   cleanMeetingName,
+  firstSuiting,
   inviteWindow,
+  inWindow,
   meetingIsFor,
   meetingMark,
   offsetHour,
+  outsideWorkingHours,
   TIMEZONE_HOURS,
   type MeetingBootcamp,
   type MeetingMark,
@@ -79,7 +82,7 @@ export type MeetingSelectionRow = {
   /** Whether each person is invited to every occurrence offered to them, not one at a time. */
   allOccurrences: boolean;
   syncedAt: Date | null;
-  /** When the next occurrence starts, as of the last live sync; null with none to come. */
+  /** When the next occurrence starts, as of the last sync; null with none to come. */
   nextStartsAt: Date | null;
   /** Occurrences still to start. */
   upcoming: number;
@@ -423,16 +426,49 @@ export type PersonMeetingStatus = {
   mark: MeetingMark;
   /** An administrator's word, over Zoom's: attended, missed, or none. */
   marked: boolean | null;
-  /** When the occurrence they hold starts; null when they hold none. */
+  /**
+   * When the occurrence they hold starts, or for someone not invited yet, the
+   * one the next sync would invite them to; null when there is neither.
+   */
   startsAt: Date | null;
+  /** When that occurrence ends; null with `startsAt`. */
+  endsAt: Date | null;
+  /** Whether `startsAt` is the occurrence the next sync would invite them to, not one they hold. */
+  predicted: boolean;
+  /** Their time zone, which `outOfHours` is read in; null when the app has none for them. */
+  timezone: string | null;
+  /** Whether that occurrence is still to come and runs outside 9:00 to 17:00 in `timezone`; for `instances`, whether any does. */
+  outOfHours: boolean;
+  /** For a meeting that invites to every occurrence, each one they hold and each the next sync would add, soonest first; null otherwise. */
+  instances: MeetingInstance[] | null;
 };
+
+/**
+ * One occurrence of a meeting that invites to all of them, for one person:
+ * attended or missed once Zoom has been read; accepted or pending on an invite
+ * not yet read; uninvited for one the next sync would invite them to.
+ */
+export type MeetingInstance = {
+  startsAt: Date;
+  endsAt: Date;
+  mark: "attended" | "missed" | "accepted" | "pending" | "uninvited";
+  outOfHours: boolean;
+};
+
+/** More upcoming occurrences than the picked meetings hold between them in the 60 days a sync reads. */
+const UPCOMING_LIMIT = PAGE_SIZE;
 
 /**
  * For each of a page's people, where they stand with each picked meeting that
  * is for them: attended, accepted, not yet answered, not yet invited (all a
  * meeting that has never synced has), or with no occurrence left in their
  * window: before the active bootcamp, or for an Intermediate meeting they will
- * take after it, between its last day and the next intermediate class.
+ * take after it, between its last day and the next intermediate class; for a
+ * meeting that invites to every occurrence that last is merely finished.
+ * Someone not yet invited is given the occurrence the next sync would invite
+ * them to, picked as the sync picks it. A meeting that invites to every
+ * occurrence also lists each one they hold and each the sync would add. Each
+ * occurrence still to come is held to their working day in their own time zone.
  * Test-group invites and RSVPs are left out; the Current tab is the real cohort.
  */
 export async function meetingStatusesFor(
@@ -444,13 +480,13 @@ export async function meetingStatusesFor(
     .map((p) => ({ ...p, email: p.email.trim().toLowerCase() }));
   if (candidates.length === 0) return out;
   const emails = [...new Set(candidates.map((c) => c.email))];
-  const [zones, rsvps] = await Promise.all([
+  const [records, rsvps] = await Promise.all([
     db
-      .select({ email: sql<string>`lower(${employees.email})`, timezone: employees.timezone })
+      .select({ email: sql<string>`lower(${employees.email})`, timezone: employees.timezone, startDate: employees.startDate })
       .from(employees)
       .where(inArray(sql`lower(${employees.email})`, emails))
       .limit(PAGE_SIZE)
-      .then((rows) => new Map(rows.map((r) => [r.email, r.timezone]))),
+      .then((rows) => new Map(rows.map((r) => [r.email, r]))),
     db
       .selectDistinct({ email: intakeResponses.email })
       .from(intakeResponses)
@@ -458,11 +494,26 @@ export async function meetingStatusesFor(
       .limit(PAGE_SIZE)
       .then((rows) => new Set(rows.map((r) => r.email))),
   ]);
-  const members = candidates.map((c) => ({ ...c, timezone: zones.get(c.email) ?? null, rsvpd: rsvps.has(c.email) }));
+  const members = candidates.map((c) => ({
+    ...c,
+    timezone: records.get(c.email)?.timezone ?? null,
+    startDate: records.get(c.email)?.startDate ?? null,
+    rsvpd: rsvps.has(c.email),
+  }));
   const now = new Date();
 
   const selections = await db
-    .select({ id: s.id, name: s.name, stage: s.stage, track: s.track, timezoneFrom: s.timezoneFrom, timezoneTo: s.timezoneTo, syncedAt: s.syncedAt })
+    .select({
+      id: s.id,
+      name: s.name,
+      stage: s.stage,
+      track: s.track,
+      timezoneFrom: s.timezoneFrom,
+      timezoneTo: s.timezoneTo,
+      syncedAt: s.syncedAt,
+      allOccurrences: s.allOccurrences,
+      minDaysAfterStart: s.minDaysAfterStart,
+    })
     .from(s)
     .orderBy(sql`lower(${s.name})`)
     .limit(PAGE_SIZE);
@@ -473,23 +524,32 @@ export async function meetingStatusesFor(
   // The two windows anyone can have: before the bootcamp, and after it until the next intermediate class.
   const before = bootcamp ? inviteWindow("bootcamp", { stage: "bootcamp" }, bootcamp) : null;
   const after = bootcamp ? inviteWindow("intermediate", { stage: "bootcamp" }, bootcamp) : null;
-  const inWindow = (w: typeof before) =>
-    w ? sql<boolean>`bool_or(${o.startDate} < ${w.cutoff} ${w.notBefore ? sql`and ${o.startDate} >= ${w.notBefore}` : sql``})` : sql<boolean>`true`;
-  const [left, held, marks] = await Promise.all([
-    db
-      .select({ meetingId: o.meetingId, before: inWindow(before), after: inWindow(after) })
-      .from(o)
-      .where(and(inArray(o.meetingId, ids), gt(o.startsAt, sql`now()`)))
-      .groupBy(o.meetingId),
+  const windowSql = (w: NonNullable<typeof before>) => sql`(${o.startDate} < ${w.cutoff} ${w.notBefore ? sql`and ${o.startDate} >= ${w.notBefore}` : sql``})`;
+  const open = sql`${i.attendance} is null and ${o.attendanceReadAt} is null`;
+  const [upcoming, held, marks] = await Promise.all([
+    // With no bootcamp, no window, so nothing is offered to anyone.
+    before && after
+      ? db
+          .select({ id: o.id, meetingId: o.meetingId, startsAt: o.startsAt, endsAt: o.endsAt, startDate: o.startDate })
+          .from(o)
+          .where(and(inArray(o.meetingId, ids), gt(o.startsAt, sql`now()`), sql`(${windowSql(before)} or ${windowSql(after)})`))
+          .orderBy(o.startsAt)
+          .limit(UPCOMING_LIMIT)
+      : [],
     db
       .select({
         meetingId: o.meetingId,
         email: i.email,
         attended: sql<boolean>`bool_or(${i.attendance} = 'attended')`,
-        invited: sql<boolean>`bool_or(${i.attendance} is null and ${o.attendanceReadAt} is null)`,
-        response: sql<string | null>`(array_agg(${i.responseStatus} order by ${o.startsAt})
-          filter (where ${i.attendance} is null and ${o.attendanceReadAt} is null))[1]`,
-        startsAt: sql<string | null>`min(${o.startsAt}) filter (where ${i.attendance} is null and ${o.attendanceReadAt} is null)`,
+        invited: sql<boolean>`bool_or(${open})`,
+        response: sql<string | null>`(array_agg(${i.responseStatus} order by ${o.startsAt}) filter (where ${open}))[1]`,
+        startsAt: sql<string | null>`min(${o.startsAt}) filter (where ${open})`,
+        endsAt: sql<string | null>`(array_agg(${o.endsAt} order by ${o.startsAt}) filter (where ${open}))[1]`,
+        // The sync offers someone who missed one only those after it.
+        lastBegun: sql<string | null>`max(${o.startsAt}) filter (where ${o.startsAt} <= now())`,
+        instances: sql<{ id: string; startsAt: string; endsAt: string; attendance: string | null; response: string | null }[]>`json_agg(
+          json_build_object('id', ${o.id}, 'startsAt', ${o.startsAt}, 'endsAt', ${o.endsAt}, 'attendance', ${i.attendance}, 'response', ${i.responseStatus})
+          order by ${o.startsAt})`,
       })
       .from(i)
       .innerJoin(o, eq(o.id, i.occurrenceId))
@@ -500,7 +560,8 @@ export async function meetingStatusesFor(
       .from(k)
       .where(and(inArray(k.meetingId, ids), inArray(k.email, emails))),
   ]);
-  const leftIn = new Map(left.map((r) => [r.meetingId, r]));
+  const upcomingOf = new Map<string, typeof upcoming>();
+  for (const occ of upcoming) upcomingOf.set(occ.meetingId, [...(upcomingOf.get(occ.meetingId) ?? []), occ]);
   const heldBy = new Map(held.map((r) => [`${r.meetingId} ${r.email}`, r]));
   const markOf = new Map(marks.map((r) => [`${r.meetingId} ${r.email}`, r.attended]));
 
@@ -512,15 +573,59 @@ export async function meetingStatusesFor(
       const h = heldBy.get(key);
       const marked = markOf.get(key) ?? null;
       const window = bootcamp ? inviteWindow(meeting.stage, member, bootcamp) : null;
-      const remaining = leftIn.get(meeting.id);
+      const offered = window ? (upcomingOf.get(meeting.id) ?? []).filter((occ) => inWindow(occ.startDate, window)) : [];
       const mark = meetingMark({
         attended: marked === true || (marked === null && Boolean(h?.attended)),
         response: h?.response ?? null,
         invited: Boolean(h?.invited),
-        // A meeting that has never synced has no occurrences stored yet, which is not the same as none being left.
-        anyLeft: meeting.syncedAt === null || Boolean(remaining && (window?.notBefore ? remaining.after : remaining.before)),
+        // A meeting no sync has read has no occurrences stored yet, which is not the same as none being left.
+        anyLeft: (meeting.syncedAt === null && !upcomingOf.has(meeting.id)) || offered.length > 0,
+        allOccurrences: meeting.allOccurrences,
       });
-      list.push({ meetingId: meeting.id, name: meeting.name, mark, marked, startsAt: h?.startsAt ? new Date(h.startsAt) : null });
+      let at: { startsAt: Date; endsAt: Date } | null = null;
+      if (mark === "uninvited") {
+        // As the sync picks it: one at a time, only those after the last one they were invited to.
+        const lastBegun = h?.lastBegun ? new Date(h.lastBegun).getTime() : -Infinity;
+        const next = firstSuiting(
+          meeting.allOccurrences ? offered : offered.filter((occ) => occ.startsAt.getTime() > lastBegun),
+          member.startDate,
+          meeting.minDaysAfterStart,
+        );
+        if (next) at = { startsAt: next.startsAt, endsAt: next.endsAt };
+      } else if (mark !== "attended" && h?.startsAt && h.endsAt) {
+        at = { startsAt: new Date(h.startsAt), endsAt: new Date(h.endsAt) };
+      }
+      const outside = (startsAt: Date, endsAt: Date) => startsAt > now && outsideWorkingHours(member.timezone, startsAt, endsAt) === true;
+      let instances: MeetingInstance[] | null = null;
+      if (meeting.allOccurrences) {
+        const found: (Omit<MeetingInstance, "outOfHours"> & { id: string })[] = (h?.instances ?? []).map((x) => ({
+          id: x.id,
+          startsAt: new Date(x.startsAt),
+          endsAt: new Date(x.endsAt),
+          mark: x.attendance === "attended" || x.attendance === "missed" ? x.attendance : x.response === "accepted" ? "accepted" : "pending",
+        }));
+        // As the sync adds them: from the first that suits them, every one offered that they do not hold, until they attend.
+        const first = mark === "attended" ? undefined : firstSuiting(offered, member.startDate, meeting.minDaysAfterStart);
+        const heldIds = new Set(found.map((x) => x.id));
+        for (const occ of first ? offered.filter((occ) => occ.startsAt >= first.startsAt && !heldIds.has(occ.id)) : []) {
+          found.push({ id: occ.id, startsAt: occ.startsAt, endsAt: occ.endsAt, mark: "uninvited" });
+        }
+        instances = found
+          .sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime())
+          .map(({ startsAt, endsAt, mark }) => ({ startsAt, endsAt, mark, outOfHours: outside(startsAt, endsAt) }));
+      }
+      list.push({
+        meetingId: meeting.id,
+        name: meeting.name,
+        mark,
+        marked,
+        startsAt: at?.startsAt ?? null,
+        endsAt: at?.endsAt ?? null,
+        predicted: mark === "uninvited" && at !== null,
+        timezone: member.timezone,
+        outOfHours: instances ? instances.some((x) => x.outOfHours) : at !== null && outside(at.startsAt, at.endsAt),
+        instances,
+      });
     }
     out.set(member.email, list);
   }

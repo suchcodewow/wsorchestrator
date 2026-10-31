@@ -5,6 +5,7 @@ import type { Session } from "next-auth";
 import { signOut } from "@/auth";
 import { AmbientBackdrop } from "@/components/ambient-backdrop";
 import { FavoriteTabsProvider } from "@/components/favorite-tabs";
+import { NavigationPending } from "@/components/navigation-pending";
 import { AppSidebar } from "@/components/app-sidebar";
 import { SiteHeader } from "@/components/site-header";
 import { buildInfo } from "@/lib/build-info";
@@ -79,7 +80,9 @@ export async function AppShell({
               pane && "lg:overflow-y-auto",
             )}
           >
-            <div className="mx-auto max-w-6xl px-6 py-10">{children}</div>
+            <div className="mx-auto max-w-6xl px-6 py-10">
+              <NavigationPending>{children}</NavigationPending>
+            </div>
           </main>
         </div>
       </FavoriteTabsProvider>

@@ -234,6 +234,16 @@ async function invitesOf(meetingId: string) {
     .where(eq(meetingOccurrences.meetingId, meetingId));
 }
 
+/** The calendar events stored as a meeting's occurrences, soonest first. */
+async function occurrenceEvents(meetingId: string) {
+  const rows = await db
+    .select({ eventId: meetingOccurrences.eventId })
+    .from(meetingOccurrences)
+    .where(eq(meetingOccurrences.meetingId, meetingId))
+    .orderBy(meetingOccurrences.startsAt);
+  return rows.map((r) => r.eventId);
+}
+
 /** An occurrence that is over, stored as an earlier sync would have, with `email` invited to it. */
 async function pastOccurrence(meetingId: string, email: string, daysAgo = 2) {
   const startsAt = new Date(Date.now() - daysAgo * DAY);
@@ -373,7 +383,7 @@ describe("Sync Now", () => {
     assert.equal(result.ok ? null : result.error, "already_running");
   });
 
-  test("a dry run logs whom it would invite, and changes nothing", async () => {
+  test("a dry run logs whom it would invite, stores the occurrences it read, and changes no invite", async () => {
     await connect();
     const id = await pick();
     event("e1", 1);
@@ -381,6 +391,7 @@ describe("Sync Now", () => {
     assert.equal(result.dryRun, true);
     assert.deepEqual(fake.writes(), []);
     assert.deepEqual(await invitesOf(id), []);
+    assert.deepEqual(await occurrenceEvents(id), ["e1"]);
     const [row] = await db.select({ syncedAt: meetingSelections.syncedAt }).from(meetingSelections).where(eq(meetingSelections.id, id));
     assert.equal(row!.syncedAt, null);
     const changes = await listMeetingSyncChanges(result.runId, { ...MEETING_SYNC_CHANGE_LIST, q: salesEmail, page: 1 });
@@ -388,6 +399,49 @@ describe("Sync Now", () => {
       changes.rows.map((c) => [c.action, c.email]),
       [["invited", salesEmail]],
     );
+  });
+
+  test("after a dry run the Current tab lists every occurrence of a meeting that invites to all of them, and a live run invites to the same ones", async () => {
+    await connect();
+    const id = await pick("bootcamp", "sales", NAME, true);
+    event("e1", 1);
+    event("e2", 2);
+    event("e3", 3);
+    await sync_ok(true);
+    const [status] = (await meetingStatusesFor([{ email: salesEmail, stage: "bootcamp", track: "sales" }])).get(salesEmail)!;
+    assert.equal(status!.mark, "uninvited");
+    assert.equal(status!.predicted, true);
+    assert.deepEqual(status!.instances?.map((x) => x.mark), ["uninvited", "uninvited", "uninvited"]);
+    assert.deepEqual(fake.writes(), []);
+
+    await sync_ok();
+    assert.deepEqual(await occurrenceEvents(id), ["e1", "e2", "e3"]);
+    const mine = (await invitesOf(id)).filter((inv) => inv.email === salesEmail).map((inv) => inv.eventId);
+    assert.deepEqual(mine.sort(), ["e1", "e2", "e3"]);
+  });
+
+  test("a dry run forgets an occurrence no longer on the calendar", async () => {
+    await connect();
+    const id = await pick();
+    event("e1", 1);
+    event("e2", 8);
+    await sync_ok(true);
+    fake.events.delete("e2");
+    await sync_ok(true);
+    assert.deepEqual(await occurrenceEvents(id), ["e1"]);
+  });
+
+  test("after a dry run, someone with no occurrence in their window has none left", async (t) => {
+    await connect();
+    const id = await pick();
+    const [row] = await db.select({ btcDays: bootcamps.btcDays, intDays: bootcamps.intDays }).from(bootcamps).where(eq(bootcamps.id, bootcamp.id));
+    const lastDay = new Date(`${bootcamp.startDate}T00:00:00Z`).getTime() + (Math.max(row!.btcDays, row!.intDays ?? 0, 1) - 1) * DAY;
+    const afterDays = Math.ceil((lastDay - Date.now()) / DAY) + 2;
+    if (afterDays > 55) return t.skip("the active bootcamp ends past the calendar's 60 days");
+    event("e1", afterDays);
+    await sync_ok(true);
+    const statuses = (await meetingStatusesFor([{ email: salesEmail, stage: "bootcamp", track: "sales" }])).get(salesEmail)!;
+    assert.equal(statuses.find((x) => x.meetingId === id)!.mark, "none_left");
   });
 
   test("invites whom the meeting is for to its next occurrence, with the administrators, and sends nothing twice", async () => {
@@ -472,6 +526,61 @@ describe("Sync Now", () => {
     assert.equal(status!.mark, "accepted");
   });
 
+  test("the Current tab gives someone not yet invited the occurrence the next sync would pick, and flags one outside 9 to 5", async () => {
+    await connect();
+    const id = await pick();
+    // 13:00 to 14:00 UTC two days out: before 9:00 in Chicago, mid-afternoon in London.
+    const day = new Date(Date.now() + 2 * DAY).toISOString().slice(0, 10);
+    const startsAt = `${day}T13:00:00.000Z`;
+    event("e1", 2, NAME, { start: { dateTime: startsAt }, end: { dateTime: `${day}T14:00:00.000Z` } });
+    event("e2", 5);
+    await sync_ok();
+    // As if they joined the cohort after this sync: on no invite yet.
+    const [occ] = await db.select({ id: meetingOccurrences.id }).from(meetingOccurrences).where(and(eq(meetingOccurrences.meetingId, id), eq(meetingOccurrences.eventId, "e1")));
+    await db.delete(meetingInvites).where(and(eq(meetingInvites.occurrenceId, occ!.id), eq(meetingInvites.email, salesEmail)));
+    const status = async () => (await meetingStatusesFor([{ email: salesEmail, stage: "bootcamp", track: "sales" }])).get(salesEmail)![0]!;
+    try {
+      await db.update(employees).set({ timezone: "America/Chicago" }).where(eq(employees.email, salesEmail));
+      const chicago = await status();
+      assert.deepEqual([chicago.mark, chicago.predicted, chicago.startsAt?.toISOString(), chicago.timezone, chicago.outOfHours], ["uninvited", true, startsAt, "America/Chicago", true]);
+
+      await db.update(employees).set({ timezone: "Europe/London" }).where(eq(employees.email, salesEmail));
+      assert.equal((await status()).outOfHours, false);
+
+      await db.update(employees).set({ timezone: null }).where(eq(employees.email, salesEmail));
+      const none = await status();
+      assert.deepEqual([none.predicted, none.outOfHours], [true, false]);
+
+      await sync_ok();
+      const invited = await status();
+      assert.deepEqual([invited.mark, invited.predicted, invited.startsAt?.toISOString()], ["pending", false, startsAt], "the sync invites them to the one predicted");
+    } finally {
+      await db.update(employees).set({ timezone: null }).where(eq(employees.email, salesEmail));
+    }
+  });
+
+  test("the Current tab lists every occurrence of a meeting that invites to all of them, with how each stands", async () => {
+    await connect();
+    const id = await pick("bootcamp", "sales", NAME, true);
+    await pastOccurrence(id, salesEmail);
+    fake.participants.set("/abc//def==", [{ name: "Someone Else", user_email: `else@${TEST_EMAIL_DOMAIN}` }]);
+    event("e1", 2);
+    event("e2", 5);
+    await sync_ok();
+    // As if the sync had not reached e2 for them yet: the next one adds it.
+    const [occ] = await db.select({ id: meetingOccurrences.id }).from(meetingOccurrences).where(and(eq(meetingOccurrences.meetingId, id), eq(meetingOccurrences.eventId, "e2")));
+    await db.delete(meetingInvites).where(and(eq(meetingInvites.occurrenceId, occ!.id), eq(meetingInvites.email, salesEmail)));
+    const [status] = (await meetingStatusesFor([{ email: salesEmail, stage: "bootcamp", track: "sales" }])).get(salesEmail)!;
+    assert.equal(status!.mark, "pending");
+    assert.deepEqual(status!.instances?.map((x) => x.mark), ["missed", "pending", "uninvited"]);
+    const starts = status!.instances!.map((x) => x.startsAt.getTime());
+    assert.deepEqual(starts, [...starts].sort((a, b) => a - b), "soonest first");
+
+    assert.ok((await updateMeetingSelection(id, { allOccurrences: false })).ok);
+    const [single] = (await meetingStatusesFor([{ email: salesEmail, stage: "bootcamp", track: "sales" }])).get(salesEmail)!;
+    assert.equal(single!.instances, null, "one at a time has no instances");
+  });
+
   test("someone Zoom did not see join is counted missing and invited to the next occurrence", async () => {
     await connect();
     const id = await pick();
@@ -529,6 +638,20 @@ describe("Sync Now", () => {
     assert.ok(!fake.guests("late").includes(salesEmail));
     const [status] = (await meetingStatusesFor([{ email: salesEmail, stage: "bootcamp", track: "sales" }])).get(salesEmail)!;
     assert.deepEqual([status!.meetingId, status!.mark], [id, "none_left"]);
+  });
+
+  test("a meeting that invites to every occurrence raises no alert with none left before the bootcamp", async () => {
+    await connect();
+    const id = await pick("bootcamp", "sales", NAME, true);
+    // On the bootcamp's first day: too late.
+    const late = Math.ceil((Date.parse(`${bootcamp.startDate}T12:00:00Z`) - Date.now()) / DAY);
+    event("late", late);
+    const result = await sync_ok();
+    assert.ok(!fake.guests("late").includes(salesEmail));
+    const problems = await listMeetingSyncChanges(result.runId, { ...MEETING_SYNC_CHANGE_LIST, q: salesEmail, page: 1 }, "problems");
+    assert.deepEqual(problems.rows, []);
+    const [status] = (await meetingStatusesFor([{ email: salesEmail, stage: "bootcamp", track: "sales" }])).get(salesEmail)!;
+    assert.deepEqual([status!.meetingId, status!.mark], [id, "finished"]);
   });
 
   test("a guest added by hand stays when the meeting stops being for them", async () => {

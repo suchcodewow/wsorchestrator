@@ -8,8 +8,8 @@
  * deferred, under the stage row alone, and the Current tab everyone else.
  * An administrator sets anyone's track from the Track column, and it holds
  * through every sync until they hand it back to the rules. A row opens to show the rest of what the sync knows about them.
- * With one stage and Sales or Engineer picked, an eVals viewer also sees a
- * column per assessment for that stage and track, after their average.
+ * No view shows a score: Cohorts is who is in them, and eVals and Reporting
+ * are how they did.
  * The Current tab's Attendance column, beside each name, holds an RSVP mark if
  * they saved their stage's registration form, then a mark for each picked
  * Google meeting that is for them, and an eVals administrator can override
@@ -34,12 +34,12 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import type {
   CandidateStage,
   CandidateTrack,
-  CohortScoring,
   CurrentCohortCounts,
   CurrentCohortFilter,
   CurrentCohortMember,
   CurrentTrack,
 } from "@/lib/evals/current-cohort";
+import type { MeetingInstance } from "@/lib/evals/google-meetings";
 import type { MeetingMark } from "@/lib/evals/meeting-plan";
 import type { IntakeFormId, IntakeQuestion } from "@/db/schema";
 import type { SetTrackResult, TrackChoice } from "@/lib/evals/tracks";
@@ -58,6 +58,8 @@ import {
   CircleAlert,
   CircleCheck,
   CircleHelp,
+  CircleMinus,
+  CircleX,
   Code,
   GraduationCap,
   Handshake,
@@ -138,7 +140,19 @@ function useFilterParams() {
 /** Where each person stands with each picked Google meeting that is for them, by lowercased email. */
 export type MemberMeetings = Record<
   string,
-  { meetingId: string; name: string; mark: MeetingMark; marked: boolean | null; startsAt: string | null }[]
+  {
+    meetingId: string;
+    name: string;
+    mark: MeetingMark;
+    marked: boolean | null;
+    startsAt: string | null;
+    endsAt: string | null;
+    predicted: boolean;
+    timezone: string | null;
+    outOfHours: boolean;
+    /** Every occurrence of a meeting that invites to all of them; null for one taken one at a time. */
+    instances: { startsAt: string; endsAt: string; mark: MeetingInstance["mark"]; outOfHours: boolean }[] | null;
+  }[]
 >;
 
 export function CurrentCohortView({
@@ -147,11 +161,10 @@ export function CurrentCohortView({
   filter,
   page,
   counts,
-  assessments,
   deferral,
   activeBootcamp,
   canSetTrack,
-  canSeeScores,
+  canOpenRecord,
   meetings = {},
   canMarkAttendance = false,
   intakes,
@@ -164,14 +177,12 @@ export function CurrentCohortView({
   page: Page<CurrentCohortMember>;
   /** Everyone in each stage on each track, whatever the search or filter. */
   counts: CurrentCohortCounts;
-  /** A column each, after the average; null for none, as for a viewer outside eVals or a filter without one stage and Sales or Engineer. */
-  assessments: CohortScoring["assessments"] | null;
   deferral: { days: number; bootcampStart: string | null };
   activeBootcamp: ActiveBootcamp | null;
   /** Whether the viewer may set anyone's track. */
   canSetTrack: boolean;
-  /** Whether the viewer is in eVals, whose scores and Live Sessions records these are. */
-  canSeeScores: boolean;
+  /** Whether the viewer is in eVals, whose Live Sessions records these are. */
+  canOpenRecord: boolean;
   /** The Current tab's meeting marks; none on the Deferred tab. */
   meetings?: MemberMeetings;
   /** Whether the viewer may say someone attended or missed a meeting, over what Zoom said. */
@@ -196,13 +207,12 @@ export function CurrentCohortView({
     });
   }
 
-  const scoreColumns = assessments && assessments.length > 0 ? assessments : null;
   // No bootcamp candidate has a BTC date yet.
   const showBtcDate = filter.stage !== "bootcamp";
   const columns = showBtcDate ? COLUMNS : COLUMNS.filter((c) => c.column !== "btcDate");
   // The RSVP and meeting marks are the Current tab's; the Deferred tab has none.
   const showAttendance = tab === "current";
-  const columnCount = columns.length + (showAttendance ? 1 : 0) + (scoreColumns ? scoreColumns.length + 1 : 0);
+  const columnCount = columns.length + (showAttendance ? 1 : 0);
   // Each row counts within the other row's pick; the Deferred tab has only the deferred to count.
   const stageCount = (stage: CandidateStage) =>
     tab === "deferred"
@@ -384,18 +394,6 @@ export function CurrentCohortView({
                     {c.column === "fullName" && showAttendance && <PlainHeader>Attendance</PlainHeader>}
                   </Fragment>
                 ))}
-                {scoreColumns && (
-                  <>
-                    <SortHeader column="averageScore" sort={query.sort} dir={query.dir} className="text-right">
-                      Average
-                    </SortHeader>
-                    {scoreColumns.map((a) => (
-                      <PlainHeader key={a.id} className="min-w-24 text-right">
-                        {a.name}
-                      </PlainHeader>
-                    ))}
-                  </>
-                )}
               </tr>
             </thead>
             <tbody>
@@ -456,21 +454,11 @@ export function CurrentCohortView({
                           {formatDate(m.btcDate)}
                         </td>
                       )}
-                      {scoreColumns && (
-                        <>
-                          <td className="px-5 py-2 text-right font-medium tabular-nums">{score(m.averageScore)}</td>
-                          {scoreColumns.map((a) => (
-                            <td key={a.id} className="px-5 py-2 text-right tabular-nums text-muted-foreground">
-                              {score(m.scores[a.id])}
-                            </td>
-                          ))}
-                        </>
-                      )}
                     </tr>
                     {expanded && (
                       <tr id={`person-${m.email}`} className="border-b bg-muted/30 last:border-b-0">
                         <td colSpan={columnCount} className="px-5 pt-1 pb-4 pl-10">
-                          <PersonDetails member={m} canSeeScores={canSeeScores} />
+                          <PersonDetails member={m} canOpenRecord={canOpenRecord} />
                           <Registrations
                             stage={m.stage}
                             intakes={intakes[m.email.toLowerCase()] ?? []}
@@ -561,11 +549,7 @@ function TrackLabel({ member }: { member: CurrentCohortMember }) {
 }
 
 /** Everything the row leaves out, from the last HiBob sync and the classes they attended. */
-function score(value: number | null | undefined): string {
-  return value == null ? "—" : value.toFixed(1);
-}
-
-function PersonDetails({ member: m, canSeeScores }: { member: CurrentCohortMember; canSeeScores: boolean }) {
+function PersonDetails({ member: m, canOpenRecord }: { member: CurrentCohortMember; canOpenRecord: boolean }) {
   return (
     <dl className="grid grid-cols-2 gap-x-8 gap-y-3 lg:grid-cols-4">
       <Field label="Email">{m.email}</Field>
@@ -582,11 +566,10 @@ function PersonDetails({ member: m, canSeeScores }: { member: CurrentCohortMembe
       <Field label="In position since">{formatDate(m.activeEffectiveDate)}</Field>
       <Field label="Stage">{m.stage === "bootcamp" ? "Bootcamp" : "Intermediate"}</Field>
       <Field label="Track set by">{m.overridden ? "An administrator" : "The rules"}</Field>
-      {canSeeScores && <Field label="BTC score">{score(m.btcScore)}</Field>}
       <Field label="Live Sessions">
         {!m.recordKey ? (
           "None yet"
-        ) : canSeeScores ? (
+        ) : canOpenRecord ? (
           <Link
             href={`/reporting/bootcamp/${m.recordKey}`}
             onClick={(ev) => ev.stopPropagation()}
@@ -726,7 +709,54 @@ const MARKS: Record<MeetingMark, { Icon: LucideIcon; className: string; label: s
   pending: { Icon: CircleHelp, className: "text-muted-foreground", label: "Not accepted" },
   uninvited: { Icon: Circle, className: "text-muted-foreground", label: "Not invited yet" },
   none_left: { Icon: CircleAlert, className: "text-red-600 dark:text-red-400", label: "None left before their bootcamp" },
+  finished: { Icon: CircleMinus, className: "text-muted-foreground", label: "None left; nothing more is needed" },
 };
+
+const INSTANCE_MARKS: Record<MeetingInstance["mark"], { Icon: LucideIcon; className: string; label: string }> = {
+  attended: MARKS.attended,
+  missed: { Icon: CircleX, className: "text-red-600 dark:text-red-400", label: "Missed" },
+  accepted: MARKS.accepted,
+  pending: MARKS.pending,
+  uninvited: { ...MARKS.uninvited, label: "Not invited yet; the next sync adds them to this one" },
+};
+
+/** "Tue, Nov 10" and "7:00 AM – 8:00 AM CST" for an occurrence, read in `zone`. */
+function inZone(zone: string, startsAt: string, endsAt: string): { day: string; time: string } {
+  const start = new Date(startsAt);
+  // Built by hand, with plain spaces: the server's ICU and the browser's space a range differently, which fails hydration.
+  const format = (at: Date, options: Intl.DateTimeFormatOptions) =>
+    new Intl.DateTimeFormat("en-US", { timeZone: zone, ...options }).format(at).replace(/\s/g, " ");
+  const clock = { hour: "numeric", minute: "2-digit" } as const;
+  return {
+    day: format(start, { weekday: "short", month: "short", day: "numeric" }),
+    time: `${format(start, clock)} – ${format(new Date(endsAt), { ...clock, timeZoneName: "short" })}`,
+  };
+}
+
+/** "Tue, Nov 10, 7:00 AM – 8:00 AM CST" in the attendee's own time zone; the viewer's when the app has none for them, or one the runtime does not know. */
+function occurrenceWhen(zone: string | null, startsAt: string, endsAt: string): string {
+  if (!zone) return formatWhen(startsAt);
+  try {
+    const { day, time } = inZone(zone, startsAt, endsAt);
+    return `${day}, ${time}`;
+  } catch {
+    return formatWhen(startsAt);
+  }
+}
+
+/** An occurrence still to come that runs outside 9 to 5 where the attendee is. */
+const OUT_OF_HOURS = "text-orange-600 dark:text-orange-400";
+
+/** What one occurrence of a meeting that invites to all of them shows: its icon, orange outside 9 to 5, and the words for it. */
+function instanceMark(name: string, timezone: string | null, x: NonNullable<MemberMeetings[string][number]["instances"]>[number]) {
+  const { Icon, className, label } = INSTANCE_MARKS[x.mark];
+  const when = occurrenceWhen(timezone, x.startsAt, x.endsAt);
+  return {
+    when,
+    spoken: `${name}: ${when}, ${label}${x.outOfHours ? ", outside 9 to 5 where they are" : ""}`,
+    icon: <Icon className={cn("size-3.5", className, x.outOfHours && OUT_OF_HOURS)} />,
+  };
+}
 
 /** A white sealed envelope on a green disc: they saved their stage's registration form, so they RSVP'd to the session. */
 function RsvpIcon({ className }: { className?: string }) {
@@ -811,83 +841,102 @@ function MeetingMarks({
         )}
         {meetings.map((m) => {
           const { Icon, className, label } = MARKS[m.mark];
-          const detail =
-            m.marked !== null
-              ? `${m.marked ? "attended" : "missed"}, marked by an administrator`
-              : m.mark !== "attended" && m.startsAt
-                ? `${label}, ${formatWhen(m.startsAt)}`
-                : m.mark === "uninvited"
-                  ? "Not invited yet; the next sync invites them"
-                  : label;
-          const icon =
-            busy === m.meetingId ? (
-              <Loader2 className="size-4 animate-spin text-muted-foreground" />
-            ) : (
-              <Icon className={cn("size-4", className)} />
+          const status = m.marked !== null ? `${m.marked ? "attended" : "missed"}, marked by an administrator` : label;
+          const when = m.startsAt && m.endsAt ? occurrenceWhen(m.timezone, m.startsAt, m.endsAt) : null;
+          const spoken = `${m.name}: ${when ? `${when}, ` : ""}${status}${!m.instances && m.outOfHours ? ", outside 9 to 5 where they are" : ""}`;
+          const instances = m.instances ?? [];
+          const size = instances.length > 0 ? "size-3.5" : "size-4";
+          const spinner = <Loader2 className={cn(size, "animate-spin text-muted-foreground")} />;
+          // Every mark of a meeting is a way to its one menu: the attendance an administrator overrides is the meeting's, not an occurrence's.
+          const control = (key: string, spokenAs: string, shown: string, icon: React.ReactElement) => {
+            const tip = (
+              <TooltipContent>
+                <span className="block font-medium">{m.name}</span>
+                {shown}
+              </TooltipContent>
             );
-          const tip = (
-            <TooltipContent>
-              <span className="font-medium">{m.name}</span>: {detail}
-            </TooltipContent>
-          );
-          if (!canMark) {
-            return (
-              <Tooltip key={m.meetingId}>
-                <TooltipTrigger asChild>
-                  <span
-                    tabIndex={0}
-                    aria-label={`${m.name}: ${detail}`}
-                    className="rounded-sm p-0.5 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                  >
-                    {icon}
-                  </span>
-                </TooltipTrigger>
-                {tip}
-              </Tooltip>
-            );
-          }
-          return (
-            <DropdownMenu key={m.meetingId}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <DropdownMenuTrigger asChild>
-                    <button
-                      type="button"
-                      aria-label={`${m.name}: ${detail}`}
-                      disabled={busy !== null}
-                      className="cursor-pointer rounded-sm p-0.5 outline-none hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50"
+            if (!canMark) {
+              return (
+                <Tooltip key={key}>
+                  <TooltipTrigger asChild>
+                    <span
+                      tabIndex={0}
+                      aria-label={spokenAs}
+                      className="rounded-sm p-0.5 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
                     >
                       {icon}
-                    </button>
-                  </DropdownMenuTrigger>
-                </TooltipTrigger>
-                {tip}
-              </Tooltip>
-              <DropdownMenuContent align="start" className="w-60">
-                <DropdownMenuLabel className="font-normal">
-                  <span className="font-medium">{m.name}</span>
-                  <span className="block text-xs text-muted-foreground">{member.fullName}</span>
-                </DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  disabled={m.marked === true}
-                  onSelect={() => setConfirming({ meetingId: m.meetingId, name: m.name })}
-                >
-                  <CircleCheck />
-                  Mark complete
-                </DropdownMenuItem>
-                <DropdownMenuItem disabled={m.marked === false} onSelect={() => void mark(m.meetingId, false)}>
-                  <CircleAlert />
-                  Mark missed
-                </DropdownMenuItem>
-                {m.marked !== null && (
-                  <DropdownMenuItem onSelect={() => void mark(m.meetingId, null)}>
-                    <RotateCcw />
-                    Go by Zoom again
+                    </span>
+                  </TooltipTrigger>
+                  {tip}
+                </Tooltip>
+              );
+            }
+            return (
+              <DropdownMenu key={key}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        type="button"
+                        aria-label={spokenAs}
+                        disabled={busy !== null}
+                        className="cursor-pointer rounded-sm p-0.5 outline-none hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                      >
+                        {icon}
+                      </button>
+                    </DropdownMenuTrigger>
+                  </TooltipTrigger>
+                  {tip}
+                </Tooltip>
+                <DropdownMenuContent align="start" className="w-60">
+                  <DropdownMenuLabel className="font-normal">
+                    <span className="font-medium">{m.name}</span>
+                    <span className="block text-xs text-muted-foreground">{member.fullName}</span>
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    disabled={m.marked === true}
+                    onSelect={() => setConfirming({ meetingId: m.meetingId, name: m.name })}
+                  >
+                    <CircleCheck />
+                    Mark complete
                   </DropdownMenuItem>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
+                  <DropdownMenuItem disabled={m.marked === false} onSelect={() => void mark(m.meetingId, false)}>
+                    <CircleAlert />
+                    Mark missed
+                  </DropdownMenuItem>
+                  {m.marked !== null && (
+                    <DropdownMenuItem onSelect={() => void mark(m.meetingId, null)}>
+                      <RotateCcw />
+                      Go by Zoom again
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            );
+          };
+          const own = control(
+            m.meetingId,
+            spoken,
+            when ?? status,
+            busy === m.meetingId ? (
+              spinner
+            ) : (
+              // A meeting that invites to every occurrence turns each of those orange, not its own mark.
+              <Icon className={cn(size, className, !m.instances && m.outOfHours && OUT_OF_HOURS)} />
+            ),
+          );
+          // A series that has run out needs nothing from anyone, so it shows nothing, unless an administrator's word is there to undo.
+          if (instances.length === 0) return m.mark === "finished" && m.marked === null ? null : own;
+          // The occurrences say how the series stands, in a pill so it reads as one. Its own mark would read as one more, so it shows only for an administrator's word, which no occurrence carries.
+          return (
+            <span key={m.meetingId} className="inline-flex items-center gap-0.5 rounded-full border px-1">
+              {m.marked !== null && own}
+              {instances.map((x, n) => {
+                const shown = instanceMark(m.name, m.timezone, x);
+                return control(x.startsAt, shown.spoken, shown.when, busy === m.meetingId && m.marked === null && n === 0 ? spinner : shown.icon);
+              })}
+            </span>
           );
         })}
         <Dialog open={confirming !== null} onOpenChange={(open) => !open && setConfirming(null)}>

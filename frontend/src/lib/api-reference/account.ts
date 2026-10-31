@@ -166,6 +166,16 @@ export const ACCOUNT_GROUPS: EndpointGroup[] = [
       },
       {
         method: "GET",
+        path: "/api/welcome/upcoming-sessions",
+        summary: "Returns what the Welcome page's Upcoming Sessions card shows: every bootcamp that is not complete and has not ended, soonest first.",
+        access: "signedIn",
+        token: true,
+        notes:
+          "At most 12. A bootcamp has ended once its last day is before today; its last day is the longer class's, since day N of Bootcamp and of Intermediate is the same calendar day. intDays is null for a bootcamp with no intermediate class.",
+        returns: "{ sessions: { id, startDate: \"YYYY-MM-DD\", endDate: \"YYYY-MM-DD\", intDays: number | null }[] }",
+      },
+      {
+        method: "GET",
         path: "/api/me/impersonation",
         summary: "Returns whom you are viewing the app as, if anyone.",
         access: "signedIn",

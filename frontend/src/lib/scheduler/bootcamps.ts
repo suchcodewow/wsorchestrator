@@ -9,7 +9,7 @@
 
 import "server-only";
 
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
 import {
@@ -62,8 +62,11 @@ const SORT_COLUMNS = {
   createdBy: sql`lower(${createdBy})`,
 } as const;
 
-/** One page of bootcamps, latest first by default. The search matches the status, the facility or who created it. */
-export async function listBootcamps(query: ListQuery<BootcampSort>): Promise<Page<BootcampRow>> {
+/**
+ * One page of bootcamps, latest first by default. The search matches the status, the facility or who created it.
+ * `includeComplete` false leaves out those that have run.
+ */
+export async function listBootcamps(query: ListQuery<BootcampSort>, includeComplete = true): Promise<Page<BootcampRow>> {
   const { limit, offset } = pageWindow(query.page);
   const rows = await db
     .select({
@@ -80,7 +83,12 @@ export async function listBootcamps(query: ListQuery<BootcampSort>): Promise<Pag
     .from(bootcamps)
     .leftJoin(users, eq(users.id, bootcamps.createdBy))
     .leftJoin(facilities, eq(facilities.id, bootcamps.facilityId))
-    .where(searchAny(query.q, [bootcamps.status, users.name, users.email, facilities.name]))
+    .where(
+      and(
+        searchAny(query.q, [bootcamps.status, users.name, users.email, facilities.name]),
+        includeComplete ? undefined : ne(bootcamps.status, "complete"),
+      ),
+    )
     .orderBy(...orderFor(SORT_COLUMNS[query.sort], query.dir, sql`${bootcamps.startDate} desc`, bootcamps.id))
     .limit(limit)
     .offset(offset);
@@ -98,6 +106,31 @@ export async function activeBootcamp(): Promise<ActiveBootcamp | null> {
     .from(bootcamps)
     .where(eq(bootcamps.status, "active"));
   return row ?? null;
+}
+
+/** The most upcoming bootcamps the Welcome page lists. */
+const UPCOMING_LIMIT = 12;
+
+/** A bootcamp not yet over, as the Welcome page lists it. */
+export type UpcomingBootcamp = Pick<BootcampRow, "id" | "startDate" | "intDays"> & {
+  /** Its last day, YYYY-MM-DD: day N of every track is the same calendar day, so the longer class's. */
+  endDate: string;
+};
+
+/** The bootcamps that are not complete and whose last day is today or later, soonest first. */
+export async function upcomingBootcamps(): Promise<UpcomingBootcamp[]> {
+  const endDate = sql<string>`(${bootcamps.startDate} + greatest(${bootcamps.btcDays}, coalesce(${bootcamps.intDays}, 0)) - 1)`;
+  return db
+    .select({
+      id: bootcamps.id,
+      startDate: bootcamps.startDate,
+      intDays: bootcamps.intDays,
+      endDate: sql<string>`to_char(${endDate}, 'YYYY-MM-DD')`,
+    })
+    .from(bootcamps)
+    .where(and(ne(bootcamps.status, "complete"), sql`${endDate} >= current_date`))
+    .orderBy(asc(bootcamps.startDate))
+    .limit(UPCOMING_LIMIT);
 }
 
 /** One bootcamp and its judges, or null. */

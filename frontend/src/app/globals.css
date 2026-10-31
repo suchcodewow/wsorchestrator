@@ -1114,3 +1114,101 @@
     flex-shrink: 0;
   }
 }
+
+/*
+ * The page loader: the logo gear bouncing inside a dashed ring that turns
+ * clockwise under it, so the gear reads as running in a wheel. The ring has
+ * six dashes and turns one dash on each 0.75s beat, starting with a dash
+ * centred at the bottom, so every landing is on a dash and never in a gap.
+ * The bounce is a near-zero move on an absurd bezier (both control points at
+ * 900), which overshoots it into a hop of about 675 times the move: 0.0444px
+ * up comes out at roughly 30px.
+ */
+@layer components {
+  .gear-loader {
+    /* A navigation that answers at once never shows it. */
+    animation: gear-loader-appear 0.2s ease-out 0.3s both;
+  }
+
+  .gear-loader-wheel {
+    position: relative;
+    width: 84px;
+    aspect-ratio: 1;
+  }
+
+  .gear-loader-ring {
+    position: absolute;
+    inset: 0;
+    color: var(--muted-foreground);
+    animation: gear-loader-ring 4.5s linear infinite;
+  }
+
+  /* Sits on the ring's inner edge, 3px up: the ring's stroke. */
+  .gear-loader-hop {
+    position: absolute;
+    left: 30px;
+    bottom: 3px;
+    width: 24px;
+    aspect-ratio: 1;
+    color: var(--brand);
+    animation: gear-loader-hop 0.75s cubic-bezier(0, 900, 1, 900) infinite;
+  }
+
+  .gear-loader-hop > svg {
+    width: 100%;
+    height: 100%;
+    animation: gear-turn 0.75s linear infinite;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .gear-loader-ring,
+    .gear-loader-hop,
+    .gear-loader-hop > svg {
+      animation: none;
+    }
+  }
+}
+
+@keyframes gear-loader-appear {
+  from {
+    opacity: 0;
+  }
+}
+
+/* A circle's dashes start at 3 o'clock, so the first is centred at 15deg; turning it 75deg more puts it at 6 o'clock. */
+@keyframes gear-loader-ring {
+  from {
+    transform: rotate(75deg);
+  }
+  to {
+    transform: rotate(435deg);
+  }
+}
+
+@keyframes gear-loader-hop {
+  0%,
+  2% {
+    bottom: 3px;
+  }
+  98%,
+  to {
+    bottom: 3.0444px;
+  }
+}
+
+/*
+ * While NavigationPending waits on a page, the one being left stays put for
+ * as long as the loader takes to fade in, so a quick page swaps straight over
+ * without a flash of the gear, then gives the space to it.
+ */
+@layer components {
+  [data-navigating] > .nav-pending-page {
+    animation: nav-pending-hide 0s linear 0.3s forwards;
+  }
+}
+
+@keyframes nav-pending-hide {
+  to {
+    visibility: hidden;
+  }
+}

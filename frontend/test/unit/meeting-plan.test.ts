@@ -13,6 +13,8 @@ import {
   inTimezoneRange,
   inviteWindow,
   inviteWindowLabel,
+  inWindow,
+  outsideWorkingHours,
   offsetHour,
   timezoneRangeLabel,
   joinedFrom,
@@ -290,6 +292,12 @@ test("all meetings invites them to every occurrence left in their window", () =>
   assert.deepEqual(remove, []);
 });
 
+test("all meetings has them finished, not short of one, with none left in their window", () => {
+  const { outcomes, invite: added } = allOf([], [], []);
+  assert.deepEqual(outcomes.get("a@harness.io"), { kind: "finished" });
+  assert.deepEqual(added, []);
+});
+
 test("all meetings adds only what they do not hold, and leaves what they do", () => {
   const { outcomes, invite: added, remove } = allOf([invite("next", "a@harness.io")]);
   assert.deepEqual(outcomes.get("a@harness.io"), { kind: "invited", occurrenceId: "next" });
@@ -371,6 +379,8 @@ test("the Current tab's mark", () => {
   assert.equal(meetingMark({ attended: false, response: "needsAction", invited: true, anyLeft: false }), "pending");
   assert.equal(meetingMark({ attended: false, response: null, invited: false, anyLeft: true }), "uninvited");
   assert.equal(meetingMark({ attended: false, response: null, invited: false, anyLeft: false }), "none_left");
+  assert.equal(meetingMark({ attended: false, response: null, invited: false, anyLeft: false, allOccurrences: true }), "finished");
+  assert.equal(meetingMark({ attended: false, response: null, invited: false, anyLeft: true, allOccurrences: true }), "uninvited");
 });
 
 const JULY = new Date("2026-07-15T12:00:00Z");
@@ -423,4 +433,40 @@ test("a time zone range reads as a person would say it", () => {
   assert.equal(timezoneRangeLabel(1, 1), "UTC+1");
   assert.equal(timezoneRangeLabel(9, -6), "UTC+9 to UTC-6");
   assert.equal(timezoneRangeLabel(0, 3), "UTC+0 to UTC+3");
+});
+
+test("an occurrence falls in a window from its first day up to, not on, the cutoff", () => {
+  assert.equal(inWindow("2026-11-01", { notBefore: null, cutoff: "2026-11-09" }), true);
+  assert.equal(inWindow("2026-11-09", { notBefore: null, cutoff: "2026-11-09" }), false);
+  assert.equal(inWindow("2026-11-12", { notBefore: "2026-11-13", cutoff: "9999-12-31" }), false);
+  assert.equal(inWindow("2026-11-13", { notBefore: "2026-11-13", cutoff: "9999-12-31" }), true);
+});
+
+const at = (iso: string, hours = 1) => [new Date(iso), new Date(Date.parse(iso) + hours * 60 * 60_000)] as const;
+
+test("a meeting inside 9 to 5 where someone is is not out of hours, to the minute", () => {
+  // 15:00Z is 10:00 in Chicago in November (UTC-6).
+  assert.equal(outsideWorkingHours("America/Chicago", ...at("2026-11-10T15:00:00Z")), false);
+  // 9:00 to 17:00 exactly, in New York (UTC-5).
+  assert.equal(outsideWorkingHours("America/New_York", ...at("2026-11-10T14:00:00Z", 8)), false);
+});
+
+test("a meeting that starts before 9, ends after 5 or runs past midnight is out of hours", () => {
+  // 7:00 to 8:00 in Chicago.
+  assert.equal(outsideWorkingHours("America/Chicago", ...at("2026-11-10T13:00:00Z")), true);
+  // 16:30 to 17:30 in London.
+  assert.equal(outsideWorkingHours("Europe/London", ...at("2026-11-10T16:30:00Z")), true);
+  // 23:30 to 00:30 in Kolkata (UTC+5:30).
+  assert.equal(outsideWorkingHours("Asia/Kolkata", ...at("2026-11-10T18:00:00Z")), true);
+});
+
+test("working hours follow daylight saving", () => {
+  // 13:00Z is 9:00 in New York in summer (UTC-4) and 8:00 in winter (UTC-5).
+  assert.equal(outsideWorkingHours("America/New_York", ...at("2026-07-14T13:00:00Z")), false);
+  assert.equal(outsideWorkingHours("America/New_York", ...at("2026-12-15T13:00:00Z")), true);
+});
+
+test("no time zone, or one the runtime does not know, says nothing", () => {
+  assert.equal(outsideWorkingHours(null, ...at("2026-11-10T03:00:00Z")), null);
+  assert.equal(outsideWorkingHours("Mars/Olympus_Mons", ...at("2026-11-10T03:00:00Z")), null);
 });
