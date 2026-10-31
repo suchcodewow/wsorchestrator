@@ -40,7 +40,7 @@ import type {
   CurrentTrack,
 } from "@/lib/evals/current-cohort";
 import type { MeetingInstance } from "@/lib/evals/google-meetings";
-import type { MeetingMark } from "@/lib/evals/meeting-plan";
+import type { MeetingLeavingReason, MeetingMark } from "@/lib/evals/meeting-plan";
 import type { IntakeFormId, IntakeQuestion } from "@/db/schema";
 import type { SetTrackResult, TrackChoice } from "@/lib/evals/tracks";
 import type { IntakeOnFile } from "@/lib/logistics/intake";
@@ -51,12 +51,13 @@ import type { ActiveBootcamp } from "@/lib/scheduler/bootcamps";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 import {
-  Check,
+  CalendarCheck,
+  CalendarClock,
   ChevronDown,
   ChevronRight,
-  Circle,
   CircleAlert,
   CircleCheck,
+  CircleDashed,
   CircleHelp,
   CircleMinus,
   CircleX,
@@ -68,6 +69,7 @@ import {
   Printer,
   RotateCcw,
   Users,
+  X,
   type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
@@ -137,7 +139,7 @@ function useFilterParams() {
   return { toggle, pending };
 }
 
-/** Where each person stands with each picked Google meeting that is for them, by lowercased email. */
+/** Where each person stands with each picked Google meeting that is for them, or that the next sync takes them off, by lowercased email. */
 export type MemberMeetings = Record<
   string,
   {
@@ -152,6 +154,8 @@ export type MemberMeetings = Record<
     outOfHours: boolean;
     /** Every occurrence of a meeting that invites to all of them; null for one taken one at a time. */
     instances: { startsAt: string; endsAt: string; mark: MeetingInstance["mark"]; outOfHours: boolean }[] | null;
+    /** What the next sync takes them off and why; null when it leaves their invites alone. */
+    leaving: { why: MeetingLeavingReason; dryRun: boolean; occurrences: { startsAt: string; endsAt: string }[] } | null;
   }[]
 >;
 
@@ -703,22 +707,52 @@ function TrackMenu({
   );
 }
 
-const MARKS: Record<MeetingMark, { Icon: LucideIcon; className: string; label: string }> = {
-  attended: { Icon: CircleCheck, className: "text-emerald-600 dark:text-emerald-400", label: "Attended" },
-  accepted: { Icon: Check, className: "text-muted-foreground", label: "Accepted" },
-  pending: { Icon: CircleHelp, className: "text-muted-foreground", label: "Not accepted" },
-  uninvited: { Icon: Circle, className: "text-muted-foreground", label: "Not invited yet" },
+/** A white stroke on a solid disc, as the RSVP mark is: how an occurrence came out, where every other mark is an outline. */
+function DiscIcon({ className, disc, stroke }: { className?: string; disc: string; stroke: string }) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className={className}>
+      <circle cx="12" cy="12" r="12" className={disc} />
+      <path d={stroke} fill="none" stroke="white" strokeWidth="2.75" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function AttendedIcon({ className }: { className?: string }) {
+  return <DiscIcon className={className} disc="fill-emerald-600 dark:fill-emerald-500" stroke="M7 12.5 10.5 16 17 8.5" />;
+}
+
+function MissedIcon({ className }: { className?: string }) {
+  return <DiscIcon className={className} disc="fill-red-600 dark:fill-red-500" stroke="M8.25 8.25 15.75 15.75M15.75 8.25 8.25 15.75" />;
+}
+
+type Mark = { Icon: React.ComponentType<{ className?: string }>; className: string; label: string };
+
+const MARKS: Record<MeetingMark, Mark> = {
+  leaving: { Icon: X, className: "stroke-3 text-red-600 dark:text-red-400", label: "The next sync takes them off" },
+  attended: { Icon: AttendedIcon, className: "", label: "Attended" },
+  accepted: { Icon: CalendarCheck, className: "text-muted-foreground", label: "Invited and accepted" },
+  pending: { Icon: CalendarClock, className: "text-muted-foreground", label: "Invited, not accepted yet" },
+  uninvited: { Icon: CircleDashed, className: "text-muted-foreground", label: "Not invited yet" },
   none_left: { Icon: CircleAlert, className: "text-red-600 dark:text-red-400", label: "None left before their bootcamp" },
   finished: { Icon: CircleMinus, className: "text-muted-foreground", label: "None left; nothing more is needed" },
 };
 
-const INSTANCE_MARKS: Record<MeetingInstance["mark"], { Icon: LucideIcon; className: string; label: string }> = {
+const INSTANCE_MARKS: Record<MeetingInstance["mark"], Mark> = {
+  leaving: MARKS.leaving,
   attended: MARKS.attended,
-  missed: { Icon: CircleX, className: "text-red-600 dark:text-red-400", label: "Missed" },
+  missed: { Icon: MissedIcon, className: "", label: "Missed" },
   accepted: MARKS.accepted,
   pending: MARKS.pending,
   uninvited: { ...MARKS.uninvited, label: "Not invited yet; the next sync adds them to this one" },
 };
+
+const LEAVING_WHY: Record<MeetingLeavingReason, string> = {
+  attended: "They already attended",
+  not_for_them: "This meeting is no longer for them",
+  extra: "They hold an invite they should not",
+};
+
+const OUTSIDE_HOURS = "Outside 9 to 5 where they are";
 
 /** "Tue, Nov 10" and "7:00 AM – 8:00 AM CST" for an occurrence, read in `zone`. */
 function inZone(zone: string, startsAt: string, endsAt: string): { day: string; time: string } {
@@ -747,14 +781,49 @@ function occurrenceWhen(zone: string | null, startsAt: string, endsAt: string): 
 /** An occurrence still to come that runs outside 9 to 5 where the attendee is. */
 const OUT_OF_HOURS = "text-orange-600 dark:text-orange-400";
 
+type MemberMeeting = MemberMeetings[string][number];
+
+/** What taking someone off comes to: the next sync does it, unless the sync is in dry run, and then it is only logged. */
+function leavingWords(leaving: NonNullable<MemberMeeting["leaving"]>): string {
+  return leaving.dryRun ? "A live sync would take them off" : MARKS.leaving.label;
+}
+
+const DRY_RUN = "The sync is in dry run, so nothing changes yet";
+
+function leavingWhy(m: MemberMeeting): string | null {
+  if (!m.leaving) return null;
+  return m.leaving.why === "attended" && m.marked === true ? "Marked complete by an administrator" : LEAVING_WHY[m.leaving.why];
+}
+
+/** What a meeting's own mark means, a line each: its meaning first, then the occurrence it is about. */
+function meetingLines(m: MemberMeeting): string[] {
+  const taken = m.leaving?.occurrences.map((x) => occurrenceWhen(m.timezone, x.startsAt, x.endsAt)) ?? [];
+  const dryRun = m.leaving?.dryRun ? DRY_RUN : null;
+  if (m.mark === "leaving" && m.leaving) return [leavingWords(m.leaving), leavingWhy(m), ...taken, dryRun].filter((line) => line !== null);
+  const when = m.startsAt && m.endsAt ? occurrenceWhen(m.timezone, m.startsAt, m.endsAt) : null;
+  return [
+    m.marked !== null ? `${m.marked ? "Attended" : "Missed"}, marked by an administrator` : MARKS[m.mark].label,
+    when && (m.predicted ? `The next sync invites them to ${when}` : when),
+    !m.instances && m.outOfHours ? OUTSIDE_HOURS : null,
+    m.leaving && `${leavingWords(m.leaving)} ${taken.join("; ")}`,
+    dryRun,
+  ].filter((line) => line !== null);
+}
+
 /** What one occurrence of a meeting that invites to all of them shows: its icon, orange outside 9 to 5, and the words for it. */
-function instanceMark(name: string, timezone: string | null, x: NonNullable<MemberMeetings[string][number]["instances"]>[number]) {
+function instanceMark(m: MemberMeeting, x: NonNullable<MemberMeeting["instances"]>[number]) {
   const { Icon, className, label } = INSTANCE_MARKS[x.mark];
-  const when = occurrenceWhen(timezone, x.startsAt, x.endsAt);
+  const leaving = x.mark === "leaving" ? m.leaving : null;
+  const outside = x.outOfHours && x.mark !== "leaving";
   return {
-    when,
-    spoken: `${name}: ${when}, ${label}${x.outOfHours ? ", outside 9 to 5 where they are" : ""}`,
-    icon: <Icon className={cn("size-3.5", className, x.outOfHours && OUT_OF_HOURS)} />,
+    lines: [
+      leaving ? leavingWords(leaving) : label,
+      leaving ? leavingWhy(m) : null,
+      occurrenceWhen(m.timezone, x.startsAt, x.endsAt),
+      outside ? OUTSIDE_HOURS : null,
+      leaving?.dryRun ? DRY_RUN : null,
+    ].filter((line) => line !== null),
+    icon: <Icon className={cn("size-3.5", className, outside && OUT_OF_HOURS)} />,
   };
 }
 
@@ -840,19 +909,21 @@ function MeetingMarks({
           </Tooltip>
         )}
         {meetings.map((m) => {
-          const { Icon, className, label } = MARKS[m.mark];
-          const status = m.marked !== null ? `${m.marked ? "attended" : "missed"}, marked by an administrator` : label;
-          const when = m.startsAt && m.endsAt ? occurrenceWhen(m.timezone, m.startsAt, m.endsAt) : null;
-          const spoken = `${m.name}: ${when ? `${when}, ` : ""}${status}${!m.instances && m.outOfHours ? ", outside 9 to 5 where they are" : ""}`;
+          const { Icon, className } = MARKS[m.mark];
           const instances = m.instances ?? [];
           const size = instances.length > 0 ? "size-3.5" : "size-4";
           const spinner = <Loader2 className={cn(size, "animate-spin text-muted-foreground")} />;
           // Every mark of a meeting is a way to its one menu: the attendance an administrator overrides is the meeting's, not an occurrence's.
-          const control = (key: string, spokenAs: string, shown: string, icon: React.ReactElement) => {
+          const control = (key: string, lines: string[], icon: React.ReactElement) => {
+            const spokenAs = `${m.name}: ${lines.join(", ")}`;
             const tip = (
               <TooltipContent>
                 <span className="block font-medium">{m.name}</span>
-                {shown}
+                {lines.map((line, n) => (
+                  <span key={line} className={cn("block", n > 0 && "text-muted-foreground")}>
+                    {line}
+                  </span>
+                ))}
               </TooltipContent>
             );
             if (!canMark) {
@@ -902,7 +973,7 @@ function MeetingMarks({
                     Mark complete
                   </DropdownMenuItem>
                   <DropdownMenuItem disabled={m.marked === false} onSelect={() => void mark(m.meetingId, false)}>
-                    <CircleAlert />
+                    <CircleX />
                     Mark missed
                   </DropdownMenuItem>
                   {m.marked !== null && (
@@ -917,13 +988,12 @@ function MeetingMarks({
           };
           const own = control(
             m.meetingId,
-            spoken,
-            when ?? status,
+            meetingLines(m),
             busy === m.meetingId ? (
               spinner
             ) : (
               // A meeting that invites to every occurrence turns each of those orange, not its own mark.
-              <Icon className={cn(size, className, !m.instances && m.outOfHours && OUT_OF_HOURS)} />
+              <Icon className={cn(size, className, !m.instances && m.mark !== "leaving" && m.outOfHours && OUT_OF_HOURS)} />
             ),
           );
           // A series that has run out needs nothing from anyone, so it shows nothing, unless an administrator's word is there to undo.
@@ -933,8 +1003,8 @@ function MeetingMarks({
             <span key={m.meetingId} className="inline-flex items-center gap-0.5 rounded-full border px-1">
               {m.marked !== null && own}
               {instances.map((x, n) => {
-                const shown = instanceMark(m.name, m.timezone, x);
-                return control(x.startsAt, shown.spoken, shown.when, busy === m.meetingId && m.marked === null && n === 0 ? spinner : shown.icon);
+                const shown = instanceMark(m, x);
+                return control(x.startsAt, shown.lines, busy === m.meetingId && m.marked === null && n === 0 ? spinner : shown.icon);
               })}
             </span>
           );

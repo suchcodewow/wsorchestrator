@@ -526,6 +526,57 @@ describe("Sync Now", () => {
     assert.equal(status!.mark, "accepted");
   });
 
+  test("someone who declines is invited to the next occurrence at once, and accepting after all undoes it", async () => {
+    await connect();
+    const id = await pick();
+    event("e1", 1);
+    const second = event("e2", 2);
+    await sync_ok();
+    const reply = (responseStatus: string) => {
+      fake.events.get("e1")!.attendees = fake.events.get("e1")!.attendees!.map((a) => (a.email === salesEmail ? { ...a, responseStatus } : a));
+    };
+    const status = async () => (await meetingStatusesFor([{ email: salesEmail, stage: "bootcamp", track: "sales" }])).get(salesEmail)![0]!;
+    const mine = async () => (await invitesOf(id)).filter((inv) => inv.email === salesEmail).map((inv) => inv.eventId).sort();
+
+    reply("declined");
+    const preview = await sync_ok(true);
+    assert.equal(preview.invited, 1, "a dry run reads the reply too");
+    assert.ok(!fake.guests("e2").includes(salesEmail), "and changes nothing");
+    assert.deepEqual(await mine(), ["e1"]);
+
+    const result = await sync_ok();
+    assert.ok(result.ok && result.runId);
+    assert.ok(fake.guests("e2").includes(salesEmail), "invited to the next one");
+    assert.ok(fake.guests("e1").includes(salesEmail), "and left on the one they declined");
+    const changes = await listMeetingSyncChanges(result.runId, { ...MEETING_SYNC_CHANGE_LIST, q: salesEmail, page: 1 });
+    assert.deepEqual(
+      changes.rows.map((c) => [c.action, c.detail]),
+      [["invited", "Declined an earlier one."]],
+    );
+    const moved = await status();
+    assert.deepEqual([moved.mark, moved.startsAt?.toISOString()], ["pending", new Date(second.start!.dateTime!).toISOString()]);
+
+    await sync_ok();
+    assert.deepEqual(await mine(), ["e1", "e2"], "a later sync leaves it there");
+
+    reply("accepted");
+    await sync_ok();
+    assert.deepEqual(await mine(), ["e1"]);
+    assert.ok(!fake.guests("e2").includes(salesEmail), "the later invite was the spare one");
+  });
+
+  test("declining the last occurrence leaves them on it, and the Current tab says none are left", async () => {
+    await connect();
+    await pick();
+    event("e1", 1);
+    await sync_ok();
+    fake.events.get("e1")!.attendees = fake.events.get("e1")!.attendees!.map((a) => (a.email === salesEmail ? { ...a, responseStatus: "declined" } : a));
+    await sync_ok();
+    assert.ok(fake.guests("e1").includes(salesEmail));
+    const [status] = (await meetingStatusesFor([{ email: salesEmail, stage: "bootcamp", track: "sales" }])).get(salesEmail)!;
+    assert.equal(status!.mark, "none_left");
+  });
+
   test("the Current tab gives someone not yet invited the occurrence the next sync would pick, and flags one outside 9 to 5", async () => {
     await connect();
     const id = await pick();
@@ -668,6 +719,88 @@ describe("Sync Now", () => {
     assert.ok(guests.includes(engineerEmail));
     assert.ok(!guests.includes(salesEmail), "the sync takes off the Sales candidate it added");
     assert.ok(guests.includes(byHand), "but not someone added by hand");
+  });
+
+  test("the Current tab shows who the next sync takes off a meeting no longer for them, until it has", async () => {
+    await connect();
+    const id = await pick("bootcamp", "both");
+    event("e1", 1);
+    await sync_ok();
+    assert.ok((await updateMeetingSelection(id, { track: "sales" })).ok);
+
+    const status = async () =>
+      (await meetingStatusesFor([{ email: engineerEmail, stage: "bootcamp", track: "engineer" }])).get(engineerEmail)!.find((x) => x.meetingId === id);
+    const leaving = await status();
+    assert.equal(leaving?.mark, "leaving");
+    assert.deepEqual([leaving?.leaving?.why, leaving?.leaving?.dryRun, leaving?.leaving?.occurrences.length], ["not_for_them", false, 1]);
+    assert.equal(leaving?.startsAt?.getTime(), leaving?.leaving?.occurrences[0]?.startsAt.getTime());
+
+    await setMeetingSyncLive(admin.id, false);
+    assert.equal((await status())?.leaving?.dryRun, true, "a dry run only logs it");
+    await setMeetingSyncLive(admin.id, true);
+
+    await saveTestGroup(admin.id, { on: true, suffix: "test", members: [] });
+    assert.equal(await status(), undefined, "no sync touches a real invite with the test group on");
+    await saveTestGroup(admin.id, { on: false });
+
+    await sync_ok();
+    assert.ok(!fake.guests("e1").includes(engineerEmail));
+    assert.equal(await status(), undefined);
+  });
+
+  test("the Current tab shows the next sync taking someone marked complete off, then that they attended", async () => {
+    await connect();
+    const id = await pick();
+    event("e1", 1);
+    await sync_ok();
+    assert.ok((await setAttendanceMark(admin.id, id, { email: salesEmail, attended: true })).ok);
+
+    const status = async () => (await meetingStatusesFor([{ email: salesEmail, stage: "bootcamp", track: "sales" }])).get(salesEmail)![0]!;
+    const leaving = await status();
+    assert.deepEqual([leaving.mark, leaving.marked, leaving.leaving?.why], ["leaving", true, "attended"]);
+
+    await sync_ok();
+    const done = await status();
+    assert.deepEqual([done.mark, done.leaving], ["attended", null]);
+  });
+
+  test("the Current tab shows no removal for a guest the sync did not add, as it leaves them on the event", async () => {
+    await connect();
+    const id = await pick();
+    event("e1", 1);
+    fake.events.get("e1")!.attendees = [{ email: salesEmail, responseStatus: "accepted" }];
+    await sync_ok();
+    assert.ok((await setAttendanceMark(admin.id, id, { email: salesEmail, attended: true })).ok);
+
+    const [status] = (await meetingStatusesFor([{ email: salesEmail, stage: "bootcamp", track: "sales" }])).get(salesEmail)!;
+    assert.deepEqual([status!.mark, status!.leaving], ["attended", null]);
+  });
+
+  test("the Current tab marks each occurrence of a meeting that invites to all of them that the next sync takes someone off", async () => {
+    await connect();
+    const id = await pick("bootcamp", "sales", NAME, true);
+    event("e1", 1);
+    event("e2", 2);
+    await sync_ok();
+    assert.ok((await setAttendanceMark(admin.id, id, { email: salesEmail, attended: true })).ok);
+
+    const [status] = (await meetingStatusesFor([{ email: salesEmail, stage: "bootcamp", track: "sales" }])).get(salesEmail)!;
+    assert.equal(status!.mark, "leaving");
+    assert.deepEqual(status!.instances?.map((x) => x.mark), ["leaving", "leaving"]);
+    assert.equal(status!.leaving?.occurrences.length, 2);
+  });
+
+  test("the Current tab keeps the mark of the invite someone keeps when the next sync takes off only their extra one", async () => {
+    await connect();
+    const id = await pick("bootcamp", "sales", NAME, true);
+    event("e1", 1);
+    event("e2", 2);
+    await sync_ok();
+    assert.ok((await updateMeetingSelection(id, { allOccurrences: false })).ok);
+
+    const [status] = (await meetingStatusesFor([{ email: salesEmail, stage: "bootcamp", track: "sales" }])).get(salesEmail)!;
+    assert.equal(status!.mark, "pending");
+    assert.deepEqual([status!.leaving?.why, status!.leaving?.occurrences.length], ["extra", 1]);
   });
 
   test("the test group stands in for the cohort, with no administrators, and turning it off takes its invites back", async () => {

@@ -16,12 +16,17 @@
  * occurrence is over, Zoom says whether they joined. Someone who did is done;
  * someone who did not is invited to the next occurrence after it, while one
  * is left before the bootcamp. An administrator's mark overrides Zoom either
- * way. Every Assessments Administrator is invited to each upcoming
- * occurrence a cohort member is on.
+ * way. Someone who declines their occurrence does not wait for it: they are
+ * invited to the next one after it straight away, and stay a declined guest on
+ * the one they turned down, which is how a later sync knows not to offer it
+ * again. Accepting it after all makes the later invite the spare one. Every
+ * Assessments Administrator is invited to each upcoming occurrence a cohort
+ * member is on.
  *
  * A meeting may instead invite each person to every occurrence offered to
  * them, whether or not they have attended one. Its series simply ends, so
  * having none left is no problem, as it is for a meeting they must attend once.
+ * They hold the later ones already, so declining one changes nothing.
  *
  * A meeting may also hold back from people who started recently: it offers
  * each the first occurrence on or after their start date plus a number of
@@ -283,6 +288,8 @@ export type PlanInvite = {
   role: MeetingInviteRole;
   addedBySync: boolean;
   attendance: MeetingAttendance | null;
+  /** Google's word on the invite, `declined` among them; null or missing when none is known. */
+  responseStatus?: string | null;
 };
 
 /** For the run log and the Current tab: where one person stands with one meeting. */
@@ -301,7 +308,7 @@ export type MemberOutcome =
   | { kind: "finished" };
 
 /** A member invite to add. */
-export type PlanAdd = { email: string; occurrenceId: string; afterMiss: boolean };
+export type PlanAdd = { email: string; occurrenceId: string; afterMiss: boolean; afterDecline?: boolean };
 
 export type MeetingPlan = {
   outcomes: Map<string, MemberOutcome>;
@@ -389,25 +396,29 @@ export function planMeeting(input: {
       remove.push(...future.map(({ invite }) => invite));
       continue;
     }
-    if (future.length > 0) {
-      outcomes.set(email, { kind: "invited", occurrenceId: future[0]!.invite.occurrenceId });
-      // One at a time: any later ones are left from when the meeting invited to every occurrence.
-      remove.push(...future.slice(1).map(({ invite }) => invite));
+    // A declined invite stays where it is, as the record of the decline; it is just not the one they are going to.
+    const going = future.filter(({ invite }) => invite.responseStatus !== "declined");
+    const declined = future.filter(({ invite }) => invite.responseStatus === "declined");
+    if (going.length > 0) {
+      outcomes.set(email, { kind: "invited", occurrenceId: going[0]!.invite.occurrenceId });
+      // One at a time: any later ones are left from when the meeting invited to every occurrence, or from a decline they took back.
+      remove.push(...going.slice(1).map(({ invite }) => invite));
       continue;
     }
     // An administrator's "missed" stands for every occurrence that has begun, whatever Zoom said or has yet to say.
     const begun = mine.filter(({ at }) => at.startsAt <= input.now);
-    const pending = mark === false ? [] : begun.filter(({ invite, at }) => invite.attendance === null && !at.attendanceRead);
+    const pending =
+      mark === false ? [] : begun.filter(({ invite, at }) => invite.attendance === null && !at.attendanceRead && invite.responseStatus !== "declined");
     if (pending.length > 0) {
       outcomes.set(email, { kind: "waiting", occurrenceId: pending[0]!.invite.occurrenceId });
       continue;
     }
-    const lastBegun = Math.max(-Infinity, ...begun.map(({ at }) => at.startsAt.getTime()));
-    const next = firstOf(offeredTo(email).filter((o) => o.startsAt.getTime() > lastBegun));
+    const lastPassed = Math.max(-Infinity, ...[...begun, ...declined].map(({ at }) => at.startsAt.getTime()));
+    const next = firstOf(offeredTo(email).filter((o) => o.startsAt.getTime() > lastPassed));
     if (next) {
       const afterMiss = begun.length > 0;
       outcomes.set(email, { kind: "invite", occurrenceId: next.id, afterMiss });
-      invite.push({ email, occurrenceId: next.id, afterMiss });
+      invite.push({ email, occurrenceId: next.id, afterMiss, ...(declined.length > 0 && { afterDecline: true }) });
     } else {
       outcomes.set(email, { kind: "none_left" });
     }
@@ -477,12 +488,16 @@ export function sameGuests(a: readonly CalendarAttendee[], b: readonly CalendarA
 }
 
 /** Where someone stands with one meeting on the Current tab. */
-export const MEETING_MARKS = ["attended", "accepted", "pending", "uninvited", "none_left", "finished"] as const;
+export const MEETING_MARKS = ["leaving", "attended", "accepted", "pending", "uninvited", "none_left", "finished"] as const;
 export type MeetingMark = (typeof MEETING_MARKS)[number];
 
+/** Why the next sync takes someone off an invite: they attended, the meeting is no longer for them, or it is one more than they should hold. */
+export type MeetingLeavingReason = "attended" | "not_for_them" | "extra";
+
 /**
- * The icon the Current tab shows: attended; else accepted or not yet on the
- * invite they hold; else, with no occurrence left before their bootcamp,
+ * The icon the Current tab shows: leaving when the next sync takes them off
+ * every invite they hold and gives them no other; else attended; else accepted
+ * or not yet on the invite they hold; else, with no occurrence left before their bootcamp,
  * `none_left`, or `finished` for a meeting that invites to all of them, which
  * is no problem; else `uninvited` until the next sync invites them.
  */
@@ -494,7 +509,10 @@ export function meetingMark(input: {
   anyLeft: boolean;
   /** Whether the meeting invites each person to every occurrence, not one at a time. */
   allOccurrences?: boolean;
+  /** Whether the next sync leaves them with no invite to it still to come. */
+  leaving?: boolean;
 }): MeetingMark {
+  if (input.leaving) return "leaving";
   if (input.attended) return "attended";
   if (input.invited) return input.response === "accepted" ? "accepted" : "pending";
   if (input.anyLeft) return "uninvited";
