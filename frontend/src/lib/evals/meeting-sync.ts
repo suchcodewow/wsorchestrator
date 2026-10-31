@@ -9,8 +9,8 @@
  * 2. For each occurrence over for half an hour whose attendance is not known,
  *    asks the connected Zoom user who joined.
  * 3. Invites each person on the Cohorts page's Current tab whom a meeting is
- *    for to its next occurrence in their window, and anyone who missed theirs
- *    to the next one after it, or to every occurrence in it when the meeting
+ *    for to its next occurrence in their window, and anyone who missed or
+ *    declined theirs to the next one after it, or to every occurrence in it when the meeting
  *    is set to all meetings (`meeting-plan.ts` has the rules), with every
  *    Assessments Administrator on each occurrence a cohort member is on. The
  *    window is before the active bootcamp starts, except for an Intermediate
@@ -491,7 +491,7 @@ async function invitesOn(occurrences: readonly Occurrence[]): Promise<Invite[]> 
 }
 
 /** Copies each guest's reply from the calendar onto the invite the sync holds for them. */
-async function storeReplies(occurrences: readonly Occurrence[], invites: Invite[]): Promise<void> {
+async function storeReplies(occurrences: readonly Occurrence[], invites: Invite[], persist: boolean): Promise<void> {
   for (const occ of occurrences) {
     if (!occ.event) continue;
     const replies = new Map((occ.event.attendees ?? []).map((a) => [a.email.trim().toLowerCase(), a.responseStatus ?? null]));
@@ -499,10 +499,12 @@ async function storeReplies(occurrences: readonly Occurrence[], invites: Invite[
       .filter((inv) => inv.occurrenceId === occ.id && replies.has(inv.email) && replies.get(inv.email) !== inv.responseStatus)
       .map((inv) => ({ email: inv.email, status: replies.get(inv.email) ?? null }));
     if (changed.length === 0) continue;
-    await db.execute(sql`
-      update meeting_invites i set response_status = x.status
-      from jsonb_to_recordset(${JSON.stringify(changed)}::jsonb) as x(email text, status text)
-      where i.occurrence_id = ${occ.id}::uuid and i.email = x.email`);
+    if (persist) {
+      await db.execute(sql`
+        update meeting_invites i set response_status = x.status
+        from jsonb_to_recordset(${JSON.stringify(changed)}::jsonb) as x(email text, status text)
+        where i.occurrence_id = ${occ.id}::uuid and i.email = x.email`);
+    }
     for (const inv of invites) if (inv.occurrenceId === occ.id && replies.has(inv.email)) inv.responseStatus = replies.get(inv.email) ?? null;
   }
 }
@@ -581,7 +583,8 @@ async function readAttendance(ctx: Context, meeting: MeetingSelection, occurrenc
 async function syncMeeting(ctx: Context, meeting: MeetingSelection): Promise<void> {
   const occurrences = await occurrencesOf(ctx, meeting);
   const invites = await invitesOn(occurrences);
-  if (!ctx.dryRun) await storeReplies(occurrences, invites);
+  // A dry run stores nothing, but its plan still reads the replies, so it logs what a live run would do about a decline.
+  await storeReplies(occurrences, invites, !ctx.dryRun);
   await readAttendance(ctx, meeting, occurrences, invites);
 
   const byId = new Map(occurrences.map((occ) => [occ.id, occ]));
@@ -634,7 +637,7 @@ async function syncMeeting(ctx: Context, meeting: MeetingSelection): Promise<voi
       occurrenceStartsAt: byId.get(inv.occurrenceId)!.startsAt,
       action: "invited",
       email: inv.email,
-      detail: inv.afterMiss ? "Missed an earlier one." : null,
+      detail: inv.afterDecline ? "Declined an earlier one." : inv.afterMiss ? "Missed an earlier one." : null,
     });
   }
   for (const [email, outcome] of plan.outcomes) {

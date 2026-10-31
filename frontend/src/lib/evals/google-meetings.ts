@@ -31,6 +31,7 @@ import {
   meetingSyncChanges,
   meetingSyncRuns,
   users,
+  type MeetingAttendance,
   type MeetingSelection,
   type MeetingStage,
   type MeetingSyncAction,
@@ -50,9 +51,12 @@ import {
   meetingMark,
   offsetHour,
   outsideWorkingHours,
+  planMeeting,
   TIMEZONE_HOURS,
   type MeetingBootcamp,
+  type MeetingLeavingReason,
   type MeetingMark,
+  type PlanOccurrence,
 } from "@/lib/evals/meeting-plan";
 import type { MeetingSelectionSort, MeetingSyncChangeSort, MeetingSyncSort } from "@/lib/list-specs";
 import { PAGE_SIZE, pageWindow, toPage, type ListQuery, type Page } from "@/lib/paging";
@@ -441,22 +445,37 @@ export type PersonMeetingStatus = {
   outOfHours: boolean;
   /** For a meeting that invites to every occurrence, each one they hold and each the next sync would add, soonest first; null otherwise. */
   instances: MeetingInstance[] | null;
+  /** What the next sync takes them off, soonest first, and why; null when it leaves their invites alone. In a dry run it only logs this. */
+  leaving: { why: MeetingLeavingReason; dryRun: boolean; occurrences: { startsAt: Date; endsAt: Date }[] } | null;
 };
 
 /**
  * One occurrence of a meeting that invites to all of them, for one person:
  * attended or missed once Zoom has been read; accepted or pending on an invite
- * not yet read; uninvited for one the next sync would invite them to.
+ * not yet read; uninvited for one the next sync would invite them to; leaving
+ * for one it would take them off.
  */
 export type MeetingInstance = {
   startsAt: Date;
   endsAt: Date;
-  mark: "attended" | "missed" | "accepted" | "pending" | "uninvited";
+  mark: "attended" | "missed" | "accepted" | "pending" | "uninvited" | "leaving";
   outOfHours: boolean;
 };
 
 /** More upcoming occurrences than the picked meetings hold between them in the 60 days a sync reads. */
 const UPCOMING_LIMIT = PAGE_SIZE;
+
+/** One person's invite to one occurrence of a meeting, as `meetingStatusesFor` reads it. */
+type HeldInvite = {
+  id: string;
+  startsAt: string;
+  endsAt: string;
+  startDate: string;
+  read: boolean;
+  addedBySync: boolean;
+  attendance: MeetingAttendance | null;
+  response: string | null;
+};
 
 /**
  * For each of a page's people, where they stand with each picked meeting that
@@ -467,9 +486,15 @@ const UPCOMING_LIMIT = PAGE_SIZE;
  * meeting that invites to every occurrence that last is merely finished.
  * Someone not yet invited is given the occurrence the next sync would invite
  * them to, picked as the sync picks it. A meeting that invites to every
- * occurrence also lists each one they hold and each the sync would add. Each
- * occurrence still to come is held to their working day in their own time zone.
+ * occurrence also lists each one they hold and each the sync would add. An
+ * invite they declined to a meeting taken one at a time is not the one they
+ * hold. Each occurrence still to come is held to their working day in their own time zone.
  * Test-group invites and RSVPs are left out; the Current tab is the real cohort.
+ *
+ * `leaving` is `planMeeting` run for one person, so it says what the sync says:
+ * only guests the sync added, and with no active bootcamp or with the test group
+ * on, when no sync touches these invites, nothing. A meeting no longer for
+ * someone is listed for as long as the next sync has something to take them off.
  */
 export async function meetingStatusesFor(
   people: readonly { email: string; stage: "bootcamp" | "intermediate"; track: string | null; btcDate?: string | null }[],
@@ -480,7 +505,7 @@ export async function meetingStatusesFor(
     .map((p) => ({ ...p, email: p.email.trim().toLowerCase() }));
   if (candidates.length === 0) return out;
   const emails = [...new Set(candidates.map((c) => c.email))];
-  const [records, rsvps] = await Promise.all([
+  const [records, rsvps, live, group] = await Promise.all([
     db
       .select({ email: sql<string>`lower(${employees.email})`, timezone: employees.timezone, startDate: employees.startDate })
       .from(employees)
@@ -493,6 +518,8 @@ export async function meetingStatusesFor(
       .where(and(eq(intakeResponses.form, "bootcamp"), eq(intakeResponses.test, false), inArray(intakeResponses.email, emails)))
       .limit(PAGE_SIZE)
       .then((rows) => new Set(rows.map((r) => r.email))),
+    getMeetingSyncLive(),
+    getTestGroup(),
   ]);
   const members = candidates.map((c) => ({
     ...c,
@@ -525,7 +552,6 @@ export async function meetingStatusesFor(
   const before = bootcamp ? inviteWindow("bootcamp", { stage: "bootcamp" }, bootcamp) : null;
   const after = bootcamp ? inviteWindow("intermediate", { stage: "bootcamp" }, bootcamp) : null;
   const windowSql = (w: NonNullable<typeof before>) => sql`(${o.startDate} < ${w.cutoff} ${w.notBefore ? sql`and ${o.startDate} >= ${w.notBefore}` : sql``})`;
-  const open = sql`${i.attendance} is null and ${o.attendanceReadAt} is null`;
   const [upcoming, held, marks] = await Promise.all([
     // With no bootcamp, no window, so nothing is offered to anyone.
     before && after
@@ -541,14 +567,8 @@ export async function meetingStatusesFor(
         meetingId: o.meetingId,
         email: i.email,
         attended: sql<boolean>`bool_or(${i.attendance} = 'attended')`,
-        invited: sql<boolean>`bool_or(${open})`,
-        response: sql<string | null>`(array_agg(${i.responseStatus} order by ${o.startsAt}) filter (where ${open}))[1]`,
-        startsAt: sql<string | null>`min(${o.startsAt}) filter (where ${open})`,
-        endsAt: sql<string | null>`(array_agg(${o.endsAt} order by ${o.startsAt}) filter (where ${open}))[1]`,
-        // The sync offers someone who missed one only those after it.
-        lastBegun: sql<string | null>`max(${o.startsAt}) filter (where ${o.startsAt} <= now())`,
-        instances: sql<{ id: string; startsAt: string; endsAt: string; attendance: string | null; response: string | null }[]>`json_agg(
-          json_build_object('id', ${o.id}, 'startsAt', ${o.startsAt}, 'endsAt', ${o.endsAt}, 'attendance', ${i.attendance}, 'response', ${i.responseStatus})
+        instances: sql<HeldInvite[]>`json_agg(
+          json_build_object('id', ${o.id}, 'startsAt', ${o.startsAt}, 'endsAt', ${o.endsAt}, 'startDate', ${o.startDate}, 'read', ${o.attendanceReadAt} is not null, 'addedBySync', ${i.addedBySync}, 'attendance', ${i.attendance}, 'response', ${i.responseStatus})
           order by ${o.startsAt})`,
       })
       .from(i)
@@ -568,44 +588,86 @@ export async function meetingStatusesFor(
   for (const member of members) {
     const list: PersonMeetingStatus[] = [];
     for (const meeting of selections) {
-      if (!meetingIsFor(meeting, member, now)) continue;
       const key = `${meeting.id} ${member.email}`;
       const h = heldBy.get(key);
       const marked = markOf.get(key) ?? null;
       const window = bootcamp ? inviteWindow(meeting.stage, member, bootcamp) : null;
       const offered = window ? (upcomingOf.get(meeting.id) ?? []).filter((occ) => inWindow(occ.startDate, window)) : [];
+      const attended = marked === true || (marked === null && Boolean(h?.attended));
+      // Offsets change with daylight saving, so as the sync does, who is in a range is read at the next occurrence.
+      const isFor = meetingIsFor(meeting, member, upcomingOf.get(meeting.id)?.[0]?.startsAt ?? now);
+
+      const heldInvites = h?.instances ?? [];
+      const unread = heldInvites.filter((x) => x.attendance === null && !x.read);
+      // One at a time, a declined invite is one they have been moved on from, as in `planMeeting`; with every occurrence, they hold the rest anyway.
+      const moveOn = (x: HeldInvite) => !meeting.allOccurrences && x.response === "declined";
+      const current = unread.find((x) => !moveOn(x));
+      const plan =
+        heldInvites.length > 0 && bootcamp && window && !group.on
+          ? planMeeting({
+              audience: isFor ? [member.email] : [],
+              occurrences: [
+                ...new Map<string, PlanOccurrence>([
+                  ...(upcomingOf.get(meeting.id) ?? []).map((occ): [string, PlanOccurrence] => [occ.id, { ...occ, attendanceRead: false }]),
+                  ...heldInvites.map((x): [string, PlanOccurrence] => [x.id, { id: x.id, startsAt: new Date(x.startsAt), startDate: x.startDate, attendanceRead: x.read }]),
+                ]).values(),
+              ],
+              invites: heldInvites.map((x) => ({
+                occurrenceId: x.id,
+                email: member.email,
+                role: "member" as const,
+                addedBySync: x.addedBySync,
+                attendance: x.attendance,
+                responseStatus: x.response,
+              })),
+              marks: new Map(marked === null ? [] : [[member.email, marked]]),
+              now,
+              cutoff: bootcamp.startDate,
+              windows: new Map([[member.email, window]]),
+              allOccurrences: meeting.allOccurrences,
+              minDaysAfterStart: meeting.minDaysAfterStart,
+              startDates: new Map([[member.email, member.startDate]]),
+            })
+          : null;
+      // Anyone already on the event when the sync reached it stays there: it takes off only guests it added.
+      const takenOff = new Set(plan?.remove.filter((inv) => inv.addedBySync).map((inv) => inv.occurrenceId));
+      if (!isFor && takenOff.size === 0) continue;
+      const holding = heldInvites.filter((x) => x.attendance === null && new Date(x.startsAt) > now);
+
       const mark = meetingMark({
-        attended: marked === true || (marked === null && Boolean(h?.attended)),
-        response: h?.response ?? null,
-        invited: Boolean(h?.invited),
+        attended,
+        response: current?.response ?? null,
+        invited: current !== undefined,
         // A meeting no sync has read has no occurrences stored yet, which is not the same as none being left.
-        anyLeft: (meeting.syncedAt === null && !upcomingOf.has(meeting.id)) || offered.length > 0,
+        anyLeft: plan?.outcomes.get(member.email)?.kind !== "none_left" && ((meeting.syncedAt === null && !upcomingOf.has(meeting.id)) || offered.length > 0),
         allOccurrences: meeting.allOccurrences,
+        leaving: takenOff.size > 0 && takenOff.size === holding.length && !plan?.invite.length,
       });
       let at: { startsAt: Date; endsAt: Date } | null = null;
       if (mark === "uninvited") {
-        // As the sync picks it: one at a time, only those after the last one they were invited to.
-        const lastBegun = h?.lastBegun ? new Date(h.lastBegun).getTime() : -Infinity;
+        // As the sync picks it: one at a time, only those after the last one they were invited to and missed or declined.
+        const passed = heldInvites.filter((x) => new Date(x.startsAt) <= now || (moveOn(x) && unread.includes(x)));
+        const lastPassed = Math.max(-Infinity, ...passed.map((x) => new Date(x.startsAt).getTime()));
         const next = firstSuiting(
-          meeting.allOccurrences ? offered : offered.filter((occ) => occ.startsAt.getTime() > lastBegun),
+          meeting.allOccurrences ? offered : offered.filter((occ) => occ.startsAt.getTime() > lastPassed),
           member.startDate,
           meeting.minDaysAfterStart,
         );
         if (next) at = { startsAt: next.startsAt, endsAt: next.endsAt };
-      } else if (mark !== "attended" && h?.startsAt && h.endsAt) {
-        at = { startsAt: new Date(h.startsAt), endsAt: new Date(h.endsAt) };
+      } else if (mark !== "attended" && current) {
+        at = { startsAt: new Date(current.startsAt), endsAt: new Date(current.endsAt) };
       }
       const outside = (startsAt: Date, endsAt: Date) => startsAt > now && outsideWorkingHours(member.timezone, startsAt, endsAt) === true;
       let instances: MeetingInstance[] | null = null;
       if (meeting.allOccurrences) {
-        const found: (Omit<MeetingInstance, "outOfHours"> & { id: string })[] = (h?.instances ?? []).map((x) => ({
+        const found: (Omit<MeetingInstance, "outOfHours"> & { id: string })[] = heldInvites.map((x) => ({
           id: x.id,
           startsAt: new Date(x.startsAt),
           endsAt: new Date(x.endsAt),
-          mark: x.attendance === "attended" || x.attendance === "missed" ? x.attendance : x.response === "accepted" ? "accepted" : "pending",
+          mark: takenOff.has(x.id) ? "leaving" : (x.attendance ?? (x.response === "accepted" ? "accepted" : "pending")),
         }));
         // As the sync adds them: from the first that suits them, every one offered that they do not hold, until they attend.
-        const first = mark === "attended" ? undefined : firstSuiting(offered, member.startDate, meeting.minDaysAfterStart);
+        const first = attended || !isFor ? undefined : firstSuiting(offered, member.startDate, meeting.minDaysAfterStart);
         const heldIds = new Set(found.map((x) => x.id));
         for (const occ of first ? offered.filter((occ) => occ.startsAt >= first.startsAt && !heldIds.has(occ.id)) : []) {
           found.push({ id: occ.id, startsAt: occ.startsAt, endsAt: occ.endsAt, mark: "uninvited" });
@@ -625,6 +687,16 @@ export async function meetingStatusesFor(
         timezone: member.timezone,
         outOfHours: instances ? instances.some((x) => x.outOfHours) : at !== null && outside(at.startsAt, at.endsAt),
         instances,
+        leaving:
+          takenOff.size > 0
+            ? {
+                why: !isFor ? "not_for_them" : attended ? "attended" : "extra",
+                dryRun: !live,
+                occurrences: heldInvites
+                  .filter((x) => takenOff.has(x.id))
+                  .map((x) => ({ startsAt: new Date(x.startsAt), endsAt: new Date(x.endsAt) })),
+              }
+            : null,
       });
     }
     out.set(member.email, list);

@@ -217,6 +217,44 @@ test("someone who missed theirs is invited to the next one after it", () => {
   assert.deepEqual(outcomes.get("a@harness.io"), { kind: "invite", occurrenceId: "next", afterMiss: true });
 });
 
+const declined = (occurrenceId: string, email: string): PlanInvite => ({ ...invite(occurrenceId, email), responseStatus: "declined" });
+
+test("someone who declines is invited to the next occurrence at once, and stays on the one they declined", () => {
+  const { outcomes, invite: added, remove } = plan(["a@harness.io"], [declined("next", "a@harness.io")]);
+  assert.deepEqual(outcomes.get("a@harness.io"), { kind: "invite", occurrenceId: "later", afterMiss: false });
+  assert.deepEqual(added, [{ email: "a@harness.io", occurrenceId: "later", afterMiss: false, afterDecline: true }]);
+  assert.deepEqual(remove, []);
+});
+
+test("once moved on from a decline, they hold the next occurrence and nothing changes", () => {
+  const { outcomes, invite: added, remove } = plan(["a@harness.io"], [declined("next", "a@harness.io"), invite("later", "a@harness.io")]);
+  assert.deepEqual(outcomes.get("a@harness.io"), { kind: "invited", occurrenceId: "later" });
+  assert.deepEqual(added, []);
+  assert.deepEqual(remove, []);
+});
+
+test("accepting after all makes the later invite the spare one", () => {
+  const { outcomes, remove } = plan(["a@harness.io"], [{ ...invite("next", "a@harness.io"), responseStatus: "accepted" }, invite("later", "a@harness.io")]);
+  assert.deepEqual(outcomes.get("a@harness.io"), { kind: "invited", occurrenceId: "next" });
+  assert.deepEqual(
+    remove.map((r) => r.occurrenceId),
+    ["later"],
+  );
+});
+
+test("declining the last occurrence in their window leaves none, and they stay on it", () => {
+  const { outcomes, invite: added, remove } = plan(["a@harness.io"], [declined("later", "a@harness.io")]);
+  assert.deepEqual(outcomes.get("a@harness.io"), { kind: "none_left" });
+  assert.deepEqual(added, []);
+  assert.deepEqual(remove, []);
+});
+
+test("an occurrence they declined does not hold them up once it has begun", () => {
+  const begun = occ("begun", "2026-10-20T11:00:00Z");
+  const { outcomes } = plan(["a@harness.io"], [declined("begun", "a@harness.io")], [], [begun, NEXT, LATER]);
+  assert.deepEqual(outcomes.get("a@harness.io"), { kind: "invite", occurrenceId: "next", afterMiss: true });
+});
+
 test("someone who attended is done, and taken off any later occurrence", () => {
   const { outcomes, remove } = plan(["a@harness.io"], [invite("past", "a@harness.io", "attended"), invite("later", "a@harness.io")]);
   assert.deepEqual(outcomes.get("a@harness.io"), { kind: "attended" });
@@ -334,6 +372,13 @@ test("all meetings takes them off an occurrence outside their window", () => {
   );
 });
 
+test("all meetings changes nothing for a decline: they hold the later ones already", () => {
+  const { outcomes, invite: added, remove } = allOf([declined("next", "a@harness.io"), invite("later", "a@harness.io")]);
+  assert.deepEqual(outcomes.get("a@harness.io"), { kind: "invited", occurrenceId: "next" });
+  assert.deepEqual(added, []);
+  assert.deepEqual(remove, []);
+});
+
 test("one meeting at a time takes them off the extra invites all meetings gave", () => {
   const { outcomes, invite: added, remove } = plan(["a@harness.io"], [invite("next", "a@harness.io"), invite("later", "a@harness.io")]);
   assert.deepEqual(outcomes.get("a@harness.io"), { kind: "invited", occurrenceId: "next" });
@@ -381,6 +426,8 @@ test("the Current tab's mark", () => {
   assert.equal(meetingMark({ attended: false, response: null, invited: false, anyLeft: false }), "none_left");
   assert.equal(meetingMark({ attended: false, response: null, invited: false, anyLeft: false, allOccurrences: true }), "finished");
   assert.equal(meetingMark({ attended: false, response: null, invited: false, anyLeft: true, allOccurrences: true }), "uninvited");
+  assert.equal(meetingMark({ attended: true, response: null, invited: true, anyLeft: true, leaving: true }), "leaving", "over what they did");
+  assert.equal(meetingMark({ attended: false, response: "accepted", invited: true, anyLeft: true, leaving: true }), "leaving");
 });
 
 const JULY = new Date("2026-07-15T12:00:00Z");
