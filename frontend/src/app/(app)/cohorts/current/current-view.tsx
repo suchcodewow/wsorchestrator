@@ -9,7 +9,8 @@
  * An administrator sets anyone's track from the Track column, and it holds
  * through every sync until they hand it back to the rules. A row opens to show the rest of what the sync knows about them.
  * No view shows a score: Cohorts is who is in them, and eVals and Reporting
- * are how they did.
+ * are how they did. The Current tab's one exception is the participation
+ * popup, for someone who can score, while a bootcamp is active.
  * The Current tab's Attendance column, beside each name, holds an RSVP mark if
  * they saved their stage's registration form, then a mark for each picked
  * Google meeting that is for them, and an eVals administrator can override
@@ -17,6 +18,7 @@
  */
 
 import { HEADER_ROW, Pager, PlainHeader, SortHeader, TableSearch } from "@/components/data-table";
+import { ParticipationButton } from "@/components/participation/participation-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -171,6 +173,7 @@ export function CurrentCohortView({
   canOpenRecord,
   meetings = {},
   canMarkAttendance = false,
+  canMarkParticipation = false,
   intakes,
   intakeQuestions,
 }: {
@@ -191,6 +194,8 @@ export function CurrentCohortView({
   meetings?: MemberMeetings;
   /** Whether the viewer may say someone attended or missed a meeting, over what Zoom said. */
   canMarkAttendance?: boolean;
+  /** Whether the viewer may open the participation popup; only with a bootcamp active. */
+  canMarkParticipation?: boolean;
   /** Each person on the page's latest answers to each registration form, by lowercased email. */
   intakes: Record<string, IntakeOnFile[]>;
   /** Both forms' questions as they stand now, to label those answers. */
@@ -216,7 +221,8 @@ export function CurrentCohortView({
   const columns = showBtcDate ? COLUMNS : COLUMNS.filter((c) => c.column !== "btcDate");
   // The RSVP and meeting marks are the Current tab's; the Deferred tab has none.
   const showAttendance = tab === "current";
-  const columnCount = columns.length + (showAttendance ? 1 : 0);
+  const showParticipation = canMarkParticipation && activeBootcamp !== null;
+  const columnCount = columns.length + (showAttendance ? 1 : 0) + (showParticipation ? 1 : 0);
   // Each row counts within the other row's pick; the Deferred tab has only the deferred to count.
   const stageCount = (stage: CandidateStage) =>
     tab === "deferred"
@@ -398,6 +404,7 @@ export function CurrentCohortView({
                     {c.column === "fullName" && showAttendance && <PlainHeader>Attendance</PlainHeader>}
                   </Fragment>
                 ))}
+                {showParticipation && <PlainHeader className="w-10" />}
               </tr>
             </thead>
             <tbody>
@@ -456,6 +463,11 @@ export function CurrentCohortView({
                       {showBtcDate && (
                         <td className="whitespace-nowrap px-5 py-2 tabular-nums text-muted-foreground">
                           {formatDate(m.btcDate)}
+                        </td>
+                      )}
+                      {showParticipation && (
+                        <td className="px-3 py-1" onClick={(ev) => ev.stopPropagation()}>
+                          {m.track !== "undecided" && <ParticipationButton employeeId={m.id} fullName={m.fullName} />}
                         </td>
                       )}
                     </tr>

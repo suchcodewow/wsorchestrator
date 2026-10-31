@@ -1143,6 +1143,8 @@ export const EVALS_SETTINGS_KEYS = {
   meetingSyncLive: "meeting_sync_live",
   /** JSON `{ email, fullName }[]`, at most `MEETING_FACILITATORS_MAX`: who the sync adds to each occurrence a cohort member is on. */
   meetingFacilitators: "meeting_facilitators",
+  /** JSON `ParticipationBands`: the net marks each participation score starts at. See `lib/evals/participation-values.ts`. */
+  participationBands: "participation_bands",
 } as const;
 
 /** Most people the Google Meetings sync adds to every occurrence. */
@@ -2222,6 +2224,10 @@ export type ScheduleChecklistItem = typeof scheduleChecklistItems.$inferSelect;
 export const EVALS_ASSESSMENT_STAGES = ["bootcamp", "intermediate"] as const;
 export type EvalsAssessmentStage = (typeof EVALS_ASSESSMENT_STAGES)[number];
 
+/** The assessments the app keeps itself, one for each stage; nobody scores or edits them by hand. */
+export const EVALS_BUILT_IN_ASSESSMENTS = ["participation"] as const;
+export type EvalsBuiltInAssessment = (typeof EVALS_BUILT_IN_ASSESSMENTS)[number];
+
 /** Who an assessment scores: one track, or both. */
 export const EVALS_ASSESSMENT_AUDIENCES = ["sales", "engineer", "both"] as const;
 export type EvalsAssessmentAudience = (typeof EVALS_ASSESSMENT_AUDIENCES)[number];
@@ -2240,6 +2246,8 @@ export const evalsAssessments = pgTable(
     audience: text("audience").$type<EvalsAssessmentAudience>().notNull(),
     /** Inactive assessments are kept, with their scores, but not offered for scoring. */
     active: boolean("active").notNull().default(true),
+    /** Set on the app's own assessments, which stay inactive so no judge is offered them, and which eVals Settings leaves out. */
+    builtIn: text("built_in").$type<EvalsBuiltInAssessment>(),
     createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
@@ -2250,6 +2258,7 @@ export const evalsAssessments = pgTable(
   },
   (t) => [
     index("evals_assessments_stage_idx").on(t.stage, t.active),
+    uniqueIndex("evals_assessments_built_in_idx").on(t.builtIn, t.stage).where(sql`${t.builtIn} is not null`),
     check("evals_assessments_stage_check", sql`${t.stage} in ('bootcamp', 'intermediate')`),
     check("evals_assessments_audience_check", sql`${t.audience} in ('sales', 'engineer', 'both')`),
   ],
@@ -2359,6 +2368,95 @@ export const evalsSubmissionScores = pgTable(
 );
 
 export type EvalsSubmissionScore = typeof evalsSubmissionScores.$inferSelect;
+
+export const PARTICIPATION_POLARITIES = ["positive", "negative"] as const;
+export type ParticipationPolarity = (typeof PARTICIPATION_POLARITIES)[number];
+
+/** `maxCount` is the highest a descriptor's counter goes for one attendee. */
+export const PARTICIPATION_LIMITS = { maxCount: 3, name: 120, descriptors: 40, adjustments: 100 } as const;
+
+/**
+ * Something judges can mark an attendee for during live sessions, set up on
+ * eVals Settings → Participation. Taking one off the list retires it, so the
+ * marks already made stay readable; a retired one counts for nothing.
+ */
+export const participationDescriptors = pgTable(
+  "participation_descriptors",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: text("name").notNull(),
+    polarity: text("polarity").$type<ParticipationPolarity>().notNull(),
+    position: integer("position").notNull(),
+    retiredAt: timestamp("retired_at", { withTimezone: true }),
+    createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("participation_descriptors_position_idx").on(t.polarity, t.position),
+    check("participation_descriptors_polarity_check", sql`${t.polarity} in ('positive', 'negative')`),
+  ],
+);
+
+export type ParticipationDescriptor = typeof participationDescriptors.$inferSelect;
+
+/** Where one attendee stands on one descriptor in one class, shared by every judge. */
+export const participationMarks = pgTable(
+  "participation_marks",
+  {
+    bootcampId: uuid("bootcamp_id")
+      .notNull()
+      .references(() => bootcamps.id, { onDelete: "cascade" }),
+    stage: text("stage").$type<EvalsAssessmentStage>().notNull(),
+    /** The attendee, lowercased. */
+    attendeeEmail: text("attendee_email").notNull(),
+    descriptorId: uuid("descriptor_id")
+      .notNull()
+      .references(() => participationDescriptors.id, { onDelete: "cascade" }),
+    count: integer("count").notNull().default(0),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.bootcampId, t.stage, t.attendeeEmail, t.descriptorId] }),
+    index("participation_marks_descriptor_idx").on(t.descriptorId),
+    check("participation_marks_stage_check", sql`${t.stage} in ('bootcamp', 'intermediate')`),
+    check("participation_marks_count_check", sql`${t.count} between 0 and 3`),
+  ],
+);
+
+/** One click of an arrow: who moved which counter, kept so the popup can say who adjusted it. */
+export const participationMarkEvents = pgTable(
+  "participation_mark_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    bootcampId: uuid("bootcamp_id")
+      .notNull()
+      .references(() => bootcamps.id, { onDelete: "cascade" }),
+    stage: text("stage").$type<EvalsAssessmentStage>().notNull(),
+    attendeeEmail: text("attendee_email").notNull(),
+    descriptorId: uuid("descriptor_id")
+      .notNull()
+      .references(() => participationDescriptors.id, { onDelete: "cascade" }),
+    delta: integer("delta").notNull(),
+    actorId: text("actor_id").references(() => users.id, { onDelete: "set null" }),
+    /** Copied so the line still reads after the account goes. */
+    actorName: text("actor_name").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("participation_mark_events_attendee_idx").on(t.bootcampId, t.stage, t.attendeeEmail),
+    index("participation_mark_events_descriptor_idx").on(t.descriptorId),
+    check("participation_mark_events_delta_check", sql`${t.delta} in (-1, 1)`),
+  ],
+);
 
 /**
  * The transcript of one recording a judge made while scoring an attendee,

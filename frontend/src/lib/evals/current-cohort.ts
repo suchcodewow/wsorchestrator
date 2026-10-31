@@ -51,6 +51,7 @@ export type CurrentCohortFilter = { stage: CandidateStage | null; track: Candida
 
 export type CurrentCohortMember = Pick<
   Employee,
+  | "id"
   | "email"
   | "fullName"
   | "title"
@@ -141,6 +142,7 @@ export async function listCurrentCohort(
   const cutoffs = await getCandidateCutoffs();
   const rows = await db
     .select({
+      id: e.id,
       email: e.email,
       fullName: e.fullName,
       title: e.title,

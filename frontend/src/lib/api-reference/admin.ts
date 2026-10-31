@@ -372,7 +372,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           { name: "track", type: `"sales" | "engineer" | "undecided"`, note: "only that track; all three if omitted" },
           ...listQuery(CURRENT_COHORT_LIST.sorts, "the name, email, title or track"),
         ],
-        returns: `{ stage: string | null, track: string | null, members: { email, fullName, title, department, site, reportsToEmail, reportsToName, startDate: "YYYY-MM-DD" | null, activeEffectiveDate: "YYYY-MM-DD" | null, track: "sales" | "engineer" | "undecided", overridden: boolean, stage: "bootcamp" | "intermediate", recordKey: string | null, btcDate: "YYYY-MM-DD" | null, meetings: { meetingId, name, mark: "leaving" | "attended" | "accepted" | "pending" | "uninvited" | "none_left" | "finished", marked: boolean | null, startsAt: ISO 8601 string | null, endsAt: ISO 8601 string | null, predicted: boolean, timezone: string | null, outOfHours: boolean, instances: { startsAt: ISO 8601 string, endsAt: ISO 8601 string, mark: "attended" | "missed" | "accepted" | "pending" | "uninvited" | "leaving", outOfHours: boolean }[] | null, leaving: { why: "attended" | "not_for_them" | "extra", dryRun: boolean, occurrences: { startsAt: ISO 8601 string, endsAt: ISO 8601 string }[] } | null }[] }[], ${PAGE_FIELDS}, counts: Record<"bootcamp" | "intermediate", { sales: number, engineer: number, undecided: number, deferred: number }>, syncedAt: ISO 8601 string | null, cutoffs: { startDateOnOrAfter: "YYYY-MM-DD" | null, activeEffectiveDateAfter: "YYYY-MM-DD" | null }, deferral: { days: number, bootcampStart: "YYYY-MM-DD" | null }, activeBootcamp: { id, startDate, btcDays, intDays } | null }`,
+        returns: `{ stage: string | null, track: string | null, members: { id, email, fullName, title, department, site, reportsToEmail, reportsToName, startDate: "YYYY-MM-DD" | null, activeEffectiveDate: "YYYY-MM-DD" | null, track: "sales" | "engineer" | "undecided", overridden: boolean, stage: "bootcamp" | "intermediate", recordKey: string | null, btcDate: "YYYY-MM-DD" | null, meetings: { meetingId, name, mark: "leaving" | "attended" | "accepted" | "pending" | "uninvited" | "none_left" | "finished", marked: boolean | null, startsAt: ISO 8601 string | null, endsAt: ISO 8601 string | null, predicted: boolean, timezone: string | null, outOfHours: boolean, instances: { startsAt: ISO 8601 string, endsAt: ISO 8601 string, mark: "attended" | "missed" | "accepted" | "pending" | "uninvited" | "leaving", outOfHours: boolean }[] | null, leaving: { why: "attended" | "not_for_them" | "extra", dryRun: boolean, occurrences: { startsAt: ISO 8601 string, endsAt: ISO 8601 string }[] } | null }[] }[], ${PAGE_FIELDS}, counts: Record<"bootcamp" | "intermediate", { sales: number, engineer: number, undecided: number, deferred: number }>, syncedAt: ISO 8601 string | null, cutoffs: { startDateOnOrAfter: "YYYY-MM-DD" | null, activeEffectiveDateAfter: "YYYY-MM-DD" | null }, deferral: { days: number, bootcampStart: "YYYY-MM-DD" | null }, activeBootcamp: { id, startDate, btcDays, intDays } | null }`,
         errors: [
           { status: 400, error: "invalid_stage", when: "stage is neither bootcamp nor intermediate" },
           { status: 400, error: "invalid_track", when: "track is not sales, engineer or undecided" },
@@ -390,7 +390,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           { name: "stage", type: `"bootcamp" | "intermediate"`, note: "only that stage; both if omitted" },
           ...listQuery(CURRENT_COHORT_LIST.sorts, "the name, email, title or track"),
         ],
-        returns: `{ stage: string | null, members: { email, fullName, title, department, site, reportsToEmail, reportsToName, startDate: "YYYY-MM-DD" | null, activeEffectiveDate: "YYYY-MM-DD" | null, track: "deferred", overridden: boolean, stage: "bootcamp" | "intermediate", recordKey: string | null, btcDate: "YYYY-MM-DD" | null }[], ${PAGE_FIELDS}, counts: { bootcamp: number, intermediate: number }, syncedAt: ISO 8601 string | null, cutoffs: { startDateOnOrAfter: "YYYY-MM-DD" | null, activeEffectiveDateAfter: "YYYY-MM-DD" | null }, deferral: { days: number, bootcampStart: "YYYY-MM-DD" | null }, activeBootcamp: { id, startDate, btcDays, intDays } | null }`,
+        returns: `{ stage: string | null, members: { id, email, fullName, title, department, site, reportsToEmail, reportsToName, startDate: "YYYY-MM-DD" | null, activeEffectiveDate: "YYYY-MM-DD" | null, track: "deferred", overridden: boolean, stage: "bootcamp" | "intermediate", recordKey: string | null, btcDate: "YYYY-MM-DD" | null }[], ${PAGE_FIELDS}, counts: { bootcamp: number, intermediate: number }, syncedAt: ISO 8601 string | null, cutoffs: { startDateOnOrAfter: "YYYY-MM-DD" | null, activeEffectiveDateAfter: "YYYY-MM-DD" | null }, deferral: { days: number, bootcampStart: "YYYY-MM-DD" | null }, activeBootcamp: { id, startDate, btcDays, intDays } | null }`,
         errors: [{ status: 400, error: "invalid_stage", when: "stage is neither bootcamp nor intermediate" }],
       },
       {
@@ -2402,6 +2402,93 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           { status: 409, error: "conflict", when: "someone else saved it since revises, or saved the first one first" },
         ],
       },
+      {
+        method: "GET",
+        path: "/api/evals/scoring/{assessmentId}/{employeeId}/group",
+        summary: "Lists everyone evaluated with this attendee in a breakout scored on this assessment.",
+        access: "scorer",
+        token: true,
+        notes:
+          "The caller's group with them if they have one, or else the group they are in with another instructor, attendee included, by name, at most 100. Empty for someone in no group, or with no active bootcamp.",
+        params: [
+          { name: "assessmentId", type: "uuid", required: true },
+          { name: "employeeId", type: "string", required: true },
+        ],
+        returns: "{ people: { id, fullName }[] }",
+        errors: [{ status: 404, error: "not_found", when: "no such active assessment" }],
+      },
+      {
+        method: "GET",
+        path: "/api/evals/participation/{employeeId}",
+        summary: "Returns one attendee's participation marks at the active bootcamp, as the popup shows them.",
+        access: "scorer",
+        token: true,
+        notes:
+          "descriptors is every descriptor on the list, positive first, with its shared count from 0 to 3 and adjustments, who moved it and by how much, leaving out anyone whose clicks cancelled out. runningScore is the 1 to 4 Generate would give them now, and null until they have a mark. saved is their Participation assessment, only for an Assessments Administrator, and null until it is generated.",
+        params: [{ name: "employeeId", type: "string", required: true }],
+        returns:
+          '{ attendee: { id, email, fullName, title, stage: "bootcamp" | "intermediate" }, descriptors: { id, name, polarity: "positive" | "negative", count: number, adjustments: { name, net: number }[] }[], runningScore: number | null, saved: { averageScore, positiveFeedback, constructiveFeedback } | null }',
+        errors: [
+          { status: 404, error: "not_found", when: "they are neither a current candidate on a track nor assessed at the active bootcamp" },
+          { status: 409, error: "no_bootcamp", when: "no bootcamp is active" },
+          { status: 409, error: "no_class", when: "they are in intermediate and the active bootcamp holds no intermediate class" },
+        ],
+      },
+      {
+        method: "POST",
+        path: "/api/evals/participation/{employeeId}/marks",
+        summary: "Moves one of an attendee's participation counters up or down by one.",
+        access: "scorer",
+        token: true,
+        notes:
+          "Counters are shared by every judge and run from 0 to 3. A counter already at the end it was pushed towards stays there and logs nothing. Returns the attendee's sheet, as GET /api/evals/participation/{employeeId}. No score is saved here.",
+        params: [{ name: "employeeId", type: "string", required: true }],
+        body: {
+          kind: "json",
+          fields: [
+            { name: "descriptorId", type: "uuid", required: true },
+            { name: "delta", type: "1 | -1", required: true },
+          ],
+        },
+        returns: "the attendee's sheet",
+        errors: [
+          { status: 400, error: "invalid", when: "the body is not as above" },
+          { status: 404, error: "not_found", when: "no such attendee, or the descriptor is retired or missing" },
+          { status: 409, error: "no_bootcamp", when: "no bootcamp is active" },
+          { status: 409, error: "no_class", when: "they are in intermediate and the active bootcamp holds no intermediate class" },
+        ],
+      },
+      {
+        method: "GET",
+        path: "/api/evals/participation/settings",
+        summary: "Returns the participation descriptors and the net marks each score starts at.",
+        access: "assessmentsAdmin",
+        token: true,
+        notes: "bands holds the net marks a 4, a 3 and a 2 start at; anything lower scores a 1, and no marks at all scores a 2.",
+        returns: '{ descriptors: { id, name, polarity: "positive" | "negative" }[], bands: { four: number, three: number, two: number } }',
+      },
+      {
+        method: "PUT",
+        path: "/api/evals/participation/settings",
+        summary: "Replaces the participation descriptors and bands.",
+        access: "assessmentsAdmin",
+        token: true,
+        notes:
+          "descriptors is the whole list, in order. An id keeps a descriptor, no id adds one, and one left out is retired: its marks stay and count for nothing from then on. Saved scores do not change.",
+        body: {
+          kind: "json",
+          fields: [
+            { name: "descriptors", type: '{ id?: uuid, name: string, polarity: "positive" | "negative" }[]', required: true },
+            { name: "bands", type: "{ four: number, three: number, two: number }", required: true, note: "whole numbers, four above three above two" },
+          ],
+        },
+        returns: "the settings, as GET returns them",
+        errors: [
+          { status: 400, error: "invalid", when: "a name is blank or too long, or the bands are out of order" },
+          { status: 404, error: "not_found", when: "an id is not a descriptor on the list" },
+          { status: 409, error: "duplicate", when: "two descriptors share a name" },
+        ],
+      },
     ],
   },
   {
@@ -2435,6 +2522,55 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           "stages lists the classes the caller may see the cohort of: every class the bootcamp holds for an Assessments Viewer or above, else only those released. cohort holds one row per person and class in those stages; averageScore is the mean of their submissions' averages, null with none scored, and scored how many there are. bootcamp is null, and cohort empty, when no bootcamp is active.",
         query: listQuery(BOOTCAMP_COHORT_LIST.sorts, "the name or email", BOOTCAMP_COHORT_LIST.dir),
         returns: `{ bootcamp: { id, startDate, intermediate: boolean, released: { bootcamp: { at, byName: string | null } | null, intermediate: { at, byName: string | null } | null } } | null, stages: ("bootcamp" | "intermediate")[], cohort: { key, email, fullName: string | null, stage: "bootcamp" | "intermediate", scored: number, averageScore: number | null }[], ${PAGE_FIELDS} }`,
+      },
+      {
+        method: "GET",
+        path: "/api/reporting/bootcamp/participation",
+        summary: "Returns what each class's Generate button would write.",
+        access: "assessmentsAdmin",
+        token: true,
+        notes:
+          "comments counts the blank comments there are marks to write, so one person can count twice. scores counts the people who would get a score. skipped names candidates with no marks and no assessment, whom it leaves out, at most 100. A class is null when the bootcamp does not hold it, it is already released, or no bootcamp is active.",
+        returns: "{ bootcamp: { comments: number, scores: number, skipped: string[] } | null, intermediate: { comments: number, scores: number, skipped: string[] } | null }",
+      },
+      {
+        method: "POST",
+        path: "/api/reporting/bootcamp/participation",
+        summary: "Fills the blank scores and comments in one class's Participation assessments.",
+        access: "assessmentsAdmin",
+        token: true,
+        notes:
+          "Anyone with a mark gets a score from the net of their marks, and someone with no marks but another assessment in the class gets a 2. Anyone with neither is left out, because a submission counts as attendance at release. Claude writes one sentence for each side that has marks and is blank; only the descriptors, their counts and the score are sent. Saved comments and scores stay. failed counts people whose comments Claude did not write, who are left as they were, so calling it again picks them up.",
+        body: { kind: "json", fields: [{ name: "stage", type: '"bootcamp" | "intermediate"', required: true }] },
+        returns: "{ stage, bootcamp: { id, startDate }, people: number, scores: number, comments: number, failed: number }",
+        errors: [
+          { status: 400, error: "invalid", when: "stage is missing or neither bootcamp nor intermediate" },
+          { status: 409, error: "no_bootcamp", when: "no bootcamp is active" },
+          { status: 409, error: "no_intermediate", when: "stage is intermediate and the active bootcamp holds no intermediate class" },
+          { status: 409, error: "released", when: "that class is already released" },
+          { status: 409, error: "no_assessment", when: "the built-in assessment is missing on this database" },
+          { status: 502, error: "upstream", when: "Claude wrote nothing" },
+          { status: 503, error: "unconfigured", when: "there are comments to write and no Claude key on this deployment" },
+        ],
+      },
+      {
+        method: "POST",
+        path: "/api/reporting/bootcamp/participation/{employeeId}",
+        summary: "Writes one attendee's participation comments and score again from the marks they have now.",
+        access: "assessmentsAdmin",
+        token: true,
+        notes:
+          "Replaces both comments and the score, whatever was there, and may be called after the class is released, which changes what managers see. A side with no marks ends up blank. Returns the attendee's sheet, as GET /api/evals/participation/{employeeId}.",
+        params: [{ name: "employeeId", type: "string", required: true }],
+        returns: "the attendee's sheet",
+        errors: [
+          { status: 404, error: "not_found", when: "they are neither a current candidate on a track nor assessed at the active bootcamp" },
+          { status: 409, error: "no_bootcamp", when: "no bootcamp is active" },
+          { status: 409, error: "no_class", when: "they are in intermediate and the active bootcamp holds no intermediate class" },
+          { status: 409, error: "not_generated", when: "they have no Participation assessment yet" },
+          { status: 502, error: "upstream", when: "Claude did not write them" },
+          { status: 503, error: "unconfigured", when: "no Claude key on this deployment" },
+        ],
       },
       {
         method: "POST",

@@ -10,6 +10,7 @@ import {
   canManageEvalsSettings,
   canManageTestGroup,
   canManageTrainingSettings,
+  canScoreAssessments,
   canUseEvals,
 } from "@/lib/roles";
 import { activeBootcamp } from "@/lib/scheduler/bootcamps";
@@ -78,6 +79,9 @@ export default async function CurrentCohortPage({
         meetings={meetings}
         canMarkAttendance={
           session?.user ? canManageEvalsSettings(session.user.access) : false
+        }
+        canMarkParticipation={
+          session?.user ? canScoreAssessments(session.user.access) : false
         }
         intakes={intakes}
         intakeQuestions={intakeQuestions}

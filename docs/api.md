@@ -133,6 +133,9 @@ add it to the table above.
 | eVals → an attendee's scoring form | `GET /api/evals/scoring/[assessmentId]/[employeeId]` |
 | eVals settings → Google Meetings | `GET /api/evals/google-meetings`, `GET /api/evals/google-meetings/sync`, `GET /api/evals/google-meetings/sync/[id]`, `GET /api/evals/google-meetings/settings` |
 | eVals settings → Assessments | `GET /api/evals/assessments`, `GET /api/evals/assessments/[id]` |
+| eVals settings → Participation | `GET /api/evals/participation/settings` |
+| The participation popup | `GET /api/evals/participation/[employeeId]`, `GET /api/evals/scoring/[assessmentId]/[employeeId]/group` |
+| Reporting → Live Sessions' Generate buttons | `GET /api/reporting/bootcamp/participation` |
 | Cohort Settings | `GET /api/evals/employees`, `GET /api/evals/organization`, `GET /api/evals/hibob/sync`, `GET /api/evals/titles?list=` |
 | Reporting → Live Sessions, and the active cohort above it | `GET /api/reporting/bootcamp`, `GET /api/reporting/bootcamp/cohort` |
 | A person's page under Reporting → Live Sessions | `GET /api/reporting/bootcamp/people/[key]` |

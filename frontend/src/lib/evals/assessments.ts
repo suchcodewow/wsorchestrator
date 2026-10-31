@@ -11,7 +11,7 @@
 
 import "server-only";
 
-import { and, asc, eq, inArray, isNull, notInArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, isNull, notInArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
 import {
@@ -99,6 +99,7 @@ export async function listAssessments(
     .from(evalsAssessments)
     .where(
       and(
+        isNull(evalsAssessments.builtIn),
         searchAny(query.q, [evalsAssessments.name]),
         only ? and(eq(evalsAssessments.stage, only.stage), eq(evalsAssessments.active, true)) : undefined,
       ),
@@ -109,13 +110,16 @@ export async function listAssessments(
   return toPage(rows, query.page);
 }
 
-/** How many assessments there are in all. */
+/** How many assessments there are in all, leaving out the built-in ones. */
 export async function assessmentCount(): Promise<number> {
-  const [row] = await db.select({ count: sql<number>`count(*)::int` }).from(evalsAssessments);
+  const [row] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(evalsAssessments)
+    .where(isNull(evalsAssessments.builtIn));
   return row?.count ?? 0;
 }
 
-/** One assessment with the criteria it still asks, in order. */
+/** One assessment with the criteria it still asks, in order; null for a built-in one, which nobody edits. */
 export async function getAssessment(id: string): Promise<AssessmentDetail | null> {
   const [row] = await db
     .select({
@@ -129,7 +133,7 @@ export async function getAssessment(id: string): Promise<AssessmentDetail | null
       submissions: submissionCount,
     })
     .from(evalsAssessments)
-    .where(eq(evalsAssessments.id, id));
+    .where(and(eq(evalsAssessments.id, id), isNull(evalsAssessments.builtIn)));
   if (!row) return null;
 
   // At most EVALS_ASSESSMENT_LIMITS.criteria rows: the save refuses more.
@@ -217,7 +221,7 @@ export async function updateAssessment(id: string, input: AssessmentInput): Prom
     const [current] = await tx
       .select({ stage: evalsAssessments.stage, audience: evalsAssessments.audience })
       .from(evalsAssessments)
-      .where(eq(evalsAssessments.id, id))
+      .where(and(eq(evalsAssessments.id, id), isNull(evalsAssessments.builtIn)))
       .for("update");
     if (!current) return { ok: false as const, error: "not_found" as const };
 
@@ -296,6 +300,11 @@ export async function updateAssessment(id: string, input: AssessmentInput): Prom
  * either is made inactive instead.
  */
 export async function deleteAssessment(id: string): Promise<{ ok: true; name: string } | { ok: false; error: AssessmentError }> {
+  const [builtIn] = await db
+    .select({ id: evalsAssessments.id })
+    .from(evalsAssessments)
+    .where(and(eq(evalsAssessments.id, id), isNotNull(evalsAssessments.builtIn)));
+  if (builtIn) return { ok: false, error: "not_found" };
   const [[scored], [recorded]] = await Promise.all([
     db.select({ id: evalsSubmissions.id }).from(evalsSubmissions).where(eq(evalsSubmissions.assessmentId, id)).limit(1),
     db.select({ id: evalsTranscripts.id }).from(evalsTranscripts).where(eq(evalsTranscripts.assessmentId, id)).limit(1),

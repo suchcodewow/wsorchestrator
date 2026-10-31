@@ -26,6 +26,7 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { ArrowLeft, ClipboardList, FileText, Info, Loader2, Send, Sparkles } from "lucide-react";
 import { MentionTextarea } from "@/components/mention-textarea";
+import { ParticipationGroupButton } from "@/components/participation/participation-dialog";
 import { RecordingPanel } from "@/components/recording/recording-panel";
 import { useLiveTranscript } from "@/components/recording/use-live-transcript";
 import { useRecorder } from "@/components/recording/use-recorder";
@@ -274,13 +275,18 @@ export function ScoringFormView({
           <ArrowLeft className="size-3.5" />
           {assessment.name}
         </Link>
-        <div className="space-y-1.5">
-          <h2 className="text-xl font-medium tracking-tight">{attendee.fullName}</h2>
-          <p className="text-sm text-muted-foreground">
-            <span className="text-foreground">{attendee.email}</span>
-            {attendee.title && <> · {attendee.title}</>}
-          </p>
-          <BootcampNotice stage={assessment.stage} bootcamp={bootcamp} />
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="space-y-1.5">
+            <h2 className="text-xl font-medium tracking-tight">{attendee.fullName}</h2>
+            <p className="text-sm text-muted-foreground">
+              <span className="text-foreground">{attendee.email}</span>
+              {attendee.title && <> · {attendee.title}</>}
+            </p>
+            <BootcampNotice stage={assessment.stage} bootcamp={bootcamp} />
+          </div>
+          {bootcamp && (
+            <ParticipationGroupButton assessmentId={assessment.id} employeeId={attendee.id} fullName={attendee.fullName} />
+          )}
         </div>
       </motion.div>
 
