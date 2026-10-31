@@ -451,7 +451,7 @@ function EditStep({
             label={`Code editor for ${FILE}`}
             highlight={highlight}
             inputRef={inputRef}
-            className="h-[30rem]"
+            className="h-120"
           />
         </div>
         <div className="flex min-w-0 flex-col">
@@ -479,9 +479,9 @@ function EditStep({
             ))}
           </div>
           {view === "preview" ? (
-            <BrowserFrame code={preview} address="preview.greenleaf.shop" className="h-[30rem]" />
+            <BrowserFrame code={preview} address="preview.greenleaf.shop" className="h-120" />
           ) : (
-            <div className="h-[30rem] overflow-auto p-4">
+            <div className="h-120 overflow-auto p-4">
               <DiffView before={committed} after={code} file={FILE} />
             </div>
           )}
@@ -760,7 +760,7 @@ function MergedStep({ code, onRestart }: { code: string; onRestart: () => void }
       </StepCard>
       {live && (
         <StepCard title="Your change is live" why="Anyone who visits the shop now sees the spring sale the way you wrote it.">
-          <BrowserFrame code={code} address="greenleaf.shop" className="h-[26rem]" />
+          <BrowserFrame code={code} address="greenleaf.shop" className="h-104" />
           <div className="flex justify-end px-5 py-4">
             <Button variant="outline" onClick={onRestart}>
               <RotateCcw />
