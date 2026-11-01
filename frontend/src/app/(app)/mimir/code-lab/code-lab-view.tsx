@@ -51,6 +51,7 @@ import "./code-lab.css";
 import { DiffView } from "./diff-view";
 import { HistoryGraph } from "./history-graph";
 import { PR_NUMBER, PullRequestPage, type Commit } from "./pull-request";
+import { SlidesCopy } from "./slides-copy";
 
 type Stage = "branch" | "edit" | "commit" | "push" | "pr" | "review" | "merged";
 const ORDER: Stage[] = ["branch", "edit", "commit", "push", "pr", "review", "merged"];
@@ -281,23 +282,29 @@ function StepCard({
   title,
   why,
   info,
+  aside,
   children,
   className,
 }: {
   title: string;
   why: React.ReactNode;
   info?: React.ReactNode;
+  /** Set beside the explanation behind a divider, or under it on a narrow screen. */
+  aside?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
 }) {
   return (
     <section className={cn("divide-y overflow-hidden rounded-2xl border bg-card shadow-sm", className)}>
-      <div className="space-y-3 bg-brand-subtle/50 px-5 py-4">
-        <div className="space-y-1">
-          <h2 className="text-lg font-medium tracking-tight">{title}</h2>
-          <p className="max-w-3xl text-sm text-muted-foreground">{why}</p>
+      <div className="flex gap-5 bg-brand-subtle/50 px-5 py-4 max-md:flex-col">
+        <div className="min-w-0 grow space-y-3">
+          <div className="space-y-1">
+            <h2 className="text-lg font-medium tracking-tight">{title}</h2>
+            <p className="max-w-3xl text-sm text-muted-foreground">{why}</p>
+          </div>
+          {info}
         </div>
-        {info}
+        {aside && <div className="shrink-0 border-brand-border max-md:border-t max-md:pt-4 md:w-64 md:self-stretch md:border-l md:pl-5">{aside}</div>}
       </div>
       {children}
     </section>
@@ -329,6 +336,14 @@ function BranchStep({
           <span className="text-xs font-medium text-muted-foreground">{REPO} · on main</span>
           <HistoryGraph branch={null} commits={0} pushed={0} merged={false} />
         </div>
+      }
+      aside={
+        <figure className="flex h-full flex-col items-center justify-center gap-2 text-center">
+          <SlidesCopy />
+          <figcaption className="text-xs text-muted-foreground">
+            It’s like copying a Google Slides deck to work on your own copy.
+          </figcaption>
+        </figure>
       }
     >
       <form
