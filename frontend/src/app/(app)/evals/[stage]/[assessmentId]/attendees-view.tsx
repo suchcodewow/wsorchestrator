@@ -7,7 +7,7 @@
  * active, each row also opens that attendee's participation popup.
  */
 
-import { useTransition } from "react";
+import { Fragment, useTransition } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
@@ -135,11 +135,13 @@ export function AttendeesView({
             <thead>
               <tr className={HEADER_ROW}>
                 {COLUMNS.map(({ column, label }) => (
-                  <SortHeader key={column} column={column} {...sortProps}>
-                    {label}
-                  </SortHeader>
+                  <Fragment key={column}>
+                    <SortHeader column={column} {...sortProps}>
+                      {label}
+                    </SortHeader>
+                    {column === "fullName" && bootcamp && <PlainHeader>Participation</PlainHeader>}
+                  </Fragment>
                 ))}
-                {bootcamp && <PlainHeader className="w-10" />}
               </tr>
             </thead>
             <tbody>
@@ -161,6 +163,11 @@ export function AttendeesView({
                       {p.fullName}
                     </Link>
                   </td>
+                  {bootcamp && (
+                    <td className="px-5 py-1.5">
+                      <ParticipationButton employeeId={p.id} fullName={p.fullName} labelled />
+                    </td>
+                  )}
                   <td className="px-5 py-3 text-muted-foreground">{p.title || "—"}</td>
                   <td className="px-5 py-3">
                     <div className="flex items-center gap-2">
@@ -170,11 +177,6 @@ export function AttendeesView({
                       {p.needsRescoring && <Badge variant="outline">Needs rescoring</Badge>}
                     </div>
                   </td>
-                  {bootcamp && (
-                    <td className="px-3 py-1.5">
-                      <ParticipationButton employeeId={p.id} fullName={p.fullName} />
-                    </td>
-                  )}
                 </tr>
               ))}
             </tbody>
