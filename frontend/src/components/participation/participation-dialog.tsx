@@ -380,7 +380,7 @@ export function ParticipationButton({
   employeeId: string;
   fullName: string;
   canRegenerate?: boolean;
-  /** Shows "Participation" beside the icon, with a border only on hover. */
+  /** Icon only, with a border shown only on hover. */
   labelled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
@@ -392,10 +392,9 @@ export function ParticipationButton({
           type="button"
           aria-label={`Participation for ${fullName}`}
           onClick={() => setOpen(true)}
-          className="flex cursor-pointer items-center gap-1.5 rounded-md border border-transparent px-2 py-0.5 outline-none transition-colors hover:border-input hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          className="flex cursor-pointer items-center gap-1.5 rounded-md border border-transparent px-2 py-1 outline-none transition-colors hover:border-input hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50"
         >
           <MessageSquarePlus className="size-4 text-muted-foreground" />
-          Participation
         </button>
       ) : (
         <Button
