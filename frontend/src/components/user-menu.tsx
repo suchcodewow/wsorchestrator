@@ -53,7 +53,7 @@ export type MenuVariant = "header" | "sidebar" | "rail";
 
 const TRIGGER_CLASS: Record<MenuVariant, string> = {
   header:
-    "flex cursor-pointer items-center gap-1.5 rounded-md px-2 py-1 text-sm text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50",
+    "flex cursor-pointer items-center gap-1.5 rounded-md px-2 py-1 text-sm text-muted-foreground outline-none pointer-coarse:min-h-11 transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50",
   sidebar:
     "flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2 text-left outline-none transition-colors hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50",
   rail: "flex size-10 cursor-pointer items-center justify-center rounded-lg outline-none transition-colors hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50",

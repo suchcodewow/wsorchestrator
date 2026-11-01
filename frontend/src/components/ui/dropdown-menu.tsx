@@ -22,7 +22,7 @@ function DropdownMenuContent({
       <DropdownMenuPrimitive.Content
         sideOffset={sideOffset}
         className={cn(
-          "z-50 min-w-40 overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
+          "z-50 max-h-(--radix-dropdown-menu-content-available-height) min-w-40 overflow-x-hidden overflow-y-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
           className,
         )}
         {...props}
@@ -56,7 +56,7 @@ function DropdownMenuSeparator({
 }
 
 const itemClasses =
-  "relative flex cursor-pointer select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none transition-colors focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4";
+  "relative flex cursor-pointer select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none pointer-coarse:min-h-11 transition-colors focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4";
 
 function DropdownMenuItem({
   className,
@@ -119,7 +119,7 @@ function DropdownMenuRadioIconItem({
   return (
     <DropdownMenuPrimitive.RadioItem
       className={cn(
-        "flex size-6.5 cursor-pointer select-none items-center justify-center rounded-md text-muted-foreground outline-none transition-colors",
+        "flex size-6.5 pointer-coarse:size-11 cursor-pointer select-none items-center justify-center rounded-md text-muted-foreground outline-none transition-colors",
         "focus:text-foreground focus:ring-1 focus:ring-ring/50",
         "data-[state=checked]:bg-background data-[state=checked]:text-foreground data-[state=checked]:shadow-xs",
         "[&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4",

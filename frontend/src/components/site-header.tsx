@@ -25,7 +25,7 @@ export async function SiteHeader({
 
   return (
     <header className="sticky top-0 z-40 border-b border-border/70 bg-background/70 backdrop-blur-xl framed:hidden">
-      <div className={cn("mx-auto flex h-14 items-center gap-4 px-6", width)}>
+      <div className={cn("mx-auto flex h-14 items-center gap-4 px-4 sm:px-6", width)}>
         <Link
           href="/"
           aria-label="Harness Events"
@@ -67,7 +67,7 @@ export async function SiteHeader({
             <nav className="flex shrink-0 items-center">
               <Link
                 href="/labs"
-                className="rounded-md px-2.5 py-1.5 text-sm text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                className="rounded-md px-2.5 py-1.5 text-sm text-muted-foreground outline-none transition-colors pointer-coarse:py-3 hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
               >
                 Workshops
               </Link>

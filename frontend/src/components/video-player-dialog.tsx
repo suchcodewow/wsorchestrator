@@ -40,7 +40,7 @@ export function VideoPlayerDialog({
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent
-        className="h-dvh max-h-dvh max-w-none grid-rows-[auto_minmax(0,1fr)] gap-3 overflow-hidden rounded-none p-4"
+        className="h-dvh max-h-dvh max-w-none max-sm:w-full grid-rows-[auto_minmax(0,1fr)] gap-3 overflow-hidden rounded-none p-4"
         {...(description ? {} : { "aria-describedby": undefined })}
       >
         <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 pr-8">

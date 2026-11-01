@@ -224,7 +224,7 @@ export function UsersTable({
         />
 
         <div className="overflow-hidden rounded-2xl border bg-card shadow-sm">
-          <div className="overflow-x-auto">
+          <div className="relative overflow-x-auto">
             <table className="w-full min-w-200 text-sm">
               <thead>
                 <tr className={HEADER_ROW}>

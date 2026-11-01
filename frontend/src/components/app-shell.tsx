@@ -31,7 +31,7 @@ export async function AppShell({
 
         <SiteHeader session={session} />
 
-        <main className="relative mx-auto max-w-6xl px-6 py-10">
+        <main className="relative mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-10">
           {children}
         </main>
       </div>
@@ -80,7 +80,7 @@ export async function AppShell({
               pane && "lg:overflow-y-auto",
             )}
           >
-            <div className="mx-auto max-w-6xl px-6 py-10">
+            <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-10">
               <NavigationPending>{children}</NavigationPending>
             </div>
           </main>

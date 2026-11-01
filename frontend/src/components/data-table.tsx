@@ -114,7 +114,7 @@ export function SortHeader<S extends string>({
         type="button"
         onClick={() => set({ sort: column, dir: active && dir === "asc" ? "desc" : "asc" })}
         className={cn(
-          "inline-flex cursor-pointer items-center gap-1 whitespace-nowrap uppercase tracking-wider outline-none hover:text-foreground focus-visible:text-foreground",
+          "inline-flex cursor-pointer items-center gap-1 whitespace-nowrap uppercase tracking-wider outline-none pointer-coarse:-my-2.5 pointer-coarse:h-11 hover:text-foreground focus-visible:text-foreground",
           active && "text-foreground",
         )}
       >
