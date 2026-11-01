@@ -48,7 +48,7 @@ function DialogContent({
           animate={{ opacity: 1, scale: 1, y: 0 }}
           transition={SPRING_SURFACE}
           className={cn(
-            "quiet-fields fixed left-1/2 top-1/2 z-50 grid max-h-[calc(100dvh-2rem)] w-full max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-2xl border bg-dialog p-6 shadow-2xl data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95",
+            "quiet-fields fixed left-1/2 top-1/2 z-50 grid max-h-[calc(100dvh-2rem)] w-full max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-2xl border bg-dialog p-6 shadow-2xl max-sm:w-[calc(100%-2rem)] max-sm:p-4 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95",
             // On a near-black page a dialog needs more than a shadow to stand off it: a
             // brighter edge, and a faint highlight along the top where light would catch.
             "dark:border-white/20 dark:shadow-[0_0_0_1px_rgb(0_0_0/0.6),inset_0_1px_0_rgb(255_255_255/0.08),0_32px_96px_-16px_rgb(0_0_0/0.9)]",
@@ -56,7 +56,7 @@ function DialogContent({
           )}
         >
           {children}
-          <DialogPrimitive.Close className="absolute right-4 top-4 rounded-md p-1 text-muted-foreground opacity-70 transition-all hover:bg-accent hover:opacity-100 focus-visible:ring-[3px] focus-visible:ring-ring/50 focus:outline-none">
+          <DialogPrimitive.Close className="absolute right-4 top-4 rounded-md p-1 text-muted-foreground opacity-70 transition-all hover:bg-accent hover:opacity-100 focus-visible:ring-[3px] focus-visible:ring-ring/50 focus:outline-none pointer-coarse:right-1.5 pointer-coarse:top-1.5 pointer-coarse:p-3.5">
             <X className="size-4" />
             <span className="sr-only">Close</span>
           </DialogPrimitive.Close>

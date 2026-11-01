@@ -1212,3 +1212,22 @@
     visibility: hidden;
   }
 }
+
+/*
+ * Fields on a touch screen. iOS Safari zooms the page when a field under 16px
+ * takes focus, and 2.75rem is the height a thumb can hit. Outside any layer on
+ * purpose: this has to beat `text-sm` and `h-*`, and it reaches the raw
+ * `<input>`s and `<select>`s that don't go through `Input`.
+ */
+@media (pointer: coarse) {
+  input:not([type="checkbox"], [type="radio"], [type="file"], [type="range"], [type="color"], [type="hidden"]),
+  select,
+  textarea {
+    font-size: 1rem;
+  }
+
+  input:not([type="checkbox"], [type="radio"], [type="file"], [type="range"], [type="color"], [type="hidden"]),
+  select {
+    min-height: 2.75rem;
+  }
+}

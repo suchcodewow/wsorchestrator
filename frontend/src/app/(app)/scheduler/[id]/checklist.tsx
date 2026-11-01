@@ -536,7 +536,7 @@ function ChecklistBoard({
   return (
     <Dialog open onOpenChange={(next) => !next && onClose()}>
       <DialogContent
-        className="flex h-[calc(100dvh-3rem)] max-w-[min(110rem,calc(100vw-2rem))] flex-col gap-3 overflow-hidden p-0"
+        className="flex h-[calc(100dvh-3rem)] max-w-[min(110rem,calc(100vw-2rem))] flex-col gap-3 overflow-hidden p-0 max-sm:p-0"
         onEscapeKeyDown={(e) => {
           // Escape leaves a card being changed as it was, rather than closing the whole board.
           if (editing === null && drag === null) return;

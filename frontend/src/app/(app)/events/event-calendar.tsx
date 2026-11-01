@@ -298,7 +298,7 @@ export function EventCalendar({
           transition={{ duration: 0.5, ease: EASE, delay: 0.06 }}
           className="overflow-hidden rounded-2xl border bg-card shadow-sm"
         >
-          <div className="flex items-center justify-between border-b px-5 py-4">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b px-5 py-4">
             <div className="flex items-center gap-4">
               <div className="relative h-7 overflow-hidden">
                 <AnimatePresence mode="wait" initial={false}>
