@@ -535,8 +535,8 @@ function Counter({
       disabled={disabled}
       onClick={onClick}
       className={cn(
-        "flex cursor-pointer items-center gap-2.5 rounded-xl border px-3 py-2 text-left shadow-sm outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-wait",
-        on ? "border-brand-border bg-brand-subtle" : "bg-card hover:bg-muted/40",
+        "flex cursor-pointer items-center gap-2.5 rounded-xl border border-transparent px-3 py-2 text-left outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-wait",
+        on ? "bg-brand-subtle hover:border-brand-border" : "bg-card hover:border-border hover:bg-muted/40",
       )}
     >
       <span className={cn("flex size-7 shrink-0 items-center justify-center rounded-full", on ? "bg-background" : "bg-muted")}>
