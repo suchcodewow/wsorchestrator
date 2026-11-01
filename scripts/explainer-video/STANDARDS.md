@@ -60,6 +60,11 @@ a recap. About 4 to 7 scenes.
   mid-video (the author found switching confusing). Video 1 uses a bakery; reuse
   it where it fits so the series feels connected, otherwise pick something
   equally everyday. A recurring gag is fine: "Dave" is the person doing it by hand.
+- **No regionalisms, in any language.** The audience is international and every
+  transcript may be translated, so write plain, widely understood words. Avoid
+  idioms, slang, and local references such as a country's sports, holidays or
+  money. In Spanish, write neutral Latin American Spanish: nothing that belongs
+  to one country, such as vos or local words for everyday things.
 - **Open** with the problem or a picture the viewer recognizes, not a definition.
 - **Close** with a one-breath recap that restates the idea in the video's own words.
 - **Accuracy:** explain the concept as it is in the industry. Do not invent

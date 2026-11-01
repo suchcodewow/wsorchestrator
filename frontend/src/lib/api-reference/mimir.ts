@@ -390,15 +390,20 @@ export const MIMIR_GROUPS: EndpointGroup[] = [
       {
         method: "POST",
         path: "/api/mimir/studio/concepts/{id}/regenerate",
-        summary: "Has Claude make a concept's video afresh, or its first.",
+        summary: "Has Claude make a concept's video afresh, or its first, in every language; or only the translations it lacks.",
         access: "mimirStudio",
         token: true,
-        notes: `The job is given every accepted comment on the concept's video (up to ${VIDEO_NOTES_MAX}), each as where in the video it was made, the rating and the words, and writes the script and scenes by the explainer standards, starting from what the last video was made from. When it succeeds the concept's video is the new one, under a new name, so a page still playing the old one is not cut off, and those comments are marked applied. started is false when the studio could not be started; the job is then failed, with why.`,
+        notes: `The job is given every accepted comment on the concept's video (up to ${VIDEO_NOTES_MAX}), each as where in the video it was made, the rating and the words, and writes the script and scenes by the explainer standards, starting from what the last video was made from. When it succeeds the concept's video is the new one, under a new name, so a page still playing the old one is not cut off, and those comments are marked applied. Its translations come off then, so nobody watches one of the old video, and are made again by the same job: until each is done that language plays in English, and if one fails the job is failed with the English video left up. translationsOnly leaves the English video and any comments alone. started is false when the studio could not be started; the job is then failed, with why.`,
         params: [{ name: "id", type: "string", required: true, note: "the concept's id" }],
+        body: {
+          kind: "json",
+          fields: [{ name: "translationsOnly", type: "boolean", note: "only make the translations this video lacks; a body is optional" }],
+        },
         returns: `{ job: ${JOB_SHAPE}, started: boolean }, with 201`,
         errors: [
           { status: 404, error: "not_found", when: "no concept on the map has that id" },
           { status: 409, error: "busy", when: "a video for this concept is already under way" },
+          { status: 409, error: "nothing_to_translate", when: "translationsOnly, and the concept has no video or lacks no translation" },
           { status: 503, error: "not_configured", when: "this deployment has no bucket or no studio job" },
         ],
       },
@@ -469,11 +474,15 @@ export const MIMIR_GROUPS: EndpointGroup[] = [
         access: "signedIn",
         token: true,
         notes:
-          "url is a signed Cloud Storage link, good for expiresInSeconds, that the browser plays directly, so seeking works. startAt is where you left off, or 0 if you had reached the end or have not started.",
+          "url is a signed Cloud Storage link, good for expiresInSeconds, that the browser plays directly, so seeking works. startAt is where you left off, or 0 if you had reached the end or have not started; a place kept in another language carries over as a share of the video's length. It plays in language, or else the language you last chose, or English if the video is not in that yet: language in the answer is the one you got, languages all it can be watched in, and object the file, to send with any feedback.",
         params: [{ name: "id", type: "string", required: true, note: "the concept's id" }],
-        returns: "{ url, expiresInSeconds, name, seconds, startAt, state }",
+        query: [
+          { name: "language", type: `"en" | "es"`, note: "the language to play it in" },
+          { name: "version", type: "string", note: "play this file of the video instead, by the videoObject on a piece of feedback" },
+        ],
+        returns: `{ url, expiresInSeconds, name, seconds, startAt, state, language: "en" | "es", languages: ("en" | "es")[], object }`,
         errors: [
-          { status: 404, error: "not_found", when: "no concept has that id, or it has no video" },
+          { status: 404, error: "not_found", when: "no concept has that id, it has no video, or version is not a file of it" },
           { status: 404, error: "missing", when: "the video's file is not in the bucket" },
           { status: 503, error: "not_configured", when: "this deployment has nowhere to keep videos" },
         ],

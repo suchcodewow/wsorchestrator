@@ -22,22 +22,40 @@ import {
 } from "@/db/schema";
 import type { VideoFeedbackSort, VideoFeedbackSummarySort } from "@/lib/list-specs";
 import { getMap } from "@/lib/mimir/map/content";
-import { MAP_ID } from "@/lib/mimir/map/schema";
+import { MAP_ID, videoIn, type VideoLanguage } from "@/lib/mimir/map/schema";
 import { pageWindow, toPage, type ListQuery, type Page } from "@/lib/paging";
 import { blankAsNull, orderFor, searchAny } from "@/lib/paging-sql";
 import { canUseTraining, type Access } from "@/lib/roles";
 import { isUuid } from "@/lib/utils";
 
-export type VideoRef = { kind: VideoFeedbackKind; id: string };
+/** A concept's video may name the version playing; without one it is the concept's video in English, as it is now. */
+export type VideoRef = { kind: VideoFeedbackKind; id: string; language?: VideoLanguage; object?: string };
 
-/** A video found and the caller allowed to rate it, with the name its feedback is filed under. */
-type FoundVideo = { kind: VideoFeedbackKind; conceptId: string | null; recordingTrackId: string | null; label: string };
+/** A video found and the caller allowed to rate it, with the name its feedback is filed under and the version being watched. */
+type FoundVideo = {
+  kind: VideoFeedbackKind;
+  conceptId: string | null;
+  recordingTrackId: string | null;
+  label: string;
+  language: VideoLanguage;
+  object: string | null;
+};
 
 /** The video `ref` names, if there is one; "forbidden" if the caller may not watch it. */
 export async function findVideo(access: Access, ref: VideoRef): Promise<FoundVideo | "forbidden" | null> {
   if (ref.kind === "mimir_concept") {
     const concept = (await getMap())?.content.concepts.find((c) => c.id === ref.id);
-    return concept?.video ? { kind: ref.kind, conceptId: concept.id, recordingTrackId: null, label: concept.name } : null;
+    if (!concept?.video) return null;
+    const playing = videoIn(concept.video, ref.language ?? "en");
+    return {
+      kind: ref.kind,
+      conceptId: concept.id,
+      recordingTrackId: null,
+      label: concept.name,
+      // What the player was given, which outlasts a regeneration while it plays.
+      language: ref.object ? (ref.language ?? "en") : playing.language,
+      object: ref.object ?? playing.object,
+    };
   }
   if (!canUseTraining(access)) return "forbidden";
   if (!isUuid(ref.id)) return null;
@@ -47,7 +65,7 @@ export async function findVideo(access: Access, ref: VideoRef): Promise<FoundVid
     .where(eq(recordingTracks.id, ref.id));
   if (!track) return null;
   const label = `${track.contributor || "No name given"} — ${track.kind === "camera" ? "camera" : "screen"}`;
-  return { kind: ref.kind, conceptId: null, recordingTrackId: track.id, label };
+  return { kind: ref.kind, conceptId: null, recordingTrackId: track.id, label, language: "en", object: null };
 }
 
 export type NewVideoFeedback = { rating: VideoFeedbackRating; position: number; comment: string | null };
@@ -64,6 +82,8 @@ export async function recordVideoFeedback(userId: string, video: FoundVideo, inp
       videoLabel: video.label,
       rating: input.rating,
       positionSeconds: input.position,
+      language: video.language,
+      videoObject: video.object,
       comment: input.comment,
     })
     .returning();
@@ -75,6 +95,9 @@ export type VideoFeedbackRow = {
   rating: VideoFeedbackRating;
   video: { kind: VideoFeedbackKind; id: string; label: string };
   positionSeconds: number;
+  /** The version it was left on; `videoObject` is null for feedback older than that was recorded. */
+  language: VideoLanguage;
+  videoObject: string | null;
   comment: string | null;
   status: VideoFeedbackStatus;
   user: { id: string; name: string | null; email: string | null } | null;
@@ -89,6 +112,8 @@ function toRow(r: Selected): VideoFeedbackRow {
     rating: r.rating,
     video: { kind: r.videoKind, id: (r.conceptId ?? r.recordingTrackId)!, label: r.videoLabel },
     positionSeconds: r.positionSeconds,
+    language: r.language,
+    videoObject: r.videoObject,
     comment: r.comment,
     status: r.status,
     user: r.userId ? { id: r.userId, name: r.userName, email: r.userEmail } : null,
@@ -131,6 +156,8 @@ export async function listVideoFeedback(
       positionSeconds: videoFeedback.positionSeconds,
       comment: videoFeedback.comment,
       status: videoFeedback.status,
+      language: videoFeedback.language,
+      videoObject: videoFeedback.videoObject,
       createdAt: videoFeedback.createdAt,
       userName: users.name,
       userEmail: users.email,
@@ -161,6 +188,8 @@ export type VideoFeedbackSummaryRow = {
   label: string;
   inMap: boolean;
   hasVideo: boolean;
+  /** The languages its video has been translated into. */
+  translations: string[];
   up: number;
   upComments: number;
   down: number;
@@ -194,7 +223,8 @@ export async function listVideoFeedbackSummary(
   const order = orderFor(SUMMARY_SORT_COLUMNS[query.sort], query.dir, sql`r."conceptId"`);
   const { rows } = await db.execute<VideoFeedbackSummaryRow>(sql`
     with concepts as (
-      select e.c->>'id' as concept_id, e.c->>'name' as label, jsonb_typeof(e.c->'video') = 'object' as has_video
+      select e.c->>'id' as concept_id, e.c->>'name' as label, jsonb_typeof(e.c->'video') = 'object' as has_video,
+             array(select jsonb_object_keys(coalesce(e.c#>'{video,translations}', '{}'::jsonb))) as translations
         from ${mimirMap}, jsonb_array_elements(${mimirMap.content}->'concepts') as e(c)
        where ${mimirMap.id} = ${MAP_ID}
     ), counts as (
@@ -211,6 +241,7 @@ export async function listVideoFeedbackSummary(
              coalesce(c.label, f.label) as label,
              c.concept_id is not null as "inMap",
              coalesce(c.has_video, false) as "hasVideo",
+             coalesce(c.translations, '{}') as translations,
              coalesce(f.up, 0) as up, coalesce(f.up_comments, 0) as "upComments",
              coalesce(f.down, 0) as down, coalesce(f.down_comments, 0) as "downComments",
              coalesce(f.accepted, 0) as accepted
@@ -262,7 +293,14 @@ export async function updateVideoFeedback(
  */
 export async function acceptedComments(conceptId: string, limit: number) {
   return db
-    .select({ id: videoFeedback.id, position: videoFeedback.positionSeconds, rating: videoFeedback.rating, comment: videoFeedback.comment })
+    .select({
+      id: videoFeedback.id,
+      position: videoFeedback.positionSeconds,
+      rating: videoFeedback.rating,
+      comment: videoFeedback.comment,
+      language: videoFeedback.language,
+      videoObject: videoFeedback.videoObject,
+    })
     .from(videoFeedback)
     .where(
       and(

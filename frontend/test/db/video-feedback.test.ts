@@ -65,7 +65,14 @@ after(async () => {
 describe("which videos can be rated", () => {
   test("a concept's video, by anyone signed in, under the concept's name", async () => {
     const found = await findVideo(viewer.access, { kind: "mimir_concept", id: "alpha" });
-    assert.deepEqual(found, { kind: "mimir_concept", conceptId: "alpha", recordingTrackId: null, label: "Alpha" });
+    assert.deepEqual(found, {
+      kind: "mimir_concept",
+      conceptId: "alpha",
+      recordingTrackId: null,
+      label: "Alpha",
+      language: "en",
+      object: "mimir/videos/test-alpha.mp4",
+    });
   });
 
   test("not a concept with no video, nor one that does not exist", async () => {
@@ -76,7 +83,7 @@ describe("which videos can be rated", () => {
   test("a recording only by whoever may watch recordings", async () => {
     assert.equal(await findVideo(viewer.access, { kind: "recording", id: trackId }), "forbidden");
     const found = await findVideo(admin.access, { kind: "recording", id: trackId });
-    assert.deepEqual(found, { kind: "recording", conceptId: null, recordingTrackId: trackId, label: "Feedback Test — camera" });
+    assert.deepEqual(found, { kind: "recording", conceptId: null, recordingTrackId: trackId, label: "Feedback Test — camera", language: "en", object: null });
     assert.equal(await findVideo(admin.access, { kind: "recording", id: "not-a-uuid" }), null);
     assert.equal(await findVideo(admin.access, { kind: "recording", id: randomUUID() }), null);
   });
@@ -104,6 +111,31 @@ describe("saving and reading back", () => {
     assert.deepEqual(downs.rows.map((r) => r.id), [down.id]);
     const recordings = await listVideoFeedback({ ...VIDEO_FEEDBACK_LIST, q: viewer.email, page: 1 }, { kind: "recording" });
     assert.deepEqual(recordings.rows, []);
+  });
+
+  test("remembers which version was playing, which may no longer be the live one", async () => {
+    const old = "mimir/videos/test-alpha-es--20260101T000000Z.mp4";
+    const spanish = await findVideo(viewer.access, { kind: "mimir_concept", id: "alpha", language: "es", object: old });
+    assert.ok(spanish && spanish !== "forbidden");
+    const row = await recordVideoFeedback(viewer.id, spanish, { rating: "down", position: 30, comment: `${MARK} version` });
+    feedbackIds.push(row.id);
+    assert.equal(row.language, "es");
+    assert.equal(row.videoObject, old);
+
+    const listed = await listVideoFeedback({ ...VIDEO_FEEDBACK_LIST, q: `${MARK} version`, page: 1 });
+    assert.equal(listed.rows[0]!.language, "es");
+    assert.equal(listed.rows[0]!.videoObject, old);
+  });
+
+  test("with no version named, it is whatever the concept plays now", async () => {
+    const alpha = await findVideo(viewer.access, { kind: "mimir_concept", id: "alpha" });
+    assert.ok(alpha && alpha !== "forbidden");
+    assert.equal(alpha.language, "en");
+    assert.equal(alpha.object, "mimir/videos/test-alpha.mp4");
+    // Alpha has no Spanish version, so Spanish is asked for and English plays.
+    const asked = await findVideo(viewer.access, { kind: "mimir_concept", id: "alpha", language: "es" });
+    assert.ok(asked && asked !== "forbidden");
+    assert.equal(asked.language, "en");
   });
 
   test("a recording's feedback is deleted with the take", async () => {

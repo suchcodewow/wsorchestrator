@@ -11,7 +11,7 @@
  */
 
 import { z } from "zod";
-import { MAP_SLIDE_LIMIT, VIDEO_PREFIX, mapContentSchema, type MapContent } from "../map/schema";
+import { MAP_SLIDE_LIMIT, TRANSLATED_LANGUAGES, VIDEO_LANGUAGES, VIDEO_PREFIX, mapContentSchema, type MapContent, type TranslatedLanguage } from "../map/schema";
 
 /** Everything the studio keeps sits under this prefix in the recordings bucket. */
 export const STUDIO_PREFIX = "mimir/studio/";
@@ -36,6 +36,9 @@ const VIDEO_ID = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
 /** Where a regenerated video goes: a new object each time, so a page still playing the last one is not cut off. */
 export const videoObject = (videoId: string, version: string) => `${VIDEO_PREFIX}${videoId}--${version}.mp4`;
+
+/** What a video's translation is filed under: a video of its own to the engine, with the language on the end of the name. */
+export const translatedVideoId = (videoId: string, language: TranslatedLanguage) => `${videoId}-${language}`;
 
 /** The `NN-slug` a video's object is filed under, with any version taken off; null for a name that is not one. */
 export function videoIdOf(object: string): string | null {
@@ -66,6 +69,9 @@ export const videoNoteSchema = z.object({
   position: z.number().min(0),
   rating: z.enum(["up", "down"]),
   comment: z.string().max(VIDEO_NOTE_CHARS),
+  /** The version it was left on: which language, and whether that is the file the job is replacing. */
+  language: z.enum(VIDEO_LANGUAGES).default("en"),
+  current: z.boolean().default(true),
 });
 export type VideoNote = z.infer<typeof videoNoteSchema>;
 
@@ -75,12 +81,21 @@ export const videoInputSchema = z.object({
   /** The video's object in the bucket when the job was asked for, if it had one. */
   previous: z.string().nullable(),
   notes: z.array(videoNoteSchema).max(VIDEO_NOTES_MAX),
+  /**
+   * Which translations to make. A regeneration names them all, since each is
+   * taken down with the old English video. Otherwise only those missing.
+   */
+  languages: z.array(z.enum(TRANSLATED_LANGUAGES)).default([]),
+  /** Leave the English video alone and only make the translations: for a video that has none yet, or one that failed. */
+  translationsOnly: z.boolean().default(false),
 });
-export type VideoInput = z.infer<typeof videoInputSchema>;
+export type VideoInput = z.input<typeof videoInputSchema>;
 
 export const videoResultSchema = z.object({
   object: z.string(),
   seconds: z.number().positive(),
+  /** The translations made, by language. */
+  translations: z.record(z.string(), z.object({ object: z.string(), seconds: z.number().positive() })).default({}),
   /** Claude's report on the video, as the brief asks for one: under 150 words. */
   report: z.string().max(4000),
 });

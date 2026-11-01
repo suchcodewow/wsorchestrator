@@ -16,7 +16,11 @@ does one row of `mimir_studio_jobs`:
   is passed in as a note, with its timestamp. The tools refuse to finish until
   the video has been narrated, typechecked, sound-checked, looked at, rendered
   and inspected since the last change. The MP4 lands in the bucket and the
-  concept points at it.
+  concept points at it. The same job then makes every translation by the same
+  tools and checks, following `TRANSLATE.md`, as a video of its own: `01-foo`
+  in Spanish is `01-foo-es`. Translate (the same page) makes only the missing
+  translations and leaves the English video alone, and needs its sources in
+  the bucket.
 
 The job writes its own job's row, an audit record when it finishes or fails,
 its concept's video, and objects under `mimir/` in the recordings bucket.

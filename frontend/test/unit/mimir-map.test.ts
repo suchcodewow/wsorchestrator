@@ -15,10 +15,13 @@ import {
   checklistOf,
   conceptsInOrder,
   mapContentSchema,
+  missingLanguages,
   publicMap,
   ringFraction,
   slideLevels,
   startAt,
+  videoIn,
+  videoLanguages,
 } from "@/lib/mimir/map/schema";
 import { parseSlideNumber, slideObject } from "@/lib/mimir/map/slides";
 import { CONCEPT_H, CONCEPT_W, PAD, SLIDE_H, SLIDE_W, layoutMap } from "@/lib/mimir/map/layout";
@@ -518,6 +521,24 @@ describe("a concept's checklist", () => {
       { text: "A", covered: false },
       { text: "B", covered: false },
     ]);
+  });
+});
+
+describe("a video's languages", () => {
+  const english = { object: "mimir/videos/01-a--1.mp4", seconds: 100, transcript: "In English." };
+  const spanish = { object: "mimir/videos/01-a-es--1.mp4", seconds: 120, transcript: "En español." };
+
+  test("plays the preferred language when there is one", () => {
+    const video = { ...english, translations: { es: spanish } };
+    assert.deepEqual(videoIn(video, "es"), { ...spanish, language: "es" });
+    assert.deepEqual(videoLanguages(video), ["en", "es"]);
+    assert.deepEqual(missingLanguages(video), []);
+  });
+
+  test("falls back to English, and says so", () => {
+    assert.deepEqual(videoIn(english, "es"), { ...english, language: "en" });
+    assert.deepEqual(videoLanguages(english), ["en"]);
+    assert.deepEqual(missingLanguages(english), ["es"]);
   });
 });
 

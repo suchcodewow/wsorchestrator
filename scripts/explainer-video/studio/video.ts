@@ -8,28 +8,38 @@
  *
  * Then the MP4 goes to the bucket under a new name, what it was made from is
  * saved for the next regeneration, and the live map points at it.
+ *
+ * Each translation follows in the same job and workspace, with the same tools
+ * and the same checks: to the engine it is a video of its own, with the
+ * language on the end of its id. It has to be rendered, not just re-voiced,
+ * because the scene code is timed to spoken phrases and holds the words on
+ * screen. The live map has no translation of a new video until it is done, so
+ * a language that fails plays in English rather than out of step with it.
  */
 
 import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
-import { ROOT } from "../lib/config.js";
+import { ROOT, type NarrationLanguage } from "../lib/config.js";
 import { FPS, LEAD_SECONDS, phraseEnd, phraseStart, type VideoTiming } from "../lib/timing.js";
 import { sceneFrames } from "../src/Explainer.js";
-import { conceptsInOrder, SLIDE_PREFIX, type MapContent } from "../../../frontend/src/lib/mimir/map/schema";
-import { videoInputSchema, videoObject, videoResultSchema, type VideoNote, type VideoResult } from "../../../frontend/src/lib/mimir/studio/shapes";
+import { conceptsInOrder, SLIDE_PREFIX, VIDEO_LANGUAGE_NAMES, type MapContent, type MapVideoFile, type TranslatedLanguage, type VideoLanguage } from "../../../frontend/src/lib/mimir/map/schema";
+import { translatedVideoId, videoInputSchema, videoObject, videoResultSchema, videoSourcePrefix, type VideoResult } from "../../../frontend/src/lib/mimir/studio/shapes";
 import { image, runAgent, ToolError, type AgentRun, type Tool, type ToolOutput } from "./claude.js";
-import { finishVideo, liveMap, setProgress, type JobRow } from "./db.js";
+import { addTranslation, endVideoJob, liveMap, publishVideo, setProgress, type JobRow } from "./db.js";
 import { must, run } from "./proc.js";
 import { download, upload } from "./storage.js";
-import { makeWorkspace, saveSources, walk, type Workspace } from "./workspace.js";
+import { fetchSources, makeWorkspace, saveSources, walk, type Workspace } from "./workspace.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
 /** Turns and time for one video: the author's took an hour or two of mostly rendering. */
 const MAX_TURNS = 150;
 const DEADLINE_MS = 150 * 60 * 1000;
+/** A translation writes less and looks less, but renders as long. All of a job has to fit in Cloud Run's three hours. */
+const TRANSLATE_DEADLINE_MS = 90 * 60 * 1000;
+const JOB_DEADLINE_MS = 170 * 60 * 1000;
 const STILLS_PER_CALL = 12;
 const SLIDE_VIEWS = 30;
 const READ_MAX = 200_000;
@@ -80,23 +90,57 @@ function narrationNear(timing: VideoTiming, seconds: number): { scene: string; w
   return { scene: scene.key, words };
 }
 
-function notesBlock(notes: VideoNote[], timing: VideoTiming | null): string {
+type Note = ReturnType<typeof videoInputSchema.parse>["notes"][number];
+type Timings = Partial<Record<VideoLanguage, VideoTiming | null>>;
+
+function notesBlock(notes: Note[], timings: Timings): string {
   if (notes.length === 0) return "There are no notes from viewers this time.";
   const lines = [...notes]
     .sort((a, b) => a.position - b.position)
     .map((n) => {
+      // Seconds mean something only in the file they were left on.
+      const timing = n.current ? timings[n.language] : null;
       const near = timing ? narrationNear(timing, n.position) : null;
       const where = near ? ` scene="${near.scene}"` : "";
       const said = near?.words ? `\n<narration_near>${escape(near.words)}</narration_near>` : "";
-      return `<note at="${mmss(n.position)}" seconds="${n.position.toFixed(1)}" rating="${n.rating === "up" ? "thumbs up" : "thumbs down"}"${where}>${said}\n<comment>${escape(n.comment)}</comment>\n</note>`;
+      const version = `${n.language === "en" ? "" : ` language="${VIDEO_LANGUAGE_NAMES[n.language]}"`}${n.current ? "" : ` version="an earlier video"`}`;
+      return `<note at="${mmss(n.position)}" seconds="${n.position.toFixed(1)}" rating="${n.rating === "up" ? "thumbs up" : "thumbs down"}"${version}${where}>${said}\n<comment>${escape(n.comment)}</comment>\n</note>`;
     });
   return [
-    `${notes.length} accepted note${notes.length === 1 ? "" : "s"} from viewers of the previous video, each at the moment it was left${timing ? ", with what the narrator was saying then" : ""}:`,
+    `${notes.length} accepted note${notes.length === 1 ? "" : "s"} from viewers, each at the moment it was left, with what the narrator was saying then where that is known:`,
     `<notes>\n${lines.join("\n")}\n</notes>`,
   ].join("\n");
 }
 
+/** A translation's saved timing, read without bringing the rest of it into the workspace, where it would be compiled with the new English video. */
+async function savedTiming(id: string, language: TranslatedLanguage): Promise<VideoTiming | null> {
+  const target = translatedVideoId(id, language);
+  const body = await download(`${videoSourcePrefix(target)}public/audio/${target}/timing.json`);
+  return body ? (JSON.parse(body.toString("utf8")) as VideoTiming) : null;
+}
+
+/** Puts the rendered video in the bucket under a new name and saves what it was made from. */
+async function uploadVideo(ws: Workspace, id: string, progress: (text: string) => Promise<void>): Promise<MapVideoFile> {
+  await progress("Uploading the video.");
+  const mp4 = path.join(ws.dir, "out", `${id}.mp4`);
+  const seconds = parseFloat(await must("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", mp4], { cwd: ws.dir }));
+  const version = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d+Z$/, "Z");
+  const object = videoObject(id, version);
+  await upload(object, readFileSync(mp4), "video/mp4");
+  // Cloud Run's disk is its memory: the next render needs the room.
+  rmSync(mp4, { force: true });
+  const transcript = sceneFiles(ws, id)
+    .map((f) => readFileSync(path.join(ws.dir, "content", id, f), "utf8").replace(PAUSE_LINE, "").replace(/\n{2,}/g, "\n").trim())
+    .join("\n\n")
+    .slice(0, 60_000);
+
+  await progress("Saving what the video was made from.");
+  await saveSources(ws, id);
+  return { object, seconds, transcript };
+}
+
 export async function runVideo(job: JobRow): Promise<void> {
+  const started = Date.now();
   const input = videoInputSchema.parse(job.input);
   const id = input.videoId;
   const progress = (text: string) => setProgress(job.id, text);
@@ -105,33 +149,43 @@ export async function runVideo(job: JobRow): Promise<void> {
   if (!map) throw new Error("There is no live map to make a video for.");
   const concept = conceptsInOrder(map).find((c) => c.id === job.concept_id);
   if (!concept) throw new Error(`The concept ${job.concept_id} is not on the live map.`);
+  const live = map.concepts.find((c) => c.id === concept.id)?.video ?? null;
 
   await progress("Setting up the workspace.");
   const ws = await makeWorkspace(map, id, progress);
   try {
-    const previousTiming = readTiming(ws, id);
-    const report = await makeVideo(ws, id, input.notes, previousTiming, concept, map.concepts.find((c) => c.id === concept.id)?.video?.transcript ?? null, progress);
+    let english = live;
+    let report = "Only translations were made.";
+    if (input.translationsOnly) {
+      if (!english) throw new Error("There is no video to translate.");
+      if (!ws.hadSources) throw new Error(`What ${id} was made from is not in the bucket, so it cannot be translated.`);
+    } else {
+      const timings: Timings = { en: readTiming(ws, id), es: await savedTiming(id, "es") };
+      report = await makeVideo(ws, id, input.notes, timings, concept, live?.transcript ?? null, progress);
+      const file = await uploadVideo(ws, id, progress);
+      await publishVideo(job.id, { conceptId: concept.id, video: file, feedbackIds: input.notes.map((n) => n.feedbackId) });
+      english = file;
+    }
 
-    await progress("Uploading the video.");
-    const mp4 = path.join(ws.dir, "out", `${id}.mp4`);
-    const seconds = parseFloat(await must("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", mp4], { cwd: ws.dir }));
-    const version = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d+Z$/, "Z");
-    const object = videoObject(id, version);
-    await upload(object, readFileSync(mp4), "video/mp4");
-    const transcript = sceneFiles(ws, id)
-      .map((f) => readFileSync(path.join(ws.dir, "content", id, f), "utf8").replace(PAUSE_LINE, "").replace(/\n{2,}/g, "\n").trim())
-      .join("\n\n")
-      .slice(0, 60_000);
+    const translations: VideoResult["translations"] = {};
+    for (const language of input.languages) {
+      const name = VIDEO_LANGUAGE_NAMES[language];
+      try {
+        const say = (text: string) => progress(`${name}: ${text}`);
+        const deadline = Math.min(Date.now() + TRANSLATE_DEADLINE_MS, started + JOB_DEADLINE_MS);
+        const notes = input.notes.filter((n) => n.language === language);
+        const timing = { [language]: await savedTiming(id, language) };
+        await translateVideo(ws, id, language, notes, timing, say, deadline);
+        const file = await uploadVideo(ws, translatedVideoId(id, language), say);
+        await addTranslation(concept.id, english!.object, language, file);
+        translations[language] = { object: file.object, seconds: file.seconds };
+      } catch (err) {
+        throw new Error(`The ${name} version could not be made, so it plays in English: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
 
-    await progress("Saving what the video was made from.");
-    await saveSources(ws, id);
-    const result: VideoResult = videoResultSchema.parse({ object, seconds, report: report.slice(0, 4000) });
-    await finishVideo(job.id, {
-      conceptId: concept.id,
-      video: { object, seconds, transcript },
-      feedbackIds: input.notes.map((n) => n.feedbackId),
-      result,
-    });
+    const result: VideoResult = videoResultSchema.parse({ object: english!.object, seconds: english!.seconds, translations, report: report.slice(0, 4000) });
+    await endVideoJob(job.id, result);
   } finally {
     ws.dispose();
   }
@@ -143,7 +197,7 @@ type Concept = ReturnType<typeof conceptsInOrder<MapContent["concepts"][number]>
  * The tools a video job works with, and its `finish`, over one workspace.
  * Separate from the job so they can be driven without Claude.
  */
-export function videoTools(ws: Workspace, id: string, progress: (text: string) => Promise<void>): { tools: Tool[]; finish: AgentRun<string>["finish"] } {
+export function videoTools(ws: Workspace, id: string, progress: (text: string) => Promise<void>, language: NarrationLanguage = "en"): { tools: Tool[]; finish: AgentRun<string>["finish"] } {
   const content = path.join(ws.dir, "content", id);
   mkdirSync(content, { recursive: true });
 
@@ -246,14 +300,14 @@ export function videoTools(ws: Workspace, id: string, progress: (text: string) =
 
   const narrate = tool({
     name: "narrate",
-    description: "Narrates every scene script in the cloned voice and writes public/audio/<id>/timing.json. Scenes whose text has not changed are reused, so re-running costs only the changed scenes.",
+    description: "Narrates every scene script in the video's voice and writes public/audio/<id>/timing.json. Scenes whose text has not changed are reused, so re-running costs only the changed scenes.",
     schema: z.object({}),
     inputSchema: { type: "object", properties: {} },
     run: async () => {
       if (sceneFiles(ws, id).length === 0) throw new ToolError(`There are no scene scripts in content/${id}/ yet.`);
       await progress("Narrating.");
       for (let attempt = 1; ; attempt++) {
-        const r = await run("npx", ["tsx", "cli/narrate.ts", id], { cwd: ws.dir, env: ws.env, timeoutMs: 30 * 60 * 1000 });
+        const r = await run("npx", ["tsx", "cli/narrate.ts", id, language], { cwd: ws.dir, env: ws.env, timeoutMs: 30 * 60 * 1000 });
         if (r.code === 0) {
           done.narrated = scriptEdit;
           return tail(r.output, 3000);
@@ -490,8 +544,8 @@ export function videoTools(ws: Workspace, id: string, progress: (text: string) =
 async function makeVideo(
   ws: Workspace & { hadSources: boolean },
   id: string,
-  notes: VideoNote[],
-  previousTiming: VideoTiming | null,
+  notes: Note[],
+  timings: Timings,
   concept: Concept,
   previousTranscript: string | null,
   progress: (text: string) => Promise<void>,
@@ -514,7 +568,7 @@ async function makeVideo(
     `<concept>\n${JSON.stringify({ ...about, level: about.level * 100 }, null, 2)}\n</concept>`,
     `The reference video${ws.references.length === 1 ? " is" : "s are"} ${ws.references.map((r) => `\`${r}\``).join(", ")}.${concept.slides.length ? " Its slides can be seen with view_slide." : ""}`,
     start,
-    notesBlock(notes, previousTiming),
+    notesBlock(notes, timings),
     "Work through the loop in the brief, and call finish with your report when the video is done.",
   ].join("\n\n");
 
@@ -526,5 +580,52 @@ async function makeVideo(
     finish,
     maxTurns: MAX_TURNS,
     deadline: Date.now() + DEADLINE_MS,
+  });
+}
+
+/** Makes the `language` version of the video just finished, from its sources in the workspace. */
+async function translateVideo(
+  ws: Workspace,
+  id: string,
+  language: TranslatedLanguage,
+  notes: Note[],
+  timings: Timings,
+  progress: (text: string) => Promise<void>,
+  deadline: number,
+): Promise<string> {
+  const target = translatedVideoId(id, language);
+  // The last translation, if any: what has not changed need not be narrated again.
+  const translatedBefore = await fetchSources(ws, target);
+  const { tools, finish } = videoTools(ws, target, progress, language);
+  const scenes = sceneFiles(ws, id);
+  const system = [
+    readFileSync(path.join(HERE, "TRANSLATE.md"), "utf8"),
+    `# STANDARDS.md\n\n${readFileSync(path.join(ROOT, "STANDARDS.md"), "utf8")}`,
+    `# README.md\n\n${readFileSync(path.join(ROOT, "README.md"), "utf8")}`,
+  ].join("\n\n---\n\n");
+  const prompt = [
+    `Translate the video \`${id}\` into ${VIDEO_LANGUAGE_NAMES[language]} (language code ${language}). Write content/${target}/ and src/videos/${target}.tsx.`,
+    `The English to work from is content/${id}/, with ${scenes.length} scene scripts: ${scenes.join(", ")}, and src/videos/${id}.tsx.`,
+    translatedBefore
+      ? `An earlier translation is already in content/${target}/ and src/videos/${target}.tsx, made from an earlier English video. Bring it in line with the English: keep what still fits, and change what does not.`
+      : "This video has not been translated before.",
+    notesBlock(notes, timings),
+    "Work through the loop in the brief, and call finish with your report when the video is done.",
+  ].join("\n\n");
+  await progress("Translating the script.");
+  return runAgent<string>({
+    system,
+    tools,
+    prompt,
+    finish: {
+      ...finish,
+      run: async (done) => {
+        const made = sceneFiles(ws, target);
+        if (made.join() !== scenes.join()) throw new ToolError(`A translation has the same scene files as the English, by the same names: ${scenes.join(", ")}.`);
+        return finish.run(done);
+      },
+    },
+    maxTurns: MAX_TURNS,
+    deadline,
   });
 }

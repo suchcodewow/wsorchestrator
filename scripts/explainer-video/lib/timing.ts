@@ -45,7 +45,7 @@ export type Gap = { start: number; end: number };
 export function speechGaps(scene: SceneTiming, minGap = 0.2, mergeBelow = 0.14): Gap[] {
   const merged: [number, number][] = [];
   scene.characters.forEach((c, i) => {
-    if (!/[A-Za-z0-9]/.test(c)) return;
+    if (!/[\p{L}\p{N}]/u.test(c)) return;
     const last = merged[merged.length - 1];
     if (last && scene.starts[i] - last[1] < mergeBelow) last[1] = Math.max(last[1], scene.ends[i]);
     else merged.push([scene.starts[i], scene.ends[i]]);

@@ -24,6 +24,7 @@ import {
 import { sql } from "drizzle-orm";
 import type { AdapterAccountType } from "next-auth/adapters";
 import type { DeployedContent } from "@/lib/harness-deploy-selection";
+import type { VideoLanguage } from "@/lib/mimir/map/schema";
 
 const bytea = customType<{ data: Buffer; driverData: Buffer }>({
   dataType: () => "bytea",
@@ -108,6 +109,8 @@ export const users = pgTable("users", {
     .$type<FavoriteTab[]>()
     .notNull()
     .default(sql`'[]'::jsonb`),
+  /** The language they last chose in a Mimir video's player. A video not yet in it plays in English. */
+  videoLanguage: text("video_language").$type<VideoLanguage>().notNull().default("en"),
   /** Made to test the app as, outside production; see src/lib/test-accounts.ts. */
   isTestAccount: boolean("is_test_account").notNull().default(false),
 });
@@ -3418,6 +3421,10 @@ export const videoFeedback = pgTable(
     rating: text("rating").$type<VideoFeedbackRating>().notNull(),
     /** Where the video was, in seconds, when the face or comment button was pressed. */
     positionSeconds: doublePrecision("position_seconds").notNull(),
+    /** Which version was playing, since the same moment falls at a different second in each: its language, and its file. */
+    language: text("language").$type<VideoLanguage>().notNull().default("en"),
+    /** Null for feedback older than this column, and for a recording, which has one version. */
+    videoObject: text("video_object"),
     comment: text("comment"),
     /** Only a comment is accepted or ignored; a bare rating stays pending. */
     status: text("status").$type<VideoFeedbackStatus>().notNull().default("pending"),
@@ -3430,6 +3437,7 @@ export const videoFeedback = pgTable(
     check("video_feedback_video_kind_check", sql`${t.videoKind} in ('mimir_concept', 'recording')`),
     check("video_feedback_rating_check", sql`${t.rating} in ('up', 'down')`),
     check("video_feedback_status_check", sql`${t.status} in ('pending', 'accepted', 'ignored', 'applied')`),
+    check("video_feedback_language_check", sql`${t.language} in ('en', 'es')`),
     check(
       "video_feedback_video_check",
       sql`(${t.videoKind} = 'mimir_concept' and ${t.conceptId} is not null) or (${t.videoKind} = 'recording' and ${t.recordingTrackId} is not null)`,

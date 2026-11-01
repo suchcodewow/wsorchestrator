@@ -24,6 +24,7 @@ import {
   useRef,
   useState,
   type ComponentProps,
+  type ReactNode,
   type RefObject,
 } from "react";
 import { createPortal } from "react-dom";
@@ -48,11 +49,16 @@ import {
   type VideoFeedbackRating,
 } from "@/db/schema";
 import { anchorFloating } from "@/lib/floating";
+import type { VideoLanguage } from "@/lib/mimir/map/schema";
 import { formatDuration } from "@/lib/recording/format";
 import { cn } from "@/lib/utils";
 
-/** The video feedback is filed against: a Mimir concept's id, or a recording stream's. */
-export type FeedbackTarget = { kind: VideoFeedbackKind; id: string };
+/**
+ * The video feedback is filed against: a Mimir concept's id, or a recording
+ * stream's. A concept's also says which version is playing, since the same
+ * moment falls at a different second in each.
+ */
+export type FeedbackTarget = { kind: VideoFeedbackKind; id: string; language?: VideoLanguage; object?: string };
 
 /** How long a saved rating stays lit. */
 const SAVED_MS = 2_000;
@@ -88,12 +94,15 @@ export function VideoWithFeedback({
   wrapperClassName,
   controlsList,
   onDoubleClick,
+  barStart,
   ...props
 }: ComponentProps<"video"> & {
   feedback: FeedbackTarget;
   /** The caller's own handle on the element, when it needs one. */
   videoRef?: RefObject<HTMLVideoElement | null>;
   wrapperClassName?: string;
+  /** Sits to the left of the feedback buttons. */
+  barStart?: ReactNode;
 }) {
   const own = useRef<HTMLVideoElement>(null);
   const video = videoRef ?? own;
@@ -108,7 +117,7 @@ export function VideoWithFeedback({
         }}
         {...props}
       />
-      <FeedbackBar video={video} target={feedback} />
+      <FeedbackBar video={video} target={feedback} start={barStart} />
     </div>
   );
 }
@@ -116,9 +125,11 @@ export function VideoWithFeedback({
 function FeedbackBar({
   video,
   target,
+  start,
 }: {
   video: RefObject<HTMLVideoElement | null>;
   target: FeedbackTarget;
+  start?: ReactNode;
 }) {
   const [sending, setSending] = useState<VideoFeedbackRating | null>(null);
   const [saved, setSaved] = useState<VideoFeedbackRating | null>(null);
@@ -168,6 +179,7 @@ function FeedbackBar({
         !slot && "absolute top-3 right-3 z-10",
       )}
     >
+      {start}
       {(error || saved) && (
         <span
           role="status"
