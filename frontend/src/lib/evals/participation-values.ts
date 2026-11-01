@@ -55,14 +55,20 @@ export type GenerationPlan = {
   writeConstructive: boolean;
 };
 
-export type ExistingParticipation = { email: string; positiveFeedback: string; constructiveFeedback: string };
+export type ExistingParticipation = {
+  email: string;
+  /** Blank from the first mark until Generate. */
+  averageScore: number | null;
+  positiveFeedback: string;
+  constructiveFeedback: string;
+};
 
 /**
- * Who a press of Generate touches. Anyone marked was there, so they get the
- * assessment even with no other; someone unmarked gets it only if another
- * assessment shows they attended, because a submission counts as attendance
- * when the class is released. It fills what is blank and changes nothing
- * else, so a side with no marks stays blank and a saved score stays.
+ * Who a press of Generate touches. Anyone marked has the assessment already,
+ * from their first mark; someone unmarked gets it only if another assessment
+ * shows they attended, because a submission counts as attendance when the
+ * class is released. It fills what is blank and changes nothing else, so a
+ * side with no marks stays blank and a saved score stays.
  */
 export function planGeneration(
   marksByEmail: ReadonlyMap<string, NamedMark[]>,
@@ -77,8 +83,9 @@ export function planGeneration(
     const current = saved.get(email);
     const writePositive = marks.some((m) => m.polarity === "positive") && !current?.positiveFeedback.trim();
     const writeConstructive = marks.some((m) => m.polarity === "negative") && !current?.constructiveFeedback.trim();
-    if (current && !writePositive && !writeConstructive) return [];
-    return [{ email, marks, score: current ? null : participationScore(marks, bands), writePositive, writeConstructive }];
+    const scored = current !== undefined && current.averageScore !== null;
+    if (scored && !writePositive && !writeConstructive) return [];
+    return [{ email, marks, score: scored ? null : participationScore(marks, bands), writePositive, writeConstructive }];
   });
 }
 

@@ -13,10 +13,10 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronDown, ChevronUp, Loader2, MessageSquarePlus, RefreshCw, Users } from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2, MessageSquarePlus, RefreshCw, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { PARTICIPATION_LIMITS, type ParticipationPolarity } from "@/db/schema";
+import { PARTICIPATION_LIMITS, type EvalsAssessmentStage, type ParticipationPolarity } from "@/db/schema";
 import type { GroupPerson, ParticipationSheet } from "@/lib/evals/participation";
 import { STAGE_LABELS } from "@/lib/evals/assessment-values";
 import { cn } from "@/lib/utils";
@@ -40,6 +40,7 @@ function errorFor(status: number, code: string | undefined): string {
   return (code && ERRORS[code]) || `Something went wrong (${status}).`;
 }
 
+/** With no `onAdjust` the count is only shown, with no arrows. */
 function Counter({
   row,
   disabled,
@@ -47,44 +48,179 @@ function Counter({
 }: {
   row: ParticipationSheet["descriptors"][number];
   disabled: boolean;
-  onAdjust: (delta: 1 | -1) => void;
+  onAdjust?: (delta: 1 | -1) => void;
 }) {
+  const adjustments = row.adjustments.map((a) => `${a.name} ${a.net > 0 ? "+" : "−"}${Math.abs(a.net)}`).join(" · ");
   return (
-    <li className="flex items-center justify-between gap-4 py-2">
-      <div className="min-w-0">
-        <p className="text-sm wrap-break-word">{row.name}</p>
-        {row.adjustments.length > 0 && (
-          <p className="text-xs text-muted-foreground">
-            {row.adjustments.map((a) => `${a.name} ${a.net > 0 ? "+" : "−"}${Math.abs(a.net)}`).join(" · ")}
-          </p>
+    <li className="flex items-center justify-between gap-3 py-0.5">
+      <div className="flex min-w-0 items-baseline gap-2">
+        <span className="shrink-0 text-sm">{row.name}</span>
+        {adjustments && (
+          <span className="truncate text-xs text-muted-foreground" title={adjustments}>
+            {adjustments}
+          </span>
         )}
       </div>
-      <div className="flex shrink-0 items-center gap-1">
-        <Button
-          variant="outline"
-          size="icon"
-          className="size-8"
-          aria-label={`Lower ${row.name}`}
-          disabled={disabled || row.count === 0}
-          onClick={() => onAdjust(-1)}
-        >
-          <ChevronDown />
-        </Button>
-        <span className="w-6 text-center text-sm font-medium tabular-nums" aria-label={`${row.name} count`}>
+      <div className="flex min-h-6 shrink-0 items-center gap-0.5">
+        {onAdjust && (
+          <Button
+            variant="outline"
+            size="icon"
+            className="size-6"
+            aria-label={`Lower ${row.name}`}
+            disabled={disabled || row.count === 0}
+            onClick={() => onAdjust(-1)}
+          >
+            <ChevronLeft className="size-3.5" />
+          </Button>
+        )}
+        <span className="w-5 text-center text-sm font-medium tabular-nums" aria-label={`${row.name} count`}>
           {row.count}
         </span>
-        <Button
-          variant="outline"
-          size="icon"
-          className="size-8"
-          aria-label={`Raise ${row.name}`}
-          disabled={disabled || row.count >= PARTICIPATION_LIMITS.maxCount}
-          onClick={() => onAdjust(1)}
-        >
-          <ChevronUp />
-        </Button>
+        {onAdjust && (
+          <Button
+            variant="outline"
+            size="icon"
+            className="size-6"
+            aria-label={`Raise ${row.name}`}
+            disabled={disabled || row.count >= PARTICIPATION_LIMITS.maxCount}
+            onClick={() => onAdjust(1)}
+          >
+            <ChevronRight className="size-3.5" />
+          </Button>
+        )}
       </div>
     </li>
+  );
+}
+
+/** Reads one attendee's marks, and moves them. `updateScore` carries each move through to a saved score. */
+function useParticipationSheet(employeeId: string, updateScore: boolean, onMoved?: () => void) {
+  const [sheet, setSheet] = useState<ParticipationSheet | null>(null);
+  const [saving, setSaving] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let current = true;
+    async function load() {
+      try {
+        const res = await fetch(`/api/evals/participation/${encodeURIComponent(employeeId)}`);
+        const body = await res.json().catch(() => null);
+        if (!current) return;
+        if (res.ok) setSheet(body as ParticipationSheet);
+        else setError(errorFor(res.status, body?.error));
+      } catch {
+        if (current) setError("Could not reach the server.");
+      }
+    }
+    void load();
+    return () => {
+      current = false;
+    };
+  }, [employeeId]);
+
+  async function adjust(descriptorId: string, delta: 1 | -1) {
+    setSaving(descriptorId);
+    setError(null);
+    try {
+      const res = await fetch(`/api/evals/participation/${encodeURIComponent(employeeId)}/marks`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ descriptorId, delta, ...(updateScore && { updateScore }) }),
+      });
+      const body = await res.json().catch(() => null);
+      if (!res.ok) {
+        setError(errorFor(res.status, body?.error));
+        return;
+      }
+      setSheet(body as ParticipationSheet);
+      onMoved?.();
+    } catch {
+      setError("Could not reach the server.");
+    } finally {
+      setSaving(null);
+    }
+  }
+
+  return { sheet, setSheet, saving, error, adjust };
+}
+
+function Loading() {
+  return (
+    <div role="status" className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
+      <Loader2 className="size-4 animate-spin" />
+      Loading marks…
+    </div>
+  );
+}
+
+function ErrorLine({ error }: { error: string }) {
+  return (
+    <p role="alert" className="text-sm text-destructive">
+      {error}
+    </p>
+  );
+}
+
+/** Every descriptor, positive then constructive. */
+function Counters({
+  sheet,
+  disabled,
+  onAdjust,
+}: {
+  sheet: ParticipationSheet;
+  disabled: boolean;
+  /** Leave out to show the marks with no arrows. */
+  onAdjust?: (descriptorId: string, delta: 1 | -1) => void;
+}) {
+  return (
+    <>
+      {sheet.descriptors.length === 0 && <p className="text-sm text-muted-foreground">No descriptors are set up yet.</p>}
+      {SECTIONS.map(({ polarity, label }) => {
+        const rows = sheet.descriptors.filter((x) => x.polarity === polarity);
+        if (rows.length === 0) return null;
+        return (
+          <section key={polarity}>
+            <h3 className="text-xs font-medium text-muted-foreground">{label}</h3>
+            <ul className="divide-y">
+              {rows.map((row) => (
+                <Counter
+                  key={row.id}
+                  row={row}
+                  disabled={disabled}
+                  onAdjust={onAdjust && ((delta) => onAdjust(row.id, delta))}
+                />
+              ))}
+            </ul>
+          </section>
+        );
+      })}
+    </>
+  );
+}
+
+/**
+ * The popup's marks inside the Administration View. With `onMoved` they have
+ * arrows, and each move carries through to a saved score, as an edit does.
+ */
+export function ParticipationMarks({
+  employeeId,
+  stage,
+  onMoved,
+}: {
+  employeeId: string;
+  /** The class of the assessment they sit in; a person's marks in another class are not its marks. */
+  stage: EvalsAssessmentStage;
+  onMoved?: () => void;
+}) {
+  const { sheet, saving, error, adjust } = useParticipationSheet(employeeId, onMoved !== undefined, onMoved);
+  if (!sheet) return error ? <ErrorLine error={error} /> : <Loading />;
+  if (sheet.attendee.stage !== stage) return null;
+  return (
+    <div className="space-y-1.5">
+      <Counters sheet={sheet} disabled={saving !== null} onAdjust={onMoved && adjust} />
+      {error && <ErrorLine error={error} />}
+    </div>
   );
 }
 
@@ -143,103 +279,29 @@ function Regenerate({ employeeId, onDone }: { employeeId: string; onDone: (sheet
 }
 
 function SheetPanel({ employeeId, canRegenerate }: { employeeId: string; canRegenerate: boolean }) {
-  const [sheet, setSheet] = useState<ParticipationSheet | null>(null);
-  const [saving, setSaving] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let current = true;
-    async function load() {
-      try {
-        const res = await fetch(`/api/evals/participation/${encodeURIComponent(employeeId)}`);
-        const body = await res.json().catch(() => null);
-        if (!current) return;
-        if (res.ok) setSheet(body as ParticipationSheet);
-        else setError(errorFor(res.status, body?.error));
-      } catch {
-        if (current) setError("Could not reach the server.");
-      }
-    }
-    void load();
-    return () => {
-      current = false;
-    };
-  }, [employeeId]);
-
-  async function adjust(descriptorId: string, delta: 1 | -1) {
-    setSaving(descriptorId);
-    setError(null);
-    try {
-      const res = await fetch(`/api/evals/participation/${encodeURIComponent(employeeId)}/marks`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ descriptorId, delta }),
-      });
-      const body = await res.json().catch(() => null);
-      if (!res.ok) {
-        setError(errorFor(res.status, body?.error));
-        return;
-      }
-      setSheet(body as ParticipationSheet);
-    } catch {
-      setError("Could not reach the server.");
-    } finally {
-      setSaving(null);
-    }
-  }
-
-  if (!sheet) {
-    return error ? (
-      <p role="alert" className="text-sm text-destructive">
-        {error}
-      </p>
-    ) : (
-      <div role="status" className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
-        <Loader2 className="size-4 animate-spin" />
-        Loading marks…
-      </div>
-    );
-  }
+  const { sheet, setSheet, saving, error, adjust } = useParticipationSheet(employeeId, false);
+  if (!sheet) return error ? <ErrorLine error={error} /> : <Loading />;
 
   return (
-    <div className="min-w-0 space-y-4">
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <p className="font-medium wrap-break-word">{sheet.attendee.fullName}</p>
-          <p className="text-sm text-muted-foreground">{STAGE_LABELS[sheet.attendee.stage]}</p>
-        </div>
+    <div className="min-w-0 space-y-1.5">
+      <div className="flex items-baseline justify-between gap-3">
+        <p className="min-w-0 text-sm wrap-break-word">
+          <span className="font-medium">{sheet.attendee.fullName}</span>{" "}
+          <span className="text-muted-foreground">· {STAGE_LABELS[sheet.attendee.stage]}</span>
+        </p>
         {sheet.runningScore !== null && (
-          <div className="shrink-0 text-right" aria-live="polite">
-            <p className="text-2xl font-medium leading-none tabular-nums">{sheet.runningScore}</p>
-            <p className="mt-1 text-xs text-muted-foreground">Running score</p>
-          </div>
+          <p className="shrink-0 text-xs text-muted-foreground" aria-live="polite">
+            Running score{" "}
+            <span className="text-base font-medium text-foreground tabular-nums">{sheet.runningScore}</span>
+          </p>
         )}
       </div>
 
-      {sheet.descriptors.length === 0 && <p className="text-sm text-muted-foreground">No descriptors are set up yet.</p>}
-      {SECTIONS.map(({ polarity, label }) => {
-        const rows = sheet.descriptors.filter((x) => x.polarity === polarity);
-        if (rows.length === 0) return null;
-        return (
-          <section key={polarity} className="space-y-1">
-            <h3 className="text-xs font-medium text-muted-foreground">{label}</h3>
-            <ul className="divide-y">
-              {rows.map((row) => (
-                <Counter key={row.id} row={row} disabled={saving !== null} onAdjust={(delta) => adjust(row.id, delta)} />
-              ))}
-            </ul>
-          </section>
-        );
-      })}
+      <Counters sheet={sheet} disabled={saving !== null} onAdjust={adjust} />
+      {error && <ErrorLine error={error} />}
 
-      {error && (
-        <p role="alert" className="text-sm text-destructive">
-          {error}
-        </p>
-      )}
-
-      {sheet.saved && (
-        <section className="space-y-2 border-t pt-4">
+      {sheet.saved?.averageScore != null && (
+        <section className="space-y-1.5 border-t pt-2">
           <p className="text-sm">
             <span className="text-muted-foreground">Saved score</span>{" "}
             <span className="font-medium tabular-nums">{sheet.saved.averageScore}</span>
@@ -277,14 +339,14 @@ export function ParticipationDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={many ? "sm:max-w-3xl" : "sm:max-w-xl"}>
+      <DialogContent className={cn("gap-2 p-4", many ? "sm:max-w-3xl" : "sm:max-w-xl")}>
         <DialogHeader>
           <DialogTitle>Participation</DialogTitle>
           <DialogDescription className="sr-only">Raise or lower each descriptor for this attendee.</DialogDescription>
         </DialogHeader>
-        <div className={cn("gap-6", many && "grid sm:grid-cols-[13rem_minmax(0,1fr)]")}>
+        <div className={cn("gap-4", many && "grid sm:grid-cols-[12rem_minmax(0,1fr)]")}>
           {(many || loading) && (
-            <nav aria-label="Evaluation group" className="min-w-0 space-y-1">
+            <nav aria-label="Evaluation group" className="min-w-0 space-y-0.5">
               {people.map((p) => (
                 <button
                   key={p.id}
@@ -292,7 +354,7 @@ export function ParticipationDialog({
                   aria-current={p.id === picked}
                   onClick={() => setPicked(p.id)}
                   className={cn(
-                    "w-full cursor-pointer rounded-md px-2.5 py-1.5 text-left text-sm wrap-break-word transition-colors",
+                    "w-full cursor-pointer rounded-md px-2 py-1 text-left text-sm wrap-break-word transition-colors",
                     p.id === picked ? "bg-brand/10 font-medium" : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
                   )}
                 >

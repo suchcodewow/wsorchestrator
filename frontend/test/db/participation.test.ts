@@ -134,6 +134,45 @@ describe("marks", () => {
     assert.equal(marked.sheet.runningScore, 2);
   });
 
+  test("the first mark creates the assessment with a blank score, and clearing the marks removes it", async () => {
+    const a = await attendee("creates");
+    assert.equal(await participationRow(a.email), null);
+    await adjustMark(judge.id, a.id, { descriptorId: positive.id, delta: 1 }, false);
+    await adjustMark(judge.id, a.id, { descriptorId: negative.id, delta: 1 }, false);
+    const created = await participationRow(a.email);
+    assert.equal(created?.averageScore, null);
+
+    await adjustMark(judge.id, a.id, { descriptorId: positive.id, delta: -1 }, false);
+    assert.ok(await participationRow(a.email), "a mark is still there");
+    await adjustMark(judge.id, a.id, { descriptorId: negative.id, delta: -1 }, false);
+    assert.equal(await participationRow(a.email), null);
+  });
+
+  test("clearing the marks keeps an assessment that has a score", async () => {
+    const a = await attendee("keeps");
+    await adjustMark(judge.id, a.id, { descriptorId: positive.id, delta: 1 }, false);
+    await db.update(evalsSubmissions).set({ averageScore: 2 }).where(eq(evalsSubmissions.attendeeEmail, a.email));
+    await adjustMark(judge.id, a.id, { descriptorId: positive.id, delta: -1 }, false);
+    assert.equal((await participationRow(a.email))?.averageScore, 2);
+  });
+
+  test("an administrator's edit carries through to a saved score, and nobody's other click does", async () => {
+    const a = await attendee("rescored");
+    const up = { descriptorId: positive.id, delta: 1 as const };
+    await adjustMark(judge.id, a.id, up, false);
+    await adjustMark(admin.id, a.id, { ...up, updateScore: true }, true);
+    assert.equal((await participationRow(a.email))?.averageScore, null, "blank stays blank until Generate");
+
+    await db.update(evalsSubmissions).set({ averageScore: 2 }).where(eq(evalsSubmissions.attendeeEmail, a.email));
+    await adjustMark(judge.id, a.id, up, false);
+    assert.equal((await participationRow(a.email))?.averageScore, 2, "a judge's mark leaves the score alone");
+
+    const down = await adjustMark(admin.id, a.id, { descriptorId: negative.id, delta: 1, updateScore: true }, true);
+    assert.ok(down.ok);
+    assert.equal((await participationRow(a.email))?.averageScore, 3, "3 up and 1 down nets 2");
+    assert.equal(down.sheet.saved?.averageScore, 3);
+  });
+
   test("only an administrator's sheet carries what was saved", async () => {
     const a = await attendee("saved");
     const sheet = await getParticipationSheet(a.id, false);

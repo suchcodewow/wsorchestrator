@@ -1,7 +1,9 @@
 -- participation: judges mark attendees against descriptors through a live
 -- session, and a built-in assessment for each stage holds what is generated
 -- from those marks. The built-in assessments stay inactive, so no judge is
--- offered them; they are named by `built_in` and hold no criteria.
+-- offered them; they are named by `built_in` and hold no criteria. The first
+-- mark creates someone's assessment with a blank score, which no average
+-- counts, so `average_score` is no longer required.
 --
 -- Safe to run on any database:
 --   * fresh/empty      — skipped entirely; db:push creates the schema outright
@@ -19,6 +21,8 @@ begin
     raise notice 'fresh database — nothing to migrate';
     return;
   end if;
+
+  alter table evals_submissions alter column average_score drop not null;
 
   alter table evals_assessments add column if not exists built_in text;
   create unique index if not exists evals_assessments_built_in_idx
@@ -106,6 +110,16 @@ begin
       ('Dominates or disrupts discussion', 'negative', 4),
       ('Distracted or absent', 'negative', 5);
   end if;
+
+  -- Anyone marked already has their assessment.
+  insert into evals_submissions (bootcamp_id, assessment_id, attendee_email, assessment_name, average_score)
+  select distinct m.bootcamp_id, a.id, m.attendee_email, a.name, null::double precision
+  from participation_marks m
+  join participation_descriptors d on d.id = m.descriptor_id and d.retired_at is null
+  join evals_assessments a on a.built_in = 'participation' and a.stage = m.stage
+  join bootcamps b on b.id = m.bootcamp_id and b.status = 'active'
+  where m.count > 0
+  on conflict do nothing;
 end $$;
 
 commit;

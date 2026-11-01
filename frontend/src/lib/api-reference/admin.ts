@@ -2424,7 +2424,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "scorer",
         token: true,
         notes:
-          "descriptors is every descriptor on the list, positive first, with its shared count from 0 to 3 and adjustments, who moved it and by how much, leaving out anyone whose clicks cancelled out. runningScore is the 1 to 4 Generate would give them now, and null until they have a mark. saved is their Participation assessment, only for an Assessments Administrator, and null until it is generated.",
+          "descriptors is every descriptor on the list, positive first, with its shared count from 0 to 3 and adjustments, who moved it and by how much, leaving out anyone whose clicks cancelled out. runningScore is the 1 to 4 Generate would give them now, and null until they have a mark. saved is their Participation assessment, only for an Assessments Administrator: null before their first mark, with averageScore null until it is generated.",
         params: [{ name: "employeeId", type: "string", required: true }],
         returns:
           '{ attendee: { id, email, fullName, title, stage: "bootcamp" | "intermediate" }, descriptors: { id, name, polarity: "positive" | "negative", count: number, adjustments: { name, net: number }[] }[], runningScore: number | null, saved: { averageScore, positiveFeedback, constructiveFeedback } | null }',
@@ -2441,18 +2441,20 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "scorer",
         token: true,
         notes:
-          "Counters are shared by every judge and run from 0 to 3. A counter already at the end it was pushed towards stays there and logs nothing. Returns the attendee's sheet, as GET /api/evals/participation/{employeeId}. No score is saved here.",
+          "Counters are shared by every judge and run from 0 to 3. A counter already at the end it was pushed towards stays there and logs nothing. The first mark creates their Participation assessment with a blank score, which no average counts. If their marks all return to zero while the score and comments are blank, the assessment is removed, so a mistaken click does not count as attendance. Returns the attendee's sheet, as GET /api/evals/participation/{employeeId}.",
         params: [{ name: "employeeId", type: "string", required: true }],
         body: {
           kind: "json",
           fields: [
             { name: "descriptorId", type: "uuid", required: true },
             { name: "delta", type: "1 | -1", required: true },
+            { name: "updateScore", type: "boolean", required: false, note: "Assessments Administrator only: also recalculates a saved score from the marks" },
           ],
         },
         returns: "the attendee's sheet",
         errors: [
           { status: 400, error: "invalid", when: "the body is not as above" },
+          { status: 403, error: "forbidden", when: "updateScore is set and the caller is not an Assessments Administrator" },
           { status: 404, error: "not_found", when: "no such attendee, or the descriptor is retired or missing" },
           { status: 409, error: "no_bootcamp", when: "no bootcamp is active" },
           { status: 409, error: "no_class", when: "they are in intermediate and the active bootcamp holds no intermediate class" },
@@ -2540,7 +2542,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "assessmentsAdmin",
         token: true,
         notes:
-          "Anyone with a mark gets a score from the net of their marks, and someone with no marks but another assessment in the class gets a 2. Anyone with neither is left out, because a submission counts as attendance at release. Claude writes one sentence for each side that has marks and is blank; only the descriptors, their counts and the score are sent. Saved comments and scores stay. failed counts people whose comments Claude did not write, who are left as they were, so calling it again picks them up.",
+          "Anyone with a mark and a blank score gets a score from the net of their marks, and someone with no marks but another assessment in the class gets a 2. Anyone with neither is left out, because a submission counts as attendance at release. Claude writes one sentence for each side that has marks and is blank; only the descriptors, their counts and the score are sent. Saved comments and scores stay. failed counts people whose comments Claude did not write, who are left as they were, so calling it again picks them up.",
         body: { kind: "json", fields: [{ name: "stage", type: '"bootcamp" | "intermediate"', required: true }] },
         returns: "{ stage, bootcamp: { id, startDate }, people: number, scores: number, comments: number, failed: number }",
         errors: [
@@ -2567,7 +2569,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           { status: 404, error: "not_found", when: "they are neither a current candidate on a track nor assessed at the active bootcamp" },
           { status: 409, error: "no_bootcamp", when: "no bootcamp is active" },
           { status: 409, error: "no_class", when: "they are in intermediate and the active bootcamp holds no intermediate class" },
-          { status: 409, error: "not_generated", when: "they have no Participation assessment yet" },
+          { status: 409, error: "not_generated", when: "their Participation assessment has no score yet" },
           { status: 502, error: "upstream", when: "Claude did not write them" },
           { status: 503, error: "unconfigured", when: "no Claude key on this deployment" },
         ],
@@ -2598,7 +2600,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           "classes is what a manager sees: each class's day, overall score and score per exercise, from the latest released class of it they were assessed in. records is null below Assessments Viewer. Above it, submissions is every assessment of them at any bootcamp, newest bootcamp first, with each criterion's score and comment; released says whether managers may see it yet.",
         params: [{ name: "key", type: "string", required: true, note: "a key from the list: an employee id or a submission's" }],
         returns:
-          '{ key, email, employee: { fullName, title, department, site, reportsToName, reportsToEmail, startDate, track } | null, classes: { bootcamp: ClassSummary, intermediate: ClassSummary }, records: { submissions: { id, bootcamp: { id, startDate, status }, stage, assessmentName, averageScore, positiveFeedback, constructiveFeedback, ownerName, submittedAt, updatedAt, released, scores: { criterionId, criterionName, score, comment }[] }[] } | null }, where ClassSummary is { date: string | null, score: number | null, exercises: { name, score }[] }',
+          '{ key, email, employee: { fullName, title, department, site, reportsToName, reportsToEmail, startDate, track } | null, classes: { bootcamp: ClassSummary, intermediate: ClassSummary }, records: { submissions: { id, bootcamp: { id, startDate, status }, stage, assessmentName, builtIn: "participation" | null, averageScore: number | null, positiveFeedback, constructiveFeedback, ownerName, submittedAt, updatedAt, released, scores: { criterionId, criterionName, score, comment }[] }[] } | null }, where ClassSummary is { date: string | null, score: number | null, exercises: { name, score }[] }',
         errors: [{ status: 404, error: "not_found", when: "the key names no one, or someone the caller may not see" }],
       },
       {

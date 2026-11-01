@@ -14,15 +14,17 @@ export const POST = audited(async function POST(req: Request, { params }: Params
 
   const parsed = adjustSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "invalid" }, { status: 400 });
+  const canEditRecords = canManageBootcampRecords(user.access);
+  if (parsed.data.updateScore && !canEditRecords) return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
   const { employeeId } = await params;
-  const result = await adjustMark(user.id, employeeId.slice(0, 200), parsed.data, canManageBootcampRecords(user.access));
+  const result = await adjustMark(user.id, employeeId.slice(0, 200), parsed.data, canEditRecords);
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: PARTICIPATION_STATUS_FOR[result.error] });
 
   noteAudit({
     target: result.sheet.attendee.email,
     targetLabel: `${result.sheet.attendee.fullName}: ${result.descriptor}`,
-    detail: { delta: parsed.data.delta, moved: result.moved },
+    detail: { delta: parsed.data.delta, moved: result.moved, updateScore: parsed.data.updateScore ?? false },
   });
   return NextResponse.json(result.sheet);
 });

@@ -2321,8 +2321,11 @@ export const evalsSubmissions = pgTable(
     /** The attendee, lowercased. */
     attendeeEmail: text("attendee_email").notNull(),
     assessmentName: text("assessment_name").notNull(),
-    /** The mean of the criterion scores, to one decimal place. */
-    averageScore: doublePrecision("average_score").notNull(),
+    /**
+     * The mean of the criterion scores, to one decimal place. Null only on a
+     * Participation assessment before Generate, which no average counts.
+     */
+    averageScore: doublePrecision("average_score"),
     positiveFeedback: text("positive_feedback").notNull().default(""),
     constructiveFeedback: text("constructive_feedback").notNull().default(""),
     /** Whoever saved it last. */

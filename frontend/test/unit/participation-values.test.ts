@@ -65,7 +65,7 @@ describe("planGeneration", () => {
   });
 
   test("fills only what is blank and keeps a saved score", () => {
-    const existing = [{ email: "a", positiveFeedback: "Kept.", constructiveFeedback: " " }];
+    const existing = [{ email: "a", averageScore: 3, positiveFeedback: "Kept.", constructiveFeedback: " " }];
     const [plan] = planGeneration(marks({ a: [up(3), down(1)] }), new Set(), existing, BANDS);
     assert.equal(plan?.score, null);
     assert.equal(plan?.writePositive, false);
@@ -73,8 +73,15 @@ describe("planGeneration", () => {
   });
 
   test("a blank side with no marks is not waiting on anything", () => {
-    const existing = [{ email: "a", positiveFeedback: "Kept.", constructiveFeedback: "" }];
+    const existing = [{ email: "a", averageScore: 3, positiveFeedback: "Kept.", constructiveFeedback: "" }];
     assert.deepEqual(planGeneration(marks({ a: [up(3)] }), new Set(["a"]), existing, BANDS), []);
+  });
+
+  test("an assessment made by a mark gets its score and comment", () => {
+    const existing = [{ email: "a", averageScore: null, positiveFeedback: "", constructiveFeedback: "" }];
+    const [plan] = planGeneration(marks({ a: [up(3)] }), new Set(), existing, BANDS);
+    assert.equal(plan?.score, 3);
+    assert.equal(plan?.writePositive, true);
   });
 
   test("counts comments, not people", () => {
