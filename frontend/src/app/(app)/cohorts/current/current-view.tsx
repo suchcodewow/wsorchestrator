@@ -400,10 +400,10 @@ export function CurrentCohortView({
                     <SortHeader column={c.column} sort={query.sort} dir={query.dir}>
                       {c.label}
                     </SortHeader>
+                    {c.column === "fullName" && showParticipation && <PlainHeader>Participation</PlainHeader>}
                     {c.column === "fullName" && showAttendance && <PlainHeader>Attendance</PlainHeader>}
                   </Fragment>
                 ))}
-                {showParticipation && <PlainHeader className="w-10" />}
               </tr>
             </thead>
             <tbody>
@@ -435,6 +435,11 @@ export function CurrentCohortView({
                           {m.fullName}
                         </button>
                       </td>
+                      {showParticipation && (
+                        <td className="px-5 py-1" onClick={(ev) => ev.stopPropagation()}>
+                          {m.track !== "undecided" && <ParticipationButton employeeId={m.id} fullName={m.fullName} labelled />}
+                        </td>
+                      )}
                       {showAttendance && (
                         <td className="px-5 py-1">
                           <MeetingMarks
@@ -462,11 +467,6 @@ export function CurrentCohortView({
                       {showBtcDate && (
                         <td className="whitespace-nowrap px-5 py-2 tabular-nums text-muted-foreground">
                           {formatDate(m.btcDate)}
-                        </td>
-                      )}
-                      {showParticipation && (
-                        <td className="px-3 py-1" onClick={(ev) => ev.stopPropagation()}>
-                          {m.track !== "undecided" && <ParticipationButton employeeId={m.id} fullName={m.fullName} />}
                         </td>
                       )}
                     </tr>

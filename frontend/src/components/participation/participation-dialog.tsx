@@ -375,25 +375,40 @@ export function ParticipationButton({
   employeeId,
   fullName,
   canRegenerate = false,
+  labelled = false,
 }: {
   employeeId: string;
   fullName: string;
   canRegenerate?: boolean;
+  /** Shows "Participation" beside the icon, with a border only on hover. */
+  labelled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   return (
     // React bubbles the dialog's clicks through its portal, so they stop here rather than opening the row.
     <span onClick={(ev) => ev.stopPropagation()}>
-      <Button
-        variant="ghost"
-        size="icon"
-        className="size-8"
-        aria-label={`Participation for ${fullName}`}
-        title="Participation"
-        onClick={() => setOpen(true)}
-      >
-        <MessageSquarePlus />
-      </Button>
+      {labelled ? (
+        <button
+          type="button"
+          aria-label={`Participation for ${fullName}`}
+          onClick={() => setOpen(true)}
+          className="flex cursor-pointer items-center gap-1.5 rounded-md border border-transparent px-2 py-0.5 outline-none transition-colors hover:border-input hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50"
+        >
+          <MessageSquarePlus className="size-4 text-muted-foreground" />
+          Participation
+        </button>
+      ) : (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-8"
+          aria-label={`Participation for ${fullName}`}
+          title="Participation"
+          onClick={() => setOpen(true)}
+        >
+          <MessageSquarePlus />
+        </Button>
+      )}
       {open && (
         <ParticipationDialog
           open
