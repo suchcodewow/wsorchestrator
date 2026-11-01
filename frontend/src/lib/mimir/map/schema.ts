@@ -31,7 +31,15 @@ const text = (max: number) => z.string().trim().max(max);
 export const levelNumber = z.union([z.literal(1), z.literal(2), z.literal(3)]);
 export type MapLevel = z.infer<typeof levelNumber>;
 
-const videoSchema = z.object({
+/** What a video can be watched in. English is the concept's `video` itself; the others are in its `translations`. */
+export const VIDEO_LANGUAGES = ["en", "es"] as const;
+export type VideoLanguage = (typeof VIDEO_LANGUAGES)[number];
+export const TRANSLATED_LANGUAGES = ["es"] as const satisfies readonly VideoLanguage[];
+export type TranslatedLanguage = (typeof TRANSLATED_LANGUAGES)[number];
+/** Each in its own language, as the player's menu lists them. */
+export const VIDEO_LANGUAGE_NAMES: Record<VideoLanguage, string> = { en: "English", es: "Español" };
+
+const videoFileSchema = z.object({
   /** Where the file is in the recordings bucket. */
   object: z.string().startsWith(VIDEO_PREFIX).max(200).regex(/^[A-Za-z0-9._/-]+$/, "letters, digits and . _ / -"),
   /** Its length, from the file. The player reports the real one; this sizes the ring before it has played. */
@@ -39,7 +47,30 @@ const videoSchema = z.object({
   /** What the narrator says: the coach reads it to know the video. */
   transcript: text(60_000),
 });
+export type MapVideoFile = z.infer<typeof videoFileSchema>;
+
+const videoSchema = videoFileSchema.extend({
+  /**
+   * The same video in other languages, each its own file: the pictures follow
+   * the narrator's words, so a translation is rendered, not a second audio
+   * track. A language is here only while it matches the English above, so a
+   * regenerated video starts with none.
+   */
+  translations: z.object({ es: videoFileSchema }).partial().optional(),
+});
 export type MapVideo = z.infer<typeof videoSchema>;
+
+/** The languages `video` can be watched in now, English first. */
+export const videoLanguages = (video: MapVideo): VideoLanguage[] => ["en", ...TRANSLATED_LANGUAGES.filter((l) => video.translations?.[l])];
+
+/** The languages `video` has yet to be translated into. */
+export const missingLanguages = (video: MapVideo): TranslatedLanguage[] => TRANSLATED_LANGUAGES.filter((l) => !video.translations?.[l]);
+
+/** `video` in `language` if it has one, otherwise in English. */
+export function videoIn(video: MapVideo, language: VideoLanguage): MapVideoFile & { language: VideoLanguage } {
+  const translated = language === "en" ? undefined : video.translations?.[language];
+  return translated ? { ...translated, language } : { object: video.object, seconds: video.seconds, transcript: video.transcript, language: "en" };
+}
 
 const conceptSchema = z.object({
   id,

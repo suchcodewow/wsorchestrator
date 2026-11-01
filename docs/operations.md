@@ -191,7 +191,8 @@ site gets a link to open the app in its own tab.
 ### Mimir Studio
 
 Mimir Settings → Map takes a new slide deck and Mimir Settings → Mimir
-Feedback has a Regenerate button for each concept. Both start the
+Feedback has a Regenerate button for each concept, and a Translate button for
+one whose video is missing a language. All of them start the
 `mimir-studio` Cloud Run job (`infra/admin/studio.tf`) with the job's row id.
 The job spends the Claude and ElevenLabs keys, so it exists only where both
 `anthropic_api_key` and `eleven_labs_token` are set. What it works from is in
@@ -199,6 +200,15 @@ the recordings bucket under `mimir/studio/`, its finished videos sit beside
 the others, and none of it is in git. Setting a deployment up, the one-time
 `seed-reference` upload and running it locally are in
 [scripts/explainer-video/studio/README.md](../scripts/explainer-video/studio/README.md).
+
+Each language of a video is an MP4 of its own, with its own length, so feedback
+records the language and the file it was left on. A viewer's choice is saved on
+their account (`users.video_language`), and a video with no version in that
+language plays in English. Regenerating takes the translations off the concept
+as soon as the new English video is up, then makes them again in the same job:
+until each is back, that language plays in English rather than out of step. If
+a translation fails, the job fails but the English video stays up, and the
+concept is offered Translate.
 
 ### Google Meetings
 

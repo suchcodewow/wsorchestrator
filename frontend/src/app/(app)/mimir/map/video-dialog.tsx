@@ -6,19 +6,24 @@
  * reports where it is back to the app: every 30 seconds while playing, when
  * you pause or seek, when it ends and when you leave. Opening it again
  * carries on from where you stopped, or starts over if you had reached the
- * end.
+ * end. Each language is a file of its own with its own length, so changing
+ * language carries on the same share of the way through, and is remembered for
+ * every video from then on.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Loader2, TriangleAlert } from "lucide-react";
 import { VideoWithFeedback } from "@/components/video-feedback";
 import { FILL_VIDEO, VideoPlayerDialog } from "@/components/video-player-dialog";
-import type { ConceptState } from "@/lib/mimir/map/schema";
+import type { ConceptState, VideoLanguage } from "@/lib/mimir/map/schema";
+import { LanguageMenu } from "./language-menu";
 
 /** How often, while playing, the player says where it is. */
 const REPORT_EVERY_MS = 30_000;
 
-type Ready = { url: string; startAt: number };
+type Ready = { url: string; startAt: number; language: VideoLanguage; languages: VideoLanguage[]; object: string; play: boolean };
+
+type VideoBody = Omit<Ready, "play"> & { seconds: number };
 
 const MESSAGES: Record<string, string> = {
   missing: "This video hasn't been uploaded to this environment yet.",
@@ -40,6 +45,7 @@ export function VideoDialog({
 }) {
   const [ready, setReady] = useState<Ready | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [switching, setSwitching] = useState(false);
   const video = useRef<HTMLVideoElement>(null);
   /** Not before the player has moved to where it starts: an early report would overwrite your place with zero. */
   const started = useRef(false);
@@ -55,7 +61,7 @@ export function VideoDialog({
         const body = await res.json().catch(() => null);
         if (cancelled) return;
         if (!res.ok) setError(MESSAGES[body?.error ?? ""] ?? `The video couldn't be loaded (${res.status}).`);
-        else setReady({ url: body.url, startAt: body.startAt });
+        else setReady({ ...(body as VideoBody), play: true });
       })
       .catch(() => !cancelled && setError("Could not reach the server."));
     return () => {
@@ -84,6 +90,30 @@ export function VideoDialog({
     },
     [base, conceptId, onState],
   );
+
+  async function chooseLanguage(language: VideoLanguage) {
+    const el = video.current;
+    const share = el && el.duration > 0 ? el.currentTime / el.duration : 0;
+    const play = Boolean(el && !el.paused && !el.ended);
+    report(false, true);
+    setSwitching(true);
+    void fetch("/api/me", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ videoLanguage: language }),
+    }).catch(() => undefined);
+    try {
+      const res = await fetch(`${base}?language=${language}`);
+      const body = await res.json().catch(() => null);
+      if (!res.ok) return setError(MESSAGES[body?.error ?? ""] ?? `The video couldn't be loaded (${res.status}).`);
+      started.current = false;
+      setReady({ ...(body as VideoBody), startAt: share * body.seconds, play });
+    } catch {
+      setError("Could not reach the server.");
+    } finally {
+      setSwitching(false);
+    }
+  }
 
   // Leaving the page or closing the player is a report too.
   const latest = useRef(report);
@@ -117,7 +147,8 @@ export function VideoDialog({
         <VideoWithFeedback
           {...FILL_VIDEO}
           videoRef={video}
-          feedback={{ kind: "mimir_concept", id: conceptId }}
+          feedback={{ kind: "mimir_concept", id: conceptId, language: ready.language, object: ready.object }}
+          barStart={<LanguageMenu language={ready.language} languages={ready.languages} disabled={switching} onChoose={(l) => void chooseLanguage(l)} />}
           src={ready.url}
           controls
           playsInline
@@ -126,7 +157,7 @@ export function VideoDialog({
             const el = e.currentTarget;
             if (ready.startAt > 0 && ready.startAt < el.duration) el.currentTime = ready.startAt;
             started.current = true;
-            void el.play().catch(() => undefined);
+            if (ready.play) void el.play().catch(() => undefined);
           }}
           onTimeUpdate={(e) => {
             const el = e.currentTarget;

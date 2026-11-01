@@ -15,18 +15,21 @@ import {
   type ThemePreference,
 } from "@/db/schema";
 import { parseFavoriteTabs } from "@/lib/favorite-tabs";
+import { VIDEO_LANGUAGES, type VideoLanguage } from "@/lib/mimir/map/schema";
 import { canSeeAllEvents, type Access } from "@/lib/roles";
 
 export type UserPreferences = {
   themePreference: ThemePreference;
   calendarScope: CalendarScope;
   favoriteTabs: FavoriteTab[];
+  videoLanguage: VideoLanguage;
 };
 
 const DEFAULTS: UserPreferences = {
   themePreference: "system",
   calendarScope: "own",
   favoriteTabs: [],
+  videoLanguage: "en",
 };
 
 export const getUserPreferences = cache(
@@ -42,6 +45,7 @@ export const getUserPreferences = cache(
       ...shown,
       themePreference: own.themePreference,
       favoriteTabs: own.favoriteTabs,
+      videoLanguage: own.videoLanguage,
     };
   },
 );
@@ -49,7 +53,7 @@ export const getUserPreferences = cache(
 export async function preferencesOf(userId: string): Promise<UserPreferences> {
   const row = await db.query.users.findFirst({
     where: eq(users.id, userId),
-    columns: { themePreference: true, calendarScope: true, favoriteTabs: true },
+    columns: { themePreference: true, calendarScope: true, favoriteTabs: true, videoLanguage: true },
   });
   return row ?? DEFAULTS;
 }
@@ -63,6 +67,7 @@ export async function savePreferences(
     themePreference?: unknown;
     calendarScope?: unknown;
     favoriteTabs?: unknown;
+    videoLanguage?: unknown;
   },
 ): Promise<{ ok: true } | { ok: false; error: PreferencesError }> {
   const set: Partial<UserPreferences> = {};
@@ -86,6 +91,13 @@ export async function savePreferences(
     const tabs = parseFavoriteTabs(patch.favoriteTabs);
     if (!tabs) return { ok: false, error: "invalid" };
     set.favoriteTabs = tabs;
+  }
+
+  if (patch.videoLanguage !== undefined) {
+    if (!VIDEO_LANGUAGES.includes(patch.videoLanguage as VideoLanguage)) {
+      return { ok: false, error: "invalid" };
+    }
+    set.videoLanguage = patch.videoLanguage as VideoLanguage;
   }
 
   if (Object.keys(set).length > 0) {

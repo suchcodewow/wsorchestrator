@@ -1,17 +1,19 @@
-// Narrates every scene of a video in the cloned voice and writes public/audio/<id>/timing.json.
+// Narrates every scene of a video in its language's voice and writes public/audio/<id>/timing.json.
 // A scene is only regenerated when its text changes, so re-running costs nothing.
-// Usage: npx tsx cli/narrate.ts 01-pipelines
+// Usage: npx tsx cli/narrate.ts 01-pipelines [es]
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { ROOT, TTS_MODEL, VOICE_ID } from "../lib/config.js";
+import { ROOT, TTS_MODEL, VOICES, type NarrationLanguage } from "../lib/config.js";
 import { speak } from "../lib/eleven.js";
 import type { SceneTiming, VideoTiming } from "../lib/timing.js";
 
 const probe = (file: string) => parseFloat(execFileSync("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", file]).toString());
 const id = process.argv[2];
-if (!id) throw new Error("Usage: tsx cli/narrate.ts <video-id>");
+if (!id) throw new Error("Usage: tsx cli/narrate.ts <video-id> [language]");
+const voice = VOICES[(process.argv[3] ?? "en") as NarrationLanguage];
+if (!voice) throw new Error(`No voice for language ${process.argv[3]}.`);
 
 const srcDir = path.join(ROOT, "content", id);
 const outDir = path.join(ROOT, "public/audio", id);
@@ -33,7 +35,7 @@ const scenes: SceneTiming[] = [];
 for (let i = 0; i < files.length; i++) {
   const key = files[i].replace(/\.txt$/, "");
   const text = texts[i];
-  const hash = createHash("sha256").update(`${VOICE_ID}|${TTS_MODEL}|${raws[i]}`).digest("hex").slice(0, 16);
+  const hash = createHash("sha256").update(`${voice}|${TTS_MODEL}|${raws[i]}`).digest("hex").slice(0, 16);
   const audioRel = `audio/${id}/${key}.mp3`;
   const audioAbs = path.join(ROOT, "public", audioRel);
   const cached = cache.find((s) => s.key === key && s.hash === hash);
@@ -46,7 +48,7 @@ for (let i = 0; i < files.length; i++) {
   const inputs: string[] = [];
   let offset = 0;
   for (let k = 0; k < segs.length; k++) {
-    const s = await speak(segs[k], k > 0 ? segs[k - 1] : texts[i - 1], k < segs.length - 1 ? segs[k + 1] : texts[i + 1]);
+    const s = await speak(voice, segs[k], k > 0 ? segs[k - 1] : texts[i - 1], k < segs.length - 1 ? segs[k + 1] : texts[i + 1]);
     const segFile = path.join(outDir, `${key}.seg${k}.mp3`);
     writeFileSync(segFile, s.audio);
     const segDur = probe(segFile);

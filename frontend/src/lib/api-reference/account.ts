@@ -124,7 +124,7 @@ export const ACCOUNT_GROUPS: EndpointGroup[] = [
         access: "signedIn",
         token: true,
         returns:
-          "{ id, email: string | null, access: { event, training: string | null, assessments: string | null, iris: string | null, platform: boolean, judging: boolean, manager: boolean }, preferences: { themePreference: \"light\" | \"dark\" | \"system\", calendarScope: \"own\" | \"all\", favoriteTabs: { href: string, label: string }[] } }",
+          "{ id, email: string | null, access: { event, training: string | null, assessments: string | null, iris: string | null, platform: boolean, judging: boolean, manager: boolean }, preferences: { themePreference: \"light\" | \"dark\" | \"system\", calendarScope: \"own\" | \"all\", favoriteTabs: { href: string, label: string }[], videoLanguage: \"en\" | \"es\" } }",
       },
       {
         method: "PATCH",
@@ -144,9 +144,10 @@ export const ACCOUNT_GROUPS: EndpointGroup[] = [
               type: "{ href: string, label: string }[]",
               note: "replaces the whole list shown under Favorites in the sidebar; 25 at most; href is an in-app path, label 80 characters at most",
             },
+            { name: "videoLanguage", type: "\"en\" | \"es\"", note: "the language Mimir videos play in; one not yet in it plays in English" },
           ],
         },
-        returns: "{ preferences: { themePreference, calendarScope, favoriteTabs } }",
+        returns: "{ preferences: { themePreference, calendarScope, favoriteTabs, videoLanguage } }",
         errors: [
           { status: 400, error: "invalid_body", when: "the body is not a JSON object" },
           { status: 400, error: "invalid", when: "a value is not one of the allowed ones" },

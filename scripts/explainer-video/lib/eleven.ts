@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { ENV_FILE, SFX_MODEL, TTS_MODEL, VOICE_ID, VOICE_SETTINGS } from "./config.js";
+import { ENV_FILE, SFX_MODEL, TTS_MODEL, VOICE_SETTINGS } from "./config.js";
 
 const API = "https://api.elevenlabs.io/v1";
 
@@ -25,9 +25,9 @@ async function post(pathAndQuery: string, body: unknown): Promise<Response> {
 
 export type Speech = { audio: Buffer; characters: string[]; starts: number[]; ends: number[] };
 
-/** Text to speech in the cloned voice, with character-level timestamps. */
-export async function speak(text: string, previousText?: string, nextText?: string): Promise<Speech> {
-  const res = await post(`/text-to-speech/${VOICE_ID}/with-timestamps?output_format=mp3_44100_128`, {
+/** Text to speech in the given voice, with character-level timestamps. */
+export async function speak(voice: string, text: string, previousText?: string, nextText?: string): Promise<Speech> {
+  const res = await post(`/text-to-speech/${voice}/with-timestamps?output_format=mp3_44100_128`, {
     text,
     model_id: TTS_MODEL,
     voice_settings: VOICE_SETTINGS,

@@ -49,7 +49,7 @@ const KIND_TYPE = `"main" | "breakout" | "unstructured"`;
 const AUDIENCE_TYPE = `"both" | "sales" | "engineers"`;
 const COLOR_TYPE = `"slate" | "red" | "orange" | "amber" | "green" | "teal" | "blue" | "violet" | "pink"`;
 const RECORDING_TAKE_SHAPE = `{ takeId, contributor, startedAt, durationMs: number | null, bytes: number, kinds: ("camera" | "screen")[], status: "uploading" | "assembling" | "ready" | "failed", stalled: boolean }`;
-const VIDEO_FEEDBACK_SHAPE = `{ id, rating: "up" | "down", video: { kind: "mimir_concept" | "recording", id, label }, positionSeconds: number, comment: string | null, status: "pending" | "accepted" | "ignored" | "applied", user: { id, name, email } | null, createdAt }`;
+const VIDEO_FEEDBACK_SHAPE = `{ id, rating: "up" | "down", video: { kind: "mimir_concept" | "recording", id, label }, positionSeconds: number, language: "en" | "es", videoObject: string | null, comment: string | null, status: "pending" | "accepted" | "ignored" | "applied", user: { id, name, email } | null, createdAt }`;
 const RECORDING_TRACK_SHAPE =`{ id, takeId, kind: "camera" | "screen", mimeType, startedAt, offsetMs: number, contributor, status: "uploading" | "assembling" | "ready" | "failed", chunks: number | null, durationMs: number | null, fileBytes: number | null, error: string | null, lastChunkAt: string | null, stalled: boolean }`;
 
 const MINUTES_NOTE = `a multiple of ${SCHEDULE_LIMITS.slot} from ${SCHEDULE_LIMITS.slot} to ${SCHEDULE_LIMITS.maxMinutes}`;
@@ -1754,11 +1754,11 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "signedIn",
         token: true,
         notes:
-          `A Mimir concept's video may be rated by anyone signed in; a recording's stream only by a ${ACCESS_LABELS.trainingAdmin}, who are the ones who can watch it. The video's name is saved with the feedback as it is now. A comment is trimmed, and a blank one is saved as none. A recording's feedback is deleted with the take.`,
+          `A Mimir concept's video may be rated by anyone signed in; a recording's stream only by a ${ACCESS_LABELS.trainingAdmin}, who are the ones who can watch it. The video's name is saved with the feedback as it is now, and so is the version being watched, since the same moment falls at a different second in each: videoObject is null for feedback from before that was kept, and for a recording. A comment is trimmed, and a blank one is saved as none. A recording's feedback is deleted with the take.`,
         body: {
           kind: "json",
           fields: [
-            { name: "video", type: `{ kind: "mimir_concept" | "recording", id: string }`, required: true, note: "the concept's id, or the recording stream's id" },
+            { name: "video", type: `{ kind: "mimir_concept" | "recording", id: string, language?: "en" | "es", object?: string }`, required: true, note: "the concept's id, or the recording stream's id. For a concept, language and object name the version playing, as its GET returned them; left out, it is the English video as it is now" },
             { name: "rating", type: `"up" | "down"`, required: true },
             { name: "position", type: "number", required: true, note: "where the video was, in seconds from the start" },
             { name: "comment", type: "string", note: `up to ${VIDEO_FEEDBACK_LIMITS.comment} characters` },
@@ -1792,9 +1792,9 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         summary: "Lists each concept on the Mimir map, and each video no longer on it that has feedback, with its counts of smiley and confused ratings, and of each that came with a comment, a page at a time, by name.",
         access: "trainingAdmin",
         token: true,
-        notes: "Only Mimir concept videos are counted. A comment is a rating saved with words; the counts of ratings include them. accepted is how many comments an administrator has accepted and no regeneration has applied yet. label is the concept's name on the map, or the video's name when it was last rated for one no longer on it. inMap is whether the concept is on the map, and hasVideo whether it has a video there. job is the concept's latest Mimir Studio video job, or null.",
+        notes: "Only Mimir concept videos are counted. A comment is a rating saved with words; the counts of ratings include them. accepted is how many comments an administrator has accepted and no regeneration has applied yet. label is the concept's name on the map, or the video's name when it was last rated for one no longer on it. inMap is whether the concept is on the map, and hasVideo whether it has a video there. translations lists the languages that video has been translated into. job is the concept's latest Mimir Studio video job, or null.",
         query: listQuery(VIDEO_FEEDBACK_SUMMARY_LIST.sorts, "the concept's name"),
-        returns: `{ videos: { conceptId, label, inMap: boolean, hasVideo: boolean, up: number, upComments: number, down: number, downComments: number, accepted: number, job: { id, status, progress, error, createdAt, finishedAt } | null }[], ${PAGE_FIELDS} }`,
+        returns: `{ videos: { conceptId, label, inMap: boolean, hasVideo: boolean, translations: string[], up: number, upComments: number, down: number, downComments: number, accepted: number, job: { id, status, progress, error, createdAt, finishedAt } | null }[], ${PAGE_FIELDS} }`,
       },
       {
         method: "PATCH",

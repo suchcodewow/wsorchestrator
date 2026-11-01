@@ -6,8 +6,8 @@
  * A row opens to that video's feedback, in the order of the video; a line of it
  * plays the video from five seconds before that point. Whoever may moderate
  * can also edit a comment and accept or ignore it. A concept with accepted
- * comments offers Regenerate, and one with no video Generate, to whoever may
- * run Mimir Studio.
+ * comments offers Regenerate, one with no video Generate, and one not yet in
+ * every language Translate, to whoever may run Mimir Studio.
  */
 
 import { Fragment, useEffect, useState } from "react";
@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { VIDEO_FEEDBACK_LIMITS, type VideoFeedbackStatus } from "@/db/schema";
 import type { VideoFeedbackSummarySort } from "@/lib/list-specs";
+import { TRANSLATED_LANGUAGES, VIDEO_LANGUAGE_NAMES, type VideoLanguage } from "@/lib/mimir/map/schema";
 import type { StudioJobBrief } from "@/lib/mimir/studio/jobs";
 import { riseChild, staggerParent } from "@/lib/motion";
 import type { ListQuery, Page } from "@/lib/paging";
@@ -43,7 +44,7 @@ const COLUMNS: { column: VideoFeedbackSummarySort; label: string; className?: st
   { column: "downComments", label: "With comment", className: "text-right" },
 ];
 
-type Playing = { conceptId: string; name: string; startAt: number };
+type Playing = { conceptId: string; name: string; startAt: number; language: VideoLanguage; version: string | null };
 type SummaryRow = VideoFeedbackSummaryRow & { job: StudioJobBrief | null };
 
 export function FeedbackView({
@@ -135,7 +136,14 @@ export function FeedbackView({
                       {canRegenerate && (
                         <td className="px-5 py-3 text-right">
                           {r.inMap && (
-                            <RegenerateButton conceptId={r.conceptId} name={r.label} hasVideo={r.hasVideo} accepted={r.accepted} job={r.job} />
+                            <RegenerateButton
+                              conceptId={r.conceptId}
+                              name={r.label}
+                              hasVideo={r.hasVideo}
+                              accepted={r.accepted}
+                              untranslated={TRANSLATED_LANGUAGES.filter((l) => !r.translations.includes(l))}
+                              job={r.job}
+                            />
                           )}
                         </td>
                       )}
@@ -151,6 +159,8 @@ export function FeedbackView({
                                 conceptId: r.conceptId,
                                 name: r.label,
                                 startAt: Math.max(0, row.positionSeconds - LEAD_SECONDS),
+                                language: row.language,
+                                version: row.videoObject,
                               })
                             }
                           />
@@ -316,6 +326,9 @@ function Line({
         <RatingFace rating="up" aria-label={RATING_LABELS.up} className="mt-0.5 size-4 shrink-0 text-green-600" />
       ) : (
         <RatingFace rating="down" aria-label={RATING_LABELS.down} className="mt-0.5 size-4 shrink-0 text-orange-500" />
+      )}
+      {f.language !== "en" && (
+        <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">{VIDEO_LANGUAGE_NAMES[f.language]}</span>
       )}
       <div className="min-w-0 flex-1 space-y-2">
         {editing ? (

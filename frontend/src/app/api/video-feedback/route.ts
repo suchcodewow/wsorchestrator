@@ -10,6 +10,7 @@ import { requireCaller } from "@/lib/api-auth";
 import { audited, noteAudit } from "@/lib/audit";
 import { VIDEO_FEEDBACK_KINDS, VIDEO_FEEDBACK_LIMITS, VIDEO_FEEDBACK_RATINGS } from "@/db/schema";
 import { VIDEO_FEEDBACK_LIST } from "@/lib/list-specs";
+import { VIDEO_LANGUAGES, VIDEO_PREFIX } from "@/lib/mimir/map/schema";
 import { parseListQuery } from "@/lib/paging";
 import { canManageTrainingSettings } from "@/lib/roles";
 import { findVideo, listVideoFeedback, recordVideoFeedback, type VideoFeedbackFilter } from "@/lib/video-feedback";
@@ -29,7 +30,12 @@ export async function GET(req: Request) {
 }
 
 const feedbackSchema = z.object({
-  video: z.object({ kind: z.enum(VIDEO_FEEDBACK_KINDS), id: z.string().min(1).max(200) }),
+  video: z.object({
+    kind: z.enum(VIDEO_FEEDBACK_KINDS),
+    id: z.string().min(1).max(200),
+    language: z.enum(VIDEO_LANGUAGES).optional(),
+    object: z.string().startsWith(VIDEO_PREFIX).max(200).optional(),
+  }),
   rating: z.enum(VIDEO_FEEDBACK_RATINGS),
   position: z.number().finite().min(0).max(VIDEO_FEEDBACK_LIMITS.position),
   comment: z.string().max(VIDEO_FEEDBACK_LIMITS.comment).optional(),
@@ -50,7 +56,7 @@ export const POST = audited(async function POST(req: Request) {
   noteAudit({
     target: feedback.id,
     targetLabel: video.label,
-    detail: { rating: feedback.rating, position: feedback.positionSeconds, commented: comment !== null },
+    detail: { rating: feedback.rating, position: feedback.positionSeconds, commented: comment !== null, language: feedback.language, object: feedback.videoObject },
   });
   return NextResponse.json({ feedback }, { status: 201 });
 });

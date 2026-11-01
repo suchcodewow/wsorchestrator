@@ -77,6 +77,12 @@ export function conceptData(map: MapContent) {
   };
 }
 
+/** Brings what `videoId` was made from into the workspace; true if there was anything. */
+export async function fetchSources(ws: Pick<Workspace, "dir">, videoId: string): Promise<boolean> {
+  const own = await fetchPrefix(videoSourcePrefix(videoId), ws.dir);
+  return own.some((r) => r.startsWith(`content/${videoId}/`));
+}
+
 export async function makeWorkspace(map: MapContent, videoId: string, log: (text: string) => Promise<void>): Promise<Workspace & { hadSources: boolean }> {
   const dir = mkdtempSync(path.join(os.tmpdir(), "mimir-studio-"));
   for (const rel of ENGINE) cpSync(path.join(ROOT, rel), path.join(dir, rel), { recursive: true });
@@ -91,8 +97,7 @@ export async function makeWorkspace(map: MapContent, videoId: string, log: (text
   const references = [...new Set(reference.flatMap((r) => r.match(/^src\/videos\/([^/]+)\.tsx$/)?.[1] ?? []))].sort();
   if (references.length === 0) throw new Error(`There is no reference video under ${REFERENCE_PREFIX}; run studio/seed-reference.ts first.`);
 
-  const own = await fetchPrefix(videoSourcePrefix(videoId), dir);
-  const hadSources = own.some((r) => r.startsWith(`content/${videoId}/`));
+  const hadSources = await fetchSources({ dir }, videoId);
 
   if (!existsSync(path.join(dir, "public/audio/sfx/durations.json"))) {
     await log("Making the shared sound effects, once.");
