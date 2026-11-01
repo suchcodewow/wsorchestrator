@@ -62,7 +62,7 @@ pipeline:
       type: String
       description: "\"false\" skips the verify stage."
       required: false
-      value: <+input>.default(true).allowedValues(true,false)
+      value: <+input>.default(false).allowedValues(true,false)
     - name: run_infra
       type: String
       description: "\"false\" skips the infrastructure stage."
