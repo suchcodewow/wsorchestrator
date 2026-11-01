@@ -6,9 +6,19 @@
  * narrow screen.
  */
 
-import { Eye, History, Folder, MessageCircleQuestion, Pencil, Presentation, SpellCheck, UserRound, type LucideIcon } from "lucide-react";
-import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
+import {
+  Eye,
+  Folder,
+  History,
+  MessageCircleQuestion,
+  Pencil,
+  Presentation,
+  SpellCheck,
+  UserRound,
+  type LucideIcon,
+} from "lucide-react";
+import type { ReactNode } from "react";
 
 const DECK_W = 44;
 const DECK_H = 56;
@@ -21,7 +31,12 @@ const LABEL_Y = DECK_Y + DECK_H + 14;
 
 function Label({ x, mine, className, children }: { x: number; mine?: boolean; className?: string; children: string }) {
   return (
-    <text x={x + DECK_W / 2} y={LABEL_Y} textAnchor="middle" className={cn("font-mono text-[10px]", mine ? "fill-brand" : "fill-muted-foreground", className)}>
+    <text
+      x={x + DECK_W / 2}
+      y={LABEL_Y}
+      textAnchor="middle"
+      className={cn("font-mono text-[10px]", mine ? "fill-brand" : "fill-muted-foreground", className)}
+    >
       {children}
     </text>
   );
@@ -36,7 +51,14 @@ function Deck({ x, mine = false, changed = false }: { x: number; mine?: boolean;
         className="fill-amber-400"
       />
       <path d={`M${x + DECK_W - FOLD},${DECK_Y} v${FOLD} h${FOLD} z`} className="fill-amber-600" />
-      <rect x={x + 9} y={DECK_Y + 24} width={DECK_W - 18} height={18} rx={1.5} className={changed ? "fill-brand" : "fill-white"} />
+      <rect
+        x={x + 9}
+        y={DECK_Y + 24}
+        width={DECK_W - 18}
+        height={18}
+        rx={1.5}
+        className={changed ? "fill-brand" : "fill-white"}
+      />
       <Label x={x} mine={mine}>
         {mine ? "your copy" : "team deck"}
       </Label>
@@ -48,7 +70,14 @@ function Deck({ x, mine = false, changed = false }: { x: number; mine?: boolean;
 function Place({ Icon, label, className }: { Icon: LucideIcon; label: string; className: string }) {
   return (
     <>
-      <Icon x={RIGHT_X} y={DECK_Y + (DECK_H - DECK_W) / 2} width={DECK_W} height={DECK_W} strokeWidth={1.5} className={className} />
+      <Icon
+        x={RIGHT_X}
+        y={DECK_Y + (DECK_H - DECK_W) / 2}
+        width={DECK_W}
+        height={DECK_W}
+        strokeWidth={1.5}
+        className={className}
+      />
       <Label x={RIGHT_X} mine>
         {label}
       </Label>
@@ -76,7 +105,7 @@ function Arrow({ dashed = false }: { dashed?: boolean }) {
 const ANALOGIES = {
   branch: {
     alt: "A Google Slides deck with an arrow to your own copy of it",
-    caption: "It’s like copying a Google Slides deck to work on your own copy.",
+    caption: "It’s like copying the team's Google Slides deck to work on your own copy.",
     art: (
       <>
         <Deck x={LEFT_X} />
@@ -99,7 +128,7 @@ const ANALOGIES = {
   },
   commit: {
     alt: "Your copy with an arrow to a named version in its history",
-    caption: "It’s like naming a version of your copy, so you can always get back to it.",
+    caption: "It's similar to how Google Slides saves each version to history.",
     art: (
       <>
         <Deck x={LEFT_X} mine changed />
@@ -110,7 +139,7 @@ const ANALOGIES = {
   },
   push: {
     alt: "Your copy with an arrow to the team's shared drive",
-    caption: "It’s like moving your copy to the team’s shared drive, where everyone can see it.",
+    caption: "It’s like moving your deck to the team’s shared drive. It's still your copy.",
     art: (
       <>
         <Deck x={LEFT_X} mine changed />
@@ -133,7 +162,7 @@ const ANALOGIES = {
   },
   checks: {
     alt: "Your copy with an arrow to a spelling check",
-    caption: "It’s like an automatic spelling and template check on your slides, before anyone reads them.",
+    caption: "Similar to an automatic spelling check before the deck's owner reads the slides.",
     art: (
       <>
         <Deck x={LEFT_X} mine changed />
@@ -144,7 +173,8 @@ const ANALOGIES = {
   },
   review: {
     alt: "The deck owner reading your copy of the deck",
-    caption: "In the slides example, your job as deck owner is to make sure the slides fit the theme and goals of the slide deck.",
+    caption:
+      "In the slides example, your job as deck owner is to make sure the slides fit the theme and goals of the slide deck.",
     art: (
       <>
         <Deck x={LEFT_X} mine changed />
