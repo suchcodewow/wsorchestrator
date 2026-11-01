@@ -2,11 +2,11 @@
  * The Code Lab's running analogy: each step of a code change as the everyday
  * thing it is like, working on a copy of a Google Slides deck. The team's deck
  * is muted and yours brand, the way the history graph draws main and a branch.
- * Sits beside a green box's explanation behind a divider, or under it on a
+ * Sits beside a box's explanation behind a divider, or under it on a
  * narrow screen.
  */
 
-import { History, Folder, MessageCircleQuestion, Pencil, Presentation, SpellCheck, type LucideIcon } from "lucide-react";
+import { Eye, History, Folder, MessageCircleQuestion, Pencil, Presentation, SpellCheck, UserRound, type LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
@@ -19,9 +19,9 @@ const RIGHT_X = 126;
 const ARROW_Y = DECK_Y + DECK_H / 2;
 const LABEL_Y = DECK_Y + DECK_H + 14;
 
-function Label({ x, mine, children }: { x: number; mine?: boolean; children: string }) {
+function Label({ x, mine, className, children }: { x: number; mine?: boolean; className?: string; children: string }) {
   return (
-    <text x={x + DECK_W / 2} y={LABEL_Y} textAnchor="middle" className={cn("font-mono text-[10px]", mine ? "fill-brand" : "fill-muted-foreground")}>
+    <text x={x + DECK_W / 2} y={LABEL_Y} textAnchor="middle" className={cn("font-mono text-[10px]", mine ? "fill-brand" : "fill-muted-foreground", className)}>
       {children}
     </text>
   );
@@ -142,6 +142,27 @@ const ANALOGIES = {
       </>
     ),
   },
+  review: {
+    alt: "The deck owner reading your copy of the deck",
+    caption: "In the slides example, your job as deck owner is to make sure the slides fit the theme and goals of the slide deck.",
+    art: (
+      <>
+        <Deck x={LEFT_X} mine changed />
+        <Eye x={LEFT_X + DECK_W + 15} y={ARROW_Y - 12} width={24} height={24} className="text-orange-600 dark:text-orange-400" />
+        <UserRound
+          x={RIGHT_X}
+          y={DECK_Y + (DECK_H - DECK_W) / 2}
+          width={DECK_W}
+          height={DECK_W}
+          strokeWidth={1.5}
+          className="text-orange-600 dark:text-orange-400"
+        />
+        <Label x={RIGHT_X} className="fill-orange-600 dark:fill-orange-400">
+          deck owner
+        </Label>
+      </>
+    ),
+  },
   merged: {
     alt: "Your copy with an arrow to the team deck, which now has your slide",
     caption: "It’s like pasting your slides into the team deck, which then goes out to everyone.",
@@ -166,10 +187,15 @@ const ANALOGIES = {
   },
 } satisfies Record<string, { alt: string; caption: string; art: ReactNode }>;
 
-export function SlidesAnalogy({ step }: { step: keyof typeof ANALOGIES }) {
+export function SlidesAnalogy({ step, className }: { step: keyof typeof ANALOGIES; className?: string }) {
   const { alt, caption, art } = ANALOGIES[step];
   return (
-    <figure className="flex shrink-0 flex-col items-center justify-center gap-2 border-brand-border text-center max-lg:border-t max-lg:pt-4 lg:w-64 lg:self-stretch lg:border-l lg:pl-5">
+    <figure
+      className={cn(
+        "flex shrink-0 flex-col items-center justify-center gap-2 border-brand-border text-center max-lg:border-t max-lg:pt-4 lg:w-64 lg:self-stretch lg:border-l lg:pl-5",
+        className,
+      )}
+    >
       <svg viewBox="0 0 200 76" width={200} height={76} className="max-w-full overflow-visible" role="img" aria-label={alt}>
         {art}
       </svg>
