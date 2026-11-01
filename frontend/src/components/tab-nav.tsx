@@ -14,8 +14,6 @@ export type TabItem = {
   Icon: LucideIcon;
   /** How many the tab holds, shown after its label. */
   count?: number;
-  /** Show the count as plain text, without the pill behind it. */
-  plainCount?: boolean;
 };
 
 export function TabNav({
@@ -37,7 +35,7 @@ export function TabNav({
       aria-label={label}
       data-tab-nav=""
     >
-      {tabs.map(({ href, label: text, Icon, count, plainCount }) => {
+      {tabs.map(({ href, label: text, Icon, count }) => {
         const active = pathname === href || pathname.startsWith(`${href}/`);
         const starred = favorites?.has(href) ?? false;
         return (
@@ -64,9 +62,7 @@ export function TabNav({
                 <span
                   className={cn(
                     "rounded-full px-1.5 py-px text-xs font-medium tabular-nums",
-                    plainCount
-                      ? active ? "text-brand" : "text-muted-foreground"
-                      : active ? "bg-brand-subtle text-brand" : "bg-muted text-muted-foreground",
+                    active ? "bg-brand-subtle text-brand" : "bg-muted text-muted-foreground",
                   )}
                 >
                   {count.toLocaleString()}

@@ -19,7 +19,6 @@
 
 import { HEADER_ROW, Pager, PlainHeader, SortHeader, TableSearch } from "@/components/data-table";
 import { ParticipationButton } from "@/components/participation/participation-dialog";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -554,11 +553,7 @@ function TrackLabel({ member }: { member: CurrentCohortMember }) {
   const label = CHOICE_LABELS[member.track];
   return (
     <span className="inline-flex items-center gap-1.5">
-      {member.track === "deferred" ? (
-        <Badge variant="secondary">{label}</Badge>
-      ) : (
-        label
-      )}
+      {label}
       {member.overridden && member.track !== "deferred" && <Pin className="size-3 text-muted-foreground" aria-label="Set by an administrator" />}
     </span>
   );
@@ -681,7 +676,7 @@ function TrackMenu({
       <DropdownMenuTrigger
         disabled={disabled}
         aria-label={`Track for ${member.fullName}`}
-        className="flex w-32 cursor-pointer items-center justify-between gap-1.5 rounded-md border border-input px-2 py-0.5 outline-none transition-colors hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-wait"
+        className="flex w-32 cursor-pointer items-center justify-between gap-1.5 rounded-md border border-transparent px-2 py-0.5 outline-none transition-colors hover:border-input hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-wait"
       >
         <TrackLabel member={member} />
         {busy ? (
