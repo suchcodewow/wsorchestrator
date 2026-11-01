@@ -51,7 +51,7 @@ import "./code-lab.css";
 import { DiffView } from "./diff-view";
 import { HistoryGraph } from "./history-graph";
 import { PR_NUMBER, PullRequestPage, type Commit } from "./pull-request";
-import { SlidesCopy } from "./slides-copy";
+import { SlidesAnalogy } from "./slides-analogy";
 
 type Stage = "branch" | "edit" | "commit" | "push" | "pr" | "review" | "merged";
 const ORDER: Stage[] = ["branch", "edit", "commit", "push", "pr", "review", "merged"];
@@ -289,14 +289,14 @@ function StepCard({
   title: string;
   why: React.ReactNode;
   info?: React.ReactNode;
-  /** Set beside the explanation behind a divider, or under it on a narrow screen. */
+  /** Set beside the explanation: the step's `SlidesAnalogy`. */
   aside?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
 }) {
   return (
     <section className={cn("divide-y overflow-hidden rounded-2xl border bg-card shadow-sm", className)}>
-      <div className="flex gap-5 bg-brand-subtle/50 px-5 py-4 max-md:flex-col">
+      <div className="flex gap-5 bg-brand-subtle/50 px-5 py-4 max-lg:flex-col">
         <div className="min-w-0 grow space-y-3">
           <div className="space-y-1">
             <h2 className="text-lg font-medium tracking-tight">{title}</h2>
@@ -304,7 +304,7 @@ function StepCard({
           </div>
           {info}
         </div>
-        {aside && <div className="shrink-0 border-brand-border max-md:border-t max-md:pt-4 md:w-64 md:self-stretch md:border-l md:pl-5">{aside}</div>}
+        {aside}
       </div>
       {children}
     </section>
@@ -327,8 +327,7 @@ function BranchStep({
       why={
         <>
           It’s important to make changes in your own safe space. When developing, this is usually called “creating a branch”: sort
-          of like a “branch” sprouting off the main tree “trunk”. It’s very similar to team members making a copy of a Google
-          Slides deck so they don’t interfere with each other as they make changes.
+          of like a “branch” sprouting off the main tree “trunk”.
         </>
       }
       info={
@@ -337,14 +336,7 @@ function BranchStep({
           <HistoryGraph branch={null} commits={0} pushed={0} merged={false} />
         </div>
       }
-      aside={
-        <figure className="flex h-full flex-col items-center justify-center gap-2 text-center">
-          <SlidesCopy />
-          <figcaption className="text-xs text-muted-foreground">
-            It’s like copying a Google Slides deck to work on your own copy.
-          </figcaption>
-        </figure>
-      }
+      aside={<SlidesAnalogy step="branch" />}
     >
       <form
         className="flex flex-wrap items-end gap-3 px-5 py-4"
@@ -402,6 +394,7 @@ function EditStep({
     <StepCard
       title="Implement Jordan’s changes"
       why="Here is the code from the main “trunk” ready for your updates! On the right, you can see a preview of how your code updates will impact the view. Neat, right? The changes to make are shown below. Hover over a change for a hint."
+      aside={<SlidesAnalogy step="edit" />}
       info={
         <TooltipProvider>
           <ul className="grid gap-2 sm:grid-cols-3">
@@ -595,6 +588,7 @@ function CommitStep({
     <StepCard
       title="Commit your change"
       why="Committing the change saves your changes as a snapshot. Below, you can see how that commit snapshot looks. Lines of code you changed show as the old line removed (minus sign) and the new line added (plus sign). Type a commit message indicating why you made the change, then click Commit."
+      aside={<SlidesAnalogy step="commit" />}
     >
       <div className="px-5 py-4">
         <DiffView before={before} after={after} file={FILE} />
@@ -654,6 +648,7 @@ function PushStep({
           access the code to build and deploy. Click the “Push {branch}” button.
         </>
       }
+      aside={<SlidesAnalogy step="push" />}
     >
       <div className="divide-y text-sm">
         {commits.map((c, k) => (
@@ -719,6 +714,7 @@ function PrFormStep({
           <HistoryGraph branch={branch} commits={commits.length} pushed={pushed} merged={false} requested production />
         </div>
       }
+      aside={<SlidesAnalogy step="pr" />}
     >
       <form
         className="grid gap-4 px-5 py-4"
@@ -763,6 +759,7 @@ function MergedStep({ code, onRestart }: { code: string; onRestart: () => void }
             customers, nobody copied a file by hand.
           </>
         }
+        aside={<SlidesAnalogy step="merged" />}
       >
         <div className="flex items-center gap-3 px-5 py-3 text-sm">
           {live ? (
@@ -774,7 +771,11 @@ function MergedStep({ code, onRestart }: { code: string; onRestart: () => void }
         </div>
       </StepCard>
       {live && (
-        <StepCard title="Your change is live" why="Anyone who visits the shop now sees the spring sale the way you wrote it.">
+        <StepCard
+          title="Your change is live"
+          why="Anyone who visits the shop now sees the spring sale the way you wrote it."
+          aside={<SlidesAnalogy step="live" />}
+        >
           <BrowserFrame code={code} address="greenleaf.shop" className="h-104" />
           <div className="flex justify-end px-5 py-4">
             <Button variant="outline" onClick={onRestart}>

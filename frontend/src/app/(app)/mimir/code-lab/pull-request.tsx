@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { FILE, TASKS } from "@/lib/mimir/code-lab/scenario";
 import { cn } from "@/lib/utils";
 import { DiffView } from "./diff-view";
+import { SlidesAnalogy } from "./slides-analogy";
 
 export type Commit = { hash: string; message: string; code: string };
 
@@ -146,16 +147,19 @@ export function PullRequestPage({
           </div>
 
           {allPassed && (
-            <div className="flex gap-3 rounded-xl border border-brand-border bg-brand-subtle px-5 py-4 text-sm">
-              <PartyPopper className="mt-0.5 size-4 shrink-0 text-brand" />
-              <div className="max-w-3xl space-y-1">
-                <h3 className="font-medium">Great job on your first change!</h3>
-                <p>
-                  In modern companies, automatic checks make sure your changes are safe. In our example, you only saw the code for the spring sale, but a
-                  developer could have reached anything in the application and done something dangerous by accident. With your change confirmed safe, your
-                  job is done! On to the next ticket.
-                </p>
+            <div className="flex gap-5 rounded-xl border border-brand-border bg-brand-subtle px-5 py-4 text-sm max-lg:flex-col">
+              <div className="flex min-w-0 grow gap-3">
+                <PartyPopper className="mt-0.5 size-4 shrink-0 text-brand" />
+                <div className="max-w-3xl space-y-1">
+                  <h3 className="font-medium">Great job on your first change!</h3>
+                  <p>
+                    In modern companies, automatic checks make sure your changes are safe. In our example, you only saw the code for the spring sale, but a
+                    developer could have reached anything in the application and done something dangerous by accident. With your change confirmed safe, your
+                    job is done! On to the next ticket.
+                  </p>
+                </div>
               </div>
+              <SlidesAnalogy step="checks" />
             </div>
           )}
 
