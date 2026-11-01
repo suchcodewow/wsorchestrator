@@ -19,7 +19,6 @@
 
 import { HEADER_ROW, Pager, PlainHeader, SortHeader, TableSearch } from "@/components/data-table";
 import { ParticipationButton } from "@/components/participation/participation-dialog";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -401,10 +400,10 @@ export function CurrentCohortView({
                     <SortHeader column={c.column} sort={query.sort} dir={query.dir}>
                       {c.label}
                     </SortHeader>
+                    {c.column === "fullName" && showParticipation && <PlainHeader>Participation</PlainHeader>}
                     {c.column === "fullName" && showAttendance && <PlainHeader>Attendance</PlainHeader>}
                   </Fragment>
                 ))}
-                {showParticipation && <PlainHeader className="w-10" />}
               </tr>
             </thead>
             <tbody>
@@ -436,6 +435,11 @@ export function CurrentCohortView({
                           {m.fullName}
                         </button>
                       </td>
+                      {showParticipation && (
+                        <td className="px-5 py-1" onClick={(ev) => ev.stopPropagation()}>
+                          {m.track !== "undecided" && <ParticipationButton employeeId={m.id} fullName={m.fullName} labelled />}
+                        </td>
+                      )}
                       {showAttendance && (
                         <td className="px-5 py-1">
                           <MeetingMarks
@@ -463,11 +467,6 @@ export function CurrentCohortView({
                       {showBtcDate && (
                         <td className="whitespace-nowrap px-5 py-2 tabular-nums text-muted-foreground">
                           {formatDate(m.btcDate)}
-                        </td>
-                      )}
-                      {showParticipation && (
-                        <td className="px-3 py-1" onClick={(ev) => ev.stopPropagation()}>
-                          {m.track !== "undecided" && <ParticipationButton employeeId={m.id} fullName={m.fullName} />}
                         </td>
                       )}
                     </tr>
@@ -535,8 +534,8 @@ function Counter({
       disabled={disabled}
       onClick={onClick}
       className={cn(
-        "flex cursor-pointer items-center gap-2.5 rounded-xl border px-3 py-2 text-left shadow-sm outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-wait",
-        on ? "border-brand-border bg-brand-subtle" : "bg-card hover:bg-muted/40",
+        "flex cursor-pointer items-center gap-2.5 rounded-xl border border-transparent px-3 py-2 text-left outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-wait",
+        on ? "bg-brand-subtle hover:border-brand-border" : "bg-card hover:border-border hover:bg-muted/40",
       )}
     >
       <span className={cn("flex size-7 shrink-0 items-center justify-center rounded-full", on ? "bg-background" : "bg-muted")}>
@@ -554,11 +553,7 @@ function TrackLabel({ member }: { member: CurrentCohortMember }) {
   const label = CHOICE_LABELS[member.track];
   return (
     <span className="inline-flex items-center gap-1.5">
-      {member.track === "deferred" ? (
-        <Badge variant="secondary">{label}</Badge>
-      ) : (
-        label
-      )}
+      {label}
       {member.overridden && member.track !== "deferred" && <Pin className="size-3 text-muted-foreground" aria-label="Set by an administrator" />}
     </span>
   );
@@ -681,7 +676,7 @@ function TrackMenu({
       <DropdownMenuTrigger
         disabled={disabled}
         aria-label={`Track for ${member.fullName}`}
-        className="flex w-32 cursor-pointer items-center justify-between gap-1.5 rounded-md border border-input px-2 py-0.5 outline-none transition-colors hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-wait"
+        className="flex w-32 cursor-pointer items-center justify-between gap-1.5 rounded-md border border-transparent px-2 py-0.5 outline-none transition-colors hover:border-input hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-wait"
       >
         <TrackLabel member={member} />
         {busy ? (
