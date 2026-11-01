@@ -101,7 +101,7 @@ export function readReview(comments: ReviewComment[], criteria: ReviewCriterion[
 }
 
 /** The reply's text. After a mid-reply fallback the new model carries on where the declined one stopped, so the pieces join with nothing between. */
-function textOf(content: Anthropic.Beta.BetaContentBlock[]): string {
+export function textOf(content: Anthropic.Beta.BetaContentBlock[]): string {
   return content.flatMap((block) => (block.type === "text" ? [block.text] : [])).join("");
 }
 

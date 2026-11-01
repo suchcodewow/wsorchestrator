@@ -25,6 +25,8 @@ export type ViewSubmission = Omit<PersonSubmission, "submittedAt" | "updatedAt">
 };
 
 export type ViewPerson = {
+  /** Their employee id, while they have one. */
+  key: string;
   email: string;
   employee: PersonEmployee | null;
   classes: Record<ReleaseStage, ClassSummary>;
@@ -95,7 +97,7 @@ export function PersonView({ person, canEdit, back }: { person: ViewPerson; canE
             )}
           </div>
 
-          <SubmissionGroups submissions={records.submissions} editing={editing} />
+          <SubmissionGroups personKey={person.key} submissions={records.submissions} editing={editing} />
           {records.submissions.length === 0 && (
             <p className="rounded-2xl border bg-card px-5 py-8 text-center text-sm text-muted-foreground shadow-sm">
               No assessments on file.

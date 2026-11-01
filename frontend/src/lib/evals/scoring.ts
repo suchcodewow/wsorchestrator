@@ -338,7 +338,8 @@ export async function getScoringForm(
     ? await db
         .select({
           id: s.id,
-          averageScore: s.averageScore,
+          // Only a built-in assessment leaves it blank, and this form never opens one.
+          averageScore: sql<number>`${s.averageScore}`,
           positiveFeedback: s.positiveFeedback,
           constructiveFeedback: s.constructiveFeedback,
           ownerId: s.ownerId,

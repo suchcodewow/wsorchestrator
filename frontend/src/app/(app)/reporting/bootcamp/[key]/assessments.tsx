@@ -2,16 +2,20 @@
 
 /**
  * Everything Assessments sees behind a person's INT and BTC: each assessment,
- * by class, with every criterion's score and comment and both feedback boxes.
- * With Edit on, an Assessments Administrator corrects any of it in place, one
+ * by class, with every criterion's score and comment and both feedback boxes,
+ * each closed until opened.
+ * With Edit on, each opens to a form and an Assessments Administrator corrects any of it in place, one
  * assessment at a time; one with no criteria, as the old bootcamp history
- * left, has its score set directly.
+ * left, has its score set directly. The running bootcamp's Participation
+ * assessment shows its marks, and with Edit on they move as they do in the
+ * popup, taking a generated score with them.
  */
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Save } from "lucide-react";
+import { ChevronRight, Loader2, Save } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { ParticipationMarks } from "@/components/participation/participation-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -72,7 +76,15 @@ function useSave() {
 }
 
 /** One card per class someone was assessed in: INT before BTC, each newest bootcamp first, as fetched. */
-export function SubmissionGroups({ submissions, editing }: { submissions: ViewSubmission[]; editing: boolean }) {
+export function SubmissionGroups({
+  personKey,
+  submissions,
+  editing,
+}: {
+  personKey: string;
+  submissions: ViewSubmission[];
+  editing: boolean;
+}) {
   const groups: { key: string; first: ViewSubmission; items: ViewSubmission[] }[] = [];
   const ordered = [
     ...submissions.filter((s) => s.stage === "intermediate"),
@@ -88,7 +100,8 @@ export function SubmissionGroups({ submissions, editing }: { submissions: ViewSu
   return (
     <>
       {groups.map(({ key, first, items }) => {
-        const average = averageScore(items.map((s) => s.averageScore));
+        const scored = items.flatMap((s) => (s.averageScore === null ? [] : [s.averageScore]));
+        const average = averageScore(scored);
         return (
           <div key={key} className="divide-y overflow-hidden rounded-2xl border bg-card shadow-sm">
             <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
@@ -97,8 +110,8 @@ export function SubmissionGroups({ submissions, editing }: { submissions: ViewSu
                   {STAGE_LABELS[first.stage]} · {formatDate(first.bootcamp.startDate)}
                 </h4>
                 <p className="text-xs text-muted-foreground">
-                  {STAGE_CODES[first.stage]} average {formatScore(average)} over {items.length}{" "}
-                  {items.length === 1 ? "assessment" : "assessments"}
+                  {STAGE_CODES[first.stage]} average {formatScore(average)} over {scored.length}{" "}
+                  {scored.length === 1 ? "assessment" : "assessments"}
                 </p>
               </div>
               {first.released ? (
@@ -111,9 +124,9 @@ export function SubmissionGroups({ submissions, editing }: { submissions: ViewSu
             </div>
             {items.map((s) =>
               editing ? (
-                <SubmissionForm key={`${s.id}:${s.updatedAt}`} submission={s} />
+                <EditableSubmission key={s.id} submission={s} personKey={personKey} />
               ) : (
-                <SubmissionRow key={s.id} submission={s} />
+                <SubmissionRow key={s.id} submission={s} personKey={personKey} />
               ),
             )}
           </div>
@@ -122,6 +135,9 @@ export function SubmissionGroups({ submissions, editing }: { submissions: ViewSu
     </>
   );
 }
+
+/** Marks are kept only for the running bootcamp, so only its Participation assessment has any to show. */
+const hasMarks = (s: ViewSubmission) => s.builtIn === "participation" && s.bootcamp.status === "active";
 
 function SubmissionHeading({ submission: s, average }: { submission: ViewSubmission; average: number | null }) {
   return (
@@ -140,10 +156,70 @@ function SubmissionHeading({ submission: s, average }: { submission: ViewSubmiss
   );
 }
 
-function SubmissionRow({ submission: s }: { submission: ViewSubmission }) {
+/**
+ * An assessment's heading, which opens and closes what is behind it. Closed,
+ * that stays in the page, so a form keeps whatever has been typed.
+ */
+function Collapsible({
+  submission: s,
+  average,
+  open,
+  onToggle,
+  children,
+}: {
+  submission: ViewSubmission;
+  average: number | null;
+  open: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}) {
+  const detailsId = `assessment-${s.id}`;
   return (
-    <section className="space-y-4 px-5 py-4">
-      <SubmissionHeading submission={s} average={s.averageScore} />
+    <section>
+      <div
+        onClick={onToggle}
+        className="flex cursor-pointer items-start gap-2 px-5 py-4 transition-colors hover:bg-muted/30"
+      >
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-controls={detailsId}
+          aria-label={`${s.assessmentName} details`}
+          onClick={(ev) => {
+            ev.stopPropagation();
+            onToggle();
+          }}
+          className="-mx-1 mt-0.5 cursor-pointer rounded-md px-1 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+        >
+          <ChevronRight className={cn("size-3.5 text-muted-foreground transition-transform", open && "rotate-90")} />
+        </button>
+        <div className="min-w-0 flex-1">
+          <SubmissionHeading submission={s} average={average} />
+        </div>
+      </div>
+      <div id={detailsId} hidden={!open} className="space-y-4 px-5 pb-4">
+        {children}
+      </div>
+    </section>
+  );
+}
+
+/** One assessment, closed until opened; one with nothing behind its heading does not open. */
+function SubmissionRow({ submission: s, personKey }: { submission: ViewSubmission; personKey: string }) {
+  const [open, setOpen] = useState(false);
+  const hasFeedback = Boolean(s.positiveFeedback || s.constructiveFeedback);
+
+  if (s.scores.length === 0 && !hasFeedback && !hasMarks(s)) {
+    return (
+      <section className="px-5 py-4">
+        <SubmissionHeading submission={s} average={s.averageScore} />
+      </section>
+    );
+  }
+
+  return (
+    <Collapsible submission={s} average={s.averageScore} open={open} onToggle={() => setOpen((was) => !was)}>
+      {hasMarks(s) && open && <ParticipationMarks employeeId={personKey} stage={s.stage} />}
       {s.scores.length > 0 && (
         <ul className="space-y-3">
           {s.scores.map((c) => (
@@ -159,8 +235,8 @@ function SubmissionRow({ submission: s }: { submission: ViewSubmission }) {
           ))}
         </ul>
       )}
-      {(s.positiveFeedback || s.constructiveFeedback) && (
-        <dl className="grid gap-4 border-t pt-4 sm:grid-cols-2">
+      {hasFeedback && (
+        <dl className={cn("grid gap-4 sm:grid-cols-2", (s.scores.length > 0 || hasMarks(s)) && "border-t pt-4")}>
           <Field label="Positive feedback">
             <span className="whitespace-pre-line">{s.positiveFeedback || "—"}</span>
           </Field>
@@ -169,11 +245,40 @@ function SubmissionRow({ submission: s }: { submission: ViewSubmission }) {
           </Field>
         </dl>
       )}
-    </section>
+    </Collapsible>
   );
 }
 
-function SubmissionForm({ submission: s }: { submission: ViewSubmission }) {
+/**
+ * Holds whether the form is open, so saving, which rebuilds the form from what
+ * was saved, leaves it open. A move of a mark saves at once, so a form with
+ * marks is not rebuilt, or it would lose the comments being typed.
+ */
+function EditableSubmission({ submission: s, personKey }: { submission: ViewSubmission; personKey: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <SubmissionForm
+      key={hasMarks(s) ? "marks" : s.updatedAt}
+      submission={s}
+      personKey={personKey}
+      open={open}
+      onToggle={() => setOpen((was) => !was)}
+    />
+  );
+}
+
+function SubmissionForm({
+  submission: s,
+  personKey,
+  open,
+  onToggle,
+}: {
+  submission: ViewSubmission;
+  personKey: string;
+  open: boolean;
+  onToggle: () => void;
+}) {
+  const router = useRouter();
   const { save, pending, error } = useSave();
   const [scores, setScores] = useState(() => s.scores.map((c) => ({ ...c })));
   const [positive, setPositive] = useState(s.positiveFeedback);
@@ -181,14 +286,17 @@ function SubmissionForm({ submission: s }: { submission: ViewSubmission }) {
   // An assessment with no criteria, as the old bootcamp history left, takes its score as typed.
   const direct = s.scores.length === 0;
   const [typed, setTyped] = useState(s.averageScore === null ? "" : String(s.averageScore));
+  // A Participation score comes from its marks once Generate has given it one, as an average comes from its criteria.
+  const fromMarks = hasMarks(s) && s.averageScore !== null;
 
-  const typedScore = Number(typed);
+  const typedScore = fromMarks ? s.averageScore! : Number(typed);
   const typedValid =
-    typed.trim() !== "" &&
-    Number.isFinite(typedScore) &&
-    typedScore >= BOOTCAMP_SCORE.min &&
-    typedScore <= BOOTCAMP_SCORE.max &&
-    Number(typedScore.toFixed(1)) === typedScore;
+    fromMarks ||
+    (typed.trim() !== "" &&
+      Number.isFinite(typedScore) &&
+      typedScore >= BOOTCAMP_SCORE.min &&
+      typedScore <= BOOTCAMP_SCORE.max &&
+      Number(typedScore.toFixed(1)) === typedScore);
   const average = direct ? (typedValid ? typedScore : null) : averageScore(scores.map((c) => c.score));
   const needed = direct || average === null ? null : requiredFeedback(wholeScore(average));
   const missing =
@@ -206,9 +314,9 @@ function SubmissionForm({ submission: s }: { submission: ViewSubmission }) {
   }
 
   return (
-    <section className="space-y-4 px-5 py-4">
-      <SubmissionHeading submission={s} average={average} />
-      {direct && (
+    <Collapsible submission={s} average={average} open={open} onToggle={onToggle}>
+      {hasMarks(s) && open && <ParticipationMarks employeeId={personKey} stage={s.stage} onMoved={() => router.refresh()} />}
+      {direct && !fromMarks && (
         <label className="flex flex-wrap items-center justify-between gap-3 text-sm">
           Score
           <Input
@@ -305,7 +413,7 @@ function SubmissionForm({ submission: s }: { submission: ViewSubmission }) {
           </p>
         )}
       </div>
-    </section>
+    </Collapsible>
   );
 }
 

@@ -417,6 +417,10 @@ const PAGES: Record<string, PageCase> = {
     path: () => `/evals-settings/assessments/${MISSING}`,
     expect: () => 404,
   },
+  "/evals-settings/participation": {
+    path: () => "/evals-settings/participation",
+    expect: gated(canManageEvalsSettings),
+  },
   "/evals-settings/slack-contacts": {
     path: () => "/evals-settings/slack-contacts",
     expect: gated(canManageEvalsSettings),
@@ -764,6 +768,9 @@ const ROUTES: RouteCase[] = [
   { method: "GET", path: "/api/reporting/bootcamp/cohort", allowed: canSeeBootcampRecords },
   { method: "GET", path: `/api/reporting/bootcamp/people/${MISSING}`, allowed: canSeeBootcampRecords },
   { method: "POST", path: "/api/reporting/bootcamp/release", allowed: canManageBootcampRecords, body: () => ({}) },
+  { method: "GET", path: "/api/reporting/bootcamp/participation", allowed: canManageBootcampRecords },
+  { method: "POST", path: "/api/reporting/bootcamp/participation", allowed: canManageBootcampRecords, body: () => ({}) },
+  { method: "POST", path: `/api/reporting/bootcamp/participation/${MISSING}`, allowed: canManageBootcampRecords },
   { method: "PATCH", path: `/api/reporting/bootcamp/submissions/${MISSING}`, allowed: canManageBootcampRecords, body: () => ({}) },
   { method: "GET", path: "/api/evals/canary-wire", allowed: canSeeCanaryWire },
   // No Mindtickle key on the e2e server: starting is refused as not_configured, and a step finds no pull.
@@ -827,6 +834,11 @@ const ROUTES: RouteCase[] = [
   { method: "DELETE", path: `/api/evals/assessments/${MISSING}`, allowed: canManageEvalsSettings },
 
   // eVals scoring
+  { method: "GET", path: `/api/evals/participation/${MISSING}`, allowed: canScoreAssessments },
+  { method: "POST", path: `/api/evals/participation/${MISSING}/marks`, allowed: canScoreAssessments, body: () => ({}) },
+  { method: "GET", path: "/api/evals/participation/settings", allowed: canManageEvalsSettings },
+  { method: "PUT", path: "/api/evals/participation/settings", allowed: canManageEvalsSettings, body: () => ({}) },
+  { method: "GET", path: `/api/evals/scoring/${MISSING}/0/group`, allowed: canScoreAssessments },
   { method: "GET", path: "/api/evals/scoring?stage=bootcamp", allowed: canScoreAssessments },
   { method: "GET", path: `/api/evals/scoring/${MISSING}`, allowed: canScoreAssessments },
   { method: "GET", path: `/api/evals/scoring/${MISSING}/0`, allowed: canScoreAssessments },

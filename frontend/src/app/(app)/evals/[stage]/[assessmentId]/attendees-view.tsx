@@ -3,7 +3,8 @@
 /**
  * The attendees one assessment applies to, each opening to their scoring
  * form. Assigned to me narrows them to the viewer's own groups in the active
- * bootcamp's breakouts that are scored on this assessment.
+ * bootcamp's breakouts that are scored on this assessment. While a bootcamp is
+ * active, each row also opens that attendee's participation popup.
  */
 
 import { useTransition } from "react";
@@ -11,7 +12,8 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { ArrowLeft, DoorOpen, UserCheck } from "lucide-react";
-import { HEADER_ROW, LINK_ROW, Pager, SortHeader, TableSearch, useRowLink } from "@/components/data-table";
+import { HEADER_ROW, LINK_ROW, Pager, PlainHeader, SortHeader, TableSearch, useRowLink } from "@/components/data-table";
+import { ParticipationButton } from "@/components/participation/participation-dialog";
 import { Badge } from "@/components/ui/badge";
 import { AUDIENCE_LABELS, STAGE_LABELS } from "@/lib/evals/assessment-values";
 import type { AttendeeRow, BreakoutRoom, ScoringAssessment } from "@/lib/evals/scoring";
@@ -26,13 +28,9 @@ import { BootcampNotice } from "../../bootcamp-notice";
 
 const COLUMNS: { column: AssessmentAttendeeSort; label: string }[] = [
   { column: "fullName", label: "Name" },
-  { column: "email", label: "Email" },
   { column: "title", label: "Title" },
-  { column: "track", label: "Track" },
   { column: "averageScore", label: "Score" },
 ];
-
-const TRACK_LABELS = { sales: "Sales", engineer: "Engineer" } as const;
 
 export function AttendeesView({
   assessment,
@@ -133,7 +131,7 @@ export function AttendeesView({
 
       <motion.div variants={riseChild} className="overflow-hidden rounded-2xl border bg-card shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-160 text-sm">
+          <table className="w-full min-w-120 text-sm">
             <thead>
               <tr className={HEADER_ROW}>
                 {COLUMNS.map(({ column, label }) => (
@@ -141,12 +139,13 @@ export function AttendeesView({
                     {label}
                   </SortHeader>
                 ))}
+                {bootcamp && <PlainHeader className="w-10" />}
               </tr>
             </thead>
             <tbody>
               {page.rows.length === 0 && (
                 <tr>
-                  <td colSpan={COLUMNS.length} className="px-5 py-8 text-center text-muted-foreground">
+                  <td colSpan={COLUMNS.length + (bootcamp ? 1 : 0)} className="px-5 py-8 text-center text-muted-foreground">
                     {query.q
                       ? "No attendees match that search."
                       : mine
@@ -162,9 +161,7 @@ export function AttendeesView({
                       {p.fullName}
                     </Link>
                   </td>
-                  <td className="px-5 py-3 text-muted-foreground">{p.email}</td>
                   <td className="px-5 py-3 text-muted-foreground">{p.title || "—"}</td>
-                  <td className="px-5 py-3 text-muted-foreground">{TRACK_LABELS[p.track]}</td>
                   <td className="px-5 py-3">
                     <div className="flex items-center gap-2">
                       <span className={p.averageScore === null ? "text-muted-foreground" : "font-medium"}>
@@ -173,6 +170,11 @@ export function AttendeesView({
                       {p.needsRescoring && <Badge variant="outline">Needs rescoring</Badge>}
                     </div>
                   </td>
+                  {bootcamp && (
+                    <td className="px-3 py-1.5">
+                      <ParticipationButton employeeId={p.id} fullName={p.fullName} />
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>

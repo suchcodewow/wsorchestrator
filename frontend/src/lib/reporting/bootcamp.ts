@@ -28,6 +28,7 @@ import {
   users,
   type BootcampStatus,
   type Employee,
+  type EvalsBuiltInAssessment,
 } from "@/db/schema";
 import { averageScore, requiredFeedback, wholeScore } from "@/lib/evals/assessment-values";
 import { attended } from "@/lib/evals/attendance";
@@ -265,7 +266,7 @@ export async function listCohort(
     ),
     members as (
       select c.email, c.stage, ${nameOf(sql`c.email`)} as full_name, ${keyOf(sql`c.email`)} as key,
-             (select count(*)::int ${scoredIn}) as scored,
+             (select count(s.average_score)::int ${scoredIn}) as scored,
              (select round(avg(s.average_score)::numeric, 1)::float8 ${scoredIn}) as average
         from cohort c
        where ${inReach(reader, sql`c.email`)}
@@ -364,7 +365,10 @@ export type PersonSubmission = {
   bootcamp: { id: string; startDate: string; status: BootcampStatus };
   stage: ReleaseStage;
   assessmentName: string;
-  averageScore: number;
+  /** Set on the app's own assessment, Participation, whose score comes from marks. */
+  builtIn: EvalsBuiltInAssessment | null;
+  /** Null on a Participation assessment before Generate. */
+  averageScore: number | null;
   positiveFeedback: string;
   constructiveFeedback: string;
   /** Whoever saved it last, by name or else email. */
@@ -424,6 +428,7 @@ export async function getBootcampPerson(reader: BootcampReader, key: string): Pr
         bootcamp: { id: bootcamps.id, startDate: bootcamps.startDate, status: bootcamps.status },
         stage: evalsAssessments.stage,
         assessmentName: s.assessmentName,
+        builtIn: evalsAssessments.builtIn,
         averageScore: s.averageScore,
         positiveFeedback: s.positiveFeedback,
         constructiveFeedback: s.constructiveFeedback,
@@ -480,18 +485,16 @@ export async function getBootcampPerson(reader: BootcampReader, key: string): Pr
 /** One class as a manager sees it: the newest bootcamp they were scored at in it. */
 function classFor(
   stage: ReleaseStage,
-  submitted: { bootcamp: { id: string; startDate: string }; stage: ReleaseStage; assessmentName: string; averageScore: number }[],
+  submitted: { bootcamp: { id: string; startDate: string }; stage: ReleaseStage; assessmentName: string; averageScore: number | null }[],
 ): ClassSummary {
   const inStage = submitted.filter((x) => x.stage === stage);
   // Newest bootcamp first, as fetched.
   const newest = inStage[0]?.bootcamp;
   if (!newest) return NOT_ATTENDED;
-  const scored = inStage.filter((x) => x.bootcamp.id === newest.id);
-  return {
-    date: newest.startDate,
-    score: averageScore(scored.map((x) => x.averageScore)),
-    exercises: scored.map((x) => ({ name: x.assessmentName, score: x.averageScore })),
-  };
+  const scored = inStage.flatMap((x) =>
+    x.bootcamp.id === newest.id && x.averageScore !== null ? [{ name: x.assessmentName, score: x.averageScore }] : [],
+  );
+  return { date: newest.startDate, score: averageScore(scored.map((x) => x.score)), exercises: scored };
 }
 
 const L = EVALS_ASSESSMENT_LIMITS;

@@ -45,6 +45,7 @@ export default async function BootcampPersonPage({
   return (
     <PersonView
       person={{
+        key: person.key,
         email: person.email,
         employee: person.employee,
         classes: person.classes,
