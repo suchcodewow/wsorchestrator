@@ -84,7 +84,7 @@ const STAGE_COUNTERS: { stage: CandidateStage; label: string; Icon: LucideIcon }
   { stage: "intermediate", label: "Intermediate", Icon: GraduationCap },
 ];
 
-/** `warn` tints the one that holds people who still need something done. */
+/** `warn` tints the one that holds people who still need something done, while it holds anyone. */
 const TRACK_COUNTERS: { track: CurrentTrack; label: string; Icon: LucideIcon; warn?: boolean }[] = [
   { track: "sales", label: "Sales", Icon: Handshake },
   { track: "engineer", label: "Engineer", Icon: Code },
@@ -556,11 +556,12 @@ function Counter({
   count: number;
   on: boolean;
   disabled: boolean;
-  /** A warning tint on the border and text, for people who still need something done. */
+  /** A warning tint on the border and text, for people who still need something done; none at a count of 0. */
   warn?: boolean;
   title?: string;
   onClick: () => void;
 }) {
+  const tinted = warn && count > 0;
   return (
     <button
       type="button"
@@ -571,15 +572,15 @@ function Counter({
       className={cn(
         "flex cursor-pointer items-center gap-2.5 rounded-xl border border-transparent px-3 py-2 text-left outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-wait",
         on ? "bg-brand-subtle hover:border-brand-border" : "bg-card hover:border-border hover:bg-muted/40",
-        warn && "border-amber-500/50 text-amber-700 hover:border-amber-500/70 dark:border-amber-400/40 dark:text-amber-300",
+        tinted && "border-amber-500/50 text-amber-700 hover:border-amber-500/70 dark:border-amber-400/40 dark:text-amber-300",
       )}
     >
       <span className={cn("flex size-7 shrink-0 items-center justify-center rounded-full", on ? "bg-background" : "bg-muted")}>
-        <Icon className={cn("size-3.5", warn ? "text-amber-600 dark:text-amber-400" : on ? "text-brand" : "text-muted-foreground")} />
+        <Icon className={cn("size-3.5", tinted ? "text-amber-600 dark:text-amber-400" : on ? "text-brand" : "text-muted-foreground")} />
       </span>
       <span className="min-w-0">
         <span className="block text-lg leading-tight font-medium tabular-nums">{count.toLocaleString()}</span>
-        <span className={cn("block truncate text-xs", warn ? "text-amber-700/90 dark:text-amber-300/90" : "text-muted-foreground")}>
+        <span className={cn("block truncate text-xs", tinted ? "text-amber-700/90 dark:text-amber-300/90" : "text-muted-foreground")}>
           {label}
         </span>
       </span>
