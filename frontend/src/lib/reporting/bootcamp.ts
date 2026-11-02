@@ -279,15 +279,29 @@ export async function listCohort(
   return toPage(rows, query.page);
 }
 
-export type ReleaseError = "no_bootcamp" | "no_intermediate";
+export type ReleaseError = "no_bootcamp" | "no_intermediate" | "unscored";
 
-export const RELEASE_STATUS_FOR: Record<ReleaseError, number> = { no_bootcamp: 409, no_intermediate: 409 };
+export const RELEASE_STATUS_FOR: Record<ReleaseError, number> = { no_bootcamp: 409, no_intermediate: 409, unscored: 409 };
+
+/** Everyone in `stage`'s class at `bootcampId` with an assessment still waiting on a score: at most 100 names, and how many in all. */
+export async function unscoredAttendees(bootcampId: string, stage: ReleaseStage): Promise<{ total: number; names: string[] }> {
+  const { rows } = await db.execute<{ name: string; total: number }>(sql`
+    select coalesce(nullif(e.full_name, ''), s.attendee_email) as name, count(*) over ()::int as total
+      from (select distinct s.attendee_email
+              from ${evalsSubmissions} s join ${evalsAssessments} a on a.id = s.assessment_id
+             where s.bootcamp_id = ${bootcampId} and a.stage = ${stage} and s.average_score is null) s
+      left join ${employees} e on e.email = s.attendee_email
+     order by lower(coalesce(nullif(e.full_name, ''), s.attendee_email))
+     limit 100`);
+  return { total: rows[0]?.total ?? 0, names: rows.map((r) => r.name) };
+}
 
 /**
  * Releases one class of the active bootcamp to managers, from now on, and
  * completes it: everyone scored in that class has attended it
  * (`lib/evals/attendance.ts`). That moves a BTC class on to Intermediate on
- * Cohorts → Current, and takes an INT class off it. Once released it stays
+ * Cohorts → Current, and takes an INT class off it. A class with an
+ * assessment still waiting on a score cannot be released. Once released it stays
  * so; releasing again changes nothing, and says when it was. `written`
  * counts the people scored in it.
  */
@@ -304,6 +318,7 @@ export async function releaseScores(
   const done = { id: bootcamp.id, startDate: bootcamp.startDate };
   const already = bootcamp.released[stage];
   if (already) return { ok: true, bootcamp: done, releasedAt: already.at, written: 0 };
+  if ((await unscoredAttendees(bootcamp.id, stage)).total > 0) return { ok: false, error: "unscored" };
 
   const now = new Date();
   const [atColumn, byColumn] =

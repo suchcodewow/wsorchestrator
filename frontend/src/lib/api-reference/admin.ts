@@ -2531,8 +2531,8 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "assessmentsAdmin",
         token: true,
         notes:
-          "comments counts the blank comments there are marks to write, so one person can count twice. scores counts the people who would get a score. skipped names candidates with no marks and no assessment, whom it leaves out, at most 100. A class is null when the bootcamp does not hold it, it is already released, or no bootcamp is active.",
-        returns: "{ bootcamp: { comments: number, scores: number, skipped: string[] } | null, intermediate: { comments: number, scores: number, skipped: string[] } | null }",
+          "comments counts the blank comments there are marks to write, so one person can count twice. scores counts the people who would get a score. skipped names candidates with no marks and no assessment, whom it leaves out, at most 100. unscored is everyone with an assessment in the class still waiting on a score, which keeps it from being released: total, and up to 100 names. A class is null when the bootcamp does not hold it, it is already released, or no bootcamp is active.",
+        returns: "{ bootcamp: StagePending | null, intermediate: StagePending | null }, where StagePending is { comments: number, scores: number, skipped: string[], unscored: { total: number, names: string[] } }",
       },
       {
         method: "POST",
@@ -2581,13 +2581,14 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "assessmentsAdmin",
         token: true,
         notes:
-          "From then on, managers see that class's results for the people in their org. Everyone scored in the class has attended it from then on: a BTC class moves on to Intermediate on Cohorts → Current, and an INT class leaves it. written counts the people scored in it. A release cannot be taken back; releasing a class already released changes nothing, writes nothing, and returns when it was.",
+          "From then on, managers see that class's results for the people in their org. Everyone scored in the class has attended it from then on: a BTC class moves on to Intermediate on Cohorts → Current, and an INT class leaves it. written counts the people scored in it. A class with any assessment still waiting on a score cannot be released; GET /api/reporting/bootcamp/participation names who. A release cannot be taken back; releasing a class already released changes nothing, writes nothing, and returns when it was.",
         body: { kind: "json", fields: [{ name: "stage", type: '"bootcamp" | "intermediate"', required: true }] },
         returns: "{ ok: true, stage, bootcamp: { id, startDate }, releasedAt, written: number }",
         errors: [
           { status: 400, error: "invalid", when: "stage is missing or neither bootcamp nor intermediate" },
           { status: 409, error: "no_bootcamp", when: "no bootcamp is active" },
           { status: 409, error: "no_intermediate", when: "stage is intermediate and the active bootcamp holds no intermediate class" },
+          { status: 409, error: "unscored", when: "someone in the class has an assessment still waiting on a score" },
         ],
       },
       {

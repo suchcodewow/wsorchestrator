@@ -2,12 +2,13 @@
 
 /**
  * Releases one class of the active bootcamp to managers, after saying what
- * that means. Once released it says when, and cannot be pressed again.
+ * that means. It waits until every assessment in the class has a score, and
+ * its tooltip names who is still waiting on one.
  */
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, Loader2, Send } from "lucide-react";
+import { Loader2, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -18,20 +19,23 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { RELEASE_LABELS, STAGE_CODES, type ReleaseStage } from "@/lib/reporting/bootcamp-values";
-import { formatDate, formatWhen } from "../../cohort-settings/format";
+import { formatDate } from "../../cohort-settings/format";
+import { Hint } from "./hint";
+
+const ERRORS: Record<string, string> = {
+  unscored: "Someone in this class is still waiting on a score. Reload to see who.",
+};
 
 export function ReleaseButton({
   stage,
   startDate,
-  released,
-  unavailable,
+  unscored,
 }: {
   stage: ReleaseStage;
-  /** The active bootcamp's first day; null with none active. */
-  startDate: string | null;
-  released: { at: string; byName: string | null } | null;
-  /** Why it cannot be pressed, when it cannot. */
-  unavailable: string | null;
+  /** The active bootcamp's first day. */
+  startDate: string;
+  /** Who in the class is still waiting on a score; null when that is not known here. */
+  unscored: { total: number; names: string[] } | null;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -48,7 +52,10 @@ export function ReleaseButton({
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ stage }),
       });
-      if (!res.ok) throw new Error(`Could not release (${res.status})`);
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(ERRORS[body?.error ?? ""] ?? `Could not release (${res.status})`);
+      }
       setOpen(false);
       router.refresh();
     } catch (err) {
@@ -58,26 +65,32 @@ export function ReleaseButton({
     }
   }
 
-  if (released) {
-    return (
-      <Button
-        variant="outline"
-        size="sm"
-        disabled
-        title={`Released ${formatWhen(released.at)}${released.byName ? ` by ${released.byName}` : ""}`}
-      >
-        <CheckCircle2 className="text-emerald-600 dark:text-emerald-400" />
-        {code} released {formatDate(released.at.slice(0, 10))}
-      </Button>
-    );
-  }
+  const waiting = unscored?.total ?? 0;
+  const more = waiting - (unscored?.names.length ?? 0);
 
   return (
     <>
-      <Button size="sm" onClick={() => setOpen(true)} disabled={unavailable !== null} title={unavailable ?? undefined}>
-        <Send />
-        {RELEASE_LABELS[stage]}
-      </Button>
+      <Hint
+        disabled={waiting > 0}
+        content={
+          waiting > 0 ? (
+            <>
+              <p className="font-medium">Waiting on a score</p>
+              <p>
+                {unscored!.names.join(", ")}
+                {more > 0 && `, and ${more.toLocaleString()} more`}
+              </p>
+            </>
+          ) : (
+            <p>Shows managers the {code} results. It cannot be taken back.</p>
+          )
+        }
+      >
+        <Button size="sm" onClick={() => setOpen(true)} disabled={waiting > 0} aria-label={RELEASE_LABELS[stage]}>
+          <Send />
+          Release scores
+        </Button>
+      </Hint>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>

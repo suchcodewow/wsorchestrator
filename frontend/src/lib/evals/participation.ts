@@ -51,7 +51,7 @@ import {
 import { getCandidateCutoffs } from "@/lib/evals/settings";
 import { reviewConfigured } from "@/lib/evals/transcript-review";
 import { taggerOf } from "@/lib/mention-store";
-import { cohortBootcamp } from "@/lib/reporting/bootcamp";
+import { cohortBootcamp, unscoredAttendees } from "@/lib/reporting/bootcamp";
 import { activeBootcamp, type ActiveBootcamp } from "@/lib/scheduler/bootcamps";
 
 const d = participationDescriptors;
@@ -488,9 +488,15 @@ async function generationPlans(bootcampId: string, stage: EvalsAssessmentStage, 
   return { plans, skipped };
 }
 
-export type StagePending = { comments: number; scores: number; skipped: string[] };
+export type StagePending = {
+  comments: number;
+  scores: number;
+  skipped: string[];
+  /** Who has an assessment still waiting on a score, which holds up Release: at most 100 names, and how many in all. */
+  unscored: { total: number; names: string[] };
+};
 
-/** What each class's Generate button would do; null for a class the bootcamp does not hold, or one already released. */
+/** What each class's Generate and Release buttons face; null for a class the bootcamp does not hold, or one already released. */
 export async function pendingParticipation(): Promise<Record<EvalsAssessmentStage, StagePending | null>> {
   const bootcamp = await cohortBootcamp();
   const one = async (stage: EvalsAssessmentStage): Promise<StagePending | null> => {
@@ -498,8 +504,11 @@ export async function pendingParticipation(): Promise<Record<EvalsAssessmentStag
     if (stage === "intermediate" && !bootcamp.intermediate) return null;
     const assessment = await participationAssessment(stage);
     if (!assessment) return null;
-    const { plans, skipped } = await generationPlans(bootcamp.id, stage, assessment.id);
-    return { ...generationCounts(plans), skipped: skipped.slice(0, 100) };
+    const [{ plans, skipped }, unscored] = await Promise.all([
+      generationPlans(bootcamp.id, stage, assessment.id),
+      unscoredAttendees(bootcamp.id, stage),
+    ]);
+    return { ...generationCounts(plans), skipped: skipped.slice(0, 100), unscored };
   };
   const [btc, int] = await Promise.all([one("bootcamp"), one("intermediate")]);
   return { bootcamp: btc, intermediate: int };

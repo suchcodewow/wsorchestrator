@@ -3,7 +3,8 @@
 /**
  * Generates one class's participation scores and comments, after saying what
  * it will write and whom it leaves out. Its count is the blank comments there
- * are marks to fill; it still runs at zero when scores are waiting.
+ * are marks to fill, which its tooltip spells out; it still runs at zero when
+ * scores are waiting.
  */
 
 import { useState } from "react";
@@ -21,6 +22,7 @@ import {
 import { STAGE_LABELS } from "@/lib/evals/assessment-values";
 import type { StagePending } from "@/lib/evals/participation";
 import type { ReleaseStage } from "@/lib/reporting/bootcamp-values";
+import { Hint } from "./hint";
 
 const ERRORS: Record<string, string> = {
   no_bootcamp: "No bootcamp is active.",
@@ -34,13 +36,10 @@ const ERRORS: Record<string, string> = {
 export function GenerateButton({
   stage,
   pending,
-  unavailable,
 }: {
   stage: ReleaseStage;
   /** What pressing it would write; null when it cannot run. */
   pending: StagePending | null;
-  /** Why it cannot be pressed, when it cannot. */
-  unavailable: string | null;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -49,7 +48,12 @@ export function GenerateButton({
   const label = `Generate ${STAGE_LABELS[stage]} Feedback`;
   const comments = pending?.comments ?? 0;
   const scores = pending?.scores ?? 0;
-  const why = unavailable ?? (comments === 0 && scores === 0 ? "Nothing is waiting to be generated" : null);
+  const why = !pending
+    ? "The Participation assessment is not set up on this database"
+    : comments === 0 && scores === 0
+      ? "Nothing is waiting to be generated"
+      : null;
+  const plural = (n: number, one: string, many: string) => `${n.toLocaleString()} ${n === 1 ? one : many}`;
 
   async function submit() {
     setRunning(true);
@@ -80,10 +84,23 @@ export function GenerateButton({
 
   return (
     <>
-      <Button variant="outline" size="sm" disabled={why !== null} title={why ?? undefined} onClick={() => setOpen(true)}>
-        <Sparkles />
-        {label} ({comments})
-      </Button>
+      <Hint
+        disabled={why !== null}
+        content={
+          <>
+            <p>
+              ({comments.toLocaleString()}) is how many blank comments Claude can write from participation marks
+              {scores > 0 && `, beside ${plural(scores, "participation score", "participation scores")} to fill in`}.
+            </p>
+            {why && <p className="text-muted-foreground">{why}.</p>}
+          </>
+        }
+      >
+        <Button variant="outline" size="sm" disabled={why !== null} aria-label={`${label}: ${plural(comments, "comment", "comments")} to write`} onClick={() => setOpen(true)}>
+          <Sparkles />
+          Generate feedback ({comments.toLocaleString()})
+        </Button>
+      </Hint>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>

@@ -34,8 +34,7 @@ import { RELEASE_STAGES, STAGE_CODES, type ReleaseStage } from "@/lib/reporting/
 import { cn } from "@/lib/utils";
 import { formatDate, formatScore } from "../../cohort-settings/format";
 import { LevelChip } from "./class-card";
-import { GenerateButton } from "./generate-button";
-import { ReleaseButton } from "./release-button";
+import { ClassActions } from "./class-actions";
 
 type Released = { at: string; byName: string | null } | null;
 
@@ -126,42 +125,13 @@ export function BootcampView({
             {everyone ? "with a BTC or INT record." : "in your org with a BTC or INT record."}
           </p>
         </div>
-        {canRelease && (
-          <div className="flex flex-wrap justify-end gap-2">
-            {RELEASE_STAGES.map((stage) => (
-              <GenerateButton
-                key={stage}
-                stage={stage}
-                pending={participation[stage]}
-                unavailable={
-                  !bootcamp
-                    ? "No bootcamp is active"
-                    : stage === "intermediate" && !bootcamp.intermediate
-                      ? "The active bootcamp has no intermediate class"
-                      : bootcamp.released[stage]
-                        ? "This class is released"
-                        : null
-                }
-              />
-            ))}
-            {RELEASE_STAGES.map((stage) => (
-              <ReleaseButton
-                key={stage}
-                stage={stage}
-                startDate={bootcamp?.startDate ?? null}
-                released={bootcamp?.released[stage] ?? null}
-                unavailable={
-                  !bootcamp
-                    ? "No bootcamp is active"
-                    : stage === "intermediate" && !bootcamp.intermediate
-                      ? "The active bootcamp has no intermediate class"
-                      : null
-                }
-              />
-            ))}
-          </div>
-        )}
       </motion.div>
+
+      {canRelease && (
+        <motion.div variants={riseChild}>
+          <ClassActions bootcamp={bootcamp} pending={participation} />
+        </motion.div>
+      )}
 
       <motion.div variants={riseChild} className="flex flex-wrap items-center gap-3">
         <TableSearch

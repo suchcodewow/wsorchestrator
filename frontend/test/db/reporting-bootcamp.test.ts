@@ -33,6 +33,7 @@ import {
   readerOf,
   releaseScores,
   submissionEditSchema,
+  unscoredAttendees,
   visibleStages,
 } from "@/lib/reporting/bootcamp";
 import { PERSONAS } from "../support/access";
@@ -195,6 +196,20 @@ describe("releasing a class", () => {
 
     const newcomer = (await getBootcampPerson(manager(), `${SCOPED}newcomer`))!;
     assert.equal(newcomer.classes.bootcamp.date, null, "not released, so not attended as far as a manager knows");
+  });
+
+  test("waits until every assessment in the class has a score, and names who holds it up", async () => {
+    await db.update(evalsSubmissions).set({ averageScore: null }).where(eq(evalsSubmissions.id, submissionId));
+    try {
+      const waiting = await unscoredAttendees(bootcampId, "bootcamp");
+      assert.ok(waiting.names.includes("Person newcomer"));
+      assert.equal(waiting.total, waiting.names.length);
+      assert.deepEqual(await releaseScores(admin.id, "bootcamp"), { ok: false, error: "unscored" });
+      assert.equal((await cohortBootcamp())!.released.bootcamp, null);
+    } finally {
+      await db.update(evalsSubmissions).set({ averageScore: 3 }).where(eq(evalsSubmissions.id, submissionId));
+    }
+    assert.equal((await unscoredAttendees(bootcampId, "bootcamp")).names.includes("Person newcomer"), false);
   });
 
   test("shows a manager the class once released, and releasing again changes nothing", async () => {
