@@ -30,6 +30,7 @@ export default async function CurrentCohortPage({
   const filter = {
     stage: isCandidateStage(params.stage) ? params.stage : null,
     track: isCurrentTrack(params.track) ? params.track : null,
+    unanswered: params.rsvp === "none",
   };
   const session = await auth();
   const canOpenRecord = session?.user ? canUseEvals(session.user.access) : false;
@@ -71,6 +72,7 @@ export default async function CurrentCohortPage({
         filter={filter}
         page={page}
         counts={summary.counts}
+        unanswered={summary.unanswered}
         deferral={summary.deferral}
         activeBootcamp={active}
         canSetTrack={

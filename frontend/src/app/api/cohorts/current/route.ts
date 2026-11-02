@@ -1,6 +1,6 @@
 /**
- * The Current tab's candidates, a page at a time, narrowed to a stage and a
- * track, with each one's count and the active bootcamp. The deferred are on
+ * The Current tab's candidates, a page at a time, narrowed to a stage, a
+ * track and those who have not RSVP'd, with each one's count and the active bootcamp. The deferred are on
  * GET /api/cohorts/deferred instead. No scores: those are eVals' and
  * Reporting's. Each member carries `meetings`: where
  * they stand with each picked Google meeting that is for them.
@@ -25,9 +25,12 @@ export async function GET(req: Request) {
   const track = params.get("track");
   if (track !== null && !isCurrentTrack(track)) return NextResponse.json({ error: "invalid_track" }, { status: 400 });
 
+  const rsvp = params.get("rsvp");
+  if (rsvp !== null && rsvp !== "none") return NextResponse.json({ error: "invalid_rsvp" }, { status: 400 });
+
   const query = parseListQuery(params, CURRENT_COHORT_LIST);
-  const [{ rows, page, hasMore }, { counts, syncedAt, cutoffs, deferral }, bootcamp] = await Promise.all([
-    listCurrentCohort({ stage, track }, query),
+  const [{ rows, page, hasMore }, { counts, unanswered, syncedAt, cutoffs, deferral }, bootcamp] = await Promise.all([
+    listCurrentCohort({ stage, track, unanswered: rsvp === "none" }, query),
     currentCohortSummary(),
     activeBootcamp(),
   ]);
@@ -35,10 +38,12 @@ export async function GET(req: Request) {
   return NextResponse.json({
     stage,
     track,
+    rsvp,
     members: rows.map((m) => ({ ...m, meetings: statuses.get(m.email.trim().toLowerCase()) ?? [] })),
     page,
     hasMore,
     counts,
+    unanswered,
     syncedAt,
     cutoffs,
     deferral,
