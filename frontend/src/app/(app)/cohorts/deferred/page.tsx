@@ -34,6 +34,7 @@ export default async function DeferredCohortPage({
       filter={filter}
       page={page}
       counts={summary.counts}
+      unanswered={summary.unanswered}
       deferral={summary.deferral}
       activeBootcamp={active}
       canSetTrack={session?.user ? canManageTrainingSettings(session.user.access) : false}
