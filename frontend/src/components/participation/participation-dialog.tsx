@@ -28,6 +28,7 @@ const ERRORS: Record<string, string> = {
   no_class: "The active bootcamp has no intermediate class.",
   not_found: "This person is not in the active bootcamp's cohort.",
   forbidden: "You can no longer mark participation — reload the page.",
+  released: "This class has been released, so only an administrator can change these marks.",
   no_assessment: "This class has no Participation assessment.",
   no_marks: "Mark them first: there is nothing to write comments from.",
   unconfigured: "Claude is not set up on this deployment.",
@@ -275,7 +276,8 @@ function SheetPanel({ employeeId, canRegenerate }: { employeeId: string; canRege
         <span className="text-muted-foreground">· {STAGE_LABELS[sheet.attendee.stage]}</span>
       </p>
 
-      <Counters sheet={sheet} disabled={saving !== null} onAdjust={adjust} />
+      <Counters sheet={sheet} disabled={saving !== null} onAdjust={sheet.locked ? undefined : adjust} />
+      {sheet.locked && <p className="text-sm text-muted-foreground">{ERRORS.released}</p>}
       {error && <ErrorLine error={error} />}
 
       {score !== null && (

@@ -19,6 +19,7 @@ delete process.env.ANTHROPIC_API_KEY;
 
 import { db } from "@/db";
 import {
+  bootcamps,
   employees,
   evalsAssessments,
   evalsSubmissions,
@@ -184,6 +185,31 @@ describe("marks", () => {
     assert.ok(below.ok);
     assert.equal(below.moved, false);
     assert.equal((await participationRow(a.email))?.constructiveFeedback, "Speak up.");
+  });
+
+  test("once the class is released only an administrator moves the marks", async () => {
+    const a = await attendee("released");
+    await adjustMark(judge.id, a.id, { descriptorId: positive.id, delta: 1 }, false);
+    const [was] = await db.select({ at: bootcamps.btcReleasedAt }).from(bootcamps).where(eq(bootcamps.id, bootcampId));
+    await db.update(bootcamps).set({ btcReleasedAt: new Date() }).where(eq(bootcamps.id, bootcampId));
+    try {
+      assert.deepEqual(await adjustMark(judge.id, a.id, { descriptorId: positive.id, delta: 1 }, false), {
+        ok: false,
+        error: "released",
+      });
+      const seen = await getParticipationSheet(a.id, false);
+      assert.ok(seen.ok);
+      assert.equal(seen.sheet.locked, true);
+
+      const moved = await adjustMark(admin.id, a.id, { descriptorId: positive.id, delta: 1 }, true);
+      assert.ok(moved.ok);
+      assert.equal(moved.sheet.locked, false);
+      assert.equal(moved.sheet.descriptors.find((x) => x.id === positive.id)!.count, 2);
+      const ran = await regenerateParticipation(admin.id, a.id);
+      if (!ran.ok) assert.equal(ran.error, "unconfigured", "release does not stop an administrator's Regenerate");
+    } finally {
+      await db.update(bootcamps).set({ btcReleasedAt: was?.at ?? null }).where(eq(bootcamps.id, bootcampId));
+    }
   });
 
   test("only an administrator's sheet carries what was saved", async () => {

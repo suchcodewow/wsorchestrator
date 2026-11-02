@@ -22,6 +22,7 @@ import {
   EVALS_SETTINGS_KEYS,
   PARTICIPATION_LIMITS,
   PARTICIPATION_POLARITIES,
+  bootcamps,
   employees,
   evalsAssessments,
   evalsSettings,
@@ -207,16 +208,28 @@ export type ParticipationSheet = {
   runningScore: number | null;
   /** The saved assessment, for someone who may read it; its score is blank before Generate. */
   saved: { averageScore: number | null; positiveFeedback: string; constructiveFeedback: string } | null;
+  /** Their class is released, so only an administrator may move their marks. */
+  locked: boolean;
 };
 
+/** Whether `stage`'s class at `bootcampId` has been released to managers. */
+async function isReleased(bootcampId: string, stage: EvalsAssessmentStage): Promise<boolean> {
+  const [row] = await db
+    .select({ at: stage === "bootcamp" ? bootcamps.btcReleasedAt : bootcamps.intReleasedAt })
+    .from(bootcamps)
+    .where(eq(bootcamps.id, bootcampId));
+  return Boolean(row?.at);
+}
+
+/** `admin` is an Assessments Administrator, who reads what was saved and may mark them after release. */
 async function readSheet(
   bootcamp: ActiveBootcamp,
   attendee: Attendee,
-  withSaved: boolean,
+  admin: boolean,
 ): Promise<ParticipationSheet> {
   const scope = and(eq(m.bootcampId, bootcamp.id), eq(m.stage, attendee.stage), eq(m.attendeeEmail, attendee.email));
   const e = participationMarkEvents;
-  const [descriptors, marks, events, bands, saved] = await Promise.all([
+  const [descriptors, marks, events, bands, saved, released] = await Promise.all([
     activeDescriptors(),
     db.select({ descriptorId: m.descriptorId, count: m.count }).from(m).where(scope).limit(PARTICIPATION_LIMITS.descriptors * 2),
     db
@@ -228,7 +241,8 @@ async function readSheet(
       .orderBy(asc(e.actorName))
       .limit(PARTICIPATION_LIMITS.adjustments),
     participationBands(),
-    withSaved ? savedParticipation(bootcamp.id, attendee.stage, attendee.email) : null,
+    admin ? savedParticipation(bootcamp.id, attendee.stage, attendee.email) : null,
+    admin ? false : isReleased(bootcamp.id, attendee.stage),
   ]);
   const counts = new Map(marks.map((x) => [x.descriptorId, x.count]));
   const rows = descriptors.map((x) => ({
@@ -241,6 +255,7 @@ async function readSheet(
     descriptors: rows,
     runningScore: rows.some((x) => x.count > 0) ? participationScore(rows, bands) : null,
     saved: saved ?? null,
+    locked: released,
   };
 }
 
@@ -256,12 +271,16 @@ async function savedParticipation(bootcampId: string, stage: EvalsAssessmentStag
 
 export async function getParticipationSheet(
   employeeId: string,
-  withSaved: boolean,
+  admin: boolean,
 ): Promise<{ ok: true; sheet: ParticipationSheet } | { ok: false; error: ParticipationError }> {
   const found = await bootcampAttendee(employeeId);
   if (!found.ok) return found;
-  return { ok: true, sheet: await readSheet(found.bootcamp, found.attendee, withSaved) };
+  return { ok: true, sheet: await readSheet(found.bootcamp, found.attendee, admin) };
 }
+
+export type AdjustError = ParticipationError | "released";
+
+export const ADJUST_STATUS_FOR: Record<AdjustError, number> = { ...PARTICIPATION_STATUS_FOR, released: 409 };
 
 export const adjustSchema = z.object({
   descriptorId: z.string().uuid(),
@@ -273,16 +292,18 @@ export const adjustSchema = z.object({
  * towards stays there and logs nothing, which also covers two judges racing
  * for the last step. A move saves the score the marks now give and clears
  * the comment on its own side, which no longer says what the marks do.
+ * Once their class is released only an administrator may move them.
  */
 export async function adjustMark(
   actorId: string,
   employeeId: string,
   input: z.infer<typeof adjustSchema>,
-  withSaved: boolean,
-): Promise<{ ok: true; sheet: ParticipationSheet; descriptor: string; moved: boolean } | { ok: false; error: ParticipationError }> {
+  admin: boolean,
+): Promise<{ ok: true; sheet: ParticipationSheet; descriptor: string; moved: boolean } | { ok: false; error: AdjustError }> {
   const found = await bootcampAttendee(employeeId);
   if (!found.ok) return found;
   const { bootcamp, attendee } = found;
+  if (!admin && (await isReleased(bootcamp.id, attendee.stage))) return { ok: false, error: "released" };
   const [descriptor] = await db
     .select({ name: d.name, polarity: d.polarity })
     .from(d)
@@ -370,7 +391,7 @@ export async function adjustMark(
     }
     return true;
   });
-  return { ok: true, sheet: await readSheet(bootcamp, attendee, withSaved), descriptor: descriptor.name, moved };
+  return { ok: true, sheet: await readSheet(bootcamp, attendee, admin), descriptor: descriptor.name, moved };
 }
 
 export type GroupPerson = { id: string; fullName: string };

@@ -3,7 +3,7 @@
 import { NextResponse } from "next/server";
 import { requireCaller } from "@/lib/api-auth";
 import { audited, noteAudit } from "@/lib/audit";
-import { PARTICIPATION_STATUS_FOR, adjustMark, adjustSchema } from "@/lib/evals/participation";
+import { ADJUST_STATUS_FOR, adjustMark, adjustSchema } from "@/lib/evals/participation";
 import { canManageBootcampRecords, canScoreAssessments } from "@/lib/roles";
 
 type Params = { params: Promise<{ employeeId: string }> };
@@ -17,7 +17,7 @@ export const POST = audited(async function POST(req: Request, { params }: Params
 
   const { employeeId } = await params;
   const result = await adjustMark(user.id, employeeId.slice(0, 200), parsed.data, canManageBootcampRecords(user.access));
-  if (!result.ok) return NextResponse.json({ error: result.error }, { status: PARTICIPATION_STATUS_FOR[result.error] });
+  if (!result.ok) return NextResponse.json({ error: result.error }, { status: ADJUST_STATUS_FOR[result.error] });
 
   noteAudit({
     target: result.sheet.attendee.email,
