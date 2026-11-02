@@ -51,7 +51,7 @@ import {
 import { getCandidateCutoffs } from "@/lib/evals/settings";
 import { reviewConfigured } from "@/lib/evals/transcript-review";
 import { taggerOf } from "@/lib/mention-store";
-import { cohortBootcamp, unscoredAttendees } from "@/lib/reporting/bootcamp";
+import { cohortBootcamp, cohortEmails, unscoredAttendees } from "@/lib/reporting/bootcamp";
 import { activeBootcamp, type ActiveBootcamp } from "@/lib/scheduler/bootcamps";
 
 const d = participationDescriptors;
@@ -452,8 +452,14 @@ async function marksOf(bootcampId: string, stage: EvalsAssessmentStage, email?: 
 }
 
 /** Who a press of Generate touches for one class at this bootcamp, and who it leaves out. */
-async function generationPlans(bootcampId: string, stage: EvalsAssessmentStage, assessmentId: string) {
-  const [marks, assessed, existing, bands, cutoffs] = await Promise.all([
+/**
+ * What Generate would write for each person in `stage`'s class. Anyone in its
+ * cohort, having RSVP'd, counts as attending, as does anyone scored on
+ * something else there.
+ */
+async function generationPlans(bootcamp: { id: string; startDate: string }, stage: EvalsAssessmentStage, assessmentId: string) {
+  const bootcampId = bootcamp.id;
+  const [marks, assessed, existing, bands, cutoffs, cohort] = await Promise.all([
     marksOf(bootcampId, stage),
     db
       .selectDistinct({ email: s.attendeeEmail })
@@ -471,10 +477,11 @@ async function generationPlans(bootcampId: string, stage: EvalsAssessmentStage, 
       .where(and(eq(s.bootcampId, bootcampId), eq(s.assessmentId, assessmentId))),
     participationBands(),
     getCandidateCutoffs(),
+    cohortEmails(bootcamp, stage),
   ]);
   const byEmail = new Map<string, NamedMark[]>();
   for (const { email, ...mark } of marks) byEmail.set(email, [...(byEmail.get(email) ?? []), mark]);
-  const assessedEmails = new Set(assessed.map((x) => x.email));
+  const assessedEmails = new Set([...assessed.map((x) => x.email), ...cohort]);
   const plans = planGeneration(byEmail, assessedEmails, existing, bands);
 
   // Nothing shows these people came, and a submission would mark them as attended at release.
@@ -505,8 +512,8 @@ export async function pendingParticipation(): Promise<Record<EvalsAssessmentStag
     const assessment = await participationAssessment(stage);
     if (!assessment) return null;
     const [{ plans, skipped }, unscored] = await Promise.all([
-      generationPlans(bootcamp.id, stage, assessment.id),
-      unscoredAttendees(bootcamp.id, stage),
+      generationPlans(bootcamp, stage, assessment.id),
+      unscoredAttendees(bootcamp, stage),
     ]);
     return { ...generationCounts(plans), skipped: skipped.slice(0, 100), unscored };
   };
@@ -557,7 +564,7 @@ export async function generateParticipation(
   const assessment = await participationAssessment(stage);
   if (!assessment) return { ok: false, error: "no_assessment" };
 
-  const { plans } = await generationPlans(bootcamp.id, stage, assessment.id);
+  const { plans } = await generationPlans(bootcamp, stage, assessment.id);
   const bands = await participationBands();
   const scoreOf = (p: GenerationPlan) => p.score ?? participationScore(p.marks, bands);
   const people = asPeople(plans, scoreOf);
