@@ -84,7 +84,7 @@ export function ClassCard({
             </button>
           )}
           <div>
-            <h2 className="text-lg font-medium tracking-tight">{name}</h2>
+            <h2 className="text-2xl font-medium tracking-tight">{name}</h2>
             <p className="text-xs text-muted-foreground">{code}</p>
           </div>
         </div>
@@ -108,7 +108,7 @@ export function ClassCard({
       {open && (
         <div id={bodyId} className="flex flex-col gap-3">
           <div className={cn("space-y-1.5", SCORE_COLUMN)}>
-            <div className="flex items-baseline justify-between text-2xl font-medium">
+            <div className="flex items-baseline justify-between text-lg font-medium">
               <span>Overall Score</span>
               <span className="tabular-nums">
                 {formatScore(score)}
