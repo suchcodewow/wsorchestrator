@@ -2,8 +2,10 @@
  * The Welcome page's "Running a Live Training Session" steps, as numbers:
  * whether a bootcamp is active, who is in the current cohort, what the active
  * bootcamp's schedule holds and what is wrong with it, and how far scoring
- * has got. Each part is there only for a caller who may see where it comes
- * from: the Scheduler and Cohorts for Training, eVals for Assessments.
+ * has got, and which of its classes have been released to managers. Each
+ * part is there only for a caller who may see where it comes from: the
+ * Scheduler and Cohorts for Training, eVals for Assessments, Reporting → Live
+ * Sessions for the releases.
  */
 
 import "server-only";
@@ -11,7 +13,9 @@ import "server-only";
 import { SCHEDULE_TRACKS, type ScheduleTrack } from "@/db/schema";
 import { CURRENT_TRACKS, currentCohortSummary, type CandidateStage } from "@/lib/evals/current-cohort";
 import { scoringProgress, type ScoringTally } from "@/lib/evals/scoring";
-import { canUseEvals, canUseTraining, type Access } from "@/lib/roles";
+import { cohortBootcamp } from "@/lib/reporting/bootcamp";
+import type { ReleaseStage } from "@/lib/reporting/bootcamp-values";
+import { canSeeBootcampRecords, canUseEvals, canUseTraining, type Access } from "@/lib/roles";
 import { activeBootcamp, type ActiveBootcamp } from "@/lib/scheduler/bootcamps";
 import { scheduleIssues } from "@/lib/scheduler/issues";
 import { loadSchedule } from "@/lib/scheduler/schedule";
@@ -30,6 +34,13 @@ export type LiveTraining = {
   } | null;
   /** Null without Assessments access. */
   assessments: Record<ScheduleTrack, ScoringTally> | null;
+  /** The active bootcamp's releases; null with no bootcamp active. */
+  feedback: {
+    /** False when it holds no intermediate class. */
+    intermediate: boolean;
+    /** When each class's scores were released to managers, as an ISO timestamp; null until then. */
+    released: Record<ReleaseStage, string | null>;
+  } | null;
 };
 
 export function canSeeLiveTraining(access: Access): boolean {
@@ -37,11 +48,24 @@ export function canSeeLiveTraining(access: Access): boolean {
 }
 
 export async function liveTraining(access: Access): Promise<LiveTraining> {
-  const [training, assessments] = await Promise.all([
+  const [training, assessments, feedback] = await Promise.all([
     canUseTraining(access) ? trainingSteps() : null,
     canUseEvals(access) ? scoringProgress() : null,
+    canSeeBootcampRecords(access) ? feedbackStep() : null,
   ]);
-  return { training, assessments };
+  return { training, assessments, feedback };
+}
+
+async function feedbackStep(): Promise<LiveTraining["feedback"]> {
+  const bootcamp = await cohortBootcamp();
+  if (!bootcamp) return null;
+  return {
+    intermediate: bootcamp.intermediate,
+    released: {
+      bootcamp: bootcamp.released.bootcamp?.at.toISOString() ?? null,
+      intermediate: bootcamp.released.intermediate?.at.toISOString() ?? null,
+    },
+  };
 }
 
 async function trainingSteps(): Promise<NonNullable<LiveTraining["training"]>> {

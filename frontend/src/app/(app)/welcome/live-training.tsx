@@ -1,6 +1,6 @@
 /**
  * "Running a Live Training Session": the steps of a bootcamp from scheduling
- * it to scoring it, each a card with where it stands now and a link to the
+ * it to releasing its scores, each a card with where it stands now and a link to the
  * page that does it. Drawn as the landing page's Training path is, with real
  * numbers in place of its examples.
  */
@@ -11,13 +11,16 @@ import {
   CalendarPlus,
   CalendarRange,
   Check,
+  Circle,
   FlaskConical,
   MessageSquareText,
   UserPlus,
   type LucideIcon,
 } from "lucide-react";
 import { SCHEDULE_TRACKS } from "@/db/schema";
+import { STAGE_LABELS } from "@/lib/evals/assessment-values";
 import type { LiveTraining } from "@/lib/live-training";
+import { RELEASE_STAGES } from "@/lib/reporting/bootcamp-values";
 import { TRACK_LABELS } from "@/lib/scheduler/timeline";
 import { cn } from "@/lib/utils";
 import { formatDate } from "../cohort-settings/format";
@@ -40,7 +43,7 @@ const COLUMNS: Record<number, string> = {
   5: "xl:grid-cols-5",
 };
 
-export function LiveTrainingSteps({ training, assessments }: LiveTraining) {
+export function LiveTrainingSteps({ training, assessments, feedback }: LiveTraining) {
   const steps: Step[] = [];
   if (training) {
     const { active, attendees, sessions, issues } = training;
@@ -137,10 +140,33 @@ export function LiveTrainingSteps({ training, assessments }: LiveTraining) {
   steps.push({
     Icon: MessageSquareText,
     title: "Provide Feedback",
-    body: "Send each attendee their results and feedback in Slack.",
-    href: null,
-    detail: (
-      <span className="inline-flex rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">Coming soon</span>
+    body: "Generate each attendee's participation feedback, then release each class's scores to their managers on Live Sessions.",
+    href: "/reporting/bootcamp",
+    detail: feedback ? (
+      <ul className="space-y-1.5">
+        {(feedback.intermediate ? RELEASE_STAGES : (["bootcamp"] as const)).map((stage) => {
+          const at = feedback.released[stage];
+          return (
+            <li key={stage} className="flex items-center gap-1.5">
+              {at ? (
+                <>
+                  <Ticked>{STAGE_LABELS[stage]} released</Ticked>
+                  <span className="ml-auto font-mono text-[10px] text-muted-foreground tabular-nums">
+                    {formatDate(at.slice(0, 10))}
+                  </span>
+                </>
+              ) : (
+                <span className="flex items-center gap-1.5 text-muted-foreground">
+                  <Circle className="size-3" />
+                  {STAGE_LABELS[stage]} not released
+                </span>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    ) : (
+      <p className="text-muted-foreground">No session is active.</p>
     ),
   });
 
