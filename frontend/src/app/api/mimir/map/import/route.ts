@@ -1,6 +1,6 @@
 /**
- * Imports the concept map from a JSON file (see `mapContentSchema`), replacing
- * the one there. Sent as a file so the audit trail records its name and size
+ * Imports the concept map from a JSON file (see `mapContentSchema`), as a new
+ * version replacing the one there. Sent as a file so the audit trail records its name and size
  * rather than the whole of it.
  */
 
@@ -34,8 +34,8 @@ export const POST = audited(async function POST(req: Request) {
     return NextResponse.json({ error: "invalid", path: issue?.path.join("."), message: issue?.message }, { status: 400 });
   }
 
-  await importMap(user.id, parsed.data);
+  const version = await importMap(user.id, parsed.data, `Imported ${file.name}.`);
   const videos = parsed.data.concepts.filter((c) => c.video).length;
-  noteAudit({ detail: { file: file.name, bytes: file.size, concepts: parsed.data.concepts.length, videos } });
+  noteAudit({ detail: { file: file.name, bytes: file.size, concepts: parsed.data.concepts.length, videos, version } });
   return NextResponse.json({ ok: true, concepts: parsed.data.concepts.length, videos });
 });

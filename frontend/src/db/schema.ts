@@ -2977,11 +2977,10 @@ export const MIMIR_SETTINGS_KEYS = {
 export const MIMIR_SETTING_MAX = 8000;
 
 /**
- * The concept map: the slides, the concepts they rely on, the course order,
- * and the video for each concept that has one. One row, `current`, replaced
- * whole by each import. The repository is public and this content is not, so
- * it is imported in Mimir Settings → Map rather than seeded. Validated by
- * `lib/mimir/map/content.ts` on the way in and on the way out.
+ * Superseded by `mimir_map_versions` and `mimir_concept_videos`, which
+ * `20261102140335_mimir_map_versions.sql` filled from it. Nothing reads or
+ * writes it now; it is kept only so a revision still serving during that
+ * deploy finds what it expects, and can be dropped by a later migration.
  */
 export const mimirMap = pgTable("mimir_map", {
   id: text("id").primaryKey(),
@@ -2989,6 +2988,62 @@ export const mimirMap = pgTable("mimir_map", {
   importedBy: text("imported_by").references(() => users.id, { onDelete: "set null" }),
   importedAt: timestamp("imported_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+export const MIMIR_MAP_SOURCES = ["import", "deck", "edit", "restore", "migration"] as const;
+export type MimirMapSource = (typeof MIMIR_MAP_SOURCES)[number];
+
+/**
+ * The concept map, every version of it: the slides, the concepts they rely on
+ * and the course order, without the videos (`mimir_concept_videos`). The
+ * highest version is the live map. Each import, published deck and edit adds
+ * one, as the next number after the one it was made from, so the primary key
+ * refuses a second change made from the same version. The repository is
+ * public and this content is not, so it is imported in Mimir Settings → Map
+ * rather than seeded. Validated by `lib/mimir/map/content.ts` on the way in
+ * and on the way out.
+ */
+export const mimirMapVersions = pgTable(
+  "mimir_map_versions",
+  {
+    version: integer("version").primaryKey(),
+    content: jsonb("content").$type<Record<string, unknown>>().notNull(),
+    source: text("source").$type<MimirMapSource>().notNull(),
+    /** What changed, in a line, for the history. */
+    summary: text("summary").notNull().default(""),
+    createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    check("mimir_map_versions_source_check", sql`${t.source} in ('import', 'deck', 'edit', 'restore', 'migration')`),
+    check("mimir_map_versions_version_check", sql`${t.version} > 0`),
+  ],
+);
+
+/**
+ * A concept's video in one language, by the concept's id: English is the
+ * video itself, any other a translation of it, rendered on its own. Mimir
+ * Studio writes these and nothing else, so it never races an edit to the map.
+ * A translation is kept only while it matches the English: replacing the
+ * English deletes the others in the same transaction. A concept taken off the
+ * map keeps its rows, and has its video again if it comes back.
+ */
+export const mimirConceptVideos = pgTable(
+  "mimir_concept_videos",
+  {
+    conceptId: text("concept_id").notNull(),
+    language: text("language").$type<VideoLanguage>().notNull(),
+    /** Where the file is in the recordings bucket. */
+    object: text("object").notNull(),
+    seconds: doublePrecision("seconds").notNull(),
+    /** What the narrator says: the coach reads it to know the video. */
+    transcript: text("transcript").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.conceptId, t.language] }),
+    check("mimir_concept_videos_language_check", sql`${t.language} in ('en', 'es')`),
+  ],
+);
 
 /** One main point of a concept, and whether this person has put it in their own words. */
 export type MimirConceptPoint = { text: string; covered: boolean };

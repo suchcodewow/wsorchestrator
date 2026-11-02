@@ -391,6 +391,7 @@ const PAGES: Record<string, PageCase> = {
     expect: (a) => (canManageMimir(a) ? { to: MIMIR_SETTINGS_TABS[0]!.href } : 404),
   },
   "/mimir-settings/map": { path: () => "/mimir-settings/map", expect: gated(canManageMimir) },
+  "/mimir-settings/map-editor": { path: () => "/mimir-settings/map-editor", expect: gated(canManageMimir) },
   "/mimir-settings/content": { path: () => "/mimir-settings/content?kind=capability", expect: gated(canManageMimir) },
   "/mimir-settings/content/new": { path: () => "/mimir-settings/content/new?kind=term", expect: gated(canManageMimir) },
   "/mimir-settings/content/<one>": { path: () => `/mimir-settings/content/${mimirItemId}`, expect: gated(canManageMimir) },
@@ -897,6 +898,9 @@ const ROUTES: RouteCase[] = [
   // Mimir map: the map, its videos and the coach are everyone's; importing the map, a Training Administrator's.
   { method: "GET", path: "/api/mimir/map", allowed: true },
   { method: "POST", path: "/api/mimir/map/import", allowed: canManageMimir, body: form },
+  { method: "GET", path: "/api/mimir/map/versions", allowed: canManageMimir },
+  { method: "GET", path: "/api/mimir/map/versions/999999", allowed: canManageMimir },
+  { method: "POST", path: "/api/mimir/map/versions", allowed: canManageMimir, body: () => ({}) },
   { method: "GET", path: "/api/mimir/map/slides/999", allowed: true },
   { method: "GET", path: `/api/mimir/map/concepts/${MISSING}/video`, allowed: true },
   { method: "PUT", path: `/api/mimir/map/concepts/${MISSING}/video`, allowed: true, body: () => ({}) },

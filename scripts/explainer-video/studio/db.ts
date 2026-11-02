@@ -5,7 +5,7 @@
  */
 
 import pg from "pg";
-import { mapContentSchema, MAP_ID, type MapContent, type TranslatedLanguage } from "../../../frontend/src/lib/mimir/map/schema";
+import { mapContentSchema, withVideos, type MapContent, type TranslatedLanguage, type VideoRow } from "../../../frontend/src/lib/mimir/map/schema";
 
 /** `SYSTEM_ACTORS.studio` in the frontend's `lib/audit.ts`; the two agree. */
 export const AUDIT_ACTOR = "Mimir Studio";
@@ -65,27 +65,46 @@ export async function deckReady(id: string, result: unknown): Promise<void> {
 type MapVideo = NonNullable<MapContent["concepts"][number]["video"]>;
 export type NewVideo = { conceptId: string; video: Pick<MapVideo, "object" | "seconds" | "transcript">; feedbackIds: string[] };
 
+/** The live version's structure and its concepts' videos, read as the app reads them (`lib/mimir/map/content.ts`). */
+async function readLive(client: pg.PoolClient | pg.Pool): Promise<MapContent | null> {
+  const { rows } = await client.query<{ content: unknown }>(`select content from mimir_map_versions order by version desc limit 1`);
+  if (!rows[0]) return null;
+  const videos = await client.query<VideoRow>(
+    `select concept_id as "conceptId", language, object, seconds, transcript from mimir_concept_videos
+      where concept_id in (select e.c->>'id' from jsonb_array_elements($1::jsonb->'concepts') as e(c))`,
+    [JSON.stringify(rows[0].content)],
+  );
+  const parsed = mapContentSchema.safeParse(withVideos(rows[0].content, videos.rows));
+  return parsed.success ? parsed.data : null;
+}
+
 /**
- * Puts a regenerated video on the live map, in one transaction: the map row is
- * locked so a deck published meanwhile is not overwritten, and the comments
- * the video took in become 'applied'. Any translations come off with the old
- * video, so nobody is shown a version that no longer matches. Returns the
- * object the concept had before, or throws when the concept is no longer on
- * the map or the job has been given up on.
+ * Puts a regenerated video on the live map, in one transaction: the concept's
+ * video rows are locked so a translation finishing meanwhile cannot land on
+ * the old one, and the comments the video took in become 'applied'. Any
+ * translations come off with the old video, so nobody is shown a version that
+ * no longer matches. The map's structure is not touched, so an edit made
+ * meanwhile stands. Returns the object the concept had before, or throws when
+ * the concept is no longer on the map or the job has been given up on.
  */
 export async function publishVideo(jobId: string, done: NewVideo): Promise<string | null> {
   const client = await pool.connect();
   try {
     await client.query("begin");
-    const { rows } = await client.query<{ content: unknown }>(`select content from mimir_map where id = $1 for update`, [MAP_ID]);
-    const parsed = rows[0] ? mapContentSchema.safeParse(rows[0].content) : null;
-    if (!parsed?.success) throw new Error("The live map is missing or no longer reads, so the video could not be added to it.");
-    const map = parsed.data;
+    const map = await readLive(client);
+    if (!map) throw new Error("The live map is missing or no longer reads, so the video could not be added to it.");
     const concept = map.concepts.find((c) => c.id === done.conceptId);
     if (!concept) throw new Error(`The concept ${done.conceptId} is no longer on the map.`);
-    const was = concept.video?.object ?? null;
-    const content = mapContentSchema.parse({ ...map, concepts: map.concepts.map((c) => (c.id === done.conceptId ? { ...c, video: done.video } : c)) });
-    await client.query(`update mimir_map set content = $2::jsonb where id = $1`, [MAP_ID, JSON.stringify(content)]);
+    const before = await client.query<{ object: string }>(
+      `select object from mimir_concept_videos where concept_id = $1 and language = 'en' for update`,
+      [done.conceptId],
+    );
+    const was = before.rows[0]?.object ?? null;
+    await client.query(`delete from mimir_concept_videos where concept_id = $1`, [done.conceptId]);
+    await client.query(
+      `insert into mimir_concept_videos (concept_id, language, object, seconds, transcript) values ($1, 'en', $2, $3, $4)`,
+      [done.conceptId, done.video.object, done.video.seconds, done.video.transcript],
+    );
     if (done.feedbackIds.length) {
       await client.query(
         `update video_feedback set status = 'applied'
@@ -116,21 +135,26 @@ export async function publishVideo(jobId: string, done: NewVideo): Promise<strin
 
 /**
  * Adds a translation to the concept's video, as long as that is still the
- * video it was translated from: the map row is locked for the same reason.
+ * video it was translated from: the English row is locked for the same reason.
  */
 export async function addTranslation(conceptId: string, from: string, language: TranslatedLanguage, file: Pick<MapVideo, "object" | "seconds" | "transcript">): Promise<void> {
   const client = await pool.connect();
   try {
     await client.query("begin");
-    const { rows } = await client.query<{ content: unknown }>(`select content from mimir_map where id = $1 for update`, [MAP_ID]);
-    const parsed = rows[0] ? mapContentSchema.safeParse(rows[0].content) : null;
-    if (!parsed?.success) throw new Error("The live map is missing or no longer reads, so the translation could not be added to it.");
-    const map = parsed.data;
-    const concept = map.concepts.find((c) => c.id === conceptId);
-    if (concept?.video?.object !== from) throw new Error(`The video for ${conceptId} changed while it was being translated.`);
-    const video = { ...concept.video, translations: { ...concept.video.translations, [language]: file } };
-    const content = mapContentSchema.parse({ ...map, concepts: map.concepts.map((c) => (c.id === conceptId ? { ...c, video } : c)) });
-    await client.query(`update mimir_map set content = $2::jsonb where id = $1`, [MAP_ID, JSON.stringify(content)]);
+    const english = await client.query<{ object: string }>(
+      `select object from mimir_concept_videos where concept_id = $1 and language = 'en' for update`,
+      [conceptId],
+    );
+    if (english.rows[0]?.object !== from) throw new Error(`The video for ${conceptId} changed while it was being translated.`);
+    const map = await readLive(client);
+    const concept = map?.concepts.find((c) => c.id === conceptId);
+    if (!concept) throw new Error(`The concept ${conceptId} is no longer on the map.`);
+    await client.query(
+      `insert into mimir_concept_videos (concept_id, language, object, seconds, transcript) values ($1, $2, $3, $4, $5)
+       on conflict (concept_id, language) do update set object = excluded.object, seconds = excluded.seconds,
+         transcript = excluded.transcript, created_at = now()`,
+      [conceptId, language, file.object, file.seconds, file.transcript],
+    );
     await client.query("commit");
     await recordAudit("studio.video.translate", `Translated the video for ${concept.name} into ${language}.`, conceptId, concept.name, "succeeded", {
       object: file.object,
@@ -157,9 +181,7 @@ export async function endVideoJob(id: string, result: unknown): Promise<void> {
 
 /** The live map, or null when none has been imported or it no longer reads. */
 export async function liveMap(): Promise<MapContent | null> {
-  const { rows } = await pool.query<{ content: unknown }>(`select content from mimir_map where id = $1`, [MAP_ID]);
-  const parsed = rows[0] ? mapContentSchema.safeParse(rows[0].content) : null;
-  return parsed?.success ? parsed.data : null;
+  return readLive(pool);
 }
 
 export async function recordAudit(

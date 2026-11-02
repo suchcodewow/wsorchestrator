@@ -17,15 +17,20 @@ import { randomUUID } from "node:crypto";
 import { eq, inArray } from "drizzle-orm";
 
 import { db } from "@/db";
-import { mimirMap, videoFeedback } from "@/db/schema";
+import { mimirConceptVideos, mimirMapVersions, videoFeedback } from "@/db/schema";
 import { VIDEO_FEEDBACK_LIST, VIDEO_FEEDBACK_SUMMARY_LIST } from "@/lib/list-specs";
 import { importMap } from "@/lib/mimir/map/content";
-import { MAP_ID } from "@/lib/mimir/map/schema";
 import { deleteTake, registerTrack } from "@/lib/recording/recordings";
 import { findVideo, listVideoFeedback, listVideoFeedbackSummary, recordVideoFeedback } from "@/lib/video-feedback";
 import { PERSONAS } from "../support/access";
 import { mapFixture } from "../support/mimir-map";
 import { testScope, type TestUser } from "../support/seed";
+
+/** No map at all: this database is workshops_agent, the tests' own. */
+async function clearMap() {
+  await db.delete(mimirMapVersions);
+  await db.delete(mimirConceptVideos);
+}
 
 const scope = testScope("vidfb");
 const feedbackIds: string[] = [];
@@ -58,7 +63,7 @@ before(async () => {
 after(async () => {
   if (feedbackIds.length) await db.delete(videoFeedback).where(inArray(videoFeedback.id, feedbackIds));
   for (const id of takes) await deleteTake(id);
-  await db.delete(mimirMap).where(eq(mimirMap.id, MAP_ID));
+  await clearMap();
   await scope.tearDown();
 });
 
