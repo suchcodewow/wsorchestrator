@@ -7,6 +7,7 @@ import { CURRENT_COHORT_LIST } from "@/lib/list-specs";
 import { parseListQuery } from "@/lib/paging";
 import { getTestGroup } from "@/lib/cohorts/test-group";
 import {
+  canManageBootcampRecords,
   canManageEvalsSettings,
   canManageTestGroup,
   canManageTrainingSettings,
@@ -29,6 +30,7 @@ export default async function CurrentCohortPage({
   const filter = {
     stage: isCandidateStage(params.stage) ? params.stage : null,
     track: isCurrentTrack(params.track) ? params.track : null,
+    unanswered: params.rsvp === "none",
   };
   const session = await auth();
   const canOpenRecord = session?.user ? canUseEvals(session.user.access) : false;
@@ -70,6 +72,7 @@ export default async function CurrentCohortPage({
         filter={filter}
         page={page}
         counts={summary.counts}
+        unanswered={summary.unanswered}
         deferral={summary.deferral}
         activeBootcamp={active}
         canSetTrack={
@@ -82,6 +85,9 @@ export default async function CurrentCohortPage({
         }
         canMarkParticipation={
           session?.user ? canScoreAssessments(session.user.access) : false
+        }
+        canRegenerateParticipation={
+          session?.user ? canManageBootcampRecords(session.user.access) : false
         }
         intakes={intakes}
         intakeQuestions={intakeQuestions}

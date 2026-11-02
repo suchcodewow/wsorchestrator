@@ -19,6 +19,7 @@ delete process.env.ANTHROPIC_API_KEY;
 
 import { db } from "@/db";
 import {
+  bootcamps,
   employees,
   evalsAssessments,
   evalsSubmissions,
@@ -134,13 +135,12 @@ describe("marks", () => {
     assert.equal(marked.sheet.runningScore, 2);
   });
 
-  test("the first mark creates the assessment with a blank score, and clearing the marks removes it", async () => {
+  test("the first mark creates the assessment with its score, and clearing the marks removes it", async () => {
     const a = await attendee("creates");
     assert.equal(await participationRow(a.email), null);
     await adjustMark(judge.id, a.id, { descriptorId: positive.id, delta: 1 }, false);
+    assert.equal((await participationRow(a.email))?.averageScore, 2);
     await adjustMark(judge.id, a.id, { descriptorId: negative.id, delta: 1 }, false);
-    const created = await participationRow(a.email);
-    assert.equal(created?.averageScore, null);
 
     await adjustMark(judge.id, a.id, { descriptorId: positive.id, delta: -1 }, false);
     assert.ok(await participationRow(a.email), "a mark is still there");
@@ -148,29 +148,68 @@ describe("marks", () => {
     assert.equal(await participationRow(a.email), null);
   });
 
-  test("clearing the marks keeps an assessment that has a score", async () => {
+  test("clearing the marks keeps the assessment of someone with a comment", async () => {
     const a = await attendee("keeps");
     await adjustMark(judge.id, a.id, { descriptorId: positive.id, delta: 1 }, false);
-    await db.update(evalsSubmissions).set({ averageScore: 2 }).where(eq(evalsSubmissions.attendeeEmail, a.email));
+    await db.update(evalsSubmissions).set({ constructiveFeedback: "Speak up." }).where(eq(evalsSubmissions.attendeeEmail, a.email));
     await adjustMark(judge.id, a.id, { descriptorId: positive.id, delta: -1 }, false);
-    assert.equal((await participationRow(a.email))?.averageScore, 2);
+    assert.equal((await participationRow(a.email))?.averageScore, 2, "no marks scores a 2, as Generate would");
   });
 
-  test("an administrator's edit carries through to a saved score, and nobody's other click does", async () => {
+  test("anyone's click saves the score and clears the comment on its own side", async () => {
     const a = await attendee("rescored");
     const up = { descriptorId: positive.id, delta: 1 as const };
     await adjustMark(judge.id, a.id, up, false);
-    await adjustMark(admin.id, a.id, { ...up, updateScore: true }, true);
-    assert.equal((await participationRow(a.email))?.averageScore, null, "blank stays blank until Generate");
-
-    await db.update(evalsSubmissions).set({ averageScore: 2 }).where(eq(evalsSubmissions.attendeeEmail, a.email));
     await adjustMark(judge.id, a.id, up, false);
-    assert.equal((await participationRow(a.email))?.averageScore, 2, "a judge's mark leaves the score alone");
+    await adjustMark(judge.id, a.id, up, false);
+    const comments = { positiveFeedback: "Strong.", constructiveFeedback: "Speak up." };
+    await db.update(evalsSubmissions).set(comments).where(eq(evalsSubmissions.attendeeEmail, a.email));
 
-    const down = await adjustMark(admin.id, a.id, { descriptorId: negative.id, delta: 1, updateScore: true }, true);
+    const down = await adjustMark(judge.id, a.id, { descriptorId: negative.id, delta: 1 }, true);
     assert.ok(down.ok);
-    assert.equal((await participationRow(a.email))?.averageScore, 3, "3 up and 1 down nets 2");
+    const row = await participationRow(a.email);
+    assert.equal(row?.averageScore, 3, "3 up and 1 down nets 2");
+    assert.equal(row?.positiveFeedback, "Strong.");
+    assert.equal(row?.constructiveFeedback, "");
     assert.equal(down.sheet.saved?.averageScore, 3);
+
+    await adjustMark(judge.id, a.id, { descriptorId: positive.id, delta: -1 }, false);
+    assert.equal((await participationRow(a.email))?.positiveFeedback, "");
+  });
+
+  test("a click that moves nothing clears nothing", async () => {
+    const a = await attendee("stuck");
+    await adjustMark(judge.id, a.id, { descriptorId: positive.id, delta: 1 }, false);
+    await db.update(evalsSubmissions).set({ constructiveFeedback: "Speak up." }).where(eq(evalsSubmissions.attendeeEmail, a.email));
+    const below = await adjustMark(judge.id, a.id, { descriptorId: negative.id, delta: -1 }, false);
+    assert.ok(below.ok);
+    assert.equal(below.moved, false);
+    assert.equal((await participationRow(a.email))?.constructiveFeedback, "Speak up.");
+  });
+
+  test("once the class is released only an administrator moves the marks", async () => {
+    const a = await attendee("released");
+    await adjustMark(judge.id, a.id, { descriptorId: positive.id, delta: 1 }, false);
+    const [was] = await db.select({ at: bootcamps.btcReleasedAt }).from(bootcamps).where(eq(bootcamps.id, bootcampId));
+    await db.update(bootcamps).set({ btcReleasedAt: new Date() }).where(eq(bootcamps.id, bootcampId));
+    try {
+      assert.deepEqual(await adjustMark(judge.id, a.id, { descriptorId: positive.id, delta: 1 }, false), {
+        ok: false,
+        error: "released",
+      });
+      const seen = await getParticipationSheet(a.id, false);
+      assert.ok(seen.ok);
+      assert.equal(seen.sheet.locked, true);
+
+      const moved = await adjustMark(admin.id, a.id, { descriptorId: positive.id, delta: 1 }, true);
+      assert.ok(moved.ok);
+      assert.equal(moved.sheet.locked, false);
+      assert.equal(moved.sheet.descriptors.find((x) => x.id === positive.id)!.count, 2);
+      const ran = await regenerateParticipation(admin.id, a.id);
+      if (!ran.ok) assert.equal(ran.error, "unconfigured", "release does not stop an administrator's Regenerate");
+    } finally {
+      await db.update(bootcamps).set({ btcReleasedAt: was?.at ?? null }).where(eq(bootcamps.id, bootcampId));
+    }
   });
 
   test("only an administrator's sheet carries what was saved", async () => {
@@ -234,9 +273,19 @@ describe("generating", () => {
     }
   });
 
-  test("Regenerate needs a saved assessment", async () => {
+  test("Regenerate leaves alone someone with no marks and no assessment", async () => {
     const a = await attendee("regen");
-    assert.deepEqual(await regenerateParticipation(admin.id, a.id), { ok: false, error: "not_generated" });
+    assert.deepEqual(await regenerateParticipation(admin.id, a.id), { ok: false, error: "no_marks" });
+    assert.equal(await participationRow(a.email), null);
+  });
+
+  test("Regenerate does not wait for Generate once someone has a mark", async () => {
+    const a = await attendee("regen-marked");
+    await adjustMark(judge.id, a.id, { descriptorId: positive.id, delta: 1 }, false);
+    const ran = await regenerateParticipation(admin.id, a.id);
+    // Claude is not set up here, which is the furthest a run without a key gets.
+    if (!ran.ok) assert.equal(ran.error, "unconfigured");
+    else assert.equal((await participationRow(a.email))?.averageScore, 2);
   });
 });
 

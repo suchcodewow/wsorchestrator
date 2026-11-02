@@ -55,6 +55,7 @@ export default async function BootcampPersonPage({
             submittedAt: s.submittedAt.toISOString(),
             updatedAt: s.updatedAt.toISOString(),
           })),
+          reviews: records.reviews.map((r) => ({ ...r, updatedAt: r.updatedAt.toISOString() })),
         },
       }}
       canEdit={canManageBootcampRecords(access)}

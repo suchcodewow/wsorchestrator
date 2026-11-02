@@ -1,16 +1,14 @@
 /**
  * Publishing a deck job's draft: its slide pictures over the live ones, then
- * its map over the live map, each kept concept keeping the video it has now.
+ * its map as the next version of the live map, each kept concept keeping the
+ * video it has now.
  * Discarding one throws the draft away. Either way the uploaded deck goes.
  */
 
 import "server-only";
 
-import { eq } from "drizzle-orm";
-import { db } from "@/db";
-import { mimirMap } from "@/db/schema";
 import { compose, deleteObject, listObjects } from "@/lib/recording/gcs";
-import { mapContentSchema, MAP_ID, type MapContent } from "../map/schema";
+import { getMap, replaceMap } from "../map/content";
 import { slideObject } from "../map/slides";
 import { bucket } from "../map/video";
 import { getJob, moveJob, type StudioJob } from "./jobs";
@@ -58,18 +56,11 @@ export async function publishDeck(userId: string, jobId: string): Promise<Publis
   const claimed = await moveJob(job.id, "deck", "ready", "published", { finishedAt: new Date() });
   if (!claimed) return { ok: false, error: "not_ready" };
 
-  const diff = await db.transaction(async (tx) => {
-    const [row] = await tx.select().from(mimirMap).where(eq(mimirMap.id, MAP_ID)).for("update");
-    const parsed = row ? mapContentSchema.safeParse(row.content) : null;
-    const live: MapContent | null = parsed?.success ? parsed.data : null;
-    const content = withLiveVideos(draft.draft, live);
-    const now = new Date();
-    await tx
-      .insert(mimirMap)
-      .values({ id: MAP_ID, content, importedBy: userId, importedAt: now })
-      .onConflictDoUpdate({ target: mimirMap.id, set: { content, importedBy: userId, importedAt: now } });
-    return diffMaps(live, content);
-  });
+  // Concepts keep their videos by id, so a concept the draft keeps keeps its video without being told.
+  const live = (await getMap())?.content ?? null;
+  const content = withLiveVideos(draft.draft, live);
+  await replaceMap(userId, content, "deck", `Published the deck ${job.label}.`);
+  const diff = diffMaps(live, content);
 
   const keep = new Set(numbers.map(slideObject));
   await sweep(b, "mimir/slides/", (n) => keep.has(n));

@@ -46,27 +46,6 @@ const NOT_DRAGGABLE = ".mm-slide, .mm-concept, .mm-group, .mm-level, button";
 const DRAG_THRESHOLD = 4;
 const levelVar = (level: number) => ({ "--lc": `var(--l${level})` }) as React.CSSProperties;
 
-/** Stubbed progress for the section courses, in quarters done, in the order the sections are shown, until it is tracked for real. */
-const STUB_QUARTERS = [2, 1];
-
-/** A ring in four quarters, the first `done` of them filled, clockwise from the top. */
-function CourseRing({ done }: { done: number }) {
-  const r = 7;
-  const arc = (q: number) => {
-    const a0 = (q * 90 + 8 - 90) * (Math.PI / 180);
-    const a1 = ((q + 1) * 90 - 8 - 90) * (Math.PI / 180);
-    const pt = (a: number) => `${(9 + r * Math.cos(a)).toFixed(2)},${(9 + r * Math.sin(a)).toFixed(2)}`;
-    return `M${pt(a0)} A${r},${r} 0 0 1 ${pt(a1)}`;
-  };
-  return (
-    <svg className="mm-ring" viewBox="0 0 18 18" role="img" aria-label={`Course ${done * 25}% complete`}>
-      {[0, 1, 2, 3].map((q) => (
-        <path key={q} d={arc(q)} className={q < done ? "mm-ring-on" : undefined} />
-      ))}
-    </svg>
-  );
-}
-
 export function MapView({
   map,
   states: initialStates,
@@ -275,14 +254,9 @@ export function MapView({
             ))}
           </svg>
 
-          {layout.bands.map((b, i) => (
+          {layout.bands.map((b) => (
             <div key={b.name} className="mm-band" style={{ background: `var(--s${b.band})`, left: b.left, width: b.width, top: b.top, height: b.height }}>
               <span>{filter ? `${b.name} (${b.count} ${b.count === 1 ? "slide" : "slides"})` : `${b.name} (slides ${b.from}-${b.to})`}</span>
-              {/* Stubs for now: the course link goes nowhere and the circle does not yet track anything. */}
-              <div className="mm-course">
-                <button type="button">Launch Mindsmith Course</button>
-                <CourseRing done={STUB_QUARTERS[i] ?? 0} />
-              </div>
             </div>
           ))}
 

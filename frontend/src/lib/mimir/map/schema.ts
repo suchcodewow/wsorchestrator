@@ -20,6 +20,8 @@ export const POINTS_MIN = 2;
 export const POINTS_MAX = 6;
 export const POINT_CHARS = 160;
 export const REQUIRES_MAX = 12;
+/** What an edit says it changed, for the map's history. */
+export const MAP_SUMMARY_MAX = 500;
 /** A video object lives under this prefix in the recordings bucket, clear of the prefixes its lifecycle rules delete. */
 export const VIDEO_PREFIX = "mimir/videos/";
 /** A slide's picture is `<n>.jpg` under this prefix, in the same bucket and clear of the same lifecycle rules. */
@@ -148,6 +150,55 @@ export const mapContentSchema = z
   });
 
 export type MapContent = z.infer<typeof mapContentSchema>;
+
+/** A concept's video in one language, as `mimir_concept_videos` keeps it. */
+export type VideoRow = { conceptId: string; language: VideoLanguage } & MapVideoFile;
+
+/** The map without its videos: what a version stores. */
+export function withoutVideos(content: MapContent): MapContent {
+  return {
+    ...content,
+    concepts: content.concepts.map((c) => {
+      const kept = { ...c };
+      delete kept.video;
+      return kept;
+    }),
+  };
+}
+
+/** Each concept's videos as rows, English first: what an import writes beside its version. */
+export function videoRows(content: MapContent): VideoRow[] {
+  return content.concepts.flatMap((c) => {
+    if (!c.video) return [];
+    const { object, seconds, transcript, translations } = c.video;
+    const rows: VideoRow[] = [{ conceptId: c.id, language: "en", object, seconds, transcript }];
+    for (const language of TRANSLATED_LANGUAGES) {
+      const t = translations?.[language];
+      if (t) rows.push({ conceptId: c.id, language, object: t.object, seconds: t.seconds, transcript: t.transcript });
+    }
+    return rows;
+  });
+}
+
+/**
+ * A version's structure with its concepts' videos put back, as everything that
+ * reads the map expects it. A translation without its English is ignored.
+ */
+export function withVideos(structure: unknown, rows: VideoRow[]): unknown {
+  if (typeof structure !== "object" || structure === null || !Array.isArray((structure as { concepts?: unknown }).concepts)) return structure;
+  const byConcept = new Map<string, Partial<Record<VideoLanguage, MapVideoFile>>>();
+  for (const r of rows) byConcept.set(r.conceptId, { ...byConcept.get(r.conceptId), [r.language]: { object: r.object, seconds: r.seconds, transcript: r.transcript } });
+  const s = structure as { concepts: { id?: unknown }[] };
+  return {
+    ...s,
+    concepts: s.concepts.map((c) => {
+      const files = typeof c.id === "string" ? byConcept.get(c.id) : undefined;
+      if (!files?.en) return c;
+      const translations = Object.fromEntries(TRANSLATED_LANGUAGES.flatMap((l) => (files[l] ? [[l, files[l]]] : [])));
+      return { ...c, video: { ...files.en, ...(Object.keys(translations).length ? { translations } : {}) } };
+    }),
+  };
+}
 
 /** A concept with where it falls in the course. */
 export type InOrder<C> = C & {

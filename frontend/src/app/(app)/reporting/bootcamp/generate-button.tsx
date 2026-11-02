@@ -1,9 +1,10 @@
 "use client";
 
 /**
- * Generates one class's participation scores and comments, after saying what
- * it will write and whom it leaves out. Its count is the blank comments there
- * are marks to fill; it still runs at zero when scores are waiting.
+ * Generates one class's participation scores and comments, then everyone's
+ * blank overall feedback, after saying what it will write and whom it leaves
+ * out. Its count is the blank comments there are marks or feedback to fill,
+ * which its tooltip spells out; it still runs at zero when scores are waiting.
  */
 
 import { useState } from "react";
@@ -21,6 +22,7 @@ import {
 import { STAGE_LABELS } from "@/lib/evals/assessment-values";
 import type { StagePending } from "@/lib/evals/participation";
 import type { ReleaseStage } from "@/lib/reporting/bootcamp-values";
+import { Hint } from "./hint";
 
 const ERRORS: Record<string, string> = {
   no_bootcamp: "No bootcamp is active.",
@@ -34,22 +36,26 @@ const ERRORS: Record<string, string> = {
 export function GenerateButton({
   stage,
   pending,
-  unavailable,
 }: {
   stage: ReleaseStage;
   /** What pressing it would write; null when it cannot run. */
   pending: StagePending | null;
-  /** Why it cannot be pressed, when it cannot. */
-  unavailable: string | null;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const label = `Generate ${STAGE_LABELS[stage]} Feedback`;
-  const comments = pending?.comments ?? 0;
+  const marks = pending?.comments ?? 0;
+  const overall = pending?.overall ?? 0;
+  const comments = marks + overall;
   const scores = pending?.scores ?? 0;
-  const why = unavailable ?? (comments === 0 && scores === 0 ? "Nothing is waiting to be generated" : null);
+  const why = !pending
+    ? "The Participation assessment is not set up on this database"
+    : comments === 0 && scores === 0
+      ? "Nothing is waiting to be generated"
+      : null;
+  const plural = (n: number, one: string, many: string) => `${n.toLocaleString()} ${n === 1 ? one : many}`;
 
   async function submit() {
     setRunning(true);
@@ -66,8 +72,13 @@ export function GenerateButton({
         return;
       }
       router.refresh();
-      if (body.failed > 0) {
-        setError(`Claude could not write comments for ${body.failed} of them. Press Generate again to retry.`);
+      if (body.overall?.error) {
+        setError(ERRORS[body.overall.error] ?? "Claude could not write the overall feedback. Press Generate again to retry.");
+        return;
+      }
+      const failed = body.failed + (body.overall?.failed ?? 0);
+      if (failed > 0) {
+        setError(`Claude could not write comments for ${failed} of them. Press Generate again to retry.`);
         return;
       }
       setOpen(false);
@@ -80,25 +91,41 @@ export function GenerateButton({
 
   return (
     <>
-      <Button variant="outline" size="sm" disabled={why !== null} title={why ?? undefined} onClick={() => setOpen(true)}>
-        <Sparkles />
-        {label} ({comments})
-      </Button>
+      <Hint
+        disabled={why !== null}
+        content={
+          <>
+            <p>
+              ({comments.toLocaleString()}) counts the blank comments Claude can write:{" "}
+              {plural(marks, "participation comment", "participation comments")} from marks, and{" "}
+              {plural(overall, "overall feedback box", "overall feedback boxes")} summed up from each person&apos;s assessments.
+              {scores > 0 && ` It also fills in ${plural(scores, "participation score", "participation scores")}.`}
+            </p>
+            {why && <p className="text-muted-foreground">{why}.</p>}
+          </>
+        }
+      >
+        <Button variant="outline" size="sm" disabled={why !== null} aria-label={`${label}: ${plural(comments, "comment", "comments")} to write`} onClick={() => setOpen(true)}>
+          <Sparkles />
+          Generate feedback ({comments.toLocaleString()})
+        </Button>
+      </Hint>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{label}?</DialogTitle>
             <DialogDescription>
-              Claude writes {comments.toLocaleString()} blank {comments === 1 ? "comment" : "comments"}, and{" "}
-              {scores.toLocaleString()} participation {scores === 1 ? "score goes" : "scores go"} into the overall score.
-              Comments and scores already saved stay as they are.
+              Claude writes {plural(marks, "blank participation comment", "blank participation comments")}, and{" "}
+              {scores.toLocaleString()} participation {scores === 1 ? "score goes" : "scores go"} into the overall score. Then
+              it sums up each person&apos;s assessment feedback into their blank overall positive and constructive feedback,{" "}
+              {overall.toLocaleString()} so far. Comments and scores already saved stay as they are.
             </DialogDescription>
           </DialogHeader>
           {pending && pending.skipped.length > 0 && (
             <div className="space-y-1 text-sm">
               <p className="font-medium">
-                Skipped: {pending.skipped.length.toLocaleString()} with no marks and no assessment
+                Skipped: {pending.skipped.length.toLocaleString()} with no RSVP, marks or assessment
               </p>
               <p className="text-muted-foreground">{pending.skipped.join(", ")}</p>
             </div>

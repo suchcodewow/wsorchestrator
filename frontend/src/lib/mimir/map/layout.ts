@@ -17,14 +17,14 @@ import { conceptsInOrder, slideLevels, type InOrder, type MapLevel, type PublicM
 
 export const PAD = 20;
 export const SLIDE_W = 117;
-export const SLIDE_H = 61;
+export const SLIDE_H = 37;
 export const SLIDE_Y = 34;
 export const CONCEPT_W = 126;
 export const CONCEPT_H = 83;
 export const LEVEL_H = 28;
 export const GROUP_H = 24;
-/** A section's header over its slides, four times a group bar, with room for its course link. */
-export const BAND_H = GROUP_H * 4;
+/** A section's header over its slides, twice a group bar. */
+export const BAND_H = GROUP_H * 2;
 const BOTTOM_PAD = 24;
 
 export type PublicConcept = PublicMap["concepts"][number];

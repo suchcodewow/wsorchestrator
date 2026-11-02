@@ -14,7 +14,7 @@
  * it does not push the scores down the page. Submit stops the recording and
  * waits for its transcript before it sends the scores.
  *
- * Once a recording's transcript is filed, AI Comments has Claude read it
+ * Once a recording's transcript is filed, the AI comments button has Claude read it
  * against every criterion and appends its note to each comment, on a new
  * line after whatever is there, between [AI start] and [AI END]. Nothing is
  * saved until Submit.
@@ -24,7 +24,8 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { ArrowLeft, ClipboardList, FileText, Info, Loader2, Send, Sparkles } from "lucide-react";
+import { ArrowLeft, ClipboardList, FileText, Info, Loader2, Send } from "lucide-react";
+import { AiCommentsButton } from "@/components/ai-comments-button";
 import { MentionTextarea } from "@/components/mention-textarea";
 import { ParticipationGroupButton } from "@/components/participation/participation-dialog";
 import { RecordingPanel } from "@/components/recording/recording-panel";
@@ -199,16 +200,12 @@ export function ScoringFormView({
     const filed = transcripts.transcripts.find((t) => t.recordingId === r.id);
     const heard = Boolean(filed?.text.trim());
     return (
-      <Button
-        variant="ghost"
-        size="sm"
+      <AiCommentsButton
+        pending={reviewing === r.id}
         disabled={!filed || !heard || reviewing !== null}
-        title={!filed ? "Waiting for its transcript" : !heard ? "Nothing was heard in this recording" : undefined}
+        reason={!filed ? "Waiting for its transcript" : !heard ? "Nothing was heard in this recording" : undefined}
         onClick={() => filed && askClaude(filed)}
-      >
-        {reviewing === r.id ? <Loader2 className="animate-spin" /> : <Sparkles />}
-        AI Comments
-      </Button>
+      />
     );
   }
 

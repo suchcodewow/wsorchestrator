@@ -16,17 +16,22 @@ import assert from "node:assert/strict";
 import { eq } from "drizzle-orm";
 
 import { db } from "@/db";
-import { mimirCoachConversations, mimirCoachMessages, mimirCoachStats, mimirConceptProgress, mimirMap } from "@/db/schema";
+import { mimirCoachConversations, mimirCoachMessages, mimirCoachStats, mimirConceptProgress, mimirConceptVideos, mimirMapVersions } from "@/db/schema";
 import { MIMIR_CONTEXT_LIMIT, type Complete, type CompletionRequest } from "@/lib/mimir/chat";
-import { getMap, importMap } from "@/lib/mimir/map/content";
+import { editMap, getMap, getMapVersion, importMap, listMapVersions, replaceMap } from "@/lib/mimir/map/content";
 import { GREET_AFTER_MS, beginCoachTurn, getCoachChat, resetCoachChat, sendCoachMessage } from "@/lib/mimir/map/coach";
 import { getConceptState, listConceptStates, markMastered, markRecommended, saveVideoProgress } from "@/lib/mimir/map/progress";
-import { MAP_ID } from "@/lib/mimir/map/schema";
 import { countNewConversation } from "@/lib/mimir/map/stats";
 import { mapSummary } from "@/lib/mimir/map/summary";
 import { PERSONAS } from "../support/access";
 import { testScope, type TestUser } from "../support/seed";
 import { mapFixture } from "../support/mimir-map";
+
+/** No map at all: this database is workshops_agent, the tests' own. */
+async function clearMap() {
+  await db.delete(mimirMapVersions);
+  await db.delete(mimirConceptVideos);
+}
 
 const scope = testScope("mimirmap");
 
@@ -65,7 +70,7 @@ before(async () => {
 });
 
 after(async () => {
-  await db.delete(mimirMap).where(eq(mimirMap.id, MAP_ID));
+  await clearMap();
   if (savedKey === undefined) delete process.env.ANTHROPIC_API_KEY;
   await scope.tearDown();
 });
@@ -81,12 +86,54 @@ describe("the map's content", () => {
   });
 
   test("a stored map that no longer fits the schema reads as no map, rather than reaching the page", async () => {
-    await db.update(mimirMap).set({ content: { version: 1, nonsense: true } }).where(eq(mimirMap.id, MAP_ID));
+    const live = (await getMap())!.version;
+    await db.update(mimirMapVersions).set({ content: { version: 1, nonsense: true } }).where(eq(mimirMapVersions.version, live));
     assert.equal(await getMap(), null);
     await importMap(admin.id, mapFixture());
     assert.ok(await getMap());
   });
+
+  test("each change is a new version, the newest live, and the history lists them newest first", async () => {
+    const before = (await getMap())!.version;
+    await importMap(admin.id, mapFixture({ title: "Second" }));
+    const after = (await getMap())!;
+    assert.equal(after.version, before + 1);
+    const page = await listMapVersions({ page: 1, q: "", sort: "version", dir: "desc" });
+    assert.deepEqual(page.rows.slice(0, 2).map((r) => [r.version, r.live, r.source]), [[before + 1, true, "import"], [before, false, "import"]]);
+    assert.equal(page.rows[0]!.createdBy?.id, admin.id);
+    assert.equal((await getMapVersion(before))!.content.title, "Test map");
+    await importMap(admin.id, mapFixture());
+  });
+
+  test("an edit from the live version is added; one from an older version is refused, and nothing changes", async () => {
+    const live = (await getMap())!;
+    const renamed = { ...live.content, sections: live.content.sections.map((s, i) => (i === 0 ? { ...s, name: "Renamed section" } : s)) };
+    const stale = await editMap(admin.id, live.version - 1, renamed, "stale");
+    assert.deepEqual(stale, { ok: false, error: "conflict", live: live.version });
+    assert.equal((await getMap())!.version, live.version);
+    const saved = await editMap(admin.id, live.version, renamed, "Renamed a section.");
+    assert.deepEqual(saved, { ok: true, version: live.version + 1 });
+    const now = (await getMap())!;
+    assert.equal(now.content.sections[0]!.name, "Renamed section");
+    // The edit carried no videos of its own, and the concepts keep theirs.
+    assert.equal(now.content.concepts.find((c) => c.id === "alpha")!.video?.object, "mimir/videos/test-alpha.mp4");
+    assert.equal(stored(await getMapVersion(now.version)).some((c) => c.video), false);
+    await importMap(admin.id, mapFixture());
+  });
+
+  test("a published deck keeps each concept's video; an imported file is the whole map, videos and all", async () => {
+    const noVideo = { ...mapFixture().concepts.find((c) => c.id === "alpha")! };
+    delete noVideo.video;
+    const withoutAlpha = mapFixture({ concepts: mapFixture().concepts.map((c) => (c.id === "alpha" ? noVideo : c)) });
+    await replaceMap(admin.id, withoutAlpha, "deck", "deck");
+    assert.equal((await getMap())!.content.concepts.find((c) => c.id === "alpha")!.video?.object, "mimir/videos/test-alpha.mp4");
+    await importMap(admin.id, withoutAlpha);
+    assert.equal((await getMap())!.content.concepts.find((c) => c.id === "alpha")!.video, undefined);
+    await importMap(admin.id, mapFixture());
+  });
 });
+
+const stored = (v: { content: { concepts: { video?: unknown }[] } } | null) => v?.content.concepts ?? [];
 
 describe("progress through a video", () => {
   test("it resumes where they left off, and remembers the furthest they got", async () => {
@@ -349,7 +396,7 @@ describe("the coach", () => {
   });
 
   test("without a map there is nothing to coach on", async () => {
-    await db.delete(mimirMap).where(eq(mimirMap.id, MAP_ID));
+    await clearMap();
     assert.deepEqual(await sendCoachMessage(rep.id, { open: true }, { complete: coach("x").complete }), { ok: false, error: "no_map" });
     const view = await getCoachChat(rep.id);
     assert.deepEqual([view.hasMap, view.needsGreeting, view.conversation], [false, false, null]);

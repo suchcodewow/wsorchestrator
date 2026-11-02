@@ -40,6 +40,7 @@ export function AttendeesView({
   page,
   counts,
   rooms,
+  canRegenerate,
 }: {
   assessment: ScoringAssessment;
   bootcamp: ActiveBootcamp | null;
@@ -51,6 +52,8 @@ export function AttendeesView({
   counts: { attendees: number; scored: number; mine: number };
   /** The viewer's rooms in the breakouts scored on this assessment. */
   rooms: BreakoutRoom[];
+  /** Whether the participation popup saves the score as marks move and offers AI comments. */
+  canRegenerate: boolean;
 }) {
   const sortProps = { sort: query.sort, dir: query.dir };
   const base = `/evals/${assessment.stage}/${assessment.id}`;
@@ -165,7 +168,7 @@ export function AttendeesView({
                   </td>
                   {bootcamp && (
                     <td className="px-5 py-1.5">
-                      <ParticipationButton employeeId={p.id} fullName={p.fullName} labelled />
+                      <ParticipationButton employeeId={p.id} fullName={p.fullName} canRegenerate={canRegenerate} labelled />
                     </td>
                   )}
                   <td className="px-5 py-3 text-muted-foreground">{p.title || "—"}</td>

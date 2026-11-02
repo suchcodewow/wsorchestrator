@@ -157,13 +157,13 @@ export const ACCOUNT_GROUPS: EndpointGroup[] = [
       {
         method: "GET",
         path: "/api/welcome/live-training",
-        summary: "Returns what the Welcome page's Running a Live Training Session steps show: the active bootcamp, the current cohort, the active schedule, and how far scoring has got.",
+        summary: "Returns what the Welcome page's Running a Live Training Session steps show: the active bootcamp, the current cohort, the active schedule, how far scoring has got, and which classes have been released.",
         access: "signedIn",
         token: true,
         notes:
-          "training is null below Training Viewer, and assessments below Assessments Viewer. attendees counts everyone on the Cohorts page's Current tab. sessions and issues are null with no bootcamp active; a track the active bootcamp does not hold has null sessions, and issues counts what the schedule page's warning button lists. In assessments, total is one for each attendee on each active assessment that applies to them and scored those with a submission at the active bootcamp; btc and int are sales attendees, btc_se and int_se engineers.",
+          "training is null below Training Viewer, and assessments below Assessments Viewer. attendees counts everyone on the Cohorts page's Current tab. sessions and issues are null with no bootcamp active; a track the active bootcamp does not hold has null sessions, and issues counts what the schedule page's warning button lists. In assessments, total is one for each attendee on each active assessment that applies to them and scored those with a submission at the active bootcamp; btc and int are sales attendees, btc_se and int_se engineers. feedback is null with no bootcamp active; each of its released values is when that class's scores were released to managers on Reporting → Live Sessions, or null until then.",
         returns:
-          "{ training: { active: { id, startDate: \"YYYY-MM-DD\", btcDays: number, intDays: number | null } | null, attendees: { bootcamp: number, intermediate: number }, sessions: { btc, int, btc_se, int_se: number | null } | null, issues: number | null } | null, assessments: { btc, int, btc_se, int_se: { scored: number, total: number } } | null }",
+          "{ training: { active: { id, startDate: \"YYYY-MM-DD\", btcDays: number, intDays: number | null } | null, attendees: { bootcamp: number, intermediate: number }, sessions: { btc, int, btc_se, int_se: number | null } | null, issues: number | null } | null, assessments: { btc, int, btc_se, int_se: { scored: number, total: number } } | null, feedback: { intermediate: boolean, released: { bootcamp: string | null, intermediate: string | null } } | null }",
       },
       {
         method: "GET",

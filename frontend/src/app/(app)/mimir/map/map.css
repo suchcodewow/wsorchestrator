@@ -65,55 +65,19 @@
 .mm-band {
   position: absolute;
   top: 0;
-  height: 96px;
+  height: 48px;
   color: #fff;
   font-size: 12px;
   font-weight: 600;
   padding: 3px 9px;
   border-radius: 5px;
   overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
 }
 .mm-band > span {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.mm-course {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.mm-course button {
-  background: none;
-  border: 0;
-  padding: 0;
-  color: inherit;
-  font: inherit;
-  font-weight: 500;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-  cursor: pointer;
-  text-align: left;
-}
-.mm-ring {
-  flex: none;
-  width: 20px;
-  height: 20px;
-}
-.mm-ring path {
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2.6;
-  stroke-linecap: round;
-  opacity: 0.35;
-}
-.mm-ring path.mm-ring-on {
-  opacity: 1;
-}
-
 .mm-slide,
 .mm-concept,
 .mm-group,
@@ -127,22 +91,22 @@
   position: absolute;
   top: 34px;
   width: 117px;
-  height: 61px;
+  height: 37px;
   background: var(--background);
   border: 1px solid var(--border);
-  border-top: 5px solid var(--ln);
+  border-top: 4px solid var(--ln);
   border-radius: 6px;
-  padding: 4px 5px;
+  padding: 3px 5px;
   font-size: 12px;
-  line-height: 1.25;
+  line-height: 1.35;
   overflow: hidden;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 .mm-slide b {
   display: inline;
   margin-right: 5px;
-  font-size: 17px;
-  line-height: 1.2;
+  font-size: 14px;
 }
 .mm-slide.mm-empty {
   color: color-mix(in srgb, var(--foreground) 55%, var(--background));

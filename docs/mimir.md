@@ -51,6 +51,13 @@ whole against `src/lib/mimir/map/schema.ts` and replaces the last one. Progress
 is keyed by concept id, so everyone's progress on a concept the new map keeps
 carries over. `.gitignore` refuses `mimir-map-content*.json` as a backstop.
 
+After that, **Mimir Settings → Map Editor** changes the live map in place:
+section names and the slides each spans, group names, descriptions and levels,
+and each concept's name, group, explanation, main points and what it depends
+on. Each save is a new version, and its History can put any earlier version
+back. Videos are not edited there: each concept keeps its own whichever
+version is live. The same is reachable through `/api/mimir/map/versions`.
+
 ## The videos
 
 Each environment keeps them in its own private recordings bucket
@@ -160,7 +167,9 @@ role and coaching style), pointed at the course. One conversation per person.
 
 | Table | Holds |
 | --- | --- |
-| `mimir_map` | The imported map: one row, `current`. |
+| `mimir_map_versions` | The map's structure (sections, slides, levels, groups, concepts and what each depends on), every version of it. The highest version is live. Each import, published deck, Map Editor save and restore adds one, as the next number after the version it was made from, so a save made over one it did not see is refused. |
+| `mimir_concept_videos` | Each concept's video, one row per language, by concept id. Mimir Studio writes these and nothing else. Replacing the English deletes the translations. A concept taken off the map keeps its rows. |
+| `mimir_map` | Superseded by the two above and no longer read; kept until a later migration drops it. |
 | `mimir_concept_progress` | Per person per concept: where they left off, the furthest reached, when the video was finished, when the coach marked it mastered or recommended it, and its checklist (`points`: each point and whether it is covered). |
 | `mimir_coach_conversations`, `mimir_coach_messages` | One conversation per person with the map coach. |
 

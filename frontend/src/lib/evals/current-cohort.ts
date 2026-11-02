@@ -46,8 +46,12 @@ export function isCurrentTrack(value: unknown): value is CurrentTrack {
   return CURRENT_TRACKS.includes(value as CurrentTrack);
 }
 
-/** At most one stage and one track; null for the stage shows both, and for the track every one but deferred. */
-export type CurrentCohortFilter = { stage: CandidateStage | null; track: CandidateTrack | null };
+/**
+ * At most one stage and one track; null for the stage shows both, and for the
+ * track every one but deferred. `unanswered` keeps only those who have not
+ * RSVP'd: saved no answers to their stage's registration form.
+ */
+export type CurrentCohortFilter = { stage: CandidateStage | null; track: CandidateTrack | null; unanswered?: boolean };
 
 export type CurrentCohortMember = Pick<
   Employee,
@@ -77,6 +81,8 @@ export type CurrentCohortCounts = Record<CandidateStage, Record<CandidateTrack, 
 
 export type CurrentCohortSummary = {
   counts: CurrentCohortCounts;
+  /** The same, of only those who have not RSVP'd. */
+  unanswered: CurrentCohortCounts;
   /** When the sync that set those tracks ran; null if none has stored anyone. */
   syncedAt: Date | null;
   /** The cutoffs the counts and lists were drawn with. */
@@ -92,6 +98,8 @@ const attendedBtc = attended("bootcamp", sql`${e.email}`);
 const attendedInt = attended("intermediate", sql`${e.email}`);
 const candidateStage = sql<CandidateStage>`(case when ${attendedBtc} then 'intermediate' else 'bootcamp' end)`;
 const btcDate = classDate("bootcamp", sql`${e.email}`);
+/** They saved answers to their stage's registration form, as the RSVP mark beside their name shows. */
+const rsvped = sql<boolean>`exists (select 1 from ${intakeResponses} where ${intakeResponses.form} = ${candidateStage} and ${intakeResponses.email} = lower(${e.email}))`;
 
 const SORT_COLUMNS = {
   fullName: sql`lower(${e.fullName})`,
@@ -164,6 +172,7 @@ export async function listCurrentCohort(
         isCandidate(cutoffs),
         filter.stage ? IN_STAGE[filter.stage] : undefined,
         filter.track ? ON_TRACK[filter.track] : or(isNull(e.track), inArray(e.track, ["sales", "engineer"])),
+        filter.unanswered ? not(rsvped) : undefined,
         searchAny(query.q, [e.fullName, e.email, e.title, candidateTrack]),
       ),
     )
@@ -287,7 +296,12 @@ export async function currentCohortSummary(): Promise<CurrentCohortSummary> {
   const cutoffs = await getCandidateCutoffs();
   const [cells, [synced], days, bootcampStart] = await Promise.all([
     db
-      .select({ stage: candidateStage, track: candidateTrack, count: sql<number>`count(*)::int` })
+      .select({
+        stage: candidateStage,
+        track: candidateTrack,
+        count: sql<number>`count(*)::int`,
+        unanswered: sql<number>`(count(*) filter (where not ${rsvped}))::int`,
+      })
       .from(e)
       .where(isCandidate(cutoffs))
       .groupBy(candidateStage, candidateTrack),
@@ -298,9 +312,14 @@ export async function currentCohortSummary(): Promise<CurrentCohortSummary> {
   ]);
   const zero = () => Object.fromEntries(CANDIDATE_TRACKS.map((t) => [t, 0])) as Record<CandidateTrack, number>;
   const counts: CurrentCohortCounts = { bootcamp: zero(), intermediate: zero() };
-  for (const c of cells) counts[c.stage][c.track] = c.count;
+  const unanswered: CurrentCohortCounts = { bootcamp: zero(), intermediate: zero() };
+  for (const c of cells) {
+    counts[c.stage][c.track] = c.count;
+    unanswered[c.stage][c.track] = c.unanswered;
+  }
   return {
     counts,
+    unanswered,
     syncedAt: synced?.at ? new Date(synced.at) : null,
     cutoffs,
     deferral: { days, bootcampStart },

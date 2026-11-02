@@ -6,21 +6,23 @@
  * A mark is a shared counter from 0 to `PARTICIPATION_LIMITS.maxCount`, with
  * every click logged, so two judges clicking at once both count and the popup
  * can say who did what. An attendee's first mark creates their assessment,
- * because a mark shows they are attending, with a blank score that no average
- * counts. Generate fills that in, and from then on it counts towards the class
- * like any other assessment. If their marks all go back to zero before then,
- * the assessment goes too, so that a mistaken click never counts as attendance.
+ * because a mark shows they are attending, and every click saves the score
+ * the marks give and clears the comment on that side, for Generate or an
+ * administrator to write again. If their marks all go back to zero, and
+ * nothing else shows they attended, the assessment goes too, so that a
+ * mistaken click never counts as attendance.
  */
 
 import "server-only";
 
-import { and, asc, eq, inArray, isNotNull, isNull, lt, gt, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, lt, gt, notExists, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
 import {
   EVALS_SETTINGS_KEYS,
   PARTICIPATION_LIMITS,
   PARTICIPATION_POLARITIES,
+  bootcamps,
   employees,
   evalsAssessments,
   evalsSettings,
@@ -36,6 +38,7 @@ import {
 import { attended } from "@/lib/evals/attendance";
 import { IN_STAGE, isCandidate } from "@/lib/evals/current-cohort";
 import { writeFeedback, type FeedbackPerson, type WrittenFeedback } from "@/lib/evals/participation-feedback";
+import { pendingOverall } from "@/lib/reporting/overall-feedback";
 import {
   DEFAULT_PARTICIPATION_BANDS,
   bandsInOrder,
@@ -49,7 +52,7 @@ import {
 import { getCandidateCutoffs } from "@/lib/evals/settings";
 import { reviewConfigured } from "@/lib/evals/transcript-review";
 import { taggerOf } from "@/lib/mention-store";
-import { cohortBootcamp } from "@/lib/reporting/bootcamp";
+import { cohortBootcamp, cohortEmails, unscoredAttendees } from "@/lib/reporting/bootcamp";
 import { activeBootcamp, type ActiveBootcamp } from "@/lib/scheduler/bootcamps";
 
 const d = participationDescriptors;
@@ -206,16 +209,28 @@ export type ParticipationSheet = {
   runningScore: number | null;
   /** The saved assessment, for someone who may read it; its score is blank before Generate. */
   saved: { averageScore: number | null; positiveFeedback: string; constructiveFeedback: string } | null;
+  /** Their class is released, so only an administrator may move their marks. */
+  locked: boolean;
 };
 
+/** Whether `stage`'s class at `bootcampId` has been released to managers. */
+async function isReleased(bootcampId: string, stage: EvalsAssessmentStage): Promise<boolean> {
+  const [row] = await db
+    .select({ at: stage === "bootcamp" ? bootcamps.btcReleasedAt : bootcamps.intReleasedAt })
+    .from(bootcamps)
+    .where(eq(bootcamps.id, bootcampId));
+  return Boolean(row?.at);
+}
+
+/** `admin` is an Assessments Administrator, who reads what was saved and may mark them after release. */
 async function readSheet(
   bootcamp: ActiveBootcamp,
   attendee: Attendee,
-  withSaved: boolean,
+  admin: boolean,
 ): Promise<ParticipationSheet> {
   const scope = and(eq(m.bootcampId, bootcamp.id), eq(m.stage, attendee.stage), eq(m.attendeeEmail, attendee.email));
   const e = participationMarkEvents;
-  const [descriptors, marks, events, bands, saved] = await Promise.all([
+  const [descriptors, marks, events, bands, saved, released] = await Promise.all([
     activeDescriptors(),
     db.select({ descriptorId: m.descriptorId, count: m.count }).from(m).where(scope).limit(PARTICIPATION_LIMITS.descriptors * 2),
     db
@@ -227,7 +242,8 @@ async function readSheet(
       .orderBy(asc(e.actorName))
       .limit(PARTICIPATION_LIMITS.adjustments),
     participationBands(),
-    withSaved ? savedParticipation(bootcamp.id, attendee.stage, attendee.email) : null,
+    admin ? savedParticipation(bootcamp.id, attendee.stage, attendee.email) : null,
+    admin ? false : isReleased(bootcamp.id, attendee.stage),
   ]);
   const counts = new Map(marks.map((x) => [x.descriptorId, x.count]));
   const rows = descriptors.map((x) => ({
@@ -240,6 +256,7 @@ async function readSheet(
     descriptors: rows,
     runningScore: rows.some((x) => x.count > 0) ? participationScore(rows, bands) : null,
     saved: saved ?? null,
+    locked: released,
   };
 }
 
@@ -255,36 +272,41 @@ async function savedParticipation(bootcampId: string, stage: EvalsAssessmentStag
 
 export async function getParticipationSheet(
   employeeId: string,
-  withSaved: boolean,
+  admin: boolean,
 ): Promise<{ ok: true; sheet: ParticipationSheet } | { ok: false; error: ParticipationError }> {
   const found = await bootcampAttendee(employeeId);
   if (!found.ok) return found;
-  return { ok: true, sheet: await readSheet(found.bootcamp, found.attendee, withSaved) };
+  return { ok: true, sheet: await readSheet(found.bootcamp, found.attendee, admin) };
 }
+
+export type AdjustError = ParticipationError | "released";
+
+export const ADJUST_STATUS_FOR: Record<AdjustError, number> = { ...PARTICIPATION_STATUS_FOR, released: 409 };
 
 export const adjustSchema = z.object({
   descriptorId: z.string().uuid(),
   delta: z.union([z.literal(1), z.literal(-1)]),
-  /** An administrator's edit in the Administration View, which carries through to a saved score. */
-  updateScore: z.boolean().optional(),
 });
 
 /**
  * Moves one counter by one. A counter already at the end it was pushed
  * towards stays there and logs nothing, which also covers two judges racing
- * for the last step.
+ * for the last step. A move saves the score the marks now give and clears
+ * the comment on its own side, which no longer says what the marks do.
+ * Once their class is released only an administrator may move them.
  */
 export async function adjustMark(
   actorId: string,
   employeeId: string,
   input: z.infer<typeof adjustSchema>,
-  withSaved: boolean,
-): Promise<{ ok: true; sheet: ParticipationSheet; descriptor: string; moved: boolean } | { ok: false; error: ParticipationError }> {
+  admin: boolean,
+): Promise<{ ok: true; sheet: ParticipationSheet; descriptor: string; moved: boolean } | { ok: false; error: AdjustError }> {
   const found = await bootcampAttendee(employeeId);
   if (!found.ok) return found;
   const { bootcamp, attendee } = found;
+  if (!admin && (await isReleased(bootcamp.id, attendee.stage))) return { ok: false, error: "released" };
   const [descriptor] = await db
-    .select({ name: d.name })
+    .select({ name: d.name, polarity: d.polarity })
     .from(d)
     .where(and(eq(d.id, input.descriptorId), isNull(d.retiredAt)));
   if (!descriptor) return { ok: false, error: "not_found" };
@@ -340,21 +362,37 @@ export async function adjustMark(
         ),
       )
       .limit(PARTICIPATION_LIMITS.descriptors);
+    await tx
+      .update(s)
+      .set({
+        averageScore: participationScore(remaining, bands),
+        ...(descriptor.polarity === "positive" ? { positiveFeedback: "" } : { constructiveFeedback: "" }),
+        ownerId: actorId,
+        updatedAt: new Date(),
+      })
+      .where(ofAttendee);
+    // A mistaken click must not count as attendance. Someone assessed on anything else in the class keeps
+    // theirs, at the 2 Generate would give them.
     if (remaining.length === 0) {
+      const other = tx
+        .select({ one: sql`1` })
+        .from(evalsAssessments)
+        .innerJoin(s, eq(s.assessmentId, evalsAssessments.id))
+        .where(
+          and(
+            eq(s.bootcampId, bootcamp.id),
+            eq(s.attendeeEmail, attendee.email),
+            eq(evalsAssessments.stage, attendee.stage),
+            isNull(evalsAssessments.builtIn),
+          ),
+        );
       await tx
         .delete(s)
-        .where(and(ofAttendee, isNull(s.averageScore), eq(s.positiveFeedback, ""), eq(s.constructiveFeedback, "")));
-    }
-    // A blank score stays blank: only Generate gives one.
-    if (input.updateScore) {
-      await tx
-        .update(s)
-        .set({ averageScore: participationScore(remaining, bands), ownerId: actorId, updatedAt: new Date() })
-        .where(and(ofAttendee, isNotNull(s.averageScore)));
+        .where(and(ofAttendee, eq(s.positiveFeedback, ""), eq(s.constructiveFeedback, ""), notExists(other)));
     }
     return true;
   });
-  return { ok: true, sheet: await readSheet(bootcamp, attendee, withSaved), descriptor: descriptor.name, moved };
+  return { ok: true, sheet: await readSheet(bootcamp, attendee, admin), descriptor: descriptor.name, moved };
 }
 
 export type GroupPerson = { id: string; fullName: string };
@@ -415,8 +453,14 @@ async function marksOf(bootcampId: string, stage: EvalsAssessmentStage, email?: 
 }
 
 /** Who a press of Generate touches for one class at this bootcamp, and who it leaves out. */
-async function generationPlans(bootcampId: string, stage: EvalsAssessmentStage, assessmentId: string) {
-  const [marks, assessed, existing, bands, cutoffs] = await Promise.all([
+/**
+ * What Generate would write for each person in `stage`'s class. Anyone in its
+ * cohort, having RSVP'd, counts as attending, as does anyone scored on
+ * something else there.
+ */
+async function generationPlans(bootcamp: { id: string; startDate: string }, stage: EvalsAssessmentStage, assessmentId: string) {
+  const bootcampId = bootcamp.id;
+  const [marks, assessed, existing, bands, cutoffs, cohort] = await Promise.all([
     marksOf(bootcampId, stage),
     db
       .selectDistinct({ email: s.attendeeEmail })
@@ -434,10 +478,11 @@ async function generationPlans(bootcampId: string, stage: EvalsAssessmentStage, 
       .where(and(eq(s.bootcampId, bootcampId), eq(s.assessmentId, assessmentId))),
     participationBands(),
     getCandidateCutoffs(),
+    cohortEmails(bootcamp, stage),
   ]);
   const byEmail = new Map<string, NamedMark[]>();
   for (const { email, ...mark } of marks) byEmail.set(email, [...(byEmail.get(email) ?? []), mark]);
-  const assessedEmails = new Set(assessed.map((x) => x.email));
+  const assessedEmails = new Set([...assessed.map((x) => x.email), ...cohort]);
   const plans = planGeneration(byEmail, assessedEmails, existing, bands);
 
   // Nothing shows these people came, and a submission would mark them as attended at release.
@@ -451,9 +496,17 @@ async function generationPlans(bootcampId: string, stage: EvalsAssessmentStage, 
   return { plans, skipped };
 }
 
-export type StagePending = { comments: number; scores: number; skipped: string[] };
+export type StagePending = {
+  comments: number;
+  /** Blank overall feedback, positive or constructive, with assessment feedback to sum up. */
+  overall: number;
+  scores: number;
+  skipped: string[];
+  /** Who has an assessment still waiting on a score, which holds up Release: at most 100 names, and how many in all. */
+  unscored: { total: number; names: string[] };
+};
 
-/** What each class's Generate button would do; null for a class the bootcamp does not hold, or one already released. */
+/** What each class's Generate and Release buttons face; null for a class the bootcamp does not hold, or one already released. */
 export async function pendingParticipation(): Promise<Record<EvalsAssessmentStage, StagePending | null>> {
   const bootcamp = await cohortBootcamp();
   const one = async (stage: EvalsAssessmentStage): Promise<StagePending | null> => {
@@ -461,8 +514,12 @@ export async function pendingParticipation(): Promise<Record<EvalsAssessmentStag
     if (stage === "intermediate" && !bootcamp.intermediate) return null;
     const assessment = await participationAssessment(stage);
     if (!assessment) return null;
-    const { plans, skipped } = await generationPlans(bootcamp.id, stage, assessment.id);
-    return { ...generationCounts(plans), skipped: skipped.slice(0, 100) };
+    const [{ plans, skipped }, unscored, overall] = await Promise.all([
+      generationPlans(bootcamp, stage, assessment.id),
+      unscoredAttendees(bootcamp, stage),
+      pendingOverall(bootcamp, stage),
+    ]);
+    return { ...generationCounts(plans), overall, skipped: skipped.slice(0, 100), unscored };
   };
   const [btc, int] = await Promise.all([one("bootcamp"), one("intermediate")]);
   return { bootcamp: btc, intermediate: int };
@@ -511,7 +568,7 @@ export async function generateParticipation(
   const assessment = await participationAssessment(stage);
   if (!assessment) return { ok: false, error: "no_assessment" };
 
-  const { plans } = await generationPlans(bootcamp.id, stage, assessment.id);
+  const { plans } = await generationPlans(bootcamp, stage, assessment.id);
   const bands = await participationBands();
   const scoreOf = (p: GenerationPlan) => p.score ?? participationScore(p.marks, bands);
   const people = asPeople(plans, scoreOf);
@@ -571,19 +628,21 @@ export async function generateParticipation(
   };
 }
 
-export type RegenerateError = ParticipationError | "not_generated" | "unconfigured" | "upstream";
+export type RegenerateError = ParticipationError | "no_assessment" | "no_marks" | "unconfigured" | "upstream";
 
 export const REGENERATE_STATUS_FOR: Record<RegenerateError, number> = {
   ...PARTICIPATION_STATUS_FOR,
-  not_generated: 409,
+  no_assessment: 409,
+  no_marks: 409,
   unconfigured: 503,
   upstream: 502,
 };
 
 /**
  * Replaces one attendee's participation comments and score from the marks
- * they have now, whatever was there. It needs a saved score, because that
- * stays blank until Generate is pressed for the class.
+ * they have now, whatever was there, without waiting for the class's
+ * Generate. Someone with no marks and no assessment yet is left alone, since
+ * an assessment counts as attendance at release.
  */
 export async function regenerateParticipation(
   actorId: string,
@@ -593,11 +652,12 @@ export async function regenerateParticipation(
   if (!found.ok) return found;
   const { bootcamp, attendee } = found;
   const assessment = await participationAssessment(attendee.stage);
+  if (!assessment) return { ok: false, error: "no_assessment" };
   const saved = await savedParticipation(bootcamp.id, attendee.stage, attendee.email);
-  if (!assessment || saved?.averageScore == null) return { ok: false, error: "not_generated" };
 
   const [rows, bands] = await Promise.all([marksOf(bootcamp.id, attendee.stage, attendee.email), participationBands()]);
   const marks: NamedMark[] = rows.map(({ name, polarity, count }) => ({ name, polarity, count }));
+  if (!saved && marks.length === 0) return { ok: false, error: "no_marks" };
   const score = participationScore(marks, bands);
   const person: FeedbackPerson = {
     id: "p1",
@@ -613,15 +673,24 @@ export async function regenerateParticipation(
     if (!written) return { ok: false, error: "upstream" };
     text = written;
   }
+  const now = new Date();
+  const written = {
+    averageScore: score,
+    positiveFeedback: text.positive,
+    constructiveFeedback: text.constructive,
+    ownerId: actorId,
+    updatedAt: now,
+  };
   await db
-    .update(s)
-    .set({
-      averageScore: score,
-      positiveFeedback: text.positive,
-      constructiveFeedback: text.constructive,
-      ownerId: actorId,
-      updatedAt: new Date(),
+    .insert(s)
+    .values({
+      bootcampId: bootcamp.id,
+      assessmentId: assessment.id,
+      attendeeEmail: attendee.email,
+      assessmentName: assessment.name,
+      submittedAt: now,
+      ...written,
     })
-    .where(and(eq(s.bootcampId, bootcamp.id), eq(s.assessmentId, assessment.id), eq(s.attendeeEmail, attendee.email)));
+    .onConflictDoUpdate({ target: [s.bootcampId, s.assessmentId, s.attendeeEmail], set: written });
   return { ok: true, sheet: await readSheet(bootcamp, attendee, true), email: attendee.email };
 }

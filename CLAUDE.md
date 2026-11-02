@@ -252,7 +252,8 @@ for running events, visible only to administrators.") is the shape to avoid.
 **Group related items in one card with separators, not a stack of cards.**
 A run of checks, settings or steps that belong together goes in a single
 bordered card whose rows are split by `divide-y`, each row padded on its own
-(`px-5 py-4`). Don't give each item its own `rounded-2xl border` card with
+and kept compact: `px-5 py-2.5`, with a row's label and its live value on one
+line where they fit rather than stacked. Don't give each item its own `rounded-2xl border` card with
 `space-y-*` between them: the gaps and repeated borders spread one task across
 the page. `frontend/src/app/(app)/me/check-pc/check-pc-view.tsx` is the shape
 to copy. Separate cards are for things that really are separate, such as a

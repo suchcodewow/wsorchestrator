@@ -1,5 +1,5 @@
 import { FOOD_ORDER_LIST, RECORDING_LIST, GUEST_JUDGE_LIST, INTAKE_RESPONSE_LIST, JUDGE_PROSPECT_LIST, ASSESSMENT_ATTENDEE_LIST, ASSESSMENT_LIST, AUDIT_LIST, BOOTCAMP_COHORT_LIST, BOOTCAMP_LIST, BOOTCAMP_RECORD_LIST, CURRENT_COHORT_LIST, DOMAIN_LIST, EMPLOYEE_LIST, FRAME_DOMAIN_LIST, HIBOB_SYNC_LIST, HISTORY_STATUSES, JUDGE_LIST, ORGANIZATION_LIST, PREVIOUS_SESSION_LIST, SESSION_COMMENT_LIST, SESSION_TYPE_LIST, MEETING_SELECTION_LIST, MEETING_SYNC_CHANGE_LIST, MEETING_SYNC_LIST, SLACK_CONTACT_LIST, SLACK_SYNC_CHANGE_LIST, SLACK_SYNC_LIST, CHANNEL_CONTACT_LIST, SURVEY_RESPONSE_LIST, SURVEY_RESULT_LIST, TITLE_LIST, USER_LIST, FACILITY_LIST, VIDEO_FEEDBACK_LIST, VIDEO_FEEDBACK_SUMMARY_LIST } from "@/lib/list-specs";
-import { BOOTCAMP_LIMITS, BOOTCAMP_SCORE, CHECKLIST_LIMITS, EVALS_ASSESSMENT_LIMITS, FACILITY_LIMITS, FOOD_ORDER_LIMITS, INTAKE_LIMITS, MEETING_SELECTION_LIMITS, RECORDING_LIMITS, SCHEDULE_LIMITS, SURVEY_LIMITS, VIDEO_FEEDBACK_LIMITS } from "@/db/schema";
+import { BOOTCAMP_EXAM, BOOTCAMP_LIMITS, BOOTCAMP_SCORE, CHECKLIST_LIMITS, EVALS_ASSESSMENT_LIMITS, FACILITY_LIMITS, FOOD_ORDER_LIMITS, INTAKE_LIMITS, MEETING_SELECTION_LIMITS, RECORDING_LIMITS, SCHEDULE_LIMITS, SURVEY_LIMITS, VIDEO_FEEDBACK_LIMITS } from "@/db/schema";
 import { PAGE_SIZE } from "@/lib/paging";
 import { RECORDING_RETENTION_DAYS, UPLOAD_STALLED_MS, UPLOAD_URL_BATCH } from "@/lib/recording/video";
 import { CHECKLIST_ITEM_ROW } from "./account";
@@ -366,16 +366,18 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "trainingViewer",
         token: true,
         notes:
-          "A bootcamp candidate is anyone under the Organization Leader, on the sales, engineer or deferred track or on none, who has attended no BTC; an intermediate candidate has attended a BTC and no INT. Someone attended a class when they were assessed in it at a bootcamp whose class has since been released (POST /api/reporting/bootcamp/release). Either must also pass the date cutoffs in GET /api/evals/candidate-cutoffs, which cutoffs echoes. The ignored and exempt tracks are left out. A track is, first, one an administrator set by hand with PUT /api/cohorts/current/track, which overridden marks, exempt among them; then ignored for a title on the Ignored list; then deferred when their HiBob start date is fewer than deferral.days before deferral.bootcampStart, or after it; then the Sales or Engineer list their title is on. undecided is a title on no list. members never includes anyone deferred, and track cannot ask for them; they are on GET /api/cohorts/deferred. deferral echoes GET /api/evals/deferral-days. counts gives each stage on each track, deferred included; each stage's counts ignore the track filter, each track's ignore the stage filter, and neither depends on the search. activeBootcamp is the one active bootcamp, or null. No scores are returned, to anyone; GET /api/reporting/bootcamp/people/{key} and the eVals routes have them. meetings lists where each member stands with each Google meeting picked for their stage and track (GET /api/evals/google-meetings): attended, by Zoom or an administrator's mark; accepted or pending on the invite they hold, startsAt and endsAt being when it runs (on a meeting without allOccurrences, one they declined is not the invite they hold); uninvited until the next sync invites them, startsAt and endsAt then being the occurrence it would pick, as the sync picks it, with predicted true (null on a meeting with nothing to offer yet); or none_left with no occurrence left in their window: before the active bootcamp, or, for an Intermediate meeting they will take after it, from the day after its last day to the next intermediate class; or finished in place of none_left on a meeting with allOccurrences, where having none left needs nothing more. marked is an administrator's mark, or null when Zoom decides. timezone is the member's own, or null when the app has none. outOfHours is true when that occurrence is still to come and, in their time zone, starts before 9:00, ends after 17:00 or ends on a later day; it is false for anyone with no time zone. instances is null unless the meeting invites to every occurrence; then it lists, soonest first, each occurrence they hold an invite to, attended or missed once Zoom has been read and accepted or pending before, leaving when the next sync would take them off it, and each the next sync would add them to, uninvited, and outOfHours is true when any of them is. leaving is null unless the next sync would take them off an invite it added; then occurrences lists those, soonest first, why says they attended, the meeting is no longer for them (not_for_them, the one case where a meeting not picked for their stage and track is listed), or it is one more invite than they should hold (extra), and dryRun is true while the sync only logs what it would do. It is null with no active bootcamp or with the test group on, when no sync changes these invites. mark is leaving when that leaves them with no invite still to come. recordKey is the key of their page on GET /api/reporting/bootcamp/people/{key} once they have attended a BTC, and null before. btcDate is the day of the latest BTC they attended.",
+          "A bootcamp candidate is anyone under the Organization Leader, on the sales, engineer or deferred track or on none, who has attended no BTC; an intermediate candidate has attended a BTC and no INT. Someone attended a class when they were assessed in it at a bootcamp whose class has since been released (POST /api/reporting/bootcamp/release). Either must also pass the date cutoffs in GET /api/evals/candidate-cutoffs, which cutoffs echoes. The ignored and exempt tracks are left out. A track is, first, one an administrator set by hand with PUT /api/cohorts/current/track, which overridden marks, exempt among them; then ignored for a title on the Ignored list; then deferred when their HiBob start date is fewer than deferral.days before deferral.bootcampStart, or after it; then the Sales or Engineer list their title is on. undecided is a title on no list. members never includes anyone deferred, and track cannot ask for them; they are on GET /api/cohorts/deferred. deferral echoes GET /api/evals/deferral-days. counts gives each stage on each track, deferred included; each stage's counts ignore the track filter, each track's ignore the stage filter, and neither depends on the search. unanswered is the same counts of only those who have not RSVP'd: saved no answers to their stage's registration form. activeBootcamp is the one active bootcamp, or null. No scores are returned, to anyone; GET /api/reporting/bootcamp/people/{key} and the eVals routes have them. meetings lists where each member stands with each Google meeting picked for their stage and track (GET /api/evals/google-meetings): attended, by Zoom or an administrator's mark; accepted or pending on the invite they hold, startsAt and endsAt being when it runs (on a meeting without allOccurrences, one they declined is not the invite they hold); uninvited until the next sync invites them, startsAt and endsAt then being the occurrence it would pick, as the sync picks it, with predicted true (null on a meeting with nothing to offer yet); or none_left with no occurrence left in their window: before the active bootcamp, or, for an Intermediate meeting they will take after it, from the day after its last day to the next intermediate class; or finished in place of none_left on a meeting with allOccurrences, where having none left needs nothing more. marked is an administrator's mark, or null when Zoom decides. timezone is the member's own, or null when the app has none. outOfHours is true when that occurrence is still to come and, in their time zone, starts before 9:00, ends after 17:00 or ends on a later day; it is false for anyone with no time zone. instances is null unless the meeting invites to every occurrence; then it lists, soonest first, each occurrence they hold an invite to, attended or missed once Zoom has been read and accepted or pending before, leaving when the next sync would take them off it, and each the next sync would add them to, uninvited, and outOfHours is true when any of them is. leaving is null unless the next sync would take them off an invite it added; then occurrences lists those, soonest first, why says they attended, the meeting is no longer for them (not_for_them, the one case where a meeting not picked for their stage and track is listed), or it is one more invite than they should hold (extra), and dryRun is true while the sync only logs what it would do. It is null with no active bootcamp or with the test group on, when no sync changes these invites. mark is leaving when that leaves them with no invite still to come. recordKey is the key of their page on GET /api/reporting/bootcamp/people/{key} once they have attended a BTC, and null before. btcDate is the day of the latest BTC they attended.",
         query: [
           { name: "stage", type: `"bootcamp" | "intermediate"`, note: "only that stage; both if omitted" },
           { name: "track", type: `"sales" | "engineer" | "undecided"`, note: "only that track; all three if omitted" },
+          { name: "rsvp", type: `"none"`, note: "only those who have not RSVP'd to their stage's registration form" },
           ...listQuery(CURRENT_COHORT_LIST.sorts, "the name, email, title or track"),
         ],
-        returns: `{ stage: string | null, track: string | null, members: { id, email, fullName, title, department, site, reportsToEmail, reportsToName, startDate: "YYYY-MM-DD" | null, activeEffectiveDate: "YYYY-MM-DD" | null, track: "sales" | "engineer" | "undecided", overridden: boolean, stage: "bootcamp" | "intermediate", recordKey: string | null, btcDate: "YYYY-MM-DD" | null, meetings: { meetingId, name, mark: "leaving" | "attended" | "accepted" | "pending" | "uninvited" | "none_left" | "finished", marked: boolean | null, startsAt: ISO 8601 string | null, endsAt: ISO 8601 string | null, predicted: boolean, timezone: string | null, outOfHours: boolean, instances: { startsAt: ISO 8601 string, endsAt: ISO 8601 string, mark: "attended" | "missed" | "accepted" | "pending" | "uninvited" | "leaving", outOfHours: boolean }[] | null, leaving: { why: "attended" | "not_for_them" | "extra", dryRun: boolean, occurrences: { startsAt: ISO 8601 string, endsAt: ISO 8601 string }[] } | null }[] }[], ${PAGE_FIELDS}, counts: Record<"bootcamp" | "intermediate", { sales: number, engineer: number, undecided: number, deferred: number }>, syncedAt: ISO 8601 string | null, cutoffs: { startDateOnOrAfter: "YYYY-MM-DD" | null, activeEffectiveDateAfter: "YYYY-MM-DD" | null }, deferral: { days: number, bootcampStart: "YYYY-MM-DD" | null }, activeBootcamp: { id, startDate, btcDays, intDays } | null }`,
+        returns: `{ stage: string | null, track: string | null, rsvp: "none" | null, members: { id, email, fullName, title, department, site, reportsToEmail, reportsToName, startDate: "YYYY-MM-DD" | null, activeEffectiveDate: "YYYY-MM-DD" | null, track: "sales" | "engineer" | "undecided", overridden: boolean, stage: "bootcamp" | "intermediate", recordKey: string | null, btcDate: "YYYY-MM-DD" | null, meetings: { meetingId, name, mark: "leaving" | "attended" | "accepted" | "pending" | "uninvited" | "none_left" | "finished", marked: boolean | null, startsAt: ISO 8601 string | null, endsAt: ISO 8601 string | null, predicted: boolean, timezone: string | null, outOfHours: boolean, instances: { startsAt: ISO 8601 string, endsAt: ISO 8601 string, mark: "attended" | "missed" | "accepted" | "pending" | "uninvited" | "leaving", outOfHours: boolean }[] | null, leaving: { why: "attended" | "not_for_them" | "extra", dryRun: boolean, occurrences: { startsAt: ISO 8601 string, endsAt: ISO 8601 string }[] } | null }[] }[], ${PAGE_FIELDS}, counts: Record<"bootcamp" | "intermediate", { sales: number, engineer: number, undecided: number, deferred: number }>, unanswered: the same as counts, syncedAt: ISO 8601 string | null, cutoffs: { startDateOnOrAfter: "YYYY-MM-DD" | null, activeEffectiveDateAfter: "YYYY-MM-DD" | null }, deferral: { days: number, bootcampStart: "YYYY-MM-DD" | null }, activeBootcamp: { id, startDate, btcDays, intDays } | null }`,
         errors: [
           { status: 400, error: "invalid_stage", when: "stage is neither bootcamp nor intermediate" },
           { status: 400, error: "invalid_track", when: "track is not sales, engineer or undecided" },
+          { status: 400, error: "invalid_rsvp", when: "rsvp is given and is not none" },
         ],
       },
       {
@@ -2424,10 +2426,10 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "scorer",
         token: true,
         notes:
-          "descriptors is every descriptor on the list, positive first, with its shared count from 0 to 3 and adjustments, who moved it and by how much, leaving out anyone whose clicks cancelled out. runningScore is the 1 to 4 Generate would give them now, and null until they have a mark. saved is their Participation assessment, only for an Assessments Administrator: null before their first mark, with averageScore null until it is generated.",
+          "descriptors is every descriptor on the list, positive first, with its shared count from 0 to 3 and adjustments, who moved it and by how much, leaving out anyone whose clicks cancelled out. runningScore is the 1 to 4 Generate would give them now, and null until they have a mark. saved is their Participation assessment, only for an Assessments Administrator: null before their first mark. locked is true once their class is released, for anyone but an Assessments Administrator, who may still move the marks.",
         params: [{ name: "employeeId", type: "string", required: true }],
         returns:
-          '{ attendee: { id, email, fullName, title, stage: "bootcamp" | "intermediate" }, descriptors: { id, name, polarity: "positive" | "negative", count: number, adjustments: { name, net: number }[] }[], runningScore: number | null, saved: { averageScore, positiveFeedback, constructiveFeedback } | null }',
+          '{ attendee: { id, email, fullName, title, stage: "bootcamp" | "intermediate" }, descriptors: { id, name, polarity: "positive" | "negative", count: number, adjustments: { name, net: number }[] }[], runningScore: number | null, saved: { averageScore, positiveFeedback, constructiveFeedback } | null, locked: boolean }',
         errors: [
           { status: 404, error: "not_found", when: "they are neither a current candidate on a track nor assessed at the active bootcamp" },
           { status: 409, error: "no_bootcamp", when: "no bootcamp is active" },
@@ -2441,23 +2443,22 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "scorer",
         token: true,
         notes:
-          "Counters are shared by every judge and run from 0 to 3. A counter already at the end it was pushed towards stays there and logs nothing. The first mark creates their Participation assessment with a blank score, which no average counts. If their marks all return to zero while the score and comments are blank, the assessment is removed, so a mistaken click does not count as attendance. Returns the attendee's sheet, as GET /api/evals/participation/{employeeId}.",
+          "Counters are shared by every judge and run from 0 to 3. A counter already at the end it was pushed towards stays there and logs nothing. Every move saves the score the marks now give to their Participation assessment, creating it on the first mark, and clears the comment on the moved descriptor's side: a positive descriptor clears positiveFeedback, a negative one constructiveFeedback. Once their class is released only an Assessments Administrator may move them; anyone else is refused. If their marks all return to zero and the assessment was made only by marks, with both comments blank, it is removed, so a mistaken click does not count as attendance. Returns the attendee's sheet, as GET /api/evals/participation/{employeeId}.",
         params: [{ name: "employeeId", type: "string", required: true }],
         body: {
           kind: "json",
           fields: [
             { name: "descriptorId", type: "uuid", required: true },
             { name: "delta", type: "1 | -1", required: true },
-            { name: "updateScore", type: "boolean", required: false, note: "Assessments Administrator only: also recalculates a saved score from the marks" },
           ],
         },
         returns: "the attendee's sheet",
         errors: [
           { status: 400, error: "invalid", when: "the body is not as above" },
-          { status: 403, error: "forbidden", when: "updateScore is set and the caller is not an Assessments Administrator" },
           { status: 404, error: "not_found", when: "no such attendee, or the descriptor is retired or missing" },
           { status: 409, error: "no_bootcamp", when: "no bootcamp is active" },
           { status: 409, error: "no_class", when: "they are in intermediate and the active bootcamp holds no intermediate class" },
+          { status: 409, error: "released", when: "their class is released and the caller is not an Assessments Administrator" },
         ],
       },
       {
@@ -2521,7 +2522,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "signedIn",
         token: true,
         notes:
-          "stages lists the classes the caller may see the cohort of: every class the bootcamp holds for an Assessments Viewer or above, else only those released. cohort holds one row per person and class in those stages; averageScore is the mean of their submissions' averages, null with none scored, and scored how many there are. bootcamp is null, and cohort empty, when no bootcamp is active.",
+          "stages lists the classes the caller may see the cohort of: every class the bootcamp holds for an Assessments Viewer or above, else only those released. cohort holds one row per person and class in those stages: everyone who RSVP'd to their class by saving its registration form and is not deferred, whether a current candidate or already scored at the bootcamp; averageScore is the mean of their submissions' averages, null with none scored, and scored how many there are. bootcamp is null, and cohort empty, when no bootcamp is active.",
         query: listQuery(BOOTCAMP_COHORT_LIST.sorts, "the name or email", BOOTCAMP_COHORT_LIST.dir),
         returns: `{ bootcamp: { id, startDate, intermediate: boolean, released: { bootcamp: { at, byName: string | null } | null, intermediate: { at, byName: string | null } | null } } | null, stages: ("bootcamp" | "intermediate")[], cohort: { key, email, fullName: string | null, stage: "bootcamp" | "intermediate", scored: number, averageScore: number | null }[], ${PAGE_FIELDS} }`,
       },
@@ -2532,8 +2533,8 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "assessmentsAdmin",
         token: true,
         notes:
-          "comments counts the blank comments there are marks to write, so one person can count twice. scores counts the people who would get a score. skipped names candidates with no marks and no assessment, whom it leaves out, at most 100. A class is null when the bootcamp does not hold it, it is already released, or no bootcamp is active.",
-        returns: "{ bootcamp: { comments: number, scores: number, skipped: string[] } | null, intermediate: { comments: number, scores: number, skipped: string[] } | null }",
+          "comments counts the blank comments there are marks to write, so one person can count twice. overall counts the blank overall positive and constructive feedback of the cohort (PUT /api/reporting/bootcamp/people/{key}/review) that some assessment's saved feedback on that side could fill. scores counts the people who would get a score. skipped names candidates who have not RSVP'd and have no marks and no assessment, whom it leaves out, at most 100. unscored is everyone in the class still waiting on a score, which keeps it from being released: someone in the cohort (RSVP'd to the class and not deferred, as Live Sessions lists them) without a scored assessment for every active assessment of the class taught to their track and for Participation, or anyone with a blank score there. total, and up to 100 names. A class is null when the bootcamp does not hold it, it is already released, or no bootcamp is active.",
+        returns: "{ bootcamp: StagePending | null, intermediate: StagePending | null }, where StagePending is { comments: number, overall: number, scores: number, skipped: string[], unscored: { total: number, names: string[] } }",
       },
       {
         method: "POST",
@@ -2542,9 +2543,9 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "assessmentsAdmin",
         token: true,
         notes:
-          "Anyone with a mark and a blank score gets a score from the net of their marks, and someone with no marks but another assessment in the class gets a 2. Anyone with neither is left out, because a submission counts as attendance at release. Claude writes one sentence for each side that has marks and is blank; only the descriptors, their counts and the score are sent. Saved comments and scores stay. failed counts people whose comments Claude did not write, who are left as they were, so calling it again picks them up.",
+          "Anyone with a mark and a blank score gets a score from the net of their marks, and someone with no marks who RSVP'd to the class, or has another assessment in it, gets a 2. Anyone else is left out, because a submission counts as attendance at release. Claude writes one sentence for each side that has marks and is blank; only the descriptors, their counts and the score are sent. Saved comments and scores stay. failed counts people whose comments Claude did not write, who are left as they were, so calling it again picks them up. Then, for everyone in the class's cohort, Claude sums up each side of their assessments' saved feedback, Participation's included, into one sentence for their overall feedback on that side where it is blank; overall says how many it wrote and for how many people it failed, or the error that stopped it, unconfigured or upstream, without undoing the Participation step.",
         body: { kind: "json", fields: [{ name: "stage", type: '"bootcamp" | "intermediate"', required: true }] },
-        returns: "{ stage, bootcamp: { id, startDate }, people: number, scores: number, comments: number, failed: number }",
+        returns: '{ stage, bootcamp: { id, startDate }, people: number, scores: number, comments: number, failed: number, overall: { written: number, failed: number, error: "unconfigured" | "upstream" | null } }',
         errors: [
           { status: 400, error: "invalid", when: "stage is missing or neither bootcamp nor intermediate" },
           { status: 409, error: "no_bootcamp", when: "no bootcamp is active" },
@@ -2562,14 +2563,15 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "assessmentsAdmin",
         token: true,
         notes:
-          "Replaces both comments and the score, whatever was there, and may be called after the class is released, which changes what managers see. A side with no marks ends up blank. Returns the attendee's sheet, as GET /api/evals/participation/{employeeId}.",
+          "Replaces both comments and the score, whatever was there, and may be called after the class is released, which changes what managers see. It need not wait for the class's Generate: someone with marks and no Participation assessment yet gets one. A side with no marks ends up blank. Returns the attendee's sheet, as GET /api/evals/participation/{employeeId}.",
         params: [{ name: "employeeId", type: "string", required: true }],
         returns: "the attendee's sheet",
         errors: [
           { status: 404, error: "not_found", when: "they are neither a current candidate on a track nor assessed at the active bootcamp" },
           { status: 409, error: "no_bootcamp", when: "no bootcamp is active" },
           { status: 409, error: "no_class", when: "they are in intermediate and the active bootcamp holds no intermediate class" },
-          { status: 409, error: "not_generated", when: "their Participation assessment has no score yet" },
+          { status: 409, error: "no_assessment", when: "their class has no Participation assessment" },
+          { status: 409, error: "no_marks", when: "they have no marks and no Participation assessment yet" },
           { status: 502, error: "upstream", when: "Claude did not write them" },
           { status: 503, error: "unconfigured", when: "no Claude key on this deployment" },
         ],
@@ -2581,13 +2583,14 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "assessmentsAdmin",
         token: true,
         notes:
-          "From then on, managers see that class's results for the people in their org. Everyone scored in the class has attended it from then on: a BTC class moves on to Intermediate on Cohorts → Current, and an INT class leaves it. written counts the people scored in it. A release cannot be taken back; releasing a class already released changes nothing, writes nothing, and returns when it was.",
+          "From then on, managers see that class's results for the people in their org. Everyone scored in the class has attended it from then on: a BTC class moves on to Intermediate on Cohorts → Current, and an INT class leaves it. written counts the people scored in it. A class with any assessment still waiting on a score cannot be released; GET /api/reporting/bootcamp/participation names who. A release cannot be taken back; releasing a class already released changes nothing, writes nothing, and returns when it was.",
         body: { kind: "json", fields: [{ name: "stage", type: '"bootcamp" | "intermediate"', required: true }] },
         returns: "{ ok: true, stage, bootcamp: { id, startDate }, releasedAt, written: number }",
         errors: [
           { status: 400, error: "invalid", when: "stage is missing or neither bootcamp nor intermediate" },
           { status: 409, error: "no_bootcamp", when: "no bootcamp is active" },
           { status: 409, error: "no_intermediate", when: "stage is intermediate and the active bootcamp holds no intermediate class" },
+          { status: 409, error: "unscored", when: "someone in the class has an assessment still waiting on a score" },
         ],
       },
       {
@@ -2597,11 +2600,60 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "signedIn",
         token: true,
         notes:
-          "classes is what a manager sees: each class's day, overall score and score per exercise, from the latest released class of it they were assessed in. records is null below Assessments Viewer. Above it, submissions is every assessment of them at any bootcamp, newest bootcamp first, with each criterion's score and comment; released says whether managers may see it yet.",
+          "classes is what a manager sees: each class's day, overall score and score per exercise, from the latest released class of it they were assessed in, with that class's overall positiveFeedback, constructiveFeedback and otherNotes (empty when none) and examAverage, the mean of the entrance and exit exams as a percentage once both are in. Each exercise's feedback is that assessment's positive feedback when its score rounds to 4, its constructive feedback when it rounds to 1 or 2, and null for a 3. The exams count towards score as one more exercise: an average of 96% or more is 4, 88% or more 3, 80% or more 2, and less 1. records is null below Assessments Viewer. Above it, submissions is every assessment of them at any bootcamp, newest bootcamp first, with each criterion's score and comment; released says whether managers may see it yet. reviews is each class's overall feedback and exams as entered with PUT /api/reporting/bootcamp/people/{key}/review.",
         params: [{ name: "key", type: "string", required: true, note: "a key from the list: an employee id or a submission's" }],
         returns:
-          '{ key, email, employee: { fullName, title, department, site, reportsToName, reportsToEmail, startDate, track } | null, classes: { bootcamp: ClassSummary, intermediate: ClassSummary }, records: { submissions: { id, bootcamp: { id, startDate, status }, stage, assessmentName, builtIn: "participation" | null, averageScore: number | null, positiveFeedback, constructiveFeedback, ownerName, submittedAt, updatedAt, released, scores: { criterionId, criterionName, score, comment }[] }[] } | null }, where ClassSummary is { date: string | null, score: number | null, exercises: { name, score }[] }',
+          '{ key, email, employee: { fullName, title, department, site, reportsToName, reportsToEmail, startDate, track } | null, classes: { bootcamp: ClassSummary, intermediate: ClassSummary }, records: { submissions: { id, bootcamp: { id, startDate, status }, stage, assessmentName, builtIn: "participation" | null, averageScore: number | null, positiveFeedback, constructiveFeedback, ownerName, submittedAt, updatedAt, released, scores: { criterionId, criterionName, score, comment }[] }[], reviews: { bootcampId, stage, positiveFeedback, constructiveFeedback, otherNotes, entranceExam: number | null, exitExam: number | null, updatedAt }[] } | null }, where ClassSummary is { date: string | null, score: number | null, exercises: { name, score, feedback: string | null }[], positiveFeedback, constructiveFeedback, otherNotes, examAverage: number | null }',
         errors: [{ status: 404, error: "not_found", when: "the key names no one, or someone the caller may not see" }],
+      },
+      {
+        method: "PUT",
+        path: "/api/reporting/bootcamp/people/{key}/review",
+        summary: "Sets someone's overall feedback and entrance and exit exams for one class they were assessed in.",
+        access: "assessmentsAdmin",
+        token: true,
+        notes:
+          "It replaces the whole review: both feedback boxes and the optional otherNotes, which their manager reads under the class's overall score once it is released, and both exams. Once both exams are in, their average counts towards the class's overall score as one more exercise. The audit log records who saved it.",
+        params: [{ name: "key", type: "string", required: true, note: "a key from the list: an employee id or a submission's" }],
+        body: { kind: "json", fields: [
+          { name: "bootcampId", type: "string", required: true, note: "a bootcamp they were assessed at in stage" },
+          { name: "stage", type: '"bootcamp" | "intermediate"', required: true },
+          { name: "positiveFeedback", type: "string", note: `up to ${EVALS_ASSESSMENT_LIMITS.feedback} characters` },
+          { name: "constructiveFeedback", type: "string", note: `up to ${EVALS_ASSESSMENT_LIMITS.feedback} characters` },
+          { name: "otherNotes", type: "string", note: `up to ${EVALS_ASSESSMENT_LIMITS.feedback} characters; optional` },
+          { name: "entranceExam", type: "number | null", note: `${BOOTCAMP_EXAM.min} to ${BOOTCAMP_EXAM.max}, to one decimal place; null for none` },
+          { name: "exitExam", type: "number | null", note: `${BOOTCAMP_EXAM.min} to ${BOOTCAMP_EXAM.max}, to one decimal place; null for none` },
+          { name: "revises", type: "string | null", required: true, note: "the updatedAt of the review being replaced, or null when there is none yet" },
+        ] },
+        returns: "{ ok: true, review: { email, bootcampId, stage, examAverage: number | null, updatedAt } }",
+        errors: [
+          { status: 400, error: "invalid", when: "the body is not that shape" },
+          { status: 404, error: "not_found", when: "the key names no one, or they were not assessed in that class at that bootcamp" },
+          { status: 409, error: "conflict", when: "someone saved it since revises" },
+        ],
+      },
+      {
+        method: "POST",
+        path: "/api/reporting/bootcamp/people/{key}/review/generate",
+        summary: "Has Claude write one sentence of someone's overall feedback for one class, from their assessments' feedback.",
+        access: "assessmentsAdmin",
+        token: true,
+        notes:
+          "Claude sums up that side of the saved feedback on every assessment of them in that class at that bootcamp, Participation's included, into one sentence. Only the feedback is sent, with no name or email. Nothing is saved: the text is for PUT /api/reporting/bootcamp/people/{key}/review.",
+        params: [{ name: "key", type: "string", required: true, note: "a key from the list: an employee id or a submission's" }],
+        body: { kind: "json", fields: [
+          { name: "bootcampId", type: "string", required: true, note: "a bootcamp they were assessed at in stage" },
+          { name: "stage", type: '"bootcamp" | "intermediate"', required: true },
+          { name: "side", type: '"positive" | "constructive"', required: true },
+        ] },
+        returns: "{ text }",
+        errors: [
+          { status: 400, error: "invalid", when: "the body is not that shape" },
+          { status: 404, error: "not_found", when: "the key names no one, or they were not assessed in that class at that bootcamp" },
+          { status: 409, error: "no_feedback", when: "no assessment of them there has feedback on that side" },
+          { status: 502, error: "upstream", when: "Claude wrote nothing" },
+          { status: 503, error: "unconfigured", when: "there is no Claude key on this deployment" },
+        ],
       },
       {
         method: "PATCH",

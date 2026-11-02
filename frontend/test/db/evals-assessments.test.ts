@@ -19,7 +19,7 @@ import { eq, like } from "drizzle-orm";
 process.env.AUTH_SECRET ||= "evals-assessments-test-secret-evals-assess";
 
 import { db } from "@/db";
-import { employees, evalsAssessmentCriteria, type EmployeeTrack } from "@/db/schema";
+import { employees, evalsAssessmentCriteria, intakeResponses, type EmployeeTrack } from "@/db/schema";
 import {
   createAssessment,
   deleteAssessment,
@@ -28,7 +28,7 @@ import {
   updateAssessment,
   type AssessmentInput,
 } from "@/lib/evals/assessments";
-import { listCurrentCohort } from "@/lib/evals/current-cohort";
+import { currentCohortSummary, listCurrentCohort } from "@/lib/evals/current-cohort";
 import {
   getScoringForm,
   listAttendees,
@@ -290,6 +290,32 @@ describe("the Current tab", () => {
     const row = (await listCurrentCohort({ stage: "bootcamp", track: "sales" }, query)).rows.find((m) => m.email === sales.email);
     assert.ok(row, "the scored candidate is still listed");
     for (const key of ["btcScore", "scores", "averageScore"]) assert.ok(!(key in row), key);
+  });
+
+  test("Undecided keeps those who have not RSVP'd to their stage's form, and counts them", async () => {
+    const query = { ...CURRENT_COHORT_LIST, q: sales.email, page: 1, sort: "email" as const, dir: "asc" as const };
+    const listed = async () =>
+      (await listCurrentCohort({ stage: "bootcamp", track: "sales", unanswered: true }, query)).rows.some((m) => m.email === sales.email);
+    const before = (await currentCohortSummary()).unanswered.bootcamp.sales;
+    assert.equal(await listed(), true, "no answers saved yet");
+
+    const [other] = await db
+      .insert(intakeResponses)
+      .values({ form: "intermediate", email: sales.email.toLowerCase(), answers: {} })
+      .returning({ id: intakeResponses.id });
+    const [rsvp] = await db
+      .insert(intakeResponses)
+      .values({ form: "bootcamp", email: sales.email.toLowerCase(), answers: {} })
+      .returning({ id: intakeResponses.id });
+    try {
+      assert.equal(await listed(), false);
+      assert.equal((await currentCohortSummary()).unanswered.bootcamp.sales, before - 1);
+      await db.delete(intakeResponses).where(eq(intakeResponses.id, rsvp!.id));
+      assert.equal(await listed(), true, "the other stage's form is not an RSVP to this one");
+    } finally {
+      await db.delete(intakeResponses).where(eq(intakeResponses.id, rsvp!.id));
+      await db.delete(intakeResponses).where(eq(intakeResponses.id, other!.id));
+    }
   });
 });
 

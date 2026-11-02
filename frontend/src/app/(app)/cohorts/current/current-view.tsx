@@ -66,6 +66,7 @@ import {
   GraduationCap,
   Handshake,
   Loader2,
+  MailQuestion,
   Pin,
   Printer,
   RotateCcw,
@@ -83,10 +84,11 @@ const STAGE_COUNTERS: { stage: CandidateStage; label: string; Icon: LucideIcon }
   { stage: "intermediate", label: "Intermediate", Icon: GraduationCap },
 ];
 
-const TRACK_COUNTERS: { track: CurrentTrack; label: string; Icon: LucideIcon }[] = [
+/** `warn` tints the one that holds people who still need something done, while it holds anyone. */
+const TRACK_COUNTERS: { track: CurrentTrack; label: string; Icon: LucideIcon; warn?: boolean }[] = [
   { track: "sales", label: "Sales", Icon: Handshake },
   { track: "engineer", label: "Engineer", Icon: Code },
-  { track: "undecided", label: "Undecided", Icon: CircleHelp },
+  { track: "undecided", label: "Needs track selected", Icon: CircleHelp, warn: true },
 ];
 
 const COLUMNS: { column: CurrentCohortSort; label: string }[] = [
@@ -128,7 +130,7 @@ function useFilterParams() {
   const params = useSearchParams();
   const [pending, startTransition] = useTransition();
 
-  function toggle(name: "stage" | "track", value: string) {
+  function toggle(name: "stage" | "track" | "rsvp", value: string) {
     const next = new URLSearchParams(params.toString());
     if (next.get(name) === value) next.delete(name);
     else next.set(name, value);
@@ -166,6 +168,7 @@ export function CurrentCohortView({
   filter,
   page,
   counts,
+  unanswered,
   deferral,
   activeBootcamp,
   canSetTrack,
@@ -173,6 +176,7 @@ export function CurrentCohortView({
   meetings = {},
   canMarkAttendance = false,
   canMarkParticipation = false,
+  canRegenerateParticipation = false,
   intakes,
   intakeQuestions,
 }: {
@@ -183,6 +187,8 @@ export function CurrentCohortView({
   page: Page<CurrentCohortMember>;
   /** Everyone in each stage on each track, whatever the search or filter. */
   counts: CurrentCohortCounts;
+  /** The same, of only those who have not RSVP'd. */
+  unanswered: CurrentCohortCounts;
   deferral: { days: number; bootcampStart: string | null };
   activeBootcamp: ActiveBootcamp | null;
   /** Whether the viewer may set anyone's track. */
@@ -195,6 +201,8 @@ export function CurrentCohortView({
   canMarkAttendance?: boolean;
   /** Whether the viewer may open the participation popup; only with a bootcamp active. */
   canMarkParticipation?: boolean;
+  /** Whether the popup saves the score as marks move and offers AI comments. */
+  canRegenerateParticipation?: boolean;
   /** Each person on the page's latest answers to each registration form, by lowercased email. */
   intakes: Record<string, IntakeOnFile[]>;
   /** Both forms' questions as they stand now, to label those answers. */
@@ -222,15 +230,16 @@ export function CurrentCohortView({
   const showAttendance = tab === "current";
   const showParticipation = canMarkParticipation && activeBootcamp !== null;
   const columnCount = columns.length + (showAttendance ? 1 : 0) + (showParticipation ? 1 : 0);
-  // Each row counts within the other row's pick; the Deferred tab has only the deferred to count.
-  const stageCount = (stage: CandidateStage) =>
-    tab === "deferred"
-      ? counts[stage].deferred
-      : filter.track
-        ? counts[stage][filter.track]
-        : TRACK_COUNTERS.reduce((n, c) => n + counts[stage][c.track], 0);
+  // Each counter counts within the other picks; the Deferred tab has only the deferred to count.
+  const picked = filter.unanswered ? unanswered : counts;
+  const inTracks = (cells: CurrentCohortCounts, stage: CandidateStage) =>
+    filter.track ? cells[stage][filter.track] : TRACK_COUNTERS.reduce((n, c) => n + cells[stage][c.track], 0);
+  const stageCount = (stage: CandidateStage) => (tab === "deferred" ? counts[stage].deferred : inTracks(picked, stage));
   const trackCount = (track: CandidateTrack) =>
-    filter.stage ? counts[filter.stage][track] : counts.bootcamp[track] + counts.intermediate[track];
+    filter.stage ? picked[filter.stage][track] : picked.bootcamp[track] + picked.intermediate[track];
+  const unansweredCount = filter.stage
+    ? inTracks(unanswered, filter.stage)
+    : inTracks(unanswered, "bootcamp") + inTracks(unanswered, "intermediate");
   // A track that isn't this tab's takes them off it.
   const leavesTab = (track: CandidateTrack | "ignored" | "exempt") =>
     tab === "deferred" ? track !== "deferred" : track === "deferred" || track === "ignored" || track === "exempt";
@@ -324,15 +333,28 @@ export function CurrentCohortView({
             onClick={() => toggle("stage", stage)}
           />
         ))}
+        {tab === "current" && (
+          <Counter
+            label="Undecided"
+            Icon={MailQuestion}
+            count={unansweredCount}
+            on={filter.unanswered === true}
+            disabled={pending}
+            warn
+            title="Has not RSVP'd: saved no answers to their stage's registration form"
+            onClick={() => toggle("rsvp", "none")}
+          />
+        )}
       </motion.div>
 
       {tab === "current" && (
         <motion.div variants={riseChild} role="group" aria-label="Track" className={COUNTER_GRID}>
-          {TRACK_COUNTERS.map(({ track, label, Icon }) => (
+          {TRACK_COUNTERS.map(({ track, label, Icon, warn }) => (
             <Counter
               key={track}
               label={label}
               Icon={Icon}
+              warn={warn}
               count={trackCount(track)}
               on={filter.track === track}
               disabled={pending}
@@ -437,7 +459,14 @@ export function CurrentCohortView({
                       </td>
                       {showParticipation && (
                         <td className="px-5 py-1" onClick={(ev) => ev.stopPropagation()}>
-                          {m.track !== "undecided" && <ParticipationButton employeeId={m.id} fullName={m.fullName} labelled />}
+                          {m.track !== "undecided" && (
+                            <ParticipationButton
+                              employeeId={m.id}
+                              fullName={m.fullName}
+                              canRegenerate={canRegenerateParticipation}
+                              labelled
+                            />
+                          )}
                         </td>
                       )}
                       {showAttendance && (
@@ -518,6 +547,8 @@ function Counter({
   count,
   on,
   disabled,
+  warn = false,
+  title,
   onClick,
 }: {
   label: string;
@@ -525,25 +556,33 @@ function Counter({
   count: number;
   on: boolean;
   disabled: boolean;
+  /** A warning tint on the border and text, for people who still need something done; none at a count of 0. */
+  warn?: boolean;
+  title?: string;
   onClick: () => void;
 }) {
+  const tinted = warn && count > 0;
   return (
     <button
       type="button"
       aria-pressed={on}
       disabled={disabled}
+      title={title}
       onClick={onClick}
       className={cn(
         "flex cursor-pointer items-center gap-2.5 rounded-xl border border-transparent px-3 py-2 text-left outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-wait",
         on ? "bg-brand-subtle hover:border-brand-border" : "bg-card hover:border-border hover:bg-muted/40",
+        tinted && "border-amber-500/50 text-amber-700 hover:border-amber-500/70 dark:border-amber-400/40 dark:text-amber-300",
       )}
     >
       <span className={cn("flex size-7 shrink-0 items-center justify-center rounded-full", on ? "bg-background" : "bg-muted")}>
-        <Icon className={cn("size-3.5", on ? "text-brand" : "text-muted-foreground")} />
+        <Icon className={cn("size-3.5", tinted ? "text-amber-600 dark:text-amber-400" : on ? "text-brand" : "text-muted-foreground")} />
       </span>
       <span className="min-w-0">
         <span className="block text-lg leading-tight font-medium tabular-nums">{count.toLocaleString()}</span>
-        <span className="block truncate text-xs text-muted-foreground">{label}</span>
+        <span className={cn("block truncate text-xs", tinted ? "text-amber-700/90 dark:text-amber-300/90" : "text-muted-foreground")}>
+          {label}
+        </span>
       </span>
     </button>
   );

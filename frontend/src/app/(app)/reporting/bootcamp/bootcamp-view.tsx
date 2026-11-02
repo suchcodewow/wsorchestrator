@@ -20,7 +20,6 @@ import {
   TableSearch,
   useRowLink,
 } from "@/components/data-table";
-import { ParticipationButton } from "@/components/participation/participation-dialog";
 import type { StagePending } from "@/lib/evals/participation";
 import {
   BOOTCAMP_COHORT_PREFIX,
@@ -31,12 +30,11 @@ import {
 import { riseChild, staggerParent } from "@/lib/motion";
 import type { ListQuery, Page } from "@/lib/paging";
 import type { BootcampRecordCounts, BootcampRecordRow, CohortRow } from "@/lib/reporting/bootcamp";
-import { RELEASE_STAGES, STAGE_CODES, type ReleaseStage } from "@/lib/reporting/bootcamp-values";
+import type { ReleaseStage } from "@/lib/reporting/bootcamp-values";
 import { cn } from "@/lib/utils";
 import { formatDate, formatScore } from "../../cohort-settings/format";
 import { LevelChip } from "./class-card";
-import { GenerateButton } from "./generate-button";
-import { ReleaseButton } from "./release-button";
+import { ClassActions } from "./class-actions";
 
 type Released = { at: string; byName: string | null } | null;
 
@@ -87,7 +85,6 @@ function useStatusFilter() {
 export function BootcampView({
   everyone,
   canRelease,
-  canMarkParticipation,
   pending: participation,
   bootcamp,
   cohort,
@@ -99,8 +96,6 @@ export function BootcampView({
   /** An Assessments Viewer or above, who sees everyone rather than their org. */
   everyone: boolean;
   canRelease: boolean;
-  /** Whether the viewer may open the participation popup from the cohort. */
-  canMarkParticipation: boolean;
   /** What each class's Generate button would write; null to an administrator for a class it can no longer run on. */
   pending: Record<ReleaseStage, StagePending | null>;
   /** The active bootcamp, or null with none. */
@@ -127,45 +122,16 @@ export function BootcampView({
             <span className="font-medium text-foreground">
               {counts.total.toLocaleString()} {counts.total === 1 ? "person" : "people"}
             </span>{" "}
-            {everyone ? "with a BTC or INT record." : "in your org with a BTC or INT record."}
+            {everyone ? "with a Bootcamp or Intermediate record." : "in your org with a Bootcamp or Intermediate record."}
           </p>
         </div>
-        {canRelease && (
-          <div className="flex flex-wrap justify-end gap-2">
-            {RELEASE_STAGES.map((stage) => (
-              <GenerateButton
-                key={stage}
-                stage={stage}
-                pending={participation[stage]}
-                unavailable={
-                  !bootcamp
-                    ? "No bootcamp is active"
-                    : stage === "intermediate" && !bootcamp.intermediate
-                      ? "The active bootcamp has no intermediate class"
-                      : bootcamp.released[stage]
-                        ? "This class is released"
-                        : null
-                }
-              />
-            ))}
-            {RELEASE_STAGES.map((stage) => (
-              <ReleaseButton
-                key={stage}
-                stage={stage}
-                startDate={bootcamp?.startDate ?? null}
-                released={bootcamp?.released[stage] ?? null}
-                unavailable={
-                  !bootcamp
-                    ? "No bootcamp is active"
-                    : stage === "intermediate" && !bootcamp.intermediate
-                      ? "The active bootcamp has no intermediate class"
-                      : null
-                }
-              />
-            ))}
-          </div>
-        )}
       </motion.div>
+
+      {canRelease && (
+        <motion.div variants={riseChild}>
+          <ClassActions bootcamp={bootcamp} pending={participation} />
+        </motion.div>
+      )}
 
       <motion.div variants={riseChild} className="flex flex-wrap items-center gap-3">
         <TableSearch
@@ -203,21 +169,7 @@ export function BootcampView({
 
       {bootcamp && cohort && (
         <motion.section variants={riseChild} className="space-y-3">
-          <div className="space-y-1">
-            <h3 className="text-base font-medium tracking-tight">Current cohort</h3>
-            <p className="text-sm text-muted-foreground">
-              Starts {formatDate(bootcamp.startDate)}
-              {(bootcamp.intermediate ? RELEASE_STAGES : (["bootcamp"] as const)).map((stage) => (
-                <span key={stage}>
-                  {" · "}
-                  {STAGE_CODES[stage]}{" "}
-                  {bootcamp.released[stage]
-                    ? `released ${formatDate(bootcamp.released[stage].at.slice(0, 10))}`
-                    : "not released to managers"}
-                </span>
-              ))}
-            </p>
-          </div>
+          <h3 className="text-base font-medium tracking-tight">Current cohort</h3>
           <div className="overflow-hidden rounded-2xl border bg-card shadow-sm">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -261,9 +213,6 @@ export function BootcampView({
                         </td>
                         <td className="px-3 py-1.5">
                           <div className="flex items-center justify-end gap-1">
-                            {canMarkParticipation && (
-                              <ParticipationButton employeeId={m.key} fullName={m.fullName ?? m.email} canRegenerate={canRelease} />
-                            )}
                             <ChevronRight className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
                           </div>
                         </td>

@@ -12,7 +12,8 @@ import "server-only";
 import { and, eq, isNotNull, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
-  mimirMap,
+  mimirConceptVideos,
+  mimirMapVersions,
   recordingTracks,
   users,
   videoFeedback,
@@ -22,7 +23,7 @@ import {
 } from "@/db/schema";
 import type { VideoFeedbackSort, VideoFeedbackSummarySort } from "@/lib/list-specs";
 import { getMap } from "@/lib/mimir/map/content";
-import { MAP_ID, videoIn, type VideoLanguage } from "@/lib/mimir/map/schema";
+import { videoIn, type VideoLanguage } from "@/lib/mimir/map/schema";
 import { pageWindow, toPage, type ListQuery, type Page } from "@/lib/paging";
 import { blankAsNull, orderFor, searchAny } from "@/lib/paging-sql";
 import { canUseTraining, type Access } from "@/lib/roles";
@@ -223,10 +224,14 @@ export async function listVideoFeedbackSummary(
   const order = orderFor(SUMMARY_SORT_COLUMNS[query.sort], query.dir, sql`r."conceptId"`);
   const { rows } = await db.execute<VideoFeedbackSummaryRow>(sql`
     with concepts as (
-      select e.c->>'id' as concept_id, e.c->>'name' as label, jsonb_typeof(e.c->'video') = 'object' as has_video,
-             array(select jsonb_object_keys(coalesce(e.c#>'{video,translations}', '{}'::jsonb))) as translations
-        from ${mimirMap}, jsonb_array_elements(${mimirMap.content}->'concepts') as e(c)
-       where ${mimirMap.id} = ${MAP_ID}
+      select e.c->>'id' as concept_id, e.c->>'name' as label,
+             exists (select 1 from ${mimirConceptVideos} v where v.concept_id = e.c->>'id' and v.language = 'en') as has_video,
+             array(select v.language from ${mimirConceptVideos} v
+                    where v.concept_id = e.c->>'id' and v.language <> 'en'
+                      and exists (select 1 from ${mimirConceptVideos} en where en.concept_id = v.concept_id and en.language = 'en')
+                    order by v.language) as translations
+        from (select ${mimirMapVersions.content} as content from ${mimirMapVersions} order by ${mimirMapVersions.version} desc limit 1) m,
+             jsonb_array_elements(m.content->'concepts') as e(c)
     ), counts as (
       select ${videoFeedback.conceptId} as concept_id,
              (array_agg(${videoFeedback.videoLabel} order by ${videoFeedback.createdAt} desc))[1] as label,
