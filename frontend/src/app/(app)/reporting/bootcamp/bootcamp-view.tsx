@@ -122,7 +122,7 @@ export function BootcampView({
             <span className="font-medium text-foreground">
               {counts.total.toLocaleString()} {counts.total === 1 ? "person" : "people"}
             </span>{" "}
-            {everyone ? "with a BTC or INT record." : "in your org with a BTC or INT record."}
+            {everyone ? "with a Bootcamp or Intermediate record." : "in your org with a Bootcamp or Intermediate record."}
           </p>
         </div>
       </motion.div>

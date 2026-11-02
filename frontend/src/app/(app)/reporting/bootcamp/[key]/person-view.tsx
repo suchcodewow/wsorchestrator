@@ -101,13 +101,12 @@ export function PersonView({ person, canEdit, back }: { person: ViewPerson; canE
 
         {person.classes.intermediate.date !== null && (
           <motion.div variants={riseChild}>
-            <ClassCard name="Intermediate" code="INT" summary={person.classes.intermediate} whole />
+            <ClassCard name="Intermediate" summary={person.classes.intermediate} whole />
           </motion.div>
         )}
         <motion.div variants={riseChild}>
           <ClassCard
             name="Bootcamp"
-            code="BTC"
             summary={person.classes.bootcamp}
             whole
             // Once they have been to INT, their BTC is history: closed until opened.
