@@ -89,8 +89,8 @@ export function GenerateButton({
         content={
           <>
             <p>
-              ({comments.toLocaleString()}) is how many blank comments Claude can write from participation marks
-              {scores > 0 && `, beside ${plural(scores, "participation score", "participation scores")} to fill in`}.
+              ({comments.toLocaleString()}) counts the blank comments Claude can write from participation marks.
+              {scores > 0 && ` It also fills in ${plural(scores, "participation score", "participation scores")}.`}
             </p>
             {why && <p className="text-muted-foreground">{why}.</p>}
           </>
