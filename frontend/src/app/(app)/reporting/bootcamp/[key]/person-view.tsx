@@ -13,7 +13,7 @@ import { motion } from "framer-motion";
 import { ArrowLeft, Eye, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { riseChild, staggerParent } from "@/lib/motion";
-import type { PersonEmployee, PersonSubmission } from "@/lib/reporting/bootcamp";
+import type { PersonEmployee, PersonReview, PersonSubmission } from "@/lib/reporting/bootcamp";
 import type { ClassSummary, ReleaseStage } from "@/lib/reporting/bootcamp-values";
 import { formatDate } from "../../../cohort-settings/format";
 import { ClassCard, Field, TRACK_LABELS } from "../class-card";
@@ -24,13 +24,15 @@ export type ViewSubmission = Omit<PersonSubmission, "submittedAt" | "updatedAt">
   updatedAt: string;
 };
 
+export type ViewReview = Omit<PersonReview, "updatedAt"> & { updatedAt: string };
+
 export type ViewPerson = {
   /** Their employee id, while they have one. */
   key: string;
   email: string;
   employee: PersonEmployee | null;
   classes: Record<ReleaseStage, ClassSummary>;
-  records: { submissions: ViewSubmission[] } | null;
+  records: { submissions: ViewSubmission[]; reviews: ViewReview[] } | null;
 };
 
 export function PersonView({ person, canEdit, back }: { person: ViewPerson; canEdit: boolean; back: string }) {
@@ -38,7 +40,7 @@ export function PersonView({ person, canEdit, back }: { person: ViewPerson; canE
   const [editing, setEditing] = useState(false);
 
   return (
-    <motion.div variants={staggerParent(0.05)} initial="hidden" animate="show" className="max-w-4xl space-y-8">
+    <motion.div variants={staggerParent(0.05)} initial="hidden" animate="show" className="max-w-4xl space-y-6">
       <motion.div variants={riseChild}>
         <Link
           href={back}
@@ -50,7 +52,7 @@ export function PersonView({ person, canEdit, back }: { person: ViewPerson; canE
       </motion.div>
 
       <motion.div variants={staggerParent(0.04)} className="divide-y overflow-hidden rounded-2xl border bg-card shadow-sm">
-        <motion.section variants={riseChild} className="space-y-4 px-5 py-4">
+        <motion.section variants={riseChild} className="space-y-3 px-5 py-3">
           <div className="space-y-1">
             <h2 className="text-xl font-medium tracking-tight">{employee?.fullName ?? person.email}</h2>
             {(!employee || employee.title) && (
@@ -60,7 +62,7 @@ export function PersonView({ person, canEdit, back }: { person: ViewPerson; canE
             )}
           </div>
           {employee && (
-            <dl className="grid gap-x-8 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
+            <dl className="grid gap-x-8 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">
               <Field label="Department">{employee.department || "—"}</Field>
               <Field label="Site">{employee.site || "—"}</Field>
               <Field label="Manager">{employee.reportsToName || "—"}</Field>
@@ -97,7 +99,12 @@ export function PersonView({ person, canEdit, back }: { person: ViewPerson; canE
             )}
           </div>
 
-          <SubmissionGroups personKey={person.key} submissions={records.submissions} editing={editing} />
+          <SubmissionGroups
+            personKey={person.key}
+            submissions={records.submissions}
+            reviews={records.reviews}
+            editing={editing}
+          />
           {records.submissions.length === 0 && (
             <p className="rounded-2xl border bg-card px-5 py-8 text-center text-sm text-muted-foreground shadow-sm">
               No assessments on file.

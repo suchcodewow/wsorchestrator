@@ -8,7 +8,10 @@
  * them in HiBob's reporting lines — read live, so it follows each sync — and
  * of a bootcamp's submissions only the stages an Assessments Administrator
  * has released, which keeps a class still being judged out of view; what they
- * see of a submission is its score, never its comments.
+ * see of a submission is its score, with its positive feedback when it rounds
+ * to 4 and its constructive when it rounds to 2, never its criteria's comments;
+ * and of a class, the overall feedback, notes and exam average an
+ * administrator entered.
  */
 
 import "server-only";
@@ -17,8 +20,10 @@ import { and, asc, desc, eq, inArray, isNull, sql, type SQL } from "drizzle-orm"
 import { z } from "zod";
 import { db } from "@/db";
 import {
+  BOOTCAMP_EXAM,
   BOOTCAMP_SCORE,
   EVALS_ASSESSMENT_LIMITS,
+  bootcampClassReviews,
   bootcamps,
   employees,
   evalsAssessmentCriteria,
@@ -39,7 +44,15 @@ import { retrackEmployees } from "@/lib/evals/tracks";
 import type { BootcampCohortSort, BootcampRecordSort, HistoryStatus } from "@/lib/list-specs";
 import { PAGE_SIZE, pageWindow, toPage, type ListQuery, type Page } from "@/lib/paging";
 import { orderFor, searchAny } from "@/lib/paging-sql";
-import { NOT_ATTENDED, type BootcampLevel, type ClassSummary, type ReleaseStage } from "@/lib/reporting/bootcamp-values";
+import {
+  NOT_ATTENDED,
+  RELEASE_STAGES,
+  examAverage,
+  examScore,
+  type BootcampLevel,
+  type ClassSummary,
+  type ReleaseStage,
+} from "@/lib/reporting/bootcamp-values";
 import { canUseEvals, type Access } from "@/lib/roles";
 
 /**
@@ -281,13 +294,17 @@ export async function listCohort(
   const { limit, offset } = pageWindow(query.page);
   const scoredIn = sql`from ${evalsSubmissions} s join ${evalsAssessments} a on a.id = s.assessment_id
     where s.bootcamp_id = ${bootcamp.id} and s.attendee_email = c.email and a.stage = c.stage`;
+  // Both exams in, their average counts as one more assessment, on the scale `examScore` sets.
+  const examIn = sql`(select ${EXAM_SCORE_SQL} from ${bootcampClassReviews} r
+    where r.bootcamp_id = ${bootcamp.id} and r.attendee_email = c.email and r.stage = c.stage)`;
   const order = orderFor(COHORT_SORT_COLUMNS[query.sort], query.dir, sql`lower(m.full_name) asc nulls last`, sql`m.email`);
   const { rows } = await db.execute<CohortRow>(sql`
     with cohort as (${await cohortSql(bootcamp, stages)}),
     members as (
       select c.email, c.stage, ${nameOf(sql`c.email`)} as full_name, ${keyOf(sql`c.email`)} as key,
              (select count(s.average_score)::int ${scoredIn}) as scored,
-             (select round(avg(s.average_score)::numeric, 1)::float8 ${scoredIn}) as average
+             (select round(avg(x.score)::numeric, 1)::float8
+                from (select s.average_score as score ${scoredIn} union all select ${examIn}) x) as average
         from cohort c
        where ${inReach(reader, sql`c.email`)}
     )
@@ -298,6 +315,13 @@ export async function listCohort(
      limit ${limit} offset ${offset}`);
   return toPage(rows, query.page);
 }
+
+/** `examScore` of the mean of `r`'s exams, or null until both are in. */
+const EXAM_SCORE_SQL = sql`(case when r.entrance_exam is null or r.exit_exam is null then null
+  when round(((r.entrance_exam + r.exit_exam) / 2)::numeric, 1) >= 96 then 4
+  when round(((r.entrance_exam + r.exit_exam) / 2)::numeric, 1) >= 88 then 3
+  when round(((r.entrance_exam + r.exit_exam) / 2)::numeric, 1) >= 80 then 2
+  else 1 end)::float8`;
 
 export type ReleaseError = "no_bootcamp" | "no_intermediate" | "unscored";
 
@@ -440,6 +464,19 @@ export type PersonSubmission = {
   scores: SubmissionScore[];
 };
 
+/** An administrator's overall view of the person in one class at one bootcamp. */
+export type PersonReview = {
+  bootcampId: string;
+  stage: ReleaseStage;
+  positiveFeedback: string;
+  constructiveFeedback: string;
+  otherNotes: string;
+  entranceExam: number | null;
+  exitExam: number | null;
+  /** Also the version an edit must name. */
+  updatedAt: Date;
+};
+
 export type BootcampPerson = {
   key: string;
   email: string;
@@ -447,8 +484,11 @@ export type BootcampPerson = {
   employee: PersonEmployee | null;
   /** BTC and INT as a manager sees them. */
   classes: Record<ReleaseStage, ClassSummary>;
-  /** Null for a reader outside Assessments: the submissions behind `classes`, which only Assessments sees. */
-  records: { submissions: PersonSubmission[] } | null;
+  /**
+   * Null for a reader outside Assessments: the submissions behind `classes`,
+   * which only Assessments sees, and each class's review as entered.
+   */
+  records: { submissions: PersonSubmission[]; reviews: PersonReview[] } | null;
 };
 
 /**
@@ -465,7 +505,8 @@ export async function getBootcampPerson(reader: BootcampReader, key: string): Pr
   }
 
   const s = evalsSubmissions;
-  const [[employee], submitted] = await Promise.all([
+  const r = bootcampClassReviews;
+  const [[employee], submitted, reviewed] = await Promise.all([
     db
       .select({
         fullName: employees.fullName,
@@ -503,10 +544,29 @@ export async function getBootcampPerson(reader: BootcampReader, key: string): Pr
       .where(eq(s.attendeeEmail, email))
       .orderBy(desc(bootcamps.startDate), asc(evalsAssessments.stage), sql`lower(${s.assessmentName})`, s.id)
       .limit(PAGE_SIZE),
+    db
+      .select({
+        bootcampId: r.bootcampId,
+        stage: sql<ReleaseStage>`${r.stage}`,
+        positiveFeedback: r.positiveFeedback,
+        constructiveFeedback: r.constructiveFeedback,
+        otherNotes: r.otherNotes,
+        entranceExam: r.entranceExam,
+        exitExam: r.exitExam,
+        updatedAt: r.updatedAt,
+      })
+      .from(r)
+      .where(and(eq(r.attendeeEmail, email), inArray(r.stage, [...RELEASE_STAGES])))
+      .limit(PAGE_SIZE),
   ]);
   const visible = reader.all ? submitted : submitted.filter((x) => x.released);
+  // A review belongs to a class they were assessed in, so it is seen where its submissions are.
+  const reviews = reviewed.filter((x) => visible.some((v) => v.bootcamp.id === x.bootcampId && v.stage === x.stage));
 
-  const classes = { bootcamp: classFor("bootcamp", visible), intermediate: classFor("intermediate", visible) };
+  const classes = {
+    bootcamp: classFor("bootcamp", visible, reviews),
+    intermediate: classFor("intermediate", visible, reviews),
+  };
   if (!reader.all) return { key, email, employee: employee ?? null, classes, records: null };
 
   const ids = visible.map((x) => x.id);
@@ -537,23 +597,58 @@ export async function getBootcampPerson(reader: BootcampReader, key: string): Pr
     email,
     employee: employee ?? null,
     classes,
-    records: { submissions: visible.map((x) => ({ ...x, scores: scoresOf.get(x.id) ?? [] })) },
+    records: { submissions: visible.map((x) => ({ ...x, scores: scoresOf.get(x.id) ?? [] })), reviews },
   };
 }
 
-/** One class as a manager sees it: the newest bootcamp they were scored at in it. */
+/**
+ * One class as a manager sees it: the newest bootcamp they were scored at in
+ * it, with its review. Both exams in, their average counts as one more
+ * exercise towards the overall score.
+ */
 function classFor(
   stage: ReleaseStage,
-  submitted: { bootcamp: { id: string; startDate: string }; stage: ReleaseStage; assessmentName: string; averageScore: number | null }[],
+  submitted: {
+    bootcamp: { id: string; startDate: string };
+    stage: ReleaseStage;
+    assessmentName: string;
+    averageScore: number | null;
+    positiveFeedback: string;
+    constructiveFeedback: string;
+  }[],
+  reviews: PersonReview[],
 ): ClassSummary {
   const inStage = submitted.filter((x) => x.stage === stage);
   // Newest bootcamp first, as fetched.
   const newest = inStage[0]?.bootcamp;
   if (!newest) return NOT_ATTENDED;
   const scored = inStage.flatMap((x) =>
-    x.bootcamp.id === newest.id && x.averageScore !== null ? [{ name: x.assessmentName, score: x.averageScore }] : [],
+    x.bootcamp.id === newest.id && x.averageScore !== null
+      ? [{ name: x.assessmentName, score: x.averageScore, feedback: feedbackShown(x.averageScore, x) }]
+      : [],
   );
-  return { date: newest.startDate, score: averageScore(scored.map((x) => x.score)), exercises: scored };
+  const review = reviews.find((x) => x.bootcampId === newest.id && x.stage === stage);
+  const exams = review ? examAverage(review.entranceExam, review.exitExam) : null;
+  const counted = [...scored.map((x) => x.score), ...(exams === null ? [] : [examScore(exams)])];
+  return {
+    date: newest.startDate,
+    score: averageScore(counted),
+    exercises: scored,
+    positiveFeedback: review?.positiveFeedback ?? "",
+    constructiveFeedback: review?.constructiveFeedback ?? "",
+    otherNotes: review?.otherNotes ?? "",
+    examAverage: exams,
+  };
+}
+
+/**
+ * The feedback a manager reads under an assessment's score, as they see it
+ * rounded: the positive for a 4, the constructive for a 2, else none.
+ */
+function feedbackShown(average: number, s: { positiveFeedback: string; constructiveFeedback: string }): string | null {
+  const whole = wholeScore(average);
+  const text = whole === 4 ? s.positiveFeedback : whole === 2 ? s.constructiveFeedback : "";
+  return text || null;
 }
 
 const L = EVALS_ASSESSMENT_LIMITS;
@@ -676,6 +771,107 @@ export async function editSubmission(
         attendeeEmail: current.attendeeEmail,
         assessmentName: current.assessmentName,
         averageScore: average,
+        updatedAt: now,
+      },
+    };
+  });
+}
+
+const examSchema = z
+  .number()
+  .min(BOOTCAMP_EXAM.min)
+  .max(BOOTCAMP_EXAM.max)
+  .refine((n) => Number(n.toFixed(BOOTCAMP_EXAM.decimals)) === n, {
+    message: `at most ${BOOTCAMP_EXAM.decimals} decimal place`,
+  })
+  .nullable();
+
+/**
+ * An administrator's overall view of someone in one class at one bootcamp:
+ * the overall feedback their manager reads, and both exams as percentages,
+ * either left out as null.
+ */
+export const classReviewSchema = z.object({
+  bootcampId: z.string().uuid(),
+  stage: z.enum(RELEASE_STAGES),
+  positiveFeedback: z.string().trim().max(L.feedback).default(""),
+  constructiveFeedback: z.string().trim().max(L.feedback).default(""),
+  otherNotes: z.string().trim().max(L.feedback).default(""),
+  entranceExam: examSchema.default(null),
+  exitExam: examSchema.default(null),
+  /** The `updatedAt` of the version this replaces; null for the first. */
+  revises: z.string().datetime({ offset: true }).nullable(),
+});
+
+export type ClassReviewInput = z.infer<typeof classReviewSchema>;
+
+export type ClassReviewError = "not_found" | "conflict";
+
+export const CLASS_REVIEW_STATUS_FOR: Record<ClassReviewError, number> = { not_found: 404, conflict: 409 };
+
+/**
+ * Saves the review of the person `key` in one class they were assessed in,
+ * whole: the feedback and both exams. `revises` must name the version it
+ * replaces, or null when there is none yet.
+ */
+export async function saveClassReview(
+  actorId: string,
+  key: string,
+  input: ClassReviewInput,
+): Promise<
+  | { ok: true; review: { email: string; bootcampId: string; stage: ReleaseStage; examAverage: number | null; updatedAt: Date } }
+  | { ok: false; error: ClassReviewError }
+> {
+  const email = await resolvePerson(key);
+  if (!email) return { ok: false, error: "not_found" };
+  const r = bootcampClassReviews;
+  return db.transaction(async (tx) => {
+    const [assessed] = await tx
+      .select({ id: evalsSubmissions.id })
+      .from(evalsSubmissions)
+      .innerJoin(evalsAssessments, eq(evalsAssessments.id, evalsSubmissions.assessmentId))
+      .where(
+        and(
+          eq(evalsSubmissions.bootcampId, input.bootcampId),
+          eq(evalsSubmissions.attendeeEmail, email),
+          eq(evalsAssessments.stage, input.stage),
+        ),
+      )
+      .limit(1);
+    if (!assessed) return { ok: false as const, error: "not_found" as const };
+
+    const where = and(eq(r.bootcampId, input.bootcampId), eq(r.stage, input.stage), eq(r.attendeeEmail, email));
+    const [current] = await tx.select({ updatedAt: r.updatedAt }).from(r).where(where).for("update");
+    const revises = input.revises === null ? null : Date.parse(input.revises);
+    if ((current?.updatedAt.getTime() ?? null) !== revises) return { ok: false as const, error: "conflict" as const };
+
+    const now = new Date();
+    const values = {
+      positiveFeedback: input.positiveFeedback,
+      constructiveFeedback: input.constructiveFeedback,
+      otherNotes: input.otherNotes,
+      entranceExam: input.entranceExam,
+      exitExam: input.exitExam,
+      updatedBy: actorId,
+      updatedAt: now,
+    };
+    if (current) await tx.update(r).set(values).where(where);
+    else {
+      const inserted = await tx
+        .insert(r)
+        .values({ bootcampId: input.bootcampId, stage: input.stage, attendeeEmail: email, ...values })
+        .onConflictDoNothing()
+        .returning({ updatedAt: r.updatedAt });
+      // Someone else saved the first between our read and our write.
+      if (inserted.length === 0) return { ok: false as const, error: "conflict" as const };
+    }
+    return {
+      ok: true as const,
+      review: {
+        email,
+        bootcampId: input.bootcampId,
+        stage: input.stage,
+        examAverage: examAverage(input.entranceExam, input.exitExam),
         updatedAt: now,
       },
     };

@@ -1,9 +1,10 @@
 "use client";
 
 /**
- * Everything Assessments sees behind a person's INT and BTC: each assessment,
- * by class, with every criterion's score and comment and both feedback boxes,
- * each closed until opened.
+ * Everything Assessments sees behind a person's INT and BTC: each class's
+ * overall feedback and exams first, then each assessment, with every
+ * criterion's score and comment and both feedback boxes, each closed until
+ * opened.
  * With Edit on, each opens to a form and an Assessments Administrator corrects any of it in place, one
  * assessment at a time; one with no criteria, as the old bootcamp history
  * left, has its score set directly. The running bootcamp's Participation
@@ -19,7 +20,7 @@ import { ParticipationMarks } from "@/components/participation/participation-dia
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { BOOTCAMP_SCORE, EVALS_ASSESSMENT_LIMITS } from "@/db/schema";
+import { BOOTCAMP_EXAM, BOOTCAMP_SCORE, EVALS_ASSESSMENT_LIMITS } from "@/db/schema";
 import {
   CONSTRUCTIVE_REQUIRED_NOTE,
   CRITERION_SCORES,
@@ -29,11 +30,11 @@ import {
   requiredFeedback,
   wholeScore,
 } from "@/lib/evals/assessment-values";
-import { STAGE_CODES } from "@/lib/reporting/bootcamp-values";
+import { STAGE_CODES, examAverage, examScore, type ReleaseStage } from "@/lib/reporting/bootcamp-values";
 import { cn } from "@/lib/utils";
 import { formatDate, formatScore, formatWhen } from "../../../cohort-settings/format";
 import { Field } from "../class-card";
-import type { ViewSubmission } from "./person-view";
+import type { ViewReview, ViewSubmission } from "./person-view";
 
 const SAVE_ERRORS: Record<string, string> = {
   conflict: "Someone changed this since the page loaded. Reload to see their version.",
@@ -48,12 +49,12 @@ function useSave() {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function save(url: string, body: unknown): Promise<boolean> {
+  async function save(url: string, body: unknown, method: "PATCH" | "PUT" = "PATCH"): Promise<boolean> {
     setPending(true);
     setError(null);
     try {
       const res = await fetch(url, {
-        method: "PATCH",
+        method,
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
       });
@@ -79,10 +80,12 @@ function useSave() {
 export function SubmissionGroups({
   personKey,
   submissions,
+  reviews,
   editing,
 }: {
   personKey: string;
   submissions: ViewSubmission[];
+  reviews: ViewReview[];
   editing: boolean;
 }) {
   const groups: { key: string; first: ViewSubmission; items: ViewSubmission[] }[] = [];
@@ -97,42 +100,127 @@ export function SubmissionGroups({
     else groups.push({ key, first: s, items: [s] });
   }
 
+  // Once they have been to INT, their BTC is history: its cards start closed.
+  const atIntermediate = submissions.some((s) => s.stage === "intermediate");
+
   return (
     <>
-      {groups.map(({ key, first, items }) => {
-        const scored = items.flatMap((s) => (s.averageScore === null ? [] : [s.averageScore]));
-        const average = averageScore(scored);
-        return (
-          <div key={key} className="divide-y overflow-hidden rounded-2xl border bg-card shadow-sm">
-            <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
-              <div className="space-y-0.5">
-                <h4 className="font-medium">
-                  {STAGE_LABELS[first.stage]} · {formatDate(first.bootcamp.startDate)}
-                </h4>
-                <p className="text-xs text-muted-foreground">
-                  {STAGE_CODES[first.stage]} average {formatScore(average)} over {scored.length}{" "}
-                  {scored.length === 1 ? "assessment" : "assessments"}
-                </p>
-              </div>
-              {first.released ? (
-                <Badge variant="secondary">Released to managers</Badge>
-              ) : (
-                <Badge variant="outline" className="text-muted-foreground">
-                  Not released
-                </Badge>
-              )}
-            </div>
-            {items.map((s) =>
-              editing ? (
-                <EditableSubmission key={s.id} submission={s} personKey={personKey} />
-              ) : (
-                <SubmissionRow key={s.id} submission={s} personKey={personKey} />
-              ),
+      {groups.map(({ key, first, items }) => (
+        <ClassGroup
+          key={key}
+          personKey={personKey}
+          first={first}
+          items={items}
+          review={reviews.find((r) => r.bootcampId === first.bootcamp.id && r.stage === first.stage) ?? null}
+          editing={editing}
+          collapsible={atIntermediate && first.stage === "bootcamp"}
+        />
+      ))}
+    </>
+  );
+}
+
+/**
+ * One class at one bootcamp: its review, then each assessment. A collapsible
+ * one starts closed, showing only its overall score, the exams counted as in
+ * the manager's view; closed, its forms stay in the page with what was typed.
+ */
+function ClassGroup({
+  personKey,
+  first,
+  items,
+  review,
+  editing,
+  collapsible,
+}: {
+  personKey: string;
+  first: ViewSubmission;
+  items: ViewSubmission[];
+  review: ViewReview | null;
+  editing: boolean;
+  collapsible: boolean;
+}) {
+  const [open, setOpen] = useState(!collapsible);
+  const scored = items.flatMap((s) => (s.averageScore === null ? [] : [s.averageScore]));
+  const average = averageScore(scored);
+  const exams = review ? examAverage(review.entranceExam, review.exitExam) : null;
+  const overall = averageScore(exams === null ? scored : [...scored, examScore(exams)]);
+  const bodyId = `class-${first.bootcamp.id}-${first.stage}`;
+  const toggle = () => setOpen((was) => !was);
+
+  return (
+    <div className="divide-y overflow-hidden rounded-2xl border bg-card shadow-sm">
+      <div
+        onClick={collapsible ? toggle : undefined}
+        className={cn(
+          "flex flex-wrap items-center justify-between gap-3 px-5 py-3",
+          collapsible && "cursor-pointer transition-colors hover:bg-muted/30",
+        )}
+      >
+        <div className="flex items-start gap-2">
+          {collapsible && (
+            <button
+              type="button"
+              aria-expanded={open}
+              aria-controls={bodyId}
+              aria-label={`${STAGE_LABELS[first.stage]} details`}
+              onClick={(ev) => {
+                ev.stopPropagation();
+                toggle();
+              }}
+              className="-mx-1 mt-1 cursor-pointer rounded-md px-1 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+            >
+              <ChevronRight className={cn("size-3.5 text-muted-foreground transition-transform", open && "rotate-90")} />
+            </button>
+          )}
+          <div className="space-y-0.5">
+            <h4 className="font-medium">
+              {STAGE_LABELS[first.stage]} · {formatDate(first.bootcamp.startDate)}
+            </h4>
+            {open && (
+              <p className="text-xs text-muted-foreground">
+                {STAGE_CODES[first.stage]} average {formatScore(average)} over {scored.length}{" "}
+                {scored.length === 1 ? "assessment" : "assessments"}
+              </p>
             )}
           </div>
-        );
-      })}
-    </>
+        </div>
+        {open ? (
+          first.released ? (
+            <Badge variant="secondary">Released to managers</Badge>
+          ) : (
+            <Badge variant="outline" className="text-muted-foreground">
+              Not released
+            </Badge>
+          )
+        ) : (
+          <span className="text-xl font-medium tabular-nums">
+            {formatScore(overall)}
+            {overall !== null && <span className="text-sm text-muted-foreground"> / {BOOTCAMP_SCORE.max}</span>}
+          </span>
+        )}
+      </div>
+      <div id={bodyId} hidden={!open} className="divide-y">
+        {editing ? (
+          <ClassReviewForm
+            key={review?.updatedAt ?? "new"}
+            personKey={personKey}
+            bootcampId={first.bootcamp.id}
+            stage={first.stage}
+            review={review}
+          />
+        ) : (
+          <ClassReviewRow review={review} />
+        )}
+        {items.map((s) =>
+          editing ? (
+            <EditableSubmission key={s.id} submission={s} personKey={personKey} />
+          ) : (
+            <SubmissionRow key={s.id} submission={s} personKey={personKey} />
+          ),
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -148,10 +236,7 @@ function SubmissionHeading({ submission: s, average }: { submission: ViewSubmiss
           {s.ownerName ?? "Unknown judge"} · {formatWhen(s.updatedAt)}
         </p>
       </div>
-      <span className="text-xl font-medium tabular-nums">
-        {formatScore(average)}
-        <span className="text-sm text-muted-foreground"> / {BOOTCAMP_SCORE.max}</span>
-      </span>
+      <span className="text-xl font-medium tabular-nums">{formatScore(average)}</span>
     </div>
   );
 }
@@ -450,6 +535,191 @@ function FeedbackBox({
         maxLength={EVALS_ASSESSMENT_LIMITS.feedback}
         onChange={(e) => onChange(e.target.value)}
       />
+    </div>
+  );
+}
+
+const percent = (n: number | null) => (n === null ? "—" : `${n}%`);
+
+/** The exams' average and where it falls on the scale, or a dash until both are in. */
+function ExamAverage({ entrance, exit }: { entrance: number | null; exit: number | null }) {
+  const average = examAverage(entrance, exit);
+  return (
+    <Field label="Exam average">
+      <span className="tabular-nums">
+        {average === null ? "—" : `${average}% · scores ${examScore(average)}`}
+      </span>
+    </Field>
+  );
+}
+
+/** A class's overall feedback and exams, as entered. */
+function ClassReviewRow({ review }: { review: ViewReview | null }) {
+  return (
+    <section className="space-y-3 px-5 py-3">
+      <dl className="grid gap-3">
+        <Field label="Overall positive feedback">
+          <span className="whitespace-pre-line">{review?.positiveFeedback || "—"}</span>
+        </Field>
+        <Field label="Overall constructive feedback">
+          <span className="whitespace-pre-line">{review?.constructiveFeedback || "—"}</span>
+        </Field>
+        <Field label="Other notes">
+          <span className="whitespace-pre-line">{review?.otherNotes || "—"}</span>
+        </Field>
+      </dl>
+      <dl className="grid gap-3 sm:grid-cols-3">
+        <Field label="Entrance exam">
+          <span className="tabular-nums">{percent(review?.entranceExam ?? null)}</span>
+        </Field>
+        <Field label="Exit exam">
+          <span className="tabular-nums">{percent(review?.exitExam ?? null)}</span>
+        </Field>
+        <ExamAverage entrance={review?.entranceExam ?? null} exit={review?.exitExam ?? null} />
+      </dl>
+    </section>
+  );
+}
+
+/** What is typed as an exam: null when blank, NaN when it is no percentage to one decimal place. */
+function parseExam(typed: string): number | null {
+  if (typed.trim() === "") return null;
+  const n = Number(typed);
+  return Number.isFinite(n) && n >= BOOTCAMP_EXAM.min && n <= BOOTCAMP_EXAM.max && Number(n.toFixed(BOOTCAMP_EXAM.decimals)) === n
+    ? n
+    : NaN;
+}
+
+/** A class's overall feedback and both exams, as an administrator enters them; saving rebuilds it from what was saved. */
+function ClassReviewForm({
+  personKey,
+  bootcampId,
+  stage,
+  review,
+}: {
+  personKey: string;
+  bootcampId: string;
+  stage: ReleaseStage;
+  review: ViewReview | null;
+}) {
+  const { save, pending, error } = useSave();
+  const [positive, setPositive] = useState(review?.positiveFeedback ?? "");
+  const [constructive, setConstructive] = useState(review?.constructiveFeedback ?? "");
+  const [notes, setNotes] = useState(review?.otherNotes ?? "");
+  const [entranceTyped, setEntranceTyped] = useState(review?.entranceExam == null ? "" : String(review.entranceExam));
+  const [exitTyped, setExitTyped] = useState(review?.exitExam == null ? "" : String(review.exitExam));
+  const entrance = parseExam(entranceTyped);
+  const exit = parseExam(exitTyped);
+  const valid = !Number.isNaN(entrance) && !Number.isNaN(exit);
+  const changed =
+    positive !== (review?.positiveFeedback ?? "") ||
+    constructive !== (review?.constructiveFeedback ?? "") ||
+    notes !== (review?.otherNotes ?? "") ||
+    entrance !== (review?.entranceExam ?? null) ||
+    exit !== (review?.exitExam ?? null);
+  const id = `${bootcampId}-${stage}`;
+
+  return (
+    <section className="space-y-3 px-5 py-3">
+      <FeedbackBox
+        id={`${id}-overall-positive`}
+        label="Overall positive feedback"
+        value={positive}
+        onChange={setPositive}
+        note={null}
+      />
+      <FeedbackBox
+        id={`${id}-overall-constructive`}
+        label="Overall constructive feedback"
+        value={constructive}
+        onChange={setConstructive}
+        note={null}
+      />
+      <FeedbackBox
+        id={`${id}-other-notes`}
+        label="Other notes (optional, shown to the manager when written)"
+        value={notes}
+        onChange={setNotes}
+        note={null}
+      />
+      <div className="grid gap-3 sm:grid-cols-3">
+        <ExamInput id={`${id}-entrance`} label="Entrance exam" value={entranceTyped} onChange={setEntranceTyped} />
+        <ExamInput id={`${id}-exit`} label="Exit exam" value={exitTyped} onChange={setExitTyped} />
+        <dl className="self-end">
+          <ExamAverage entrance={valid ? entrance : null} exit={valid ? exit : null} />
+        </dl>
+      </div>
+      <div className="flex flex-wrap items-center gap-3">
+        <Button
+          size="sm"
+          variant="brand"
+          disabled={!changed || !valid || pending}
+          onClick={() =>
+            void save(
+              `/api/reporting/bootcamp/people/${encodeURIComponent(personKey)}/review`,
+              {
+                bootcampId,
+                stage,
+                positiveFeedback: positive,
+                constructiveFeedback: constructive,
+                otherNotes: notes,
+                entranceExam: entrance,
+                exitExam: exit,
+                revises: review?.updatedAt ?? null,
+              },
+              "PUT",
+            )
+          }
+        >
+          {pending ? <Loader2 className="animate-spin" /> : <Save />}
+          Save
+        </Button>
+        {!valid && (
+          <p className="text-sm text-muted-foreground">
+            Exams run from {BOOTCAMP_EXAM.min} to {BOOTCAMP_EXAM.max}%, to one decimal place.
+          </p>
+        )}
+        {error && (
+          <p role="alert" className="text-sm text-destructive">
+            {error}
+          </p>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function ExamInput({
+  id,
+  label,
+  value,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <label htmlFor={id} className="text-sm font-medium">
+        {label}
+      </label>
+      <div className="flex items-center gap-1.5">
+        <Input
+          id={id}
+          type="number"
+          inputMode="decimal"
+          min={BOOTCAMP_EXAM.min}
+          max={BOOTCAMP_EXAM.max}
+          step={0.1}
+          value={value}
+          aria-invalid={Number.isNaN(parseExam(value))}
+          onChange={(e) => onChange(e.target.value)}
+          className="w-24"
+        />
+        <span className="text-sm text-muted-foreground">%</span>
+      </div>
     </div>
   );
 }

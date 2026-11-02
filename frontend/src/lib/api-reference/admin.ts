@@ -1,5 +1,5 @@
 import { FOOD_ORDER_LIST, RECORDING_LIST, GUEST_JUDGE_LIST, INTAKE_RESPONSE_LIST, JUDGE_PROSPECT_LIST, ASSESSMENT_ATTENDEE_LIST, ASSESSMENT_LIST, AUDIT_LIST, BOOTCAMP_COHORT_LIST, BOOTCAMP_LIST, BOOTCAMP_RECORD_LIST, CURRENT_COHORT_LIST, DOMAIN_LIST, EMPLOYEE_LIST, FRAME_DOMAIN_LIST, HIBOB_SYNC_LIST, HISTORY_STATUSES, JUDGE_LIST, ORGANIZATION_LIST, PREVIOUS_SESSION_LIST, SESSION_COMMENT_LIST, SESSION_TYPE_LIST, MEETING_SELECTION_LIST, MEETING_SYNC_CHANGE_LIST, MEETING_SYNC_LIST, SLACK_CONTACT_LIST, SLACK_SYNC_CHANGE_LIST, SLACK_SYNC_LIST, CHANNEL_CONTACT_LIST, SURVEY_RESPONSE_LIST, SURVEY_RESULT_LIST, TITLE_LIST, USER_LIST, FACILITY_LIST, VIDEO_FEEDBACK_LIST, VIDEO_FEEDBACK_SUMMARY_LIST } from "@/lib/list-specs";
-import { BOOTCAMP_LIMITS, BOOTCAMP_SCORE, CHECKLIST_LIMITS, EVALS_ASSESSMENT_LIMITS, FACILITY_LIMITS, FOOD_ORDER_LIMITS, INTAKE_LIMITS, MEETING_SELECTION_LIMITS, RECORDING_LIMITS, SCHEDULE_LIMITS, SURVEY_LIMITS, VIDEO_FEEDBACK_LIMITS } from "@/db/schema";
+import { BOOTCAMP_EXAM, BOOTCAMP_LIMITS, BOOTCAMP_SCORE, CHECKLIST_LIMITS, EVALS_ASSESSMENT_LIMITS, FACILITY_LIMITS, FOOD_ORDER_LIMITS, INTAKE_LIMITS, MEETING_SELECTION_LIMITS, RECORDING_LIMITS, SCHEDULE_LIMITS, SURVEY_LIMITS, VIDEO_FEEDBACK_LIMITS } from "@/db/schema";
 import { PAGE_SIZE } from "@/lib/paging";
 import { RECORDING_RETENTION_DAYS, UPLOAD_STALLED_MS, UPLOAD_URL_BATCH } from "@/lib/recording/video";
 import { CHECKLIST_ITEM_ROW } from "./account";
@@ -2600,11 +2600,37 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "signedIn",
         token: true,
         notes:
-          "classes is what a manager sees: each class's day, overall score and score per exercise, from the latest released class of it they were assessed in. records is null below Assessments Viewer. Above it, submissions is every assessment of them at any bootcamp, newest bootcamp first, with each criterion's score and comment; released says whether managers may see it yet.",
+          "classes is what a manager sees: each class's day, overall score and score per exercise, from the latest released class of it they were assessed in, with that class's overall positiveFeedback, constructiveFeedback and otherNotes (empty when none) and examAverage, the mean of the entrance and exit exams as a percentage once both are in. Each exercise's feedback is that assessment's positive feedback when its score rounds to 4, its constructive feedback when it rounds to 2, and otherwise null. The exams count towards score as one more exercise: an average of 96% or more is 4, 88% or more 3, 80% or more 2, and less 1. records is null below Assessments Viewer. Above it, submissions is every assessment of them at any bootcamp, newest bootcamp first, with each criterion's score and comment; released says whether managers may see it yet. reviews is each class's overall feedback and exams as entered with PUT /api/reporting/bootcamp/people/{key}/review.",
         params: [{ name: "key", type: "string", required: true, note: "a key from the list: an employee id or a submission's" }],
         returns:
-          '{ key, email, employee: { fullName, title, department, site, reportsToName, reportsToEmail, startDate, track } | null, classes: { bootcamp: ClassSummary, intermediate: ClassSummary }, records: { submissions: { id, bootcamp: { id, startDate, status }, stage, assessmentName, builtIn: "participation" | null, averageScore: number | null, positiveFeedback, constructiveFeedback, ownerName, submittedAt, updatedAt, released, scores: { criterionId, criterionName, score, comment }[] }[] } | null }, where ClassSummary is { date: string | null, score: number | null, exercises: { name, score }[] }',
+          '{ key, email, employee: { fullName, title, department, site, reportsToName, reportsToEmail, startDate, track } | null, classes: { bootcamp: ClassSummary, intermediate: ClassSummary }, records: { submissions: { id, bootcamp: { id, startDate, status }, stage, assessmentName, builtIn: "participation" | null, averageScore: number | null, positiveFeedback, constructiveFeedback, ownerName, submittedAt, updatedAt, released, scores: { criterionId, criterionName, score, comment }[] }[], reviews: { bootcampId, stage, positiveFeedback, constructiveFeedback, otherNotes, entranceExam: number | null, exitExam: number | null, updatedAt }[] } | null }, where ClassSummary is { date: string | null, score: number | null, exercises: { name, score, feedback: string | null }[], positiveFeedback, constructiveFeedback, otherNotes, examAverage: number | null }',
         errors: [{ status: 404, error: "not_found", when: "the key names no one, or someone the caller may not see" }],
+      },
+      {
+        method: "PUT",
+        path: "/api/reporting/bootcamp/people/{key}/review",
+        summary: "Sets someone's overall feedback and entrance and exit exams for one class they were assessed in.",
+        access: "assessmentsAdmin",
+        token: true,
+        notes:
+          "It replaces the whole review: both feedback boxes and the optional otherNotes, which their manager reads under the class's overall score once it is released, and both exams. Once both exams are in, their average counts towards the class's overall score as one more exercise. The audit log records who saved it.",
+        params: [{ name: "key", type: "string", required: true, note: "a key from the list: an employee id or a submission's" }],
+        body: { kind: "json", fields: [
+          { name: "bootcampId", type: "string", required: true, note: "a bootcamp they were assessed at in stage" },
+          { name: "stage", type: '"bootcamp" | "intermediate"', required: true },
+          { name: "positiveFeedback", type: "string", note: `up to ${EVALS_ASSESSMENT_LIMITS.feedback} characters` },
+          { name: "constructiveFeedback", type: "string", note: `up to ${EVALS_ASSESSMENT_LIMITS.feedback} characters` },
+          { name: "otherNotes", type: "string", note: `up to ${EVALS_ASSESSMENT_LIMITS.feedback} characters; optional` },
+          { name: "entranceExam", type: "number | null", note: `${BOOTCAMP_EXAM.min} to ${BOOTCAMP_EXAM.max}, to one decimal place; null for none` },
+          { name: "exitExam", type: "number | null", note: `${BOOTCAMP_EXAM.min} to ${BOOTCAMP_EXAM.max}, to one decimal place; null for none` },
+          { name: "revises", type: "string | null", required: true, note: "the updatedAt of the review being replaced, or null when there is none yet" },
+        ] },
+        returns: "{ ok: true, review: { email, bootcampId, stage, examAverage: number | null, updatedAt } }",
+        errors: [
+          { status: 400, error: "invalid", when: "the body is not that shape" },
+          { status: 404, error: "not_found", when: "the key names no one, or they were not assessed in that class at that bootcamp" },
+          { status: 409, error: "conflict", when: "someone saved it since revises" },
+        ],
       },
       {
         method: "PATCH",

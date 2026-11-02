@@ -2375,6 +2375,48 @@ export const evalsSubmissionScores = pgTable(
 
 export type EvalsSubmissionScore = typeof evalsSubmissionScores.$inferSelect;
 
+/** The range an entrance or exit exam is scored in, as a percentage. */
+export const BOOTCAMP_EXAM = { min: 0, max: 100, decimals: 1 } as const;
+
+/**
+ * An administrator's overall view of one attendee in one class: the overall
+ * feedback a manager reads under the scorecard, and the entrance and exit
+ * exams, whose average counts towards the overall score as one assessment.
+ */
+export const bootcampClassReviews = pgTable(
+  "bootcamp_class_reviews",
+  {
+    bootcampId: uuid("bootcamp_id")
+      .notNull()
+      .references(() => bootcamps.id, { onDelete: "cascade" }),
+    stage: text("stage").$type<EvalsAssessmentStage>().notNull(),
+    /** The attendee, lowercased. */
+    attendeeEmail: text("attendee_email").notNull(),
+    positiveFeedback: text("positive_feedback").notNull().default(""),
+    constructiveFeedback: text("constructive_feedback").notNull().default(""),
+    /** Optional; a manager sees them only when there are any. */
+    otherNotes: text("other_notes").notNull().default(""),
+    /** Percentages, to one decimal place; null until entered. */
+    entranceExam: doublePrecision("entrance_exam"),
+    exitExam: doublePrecision("exit_exam"),
+    /** Whoever saved it last. */
+    updatedBy: text("updated_by").references(() => users.id, { onDelete: "set null" }),
+    /** Also the version an edit must name. */
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.bootcampId, t.stage, t.attendeeEmail] }),
+    index("bootcamp_class_reviews_attendee_email_idx").on(t.attendeeEmail),
+    check("bootcamp_class_reviews_stage_check", sql`${t.stage} in ('bootcamp', 'intermediate')`),
+    check("bootcamp_class_reviews_entrance_check", sql`${t.entranceExam} between 0 and 100`),
+    check("bootcamp_class_reviews_exit_check", sql`${t.exitExam} between 0 and 100`),
+  ],
+);
+
+export type BootcampClassReview = typeof bootcampClassReviews.$inferSelect;
+
 export const PARTICIPATION_POLARITIES = ["positive", "negative"] as const;
 export type ParticipationPolarity = (typeof PARTICIPATION_POLARITIES)[number];
 

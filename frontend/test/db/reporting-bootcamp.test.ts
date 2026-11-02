@@ -20,6 +20,7 @@ process.env.AUTH_SECRET ||= "reporting-bootcamp-test-secret-reporting-b";
 
 import { db } from "@/db";
 import {
+  bootcampClassReviews,
   bootcamps,
   employees,
   evalsAssessmentCriteria,
@@ -33,6 +34,7 @@ import { getCandidateCutoffs } from "@/lib/evals/settings";
 import { BOOTCAMP_COHORT_LIST, BOOTCAMP_RECORD_LIST } from "@/lib/list-specs";
 import {
   bootcampRecordCounts,
+  classReviewSchema,
   cohortBootcamp,
   editSubmission,
   getBootcampPerson,
@@ -40,6 +42,7 @@ import {
   listCohort,
   readerOf,
   releaseScores,
+  saveClassReview,
   submissionEditSchema,
   unscoredAttendees,
   visibleStages,
@@ -155,6 +158,8 @@ before(async () => {
 });
 
 after(async () => {
+  // The active bootcamp is not the suite's, so its reviews of the suite's people go by hand.
+  await db.delete(bootcampClassReviews).where(eq(bootcampClassReviews.attendeeEmail, emailOf("newcomer")));
   await db.update(bootcamps).set(restoreRelease).where(eq(bootcamps.id, bootcampId));
   await db.delete(intakeResponses).where(eq(intakeResponses.email, emailOf("newcomer")));
   await scope.tearDown();
@@ -197,7 +202,11 @@ describe("who a reader sees", () => {
     assert.deepEqual(person?.classes.bootcamp, {
       date: "2026-03-02",
       score: 2.8,
-      exercises: [{ name: "bootcamp attendance", score: 2.8 }],
+      exercises: [{ name: "bootcamp attendance", score: 2.8, feedback: null }],
+      positiveFeedback: "",
+      constructiveFeedback: "",
+      otherNotes: "",
+      examAverage: null,
     });
     assert.equal(person?.classes.intermediate.date, null);
 
@@ -382,5 +391,131 @@ describe("an administrator's corrections", () => {
       ok: false,
       error: "conflict",
     });
+  });
+});
+
+describe("a class's overall review", () => {
+  /** The bootcamp the lead's INT was at. */
+  async function leadIntermediate() {
+    const [row] = await db
+      .select({ bootcampId: evalsSubmissions.bootcampId })
+      .from(evalsSubmissions)
+      .innerJoin(evalsAssessments, eq(evalsAssessments.id, evalsSubmissions.assessmentId))
+      .where(and(eq(evalsSubmissions.attendeeEmail, emailOf("lead")), eq(evalsAssessments.stage, "intermediate")));
+    return row!.bootcampId;
+  }
+
+  test("shows a manager its feedback and exam average, the exams counting as one more exercise", async () => {
+    const leadBootcamp = await leadIntermediate();
+    const input = classReviewSchema.parse({
+      bootcampId: leadBootcamp,
+      stage: "intermediate",
+      positiveFeedback: "  Strong demos  ",
+      constructiveFeedback: "Slow down",
+      otherNotes: "Out sick on day two",
+      entranceExam: 90,
+      exitExam: 94,
+      revises: null,
+    });
+    const saved = await saveClassReview(admin.id, `${SCOPED}lead`, input);
+    assert.ok(saved.ok);
+    assert.equal(saved.review.examAverage, 92);
+
+    const person = await getBootcampPerson(manager(), `${SCOPED}lead`);
+    // 3.4 from the assessment and 3 from a 92% exam average.
+    assert.equal(person?.classes.intermediate.score, 3.2);
+    assert.equal(person?.classes.intermediate.positiveFeedback, "Strong demos");
+    assert.equal(person?.classes.intermediate.constructiveFeedback, "Slow down");
+    assert.equal(person?.classes.intermediate.examAverage, 92);
+    assert.equal(person?.classes.intermediate.otherNotes, "Out sick on day two");
+    assert.deepEqual(person?.classes.intermediate.exercises.length, 1, "the exams are not listed as an exercise");
+    assert.equal(person?.classes.bootcamp.examAverage, null, "a review is of one class");
+
+    const full = await getBootcampPerson(viewer(), `${SCOPED}lead`);
+    assert.deepEqual(
+      full?.records?.reviews.map(({ entranceExam, exitExam }) => ({ entranceExam, exitExam })),
+      [{ entranceExam: 90, exitExam: 94 }],
+    );
+
+    // One exam alone counts for nothing.
+    const halfway = await saveClassReview(admin.id, `${SCOPED}lead`, {
+      ...input,
+      exitExam: null,
+      revises: saved.review.updatedAt.toISOString(),
+    });
+    assert.ok(halfway.ok);
+    const after = await getBootcampPerson(manager(), `${SCOPED}lead`);
+    assert.equal(after?.classes.intermediate.score, 3.4);
+    assert.equal(after?.classes.intermediate.examAverage, null);
+  });
+
+  test("shows a manager an assessment's positive feedback under a 4 and its constructive under a 2", async () => {
+    const shown = async (averageScore: number) => {
+      await db
+        .update(evalsSubmissions)
+        .set({ averageScore, positiveFeedback: "Great demo", constructiveFeedback: "Practise the demo" })
+        .where(eq(evalsSubmissions.id, repSubmissionId));
+      return (await getBootcampPerson(manager(), `${SCOPED}rep`))?.classes.bootcamp.exercises[0]?.feedback;
+    };
+    assert.equal(await shown(3.6), "Great demo", "3.6 rounds to 4");
+    assert.equal(await shown(2.2), "Practise the demo");
+    assert.equal(await shown(3), null);
+    assert.equal(await shown(1), null);
+  });
+
+  test("refuses a stale save, a class they were not assessed in, and an exam outside 0 to 100", async () => {
+    const leadBootcamp = await leadIntermediate();
+    const input = {
+      bootcampId: leadBootcamp,
+      stage: "intermediate" as const,
+      positiveFeedback: "",
+      constructiveFeedback: "",
+      otherNotes: "",
+      entranceExam: 80,
+      exitExam: 80,
+    };
+    assert.deepEqual(await saveClassReview(admin.id, `${SCOPED}lead`, { ...input, revises: null }), {
+      ok: false,
+      error: "conflict",
+    });
+    assert.deepEqual(
+      await saveClassReview(admin.id, `${SCOPED}rep`, { ...input, revises: null }),
+      { ok: false, error: "not_found" },
+      "the rep was never at the lead's INT",
+    );
+    assert.equal(classReviewSchema.safeParse({ ...input, exitExam: 101, revises: null }).success, false);
+    assert.equal(classReviewSchema.safeParse({ ...input, exitExam: 90.25, revises: null }).success, false);
+  });
+
+  test("counts the exams in the active cohort's average", async () => {
+    const average = async () => {
+      const page = await listCohort(viewer(), (await cohortBootcamp())!, {
+        ...BOOTCAMP_COHORT_LIST,
+        q: emailOf("newcomer"),
+        page: 1,
+      });
+      return page.rows.find((r) => r.email === emailOf("newcomer"))!.averageScore;
+    };
+    const scores = await db
+      .select({ score: evalsSubmissions.averageScore })
+      .from(evalsSubmissions)
+      .innerJoin(evalsAssessments, eq(evalsAssessments.id, evalsSubmissions.assessmentId))
+      .where(and(eq(evalsSubmissions.bootcampId, bootcampId), eq(evalsSubmissions.attendeeEmail, emailOf("newcomer")), eq(evalsAssessments.stage, "bootcamp")));
+    const counted = scores.flatMap((x) => (x.score === null ? [] : [x.score]));
+
+    const saved = await saveClassReview(admin.id, `${SCOPED}newcomer`, {
+      bootcampId,
+      stage: "bootcamp",
+      positiveFeedback: "",
+      constructiveFeedback: "",
+      otherNotes: "",
+      entranceExam: 79,
+      exitExam: 80,
+      revises: null,
+    });
+    assert.ok(saved.ok);
+    // 79.5% is below 80%, so the exams score 1.
+    const expected = Math.round(((counted.reduce((a, b) => a + b, 0) + 1) * 10) / (counted.length + 1)) / 10;
+    assert.equal(await average(), expected);
   });
 });
