@@ -2424,7 +2424,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "scorer",
         token: true,
         notes:
-          "descriptors is every descriptor on the list, positive first, with its shared count from 0 to 3 and adjustments, who moved it and by how much, leaving out anyone whose clicks cancelled out. runningScore is the 1 to 4 Generate would give them now, and null until they have a mark. saved is their Participation assessment, only for an Assessments Administrator: null before their first mark, with averageScore null until it is generated.",
+          "descriptors is every descriptor on the list, positive first, with its shared count from 0 to 3 and adjustments, who moved it and by how much, leaving out anyone whose clicks cancelled out. runningScore is the 1 to 4 Generate would give them now, and null until they have a mark. saved is their Participation assessment, only for an Assessments Administrator: null before their first mark.",
         params: [{ name: "employeeId", type: "string", required: true }],
         returns:
           '{ attendee: { id, email, fullName, title, stage: "bootcamp" | "intermediate" }, descriptors: { id, name, polarity: "positive" | "negative", count: number, adjustments: { name, net: number }[] }[], runningScore: number | null, saved: { averageScore, positiveFeedback, constructiveFeedback } | null }',
@@ -2441,20 +2441,18 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "scorer",
         token: true,
         notes:
-          "Counters are shared by every judge and run from 0 to 3. A counter already at the end it was pushed towards stays there and logs nothing. The first mark creates their Participation assessment with a blank score, which no average counts. If their marks all return to zero while the score and comments are blank, the assessment is removed, so a mistaken click does not count as attendance. Returns the attendee's sheet, as GET /api/evals/participation/{employeeId}.",
+          "Counters are shared by every judge and run from 0 to 3. A counter already at the end it was pushed towards stays there and logs nothing. Every move saves the score the marks now give to their Participation assessment, creating it on the first mark, and clears the comment on the moved descriptor's side: a positive descriptor clears positiveFeedback, a negative one constructiveFeedback. This holds after the class is released too. If their marks all return to zero and the assessment was made only by marks, with both comments blank, it is removed, so a mistaken click does not count as attendance. Returns the attendee's sheet, as GET /api/evals/participation/{employeeId}.",
         params: [{ name: "employeeId", type: "string", required: true }],
         body: {
           kind: "json",
           fields: [
             { name: "descriptorId", type: "uuid", required: true },
             { name: "delta", type: "1 | -1", required: true },
-            { name: "updateScore", type: "boolean", required: false, note: "Assessments Administrator only: also recalculates a saved score from the marks" },
           ],
         },
         returns: "the attendee's sheet",
         errors: [
           { status: 400, error: "invalid", when: "the body is not as above" },
-          { status: 403, error: "forbidden", when: "updateScore is set and the caller is not an Assessments Administrator" },
           { status: 404, error: "not_found", when: "no such attendee, or the descriptor is retired or missing" },
           { status: 409, error: "no_bootcamp", when: "no bootcamp is active" },
           { status: 409, error: "no_class", when: "they are in intermediate and the active bootcamp holds no intermediate class" },

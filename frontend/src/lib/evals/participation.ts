@@ -6,15 +6,16 @@
  * A mark is a shared counter from 0 to `PARTICIPATION_LIMITS.maxCount`, with
  * every click logged, so two judges clicking at once both count and the popup
  * can say who did what. An attendee's first mark creates their assessment,
- * because a mark shows they are attending, with a blank score that no average
- * counts. Generate fills that in, and from then on it counts towards the class
- * like any other assessment. If their marks all go back to zero before then,
- * the assessment goes too, so that a mistaken click never counts as attendance.
+ * because a mark shows they are attending, and every click saves the score
+ * the marks give and clears the comment on that side, for Generate or an
+ * administrator to write again. If their marks all go back to zero, and
+ * nothing else shows they attended, the assessment goes too, so that a
+ * mistaken click never counts as attendance.
  */
 
 import "server-only";
 
-import { and, asc, eq, inArray, isNotNull, isNull, lt, gt, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, lt, gt, notExists, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
 import {
@@ -265,14 +266,13 @@ export async function getParticipationSheet(
 export const adjustSchema = z.object({
   descriptorId: z.string().uuid(),
   delta: z.union([z.literal(1), z.literal(-1)]),
-  /** An administrator's edit in the Administration View, which carries through to a saved score. */
-  updateScore: z.boolean().optional(),
 });
 
 /**
  * Moves one counter by one. A counter already at the end it was pushed
  * towards stays there and logs nothing, which also covers two judges racing
- * for the last step.
+ * for the last step. A move saves the score the marks now give and clears
+ * the comment on its own side, which no longer says what the marks do.
  */
 export async function adjustMark(
   actorId: string,
@@ -284,7 +284,7 @@ export async function adjustMark(
   if (!found.ok) return found;
   const { bootcamp, attendee } = found;
   const [descriptor] = await db
-    .select({ name: d.name })
+    .select({ name: d.name, polarity: d.polarity })
     .from(d)
     .where(and(eq(d.id, input.descriptorId), isNull(d.retiredAt)));
   if (!descriptor) return { ok: false, error: "not_found" };
@@ -340,17 +340,33 @@ export async function adjustMark(
         ),
       )
       .limit(PARTICIPATION_LIMITS.descriptors);
+    await tx
+      .update(s)
+      .set({
+        averageScore: participationScore(remaining, bands),
+        ...(descriptor.polarity === "positive" ? { positiveFeedback: "" } : { constructiveFeedback: "" }),
+        ownerId: actorId,
+        updatedAt: new Date(),
+      })
+      .where(ofAttendee);
+    // A mistaken click must not count as attendance. Someone assessed on anything else in the class keeps
+    // theirs, at the 2 Generate would give them.
     if (remaining.length === 0) {
+      const other = tx
+        .select({ one: sql`1` })
+        .from(evalsAssessments)
+        .innerJoin(s, eq(s.assessmentId, evalsAssessments.id))
+        .where(
+          and(
+            eq(s.bootcampId, bootcamp.id),
+            eq(s.attendeeEmail, attendee.email),
+            eq(evalsAssessments.stage, attendee.stage),
+            isNull(evalsAssessments.builtIn),
+          ),
+        );
       await tx
         .delete(s)
-        .where(and(ofAttendee, isNull(s.averageScore), eq(s.positiveFeedback, ""), eq(s.constructiveFeedback, "")));
-    }
-    // A blank score stays blank: only Generate gives one.
-    if (input.updateScore) {
-      await tx
-        .update(s)
-        .set({ averageScore: participationScore(remaining, bands), ownerId: actorId, updatedAt: new Date() })
-        .where(and(ofAttendee, isNotNull(s.averageScore)));
+        .where(and(ofAttendee, eq(s.positiveFeedback, ""), eq(s.constructiveFeedback, ""), notExists(other)));
     }
     return true;
   });

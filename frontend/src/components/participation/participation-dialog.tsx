@@ -95,8 +95,8 @@ function Counter({
   );
 }
 
-/** Reads one attendee's marks, and moves them. `updateScore` carries each move through to a saved score. */
-function useParticipationSheet(employeeId: string, updateScore: boolean, onMoved?: () => void) {
+/** Reads one attendee's marks, and moves them; each move saves their score and clears that side's comment. */
+function useParticipationSheet(employeeId: string, onMoved?: () => void) {
   const [sheet, setSheet] = useState<ParticipationSheet | null>(null);
   const [saving, setSaving] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -127,7 +127,7 @@ function useParticipationSheet(employeeId: string, updateScore: boolean, onMoved
       const res = await fetch(`/api/evals/participation/${encodeURIComponent(employeeId)}/marks`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ descriptorId, delta, ...(updateScore && { updateScore }) }),
+        body: JSON.stringify({ descriptorId, delta }),
       });
       const body = await res.json().catch(() => null);
       if (!res.ok) {
@@ -217,7 +217,7 @@ export function ParticipationMarks({
   /** Told the score the marks give whenever they are read or move, for a form whose saved score is still blank. */
   onScore?: (score: number | null) => void;
 }) {
-  const { sheet, saving, error, adjust } = useParticipationSheet(employeeId, onMoved !== undefined, onMoved);
+  const { sheet, saving, error, adjust } = useParticipationSheet(employeeId, onMoved);
   const runningScore = sheet && sheet.attendee.stage === stage ? sheet.runningScore : null;
   useEffect(() => {
     onScore?.(runningScore);
@@ -263,7 +263,7 @@ function useAiComments(employeeId: string, onDone: (sheet: ParticipationSheet) =
 function SheetPanel({ employeeId, canRegenerate }: { employeeId: string; canRegenerate: boolean }) {
   const router = useRouter();
   // An administrator's marks carry through to the saved score, as they do in the Administration View.
-  const { sheet, setSheet, saving, error, adjust } = useParticipationSheet(employeeId, canRegenerate, () => router.refresh());
+  const { sheet, setSheet, saving, error, adjust } = useParticipationSheet(employeeId, () => router.refresh());
   const comments = useAiComments(employeeId, setSheet);
   if (!sheet) return error ? <ErrorLine error={error} /> : <Loading />;
   const score = sheet.saved?.averageScore ?? sheet.runningScore;
