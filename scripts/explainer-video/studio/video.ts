@@ -312,6 +312,9 @@ export function videoTools(ws: Workspace, id: string, progress: (text: string) =
           done.narrated = scriptEdit;
           return tail(r.output, 3000);
         }
+        // No script edit fixes the account, so the job ends with ElevenLabs' own words rather than handing them to Claude.
+        const refusal = r.output.match(/ElevenLabs \S+ -> HTTP (?:401|402|404)\b.*/);
+        if (refusal) throw new Error(`ElevenLabs refused the narration: ${refusal[0].slice(0, 1000)}`);
         const limited = /\b429\b|rate.?limit|too many requests/i.test(r.output);
         if (!limited || attempt >= NARRATE_TRIES) throw new ToolError(`Narration failed:\n${tail(r.output)}`);
         await progress(`Narration was rate limited; trying again in a minute (${attempt} of ${NARRATE_TRIES - 1}).`);
