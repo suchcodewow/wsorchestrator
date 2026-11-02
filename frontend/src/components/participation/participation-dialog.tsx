@@ -2,18 +2,19 @@
 
 /**
  * The participation popup: every descriptor for one attendee, its shared
- * counter from 0 to 3 with arrows, who has moved it, and a running 1 to 4 once
- * they have a mark. With more than one person it lists them beside the
- * counters, for a judge marking the rest of an evaluation group. It is a
- * dialog over the page, so a recording or unsaved scores behind it carry on.
+ * counter from 0 to 3 with arrows, who has moved it, and their 1 to 4 score
+ * below. With more than one person it lists them beside the counters, for a
+ * judge marking the rest of an evaluation group. It is a dialog over the page,
+ * so a recording or unsaved scores behind it carry on.
  *
  * Marks save as they are clicked. An administrator on Reporting also sees what
- * was generated, and can have it written again.
+ * was generated; each mark carries through to the saved score, and AI Comments
+ * writes the comments again from the marks as they are now.
  */
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, ChevronRight, Loader2, MessageSquarePlus, RefreshCw, Users } from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2, MessageSquarePlus, Sparkles, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { PARTICIPATION_LIMITS, type EvalsAssessmentStage, type ParticipationPolarity } from "@/db/schema";
@@ -31,9 +32,9 @@ const ERRORS: Record<string, string> = {
   upstream: "Claude could not write them just now. Try again.",
 };
 
-const SECTIONS: { polarity: ParticipationPolarity; label: string }[] = [
-  { polarity: "positive", label: "Positive" },
-  { polarity: "negative", label: "Constructive" },
+const SECTIONS: { polarity: ParticipationPolarity; label: string; className: string }[] = [
+  { polarity: "positive", label: "Positive", className: "text-green-600 dark:text-green-400" },
+  { polarity: "negative", label: "Constructive", className: "text-orange-500 dark:text-orange-400" },
 ];
 
 function errorFor(status: number, code: string | undefined): string {
@@ -52,15 +53,7 @@ function Counter({
 }) {
   const adjustments = row.adjustments.map((a) => `${a.name} ${a.net > 0 ? "+" : "−"}${Math.abs(a.net)}`).join(" · ");
   return (
-    <li className="flex items-center justify-between gap-3 py-0.5">
-      <div className="flex min-w-0 items-baseline gap-2">
-        <span className="shrink-0 text-sm">{row.name}</span>
-        {adjustments && (
-          <span className="truncate text-xs text-muted-foreground" title={adjustments}>
-            {adjustments}
-          </span>
-        )}
-      </div>
+    <li className="flex items-center gap-3 py-0.5">
       <div className="flex min-h-6 shrink-0 items-center gap-0.5">
         {onAdjust && (
           <Button
@@ -90,6 +83,12 @@ function Counter({
           </Button>
         )}
       </div>
+      <span className="min-w-0 text-sm wrap-break-word">{row.name}</span>
+      {adjustments && (
+        <span className="ml-auto max-w-[45%] shrink-0 truncate text-right text-xs text-muted-foreground" title={adjustments}>
+          {adjustments}
+        </span>
+      )}
     </li>
   );
 }
@@ -176,13 +175,13 @@ function Counters({
   return (
     <>
       {sheet.descriptors.length === 0 && <p className="text-sm text-muted-foreground">No descriptors are set up yet.</p>}
-      {SECTIONS.map(({ polarity, label }) => {
+      {SECTIONS.map(({ polarity, label, className }) => {
         const rows = sheet.descriptors.filter((x) => x.polarity === polarity);
         if (rows.length === 0) return null;
         return (
           <section key={polarity}>
-            <h3 className="text-xs font-medium text-muted-foreground">{label}</h3>
-            <ul className="divide-y">
+            <h3 className={cn("text-xs font-medium", className)}>{label}</h3>
+            <ul>
               {rows.map((row) => (
                 <Counter
                   key={row.id}
@@ -224,9 +223,9 @@ export function ParticipationMarks({
   );
 }
 
-function Regenerate({ employeeId, onDone }: { employeeId: string; onDone: (sheet: ParticipationSheet) => void }) {
+/** Has Claude write this person's comments again from the marks they have now. */
+function AiComments({ employeeId, onDone }: { employeeId: string; onDone: (sheet: ParticipationSheet) => void }) {
   const router = useRouter();
-  const [confirming, setConfirming] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -241,7 +240,6 @@ function Regenerate({ employeeId, onDone }: { employeeId: string; onDone: (sheet
         return;
       }
       onDone(body as ParticipationSheet);
-      setConfirming(false);
       router.refresh();
     } catch {
       setError("Could not reach the server.");
@@ -252,65 +250,47 @@ function Regenerate({ employeeId, onDone }: { employeeId: string; onDone: (sheet
 
   return (
     <div className="space-y-2">
-      {confirming ? (
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sm text-muted-foreground">Replace both comments and the score?</span>
-          <Button size="sm" disabled={pending} onClick={run}>
-            {pending ? <Loader2 className="animate-spin" /> : <RefreshCw />}
-            Replace
-          </Button>
-          <Button variant="ghost" size="sm" disabled={pending} onClick={() => setConfirming(false)}>
-            Cancel
-          </Button>
-        </div>
-      ) : (
-        <Button variant="outline" size="sm" onClick={() => setConfirming(true)}>
-          <RefreshCw />
-          Regenerate Participation Comments
-        </Button>
-      )}
-      {error && (
-        <p role="alert" className="text-sm text-destructive">
-          {error}
-        </p>
-      )}
+      <Button variant="outline" size="sm" disabled={pending} onClick={run}>
+        {pending ? <Loader2 className="animate-spin" /> : <Sparkles />}
+        AI Comments
+      </Button>
+      {error && <ErrorLine error={error} />}
     </div>
   );
 }
 
 function SheetPanel({ employeeId, canRegenerate }: { employeeId: string; canRegenerate: boolean }) {
-  const { sheet, setSheet, saving, error, adjust } = useParticipationSheet(employeeId, false);
+  const router = useRouter();
+  // An administrator's marks carry through to the saved score, as they do in the Administration View.
+  const { sheet, setSheet, saving, error, adjust } = useParticipationSheet(employeeId, canRegenerate, () => router.refresh());
   if (!sheet) return error ? <ErrorLine error={error} /> : <Loading />;
+  const score = sheet.saved?.averageScore ?? sheet.runningScore;
 
   return (
     <div className="min-w-0 space-y-1.5">
-      <div className="flex items-baseline justify-between gap-3">
-        <p className="min-w-0 text-sm wrap-break-word">
-          <span className="font-medium">{sheet.attendee.fullName}</span>{" "}
-          <span className="text-muted-foreground">· {STAGE_LABELS[sheet.attendee.stage]}</span>
-        </p>
-        {sheet.runningScore !== null && (
-          <p className="shrink-0 text-xs text-muted-foreground" aria-live="polite">
-            Running score{" "}
-            <span className="text-base font-medium text-foreground tabular-nums">{sheet.runningScore}</span>
-          </p>
-        )}
-      </div>
+      <p className="min-w-0 text-sm wrap-break-word">
+        <span className="font-medium">{sheet.attendee.fullName}</span>{" "}
+        <span className="text-muted-foreground">· {STAGE_LABELS[sheet.attendee.stage]}</span>
+      </p>
 
       <Counters sheet={sheet} disabled={saving !== null} onAdjust={adjust} />
       {error && <ErrorLine error={error} />}
 
-      {sheet.saved?.averageScore != null && (
+      {score !== null && (
         <section className="space-y-1.5 border-t pt-2">
-          <p className="text-sm">
-            <span className="text-muted-foreground">Saved score</span>{" "}
-            <span className="font-medium tabular-nums">{sheet.saved.averageScore}</span>
+          <p className="text-sm" aria-live="polite">
+            <span className="text-muted-foreground">Score</span>{" "}
+            <span className="font-medium tabular-nums">{score}</span>
           </p>
-          {sheet.saved.positiveFeedback && <p className="text-sm whitespace-pre-line">{sheet.saved.positiveFeedback}</p>}
-          {sheet.saved.constructiveFeedback && (
-            <p className="text-sm whitespace-pre-line">{sheet.saved.constructiveFeedback}</p>
+          {sheet.saved?.averageScore != null && (
+            <>
+              {sheet.saved.positiveFeedback && <p className="text-sm whitespace-pre-line">{sheet.saved.positiveFeedback}</p>}
+              {sheet.saved.constructiveFeedback && (
+                <p className="text-sm whitespace-pre-line">{sheet.saved.constructiveFeedback}</p>
+              )}
+              {canRegenerate && <AiComments employeeId={employeeId} onDone={setSheet} />}
+            </>
           )}
-          {canRegenerate && <Regenerate employeeId={employeeId} onDone={setSheet} />}
         </section>
       )}
     </div>
