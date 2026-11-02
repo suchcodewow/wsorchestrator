@@ -9,7 +9,7 @@
  * of a bootcamp's submissions only the stages an Assessments Administrator
  * has released, which keeps a class still being judged out of view; what they
  * see of a submission is its score, with its positive feedback when it rounds
- * to 4 and its constructive when it rounds to 2, never its criteria's comments;
+ * to 4 and its constructive when it rounds to 1 or 2, never its criteria's comments;
  * and of a class, the overall feedback, notes and exam average an
  * administrator entered.
  */
@@ -643,11 +643,11 @@ function classFor(
 
 /**
  * The feedback a manager reads under an assessment's score, as they see it
- * rounded: the positive for a 4, the constructive for a 2, else none.
+ * rounded: the positive for a 4, the constructive for a 1 or 2, none for a 3.
  */
 function feedbackShown(average: number, s: { positiveFeedback: string; constructiveFeedback: string }): string | null {
   const whole = wholeScore(average);
-  const text = whole === 4 ? s.positiveFeedback : whole === 2 ? s.constructiveFeedback : "";
+  const text = whole === 4 ? s.positiveFeedback : whole <= 2 ? s.constructiveFeedback : "";
   return text || null;
 }
 

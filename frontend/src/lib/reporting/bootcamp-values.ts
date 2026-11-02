@@ -36,7 +36,7 @@ export type ClassSummary = {
   /**
    * Each assessment's score, with the feedback a manager reads under it: the
    * positive feedback of one that rounds to 4, the constructive of one that
-   * rounds to 2, and null for any other.
+   * rounds to 1 or 2, and null for a 3.
    */
   exercises: { name: string; score: number; feedback: string | null }[];
   /** An administrator's overall feedback and other notes on the class; empty until written. */

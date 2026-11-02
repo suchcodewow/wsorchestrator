@@ -450,7 +450,7 @@ describe("a class's overall review", () => {
     assert.equal(after?.classes.intermediate.examAverage, null);
   });
 
-  test("shows a manager an assessment's positive feedback under a 4 and its constructive under a 2", async () => {
+  test("shows a manager an assessment's positive feedback under a 4 and its constructive under a 1 or 2", async () => {
     const shown = async (averageScore: number) => {
       await db
         .update(evalsSubmissions)
@@ -461,7 +461,7 @@ describe("a class's overall review", () => {
     assert.equal(await shown(3.6), "Great demo", "3.6 rounds to 4");
     assert.equal(await shown(2.2), "Practise the demo");
     assert.equal(await shown(3), null);
-    assert.equal(await shown(1), null);
+    assert.equal(await shown(1), "Practise the demo");
   });
 
   test("refuses a stale save, a class they were not assessed in, and an exam outside 0 to 100", async () => {
