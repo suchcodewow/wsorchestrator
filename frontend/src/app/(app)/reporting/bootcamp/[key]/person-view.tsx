@@ -73,7 +73,7 @@ export function PersonView({ person, canEdit, back }: { person: ViewPerson; canE
       </motion.div>
 
       <motion.div variants={staggerParent(0.04)} className="divide-y overflow-hidden rounded-2xl border bg-card shadow-sm">
-        <motion.section variants={riseChild} className="space-y-3 px-5 py-3">
+        <motion.section variants={riseChild} className="space-y-3 bg-black/3 px-5 py-3 dark:bg-white/4">
           <div className="flex items-start justify-between gap-4">
             <div className="space-y-1">
               <h2 className="text-xl font-medium tracking-tight">{employee?.fullName ?? person.email}</h2>
