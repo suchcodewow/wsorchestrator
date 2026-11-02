@@ -33,6 +33,9 @@ export function Field({ label, children }: { label: string; children: React.Reac
   );
 }
 
+/** A score with its bar: a column at the card's left, half as wide as the bars once inset from both sides. */
+const SCORE_COLUMN = "sm:w-[calc(50%-4rem)]";
+
 export function ClassCard({
   name,
   code,
@@ -104,8 +107,7 @@ export function ClassCard({
 
       {open && (
         <div id={bodyId} className="flex flex-col gap-3">
-
-          <div className="space-y-1.5 sm:px-16">
+          <div className={cn("space-y-1.5", SCORE_COLUMN)}>
             <div className="flex items-baseline justify-between text-2xl font-medium">
               <span>Overall Score</span>
               <span className="tabular-nums">
@@ -118,7 +120,7 @@ export function ClassCard({
 
           <FeedbackPanel label="Overall Positive Feedback" text={summary.positiveFeedback} />
           <FeedbackPanel label="Overall Constructive Feedback" text={summary.constructiveFeedback} />
-          <div className="flex items-baseline justify-between gap-4 text-sm">
+          <div className="flex items-baseline gap-2 text-sm">
             <span className="text-muted-foreground">Average exam score</span>
             <span className="tabular-nums">{examAverage === null ? "—" : `${examAverage}%`}</span>
           </div>
@@ -127,14 +129,16 @@ export function ClassCard({
           {exercises.length > 0 && (
             <div className="space-y-2 border-t pt-3">
               <h3 className="text-xs text-muted-foreground">Score Breakdown</h3>
-              <ul className="space-y-2 sm:px-16">
+              <ul className="space-y-2">
                 {exercises.map((exercise, i) => (
                   <li key={`${exercise.name}-${i}`} className="space-y-1">
-                    <div className="flex items-baseline justify-between gap-4 text-sm">
-                      <span className="min-w-0 wrap-break-word">{exercise.name}</span>
-                      <span className="tabular-nums">{formatScore(shown(exercise.score))}</span>
+                    <div className={cn("space-y-1", SCORE_COLUMN)}>
+                      <div className="flex items-baseline justify-between gap-4 text-sm">
+                        <span className="min-w-0 wrap-break-word">{exercise.name}</span>
+                        <span className="tabular-nums">{formatScore(shown(exercise.score))}</span>
+                      </div>
+                      <ScoreBar score={shown(exercise.score)} thin />
                     </div>
-                    <ScoreBar score={shown(exercise.score)} thin />
                     {exercise.feedback && (
                       <p className="pt-0.5 text-sm whitespace-pre-line text-muted-foreground wrap-break-word">
                         {exercise.feedback}
@@ -154,7 +158,7 @@ export function ClassCard({
 /** Overall feedback as a manager reads it, across the card's width. */
 function FeedbackPanel({ label, text }: { label: string; text: string }) {
   return (
-    <div className="space-y-1 rounded-lg border bg-muted/30 px-4 py-2.5">
+    <div className="space-y-1 rounded-lg bg-muted/30 px-4 py-2.5">
       <h3 className="text-xs text-muted-foreground">{label}</h3>
       <p className={cn("text-sm whitespace-pre-line wrap-break-word", !text && "text-muted-foreground")}>{text || "—"}</p>
     </div>
