@@ -16,6 +16,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronRight, Loader2, Save } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { AiCommentsButton } from "@/components/ai-comments-button";
 import { ParticipationMarks } from "@/components/participation/participation-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,7 +31,7 @@ import {
   requiredFeedback,
   wholeScore,
 } from "@/lib/evals/assessment-values";
-import { STAGE_CODES, examAverage, examScore, type ReleaseStage } from "@/lib/reporting/bootcamp-values";
+import { STAGE_CODES, examAverage, examScore, type OverallSide, type ReleaseStage } from "@/lib/reporting/bootcamp-values";
 import { cn } from "@/lib/utils";
 import { formatDate, formatScore, formatWhen } from "../../../cohort-settings/format";
 import { Field } from "../class-card";
@@ -208,6 +209,10 @@ function ClassGroup({
             bootcampId={first.bootcamp.id}
             stage={first.stage}
             review={review}
+            sources={{
+              positive: items.some((s) => s.positiveFeedback.trim()),
+              constructive: items.some((s) => s.constructiveFeedback.trim()),
+            }}
           />
         ) : (
           <ClassReviewRow review={review} />
@@ -512,6 +517,7 @@ function FeedbackBox({
   value,
   onChange,
   note,
+  action,
 }: {
   id: string;
   label: string;
@@ -519,13 +525,18 @@ function FeedbackBox({
   onChange: (value: string) => void;
   /** Set when the average makes this box required. */
   note: string | null;
+  /** Beside the label, such as the button that has Claude write it. */
+  action?: React.ReactNode;
 }) {
   return (
     <div className="space-y-1.5">
-      <label htmlFor={id} className="text-sm font-medium">
-        {label}
-        {note && <span className="text-destructive"> *</span>}
-      </label>
+      <div className="flex min-h-8 items-center justify-between gap-2">
+        <label htmlFor={id} className="text-sm font-medium">
+          {label}
+          {note && <span className="text-destructive"> *</span>}
+        </label>
+        {action}
+      </div>
       {note && <p className="text-xs text-amber-600 dark:text-amber-500">{note}</p>}
       <Textarea
         id={id}
@@ -590,19 +601,36 @@ function parseExam(typed: string): number | null {
     : NaN;
 }
 
-/** A class's overall feedback and both exams, as an administrator enters them; saving rebuilds it from what was saved. */
+const SUGGEST_ERRORS: Record<string, string> = {
+  no_feedback: "No assessment in this class has feedback on that side to sum up.",
+  not_found: "This person was not assessed in this class.",
+  unconfigured: "Claude is not set up on this deployment.",
+  upstream: "Claude could not write this just now. Try again.",
+};
+
+/**
+ * A class's overall feedback and both exams, as an administrator enters them;
+ * saving rebuilds it from what was saved. Each feedback box's sparkle has
+ * Claude sum up that side of every assessment's saved feedback into the box,
+ * for the administrator to edit and save.
+ */
 function ClassReviewForm({
   personKey,
   bootcampId,
   stage,
   review,
+  sources,
 }: {
   personKey: string;
   bootcampId: string;
   stage: ReleaseStage;
   review: ViewReview | null;
+  /** Whether any assessment here has saved feedback on each side. */
+  sources: Record<OverallSide, boolean>;
 }) {
   const { save, pending, error } = useSave();
+  const [writing, setWriting] = useState<OverallSide | null>(null);
+  const [suggestError, setSuggestError] = useState<string | null>(null);
   const [positive, setPositive] = useState(review?.positiveFeedback ?? "");
   const [constructive, setConstructive] = useState(review?.constructiveFeedback ?? "");
   const [notes, setNotes] = useState(review?.otherNotes ?? "");
@@ -619,6 +647,38 @@ function ClassReviewForm({
     exit !== (review?.exitExam ?? null);
   const id = `${bootcampId}-${stage}`;
 
+  async function suggest(side: OverallSide) {
+    setWriting(side);
+    setSuggestError(null);
+    try {
+      const res = await fetch(`/api/reporting/bootcamp/people/${encodeURIComponent(personKey)}/review/generate`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ bootcampId, stage, side }),
+      });
+      const body = (await res.json().catch(() => ({}))) as { text?: string; error?: string };
+      if (!res.ok || typeof body.text !== "string") {
+        setSuggestError((body.error && SUGGEST_ERRORS[body.error]) || `Could not generate (${res.status})`);
+        return;
+      }
+      (side === "positive" ? setPositive : setConstructive)(body.text);
+    } catch {
+      setSuggestError("Could not reach the server.");
+    } finally {
+      setWriting(null);
+    }
+  }
+
+  const sparkle = (side: OverallSide) => (
+    <AiCommentsButton
+      pending={writing === side}
+      disabled={!sources[side] || (writing !== null && writing !== side)}
+      reason={sources[side] ? undefined : `No assessment here has ${side} feedback to sum up`}
+      label={`Generate overall ${side} feedback from every assessment`}
+      onClick={() => void suggest(side)}
+    />
+  );
+
   return (
     <section className="space-y-3 px-5 py-3">
       <FeedbackBox
@@ -627,6 +687,7 @@ function ClassReviewForm({
         value={positive}
         onChange={setPositive}
         note={null}
+        action={sparkle("positive")}
       />
       <FeedbackBox
         id={`${id}-overall-constructive`}
@@ -634,7 +695,13 @@ function ClassReviewForm({
         value={constructive}
         onChange={setConstructive}
         note={null}
+        action={sparkle("constructive")}
       />
+      {suggestError && (
+        <p role="alert" className="text-sm text-destructive">
+          {suggestError}
+        </p>
+      )}
       <FeedbackBox
         id={`${id}-other-notes`}
         label="Other notes (optional, shown to the manager when written)"

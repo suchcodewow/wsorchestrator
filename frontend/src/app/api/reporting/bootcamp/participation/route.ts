@@ -1,6 +1,7 @@
 /**
  * What each class's Generate button would write, and pressing it: fills the
- * blank scores and comments in one class's Participation assessments.
+ * blank scores and comments in one class's Participation assessments, then
+ * the blank overall feedback of everyone in its cohort.
  */
 
 import { NextResponse } from "next/server";
@@ -8,7 +9,9 @@ import { z } from "zod";
 import { requireCaller } from "@/lib/api-auth";
 import { audited, noteAudit } from "@/lib/audit";
 import { GENERATE_STATUS_FOR, generateParticipation, pendingParticipation } from "@/lib/evals/participation";
+import { cohortBootcamp } from "@/lib/reporting/bootcamp";
 import { RELEASE_STAGES, STAGE_CODES } from "@/lib/reporting/bootcamp-values";
+import { generateOverall } from "@/lib/reporting/overall-feedback";
 import { canManageBootcampRecords } from "@/lib/roles";
 
 export const maxDuration = 300;
@@ -33,10 +36,25 @@ export const POST = audited(async function POST(req: Request) {
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: GENERATE_STATUS_FOR[result.error] });
 
   const { bootcamp, ...counts } = result;
+  // Overall feedback goes second, so it sums up the Participation comments just written.
+  const active = await cohortBootcamp();
+  const overall = active ? await generateOverall(user.id, active, stage) : { ok: true as const, written: 0, failed: 0 };
   noteAudit({
     target: bootcamp.id,
     targetLabel: `Participation ${STAGE_CODES[stage]} ${bootcamp.startDate}`,
-    detail: { stage, people: counts.people, scores: counts.scores, comments: counts.comments, failed: counts.failed },
+    detail: {
+      stage,
+      people: counts.people,
+      scores: counts.scores,
+      comments: counts.comments,
+      failed: counts.failed,
+      overall: overall.ok ? { written: overall.written, failed: overall.failed } : { error: overall.error },
+    },
   });
-  return NextResponse.json({ ...counts, stage, bootcamp });
+  return NextResponse.json({
+    ...counts,
+    overall: overall.ok ? { written: overall.written, failed: overall.failed, error: null } : { written: 0, failed: 0, error: overall.error },
+    stage,
+    bootcamp,
+  });
 });

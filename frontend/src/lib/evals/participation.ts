@@ -38,6 +38,7 @@ import {
 import { attended } from "@/lib/evals/attendance";
 import { IN_STAGE, isCandidate } from "@/lib/evals/current-cohort";
 import { writeFeedback, type FeedbackPerson, type WrittenFeedback } from "@/lib/evals/participation-feedback";
+import { pendingOverall } from "@/lib/reporting/overall-feedback";
 import {
   DEFAULT_PARTICIPATION_BANDS,
   bandsInOrder,
@@ -497,6 +498,8 @@ async function generationPlans(bootcamp: { id: string; startDate: string }, stag
 
 export type StagePending = {
   comments: number;
+  /** Blank overall feedback, positive or constructive, with assessment feedback to sum up. */
+  overall: number;
   scores: number;
   skipped: string[];
   /** Who has an assessment still waiting on a score, which holds up Release: at most 100 names, and how many in all. */
@@ -511,11 +514,12 @@ export async function pendingParticipation(): Promise<Record<EvalsAssessmentStag
     if (stage === "intermediate" && !bootcamp.intermediate) return null;
     const assessment = await participationAssessment(stage);
     if (!assessment) return null;
-    const [{ plans, skipped }, unscored] = await Promise.all([
+    const [{ plans, skipped }, unscored, overall] = await Promise.all([
       generationPlans(bootcamp, stage, assessment.id),
       unscoredAttendees(bootcamp, stage),
+      pendingOverall(bootcamp, stage),
     ]);
-    return { ...generationCounts(plans), skipped: skipped.slice(0, 100), unscored };
+    return { ...generationCounts(plans), overall, skipped: skipped.slice(0, 100), unscored };
   };
   const [btc, int] = await Promise.all([one("bootcamp"), one("intermediate")]);
   return { bootcamp: btc, intermediate: int };

@@ -70,3 +70,7 @@ export function examScore(average: number): number {
   if (average >= 80) return 2;
   return 1;
 }
+
+/** The two sides of overall feedback Claude can write. */
+export const OVERALL_SIDES = ["positive", "constructive"] as const;
+export type OverallSide = (typeof OVERALL_SIDES)[number];

@@ -774,6 +774,7 @@ const ROUTES: RouteCase[] = [
   { method: "POST", path: `/api/reporting/bootcamp/participation/${MISSING}`, allowed: canManageBootcampRecords },
   { method: "PATCH", path: `/api/reporting/bootcamp/submissions/${MISSING}`, allowed: canManageBootcampRecords, body: () => ({}) },
   { method: "PUT", path: `/api/reporting/bootcamp/people/${MISSING}/review`, allowed: canManageBootcampRecords, body: () => ({}) },
+  { method: "POST", path: `/api/reporting/bootcamp/people/${MISSING}/review/generate`, allowed: canManageBootcampRecords, body: () => ({}) },
   { method: "GET", path: "/api/evals/canary-wire", allowed: canSeeCanaryWire },
   // No Mindtickle key on the e2e server: starting is refused as not_configured, and a step finds no pull.
   { method: "GET", path: "/api/evals/canary-wire/history", allowed: canSeeCanaryWire },

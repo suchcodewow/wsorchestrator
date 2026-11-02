@@ -420,7 +420,7 @@ const uuidSchema = z.string().uuid();
  * The email a person's key (see `keyOf`) stands for: an employee id or a
  * submission's. Null for neither.
  */
-async function resolvePerson(key: string): Promise<string | null> {
+export async function resolvePerson(key: string): Promise<string | null> {
   if (key.length > 64) return null;
   const [employee] = await db.select({ email: employees.email }).from(employees).where(eq(employees.id, key));
   if (employee) return employee.email;

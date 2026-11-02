@@ -2533,8 +2533,8 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "assessmentsAdmin",
         token: true,
         notes:
-          "comments counts the blank comments there are marks to write, so one person can count twice. scores counts the people who would get a score. skipped names candidates who have not RSVP'd and have no marks and no assessment, whom it leaves out, at most 100. unscored is everyone in the class still waiting on a score, which keeps it from being released: someone in the cohort (RSVP'd to the class and not deferred, as Live Sessions lists them) without a scored assessment for every active assessment of the class taught to their track and for Participation, or anyone with a blank score there. total, and up to 100 names. A class is null when the bootcamp does not hold it, it is already released, or no bootcamp is active.",
-        returns: "{ bootcamp: StagePending | null, intermediate: StagePending | null }, where StagePending is { comments: number, scores: number, skipped: string[], unscored: { total: number, names: string[] } }",
+          "comments counts the blank comments there are marks to write, so one person can count twice. overall counts the blank overall positive and constructive feedback of the cohort (PUT /api/reporting/bootcamp/people/{key}/review) that some assessment's saved feedback on that side could fill. scores counts the people who would get a score. skipped names candidates who have not RSVP'd and have no marks and no assessment, whom it leaves out, at most 100. unscored is everyone in the class still waiting on a score, which keeps it from being released: someone in the cohort (RSVP'd to the class and not deferred, as Live Sessions lists them) without a scored assessment for every active assessment of the class taught to their track and for Participation, or anyone with a blank score there. total, and up to 100 names. A class is null when the bootcamp does not hold it, it is already released, or no bootcamp is active.",
+        returns: "{ bootcamp: StagePending | null, intermediate: StagePending | null }, where StagePending is { comments: number, overall: number, scores: number, skipped: string[], unscored: { total: number, names: string[] } }",
       },
       {
         method: "POST",
@@ -2543,9 +2543,9 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "assessmentsAdmin",
         token: true,
         notes:
-          "Anyone with a mark and a blank score gets a score from the net of their marks, and someone with no marks who RSVP'd to the class, or has another assessment in it, gets a 2. Anyone else is left out, because a submission counts as attendance at release. Claude writes one sentence for each side that has marks and is blank; only the descriptors, their counts and the score are sent. Saved comments and scores stay. failed counts people whose comments Claude did not write, who are left as they were, so calling it again picks them up.",
+          "Anyone with a mark and a blank score gets a score from the net of their marks, and someone with no marks who RSVP'd to the class, or has another assessment in it, gets a 2. Anyone else is left out, because a submission counts as attendance at release. Claude writes one sentence for each side that has marks and is blank; only the descriptors, their counts and the score are sent. Saved comments and scores stay. failed counts people whose comments Claude did not write, who are left as they were, so calling it again picks them up. Then, for everyone in the class's cohort, Claude sums up each side of their assessments' saved feedback, Participation's included, into one sentence for their overall feedback on that side where it is blank; overall says how many it wrote and for how many people it failed, or the error that stopped it, unconfigured or upstream, without undoing the Participation step.",
         body: { kind: "json", fields: [{ name: "stage", type: '"bootcamp" | "intermediate"', required: true }] },
-        returns: "{ stage, bootcamp: { id, startDate }, people: number, scores: number, comments: number, failed: number }",
+        returns: '{ stage, bootcamp: { id, startDate }, people: number, scores: number, comments: number, failed: number, overall: { written: number, failed: number, error: "unconfigured" | "upstream" | null } }',
         errors: [
           { status: 400, error: "invalid", when: "stage is missing or neither bootcamp nor intermediate" },
           { status: 409, error: "no_bootcamp", when: "no bootcamp is active" },
@@ -2630,6 +2630,29 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           { status: 400, error: "invalid", when: "the body is not that shape" },
           { status: 404, error: "not_found", when: "the key names no one, or they were not assessed in that class at that bootcamp" },
           { status: 409, error: "conflict", when: "someone saved it since revises" },
+        ],
+      },
+      {
+        method: "POST",
+        path: "/api/reporting/bootcamp/people/{key}/review/generate",
+        summary: "Has Claude write one sentence of someone's overall feedback for one class, from their assessments' feedback.",
+        access: "assessmentsAdmin",
+        token: true,
+        notes:
+          "Claude sums up that side of the saved feedback on every assessment of them in that class at that bootcamp, Participation's included, into one sentence. Only the feedback is sent, with no name or email. Nothing is saved: the text is for PUT /api/reporting/bootcamp/people/{key}/review.",
+        params: [{ name: "key", type: "string", required: true, note: "a key from the list: an employee id or a submission's" }],
+        body: { kind: "json", fields: [
+          { name: "bootcampId", type: "string", required: true, note: "a bootcamp they were assessed at in stage" },
+          { name: "stage", type: '"bootcamp" | "intermediate"', required: true },
+          { name: "side", type: '"positive" | "constructive"', required: true },
+        ] },
+        returns: "{ text }",
+        errors: [
+          { status: 400, error: "invalid", when: "the body is not that shape" },
+          { status: 404, error: "not_found", when: "the key names no one, or they were not assessed in that class at that bootcamp" },
+          { status: 409, error: "no_feedback", when: "no assessment of them there has feedback on that side" },
+          { status: 502, error: "upstream", when: "Claude wrote nothing" },
+          { status: 503, error: "unconfigured", when: "there is no Claude key on this deployment" },
         ],
       },
       {

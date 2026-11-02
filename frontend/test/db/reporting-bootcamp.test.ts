@@ -47,6 +47,7 @@ import {
   unscoredAttendees,
   visibleStages,
 } from "@/lib/reporting/bootcamp";
+import { pendingOverall, suggestOverallFeedback } from "@/lib/reporting/overall-feedback";
 import { PERSONAS } from "../support/access";
 import { TEST_EMAIL_DOMAIN, TEST_PREFIX } from "../support/db";
 import { testScope, type TestUser } from "../support/seed";
@@ -517,5 +518,45 @@ describe("a class's overall review", () => {
     // 79.5% is below 80%, so the exams score 1.
     const expected = Math.round(((counted.reduce((a, b) => a + b, 0) + 1) * 10) / (counted.length + 1)) / 10;
     assert.equal(await average(), expected);
+  });
+});
+
+describe("Claude's overall feedback", () => {
+  test("counts a blank overall side the cohort's assessment feedback could fill, and stops counting once it is written", async () => {
+    const bootcamp = (await cohortBootcamp())!;
+    const newcomer = and(eq(evalsSubmissions.bootcampId, bootcampId), eq(evalsSubmissions.attendeeEmail, emailOf("newcomer")));
+    await db.update(evalsSubmissions).set({ positiveFeedback: "", constructiveFeedback: "" }).where(newcomer);
+    const before = await pendingOverall(bootcamp, "bootcamp");
+
+    await db.update(evalsSubmissions).set({ positiveFeedback: "Calm presenter" }).where(eq(evalsSubmissions.id, submissionId));
+    assert.equal(await pendingOverall(bootcamp, "bootcamp"), before + 1, "the positive side, and not the constructive with nothing to sum up");
+
+    await db
+      .insert(bootcampClassReviews)
+      .values({ bootcampId, stage: "bootcamp", attendeeEmail: emailOf("newcomer"), positiveFeedback: "Already written" })
+      .onConflictDoUpdate({
+        target: [bootcampClassReviews.bootcampId, bootcampClassReviews.stage, bootcampClassReviews.attendeeEmail],
+        set: { positiveFeedback: "Already written" },
+      });
+    assert.equal(await pendingOverall(bootcamp, "bootcamp"), before);
+  });
+
+  test("writes one side only from feedback there is, for a class the person was assessed in", async () => {
+    await db
+      .update(evalsSubmissions)
+      .set({ constructiveFeedback: "" })
+      .where(and(eq(evalsSubmissions.bootcampId, bootcampId), eq(evalsSubmissions.attendeeEmail, emailOf("newcomer"))));
+    assert.deepEqual(await suggestOverallFeedback(`${SCOPED}newcomer`, bootcampId, "bootcamp", "constructive"), {
+      ok: false,
+      error: "no_feedback",
+    });
+    assert.deepEqual(await suggestOverallFeedback(`${SCOPED}rep`, bootcampId, "bootcamp", "positive"), {
+      ok: false,
+      error: "not_found",
+    });
+    assert.deepEqual(await suggestOverallFeedback(`${SCOPED}nobody`, bootcampId, "bootcamp", "positive"), {
+      ok: false,
+      error: "not_found",
+    });
   });
 });
