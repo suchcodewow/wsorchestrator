@@ -16,7 +16,7 @@
 import { conceptsInOrder, slideLevels, type InOrder, type MapLevel, type PublicMap } from "./schema";
 
 export const PAD = 20;
-export const SLIDE_W = 70;
+export const SLIDE_W = 117;
 export const SLIDE_H = 37;
 export const SLIDE_Y = 34;
 export const CONCEPT_W = 126;
@@ -69,11 +69,9 @@ const COL_GAP = 65;
 const SLIDE_COL_GAP = 85;
 /** The most a card grows when there is room, so a very wide window gets wider gaps instead of absurd cards. */
 const CONCEPT_GROW_MAX = 240;
-const SLIDE_GROW_MAX = 180;
+const SLIDE_GROW_MAX = 300;
 /** A share of any spare room goes to the cards, the rest to the gaps between the columns. */
 const CARD_SHARE = 0.65;
-/** How fast a slide card grows beside a concept card. */
-const SLIDE_GROW = 0.72;
 /** What heads the slides' column. */
 export const SLIDES_HEADING = "EMD";
 const SLIDE_PITCH = SLIDE_H + 6;
@@ -103,10 +101,10 @@ export function layoutMap(map: PublicMap, only: string | null = null, minWidth =
   const m = map.slides.length ? 1 : 0;
   const natural = 2 * PAD + n * CONCEPT_W + Math.max(0, n - 1) * COL_GAP + (n && m ? SLIDE_COL_GAP : 0) + m * SLIDE_W;
   const extra = Math.max(0, minWidth - natural);
-  // Slide cards grow at a little over half the rate of concept cards, being the smaller.
-  const unit = (extra * CARD_SHARE) / Math.max(n + SLIDE_GROW * m, 1);
+  // Slide cards are given a little more of it than concept cards, being the busier.
+  const unit = (extra * CARD_SHARE) / Math.max(n + 1.2 * m, 1);
   const cw = CONCEPT_W + Math.min(unit, CONCEPT_GROW_MAX);
-  const sw = SLIDE_W + Math.min(unit * SLIDE_GROW, SLIDE_GROW_MAX);
+  const sw = SLIDE_W + Math.min(unit * 1.2, SLIDE_GROW_MAX);
   const leftover = Math.max(0, extra - (cw - CONCEPT_W) * n - (sw - SLIDE_W) * m);
   const gapExtra = n ? leftover / n : 0;
   const colGap = COL_GAP + gapExtra;
