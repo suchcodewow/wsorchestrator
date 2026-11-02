@@ -5,20 +5,20 @@
  * overall feedback and exams first, then each assessment, with every
  * criterion's score and comment and both feedback boxes, each closed until
  * opened.
- * With Edit on, each opens to a form and an Assessments Administrator corrects any of it in place, one
- * assessment at a time; one with no criteria, as the old bootcamp history
- * left, has its score set directly. The running bootcamp's Participation
+ * With Edit on, each opens to a form and an Assessments Administrator corrects
+ * any of it in place; Save Changes saves every form changed, and Discard drops
+ * them all. One with no criteria, as the old bootcamp history left, has its
+ * score set directly. The running bootcamp's Participation
  * assessment shows its marks, and with Edit on they move as they do in the
  * popup, taking a generated score with them.
  */
 
-import { useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronRight, Loader2, Save } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { AiCommentsButton } from "@/components/ai-comments-button";
 import { ParticipationMarks } from "@/components/participation/participation-dialog";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { BOOTCAMP_EXAM, BOOTCAMP_SCORE, EVALS_ASSESSMENT_LIMITS } from "@/db/schema";
@@ -44,14 +44,11 @@ const SAVE_ERRORS: Record<string, string> = {
   not_found: "This has been removed.",
 };
 
-/** Saves `body` to `url`, then reloads the page's data; returns the error to show, if any. */
+/** Saves `body` to `url`, keeping the error to show, if any; the edit session reloads the page's data once all are in. */
 function useSave() {
-  const router = useRouter();
-  const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function save(url: string, body: unknown, method: "PATCH" | "PUT" = "PATCH"): Promise<boolean> {
-    setPending(true);
     setError(null);
     try {
       const res = await fetch(url, {
@@ -64,17 +61,81 @@ function useSave() {
         setError((code && SAVE_ERRORS[code]) || `Could not save (${res.status})`);
         return false;
       }
-      router.refresh();
       return true;
     } catch {
       setError("Could not save");
       return false;
-    } finally {
-      setPending(false);
     }
   }
 
-  return { save, pending, error };
+  return { save, error };
+}
+
+/** A form with unsaved changes: whether they can be saved as they stand, and how. */
+type PendingEdit = { valid: boolean; save: () => Promise<boolean> };
+
+const EditRegistry = createContext<((id: string, edit: PendingEdit | null) => void) | null>(null);
+
+/**
+ * The Administration View's one save: every form with changes registers here,
+ * and `saveAll` saves each in turn, then reloads the page's data once. A form
+ * that cannot be saved as it stands holds up all of them.
+ */
+export function useEditSession() {
+  const router = useRouter();
+  const [edits, setEdits] = useState<Record<string, PendingEdit>>({});
+  const [saving, setSaving] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+
+  const register = useCallback((id: string, edit: PendingEdit | null) => {
+    setEdits((all) => {
+      if (!edit && !(id in all)) return all;
+      const next = { ...all };
+      if (edit) next[id] = edit;
+      else delete next[id];
+      return next;
+    });
+  }, []);
+
+  async function saveAll(): Promise<boolean> {
+    const list = Object.values(edits);
+    if (list.some((e) => !e.valid)) {
+      setProblem("Some changes can't be saved yet; check the fields marked in each.");
+      return false;
+    }
+    setSaving(true);
+    setProblem(null);
+    let failed = 0;
+    for (const edit of list) if (!(await edit.save())) failed++;
+    setSaving(false);
+    if (list.length > 0) router.refresh();
+    if (failed > 0) {
+      setProblem(`${failed} of ${list.length} could not be saved; each says why.`);
+      return false;
+    }
+    return true;
+  }
+
+  return { register, changed: Object.keys(edits).length, saving, problem, saveAll, clearProblem: () => setProblem(null) };
+}
+
+export const EditSessionProvider = EditRegistry.Provider;
+
+/**
+ * Tells the edit session whether this form has changes, and how to save them.
+ * `save` is read when Save Changes runs, so it may change every render.
+ */
+function usePendingEdit(id: string, changed: boolean, valid: boolean, save: () => Promise<boolean>) {
+  const register = useContext(EditRegistry);
+  const saveRef = useRef(save);
+  useEffect(() => {
+    saveRef.current = save;
+  });
+  useEffect(() => {
+    if (!register) return;
+    register(id, changed ? { valid, save: () => saveRef.current() } : null);
+    return () => register(id, null);
+  }, [register, id, changed, valid]);
 }
 
 /** One card per class someone was assessed in: INT before BTC, each newest bootcamp first, as fetched. */
@@ -369,7 +430,7 @@ function SubmissionForm({
   onToggle: () => void;
 }) {
   const router = useRouter();
-  const { save, pending, error } = useSave();
+  const { save, error } = useSave();
   const [scores, setScores] = useState(() => s.scores.map((c) => ({ ...c })));
   const [positive, setPositive] = useState(s.positiveFeedback);
   const [constructive, setConstructive] = useState(s.constructiveFeedback);
@@ -400,6 +461,16 @@ function SubmissionForm({
     constructive !== s.constructiveFeedback ||
     (direct && typedScore !== s.averageScore) ||
     scores.some((c, i) => c.score !== s.scores[i]!.score || c.comment !== s.scores[i]!.comment);
+
+  usePendingEdit(`submission-${s.id}`, changed, !missing, () =>
+    save(`/api/reporting/bootcamp/submissions/${s.id}`, {
+      scores: scores.map(({ criterionId, score, comment }) => ({ criterionId, score, comment })),
+      positiveFeedback: positive,
+      constructiveFeedback: constructive,
+      ...(direct && { averageScore: typedScore }),
+      revises: s.updatedAt,
+    }),
+  );
 
   function set(i: number, change: Partial<{ score: number; comment: string }>) {
     setScores((all) => all.map((c, j) => (j === i ? { ...c, ...change } : c)));
@@ -478,35 +549,16 @@ function SubmissionForm({
           note={needed === "constructive" ? CONSTRUCTIVE_REQUIRED_NOTE : null}
         />
       </div>
-      <div className="flex flex-wrap items-center gap-3">
-        <Button
-          size="sm"
-          variant="brand"
-          disabled={!changed || missing || pending}
-          onClick={() =>
-            void save(`/api/reporting/bootcamp/submissions/${s.id}`, {
-              scores: scores.map(({ criterionId, score, comment }) => ({ criterionId, score, comment })),
-              positiveFeedback: positive,
-              constructiveFeedback: constructive,
-              ...(direct && { averageScore: typedScore }),
-              revises: s.updatedAt,
-            })
-          }
-        >
-          {pending ? <Loader2 className="animate-spin" /> : <Save />}
-          Save
-        </Button>
-        {direct && !typedValid && (
-          <p className="text-sm text-muted-foreground">
-            Scores run from {BOOTCAMP_SCORE.min} to {BOOTCAMP_SCORE.max}, to one decimal place.
-          </p>
-        )}
-        {error && (
-          <p role="alert" className="text-sm text-destructive">
-            {error}
-          </p>
-        )}
-      </div>
+      {direct && !typedValid && (
+        <p className="text-sm text-muted-foreground">
+          Scores run from {BOOTCAMP_SCORE.min} to {BOOTCAMP_SCORE.max}, to one decimal place.
+        </p>
+      )}
+      {error && (
+        <p role="alert" className="text-sm text-destructive">
+          {error}
+        </p>
+      )}
     </Collapsible>
   );
 }
@@ -628,7 +680,7 @@ function ClassReviewForm({
   /** Whether any assessment here has saved feedback on each side. */
   sources: Record<OverallSide, boolean>;
 }) {
-  const { save, pending, error } = useSave();
+  const { save, error } = useSave();
   const [writing, setWriting] = useState<OverallSide | null>(null);
   const [suggestError, setSuggestError] = useState<string | null>(null);
   const [positive, setPositive] = useState(review?.positiveFeedback ?? "");
@@ -646,6 +698,23 @@ function ClassReviewForm({
     entrance !== (review?.entranceExam ?? null) ||
     exit !== (review?.exitExam ?? null);
   const id = `${bootcampId}-${stage}`;
+
+  usePendingEdit(`review-${id}`, changed, valid, () =>
+    save(
+      `/api/reporting/bootcamp/people/${encodeURIComponent(personKey)}/review`,
+      {
+        bootcampId,
+        stage,
+        positiveFeedback: positive,
+        constructiveFeedback: constructive,
+        otherNotes: notes,
+        entranceExam: entrance,
+        exitExam: exit,
+        revises: review?.updatedAt ?? null,
+      },
+      "PUT",
+    ),
+  );
 
   async function suggest(side: OverallSide) {
     setWriting(side);
@@ -704,7 +773,7 @@ function ClassReviewForm({
       )}
       <FeedbackBox
         id={`${id}-other-notes`}
-        label="Other notes (optional, shown to the manager when written)"
+        label="Other notes"
         value={notes}
         onChange={setNotes}
         note={null}
@@ -716,42 +785,16 @@ function ClassReviewForm({
           <ExamAverage entrance={valid ? entrance : null} exit={valid ? exit : null} />
         </dl>
       </div>
-      <div className="flex flex-wrap items-center gap-3">
-        <Button
-          size="sm"
-          variant="brand"
-          disabled={!changed || !valid || pending}
-          onClick={() =>
-            void save(
-              `/api/reporting/bootcamp/people/${encodeURIComponent(personKey)}/review`,
-              {
-                bootcampId,
-                stage,
-                positiveFeedback: positive,
-                constructiveFeedback: constructive,
-                otherNotes: notes,
-                entranceExam: entrance,
-                exitExam: exit,
-                revises: review?.updatedAt ?? null,
-              },
-              "PUT",
-            )
-          }
-        >
-          {pending ? <Loader2 className="animate-spin" /> : <Save />}
-          Save
-        </Button>
-        {!valid && (
-          <p className="text-sm text-muted-foreground">
-            Exams run from {BOOTCAMP_EXAM.min} to {BOOTCAMP_EXAM.max}%, to one decimal place.
-          </p>
-        )}
-        {error && (
-          <p role="alert" className="text-sm text-destructive">
-            {error}
-          </p>
-        )}
-      </div>
+      {!valid && (
+        <p className="text-sm text-muted-foreground">
+          Exams run from {BOOTCAMP_EXAM.min} to {BOOTCAMP_EXAM.max}%, to one decimal place.
+        </p>
+      )}
+      {error && (
+        <p role="alert" className="text-sm text-destructive">
+          {error}
+        </p>
+      )}
     </section>
   );
 }

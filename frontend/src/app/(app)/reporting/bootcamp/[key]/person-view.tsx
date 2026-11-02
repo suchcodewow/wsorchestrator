@@ -4,20 +4,29 @@
  * One person on Reporting → Live Sessions. On top, what their manager sees: who
  * they are, then INT (once they have been) above BTC, scores rounded to whole
  * numbers. Below, the Administration View, for Assessments only: every
- * assessment behind those scores, with an administrator's Edit switch.
+ * assessment behind those scores, with an administrator's Edit switch, whose
+ * Save Changes saves every form changed and Discard drops them, once confirmed.
  */
 
 import { useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { ArrowLeft, Eye, Pencil } from "lucide-react";
+import { ArrowLeft, Loader2, Pencil, Save, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { riseChild, staggerParent } from "@/lib/motion";
 import type { PersonEmployee, PersonReview, PersonSubmission } from "@/lib/reporting/bootcamp";
 import type { ClassSummary, ReleaseStage } from "@/lib/reporting/bootcamp-values";
 import { formatDate } from "../../../cohort-settings/format";
 import { ClassCard, Field, TRACK_LABELS } from "../class-card";
-import { SubmissionGroups } from "./assessments";
+import { EditSessionProvider, SubmissionGroups, useEditSession } from "./assessments";
 
 export type ViewSubmission = Omit<PersonSubmission, "submittedAt" | "updatedAt"> & {
   submittedAt: string;
@@ -38,6 +47,18 @@ export type ViewPerson = {
 export function PersonView({ person, canEdit, back }: { person: ViewPerson; canEdit: boolean; back: string }) {
   const { employee, records } = person;
   const [editing, setEditing] = useState(false);
+  const [discarding, setDiscarding] = useState(false);
+  const session = useEditSession();
+
+  async function saveChanges() {
+    if (await session.saveAll()) setEditing(false);
+  }
+
+  function stopEditing() {
+    setDiscarding(false);
+    session.clearProblem();
+    setEditing(false);
+  }
 
   return (
     <motion.div variants={staggerParent(0.05)} initial="hidden" animate="show" className="max-w-4xl space-y-6">
@@ -53,12 +74,19 @@ export function PersonView({ person, canEdit, back }: { person: ViewPerson; canE
 
       <motion.div variants={staggerParent(0.04)} className="divide-y overflow-hidden rounded-2xl border bg-card shadow-sm">
         <motion.section variants={riseChild} className="space-y-3 px-5 py-3">
-          <div className="space-y-1">
-            <h2 className="text-xl font-medium tracking-tight">{employee?.fullName ?? person.email}</h2>
-            {(!employee || employee.title) && (
-              <p className="text-sm text-muted-foreground">
-                {employee ? employee.title : "Not in the employee list from the last HiBob sync."}
-              </p>
+          <div className="flex items-start justify-between gap-4">
+            <div className="space-y-1">
+              <h2 className="text-xl font-medium tracking-tight">{employee?.fullName ?? person.email}</h2>
+              {(!employee || employee.title) && (
+                <p className="text-sm text-muted-foreground">
+                  {employee ? employee.title : "Not in the employee list from the last HiBob sync."}
+                </p>
+              )}
+            </div>
+            {employee && (
+              <span className="shrink-0 text-sm tabular-nums text-muted-foreground">
+                Started {formatDate(employee.startDate)}
+              </span>
             )}
           </div>
           {employee && (
@@ -66,7 +94,6 @@ export function PersonView({ person, canEdit, back }: { person: ViewPerson; canE
               <Field label="Department">{employee.department || "—"}</Field>
               <Field label="Site">{employee.site || "—"}</Field>
               <Field label="Manager">{employee.reportsToName || "—"}</Field>
-              <Field label="Started">{formatDate(employee.startDate)}</Field>
               <Field label="Track">{employee.track ? TRACK_LABELS[employee.track] : "—"}</Field>
             </dl>
           )}
@@ -98,20 +125,44 @@ export function PersonView({ person, canEdit, back }: { person: ViewPerson; canE
                 {records.submissions.length} {records.submissions.length === 1 ? "assessment" : "assessments"}
               </p>
             </div>
-            {canEdit && (
-              <Button variant="outline" size="sm" onClick={() => setEditing((on) => !on)} aria-pressed={editing}>
-                {editing ? <Eye /> : <Pencil />}
-                {editing ? "Done editing" : "Edit"}
-              </Button>
-            )}
+            {canEdit &&
+              (editing ? (
+                <div className="flex flex-wrap items-center justify-end gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={session.saving}
+                    onClick={() => (session.changed > 0 ? setDiscarding(true) : stopEditing())}
+                  >
+                    <Undo2 />
+                    Discard
+                  </Button>
+                  <Button variant="brand" size="sm" disabled={session.saving} onClick={() => void saveChanges()}>
+                    {session.saving ? <Loader2 className="animate-spin" /> : <Save />}
+                    Save Changes
+                  </Button>
+                </div>
+              ) : (
+                <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
+                  <Pencil />
+                  Edit
+                </Button>
+              ))}
           </div>
+          {editing && session.problem && (
+            <p role="alert" className="text-sm text-destructive">
+              {session.problem}
+            </p>
+          )}
 
-          <SubmissionGroups
-            personKey={person.key}
-            submissions={records.submissions}
-            reviews={records.reviews}
-            editing={editing}
-          />
+          <EditSessionProvider value={session.register}>
+            <SubmissionGroups
+              personKey={person.key}
+              submissions={records.submissions}
+              reviews={records.reviews}
+              editing={editing}
+            />
+          </EditSessionProvider>
           {records.submissions.length === 0 && (
             <p className="rounded-2xl border bg-card px-5 py-8 text-center text-sm text-muted-foreground shadow-sm">
               No assessments on file.
@@ -119,6 +170,27 @@ export function PersonView({ person, canEdit, back }: { person: ViewPerson; canE
           )}
         </motion.section>
       )}
+
+      <Dialog open={discarding} onOpenChange={setDiscarding}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Discard changes?</DialogTitle>
+            <DialogDescription>
+              {session.changed === 1 ? "One form has" : `${session.changed} forms have`} changes that have not been
+              saved. Discarding puts them back as they were saved. Participation marks moved while editing were saved as
+              they moved, and stay.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDiscarding(false)}>
+              Keep editing
+            </Button>
+            <Button variant="destructive" onClick={stopEditing}>
+              Discard changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </motion.div>
   );
 }
