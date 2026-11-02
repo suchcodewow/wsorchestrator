@@ -158,7 +158,7 @@ export function ClassCard({
 /** Overall feedback as a manager reads it, across the card's width. */
 function FeedbackPanel({ label, text }: { label: string; text: string }) {
   return (
-    <div className="space-y-1 rounded-lg bg-muted/30 px-4 py-2.5">
+    <div className="space-y-1">
       <h3 className="text-xs text-muted-foreground">{label}</h3>
       <p className={cn("text-sm whitespace-pre-line wrap-break-word", !text && "text-muted-foreground")}>{text || "—"}</p>
     </div>
