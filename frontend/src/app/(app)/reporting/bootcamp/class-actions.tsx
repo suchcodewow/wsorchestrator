@@ -3,12 +3,13 @@
 /**
  * An administrator's two steps for each class of the active bootcamp, in the
  * order they are taken: Generate fills in the participation feedback, then
- * Release shows the class to managers. A released class says when instead.
+ * Release shows the class to managers. A released class says when instead,
+ * and one still waiting on scores says for how many.
  */
 
 import { CheckCircle2 } from "lucide-react";
 import type { StagePending } from "@/lib/evals/participation";
-import { RELEASE_STAGES, STAGE_CODES, type ReleaseStage } from "@/lib/reporting/bootcamp-values";
+import { RELEASE_STAGES, type ReleaseStage } from "@/lib/reporting/bootcamp-values";
 import { STAGE_LABELS } from "@/lib/evals/assessment-values";
 import { formatDate, formatWhen } from "../../cohort-settings/format";
 import type { ViewBootcamp } from "./bootcamp-view";
@@ -28,12 +29,7 @@ function Status({ bootcamp, stage, pending }: { bootcamp: ViewBootcamp; stage: R
     );
   }
   const waiting = pending?.unscored.total ?? 0;
-  return (
-    <>
-      Not released to managers
-      {waiting > 0 && ` · ${waiting.toLocaleString()} waiting on a score`}
-    </>
-  );
+  return waiting > 0 ? <>{waiting.toLocaleString()} waiting on a score</> : null;
 }
 
 export function ClassActions({
@@ -45,7 +41,7 @@ export function ClassActions({
 }) {
   if (!bootcamp) {
     return (
-      <div className="rounded-2xl border bg-card px-5 py-4 text-sm text-muted-foreground shadow-sm">
+      <div className="rounded-2xl border bg-card px-5 py-2.5 text-sm text-muted-foreground shadow-sm">
         No bootcamp is active, so there is nothing to generate or release.
       </div>
     );
@@ -56,15 +52,13 @@ export function ClassActions({
         const held = stage === "bootcamp" || bootcamp.intermediate;
         const open = held && !bootcamp.released[stage];
         return (
-          <div key={stage} className="flex flex-wrap items-center gap-x-4 gap-y-3 px-5 py-4">
-            <div className="min-w-0 flex-1 space-y-0.5">
-              <p className="text-sm font-medium">
-                {STAGE_LABELS[stage]} <span className="font-normal text-muted-foreground">· {STAGE_CODES[stage]}</span>
-              </p>
-              <p className="text-sm text-muted-foreground">
+          <div key={stage} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-2.5">
+            <p className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-3 text-sm">
+              <span className="font-medium">{STAGE_LABELS[stage]}</span>
+              <span className="text-muted-foreground">
                 <Status bootcamp={bootcamp} stage={stage} pending={pending[stage]} />
-              </p>
-            </div>
+              </span>
+            </p>
             {open && (
               <div className="flex flex-wrap gap-2">
                 <GenerateButton stage={stage} pending={pending[stage]} />

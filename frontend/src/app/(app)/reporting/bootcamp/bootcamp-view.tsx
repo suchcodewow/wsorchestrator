@@ -30,7 +30,7 @@ import {
 import { riseChild, staggerParent } from "@/lib/motion";
 import type { ListQuery, Page } from "@/lib/paging";
 import type { BootcampRecordCounts, BootcampRecordRow, CohortRow } from "@/lib/reporting/bootcamp";
-import { RELEASE_STAGES, STAGE_CODES, type ReleaseStage } from "@/lib/reporting/bootcamp-values";
+import type { ReleaseStage } from "@/lib/reporting/bootcamp-values";
 import { cn } from "@/lib/utils";
 import { formatDate, formatScore } from "../../cohort-settings/format";
 import { LevelChip } from "./class-card";
@@ -169,21 +169,7 @@ export function BootcampView({
 
       {bootcamp && cohort && (
         <motion.section variants={riseChild} className="space-y-3">
-          <div className="space-y-1">
-            <h3 className="text-base font-medium tracking-tight">Current cohort</h3>
-            <p className="text-sm text-muted-foreground">
-              Starts {formatDate(bootcamp.startDate)}
-              {(bootcamp.intermediate ? RELEASE_STAGES : (["bootcamp"] as const)).map((stage) => (
-                <span key={stage}>
-                  {" · "}
-                  {STAGE_CODES[stage]}{" "}
-                  {bootcamp.released[stage]
-                    ? `released ${formatDate(bootcamp.released[stage].at.slice(0, 10))}`
-                    : "not released to managers"}
-                </span>
-              ))}
-            </p>
-          </div>
+          <h3 className="text-base font-medium tracking-tight">Current cohort</h3>
           <div className="overflow-hidden rounded-2xl border bg-card shadow-sm">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">

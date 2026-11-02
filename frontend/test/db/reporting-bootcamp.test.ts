@@ -14,12 +14,20 @@ import "../support/test-env";
 
 import { after, before, describe, test } from "node:test";
 import assert from "node:assert/strict";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
 process.env.AUTH_SECRET ||= "reporting-bootcamp-test-secret-reporting-b";
 
 import { db } from "@/db";
-import { bootcamps, employees, evalsAssessmentCriteria, evalsSubmissions, evalsSubmissionScores } from "@/db/schema";
+import {
+  bootcamps,
+  employees,
+  evalsAssessmentCriteria,
+  evalsAssessments,
+  evalsSubmissions,
+  evalsSubmissionScores,
+  intakeResponses,
+} from "@/db/schema";
 import { IN_STAGE, isCandidate } from "@/lib/evals/current-cohort";
 import { getCandidateCutoffs } from "@/lib/evals/settings";
 import { BOOTCAMP_COHORT_LIST, BOOTCAMP_RECORD_LIST } from "@/lib/list-specs";
@@ -66,6 +74,18 @@ async function employee(key: string, reportsTo: string | null) {
   });
 }
 
+/** Gives the newcomer the built-in Participation assessment, scored `score`. */
+async function participation(score: number) {
+  const [built] = await db
+    .select({ id: evalsAssessments.id, name: evalsAssessments.name })
+    .from(evalsAssessments)
+    .where(and(eq(evalsAssessments.builtIn, "participation"), eq(evalsAssessments.stage, "bootcamp")));
+  await db
+    .insert(evalsSubmissions)
+    .values({ bootcampId, assessmentId: built!.id, attendeeEmail: emailOf("newcomer"), assessmentName: built!.name, averageScore: score, ownerId: admin.id })
+    .onConflictDoNothing();
+}
+
 /** Everyone the reader may see who belongs to this suite, by email, with their level. */
 async function seen(reader: ReturnType<typeof readerOf>) {
   const page = await listBootcampRecords(reader, { ...BOOTCAMP_RECORD_LIST, sort: "email", dir: "asc", q: SCOPED, page: 1 });
@@ -100,11 +120,14 @@ before(async () => {
   // The newcomer is scored at the active bootcamp, which nobody below Assessments sees until it is released.
   // They are a bootcamp candidate on Cohorts → Current too, so that releasing moves them on.
   await employee("newcomer", "lead");
+  // Saving the registration form is what puts them in the cohort.
+  await db.insert(intakeResponses).values({ form: "bootcamp", email: emailOf("newcomer"), answers: {} });
+  await employee("no-rsvp", "lead");
   const today = new Date().toISOString().slice(0, 10);
   await db
     .update(employees)
     .set({ orgDepth: 2, track: "sales", startDate: today, activeEffectiveDate: today })
-    .where(eq(employees.id, `${SCOPED}newcomer`));
+    .where(inArray(employees.id, [`${SCOPED}newcomer`, `${SCOPED}no-rsvp`]));
   const assessmentId = await scope.createAssessment(admin.id, `${SCOPED}Demo day`);
   const [criterion] = await db
     .select({ id: evalsAssessmentCriteria.id })
@@ -133,6 +156,7 @@ before(async () => {
 
 after(async () => {
   await db.update(bootcamps).set(restoreRelease).where(eq(bootcamps.id, bootcampId));
+  await db.delete(intakeResponses).where(eq(intakeResponses.email, emailOf("newcomer")));
   await scope.tearDown();
 });
 
@@ -198,10 +222,37 @@ describe("releasing a class", () => {
     assert.equal(newcomer.classes.bootcamp.date, null, "not released, so not attended as far as a manager knows");
   });
 
-  test("waits until every assessment in the class has a score, and names who holds it up", async () => {
+  test("lists only those who RSVP'd, and not a candidate who has been deferred", async () => {
+    const bootcamp = (await cohortBootcamp())!;
+    const listed = async () =>
+      (await listCohort(viewer(), bootcamp, { ...BOOTCAMP_COHORT_LIST, q: SCOPED, page: 1 })).rows.map((r) => r.email);
+    assert.deepEqual(await listed(), [emailOf("newcomer")], "no-rsvp is a candidate who has not saved the form");
+    const [rsvp] = await db
+      .insert(intakeResponses)
+      .values({ form: "bootcamp", email: emailOf("no-rsvp"), answers: {} })
+      .returning({ id: intakeResponses.id });
+    try {
+      assert.deepEqual(await listed(), [emailOf("newcomer"), emailOf("no-rsvp")]);
+      await db.update(employees).set({ track: "deferred" }).where(eq(employees.id, `${SCOPED}no-rsvp`));
+      assert.deepEqual(await listed(), [emailOf("newcomer")]);
+    } finally {
+      await db.delete(intakeResponses).where(eq(intakeResponses.id, rsvp!.id));
+      await db.update(employees).set({ track: "sales" }).where(eq(employees.id, `${SCOPED}no-rsvp`));
+    }
+  });
+
+  test("waits until everyone in the cohort has every assessment, and names who holds it up", async () => {
+    const bootcamp = (await cohortBootcamp())!;
+    const missing = await unscoredAttendees(bootcamp, "bootcamp");
+    assert.ok(missing.names.includes("Person newcomer"), "no Participation assessment yet");
+    assert.equal(missing.names.includes("Person no-rsvp"), false);
+    assert.deepEqual(await releaseScores(admin.id, "bootcamp"), { ok: false, error: "unscored" });
+
+    await participation(3);
+    assert.equal((await unscoredAttendees(bootcamp, "bootcamp")).names.includes("Person newcomer"), false);
     await db.update(evalsSubmissions).set({ averageScore: null }).where(eq(evalsSubmissions.id, submissionId));
     try {
-      const waiting = await unscoredAttendees(bootcampId, "bootcamp");
+      const waiting = await unscoredAttendees((await cohortBootcamp())!, "bootcamp");
       assert.ok(waiting.names.includes("Person newcomer"));
       assert.equal(waiting.total, waiting.names.length);
       assert.deepEqual(await releaseScores(admin.id, "bootcamp"), { ok: false, error: "unscored" });
@@ -209,7 +260,7 @@ describe("releasing a class", () => {
     } finally {
       await db.update(evalsSubmissions).set({ averageScore: 3 }).where(eq(evalsSubmissions.id, submissionId));
     }
-    assert.equal((await unscoredAttendees(bootcampId, "bootcamp")).names.includes("Person newcomer"), false);
+    assert.equal((await unscoredAttendees((await cohortBootcamp())!, "bootcamp")).names.includes("Person newcomer"), false);
   });
 
   test("shows a manager the class once released, and releasing again changes nothing", async () => {
@@ -237,6 +288,10 @@ describe("releasing a class", () => {
     const newcomer = (await getBootcampPerson(manager(), `${SCOPED}newcomer`))!;
     assert.equal(newcomer.classes.bootcamp.score, 3);
     assert.equal(newcomer.records, null);
+    // Only Participation was there to let the release through; the corrections below score the demo alone.
+    await db
+      .delete(evalsSubmissions)
+      .where(and(eq(evalsSubmissions.attendeeEmail, emailOf("newcomer")), eq(evalsSubmissions.assessmentName, "Participation")));
   });
 
   test("completes the class: everyone scored in it has attended it, which moves them on to Intermediate", async () => {

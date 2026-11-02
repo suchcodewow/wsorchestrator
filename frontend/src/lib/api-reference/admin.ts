@@ -2520,7 +2520,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "signedIn",
         token: true,
         notes:
-          "stages lists the classes the caller may see the cohort of: every class the bootcamp holds for an Assessments Viewer or above, else only those released. cohort holds one row per person and class in those stages; averageScore is the mean of their submissions' averages, null with none scored, and scored how many there are. bootcamp is null, and cohort empty, when no bootcamp is active.",
+          "stages lists the classes the caller may see the cohort of: every class the bootcamp holds for an Assessments Viewer or above, else only those released. cohort holds one row per person and class in those stages: everyone who RSVP'd to their class by saving its registration form and is not deferred, whether a current candidate or already scored at the bootcamp; averageScore is the mean of their submissions' averages, null with none scored, and scored how many there are. bootcamp is null, and cohort empty, when no bootcamp is active.",
         query: listQuery(BOOTCAMP_COHORT_LIST.sorts, "the name or email", BOOTCAMP_COHORT_LIST.dir),
         returns: `{ bootcamp: { id, startDate, intermediate: boolean, released: { bootcamp: { at, byName: string | null } | null, intermediate: { at, byName: string | null } | null } } | null, stages: ("bootcamp" | "intermediate")[], cohort: { key, email, fullName: string | null, stage: "bootcamp" | "intermediate", scored: number, averageScore: number | null }[], ${PAGE_FIELDS} }`,
       },
@@ -2531,7 +2531,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "assessmentsAdmin",
         token: true,
         notes:
-          "comments counts the blank comments there are marks to write, so one person can count twice. scores counts the people who would get a score. skipped names candidates with no marks and no assessment, whom it leaves out, at most 100. unscored is everyone with an assessment in the class still waiting on a score, which keeps it from being released: total, and up to 100 names. A class is null when the bootcamp does not hold it, it is already released, or no bootcamp is active.",
+          "comments counts the blank comments there are marks to write, so one person can count twice. scores counts the people who would get a score. skipped names candidates who have not RSVP'd and have no marks and no assessment, whom it leaves out, at most 100. unscored is everyone in the class still waiting on a score, which keeps it from being released: someone in the cohort (RSVP'd to the class and not deferred, as Live Sessions lists them) without a scored assessment for every active assessment of the class taught to their track and for Participation, or anyone with a blank score there. total, and up to 100 names. A class is null when the bootcamp does not hold it, it is already released, or no bootcamp is active.",
         returns: "{ bootcamp: StagePending | null, intermediate: StagePending | null }, where StagePending is { comments: number, scores: number, skipped: string[], unscored: { total: number, names: string[] } }",
       },
       {
@@ -2541,7 +2541,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "assessmentsAdmin",
         token: true,
         notes:
-          "Anyone with a mark and a blank score gets a score from the net of their marks, and someone with no marks but another assessment in the class gets a 2. Anyone with neither is left out, because a submission counts as attendance at release. Claude writes one sentence for each side that has marks and is blank; only the descriptors, their counts and the score are sent. Saved comments and scores stay. failed counts people whose comments Claude did not write, who are left as they were, so calling it again picks them up.",
+          "Anyone with a mark and a blank score gets a score from the net of their marks, and someone with no marks who RSVP'd to the class, or has another assessment in it, gets a 2. Anyone else is left out, because a submission counts as attendance at release. Claude writes one sentence for each side that has marks and is blank; only the descriptors, their counts and the score are sent. Saved comments and scores stay. failed counts people whose comments Claude did not write, who are left as they were, so calling it again picks them up.",
         body: { kind: "json", fields: [{ name: "stage", type: '"bootcamp" | "intermediate"', required: true }] },
         returns: "{ stage, bootcamp: { id, startDate }, people: number, scores: number, comments: number, failed: number }",
         errors: [

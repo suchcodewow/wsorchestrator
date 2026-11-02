@@ -115,7 +115,7 @@ export function GenerateButton({
           {pending && pending.skipped.length > 0 && (
             <div className="space-y-1 text-sm">
               <p className="font-medium">
-                Skipped: {pending.skipped.length.toLocaleString()} with no marks and no assessment
+                Skipped: {pending.skipped.length.toLocaleString()} with no RSVP, marks or assessment
               </p>
               <p className="text-muted-foreground">{pending.skipped.join(", ")}</p>
             </div>
