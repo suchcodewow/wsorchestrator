@@ -1,8 +1,9 @@
 "use client";
 
 /**
- * One class as a manager sees it, BTC or INT: the day, the overall score and
- * each exercise's, on Reporting → Live Sessions.
+ * One class as a manager sees it, BTC or INT: the day, the overall score, the
+ * overall feedback, exam average and any other notes, and each exercise's
+ * score with the feedback a 4 or a 2 carries, on Reporting → Live Sessions. Only the overall score names the scale's top.
  */
 
 import { Badge } from "@/components/ui/badge";
@@ -40,12 +41,12 @@ export function ClassCard({
   /** Rounds every score to a whole number, as a manager sees them. */
   whole?: boolean;
 }) {
-  const { date, exercises } = summary;
+  const { date, exercises, examAverage } = summary;
   const shown = (n: number | null) => (whole && n !== null ? Math.round(n) : n);
   const score = shown(summary.score);
 
   return (
-    <section className="flex flex-col gap-5 px-5 py-4">
+    <section className="flex flex-col gap-3 px-5 py-3">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h2 className="text-lg font-medium tracking-tight">{name}</h2>
@@ -60,10 +61,10 @@ export function ClassCard({
         )}
       </div>
 
-      <div className="space-y-2">
-        <div className="flex items-baseline justify-between">
-          <span className="text-xs text-muted-foreground">Overall score</span>
-          <span className="text-2xl font-medium tabular-nums">
+      <div className="space-y-1.5 sm:px-16">
+        <div className="flex items-baseline justify-between text-2xl font-medium">
+          <span>Overall Score</span>
+          <span className="tabular-nums">
             {formatScore(score)}
             {score !== null && <span className="text-sm text-muted-foreground"> / {BOOTCAMP_SCORE.max}</span>}
           </span>
@@ -71,10 +72,18 @@ export function ClassCard({
         <ScoreBar score={score} />
       </div>
 
+      <FeedbackPanel label="Overall Positive Feedback" text={summary.positiveFeedback} />
+      <FeedbackPanel label="Overall Constructive Feedback" text={summary.constructiveFeedback} />
+      <div className="flex items-baseline justify-between gap-4 text-sm">
+        <span className="text-muted-foreground">Average exam score</span>
+        <span className="tabular-nums">{examAverage === null ? "—" : `${examAverage}%`}</span>
+      </div>
+      {summary.otherNotes && <FeedbackPanel label="Other Notes" text={summary.otherNotes} />}
+
       {exercises.length > 0 && (
-        <div className="space-y-3 border-t pt-4">
-          <h3 className="text-xs text-muted-foreground">By exercise</h3>
-          <ul className="space-y-3">
+        <div className="space-y-2 border-t pt-3">
+          <h3 className="text-xs text-muted-foreground">Score Breakdown</h3>
+          <ul className="space-y-2 sm:px-16">
             {exercises.map((exercise, i) => (
               <li key={`${exercise.name}-${i}`} className="space-y-1">
                 <div className="flex items-baseline justify-between gap-4 text-sm">
@@ -82,12 +91,27 @@ export function ClassCard({
                   <span className="tabular-nums">{formatScore(shown(exercise.score))}</span>
                 </div>
                 <ScoreBar score={shown(exercise.score)} thin />
+                {exercise.feedback && (
+                  <p className="pt-0.5 text-sm whitespace-pre-line text-muted-foreground wrap-break-word">
+                    {exercise.feedback}
+                  </p>
+                )}
               </li>
             ))}
           </ul>
         </div>
       )}
     </section>
+  );
+}
+
+/** Overall feedback as a manager reads it, across the card's width. */
+function FeedbackPanel({ label, text }: { label: string; text: string }) {
+  return (
+    <div className="space-y-1 rounded-lg border bg-muted/30 px-4 py-2.5">
+      <h3 className="text-xs text-muted-foreground">{label}</h3>
+      <p className={cn("text-sm whitespace-pre-line wrap-break-word", !text && "text-muted-foreground")}>{text || "—"}</p>
+    </div>
   );
 }
 

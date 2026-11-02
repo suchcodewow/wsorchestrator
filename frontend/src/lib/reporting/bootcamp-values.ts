@@ -31,9 +31,42 @@ export const RELEASE_LABELS: Record<ReleaseStage, string> = {
 export type ClassSummary = {
   /** The class's day; null for someone who has not attended. */
   date: string | null;
-  /** From 1 to 4, to one decimal place; null when unscored. */
+  /** From 1 to 4, to one decimal place; null when unscored. The exams count as one more exercise. */
   score: number | null;
-  exercises: { name: string; score: number }[];
+  /**
+   * Each assessment's score, with the feedback a manager reads under it: the
+   * positive feedback of one that rounds to 4, the constructive of one that
+   * rounds to 2, and null for any other.
+   */
+  exercises: { name: string; score: number; feedback: string | null }[];
+  /** An administrator's overall feedback and other notes on the class; empty until written. */
+  positiveFeedback: string;
+  constructiveFeedback: string;
+  otherNotes: string;
+  /** The mean of the entrance and exit exams, as a percentage; null until both are in. */
+  examAverage: number | null;
 };
 
-export const NOT_ATTENDED: ClassSummary = { date: null, score: null, exercises: [] };
+export const NOT_ATTENDED: ClassSummary = {
+  date: null,
+  score: null,
+  exercises: [],
+  positiveFeedback: "",
+  constructiveFeedback: "",
+  otherNotes: "",
+  examAverage: null,
+};
+
+/** The mean of the entrance and exit exams, to one decimal place; null unless both are in. */
+export function examAverage(entrance: number | null, exit: number | null): number | null {
+  if (entrance === null || exit === null) return null;
+  return Math.round((entrance + exit) * 5) / 10;
+}
+
+/** An exam average on the 1 to 4 scale: 96% and up is 4, 88% is 3, 80% is 2, anything less 1. */
+export function examScore(average: number): number {
+  if (average >= 96) return 4;
+  if (average >= 88) return 3;
+  if (average >= 80) return 2;
+  return 1;
+}
