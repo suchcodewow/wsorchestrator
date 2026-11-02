@@ -8,13 +8,14 @@
  * so a recording or unsaved scores behind it carry on.
  *
  * Marks save as they are clicked. An administrator on Reporting also sees what
- * was generated; each mark carries through to the saved score, and AI Comments
- * writes the comments again from the marks as they are now.
+ * was generated; each mark carries through to the saved score, and the AI
+ * comments button beside it writes the comments again from the marks as they are now.
  */
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, ChevronRight, Loader2, MessageSquarePlus, Sparkles, Users } from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2, MessageSquarePlus, Users } from "lucide-react";
+import { AiCommentsButton } from "@/components/ai-comments-button";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { PARTICIPATION_LIMITS, type EvalsAssessmentStage, type ParticipationPolarity } from "@/db/schema";
@@ -224,7 +225,7 @@ export function ParticipationMarks({
 }
 
 /** Has Claude write this person's comments again from the marks they have now. */
-function AiComments({ employeeId, onDone }: { employeeId: string; onDone: (sheet: ParticipationSheet) => void }) {
+function useAiComments(employeeId: string, onDone: (sheet: ParticipationSheet) => void) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -248,21 +249,14 @@ function AiComments({ employeeId, onDone }: { employeeId: string; onDone: (sheet
     }
   }
 
-  return (
-    <div className="space-y-2">
-      <Button variant="outline" size="sm" disabled={pending} onClick={run}>
-        {pending ? <Loader2 className="animate-spin" /> : <Sparkles />}
-        AI Comments
-      </Button>
-      {error && <ErrorLine error={error} />}
-    </div>
-  );
+  return { pending, error, run };
 }
 
 function SheetPanel({ employeeId, canRegenerate }: { employeeId: string; canRegenerate: boolean }) {
   const router = useRouter();
   // An administrator's marks carry through to the saved score, as they do in the Administration View.
   const { sheet, setSheet, saving, error, adjust } = useParticipationSheet(employeeId, canRegenerate, () => router.refresh());
+  const comments = useAiComments(employeeId, setSheet);
   if (!sheet) return error ? <ErrorLine error={error} /> : <Loading />;
   const score = sheet.saved?.averageScore ?? sheet.runningScore;
 
@@ -278,17 +272,22 @@ function SheetPanel({ employeeId, canRegenerate }: { employeeId: string; canRege
 
       {score !== null && (
         <section className="space-y-1.5 border-t pt-2">
-          <p className="text-sm" aria-live="polite">
-            <span className="text-muted-foreground">Score</span>{" "}
-            <span className="font-medium tabular-nums">{score}</span>
-          </p>
+          <div className="flex min-h-8 items-center gap-2">
+            <p className="text-sm" aria-live="polite">
+              <span className="text-muted-foreground">Score</span>{" "}
+              <span className="font-medium tabular-nums">{score}</span>
+            </p>
+            {canRegenerate && sheet.saved?.averageScore != null && (
+              <AiCommentsButton pending={comments.pending} onClick={comments.run} />
+            )}
+          </div>
+          {comments.error && <ErrorLine error={comments.error} />}
           {sheet.saved?.averageScore != null && (
             <>
               {sheet.saved.positiveFeedback && <p className="text-sm whitespace-pre-line">{sheet.saved.positiveFeedback}</p>}
               {sheet.saved.constructiveFeedback && (
                 <p className="text-sm whitespace-pre-line">{sheet.saved.constructiveFeedback}</p>
               )}
-              {canRegenerate && <AiComments employeeId={employeeId} onDone={setSheet} />}
             </>
           )}
         </section>
