@@ -3,9 +3,13 @@
 /**
  * One class as a manager sees it, BTC or INT: the day, the overall score, the
  * overall feedback, exam average and any other notes, and each exercise's
- * score with the feedback a 4 or a 2 carries, on Reporting → Live Sessions. Only the overall score names the scale's top.
+ * score with the feedback a 4, 2 or 1 carries, on Reporting → Live Sessions.
+ * Only the overall score names the scale's top. A collapsible one, as BTC is
+ * once someone has been to INT, starts closed on its score and day.
  */
 
+import { useState } from "react";
+import { ChevronRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { BOOTCAMP_SCORE } from "@/db/schema";
 import type { BootcampLevel, ClassSummary } from "@/lib/reporting/bootcamp-values";
@@ -34,71 +38,113 @@ export function ClassCard({
   code,
   summary,
   whole = false,
+  collapsible = false,
 }: {
   name: string;
   code: string;
   summary: ClassSummary;
   /** Rounds every score to a whole number, as a manager sees them. */
   whole?: boolean;
+  /** Starts closed, showing only the class, its overall score and its day; opened, it shows the rest. */
+  collapsible?: boolean;
 }) {
   const { date, exercises, examAverage } = summary;
   const shown = (n: number | null) => (whole && n !== null ? Math.round(n) : n);
   const score = shown(summary.score);
+  const [open, setOpen] = useState(!collapsible);
+  const toggle = () => setOpen((was) => !was);
+  const bodyId = `class-${code}`;
 
   return (
     <section className="flex flex-col gap-3 px-5 py-3">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h2 className="text-lg font-medium tracking-tight">{name}</h2>
-          <p className="text-xs text-muted-foreground">{code}</p>
-        </div>
-        {date ? (
-          <span className="text-sm tabular-nums text-muted-foreground">{formatDate(date)}</span>
-        ) : (
-          <Badge variant="outline" className="text-muted-foreground">
-            Not attended
-          </Badge>
+      <div
+        onClick={collapsible ? toggle : undefined}
+        className={cn(
+          "flex items-start justify-between gap-4",
+          collapsible && "-mx-5 -my-3 cursor-pointer px-5 py-3 transition-colors hover:bg-muted/30",
         )}
-      </div>
-
-      <div className="space-y-1.5 sm:px-16">
-        <div className="flex items-baseline justify-between text-2xl font-medium">
-          <span>Overall Score</span>
-          <span className="tabular-nums">
-            {formatScore(score)}
-            {score !== null && <span className="text-sm text-muted-foreground"> / {BOOTCAMP_SCORE.max}</span>}
-          </span>
+      >
+        <div className="flex items-start gap-2">
+          {collapsible && (
+            <button
+              type="button"
+              aria-expanded={open}
+              aria-controls={bodyId}
+              aria-label={`${name} details`}
+              onClick={(ev) => {
+                ev.stopPropagation();
+                toggle();
+              }}
+              className="-mx-1 mt-1.5 cursor-pointer rounded-md px-1 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+            >
+              <ChevronRight className={cn("size-3.5 text-muted-foreground transition-transform", open && "rotate-90")} />
+            </button>
+          )}
+          <div>
+            <h2 className="text-lg font-medium tracking-tight">{name}</h2>
+            <p className="text-xs text-muted-foreground">{code}</p>
+          </div>
         </div>
-        <ScoreBar score={score} />
+        <div className="flex items-baseline gap-4">
+          {!open && (
+            <span className="text-2xl font-medium tabular-nums">
+              {formatScore(score)}
+              {score !== null && <span className="text-sm text-muted-foreground"> / {BOOTCAMP_SCORE.max}</span>}
+            </span>
+          )}
+          {date ? (
+            <span className="text-sm tabular-nums text-muted-foreground">{formatDate(date)}</span>
+          ) : (
+            <Badge variant="outline" className="text-muted-foreground">
+              Not attended
+            </Badge>
+          )}
+        </div>
       </div>
 
-      <FeedbackPanel label="Overall Positive Feedback" text={summary.positiveFeedback} />
-      <FeedbackPanel label="Overall Constructive Feedback" text={summary.constructiveFeedback} />
-      <div className="flex items-baseline justify-between gap-4 text-sm">
-        <span className="text-muted-foreground">Average exam score</span>
-        <span className="tabular-nums">{examAverage === null ? "—" : `${examAverage}%`}</span>
-      </div>
-      {summary.otherNotes && <FeedbackPanel label="Other Notes" text={summary.otherNotes} />}
+      {open && (
+        <div id={bodyId} className="flex flex-col gap-3">
 
-      {exercises.length > 0 && (
-        <div className="space-y-2 border-t pt-3">
-          <h3 className="text-xs text-muted-foreground">Score Breakdown</h3>
-          <ul className="space-y-2 sm:px-16">
-            {exercises.map((exercise, i) => (
-              <li key={`${exercise.name}-${i}`} className="space-y-1">
-                <div className="flex items-baseline justify-between gap-4 text-sm">
-                  <span className="min-w-0 wrap-break-word">{exercise.name}</span>
-                  <span className="tabular-nums">{formatScore(shown(exercise.score))}</span>
-                </div>
-                <ScoreBar score={shown(exercise.score)} thin />
-                {exercise.feedback && (
-                  <p className="pt-0.5 text-sm whitespace-pre-line text-muted-foreground wrap-break-word">
-                    {exercise.feedback}
-                  </p>
-                )}
-              </li>
-            ))}
-          </ul>
+          <div className="space-y-1.5 sm:px-16">
+            <div className="flex items-baseline justify-between text-2xl font-medium">
+              <span>Overall Score</span>
+              <span className="tabular-nums">
+                {formatScore(score)}
+                {score !== null && <span className="text-sm text-muted-foreground"> / {BOOTCAMP_SCORE.max}</span>}
+              </span>
+            </div>
+            <ScoreBar score={score} />
+          </div>
+
+          <FeedbackPanel label="Overall Positive Feedback" text={summary.positiveFeedback} />
+          <FeedbackPanel label="Overall Constructive Feedback" text={summary.constructiveFeedback} />
+          <div className="flex items-baseline justify-between gap-4 text-sm">
+            <span className="text-muted-foreground">Average exam score</span>
+            <span className="tabular-nums">{examAverage === null ? "—" : `${examAverage}%`}</span>
+          </div>
+          {summary.otherNotes && <FeedbackPanel label="Other Notes" text={summary.otherNotes} />}
+
+          {exercises.length > 0 && (
+            <div className="space-y-2 border-t pt-3">
+              <h3 className="text-xs text-muted-foreground">Score Breakdown</h3>
+              <ul className="space-y-2 sm:px-16">
+                {exercises.map((exercise, i) => (
+                  <li key={`${exercise.name}-${i}`} className="space-y-1">
+                    <div className="flex items-baseline justify-between gap-4 text-sm">
+                      <span className="min-w-0 wrap-break-word">{exercise.name}</span>
+                      <span className="tabular-nums">{formatScore(shown(exercise.score))}</span>
+                    </div>
+                    <ScoreBar score={shown(exercise.score)} thin />
+                    {exercise.feedback && (
+                      <p className="pt-0.5 text-sm whitespace-pre-line text-muted-foreground wrap-break-word">
+                        {exercise.feedback}
+                      </p>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       )}
     </section>

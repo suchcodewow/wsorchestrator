@@ -78,7 +78,14 @@ export function PersonView({ person, canEdit, back }: { person: ViewPerson; canE
           </motion.div>
         )}
         <motion.div variants={riseChild}>
-          <ClassCard name="Bootcamp" code="BTC" summary={person.classes.bootcamp} whole />
+          <ClassCard
+            name="Bootcamp"
+            code="BTC"
+            summary={person.classes.bootcamp}
+            whole
+            // Once they have been to INT, their BTC is history: closed until opened.
+            collapsible={person.classes.intermediate.date !== null}
+          />
         </motion.div>
       </motion.div>
 
