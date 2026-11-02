@@ -6,7 +6,8 @@ import {
   MIMIR_REFLECTION_MAX,
   MIMIR_SETTING_MAX,
 } from "@/db/schema";
-import { MIMIR_ITEM_LIST, MIMIR_PROGRESS_LIST, MIMIR_STUDIO_JOB_LIST } from "@/lib/list-specs";
+import { MAP_VERSION_LIST, MIMIR_ITEM_LIST, MIMIR_PROGRESS_LIST, MIMIR_STUDIO_JOB_LIST } from "@/lib/list-specs";
+import { MAP_SUMMARY_MAX } from "@/lib/mimir/map/schema";
 import { DECK_MAX_BYTES, VIDEO_NOTES_MAX } from "@/lib/mimir/studio/shapes";
 import { PAGE_FIELDS, listQuery } from "./paging";
 import type { EndpointGroup, Field } from "./types";
@@ -453,11 +454,11 @@ export const MIMIR_GROUPS: EndpointGroup[] = [
       {
         method: "POST",
         path: "/api/mimir/map/import",
-        summary: "Imports the concept map from a JSON file, replacing the one there.",
+        summary: "Imports the concept map from a JSON file, as a new version that replaces the one there.",
         access: "trainingAdmin",
         token: true,
         notes:
-          "The file is validated whole and written whole, or refused. Progress is keyed by concept id, so everyone's progress on a concept the new map keeps carries over. frontend/scripts/mimir-map-convert.ts makes such a file from the course data and the videos' scripts. The content is private, so the file is never committed.",
+          "The file is validated whole and written whole, or refused. It is the whole map, videos and all: each concept in it gets the videos the file gives it, or none. Progress is keyed by concept id, so everyone's progress on a concept the new map keeps carries over. frontend/scripts/mimir-map-convert.ts makes such a file from the course data and the videos' scripts. The content is private, so the file is never committed.",
         body: { kind: "multipart", fields: [{ name: "file", type: "file", required: true, note: "JSON, at most 8 MB" }] },
         returns: "{ ok: true, concepts: number, videos: number }",
         errors: [
@@ -465,6 +466,53 @@ export const MIMIR_GROUPS: EndpointGroup[] = [
           { status: 400, error: "not_json", when: "the file is not JSON" },
           { status: 400, error: "invalid", when: "the file does not fit the map's shape; path and message say where" },
           { status: 413, error: "too_large", when: "the file is over 8 MB" },
+        ],
+      },
+      {
+        method: "GET",
+        path: "/api/mimir/map/versions",
+        summary: "Lists every version of the concept map, a page at a time, the newest first.",
+        access: "trainingAdmin",
+        token: true,
+        notes:
+          "Each import, published deck, edit and restore adds a version, and the highest is the live map (live: true). source says which made it; summary is what it said it changed, and is what q searches. createdBy is null for the version made when versions began, and for an account since deleted.",
+        query: listQuery(MAP_VERSION_LIST.sorts, "what the version said it changed", "desc"),
+        returns: `{ versions: { version, source: "import" | "deck" | "edit" | "restore" | "migration", summary, createdAt, createdBy: { id, name, email } | null, live: boolean }[], ${PAGE_FIELDS} }`,
+      },
+      {
+        method: "GET",
+        path: "/api/mimir/map/versions/{version}",
+        summary: "Returns one version of the concept map's structure.",
+        access: "trainingAdmin",
+        token: true,
+        notes: "The structure only: sections, slides, levels, groups and concepts, without videos, which are kept apart and belong to each concept whichever version is live. Send it back, changed, as the content of a new version.",
+        params: [{ name: "version", type: "number", required: true, note: "the version's number" }],
+        returns: "{ version, source, createdAt, content: { version, title, sections, slides, levels, buckets, concepts } }",
+        errors: [{ status: 404, error: "not_found", when: "there is no such version, or it no longer fits the map's shape" }],
+      },
+      {
+        method: "POST",
+        path: "/api/mimir/map/versions",
+        summary: "Changes the live concept map, as a new version: an edit to its structure, or an earlier version put back.",
+        access: "trainingAdmin",
+        token: true,
+        notes:
+          "base is the version the change was made from. It must still be the live one: if another version has been added since, nothing changes and the answer is 409 with the live version, so a change is never made over one you did not see. Send content and summary to edit, or restore to put an earlier version back. content is validated whole, as an import is. Any videos in it are ignored: each concept keeps the videos it has, and one taken off the map has its video again if it comes back.",
+        body: {
+          kind: "json",
+          fields: [
+            { name: "base", type: "number", required: true, note: "the live version, as you read it" },
+            { name: "content", type: "object", note: "the whole map, as GET /api/mimir/map/versions/{version} returns it, changed" },
+            { name: "summary", type: "string", note: `what you changed, up to ${MAP_SUMMARY_MAX} characters; required with content` },
+            { name: "restore", type: "number", note: "an earlier version to put back, instead of content" },
+          ],
+        },
+        returns: "201 { version }",
+        errors: [
+          { status: 400, error: "invalid_body", when: "base is missing, or there is neither content with a summary nor restore" },
+          { status: 400, error: "invalid", when: "content does not fit the map's shape; path and message say where" },
+          { status: 404, error: "not_found", when: "restore names no version that still fits the map's shape" },
+          { status: 409, error: "conflict", when: "base is not the live version; live is the one that is" },
         ],
       },
       {
