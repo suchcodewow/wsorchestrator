@@ -18,7 +18,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { RELEASE_LABELS, STAGE_CODES, type ReleaseStage } from "@/lib/reporting/bootcamp-values";
+import { STAGE_LABELS } from "@/lib/evals/assessment-values";
+import { RELEASE_LABELS, type ReleaseStage } from "@/lib/reporting/bootcamp-values";
 import { formatDate } from "../../cohort-settings/format";
 import { Hint } from "./hint";
 
@@ -41,7 +42,7 @@ export function ReleaseButton({
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const code = STAGE_CODES[stage];
+  const label = STAGE_LABELS[stage];
 
   async function submit() {
     setPending(true);
@@ -82,7 +83,7 @@ export function ReleaseButton({
               </p>
             </>
           ) : (
-            <p>Shows managers the {code} results. It cannot be taken back.</p>
+            <p>Shows managers the {label} results. It cannot be taken back.</p>
           )
         }
       >
@@ -97,9 +98,9 @@ export function ReleaseButton({
           <DialogHeader>
             <DialogTitle>{RELEASE_LABELS[stage]}?</DialogTitle>
             <DialogDescription>
-              Managers will see the {code} results of the bootcamp starting {formatDate(startDate)} for the people
-              in their org, here and on each person&apos;s page. Everyone scored in {code} gets{" "}
-              {formatDate(startDate)} as their {code} date in bootcamp history, with their scores, which completes
+              Managers will see the {label} results of the bootcamp starting {formatDate(startDate)} for the people
+              in their org, here and on each person&apos;s page. Everyone scored in {label} gets{" "}
+              {formatDate(startDate)} as their {label} date in bootcamp history, with their scores, which completes
               the class. Only release once every assessment is in; a release cannot be taken back.
             </DialogDescription>
           </DialogHeader>
@@ -110,7 +111,7 @@ export function ReleaseButton({
             </Button>
             <Button onClick={() => void submit()} disabled={pending}>
               {pending && <Loader2 className="animate-spin" />}
-              {pending ? "Releasing…" : `Release ${code} scores`}
+              {pending ? "Releasing…" : `Release ${label} scores`}
             </Button>
           </DialogFooter>
         </DialogContent>

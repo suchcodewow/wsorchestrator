@@ -31,7 +31,7 @@ import {
   requiredFeedback,
   wholeScore,
 } from "@/lib/evals/assessment-values";
-import { STAGE_CODES, examAverage, examScore, type OverallSide, type ReleaseStage } from "@/lib/reporting/bootcamp-values";
+import { examAverage, examScore, type OverallSide, type ReleaseStage } from "@/lib/reporting/bootcamp-values";
 import { cn } from "@/lib/utils";
 import { formatDate, formatScore, formatWhen } from "../../../cohort-settings/format";
 import { Field } from "../class-card";
@@ -241,7 +241,7 @@ function ClassGroup({
             </h4>
             {open && (
               <p className="text-xs text-muted-foreground">
-                {STAGE_CODES[first.stage]} average {formatScore(average)} over {scored.length}{" "}
+                {STAGE_LABELS[first.stage]} average {formatScore(average)} over {scored.length}{" "}
                 {scored.length === 1 ? "assessment" : "assessments"}
               </p>
             )}

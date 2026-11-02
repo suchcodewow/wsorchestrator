@@ -12,6 +12,7 @@ import { useState } from "react";
 import { ChevronRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { BOOTCAMP_SCORE } from "@/db/schema";
+import { STAGE_LABELS } from "@/lib/evals/assessment-values";
 import type { BootcampLevel, ClassSummary } from "@/lib/reporting/bootcamp-values";
 import { cn } from "@/lib/utils";
 import { formatDate, formatScore } from "../../cohort-settings/format";
@@ -38,13 +39,11 @@ const SCORE_COLUMN = "sm:w-[calc(50%-4rem)]";
 
 export function ClassCard({
   name,
-  code,
   summary,
   whole = false,
   collapsible = false,
 }: {
   name: string;
-  code: string;
   summary: ClassSummary;
   /** Rounds every score to a whole number, as a manager sees them. */
   whole?: boolean;
@@ -56,7 +55,7 @@ export function ClassCard({
   const score = shown(summary.score);
   const [open, setOpen] = useState(!collapsible);
   const toggle = () => setOpen((was) => !was);
-  const bodyId = `class-${code}`;
+  const bodyId = `class-${name.toLowerCase()}`;
 
   return (
     <section className="flex flex-col gap-3 px-5 py-3">
@@ -83,10 +82,7 @@ export function ClassCard({
               <ChevronRight className={cn("size-3.5 text-muted-foreground transition-transform", open && "rotate-90")} />
             </button>
           )}
-          <div>
-            <h2 className="text-2xl font-medium tracking-tight">{name}</h2>
-            <p className="text-xs text-muted-foreground">{code}</p>
-          </div>
+          <h2 className="text-2xl font-medium tracking-tight">{name}</h2>
         </div>
         <div className="flex items-baseline gap-4">
           {!open && (
@@ -175,7 +171,7 @@ export function ScoreBar({ score, thin = false }: { score: number | null; thin?:
   );
 }
 
-/** The furthest class someone has been to, as a chip: INT in green, BTC in blue. */
+/** The furthest class someone has been to, as a chip: Intermediate in green, Bootcamp in blue. */
 export function LevelChip({ level }: { level: BootcampLevel }) {
   return (
     <Badge
@@ -187,7 +183,7 @@ export function LevelChip({ level }: { level: BootcampLevel }) {
           : "bg-blue-100 text-blue-700 dark:bg-blue-400/15 dark:text-blue-300",
       )}
     >
-      {level === "intermediate" ? "INT" : "BTC"}
+      {STAGE_LABELS[level]}
     </Badge>
   );
 }
