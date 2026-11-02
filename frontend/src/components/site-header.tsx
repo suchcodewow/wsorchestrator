@@ -23,8 +23,11 @@ export async function SiteHeader({
   const { themePreference } = await getUserPreferences();
   const environment = deploymentEnvironment();
 
+  // No backdrop blur: the logo gear never stops turning, so a blurred header
+  // was re-filtered every frame, and Chrome on macOS blanked it when it fell
+  // behind. A near-opaque background hides what scrolls under it instead.
   return (
-    <header className="sticky top-0 z-40 border-b border-border/70 bg-background/70 backdrop-blur-xl framed:hidden">
+    <header className="sticky top-0 z-40 border-b border-border/70 bg-background/95 framed:hidden">
       <div className={cn("mx-auto flex h-14 items-center gap-4 px-4 sm:px-6", width)}>
         <Link
           href="/"
