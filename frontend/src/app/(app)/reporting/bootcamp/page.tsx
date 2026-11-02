@@ -19,7 +19,7 @@ import {
   visibleStages,
 } from "@/lib/reporting/bootcamp";
 import { pendingParticipation } from "@/lib/evals/participation";
-import { canManageBootcampRecords, canScoreAssessments } from "@/lib/roles";
+import { canManageBootcampRecords } from "@/lib/roles";
 import { BootcampView } from "./bootcamp-view";
 
 export const metadata: Metadata = { title: "Live Sessions" };
@@ -54,7 +54,6 @@ export default async function BootcampPage({
     <BootcampView
       everyone={reader.all}
       canRelease={canRelease}
-      canMarkParticipation={canScoreAssessments(access)}
       pending={pending}
       bootcamp={
         bootcamp && {

@@ -7,6 +7,7 @@ import { CURRENT_COHORT_LIST } from "@/lib/list-specs";
 import { parseListQuery } from "@/lib/paging";
 import { getTestGroup } from "@/lib/cohorts/test-group";
 import {
+  canManageBootcampRecords,
   canManageEvalsSettings,
   canManageTestGroup,
   canManageTrainingSettings,
@@ -82,6 +83,9 @@ export default async function CurrentCohortPage({
         }
         canMarkParticipation={
           session?.user ? canScoreAssessments(session.user.access) : false
+        }
+        canRegenerateParticipation={
+          session?.user ? canManageBootcampRecords(session.user.access) : false
         }
         intakes={intakes}
         intakeQuestions={intakeQuestions}

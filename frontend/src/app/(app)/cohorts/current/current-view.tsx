@@ -173,6 +173,7 @@ export function CurrentCohortView({
   meetings = {},
   canMarkAttendance = false,
   canMarkParticipation = false,
+  canRegenerateParticipation = false,
   intakes,
   intakeQuestions,
 }: {
@@ -195,6 +196,8 @@ export function CurrentCohortView({
   canMarkAttendance?: boolean;
   /** Whether the viewer may open the participation popup; only with a bootcamp active. */
   canMarkParticipation?: boolean;
+  /** Whether the popup saves the score as marks move and offers AI comments. */
+  canRegenerateParticipation?: boolean;
   /** Each person on the page's latest answers to each registration form, by lowercased email. */
   intakes: Record<string, IntakeOnFile[]>;
   /** Both forms' questions as they stand now, to label those answers. */
@@ -437,7 +440,14 @@ export function CurrentCohortView({
                       </td>
                       {showParticipation && (
                         <td className="px-5 py-1" onClick={(ev) => ev.stopPropagation()}>
-                          {m.track !== "undecided" && <ParticipationButton employeeId={m.id} fullName={m.fullName} labelled />}
+                          {m.track !== "undecided" && (
+                            <ParticipationButton
+                              employeeId={m.id}
+                              fullName={m.fullName}
+                              canRegenerate={canRegenerateParticipation}
+                              labelled
+                            />
+                          )}
                         </td>
                       )}
                       {showAttendance && (

@@ -236,7 +236,7 @@ function SubmissionRow({ submission: s, personKey }: { submission: ViewSubmissio
         </ul>
       )}
       {hasFeedback && (
-        <dl className={cn("grid gap-4 sm:grid-cols-2", (s.scores.length > 0 || hasMarks(s)) && "border-t pt-4")}>
+        <dl className={cn("grid gap-4", (s.scores.length > 0 || hasMarks(s)) && "border-t pt-4")}>
           <Field label="Positive feedback">
             <span className="whitespace-pre-line">{s.positiveFeedback || "—"}</span>
           </Field>
@@ -286,10 +286,12 @@ function SubmissionForm({
   // An assessment with no criteria, as the old bootcamp history left, takes its score as typed.
   const direct = s.scores.length === 0;
   const [typed, setTyped] = useState(s.averageScore === null ? "" : String(s.averageScore));
-  // A Participation score comes from its marks once Generate has given it one, as an average comes from its criteria.
-  const fromMarks = hasMarks(s) && s.averageScore !== null;
+  // A Participation score comes from its marks, as an average comes from its criteria; before Generate gives it
+  // one, saving gives it the score its marks make now.
+  const [marksScore, setMarksScore] = useState<number | null>(null);
+  const fromMarks = hasMarks(s) && (s.averageScore !== null || marksScore !== null);
 
-  const typedScore = fromMarks ? s.averageScore! : Number(typed);
+  const typedScore = fromMarks ? (s.averageScore ?? marksScore!) : Number(typed);
   const typedValid =
     fromMarks ||
     (typed.trim() !== "" &&
@@ -315,7 +317,9 @@ function SubmissionForm({
 
   return (
     <Collapsible submission={s} average={average} open={open} onToggle={onToggle}>
-      {hasMarks(s) && open && <ParticipationMarks employeeId={personKey} stage={s.stage} onMoved={() => router.refresh()} />}
+      {hasMarks(s) && open && (
+        <ParticipationMarks employeeId={personKey} stage={s.stage} onMoved={() => router.refresh()} onScore={setMarksScore} />
+      )}
       {direct && !fromMarks && (
         <label className="flex flex-wrap items-center justify-between gap-3 text-sm">
           Score
@@ -368,7 +372,7 @@ function SubmissionForm({
           </li>
         ))}
       </ul>
-      <div className="grid gap-4 border-t pt-4 sm:grid-cols-2">
+      <div className="grid gap-4 border-t pt-4">
         <FeedbackBox
           id={`${s.id}-positive`}
           label="Positive feedback"

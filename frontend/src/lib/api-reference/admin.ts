@@ -2562,14 +2562,15 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "assessmentsAdmin",
         token: true,
         notes:
-          "Replaces both comments and the score, whatever was there, and may be called after the class is released, which changes what managers see. A side with no marks ends up blank. Returns the attendee's sheet, as GET /api/evals/participation/{employeeId}.",
+          "Replaces both comments and the score, whatever was there, and may be called after the class is released, which changes what managers see. It need not wait for the class's Generate: someone with marks and no Participation assessment yet gets one. A side with no marks ends up blank. Returns the attendee's sheet, as GET /api/evals/participation/{employeeId}.",
         params: [{ name: "employeeId", type: "string", required: true }],
         returns: "the attendee's sheet",
         errors: [
           { status: 404, error: "not_found", when: "they are neither a current candidate on a track nor assessed at the active bootcamp" },
           { status: 409, error: "no_bootcamp", when: "no bootcamp is active" },
           { status: 409, error: "no_class", when: "they are in intermediate and the active bootcamp holds no intermediate class" },
-          { status: 409, error: "not_generated", when: "their Participation assessment has no score yet" },
+          { status: 409, error: "no_assessment", when: "their class has no Participation assessment" },
+          { status: 409, error: "no_marks", when: "they have no marks and no Participation assessment yet" },
           { status: 502, error: "upstream", when: "Claude did not write them" },
           { status: 503, error: "unconfigured", when: "no Claude key on this deployment" },
         ],

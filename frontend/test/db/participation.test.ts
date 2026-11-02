@@ -234,9 +234,19 @@ describe("generating", () => {
     }
   });
 
-  test("Regenerate needs a saved assessment", async () => {
+  test("Regenerate leaves alone someone with no marks and no assessment", async () => {
     const a = await attendee("regen");
-    assert.deepEqual(await regenerateParticipation(admin.id, a.id), { ok: false, error: "not_generated" });
+    assert.deepEqual(await regenerateParticipation(admin.id, a.id), { ok: false, error: "no_marks" });
+    assert.equal(await participationRow(a.email), null);
+  });
+
+  test("Regenerate does not wait for Generate once someone has a mark", async () => {
+    const a = await attendee("regen-marked");
+    await adjustMark(judge.id, a.id, { descriptorId: positive.id, delta: 1 }, false);
+    const ran = await regenerateParticipation(admin.id, a.id);
+    // Claude is not set up here, which is the furthest a run without a key gets.
+    if (!ran.ok) assert.equal(ran.error, "unconfigured");
+    else assert.equal((await participationRow(a.email))?.averageScore, 2);
   });
 });
 

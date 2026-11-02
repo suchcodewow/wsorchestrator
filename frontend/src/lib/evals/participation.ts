@@ -571,19 +571,21 @@ export async function generateParticipation(
   };
 }
 
-export type RegenerateError = ParticipationError | "not_generated" | "unconfigured" | "upstream";
+export type RegenerateError = ParticipationError | "no_assessment" | "no_marks" | "unconfigured" | "upstream";
 
 export const REGENERATE_STATUS_FOR: Record<RegenerateError, number> = {
   ...PARTICIPATION_STATUS_FOR,
-  not_generated: 409,
+  no_assessment: 409,
+  no_marks: 409,
   unconfigured: 503,
   upstream: 502,
 };
 
 /**
  * Replaces one attendee's participation comments and score from the marks
- * they have now, whatever was there. It needs a saved score, because that
- * stays blank until Generate is pressed for the class.
+ * they have now, whatever was there, without waiting for the class's
+ * Generate. Someone with no marks and no assessment yet is left alone, since
+ * an assessment counts as attendance at release.
  */
 export async function regenerateParticipation(
   actorId: string,
@@ -593,11 +595,12 @@ export async function regenerateParticipation(
   if (!found.ok) return found;
   const { bootcamp, attendee } = found;
   const assessment = await participationAssessment(attendee.stage);
+  if (!assessment) return { ok: false, error: "no_assessment" };
   const saved = await savedParticipation(bootcamp.id, attendee.stage, attendee.email);
-  if (!assessment || saved?.averageScore == null) return { ok: false, error: "not_generated" };
 
   const [rows, bands] = await Promise.all([marksOf(bootcamp.id, attendee.stage, attendee.email), participationBands()]);
   const marks: NamedMark[] = rows.map(({ name, polarity, count }) => ({ name, polarity, count }));
+  if (!saved && marks.length === 0) return { ok: false, error: "no_marks" };
   const score = participationScore(marks, bands);
   const person: FeedbackPerson = {
     id: "p1",
@@ -613,15 +616,24 @@ export async function regenerateParticipation(
     if (!written) return { ok: false, error: "upstream" };
     text = written;
   }
+  const now = new Date();
+  const written = {
+    averageScore: score,
+    positiveFeedback: text.positive,
+    constructiveFeedback: text.constructive,
+    ownerId: actorId,
+    updatedAt: now,
+  };
   await db
-    .update(s)
-    .set({
-      averageScore: score,
-      positiveFeedback: text.positive,
-      constructiveFeedback: text.constructive,
-      ownerId: actorId,
-      updatedAt: new Date(),
+    .insert(s)
+    .values({
+      bootcampId: bootcamp.id,
+      assessmentId: assessment.id,
+      attendeeEmail: attendee.email,
+      assessmentName: assessment.name,
+      submittedAt: now,
+      ...written,
     })
-    .where(and(eq(s.bootcampId, bootcamp.id), eq(s.assessmentId, assessment.id), eq(s.attendeeEmail, attendee.email)));
+    .onConflictDoUpdate({ target: [s.bootcampId, s.assessmentId, s.attendeeEmail], set: written });
   return { ok: true, sheet: await readSheet(bootcamp, attendee, true), email: attendee.email };
 }

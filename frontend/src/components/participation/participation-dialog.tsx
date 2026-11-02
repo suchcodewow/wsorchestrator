@@ -28,7 +28,8 @@ const ERRORS: Record<string, string> = {
   no_class: "The active bootcamp has no intermediate class.",
   not_found: "This person is not in the active bootcamp's cohort.",
   forbidden: "You can no longer mark participation — reload the page.",
-  not_generated: "Generate this class's participation comments first.",
+  no_assessment: "This class has no Participation assessment.",
+  no_marks: "Mark them first: there is nothing to write comments from.",
   unconfigured: "Claude is not set up on this deployment.",
   upstream: "Claude could not write them just now. Try again.",
 };
@@ -207,13 +208,20 @@ export function ParticipationMarks({
   employeeId,
   stage,
   onMoved,
+  onScore,
 }: {
   employeeId: string;
   /** The class of the assessment they sit in; a person's marks in another class are not its marks. */
   stage: EvalsAssessmentStage;
   onMoved?: () => void;
+  /** Told the score the marks give whenever they are read or move, for a form whose saved score is still blank. */
+  onScore?: (score: number | null) => void;
 }) {
   const { sheet, saving, error, adjust } = useParticipationSheet(employeeId, onMoved !== undefined, onMoved);
+  const runningScore = sheet && sheet.attendee.stage === stage ? sheet.runningScore : null;
+  useEffect(() => {
+    onScore?.(runningScore);
+  }, [onScore, runningScore]);
   if (!sheet) return error ? <ErrorLine error={error} /> : <Loading />;
   if (sheet.attendee.stage !== stage) return null;
   return (
@@ -277,18 +285,12 @@ function SheetPanel({ employeeId, canRegenerate }: { employeeId: string; canRege
               <span className="text-muted-foreground">Score</span>{" "}
               <span className="font-medium tabular-nums">{score}</span>
             </p>
-            {canRegenerate && sheet.saved?.averageScore != null && (
-              <AiCommentsButton pending={comments.pending} onClick={comments.run} />
-            )}
+            {canRegenerate && <AiCommentsButton pending={comments.pending} onClick={comments.run} />}
           </div>
           {comments.error && <ErrorLine error={comments.error} />}
-          {sheet.saved?.averageScore != null && (
-            <>
-              {sheet.saved.positiveFeedback && <p className="text-sm whitespace-pre-line">{sheet.saved.positiveFeedback}</p>}
-              {sheet.saved.constructiveFeedback && (
-                <p className="text-sm whitespace-pre-line">{sheet.saved.constructiveFeedback}</p>
-              )}
-            </>
+          {sheet.saved?.positiveFeedback && <p className="text-sm whitespace-pre-line">{sheet.saved.positiveFeedback}</p>}
+          {sheet.saved?.constructiveFeedback && (
+            <p className="text-sm whitespace-pre-line">{sheet.saved.constructiveFeedback}</p>
           )}
         </section>
       )}

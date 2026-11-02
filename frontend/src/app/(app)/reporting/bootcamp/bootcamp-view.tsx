@@ -20,7 +20,6 @@ import {
   TableSearch,
   useRowLink,
 } from "@/components/data-table";
-import { ParticipationButton } from "@/components/participation/participation-dialog";
 import type { StagePending } from "@/lib/evals/participation";
 import {
   BOOTCAMP_COHORT_PREFIX,
@@ -87,7 +86,6 @@ function useStatusFilter() {
 export function BootcampView({
   everyone,
   canRelease,
-  canMarkParticipation,
   pending: participation,
   bootcamp,
   cohort,
@@ -99,8 +97,6 @@ export function BootcampView({
   /** An Assessments Viewer or above, who sees everyone rather than their org. */
   everyone: boolean;
   canRelease: boolean;
-  /** Whether the viewer may open the participation popup from the cohort. */
-  canMarkParticipation: boolean;
   /** What each class's Generate button would write; null to an administrator for a class it can no longer run on. */
   pending: Record<ReleaseStage, StagePending | null>;
   /** The active bootcamp, or null with none. */
@@ -261,9 +257,6 @@ export function BootcampView({
                         </td>
                         <td className="px-3 py-1.5">
                           <div className="flex items-center justify-end gap-1">
-                            {canMarkParticipation && (
-                              <ParticipationButton employeeId={m.key} fullName={m.fullName ?? m.email} canRegenerate={canRelease} />
-                            )}
                             <ChevronRight className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
                           </div>
                         </td>
