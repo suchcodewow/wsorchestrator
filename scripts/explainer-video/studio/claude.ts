@@ -29,6 +29,12 @@ export type Tool<S extends z.ZodTypeAny = z.ZodTypeAny> = {
 /** A tool's failure that Claude should see and can act on, as opposed to one that ends the job. */
 export class ToolError extends Error {}
 
+/**
+ * How often one tool may fail the same way in a row before the job ends with
+ * that failure as its reason, rather than spending every turn on it.
+ */
+const REPEATS_ALLOWED = 5;
+
 /** A tool calling this ends the loop; its input is the job's answer. */
 export class Done<T> {
   constructor(readonly value: T) {}
@@ -69,9 +75,20 @@ export async function runAgent<T>(run: AgentRun<T>): Promise<T> {
   const byName = new Map(run.tools.map((t) => [t.name, t]));
   const messages: Anthropic.MessageParam[] = [{ role: "user", content: run.prompt }];
   let nudged = false;
+  // The latest refusal, and how many times in a row its tool has given it.
+  let last: { tool: string; message: string; times: number } | null = null;
+  const refused = (tool: string, message: string) => {
+    console.log(`tool ${tool} failed: ${message.slice(-1500)}`);
+    last = last?.tool === tool && last.message === message ? { ...last, times: last.times + 1 } : { tool, message, times: 1 };
+    if (last.times >= REPEATS_ALLOWED) throw new Error(`${tool} failed ${last.times} times in a row: ${message.slice(-2000)}`);
+  };
+  const succeeded = (tool: string) => {
+    if (last?.tool === tool) last = null;
+  };
+  const lastFailure = () => (last ? ` The last tool to fail was ${last.tool}: ${last.message.slice(-1500)}` : "");
 
   for (let turn = 1; turn <= run.maxTurns; turn++) {
-    if (Date.now() > run.deadline) throw new Error(`Ran out of time after ${turn - 1} turns without finishing.`);
+    if (Date.now() > run.deadline) throw new Error(`Ran out of time after ${turn - 1} turns without finishing.${lastFailure()}`);
     const response = await anthropic()
       .messages.stream({
         model: MODEL,
@@ -122,6 +139,7 @@ export async function runAgent<T>(run: AgentRun<T>): Promise<T> {
           results.push(result("Accepted."));
         } catch (err) {
           if (!(err instanceof ToolError)) throw err;
+          refused(call.name, err.message);
           results.push(result(err.message, true));
         }
         continue;
@@ -139,13 +157,15 @@ export async function runAgent<T>(run: AgentRun<T>): Promise<T> {
       }
       try {
         results.push(result(await tool.run(parsed.data)));
+        succeeded(call.name);
       } catch (err) {
         if (!(err instanceof ToolError)) throw err;
+        refused(call.name, err.message);
         results.push(result(err.message, true));
       }
     }
     if (done) return done.value;
     messages.push({ role: "user", content: results });
   }
-  throw new Error(`Stopped after ${run.maxTurns} turns without finishing.`);
+  throw new Error(`Stopped after ${run.maxTurns} turns without finishing.${lastFailure()}`);
 }

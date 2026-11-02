@@ -13,6 +13,7 @@ import { FileUp, Loader2, Trash2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { MIMIR_STUDIO_ACTIVE, type MimirStudioJobStatus } from "@/db/schema";
+import { failureReason } from "@/lib/mimir/studio/failure";
 import { DECK_MAX_BYTES, type MapDiff } from "@/lib/mimir/studio/shapes";
 import { formatWhen } from "../../cohort-settings/format";
 
@@ -174,7 +175,11 @@ export function DeckPanel({ configured, job, draft }: { configured: boolean; job
           {error}
         </p>
       )}
-      {job?.status === "failed" && job.error && !error && <p className="px-5 py-4 text-sm wrap-break-word text-destructive">{job.error}</p>}
+      {job?.status === "failed" && job.error && !error && (
+        <p className="px-5 py-4 text-sm wrap-break-word text-destructive" title={job.error}>
+          {failureReason(job.error)}
+        </p>
+      )}
 
       {waiting && (
         <div className="divide-y">

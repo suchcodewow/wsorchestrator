@@ -3,7 +3,8 @@
 /**
  * Has Mimir Studio make a concept's video again, taking in its accepted
  * comments, or make its first, or translate one that is not in every language
- * yet, after saying what that involves; and how the latest such job stands.
+ * yet, after saying what that involves; and how the latest such job stands,
+ * with why it failed when it did.
  */
 
 import { useState } from "react";
@@ -13,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { MIMIR_STUDIO_ACTIVE } from "@/db/schema";
 import { VIDEO_LANGUAGE_NAMES, type VideoLanguage } from "@/lib/mimir/map/schema";
+import { failureReason } from "@/lib/mimir/studio/failure";
 import type { StudioJobBrief } from "@/lib/mimir/studio/jobs";
 import { formatWhen } from "../../cohort-settings/format";
 
@@ -127,12 +129,15 @@ function JobLine({ job }: { job: StudioJobBrief | null }) {
         {job.progress ?? "Starting…"}
       </span>
     );
-  if (job.status === "failed")
+  if (job.status === "failed") {
+    const reason = failureReason(job.error);
     return (
       <span className="max-w-64 text-right text-xs text-destructive" title={job.error ?? undefined}>
-        Failed {job.finishedAt && formatWhen(job.finishedAt)}
+        <span className="block">Failed {job.finishedAt && formatWhen(job.finishedAt)}</span>
+        {reason && <span className="line-clamp-3 wrap-break-word">{reason}</span>}
       </span>
     );
+  }
   if (job.status === "succeeded" && job.finishedAt)
     return <span className="text-right text-xs text-muted-foreground">Made {formatWhen(job.finishedAt)}</span>;
   return null;
