@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { ArrowRight, CheckCircle2, Circle, Clock, Lightbulb, Loader2, Lock, PlayCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { MyIris, SubjectStatus } from "@/lib/iris/attempts";
 import type { Level } from "@/lib/iris/engine";
 import { TRACKS, TRACK_LABELS, type Track } from "@/lib/iris/subjects";
@@ -108,13 +109,82 @@ function SubjectAction({
   }
   if (status === "unavailable") return <span className="text-muted-foreground">Not open yet</span>;
   if (status === "coming_soon") return <span className="text-muted-foreground">Coming soon</span>;
+  if (status === "in_progress") {
+    return (
+      <Button asChild variant="brand" size="sm">
+        <Link href={`/diagnostic/tests/${subject}`}>
+          Continue
+          <ArrowRight />
+        </Link>
+      </Button>
+    );
+  }
+  return <StartButton subject={subject} />;
+}
+
+/** Start opens a must-read on answering honestly, and the test begins only once the taker ticks that they have read it. */
+function StartButton({ subject }: { subject: string }) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [agreed, setAgreed] = useState(false);
+
   return (
-    <Button asChild variant={status === "in_progress" ? "brand" : "outline"} size="sm">
-      <Link href={`/diagnostic/tests/${subject}`}>
-        {status === "in_progress" ? "Continue" : "Start"}
+    <>
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => {
+          setAgreed(false);
+          setOpen(true);
+        }}
+      >
+        Start
         <ArrowRight />
-      </Link>
-    </Button>
+      </Button>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <p className="text-xs font-semibold uppercase tracking-wider text-brand">Must read</p>
+            <DialogTitle>Scoring high is not the goal</DialogTitle>
+          </DialogHeader>
+          <DialogDescription asChild>
+            <div className="space-y-3 text-sm text-foreground">
+              <p>
+                This test is not looking for a high score. It finds where you are today, and that decides the
+                training path you get.
+              </p>
+              <p>
+                Please do not use AI, a search engine or anyone else to answer these questions. A score you got
+                with help puts you on a harder path than you&apos;re ready for. Cheating only hurts you.
+              </p>
+              <p>
+                Every question has an &ldquo;I don&apos;t know&rdquo; option on purpose. Choosing it is completely
+                fine, and it helps match your path to what you actually know.
+              </p>
+            </div>
+          </DialogDescription>
+          <label className="flex items-start gap-2.5 rounded-lg border border-brand/30 bg-brand-subtle/40 px-3 py-2.5 text-sm">
+            <input
+              type="checkbox"
+              checked={agreed}
+              onChange={(e) => setAgreed(e.target.checked)}
+              className="mt-0.5 size-4 accent-brand"
+            />
+            <span>I acknowledge that I will answer on my own, without AI or other help.</span>
+          </label>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="brand" disabled={!agreed} onClick={() => router.push(`/diagnostic/tests/${subject}`)}>
+              Start the test
+              <ArrowRight />
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
