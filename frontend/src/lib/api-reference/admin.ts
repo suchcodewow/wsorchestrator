@@ -2639,7 +2639,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "assessmentsAdmin",
         token: true,
         notes:
-          "Claude sums up that side of the saved feedback on every assessment of them in that class at that bootcamp, Participation's included, into one sentence. Only the feedback is sent, with no name or email. Nothing is saved: the text is for PUT /api/reporting/bootcamp/people/{key}/review.",
+          "Claude sums up that side of the saved feedback on every assessment of them in that class at that bootcamp, Participation's included, into one sentence. Only the feedback is sent, each piece with the exercise it was left on, and their first name, the preferred one where they gave one; no full name or email. Nothing is saved: the text is for PUT /api/reporting/bootcamp/people/{key}/review.",
         params: [{ name: "key", type: "string", required: true, note: "a key from the list: an employee id or a submission's" }],
         body: { kind: "json", fields: [
           { name: "bootcampId", type: "string", required: true, note: "a bootcamp they were assessed at in stage" },
