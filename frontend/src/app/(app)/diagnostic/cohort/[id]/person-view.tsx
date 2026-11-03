@@ -7,7 +7,7 @@ import { motion } from "framer-motion";
 import { ArrowLeft } from "lucide-react";
 import { HEADER_ROW, PlainHeader } from "@/components/data-table";
 import type { CohortSummary, DetailAnswer, DetailSitting, PersonDetail } from "@/lib/iris/cohort";
-import { ENGINE, LEVELS, type Level } from "@/lib/iris/engine";
+import { ENGINE, LEVELS, placementWithBasis, type Level } from "@/lib/iris/engine";
 import { LEVEL_LABELS, SUBJECTS, OPEN_SUBJECT_KEYS, TRACK_LABELS, TRAINING, bandOf } from "@/lib/iris/subjects";
 import { riseChild, staggerParent } from "@/lib/motion";
 import { cn } from "@/lib/utils";
@@ -276,8 +276,28 @@ function Tally({ answers, placement }: { answers: DetailAnswer[]; placement: Lev
           })}
         </tbody>
       </table>
+      {placement && <p className="mt-2 text-xs text-muted-foreground">{placementNote(answers)}</p>}
     </div>
   );
+}
+
+/** How this sitting's placement was decided, in the words of the rule. */
+function placementNote(answers: DetailAnswer[]): string {
+  const { level, basis } = placementWithBasis(
+    answers.map((a) => ({ id: a.itemId, level: a.level, subtopic: "", correct: a.correct, phase: a.phase })),
+  );
+  if (basis === "tiebreak") {
+    const tie = answers.filter((a) => a.phase === "tiebreak");
+    const at = tie[0]!.level;
+    const right = tie.filter((a) => a.correct).length;
+    return right >= 2
+      ? `The tiebreak decided: ${right} of ${tie.length} right at ${LEVEL_LABELS[at]}, so ${LEVEL_LABELS[level]}.`
+      : `The tiebreak decided: ${right} of ${tie.length} right at ${LEVEL_LABELS[at]}, fewer than 2, so one level below: ${LEVEL_LABELS[level]}.`;
+  }
+  if (basis === "bar") {
+    return `Placed at the highest level with ${ENGINE.MIN_AT_LEVEL} or more asked and two thirds right: ${LEVEL_LABELS[level]}.`;
+  }
+  return `No level cleared the bar (${ENGINE.MIN_AT_LEVEL} or more asked, two thirds right), so the placement is the lowest level asked: ${LEVEL_LABELS[level]}.`;
 }
 
 function AnswerTable({ answers }: { answers: DetailAnswer[] }) {

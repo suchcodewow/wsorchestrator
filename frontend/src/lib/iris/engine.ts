@@ -73,13 +73,31 @@ function accAt(asked: readonly Asked[], lv: Level): number {
   return n ? correctAt(asked, lv) / n : 0;
 }
 
-/** The highest level with enough questions asked and two thirds of them right, otherwise Beginner. */
-export function placementOf(asked: readonly Asked[]): Level {
-  for (const lv of [3, 2, 1] as const) {
-    if (attemptsAt(asked, lv) >= ENGINE.MIN_AT_LEVEL && accAt(asked, lv) >= ENGINE.BAR) return lv;
+/** How a placement was reached: the tiebreak, a level clearing the bar, or the lowest level asked. */
+export type PlacementBasis = "tiebreak" | "bar" | "lowest";
+
+/**
+ * Where a run places someone, and why. A tiebreak decides on its own
+ * questions: two or more right places at its level, fewer places one below.
+ * Otherwise it is the highest level with enough asked and two thirds right;
+ * and when none clears that bar, the lowest level asked, never a level the
+ * run did not reach.
+ */
+export function placementWithBasis(asked: readonly Asked[]): { level: Level; basis: PlacementBasis } {
+  const tie = asked.filter((a) => a.phase === "tiebreak");
+  if (tie.length) {
+    const level = tie[0]!.level;
+    const right = tie.filter((a) => a.correct).length;
+    return { level: right >= 2 ? level : (Math.max(1, level - 1) as Level), basis: "tiebreak" };
   }
-  return 1;
+  for (const lv of [3, 2, 1] as const) {
+    if (attemptsAt(asked, lv) >= ENGINE.MIN_AT_LEVEL && accAt(asked, lv) >= ENGINE.BAR) return { level: lv, basis: "bar" };
+  }
+  const lowest = LEVELS.find((lv) => attemptsAt(asked, lv) > 0);
+  return { level: lowest ?? 1, basis: "lowest" };
 }
+
+export const placementOf = (asked: readonly Asked[]): Level => placementWithBasis(asked).level;
 
 export function confidenceOf(asked: readonly Asked[]): Confidence {
   const lv = placementOf(asked);

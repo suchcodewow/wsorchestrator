@@ -1,11 +1,12 @@
 /**
  * The Diagnostic engine and question bank.
  *
- * The accuracy floors are Project Iris's own measurements of this engine
- * (84% of true 101s, 88% of 201s and 92% of 301s placed correctly, 96% of
- * blind guessers floored at 101), less a couple of points of simulation
- * noise. The October 2026 bank measures the same in every subject. A change that drops below one is a change to how people
- * are placed, not a refactor. The simulations are seeded, so they give the
+ * The accuracy floors are this engine's measurements against simulated
+ * takers since the November 2026 placement rule, where a tiebreak decides on
+ * its own questions (77% of true 101s, 90% of 201s and 95% of 301s placed
+ * correctly, 96% of blind guessers kept at 101; the rule before it measured
+ * 84 / 88 / 92 / 98), less a couple of points of simulation noise. A change
+ * that drops below one is a change to how people are placed, not a refactor. The simulations are seeded, so they give the
  * same numbers on every run.
  */
 
@@ -18,6 +19,7 @@ import {
   drawItem,
   newRunState,
   placementOf,
+  placementWithBasis,
   submit,
   type Asked,
   type Level,
@@ -112,11 +114,28 @@ describe("the rules", () => {
     assert.equal(state.level, 2);
   });
 
-  test("placement is the highest level with three or more asked and two thirds right", () => {
+  test("without a tiebreak, placement is the highest level with three or more asked and two thirds right", () => {
     assert.equal(placementOf([...asked(1, true, 3), ...asked(2, true, 2), ...asked(2, false, 1)]), 2);
     assert.equal(placementOf([...asked(3, true, 2), ...asked(3, false, 1), ...asked(2, true, 3)]), 3);
-    assert.equal(placementOf(asked(3, true, 2)), 1, "two right at Advanced is too few to place there");
-    assert.equal(placementOf(asked(2, false, 5)), 1, "nothing clears the bar, so Beginner");
+    assert.deepEqual(placementWithBasis([...asked(2, true, 3), ...asked(3, true, 2)]), { level: 2, basis: "bar" });
+  });
+
+  test("when no level clears the bar, placement is the lowest level asked, never one the run did not reach", () => {
+    assert.deepEqual(placementWithBasis([...asked(2, false, 2), ...asked(1, false, 3)]), { level: 1, basis: "lowest" });
+    assert.equal(placementOf(asked(2, false, 5)), 2, "101 was never asked, so it is not the placement");
+    assert.equal(placementOf([]), 1);
+  });
+
+  const tiebreak = (level: Level, right: number): Asked[] =>
+    Array.from({ length: ENGINE.TIE_N }, (_, k) => ({ id: `t${k}`, level, subtopic: `t${k}`, correct: k < right, phase: "tiebreak" }));
+
+  test("a tiebreak decides on its own questions: two of three right places at its level, fewer one below", () => {
+    const main = [...asked(2, true, 4), ...asked(3, true, 2), ...asked(3, false, 2)];
+    assert.deepEqual(placementWithBasis([...main, ...tiebreak(3, 2)]), { level: 3, basis: "tiebreak" });
+    assert.deepEqual(placementWithBasis([...main, ...tiebreak(3, 1)]), { level: 2, basis: "tiebreak" });
+    // However the main questions went, the tiebreak has the last word.
+    assert.equal(placementOf([...asked(3, true, 4), ...tiebreak(3, 0)]), 2);
+    assert.equal(placementOf([...asked(1, true, 4), ...tiebreak(2, 1)]), 1);
   });
 
   test("confidence is high only with four or more at the placed level and three quarters right", () => {
@@ -152,7 +171,7 @@ describe("the rules", () => {
 
 describe("placement accuracy against simulated takers", () => {
   const expected = { beginner: 1, intermediate: 2, advanced: 3, guesser: 1 } as const;
-  const floor = { beginner: 0.82, intermediate: 0.86, advanced: 0.9, guesser: 0.94 } as const;
+  const floor = { beginner: 0.75, intermediate: 0.88, advanced: 0.93, guesser: 0.94 } as const;
 
   for (const s of OPEN_SUBJECT_KEYS) {
     test(s, () => {
