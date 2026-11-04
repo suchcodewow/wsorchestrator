@@ -1194,7 +1194,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "trainingAdmin",
         token: true,
         notes:
-          "Copies every session, who runs it and the assessment a breakout is scored on, but not comments or breakout groups. Rooms come too only when both bootcamps are at the same facility. Days past the end of a track here are left out; notes says what was. The checklists of the days it copies, and Prep Day's, are added to this bootcamp's, every item to do; replace leaves its own items alone, and an item whose half-day (AM or PM) here already has one of the same name is not added again. An owner or a tag who is not an administrator or guest judge of this bootcamp is left off, and notes names them.",
+          "Copies every session, who runs it and the assessment a breakout is scored on, but not comments or breakout groups. Rooms come too only when both bootcamps are at the same facility. Days past the end of a track here are left out; notes says what was. The checklists of the days it copies, and Prep Day's, are added to this bootcamp's, every item to do; replace leaves its own items alone, and an item whose half-day (Day or Evening) here already has one of the same name is not added again. An owner or a tag who is not an administrator or guest judge of this bootcamp is left off, and notes names them.",
         params: [BOOTCAMP_ID],
         body: {
           kind: "json",
@@ -1413,18 +1413,20 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       {
         method: "GET",
         path: "/api/scheduler/bootcamps/{id}/checklist",
-        summary: "Counts the checklist items of each half of each track-day, and how many are done.",
+        summary: "Counts the checklist items of each half of each track-day, and how many are done, and lists those the schedule marks at their time.",
         access: "trainingViewer",
         token: true,
-        notes: "One entry per track, day and period (AM or PM); a half-day with no items is left out.",
+        notes:
+          "days has one entry per track, day and period (am is Day, pm is Evening); a half-day with no items is left out. marks is every item still to do in the Day half of a class-day (not Prep Day) that has an alarm, in minutes after midnight, by track, day and time.",
         params: [BOOTCAMP_ID],
-        returns: "{ days: { track: \"btc\" | \"int\" | \"btc_se\" | \"int_se\", day: number, period: \"am\" | \"pm\", total: number, done: number }[] }",
+        returns:
+          "{ days: { track: \"btc\" | \"int\" | \"btc_se\" | \"int_se\", day: number, period: \"am\" | \"pm\", total: number, done: number }[], marks: { id, track, day: number, alarm: number, name, ownerEmail: string | null, ownerName, mentions: { email, fullName }[] }[] }",
         errors: [{ status: 404, error: "not_found", when: "no such bootcamp" }],
       },
       {
         method: "GET",
         path: "/api/scheduler/bootcamps/{id}/checklist/{track}/{day}",
-        summary: "Lists what is to be done before one day of one track, AM and PM together, each half in its order on the board.",
+        summary: "Lists what is to be done on one day of one track, Day and Evening together, each half in its order on the board.",
         access: "trainingViewer",
         token: true,
         notes: `Whole: a track-day holds at most ${CHECKLIST_LIMITS.itemsPerDay} items, both halves together. Each item's period says which half it is in.`,
@@ -1435,7 +1437,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       {
         method: "POST",
         path: "/api/scheduler/bootcamps/{id}/checklist/{track}/{day}",
-        summary: "Adds an item to the AM or PM half of one track-day's checklist, recording you as who wrote it.",
+        summary: "Adds an item to the Day or Evening half of one track-day's checklist, recording you as who wrote it.",
         access: "trainingAdmin",
         token: true,
         notes: "It goes last in its half; PATCH it with position to move it up.",
@@ -1444,7 +1446,12 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           kind: "json",
           fields: [
             { name: "name", type: "string", required: true, note: `up to ${CHECKLIST_LIMITS.name} characters` },
-            { name: "period", type: `"am" | "pm"`, note: "which half of the day; am when omitted" },
+            { name: "period", type: `"am" | "pm"`, note: "which half of the day: am is Day, pm is Evening; am when omitted" },
+            {
+              name: "alarm",
+              type: "number | null",
+              note: "when it is due, in minutes after midnight (0 to 1439); omit for none. The schedule marks it at that time only in the Day half of a class-day; elsewhere it is kept, unused",
+            },
             { name: "ownerEmail", type: "string | null", note: "a Training administrator or guest judge of the bootcamp; omit for nobody" },
             {
               name: "mentions",
@@ -1465,11 +1472,11 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       {
         method: "PATCH",
         path: "/api/scheduler/bootcamps/{id}/checklist/items/{itemId}",
-        summary: "Ticks a checklist item done or back to do, changes its name or owner, or moves it to another half-day or another place in its own.",
+        summary: "Ticks a checklist item done or back to do, changes its name, owner or time, or moves it to another half-day or another place in its own.",
         access: "signedIn",
         token: true,
         notes:
-          "A Training Administrator can tick any item; anyone else only one they own, matched by their account's email. Ticking one already done keeps when it was first ticked. Only a Training Administrator can change the name or owner, or move it; a field left out stays as it is. A new name replaces whom the item tags with mentions: anyone no longer named drops out, and anyone newly named finds it in their inbox. A move keeps who wrote it, whom it tags and whether it is done. position puts it at that place among the other items of the half-day it ends up in, renumbering that half from 0, as dropping a card on the board does; past the end is the end. Without position, an item moved to another half goes last there, and one that stays keeps its place. Given together, the name and owner are changed first, then the item moved, then ticked; the first step that fails stops the rest, and steps before it stay saved.",
+          "A Training Administrator can tick any item; anyone else only one they own, matched by their account's email. Ticking one already done keeps when it was first ticked. Only a Training Administrator can change the name, owner or alarm, or move it; a field left out stays as it is. A new name replaces whom the item tags with mentions: anyone no longer named drops out, and anyone newly named finds it in their inbox. A move keeps who wrote it, whom it tags, its alarm and whether it is done. position puts it at that place among the other items of the half-day it ends up in, renumbering that half from 0, as dropping a card on the board does; past the end is the end. Without position, an item moved to another half goes last there, and one that stays keeps its place. Given together, the name and owner are changed first, then the item moved, then ticked; the first step that fails stops the rest, and steps before it stay saved.",
         params: [BOOTCAMP_ID, CHECKLIST_ITEM_ID],
         body: {
           kind: "json",
@@ -1480,6 +1487,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
             { name: "period", type: `"am" | "pm"`, note: "to move it to the other half of the day" },
             { name: "position", type: "number", note: `its place in the half-day, first at 0, counting the other items there; 0 to ${CHECKLIST_LIMITS.itemsPerDay}` },
             { name: "name", type: "string", note: `up to ${CHECKLIST_LIMITS.name} characters` },
+            { name: "alarm", type: "number | null", note: "when it is due, in minutes after midnight (0 to 1439); null for none" },
             { name: "ownerEmail", type: "string | null", note: "a Training administrator or guest judge of the bootcamp; null or blank for nobody" },
             {
               name: "mentions",
@@ -1490,10 +1498,10 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         },
         returns: CHECKLIST_ITEM_ROW,
         errors: [
-          { status: 400, error: "invalid", when: "none of done, name, ownerEmail, track, day, period or position is given, or one is the wrong type, or name is empty or too long" },
+          { status: 400, error: "invalid", when: "none of done, name, alarm, ownerEmail, track, day, period or position is given, or one is the wrong type, or name is empty or too long, or alarm is out of range" },
           { status: 400, error: "no_day", when: "the track does not run that day at this bootcamp, or day is 0 on a track other than btc" },
           { status: 400, error: "not_instructor", when: "ownerEmail or a mention is not an administrator or guest judge of the bootcamp; email names it" },
-          { status: 403, error: "forbidden", when: "you are not a Training Administrator and name, ownerEmail, track, day, period or position is given" },
+          { status: 403, error: "forbidden", when: "you are not a Training Administrator and name, alarm, ownerEmail, track, day, period or position is given" },
           { status: 403, error: "not_owner", when: "you are not a Training Administrator and it is not yours" },
           { status: 404, error: "not_found", when: "no such bootcamp or item" },
           { status: 409, error: "full", when: `the day it is moved to already has ${CHECKLIST_LIMITS.itemsPerDay} items` },

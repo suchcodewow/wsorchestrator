@@ -7,7 +7,7 @@ import { cookies } from "next/headers";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { canManageTrainingSettings, type Access } from "@/lib/roles";
-import { checklistCounts } from "@/lib/scheduler/checklist";
+import { checklistCounts, checklistMarks } from "@/lib/scheduler/checklist";
 import { facilityPicks } from "@/lib/scheduler/facilities";
 import { parseScheduleCondensed, parseScheduleView, SCHEDULE_CONDENSED_COOKIE, SCHEDULE_VIEW_COOKIE } from "@/lib/scheduler/schedule-prefs";
 import { copySources, type Schedule } from "@/lib/scheduler/schedule";
@@ -25,10 +25,11 @@ export async function SchedulePage({
   viewer: { id: string; email: string; access: Access };
 }) {
   const canManage = canManageTrainingSettings(viewer.access);
-  const [types, sources, checklist, surveys, facilities, cookieJar] = await Promise.all([
+  const [types, sources, checklist, checklistTimed, surveys, facilities, cookieJar] = await Promise.all([
     canManage ? allSessionTypes() : [],
     canManage ? copySources(schedule.bootcamp.id) : [],
     checklistCounts(schedule.bootcamp.id),
+    checklistMarks(schedule.bootcamp.id),
     surveyDays(schedule.bootcamp.id),
     canManage ? facilityPicks() : [],
     cookies(),
@@ -50,6 +51,7 @@ export async function SchedulePage({
         viewerId={viewer.id}
         viewerEmail={viewer.email}
         checklist={checklist}
+        checklistMarks={checklistTimed}
         surveys={surveys}
         initialView={initialView}
         initialCondensed={initialCondensed}

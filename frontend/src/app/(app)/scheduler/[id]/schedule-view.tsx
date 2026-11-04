@@ -32,7 +32,7 @@ import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { SCHEDULE_LIMITS, SCHEDULE_TRACKS, type ScheduleTrack } from "@/db/schema";
 import { riseChild, staggerParent } from "@/lib/motion";
-import type { ChecklistDayCount } from "@/lib/scheduler/checklist";
+import type { ChecklistDayCount, ChecklistMark } from "@/lib/scheduler/checklist";
 import { findIssues, tally } from "@/lib/scheduler/issues";
 import type { CopySource, Schedule, SessionRow } from "@/lib/scheduler/schedule";
 import type { SessionTypeRow } from "@/lib/scheduler/session-types";
@@ -81,6 +81,7 @@ export function ScheduleView({
   viewerId,
   viewerEmail,
   checklist,
+  checklistMarks,
   surveys,
   initialView,
   initialCondensed,
@@ -94,6 +95,8 @@ export function ScheduleView({
   viewerEmail: string;
   /** How much of each half of each class-day's checklist is done. */
   checklist: ChecklistDayCount[];
+  /** The checklist items still to do that are marked on the schedule at their time. */
+  checklistMarks: ChecklistMark[];
   /** Which days have been sent their surveys. */
   surveys: SurveyDayStatus[];
   /** The manager's last-chosen view and density, from a cookie read on the server. */
@@ -127,6 +130,7 @@ export function ScheduleView({
     bootcampId: bootcamp.id,
     bootcamp,
     counts: checklist,
+    marks: checklistMarks,
     canManage,
     viewerEmail,
     instructors: schedule.instructors,
@@ -583,6 +587,7 @@ export function ScheduleView({
               onResizeEnd={onResizeEnd}
               headerAction={checklistButtons.dayButton}
               corner={checklistButtons.prepDayButton}
+              marks={checklistButtons.marks}
               footerAction={surveyButtons.dayButton}
             />
             <DragOverlay dropAnimation={null}>

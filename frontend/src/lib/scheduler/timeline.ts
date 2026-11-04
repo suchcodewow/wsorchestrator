@@ -85,10 +85,23 @@ export function checklistDayExists(track: ScheduleTrack, day: number, bootcamp: 
   return day >= 1 && day <= (trackDays(track, bootcamp) ?? 0);
 }
 
-/** "Bootcamp, Day 2", or "Prep Day", with " AM" or " PM" when given, for a checklist's title, the audit trail and the inbox. */
+/** What each half of a checklist's day is called. */
+export const CHECKLIST_PERIOD_LABELS: Record<ChecklistPeriod, string> = { am: "Day", pm: "Evening" };
+
+/** "Bootcamp, Day 2", or "Prep Day", with " · Day" or " · Evening" when given, for a checklist's title, the audit trail and the inbox. */
 export function checklistDayLabel(track: ScheduleTrack, day: number, period?: ChecklistPeriod): string {
   const label = day === CHECKLIST_PREP_DAY.day ? "Prep Day" : `${TRACK_LABELS[track]}, Day ${day}`;
-  return period ? `${label} ${period.toUpperCase()}` : label;
+  return period ? `${label} · ${CHECKLIST_PERIOD_LABELS[period]}` : label;
+}
+
+/** Whether a checklist item's time can be set: only in the Day half of a class-day. Elsewhere it keeps one, unused. */
+export function checklistAlarmApplies(item: { day: number; period: ChecklistPeriod }): boolean {
+  return item.period === "am" && item.day !== CHECKLIST_PREP_DAY.day;
+}
+
+/** Whether a checklist item is marked on the schedule: it has a time that applies, and is still to do. */
+export function checklistMarked(item: { day: number; period: ChecklistPeriod; alarm: number | null; done: boolean }): boolean {
+  return item.alarm !== null && !item.done && checklistAlarmApplies(item);
 }
 
 /** "8:00 AM", for minutes after midnight. */
@@ -141,15 +154,15 @@ export function dayTotal(sessions: readonly Timed[]): DayTotal {
   return { end, left: dayEnd - dayStart - covered, over: Math.max(0, end - dayEnd) };
 }
 
-/** The unscheduled stretches of a day: before, between and after its sessions, the last one only as far as `dayEnd`. */
-export function gapsOf(sessions: readonly Timed[]): Timed[] {
+/** The unscheduled stretches of a day: before, between and after its sessions, the last one only as far as `until`. */
+export function gapsOf(sessions: readonly Timed[], until: number = SCHEDULE_LIMITS.dayEnd): Timed[] {
   const gaps: Timed[] = [];
   let at = SCHEDULE_LIMITS.dayStart;
   for (const s of [...sessions].sort((a, b) => a.start - b.start)) {
     if (s.start > at) gaps.push({ start: at, minutes: s.start - at });
     at = Math.max(at, s.start + s.minutes);
   }
-  if (at < SCHEDULE_LIMITS.dayEnd) gaps.push({ start: at, minutes: SCHEDULE_LIMITS.dayEnd - at });
+  if (at < until) gaps.push({ start: at, minutes: until - at });
   return gaps;
 }
 

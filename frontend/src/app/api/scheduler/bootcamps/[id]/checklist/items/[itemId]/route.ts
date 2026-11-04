@@ -1,6 +1,6 @@
 /**
  * Ticking one checklist item done or back to do, which a Training
- * administrator or the item's owner can, and changing its name or owner,
+ * administrator or the item's owner can, and changing its name, owner or time,
  * moving it to another half-day or another place in its own, or removing it,
  * which only an administrator can.
  */
@@ -22,7 +22,7 @@ import {
 const paramsSchema = z.object({ id: z.string().uuid(), itemId: z.string().uuid() });
 const patchSchema = checklistEditSchema
   .extend({ done: z.boolean().optional() })
-  .refine((b) => [b.done, b.name, b.ownerEmail, b.track, b.day, b.period, b.position].some((v) => v !== undefined));
+  .refine((b) => [b.done, b.name, b.alarm, b.ownerEmail, b.track, b.day, b.period, b.position].some((v) => v !== undefined));
 
 type Params = { params: Promise<{ id: string; itemId: string }> };
 
@@ -39,11 +39,11 @@ export const PATCH = audited(async function PATCH(req: Request, { params }: Para
 
   const canManage = canManageTrainingSettings(user.access);
   const { done, track, day, period, position, ...edit } = body.data;
-  const editing = edit.name !== undefined || edit.ownerEmail !== undefined;
+  const editing = edit.name !== undefined || edit.ownerEmail !== undefined || edit.alarm !== undefined;
   const moving = track !== undefined || day !== undefined || period !== undefined || position !== undefined;
   if ((editing || moving) && !canManage) return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
-  // Each step in turn, stopping at the first that fails: the name and owner, then where it is, then whether it is done.
+  // Each step in turn, stopping at the first that fails: the name, owner and time, then where it is, then whether it is done.
   const { id, itemId } = parsed.data;
   const steps = [
     editing && (() => editChecklistItem(user.id, id, itemId, edit)),

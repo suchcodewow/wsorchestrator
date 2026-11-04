@@ -338,10 +338,7 @@ export function SessionDialog({
             {look.emoji && <span aria-hidden>{look.emoji}</span>}
             {existing ? existing.name : "Add session"}
           </DialogTitle>
-          <p className={cn("text-sm tabular-nums", end > SCHEDULE_LIMITS.dayEnd ? "text-red-600 dark:text-red-400" : "text-muted-foreground")}>
-            {placeLine}
-            {end > SCHEDULE_LIMITS.dayEnd && ` · ${formatLength(end - SCHEDULE_LIMITS.dayEnd)} past 5 PM`}
-          </p>
+          <p className="text-sm text-muted-foreground tabular-nums">{placeLine}</p>
         </DialogHeader>
 
         {problems.length > 0 && (

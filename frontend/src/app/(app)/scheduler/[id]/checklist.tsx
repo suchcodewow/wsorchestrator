@@ -1,12 +1,18 @@
 "use client";
 
 /**
- * What has to be done before each half of each day of a track: atop each day
- * of the schedule, a sunrise button for the morning's and a sunset button for
- * the afternoon's, each showing how much of it is ticked. Prep Day's sit in
- * the board's corner, stacked. Any of them opens the track's checklists as a
- * board, a column a day with AM above PM, and briefly lights the half that
- * was clicked.
+ * What has to be done in each half of each day of a track: atop each day of
+ * the schedule, a sunrise button for the Day's and a sunset button for the
+ * Evening's, each showing how much of it is ticked. Prep Day's sit in the
+ * board's corner, stacked. Any of them opens the track's checklists as a
+ * board, a column a day with Day above Evening, and briefly lights the half
+ * that was clicked.
+ *
+ * A Day item of a class-day can be given a time. Until it is ticked, a green
+ * check sits at that time at the left edge of its day on the schedule;
+ * hovering it names the item and its owner, and clicking it opens the board
+ * with the item lit. Moved to Prep Day or an Evening, an item keeps its time,
+ * greyed out, and leaves the schedule until it is moved back.
  *
  * A Training administrator adds cards, edits, ticks and removes them, drags
  * them up or down their half-day or to another, and copies them. As one is
@@ -36,8 +42,9 @@ import {
   type DragMoveEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
-import { Check, Copy, Loader2, Plus, Sunrise, Sunset, Trash2 } from "lucide-react";
+import { AlarmClock, Check, Copy, Loader2, Plus, Sunrise, Sunset, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { MentionText } from "@/components/mention-text";
 import { MentionTextarea } from "@/components/mention-textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -50,10 +57,19 @@ import {
   type ChecklistTrack,
 } from "@/db/schema";
 import { mentionsIn, type MentionPick } from "@/lib/mentions";
-import type { ChecklistDayCount, ChecklistItemRow } from "@/lib/scheduler/checklist";
+import type { ChecklistDayCount, ChecklistItemRow, ChecklistMark } from "@/lib/scheduler/checklist";
 import { byPlace, placeInHalf, previewHalf } from "@/lib/scheduler/checklist-order";
 import type { Instructor } from "@/lib/scheduler/schedule";
-import { TRACK_LABELS, checklistDayLabel, dayDate, trackDays } from "@/lib/scheduler/timeline";
+import {
+  CHECKLIST_PERIOD_LABELS,
+  TRACK_LABELS,
+  checklistAlarmApplies,
+  checklistDayLabel,
+  checklistMarked,
+  dayDate,
+  formatClock,
+  trackDays,
+} from "@/lib/scheduler/timeline";
 import { cn } from "@/lib/utils";
 import { formatWhen } from "../../cohort-settings/format";
 import type { BoardColumn } from "./board";
@@ -62,7 +78,7 @@ const ERRORS: Record<string, string> = {
   invalid: "Give the item a name.",
   not_found: "That item or bootcamp was removed — reload the page.",
   no_day: "That day is no longer part of the bootcamp — reload the page.",
-  full: `A day holds at most ${CHECKLIST_LIMITS.itemsPerDay} items, AM and PM together.`,
+  full: `A day holds at most ${CHECKLIST_LIMITS.itemsPerDay} items, Day and Evening together.`,
   not_instructor: "That person is no longer an administrator or guest judge here.",
   not_owner: "Only its owner or an administrator can tick that.",
   forbidden: "Your role changed — reload the page.",
@@ -75,8 +91,8 @@ type Count = Pick<ChecklistDayCount, "total" | "done">;
 
 type BootcampDays = { startDate: string; btcDays: number; intDays: number | null };
 
-/** What the board opens on: a track, and the half-day to light. */
-type Focus = { track: ChecklistTrack; day: number; period: ChecklistPeriod };
+/** What the board opens on: a track, and the half-day to light, or the cards in it to light. */
+type Focus = { track: ChecklistTrack; day: number; period: ChecklistPeriod; items?: string[] };
 
 const SELECT =
   "h-8 w-full cursor-pointer appearance-none rounded-md border border-input bg-background px-2.5 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-input/30";
@@ -86,7 +102,7 @@ const dateLabel = (iso: string) => WEEKDAY.format(new Date(`${iso}T00:00:00Z`));
 
 const countKey = (track: ChecklistTrack, day: number, period: ChecklistPeriod) => `${track}:${day}:${period}`;
 
-/** How each half of the day looks: a sunrise over warm morning light, a sunset into a starry dusk. */
+/** How each half looks: a sunrise over warm daylight, a sunset into a starry evening. */
 const HALVES: Record<
   ChecklistPeriod,
   {
@@ -102,7 +118,7 @@ const HALVES: Record<
   }
 > = {
   am: {
-    label: "AM",
+    label: CHECKLIST_PERIOD_LABELS.am,
     icon: Sunrise,
     button: "text-amber-600 hover:bg-amber-500/10 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300",
     badge: "bg-amber-500/15 text-amber-800 dark:text-amber-300",
@@ -113,7 +129,7 @@ const HALVES: Record<
     chip: "bg-amber-400 text-white shadow-sm shadow-amber-500/40",
   },
   pm: {
-    label: "PM",
+    label: CHECKLIST_PERIOD_LABELS.pm,
     icon: Sunset,
     button: "text-violet-600 hover:bg-violet-500/10 hover:text-violet-700 dark:text-violet-400 dark:hover:text-violet-300",
     badge: "bg-violet-500/15 text-violet-800 dark:text-violet-300",
@@ -125,7 +141,7 @@ const HALVES: Record<
   },
 };
 
-/** Where the stars of a PM section twinkle, as a percentage across and down, and how long after the first each starts. */
+/** Where the stars of an Evening section twinkle, as a percentage across and down, and how long after the first each starts. */
 const STARS = [
   { x: 62, y: 70, delay: 0 },
   { x: 80, y: 82, delay: 0.7 },
@@ -145,12 +161,14 @@ const POP = {
 /**
  * The schedule's checklist buttons: `dayButton` is its `headerAction`, atop
  * each day of each track; `prepDayButton` sits in its corner, before Day 1;
- * `board` is the board they open, to render once alongside them.
+ * `marks` are its `marks`, the timed items still to do; `board` is the board
+ * they open, to render once alongside them.
  */
 export function useChecklistButtons({
   bootcampId,
   bootcamp,
   counts,
+  marks: initialMarks,
   canManage,
   viewerEmail,
   instructors,
@@ -158,17 +176,25 @@ export function useChecklistButtons({
   bootcampId: string;
   bootcamp: BootcampDays;
   counts: ChecklistDayCount[];
+  marks: ChecklistMark[];
   canManage: boolean;
   viewerEmail: string;
   instructors: Instructor[];
-}): { dayButton: (column: BoardColumn) => ReactNode; prepDayButton: ReactNode; board: ReactNode } {
+}): {
+  dayButton: (column: BoardColumn) => ReactNode;
+  prepDayButton: ReactNode;
+  marks: (column: BoardColumn, top: (minute: number) => number) => ReactNode;
+  board: ReactNode;
+} {
   const byKey = (list: ChecklistDayCount[]) => new Map(list.map((c) => [countKey(c.track, c.day, c.period), c]));
   const [checks, setChecks] = useState(() => byKey(counts));
-  // A refresh of the page, as after copying a schedule, brings counts that replace what was kept here.
-  const [seen, setSeen] = useState(counts);
-  if (seen !== counts) {
-    setSeen(counts);
+  const [marks, setMarks] = useState(initialMarks);
+  // A refresh of the page, as after copying a schedule, brings counts and marks that replace what was kept here.
+  const [seen, setSeen] = useState({ counts, marks: initialMarks });
+  if (seen.counts !== counts || seen.marks !== initialMarks) {
+    setSeen({ counts, marks: initialMarks });
     setChecks(byKey(counts));
+    setMarks(initialMarks);
   }
   const [focus, setFocus] = useState<Focus | null>(null);
 
@@ -194,9 +220,16 @@ export function useChecklistButtons({
   return {
     dayButton: (column) => halves(column.track, column.day),
     prepDayButton: halves(prepTrack, prepDay),
+    marks: (column, top) => (
+      <DayMarks
+        marks={marks.filter((m) => m.track === column.track && m.day === column.day)}
+        top={top}
+        onOpen={(group) => setFocus({ track: column.track, day: column.day, period: "am", items: group.map((m) => m.id) })}
+      />
+    ),
     board: focus && (
       <ChecklistBoard
-        key={`${focus.track}:${focus.day}:${focus.period}`}
+        key={`${focus.track}:${focus.day}:${focus.period}:${focus.items?.join(",") ?? ""}`}
         focus={focus}
         onClose={() => setFocus(null)}
         bootcampId={bootcampId}
@@ -211,9 +244,59 @@ export function useChecklistButtons({
             return next;
           })
         }
+        onMarks={(track, list) => setMarks((prev) => [...prev.filter((m) => m.track !== track), ...list])}
       />
     ),
   };
+}
+
+/**
+ * A day's timed items on the schedule: a green check at the left edge of the
+ * column at each time, over the sessions' left borders and clear of their
+ * text. Items due at the same minute share one.
+ */
+function DayMarks({
+  marks,
+  top,
+  onOpen,
+}: {
+  marks: ChecklistMark[];
+  top: (minute: number) => number;
+  onOpen: (group: ChecklistMark[]) => void;
+}) {
+  if (marks.length === 0) return null;
+  const groups = new Map<number, ChecklistMark[]>();
+  for (const m of marks) groups.set(m.alarm, [...(groups.get(m.alarm) ?? []), m]);
+  return (
+    <TooltipProvider>
+      {[...groups].map(([alarm, group]) => (
+        <Tooltip key={alarm}>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={() => onOpen(group)}
+              aria-label={`${formatClock(alarm)}: ${group.map((m) => `${m.name}${m.ownerName || m.ownerEmail ? `, ${m.ownerName || m.ownerEmail}` : ""}`).join("; ")}. Open the checklist`}
+              className="absolute left-px z-20 flex size-3.5 -translate-y-1/2 items-center justify-center rounded-full border border-emerald-500 bg-card text-emerald-600 shadow-xs transition-transform hover:scale-125 focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none dark:text-emerald-400"
+              style={{ top: top(alarm) }}
+            >
+              <Check className="size-2.5" strokeWidth={3.5} />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="right" align="center">
+            <div className="mb-1 font-medium tabular-nums">{formatClock(alarm)}</div>
+            <ul className="space-y-1">
+              {group.map((m) => (
+                <li key={m.id}>
+                  <div className="wrap-break-word">{m.name}</div>
+                  <div className="text-muted-foreground">{m.ownerName || m.ownerEmail || "No owner"}</div>
+                </li>
+              ))}
+            </ul>
+          </TooltipContent>
+        </Tooltip>
+      ))}
+    </TooltipProvider>
+  );
 }
 
 function HalfButton({
@@ -290,6 +373,7 @@ function ChecklistBoard({
   viewerEmail,
   instructors,
   onCounts,
+  onMarks,
 }: {
   focus: Focus;
   onClose: () => void;
@@ -299,6 +383,8 @@ function ChecklistBoard({
   viewerEmail: string;
   instructors: Instructor[];
   onCounts: (counts: ChecklistDayCount[]) => void;
+  /** Every item of `track` the schedule marks, as the board now has them. */
+  onMarks: (track: ChecklistTrack, marks: ChecklistMark[]) => void;
 }) {
   const base = `/api/scheduler/bootcamps/${bootcampId}/checklist`;
   const { btcDays, intDays } = bootcamp;
@@ -312,6 +398,8 @@ function ChecklistBoard({
   const [editing, setEditing] = useState<string | null>(null);
   /** The section lit as the board opens. */
   const [lit, setLit] = useState<string | null>(null);
+  /** The cards lit as the board opens, from a mark on the schedule. */
+  const [litCards, setLitCards] = useState<ReadonlySet<string>>(new Set());
   /** Cards just added, which pop with a burst. */
   const [fresh, setFresh] = useState<Set<string>>(new Set());
   const [drag, setDrag] = useState<Drag | null>(null);
@@ -326,8 +414,21 @@ function ChecklistBoard({
   const sections = useRef(new Map<string, HTMLElement>());
   const focused = useRef(false);
 
-  // Counts for every half of every day of the track, those with nothing in them included.
+  // Counts for every half of every day of the track, those with nothing in them included, and what the schedule marks.
   const report = useEffectEvent((l: Loaded) => {
+    onMarks(
+      l.track,
+      l.items.filter(checklistMarked).map((i) => ({
+        id: i.id,
+        track: i.track,
+        day: i.day,
+        alarm: i.alarm!,
+        name: i.name,
+        ownerEmail: i.ownerEmail,
+        ownerName: i.ownerName,
+        mentions: i.mentions,
+      })),
+    );
     onCounts(
       boardDays(l.track, bootcamp).flatMap((day) =>
         CHECKLIST_PERIODS.map((period) => {
@@ -362,14 +463,16 @@ function ChecklistBoard({
     };
   }, [base, track, btcDays, intDays]);
 
-  // Once the board's first track is in, the half that was clicked scrolls into view and lights up briefly.
+  // Once the board's first track is in, the half that was clicked, or the cards, scroll into view and light up briefly.
   useEffect(() => {
     if (!items || focused.current) return;
     focused.current = true;
     const key = sectionKey(focus.day, focus.period);
-    sections.current.get(key)?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
-    const on = setTimeout(() => setLit(key), 150);
-    const off = setTimeout(() => setLit(null), 1100);
+    const card = focus.items?.length ? document.querySelector(`[data-checklist-card="${focus.items[0]}"]`) : null;
+    (card ?? sections.current.get(key))?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+    const light = (on: boolean) => (focus.items?.length ? setLitCards(new Set(on ? focus.items : [])) : setLit(on ? key : null));
+    const on = setTimeout(() => light(true), 150);
+    const off = setTimeout(() => light(false), 1400);
     return () => {
       clearTimeout(on);
       clearTimeout(off);
@@ -456,7 +559,7 @@ function ChecklistBoard({
   }
 
   async function copy(item: Item, day: number, period: ChecklistPeriod) {
-    await add(day, period, { name: item.name, ownerEmail: item.ownerEmail, mentions: item.mentions.map((m) => m.email) });
+    await add(day, period, { name: item.name, alarm: item.alarm, ownerEmail: item.ownerEmail, mentions: item.mentions.map((m) => m.email) });
   }
 
   // ── Dragging ──────────────────────────────────────────────────────────────
@@ -633,6 +736,7 @@ function ChecklistBoard({
                             landing,
                           )}
                           lit={lit === sectionKey(day, period)}
+                          litCards={litCards}
                           full={full}
                           register={(el) => {
                             if (el) sections.current.set(sectionKey(day, period), el);
@@ -706,6 +810,7 @@ function HalfSection({
   period,
   items,
   lit,
+  litCards,
   full,
   register,
   canManage,
@@ -726,6 +831,7 @@ function HalfSection({
   period: ChecklistPeriod;
   items: Item[];
   lit: boolean;
+  litCards: ReadonlySet<string>;
   /** The day has no room left. */
   full: boolean;
   register: (el: HTMLElement | null) => void;
@@ -814,7 +920,8 @@ function HalfSection({
                 <div className="rounded-lg border bg-card p-2 shadow-md">
                   <ItemForm
                     instructors={instructors}
-                    initial={{ name: item.name, picks: item.mentions, owner: item.ownerEmail ?? "" }}
+                    initial={{ name: item.name, picks: item.mentions, owner: item.ownerEmail ?? "", alarm: item.alarm }}
+                    alarmApplies={checklistAlarmApplies(item)}
                     submitLabel="Save"
                     onSubmit={(fields) => onEdit(item, fields)}
                     onCancel={() => setEditing(null)}
@@ -829,6 +936,7 @@ function HalfSection({
                 canManage={canManage}
                 viewerEmail={viewerEmail}
                 fresh={fresh.has(item.id)}
+                lit={litCards.has(item.id)}
                 moving={dragging?.kind === "move" && dragging.item.id === item.id}
                 onOpen={() => !justDropped() && setEditing(item.id)}
                 onTick={() => onTick(item)}
@@ -842,7 +950,8 @@ function HalfSection({
               <div className="rounded-lg border bg-card p-2 shadow-md">
                 <ItemForm
                   instructors={instructors}
-                  initial={{ name: "", picks: [], owner: "" }}
+                  initial={{ name: "", picks: [], owner: "", alarm: null }}
+                  alarmApplies={checklistAlarmApplies({ day, period })}
                   submitLabel="Add"
                   full={full}
                   autoFocus
@@ -910,6 +1019,7 @@ function ChecklistCard({
   canManage,
   viewerEmail,
   fresh,
+  lit,
   moving,
   onOpen,
   onTick,
@@ -919,6 +1029,8 @@ function ChecklistCard({
   canManage: boolean;
   viewerEmail: string;
   fresh: boolean;
+  /** Pulses once, as the board opens on it from the schedule. */
+  lit: boolean;
   /** Being dragged elsewhere: left faint where it was. */
   moving: boolean;
   onOpen: () => void;
@@ -941,6 +1053,15 @@ function ChecklistCard({
   return (
     <motion.li layout {...POP} data-checklist-card={item.id} className="relative">
       {fresh && <Burst />}
+      {lit && (
+        <motion.span
+          aria-hidden
+          className="pointer-events-none absolute -inset-1 z-10 rounded-xl ring-2 ring-emerald-500"
+          initial={{ opacity: 0, scale: 0.96 }}
+          animate={{ opacity: [0, 1, 1, 0], scale: [0.96, 1.03, 1, 1], backgroundColor: ["rgba(16,185,129,0)", "rgba(16,185,129,0.18)", "rgba(16,185,129,0.1)", "rgba(16,185,129,0)"] }}
+          transition={{ duration: 1.2, ease: "easeInOut" }}
+        />
+      )}
       <div
         ref={(el) => {
           setNodeRef(el);
@@ -1059,25 +1180,43 @@ function CardFace({
           <MentionText text={item.name} mentions={item.mentions} viewerEmail={viewerEmail} />
         </div>
       </div>
-      {!item.done && item.ownerEmail && (
-        <div className="mt-1.5 flex items-center text-xs text-muted-foreground">
-          <span className={cn("inline-flex min-w-0 items-center gap-1", mine && "font-medium text-foreground")}>
-            <span
-              className={cn(
-                "flex size-5 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold",
-                mine ? "bg-brand text-brand-foreground" : "bg-foreground/10",
-              )}
-            >
-              {initials(item.ownerName || item.ownerEmail)}
+      {!item.done && (item.ownerEmail || item.alarm !== null) && (
+        <div className="mt-1.5 flex items-center gap-2 text-xs text-muted-foreground">
+          {item.alarm !== null && <AlarmTime alarm={item.alarm} applies={checklistAlarmApplies(item)} />}
+          {item.ownerEmail && (
+            <span className={cn("inline-flex min-w-0 items-center gap-1", mine && "font-medium text-foreground")}>
+              <span
+                className={cn(
+                  "flex size-5 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold",
+                  mine ? "bg-brand text-brand-foreground" : "bg-foreground/10",
+                )}
+              >
+                {initials(item.ownerName || item.ownerEmail)}
+              </span>
+              <span className="truncate">
+                {item.ownerName || item.ownerEmail}
+                {mine && " (you)"}
+              </span>
             </span>
-            <span className="truncate">
-              {item.ownerName || item.ownerEmail}
-              {mine && " (you)"}
-            </span>
-          </span>
+          )}
         </div>
       )}
     </div>
+  );
+}
+
+const ALARM_UNUSED = "Only a Day item of a class-day is marked on the schedule; it keeps its time until moved back";
+
+/** When a card is due, greyed where it does not apply. */
+function AlarmTime({ alarm, applies }: { alarm: number; applies: boolean }) {
+  return (
+    <span
+      className={cn("inline-flex shrink-0 items-center gap-1 tabular-nums", applies ? "text-foreground" : "opacity-50")}
+      title={applies ? `Due at ${formatClock(alarm)}` : ALARM_UNUSED}
+    >
+      <AlarmClock className="size-3.5" />
+      {formatClock(alarm)}
+    </span>
   );
 }
 
@@ -1087,17 +1226,24 @@ function initials(name: string): string {
   return ((words[0]?.[0] ?? "") + (words.length > 1 ? (words.at(-1)?.[0] ?? "") : "")).toUpperCase() || "?";
 }
 
-/** What the API takes to add an item, or to change one. */
-type ItemFields = { name: string; ownerEmail: string | null; mentions: string[] };
+/** What the API takes to add an item, or to change one; `alarm` left out stays as it is. */
+type ItemFields = { name: string; alarm?: number | null; ownerEmail: string | null; mentions: string[] };
+
+const HOURS = Array.from({ length: 12 }, (_, i) => i + 1);
+const MINUTES = Array.from({ length: 12 }, (_, i) => i * 5);
+/** What a newly set time starts at. */
+const DEFAULT_ALARM = 9 * 60;
 
 /**
- * An item's name, with "@" tags, and its owner: blank for adding one, which
- * empties again once added, ready for the next, or holding an item's own to
- * change it.
+ * An item's name, with "@" tags, its owner and its time: blank for adding
+ * one, which empties again once added, ready for the next, or holding an
+ * item's own to change it. Where a time does not apply, its picker is greyed
+ * out, showing any it keeps, and left as it is.
  */
 function ItemForm({
   instructors,
   initial,
+  alarmApplies,
   submitLabel,
   full = false,
   autoFocus = false,
@@ -1106,7 +1252,9 @@ function ItemForm({
   onDelete,
 }: {
   instructors: Instructor[];
-  initial: { name: string; picks: MentionPick[]; owner: string };
+  initial: { name: string; picks: MentionPick[]; owner: string; alarm: number | null };
+  /** Whether the half it is in takes a time. */
+  alarmApplies: boolean;
   submitLabel: string;
   full?: boolean;
   autoFocus?: boolean;
@@ -1118,6 +1266,8 @@ function ItemForm({
   const [name, setName] = useState(initial.name);
   const [picks, setPicks] = useState<MentionPick[]>(initial.picks);
   const [owner, setOwner] = useState(initial.owner);
+  const [alarmOn, setAlarmOn] = useState(initial.alarm !== null);
+  const [alarm, setAlarm] = useState(initial.alarm ?? DEFAULT_ALARM);
   const [pending, setPending] = useState(false);
   const admins = instructors.filter((i) => i.role === "administrator");
   const judges = instructors.filter((i) => i.role === "judge");
@@ -1128,12 +1278,19 @@ function ItemForm({
   async function submit() {
     if (!name.trim() || pending) return;
     setPending(true);
-    const ok = await onSubmit({ name, ownerEmail: owner || null, mentions: mentionsIn(name, picks).map((p) => p.email) });
+    const ok = await onSubmit({
+      name,
+      ...(alarmApplies && { alarm: alarmOn ? alarm : null }),
+      ownerEmail: owner || null,
+      mentions: mentionsIn(name, picks).map((p) => p.email),
+    });
     setPending(false);
     if (ok && adding) {
       setName("");
       setPicks([]);
       setOwner("");
+      setAlarmOn(false);
+      setAlarm(DEFAULT_ALARM);
     }
   }
 
@@ -1178,6 +1335,16 @@ function ItemForm({
           </optgroup>
         )}
       </select>
+      <AlarmPicker
+        on={alarmOn}
+        minute={alarm}
+        disabled={!alarmApplies}
+        onToggle={setAlarmOn}
+        onChange={(m) => {
+          setAlarm(m);
+          setAlarmOn(true);
+        }}
+      />
       <div className="flex items-center gap-1.5">
         {onDelete && (
           <Button
@@ -1201,5 +1368,90 @@ function ItemForm({
         </Button>
       </div>
     </form>
+  );
+}
+
+/**
+ * A checkbox marked only with an alarm clock, beside an hour, a minute and
+ * AM or PM. Picking a time ticks the box; unticked, the item has none.
+ */
+function AlarmPicker({
+  on,
+  minute,
+  disabled,
+  onToggle,
+  onChange,
+}: {
+  on: boolean;
+  /** Minutes after midnight. */
+  minute: number;
+  disabled: boolean;
+  onToggle: (on: boolean) => void;
+  onChange: (minute: number) => void;
+}) {
+  const h24 = Math.floor(minute / 60);
+  const m = minute % 60;
+  const pm = h24 >= 12;
+  const h12 = h24 % 12 === 0 ? 12 : h24 % 12;
+  const set = (hour12: number, min: number, afternoon: boolean) => onChange(((hour12 % 12) + (afternoon ? 12 : 0)) * 60 + min);
+  const picker = "h-8 cursor-pointer appearance-none rounded-md border border-input bg-background px-2 text-sm tabular-nums shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed dark:bg-input/30";
+  return (
+    <div className={cn("flex items-center gap-1.5", disabled && "opacity-50")} title={disabled ? ALARM_UNUSED : undefined}>
+      <label
+        className={cn(
+          "flex h-8 shrink-0 items-center gap-1.5 rounded-md border px-2 transition-colors",
+          disabled ? "cursor-not-allowed" : "cursor-pointer",
+          on ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400" : "border-input text-muted-foreground",
+        )}
+        title={disabled ? ALARM_UNUSED : on ? "Due at this time: marked on the schedule" : "Give it a time on the schedule"}
+      >
+        <input
+          type="checkbox"
+          checked={on}
+          disabled={disabled}
+          onChange={(e) => onToggle(e.target.checked)}
+          className="size-3.5 cursor-[inherit] accent-emerald-600"
+          aria-label="Due at a time"
+        />
+        <AlarmClock className="size-4" />
+      </label>
+      <select
+        value={h12}
+        disabled={disabled}
+        onChange={(e) => set(Number(e.target.value), m, pm)}
+        aria-label="Hour"
+        className={cn(picker, !on && "text-muted-foreground")}
+      >
+        {HOURS.map((h) => (
+          <option key={h} value={h}>
+            {h}
+          </option>
+        ))}
+      </select>
+      <select
+        value={m}
+        disabled={disabled}
+        onChange={(e) => set(h12, Number(e.target.value), pm)}
+        aria-label="Minute"
+        className={cn(picker, !on && "text-muted-foreground")}
+      >
+        {/* A minute set off the five, through the API, stays pickable as it is. */}
+        {(MINUTES.includes(m) ? MINUTES : [...MINUTES, m].sort((a, b) => a - b)).map((n) => (
+          <option key={n} value={n}>
+            {String(n).padStart(2, "0")}
+          </option>
+        ))}
+      </select>
+      <select
+        value={pm ? "pm" : "am"}
+        disabled={disabled}
+        onChange={(e) => set(h12, m, e.target.value === "pm")}
+        aria-label="AM or PM"
+        className={cn(picker, !on && "text-muted-foreground")}
+      >
+        <option value="am">AM</option>
+        <option value="pm">PM</option>
+      </select>
+    </div>
   );
 }
