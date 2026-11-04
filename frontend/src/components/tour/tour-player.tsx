@@ -91,8 +91,8 @@ function scrollToTarget(el: HTMLElement): Promise<void> {
   });
 }
 
-export function TourPlayer({ steps, onFinish }: { steps: TourStep[]; onFinish: () => void }) {
-  const [index, setIndex] = useState(0);
+export function TourPlayer({ steps, start = 0, onFinish }: { steps: TourStep[]; start?: number; onFinish: () => void }) {
+  const [index, setIndex] = useState(start);
   const [direction, setDirection] = useState<1 | -1>(1);
   const [target, setTarget] = useState<{ index: number; el: HTMLElement } | null>(null);
   const spotlight = useRef<HTMLDivElement>(null);
@@ -140,6 +140,8 @@ export function TourPlayer({ steps, onFinish }: { steps: TourStep[]; onFinish: (
       box.style.transform = `translate(${r.left - HALO}px, ${r.top - HALO}px)`;
       box.style.width = `${r.width + HALO * 2}px`;
       box.style.height = `${r.height + HALO * 2}px`;
+      // Shown, and animated from step to step, only once it is somewhere: otherwise it would slide in from the corner.
+      if (!("placed" in box.dataset)) requestAnimationFrame(() => (box.dataset.placed = ""));
     });
   }, [shown]);
 
@@ -174,7 +176,7 @@ export function TourPlayer({ steps, onFinish }: { steps: TourStep[]; onFinish: (
       <div
         ref={spotlight}
         aria-hidden
-        className="pointer-events-none fixed top-0 left-0 z-50 rounded-lg shadow-[0_0_0_9999px_rgb(0_0_0/0.5)] ring-2 ring-primary transition-[transform,width,height] duration-200 motion-reduce:transition-none"
+        className="pointer-events-none invisible fixed top-0 left-0 z-50 rounded-lg shadow-[0_0_0_9999px_rgb(0_0_0/0.5)] ring-2 ring-primary duration-200 data-placed:visible data-placed:transition-[transform,width,height] motion-reduce:transition-none"
       />
       <div
         ref={callout}

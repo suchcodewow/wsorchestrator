@@ -14,7 +14,18 @@ import assert from "node:assert/strict";
 
 import { canEditTour } from "@/lib/nav";
 import { isTourPattern, normalizePath, patternRegex, patternSpecificity, suggestPattern } from "@/lib/tours/pattern";
-import { cssString, nameOf, resolveTarget, type TargetNode, type TargetRoot } from "@/lib/tours/target";
+import {
+  cssString,
+  isStableId,
+  nameOf,
+  resolveTarget,
+  roleOf,
+  structuralPath,
+  targetFor,
+  type PickNode,
+  type TargetNode,
+  type TargetRoot,
+} from "@/lib/tours/target";
 import { PERSONAS, type Persona } from "../support/access";
 
 describe("patterns", () => {
@@ -133,6 +144,82 @@ describe("finding a step's element", () => {
 
   test("attribute values are quoted safely", () => {
     assert.equal(cssString(`a"b\\c`), `"a\\"b\\\\c"`);
+  });
+});
+
+/** A fake element with a parent and children, for building a target from a pick. */
+type Tree = PickNode & { attrs: Record<string, string>; parentElement: Tree | null; children: Tree[] };
+
+function node(tagName: string, attrs: Record<string, string> = {}, text = "", kids: Tree[] = []): Tree {
+  const n: Tree = {
+    tagName: tagName.toUpperCase(),
+    attrs,
+    textContent: text || kids.map((k) => k.textContent).join(" "),
+    getAttribute: (a) => attrs[a] ?? null,
+    parentElement: null,
+    children: kids,
+  };
+  for (const k of kids) k.parentElement = n;
+  return n;
+}
+
+function all(n: Tree): Tree[] {
+  return [n, ...n.children.flatMap(all)];
+}
+
+describe("building a target from a pick", () => {
+  test("React's and Radix's made-up ids are not kept", () => {
+    for (const made of ["«r1»", ":r3:", "_r_7_", "_R_2ab_", "radix-:r5:-content"]) assert.ok(!isStableId(made), made);
+    assert.ok(isStableId("welcome-mimir"));
+  });
+
+  test("roles, explicit and implicit", () => {
+    assert.equal(roleOf(node("div", { role: "tab button" })), "tab");
+    assert.equal(roleOf(node("a", { href: "/x" })), "link");
+    assert.equal(roleOf(node("a")), null);
+    assert.equal(roleOf(node("h3")), "heading");
+    assert.equal(roleOf(node("input", { type: "submit" })), "button");
+    assert.equal(roleOf(node("div")), null);
+  });
+
+  test("the structural path starts at the nearest anchored ancestor, numbering only repeated tags", () => {
+    const pick = node("span", {}, "Third");
+    node("body", {}, "", [
+      node("section", { id: "runs" }, "", [node("div"), node("div", {}, "", [node("p"), node("span"), pick])]),
+    ]);
+    assert.equal(structuralPath(pick), '[id="runs"] > div:nth-of-type(2) > span:nth-of-type(2)');
+
+    const loose = node("em");
+    node("body", {}, "", [node("main", { id: ":r1:" }, "", [loose])]);
+    assert.equal(structuralPath(loose), "body > main > em");
+  });
+
+  test("keeps only the ways that find the pick alone, and always the path", () => {
+    const save = node("button", { id: "save" }, "Save");
+    const twin = node("button", {}, "Add");
+    const other = node("button", {}, "Add");
+    const body = node("body", {}, "", [node("main", {}, "", [save, twin, other])]);
+    const tree = all(body);
+    const root: TargetRoot = {
+      querySelectorAll(selector) {
+        const id = /^\[id="(.*)"\]$/.exec(selector);
+        if (id) return tree.filter((n) => n.attrs.id === id[1]);
+        if (selector.startsWith("[role=")) return tree.filter((n) => n.tagName === "BUTTON");
+        if (selector === "body > main > button:nth-of-type(2)") return [twin];
+        return [];
+      },
+    };
+
+    assert.deepEqual(targetFor(save, root), {
+      label: "Save",
+      path: "body > main > button:nth-of-type(1)",
+      id: "save",
+      role: "button",
+      name: "Save",
+    });
+    // "Add" names two buttons, so only the path is kept.
+    assert.deepEqual(targetFor(twin, root), { label: "Add", path: "body > main > button:nth-of-type(2)" });
+    assert.equal(resolveTarget(targetFor(twin, root), root), twin);
   });
 });
 
