@@ -15,7 +15,8 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChevronDown, ChevronUp, Circle, CircleCheck, Loader2, MessageSquarePlus, Play, SendHorizontal, Sparkles, Star, Check } from "lucide-react";
+import { ChevronDown, ChevronUp, Circle, CircleCheck, Loader2, MessageSquarePlus, Play, SendHorizontal, Star, Check } from "lucide-react";
+import { CaptainCanaryAvatar } from "@/components/captain-canary-art";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
@@ -219,8 +220,8 @@ export function ChatView({
       <header className="space-y-3 border-b px-5 py-3">
         <div className="flex items-center justify-between gap-3">
           <h2 className="flex items-center gap-1.5 font-medium">
-            <Sparkles className="size-4 text-brand" />
-            Coach
+            <CaptainCanaryAvatar className="size-7" />
+            Captain Canary
           </h2>
           <div className="flex items-center gap-1">
             <CoachPreferences profile={profile} />
@@ -396,7 +397,8 @@ function Checklist({ points }: { points: Point[] }) {
 
 function Bubble({ role, html, text, live }: { role: MimirMessageRole; html: string | null; text: string; live?: boolean }) {
   return (
-    <div className={cn("flex", role === "user" ? "justify-end" : "justify-start")}>
+    <div className={cn("flex items-end gap-2", role === "user" ? "justify-end" : "justify-start")}>
+      {role !== "user" && <CaptainCanaryAvatar className="size-7" />}
       <div
         className={cn(
           "max-w-[92%] rounded-2xl px-3.5 py-2.5 text-sm",

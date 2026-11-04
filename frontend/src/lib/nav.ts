@@ -1,7 +1,7 @@
 /** The navigation sections, and which of them a user's access may see. */
 
 import {
-  BrainCircuit,
+  Bird,
   CalendarClock,
   CalendarCog,
   CalendarDays,
@@ -213,15 +213,15 @@ export const NAV_SECTIONS: NavSection[] = [
         href: "/mimir",
         settings: "/mimir-settings",
         hasTabs: true,
-        label: "Mimir",
-        Icon: BrainCircuit,
+        label: "Captain Canary",
+        Icon: Bird,
         description: "Harness's agents and capabilities, with an AI coach.",
         visible: canUseMimir,
       },
       {
         href: "/mimir-settings",
         hasTabs: true,
-        label: "Mimir Settings",
+        label: "Captain Canary Settings",
         Icon: LibraryBig,
         description: "The library's content and the coach's settings.",
         visible: canManageMimir,

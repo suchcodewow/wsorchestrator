@@ -15,7 +15,7 @@ import { mapSummary } from "@/lib/mimir/map/summary";
 import { canManageMimir, canUseMimir } from "@/lib/roles";
 import { MimirTabs } from "./mimir-tabs";
 
-export const metadata: Metadata = { title: "Mimir" };
+export const metadata: Metadata = { title: "Captain Canary" };
 
 export default async function MimirLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
@@ -27,7 +27,7 @@ export default async function MimirLayout({ children }: { children: React.ReactN
     <div className="space-y-8">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="space-y-1">
-          <h1 className="text-3xl font-medium tracking-tight">Mimir</h1>
+          <h1 className="text-3xl font-medium tracking-tight">Captain Canary</h1>
           {summary && (
             <p className="text-sm text-muted-foreground tnum">
               <span className="font-medium text-foreground">{summary.mastered}</span> of {summary.total} concepts mastered ·{" "}

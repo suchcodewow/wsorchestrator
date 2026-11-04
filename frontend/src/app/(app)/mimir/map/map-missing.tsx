@@ -11,7 +11,7 @@ export function MapMissing({ canManage }: { canManage: boolean }) {
           <>
             Import it in{" "}
             <Link href="/mimir-settings/map" className="font-medium text-foreground underline underline-offset-2">
-              Mimir Settings → Map
+              Captain Canary Settings → Map
             </Link>
             .
           </>

@@ -144,7 +144,7 @@ export const ACCOUNT_GROUPS: EndpointGroup[] = [
               type: "{ href: string, label: string }[]",
               note: "replaces the whole list shown under Favorites in the sidebar; 25 at most; href is an in-app path, label 80 characters at most",
             },
-            { name: "videoLanguage", type: "\"en\" | \"es\"", note: "the language Mimir videos play in; one not yet in it plays in English" },
+            { name: "videoLanguage", type: "\"en\" | \"es\"", note: "the language Captain Canary videos play in; one not yet in it plays in English" },
           ],
         },
         returns: "{ preferences: { themePreference, calendarScope, favoriteTabs, videoLanguage } }",

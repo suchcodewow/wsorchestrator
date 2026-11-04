@@ -226,7 +226,7 @@ describe("the coach", () => {
     const opener = lastUserContent(req);
     assert.match(opener, /^<progress>\nPROGRESS SNAPSHOT/);
     assert.match(opener, /Next concept to cover: \[alpha\] Alpha/);
-    assert.ok(opener.endsWith("I just opened Mimir. Introduce yourself."));
+    assert.ok(opener.endsWith("I just opened Captain Canary. Introduce yourself."));
   });
 
   test("it introduces itself on the first opening and every fourth one after", async () => {

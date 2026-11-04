@@ -8,5 +8,5 @@ export const MIMIR_SETTINGS_TABS: TabItem[] = [
   { href: "/mimir-settings/map-editor", label: "Map Editor", Icon: PencilRuler },
   { href: "/mimir-settings/content", label: "Archived content", Icon: FileText },
   { href: "/mimir-settings/coaching", label: "Coaching", Icon: MessageSquareText },
-  { href: "/mimir-settings/feedback", label: "Mimir Feedback", Icon: Smile },
+  { href: "/mimir-settings/feedback", label: "Captain Canary Feedback", Icon: Smile },
 ];

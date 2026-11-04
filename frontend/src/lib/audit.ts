@@ -69,7 +69,7 @@ export const SYSTEM_ACTORS = {
   /** `runner/src/db.ts` writes this one; kept here so the two agree. */
   runner: "Runner",
   /** `scripts/explainer-video/studio/db.ts` writes this one. */
-  studio: "Mimir Studio",
+  studio: "Captain Canary Studio",
 } as const;
 
 /**

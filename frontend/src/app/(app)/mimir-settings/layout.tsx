@@ -12,7 +12,7 @@ import { canManageMimir } from "@/lib/roles";
 import { MimirSettingsTabs } from "./mimir-settings-tabs";
 
 export const metadata: Metadata = {
-  title: "Mimir Settings",
+  title: "Captain Canary Settings",
   robots: { index: false, follow: false },
 };
 
@@ -23,7 +23,7 @@ export default async function MimirSettingsLayout({ children }: { children: Reac
 
   return (
     <div className="space-y-8">
-      <h1 className="text-3xl font-medium tracking-tight">Mimir Settings</h1>
+      <h1 className="text-3xl font-medium tracking-tight">Captain Canary Settings</h1>
       <MimirSettingsTabs />
       {children}
     </div>

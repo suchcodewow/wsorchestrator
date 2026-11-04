@@ -21,7 +21,7 @@ import { formatWhen } from "../../cohort-settings/format";
 const ERRORS: Record<string, string> = {
   busy: "A video for this concept is already being made.",
   not_found: "This concept is no longer on the map.",
-  not_configured: "This deployment has no Mimir Studio set up.",
+  not_configured: "This deployment has no Captain Canary Studio set up.",
   nothing_to_translate: "This video is already in every language.",
 };
 

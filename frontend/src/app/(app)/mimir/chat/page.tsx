@@ -25,7 +25,7 @@ export default async function ChatPage() {
             <>
               Import the map in{" "}
               <Link href="/mimir-settings/map" className="font-medium text-foreground underline underline-offset-2">
-                Mimir Settings → Map
+                Captain Canary Settings → Map
               </Link>{" "}
               first.
             </>
@@ -42,7 +42,7 @@ export default async function ChatPage() {
       <div role="note" className="mx-auto flex max-w-3xl items-start gap-3 rounded-2xl border border-brand-border/60 bg-brand/5 px-5 py-4 text-sm">
         <FlaskConical className="mt-0.5 size-4 shrink-0 text-brand" />
         <p>
-          <span className="font-medium">October 2026: Mimir is in preview.</span> It can make mistakes so please double-check answers. Please use the
+          <span className="font-medium">October 2026: Captain Canary is in preview.</span> It can make mistakes so please double-check answers. Please use the
           feedback buttons in videos to help us improve it. Thanks!
         </p>
       </div>
