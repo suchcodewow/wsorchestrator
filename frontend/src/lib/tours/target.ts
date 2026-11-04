@@ -106,3 +106,81 @@ export function resolveTarget<N extends TargetNode>(target: TourTarget, root: Ta
   }
   return null;
 }
+
+/** The least of an Element that building a target from it needs. */
+export type PickNode = TargetNode & {
+  readonly parentElement: PickNode | null;
+  readonly children: ArrayLike<PickNode>;
+};
+
+/** The role an element has, explicit or as IMPLICIT_ROLES gives it; null for one with none worth naming. */
+export function roleOf(node: TargetNode): string | null {
+  const explicit = node.getAttribute("role");
+  if (explicit) return explicit.split(/\s+/)[0]!;
+  const tag = node.tagName.toLowerCase();
+  const type = (node.getAttribute("type") ?? "").toLowerCase();
+  if (tag === "a") return node.getAttribute("href") === null ? null : "link";
+  if (tag === "button" || tag === "summary") return "button";
+  if (/^h[1-6]$/.test(tag)) return "heading";
+  if (tag === "textarea") return "textbox";
+  if (tag === "select") return "combobox";
+  if (tag === "nav") return "navigation";
+  if (tag === "table" || tag === "main") return tag;
+  if (tag === "input") {
+    if (type === "button" || type === "submit") return "button";
+    if (type === "checkbox") return "checkbox";
+    if (["", "text", "search", "email"].includes(type)) return "textbox";
+  }
+  return null;
+}
+
+/** An id a person chose, not one React or Radix made up, which changes from render to render. */
+export function isStableId(id: string): boolean {
+  return !/^(?:«|:|_r_|_R_|radix-)/.test(id) && !/[«»:]/.test(id);
+}
+
+/** The ancestor a structural path starts from: an element with a `data-tour` or a stable id. */
+function anchorSelector(node: PickNode): string | null {
+  const tour = node.getAttribute("data-tour");
+  if (tour) return `[data-tour=${cssString(tour)}]`;
+  const id = node.getAttribute("id");
+  return id && isStableId(id) ? `[id=${cssString(id)}]` : null;
+}
+
+/** `tag:nth-of-type(n)` for `node` among its parent's children. */
+function stepSelector(node: PickNode): string {
+  const tag = node.tagName.toLowerCase();
+  const siblings = Array.from(node.parentElement?.children ?? []).filter((c) => c.tagName === node.tagName);
+  return siblings.length > 1 ? `${tag}:nth-of-type(${siblings.indexOf(node) + 1})` : tag;
+}
+
+/** A selector from the nearest anchored ancestor (or `body`) down to `node`. */
+export function structuralPath(node: PickNode): string {
+  const steps: string[] = [];
+  for (let at: PickNode | null = node; at; at = at.parentElement) {
+    const anchor = at === node ? null : anchorSelector(at);
+    if (anchor) return [anchor, ...steps].join(" > ");
+    if (at.tagName.toLowerCase() === "body") return ["body", ...steps].join(" > ");
+    steps.unshift(stepSelector(at));
+  }
+  return steps.join(" > ");
+}
+
+/**
+ * Every way of finding `node` again that finds only it in `root` today, for
+ * the step a person just pointed at. The structural path is always kept: it
+ * is the last resort when the page has changed under every other way.
+ */
+export function targetFor(node: PickNode, root: TargetRoot): TourTarget {
+  const unique = (t: Omit<TourTarget, "label">) => resolveTarget({ ...t, label: "" }, root) === node;
+  const target: TourTarget = { label: nameOf(node) || node.tagName.toLowerCase(), path: structuralPath(node) };
+
+  const tour = node.getAttribute("data-tour");
+  if (tour && unique({ tour })) target.tour = tour;
+  const id = node.getAttribute("id");
+  if (id && isStableId(id) && unique({ id })) target.id = id;
+  const role = roleOf(node);
+  const name = nameOf(node);
+  if (role && name && unique({ role, name })) Object.assign(target, { role, name });
+  return target;
+}
