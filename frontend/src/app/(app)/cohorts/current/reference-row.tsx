@@ -48,11 +48,17 @@ export function useReferenceRow(q: string) {
 
   return {
     shown: matched && shown,
-    play: () => {
-      setShown(false);
-      setPlaying(true);
-    },
-    overlay: playing ? <Flyover onDone={() => setPlaying(false)} /> : null,
+    play: () => setPlaying(true),
+    // The row goes once the black hides it, or straight away if the animation is skipped before then.
+    overlay: playing ? (
+      <Flyover
+        onCovered={() => setShown(false)}
+        onDone={() => {
+          setShown(false);
+          setPlaying(false);
+        }}
+      />
+    ) : null,
   };
 }
 
@@ -164,8 +170,11 @@ let seed = 7919;
 const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
 const between = (lo: number, hi: number) => lo + rand() * (hi - lo);
 
+/** How long the black takes to fade in; every bird waits for it. */
+const FADE_IN = 3;
+
 /** When the flock sets off, how long each bird takes, and how far apart they leave. */
-const FLOCK_AT = 6.4;
+const FLOCK_AT = FADE_IN + 6.4;
 const FLOCK_FOR = 4;
 const FLOCK_SPREAD = 1.2;
 
@@ -202,7 +211,7 @@ const ENDS_AT = FLOCK_AT + FLOCK_SPREAD + FLOCK_FOR;
 /** The share of each bird's flight at which it arrives, turns to face you, turns fully, and is past you. */
 const TIMES = [0, 0.4, 0.5, 0.56, 0.94, 1];
 
-function Flyover({ onDone }: { onDone: () => void }) {
+function Flyover({ onCovered, onDone }: { onCovered: () => void; onDone: () => void }) {
   const reduce = useReducedMotion();
   // How long the black takes to lift, once it starts: slowly at the end, quickly on Esc or a click.
   const [lift, setLift] = useState<number | null>(null);
@@ -225,10 +234,10 @@ function Flyover({ onDone }: { onDone: () => void }) {
         setLift(0.4);
       }}
       className="fixed inset-0 z-100 overflow-hidden bg-black"
-      initial={{ opacity: reduce ? 0 : 1 }}
+      initial={{ opacity: 0 }}
       animate={{ opacity: lift === null ? 1 : 0 }}
-      transition={{ duration: lift ?? (reduce ? 0.3 : 0), ease: "easeInOut" }}
-      onAnimationComplete={() => lift !== null && onDone()}
+      transition={{ duration: lift ?? (reduce ? 0.3 : FADE_IN), ease: "easeInOut" }}
+      onAnimationComplete={() => (lift === null ? onCovered() : onDone())}
     >
       {reduce ? (
         <div className="absolute top-1/2 left-1/2 h-12 w-24 -translate-1/2">
@@ -241,7 +250,7 @@ function Flyover({ onDone }: { onDone: () => void }) {
             className="absolute top-[30vh] left-0 h-11 w-22"
             initial={{ x: "-15vw", y: "0vh" }}
             animate={{ x: "110vw", y: ["0vh", "-5vh", "2vh"] }}
-            transition={{ delay: 0.6, duration: 2.4, ease: "linear" }}
+            transition={{ delay: FADE_IN + 0.6, duration: 2.4, ease: "linear" }}
           >
             <Gull facing="side" period={0.55} />
           </motion.div>
@@ -250,7 +259,7 @@ function Flyover({ onDone }: { onDone: () => void }) {
             className="absolute top-[58vh] left-0 h-15 w-30"
             initial={{ x: "110vw", y: "0vh" }}
             animate={{ x: "-20vw", y: ["0vh", "3vh", "-4vh"] }}
-            transition={{ delay: 3.4, duration: 2.1, ease: "linear" }}
+            transition={{ delay: FADE_IN + 3.4, duration: 2.1, ease: "linear" }}
           >
             {/* Mirrored inside: CSS scale on the moving element would mirror its path too. */}
             <div className="size-full -scale-x-100">
