@@ -14,8 +14,12 @@ import { slackInstallation, users } from "@/db/schema";
 import { openSecret, sealSecret } from "@/lib/secret-box";
 
 /**
- * What the channel sync calls (`lib/cohorts/slack-sync.ts`), and the direct
- * messages the intake reminders send (`lib/logistics/intake-reminders.ts`).
+ * What the channel sync calls (`lib/cohorts/slack-sync.ts`), the direct
+ * messages the intake reminders send (`lib/logistics/intake-reminders.ts`),
+ * and the private channels a Live Sessions person's managers are gathered in.
+ * The group DM, bookmark, pin and file scopes are asked for ahead of need, so
+ * that using them later does not mean adding the app again. Match the app's
+ * page on api.slack.com: Add to Slack asks for this list, not for that page's.
  */
 export const SLACK_BOT_SCOPES = [
   "users:read",
@@ -25,6 +29,16 @@ export const SLACK_BOT_SCOPES = [
   "channels:join",
   "chat:write",
   "im:write",
+  "groups:read",
+  "groups:write",
+  "mpim:read",
+  "mpim:write",
+  "bookmarks:read",
+  "bookmarks:write",
+  "pins:read",
+  "pins:write",
+  "files:read",
+  "files:write",
 ] as const;
 
 /** The scopes the intake reminders need beyond looking people up. */
