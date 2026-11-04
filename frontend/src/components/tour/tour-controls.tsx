@@ -2,9 +2,9 @@
 
 /**
  * The header's tour buttons: a question mark that plays the page's tour,
- * there only when the page has one and traced round by a rainbow glow for a
- * couple of seconds the first time someone who does not administer the page
- * arrives, and for whoever administers the
+ * there only when the page has one and traced round by a rainbow glow when
+ * it points the tour out (to someone new to the page, or in the second
+ * before a shared tour link plays), and for whoever administers the
  * page a pencil that opens the editor, which on a page with no tour starts one.
  */
 
@@ -37,7 +37,7 @@ export function TourControls() {
                 onClick={page.play}
               >
                 <CircleHelp />
-                {page.beckoning && <GlowTrace duration={2000} blur={4} onDone={page.stopBeckoning} />}
+                {page.beckon && <GlowTrace key={page.beckon} duration={page.beckon} blur={4} onDone={page.stopBeckoning} />}
               </Button>
             </TooltipTrigger>
             <TooltipContent>Show this page&apos;s tour</TooltipContent>

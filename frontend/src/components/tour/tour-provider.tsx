@@ -8,9 +8,11 @@
  * pointed out inside another site's frame, or while viewing as someone else,
  * where marking it seen would be recorded as them.
  *
- * A link carrying `?tour` (the callout's "Copy tour link") plays the tour
- * straight away for whoever opens it, seen or not; the parameter is then
- * taken off the address so a reload does not play it again.
+ * A link carrying `?tour` (the editor's "Copy tour link") plays the tour for
+ * whoever opens it, seen or not, a second after the page arrives: the page
+ * is given a moment to be seen first, and the question mark is traced round
+ * meanwhile, so the tour visibly comes from it. The parameter is then taken
+ * off the address so a reload does not play it again.
  *
  * It also holds the editor, for whoever administers the page, and plays the
  * editor's unsaved steps as a preview, which marks nothing seen.
@@ -29,8 +31,8 @@ type TourContext = {
   canEdit: boolean;
   playing: boolean;
   editing: boolean;
-  /** The question mark is pointing the tour out to someone new to the page. */
-  beckoning: boolean;
+  /** How long the question mark's trace runs while it points the tour out, or null when it is not. */
+  beckon: number | null;
   stopBeckoning: () => void;
   play: () => void;
   edit: () => void;
@@ -48,6 +50,11 @@ type Match = { path: string; tour: Tour | null; seenVersion: number; canEdit: bo
 /** What is playing, on which page: the saved tour, or the editor's steps as they stand. */
 type Run = { path: string; steps: TourStep[]; start: number; preview: boolean };
 
+/** How long a shared tour link waits, once the page is there, before playing. */
+const LINK_DELAY_MS = 1000;
+/** How long the question mark is traced round for someone new to the page. */
+const FIRST_VISIT_MS = 2000;
+
 /** Whether the address asks for the tour, taking the parameter off it if so. */
 function takeTourParam(): boolean {
   const url = new URL(window.location.href);
@@ -63,8 +70,8 @@ export function TourProvider({ autoPlay, children }: { autoPlay: boolean; childr
   const [run, setRun] = useState<Run | null>(null);
   // The path whose tour is open in the editor, so moving to another page closes it.
   const [editingAt, setEditingAt] = useState<string | null>(null);
-  // The path whose question mark is glowing.
-  const [beckonAt, setBeckonAt] = useState<string | null>(null);
+  // The path whose question mark is traced round, and for how long.
+  const [beckonAt, setBeckonAt] = useState<{ path: string; ms: number } | null>(null);
 
   const markSeen = useCallback(
     (seen: Tour) => {
@@ -81,6 +88,7 @@ export function TourProvider({ autoPlay, children }: { autoPlay: boolean; childr
 
   useEffect(() => {
     const ask = new AbortController();
+    let timer: number | undefined;
     fetch(`/api/tours/match?path=${encodeURIComponent(pathname)}`, { signal: ask.signal })
       .then((r) => (r.ok ? r.json() : null))
       .then((body: Omit<Match, "path"> | null) => {
@@ -88,16 +96,21 @@ export function TourProvider({ autoPlay, children }: { autoPlay: boolean; childr
         setMatch({ path: pathname, ...body });
         const tour = body.tour && body.tour.steps.length > 0 ? body.tour : null;
         if (takeTourParam() && tour) {
-          setRun({ path: pathname, steps: tour.steps, start: 0, preview: false });
+          setBeckonAt({ path: pathname, ms: LINK_DELAY_MS });
+          // Unless the question mark was clicked in the meantime and the tour is already going.
+          timer = window.setTimeout(() => setRun((r) => r ?? { path: pathname, steps: tour.steps, start: 0, preview: false }), LINK_DELAY_MS);
         } else if (tour && tour.version > body.seenVersion && !body.canEdit && autoPlay && !isFramed()) {
-          setBeckonAt(pathname);
+          setBeckonAt({ path: pathname, ms: FIRST_VISIT_MS });
           markSeen(tour);
         }
       })
       .catch(() => {
         // Aborted by the next navigation, or offline: the page simply has no tour this time.
       });
-    return () => ask.abort();
+    return () => {
+      ask.abort();
+      window.clearTimeout(timer);
+    };
   }, [pathname, autoPlay, markSeen]);
 
   // A tour fetched for the page before this one is not this page's.
@@ -105,7 +118,7 @@ export function TourProvider({ autoPlay, children }: { autoPlay: boolean; childr
   const tour = current?.tour ?? null;
   const playing = run?.path === pathname ? run : null;
   const editing = editingAt === pathname && !!current?.canEdit;
-  const beckoning = beckonAt === pathname && !!tour;
+  const beckon = beckonAt?.path === pathname && tour ? beckonAt.ms : null;
 
   const stopBeckoning = useCallback(() => setBeckonAt(null), []);
 
@@ -133,7 +146,7 @@ export function TourProvider({ autoPlay, children }: { autoPlay: boolean; childr
   );
 
   return (
-    <Context.Provider value={{ tour, canEdit: current?.canEdit ?? false, playing: !!playing, editing, beckoning, stopBeckoning, play, edit }}>
+    <Context.Provider value={{ tour, canEdit: current?.canEdit ?? false, playing: !!playing, editing, beckon, stopBeckoning, play, edit }}>
       {children}
       {editing && (
         <TourEditor
