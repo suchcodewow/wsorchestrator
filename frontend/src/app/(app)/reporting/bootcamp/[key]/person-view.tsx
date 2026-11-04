@@ -77,19 +77,21 @@ export function PersonView({ person, canEdit, back }: { person: ViewPerson; canE
         <motion.section variants={riseChild} className="space-y-3 bg-black/3 px-5 py-3 dark:bg-white/4">
           <div className="flex items-start justify-between gap-4">
             <div className="space-y-1">
-              <h2 className="text-xl font-medium tracking-tight">{employee?.fullName ?? person.email}</h2>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <h2 className="text-xl font-medium tracking-tight">{employee?.fullName ?? person.email}</h2>
+                <SlackButton personKey={person.key} />
+              </div>
               {(!employee || employee.title) && (
                 <p className="text-sm text-muted-foreground">
                   {employee ? employee.title : "Not in the employee list from the last HiBob sync."}
                 </p>
               )}
             </div>
-            <div className="flex shrink-0 flex-col items-end gap-2">
-              {employee && (
-                <span className="text-sm tabular-nums text-muted-foreground">Started {formatDate(employee.startDate)}</span>
-              )}
-              <SlackButton personKey={person.key} />
-            </div>
+            {employee && (
+              <span className="shrink-0 text-sm tabular-nums text-muted-foreground">
+                Started {formatDate(employee.startDate)}
+              </span>
+            )}
           </div>
           {employee && (
             <dl className="grid gap-x-8 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">

@@ -64,18 +64,18 @@ export function SlackButton({ personKey }: { personKey: string }) {
   }
 
   return (
-    <div className="flex flex-col items-end gap-1.5 text-right">
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
       <Button variant="outline" size="sm" disabled={busy} onClick={() => void open()}>
         {busy ? <Loader2 className="animate-spin" /> : <MessageSquare />}
-        Slack message
+        Discuss in Slack
       </Button>
       {error && (
-        <p role="alert" className="max-w-xs text-xs text-destructive">
+        <p role="alert" className="max-w-sm text-xs text-destructive">
           {error}
         </p>
       )}
       {opened && (
-        <p role="status" className="max-w-xs text-xs text-muted-foreground">
+        <p role="status" className="max-w-sm text-xs text-muted-foreground">
           {!opened.live && <span className="font-medium text-foreground">Test: </span>}
           {summary(opened)}{" "}
           {opened.callerIn ? (
