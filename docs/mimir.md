@@ -26,7 +26,7 @@ Mimir teaches the course one concept at a time. It has two tabs:
   shows **Recommended**.
 
 The previous Mimir (a reference library with a coach per card) is kept, read
-only, for Training Administrators at `/mimir-archive`. It no longer coaches or
+only, for Training Administrators at `/coach-canary-archive`. It no longer coaches or
 records progress. Its tables and its API routes are untouched.
 
 ## The content is private

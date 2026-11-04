@@ -67,9 +67,9 @@ import {
 } from "@/lib/roles";
 import { visibleCohortSettingsTabs } from "@/app/(app)/cohort-settings/tabs";
 import { EVALS_SETTINGS_TABS } from "@/app/(app)/evals-settings/tabs";
-import { MIMIR_TABS as MIMIR_ARCHIVE_TABS } from "@/app/(app)/mimir-archive/tabs";
-import { MIMIR_TABS } from "@/app/(app)/mimir/tabs";
-import { MIMIR_SETTINGS_TABS } from "@/app/(app)/mimir-settings/tabs";
+import { MIMIR_TABS as MIMIR_ARCHIVE_TABS } from "@/app/(app)/coach-canary-archive/tabs";
+import { MIMIR_TABS } from "@/app/(app)/coach-canary/tabs";
+import { MIMIR_SETTINGS_TABS } from "@/app/(app)/coach-canary-settings/tabs";
 import { SCHEDULER_SETTINGS_TABS } from "@/app/(app)/scheduler-settings/tabs";
 import { LOGISTICS_SETTINGS_TABS } from "@/app/(app)/logistics-settings/tabs";
 import { LOGISTICS_TABS } from "@/app/(app)/logistics/tabs";
@@ -368,36 +368,36 @@ const PAGES: Record<string, PageCase> = {
     expect: () => ({ to: `/reporting/bootcamp/${MISSING}` }),
     signedOut: { to: `/reporting/bootcamp/${MISSING}` },
   },
-  "/mimir": { path: () => "/mimir", expect: () => ({ to: MIMIR_TABS[0]!.href }) },
-  "/mimir/chat": { path: () => "/mimir/chat", expect: () => 200 },
-  "/mimir/map": { path: () => "/mimir/map", expect: () => 200 },
-  "/mimir/map?play=<unknown>": { path: () => `/mimir/map?play=${MISSING}`, expect: () => 200 },
-  "/mimir/videos": { path: () => "/mimir/videos", expect: () => 200 },
-  "/mimir/code-lab": { path: () => "/mimir/code-lab", expect: () => 200 },
+  "/coach-canary": { path: () => "/coach-canary", expect: () => ({ to: MIMIR_TABS[0]!.href }) },
+  "/coach-canary/chat": { path: () => "/coach-canary/chat", expect: () => 200 },
+  "/coach-canary/map": { path: () => "/coach-canary/map", expect: () => 200 },
+  "/coach-canary/map?play=<unknown>": { path: () => `/coach-canary/map?play=${MISSING}`, expect: () => 200 },
+  "/coach-canary/videos": { path: () => "/coach-canary/videos", expect: () => 200 },
+  "/coach-canary/code-lab": { path: () => "/coach-canary/code-lab", expect: () => 200 },
   // The previous Mimir, kept to read, for Training Administrators.
-  "/mimir-archive": {
-    path: () => "/mimir-archive",
+  "/coach-canary-archive": {
+    path: () => "/coach-canary-archive",
     expect: (a) => (canManageMimir(a) ? { to: MIMIR_ARCHIVE_TABS[0]!.href } : 404),
   },
-  "/mimir-archive/library": { path: () => "/mimir-archive/library", expect: gated(canManageMimir) },
-  "/mimir-archive/library?kind&cat": { path: () => "/mimir-archive/library?kind=competitor&cat=cd&q=e2e", expect: gated(canManageMimir) },
-  "/mimir-archive/library?kind=<unknown>": { path: () => "/mimir-archive/library?kind=nonsense", expect: () => 404 },
-  "/mimir-archive/library/<one>": { path: () => `/mimir-archive/library/${mimirItemId}`, expect: gated(canManageMimir) },
-  "/mimir-archive/library/<unknown>": { path: () => `/mimir-archive/library/${MISSING}`, expect: () => 404 },
-  "/mimir-archive/glossary": { path: () => "/mimir-archive/glossary?q=e2e", expect: gated(canManageMimir) },
-  "/mimir-archive/progress": { path: () => "/mimir-archive/progress?sort=tier", expect: gated(canManageMimir) },
-  "/mimir-settings": {
-    path: () => "/mimir-settings",
+  "/coach-canary-archive/library": { path: () => "/coach-canary-archive/library", expect: gated(canManageMimir) },
+  "/coach-canary-archive/library?kind&cat": { path: () => "/coach-canary-archive/library?kind=competitor&cat=cd&q=e2e", expect: gated(canManageMimir) },
+  "/coach-canary-archive/library?kind=<unknown>": { path: () => "/coach-canary-archive/library?kind=nonsense", expect: () => 404 },
+  "/coach-canary-archive/library/<one>": { path: () => `/coach-canary-archive/library/${mimirItemId}`, expect: gated(canManageMimir) },
+  "/coach-canary-archive/library/<unknown>": { path: () => `/coach-canary-archive/library/${MISSING}`, expect: () => 404 },
+  "/coach-canary-archive/glossary": { path: () => "/coach-canary-archive/glossary?q=e2e", expect: gated(canManageMimir) },
+  "/coach-canary-archive/progress": { path: () => "/coach-canary-archive/progress?sort=tier", expect: gated(canManageMimir) },
+  "/coach-canary-settings": {
+    path: () => "/coach-canary-settings",
     expect: (a) => (canManageMimir(a) ? { to: MIMIR_SETTINGS_TABS[0]!.href } : 404),
   },
-  "/mimir-settings/map": { path: () => "/mimir-settings/map", expect: gated(canManageMimir) },
-  "/mimir-settings/map-editor": { path: () => "/mimir-settings/map-editor", expect: gated(canManageMimir) },
-  "/mimir-settings/content": { path: () => "/mimir-settings/content?kind=capability", expect: gated(canManageMimir) },
-  "/mimir-settings/content/new": { path: () => "/mimir-settings/content/new?kind=term", expect: gated(canManageMimir) },
-  "/mimir-settings/content/<one>": { path: () => `/mimir-settings/content/${mimirItemId}`, expect: gated(canManageMimir) },
-  "/mimir-settings/content/<unknown>": { path: () => `/mimir-settings/content/${MISSING}`, expect: () => 404 },
-  "/mimir-settings/coaching": { path: () => "/mimir-settings/coaching", expect: gated(canManageMimir) },
-  "/mimir-settings/feedback": { path: () => "/mimir-settings/feedback", expect: gated(canManageMimir) },
+  "/coach-canary-settings/map": { path: () => "/coach-canary-settings/map", expect: gated(canManageMimir) },
+  "/coach-canary-settings/map-editor": { path: () => "/coach-canary-settings/map-editor", expect: gated(canManageMimir) },
+  "/coach-canary-settings/content": { path: () => "/coach-canary-settings/content?kind=capability", expect: gated(canManageMimir) },
+  "/coach-canary-settings/content/new": { path: () => "/coach-canary-settings/content/new?kind=term", expect: gated(canManageMimir) },
+  "/coach-canary-settings/content/<one>": { path: () => `/coach-canary-settings/content/${mimirItemId}`, expect: gated(canManageMimir) },
+  "/coach-canary-settings/content/<unknown>": { path: () => `/coach-canary-settings/content/${MISSING}`, expect: () => 404 },
+  "/coach-canary-settings/coaching": { path: () => "/coach-canary-settings/coaching", expect: gated(canManageMimir) },
+  "/coach-canary-settings/feedback": { path: () => "/coach-canary-settings/feedback", expect: gated(canManageMimir) },
   "/evals-settings": {
     path: () => "/evals-settings",
     expect: (a) => (canManageEvalsSettings(a) ? { to: EVALS_SETTINGS_TABS[0]!.href } : 404),

@@ -9,12 +9,12 @@ describe("parseFavoriteTabs", () => {
   test("keeps in-app links in order, trimming labels and dropping repeats", () => {
     assert.deepEqual(
       parseFavoriteTabs([
-        { href: "/mimir/map", label: " Map " },
+        { href: "/coach-canary/map", label: " Map " },
         { href: "/settings/people", label: "People" },
-        { href: "/mimir/map", label: "Map again" },
+        { href: "/coach-canary/map", label: "Map again" },
       ]),
       [
-        { href: "/mimir/map", label: "Map" },
+        { href: "/coach-canary/map", label: "Map" },
         { href: "/settings/people", label: "People" },
       ],
     );

@@ -226,7 +226,7 @@ describe("the coach", () => {
     const opener = lastUserContent(req);
     assert.match(opener, /^<progress>\nPROGRESS SNAPSHOT/);
     assert.match(opener, /Next concept to cover: \[alpha\] Alpha/);
-    assert.ok(opener.endsWith("I just opened Captain Canary. Introduce yourself."));
+    assert.ok(opener.endsWith("I just opened Coach Canary. Introduce yourself."));
   });
 
   test("it introduces itself on the first opening and every fourth one after", async () => {
@@ -261,7 +261,7 @@ describe("the coach", () => {
   });
 
   test("a recommendation flags the concept, a later mastery clears it, and the coach is not re-greeted for its own changes", async () => {
-    const rec = await sendCoachMessage(rep.id, { message: "No idea." }, { complete: coach("Watch it: [Watch: Gamma](/mimir/map?play=gamma)\n[RECOMMEND: gamma]").complete });
+    const rec = await sendCoachMessage(rep.id, { message: "No idea." }, { complete: coach("Watch it: [Watch: Gamma](/coach-canary/map?play=gamma)\n[RECOMMEND: gamma]").complete });
     assert.ok(rec.ok && rec.recommended[0] === "gamma");
     assert.equal((await getConceptState(rep.id, "gamma")).recommended, true);
     assert.equal((await getCoachChat(rep.id)).needsGreeting, false);

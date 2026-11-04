@@ -333,7 +333,7 @@ describe("what the map coach is told", () => {
     assert.match(p, /OPENING/);
     assert.match(p, /\[MASTERED: concept-id\]/);
     assert.match(p, /\[RECOMMEND: concept-id\]/);
-    assert.match(p, /\[Watch: Concept name\]\(\/mimir\/map\?play=concept-id\)/);
+    assert.match(p, /\[Watch: Concept name\]\(\/coach-canary\/map\?play=concept-id\)/);
     assert.match(p, /own level or earlier/);
   });
 
@@ -443,9 +443,9 @@ describe("what a reply asks the app to do", () => {
   });
 
   test("a recommendation is read the same way, in any case and with spacing", () => {
-    const r = readCoachReply("Watch it first: [Watch: Gamma](/mimir/map?play=gamma)\n  [recommend:  gamma ]  ", ids);
+    const r = readCoachReply("Watch it first: [Watch: Gamma](/coach-canary/map?play=gamma)\n  [recommend:  gamma ]  ", ids);
     assert.deepEqual(r.recommended, ["gamma"]);
-    assert.ok(r.text.includes("[Watch: Gamma](/mimir/map?play=gamma)"));
+    assert.ok(r.text.includes("[Watch: Gamma](/coach-canary/map?play=gamma)"));
     assert.ok(!/recommend/i.test(r.text));
   });
 
