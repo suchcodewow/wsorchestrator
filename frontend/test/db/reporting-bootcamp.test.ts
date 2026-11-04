@@ -43,6 +43,7 @@ import {
   cohortCounts,
   listCohort,
   readerOf,
+  releaseBlockers,
   releaseScores,
   saveClassReview,
   submissionEditSchema,
@@ -276,9 +277,42 @@ describe("releasing a class", () => {
     assert.equal((await unscoredAttendees((await cohortBootcamp())!, "bootcamp")).names.includes("Person newcomer"), false);
   });
 
+  test("waits on an exit exam and both sides of overall feedback, and names who holds it up", async () => {
+    const bootcamp = (await cohortBootcamp())!;
+    const blocked = async () => releaseBlockers(bootcamp, "bootcamp");
+    const review = { bootcampId, stage: "bootcamp" as const, attendeeEmail: emailOf("newcomer") };
+
+    // No review at all is waiting on both.
+    assert.ok((await blocked()).noExitExam.names.includes("Person newcomer"));
+    assert.ok((await blocked()).noFeedback.names.includes("Person newcomer"));
+    assert.deepEqual(await releaseScores(admin.id, "bootcamp"), { ok: false, error: "no_exit_exam" });
+
+    await db.insert(bootcampClassReviews).values({ ...review, entranceExam: 80, exitExam: 92, positiveFeedback: "Strong", constructiveFeedback: "  " });
+    assert.equal((await blocked()).noExitExam.names.includes("Person newcomer"), false);
+    assert.ok((await blocked()).noFeedback.names.includes("Person newcomer"), "blank constructive feedback still waits");
+    assert.deepEqual(await releaseScores(admin.id, "bootcamp"), { ok: false, error: "no_feedback" });
+    assert.equal((await cohortBootcamp())!.released.bootcamp, null);
+
+    await db
+      .update(bootcampClassReviews)
+      .set({ constructiveFeedback: "Slow down in discovery" })
+      .where(
+        and(
+          eq(bootcampClassReviews.bootcampId, bootcampId),
+          eq(bootcampClassReviews.stage, "bootcamp"),
+          eq(bootcampClassReviews.attendeeEmail, emailOf("newcomer")),
+        ),
+      );
+    const after = await blocked();
+    assert.equal(after.noExitExam.names.includes("Person newcomer"), false);
+    assert.equal(after.noFeedback.names.includes("Person newcomer"), false);
+  });
+
   test("shows a manager the class once released, and releasing again changes nothing", async () => {
     const first = await releaseScores(admin.id, "bootcamp");
     assert.ok(first.ok);
+    // The review was only there to let it release; the tests after this start without one.
+    await db.delete(bootcampClassReviews).where(eq(bootcampClassReviews.attendeeEmail, emailOf("newcomer")));
     assert.ok(first.written >= 1);
     const again = await releaseScores(admin.id, "bootcamp");
     assert.ok(again.ok);

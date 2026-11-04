@@ -2,8 +2,9 @@
 
 /**
  * Releases one class of the active bootcamp to managers, after saying what
- * that means. It waits until every assessment in the class has a score, and
- * its tooltip names who is still waiting on one.
+ * that means. It waits until everyone in the class has a score on every
+ * assessment, an exit exam, and overall positive and constructive feedback,
+ * and its tooltip names who is still waiting on each.
  */
 
 import { useState } from "react";
@@ -19,24 +20,47 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { STAGE_LABELS } from "@/lib/evals/assessment-values";
+import type { ReleaseBlockers, Waiting } from "@/lib/reporting/bootcamp";
 import { RELEASE_LABELS, type ReleaseStage } from "@/lib/reporting/bootcamp-values";
 import { formatDate } from "../../cohort-settings/format";
 import { Hint } from "./hint";
 
 const ERRORS: Record<string, string> = {
   unscored: "Someone in this class is still waiting on a score. Reload to see who.",
+  no_exit_exam: "Someone in this class is still waiting on an exit exam. Reload to see who.",
+  no_feedback: "Someone in this class is still waiting on overall feedback. Reload to see who.",
 };
+
+/** What the tooltip heads each kind of wait with. */
+const WAITING_ON: Record<keyof ReleaseBlockers, string> = {
+  unscored: "Waiting on a score",
+  noExitExam: "Waiting on an exit exam",
+  noFeedback: "Waiting on overall feedback",
+};
+
+function WaitingList({ heading, waiting }: { heading: string; waiting: Waiting }) {
+  const more = waiting.total - waiting.names.length;
+  return (
+    <div>
+      <p className="font-medium">{heading}</p>
+      <p>
+        {waiting.names.join(", ")}
+        {more > 0 && `, and ${more.toLocaleString()} more`}
+      </p>
+    </div>
+  );
+}
 
 export function ReleaseButton({
   stage,
   startDate,
-  unscored,
+  blockers,
 }: {
   stage: ReleaseStage;
   /** The active bootcamp's first day. */
   startDate: string;
-  /** Who in the class is still waiting on a score; null when that is not known here. */
-  unscored: { total: number; names: string[] } | null;
+  /** Who in the class is still waiting on a score, an exit exam or overall feedback; null when that is not known here. */
+  blockers: ReleaseBlockers | null;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -66,28 +90,28 @@ export function ReleaseButton({
     }
   }
 
-  const waiting = unscored?.total ?? 0;
-  const more = waiting - (unscored?.names.length ?? 0);
+  const waits = blockers
+    ? (Object.keys(WAITING_ON) as (keyof ReleaseBlockers)[]).filter((k) => blockers[k].total > 0)
+    : [];
+  const blocked = waits.length > 0;
 
   return (
     <>
       <Hint
-        disabled={waiting > 0}
+        disabled={blocked}
         content={
-          waiting > 0 ? (
-            <>
-              <p className="font-medium">Waiting on a score</p>
-              <p>
-                {unscored!.names.join(", ")}
-                {more > 0 && `, and ${more.toLocaleString()} more`}
-              </p>
-            </>
+          blocked ? (
+            <div className="space-y-2">
+              {waits.map((k) => (
+                <WaitingList key={k} heading={WAITING_ON[k]} waiting={blockers![k]} />
+              ))}
+            </div>
           ) : (
             <p>Shows managers the {label} results. It cannot be taken back.</p>
           )
         }
       >
-        <Button size="sm" onClick={() => setOpen(true)} disabled={waiting > 0} aria-label={RELEASE_LABELS[stage]}>
+        <Button size="sm" onClick={() => setOpen(true)} disabled={blocked} aria-label={RELEASE_LABELS[stage]}>
           <Send />
           Release scores
         </Button>

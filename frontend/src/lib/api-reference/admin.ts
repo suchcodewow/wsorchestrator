@@ -2628,8 +2628,8 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "assessmentsAdmin",
         token: true,
         notes:
-          "comments counts the blank comments there are marks to write, so one person can count twice. overall counts the blank overall positive and constructive feedback of the cohort (PUT /api/reporting/bootcamp/people/{key}/review) that some assessment's saved feedback on that side could fill. scores counts the people who would get a score. skipped names candidates who have not RSVP'd and have no marks and no assessment, whom it leaves out, at most 100. unscored is everyone in the class still waiting on a score, which keeps it from being released: someone in the cohort (RSVP'd to the class and not deferred, as Live Sessions lists them) without a scored assessment for every active assessment of the class taught to their track and for Participation, or anyone with a blank score there. total, and up to 100 names. A class is null when the bootcamp does not hold it, it is already released, or no bootcamp is active.",
-        returns: "{ bootcamp: StagePending | null, intermediate: StagePending | null }, where StagePending is { comments: number, overall: number, scores: number, skipped: string[], unscored: { total: number, names: string[] } }",
+          "comments counts the blank comments there are marks to write, so one person can count twice. overall counts the blank overall positive and constructive feedback of the cohort (PUT /api/reporting/bootcamp/people/{key}/review) that some assessment's saved feedback on that side could fill. scores counts the people who would get a score. skipped names candidates who have not RSVP'd and have no marks and no assessment, whom it leaves out, at most 100. unscored is everyone in the class still waiting on a score, which keeps it from being released: someone in the cohort (RSVP'd to the class and not deferred, as Live Sessions lists them) without a scored assessment for every active assessment of the class taught to their track and for Participation, or anyone with a blank score there. total, and up to 100 names. noExitExam and noFeedback, in the same shape, are everyone in that cohort without an exit exam, and without both overall positive and constructive feedback; either also keeps it from being released. A class is null when the bootcamp does not hold it, it is already released, or no bootcamp is active.",
+        returns: "{ bootcamp: StagePending | null, intermediate: StagePending | null }, where StagePending is { comments: number, overall: number, scores: number, skipped: string[], unscored: Waiting, noExitExam: Waiting, noFeedback: Waiting }, where Waiting is { total: number, names: string[] }",
       },
       {
         method: "POST",
@@ -2678,7 +2678,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "assessmentsAdmin",
         token: true,
         notes:
-          "From then on, managers see that class's results for the people in their org. Everyone scored in the class has attended it from then on: a BTC class moves on to Intermediate on Cohorts → Current, and an INT class leaves it. written counts the people scored in it. A class with any assessment still waiting on a score cannot be released; GET /api/reporting/bootcamp/participation names who. A release cannot be taken back; releasing a class already released changes nothing, writes nothing, and returns when it was.",
+          "From then on, managers see that class's results for the people in their org. Everyone scored in the class has attended it from then on: a BTC class moves on to Intermediate on Cohorts → Current, and an INT class leaves it. written counts the people scored in it. A class cannot be released while anyone in it is waiting on a score for an assessment, an exit exam, or overall positive and constructive feedback (PUT /api/reporting/bootcamp/people/{key}/review); GET /api/reporting/bootcamp/participation names who. A release cannot be taken back; releasing a class already released changes nothing, writes nothing, and returns when it was.",
         body: { kind: "json", fields: [{ name: "stage", type: '"bootcamp" | "intermediate"', required: true }] },
         returns: "{ ok: true, stage, bootcamp: { id, startDate }, releasedAt, written: number }",
         errors: [
@@ -2686,6 +2686,8 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           { status: 409, error: "no_bootcamp", when: "no bootcamp is active" },
           { status: 409, error: "no_intermediate", when: "stage is intermediate and the active bootcamp holds no intermediate class" },
           { status: 409, error: "unscored", when: "someone in the class has an assessment still waiting on a score" },
+          { status: 409, error: "no_exit_exam", when: "everyone is scored, but someone in the cohort has no exit exam" },
+          { status: 409, error: "no_feedback", when: "everyone is scored and has an exit exam, but someone in the cohort lacks overall positive or constructive feedback" },
         ],
       },
       {

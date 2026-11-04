@@ -405,9 +405,57 @@ const EXAM_SCORE_SQL = sql`(case when r.entrance_exam is null or r.exit_exam is 
   when round(((r.entrance_exam + r.exit_exam) / 2)::numeric, 1) >= 80 then 2
   else 1 end)::float8`;
 
-export type ReleaseError = "no_bootcamp" | "no_intermediate" | "unscored";
+export type ReleaseError = "no_bootcamp" | "no_intermediate" | "unscored" | "no_exit_exam" | "no_feedback";
 
-export const RELEASE_STATUS_FOR: Record<ReleaseError, number> = { no_bootcamp: 409, no_intermediate: 409, unscored: 409 };
+export const RELEASE_STATUS_FOR: Record<ReleaseError, number> = {
+  no_bootcamp: 409,
+  no_intermediate: 409,
+  unscored: 409,
+  no_exit_exam: 409,
+  no_feedback: 409,
+};
+
+/** Some of the people a class is waiting on: at most 100 names, and how many in all. */
+export type Waiting = { total: number; names: string[] };
+
+/** What holds up a class's release: who is waiting on a score, an exit exam, or overall feedback. */
+export type ReleaseBlockers = { unscored: Waiting; noExitExam: Waiting; noFeedback: Waiting };
+
+/**
+ * Everyone in `stage`'s cohort at `bootcamp` whose class review, `r`, fails
+ * `complete`; someone with no review fails it too. At most 100 names, and
+ * how many in all.
+ */
+async function cohortWithoutReview(
+  bootcamp: { id: string; startDate: string },
+  stage: ReleaseStage,
+  complete: SQL,
+): Promise<Waiting> {
+  const { rows } = await db.execute<{ name: string; total: number }>(sql`
+    with cohort as (${await cohortSql(bootcamp, [stage])})
+    select coalesce(${nameOf(sql`c.email`)}, c.email) as name, count(*) over ()::int as total
+      from cohort c
+      left join ${bootcampClassReviews} r
+        on r.bootcamp_id = ${bootcamp.id} and r.stage = c.stage and r.attendee_email = c.email
+     where not coalesce(${complete}, false)
+     order by lower(coalesce(${nameOf(sql`c.email`)}, c.email))
+     limit 100`);
+  return { total: rows[0]?.total ?? 0, names: rows.map((r) => r.name) };
+}
+
+/**
+ * Everything that holds up `stage`'s release at `bootcamp`: anyone waiting
+ * on a score (`unscoredAttendees`), anyone in the cohort without an exit
+ * exam, and anyone without both overall positive and constructive feedback.
+ */
+export async function releaseBlockers(bootcamp: { id: string; startDate: string }, stage: ReleaseStage): Promise<ReleaseBlockers> {
+  const [unscored, noExitExam, noFeedback] = await Promise.all([
+    unscoredAttendees(bootcamp, stage),
+    cohortWithoutReview(bootcamp, stage, sql`r.exit_exam is not null`),
+    cohortWithoutReview(bootcamp, stage, sql`btrim(r.positive_feedback) <> '' and btrim(r.constructive_feedback) <> ''`),
+  ]);
+  return { unscored, noExitExam, noFeedback };
+}
 
 /**
  * Everyone in `stage`'s class at `bootcamp` still waiting on a score: a
@@ -451,7 +499,8 @@ export async function unscoredAttendees(
  * completes it: everyone scored in that class has attended it
  * (`lib/evals/attendance.ts`). That moves a BTC class on to Intermediate on
  * Cohorts → Current, and takes an INT class off it. A class with anyone
- * still waiting on a score (`unscoredAttendees`) cannot be released. Once released it stays
+ * still waiting on a score, an exit exam or overall feedback
+ * (`releaseBlockers`) cannot be released. Once released it stays
  * so; releasing again changes nothing, and says when it was. `written`
  * counts the people scored in it.
  */
@@ -468,7 +517,10 @@ export async function releaseScores(
   const done = { id: bootcamp.id, startDate: bootcamp.startDate };
   const already = bootcamp.released[stage];
   if (already) return { ok: true, bootcamp: done, releasedAt: already.at, written: 0 };
-  if ((await unscoredAttendees(bootcamp, stage)).total > 0) return { ok: false, error: "unscored" };
+  const blockers = await releaseBlockers(bootcamp, stage);
+  if (blockers.unscored.total > 0) return { ok: false, error: "unscored" };
+  if (blockers.noExitExam.total > 0) return { ok: false, error: "no_exit_exam" };
+  if (blockers.noFeedback.total > 0) return { ok: false, error: "no_feedback" };
 
   const now = new Date();
   const [atColumn, byColumn] =
