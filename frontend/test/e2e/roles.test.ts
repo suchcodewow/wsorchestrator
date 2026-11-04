@@ -299,13 +299,6 @@ const PAGES: Record<string, PageCase> = {
     path: () => `/evals/bootcamp/${assessmentId}/0`,
     expect: () => 404,
   },
-  // Iris was renamed Diagnostic; old links still land, for anyone and before sign-in.
-  "/iris": { path: () => "/iris", expect: () => ({ to: "/diagnostic" }), signedOut: { to: "/diagnostic" } },
-  "/iris/<a deeper page>": {
-    path: () => "/iris/questions",
-    expect: () => ({ to: "/diagnostic/questions" }),
-    signedOut: { to: "/diagnostic/questions" },
-  },
   "/diagnostic": {
     path: () => "/diagnostic",
     expect: (a) => (canTakeIris(a) ? { to: "/diagnostic/tests" } : 404),
@@ -328,11 +321,6 @@ const PAGES: Record<string, PageCase> = {
     expect: (a) => (canSeeReporting(a) ? { to: visibleReportingTabs(a)[0]!.href } : 404),
   },
   "/reporting/canary-wire": { path: () => "/reporting/canary-wire", expect: gated(canSeeCanaryWire) },
-  "/reporting/canary-wire-history": {
-    path: () => "/reporting/canary-wire-history",
-    expect: () => ({ to: "/reporting/canary-wire" }),
-    signedOut: { to: "/reporting/canary-wire" },
-  },
   "/reporting/bootcamp": { path: () => "/reporting/bootcamp", expect: gated(canSeeBootcampRecords) },
   "/reporting/bootcamp?searched": {
     path: () => "/reporting/bootcamp?status=active&q=x&sort=email&cohort.sort=stage&cohort.page=2",
@@ -346,27 +334,6 @@ const PAGES: Record<string, PageCase> = {
   "/reporting/bootcamp/<unknown>": {
     path: () => `/reporting/bootcamp/${MISSING}`,
     expect: () => 404,
-  },
-  // The old paths, from before Bootcamp History became Reporting → Bootcamp, redirect for everyone.
-  "/reporting/bootcamp-history": {
-    path: () => "/reporting/bootcamp-history",
-    expect: () => ({ to: "/reporting/bootcamp" }),
-    signedOut: { to: "/reporting/bootcamp" },
-  },
-  "/reporting/bootcamp-history/<id>": {
-    path: () => `/reporting/bootcamp-history/${MISSING}`,
-    expect: () => ({ to: `/reporting/bootcamp/${MISSING}` }),
-    signedOut: { to: `/reporting/bootcamp/${MISSING}` },
-  },
-  "/bootcamp-history": {
-    path: () => "/bootcamp-history",
-    expect: () => ({ to: "/reporting/bootcamp" }),
-    signedOut: { to: "/reporting/bootcamp" },
-  },
-  "/bootcamp-history/<id>": {
-    path: () => `/bootcamp-history/${MISSING}`,
-    expect: () => ({ to: `/reporting/bootcamp/${MISSING}` }),
-    signedOut: { to: `/reporting/bootcamp/${MISSING}` },
   },
   "/coach-canary": { path: () => "/coach-canary", expect: () => ({ to: MIMIR_TABS[0]!.href }) },
   "/coach-canary/chat": { path: () => "/coach-canary/chat", expect: () => 200 },
