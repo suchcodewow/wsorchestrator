@@ -334,13 +334,20 @@ The published workshops and lab guides live in the **Cloud SQL** `workshops`
 database. Your local `workshops` is a different database with different rows —
 see [the two local databases](../CONTRIBUTING.md#the-two-local-databases).
 
-Run from the repo root, and **pass `PROJECT`**. `gcloud config`'s default
-project on a Harness laptop is typically `sales-209522`, so without it
-`with-db.sh` fails with "No DB_CONN … and none found":
+Run from the repo root, with the environment's service-account key, and
+**pass `PROJECT`**. `gcloud config`'s default project on a Harness laptop is
+typically `sales-209522`, so without it `with-db.sh` fails with "No DB_CONN …
+and none found":
 
 ```bash
-PROJECT=administration-459416 ./scripts/with-db.sh "node frontend/scripts/whatever.mjs"
+K=$HOME/.config/gcloud/workshop-tf-admin.json; CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE=$K GOOGLE_APPLICATION_CREDENTIALS=$K PROJECT=administration-459416 ./scripts/with-db.sh "node frontend/scripts/whatever.mjs"
 ```
+
+For QA, use `workshop-tf-admin-qa.json` and `PROJECT=harnessevents-qa`. The
+first variable points `gcloud` at the key, the second points `cloud-sql-proxy`
+at it. Neither changes your gcloud configuration. Without them, both fall back
+to your own login and fail once it is re-challenged (below). If you don't have
+the key file, ask the repo owner for it.
 
 [`with-db.sh`](../scripts/with-db.sh) opens its own `cloud-sql-proxy` on a port
 it scans for in `6543`–`6563`, pulls credentials from the `database-url` secret,
@@ -370,8 +377,11 @@ resolves from its `node_modules`. A script in `/tmp` dies with
 
 `gcloud` credentials expire, and reauth needs an interactive browser login. When
 `gcloud sql instances list` reports "Reauthentication failed", that is what has
-happened. `make tf-admin-sa` moves deploys onto a service account key, which no
-session policy expires — see
+happened. The fix is the key above, not another login: a service-account key
+is not a user credential, so no session policy expires it. `make` targets pick
+up the production key by themselves. A direct call to `with-db.sh` doesn't, so
+set the two variables. `make tf-admin-sa` is how the production key was made —
+see
 [infra/admin/README.md](../infra/admin/README.md#operator-credentials).
 
 ### Inspecting an AWS member account
