@@ -152,36 +152,6 @@ function classScores(items: ViewSubmission[], review: ViewReview | null) {
   };
 }
 
-/**
- * The overall score, to one decimal place, of the class someone is in at
- * their newest bootcamp: INT once they have one there, else BTC. Nothing
- * with no assessments.
- */
-export function CurrentOverall({ submissions, reviews }: { submissions: ViewSubmission[]; reviews: ViewReview[] }) {
-  const newest = submissions.reduce<ViewSubmission | null>(
-    (best, s) =>
-      !best ||
-      s.bootcamp.startDate > best.bootcamp.startDate ||
-      (s.bootcamp.startDate === best.bootcamp.startDate && s.stage === "intermediate")
-        ? s
-        : best,
-    null,
-  );
-  if (!newest) return null;
-  const items = submissions.filter((s) => s.bootcamp.id === newest.bootcamp.id && s.stage === newest.stage);
-  const review = reviews.find((r) => r.bootcampId === newest.bootcamp.id && r.stage === newest.stage) ?? null;
-  const { overall } = classScores(items, review);
-  return (
-    <div className="text-right">
-      <p className="text-xs text-muted-foreground">Overall {STAGE_LABELS[newest.stage]} score</p>
-      <p className="text-xl font-medium tabular-nums">
-        {formatScore(overall)}
-        {overall !== null && <span className="text-sm text-muted-foreground"> / {BOOTCAMP_SCORE.max}</span>}
-      </p>
-    </div>
-  );
-}
-
 /** One card per class someone was assessed in: INT before BTC, each newest bootcamp first, as fetched. */
 export function SubmissionGroups({
   personKey,
@@ -288,20 +258,20 @@ function ClassGroup({
             )}
           </div>
         </div>
-        {open ? (
-          first.released ? (
-            <Badge variant="secondary">Released to managers</Badge>
-          ) : (
-            <Badge variant="outline" className="text-muted-foreground">
-              Not released
-            </Badge>
-          )
-        ) : (
+        <div className="flex items-center gap-3">
+          {open &&
+            (first.released ? (
+              <Badge variant="secondary">Released to managers</Badge>
+            ) : (
+              <Badge variant="outline" className="text-muted-foreground">
+                Not released
+              </Badge>
+            ))}
           <span className="text-xl font-medium tabular-nums">
             {formatScore(overall)}
             {overall !== null && <span className="text-sm text-muted-foreground"> / {BOOTCAMP_SCORE.max}</span>}
           </span>
-        )}
+        </div>
       </div>
       <div id={bodyId} hidden={!open} className="divide-y">
         {editing ? (
