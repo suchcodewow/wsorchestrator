@@ -28,6 +28,7 @@ import { CONCEPT_H, CONCEPT_W, PAD, SLIDE_H, SLIDE_W, layoutMap } from "@/lib/mi
 import {
   OPEN_REQUEST,
   buildCoachSystem,
+  focusNote,
   knowsChecklists,
   nextConcept,
   progressSnapshot,
@@ -429,6 +430,24 @@ describe("what the map coach is told", () => {
     assert.equal(turnContent("hello", null), "hello");
     assert.ok(turnContent("hello", s).startsWith("<progress>\nPROGRESS SNAPSHOT"));
     assert.ok(turnContent(OPEN_REQUEST, s).endsWith(OPEN_REQUEST));
+  });
+
+  test("a concept picked on the map goes after the snapshot and before the rep's words, with its checklist", () => {
+    const gamma = conceptsInOrder(content).find((c) => c.id === "gamma")!;
+    const note = focusNote(gamma, state({ points: [{ text: "G one", covered: true }, { text: "G two", covered: false }] }));
+    assert.match(note, /picked \[gamma\] Gamma on the map/);
+    assert.match(note, /Checklist for \[gamma\] Gamma \(1 of 2 covered/);
+    assert.match(focusNote(gamma, undefined), /Checklist for \[gamma\] Gamma: none yet/);
+    const turn = turnContent("Can we switch to Gamma?", progressSnapshot(content, {}), note);
+    assert.match(turn, /^<progress>\n[\s\S]*<\/progress>\n\n<focus>\n[\s\S]*<\/focus>\n\nCan we switch to Gamma\?$/);
+    assert.ok(turnContent("hi", null, note).startsWith("<focus>"));
+  });
+
+  test("a mastered concept picked on the map is a refresher, with nothing to tick", () => {
+    const alpha = conceptsInOrder(content)[0]!;
+    const note = focusNote(alpha, state({ mastered: true }));
+    assert.match(note, /already mastered it, so this is a refresher/);
+    assert.doesNotMatch(note, /Checklist for/);
   });
 });
 

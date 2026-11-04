@@ -9,12 +9,14 @@
  * it in your own words, so you are never asked to repeat the lot. When the
  * coach ticks a point, marks a concept mastered, or recommends its video, it
  * says so under its reply and the map follows. A long conversation shows its latest turns, with the earlier ones
- * a click away.
+ * a click away. The map's chat button opens the tab with ?ask=<concept>: that
+ * asks the coach to switch to the concept, in place of a greeting, and the
+ * parameter comes off the address.
  */
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ChevronDown, ChevronUp, Circle, CircleCheck, Loader2, MessageSquarePlus, Play, SendHorizontal, Star, Check } from "lucide-react";
 import { CoachCanaryAvatar } from "@/components/coach-canary-art";
 import { Button } from "@/components/ui/button";
@@ -66,6 +68,12 @@ async function readEvents(res: Response, on: (event: string, data: unknown) => v
   }
 }
 
+/** Asking to switch to the concept picked on the map, when there is one; otherwise a greeting, when the coach is due to speak. */
+function openingFor(asked: Concept | undefined, needsGreeting: boolean): { message: string; focus: string } | { open: true } | null {
+  if (asked) return { message: `Can we switch to ${asked.name}?`, focus: asked.id };
+  return needsGreeting ? { open: true } : null;
+}
+
 type Notice = { kind: "mastered" | "recommended"; id: string } | ({ kind: "covered" } & Covered);
 
 export function ChatView({
@@ -81,6 +89,7 @@ export function ChatView({
   canSeePoints: boolean;
 }) {
   const router = useRouter();
+  const params = useSearchParams();
   const [view, setView] = useState(initial);
   const [draft, setDraft] = useState("");
   const [pending, setPending] = useState<string | null>(null);
@@ -93,6 +102,8 @@ export function ChatView({
   const scroller = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
   const greeted = useRef(false);
+  // What the coach is sent on opening the tab, read once, before the parameter comes off the address.
+  const opening = useRef(openingFor(concepts.find((c) => c.id === params.get("ask")), initial.needsGreeting));
   const busy = replying || resetting;
   const nameOf = (id: string) => concepts.find((c) => c.id === id)?.name ?? id;
 
@@ -102,8 +113,9 @@ export function ChatView({
   }, [messages.length, pending, streaming, replying]);
 
   /** One turn: what you said, or a greeting, and the coach's reply as it is written. */
-  async function run(input: { message: string } | { open: true }) {
+  async function run(input: { message: string; focus?: string } | { open: true }) {
     stick.current = true;
+    if ("message" in input) setPending(input.message);
     setReplying(true);
     setStreaming("");
     setError(null);
@@ -158,18 +170,21 @@ export function ChatView({
     setStreaming("");
   }
 
-  // Opening the tab with the coach due to speak: it greets you, says where you are, and asks about the next concept.
+  // Opening the tab from a concept's chat button on the map: you ask the coach to switch to it, which stands in for a greeting.
+  // Otherwise, with the coach due to speak: it greets you, says where you are, and asks about the next concept.
   useEffect(() => {
-    if (greeted.current || !initial.needsGreeting || !initial.configured) return;
+    if (greeted.current || !opening.current || !initial.configured) return;
     greeted.current = true;
-    void run({ open: true });
+    void run(opening.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  useEffect(() => {
+    if (params.has("ask")) router.replace("/coach-canary/chat", { scroll: false });
+  }, [params, router]);
 
   async function send() {
     const message = draft.trim();
     if (!message || busy) return;
-    setPending(message);
     setDraft("");
     await run({ message });
   }

@@ -153,17 +153,12 @@
   color: var(--flag);
   line-height: 1.1;
 }
-.mm-concept .mm-done {
-  position: absolute;
-  top: 3px;
-  right: 3px;
-  color: var(--lc);
-}
 .mm-concept .mm-play-slot {
   position: absolute;
-  left: 50%;
+  right: 6px;
   bottom: 6px;
-  transform: translateX(-50%);
+  display: flex;
+  gap: 6px;
 }
 
 .mm-group {
@@ -220,6 +215,25 @@
 .mm-play:hover { filter: brightness(1.15); }
 .mm-play:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 .mm-play:disabled { opacity: 0.4; cursor: not-allowed; }
+.mm-chat {
+  position: relative;
+  justify-content: center;
+  border: 3px solid color-mix(in srgb, var(--lc) 20%, transparent);
+}
+.mm-chat-done {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  border-radius: 999px;
+  background: var(--color-emerald-600);
+  color: white;
+  box-shadow: 0 0 0 2px var(--background);
+}
 
 .mm-chip {
   font-size: 12px;

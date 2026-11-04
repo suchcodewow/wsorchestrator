@@ -13,15 +13,16 @@
  * clicked, unless "Show all connections" is on. Drag the empty map to pan it sideways.
  *
  * Each concept with a video has a play button, a ring that fills as the video
- * is watched. A concept the coach has marked as known shows a check, and one it
- * has asked you to watch is flagged "Recommended". The video library links
+ * is watched. Each concept has a chat button beside it, which opens the Chat
+ * tab and asks the coach to switch to that concept; a concept the coach has
+ * marked as known shows a green check on it, and one it has asked you to
+ * watch is flagged "Recommended". The video library links
  * here with ?show=<concept> to open the map on that concept.
  */
 
 import "./map.css";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Check } from "lucide-react";
 import { anchorFloating } from "@/lib/floating";
 import {
   CONCEPT_H,
@@ -33,6 +34,7 @@ import {
 } from "@/lib/mimir/map/layout";
 import { NO_STATE, type ConceptState, type MapLevel, type PublicMap } from "@/lib/mimir/map/schema";
 import { cn } from "@/lib/utils";
+import { ChatButton } from "./chat-button";
 import { PlayButton } from "./play-button";
 import { VideoDialog } from "./video-dialog";
 
@@ -41,7 +43,7 @@ type Sel = { type: "slide"; id: number } | { type: "concept"; id: string } | { t
 type Pointed = { sel: Sel; anchor: HTMLElement };
 const same = (a: Sel | null, b: Sel) => a !== null && a.type === b.type && a.id === b.id;
 /** A press on any of these is a click on the box, not the start of a drag across the empty map. */
-const NOT_DRAGGABLE = ".mm-slide, .mm-concept, .mm-group, .mm-level, button";
+const NOT_DRAGGABLE = ".mm-slide, .mm-concept, .mm-group, .mm-level, button, a";
 /** How far the pointer moves, in pixels, before a press on the empty map counts as a drag. */
 const DRAG_THRESHOLD = 4;
 const levelVar = (level: number) => ({ "--lc": `var(--l${level})` }) as React.CSSProperties;
@@ -305,12 +307,10 @@ export function MapView({
                   {c.slides.length} {c.slides.length === 1 ? "slide" : "slides"}
                 </span>
                 {st.recommended && <span className="mm-flag">★ Recommended</span>}
-                {st.mastered && <Check className="mm-done size-3.5" strokeWidth={3} aria-hidden />}
-                {c.video && (
-                  <div className="mm-play-slot">
-                    <PlayButton concept={c} state={st} videos={videos} size={30} onPlay={setPlaying} />
-                  </div>
-                )}
+                <div className="mm-play-slot">
+                  <ChatButton concept={c} state={st} size={30} />
+                  {c.video && <PlayButton concept={c} state={st} videos={videos} size={30} onPlay={setPlaying} />}
+                </div>
               </div>
             );
           })}

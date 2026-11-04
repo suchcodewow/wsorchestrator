@@ -596,6 +596,7 @@ export const MIMIR_GROUPS: EndpointGroup[] = [
           kind: "json",
           fields: [
             { name: "message", type: "string", note: `up to ${MIMIR_MESSAGE_MAX} characters; give this or open` },
+            { name: "focus", type: "string", note: "optional, with message: a concept id; the coach turns to that concept now, ahead of the course order, as the map's chat button asks it to. An id not in the course is ignored" },
             { name: "open", type: "true", note: "ask the coach to greet you instead of saying something" },
           ],
         },

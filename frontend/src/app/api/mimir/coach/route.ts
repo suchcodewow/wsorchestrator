@@ -23,8 +23,11 @@ export async function GET(req: Request) {
   return NextResponse.json(await getCoachChat(user.id, Number.isFinite(asked) ? asked : undefined));
 }
 
-/** Either something to say, or a request that the coach greet you. */
-const sendSchema = z.union([z.object({ message: z.string().trim().min(1).max(MIMIR_MESSAGE_MAX) }), z.object({ open: z.literal(true) })]);
+/** Either something to say, with the concept it asks to switch to, or a request that the coach greet you. */
+const sendSchema = z.union([
+  z.object({ message: z.string().trim().min(1).max(MIMIR_MESSAGE_MAX), focus: z.string().max(200).optional() }),
+  z.object({ open: z.literal(true) }),
+]);
 
 export const POST = audited(async function POST(req: Request) {
   const { error, user } = await requireUser(req);
@@ -35,7 +38,7 @@ export const POST = audited(async function POST(req: Request) {
 
   const begun = await beginCoachTurn(user.id, parsed.data);
   if (!begun.ok) return NextResponse.json({ error: begun.error }, { status: COACH_STATUS_FOR[begun.error] });
-  noteAudit({ detail: { greeting: "open" in parsed.data } });
+  noteAudit({ detail: { greeting: "open" in parsed.data, ...("focus" in parsed.data && parsed.data.focus ? { focus: parsed.data.focus } : {}) } });
 
   if (!(req.headers.get("accept") ?? "").includes("text/event-stream")) {
     const result = await finishCoachTurn(begun.turn);

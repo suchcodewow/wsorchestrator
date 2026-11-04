@@ -148,12 +148,7 @@ export function progressSnapshot(content: MapContent, states: Record<string, Sna
   // The checklists still being worked through: the next concept's, and any other they have started on.
   const open = concepts
     .filter((c) => !states[c.id]?.mastered && (c.id === next?.id || states[c.id]?.points?.some((p) => p.covered)))
-    .map((c) => {
-      const list = checklistOf(c, states[c.id]?.points);
-      if (!list) return `Checklist for [${c.id}] ${c.name}: none yet. Write one with [POINTS] when you ask about it.`;
-      const lines = list.map((p, i) => `  ${i + 1}. ${p.covered ? "[covered]" : "[open]"} ${p.text}`);
-      return `Checklist for [${c.id}] ${c.name} (${list.filter((p) => p.covered).length} of ${list.length} covered; ask only about open points):\n${lines.join("\n")}`;
-    });
+    .map((c) => checklistBlock(c, states[c.id]));
   const text = [
     "PROGRESS SNAPSHOT",
     `Mastered: ${mastered} of ${concepts.length}.`,
@@ -162,6 +157,27 @@ export function progressSnapshot(content: MapContent, states: Record<string, Sna
     ...open,
   ].join("\n");
   return { text, hash: createHash("sha256").update(text).digest("hex").slice(0, 16) };
+}
+
+/** A concept's checklist as the coach reads it, with what the rep has covered. */
+function checklistBlock(c: MapConcept, state: SnapshotState | undefined): string {
+  const list = checklistOf(c, state?.points);
+  if (!list) return `Checklist for [${c.id}] ${c.name}: none yet. Write one with [POINTS] when you ask about it.`;
+  const lines = list.map((p, i) => `  ${i + 1}. ${p.covered ? "[covered]" : "[open]"} ${p.text}`);
+  return `Checklist for [${c.id}] ${c.name} (${list.filter((p) => p.covered).length} of ${list.length} covered; ask only about open points):\n${lines.join("\n")}`;
+}
+
+/**
+ * What the rep picked on the map to talk about, sent with the message that
+ * asks for it: the coach turns to that concept now, whatever comes next in
+ * order, and goes back to the order once it is done. A mastered concept is a
+ * refresher, with nothing left to tick.
+ */
+export function focusNote(c: MapConcept, state: SnapshotState | undefined): string {
+  const how = state?.mastered
+    ? `They have already mastered it, so this is a refresher: ask what they remember and fill any gaps. Nothing needs ticking.`
+    : `Check them on it the usual way, then go back to the next concept in order.\n${checklistBlock(c, state)}`;
+  return `The rep picked [${c.id}] ${c.name} on the map and wants to talk about it now, ahead of the course order. ${how}`;
 }
 
 /** The rep's side of an opening, never shown. */
@@ -176,9 +192,10 @@ export function openContent(priorOpenings: number): string {
   return priorOpenings % INTRO_EVERY === 0 ? `${OPEN_REQUEST} Introduce yourself.` : OPEN_REQUEST;
 }
 
-/** A rep's turn as it is sent: the snapshot first when it has changed since the coach last saw it. */
-export function turnContent(message: string, snapshot: { text: string } | null): string {
-  return snapshot ? `<progress>\n${snapshot.text}\n</progress>\n\n${message}` : message;
+/** A rep's turn as it is sent: the snapshot first when it has changed since the coach last saw it, then the concept they picked on the map, if any. */
+export function turnContent(message: string, snapshot: { text: string } | null, focus: string | null = null): string {
+  const progress = snapshot ? `<progress>\n${snapshot.text}\n</progress>\n\n` : "";
+  return `${progress}${focus ? `<focus>\n${focus}\n</focus>\n\n` : ""}${message}`;
 }
 
 const MASTERED = /^[ \t]*\[MASTERED:\s*([A-Za-z0-9_-]+)\s*\][ \t]*$/gim;

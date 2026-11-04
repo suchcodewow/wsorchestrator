@@ -40,6 +40,7 @@ import {
   OPEN_REQUEST,
   openContent,
   buildCoachSystem,
+  focusNote,
   knowsChecklists,
   nextConcept,
   progressSnapshot,
@@ -181,7 +182,8 @@ export type CoachTurn = {
   conceptIds: string[];
 };
 
-export type CoachInput = { message: string } | { open: true };
+/** Something to say, with the id of a concept picked on the map when the rep asked to switch to it there; or a request to be greeted. */
+export type CoachInput = { message: string; focus?: string } | { open: true };
 
 /**
  * Saves the rep's message (or the hidden "I just opened Mimir" of a
@@ -199,8 +201,10 @@ export async function beginCoachTurn(
   if (needsKey && !coachConfigured()) return { ok: false, error: "not_configured" };
   const conversation = await ensureConversation(userId, map.content);
   if (!conversation) return { ok: false, error: "upstream" };
-  const { snapshot } = await standing(userId, map.content);
+  const { snapshot, states, concepts } = await standing(userId, map.content);
   const message = "message" in input ? input.message : null;
+  const picked = "message" in input && input.focus ? concepts.find((c) => c.id === input.focus) : undefined;
+  const focus = picked ? focusNote(picked, states[picked.id]) : null;
 
   type Claim = { seq: number; at: Date } | { error: "busy" | "full" };
   const claimed = await db.transaction(async (tx): Promise<Claim> => {
@@ -240,7 +244,7 @@ export async function beginCoachTurn(
         .where(and(eq(mimirCoachMessages.userId, userId), eq(mimirCoachMessages.role, "user"), eq(mimirCoachMessages.shown, false)));
       sent = openContent(n ?? 0);
     }
-    const content = turnContent(sent ?? OPEN_REQUEST, fresh ? snapshot : null);
+    const content = turnContent(sent ?? OPEN_REQUEST, fresh ? snapshot : null, focus);
     const [row] = await tx
       .insert(mimirCoachMessages)
       .values({ userId, seq, role: "user", shown: message !== null, content, text: message ?? OPEN_REQUEST })
