@@ -11,7 +11,7 @@
  * A Day item of a class-day can be given a time. Until it is ticked, a green
  * check sits at that time at the left edge of its day on the schedule;
  * hovering it names the item and its owner, and clicking it opens the board
- * with the item lit. Moved to Prep Day or an Evening, an item keeps its time,
+ * with the item traced round once, as a page's tour button is. Moved to Prep Day or an Evening, an item keeps its time,
  * greyed out, and leaves the schedule until it is moved back.
  *
  * A Training administrator adds cards, edits, ticks and removes them, drags
@@ -43,6 +43,7 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core";
 import { AlarmClock, Check, Copy, Loader2, Plus, Sunrise, Sunset, Trash2 } from "lucide-react";
+import { GlowTrace } from "@/components/tour/glow-trace";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { MentionText } from "@/components/mention-text";
@@ -149,6 +150,9 @@ const STARS = [
   { x: 72, y: 90, delay: 2.1 },
   { x: 48, y: 86, delay: 1 },
 ];
+
+/** How long the trace round a card takes, once, as the board opens on it from a mark on the schedule. */
+const CARD_TRACE_MS = 1500;
 
 /** A card popping into existence: from small and tilted, overshooting a little as it lands. */
 const POP = {
@@ -472,7 +476,7 @@ function ChecklistBoard({
     (card ?? sections.current.get(key))?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
     const light = (on: boolean) => (focus.items?.length ? setLitCards(new Set(on ? focus.items : [])) : setLit(on ? key : null));
     const on = setTimeout(() => light(true), 150);
-    const off = setTimeout(() => light(false), 1400);
+    const off = setTimeout(() => light(false), focus.items?.length ? 150 + CARD_TRACE_MS : 1400);
     return () => {
       clearTimeout(on);
       clearTimeout(off);
@@ -1029,7 +1033,7 @@ function ChecklistCard({
   canManage: boolean;
   viewerEmail: string;
   fresh: boolean;
-  /** Pulses once, as the board opens on it from the schedule. */
+  /** Traced round once, as the board opens on it from the schedule. */
   lit: boolean;
   /** Being dragged elsewhere: left faint where it was. */
   moving: boolean;
@@ -1053,15 +1057,6 @@ function ChecklistCard({
   return (
     <motion.li layout {...POP} data-checklist-card={item.id} className="relative">
       {fresh && <Burst />}
-      {lit && (
-        <motion.span
-          aria-hidden
-          className="pointer-events-none absolute -inset-1 z-10 rounded-xl ring-2 ring-emerald-500"
-          initial={{ opacity: 0, scale: 0.96 }}
-          animate={{ opacity: [0, 1, 1, 0], scale: [0.96, 1.03, 1, 1], backgroundColor: ["rgba(16,185,129,0)", "rgba(16,185,129,0.18)", "rgba(16,185,129,0.1)", "rgba(16,185,129,0)"] }}
-          transition={{ duration: 1.2, ease: "easeInOut" }}
-        />
-      )}
       <div
         ref={(el) => {
           setNodeRef(el);
@@ -1076,7 +1071,7 @@ function ChecklistCard({
           else listeners?.onKeyDown?.(e);
         }}
         aria-label={canManage ? `${item.name}: drag to move, click to change` : undefined}
-        className={cn("group relative", canManage && "cursor-pointer active:cursor-grabbing", moving && "opacity-40")}
+        className={cn("group relative rounded-lg", canManage && "cursor-pointer active:cursor-grabbing", moving && "opacity-40")}
       >
         <CardFace
           item={item}
@@ -1111,6 +1106,13 @@ function ChecklistCard({
             )
           }
         />
+        {lit && (
+          <>
+            <GlowTrace duration={CARD_TRACE_MS} blur={4} />
+            {/* The trace draws nothing for someone who asks for less motion; they get a still ring instead. */}
+            <span aria-hidden className="pointer-events-none absolute inset-0 hidden rounded-lg ring-2 ring-emerald-500 motion-reduce:block" />
+          </>
+        )}
         {canManage && (
           <button
             type="button"
