@@ -2,16 +2,16 @@
 
 /**
  * The page's tour: fetched whenever the path changes and played from the
- * header's question mark. The first time someone who does not administer the
- * page opens it at this version, the question mark glows to point the tour
- * out, once, and the version counts as seen whether or not they take it. Not
+ * header's question mark. The first time someone
+ * opens it at this version, administrators included, the question mark glows
+ * to point the tour out, tracing round three times, and the version counts as seen whether or not they take it. Not
  * pointed out inside another site's frame, or while viewing as someone else,
  * where marking it seen would be recorded as them.
  *
  * A link carrying `?tour` (the editor's "Copy tour link") plays the tour for
  * whoever opens it, seen or not, a second after the page arrives: the page
  * is given a moment to be seen first, and the question mark is traced round
- * meanwhile, so the tour visibly comes from it. The parameter is then taken
+ * meanwhile, three times over, so the tour visibly comes from it. The parameter is then taken
  * off the address so a reload does not play it again.
  *
  * It also holds the editor, for whoever administers the page, and plays the
@@ -50,9 +50,11 @@ type Match = { path: string; tour: Tour | null; seenVersion: number; canEdit: bo
 /** What is playing, on which page: the saved tour, or the editor's steps as they stand. */
 type Run = { path: string; steps: TourStep[]; start: number; preview: boolean };
 
-/** How long a shared tour link waits, once the page is there, before playing. */
-const LINK_DELAY_MS = 1000;
-/** How long the question mark is traced round for someone new to the page. */
+/** How many times the question mark is traced round when it points the tour out. */
+export const TRACE_COUNT = 3;
+/** How long one trace round the question mark takes before a shared tour link plays. */
+const LINK_TRACE_MS = 1000;
+/** How long one trace round the question mark takes for someone new to the page. */
 const FIRST_VISIT_MS = 2000;
 
 /** Whether the address asks for the tour, taking the parameter off it if so. */
@@ -96,10 +98,10 @@ export function TourProvider({ autoPlay, children }: { autoPlay: boolean; childr
         setMatch({ path: pathname, ...body });
         const tour = body.tour && body.tour.steps.length > 0 ? body.tour : null;
         if (takeTourParam() && tour) {
-          setBeckonAt({ path: pathname, ms: LINK_DELAY_MS });
+          setBeckonAt({ path: pathname, ms: LINK_TRACE_MS });
           // Unless the question mark was clicked in the meantime and the tour is already going.
-          timer = window.setTimeout(() => setRun((r) => r ?? { path: pathname, steps: tour.steps, start: 0, preview: false }), LINK_DELAY_MS);
-        } else if (tour && tour.version > body.seenVersion && !body.canEdit && autoPlay && !isFramed()) {
+          timer = window.setTimeout(() => setRun((r) => r ?? { path: pathname, steps: tour.steps, start: 0, preview: false }), LINK_TRACE_MS * TRACE_COUNT);
+        } else if (tour && tour.version > body.seenVersion && autoPlay && !isFramed()) {
           setBeckonAt({ path: pathname, ms: FIRST_VISIT_MS });
           markSeen(tour);
         }

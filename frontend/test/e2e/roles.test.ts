@@ -437,6 +437,7 @@ const PAGES: Record<string, PageCase> = {
   "/me/tokens": { path: () => "/me/tokens", expect: gated(canUseEvents) },
   "/me/org-secrets": { path: () => "/me/org-secrets", expect: gated(canUseEvents) },
   "/me/templates": { path: () => "/me/templates", expect: gated(canUseEvents) },
+  "/me/preferences": { path: () => "/me/preferences", expect: () => 200 },
   "/me/check-pc": { path: () => "/me/check-pc", expect: () => 200 },
   "/me/api-tokens": { path: () => "/me/api-tokens", expect: () => 200 },
   "/inbox": { path: () => "/inbox", expect: () => 200 },
@@ -937,6 +938,7 @@ const ROUTES: RouteCase[] = [
   // No page has this pattern, so it is a platform administrator's, and there is no tour there to remove.
   { method: "DELETE", path: "/api/tours?pattern=/wo-test-no-tour", allowed: (a) => canEditTour(a, "/wo-test-no-tour") },
   { method: "POST", path: "/api/tours/seen", allowed: true, body: () => ({}) },
+  { method: "DELETE", path: "/api/tours/seen", allowed: true },
 ];
 
 type Via = "session" | "token";

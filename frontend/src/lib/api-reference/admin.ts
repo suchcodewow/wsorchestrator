@@ -240,6 +240,15 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           { status: 404, error: "not_found", when: "no such tour" },
         ],
       },
+      {
+        method: "DELETE",
+        path: "/api/tours/seen",
+        summary: "Forgets every tour the caller has seen, so each plays for them by itself again.",
+        access: "signedIn",
+        token: true,
+        returns: "{ ok: true, reset: number }",
+        notes: "reset is how many tours were forgotten.",
+      },
     ],
   },
   {

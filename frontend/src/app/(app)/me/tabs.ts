@@ -5,6 +5,7 @@ import {
   KeyRound,
   KeySquare,
   MonitorCheck,
+  SlidersHorizontal,
   Terminal,
   type LucideIcon,
 } from "lucide-react";
@@ -19,12 +20,11 @@ export type SettingsTab = {
 };
 
 /**
- * The Harness tokens, org secrets and templates are what this account's events
- * deploy with, so only someone in the event area sees them. Check PC is first
- * among the rest because it is where a guest judge — who has no role anywhere —
- * lands from the sidebar.
+ * Preferences is first, for everyone. The Harness tokens, org secrets and templates are what this account's events
+ * deploy with, so only someone in the event area sees them.
  */
 export const MY_SETTINGS_TABS: SettingsTab[] = [
+  { href: "/me/preferences", label: "Preferences", Icon: SlidersHorizontal },
   { href: "/me/tokens", label: "My Harness tokens", Icon: KeyRound, visible: canUseEvents },
   { href: "/me/org-secrets", label: "My org secrets", Icon: KeySquare, visible: canUseEvents },
   { href: "/me/templates", label: "My templates", Icon: FileCode2, visible: canUseEvents },

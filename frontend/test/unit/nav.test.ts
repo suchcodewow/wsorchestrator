@@ -208,22 +208,23 @@ describe("My settings tabs", () => {
   const labels = (a: Access) => visibleMySettingsTabs(a).map((t) => t.label);
   const EVENT_TABS = ["My Harness tokens", "My org secrets", "My templates"];
   const EVERYONE = ["Check PC", "My API tokens"];
+  const FIRST = "Preferences";
 
   test("anyone in the event area gets the event tabs, then the rest", () => {
     for (const a of EVERY_ACCESS.filter(canUseEvents)) {
-      assert.deepEqual(labels(a), [...EVENT_TABS, ...EVERYONE], describeAccess(a));
+      assert.deepEqual(labels(a), [FIRST, ...EVENT_TABS, ...EVERYONE], describeAccess(a));
     }
   });
 
-  test("anyone else gets only Check PC and their API tokens", () => {
+  test("anyone else gets only Preferences, Check PC and their API tokens", () => {
     // A guest judge, a Training or eVals-only user, or someone given nothing.
     for (const a of EVERY_ACCESS.filter((a) => !canUseEvents(a))) {
-      assert.deepEqual(labels(a), EVERYONE, describeAccess(a));
+      assert.deepEqual(labels(a), [FIRST, ...EVERYONE], describeAccess(a));
     }
   });
 
-  test("a guest judge lands on Check PC", () => {
-    assert.equal(visibleMySettingsTabs(PERSONAS.guestJudge)[0]!.href, "/me/check-pc");
+  test("everyone lands on Preferences", () => {
+    for (const a of EVERY_ACCESS) assert.equal(visibleMySettingsTabs(a)[0]!.href, "/me/preferences", describeAccess(a));
   });
 
   test("every tab lives under /me", () => {
