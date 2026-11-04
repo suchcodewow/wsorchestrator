@@ -48,6 +48,7 @@ import {
   submissionEditSchema,
   unscoredAttendees,
   visibleStages,
+  type BootcampReader,
 } from "@/lib/reporting/bootcamp";
 import { pendingOverall, suggestOverallFeedback } from "@/lib/reporting/overall-feedback";
 import { PERSONAS } from "../support/access";
@@ -543,20 +544,30 @@ describe("a class's overall review", () => {
 
   test("records who opens a card, once per person, and names them on both lists", async () => {
     const key = `${SCOPED}newcomer`;
-    assert.deepEqual(await recordCardView(admin.id, viewer(), key), { email: emailOf("newcomer") });
-    assert.ok(await recordCardView(admin.id, viewer(), key));
-    const viewers = (await listCardViewers(viewer(), key))!;
+    const opener = () => readerOf({ access: PERSONAS.assessmentsViewer, email: null, id: admin.id });
+    assert.deepEqual(await recordCardView(admin.id, opener(), key), { email: emailOf("newcomer") });
+    assert.ok(await recordCardView(admin.id, opener(), key));
+    const viewers = (await listCardViewers(opener(), key))!;
     const mine = viewers.viewers.find((v) => v.name === "admin")!;
     assert.equal(viewers.viewers.filter((v) => v.name === "admin").length, 1, "two opens are one viewer");
     assert.equal(mine.views, 2);
 
     const q = emailOf("newcomer");
-    const inCohort = (await listCohort(viewer(), (await cohortBootcamp())!, { ...BOOTCAMP_COHORT_LIST, q, page: 1 })).rows[0]!;
-    const inHistory = (await listBootcampRecords(viewer(), { ...BOOTCAMP_RECORD_LIST, q, page: 1 })).rows[0]!;
-    for (const row of [inCohort, inHistory]) {
+    const rowsFor = async (reader: BootcampReader) => [
+      (await listCohort(reader, (await cohortBootcamp())!, { ...BOOTCAMP_COHORT_LIST, q, page: 1 })).rows[0]!,
+      (await listBootcampRecords(reader, { ...BOOTCAMP_RECORD_LIST, q, page: 1 })).rows[0]!,
+    ];
+    for (const row of await rowsFor(opener())) {
       assert.equal(row.viewerCount, viewers.total);
       assert.equal(row.viewers[0]?.name, "admin");
     }
+
+    // Someone who has not opened it themself sees no one who has.
+    for (const row of await rowsFor(viewer())) {
+      assert.equal(row.viewerCount, 0);
+      assert.deepEqual(row.viewers, []);
+    }
+    assert.deepEqual(await listCardViewers(viewer(), key), { viewers: [], total: 0 });
 
     // Someone who may not see the card records nothing.
     const outsider = readerOf({ access: PERSONAS.nobody, email: emailOf("outsider") });

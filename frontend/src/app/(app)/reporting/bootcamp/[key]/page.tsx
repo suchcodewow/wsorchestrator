@@ -28,7 +28,7 @@ export default async function BootcampPersonPage({
   const { access } = session.user;
 
   const { key } = await params;
-  const person = await getBootcampPerson(readerOf({ access, email: session.user.email ?? null }), key);
+  const person = await getBootcampPerson(readerOf({ access, email: session.user.email ?? null, id: session.user.id }), key);
   if (!person) notFound();
 
   // The list carried its search, sorts, pages and filters here, so the back link returns to them.
