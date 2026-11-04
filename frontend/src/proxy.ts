@@ -10,9 +10,16 @@ import { withFrameSession } from "@/lib/frame-cookie";
 import { frameAncestorsPolicy } from "@/lib/frame-domains";
 import { REQUEST_PATH_HEADER } from "@/lib/request-path";
 
+const ASSET = /\.(?:png|jpe?g|gif|webp|avif|svg|ico|bmp|woff2?|ttf|otf|eot)$/i;
+
+/**
+ * Pages only: an asset is served on whatever host asked for it. The image
+ * optimizer fetches its source through this proxy on an internal host, and a
+ * redirect there left every `next/image` with "isn't a valid image".
+ */
 function canonicalRedirect(request: NextRequest): NextResponse | null {
   const canonical = process.env.CANONICAL_HOST;
-  if (!canonical) return null;
+  if (!canonical || ASSET.test(request.nextUrl.pathname)) return null;
 
   const host =
     request.headers.get("x-forwarded-host") ?? request.headers.get("host");
@@ -41,8 +48,6 @@ try {
 } catch {
   served = new Set();
 }
-
-const ASSET = /\.(?:png|jpe?g|gif|webp|avif|svg|ico|bmp|woff2?|ttf|otf|eot)$/i;
 
 function assetMiss(request: NextRequest): NextResponse | null {
   const path = request.nextUrl.pathname.slice(1);

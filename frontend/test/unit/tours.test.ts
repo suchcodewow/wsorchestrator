@@ -234,8 +234,8 @@ describe("who may write a page's tour", () => {
     ["/evals", ["assessmentsAdmin", "platform"]],
     ["/diagnostic", ["assessmentsAdmin", "platform"]],
     // Mimir sits under Assessments, but its gear is Mimir Settings, a training administrator's.
-    ["/mimir", ["trainingAdmin", "bothAdmins", "platform"]],
-    ["/mimir-settings", ["trainingAdmin", "bothAdmins", "platform"]],
+    ["/coach-canary", ["trainingAdmin", "bothAdmins", "platform"]],
+    ["/coach-canary-settings", ["trainingAdmin", "bothAdmins", "platform"]],
     ["/me", ["platform"]],
     ["/welcome", ["platform"]],
     ["/users", ["platform"]],

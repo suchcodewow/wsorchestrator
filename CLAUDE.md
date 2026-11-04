@@ -29,6 +29,28 @@ browser; to see a signed-in page, use the session-row technique in
 who holds them. Say what you need and stop; do not look for a credential
 elsewhere.
 
+**Anything that needs a gcloud login uses a service-account key, not a
+person's login.** That covers `gcloud`, `cloud-sql-proxy`, `scripts/with-db.sh`
+and tofu. A user login is re-challenged by Workspace every 16 hours, so a
+non-interactive run dies with "Reauthentication failed". The keys don't expire:
+
+| Environment | Key file                                     | Service account                     |
+| ----------- | -------------------------------------------- | ----------------------------------- |
+| Production  | `~/.config/gcloud/workshop-tf-admin.json`    | `tf-admin-sa@administration-459416` |
+| QA          | `~/.config/gcloud/workshop-tf-admin-qa.json` | `tf-admin-qa@harnessevents-qa`      |
+
+Set the key on each command, for gcloud and for the proxy:
+
+```bash
+K=$HOME/.config/gcloud/workshop-tf-admin.json; CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE=$K GOOGLE_APPLICATION_CREDENTIALS=$K PROJECT=administration-459416 ./scripts/with-db.sh "…"
+```
+
+If the key file isn't there, stop and tell the person to ask the repo owner for
+it. Don't fall back to their own login, and don't create a key. Never print or
+copy a key's contents. Each key holds owner on its project, and having one
+doesn't make a production or QA change any less something the user must ask
+for.
+
 Before investigating a failure in the deployed app, read
 [Known issues](docs/operations.md#known-issues). Several things that look broken
 are expected or were deliberately left alone.

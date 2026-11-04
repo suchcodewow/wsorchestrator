@@ -3,7 +3,7 @@
  * into a Mimir import file, which Mimir Settings → Content → Import loads.
  *
  *   cd frontend
- *   npx tsx scripts/mimir-convert.ts ../../harness-learning-hub/src/data.ts > ~/mimir-content.json
+ *   npx tsx scripts/mimir-convert.ts ../../harness-learning-hub/src/data.ts > ~/coach-canary-content.json
  *
  * The content is not public and this repository is, so the file goes
  * wherever you put it, never in here (`.gitignore` refuses `mimir-content*.json`

@@ -1,0 +1,287 @@
+/*
+ * The concept map. The geometry is absolute, in the canvas's own pixels
+ * (lib/mimir/map/layout.ts); everything else takes the app's theme tokens so
+ * it sits in the page and follows light and dark. Level colours are the
+ * course's: 100 green, 200 blue, 300 purple, 400 amber.
+ */
+
+.mm {
+  --l0: #8d8c85;
+  --l1: #2f8a5b;
+  --l2: #2b6cd4;
+  --l3: #7a4bd1;
+  --l4: #b3741a;
+  --onl: #ffffff;
+  --s1: #4d6a9b;
+  --s2: #3f8062;
+  --s3: #8a6a2f;
+  --s4: #8d4a5c;
+  --flag: #b45309;
+}
+.dark .mm {
+  --l1: #5fd09a;
+  --l2: #6ea4ff;
+  --l3: #b595ff;
+  --l4: #f0b94d;
+  --onl: #12120f;
+  --flag: #f0b94d;
+}
+
+.mm-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  background: var(--card);
+  padding: 10px 0 14px;
+  -webkit-overflow-scrolling: touch;
+  cursor: grab;
+}
+.mm-scroll.mm-dragging {
+  cursor: grabbing;
+  user-select: none;
+}
+.mm-canvas {
+  position: relative;
+}
+.mm-edges {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.mm-e {
+  fill: none;
+  stroke-width: 1;
+  opacity: 0.22;
+}
+.mm-l1 { stroke: var(--l1); }
+.mm-l2 { stroke: var(--l2); }
+.mm-l3 { stroke: var(--l3); }
+.mm-sel .mm-e { opacity: 0.035; }
+.mm-sel .mm-e.mm-on { opacity: 0.9; stroke-width: 1.8; }
+
+.mm-band {
+  position: absolute;
+  top: 0;
+  height: 48px;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 5px;
+  overflow: hidden;
+}
+.mm-band > span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mm-slide,
+.mm-concept,
+.mm-group,
+.mm-slide,
+.mm-concept,
+.mm-group,
+.mm-level {
+  cursor: pointer;
+}
+.mm-slide {
+  position: absolute;
+  top: 34px;
+  width: 117px;
+  height: 37px;
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-top: 4px solid var(--ln);
+  border-radius: 6px;
+  padding: 3px 5px;
+  font-size: 12px;
+  line-height: 1.35;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.mm-slide b {
+  display: inline;
+  margin-right: 5px;
+  font-size: 14px;
+}
+.mm-slide.mm-empty {
+  color: color-mix(in srgb, var(--foreground) 55%, var(--background));
+}
+
+.mm-concept {
+  position: absolute;
+  width: 126px;
+  height: 124px;
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-top: 5px solid var(--lc);
+  border-radius: 6px;
+  padding: 5px;
+  font-size: 13px;
+  line-height: 1.25;
+  font-weight: 600;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.mm-concept .mm-st {
+  display: inline-block;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--lc);
+  margin-right: 3px;
+}
+.mm-concept .mm-n {
+  display: block;
+  color: var(--muted-foreground);
+  font-weight: 400;
+  font-size: 12px;
+  margin-top: 3px;
+}
+.mm-concept.mm-recommended {
+  border-color: var(--flag);
+  box-shadow: 0 0 0 1px var(--flag);
+}
+.mm-concept .mm-flag {
+  display: block;
+  margin-top: 3px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--flag);
+  line-height: 1.1;
+}
+.mm-concept .mm-play-slot {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  display: flex;
+  gap: 6px;
+}
+
+.mm-group {
+  position: absolute;
+  height: 24px;
+  border: 1px solid var(--lc);
+  background: color-mix(in srgb, var(--lc) 16%, var(--card));
+  color: var(--foreground);
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 5px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.mm-level {
+  position: absolute;
+  height: 28px;
+  background: var(--lc);
+  color: var(--onl);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 5px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+/* Cards that are not part of the selection fade by colour, not transparency, so lines still pass behind them rather than showing through. */
+.mm-sel .mm-slide:not(.mm-on),
+.mm-sel .mm-concept:not(.mm-on),
+.mm-sel .mm-group:not(.mm-on) {
+  color: color-mix(in srgb, var(--foreground) 35%, var(--background));
+  filter: saturate(0.25);
+}
+.mm-sel .mm-level:not(.mm-on) {
+  opacity: 0.28;
+}
+.mm-slide.mm-on,
+.mm-concept.mm-on,
+.mm-group.mm-on,
+.mm-level.mm-on {
+  box-shadow: 0 0 0 2px var(--foreground);
+}
+
+/* The play button: a ring that fills as the video is watched. */
+.mm-play {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--lc);
+  border-radius: 999px;
+  cursor: pointer;
+}
+.mm-play:hover { filter: brightness(1.15); }
+.mm-play:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.mm-play:disabled { opacity: 0.4; cursor: not-allowed; }
+.mm-chat {
+  position: relative;
+  justify-content: center;
+  border: 3px solid color-mix(in srgb, var(--lc) 20%, transparent);
+}
+.mm-chat-done {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  border-radius: 999px;
+  background: var(--color-emerald-600);
+  color: white;
+  box-shadow: 0 0 0 2px var(--background);
+}
+
+.mm-chip {
+  font-size: 12px;
+  border: 1px solid var(--border);
+  border-left-width: 4px;
+  border-radius: 5px;
+  padding: 1px 7px;
+  background: var(--card);
+}
+.mm-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 6px;
+}
+
+/* A line from a concept to one it requires: dashed, so it reads apart from the slide lines. */
+.mm-e.mm-req { stroke-dasharray: 5 3; opacity: 0.4; }
+.mm-sel .mm-e.mm-req { opacity: 0.035; }
+.mm-sel .mm-e.mm-req.mm-on { opacity: 0.9; }
+
+
+
+/* The heading over the stack of slides, in the shape of a level's but belonging to none. */
+.mm-heading {
+  position: absolute;
+  height: 28px;
+  background: var(--l0);
+  color: var(--onl);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 5px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+/* "Show all connections" off: a line shows only when it belongs to what is selected. */
+.mm-bare .mm-edges .mm-e { opacity: 0; }
+.mm-bare.mm-sel .mm-edges .mm-e.mm-on { opacity: 0.9; }
+
+/* A faint rule between the slides and the first level's column. */
+.mm-divider {
+  position: absolute;
+  top: 20px;
+  width: 1px;
+  background: var(--border);
+  opacity: 0.6;
+  pointer-events: none;
+}

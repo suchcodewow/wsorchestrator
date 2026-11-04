@@ -1,7 +1,7 @@
 /**
  * The front door, for everyone: the upcoming bootcamps; for someone in
  * Training or Assessments, the steps of running a live training session,
- * each with where it stands now; then Captain Canary, since everyone can use it. The sidebar has every other page.
+ * each with where it stands now; then Coach Canary, since everyone can use it. The sidebar has every other page.
  */
 
 import type { Metadata } from "next";
@@ -9,7 +9,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ArrowRight, Map as MapIcon } from "lucide-react";
 import { auth, signInPath } from "@/auth";
-import { CaptainCanaryArt } from "@/components/captain-canary-art";
+import { CoachCanaryArt } from "@/components/coach-canary-art";
 import { Button } from "@/components/ui/button";
 import { mapSummary } from "@/lib/mimir/map/summary";
 import { canSeeLiveTraining, liveTraining } from "@/lib/live-training";
@@ -20,7 +20,7 @@ import { UpcomingSessions } from "./upcoming-sessions";
 
 export const metadata: Metadata = { title: "Welcome" };
 
-const MIMIR_HREF = "/mimir";
+const MIMIR_HREF = "/coach-canary";
 
 export default async function WelcomePage() {
   const session = await auth();
@@ -54,14 +54,14 @@ export default async function WelcomePage() {
           className="grid max-w-3xl overflow-hidden rounded-2xl border bg-card shadow-sm sm:grid-cols-[16rem_minmax(0,1fr)]"
         >
           <Link href={MIMIR_HREF} tabIndex={-1} aria-hidden>
-            <CaptainCanaryArt className="h-full w-full" title="Captain Canary, the coach, on the sideline" />
+            <CoachCanaryArt className="h-full w-full" title="Coach Canary on the sideline" />
           </Link>
           <div className="flex flex-col justify-center gap-3 p-5">
             <p className="text-xs font-medium tracking-wide text-brand uppercase">Training · open to everyone</p>
             <h2 id="welcome-mimir" className="text-xl font-medium tracking-tight">
-              Captain Canary
+              Coach Canary
             </h2>
-            <p className="text-muted-foreground">Learn Harness with Captain Canary.</p>
+            <p className="text-muted-foreground">Learn Harness with Coach Canary.</p>
             {summary && summary.mastered + summary.watched > 0 && (
               <p className="text-sm text-muted-foreground tnum">
                 <span className="font-medium text-foreground">{summary.mastered}</span> of {summary.total} concepts mastered · {summary.watched} of{" "}
@@ -72,13 +72,13 @@ export default async function WelcomePage() {
               {summary?.next && summary.mastered + summary.watched > 0 ? (
                 <>
                   <Button variant="brand" asChild>
-                    <Link href="/mimir/chat">
+                    <Link href="/coach-canary/chat">
                       Continue: <span className="max-w-56 truncate">{summary.next.name}</span>
                       <ArrowRight />
                     </Link>
                   </Button>
                   <Button variant="outline" asChild>
-                    <Link href="/mimir/map">
+                    <Link href="/coach-canary/map">
                       <MapIcon />
                       Open the map
                     </Link>
@@ -87,7 +87,7 @@ export default async function WelcomePage() {
               ) : (
                 <Button variant="brand" asChild>
                   <Link href={MIMIR_HREF}>
-                    Open Captain Canary
+                    Open Coach Canary
                     <ArrowRight />
                   </Link>
                 </Button>

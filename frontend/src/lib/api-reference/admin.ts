@@ -394,7 +394,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "platform",
         token: false,
         notes:
-          "Its address is generated on test-account.invalid, which no Google account can have, so nobody can sign in as it. With copyFrom it starts with the roles in each area, theme and calendar settings, and Diagnostic track of the account with that address, copied once; an employee who has never signed in has no account, so it starts with no roles, as they would. Their Diagnostic sittings, Captain Canary progress and Harness credentials are not copied, nor being a manager or a guest judge, which follow from their own address. Change its roles afterwards with PATCH /api/users/{id}, and delete it with DELETE /api/users/{id}.",
+          "Its address is generated on test-account.invalid, which no Google account can have, so nobody can sign in as it. With copyFrom it starts with the roles in each area, theme and calendar settings, and Diagnostic track of the account with that address, copied once; an employee who has never signed in has no account, so it starts with no roles, as they would. Their Diagnostic sittings, Coach Canary progress and Harness credentials are not copied, nor being a manager or a guest judge, which follow from their own address. Change its roles afterwards with PATCH /api/users/{id}, and delete it with DELETE /api/users/{id}.",
         body: {
           kind: "json",
           fields: [
@@ -1821,7 +1821,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
     id: "video-feedback",
     title: "Video feedback",
     intro:
-      "Smiley and confused faces on videos (rating up is the green smiley, down the orange confused face). Every player in the app — a Captain Canary concept's video, and each stream of a recorded take — has both faces over it, each with a comment button beside it. A rating is saved as it is pressed; the comment button pauses the video, and saving the comment saves the rating with it and plays on. Every press is its own row, so the same person can rate the same video more than once.",
+      "Smiley and confused faces on videos (rating up is the green smiley, down the orange confused face). Every player in the app — a Coach Canary concept's video, and each stream of a recorded take — has both faces over it, each with a comment button beside it. A rating is saved as it is pressed; the comment button pauses the video, and saving the comment saves the rating with it and plays on. Every press is its own row, so the same person can rate the same video more than once.",
     endpoints: [
       {
         method: "POST",
@@ -1830,7 +1830,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "signedIn",
         token: true,
         notes:
-          `A Captain Canary concept's video may be rated by anyone signed in; a recording's stream only by a ${ACCESS_LABELS.trainingAdmin}, who are the ones who can watch it. The video's name is saved with the feedback as it is now, and so is the version being watched, since the same moment falls at a different second in each: videoObject is null for feedback from before that was kept, and for a recording. A comment is trimmed, and a blank one is saved as none. A recording's feedback is deleted with the take.`,
+          `A Coach Canary concept's video may be rated by anyone signed in; a recording's stream only by a ${ACCESS_LABELS.trainingAdmin}, who are the ones who can watch it. The video's name is saved with the feedback as it is now, and so is the version being watched, since the same moment falls at a different second in each: videoObject is null for feedback from before that was kept, and for a recording. A comment is trimmed, and a blank one is saved as none. A recording's feedback is deleted with the take.`,
         body: {
           kind: "json",
           fields: [
@@ -1865,10 +1865,10 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       {
         method: "GET",
         path: "/api/video-feedback/summary",
-        summary: "Lists each concept on the Captain Canary map, and each video no longer on it that has feedback, with its counts of smiley and confused ratings, and of each that came with a comment, a page at a time, by name.",
+        summary: "Lists each concept on the Coach Canary map, and each video no longer on it that has feedback, with its counts of smiley and confused ratings, and of each that came with a comment, a page at a time, by name.",
         access: "trainingAdmin",
         token: true,
-        notes: "Only Captain Canary concept videos are counted. A comment is a rating saved with words; the counts of ratings include them. accepted is how many comments an administrator has accepted and no regeneration has applied yet. label is the concept's name on the map, or the video's name when it was last rated for one no longer on it. inMap is whether the concept is on the map, and hasVideo whether it has a video there. translations lists the languages that video has been translated into. job is the concept's latest Captain Canary Studio video job, or null.",
+        notes: "Only Coach Canary concept videos are counted. A comment is a rating saved with words; the counts of ratings include them. accepted is how many comments an administrator has accepted and no regeneration has applied yet. label is the concept's name on the map, or the video's name when it was last rated for one no longer on it. inMap is whether the concept is on the map, and hasVideo whether it has a video there. translations lists the languages that video has been translated into. job is the concept's latest Coach Canary Studio video job, or null.",
         query: listQuery(VIDEO_FEEDBACK_SUMMARY_LIST.sorts, "the concept's name"),
         returns: `{ videos: { conceptId, label, inMap: boolean, hasVideo: boolean, translations: string[], up: number, upComments: number, down: number, downComments: number, accepted: number, job: { id, status, progress, error, createdAt, finishedAt } | null }[], ${PAGE_FIELDS} }`,
       },
@@ -1879,7 +1879,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "assessmentsAdmin",
         token: true,
         params: [{ name: "id", type: "string", required: true, note: "the feedback's id" }],
-        notes: "Only a rating that came with a comment can be changed. Send comment, status, or both; the audit trail keeps the words before and after. A video with accepted comments is the one Captain Canary Feedback offers to regenerate. applied is set only by a regeneration that took the comment in, and cannot be sent.",
+        notes: "Only a rating that came with a comment can be changed. Send comment, status, or both; the audit trail keeps the words before and after. A video with accepted comments is the one Coach Canary Feedback offers to regenerate. applied is set only by a regeneration that took the comment in, and cannot be sent.",
         body: {
           kind: "json",
           fields: [
