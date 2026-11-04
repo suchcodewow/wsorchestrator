@@ -59,11 +59,12 @@ import { canUseEvals, type Access } from "@/lib/roles";
 /**
  * Who is reading: `all` for an Assessments Viewer or above, who sees every
  * record; anyone else sees the org below `email`, or no one without one.
+ * `id` is their user, whose own view of a card shows them who else opened it.
  */
-export type BootcampReader = { all: boolean; email: string | null };
+export type BootcampReader = { all: boolean; email: string | null; id: string | null };
 
-export function readerOf(caller: { access: Access; email: string | null }): BootcampReader {
-  return { all: canUseEvals(caller.access), email: caller.email?.trim().toLowerCase() || null };
+export function readerOf(caller: { access: Access; email: string | null; id?: string | null }): BootcampReader {
+  return { all: canUseEvals(caller.access), email: caller.email?.trim().toLowerCase() || null, id: caller.id ?? null };
 }
 
 /**
@@ -104,19 +105,26 @@ function pastRecords(reader: BootcampReader): SQL {
 /** Most viewers a list row names; `viewerCount` counts them all. */
 export const VIEWERS_SHOWN = 20;
 
+/** Whether the reader has opened `email`'s card themself; until they have, they see no one who did. */
+export const readerViewed = (reader: BootcampReader, email: SQL) =>
+  reader.id
+    ? sql`exists (select 1 from ${scorecardViews} w where w.attendee_email = ${email} and w.viewer_id = ${reader.id})`
+    : sql`false`;
+
 /**
  * Who has opened `email`'s card, newest first, as JSON `{ name, at }[]`, at
- * most `VIEWERS_SHOWN`; `viewerCount` is how many in all.
+ * most `VIEWERS_SHOWN`; `viewerCount` is how many in all. Both are empty
+ * until the reader has opened it themself.
  */
-const viewersOf = (email: SQL) => sql`coalesce((
+const viewersOf = (reader: BootcampReader, email: SQL) => sql`(case when ${readerViewed(reader, email)} then coalesce((
   select json_agg(json_build_object('name', v.name, 'at', v.at) order by v.at desc)
     from (select coalesce(nullif(u.name, ''), u.email) as name, w.last_viewed_at as at
             from ${scorecardViews} w join ${users} u on u.id = w.viewer_id
            where w.attendee_email = ${email}
            order by w.last_viewed_at desc
-           limit ${VIEWERS_SHOWN}) v), '[]'::json)`;
-const viewerCountOf = (email: SQL) =>
-  sql`(select count(*)::int from ${scorecardViews} w where w.attendee_email = ${email})`;
+           limit ${VIEWERS_SHOWN}) v), '[]'::json) else '[]'::json end)`;
+const viewerCountOf = (reader: BootcampReader, email: SQL) =>
+  sql`(case when ${readerViewed(reader, email)} then (select count(*)::int from ${scorecardViews} w where w.attendee_email = ${email}) else 0 end)`;
 
 /** Someone who opened a card, and when they last did. */
 export type CardViewer = { name: string; at: string };
@@ -200,7 +208,7 @@ export type BootcampRecordRow = {
   scored: number;
   /** Their score there, as the current cohort shows it; null with none. */
   averageScore: number | null;
-  /** Who has opened their card, newest first, at most `VIEWERS_SHOWN`. */
+  /** Who has opened their card, newest first, at most `VIEWERS_SHOWN`; none until the reader has. */
   viewers: CardViewer[];
   viewerCount: number;
 };
@@ -217,7 +225,7 @@ export async function listBootcampRecords(
   const order = orderFor(RECORD_SORT_COLUMNS[query.sort], query.dir, sql`lower(p.full_name) asc nulls last`, sql`p.email`);
   const { rows } = await db.execute<BootcampRecordRow>(sql`
     select p.key, p.email, p.full_name as "fullName", p.level, p.date, p.active, p.scored, p.average as "averageScore",
-           ${viewersOf(sql`p.email`)} as viewers, ${viewerCountOf(sql`p.email`)} as "viewerCount"
+           ${viewersOf(reader, sql`p.email`)} as viewers, ${viewerCountOf(reader, sql`p.email`)} as "viewerCount"
       from ${people(reader)} p
      where ${where}
      order by ${sql.join(order, sql`, `)}
@@ -291,7 +299,7 @@ export type CohortRow = {
   averageScore: number | null;
   /** The bootcamp's start date, which is the day of both its classes. */
   date: string;
-  /** Who has opened their card, newest first, at most `VIEWERS_SHOWN`. */
+  /** Who has opened their card, newest first, at most `VIEWERS_SHOWN`; none until the reader has. */
   viewers: CardViewer[];
   viewerCount: number;
 };
@@ -371,7 +379,7 @@ export async function listCohort(
   const { rows } = await db.execute<CohortRow>(sql`
     select m.key, m.email, m.full_name as "fullName", m.stage, m.scored, m.average as "averageScore",
            ${bootcamp.startDate}::text as date,
-           ${viewersOf(sql`m.email`)} as viewers, ${viewerCountOf(sql`m.email`)} as "viewerCount"
+           ${viewersOf(reader, sql`m.email`)} as viewers, ${viewerCountOf(reader, sql`m.email`)} as "viewerCount"
       from (${await cohortMembers(reader, bootcamp, stages)}) m
      where ${and(sql`true`, searchAny(query.q, [sql`m.full_name`, sql`m.email`]))}
      order by ${sql.join(order, sql`, `)}

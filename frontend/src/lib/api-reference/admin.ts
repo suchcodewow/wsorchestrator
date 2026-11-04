@@ -2598,7 +2598,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "signedIn",
         token: true,
         notes:
-          "A record is a class someone was assessed in that the caller may see: once it is released, or for an Assessments Viewer also once its bootcamp is complete. level is the furthest class attended: intermediate, else bootcamp. date is their latest class day. averageScore is their score in level at the newest bootcamp they had it, worked out as GET /api/reporting/bootcamp/cohort does, and scored how many assessments it counts. viewers names who has opened their card (POST /api/reporting/bootcamp/people/{key}/views), newest first, at most 20, with when each last did; viewerCount counts them all. key addresses their page: their employee id, else, for someone assessed whom the employee list does not have, a submission's. fullName is null for someone it has no name for, and active false for anyone the last HiBob sync did not send. counts gives everyone the caller may see, the active and the inactive, whatever the search or status.",
+          "A record is a class someone was assessed in that the caller may see: once it is released, or for an Assessments Viewer also once its bootcamp is complete. level is the furthest class attended: intermediate, else bootcamp. date is their latest class day. averageScore is their score in level at the newest bootcamp they had it, worked out as GET /api/reporting/bootcamp/cohort does, and scored how many assessments it counts. viewers names who has opened their card (POST /api/reporting/bootcamp/people/{key}/views), newest first, at most 20, with when each last did; viewerCount counts them all. Both are empty until the caller has opened that card themself. key addresses their page: their employee id, else, for someone assessed whom the employee list does not have, a submission's. fullName is null for someone it has no name for, and active false for anyone the last HiBob sync did not send. counts gives everyone the caller may see, the active and the inactive, whatever the search or status.",
         query: [
           ...listQuery(BOOTCAMP_RECORD_LIST.sorts, "the name or email", BOOTCAMP_RECORD_LIST.dir),
           { name: "status", type: HISTORY_STATUSES.map((s) => `"${s}"`).join(" | "), note: "only the active or only the inactive; everyone if omitted" },
@@ -2724,7 +2724,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         summary: "Lists who has opened someone's Live Sessions card, newest first.",
         access: "signedIn",
         token: true,
-        notes: "One row per person who has opened it: name, when they last did (at), and how many times (views). At most 100; total counts them all.",
+        notes: "One row per person who has opened it: name, when they last did (at), and how many times (views). At most 100; total counts them all. Empty until the caller has opened it themself.",
         params: [{ name: "key", type: "string", required: true, note: "a key from the list: an employee id or a submission's" }],
         returns: "{ viewers: { name, at, views: number }[], total: number }",
         errors: [{ status: 404, error: "not_found", when: "the key names no one, or someone the caller may not see" }],

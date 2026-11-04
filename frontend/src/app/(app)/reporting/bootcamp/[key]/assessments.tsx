@@ -33,7 +33,7 @@ import {
 } from "@/lib/evals/assessment-values";
 import { examAverage, examScore, type OverallSide, type ReleaseStage } from "@/lib/reporting/bootcamp-values";
 import { cn } from "@/lib/utils";
-import { formatDate, formatScore, formatWhen } from "../../../cohort-settings/format";
+import { formatDate, formatWholeScore, formatWhen } from "../../../cohort-settings/format";
 import { Field } from "../class-card";
 import type { ViewReview, ViewSubmission } from "./person-view";
 
@@ -241,7 +241,7 @@ function ClassGroup({
             </h4>
             {open && (
               <p className="text-xs text-muted-foreground">
-                {STAGE_LABELS[first.stage]} average {formatScore(average)} over {scored.length}{" "}
+                {STAGE_LABELS[first.stage]} average {formatWholeScore(average)} over {scored.length}{" "}
                 {scored.length === 1 ? "assessment" : "assessments"}
               </p>
             )}
@@ -257,7 +257,7 @@ function ClassGroup({
           )
         ) : (
           <span className="text-xl font-medium tabular-nums">
-            {formatScore(overall)}
+            {formatWholeScore(overall)}
             {overall !== null && <span className="text-sm text-muted-foreground"> / {BOOTCAMP_SCORE.max}</span>}
           </span>
         )}
@@ -302,7 +302,7 @@ function SubmissionHeading({ submission: s, average }: { submission: ViewSubmiss
           {s.ownerName ?? "Unknown judge"} · {formatWhen(s.updatedAt)}
         </p>
       </div>
-      <span className="text-xl font-medium tabular-nums">{formatScore(average)}</span>
+      <span className="text-xl font-medium tabular-nums">{formatWholeScore(average)}</span>
     </div>
   );
 }

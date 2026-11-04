@@ -34,7 +34,7 @@ export default async function BootcampPage({
   const session = await auth();
   if (!session?.user) redirect(await signInPath());
   const { access } = session.user;
-  const reader = readerOf({ access, email: session.user.email ?? null });
+  const reader = readerOf({ access, email: session.user.email ?? null, id: session.user.id });
 
   const params = await searchParams;
   const query = parseListQuery(params, BOOTCAMP_RECORD_LIST);

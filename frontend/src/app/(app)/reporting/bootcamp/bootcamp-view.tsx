@@ -35,7 +35,7 @@ import type { ListQuery, Page } from "@/lib/paging";
 import type { BootcampRecordCounts, BootcampRecordRow, CardViewer, CohortRow } from "@/lib/reporting/bootcamp";
 import type { BootcampLevel, ReleaseStage } from "@/lib/reporting/bootcamp-values";
 import { cn } from "@/lib/utils";
-import { formatDate, formatScore, formatWhen } from "../../cohort-settings/format";
+import { formatDate, formatWholeScore, formatWhen } from "../../cohort-settings/format";
 import { LevelChip } from "./class-card";
 import { ClassActions } from "./class-actions";
 
@@ -71,13 +71,12 @@ type PersonRow = {
   fullName: string | null;
   level: BootcampLevel;
   averageScore: number | null;
-  scored: number;
   date: string;
   viewers: CardViewer[];
   viewerCount: number;
 };
 
-/** A quiet eye beside the name of someone whose card has been opened; hovered, it names who opened it. */
+/** A quiet eye beside the name of someone whose card the reader has opened; hovered, it names everyone who opened it. */
 function ViewedBy({ viewers, count }: { viewers: CardViewer[]; count: number }) {
   if (count === 0) return null;
   return (
@@ -222,12 +221,8 @@ function PeopleTable<S extends string>({
                     <td className="px-5 py-2.5">
                       <LevelChip level={p.level} />
                     </td>
-                    <td
-                      className="px-5 py-2.5 text-right whitespace-nowrap tabular-nums"
-                      title={`${p.scored} ${p.scored === 1 ? "assessment" : "assessments"} scored`}
-                    >
-                      {formatScore(p.averageScore)}
-                      <span className="ml-1.5 text-xs text-muted-foreground">({p.scored})</span>
+                    <td className="px-5 py-2.5 text-right whitespace-nowrap tabular-nums">
+                      {formatWholeScore(p.averageScore)}
                     </td>
                     <td className="px-5 py-2.5 whitespace-nowrap tabular-nums text-muted-foreground">
                       {formatDate(p.date)}

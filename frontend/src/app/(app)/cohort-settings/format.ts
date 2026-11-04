@@ -30,3 +30,8 @@ export function formatWhen(iso: string | null): string {
 export function formatScore(score: number | null): string {
   return score === null ? "—" : String(roundScore(score));
 }
+
+/** A score as a whole number, from its one-decimal value, as Live Sessions shows it: 2.5 is "3". */
+export function formatWholeScore(score: number | null): string {
+  return score === null ? "—" : String(Math.round(roundScore(score)));
+}

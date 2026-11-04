@@ -1,7 +1,8 @@
 /**
  * Who has opened each person's card on Reporting → Live Sessions. The card
  * records a view as it opens; the lists show an eye beside anyone whose card
- * has been opened, naming who opened it.
+ * the reader has opened, naming everyone who opened it. Until the reader has
+ * opened a card, they see no one who did.
  */
 
 import "server-only";
@@ -9,7 +10,7 @@ import "server-only";
 import { desc, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { scorecardViews, users } from "@/db/schema";
-import { canReach, resolvePerson, type BootcampReader, type CardViewer } from "@/lib/reporting/bootcamp";
+import { canReach, readerViewed, resolvePerson, type BootcampReader, type CardViewer } from "@/lib/reporting/bootcamp";
 
 /** Most viewers `listCardViewers` returns. */
 const VIEWERS_MAX = 100;
@@ -28,13 +29,18 @@ export async function recordCardView(viewerId: string, reader: BootcampReader, k
   return { email };
 }
 
-/** Everyone who has opened the card `key` names, newest first, at most 100; null for a card the reader may not see. */
+/**
+ * Everyone who has opened the card `key` names, newest first, at most 100;
+ * none until the reader has opened it; null for a card the reader may not see.
+ */
 export async function listCardViewers(
   reader: BootcampReader,
   key: string,
 ): Promise<{ viewers: (CardViewer & { views: number })[]; total: number } | null> {
   const email = await resolvePerson(key);
   if (!email || !(await canReach(reader, email))) return null;
+  const { rows: seen } = await db.execute<{ yes: boolean }>(sql`select ${readerViewed(reader, sql`${email}`)} as yes`);
+  if (!seen[0]?.yes) return { viewers: [], total: 0 };
   const [rows, [count]] = await Promise.all([
     db
       .select({
