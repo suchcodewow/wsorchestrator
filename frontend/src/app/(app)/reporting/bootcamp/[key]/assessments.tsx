@@ -33,7 +33,7 @@ import {
 } from "@/lib/evals/assessment-values";
 import { examAverage, examScore, type OverallSide, type ReleaseStage } from "@/lib/reporting/bootcamp-values";
 import { cn } from "@/lib/utils";
-import { formatDate, formatWholeScore, formatWhen } from "../../../cohort-settings/format";
+import { formatDate, formatScore, formatWhen } from "../../../cohort-settings/format";
 import { Field } from "../class-card";
 import type { ViewReview, ViewSubmission } from "./person-view";
 
@@ -138,6 +138,50 @@ function usePendingEdit(id: string, changed: boolean, valid: boolean, save: () =
   }, [register, id, changed, valid]);
 }
 
+/**
+ * A class's assessment averages as saved, their mean, and its overall score,
+ * the exams counted as one more assessment as in the manager's view.
+ */
+function classScores(items: ViewSubmission[], review: ViewReview | null) {
+  const scored = items.flatMap((s) => (s.averageScore === null ? [] : [s.averageScore]));
+  const exams = review ? examAverage(review.entranceExam, review.exitExam) : null;
+  return {
+    scored,
+    average: averageScore(scored),
+    overall: averageScore(exams === null ? scored : [...scored, examScore(exams)]),
+  };
+}
+
+/**
+ * The overall score, to one decimal place, of the class someone is in at
+ * their newest bootcamp: INT once they have one there, else BTC. Nothing
+ * with no assessments.
+ */
+export function CurrentOverall({ submissions, reviews }: { submissions: ViewSubmission[]; reviews: ViewReview[] }) {
+  const newest = submissions.reduce<ViewSubmission | null>(
+    (best, s) =>
+      !best ||
+      s.bootcamp.startDate > best.bootcamp.startDate ||
+      (s.bootcamp.startDate === best.bootcamp.startDate && s.stage === "intermediate")
+        ? s
+        : best,
+    null,
+  );
+  if (!newest) return null;
+  const items = submissions.filter((s) => s.bootcamp.id === newest.bootcamp.id && s.stage === newest.stage);
+  const review = reviews.find((r) => r.bootcampId === newest.bootcamp.id && r.stage === newest.stage) ?? null;
+  const { overall } = classScores(items, review);
+  return (
+    <div className="text-right">
+      <p className="text-xs text-muted-foreground">Overall {STAGE_LABELS[newest.stage]} score</p>
+      <p className="text-xl font-medium tabular-nums">
+        {formatScore(overall)}
+        {overall !== null && <span className="text-sm text-muted-foreground"> / {BOOTCAMP_SCORE.max}</span>}
+      </p>
+    </div>
+  );
+}
+
 /** One card per class someone was assessed in: INT before BTC, each newest bootcamp first, as fetched. */
 export function SubmissionGroups({
   personKey,
@@ -203,10 +247,7 @@ function ClassGroup({
   collapsible: boolean;
 }) {
   const [open, setOpen] = useState(!collapsible);
-  const scored = items.flatMap((s) => (s.averageScore === null ? [] : [s.averageScore]));
-  const average = averageScore(scored);
-  const exams = review ? examAverage(review.entranceExam, review.exitExam) : null;
-  const overall = averageScore(exams === null ? scored : [...scored, examScore(exams)]);
+  const { scored, average, overall } = classScores(items, review);
   const bodyId = `class-${first.bootcamp.id}-${first.stage}`;
   const toggle = () => setOpen((was) => !was);
 
@@ -241,7 +282,7 @@ function ClassGroup({
             </h4>
             {open && (
               <p className="text-xs text-muted-foreground">
-                {STAGE_LABELS[first.stage]} average {formatWholeScore(average)} over {scored.length}{" "}
+                {STAGE_LABELS[first.stage]} average {formatScore(average)} over {scored.length}{" "}
                 {scored.length === 1 ? "assessment" : "assessments"}
               </p>
             )}
@@ -257,7 +298,7 @@ function ClassGroup({
           )
         ) : (
           <span className="text-xl font-medium tabular-nums">
-            {formatWholeScore(overall)}
+            {formatScore(overall)}
             {overall !== null && <span className="text-sm text-muted-foreground"> / {BOOTCAMP_SCORE.max}</span>}
           </span>
         )}
@@ -302,7 +343,7 @@ function SubmissionHeading({ submission: s, average }: { submission: ViewSubmiss
           {s.ownerName ?? "Unknown judge"} · {formatWhen(s.updatedAt)}
         </p>
       </div>
-      <span className="text-xl font-medium tabular-nums">{formatWholeScore(average)}</span>
+      <span className="text-xl font-medium tabular-nums">{formatScore(average)}</span>
     </div>
   );
 }
@@ -604,15 +645,16 @@ function FeedbackBox({
 
 const percent = (n: number | null) => (n === null ? "—" : `${n}%`);
 
-/** The exams' average and where it falls on the scale, or a dash until both are in. */
+/** The exams' average, and at the right where it falls on the scale, sized as an assessment's score; dashes until both are in. */
 function ExamAverage({ entrance, exit }: { entrance: number | null; exit: number | null }) {
   const average = examAverage(entrance, exit);
   return (
-    <Field label="Exam average">
-      <span className="tabular-nums">
-        {average === null ? "—" : `${average}% · scores ${examScore(average)}`}
-      </span>
-    </Field>
+    <div className="flex items-start justify-between gap-4">
+      <Field label="Exam average">
+        <span className="tabular-nums">{percent(average)}</span>
+      </Field>
+      <span className="text-xl font-medium tabular-nums">{average === null ? "—" : examScore(average)}</span>
+    </div>
   );
 }
 

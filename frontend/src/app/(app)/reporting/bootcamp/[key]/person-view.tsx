@@ -26,7 +26,7 @@ import type { PersonEmployee, PersonReview, PersonSubmission } from "@/lib/repor
 import type { ClassSummary, ReleaseStage } from "@/lib/reporting/bootcamp-values";
 import { formatDate } from "../../../cohort-settings/format";
 import { ClassCard, Field, TRACK_LABELS } from "../class-card";
-import { EditSessionProvider, SubmissionGroups, useEditSession } from "./assessments";
+import { CurrentOverall, EditSessionProvider, SubmissionGroups, useEditSession } from "./assessments";
 import { SlackButton } from "./slack-button";
 
 export type ViewSubmission = Omit<PersonSubmission, "submittedAt" | "updatedAt"> & {
@@ -139,29 +139,32 @@ export function PersonView({ person, canEdit, back }: { person: ViewPerson; canE
                 {records.submissions.length} {records.submissions.length === 1 ? "assessment" : "assessments"}
               </p>
             </div>
-            {canEdit &&
-              (editing ? (
-                <div className="flex flex-wrap items-center justify-end gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={session.saving}
-                    onClick={() => (session.changed > 0 ? setDiscarding(true) : stopEditing())}
-                  >
-                    <Undo2 />
-                    Discard
+            <div className="flex flex-wrap items-start justify-end gap-4">
+              {canEdit &&
+                (editing ? (
+                  <div className="flex flex-wrap items-center justify-end gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={session.saving}
+                      onClick={() => (session.changed > 0 ? setDiscarding(true) : stopEditing())}
+                    >
+                      <Undo2 />
+                      Discard
+                    </Button>
+                    <Button variant="brand" size="sm" disabled={session.saving} onClick={() => void saveChanges()}>
+                      {session.saving ? <Loader2 className="animate-spin" /> : <Save />}
+                      Save Changes
+                    </Button>
+                  </div>
+                ) : (
+                  <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
+                    <Pencil />
+                    Edit
                   </Button>
-                  <Button variant="brand" size="sm" disabled={session.saving} onClick={() => void saveChanges()}>
-                    {session.saving ? <Loader2 className="animate-spin" /> : <Save />}
-                    Save Changes
-                  </Button>
-                </div>
-              ) : (
-                <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
-                  <Pencil />
-                  Edit
-                </Button>
-              ))}
+                ))}
+              <CurrentOverall submissions={records.submissions} reviews={records.reviews} />
+            </div>
           </div>
           {editing && session.problem && (
             <p role="alert" className="text-sm text-destructive">
