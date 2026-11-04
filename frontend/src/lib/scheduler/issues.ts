@@ -4,10 +4,10 @@
  * so the schedule page recomputes them as a session is dragged.
  */
 
-import { AUDIENCE_TRACKS, SCHEDULE_LIMITS, SCHEDULE_TRACKS } from "@/db/schema";
+import { AUDIENCE_TRACKS, SCHEDULE_TRACKS } from "@/db/schema";
 import type { ClassLists } from "@/lib/scheduler/attendees";
 import type { Instructor, Schedule, SessionRow } from "@/lib/scheduler/schedule";
-import { GROUP_NAMES, findClashes, formatClock, place, stageOf, type Clash, type Placed } from "@/lib/scheduler/timeline";
+import { GROUP_NAMES, findClashes, place, stageOf, type Clash, type Placed } from "@/lib/scheduler/timeline";
 
 /** Where a session is, for naming it and going to it. */
 export type Spot = Omit<Clash, "what">;
@@ -15,7 +15,7 @@ export type Spot = Omit<Clash, "what">;
 /** Something wrong with the schedule: a sentence that starts with `lead` and names the sessions it is about. */
 export type Issue = { kind: IssueKind; key: string; lead: string; spots: Spot[] };
 
-type IssueKind = "clash" | "leader" | "outsider" | "late" | "breakout";
+type IssueKind = "clash" | "leader" | "outsider" | "breakout";
 
 /** How many of each kind there are, for the top of the tooltip: "3 clashes · 12 with nobody leading". */
 export function tally(issues: Issue[]): string {
@@ -24,13 +24,11 @@ export function tally(issues: Issue[]): string {
   const clashes = count("clash");
   const leaders = count("leader");
   const outsiders = count("outsider");
-  const late = count("late");
   const breakouts = count("breakout");
   return [
     clashes > 0 && plural(clashes, "clash", "clashes"),
     leaders > 0 && `${leaders} with nobody leading`,
     outsiders > 0 && `${plural(outsiders, "person", "people")} not an administrator or guest judge`,
-    late > 0 && `${late} ending after ${formatClock(SCHEDULE_LIMITS.dayEnd)}`,
     breakouts > 0 && `${plural(breakouts, "breakout", "breakouts")} not fully assigned`,
   ]
     .filter(Boolean)
@@ -42,8 +40,7 @@ export function tally(issues: Issue[]): string {
  * sessions that clash (once), each main or breakout session nobody leads,
  * each person on a session who is not a Training administrator or a guest
  * judge of this bootcamp (once, with all their sessions; a copied schedule
- * can bring them in), each session that ends after the day does, and each
- * breakout that leaves
+ * can bring them in), and each breakout that leaves
  * someone in its class out of every group, has no assessment to score them on,
  * or, when the facility has rooms, leaves an instructor without one. `flagged` has what is wrong with each session, by
  * id, for its card.
@@ -56,7 +53,6 @@ export function findIssues(
   hasRooms: boolean,
   instructors: Instructor[],
 ) {
-  const { dayEnd } = SCHEDULE_LIMITS;
   const spotOf = (s: Placed<SessionRow>): Spot => ({ sessionId: s.id, name: s.name, track: s.track, day: s.day, start: s.start, end: s.end });
   const nameOf = (what: Clash["what"]) =>
     what.kind === "person" ? what.fullName : what.kind === "room" ? (roomNames.get(what.roomId) ?? "A room") : GROUP_NAMES[what.group];
@@ -85,10 +81,6 @@ export function findIssues(
       const o = outsiders.get(email) ?? { fullName: p.fullName, spots: [] };
       o.spots.push(spotOf(s));
       outsiders.set(email, o);
-    }
-    if (s.end > dayEnd) {
-      flag(s.id, `Ends after ${formatClock(dayEnd)}`);
-      issues.push({ kind: "late", key: `late:${s.id}`, lead: `Ends after ${formatClock(dayEnd)}:`, spots: [spotOf(s)] });
     }
     if (s.kind === "breakout") {
       const assigned = new Set(s.assigned);

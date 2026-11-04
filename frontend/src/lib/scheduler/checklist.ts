@@ -1,7 +1,9 @@
 /**
  * What is to be done before each day of each of a bootcamp's tracks starts,
  * the SE tracks included, and on Prep Day, before the bootcamp does (day 0
- * of Bootcamp, `CHECKLIST_PREP_DAY`). Each day is in two halves, AM and PM.
+ * of Bootcamp, `CHECKLIST_PREP_DAY`). Each day is in two halves, Day and
+ * Evening. A Day item of a class-day can be given a time it is due, which
+ * marks it on the schedule until it is ticked.
  * A track-day's list, both halves together, holds at most
  * `CHECKLIST_LIMITS.itemsPerDay`, so it is read whole; what one person owns
  * across every bootcamp is read a page at a time.
@@ -45,6 +47,8 @@ export type ChecklistItemRow = {
   /** Its place in its half-day, first at 0. */
   position: number;
   name: string;
+  /** When it is due, in minutes after midnight; null for no time. */
+  alarm: number | null;
   /** Null when nobody owns it. */
   ownerEmail: string | null;
   ownerName: string;
@@ -71,6 +75,7 @@ const COLUMNS = {
   period: t.period,
   position: t.position,
   name: t.name,
+  alarm: t.alarm,
   ownerEmail: t.ownerEmail,
   ownerName: t.ownerName,
   done: sql<boolean>`${t.doneAt} is not null`,
@@ -108,6 +113,33 @@ export async function checklistCounts(bootcampId: string): Promise<ChecklistDayC
     .orderBy(t.track, t.day, t.period);
 }
 
+/** An item the schedule marks at its time: a Day item of a class-day, with a time, still to do. */
+export type ChecklistMark = Pick<ChecklistItemRow, "id" | "track" | "day" | "name" | "ownerEmail" | "ownerName" | "mentions"> & { alarm: number };
+
+/**
+ * Every item the schedule marks, by day and time; `checklistMarked` is the
+ * same rule, for the board's own copy. A day's Day half is within its limit of
+ * `itemsPerDay`, so four tracks of thirty days bound it; the cap is that.
+ */
+export async function checklistMarks(bootcampId: string): Promise<ChecklistMark[]> {
+  const rows = await db
+    .select({
+      id: t.id,
+      track: t.track,
+      day: t.day,
+      alarm: t.alarm,
+      name: t.name,
+      ownerEmail: t.ownerEmail,
+      ownerName: t.ownerName,
+      mentions: COLUMNS.mentions,
+    })
+    .from(t)
+    .where(and(eq(t.bootcampId, bootcampId), eq(t.period, "am"), sql`${t.day} > 0`, isNotNull(t.alarm), isNull(t.doneAt)))
+    .orderBy(t.track, t.day, t.alarm, t.position, t.id)
+    .limit(CHECKLIST_TRACKS.length * 30 * CHECKLIST_LIMITS.itemsPerDay);
+  return rows as ChecklistMark[];
+}
+
 /** One track-day's items, both halves, each half in its order on the board. */
 export async function listDayItems(bootcampId: string, track: ChecklistTrack, day: number): Promise<ChecklistItemRow[]> {
   return db
@@ -126,8 +158,10 @@ export function nextPosition(bootcampId: string, track: ChecklistTrack, day: num
 
 export const checklistItemSchema = z.object({
   name: z.string().trim().min(1).max(CHECKLIST_LIMITS.name),
-  /** Which half of the day; AM when left out. */
+  /** Which half of the day; Day (`am`) when left out. */
   period: checklistPeriodSchema.optional(),
+  /** When it is due, in minutes after midnight; null or absent for no time. */
+  alarm: z.number().int().min(0).max(24 * 60 - 1).nullish(),
   /** An administrator or guest judge of the bootcamp; blank or absent for nobody. */
   ownerEmail: z.string().trim().toLowerCase().max(320).nullish(),
   /** The emails of the people its name tags. */
@@ -188,6 +222,7 @@ export async function addChecklistItem(
         period,
         position: nextPosition(bootcampId, track, day, period),
         name: input.name,
+        alarm: input.alarm ?? null,
         ownerEmail: owner?.email ?? null,
         ownerName: owner?.fullName ?? "",
         createdBy: actorId,
@@ -221,13 +256,15 @@ export const checklistEditSchema = z.object({
   /** Its place in the half-day it ends up in, first at 0, counting the others there. */
   position: z.number().int().min(0).max(CHECKLIST_LIMITS.itemsPerDay).optional(),
   name: checklistItemSchema.shape.name.optional(),
+  /** Null for no time. */
+  alarm: checklistItemSchema.shape.alarm,
   /** Null or blank for nobody. */
   ownerEmail: checklistItemSchema.shape.ownerEmail,
   mentions: checklistItemSchema.shape.mentions,
 });
 
 /**
- * Changes an item's name, its owner, or both. A new name brings the tags it
+ * Changes an item's name, its owner, its time, or any of them. A new name brings the tags it
  * makes: anyone it no longer tags drops out of it, and anyone newly tagged
  * finds it in their inbox. Whether it is done is left alone.
  */
@@ -259,6 +296,7 @@ export async function editChecklistItem(
       .update(t)
       .set({
         ...(input.name !== undefined && { name: input.name }),
+        ...(input.alarm !== undefined && { alarm: input.alarm }),
         ...(owner !== undefined && { ownerEmail: owner?.email ?? null, ownerName: owner?.fullName ?? "" }),
       })
       .where(eq(t.id, itemId))

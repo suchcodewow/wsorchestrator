@@ -1,11 +1,11 @@
-/** How many checklist items each day of a bootcamp's classes has, and how many are done. */
+/** How many checklist items each day of a bootcamp's classes has, how many are done, and those the schedule marks at their time. */
 
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireCaller } from "@/lib/api-auth";
 import { canUseTraining } from "@/lib/roles";
 import { bootcampExists } from "@/lib/scheduler/bootcamps";
-import { checklistCounts } from "@/lib/scheduler/checklist";
+import { checklistCounts, checklistMarks } from "@/lib/scheduler/checklist";
 
 const idSchema = z.string().uuid();
 
@@ -19,5 +19,6 @@ export async function GET(req: Request, { params }: Params) {
   if (!id.success || !(await bootcampExists(id.data))) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
-  return NextResponse.json({ days: await checklistCounts(id.data) });
+  const [days, marks] = await Promise.all([checklistCounts(id.data), checklistMarks(id.data)]);
+  return NextResponse.json({ days, marks });
 }

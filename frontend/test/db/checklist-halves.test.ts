@@ -1,5 +1,5 @@
 /**
- * The AM and PM halves of a checklist day, against a real database: items
+ * The Day and Evening halves of a checklist day, against a real database: items
  * land in the half they are added to, are counted by half, move between
  * halves and days within the day's limit, and keep their half when a
  * schedule is copied.
@@ -55,7 +55,7 @@ after(async () => {
 });
 
 describe("the halves of a checklist day", () => {
-  test("an item is AM unless added to PM, and each half is counted on its own", async () => {
+  test("an item is in the Day half unless added to the Evening, and each half is counted on its own", async () => {
     const id = await bootcamp("2027-10-04", 2, null);
     const morning = await add(id, 1, "Unlock the room");
     const afternoon = await add(id, 1, "Set out the snacks", "pm");
@@ -72,11 +72,11 @@ describe("the halves of a checklist day", () => {
       ],
     );
     assert.deepEqual((await listDayItems(id, "btc", 1)).map((i) => i.period), ["am", "pm", "pm"], "a day is read whole, both halves");
-    assert.equal(checklistDayLabel("btc", 1, "pm"), "Bootcamp, Day 1 PM");
-    assert.equal(checklistDayLabel("btc", 0, "am"), "Prep Day AM");
+    assert.equal(checklistDayLabel("btc", 1, "pm"), "Bootcamp, Day 1 · Evening");
+    assert.equal(checklistDayLabel("btc", 0, "am"), "Prep Day · Day");
   });
 
-  test("is refused a half that is neither AM nor PM by the database", async () => {
+  test("is refused a half that is neither Day (am) nor Evening (pm) by the database", async () => {
     const id = await bootcamp("2027-10-11", 1, null);
     await assert.rejects(
       db.insert(scheduleChecklistItems).values({ bootcampId: id, track: "btc", day: 1, name: "Nope", period: "noon" as ChecklistPeriod }),
