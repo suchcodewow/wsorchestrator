@@ -27,6 +27,7 @@ export type Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
  *   scorer       Assessments Viewer or above, or a guest judge on the active bootcamp (canScoreAssessments)
  *   canaryWire   a people manager (by HiBob), or Assessments Viewer or above (canSeeCanaryWire)
  *   userAdmin    an administrator in any area          (canManageUsers)
+ *   pageAdmin    the administrator of the page a tour belongs to (canEditTour)
  *   platform     Platform Administrator                (canManageBackups, canManageSignInDomains, canDeleteUsers)
  *   internal     not for people: Cloud Scheduler or runner OIDC, or Auth.js
  * A platform administrator passes every check, so no entry says so.
@@ -48,6 +49,7 @@ export type AccessKey =
   | "scorer"
   | "canaryWire"
   | "userAdmin"
+  | "pageAdmin"
   | "platform"
   | "internal";
 
@@ -68,6 +70,7 @@ export const ACCESS_LABELS: Record<AccessKey, string> = {
   scorer: `${ASSESSMENTS_ROLE_LABELS.viewer} or above, or a guest judge on the active bootcamp`,
   canaryWire: `A people manager (someone HiBob has reporting to them), or an ${ASSESSMENTS_ROLE_LABELS.viewer} or above`,
   userAdmin: "An administrator in any area",
+  pageAdmin: "The administrator of the page: whoever can open the settings its sidebar entry leads to, else its area's administrator",
   platform: PLATFORM_ADMIN_LABEL,
   internal: "Internal",
 };

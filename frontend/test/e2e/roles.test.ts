@@ -28,7 +28,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { users } from "@/db/schema";
 import { mintToken, revokeToken } from "@/lib/api-tokens";
-import { NAV_SECTIONS, visibleSections } from "@/lib/nav";
+import { NAV_SECTIONS, canEditTour, visibleSections } from "@/lib/nav";
 import {
   canAuditProjects,
   canContributeComponents,
@@ -962,6 +962,14 @@ const ROUTES: RouteCase[] = [
   { method: "GET", path: "/api/tokens", allowed: true, sessionOnly: true },
   { method: "POST", path: "/api/tokens", allowed: true, body: () => ({}), sessionOnly: true },
   { method: "DELETE", path: `/api/tokens/${MISSING}`, allowed: true, sessionOnly: true },
+
+  // Page tours. A tour's gate is the administrator of its page, named by the pattern.
+  { method: "GET", path: "/api/tours/match?path=/events", allowed: true },
+  { method: "PUT", path: "/api/tours?pattern=/scheduler", allowed: (a) => canEditTour(a, "/scheduler"), body: () => ({}) },
+  { method: "PUT", path: "/api/tours?pattern=/evals", allowed: (a) => canEditTour(a, "/evals"), body: () => ({}) },
+  // No page has this pattern, so it is a platform administrator's, and there is no tour there to remove.
+  { method: "DELETE", path: "/api/tours?pattern=/wo-test-no-tour", allowed: (a) => canEditTour(a, "/wo-test-no-tour") },
+  { method: "POST", path: "/api/tours/seen", allowed: true, body: () => ({}) },
 ];
 
 type Via = "session" | "token";

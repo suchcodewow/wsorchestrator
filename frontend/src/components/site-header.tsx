@@ -2,6 +2,7 @@
 
 import { signInPath, signOut } from "@/auth";
 import { BrandMark } from "@/components/brand-mark";
+import { TourControls } from "@/components/tour/tour-controls";
 import { Button } from "@/components/ui/button";
 import { UserMenu } from "@/components/user-menu";
 import { buildInfo, deploymentEnvironment } from "@/lib/build-info";
@@ -66,6 +67,8 @@ export async function SiteHeader({
         )}
 
         <div className="ml-auto flex items-center gap-4">
+          {session?.user && <TourControls />}
+
           {!session?.user && (
             <nav className="flex shrink-0 items-center">
               <Link

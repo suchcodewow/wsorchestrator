@@ -69,6 +69,8 @@ export type NavItem = {
 export type NavSection = {
   heading: string;
   items: NavItem[];
+  /** Who may write the tours of its pages, unless an entry's settings page says otherwise; a platform administrator when unset. */
+  tourEditor?: (access: Access) => boolean;
 };
 
 /** The Welcome page: first in the sidebar, for everyone. */
@@ -81,6 +83,7 @@ export const NAV_SECTIONS: NavSection[] = [
   },
   {
     heading: "Events",
+    tourEditor: canManageSettings,
     items: [
       {
         href: "/labs",
@@ -116,6 +119,7 @@ export const NAV_SECTIONS: NavSection[] = [
   },
   {
     heading: "Training",
+    tourEditor: canManageTrainingSettings,
     items: [
       {
         href: "/scheduler",
@@ -177,6 +181,7 @@ export const NAV_SECTIONS: NavSection[] = [
   },
   {
     heading: "Assessments",
+    tourEditor: canManageEvalsSettings,
     items: [
       {
         href: "/evals",
@@ -283,4 +288,26 @@ export function isNavItemActive(pathname: string, item: NavItem): boolean {
 /** The sidebar entry at `href`, wherever it sits, for the icon a favorite of it shows. */
 export function navItemAt(href: string): NavItem | undefined {
   return NAV_SECTIONS.flatMap((section) => section.items).find((item) => item.href === href);
+}
+
+/**
+ * Whether `access` may add, change or remove the tour of the pages at
+ * `path` (a path or a tour pattern). The administrator of a page is whoever
+ * can open the settings page its sidebar entry's gear leads to (or, on that
+ * settings page, whoever can open it), else the administrator of its area; pages outside every area, and those in none of
+ * the sidebar's entries, are a platform administrator's.
+ */
+export function canEditTour(access: Access, path: string): boolean {
+  if (access.platform) return true;
+  const matches = NAV_SECTIONS.flatMap((section) =>
+    section.items.filter((item) => isNavItemActive(path, item)).map((item) => ({ section, item })),
+  );
+  // The longest href is the entry the page belongs to: /scheduler-settings, not /scheduler.
+  const best = matches.sort((a, b) => b.item.href.length - a.item.href.length)[0];
+  if (!best) return false;
+  // A settings page some entry's gear leads to is its own administrators'.
+  const isSettings = NAV_SECTIONS.some((section) => section.items.some((item) => item.settings === best.item.href));
+  const settings = isSettings ? best.item : best.item.settings ? navItemAt(best.item.settings) : undefined;
+  const editor = settings?.visible ?? best.section.tourEditor;
+  return editor?.(access) ?? false;
 }

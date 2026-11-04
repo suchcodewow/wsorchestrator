@@ -8,6 +8,7 @@ import { FavoriteTabsProvider } from "@/components/favorite-tabs";
 import { NavigationPending } from "@/components/navigation-pending";
 import { AppSidebar } from "@/components/app-sidebar";
 import { SiteHeader } from "@/components/site-header";
+import { TourProvider } from "@/components/tour/tour-provider";
 import { buildInfo } from "@/lib/build-info";
 import { SIDEBAR_COOKIE, parseSidebarState } from "@/lib/sidebar";
 import { getUserPreferences } from "@/lib/user-preferences";
@@ -54,38 +55,40 @@ export async function AppShell({
     >
       <AmbientBackdrop className="fixed inset-0 -z-10" />
 
-      <SiteHeader session={session} width="max-w-none" sidebar />
+      <TourProvider autoPlay={!session.impersonator}>
+        <SiteHeader session={session} width="max-w-none" sidebar />
 
-      <FavoriteTabsProvider initial={favoriteTabs}>
-        <div className="flex min-h-0 flex-1">
-          <AppSidebar
-            name={user.name ?? null}
-            email={user.email ?? ""}
-            image={user.image ?? null}
-            access={user.access}
-            initialTheme={themePreference}
-            build={buildInfo()}
-            impersonator={session.impersonator ?? null}
-            defaultCollapsed={collapsed}
-            sticky={!pane}
-            signOutAction={async () => {
-              "use server";
-              await signOut({ redirectTo: "/" });
-            }}
-          />
+        <FavoriteTabsProvider initial={favoriteTabs}>
+          <div className="flex min-h-0 flex-1">
+            <AppSidebar
+              name={user.name ?? null}
+              email={user.email ?? ""}
+              image={user.image ?? null}
+              access={user.access}
+              initialTheme={themePreference}
+              build={buildInfo()}
+              impersonator={session.impersonator ?? null}
+              defaultCollapsed={collapsed}
+              sticky={!pane}
+              signOutAction={async () => {
+                "use server";
+                await signOut({ redirectTo: "/" });
+              }}
+            />
 
-          <main
-            className={cn(
-              "@container relative min-w-0 flex-1",
-              pane && "lg:overflow-y-auto",
-            )}
-          >
-            <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-10">
-              <NavigationPending>{children}</NavigationPending>
-            </div>
-          </main>
-        </div>
-      </FavoriteTabsProvider>
+            <main
+              className={cn(
+                "@container relative min-w-0 flex-1",
+                pane && "lg:overflow-y-auto",
+              )}
+            >
+              <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-10">
+                <NavigationPending>{children}</NavigationPending>
+              </div>
+            </main>
+          </div>
+        </FavoriteTabsProvider>
+      </TourProvider>
     </div>
   );
 }

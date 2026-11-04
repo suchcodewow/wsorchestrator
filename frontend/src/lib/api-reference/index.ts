@@ -54,6 +54,7 @@ export const GROUPS: EndpointGroup[] = [
   "canary-wire",
   "evals",
   "iris",
+  "page-tours",
   "users",
   "platform",
   "audit",
