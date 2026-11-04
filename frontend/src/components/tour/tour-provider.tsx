@@ -1,11 +1,16 @@
 "use client";
 
 /**
- * The page's tour: fetched whenever the path changes, played by itself the
- * first time someone opens a page whose tour they have not seen at this
- * version, and again from the header's question mark. Not played by itself
- * inside another site's frame, or while viewing as someone else, where
- * marking it seen would be recorded as them.
+ * The page's tour: fetched whenever the path changes and played from the
+ * header's question mark. The first time someone who does not administer the
+ * page opens it at this version, the question mark glows to point the tour
+ * out, once, and the version counts as seen whether or not they take it. Not
+ * pointed out inside another site's frame, or while viewing as someone else,
+ * where marking it seen would be recorded as them.
+ *
+ * A link carrying `?tour` (the callout's "Copy tour link") plays the tour
+ * straight away for whoever opens it, seen or not; the parameter is then
+ * taken off the address so a reload does not play it again.
  *
  * It also holds the editor, for whoever administers the page, and plays the
  * editor's unsaved steps as a preview, which marks nothing seen.
@@ -16,6 +21,7 @@ import { usePathname } from "next/navigation";
 import { TourEditor } from "@/components/tour/tour-editor";
 import { TourPlayer } from "@/components/tour/tour-player";
 import { isFramed } from "@/lib/framed";
+import { TOUR_PARAM } from "@/lib/tours/link";
 import type { Tour, TourStep } from "@/lib/tours/tours";
 
 type TourContext = {
@@ -23,6 +29,9 @@ type TourContext = {
   canEdit: boolean;
   playing: boolean;
   editing: boolean;
+  /** The question mark is pointing the tour out to someone new to the page. */
+  beckoning: boolean;
+  stopBeckoning: () => void;
   play: () => void;
   edit: () => void;
 };
@@ -39,34 +48,23 @@ type Match = { path: string; tour: Tour | null; seenVersion: number; canEdit: bo
 /** What is playing, on which page: the saved tour, or the editor's steps as they stand. */
 type Run = { path: string; steps: TourStep[]; start: number; preview: boolean };
 
+/** Whether the address asks for the tour, taking the parameter off it if so. */
+function takeTourParam(): boolean {
+  const url = new URL(window.location.href);
+  if (!url.searchParams.has(TOUR_PARAM)) return false;
+  url.searchParams.delete(TOUR_PARAM);
+  window.history.replaceState(window.history.state, "", url);
+  return true;
+}
+
 export function TourProvider({ autoPlay, children }: { autoPlay: boolean; children: React.ReactNode }) {
   const pathname = usePathname();
   const [match, setMatch] = useState<Match | null>(null);
   const [run, setRun] = useState<Run | null>(null);
   // The path whose tour is open in the editor, so moving to another page closes it.
   const [editingAt, setEditingAt] = useState<string | null>(null);
-
-  useEffect(() => {
-    const ask = new AbortController();
-    fetch(`/api/tours/match?path=${encodeURIComponent(pathname)}`, { signal: ask.signal })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((body: Omit<Match, "path"> | null) => {
-        if (!body) return;
-        setMatch({ path: pathname, ...body });
-        const unseen = !!body.tour && body.tour.steps.length > 0 && body.tour.version > body.seenVersion;
-        if (autoPlay && unseen && !isFramed()) setRun({ path: pathname, steps: body.tour!.steps, start: 0, preview: false });
-      })
-      .catch(() => {
-        // Aborted by the next navigation, or offline: the page simply has no tour this time.
-      });
-    return () => ask.abort();
-  }, [pathname, autoPlay]);
-
-  // A tour fetched for the page before this one is not this page's.
-  const current = match?.path === pathname ? match : null;
-  const tour = current?.tour ?? null;
-  const playing = run?.path === pathname ? run : null;
-  const editing = editingAt === pathname && !!current?.canEdit;
+  // The path whose question mark is glowing.
+  const [beckonAt, setBeckonAt] = useState<string | null>(null);
 
   const markSeen = useCallback(
     (seen: Tour) => {
@@ -81,12 +79,43 @@ export function TourProvider({ autoPlay, children }: { autoPlay: boolean; childr
     [autoPlay],
   );
 
+  useEffect(() => {
+    const ask = new AbortController();
+    fetch(`/api/tours/match?path=${encodeURIComponent(pathname)}`, { signal: ask.signal })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((body: Omit<Match, "path"> | null) => {
+        if (!body) return;
+        setMatch({ path: pathname, ...body });
+        const tour = body.tour && body.tour.steps.length > 0 ? body.tour : null;
+        if (takeTourParam() && tour) {
+          setRun({ path: pathname, steps: tour.steps, start: 0, preview: false });
+        } else if (tour && tour.version > body.seenVersion && !body.canEdit && autoPlay && !isFramed()) {
+          setBeckonAt(pathname);
+          markSeen(tour);
+        }
+      })
+      .catch(() => {
+        // Aborted by the next navigation, or offline: the page simply has no tour this time.
+      });
+    return () => ask.abort();
+  }, [pathname, autoPlay, markSeen]);
+
+  // A tour fetched for the page before this one is not this page's.
+  const current = match?.path === pathname ? match : null;
+  const tour = current?.tour ?? null;
+  const playing = run?.path === pathname ? run : null;
+  const editing = editingAt === pathname && !!current?.canEdit;
+  const beckoning = beckonAt === pathname && !!tour;
+
+  const stopBeckoning = useCallback(() => setBeckonAt(null), []);
+
   const finish = useCallback(() => {
     setRun(null);
     if (tour && playing && !playing.preview) markSeen(tour);
   }, [tour, playing, markSeen]);
 
   const play = useCallback(() => {
+    setBeckonAt(null);
     if (tour) setRun({ path: pathname, steps: tour.steps, start: 0, preview: false });
   }, [tour, pathname]);
 
@@ -104,7 +133,7 @@ export function TourProvider({ autoPlay, children }: { autoPlay: boolean; childr
   );
 
   return (
-    <Context.Provider value={{ tour, canEdit: current?.canEdit ?? false, playing: !!playing, editing, play, edit }}>
+    <Context.Provider value={{ tour, canEdit: current?.canEdit ?? false, playing: !!playing, editing, beckoning, stopBeckoning, play, edit }}>
       {children}
       {editing && (
         <TourEditor

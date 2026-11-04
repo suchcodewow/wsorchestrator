@@ -14,6 +14,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { autoUpdate, type Placement } from "@floating-ui/dom";
+import { GlowTrace } from "@/components/tour/glow-trace";
 import { Button } from "@/components/ui/button";
 import { anchorFloating } from "@/lib/floating";
 import { resolveTarget } from "@/lib/tours/target";
@@ -140,8 +141,8 @@ export function TourPlayer({ steps, start = 0, onFinish }: { steps: TourStep[]; 
       box.style.transform = `translate(${r.left - HALO}px, ${r.top - HALO}px)`;
       box.style.width = `${r.width + HALO * 2}px`;
       box.style.height = `${r.height + HALO * 2}px`;
-      // Shown, and animated from step to step, only once it is somewhere: otherwise it would slide in from the corner.
-      if (!("placed" in box.dataset)) requestAnimationFrame(() => (box.dataset.placed = ""));
+      // Shown only once it is somewhere, so it appears in place rather than in the corner.
+      box.dataset.placed = "";
     });
   }, [shown]);
 
@@ -176,8 +177,11 @@ export function TourPlayer({ steps, start = 0, onFinish }: { steps: TourStep[]; 
       <div
         ref={spotlight}
         aria-hidden
-        className="pointer-events-none invisible fixed top-0 left-0 z-50 rounded-lg shadow-[0_0_0_9999px_rgb(0_0_0/0.5)] ring-2 ring-primary duration-200 data-placed:visible data-placed:transition-[transform,width,height] motion-reduce:transition-none"
-      />
+        className="pointer-events-none invisible fixed top-0 left-0 z-50 rounded-lg shadow-[0_0_0_9999px_rgb(0_0_0/0.5)] ring-2 ring-primary data-placed:visible"
+      >
+        {/* Mounted afresh for each step, so it runs again on every one. */}
+        <GlowTrace duration={1000} />
+      </div>
       <div
         ref={callout}
         role="dialog"

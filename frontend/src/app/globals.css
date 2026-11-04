@@ -214,6 +214,27 @@
   }
 }
 
+/* GlowTrace (components/tour/glow-trace.tsx): dashes that run once round an edge, seen only while they run. */
+@keyframes glow-trace-run {
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: -100;
+  }
+}
+
+@keyframes glow-trace-fade {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  25%,
+  75% {
+    opacity: 1;
+  }
+}
+
 @layer base {
   * {
     border-color: var(--border);
