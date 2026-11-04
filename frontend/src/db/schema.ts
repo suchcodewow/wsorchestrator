@@ -1149,6 +1149,8 @@ export const EVALS_SETTINGS_KEYS = {
   meetingFacilitators: "meeting_facilitators",
   /** JSON `ParticipationBands`: the net marks each participation score starts at. See `lib/evals/participation-values.ts`. */
   participationBands: "participation_bands",
+  /** `true` for Live; anything else is Test, which invites only the Additional Slack Contacts. See `lib/reporting/feedback-channels.ts`. */
+  feedbackChannelsLive: "feedback_channels_live",
 } as const;
 
 /** Most people the Google Meetings sync adds to every occurrence. */
@@ -1679,7 +1681,31 @@ export const slackChannels = pgTable("slack_channels", {
 });
 
 /**
- * The people the channel sync invited, and so the only ones it may remove:
+ * The private channel each person on Reporting → Live Sessions is discussed
+ * in, made by the card's Slack button the first time it is pressed and used
+ * by every press after (`lib/reporting/feedback-channels.ts`).
+ */
+export const feedbackChannels = pgTable(
+  "feedback_channels",
+  {
+    /** Lowercased: the attendee the channel is about. */
+    attendeeEmail: text("attendee_email").primaryKey(),
+    /** `event-feedback-{first}-{last}`, with a number after it when another attendee has the name. */
+    name: text("name").notNull(),
+    slackChannelId: text("slack_channel_id").notNull(),
+    createdBy: text("created_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [uniqueIndex("feedback_channels_name_idx").on(t.name)],
+);
+
+/**
+ * The people the channel sync, or a Live Sessions feedback channel, invited,
+ * and so the only ones it may remove:
  * someone added by hand, or already in the channel, is never touched. A row
  * goes when the sync removes them or sees they have left.
  */
