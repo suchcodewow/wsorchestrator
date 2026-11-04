@@ -1,7 +1,7 @@
 /**
  * The front door, for everyone: the upcoming bootcamps; for someone in
  * Training or Assessments, the steps of running a live training session,
- * each with where it stands now; then Mimir, since everyone can use it. The sidebar has every other page.
+ * each with where it stands now; then Captain Canary, since everyone can use it. The sidebar has every other page.
  */
 
 import type { Metadata } from "next";
@@ -9,7 +9,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ArrowRight, Map as MapIcon } from "lucide-react";
 import { auth, signInPath } from "@/auth";
-import { MimirArt } from "@/components/mimir-art";
+import { CaptainCanaryArt } from "@/components/captain-canary-art";
 import { Button } from "@/components/ui/button";
 import { mapSummary } from "@/lib/mimir/map/summary";
 import { canSeeLiveTraining, liveTraining } from "@/lib/live-training";
@@ -54,14 +54,14 @@ export default async function WelcomePage() {
           className="grid max-w-3xl overflow-hidden rounded-2xl border bg-card shadow-sm sm:grid-cols-[16rem_minmax(0,1fr)]"
         >
           <Link href={MIMIR_HREF} tabIndex={-1} aria-hidden>
-            <MimirArt className="h-full w-full" title="Mimir at the well of wisdom" />
+            <CaptainCanaryArt className="h-full w-full" title="Captain Canary, the coach, on the sideline" />
           </Link>
           <div className="flex flex-col justify-center gap-3 p-5">
             <p className="text-xs font-medium tracking-wide text-brand uppercase">Training · open to everyone</p>
             <h2 id="welcome-mimir" className="text-xl font-medium tracking-tight">
-              Mimir
+              Captain Canary
             </h2>
-            <p className="text-muted-foreground">Learn Harness with Mimir.</p>
+            <p className="text-muted-foreground">Learn Harness with Captain Canary.</p>
             {summary && summary.mastered + summary.watched > 0 && (
               <p className="text-sm text-muted-foreground tnum">
                 <span className="font-medium text-foreground">{summary.mastered}</span> of {summary.total} concepts mastered · {summary.watched} of{" "}
@@ -87,7 +87,7 @@ export default async function WelcomePage() {
               ) : (
                 <Button variant="brand" asChild>
                   <Link href={MIMIR_HREF}>
-                    Open Mimir
+                    Open Captain Canary
                     <ArrowRight />
                   </Link>
                 </Button>

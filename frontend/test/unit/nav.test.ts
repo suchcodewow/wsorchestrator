@@ -33,7 +33,7 @@ const EVENTS_ADMIN = [...EVENTS_MANAGER, "Cloud Status", "Event Settings"];
 const ACCOUNT = ["[Account]", "My inbox", "My settings"];
 
 // Mimir and Reporting are for everyone, so every sidebar has an Assessments section holding at least them.
-const MIMIR_ONLY = ["[Assessments]", "Reporting", "Mimir"];
+const MIMIR_ONLY = ["[Assessments]", "Reporting", "Captain Canary"];
 const TRAINING_ADMIN = [
   "[Training]",
   "Scheduler",
@@ -45,7 +45,7 @@ const TRAINING_ADMIN = [
   "Async Recordings",
   "Survey Results",
 ];
-const MIMIR_ADMIN = ["Mimir", "Mimir Settings"];
+const MIMIR_ADMIN = ["Captain Canary", "Captain Canary Settings"];
 
 const EXPECTED_SIDEBAR: Record<Persona, string[]> = {
   nobody: [...HOME, ...MIMIR_ONLY, ...ACCOUNT],
@@ -56,7 +56,7 @@ const EXPECTED_SIDEBAR: Record<Persona, string[]> = {
   trainingViewer: [...HOME, "[Training]", "Scheduler", "Cohorts", "Logistics", "Async Recordings", "Survey Results", ...MIMIR_ONLY, ...ACCOUNT],
   trainingAdmin: [...HOME, ...TRAINING_ADMIN, "[Assessments]", "Reporting", ...MIMIR_ADMIN, ...ACCOUNT, "[Administration]", "Manage users"],
   // Diagnostic is part of the assessments area: a viewer takes it, an administrator runs it.
-  assessmentsViewer: [...HOME, "[Assessments]", "eVals", "Diagnostic", "Reporting", "Mimir", ...ACCOUNT],
+  assessmentsViewer: [...HOME, "[Assessments]", "eVals", "Diagnostic", "Reporting", "Captain Canary", ...ACCOUNT],
   assessmentsAdmin: [
     ...HOME,
     "[Assessments]",
@@ -64,14 +64,14 @@ const EXPECTED_SIDEBAR: Record<Persona, string[]> = {
     "Diagnostic",
     "Reporting",
     "eVals settings",
-    "Mimir",
+    "Captain Canary",
     ...ACCOUNT,
     "[Administration]",
     "Manage users",
   ],
-  guestJudge: [...HOME, "[Assessments]", "eVals", "Reporting", "Mimir", ...ACCOUNT],
+  guestJudge: [...HOME, "[Assessments]", "eVals", "Reporting", "Captain Canary", ...ACCOUNT],
   // HiBob has people reporting to them: the Canary Wire as well as Bootcamp, under the Reporting everyone has.
-  peopleManager: [...HOME, "[Assessments]", "Reporting", "Mimir", ...ACCOUNT],
+  peopleManager: [...HOME, "[Assessments]", "Reporting", "Captain Canary", ...ACCOUNT],
   bothAdmins: [...HOME, ...EVENTS_ADMIN, ...TRAINING_ADMIN, "[Assessments]", "Reporting", ...MIMIR_ADMIN, ...ACCOUNT, "[Administration]", "Manage users"],
   platform: [...HOME, 
     ...EVENTS_ADMIN,
@@ -177,11 +177,11 @@ describe("isNavItemActive", () => {
     assert.equal(isNavItemActive("/evals-settings", evalsSettings), true);
   });
 
-  test("Mimir Settings does not also light up the Mimir entry", () => {
-    const mimir = link("Mimir");
+  test("Captain Canary Settings does not also light up the Captain Canary entry", () => {
+    const mimir = link("Captain Canary");
     assert.equal(isNavItemActive("/mimir/library/cd", mimir), true);
     assert.equal(isNavItemActive("/mimir-settings/content", mimir), false);
-    assert.equal(isNavItemActive("/mimir-settings/content", link("Mimir Settings")), true);
+    assert.equal(isNavItemActive("/mimir-settings/content", link("Captain Canary Settings")), true);
   });
 });
 

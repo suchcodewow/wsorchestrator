@@ -77,7 +77,7 @@ export function FeedbackView({
   return (
     <motion.div variants={staggerParent(0.04)} initial="hidden" animate="show" className="space-y-6">
       <motion.div variants={riseChild}>
-        <h2 className="text-xl font-medium tracking-tight">Mimir Feedback</h2>
+        <h2 className="text-xl font-medium tracking-tight">Captain Canary Feedback</h2>
       </motion.div>
 
       <motion.div variants={riseChild}>
@@ -101,7 +101,7 @@ export function FeedbackView({
               {page.rows.length === 0 && (
                 <tr>
                   <td colSpan={columns} className="px-5 py-8 text-center text-muted-foreground">
-                    {query.q ? "Nothing matches that search." : "The Mimir map has no concepts yet."}
+                    {query.q ? "Nothing matches that search." : "The Captain Canary map has no concepts yet."}
                   </td>
                 </tr>
               )}

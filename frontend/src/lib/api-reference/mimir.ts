@@ -52,14 +52,14 @@ const ITEM_ERRORS = [
 export const MIMIR_GROUPS: EndpointGroup[] = [
   {
     id: "mimir",
-    title: "Mimir library (archived)",
+    title: "Captain Canary library (archived)",
     intro:
-      "The previous Mimir, kept at /mimir-archive for Training Administrators. The GTM reference library and its AI coach: Harness's four agents and the capabilities each is made of, personas, competitors, proof points and more. Anyone signed in reads the content, is coached on it, and keeps their own progress; nobody sees anyone else's. Training Administrators edit the content and the coaching settings.",
+      "The previous Captain Canary, kept at /mimir-archive for Training Administrators. The GTM reference library and its AI coach: Harness's four agents and the capabilities each is made of, personas, competitors, proof points and more. Anyone signed in reads the content, is coached on it, and keeps their own progress; nobody sees anyone else's. Training Administrators edit the content and the coaching settings.",
     endpoints: [
       {
         method: "GET",
         path: "/api/mimir/items",
-        summary: "Lists Mimir items, a page at a time.",
+        summary: "Lists Captain Canary items, a page at a time.",
         access: "signedIn",
         token: true,
         query: [
@@ -87,7 +87,7 @@ export const MIMIR_GROUPS: EndpointGroup[] = [
       {
         method: "POST",
         path: "/api/mimir/items",
-        summary: "Makes a Mimir item.",
+        summary: "Makes a Captain Canary item.",
         access: "trainingAdmin",
         token: true,
         body: { kind: "json", fields: ITEM_FIELDS },
@@ -97,7 +97,7 @@ export const MIMIR_GROUPS: EndpointGroup[] = [
       {
         method: "PUT",
         path: "/api/mimir/items/{id}",
-        summary: "Replaces a Mimir item's fields.",
+        summary: "Replaces a Captain Canary item's fields.",
         access: "trainingAdmin",
         token: true,
         notes:
@@ -114,7 +114,7 @@ export const MIMIR_GROUPS: EndpointGroup[] = [
       {
         method: "DELETE",
         path: "/api/mimir/items/{id}",
-        summary: "Removes a Mimir item, with everyone's progress on it and conversations about it.",
+        summary: "Removes a Captain Canary item, with everyone's progress on it and conversations about it.",
         access: "trainingAdmin",
         token: true,
         params: [ITEM_ID],
@@ -127,7 +127,7 @@ export const MIMIR_GROUPS: EndpointGroup[] = [
       {
         method: "POST",
         path: "/api/mimir/import",
-        summary: "Imports Mimir items from a JSON file, updating those whose id exists and making the rest.",
+        summary: "Imports Captain Canary items from a JSON file, updating those whose id exists and making the rest.",
         access: "trainingAdmin",
         token: true,
         notes:
@@ -238,7 +238,7 @@ export const MIMIR_GROUPS: EndpointGroup[] = [
       {
         method: "DELETE",
         path: "/api/mimir/progress",
-        summary: "Starts Mimir over for you: every item back to not started, every conversation and takeaway deleted.",
+        summary: "Starts Captain Canary over for you: every item back to not started, every conversation and takeaway deleted.",
         access: "signedIn",
         token: true,
         notes: "Irreversible. Your role and coaching style stay.",
@@ -247,7 +247,7 @@ export const MIMIR_GROUPS: EndpointGroup[] = [
       {
         method: "GET",
         path: "/api/mimir/me",
-        summary: "Returns what you have told Mimir's coach about yourself.",
+        summary: "Returns what you have told Captain Canary's coach about yourself.",
         access: "signedIn",
         token: true,
         returns: '{ role: "SDR" | "AE" | "SE" | null, coachStyle: "socratic" | "direct" }',
@@ -299,9 +299,9 @@ export const MIMIR_GROUPS: EndpointGroup[] = [
   },
   {
     id: "mimir-studio",
-    title: "Mimir Studio",
+    title: "Captain Canary Studio",
     intro:
-      "Making the Mimir map and its videos with Claude. A new slide deck is read into a draft of the map, which is checked against the live one and then published or thrown away; a concept's video is written, narrated and rendered by the explainer standards, taking in the accepted comments on the video before it. Each runs as a job on the mimir-studio Cloud Run job, which reports its progress on the job's row; at most one deck is under way at a time, and one video per concept. A job that stops reporting for four hours is marked failed.",
+      "Making the Captain Canary map and its videos with Claude. A new slide deck is read into a draft of the map, which is checked against the live one and then published or thrown away; a concept's video is written, narrated and rendered by the explainer standards, taking in the accepted comments on the video before it. Each runs as a job on the mimir-studio Cloud Run job, which reports its progress on the job's row; at most one deck is under way at a time, and one video per concept. A job that stops reporting for four hours is marked failed.",
     endpoints: [
       {
         method: "POST",
@@ -411,7 +411,7 @@ export const MIMIR_GROUPS: EndpointGroup[] = [
       {
         method: "GET",
         path: "/api/mimir/studio/jobs",
-        summary: "Lists Mimir Studio's jobs, decks and videos, a page at a time, the newest first.",
+        summary: "Lists Captain Canary Studio's jobs, decks and videos, a page at a time, the newest first.",
         access: "mimirStudio",
         token: true,
         query: [
@@ -424,7 +424,7 @@ export const MIMIR_GROUPS: EndpointGroup[] = [
       {
         method: "GET",
         path: "/api/mimir/studio/jobs/{id}",
-        summary: "Returns one Mimir Studio job and, for a deck ready to publish, what publishing it would change.",
+        summary: "Returns one Captain Canary Studio job and, for a deck ready to publish, what publishing it would change.",
         access: "mimirStudio",
         token: true,
         notes: "diff is null unless the job is a deck that is ready. A ready deck's result holds the draft map, its slide count and Claude's summary of what changed; a finished video's, its object, length in seconds and Claude's report.",
@@ -436,7 +436,7 @@ export const MIMIR_GROUPS: EndpointGroup[] = [
   },
   {
     id: "mimir-map",
-    title: "Mimir map",
+    title: "Captain Canary map",
     intro:
       "The concept map, the video for each concept, and the coach that walks you through them in order. Anyone signed in reads the map, watches the videos and chats with the coach, and keeps their own progress; nobody sees anyone else's. A Training Administrator imports the map.",
     endpoints: [
@@ -576,7 +576,7 @@ export const MIMIR_GROUPS: EndpointGroup[] = [
       {
         method: "GET",
         path: "/api/mimir/coach",
-        summary: "Returns your conversation with the Mimir coach and how far through the course you are.",
+        summary: "Returns your conversation with the Captain Canary coach and how far through the course you are.",
         access: "signedIn",
         token: true,
         notes:

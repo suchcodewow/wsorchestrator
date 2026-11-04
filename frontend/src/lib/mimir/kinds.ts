@@ -172,7 +172,7 @@ export const KIND_FIELDS: Record<MimirKind, AttrField[]> = {
       key: "aliases",
       label: "Matches",
       type: "list",
-      hint: "Words in Mimir's other text that link to this term, comma-separated: canary, canary deployment. One in capitals (CI, PR) links only where it is written in capitals. Blank links the title.",
+      hint: "Words in Captain Canary's other text that link to this term, comma-separated: canary, canary deployment. One in capitals (CI, PR) links only where it is written in capitals. Blank links the title.",
     },
     { key: "seeAlso", label: "See also", type: "text" },
   ],

@@ -22,7 +22,7 @@ const REFRESH_MS = 10_000;
 const ERRORS: Record<string, string> = {
   invalid: "That file can't be read as a deck.",
   not_pptx: "Choose a PowerPoint file (.pptx).",
-  not_configured: "This deployment has no Mimir Studio set up.",
+  not_configured: "This deployment has no Captain Canary Studio set up.",
   busy: "Another deck is already being read.",
   no_file: "The file didn't reach the bucket. Try again.",
   not_uploading: "That deck has already been started.",
@@ -161,7 +161,7 @@ export function DeckPanel({ configured, job, draft }: { configured: boolean; job
         )}
       </div>
 
-      {!configured && <p className="px-5 py-4 text-sm text-muted-foreground">This deployment has no Mimir Studio set up.</p>}
+      {!configured && <p className="px-5 py-4 text-sm text-muted-foreground">This deployment has no Captain Canary Studio set up.</p>}
       {sent !== null && (
         <div role="status" className="space-y-2 px-5 py-4">
           <p className="text-sm text-muted-foreground tnum">Uploading, {Math.round(sent * 100)}%</p>

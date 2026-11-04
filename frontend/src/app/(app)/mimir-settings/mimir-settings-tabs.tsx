@@ -6,5 +6,5 @@ import { TabNav } from "@/components/tab-nav";
 import { MIMIR_SETTINGS_TABS } from "./tabs";
 
 export function MimirSettingsTabs() {
-  return <TabNav tabs={MIMIR_SETTINGS_TABS} label="Mimir Settings" />;
+  return <TabNav tabs={MIMIR_SETTINGS_TABS} label="Captain Canary Settings" />;
 }
