@@ -1704,6 +1704,30 @@ export const feedbackChannels = pgTable(
 );
 
 /**
+ * Who has opened each person's card on Reporting → Live Sessions, and when
+ * they last did: one row per viewer and person, kept current by
+ * `lib/reporting/card-views.ts`.
+ */
+export const scorecardViews = pgTable(
+  "scorecard_views",
+  {
+    /** Lowercased: whose card was opened. */
+    attendeeEmail: text("attendee_email").notNull(),
+    viewerId: text("viewer_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    views: integer("views").notNull().default(1),
+    firstViewedAt: timestamp("first_viewed_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    lastViewedAt: timestamp("last_viewed_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.attendeeEmail, t.viewerId] })],
+);
+
+/**
  * The people the channel sync, or a Live Sessions feedback channel, invited,
  * and so the only ones it may remove:
  * someone added by hand, or already in the channel, is never touched. A row

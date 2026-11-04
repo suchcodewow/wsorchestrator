@@ -13,12 +13,14 @@ import { parseListQuery } from "@/lib/paging";
 import {
   bootcampRecordCounts,
   cohortBootcamp,
+  cohortCounts,
   listBootcampRecords,
   listCohort,
   readerOf,
   visibleStages,
 } from "@/lib/reporting/bootcamp";
 import { pendingParticipation } from "@/lib/evals/participation";
+import { isReleaseStage } from "@/lib/reporting/bootcamp-values";
 import { canManageBootcampRecords } from "@/lib/roles";
 import { BootcampView } from "./bootcamp-view";
 
@@ -39,14 +41,17 @@ export default async function BootcampPage({
   const cohortQuery = parseListQuery(params, BOOTCAMP_COHORT_LIST, BOOTCAMP_COHORT_PREFIX);
   // A hand-typed status that isn't one shows everyone, as a bad sort does.
   const status = isHistoryStatus(params.status) ? params.status : null;
+  const stageParam = params[`${BOOTCAMP_COHORT_PREFIX}.stage`];
+  const cohortStage = isReleaseStage(stageParam) ? stageParam : null;
 
   const bootcamp = await cohortBootcamp();
   const stages = bootcamp ? visibleStages(reader, bootcamp) : [];
   const canRelease = canManageBootcampRecords(access);
-  const [records, counts, cohort, pending] = await Promise.all([
+  const [records, counts, cohort, stageCounts, pending] = await Promise.all([
     listBootcampRecords(reader, query, status),
     bootcampRecordCounts(reader),
-    bootcamp && stages.length > 0 ? listCohort(reader, bootcamp, cohortQuery) : null,
+    bootcamp && stages.length > 0 ? listCohort(reader, bootcamp, cohortQuery, cohortStage) : null,
+    bootcamp && stages.length > 0 ? cohortCounts(reader, bootcamp) : null,
     canRelease ? pendingParticipation() : { bootcamp: null, intermediate: null },
   ]);
 
@@ -71,7 +76,7 @@ export default async function BootcampPage({
           },
         }
       }
-      cohort={cohort && { query: cohortQuery, page: cohort }}
+      cohort={cohort && stageCounts && { query: cohortQuery, page: cohort, stages, stage: cohortStage, counts: stageCounts }}
       query={query}
       status={status}
       records={records}

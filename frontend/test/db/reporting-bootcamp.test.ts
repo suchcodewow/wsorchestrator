@@ -32,6 +32,7 @@ import {
 import { IN_STAGE, isCandidate } from "@/lib/evals/current-cohort";
 import { getCandidateCutoffs } from "@/lib/evals/settings";
 import { BOOTCAMP_COHORT_LIST, BOOTCAMP_RECORD_LIST } from "@/lib/list-specs";
+import { listCardViewers, recordCardView } from "@/lib/reporting/card-views";
 import {
   bootcampRecordCounts,
   classReviewSchema,
@@ -39,6 +40,7 @@ import {
   editSubmission,
   getBootcampPerson,
   listBootcampRecords,
+  cohortCounts,
   listCohort,
   readerOf,
   releaseScores,
@@ -92,7 +94,7 @@ async function participation(score: number) {
 
 /** Everyone the reader may see who belongs to this suite, by email, with their level. */
 async function seen(reader: ReturnType<typeof readerOf>) {
-  const page = await listBootcampRecords(reader, { ...BOOTCAMP_RECORD_LIST, sort: "email", dir: "asc", q: SCOPED, page: 1 });
+  const page = await listBootcampRecords(reader, { ...BOOTCAMP_RECORD_LIST, sort: "fullName", dir: "asc", q: SCOPED, page: 1 });
   return Object.fromEntries(page.rows.map((r) => [r.email, r.level]));
 }
 
@@ -518,6 +520,48 @@ describe("a class's overall review", () => {
     // 79.5% is below 80%, so the exams score 1.
     const expected = Math.round(((counted.reduce((a, b) => a + b, 0) + 1) * 10) / (counted.length + 1)) / 10;
     assert.equal(await average(), expected);
+  });
+
+  test("History shows the score the cohort does, and the cohort narrows to one class", async () => {
+    const bootcamp = (await cohortBootcamp())!;
+    const query = { ...BOOTCAMP_COHORT_LIST, q: emailOf("newcomer"), page: 1 };
+    const inCohort = (await listCohort(viewer(), bootcamp, query)).rows.find((r) => r.email === emailOf("newcomer"))!;
+    const history = await listBootcampRecords(viewer(), { ...BOOTCAMP_RECORD_LIST, q: emailOf("newcomer"), page: 1 });
+    const inHistory = history.rows.find((r) => r.email === emailOf("newcomer"))!;
+    assert.deepEqual(
+      [inHistory.level, inHistory.averageScore, inHistory.scored, inHistory.date],
+      [inCohort.stage, inCohort.averageScore, inCohort.scored, inCohort.date],
+    );
+
+    assert.deepEqual((await listCohort(viewer(), bootcamp, query, "bootcamp")).rows.map((r) => r.email), [emailOf("newcomer")]);
+    assert.deepEqual((await listCohort(viewer(), bootcamp, query, "intermediate")).rows, []);
+    const counts = await cohortCounts(viewer(), bootcamp);
+    assert.ok(counts.bootcamp >= 1);
+    // A manager sees counts only for the classes released to them.
+    assert.equal((await cohortCounts(manager(), bootcamp)).intermediate, 0);
+  });
+
+  test("records who opens a card, once per person, and names them on both lists", async () => {
+    const key = `${SCOPED}newcomer`;
+    assert.deepEqual(await recordCardView(admin.id, viewer(), key), { email: emailOf("newcomer") });
+    assert.ok(await recordCardView(admin.id, viewer(), key));
+    const viewers = (await listCardViewers(viewer(), key))!;
+    const mine = viewers.viewers.find((v) => v.name === "admin")!;
+    assert.equal(viewers.viewers.filter((v) => v.name === "admin").length, 1, "two opens are one viewer");
+    assert.equal(mine.views, 2);
+
+    const q = emailOf("newcomer");
+    const inCohort = (await listCohort(viewer(), (await cohortBootcamp())!, { ...BOOTCAMP_COHORT_LIST, q, page: 1 })).rows[0]!;
+    const inHistory = (await listBootcampRecords(viewer(), { ...BOOTCAMP_RECORD_LIST, q, page: 1 })).rows[0]!;
+    for (const row of [inCohort, inHistory]) {
+      assert.equal(row.viewerCount, viewers.total);
+      assert.equal(row.viewers[0]?.name, "admin");
+    }
+
+    // Someone who may not see the card records nothing.
+    const outsider = readerOf({ access: PERSONAS.nobody, email: emailOf("outsider") });
+    assert.equal(await recordCardView(admin.id, outsider, key), null);
+    assert.equal(await listCardViewers(outsider, key), null);
   });
 });
 

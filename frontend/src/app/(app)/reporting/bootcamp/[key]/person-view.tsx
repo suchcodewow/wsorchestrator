@@ -8,7 +8,7 @@
  * Save Changes saves every form changed and Discard drops them, once confirmed.
  */
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { ArrowLeft, Loader2, Pencil, Save, Undo2 } from "lucide-react";
@@ -45,8 +45,19 @@ export type ViewPerson = {
   records: { submissions: ViewSubmission[]; reviews: ViewReview[] } | null;
 };
 
+/** Records, once per opening, that the reader opened this card: the eye on the list names them. */
+function useRecordView(key: string) {
+  const recorded = useRef<string | null>(null);
+  useEffect(() => {
+    if (recorded.current === key) return;
+    recorded.current = key;
+    void fetch(`/api/reporting/bootcamp/people/${encodeURIComponent(key)}/views`, { method: "POST" }).catch(() => undefined);
+  }, [key]);
+}
+
 export function PersonView({ person, canEdit, back }: { person: ViewPerson; canEdit: boolean; back: string }) {
   const { employee, records } = person;
+  useRecordView(person.key);
   const [editing, setEditing] = useState(false);
   const [discarding, setDiscarding] = useState(false);
   const session = useEditSession();

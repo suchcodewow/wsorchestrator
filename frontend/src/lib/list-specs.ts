@@ -65,11 +65,11 @@ export function isHistoryStatus(value: unknown): value is HistoryStatus {
 }
 
 /** Reporting → Live Sessions: everyone with a released BTC or INT the caller may see, newest first. */
-export const BOOTCAMP_RECORD_LIST = spec(["date", "fullName", "email", "level"], "desc");
+export const BOOTCAMP_RECORD_LIST = spec(["date", "fullName", "level", "averageScore"], "desc");
 export type BootcampRecordSort = (typeof BOOTCAMP_RECORD_LIST.sorts)[number];
 
 /** Reporting → Live Sessions' current cohort, above the history; its sort and page are prefixed `cohort`. */
-export const BOOTCAMP_COHORT_LIST = spec(["fullName", "email", "stage", "averageScore"]);
+export const BOOTCAMP_COHORT_LIST = spec(["fullName", "stage", "averageScore", "date"]);
 export type BootcampCohortSort = (typeof BOOTCAMP_COHORT_LIST.sorts)[number];
 export const BOOTCAMP_COHORT_PREFIX = "cohort";
 

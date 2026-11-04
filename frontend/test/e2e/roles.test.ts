@@ -323,7 +323,7 @@ const PAGES: Record<string, PageCase> = {
   "/reporting/canary-wire": { path: () => "/reporting/canary-wire", expect: gated(canSeeCanaryWire) },
   "/reporting/bootcamp": { path: () => "/reporting/bootcamp", expect: gated(canSeeBootcampRecords) },
   "/reporting/bootcamp?searched": {
-    path: () => "/reporting/bootcamp?status=active&q=x&sort=email&cohort.sort=stage&cohort.page=2",
+    path: () => "/reporting/bootcamp?status=active&q=x&sort=averageScore&cohort.sort=stage&cohort.stage=intermediate&cohort.page=2",
     expect: gated(canSeeBootcampRecords),
   },
   // No persona is in the employee list, so the record is in nobody's org; only Assessments sees it.
@@ -745,6 +745,8 @@ const ROUTES: RouteCase[] = [
   { method: "POST", path: `/api/reporting/bootcamp/people/${MISSING}/review/generate`, allowed: canManageBootcampRecords, body: () => ({}) },
   // Anyone who may see a card opens its Slack channel; a key naming no one stops before Slack.
   { method: "POST", path: `/api/reporting/bootcamp/people/${MISSING}/slack`, allowed: canSeeBootcampRecords },
+  { method: "GET", path: `/api/reporting/bootcamp/people/${MISSING}/views`, allowed: canSeeBootcampRecords },
+  { method: "POST", path: `/api/reporting/bootcamp/people/${MISSING}/views`, allowed: canSeeBootcampRecords },
   { method: "GET", path: "/api/evals/canary-wire", allowed: canSeeCanaryWire },
   // No Mindtickle key on the e2e server: starting is refused as not_configured, and a step finds no pull.
   { method: "GET", path: "/api/evals/canary-wire/history", allowed: canSeeCanaryWire },
