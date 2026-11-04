@@ -169,6 +169,80 @@ const FOOD_ORDER_FORM_ERRORS: EndpointError[] = [
 
 export const ADMIN_GROUPS: EndpointGroup[] = [
   {
+    id: "page-tours",
+    title: "Page tours",
+    intro:
+      "The walk-through a page plays the first time someone opens it, and again from the question mark in the header. A tour is written against a path pattern, where a [name] segment stands for any one segment: /events/[id] serves every event's page. When several patterns match a page, the one with the most written-out segments wins.",
+    endpoints: [
+      {
+        method: "GET",
+        path: "/api/tours/match",
+        summary: "The tour of the page at a path, the version of it the caller last saw, and whether they may edit it.",
+        access: "signedIn",
+        token: true,
+        query: [{ name: "path", type: "string", required: true, note: "the page's path, starting with /; a query or trailing slash is ignored" }],
+        returns: `{ tour: { id, pathPattern, version: number, updatedAt, steps: { id, title, body, placement: "auto" | "top" | "bottom" | "left" | "right", target: { tour?, id?, role?, name?, path?, label } }[] } | null, seenVersion: number, canEdit: boolean }`,
+        errors: [{ status: 400, error: "invalid_path", when: "path is missing or does not start with /" }],
+      },
+      {
+        method: "PUT",
+        path: "/api/tours",
+        summary: "Writes the tour of a path pattern in full, creating it if there is none.",
+        access: "pageAdmin",
+        token: true,
+        notes:
+          "Every step is replaced and the version goes up by one, which plays the tour again for everyone who saw an earlier version. A target needs at least one way of finding its element: tour (a data-tour attribute), id, role with name, or path (a CSS selector).",
+        query: [{ name: "pattern", type: "string", required: true, note: "a path pattern: /events/[id]" }],
+        body: {
+          kind: "json",
+          fields: [
+            { name: "version", type: "number", note: "the version the edit started from; omit to create, or to overwrite whatever is there" },
+            { name: "steps", type: `{ title, body, placement?: "auto" | "top" | "bottom" | "left" | "right", target: { tour?, id?, role?, name?, path?, label? } }[]`, required: true, note: "1–30; title up to 120 characters, body up to 1000" },
+          ],
+        },
+        returns: "{ tour }, as GET /api/tours/match returns it",
+        errors: [
+          { status: 400, error: "invalid_pattern", when: "pattern is missing or not a path pattern" },
+          { status: 400, error: "invalid", when: "the body does not parse, or a target has no way of finding its element" },
+          { status: 409, error: "conflict", when: "version is not the tour's current one; the body also carries the current version" },
+        ],
+      },
+      {
+        method: "DELETE",
+        path: "/api/tours",
+        summary: "Removes the tour of a path pattern, and the record of who saw it.",
+        access: "pageAdmin",
+        token: true,
+        query: [{ name: "pattern", type: "string", required: true, note: "a path pattern: /events/[id]" }],
+        returns: "{ ok: true }",
+        errors: [
+          { status: 400, error: "invalid_pattern", when: "pattern is missing or not a path pattern" },
+          { status: 404, error: "not_found", when: "no tour is written against that pattern" },
+        ],
+      },
+      {
+        method: "POST",
+        path: "/api/tours/seen",
+        summary: "Records that the caller finished or skipped a version of a tour, so it does not play for them by itself again.",
+        access: "signedIn",
+        token: true,
+        notes: "A version newer than the tour's own counts as its own; a version older than one already recorded changes nothing.",
+        body: {
+          kind: "json",
+          fields: [
+            { name: "tourId", type: "string", required: true, note: "UUID" },
+            { name: "version", type: "number", required: true },
+          ],
+        },
+        returns: "{ ok: true }",
+        errors: [
+          { status: 400, error: "invalid", when: "the body does not parse" },
+          { status: 404, error: "not_found", when: "no such tour" },
+        ],
+      },
+    ],
+  },
+  {
     id: "users",
     title: "Users and invites",
     endpoints: [

@@ -24,6 +24,7 @@ import {
 import { sql } from "drizzle-orm";
 import type { AdapterAccountType } from "next-auth/adapters";
 import type { DeployedContent } from "@/lib/harness-deploy-selection";
+import type { TourTarget } from "@/lib/tours/target";
 import type { VideoLanguage } from "@/lib/mimir/map/schema";
 
 const bytea = customType<{ data: Buffer; driverData: Buffer }>({
@@ -3603,4 +3604,73 @@ export const mimirStudioJobs = pgTable(
     ),
     check("mimir_studio_jobs_concept_check", sql`(${t.kind} = 'deck') = (${t.conceptId} is null)`),
   ],
+);
+
+export const TOUR_PLACEMENTS = ["auto", "top", "bottom", "left", "right"] as const;
+export type TourPlacement = (typeof TOUR_PLACEMENTS)[number];
+
+export const TOUR_LIMITS = { steps: 30, title: 120, body: 1000 } as const;
+
+/**
+ * A walk-through of one kind of page: highlight boxes shown in order, each
+ * pointing at an element, played the first time someone opens the page and
+ * whenever they press the header's question mark. `pathPattern` says which
+ * pages (`/events/[id]`); `pathRegex` is made from it on save, so a page's
+ * tour is found in one query. Saving replaces every step and adds one to
+ * `version`, which plays the tour again for everyone who saw an earlier one.
+ */
+export const pageTours = pgTable(
+  "page_tours",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    pathPattern: text("path_pattern").notNull(),
+    pathRegex: text("path_regex").notNull(),
+    /** How many segments the pattern writes out; the most specific match wins. */
+    specificity: integer("specificity").notNull(),
+    version: integer("version").notNull().default(1),
+    updatedBy: text("updated_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("page_tours_path_pattern_idx").on(t.pathPattern)],
+);
+
+export type PageTour = typeof pageTours.$inferSelect;
+
+export const pageTourSteps = pgTable(
+  "page_tour_steps",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tourId: uuid("tour_id")
+      .notNull()
+      .references(() => pageTours.id, { onDelete: "cascade" }),
+    /** 0-based; the order the steps play in. */
+    position: integer("position").notNull(),
+    title: text("title").notNull().default(""),
+    body: text("body").notNull().default(""),
+    placement: text("placement").$type<TourPlacement>().notNull().default("auto"),
+    target: jsonb("target").$type<TourTarget>().notNull(),
+  },
+  (t) => [
+    uniqueIndex("page_tour_steps_position_idx").on(t.tourId, t.position),
+    check("page_tour_steps_placement_check", sql`${t.placement} in ('auto', 'top', 'bottom', 'left', 'right')`),
+  ],
+);
+
+export type PageTourStep = typeof pageTourSteps.$inferSelect;
+
+/** The version of a tour someone last saw, finished or skipped; a newer one plays for them again. */
+export const pageTourViews = pgTable(
+  "page_tour_views",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    tourId: uuid("tour_id")
+      .notNull()
+      .references(() => pageTours.id, { onDelete: "cascade" }),
+    seenVersion: integer("seen_version").notNull(),
+    seenAt: timestamp("seen_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.tourId] }), index("page_tour_views_tour_id_idx").on(t.tourId)],
 );
