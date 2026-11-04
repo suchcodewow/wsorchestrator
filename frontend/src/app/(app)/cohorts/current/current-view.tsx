@@ -78,6 +78,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Fragment, useState, useTransition } from "react";
 import { formatDate, formatWhen } from "../../cohort-settings/format";
+import { ReferenceRow, useReferenceRow } from "./reference-row";
 
 const STAGE_COUNTERS: { stage: CandidateStage; label: string; Icon: LucideIcon }[] = [
   { stage: "bootcamp", label: "Bootcamp", Icon: Users },
@@ -214,6 +215,8 @@ export function CurrentCohortView({
   const [error, setError] = useState<string | null>(null);
   const [change, setChange] = useState<Change | null>(null);
   const [open, setOpen] = useState<ReadonlySet<string>>(new Set());
+  // One search shows an extra row; reference-row.tsx says what it does and how to take it out.
+  const reference = useReferenceRow(tab === "current" ? query.q : "");
 
   function toggleOpen(email: string) {
     setOpen((was) => {
@@ -429,6 +432,9 @@ export function CurrentCohortView({
               </tr>
             </thead>
             <tbody>
+              {reference.shown && (
+                <ReferenceRow participation={showParticipation} btcDate={showBtcDate} onClick={reference.play} />
+              )}
               {page.rows.map((m) => {
                 const expanded = open.has(m.email);
                 return (
@@ -514,7 +520,7 @@ export function CurrentCohortView({
                   </Fragment>
                 );
               })}
-              {page.rows.length === 0 && (
+              {page.rows.length === 0 && !reference.shown && (
                 <tr>
                   <td colSpan={columnCount} className="px-5 py-8 text-center text-muted-foreground">
                     {query.q || filter.stage || (tab === "current" && filter.track)
@@ -534,6 +540,7 @@ export function CurrentCohortView({
           <Pager page={page} noun="people" />
         </div>
       </motion.div>
+      {reference.overlay}
     </motion.div>
   );
 }

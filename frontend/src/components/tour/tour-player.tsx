@@ -14,6 +14,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { autoUpdate, type Placement } from "@floating-ui/dom";
+import { GlowTrace } from "@/components/tour/glow-trace";
 import { Button } from "@/components/ui/button";
 import { anchorFloating } from "@/lib/floating";
 import { resolveTarget } from "@/lib/tours/target";
@@ -91,8 +92,8 @@ function scrollToTarget(el: HTMLElement): Promise<void> {
   });
 }
 
-export function TourPlayer({ steps, onFinish }: { steps: TourStep[]; onFinish: () => void }) {
-  const [index, setIndex] = useState(0);
+export function TourPlayer({ steps, start = 0, onFinish }: { steps: TourStep[]; start?: number; onFinish: () => void }) {
+  const [index, setIndex] = useState(start);
   const [direction, setDirection] = useState<1 | -1>(1);
   const [target, setTarget] = useState<{ index: number; el: HTMLElement } | null>(null);
   const spotlight = useRef<HTMLDivElement>(null);
@@ -140,6 +141,8 @@ export function TourPlayer({ steps, onFinish }: { steps: TourStep[]; onFinish: (
       box.style.transform = `translate(${r.left - HALO}px, ${r.top - HALO}px)`;
       box.style.width = `${r.width + HALO * 2}px`;
       box.style.height = `${r.height + HALO * 2}px`;
+      // Shown only once it is somewhere, so it appears in place rather than in the corner.
+      box.dataset.placed = "";
     });
   }, [shown]);
 
@@ -174,8 +177,11 @@ export function TourPlayer({ steps, onFinish }: { steps: TourStep[]; onFinish: (
       <div
         ref={spotlight}
         aria-hidden
-        className="pointer-events-none fixed top-0 left-0 z-50 rounded-lg shadow-[0_0_0_9999px_rgb(0_0_0/0.5)] ring-2 ring-primary transition-[transform,width,height] duration-200 motion-reduce:transition-none"
-      />
+        className="pointer-events-none invisible fixed top-0 left-0 z-50 rounded-lg shadow-[0_0_0_9999px_rgb(0_0_0/0.5)] ring-2 ring-primary data-placed:visible"
+      >
+        {/* Mounted afresh for each step, so it runs again on every one. */}
+        <GlowTrace duration={1000} />
+      </div>
       <div
         ref={callout}
         role="dialog"
