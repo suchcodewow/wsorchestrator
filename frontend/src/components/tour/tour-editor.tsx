@@ -5,7 +5,9 @@
  * dragged to reorder, each with its words, where its callout goes and the
  * element it points at, picked by clicking it on the page. Nothing is kept
  * until Save, which sends the whole tour at once; a preview plays the steps
- * as they stand. A panel, not a modal, so the page can be pointed at.
+ * as they stand. A panel, not a modal, so the page can be pointed at. Once
+ * the tour is saved, "Copy tour link" copies this page's address with `?tour`
+ * on it, which starts the tour for whoever opens it.
  *
  * Saving names the version the edit started from, so two administrators
  * editing at once cannot quietly overwrite each other: the second is told.
@@ -26,7 +28,7 @@ import {
 } from "@dnd-kit/core";
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { ChevronDown, Crosshair, GripVertical, Play, Plus, Trash2, TriangleAlert, X } from "lucide-react";
+import { Check, ChevronDown, Crosshair, GripVertical, Link2, Play, Plus, Trash2, TriangleAlert, X } from "lucide-react";
 import { TOUR_UI, TourPicker } from "@/components/tour/tour-picker";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -34,6 +36,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { TOUR_LIMITS, TOUR_PLACEMENTS, type TourPlacement } from "@/db/schema";
 import { cn } from "@/lib/utils";
+import { tourLink } from "@/lib/tours/link";
 import { isTourPattern, suggestPattern } from "@/lib/tours/pattern";
 import { resolveTarget, type TourTarget } from "@/lib/tours/target";
 import type { Tour, TourStep } from "@/lib/tours/tours";
@@ -88,6 +91,7 @@ export function TourEditor({
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<"discard" | "delete" | null>(null);
+  const [copied, setCopied] = useState<"yes" | "failed" | null>(null);
   const [, setTick] = useState(0);
 
   useEffect(() => {
@@ -171,6 +175,15 @@ export function TourEditor({
     }
   }
 
+  async function copyLink() {
+    try {
+      await navigator.clipboard.writeText(tourLink());
+      setCopied("yes");
+    } catch {
+      setCopied("failed");
+    }
+  }
+
   const close = () => (dirty ? setConfirm("discard") : onClose());
 
   return (
@@ -192,6 +205,12 @@ export function TourEditor({
               </p>
             )}
           </div>
+          {tour && (
+            <Button variant="ghost" size="sm" className="h-8 px-2 text-xs text-muted-foreground" onClick={copyLink}>
+              {copied === "yes" ? <Check /> : <Link2 />}
+              {copied === "yes" ? "Copied" : copied === "failed" ? "Couldn't copy" : "Copy tour link"}
+            </Button>
+          )}
           <Button variant="ghost" size="icon" className="-mr-2 size-8" aria-label="Close the editor" onClick={close}>
             <X />
           </Button>
