@@ -743,6 +743,8 @@ const ROUTES: RouteCase[] = [
   { method: "PATCH", path: `/api/reporting/bootcamp/submissions/${MISSING}`, allowed: canManageBootcampRecords, body: () => ({}) },
   { method: "PUT", path: `/api/reporting/bootcamp/people/${MISSING}/review`, allowed: canManageBootcampRecords, body: () => ({}) },
   { method: "POST", path: `/api/reporting/bootcamp/people/${MISSING}/review/generate`, allowed: canManageBootcampRecords, body: () => ({}) },
+  // Anyone who may see a card opens its Slack channel; a key naming no one stops before Slack.
+  { method: "POST", path: `/api/reporting/bootcamp/people/${MISSING}/slack`, allowed: canSeeBootcampRecords },
   { method: "GET", path: "/api/evals/canary-wire", allowed: canSeeCanaryWire },
   // No Mindtickle key on the e2e server: starting is refused as not_configured, and a step finds no pull.
   { method: "GET", path: "/api/evals/canary-wire/history", allowed: canSeeCanaryWire },
@@ -757,9 +759,11 @@ const ROUTES: RouteCase[] = [
   { method: "GET", path: "/api/evals/hibob/sync", allowed: canManageEvalsSettings },
   { method: "GET", path: "/api/evals/organization", allowed: canManageEvalsSettings },
   { method: "GET", path: "/api/evals/slack-contacts", allowed: canManageEvalsSettings },
+  { method: "GET", path: "/api/evals/slack-contacts/settings", allowed: canManageEvalsSettings },
   { method: "GET", path: "/api/evals/titles", allowed: canManageEvalsSettings },
   { method: "POST", path: "/api/evals/hibob/sync", allowed: canManageEvalsSettings, denyOnly: true },
   { method: "POST", path: "/api/evals/slack-contacts", allowed: canManageEvalsSettings, body: () => ({}) },
+  { method: "PUT", path: "/api/evals/slack-contacts/settings", allowed: canManageEvalsSettings, body: () => ({}) },
   { method: "POST", path: "/api/evals/titles", allowed: canManageEvalsSettings, body: () => ({}) },
   { method: "PUT", path: "/api/evals/candidate-cutoffs", allowed: canManageEvalsSettings, body: () => ({}) },
   { method: "PUT", path: "/api/evals/deferral-days", allowed: canManageEvalsSettings, body: () => ({}) },

@@ -434,6 +434,13 @@ export async function resolvePerson(key: string): Promise<string | null> {
   return null;
 }
 
+/** True when the reader may see the person `email` (lowercased), as `getBootcampPerson` decides it. */
+export async function canReach(reader: BootcampReader, email: string): Promise<boolean> {
+  if (reader.all) return true;
+  const { rows } = await db.execute<{ ok: boolean }>(sql`select ${inReach(reader, sql`${email}`)} as ok`);
+  return rows[0]?.ok ?? false;
+}
+
 export type PersonEmployee = Pick<
   Employee,
   "fullName" | "title" | "department" | "site" | "reportsToName" | "reportsToEmail" | "startDate" | "track"
@@ -499,10 +506,7 @@ export type BootcampPerson = {
 export async function getBootcampPerson(reader: BootcampReader, key: string): Promise<BootcampPerson | null> {
   const email = await resolvePerson(key);
   if (!email) return null;
-  if (!reader.all) {
-    const { rows } = await db.execute<{ ok: boolean }>(sql`select ${inReach(reader, sql`${email}`)} as ok`);
-    if (!rows[0]?.ok) return null;
-  }
+  if (!(await canReach(reader, email))) return null;
 
   const s = evalsSubmissions;
   const r = bootcampClassReviews;

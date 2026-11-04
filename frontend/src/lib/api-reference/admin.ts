@@ -2690,6 +2690,23 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         errors: [{ status: 404, error: "not_found", when: "the key names no one, or someone the caller may not see" }],
       },
       {
+        method: "POST",
+        path: "/api/reporting/bootcamp/people/{key}/slack",
+        summary: "Opens the private Slack channel where someone's Live Sessions card is discussed, making it the first time.",
+        access: "signedIn",
+        token: true,
+        notes:
+          "Takes no body. The channel is event-feedback-{first}-{last}, from the first and last words of their name, with -2, -3 and so on after it when another attendee's channel or another Slack channel already has the name; there is one per attendee, made private by the app's bot, which stays in it. An archived one is unarchived, and one Slack no longer has is made again. Who is invited follows PUT /api/evals/slack-contacts/settings. Live invites everyone above them in HiBob's reporting lines, the caller and every Additional Slack Contact, and takes out anyone the app invited who no longer belongs; someone added by hand is never taken out. Test, the default, invites only the Additional Slack Contacts and takes no one out, so callerIn is false for a caller who is not one. They themself are never invited. Each call then posts a message there naming the caller, with a link back to the card. invited and removed are the emails changed by this call; skipped are those who belong but have no Slack account, or whom Slack refused. appUrl opens the channel in the Slack app, webUrl in a browser. The audit log records each call.",
+        params: [{ name: "key", type: "string", required: true, note: "a key from the list: an employee id or a submission's" }],
+        returns:
+          "{ channelId, name, live: boolean, created: boolean, unarchived: boolean, invited: string[], removed: string[], skipped: string[], callerIn: boolean, appUrl, webUrl }",
+        errors: [
+          { status: 404, error: "not_found", when: "the key names no one, or someone the caller may not see" },
+          { status: 409, error: "not_configured", when: "the Slack app is not added (Admin Settings → External Connectors)" },
+          { status: 502, error: "slack_error", when: "Slack refused, with detail naming its error, such as a missing scope" },
+        ],
+      },
+      {
         method: "PUT",
         path: "/api/reporting/bootcamp/people/{key}/review",
         summary: "Sets someone's overall feedback and entrance and exit exams for one class they were assessed in.",
@@ -3052,7 +3069,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "assessmentsAdmin",
         token: true,
         notes:
-          "These people are added to the Slack messages sent to each attendee's team at the end of a bootcamp, after the attendee's management chain. fullName is their name in the employee list now, and empty only if it has none. total counts every contact, whatever the search.",
+          "These people are added to the Slack messages sent to each attendee's team at the end of a bootcamp, after the attendee's management chain, and to each attendee's private channel from the Slack button on their Live Sessions card (POST /api/reporting/bootcamp/people/{key}/slack). fullName is their name in the employee list now, and empty only if it has none. total counts every contact, whatever the search.",
         query: listQuery(SLACK_CONTACT_LIST.sorts, "the name, the email or who added them"),
         returns: `{ contacts: { id, email, fullName, createdAt, addedBy: string | null }[], ${PAGE_FIELDS}, total: number }`,
       },
@@ -3074,6 +3091,26 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           { status: 400, error: "not_employee", when: "nobody at Harness in the employee list has that email" },
           { status: 409, error: "duplicate", when: "that email is already a contact" },
         ],
+      },
+      {
+        method: "GET",
+        path: "/api/evals/slack-contacts/settings",
+        summary: "Says whether the Slack button on a Live Sessions card is in Test or Live.",
+        access: "assessmentsAdmin",
+        token: true,
+        returns: "{ live: boolean }",
+      },
+      {
+        method: "PUT",
+        path: "/api/evals/slack-contacts/settings",
+        summary: "Puts the Slack button on a Live Sessions card in Live, or back in Test.",
+        access: "assessmentsAdmin",
+        token: true,
+        notes:
+          "Test until an administrator turns it Live. In Test, the button (POST /api/reporting/bootcamp/people/{key}/slack) invites only the Additional Slack Contacts to an attendee's channel and takes no one out; Live, it also invites their reporting line and whoever pressed it, and takes out anyone it invited who no longer belongs.",
+        body: { kind: "json", fields: [{ name: "live", type: "boolean", required: true }] },
+        returns: "{ live: boolean }",
+        errors: [{ status: 400, error: "invalid", when: "the body does not parse" }],
       },
       {
         method: "DELETE",

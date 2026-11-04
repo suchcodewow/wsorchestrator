@@ -258,7 +258,7 @@ async function findChannels(slack: SlackClient, names: readonly string[]): Promi
 }
 
 /** Everyone in a channel, by Slack user id. */
-async function channelMembers(slack: SlackClient, channelId: string): Promise<Set<string>> {
+export async function channelMembers(slack: SlackClient, channelId: string): Promise<Set<string>> {
   const members = new Set<string>();
   let cursor = "";
   do {
@@ -378,7 +378,7 @@ async function ensureChannels(
 }
 
 /** Errors that would fail every call alike, so the whole run stops rather than logging one per person. */
-function isFatal(err: SlackError): boolean {
+export function isFatal(err: SlackError): boolean {
   return [
     "invalid_auth",
     "not_authed",

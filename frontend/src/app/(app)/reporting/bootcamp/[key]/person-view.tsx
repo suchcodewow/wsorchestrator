@@ -27,6 +27,7 @@ import type { ClassSummary, ReleaseStage } from "@/lib/reporting/bootcamp-values
 import { formatDate } from "../../../cohort-settings/format";
 import { ClassCard, Field, TRACK_LABELS } from "../class-card";
 import { EditSessionProvider, SubmissionGroups, useEditSession } from "./assessments";
+import { SlackButton } from "./slack-button";
 
 export type ViewSubmission = Omit<PersonSubmission, "submittedAt" | "updatedAt"> & {
   submittedAt: string;
@@ -83,11 +84,12 @@ export function PersonView({ person, canEdit, back }: { person: ViewPerson; canE
                 </p>
               )}
             </div>
-            {employee && (
-              <span className="shrink-0 text-sm tabular-nums text-muted-foreground">
-                Started {formatDate(employee.startDate)}
-              </span>
-            )}
+            <div className="flex shrink-0 flex-col items-end gap-2">
+              {employee && (
+                <span className="text-sm tabular-nums text-muted-foreground">Started {formatDate(employee.startDate)}</span>
+              )}
+              <SlackButton personKey={person.key} />
+            </div>
           </div>
           {employee && (
             <dl className="grid gap-x-8 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">
