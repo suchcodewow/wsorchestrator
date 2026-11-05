@@ -12,7 +12,6 @@ import { Button } from "@/components/ui/button";
 
 type Opened = {
   name: string;
-  live: boolean;
   created: boolean;
   unarchived: boolean;
   invited: string[];
@@ -25,6 +24,7 @@ type Opened = {
 
 const ERRORS: Record<string, string> = {
   not_found: "This person is no longer yours to see — reload the page.",
+  dry_run: "Slack is in dry run, so no channel was opened. A platform administrator turns it live on Admin Settings → External Connectors.",
   not_configured: "Slack is not connected. An administrator adds the app on Admin Settings → External Connectors.",
   forbidden: "Your own role changed — reload the page.",
 };
@@ -76,14 +76,13 @@ export function SlackButton({ personKey }: { personKey: string }) {
       )}
       {opened && (
         <p role="status" className="max-w-sm text-xs text-muted-foreground">
-          {!opened.live && <span className="font-medium text-foreground">Test: </span>}
           {summary(opened)}{" "}
           {opened.callerIn ? (
             <a href={opened.webUrl} target="_blank" rel="noreferrer" className="underline underline-offset-2 hover:text-foreground">
               Open in a browser
             </a>
           ) : (
-            "You are not in it: in Test only the Additional Slack Contacts are."
+            "You are not in it: the app found no Slack account for you."
           )}
           {opened.skipped.length > 0 && (
             <span className="block">

@@ -1,11 +1,12 @@
 "use client";
 
 /**
- * An administrator's two steps for each class of the active bootcamp, in the
- * order they are taken: Generate fills in the participation feedback, then
- * Release shows the class to managers. A released class says when instead,
- * and one still waiting on scores, exit exams or overall feedback says for
- * how many.
+ * An administrator's steps for each class of the active bootcamp, in the
+ * order they are taken: Generate fills in the participation feedback,
+ * Preview logs who the release's Slack message would reach, then Release
+ * shows the class to managers and sends it. A released class says when
+ * instead, and one still waiting on scores, exit exams or overall feedback
+ * says for how many.
  */
 
 import { CheckCircle2 } from "lucide-react";
@@ -13,8 +14,9 @@ import type { StagePending } from "@/lib/evals/participation";
 import { RELEASE_STAGES, type ReleaseStage } from "@/lib/reporting/bootcamp-values";
 import { STAGE_LABELS } from "@/lib/evals/assessment-values";
 import { formatDate, formatWhen } from "../../cohort-settings/format";
-import type { ViewBootcamp } from "./bootcamp-view";
+import type { ViewBootcamp } from "../../reporting/bootcamp/bootcamp-view";
 import { GenerateButton } from "./generate-button";
+import { PreviewButton } from "./preview-button";
 import { ReleaseButton } from "./release-button";
 
 function Status({ bootcamp, stage, pending }: { bootcamp: ViewBootcamp; stage: ReleaseStage; pending: StagePending | null }) {
@@ -42,9 +44,11 @@ function Status({ bootcamp, stage, pending }: { bootcamp: ViewBootcamp; stage: R
 export function ClassActions({
   bootcamp,
   pending,
+  slackLive,
 }: {
   bootcamp: ViewBootcamp | null;
   pending: Record<ReleaseStage, StagePending | null>;
+  slackLive: boolean;
 }) {
   if (!bootcamp) {
     return (
@@ -69,7 +73,13 @@ export function ClassActions({
             {open && (
               <div className="flex flex-wrap gap-2">
                 <GenerateButton stage={stage} pending={pending[stage]} />
-                <ReleaseButton stage={stage} startDate={bootcamp.startDate} blockers={pending[stage] ?? null} />
+                <PreviewButton stage={stage} />
+                <ReleaseButton
+                  stage={stage}
+                  startDate={bootcamp.startDate}
+                  blockers={pending[stage] ?? null}
+                  slackLive={slackLive}
+                />
               </div>
             )}
           </div>

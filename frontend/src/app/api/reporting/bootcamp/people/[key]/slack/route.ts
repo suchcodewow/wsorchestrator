@@ -31,7 +31,6 @@ export const POST = audited(async function POST(req: Request, { params }: { para
     targetLabel: `#${result.name}`,
     detail: {
       channelId: result.channelId,
-      live: result.live,
       created: result.created,
       unarchived: result.unarchived,
       invited: result.invited,

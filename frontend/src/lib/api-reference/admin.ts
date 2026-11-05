@@ -1,4 +1,4 @@
-import { FOOD_ORDER_LIST, RECORDING_LIST, GUEST_JUDGE_LIST, INTAKE_RESPONSE_LIST, JUDGE_PROSPECT_LIST, ASSESSMENT_ATTENDEE_LIST, ASSESSMENT_LIST, AUDIT_LIST, BOOTCAMP_COHORT_LIST, BOOTCAMP_LIST, BOOTCAMP_RECORD_LIST, CURRENT_COHORT_LIST, DOMAIN_LIST, EMPLOYEE_LIST, FRAME_DOMAIN_LIST, HIBOB_SYNC_LIST, HISTORY_STATUSES, JUDGE_LIST, ORGANIZATION_LIST, PREVIOUS_SESSION_LIST, SESSION_COMMENT_LIST, SESSION_TYPE_LIST, MEETING_SELECTION_LIST, MEETING_SYNC_CHANGE_LIST, MEETING_SYNC_LIST, SLACK_CONTACT_LIST, SLACK_SYNC_CHANGE_LIST, SLACK_SYNC_LIST, CHANNEL_CONTACT_LIST, SURVEY_RESPONSE_LIST, SURVEY_RESULT_LIST, TITLE_LIST, USER_LIST, FACILITY_LIST, VIDEO_FEEDBACK_LIST, VIDEO_FEEDBACK_SUMMARY_LIST } from "@/lib/list-specs";
+import { FOOD_ORDER_LIST, RECORDING_LIST, GUEST_JUDGE_LIST, INTAKE_RESPONSE_LIST, JUDGE_PROSPECT_LIST, ASSESSMENT_ATTENDEE_LIST, ASSESSMENT_LIST, AUDIT_LIST, BOOTCAMP_COHORT_LIST, BOOTCAMP_LIST, BOOTCAMP_RECORD_LIST, CURRENT_COHORT_LIST, DOMAIN_LIST, EMPLOYEE_LIST, FRAME_DOMAIN_LIST, HIBOB_SYNC_LIST, HISTORY_STATUSES, JUDGE_LIST, ORGANIZATION_LIST, PREVIOUS_SESSION_LIST, RELEASE_NOTICE_LIST, RELEASE_NOTICE_MESSAGE_LIST, SESSION_COMMENT_LIST, SESSION_TYPE_LIST, MEETING_SELECTION_LIST, MEETING_SYNC_CHANGE_LIST, MEETING_SYNC_LIST, SLACK_CONTACT_LIST, SLACK_SYNC_CHANGE_LIST, SLACK_SYNC_LIST, CHANNEL_CONTACT_LIST, SURVEY_RESPONSE_LIST, SURVEY_RESULT_LIST, TITLE_LIST, USER_LIST, FACILITY_LIST, VIDEO_FEEDBACK_LIST, VIDEO_FEEDBACK_SUMMARY_LIST } from "@/lib/list-specs";
 import { BOOTCAMP_EXAM, BOOTCAMP_LIMITS, BOOTCAMP_SCORE, CHECKLIST_LIMITS, EVALS_ASSESSMENT_LIMITS, FACILITY_LIMITS, FOOD_ORDER_LIMITS, INTAKE_LIMITS, MEETING_SELECTION_LIMITS, RECORDING_LIMITS, SCHEDULE_LIMITS, SURVEY_LIMITS, VIDEO_FEEDBACK_LIMITS } from "@/db/schema";
 import { PAGE_SIZE } from "@/lib/paging";
 import { RECORDING_RETENTION_DAYS, UPLOAD_STALLED_MS, UPLOAD_URL_BATCH } from "@/lib/recording/video";
@@ -870,7 +870,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           fields: [{ name: "preview", type: "boolean", note: "true for a dry run whether or not the sync is live, to see what it would change and send, and to whom; the body may be left out" }],
         },
         notes:
-          "Its channels also run after each scheduled HiBob sync, and its reminders once a day on their own. Channels: with no bootcamp active, none are synced. Otherwise it finds or creates the public channels sales-bootcamp-{mon}-{yyyy} and se-bootcamp-{mon}-{yyyy}, and the -intermediate- pair when the bootcamp holds an intermediate class, from its start date; joins each; invites the Current tab's Sales and Engineers at that stage, and the Bootcamp Contacts, to the sales- channel, and its Engineers and the Engineer Contacts to the se- one; and removes anyone it invited earlier who no longer belongs. Undecided people are left out, and no one it did not invite is ever removed. Reminders: while the daily reminder is on (PUT /api/cohorts/slack/settings) and today's have not gone out, a direct message, with a link to /intake, to everyone in the current cohort who has not answered their stage's intake form; a form with no questions sends nothing, and an app missing chat:write or im:write sends nothing and says so in notes. A run with nothing to do in any part is skipped. In dry run (see PUT /api/cohorts/slack/settings), or with preview, it changes and sends nothing, and the counts and GET /api/cohorts/slack/sync/{id} say what it would do and send, and to whom. A dry run works with Slack not connected too: unable to see who is already anywhere, it lists every channel not yet created as one to create, everyone each should hold as one to add, and a message to everyone due a reminder, and says so in notes. Slack's rate limits can stop a run part-way, when unfinished is true and the next run carries on. Allows 300 seconds; every attempt is logged.",
+          "Its channels also run after each scheduled HiBob sync, and its reminders once a day on their own. Channels: with no bootcamp active, none are synced. Otherwise it finds or creates the public channels sales-bootcamp-{mon}-{yyyy} and se-bootcamp-{mon}-{yyyy}, and the -intermediate- pair when the bootcamp holds an intermediate class, from its start date; joins each; invites the Current tab's Sales and Engineers at that stage, and the Bootcamp Contacts, to the sales- channel, and its Engineers and the Engineer Contacts to the se- one; and removes anyone it invited earlier who no longer belongs. Undecided people are left out, and no one it did not invite is ever removed. Reminders: while the daily reminder is on (PUT /api/cohorts/slack/settings) and today's have not gone out, a direct message, with a link to /intake, to everyone in the current cohort who has not answered their stage's intake form; a form with no questions sends nothing, and an app missing chat:write or im:write sends nothing and says so in notes. A run with nothing to do in any part is skipped. In dry run (see PUT /api/settings/slack-mode), or with preview, it changes and sends nothing, and the counts and GET /api/cohorts/slack/sync/{id} say what it would do and send, and to whom. A dry run works with Slack not connected too: unable to see who is already anywhere, it lists every channel not yet created as one to create, everyone each should hold as one to add, and a message to everyone due a reminder, and says so in notes. Slack's rate limits can stop a run part-way, when unfinished is true and the next run carries on. Allows 300 seconds; every attempt is logged.",
         returns: `{ ok: true, runId, status: "succeeded" | "skipped", dryRun: boolean, invited, removed, messaged, notInSlack, failures: number, unfinished: boolean, notes: string[] }`,
         errors: [
           { status: 400, error: "invalid", when: "the body is not that shape" },
@@ -898,7 +898,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       {
         method: "GET",
         path: "/api/cohorts/slack/settings",
-        summary: "Whether the cohort Slack sync is live or a dry run, and whether it sends the intake form's daily reminder.",
+        summary: "Whether Slack is live or a dry run (set with PUT /api/settings/slack-mode), and whether the cohort Slack sync sends the intake form's daily reminder.",
         access: "trainingAdmin",
         token: true,
         returns: "{ live: boolean, reminders: boolean }",
@@ -906,20 +906,17 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       {
         method: "PUT",
         path: "/api/cohorts/slack/settings",
-        summary: "Turns the cohort Slack sync live or back to a dry run, or its daily intake form reminder on or off.",
+        summary: "Turns the cohort Slack sync's daily intake form reminder on or off.",
         access: "trainingAdmin",
         token: true,
         notes:
-          "Either or both. The sync starts as a dry run and the daily reminder off. While the reminder is off, no run sends any; while it is on, the scheduled run and POST /api/cohorts/slack/sync send the reminders that are due, or log them in a dry run. QA shares production's Slack workspace, so leave QA in dry run with the reminder off.",
+          "The daily reminder starts off. While it is off, no run sends any; while it is on, the scheduled run and POST /api/cohorts/slack/sync send the reminders that are due, or log them while Slack is in dry run. Whether Slack is live is set with PUT /api/settings/slack-mode, and live is returned here only to read. QA shares production's Slack workspace, so leave QA in dry run with the reminder off.",
         body: {
           kind: "json",
-          fields: [
-            { name: "live", type: "boolean", note: "true to change Slack, false for a dry run" },
-            { name: "reminders", type: "boolean", note: "true to send the intake form's daily reminder" },
-          ],
+          fields: [{ name: "reminders", type: "boolean", required: true, note: "true to send the intake form's daily reminder" }],
         },
         returns: "{ live: boolean, reminders: boolean }",
-        errors: [{ status: 400, error: "invalid", when: "the body is not that shape, or names neither" }],
+        errors: [{ status: 400, error: "invalid", when: "the body is not that shape" }],
       },
       {
         method: "GET",
@@ -953,6 +950,26 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           { status: 409, error: "suffix_locked", when: "the suffix is changed while the group is on" },
           { status: 502, error: "teardown_failed", when: "a channel or invite could not be removed; failures lists them and the group stays on" },
         ],
+      },
+      {
+        method: "GET",
+        path: "/api/settings/slack-mode",
+        summary: "Whether the app changes Slack and sends messages there, or only logs what it would.",
+        access: "platform",
+        token: true,
+        returns: "{ live: boolean }",
+      },
+      {
+        method: "PUT",
+        path: "/api/settings/slack-mode",
+        summary: "Turns Slack live, or back to a dry run, for everything the app does there.",
+        access: "platform",
+        token: true,
+        notes:
+          "One switch, on Admin Settings → External Connectors, and a dry run until someone turns it live. In a dry run the cohort Slack sync (POST /api/cohorts/slack/sync) logs the channels it would create, the people it would invite and remove and the reminders it would send; the daily survey announcement is not posted; the Live Sessions Slack button (POST /api/reporting/bootcamp/people/{key}/slack) answers dry_run; and a release logs the message it would send (GET /api/reporting/release-notices/{id}). QA shares production's Slack workspace, so leave QA in dry run.",
+        body: { kind: "json", fields: [{ name: "live", type: "boolean", required: true, note: "true to change Slack and send messages, false for a dry run" }] },
+        returns: "{ live: boolean }",
+        errors: [{ status: 400, error: "invalid", when: "the body is not that shape" }],
       },
       {
         method: "GET",
@@ -2678,10 +2695,10 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "assessmentsAdmin",
         token: true,
         notes:
-          "From then on, managers see that class's results for the people in their org. Everyone scored in the class has attended it from then on: a BTC class moves on to Intermediate on Cohorts → Current, and an INT class leaves it. written counts the people scored in it. A class cannot be released while anyone in it is waiting on a score for an assessment, an exit exam, or overall positive and constructive feedback (PUT /api/reporting/bootcamp/people/{key}/review); GET /api/reporting/bootcamp/participation names who. A release cannot be taken back; releasing a class already released changes nothing, writes nothing, tells no one, and returns when it was, with notice null. Otherwise everyone in the management chain of anyone scored in the class (their manager up to the Organization Leader, from the HiBob sync), and everyone on the Additional Slack Contacts (GET /api/evals/slack-contacts) whoever they manage, gets a Slack direct message, \"Feedback has been released for November 2026 Bootcamp! Click here to view results for your attendees\" (Intermediate for an INT class), linking to Reporting → Live Sessions. With the test group on, its members for that class get it instead, and testGroup is true. notice says how that went: sent when every recipient was tried, messaged, notInSlack and failed counting them; dry_run while the Slack sync is in dry run, which sends nothing; not_connected with no Slack app; missing_scopes when the app lacks chat:write or im:write; failed when Slack refused every call or ran past a minute, error being Slack's answer. A notice never fails the release.",
+          "From then on, managers see that class's results for the people in their org. Everyone scored in the class has attended it from then on: a BTC class moves on to Intermediate on Cohorts → Current, and an INT class leaves it. written counts the people scored in it. A class cannot be released while anyone in it is waiting on a score for an assessment, an exit exam, or overall positive and constructive feedback (PUT /api/reporting/bootcamp/people/{key}/review); GET /api/reporting/bootcamp/participation names who. A release cannot be taken back; releasing a class already released changes nothing, writes nothing, tells no one, and returns when it was, with notice null. Otherwise everyone in the management chain of anyone scored in the class (their manager up to the Organization Leader, from the HiBob sync), and everyone on the Additional Slack Contacts (GET /api/evals/slack-contacts) whoever they manage, gets a Slack direct message, \"Feedback has been released for November 2026 Bootcamp! Click here to view results for your attendees\" (Intermediate for an INT class), linking to Reporting → Live Sessions. With the test group on, its members for that class get it instead. The messages go out after the response, one at a time; notice.runId is the run, which GET /api/reporting/release-notices/{id} shows as it goes. notice.dryRun is true while Slack is in dry run (PUT /api/settings/slack-mode), when nothing is sent and the run logs what would have been. notice is null when no one was scored, or the run could not start. Nothing about the message fails the release.",
         body: { kind: "json", fields: [{ name: "stage", type: '"bootcamp" | "intermediate"', required: true }] },
         returns:
-          '{ ok: true, stage, bootcamp: { id, startDate }, releasedAt, written: number, notice: { status: "sent" | "dry_run" | "not_connected" | "missing_scopes" | "failed", testGroup: boolean, recipients: number, messaged: number, notInSlack: number, failed: number, error?: string } | null }',
+          '{ ok: true, stage, bootcamp: { id, startDate }, releasedAt, written: number, notice: { runId, dryRun: boolean } | null }',
         errors: [
           { status: 400, error: "invalid", when: "stage is missing or neither bootcamp nor intermediate" },
           { status: 409, error: "no_bootcamp", when: "no bootcamp is active" },
@@ -2690,6 +2707,49 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           { status: 409, error: "no_exit_exam", when: "everyone is scored, but someone in the cohort has no exit exam" },
           { status: 409, error: "no_feedback", when: "everyone is scored and has an exit exam, but someone in the cohort lacks overall positive or constructive feedback" },
         ],
+      },
+      {
+        method: "POST",
+        path: "/api/reporting/release-notices/preview",
+        summary: "Logs who releasing the active bootcamp's BTC or INT scores would message in Slack, without releasing or sending anything.",
+        access: "assessmentsAdmin",
+        token: true,
+        notes:
+          "The recipients are worked out as POST /api/reporting/bootcamp/release would, from everyone scored in the class so far, and logged one at a time after the response, each with the message they would get, whether Slack is live or not and whether or not the class is released. With Slack connected, someone it has no account for is logged as not_in_slack. runId is the run, on GET /api/reporting/release-notices/{id}.",
+        body: { kind: "json", fields: [{ name: "stage", type: '"bootcamp" | "intermediate"', required: true }] },
+        returns: "{ runId }",
+        errors: [
+          { status: 400, error: "invalid", when: "stage is missing or neither bootcamp nor intermediate" },
+          { status: 409, error: "no_bootcamp", when: "no bootcamp is active" },
+          { status: 409, error: "no_intermediate", when: "stage is intermediate and the active bootcamp holds no intermediate class" },
+        ],
+      },
+      {
+        method: "GET",
+        path: "/api/reporting/release-notices",
+        summary: "Lists each release message run, a release's or a preview's, newest first, a page at a time.",
+        access: "assessmentsAdmin",
+        token: true,
+        notes:
+          "preview is true for POST /api/reporting/release-notices/preview; dryRun is true for a preview and for a release while Slack was in dry run, when nothing was sent; testGroup is true when the test group's members were messaged instead. While status is running, messaged, notInSlack and failures count those done so far, out of recipients. A run still running after ten minutes died with its server and is shown as failed.",
+        query: listQuery(RELEASE_NOTICE_LIST.sorts, "who started it, the class, the status or the error", "desc"),
+        returns: `{ runs: { id, stage: "bootcamp" | "intermediate", triggeredBy: string | null, preview: boolean, dryRun: boolean, testGroup: boolean, status: "running" | "succeeded" | "failed", startedAt, finishedAt: string | null, recipients, messaged, notInSlack, failures: number, error: string | null }[], ${PAGE_FIELDS} }`,
+      },
+      {
+        method: "GET",
+        path: "/api/reporting/release-notices/{id}",
+        summary: "One release message run, how many of its rows are of each kind, and a page of who it messaged.",
+        access: "assessmentsAdmin",
+        token: true,
+        notes:
+          "One row per recipient, added as each is done: messaged, with the message in detail as Slack mrkdwn (in a dry run, what would have been sent); not_in_slack, for an email Slack has no account for; or failed, with Slack's error in detail. fullName is the employee list's name for the email now, or null. counts is by kind, whatever the search.",
+        params: [{ name: "id", type: "string", required: true, note: "UUID" }],
+        query: [
+          { name: "kind", type: `"messages" | "problems"`, note: "only messages sent, or only failures and those not in Slack" },
+          ...listQuery(RELEASE_NOTICE_MESSAGE_LIST.sorts, "the email, the name, the action or the detail"),
+        ],
+        returns: `{ run: { id, stage: "bootcamp" | "intermediate", triggeredBy: string | null, preview: boolean, dryRun: boolean, testGroup: boolean, status: "running" | "succeeded" | "failed", startedAt, finishedAt: string | null, recipients, messaged, notInSlack, failures: number, error: string | null }, counts: { all, messages, problems: number }, messages: { id, action: "messaged" | "not_in_slack" | "failed", email, fullName: string | null, detail: string | null, at }[], ${PAGE_FIELDS} }`,
+        errors: [{ status: 404, error: "not_found", when: "id is not a UUID, or no such run" }],
       },
       {
         method: "GET",
@@ -2711,12 +2771,13 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "signedIn",
         token: true,
         notes:
-          "Takes no body. The channel is event-feedback-{first}-{last}, from the first and last words of their name, with -2, -3 and so on after it when another attendee's channel or another Slack channel already has the name; there is one per attendee, made private by the app's bot, which stays in it. An archived one is unarchived, and one Slack no longer has is made again. Who is invited follows PUT /api/evals/slack-contacts/settings. Live invites everyone above them in HiBob's reporting lines, the caller and every Additional Slack Contact, and takes out anyone the app invited who no longer belongs; someone added by hand is never taken out. Test, the default, invites only the Additional Slack Contacts and takes no one out, so callerIn is false for a caller who is not one. They themself are never invited. Each call then posts a message there naming the caller, with a link back to the card. invited and removed are the emails changed by this call; skipped are those who belong but have no Slack account, or whom Slack refused. appUrl opens the channel in the Slack app, webUrl in a browser. The audit log records each call.",
+          "Takes no body. The channel is event-feedback-{first}-{last}, from the first and last words of their name, with -2, -3 and so on after it when another attendee's channel or another Slack channel already has the name; there is one per attendee, made private by the app's bot, which stays in it. An archived one is unarchived, and one Slack no longer has is made again. It invites everyone above them in HiBob's reporting lines, the caller and every Additional Slack Contact, and takes out anyone the app invited who no longer belongs; someone added by hand is never taken out. They themself are never invited. While Slack is in dry run (PUT /api/settings/slack-mode) it does nothing and answers dry_run. Each call then posts a message there naming the caller, with a link back to the card. invited and removed are the emails changed by this call; skipped are those who belong but have no Slack account, or whom Slack refused. appUrl opens the channel in the Slack app, webUrl in a browser. The audit log records each call.",
         params: [{ name: "key", type: "string", required: true, note: "a key from the list: an employee id or a submission's" }],
         returns:
-          "{ channelId, name, live: boolean, created: boolean, unarchived: boolean, invited: string[], removed: string[], skipped: string[], callerIn: boolean, appUrl, webUrl }",
+          "{ channelId, name, created: boolean, unarchived: boolean, invited: string[], removed: string[], skipped: string[], callerIn: boolean, appUrl, webUrl }",
         errors: [
           { status: 404, error: "not_found", when: "the key names no one, or someone the caller may not see" },
+          { status: 409, error: "dry_run", when: "Slack is in dry run (PUT /api/settings/slack-mode)" },
           { status: 409, error: "not_configured", when: "the Slack app is not added (Admin Settings → External Connectors)" },
           { status: 502, error: "slack_error", when: "Slack refused, with detail naming its error, such as a missing scope" },
         ],
@@ -3128,26 +3189,6 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           { status: 400, error: "not_employee", when: "nobody at Harness in the employee list has that email" },
           { status: 409, error: "duplicate", when: "that email is already a contact" },
         ],
-      },
-      {
-        method: "GET",
-        path: "/api/evals/slack-contacts/settings",
-        summary: "Says whether the Slack button on a Live Sessions card is in Test or Live.",
-        access: "assessmentsAdmin",
-        token: true,
-        returns: "{ live: boolean }",
-      },
-      {
-        method: "PUT",
-        path: "/api/evals/slack-contacts/settings",
-        summary: "Puts the Slack button on a Live Sessions card in Live, or back in Test.",
-        access: "assessmentsAdmin",
-        token: true,
-        notes:
-          "Test until an administrator turns it Live. In Test, the button (POST /api/reporting/bootcamp/people/{key}/slack) invites only the Additional Slack Contacts to an attendee's channel and takes no one out; Live, it also invites their reporting line and whoever pressed it, and takes out anyone it invited who no longer belongs.",
-        body: { kind: "json", fields: [{ name: "live", type: "boolean", required: true }] },
-        returns: "{ live: boolean }",
-        errors: [{ status: 400, error: "invalid", when: "the body does not parse" }],
       },
       {
         method: "DELETE",

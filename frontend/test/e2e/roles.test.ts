@@ -67,6 +67,7 @@ import {
 } from "@/lib/roles";
 import { visibleCohortSettingsTabs } from "@/app/(app)/cohort-settings/tabs";
 import { EVALS_SETTINGS_TABS } from "@/app/(app)/evals-settings/tabs";
+import { REPORTING_SETTINGS_TABS } from "@/app/(app)/reporting-settings/tabs";
 import { MIMIR_TABS as MIMIR_ARCHIVE_TABS } from "@/app/(app)/coach-canary-archive/tabs";
 import { MIMIR_TABS } from "@/app/(app)/coach-canary/tabs";
 import { MIMIR_SETTINGS_TABS } from "@/app/(app)/coach-canary-settings/tabs";
@@ -322,6 +323,13 @@ const PAGES: Record<string, PageCase> = {
   },
   "/reporting/canary-wire": { path: () => "/reporting/canary-wire", expect: gated(canSeeCanaryWire) },
   "/reporting/bootcamp": { path: () => "/reporting/bootcamp", expect: gated(canSeeBootcampRecords) },
+  "/reporting-settings": {
+    path: () => "/reporting-settings",
+    expect: (a) => (canManageBootcampRecords(a) ? { to: REPORTING_SETTINGS_TABS[0]!.href } : 404),
+  },
+  "/reporting-settings/feedback": { path: () => "/reporting-settings/feedback", expect: gated(canManageBootcampRecords) },
+  "/reporting-settings/feedback/<unknown>": { path: () => `/reporting-settings/feedback/${MISSING}`, expect: () => 404 },
+  "/reporting-settings/canary-wire": { path: () => "/reporting-settings/canary-wire", expect: gated(canManageBootcampRecords) },
   "/reporting/bootcamp?searched": {
     path: () => "/reporting/bootcamp?status=active&q=x&sort=averageScore&cohort.sort=stage&cohort.stage=intermediate&cohort.page=2",
     expect: gated(canSeeBootcampRecords),
@@ -559,6 +567,8 @@ const ROUTES: RouteCase[] = [
   { method: "PATCH", path: `/api/settings/repos/${MISSING}`, allowed: canManageSettings, body: () => ({}) },
   { method: "DELETE", path: `/api/settings/repos/${MISSING}`, allowed: canManageSettings },
   { method: "GET", path: "/api/settings/timed-jobs", allowed: canManageTimedJobs },
+  { method: "GET", path: "/api/settings/slack-mode", allowed: canManageConnectors },
+  { method: "PUT", path: "/api/settings/slack-mode", allowed: canManageConnectors, body: () => ({}) },
   { method: "PATCH", path: "/api/settings/timed-jobs/missing", allowed: canManageTimedJobs, body: () => ({ enabled: true }) },
   { method: "PATCH", path: "/api/settings/timed-jobs/missing", allowed: canManageTimedJobs, body: () => ({ schedule: null }) },
   { method: "POST", path: `/api/me/harness-tokens/${MISSING}/deploy`, allowed: canManageSettings, body: () => ({}) },
@@ -737,6 +747,10 @@ const ROUTES: RouteCase[] = [
   { method: "GET", path: "/api/reporting/bootcamp/cohort", allowed: canSeeBootcampRecords },
   { method: "GET", path: `/api/reporting/bootcamp/people/${MISSING}`, allowed: canSeeBootcampRecords },
   { method: "POST", path: "/api/reporting/bootcamp/release", allowed: canManageBootcampRecords, body: () => ({}) },
+  // Refused for its body before it starts a run, so this is safe past the gate.
+  { method: "POST", path: "/api/reporting/release-notices/preview", allowed: canManageBootcampRecords, body: () => ({}) },
+  { method: "GET", path: "/api/reporting/release-notices", allowed: canManageBootcampRecords },
+  { method: "GET", path: `/api/reporting/release-notices/${MISSING}`, allowed: canManageBootcampRecords },
   { method: "GET", path: "/api/reporting/bootcamp/participation", allowed: canManageBootcampRecords },
   { method: "POST", path: "/api/reporting/bootcamp/participation", allowed: canManageBootcampRecords, body: () => ({}) },
   { method: "POST", path: `/api/reporting/bootcamp/participation/${MISSING}`, allowed: canManageBootcampRecords },
@@ -761,11 +775,9 @@ const ROUTES: RouteCase[] = [
   { method: "GET", path: "/api/evals/hibob/sync", allowed: canManageEvalsSettings },
   { method: "GET", path: "/api/evals/organization", allowed: canManageEvalsSettings },
   { method: "GET", path: "/api/evals/slack-contacts", allowed: canManageEvalsSettings },
-  { method: "GET", path: "/api/evals/slack-contacts/settings", allowed: canManageEvalsSettings },
   { method: "GET", path: "/api/evals/titles", allowed: canManageEvalsSettings },
   { method: "POST", path: "/api/evals/hibob/sync", allowed: canManageEvalsSettings, denyOnly: true },
   { method: "POST", path: "/api/evals/slack-contacts", allowed: canManageEvalsSettings, body: () => ({}) },
-  { method: "PUT", path: "/api/evals/slack-contacts/settings", allowed: canManageEvalsSettings, body: () => ({}) },
   { method: "POST", path: "/api/evals/titles", allowed: canManageEvalsSettings, body: () => ({}) },
   { method: "PUT", path: "/api/evals/candidate-cutoffs", allowed: canManageEvalsSettings, body: () => ({}) },
   { method: "PUT", path: "/api/evals/deferral-days", allowed: canManageEvalsSettings, body: () => ({}) },

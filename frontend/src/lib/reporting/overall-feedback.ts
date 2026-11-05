@@ -11,8 +11,9 @@
  * failed batch costs only its own sentences.
  *
  * Two ways in: one side of one review, which the administrator's sparkle
- * fills into the form unsaved; and the Live Sessions Generate button, which
- * saves every blank side for the active bootcamp's cohort in one class.
+ * fills into the form unsaved; and the Generate button on Reporting Settings
+ * → Feedback Management, which saves every blank side for the active
+ * bootcamp's cohort in one class.
  */
 
 import "server-only";

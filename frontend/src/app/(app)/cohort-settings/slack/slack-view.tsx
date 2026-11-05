@@ -2,7 +2,8 @@
 
 /**
  * The Slack app's install, the active bootcamp's Slack channels, the intake
- * form's reminders, whether the sync is live or a dry run, the Preview and
+ * form's reminders, whether Slack is live or a dry run (set on Admin
+ * Settings → External Connectors), the Preview and
  * Sync Now buttons, and every run's result, each linking to what it
  * did and sent, and to whom.
  */
@@ -42,7 +43,6 @@ import { INTAKE_FORM_LABELS } from "@/lib/logistics/intake-values";
 import type { SlackSyncSort } from "@/lib/list-specs";
 import { riseChild, staggerParent } from "@/lib/motion";
 import type { ListQuery, Page } from "@/lib/paging";
-import { cn } from "@/lib/utils";
 import { formatDate, formatWhen } from "../format";
 
 export type SlackRun = {
@@ -155,7 +155,7 @@ export function SlackSyncView({
   const sortProps = { sort: query.sort, dir: query.dir };
   const router = useRouter();
   const rowLink = useRowLink();
-  const [busy, setBusy] = useState<"sync" | "preview" | "mode" | "reminders" | null>(null);
+  const [busy, setBusy] = useState<"sync" | "preview" | "reminders" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -190,35 +190,6 @@ export function SlackSyncView({
       } else {
         router.push(`/cohort-settings/slack/${body.runId}`);
       }
-    } catch {
-      setError("Could not reach the server.");
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  async function setLive(next: boolean) {
-    if (next === live) return;
-    if (
-      next &&
-      !window.confirm(
-        "Go live? From the next sync, it creates channels, invites people, removes those it invited who no longer belong, and sends the intake form reminders that are due.",
-      )
-    ) {
-      return;
-    }
-    setBusy("mode");
-    setError(null);
-    setNotice(null);
-    try {
-      const res = await fetch("/api/cohorts/slack/settings", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ live: next }),
-      });
-      const body = await res.json().catch(() => null);
-      if (!res.ok) setError(message(body, res.status));
-      else router.refresh();
     } catch {
       setError("Could not reach the server.");
     } finally {
@@ -309,43 +280,14 @@ export function SlackSyncView({
 
       <motion.div variants={riseChild} className="divide-y overflow-hidden rounded-2xl border bg-card shadow-sm">
         <ConnectionRow connection={connection} />
-        <div className="flex flex-wrap items-center justify-between gap-4 px-5 py-4 sm:flex-nowrap">
-          <div className="min-w-0 space-y-0.5">
-            <p className="text-sm font-medium">Mode</p>
-            <p className="text-sm text-muted-foreground">
-              {live
-                ? "Each sync creates the channels, invites the cohort and its contacts, removes anyone it invited who no longer belongs, and sends the reminders that are due."
-                : configured
-                  ? "Each sync reads Slack and logs the channels it would create, who it would add and remove, and the messages it would send, without changing or sending anything."
-                  : "Each sync logs the channels it would create, who it would add, and the messages it would send, without Slack: connect it to check who is already there."}
-            </p>
-          </div>
-          <div role="radiogroup" aria-label="Mode" className="inline-flex shrink-0 items-center rounded-lg border bg-card p-0.5 shadow-xs">
-            {([
-              [false, "Dry run"],
-              [true, "Live"],
-            ] as const).map(([value, label]) => (
-              <button
-                key={label}
-                type="button"
-                role="radio"
-                aria-checked={live === value}
-                disabled={busy === "mode"}
-                onClick={() => setLive(value)}
-                className={cn(
-                  "inline-flex cursor-pointer items-center gap-1.5 rounded-md px-3 py-1.5 text-sm outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-wait",
-                  live === value
-                    ? value
-                      ? "bg-brand font-medium text-brand-foreground"
-                      : "bg-accent font-medium text-foreground"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                {busy === "mode" && live !== value && <Loader2 className="size-3.5 animate-spin" />}
-                {label}
-              </button>
-            ))}
-          </div>
+        <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-2.5">
+          <span className="flex items-center gap-2 text-sm font-medium">
+            Mode
+            {live ? <Badge>Live</Badge> : <Badge variant="secondary">Dry run</Badge>}
+          </span>
+          <Link href="/admin-settings/connectors" className="text-sm text-muted-foreground hover:text-foreground hover:underline">
+            Set on Admin Settings → External Connectors
+          </Link>
         </div>
         <div className="flex flex-wrap items-center justify-between gap-4 px-5 py-4 sm:flex-nowrap">
           <div className="min-w-0 space-y-0.5">

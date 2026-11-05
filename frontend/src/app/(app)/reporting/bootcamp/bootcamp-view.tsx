@@ -1,9 +1,9 @@
 "use client";
 
 /**
- * Reporting → Bootcamp: an administrator's release buttons, the current
- * cohort, then everyone with a record, marked with the furthest class they
- * have been to. Both tables have the same columns. One search narrows both;
+ * Reporting → Bootcamp: the current cohort, then everyone with a record,
+ * marked with the furthest class they have been to. Both tables have the
+ * same columns. One search narrows both;
  * the cohort can be narrowed to one class; a row opens that person.
  */
 
@@ -23,7 +23,6 @@ import {
 } from "@/components/data-table";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { STAGE_LABELS } from "@/lib/evals/assessment-values";
-import type { StagePending } from "@/lib/evals/participation";
 import {
   BOOTCAMP_COHORT_PREFIX,
   type BootcampCohortSort,
@@ -37,7 +36,6 @@ import type { BootcampLevel, ReleaseStage } from "@/lib/reporting/bootcamp-value
 import { cn } from "@/lib/utils";
 import { formatDate, formatWholeScore, formatWhen } from "../../cohort-settings/format";
 import { LevelChip } from "./class-card";
-import { ClassActions } from "./class-actions";
 
 type Released = { at: string; byName: string | null } | null;
 
@@ -253,8 +251,6 @@ function PeopleTable<S extends string>({
 
 export function BootcampView({
   everyone,
-  canRelease,
-  pending: participation,
   bootcamp,
   cohort,
   query,
@@ -264,9 +260,6 @@ export function BootcampView({
 }: {
   /** An Assessments Viewer or above, who sees everyone rather than their org. */
   everyone: boolean;
-  canRelease: boolean;
-  /** What each class's Generate button would write; null to an administrator for a class it can no longer run on. */
-  pending: Record<ReleaseStage, StagePending | null>;
   /** The active bootcamp, or null with none. */
   bootcamp: ViewBootcamp | null;
   /** Its cohort, or null when there is none to show this reader: the classes they may see, the one shown, and how many are in each. */
@@ -301,12 +294,6 @@ export function BootcampView({
           </p>
         </div>
       </motion.div>
-
-      {canRelease && (
-        <motion.div variants={riseChild}>
-          <ClassActions bootcamp={bootcamp} pending={participation} />
-        </motion.div>
-      )}
 
       <motion.div variants={riseChild} className="flex flex-wrap items-center gap-3">
         <TableSearch

@@ -19,9 +19,7 @@ import {
   readerOf,
   visibleStages,
 } from "@/lib/reporting/bootcamp";
-import { pendingParticipation } from "@/lib/evals/participation";
 import { isReleaseStage } from "@/lib/reporting/bootcamp-values";
-import { canManageBootcampRecords } from "@/lib/roles";
 import { BootcampView } from "./bootcamp-view";
 
 export const metadata: Metadata = { title: "Live Sessions" };
@@ -46,20 +44,16 @@ export default async function BootcampPage({
 
   const bootcamp = await cohortBootcamp();
   const stages = bootcamp ? visibleStages(reader, bootcamp) : [];
-  const canRelease = canManageBootcampRecords(access);
-  const [records, counts, cohort, stageCounts, pending] = await Promise.all([
+  const [records, counts, cohort, stageCounts] = await Promise.all([
     listBootcampRecords(reader, query, status),
     bootcampRecordCounts(reader),
     bootcamp && stages.length > 0 ? listCohort(reader, bootcamp, cohortQuery, cohortStage) : null,
     bootcamp && stages.length > 0 ? cohortCounts(reader, bootcamp) : null,
-    canRelease ? pendingParticipation() : { bootcamp: null, intermediate: null },
   ]);
 
   return (
     <BootcampView
       everyone={reader.all}
-      canRelease={canRelease}
-      pending={pending}
       bootcamp={
         bootcamp && {
           startDate: bootcamp.startDate,

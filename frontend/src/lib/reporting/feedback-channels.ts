@@ -5,17 +5,14 @@
  * it or making it when it has to, brings its members in line, posts a link
  * back to the card, and says how to open it.
  *
- * Who is invited depends on the mode on eVals settings → Additional Slack
- * Contacts:
+ * It invites everyone above the attendee in HiBob's reporting lines (whoever
+ * may see the card as their manager), whoever pressed the button, and the
+ * Additional Slack Contacts. Someone the app invited who no longer belongs is
+ * taken out; someone added by hand never is. The attendee is never invited
+ * to their own channel.
  *
- * - Live: everyone above the attendee in HiBob's reporting lines (whoever may
- *   see the card as their manager), whoever pressed the button, and the
- *   Additional Slack Contacts. Someone the app invited who no longer belongs
- *   is taken out; someone added by hand never is.
- * - Test, the default: only the Additional Slack Contacts are invited, and
- *   no one is taken out, so a channel already made live keeps its people.
- *
- * The attendee is never invited to their own channel.
+ * While Slack is in dry run (Admin Settings → External Connectors) a press
+ * changes nothing and says so.
  */
 
 import "server-only";
@@ -23,16 +20,14 @@ import "server-only";
 import { and, eq, inArray, like, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
-  EVALS_SETTINGS_KEYS,
   employees,
-  evalsSettings,
   feedbackChannels,
   slackChannelMembers,
   users,
 } from "@/db/schema";
 import { planMembership } from "@/lib/cohorts/slack-plan";
 import { slackContactEmails } from "@/lib/evals/slack-contacts";
-import { channelMembers, isFatal, resolveSlackUsers } from "@/lib/cohorts/slack-sync";
+import { channelMembers, getSlackSyncLive, isFatal, resolveSlackUsers } from "@/lib/cohorts/slack-sync";
 import { canReach, nameOf, resolvePerson, type BootcampReader } from "@/lib/reporting/bootcamp";
 import { feedbackChannelName } from "@/lib/reporting/feedback-channel-values";
 import { SlackError, SlackOutOfTime, slackClient, slackToken, type SlackClient } from "@/lib/slack";
@@ -42,30 +37,6 @@ import { getSlackInstallation } from "@/lib/slack-app";
 const DEADLINE_MS = 60_000;
 /** How many numbered names to try before giving up on one Slack keeps refusing. */
 const NAME_TRIES = 20;
-
-/* ------------------------------------------------------------------ */
-/* Test or Live                                                        */
-/* ------------------------------------------------------------------ */
-
-/** Whether a press invites the reporting line; false, Test, until someone says otherwise. */
-export async function getFeedbackChannelsLive(): Promise<boolean> {
-  const [row] = await db
-    .select({ value: evalsSettings.value })
-    .from(evalsSettings)
-    .where(eq(evalsSettings.key, EVALS_SETTINGS_KEYS.feedbackChannelsLive));
-  return row?.value === "true";
-}
-
-export async function setFeedbackChannelsLive(actorId: string, live: boolean): Promise<void> {
-  const value = live ? "true" : "false";
-  await db
-    .insert(evalsSettings)
-    .values({ key: EVALS_SETTINGS_KEYS.feedbackChannelsLive, value, updatedBy: actorId })
-    .onConflictDoUpdate({
-      target: evalsSettings.key,
-      set: { value, updatedBy: actorId, updatedAt: new Date() },
-    });
-}
 
 /* ------------------------------------------------------------------ */
 /* Who belongs                                                         */
@@ -151,10 +122,11 @@ async function ensureChannel(
 /* A press                                                             */
 /* ------------------------------------------------------------------ */
 
-export type FeedbackChannelError = "not_found" | "not_configured" | "slack_error";
+export type FeedbackChannelError = "not_found" | "dry_run" | "not_configured" | "slack_error";
 
 export const STATUS_FOR: Record<FeedbackChannelError, number> = {
   not_found: 404,
+  dry_run: 409,
   not_configured: 409,
   slack_error: 502,
 };
@@ -162,7 +134,6 @@ export const STATUS_FOR: Record<FeedbackChannelError, number> = {
 export type FeedbackChannelResult = {
   channelId: string;
   name: string;
-  live: boolean;
   created: boolean;
   unarchived: boolean;
   /** Emails newly invited, and taken out. */
@@ -193,21 +164,21 @@ export async function openFeedbackChannel(
   const email = await resolvePerson(key);
   if (!email || !(await canReach(reader, email))) return { ok: false, error: "not_found" };
 
+  if (!(await getSlackSyncLive())) return { ok: false, error: "dry_run" };
   const [token, install] = await Promise.all([slackToken(), getSlackInstallation()]);
   if (!token) return { ok: false, error: "not_configured" };
   const slack = slackClient(token, Date.now() + DEADLINE_MS);
 
-  const [{ rows: named }, [presser], live] = await Promise.all([
+  const [{ rows: named }, [presser]] = await Promise.all([
     db.execute<{ fullName: string | null }>(sql`select ${nameOf(sql`${email}`)} as "fullName"`),
     db.select({ name: users.name, email: users.email }).from(users).where(eq(users.id, caller.id)),
-    getFeedbackChannelsLive(),
   ]);
   const attendee = { email, fullName: named[0]?.fullName ?? null };
   const callerEmail = caller.email?.trim().toLowerCase() || null;
 
   const contacts = await slackContactEmails();
   const wantedEmails = [
-    ...new Set([...(live ? [...(await managersOf(email)), ...(callerEmail ? [callerEmail] : [])] : []), ...contacts]),
+    ...new Set([...(await managersOf(email)), ...(callerEmail ? [callerEmail] : []), ...contacts]),
   ].filter((e) => e !== email);
 
   try {
@@ -230,18 +201,15 @@ export async function openFeedbackChannel(
     const plan = planMembership({
       wanted: new Set(wanted.keys()),
       members,
-      // Test takes no one out: a channel made live keeps its people.
-      invitedBySync: live ? new Set(invitedByApp.keys()) : new Set(),
+      invitedBySync: new Set(invitedByApp.keys()),
     });
     const emailOf = (id: string) => wanted.get(id) ?? invitedByApp.get(id) ?? "";
 
-    if (live) {
-      const gone = [...invitedByApp.keys()].filter((id) => !members.has(id));
-      if (gone.length > 0) {
-        await db
-          .delete(slackChannelMembers)
-          .where(and(eq(slackChannelMembers.slackChannelId, channel.id), inArray(slackChannelMembers.slackUserId, gone)));
-      }
+    const gone = [...invitedByApp.keys()].filter((id) => !members.has(id));
+    if (gone.length > 0) {
+      await db
+        .delete(slackChannelMembers)
+        .where(and(eq(slackChannelMembers.slackChannelId, channel.id), inArray(slackChannelMembers.slackUserId, gone)));
     }
 
     const invited: string[] = [];
@@ -290,7 +258,7 @@ export async function openFeedbackChannel(
     const about = attendee.fullName ?? attendee.email;
     await slack.call("chat.postMessage", {
       channel: channel.id,
-      text: `${live ? "" : "[Test] "}${who} opened this to discuss *${about}*: <${cardUrl}|their Live Sessions card>`,
+      text: `${who} opened this to discuss *${about}*: <${cardUrl}|their Live Sessions card>`,
       unfurl_links: "false",
     });
 
@@ -302,7 +270,6 @@ export async function openFeedbackChannel(
       result: {
         channelId: channel.id,
         name: channel.name,
-        live,
         created: channel.created,
         unarchived: channel.unarchived,
         invited: invited.sort(),

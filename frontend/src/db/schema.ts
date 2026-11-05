@@ -1149,8 +1149,6 @@ export const EVALS_SETTINGS_KEYS = {
   meetingFacilitators: "meeting_facilitators",
   /** JSON `ParticipationBands`: the net marks each participation score starts at. See `lib/evals/participation-values.ts`. */
   participationBands: "participation_bands",
-  /** `true` for Live; anything else is Test, which invites only the Additional Slack Contacts. See `lib/reporting/feedback-channels.ts`. */
-  feedbackChannelsLive: "feedback_channels_live",
 } as const;
 
 /** Most people the Google Meetings sync adds to every occurrence. */
@@ -1838,6 +1836,71 @@ export const slackSyncChanges = pgTable(
     at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("slack_sync_changes_run_idx").on(t.runId, t.at)],
+);
+
+export const RELEASE_NOTICE_STATUSES = ["running", "succeeded", "failed"] as const;
+export type ReleaseNoticeStatus = (typeof RELEASE_NOTICE_STATUSES)[number];
+
+/**
+ * One sending of the Slack message a release sends to a class's managers and
+ * the Additional Slack Contacts (`lib/reporting/release-notice.ts`), or a
+ * preview of it, and how it ended. Shown on Reporting Settings → Feedback
+ * Management.
+ */
+export const releaseNoticeRuns = pgTable(
+  "release_notice_runs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    stage: text("stage").$type<"bootcamp" | "intermediate">().notNull(),
+    bootcampId: uuid("bootcamp_id").references(() => bootcamps.id, { onDelete: "set null" }),
+    /** Who pressed Release or Preview. */
+    triggeredBy: text("triggered_by").references(() => users.id, { onDelete: "set null" }),
+    /** Preview: nothing was released, and nothing sent. */
+    preview: boolean("preview").notNull().default(false),
+    /** Sent nothing, and logged what it would have: a preview, or Slack in dry run. */
+    dryRun: boolean("dry_run").notNull(),
+    /** The test group's members were messaged in place of the managers and contacts. */
+    testGroup: boolean("test_group").notNull().default(false),
+    status: text("status").$type<ReleaseNoticeStatus>().notNull().default("running"),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+    recipients: integer("recipients").notNull().default(0),
+    /** Messages sent, or in a dry run that would be. */
+    messaged: integer("messaged").notNull().default(0),
+    notInSlack: integer("not_in_slack").notNull().default(0),
+    failures: integer("failures").notNull().default(0),
+    /** Why it failed, or why it sent nothing. */
+    error: text("error"),
+  },
+  (t) => [
+    index("release_notice_runs_started_at_idx").on(t.startedAt),
+    check("release_notice_runs_stage_check", sql`${t.stage} in ('bootcamp', 'intermediate')`),
+    check("release_notice_runs_status_check", sql`${t.status} in ('running', 'succeeded', 'failed')`),
+  ],
+);
+
+export const RELEASE_NOTICE_ACTIONS = ["messaged", "not_in_slack", "failed"] as const;
+export type ReleaseNoticeAction = (typeof RELEASE_NOTICE_ACTIONS)[number];
+
+/** One recipient of a release notice run: the message sent (its text in `detail`), no Slack account, or Slack's refusal. */
+export const releaseNoticeMessages = pgTable(
+  "release_notice_messages",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    runId: uuid("run_id")
+      .notNull()
+      .references(() => releaseNoticeRuns.id, { onDelete: "cascade" }),
+    action: text("action").$type<ReleaseNoticeAction>().notNull(),
+    /** Lowercased. */
+    email: text("email").notNull(),
+    /** The message, as Slack mrkdwn; Slack's error, for a failure. */
+    detail: text("detail"),
+    at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("release_notice_messages_run_idx").on(t.runId, t.at),
+    check("release_notice_messages_action_check", sql`${t.action} in ('messaged', 'not_in_slack', 'failed')`),
+  ],
 );
 
 /** `skipped` is a run with nothing to do: no meeting picked, or no active bootcamp. */

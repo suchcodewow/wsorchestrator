@@ -1,9 +1,9 @@
 "use client";
 
 /**
- * The Additional Slack Contacts: whether the Live Sessions channels are in
- * Test or Live; a field to find an employee by name, or type any email, and
- * add them; then a page of those added, searched and sorted by the database.
+ * The Additional Slack Contacts: a field to find an employee by name, or
+ * type any email, and add them; then a page of those added, searched and
+ * sorted by the database.
  */
 
 import { useState } from "react";
@@ -16,7 +16,6 @@ import { Button } from "@/components/ui/button";
 import type { SlackContactSort } from "@/lib/list-specs";
 import { riseChild, staggerParent } from "@/lib/motion";
 import type { ListQuery, Page } from "@/lib/paging";
-import { cn } from "@/lib/utils";
 import { formatWhen } from "../../cohort-settings/format";
 
 export type SlackContactListing = {
@@ -46,12 +45,10 @@ export function SlackContactsView({
   query,
   page,
   count,
-  live,
 }: {
   query: ListQuery<SlackContactSort>;
   page: Page<SlackContactListing>;
   count: number;
-  live: boolean;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
@@ -80,19 +77,6 @@ export function SlackContactsView({
     }
   }
 
-  async function setLive(next: boolean) {
-    if (next === live) return;
-    if (
-      next &&
-      !window.confirm(
-        "Go live? From now on, the Slack button on a Live Sessions card invites the attendee's managers and whoever pressed it, as well as these contacts, and takes out anyone it invited who no longer belongs.",
-      )
-    ) {
-      return;
-    }
-    await send("mode", "/api/evals/slack-contacts/settings", { method: "PUT", body: JSON.stringify({ live: next }) });
-  }
-
   return (
     <motion.div variants={staggerParent(0.05)} initial="hidden" animate="show" className="space-y-6">
       <motion.div variants={riseChild} className="space-y-1.5">
@@ -101,47 +85,9 @@ export function SlackContactsView({
           <span className="font-medium text-foreground">
             {count.toLocaleString()} {count === 1 ? "contact" : "contacts"}
           </span>{" "}
-          added to every team&apos;s Slack message at the end of a bootcamp, and to each Live Sessions channel.
+          added to every team&apos;s Slack message at the end of a bootcamp, to each Live Sessions channel, and to the
+          message a release sends managers.
         </p>
-      </motion.div>
-
-      <motion.div variants={riseChild} className="overflow-hidden rounded-2xl border bg-card text-sm shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-4 px-5 py-2.5 sm:flex-nowrap">
-          <div className="min-w-0 space-y-0.5">
-            <p className="font-medium">Live Sessions channels</p>
-            <p className="text-muted-foreground">
-              {live
-                ? "The Slack button on a card invites the attendee's managers, whoever pressed it and these contacts, and takes out anyone it invited who no longer belongs."
-                : "The Slack button on a card invites only these contacts, and takes no one out."}
-            </p>
-          </div>
-          <div role="radiogroup" aria-label="Live Sessions channels" className="inline-flex shrink-0 items-center rounded-lg border bg-card p-0.5 shadow-xs">
-            {([
-              [false, "Test"],
-              [true, "Live"],
-            ] as const).map(([value, label]) => (
-              <button
-                key={label}
-                type="button"
-                role="radio"
-                aria-checked={live === value}
-                disabled={busy === "mode"}
-                onClick={() => void setLive(value)}
-                className={cn(
-                  "inline-flex cursor-pointer items-center gap-1.5 rounded-md px-3 py-1.5 text-sm outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-wait",
-                  live === value
-                    ? value
-                      ? "bg-brand font-medium text-brand-foreground"
-                      : "bg-accent font-medium text-foreground"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                {busy === "mode" && live !== value && <Loader2 className="size-3.5 animate-spin" />}
-                {label}
-              </button>
-            ))}
-          </div>
-        </div>
       </motion.div>
 
       <motion.div variants={riseChild}>

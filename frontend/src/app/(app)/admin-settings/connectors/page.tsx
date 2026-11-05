@@ -1,5 +1,6 @@
-/** The External Connectors tab: the Google, Zoom and Slack accounts the app acts as. */
+/** The External Connectors tab: the Google, Zoom and Slack accounts the app acts as, and whether Slack is live. */
 
+import { getSlackSyncLive } from "@/lib/cohorts/slack-sync";
 import { googleConnectionStatus } from "@/lib/evals/google-meetings";
 import { oauthClient } from "@/lib/google-calendar";
 import { envSlackToken } from "@/lib/slack";
@@ -15,7 +16,12 @@ export default async function ConnectorsPage({
 }) {
   const params = await searchParams;
   const one = (key: string) => (typeof params[key] === "string" ? params[key] : null);
-  const [google, zoom, slack] = await Promise.all([googleConnectionStatus(), zoomConnectionStatus(), getSlackInstallation()]);
+  const [google, zoom, slack, live] = await Promise.all([
+    googleConnectionStatus(),
+    zoomConnectionStatus(),
+    getSlackInstallation(),
+    getSlackSyncLive(),
+  ]);
 
   return (
     <ConnectorsView
@@ -25,6 +31,7 @@ export default async function ConnectorsPage({
         appConfigured: slackApp() !== null,
         envToken: Boolean(envSlackToken()),
         installation: slack && { ...slack, installedAt: slack.installedAt.toISOString() },
+        live,
       }}
       returned={{ google: one("google"), zoom: one("zoom"), slack: one("slack"), current: one("current"), detail: one("detail") }}
     />

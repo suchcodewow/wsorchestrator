@@ -4,7 +4,8 @@
  * External Connectors: each outside account the app acts as, in one card. A
  * connect button leaves for the provider's consent screen and comes back
  * through the shared OAuth callback (lib/oauth-purposes.ts), which reports the
- * outcome in the query string.
+ * outcome in the query string. The Slack app's box also holds Slack's mode:
+ * a dry run, which logs what the app would change and send there, or live.
  */
 
 import { useEffect, useState } from "react";
@@ -80,11 +81,12 @@ export function ConnectorsView({
 }: {
   google: { configured: boolean; connection: Person | null };
   zoom: { configured: boolean; connection: Person | null };
-  slack: { appConfigured: boolean; envToken: boolean; installation: SlackInstall | null };
+  slack: { appConfigured: boolean; envToken: boolean; installation: SlackInstall | null; live: boolean };
   returned: Returned;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
+  const [modeBusy, setModeBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const messages = [
@@ -117,6 +119,33 @@ export function ConnectorsView({
       setError("Could not reach the server.");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function setLive(next: boolean) {
+    if (next === slack.live) return;
+    if (
+      next &&
+      !window.confirm(
+        "Go live? From now on the cohort Slack sync creates channels, invites and removes people and sends reminders; the daily surveys are announced; the Live Sessions Slack button opens channels; and releasing scores messages managers.",
+      )
+    ) {
+      return;
+    }
+    setModeBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/settings/slack-mode", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ live: next }),
+      });
+      if (!res.ok) setError(`Could not change Slack's mode (${res.status}).`);
+      else router.refresh();
+    } catch {
+      setError("Could not reach the server.");
+    } finally {
+      setModeBusy(false);
     }
   }
 
@@ -214,6 +243,41 @@ export function ConnectorsView({
                 ? `Missing ${installation.missingScopes.join(", ")}. Add it again to grant them.`
                 : null
           }
+          extra={
+            <div className="flex flex-wrap items-center gap-3 pt-2">
+              <div role="radiogroup" aria-label="Slack mode" className="inline-flex shrink-0 items-center rounded-lg border bg-card p-0.5 shadow-xs">
+                {([
+                  [false, "Dry run"],
+                  [true, "Live"],
+                ] as const).map(([value, label]) => (
+                  <button
+                    key={label}
+                    type="button"
+                    role="radio"
+                    aria-checked={slack.live === value}
+                    disabled={modeBusy}
+                    onClick={() => void setLive(value)}
+                    className={cn(
+                      "inline-flex cursor-pointer items-center gap-1.5 rounded-md px-3 py-1.5 text-sm outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-wait",
+                      slack.live === value
+                        ? value
+                          ? "bg-brand font-medium text-brand-foreground"
+                          : "bg-accent font-medium text-foreground"
+                        : "text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    {modeBusy && slack.live !== value && <Loader2 className="size-3.5 animate-spin" />}
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <span className="text-muted-foreground">
+                {slack.live
+                  ? "The app changes Slack and sends its messages: the cohort sync and reminders, survey announcements, Live Sessions channels and release messages."
+                  : "Nothing is changed or sent in Slack. The cohort sync and releases log what they would do; the Live Sessions Slack button does nothing."}
+              </span>
+            </div>
+          }
           action={
             <>
               {slack.appConfigured && (
@@ -245,6 +309,7 @@ function Row({
   badge,
   detail,
   warning,
+  extra,
   action,
 }: {
   name: string;
@@ -252,6 +317,8 @@ function Row({
   badge?: React.ReactNode;
   detail: string;
   warning?: string | null;
+  /** Settings of the connector's own, under its detail. */
+  extra?: React.ReactNode;
   action: React.ReactNode;
 }) {
   return (
@@ -268,6 +335,7 @@ function Row({
             {warning}
           </div>
         )}
+        {extra}
       </div>
       <div className="flex flex-wrap gap-2">{action}</div>
     </div>

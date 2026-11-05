@@ -56,6 +56,14 @@ export type SlackSyncSort = (typeof SLACK_SYNC_LIST.sorts)[number];
 export const SLACK_SYNC_CHANGE_LIST = spec(["at", "channelName", "action", "email"]);
 export type SlackSyncChangeSort = (typeof SLACK_SYNC_CHANGE_LIST.sorts)[number];
 
+/** Reporting Settings → Feedback Management: each release message sent, or previewed, newest first. */
+export const RELEASE_NOTICE_LIST = spec(["startedAt", "triggeredBy", "stage", "status"], "desc");
+export type ReleaseNoticeSort = (typeof RELEASE_NOTICE_LIST.sorts)[number];
+
+/** One release message run's recipients, in the order they were messaged. */
+export const RELEASE_NOTICE_MESSAGE_LIST = spec(["at", "action", "email"]);
+export type ReleaseNoticeMessageSort = (typeof RELEASE_NOTICE_MESSAGE_LIST.sorts)[number];
+
 /** Reporting → Live Sessions narrowed to people still in the employee list, or to those not. */
 export const HISTORY_STATUSES = ["active", "inactive"] as const;
 export type HistoryStatus = (typeof HISTORY_STATUSES)[number];

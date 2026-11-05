@@ -494,6 +494,19 @@ export async function unscoredAttendees(
   return { total: rows[0]?.total ?? 0, names: rows.map((r) => r.name) };
 }
 
+/** Everyone scored in `stage` at the bootcamp `bootcampId`, lowercased: who a release of it reaches. */
+export async function classAttendees(
+  bootcampId: string,
+  stage: ReleaseStage,
+  executor: Pick<typeof db, "execute"> = db,
+): Promise<string[]> {
+  const { rows } = await executor.execute<{ email: string }>(sql`
+    select distinct s.attendee_email as email
+      from ${evalsSubmissions} s join ${evalsAssessments} a on a.id = s.assessment_id
+     where s.bootcamp_id = ${bootcampId} and a.stage = ${stage}`);
+  return rows.map((r) => r.email);
+}
+
 /**
  * Releases one class of the active bootcamp to managers, from now on, and
  * completes it: everyone scored in that class has attended it
@@ -542,11 +555,7 @@ export async function releaseScores(
       .returning({ at: bootcamps[atColumn] });
     // Someone else released it between our read and our write.
     if (!row) return null;
-    const { rows: scored } = await tx.execute<{ email: string }>(sql`
-      select distinct s.attendee_email as email
-        from ${evalsSubmissions} s join ${evalsAssessments} a on a.id = s.assessment_id
-       where s.bootcamp_id = ${bootcamp.id} and a.stage = ${stage}`);
-    return { releasedAt: row.at ?? now, emails: scored.map((r) => r.email) };
+    return { releasedAt: row.at ?? now, emails: await classAttendees(bootcamp.id, stage, tx) };
   });
   if (!result) {
     return {

@@ -1,22 +1,18 @@
 /**
- * The cohort Slack sync's two switches: whether it changes Slack or only logs
- * what it would do (`live`), and whether it sends the intake form's daily
- * reminder (`reminders`). Both start off; QA, which shares production's
- * workspace, leaves them there.
+ * The cohort Slack sync's daily intake form reminder (`reminders`), which
+ * starts off. Whether Slack is live or a dry run is read here too, but set
+ * on PUT /api/settings/slack-mode.
  */
 
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireCaller } from "@/lib/api-auth";
 import { audited, noteAudit } from "@/lib/audit";
-import { getSlackSyncLive, setSlackSyncLive } from "@/lib/cohorts/slack-sync";
+import { getSlackSyncLive } from "@/lib/cohorts/slack-sync";
 import { getIntakeRemindersOn, setIntakeRemindersOn } from "@/lib/logistics/intake-reminders";
 import { canManageTrainingSettings } from "@/lib/roles";
 
-const bodySchema = z
-  .object({ live: z.boolean().optional(), reminders: z.boolean().optional() })
-  .strict()
-  .refine((b) => b.live !== undefined || b.reminders !== undefined, "nothing to change");
+const bodySchema = z.object({ reminders: z.boolean() }).strict();
 
 export async function GET(req: Request) {
   const { error } = await requireCaller(req, canManageTrainingSettings);
@@ -33,18 +29,8 @@ export const PUT = audited(async function PUT(req: Request) {
   if (!parsed.success) {
     return NextResponse.json({ error: "invalid" }, { status: 400 });
   }
-  const { live, reminders } = parsed.data;
-  if (live !== undefined) await setSlackSyncLive(user.id, live);
-  if (reminders !== undefined) await setIntakeRemindersOn(user.id, reminders);
-  noteAudit({
-    target: "slack_settings",
-    targetLabel: [
-      live !== undefined && (live ? "Live" : "Dry run"),
-      reminders !== undefined && `Daily reminder ${reminders ? "on" : "off"}`,
-    ]
-      .filter(Boolean)
-      .join(", "),
-  });
-  const [nowLive, nowReminders] = await Promise.all([getSlackSyncLive(), getIntakeRemindersOn()]);
-  return NextResponse.json({ live: nowLive, reminders: nowReminders });
+  await setIntakeRemindersOn(user.id, parsed.data.reminders);
+  noteAudit({ target: "slack_settings", targetLabel: `Daily reminder ${parsed.data.reminders ? "on" : "off"}` });
+  const [live, reminders] = await Promise.all([getSlackSyncLive(), getIntakeRemindersOn()]);
+  return NextResponse.json({ live, reminders });
 });

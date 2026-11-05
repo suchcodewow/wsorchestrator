@@ -1,6 +1,6 @@
 /**
  * The Slack tab: everything the app sends through Slack. The app's install,
- * dry run or live, the intake form's daily reminder and how each form stands,
+ * whether Slack is in dry run or live, the intake form's daily reminder and how each form stands,
  * the active bootcamp's channels, previewing and syncing now, and the sync's
  * log a page at a time.
  */

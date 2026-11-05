@@ -28,13 +28,15 @@ import {
   evalsSubmissions,
   evalsSubmissionScores,
   intakeResponses,
+  releaseNoticeRuns,
 } from "@/db/schema";
 import { IN_STAGE, isCandidate } from "@/lib/evals/current-cohort";
 import { getCandidateCutoffs } from "@/lib/evals/settings";
-import { BOOTCAMP_COHORT_LIST, BOOTCAMP_RECORD_LIST } from "@/lib/list-specs";
+import { BOOTCAMP_COHORT_LIST, BOOTCAMP_RECORD_LIST, RELEASE_NOTICE_LIST, RELEASE_NOTICE_MESSAGE_LIST } from "@/lib/list-specs";
 import { listCardViewers, recordCardView } from "@/lib/reporting/card-views";
 import {
   bootcampRecordCounts,
+  classAttendees,
   classReviewSchema,
   cohortBootcamp,
   editSubmission,
@@ -52,6 +54,13 @@ import {
   type BootcampReader,
 } from "@/lib/reporting/bootcamp";
 import { pendingOverall, suggestOverallFeedback } from "@/lib/reporting/overall-feedback";
+import {
+  countReleaseNoticeMessages,
+  getReleaseNotice,
+  listReleaseNoticeMessages,
+  listReleaseNotices,
+  startReleaseNotice,
+} from "@/lib/reporting/release-notice";
 import { PERSONAS } from "../support/access";
 import { TEST_EMAIL_DOMAIN, TEST_PREFIX } from "../support/db";
 import { testScope, type TestUser } from "../support/seed";
@@ -221,6 +230,46 @@ describe("who a reader sees", () => {
 });
 
 describe("releasing a class", () => {
+  test("a preview logs the message each manager in the chain would get, and sends nothing", async () => {
+    await db
+      .update(employees)
+      .set({ managementChain: `${emailOf("lead")};${emailOf("manager")}` })
+      .where(eq(employees.id, `${SCOPED}newcomer`));
+    assert.ok((await classAttendees(bootcampId, "bootcamp")).includes(emailOf("newcomer")));
+    const bootcamp = (await cohortBootcamp())!;
+    const run = await startReleaseNotice({
+      stage: "bootcamp",
+      bootcamp: { id: bootcamp.id, startDate: bootcamp.startDate },
+      attendees: [emailOf("newcomer")],
+      actorId: admin.id,
+      preview: true,
+      reportingUrl: "https://example.test/reporting/bootcamp",
+    });
+    try {
+      assert.equal(run.dryRun, true);
+      assert.equal((await getReleaseNotice(run.runId))?.status, "running");
+      await run.send();
+
+      const done = (await getReleaseNotice(run.runId))!;
+      assert.equal(done.status, "succeeded");
+      assert.equal(done.preview, true);
+      assert.equal(done.triggeredBy, "admin");
+      const page = await listReleaseNoticeMessages(run.runId, { ...RELEASE_NOTICE_MESSAGE_LIST, q: SCOPED, page: 1 });
+      assert.deepEqual(page.rows.map((m) => [m.email, m.action]), [
+        [emailOf("lead"), "messaged"],
+        [emailOf("manager"), "messaged"],
+      ]);
+      assert.match(page.rows[0]!.detail ?? "", /^Feedback has been released for .+ Bootcamp!  <https:\/\/example\.test\/reporting\/bootcamp\|Click here>/);
+      assert.equal(page.rows[0]!.fullName, "Person lead");
+      const counts = await countReleaseNoticeMessages(run.runId);
+      assert.equal(counts.all, done.messaged + done.notInSlack + done.failures);
+      assert.equal(counts.all, done.recipients);
+      assert.ok((await listReleaseNotices({ ...RELEASE_NOTICE_LIST, page: 1 })).rows.some((r) => r.id === run.runId));
+    } finally {
+      await db.delete(releaseNoticeRuns).where(eq(releaseNoticeRuns.id, run.runId));
+    }
+  });
+
   test("hides the active cohort's results from a manager entirely until released", async () => {
     const bootcamp = (await cohortBootcamp())!;
     const query = { ...BOOTCAMP_COHORT_LIST, q: SCOPED, page: 1 };
