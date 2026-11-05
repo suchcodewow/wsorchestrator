@@ -125,7 +125,8 @@ export function ReleaseButton({
               Managers will see the {label} results of the bootcamp starting {formatDate(startDate)} for the people
               in their org, here and on each person&apos;s page. Everyone scored in {label} gets{" "}
               {formatDate(startDate)} as their {label} date in bootcamp history, with their scores, which completes
-              the class. Only release once every assessment is in; a release cannot be taken back.
+              the class. Everyone in their management chains gets a Slack message linking here. Only release once
+              every assessment is in; a release cannot be taken back.
             </DialogDescription>
           </DialogHeader>
           {error && <p className="text-sm text-destructive">{error}</p>}

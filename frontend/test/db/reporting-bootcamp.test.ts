@@ -314,10 +314,13 @@ describe("releasing a class", () => {
     // The review was only there to let it release; the tests after this start without one.
     await db.delete(bootcampClassReviews).where(eq(bootcampClassReviews.attendeeEmail, emailOf("newcomer")));
     assert.ok(first.written >= 1);
+    assert.equal(first.attendees.length, first.written);
+    assert.ok(first.attendees.includes(emailOf("newcomer")));
     const again = await releaseScores(admin.id, "bootcamp");
     assert.ok(again.ok);
     assert.equal(again.releasedAt.getTime(), first.releasedAt.getTime());
     assert.equal(again.written, 0);
+    assert.deepEqual(again.attendees, []);
 
     const bootcamp = (await cohortBootcamp())!;
     assert.equal(bootcamp.released.bootcamp?.byName, "admin");

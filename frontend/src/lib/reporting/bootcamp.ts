@@ -508,7 +508,14 @@ export async function releaseScores(
   actorId: string,
   stage: ReleaseStage,
 ): Promise<
-  | { ok: true; bootcamp: { id: string; startDate: string }; releasedAt: Date; written: number }
+  | {
+      ok: true;
+      bootcamp: { id: string; startDate: string };
+      releasedAt: Date;
+      written: number;
+      /** Everyone scored in the class, lowercased, when this call released it; empty when it was already. */
+      attendees: string[];
+    }
   | { ok: false; error: ReleaseError }
 > {
   const bootcamp = await cohortBootcamp();
@@ -516,7 +523,7 @@ export async function releaseScores(
   if (stage === "intermediate" && !bootcamp.intermediate) return { ok: false, error: "no_intermediate" };
   const done = { id: bootcamp.id, startDate: bootcamp.startDate };
   const already = bootcamp.released[stage];
-  if (already) return { ok: true, bootcamp: done, releasedAt: already.at, written: 0 };
+  if (already) return { ok: true, bootcamp: done, releasedAt: already.at, written: 0, attendees: [] };
   const blockers = await releaseBlockers(bootcamp, stage);
   if (blockers.unscored.total > 0) return { ok: false, error: "unscored" };
   if (blockers.noExitExam.total > 0) return { ok: false, error: "no_exit_exam" };
@@ -542,10 +549,22 @@ export async function releaseScores(
     return { releasedAt: row.at ?? now, emails: scored.map((r) => r.email) };
   });
   if (!result) {
-    return { ok: true, bootcamp: done, releasedAt: (await cohortBootcamp())?.released[stage]?.at ?? now, written: 0 };
+    return {
+      ok: true,
+      bootcamp: done,
+      releasedAt: (await cohortBootcamp())?.released[stage]?.at ?? now,
+      written: 0,
+      attendees: [],
+    };
   }
   await retrackEmployees(result.emails);
-  return { ok: true, bootcamp: done, releasedAt: result.releasedAt, written: result.emails.length };
+  return {
+    ok: true,
+    bootcamp: done,
+    releasedAt: result.releasedAt,
+    written: result.emails.length,
+    attendees: result.emails,
+  };
 }
 
 const uuidSchema = z.string().uuid();
