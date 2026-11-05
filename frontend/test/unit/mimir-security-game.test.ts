@@ -14,6 +14,7 @@ import {
   ROUNDS,
   actualCount,
   isVulnerable,
+  marksFor,
   pointsFor,
   reviewFor,
   rulesInForce,
@@ -114,5 +115,50 @@ describe("the performance review", () => {
     assert.equal(reviewFor(11).title, "Performance Improvement Plan");
     assert.equal(reviewFor(27).title, "Meets Expectations");
     assert.equal(reviewFor(28).pizza, true);
+  });
+});
+
+describe("what the answer circles", () => {
+  const circled = (text: string, spans: { start: number; end: number }[]) => spans.map((s) => text.slice(s.start, s.end));
+
+  test("every P in every package, and nothing else", () => {
+    const m = marksFor(build("run-293-7m", "power fortress penguin"), 1);
+    assert.deepEqual(m.packages, [[{ start: 0, end: 1 }], [], [{ start: 0, end: 1 }]]);
+    assert.equal(m.digit, undefined);
+    assert.equal(m.color, false);
+  });
+
+  test("the even first digit and the color of a blue build", () => {
+    const m = marksFor(build("cat-847-3x", "thunder lightning apple", "blue"), 2);
+    assert.deepEqual(circled("cat-847-3x", [m.digit!]), ["8"]);
+    assert.equal(m.color, true);
+    assert.deepEqual(circled("apple", m.packages[2]), ["pp"], "touching matches are one circle");
+  });
+
+  test("git and lab, wherever they are, on a red build", () => {
+    const m = marksFor(build("cat-847-3x", "gitirdone lightning labrador", "red"), 3);
+    assert.deepEqual(circled("gitirdone", m.packages[0]), ["git"]);
+    assert.deepEqual(circled("labrador", m.packages[2]), ["lab"]);
+    assert.equal(m.color, true);
+  });
+
+  test("nothing on a build that is fine", () => {
+    for (const round of ROUNDS) {
+      for (const b of round.examples.filter((e) => !isVulnerable(e, round.number))) {
+        const m = marksFor(b, round.number);
+        assert.deepEqual(m.packages, [[], [], []]);
+        assert.equal(m.digit, undefined);
+        assert.equal(m.color, false);
+      }
+    }
+  });
+
+  test("something on every build that is vulnerable, on every page", () => {
+    for (const round of ROUNDS) {
+      for (const b of round.pages.flat().filter((x) => isVulnerable(x, round.number))) {
+        const m = marksFor(b, round.number);
+        assert.ok(m.packages.some((s) => s.length) || m.digit, b.id);
+      }
+    }
   });
 });
