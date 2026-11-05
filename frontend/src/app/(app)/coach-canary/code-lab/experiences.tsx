@@ -10,6 +10,7 @@
 import { useState, type ReactNode } from "react";
 import { ChevronRight, Laptop, Presentation, ShieldAlert, Timer, type LucideIcon } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
 import { CodeLabView } from "./code-lab-view";
 import { SecurityTeamView } from "./security-team-view";
 import { SlideReviewView } from "./slide-review-view";
@@ -22,6 +23,8 @@ type Experience = {
   Icon: LucideIcon;
   /** The experience itself, for the person signed in. */
   render: (author: string) => ReactNode;
+  /** Uses the window's whole width rather than the reading column, for a slide read at the largest size the screen allows. */
+  wide?: boolean;
 };
 
 const EXPERIENCES: Experience[] = [
@@ -50,6 +53,7 @@ const EXPERIENCES: Experience[] = [
     minutes: "10–15 minutes",
     Icon: Presentation,
     render: () => <SlideReviewView />,
+    wide: true,
   },
 ];
 
@@ -94,7 +98,7 @@ export function ExperiencesView({ author }: { author: string }) {
               <DialogTitle>{open.name}</DialogTitle>
             </div>
             <div className="overflow-y-auto px-6 py-6">
-              <div className="mx-auto max-w-7xl">{open.render(author)}</div>
+              <div className={cn("mx-auto", !open.wide && "max-w-7xl")}>{open.render(author)}</div>
             </div>
           </DialogContent>
         </Dialog>

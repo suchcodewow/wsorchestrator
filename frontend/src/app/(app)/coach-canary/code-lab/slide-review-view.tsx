@@ -183,7 +183,6 @@ function SlideRound({
   const game: GameState = {
     look: (t) => (fixed.has(t) ? {} : (flawOf(t)?.look ?? {})),
     status: (t) => (fixed.has(t) ? "fixed" : reviewing && flawOf(t) ? "missed" : "plain"),
-    badge: (t) => (reviewing && !fixed.has(t) && flawOf(t) ? missed.indexOf(flawOf(t)!) + 1 : undefined),
     flaw: flawOf,
     justFixed,
     click,
@@ -205,6 +204,15 @@ function SlideRound({
           <span className="text-muted-foreground">Wrong clicks:</span>{" "}
           <span className="font-medium tabular-nums">{wrongClicks}</span>
         </p>
+        {reviewing && (
+          <p className="text-sm">
+            <span className="text-muted-foreground">Missed:</span>{" "}
+            <span className={cn("font-medium tabular-nums", missed.length > 0 && "text-destructive")}>
+              {missed.length ? `${missed.length} (${missed.length * POINTS.missed})` : "none"}
+            </span>
+            {missed.length > 0 && <span className="text-muted-foreground"> · hover a red outline to see why</span>}
+          </p>
+        )}
         <p className="ml-auto flex items-baseline gap-2 rounded-xl border bg-card px-4 py-1.5 shadow-sm">
           <span className="text-sm text-muted-foreground">Score</span>
           <span className={cn("text-2xl font-bold tabular-nums", score < 0 && "text-destructive")}>{score}</span>
@@ -228,40 +236,7 @@ function SlideRound({
         </TooltipProvider>
       </Game.Provider>
 
-      {reviewing && <ReviewList slide={slide} missed={missed} />}
     </div>
-  );
-}
-
-function FlawRow({ flaw, n }: { flaw: Flaw; n: number }) {
-  return (
-    <li className="flex items-baseline gap-3 px-5 py-2.5 text-sm">
-      <span className="grid size-5 shrink-0 translate-y-0.5 place-items-center rounded-full bg-red-600 text-xs font-semibold text-white">
-        {n}
-      </span>
-      <span className="w-32 shrink-0 font-medium">{KIND_LABEL[flaw.kind]}</span>
-      <span className="text-muted-foreground">{flaw.note}</span>
-    </li>
-  );
-}
-
-function ReviewList({ slide, missed }: { slide: Slide; missed: Flaw[] }) {
-  const found = slide.flaws.length - missed.length;
-  return (
-    <section className="overflow-hidden rounded-2xl border bg-card shadow-sm">
-      <p className="border-b bg-muted/40 px-5 py-2.5 text-sm font-medium">
-        {missed.length
-          ? `You found ${found} of ${slide.flaws.length}. The ${missed.length} you missed are marked on the slide (${missed.length * POINTS.missed} points).`
-          : `You found all ${slide.flaws.length}. Nothing got past you.`}
-      </p>
-      {missed.length > 0 && (
-        <ul className="divide-y">
-          {missed.map((fl, i) => (
-            <FlawRow key={fl.target} flaw={fl} n={i + 1} />
-          ))}
-        </ul>
-      )}
-    </section>
   );
 }
 
@@ -270,7 +245,6 @@ function ReviewList({ slide, missed }: { slide: Slide; missed: Flaw[] }) {
 type GameState = {
   look: (t: Target) => Look;
   status: (t: Target) => "plain" | "fixed" | "missed";
-  badge: (t: Target) => number | undefined;
   flaw: (t: Target) => Flaw | undefined;
   /** The piece fixed a moment ago, whose tooltip opens without a hover. */
   justFixed: Target | null;
@@ -297,6 +271,7 @@ const FONT: Record<SlideFont, string> = {
   times: "'Times New Roman', Times, serif",
   verdana: "Verdana, sans-serif",
   courier: "'Courier New', Courier, monospace",
+  comic: "'Comic Sans MS', 'Chalkboard SE', cursive",
 };
 
 type TextBase = { font: SlideFont; size: number; weight?: number; italic?: boolean; color?: string };
@@ -444,7 +419,6 @@ function Piece({
   const game = useGame();
   const look = game.look(target);
   const status = game.status(target);
-  const badge = game.badge(target);
   const flaw = game.flaw(target);
   const [hovered, setHovered] = useState(false);
   const onClick = (e: MouseEvent<HTMLButtonElement>) => {
@@ -460,7 +434,7 @@ function Piece({
       aria-label={label}
       onClick={onClick}
       className={cn(
-        "absolute block rounded-[3px] text-left whitespace-nowrap outline-offset-2",
+        "absolute block rounded-[3px] text-left whitespace-pre outline-offset-2",
         game.reviewing && "cursor-default",
         !game.reviewing && status !== "fixed" && "cursor-pointer hover:outline-2 hover:outline-sky-500/40 hover:outline-dashed",
         status === "fixed" && "outline-2 outline-emerald-500/70 outline-solid",
@@ -470,14 +444,6 @@ function Piece({
       style={{ left: x + (look.dx ?? 0), top: y + (look.dy ?? 0), ...style }}
     >
       {children}
-      {badge !== undefined && (
-        <span
-          className="absolute -top-3 -right-3 grid size-6 place-items-center rounded-full bg-red-600 text-sm font-semibold text-white shadow"
-          style={{ fontFamily: FONT.geist, fontStyle: "normal" }}
-        >
-          {badge}
-        </span>
-      )}
     </button>
   );
   if (!flaw || status === "plain") return button;
@@ -612,7 +578,7 @@ function CapabilitiesBox() {
     <Piece target="capabilitiesBox" x={L.box.x} y={L.box.y} label="Required capabilities box" style={{ width: w, height: h }}>
       <span
         className="absolute inset-0 bg-white"
-        style={{ border: `1.5px ${look.solid ? "solid" : "dashed"} ${look.solid ? "#b7b7b6" : "#dcdcd9"}` }}
+        style={{ border: look.solid ? "2px solid #8a8a86" : "1.5px dashed #dcdcd9" }}
       />
       {corner({ left: -7, top: -7 }, "border-t border-l")}
       {corner({ right: -7, top: -7 }, "border-t border-r")}
