@@ -2,7 +2,8 @@
 
 /**
  * Google Meetings: any account the sync still needs connected, whom it adds,
- * and whether it is live or a dry run, in one card; then the meetings picked from the
+ * and whether it is live or a dry run (set on Admin Settings → External
+ * Connectors), in one card; then the meetings picked from the
  * Revenue Enablement calendar, each opening to be changed, or the sync's log;
  * and Preview and Sync Now, which add the cohort to each meeting's next
  * occurrence before their bootcamp.
@@ -178,7 +179,7 @@ export function GoogleMeetingsView({ overview, list }: { overview: Overview; lis
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<EditableMeeting | null>(null);
   const [deleting, setDeleting] = useState<MeetingListing | null>(null);
-  const [busy, setBusy] = useState<"sync" | "preview" | "mode" | "delete" | null>(null);
+  const [busy, setBusy] = useState<"sync" | "preview" | "delete" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -215,35 +216,6 @@ export function GoogleMeetingsView({ overview, list }: { overview: Overview; lis
       } else {
         router.push(`/evals-settings/google-meetings/runs/${body.runId}`);
       }
-    } catch {
-      setError("Could not reach the server.");
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  async function setLive(next: boolean) {
-    if (next === live) return;
-    if (
-      next &&
-      !window.confirm(
-        "Go live? From the next sync, Google Calendar invites go to the cohort and the meeting facilitators, those it invited who no longer belong are taken off, and any meetings left from the old form are cancelled.",
-      )
-    ) {
-      return;
-    }
-    setBusy("mode");
-    setError(null);
-    setNotice(null);
-    try {
-      const res = await fetch("/api/evals/google-meetings/settings", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ live: next }),
-      });
-      const body = await res.json().catch(() => null);
-      if (!res.ok) setError(message(SYNC_ERRORS, body, res.status));
-      else router.refresh();
     } catch {
       setError("Could not reach the server.");
     } finally {
@@ -376,41 +348,14 @@ export function GoogleMeetingsView({ overview, list }: { overview: Overview; lis
               : "No bootcamp is active in the Scheduler, so each sync skips itself."}
           </p>
         </div>
-        <div className="flex flex-wrap items-center justify-between gap-4 px-5 py-4 sm:flex-nowrap">
-          <div className="min-w-0 space-y-0.5">
-            <p className="font-medium">Mode</p>
-            <p className="text-muted-foreground">
-              {live
-                ? "Each sync adds people to their next occurrence, and takes off anyone it invited who no longer belongs. Google emails no one about it."
-                : "Each sync reads the calendar and Zoom and logs whom it would invite and take off, without changing any invite."}
-            </p>
-          </div>
-          <div role="radiogroup" aria-label="Mode" className="inline-flex shrink-0 items-center rounded-lg border bg-card p-0.5 shadow-xs">
-            {([
-              [false, "Dry run"],
-              [true, "Live"],
-            ] as const).map(([value, label]) => (
-              <button
-                key={label}
-                type="button"
-                role="radio"
-                aria-checked={live === value}
-                disabled={busy === "mode"}
-                onClick={() => setLive(value)}
-                className={cn(
-                  "inline-flex cursor-pointer items-center gap-1.5 rounded-md px-3 py-1.5 text-sm outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-wait",
-                  live === value
-                    ? value
-                      ? "bg-brand font-medium text-brand-foreground"
-                      : "bg-accent font-medium text-foreground"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                {busy === "mode" && live !== value && <Loader2 className="size-3.5 animate-spin" />}
-                {label}
-              </button>
-            ))}
-          </div>
+        <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-2.5">
+          <span className="flex items-center gap-2 font-medium">
+            Mode
+            {live ? <Badge>Live</Badge> : <Badge variant="secondary">Dry run</Badge>}
+          </span>
+          <Link href="/admin-settings/connectors" className="text-muted-foreground hover:text-foreground hover:underline">
+            Set on Admin Settings → External Connectors
+          </Link>
         </div>
         {legacyMeetings > 0 && (
           <div className="flex items-start gap-2 px-5 py-4 text-muted-foreground">

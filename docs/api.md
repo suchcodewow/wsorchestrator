@@ -128,14 +128,15 @@ add it to the table above.
 | Account menu → View as an employee | `GET /api/me/impersonation`; the search is `GET /api/evals/employees?match=person` |
 | Users | `GET /api/users` |
 | Admin settings → Allowed Domains | `GET /api/settings/domains`, `GET /api/settings/frame-domains` |
+| Admin settings → External Connectors' Google Meetings and Slack modes | `GET /api/settings/google-meetings-mode`, `GET /api/settings/slack-mode` |
 | eVals → Bootcamp / Intermediate | `GET /api/evals/scoring?stage=bootcamp\|intermediate` |
 | eVals → an assessment's attendees | `GET /api/evals/scoring/[assessmentId]` |
 | eVals → an attendee's scoring form | `GET /api/evals/scoring/[assessmentId]/[employeeId]` |
-| eVals settings → Google Meetings | `GET /api/evals/google-meetings`, `GET /api/evals/google-meetings/sync`, `GET /api/evals/google-meetings/sync/[id]`, `GET /api/evals/google-meetings/settings` |
+| eVals settings → Google Meetings | `GET /api/evals/google-meetings`, `GET /api/evals/google-meetings/sync`, `GET /api/evals/google-meetings/sync/[id]` |
 | eVals settings → Assessments | `GET /api/evals/assessments`, `GET /api/evals/assessments/[id]` |
 | eVals settings → Participation | `GET /api/evals/participation/settings` |
 | The participation popup | `GET /api/evals/participation/[employeeId]`, `GET /api/evals/scoring/[assessmentId]/[employeeId]/group` |
-| Reporting → Live Sessions' Generate buttons | `GET /api/reporting/bootcamp/participation` |
+| Reporting Settings → Feedback Management: the Generate and Release buttons, and the release message log | `GET /api/reporting/bootcamp/participation`, `GET /api/reporting/release-notices`, `GET /api/reporting/release-notices/[id]` |
 | Cohort Settings | `GET /api/evals/employees`, `GET /api/evals/organization`, `GET /api/evals/hibob/sync`, `GET /api/evals/titles?list=` |
 | Reporting → Live Sessions, and the active cohort above it | `GET /api/reporting/bootcamp`, `GET /api/reporting/bootcamp/cohort` |
 | A person's page under Reporting → Live Sessions | `GET /api/reporting/bootcamp/people/[key]` |

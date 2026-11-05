@@ -78,8 +78,8 @@ a bootcamp is active, `lib/cohorts/slack-sync.ts` keeps
 `sales-bootcamp-{mon}-{yyyy}`, `se-bootcamp-…` and the `-intermediate-` pair
 in step with Cohorts → Current and Cohort Settings → Additional Channel
 Contacts. It removes only people it invited itself (`slack_channel_members`),
-never anyone added by hand. Every run is a dry run until someone presses
-*Go live* on Cohort Settings → Slack. The bot is the Slack app's: *Add to
+never anyone added by hand. Every run is a dry run until a platform
+administrator sets Slack to *Live* on Admin Settings → External Connectors. The bot is the Slack app's: *Add to
 Slack* on that tab runs Slack's OAuth install with `SLACK_APP_CLIENT_ID` and
 `SLACK_APP_CLIENT_SECRET` (from `slack_app_client_id` /
 `tf_slack_app_client_secret`, set on production's workspace only; see
@@ -262,8 +262,10 @@ runs outside 9 to 5 in the person's time zone is orange.
 **Dry run and the test group.** These work as they do on Cohort Settings →
 Slack.
 
-- A new environment starts in **dry run**. The sync logs everything it would
-  do, invites no one and writes nothing to Google or Zoom. It does store the
+- A new environment starts in **dry run**, until a platform administrator
+  sets Google Meetings to *Live* on Admin Settings → External Connectors. The
+  sync logs everything it would do, invites no one and writes nothing to
+  Google or Zoom. It does store the
   occurrences it read, so the Current tab can list them. *Preview* does the
   same whatever the setting.
 - With the Cohorts test group on, the group is invited instead of the cohort,
