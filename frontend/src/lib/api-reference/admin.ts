@@ -692,7 +692,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "PUT",
         path: "/api/evals/google-meetings/{id}/attendance",
         summary: "Marks one person attended or missed for a picked meeting, over what Zoom said, or clears the mark.",
-        access: "assessmentsAdmin",
+        access: "trainingAdmin",
         token: true,
         params: [{ name: "id", type: "string", required: true, note: "UUID" }],
         notes:

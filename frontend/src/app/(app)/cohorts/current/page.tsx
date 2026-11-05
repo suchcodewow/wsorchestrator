@@ -6,7 +6,7 @@ import { meetingStatusesFor } from "@/lib/evals/google-meetings";
 import { CURRENT_COHORT_LIST } from "@/lib/list-specs";
 import { parseListQuery } from "@/lib/paging";
 import { getTestGroup } from "@/lib/cohorts/test-group";
-import { canManageEvalsSettings, canManageTestGroup, canManageTrainingSettings } from "@/lib/roles";
+import { canManageTestGroup, canManageTrainingSettings } from "@/lib/roles";
 import { activeBootcamp } from "@/lib/scheduler/bootcamps";
 import { intakeQuestionsByForm, latestIntakesOf } from "@/lib/logistics/intake";
 import { CurrentCohortView, type MemberMeetings } from "./current-view";
@@ -72,7 +72,7 @@ export default async function CurrentCohortPage({
         }
         meetings={meetings}
         canMarkAttendance={
-          session?.user ? canManageEvalsSettings(session.user.access) : false
+          session?.user ? canManageTrainingSettings(session.user.access) : false
         }
         intakes={intakes}
         intakeQuestions={intakeQuestions}

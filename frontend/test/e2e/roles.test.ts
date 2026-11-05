@@ -794,7 +794,7 @@ const ROUTES: RouteCase[] = [
   { method: "POST", path: "/api/evals/google-meetings", allowed: canManageEvalsSettings, body: () => ({}) },
   { method: "PATCH", path: `/api/evals/google-meetings/${MISSING}`, allowed: canManageEvalsSettings, body: () => ({}) },
   { method: "DELETE", path: `/api/evals/google-meetings/${MISSING}`, allowed: canManageEvalsSettings },
-  { method: "PUT", path: `/api/evals/google-meetings/${MISSING}/attendance`, allowed: canManageEvalsSettings, body: () => ({}) },
+  { method: "PUT", path: `/api/evals/google-meetings/${MISSING}/attendance`, allowed: canManageTrainingSettings, body: () => ({}) },
   { method: "GET", path: "/api/evals/google-meetings/facilitators", allowed: canManageEvalsSettings },
   { method: "PUT", path: "/api/evals/google-meetings/facilitators", allowed: canManageEvalsSettings, body: () => ({}) },
   // An allowed read or sync would call Google for real, were an account connected.
