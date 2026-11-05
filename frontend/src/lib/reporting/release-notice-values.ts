@@ -1,6 +1,7 @@
 /**
- * The Slack message a release sends to the managers of a class, and who
- * they are. Pure, so the unit suite covers them; `release-notice.ts` sends it.
+ * The Slack message a release sends to the managers of a class and the
+ * Additional Slack Contacts, and who they are. Pure, so the unit suite
+ * covers them; `release-notice.ts` sends it.
  */
 
 import { STAGE_LABELS } from "@/lib/evals/assessment-values";
@@ -15,16 +16,16 @@ export function releaseNoticeText(stage: ReleaseStage, startDate: string, url: s
 /**
  * Everyone in the management chain of anyone in `chains`, each a
  * `management_chain` as the HiBob sync stores it: lowercased emails from the
- * manager up to the Organization Leader, joined with `;`. Each email once, in
- * the order first met; an attendee who manages another attendee is in it too.
+ * manager up to the Organization Leader, joined with `;`. Then the
+ * Additional Slack Contacts, `contacts`, whoever they manage. Each email
+ * once, in the order first met; an attendee who manages another attendee is
+ * in it too.
  */
-export function releaseNoticeRecipients(chains: readonly (string | null)[]): string[] {
+export function releaseNoticeRecipients(chains: readonly (string | null)[], contacts: readonly string[] = []): string[] {
   const seen = new Set<string>();
-  for (const chain of chains) {
-    for (const email of (chain ?? "").split(";")) {
-      const e = email.trim().toLowerCase();
-      if (e) seen.add(e);
-    }
+  for (const email of [...chains.flatMap((chain) => (chain ?? "").split(";")), ...contacts]) {
+    const e = email.trim().toLowerCase();
+    if (e) seen.add(e);
   }
   return [...seen];
 }

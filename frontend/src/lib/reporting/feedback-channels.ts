@@ -26,12 +26,12 @@ import {
   EVALS_SETTINGS_KEYS,
   employees,
   evalsSettings,
-  evalsSlackContacts,
   feedbackChannels,
   slackChannelMembers,
   users,
 } from "@/db/schema";
 import { planMembership } from "@/lib/cohorts/slack-plan";
+import { slackContactEmails } from "@/lib/evals/slack-contacts";
 import { channelMembers, isFatal, resolveSlackUsers } from "@/lib/cohorts/slack-sync";
 import { canReach, nameOf, resolvePerson, type BootcampReader } from "@/lib/reporting/bootcamp";
 import { feedbackChannelName } from "@/lib/reporting/feedback-channel-values";
@@ -82,11 +82,6 @@ async function managersOf(email: string): Promise<string[]> {
        where m.active and m.reports_to_email <> '' and line.depth < 50
     )
     select email from line group by email order by min(depth)`);
-  return rows.map((r) => r.email);
-}
-
-async function contactEmails(): Promise<string[]> {
-  const rows = await db.select({ email: evalsSlackContacts.email }).from(evalsSlackContacts);
   return rows.map((r) => r.email);
 }
 
@@ -210,7 +205,7 @@ export async function openFeedbackChannel(
   const attendee = { email, fullName: named[0]?.fullName ?? null };
   const callerEmail = caller.email?.trim().toLowerCase() || null;
 
-  const contacts = await contactEmails();
+  const contacts = await slackContactEmails();
   const wantedEmails = [
     ...new Set([...(live ? [...(await managersOf(email)), ...(callerEmail ? [callerEmail] : [])] : []), ...contacts]),
   ].filter((e) => e !== email);

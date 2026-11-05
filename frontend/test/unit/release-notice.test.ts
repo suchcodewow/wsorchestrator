@@ -32,6 +32,18 @@ describe("releaseNoticeRecipients", () => {
     );
   });
 
+  test("adds the Additional Slack Contacts after the chains, once each", () => {
+    assert.deepEqual(releaseNoticeRecipients(["m1@x.io;cro@x.io"], ["ops@x.io", "CRO@x.io", "ops@x.io"]), [
+      "m1@x.io",
+      "cro@x.io",
+      "ops@x.io",
+    ]);
+  });
+
+  test("tells the contacts even when no attendee has a chain", () => {
+    assert.deepEqual(releaseNoticeRecipients([], ["ops@x.io"]), ["ops@x.io"]);
+  });
+
   test("skips anyone with no chain", () => {
     assert.deepEqual(releaseNoticeRecipients([null, "", "m1@x.io;"]), ["m1@x.io"]);
   });

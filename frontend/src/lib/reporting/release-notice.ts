@@ -1,7 +1,7 @@
 /**
  * Telling managers a class has been released: one Slack direct message to
- * everyone in the management chain of anyone scored in it, linking to
- * Reporting → Live Sessions.
+ * everyone in the management chain of anyone scored in it, and to each of the
+ * Additional Slack Contacts, linking to Reporting → Live Sessions.
  *
  * It sends only with the Slack sync live, since QA shares production's
  * workspace and stays in dry run. With the test group on, it messages the
@@ -16,6 +16,7 @@ import { db } from "@/db";
 import { employees } from "@/db/schema";
 import { getSlackSyncLive, isFatal, resolveSlackUsers } from "@/lib/cohorts/slack-sync";
 import { getTestGroup } from "@/lib/cohorts/test-group";
+import { slackContactEmails } from "@/lib/evals/slack-contacts";
 import type { ReleaseStage } from "@/lib/reporting/bootcamp-values";
 import { releaseNoticeRecipients, releaseNoticeText } from "@/lib/reporting/release-notice-values";
 import { SlackError, SlackOutOfTime, slackClient, slackToken } from "@/lib/slack";
@@ -37,7 +38,10 @@ export type ReleaseNotice = {
   error?: string;
 };
 
-/** Who is told: the managers of `attendees` (lowercased emails), or the test group's members for `stage`. */
+/**
+ * Who is told: the managers of `attendees` (lowercased emails) and the
+ * Additional Slack Contacts, or the test group's members for `stage`.
+ */
 async function recipientsOf(stage: ReleaseStage, attendees: string[]): Promise<{ emails: string[]; testGroup: boolean }> {
   const group = await getTestGroup();
   if (group.on) {
@@ -54,7 +58,7 @@ async function recipientsOf(stage: ReleaseStage, attendees: string[]): Promise<{
       .where(and(inArray(employees.email, attendees.slice(i, i + 500)), eq(employees.active, true)));
     chains.push(...rows.map((r) => r.chain));
   }
-  return { emails: releaseNoticeRecipients(chains), testGroup: false };
+  return { emails: releaseNoticeRecipients(chains, await slackContactEmails()), testGroup: false };
 }
 
 /** Messages the managers of `attendees`, the people scored in `stage` at the bootcamp starting `startDate`. */

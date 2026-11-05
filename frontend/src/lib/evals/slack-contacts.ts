@@ -1,7 +1,7 @@
 /**
  * The Additional Slack Contacts: people added to the Slack messages sent to
  * each attendee's team at the end of a bootcamp, after the attendee's
- * management chain. Kept apart from `employees.management_chain`, which the
+ * management chain, and to the message a release sends managers. Kept apart from `employees.management_chain`, which the
  * HiBob sync rewrites.
  */
 
@@ -61,6 +61,12 @@ export async function listSlackContacts(query: ListQuery<SlackContactSort>): Pro
     rows.map(({ addedByName, addedByEmail, ...row }) => ({ ...row, addedBy: addedByName ?? addedByEmail })),
     query.page,
   );
+}
+
+/** Every contact's email, lowercased: a handful of people, added by hand. */
+export async function slackContactEmails(): Promise<string[]> {
+  const rows = await db.select({ email: evalsSlackContacts.email }).from(evalsSlackContacts);
+  return rows.map((r) => r.email);
 }
 
 /** How many contacts there are in all. */
