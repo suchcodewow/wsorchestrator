@@ -16,7 +16,15 @@ import { AlertTriangle, ChevronDown, Crown, Loader2, Trash2 } from "lucide-react
 import { SessionLookFields, type SessionLook } from "@/components/session-look-fields";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { SCHEDULE_LIMITS, SESSION_AUDIENCES, type ScheduleTrack, type SessionAudience } from "@/db/schema";
 import type { RoomRow } from "@/lib/scheduler/facilities";
@@ -475,35 +483,14 @@ export function SessionDialog({
               )}
 
               {look.kind === "main" && (
-                <section className="grid gap-2">
-                  <h3 className="text-sm font-medium">
-                    Room
-                    {roomId && <span className="ml-2 font-normal text-muted-foreground">{roomName(roomId)}</span>}
-                  </h3>
-                  {!hasFacility ? (
-                    <p className="text-sm text-muted-foreground">Pick a facility for this bootcamp on the Scheduler to give sessions rooms.</p>
-                  ) : rooms.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">This bootcamp&apos;s facility has no rooms yet.</p>
-                  ) : (
-                    <div role="radiogroup" aria-label="Room" className="grid gap-1.5 sm:grid-cols-2">
-                      <RoomOption label="No room" detail="" on={roomId === null} onPick={() => setRoomId(null)} />
-                      {rooms.map((r) => {
-                        const theirs = busy.rooms.get(r.id) ?? [];
-                        return (
-                          <RoomOption
-                            key={r.id}
-                            label={r.name}
-                            detail={`Holds ${r.capacity}`}
-                            on={roomId === r.id}
-                            busy={theirs}
-                            disabled={theirs.length > 0 && !before.rooms.has(r.id) && roomId !== r.id}
-                            onPick={() => setRoomId(r.id)}
-                          />
-                        );
-                      })}
-                    </div>
-                  )}
-                </section>
+                <RoomPicker
+                  hasFacility={hasFacility}
+                  rooms={rooms}
+                  value={roomId}
+                  busy={busy.rooms}
+                  before={before.rooms}
+                  onChange={setRoomId}
+                />
               )}
             </form>
           ) : (
@@ -741,44 +728,114 @@ function InstructorPicker({
   );
 }
 
-function RoomOption({
-  label,
-  detail,
-  on,
-  busy = [],
-  disabled,
-  onPick,
+/**
+ * A one-room session's room, as one dropdown drawn like the instructors':
+ * free rooms first, then busy ones, each with what it holds. Picking one
+ * replaces the last. A busy room cannot be picked unless the session already
+ * had it, and a busy room it keeps is named under it in red.
+ */
+function RoomPicker({
+  hasFacility,
+  rooms,
+  value,
+  busy,
+  before,
+  onChange,
 }: {
-  label: string;
-  detail: string;
-  on: boolean;
-  busy?: Clash[];
-  disabled?: boolean;
-  onPick: () => void;
+  hasFacility: boolean;
+  rooms: RoomRow[];
+  value: string | null;
+  busy: Map<string, Clash[]>;
+  before: Set<string | null>;
+  onChange: (room: string | null) => void;
 }) {
+  const [filter, setFilter] = useState("");
+  const needle = filter.trim().toLowerCase();
+  const isBusy = (r: RoomRow) => (busy.get(r.id) ?? []).length > 0;
+  const shown = rooms
+    .filter((r) => !needle || r.name.toLowerCase().includes(needle))
+    .sort((a, b) => Number(isBusy(a)) - Number(isBusy(b)) || a.name.localeCompare(b.name));
+  const picked = rooms.find((r) => r.id === value);
+  const clashes = value ? (busy.get(value) ?? []) : [];
+
   return (
-    <button
-      type="button"
-      role="radio"
-      aria-checked={on}
-      disabled={disabled}
-      onClick={onPick}
-      className={cn(
-        "rounded-lg border px-3 py-2 text-left transition-colors disabled:cursor-not-allowed",
-        on ? "border-brand-border bg-brand/8" : "hover:bg-accent/40",
-        busy.length > 0 && "border-red-300 bg-red-50/70 dark:border-red-900/70 dark:bg-red-950/20",
-      )}
-    >
-      <div className={cn("flex items-baseline justify-between gap-2 text-sm", busy.length > 0 && "font-medium text-red-700 dark:text-red-400")}>
-        <span className="truncate">{label}</span>
-        {detail && <span className="shrink-0 text-xs font-normal text-muted-foreground tabular-nums">{detail}</span>}
-      </div>
-      {busy.map((c) => (
-        <div key={c.sessionId} className="truncate text-xs text-red-700 dark:text-red-400">
-          Busy: {describeClash(c)}
-        </div>
-      ))}
-    </button>
+    <div className="grid gap-1.5">
+      <span id="session-room" className="text-sm font-medium">
+        Room
+      </span>
+      <DropdownMenu onOpenChange={(open) => !open && setFilter("")}>
+        <DropdownMenuTrigger aria-labelledby="session-room" disabled={!hasFacility || rooms.length === 0} className={TRIGGER}>
+          {!hasFacility ? (
+            <span className="truncate text-muted-foreground">Pick a facility for this bootcamp on the Scheduler to give sessions rooms</span>
+          ) : rooms.length === 0 ? (
+            <span className="truncate text-muted-foreground">This bootcamp&apos;s facility has no rooms yet</span>
+          ) : picked ? (
+            <span className={cn("flex min-w-0 items-baseline gap-1.5", clashes.length > 0 && "text-red-700 dark:text-red-400")}>
+              <span className="truncate">{picked.name}</span>
+              <span className="shrink-0 text-xs text-muted-foreground tabular-nums">Holds {picked.capacity}</span>
+            </span>
+          ) : value ? (
+            <span className="truncate">A removed room</span>
+          ) : (
+            <span className="text-muted-foreground">No room</span>
+          )}
+          <ChevronDown className="ml-auto size-4 shrink-0 text-muted-foreground" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="w-(--radix-dropdown-menu-trigger-width) min-w-72">
+          {rooms.length > 8 && (
+            <>
+              {/* Keys typed here are the search's, not the menu's: no typeahead, no arrow-key moves. */}
+              <Input
+                aria-label="Find a room"
+                value={filter}
+                placeholder="Find a room"
+                onChange={(e) => setFilter(e.target.value)}
+                onKeyDown={(e) => e.key !== "Escape" && e.stopPropagation()}
+                className="h-8"
+              />
+              <DropdownMenuSeparator />
+            </>
+          )}
+          <DropdownMenuRadioGroup value={value ?? ""} onValueChange={(v) => onChange(v || null)} className="max-h-72 overflow-y-auto">
+            {!needle && (
+              <DropdownMenuRadioItem value="">
+                <span className="text-muted-foreground">No room</span>
+              </DropdownMenuRadioItem>
+            )}
+            {shown.length === 0 && <p className="px-2 py-1.5 text-sm text-muted-foreground">No room matches.</p>}
+            {shown.map((r) => {
+              const theirs = busy.get(r.id) ?? [];
+              return (
+                <DropdownMenuRadioItem
+                  key={r.id}
+                  value={r.id}
+                  disabled={theirs.length > 0 && !before.has(r.id) && r.id !== value}
+                  className="items-start"
+                >
+                  <span className="min-w-0 flex-1">
+                    <span className={cn("flex items-baseline justify-between gap-2", theirs.length > 0 && "font-medium text-red-700 dark:text-red-400")}>
+                      <span className="truncate">{r.name}</span>
+                      <span className="shrink-0 text-xs font-normal text-muted-foreground tabular-nums">Holds {r.capacity}</span>
+                    </span>
+                    {theirs.map((c) => (
+                      <span key={c.sessionId} className="block truncate text-xs text-red-700 dark:text-red-400">
+                        Busy: {describeClash(c)}
+                      </span>
+                    ))}
+                  </span>
+                </DropdownMenuRadioItem>
+              );
+            })}
+          </DropdownMenuRadioGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {picked &&
+        clashes.map((c) => (
+          <p key={c.sessionId} className="text-xs text-red-700 dark:text-red-400">
+            {picked.name} is also in {describeClash(c)}
+          </p>
+        ))}
+    </div>
   );
 }
 
