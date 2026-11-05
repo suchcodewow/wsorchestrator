@@ -10,6 +10,7 @@ import { auth, signInPath } from "@/auth";
 import { BOOTCAMP_COHORT_LIST, BOOTCAMP_COHORT_PREFIX, BOOTCAMP_RECORD_LIST, isHistoryStatus } from "@/lib/list-specs";
 import { parseListQuery, withParams, writeListQuery } from "@/lib/paging";
 import { getBootcampPerson, readerOf } from "@/lib/reporting/bootcamp";
+import { isReleaseStage } from "@/lib/reporting/bootcamp-values";
 import { canManageBootcampRecords } from "@/lib/roles";
 import { PersonView } from "./person-view";
 
@@ -27,10 +28,10 @@ export default async function BootcampPersonPage({
   const { access } = session.user;
 
   const { key } = await params;
-  const person = await getBootcampPerson(readerOf({ access, email: session.user.email ?? null }), key);
+  const person = await getBootcampPerson(readerOf({ access, email: session.user.email ?? null, id: session.user.id }), key);
   if (!person) notFound();
 
-  // The list carried its search, sorts, pages and status here, so the back link returns to them.
+  // The list carried its search, sorts, pages and filters here, so the back link returns to them.
   const list = await searchParams;
   const back = writeListQuery(parseListQuery(list, BOOTCAMP_RECORD_LIST), BOOTCAMP_RECORD_LIST);
   writeListQuery(
@@ -40,6 +41,8 @@ export default async function BootcampPersonPage({
     BOOTCAMP_COHORT_PREFIX,
   );
   if (isHistoryStatus(list.status)) back.set("status", list.status);
+  const stage = list[`${BOOTCAMP_COHORT_PREFIX}.stage`];
+  if (isReleaseStage(stage)) back.set(`${BOOTCAMP_COHORT_PREFIX}.stage`, stage);
 
   const { records } = person;
   return (

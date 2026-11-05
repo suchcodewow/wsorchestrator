@@ -1,4 +1,4 @@
-import { FOOD_ORDER_LIST, RECORDING_LIST, GUEST_JUDGE_LIST, INTAKE_RESPONSE_LIST, JUDGE_PROSPECT_LIST, ASSESSMENT_ATTENDEE_LIST, ASSESSMENT_LIST, AUDIT_LIST, BOOTCAMP_COHORT_LIST, BOOTCAMP_LIST, BOOTCAMP_RECORD_LIST, CURRENT_COHORT_LIST, DOMAIN_LIST, EMPLOYEE_LIST, FRAME_DOMAIN_LIST, HIBOB_SYNC_LIST, HISTORY_STATUSES, JUDGE_LIST, ORGANIZATION_LIST, PREVIOUS_SESSION_LIST, SESSION_COMMENT_LIST, SESSION_TYPE_LIST, MEETING_SELECTION_LIST, MEETING_SYNC_CHANGE_LIST, MEETING_SYNC_LIST, SLACK_CONTACT_LIST, SLACK_SYNC_CHANGE_LIST, SLACK_SYNC_LIST, CHANNEL_CONTACT_LIST, SURVEY_RESPONSE_LIST, SURVEY_RESULT_LIST, TITLE_LIST, USER_LIST, FACILITY_LIST, VIDEO_FEEDBACK_LIST, VIDEO_FEEDBACK_SUMMARY_LIST } from "@/lib/list-specs";
+import { FOOD_ORDER_LIST, RECORDING_LIST, GUEST_JUDGE_LIST, INTAKE_RESPONSE_LIST, JUDGE_PROSPECT_LIST, ASSESSMENT_ATTENDEE_LIST, ASSESSMENT_LIST, AUDIT_LIST, BOOTCAMP_COHORT_LIST, BOOTCAMP_LIST, BOOTCAMP_RECORD_LIST, CURRENT_COHORT_LIST, DOMAIN_LIST, EMPLOYEE_LIST, FRAME_DOMAIN_LIST, HIBOB_SYNC_LIST, HISTORY_STATUSES, JUDGE_LIST, ORGANIZATION_LIST, PREVIOUS_SESSION_LIST, RELEASE_NOTICE_LIST, RELEASE_NOTICE_MESSAGE_LIST, SESSION_COMMENT_LIST, SESSION_TYPE_LIST, MEETING_SELECTION_LIST, MEETING_SYNC_CHANGE_LIST, MEETING_SYNC_LIST, SLACK_CONTACT_LIST, SLACK_SYNC_CHANGE_LIST, SLACK_SYNC_LIST, CHANNEL_CONTACT_LIST, SURVEY_RESPONSE_LIST, SURVEY_RESULT_LIST, TITLE_LIST, USER_LIST, FACILITY_LIST, VIDEO_FEEDBACK_LIST, VIDEO_FEEDBACK_SUMMARY_LIST } from "@/lib/list-specs";
 import { BOOTCAMP_EXAM, BOOTCAMP_LIMITS, BOOTCAMP_SCORE, CHECKLIST_LIMITS, EVALS_ASSESSMENT_LIMITS, FACILITY_LIMITS, FOOD_ORDER_LIMITS, INTAKE_LIMITS, MEETING_SELECTION_LIMITS, RECORDING_LIMITS, SCHEDULE_LIMITS, SURVEY_LIMITS, VIDEO_FEEDBACK_LIMITS } from "@/db/schema";
 import { PAGE_SIZE } from "@/lib/paging";
 import { RECORDING_RETENTION_DAYS, UPLOAD_STALLED_MS, UPLOAD_URL_BATCH } from "@/lib/recording/video";
@@ -239,6 +239,15 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           { status: 400, error: "invalid", when: "the body does not parse" },
           { status: 404, error: "not_found", when: "no such tour" },
         ],
+      },
+      {
+        method: "DELETE",
+        path: "/api/tours/seen",
+        summary: "Forgets every tour the caller has seen, so each plays for them by itself again.",
+        access: "signedIn",
+        token: true,
+        returns: "{ ok: true, reset: number }",
+        notes: "reset is how many tours were forgotten.",
       },
     ],
   },
@@ -602,7 +611,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "assessmentsAdmin",
         token: true,
         notes:
-          "A picked meeting is a name on the calendar, matched to its events whatever their case or spacing, and whom in the Cohorts page's Current tab it is for: a stage (bootcamp or intermediate) and a track (sales, engineer or both), and optionally a range of UTC offsets, timezoneFrom to timezoneTo in whole hours (both null for every time zone), and minDaysAfterStart, how many days after a person's start date the meeting suits them: the sync invites each person to the first occurrence in their window on or after their start date plus that many days, or to the last one in it when none is. A person's window is before the active bootcamp starts. An intermediate meeting is also for bootcamp candidates who have RSVP'd to the active bootcamp (saved its intake form), and for intermediate candidates whose latest BTC is the active bootcamp's; their window runs from the day after the bootcamp's last day (its start plus the longer of its BTC and INT days) until the next scheduled bootcamp with an intermediate class starts, with no end when none is scheduled. allOccurrences false invites each person to one occurrence, and to the next one only after they miss it; true invites them to that first occurrence and every one after it in their window, until they attend. syncedAt is when a live sync last read its events, or null before one has; nextStartsAt and upcoming are as of the last sync, live or dry, and invited and attended as of the last live one: when the next occurrence starts, how many are still to start, how many of the cohort are on one still to start, and how many attended one, by Zoom or by an administrator's mark. connection and zoom.connection are null until each is connected, and never include a token. facilitators are the people added to every occurrence a cohort member is on (GET /api/evals/google-meetings/facilitators). live says whether a sync changes the calendar (PUT /api/evals/google-meetings/settings). testGroup is the Cohorts page's test group (GET /api/cohorts/test-group). cutoff is the active bootcamp's start date, before which each person is invited, or null with none active. legacyMeetings counts the old create-a-meeting invites the next live sync cancels. meetingCount is every picked meeting, whatever the search.",
+          "A picked meeting is a name on the calendar, matched to its events whatever their case or spacing, and whom in the Cohorts page's Current tab it is for: a stage (bootcamp or intermediate) and a track (sales, engineer or both), and optionally a range of UTC offsets, timezoneFrom to timezoneTo in whole hours (both null for every time zone), and minDaysAfterStart, how many days after a person's start date the meeting suits them: the sync invites each person to the first occurrence in their window on or after their start date plus that many days, or to the last one in it when none is. A person's window is before the active bootcamp starts. An intermediate meeting is also for bootcamp candidates who have RSVP'd to the active bootcamp (saved its intake form), and for intermediate candidates whose latest BTC is the active bootcamp's; their window runs from the day after the bootcamp's last day (its start plus the longer of its BTC and INT days) until the next scheduled bootcamp with an intermediate class starts, with no end when none is scheduled. allOccurrences false invites each person to one occurrence, and to the next one only after they miss it; true invites them to that first occurrence and every one after it in their window, until they attend. syncedAt is when a live sync last read its events, or null before one has; nextStartsAt and upcoming are as of the last sync, live or dry, and invited and attended as of the last live one: when the next occurrence starts, how many are still to start, how many of the cohort are on one still to start, and how many attended one, by Zoom or by an administrator's mark. connection and zoom.connection are null until each is connected, and never include a token. facilitators are the people added to every occurrence a cohort member is on (GET /api/evals/google-meetings/facilitators). live says whether a sync changes the calendar (PUT /api/settings/google-meetings-mode). testGroup is the Cohorts page's test group (GET /api/cohorts/test-group). cutoff is the active bootcamp's start date, before which each person is invited, or null with none active. legacyMeetings counts the old create-a-meeting invites the next live sync cancels. meetingCount is every picked meeting, whatever the search.",
         query: listQuery(MEETING_SELECTION_LIST.sorts, "the name"),
         returns: `{ meetings: { id, name, stage: "bootcamp" | "intermediate", track: "sales" | "engineer" | "both", timezoneFrom: number | null, timezoneTo: number | null, minDaysAfterStart: number, allOccurrences: boolean, syncedAt: string | null, nextStartsAt: string | null, upcoming: number, invited: number, attended: number, addedBy: string | null, createdAt }[], ${PAGE_FIELDS}, connection: { email, connectedAt, connectedBy: string | null } | null, zoom: { configured: boolean, connection: { email, connectedAt, connectedBy: string | null } | null }, facilitators: { email, fullName }[], live: boolean, running: boolean, testGroup: { on: boolean, suffix: string, members: number }, cutoff: "YYYY-MM-DD" | null, lastLiveSync: { finishedAt, status: "running" | "succeeded" | "skipped" | "failed", error: string | null } | null, legacyMeetings: number, meetingCount: number }`,
       },
@@ -753,25 +762,6 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       },
       {
         method: "GET",
-        path: "/api/evals/google-meetings/settings",
-        summary: "Whether the Google Meetings sync is live or a dry run.",
-        access: "assessmentsAdmin",
-        token: true,
-        returns: "{ live: boolean }",
-      },
-      {
-        method: "PUT",
-        path: "/api/evals/google-meetings/settings",
-        summary: "Turns the Google Meetings sync live, or back to a dry run.",
-        access: "assessmentsAdmin",
-        token: true,
-        notes: "Off until an administrator turns it on. A dry run reads the calendar and Zoom and logs whom it would invite and take off, but changes no invite and writes nothing to either; it stores only the occurrences it read, for the Current tab. QA shares production's Google Workspace, so it stays off there.",
-        body: { kind: "json", fields: [{ name: "live", type: "boolean", required: true }] },
-        returns: "{ live: boolean }",
-        errors: [{ status: 400, error: "invalid", when: "the body does not parse" }],
-      },
-      {
-        method: "GET",
         path: "/api/evals/google-meetings/sync",
         summary: "Lists the Google Meetings sync's log a page at a time, newest first.",
         access: "assessmentsAdmin",
@@ -861,7 +851,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           fields: [{ name: "preview", type: "boolean", note: "true for a dry run whether or not the sync is live, to see what it would change and send, and to whom; the body may be left out" }],
         },
         notes:
-          "Its channels also run after each scheduled HiBob sync, and its reminders once a day on their own. Channels: with no bootcamp active, none are synced. Otherwise it finds or creates the public channels sales-bootcamp-{mon}-{yyyy} and se-bootcamp-{mon}-{yyyy}, and the -intermediate- pair when the bootcamp holds an intermediate class, from its start date; joins each; invites the Current tab's Sales and Engineers at that stage, and the Bootcamp Contacts, to the sales- channel, and its Engineers and the Engineer Contacts to the se- one; and removes anyone it invited earlier who no longer belongs. Undecided people are left out, and no one it did not invite is ever removed. Reminders: while the daily reminder is on (PUT /api/cohorts/slack/settings) and today's have not gone out, a direct message, with a link to /intake, to everyone in the current cohort who has not answered their stage's intake form; a form with no questions sends nothing, and an app missing chat:write or im:write sends nothing and says so in notes. A run with nothing to do in any part is skipped. In dry run (see PUT /api/cohorts/slack/settings), or with preview, it changes and sends nothing, and the counts and GET /api/cohorts/slack/sync/{id} say what it would do and send, and to whom. A dry run works with Slack not connected too: unable to see who is already anywhere, it lists every channel not yet created as one to create, everyone each should hold as one to add, and a message to everyone due a reminder, and says so in notes. Slack's rate limits can stop a run part-way, when unfinished is true and the next run carries on. Allows 300 seconds; every attempt is logged.",
+          "Its channels also run after each scheduled HiBob sync, and its reminders once a day on their own. Channels: with no bootcamp active, none are synced. Otherwise it finds or creates the public channels sales-bootcamp-{mon}-{yyyy} and se-bootcamp-{mon}-{yyyy}, and the -intermediate- pair when the bootcamp holds an intermediate class, from its start date; joins each; invites the Current tab's Sales and Engineers at that stage, and the Bootcamp Contacts, to the sales- channel, and its Engineers and the Engineer Contacts to the se- one; and removes anyone it invited earlier who no longer belongs. Undecided people are left out, and no one it did not invite is ever removed. Reminders: while the daily reminder is on (PUT /api/cohorts/slack/settings) and today's have not gone out, a direct message, with a link to /intake, to everyone in the current cohort who has not answered their stage's intake form; a form with no questions sends nothing, and an app missing chat:write or im:write sends nothing and says so in notes. A run with nothing to do in any part is skipped. In dry run (see PUT /api/settings/slack-mode), or with preview, it changes and sends nothing, and the counts and GET /api/cohorts/slack/sync/{id} say what it would do and send, and to whom. A dry run works with Slack not connected too: unable to see who is already anywhere, it lists every channel not yet created as one to create, everyone each should hold as one to add, and a message to everyone due a reminder, and says so in notes. Slack's rate limits can stop a run part-way, when unfinished is true and the next run carries on. Allows 300 seconds; every attempt is logged.",
         returns: `{ ok: true, runId, status: "succeeded" | "skipped", dryRun: boolean, invited, removed, messaged, notInSlack, failures: number, unfinished: boolean, notes: string[] }`,
         errors: [
           { status: 400, error: "invalid", when: "the body is not that shape" },
@@ -889,7 +879,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       {
         method: "GET",
         path: "/api/cohorts/slack/settings",
-        summary: "Whether the cohort Slack sync is live or a dry run, and whether it sends the intake form's daily reminder.",
+        summary: "Whether Slack is live or a dry run (set with PUT /api/settings/slack-mode), and whether the cohort Slack sync sends the intake form's daily reminder.",
         access: "trainingAdmin",
         token: true,
         returns: "{ live: boolean, reminders: boolean }",
@@ -897,20 +887,17 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       {
         method: "PUT",
         path: "/api/cohorts/slack/settings",
-        summary: "Turns the cohort Slack sync live or back to a dry run, or its daily intake form reminder on or off.",
+        summary: "Turns the cohort Slack sync's daily intake form reminder on or off.",
         access: "trainingAdmin",
         token: true,
         notes:
-          "Either or both. The sync starts as a dry run and the daily reminder off. While the reminder is off, no run sends any; while it is on, the scheduled run and POST /api/cohorts/slack/sync send the reminders that are due, or log them in a dry run. QA shares production's Slack workspace, so leave QA in dry run with the reminder off.",
+          "The daily reminder starts off. While it is off, no run sends any; while it is on, the scheduled run and POST /api/cohorts/slack/sync send the reminders that are due, or log them while Slack is in dry run. Whether Slack is live is set with PUT /api/settings/slack-mode, and live is returned here only to read. QA shares production's Slack workspace, so leave QA in dry run with the reminder off.",
         body: {
           kind: "json",
-          fields: [
-            { name: "live", type: "boolean", note: "true to change Slack, false for a dry run" },
-            { name: "reminders", type: "boolean", note: "true to send the intake form's daily reminder" },
-          ],
+          fields: [{ name: "reminders", type: "boolean", required: true, note: "true to send the intake form's daily reminder" }],
         },
         returns: "{ live: boolean, reminders: boolean }",
-        errors: [{ status: 400, error: "invalid", when: "the body is not that shape, or names neither" }],
+        errors: [{ status: 400, error: "invalid", when: "the body is not that shape" }],
       },
       {
         method: "GET",
@@ -944,6 +931,46 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           { status: 409, error: "suffix_locked", when: "the suffix is changed while the group is on" },
           { status: 502, error: "teardown_failed", when: "a channel or invite could not be removed; failures lists them and the group stays on" },
         ],
+      },
+      {
+        method: "GET",
+        path: "/api/settings/google-meetings-mode",
+        summary: "Whether the Google Meetings sync is live or a dry run.",
+        access: "platform",
+        token: true,
+        returns: "{ live: boolean }",
+      },
+      {
+        method: "PUT",
+        path: "/api/settings/google-meetings-mode",
+        summary: "Turns the Google Meetings sync live, or back to a dry run.",
+        access: "platform",
+        token: true,
+        notes:
+          "On Admin Settings → External Connectors, beside the Google account, and a dry run until someone turns it live. A dry run reads the calendar and Zoom and logs whom it would invite and take off, but changes no invite and writes nothing to either, cancelling none of the old form's meetings; it stores only the occurrences it read, for the Current tab. QA shares production's Google Workspace, so it stays in dry run there.",
+        body: { kind: "json", fields: [{ name: "live", type: "boolean", required: true, note: "true to change invites, false for a dry run" }] },
+        returns: "{ live: boolean }",
+        errors: [{ status: 400, error: "invalid", when: "the body is not that shape" }],
+      },
+      {
+        method: "GET",
+        path: "/api/settings/slack-mode",
+        summary: "Whether the app changes Slack and sends messages there, or only logs what it would.",
+        access: "platform",
+        token: true,
+        returns: "{ live: boolean }",
+      },
+      {
+        method: "PUT",
+        path: "/api/settings/slack-mode",
+        summary: "Turns Slack live, or back to a dry run, for everything the app does there.",
+        access: "platform",
+        token: true,
+        notes:
+          "One switch, on Admin Settings → External Connectors, and a dry run until someone turns it live. In a dry run the cohort Slack sync (POST /api/cohorts/slack/sync) logs the channels it would create, the people it would invite and remove and the reminders it would send; the daily survey announcement is not posted; the Live Sessions Slack button (POST /api/reporting/bootcamp/people/{key}/slack) answers dry_run; and a release logs the message it would send (GET /api/reporting/release-notices/{id}). QA shares production's Slack workspace, so leave QA in dry run.",
+        body: { kind: "json", fields: [{ name: "live", type: "boolean", required: true, note: "true to change Slack and send messages, false for a dry run" }] },
+        returns: "{ live: boolean }",
+        errors: [{ status: 400, error: "invalid", when: "the body is not that shape" }],
       },
       {
         method: "GET",
@@ -1185,7 +1212,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "trainingAdmin",
         token: true,
         notes:
-          "Copies every session, who runs it and the assessment a breakout is scored on, but not comments or breakout groups. Rooms come too only when both bootcamps are at the same facility. Days past the end of a track here are left out; notes says what was. The checklists of the days it copies, and Prep Day's, are added to this bootcamp's, every item to do; replace leaves its own items alone, and an item whose half-day (AM or PM) here already has one of the same name is not added again. An owner or a tag who is not an administrator or guest judge of this bootcamp is left off, and notes names them.",
+          "Copies every session, who runs it and the assessment a breakout is scored on, but not comments or breakout groups. Rooms come too only when both bootcamps are at the same facility. Days past the end of a track here are left out; notes says what was. The checklists of the days it copies, and Prep Day's, are added to this bootcamp's, every item to do; replace leaves its own items alone, and an item whose half-day (Day or Evening) here already has one of the same name is not added again. An owner or a tag who is not an administrator or guest judge of this bootcamp is left off, and notes names them.",
         params: [BOOTCAMP_ID],
         body: {
           kind: "json",
@@ -1404,18 +1431,20 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       {
         method: "GET",
         path: "/api/scheduler/bootcamps/{id}/checklist",
-        summary: "Counts the checklist items of each half of each track-day, and how many are done.",
+        summary: "Counts the checklist items of each half of each track-day, and how many are done, and lists those the schedule marks at their time.",
         access: "trainingViewer",
         token: true,
-        notes: "One entry per track, day and period (AM or PM); a half-day with no items is left out.",
+        notes:
+          "days has one entry per track, day and period (am is Day, pm is Evening); a half-day with no items is left out. marks is every item still to do in the Day half of a class-day (not Prep Day) that has an alarm, in minutes after midnight, by track, day and time.",
         params: [BOOTCAMP_ID],
-        returns: "{ days: { track: \"btc\" | \"int\" | \"btc_se\" | \"int_se\", day: number, period: \"am\" | \"pm\", total: number, done: number }[] }",
+        returns:
+          "{ days: { track: \"btc\" | \"int\" | \"btc_se\" | \"int_se\", day: number, period: \"am\" | \"pm\", total: number, done: number }[], marks: { id, track, day: number, alarm: number, name, ownerEmail: string | null, ownerName, mentions: { email, fullName }[] }[] }",
         errors: [{ status: 404, error: "not_found", when: "no such bootcamp" }],
       },
       {
         method: "GET",
         path: "/api/scheduler/bootcamps/{id}/checklist/{track}/{day}",
-        summary: "Lists what is to be done before one day of one track, AM and PM together, each half in its order on the board.",
+        summary: "Lists what is to be done on one day of one track, Day and Evening together, each half in its order on the board.",
         access: "trainingViewer",
         token: true,
         notes: `Whole: a track-day holds at most ${CHECKLIST_LIMITS.itemsPerDay} items, both halves together. Each item's period says which half it is in.`,
@@ -1426,7 +1455,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       {
         method: "POST",
         path: "/api/scheduler/bootcamps/{id}/checklist/{track}/{day}",
-        summary: "Adds an item to the AM or PM half of one track-day's checklist, recording you as who wrote it.",
+        summary: "Adds an item to the Day or Evening half of one track-day's checklist, recording you as who wrote it.",
         access: "trainingAdmin",
         token: true,
         notes: "It goes last in its half; PATCH it with position to move it up.",
@@ -1435,7 +1464,12 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
           kind: "json",
           fields: [
             { name: "name", type: "string", required: true, note: `up to ${CHECKLIST_LIMITS.name} characters` },
-            { name: "period", type: `"am" | "pm"`, note: "which half of the day; am when omitted" },
+            { name: "period", type: `"am" | "pm"`, note: "which half of the day: am is Day, pm is Evening; am when omitted" },
+            {
+              name: "alarm",
+              type: "number | null",
+              note: "when it is due, in minutes after midnight (0 to 1439); omit for none. The schedule marks it at that time only in the Day half of a class-day; elsewhere it is kept, unused",
+            },
             { name: "ownerEmail", type: "string | null", note: "a Training administrator or guest judge of the bootcamp; omit for nobody" },
             {
               name: "mentions",
@@ -1456,11 +1490,11 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
       {
         method: "PATCH",
         path: "/api/scheduler/bootcamps/{id}/checklist/items/{itemId}",
-        summary: "Ticks a checklist item done or back to do, changes its name or owner, or moves it to another half-day or another place in its own.",
+        summary: "Ticks a checklist item done or back to do, changes its name, owner or time, or moves it to another half-day or another place in its own.",
         access: "signedIn",
         token: true,
         notes:
-          "A Training Administrator can tick any item; anyone else only one they own, matched by their account's email. Ticking one already done keeps when it was first ticked. Only a Training Administrator can change the name or owner, or move it; a field left out stays as it is. A new name replaces whom the item tags with mentions: anyone no longer named drops out, and anyone newly named finds it in their inbox. A move keeps who wrote it, whom it tags and whether it is done. position puts it at that place among the other items of the half-day it ends up in, renumbering that half from 0, as dropping a card on the board does; past the end is the end. Without position, an item moved to another half goes last there, and one that stays keeps its place. Given together, the name and owner are changed first, then the item moved, then ticked; the first step that fails stops the rest, and steps before it stay saved.",
+          "A Training Administrator can tick any item; anyone else only one they own, matched by their account's email. Ticking one already done keeps when it was first ticked. Only a Training Administrator can change the name, owner or alarm, or move it; a field left out stays as it is. A new name replaces whom the item tags with mentions: anyone no longer named drops out, and anyone newly named finds it in their inbox. A move keeps who wrote it, whom it tags, its alarm and whether it is done. position puts it at that place among the other items of the half-day it ends up in, renumbering that half from 0, as dropping a card on the board does; past the end is the end. Without position, an item moved to another half goes last there, and one that stays keeps its place. Given together, the name and owner are changed first, then the item moved, then ticked; the first step that fails stops the rest, and steps before it stay saved.",
         params: [BOOTCAMP_ID, CHECKLIST_ITEM_ID],
         body: {
           kind: "json",
@@ -1471,6 +1505,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
             { name: "period", type: `"am" | "pm"`, note: "to move it to the other half of the day" },
             { name: "position", type: "number", note: `its place in the half-day, first at 0, counting the other items there; 0 to ${CHECKLIST_LIMITS.itemsPerDay}` },
             { name: "name", type: "string", note: `up to ${CHECKLIST_LIMITS.name} characters` },
+            { name: "alarm", type: "number | null", note: "when it is due, in minutes after midnight (0 to 1439); null for none" },
             { name: "ownerEmail", type: "string | null", note: "a Training administrator or guest judge of the bootcamp; null or blank for nobody" },
             {
               name: "mentions",
@@ -1481,10 +1516,10 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         },
         returns: CHECKLIST_ITEM_ROW,
         errors: [
-          { status: 400, error: "invalid", when: "none of done, name, ownerEmail, track, day, period or position is given, or one is the wrong type, or name is empty or too long" },
+          { status: 400, error: "invalid", when: "none of done, name, alarm, ownerEmail, track, day, period or position is given, or one is the wrong type, or name is empty or too long, or alarm is out of range" },
           { status: 400, error: "no_day", when: "the track does not run that day at this bootcamp, or day is 0 on a track other than btc" },
           { status: 400, error: "not_instructor", when: "ownerEmail or a mention is not an administrator or guest judge of the bootcamp; email names it" },
-          { status: 403, error: "forbidden", when: "you are not a Training Administrator and name, ownerEmail, track, day, period or position is given" },
+          { status: 403, error: "forbidden", when: "you are not a Training Administrator and name, alarm, ownerEmail, track, day, period or position is given" },
           { status: 403, error: "not_owner", when: "you are not a Training Administrator and it is not yours" },
           { status: 404, error: "not_found", when: "no such bootcamp or item" },
           { status: 409, error: "full", when: `the day it is moved to already has ${CHECKLIST_LIMITS.itemsPerDay} items` },
@@ -2581,12 +2616,12 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "signedIn",
         token: true,
         notes:
-          "A record is a class someone was assessed in that the caller may see: once it is released, or for an Assessments Viewer also once its bootcamp is complete. level is the furthest class attended: intermediate, else bootcamp. date is their latest class day. key addresses their page: their employee id, else, for someone assessed whom the employee list does not have, a submission's. fullName is null for someone it has no name for, and active false for anyone the last HiBob sync did not send. counts gives everyone the caller may see, the active and the inactive, whatever the search or status.",
+          "A record is a class someone was assessed in that the caller may see: once it is released, or for an Assessments Viewer also once its bootcamp is complete. level is the furthest class attended: intermediate, else bootcamp. date is their latest class day. averageScore is their score in level at the newest bootcamp they had it, worked out as GET /api/reporting/bootcamp/cohort does, and scored how many assessments it counts. viewers names who has opened their card (POST /api/reporting/bootcamp/people/{key}/views), newest first, at most 20, with when each last did; viewerCount counts them all. Both are empty until the caller has opened that card themself. key addresses their page: their employee id, else, for someone assessed whom the employee list does not have, a submission's. fullName is null for someone it has no name for, and active false for anyone the last HiBob sync did not send. counts gives everyone the caller may see, the active and the inactive, whatever the search or status.",
         query: [
           ...listQuery(BOOTCAMP_RECORD_LIST.sorts, "the name or email", BOOTCAMP_RECORD_LIST.dir),
           { name: "status", type: HISTORY_STATUSES.map((s) => `"${s}"`).join(" | "), note: "only the active or only the inactive; everyone if omitted" },
         ],
-        returns: `{ people: { key, email, fullName: string | null, level: "intermediate" | "bootcamp", date: "YYYY-MM-DD", active: boolean }[], ${PAGE_FIELDS}, status: "active" | "inactive" | null, counts: { total: number, active: number, inactive: number } }`,
+        returns: `{ people: { key, email, fullName: string | null, level: "intermediate" | "bootcamp", date: "YYYY-MM-DD", active: boolean, scored: number, averageScore: number | null, viewers: { name, at }[], viewerCount: number }[], ${PAGE_FIELDS}, status: "active" | "inactive" | null, counts: { total: number, active: number, inactive: number } }`,
         errors: [{ status: 400, error: "invalid_status", when: "status is neither active nor inactive" }],
       },
       {
@@ -2596,9 +2631,13 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "signedIn",
         token: true,
         notes:
-          "stages lists the classes the caller may see the cohort of: every class the bootcamp holds for an Assessments Viewer or above, else only those released. cohort holds one row per person and class in those stages: everyone who RSVP'd to their class by saving its registration form and is not deferred, whether a current candidate or already scored at the bootcamp; averageScore is the mean of their submissions' averages, null with none scored, and scored how many there are. bootcamp is null, and cohort empty, when no bootcamp is active.",
-        query: listQuery(BOOTCAMP_COHORT_LIST.sorts, "the name or email", BOOTCAMP_COHORT_LIST.dir),
-        returns: `{ bootcamp: { id, startDate, intermediate: boolean, released: { bootcamp: { at, byName: string | null } | null, intermediate: { at, byName: string | null } | null } } | null, stages: ("bootcamp" | "intermediate")[], cohort: { key, email, fullName: string | null, stage: "bootcamp" | "intermediate", scored: number, averageScore: number | null }[], ${PAGE_FIELDS} }`,
+          "stages lists the classes the caller may see the cohort of: every class the bootcamp holds for an Assessments Viewer or above, else only those released. cohort holds one row per person and class in those stages: everyone who RSVP'd to their class by saving its registration form and is not deferred, whether a current candidate or already scored at the bootcamp; averageScore is the mean of their submissions' averages, both exams counting as one more once both are in, to one decimal place, null with none scored, and scored how many submissions there are. date is the bootcamp's start date, the day of both its classes. viewers and viewerCount are as on GET /api/reporting/bootcamp. stage narrows cohort to one class; counts gives how many are in each class the caller may see, whatever the search or stage. bootcamp is null, and cohort empty, when no bootcamp is active.",
+        query: [
+          ...listQuery(BOOTCAMP_COHORT_LIST.sorts, "the name or email", BOOTCAMP_COHORT_LIST.dir),
+          { name: "stage", type: '"bootcamp" | "intermediate"', note: "only that class; both if omitted" },
+        ],
+        returns: `{ bootcamp: { id, startDate, intermediate: boolean, released: { bootcamp: { at, byName: string | null } | null, intermediate: { at, byName: string | null } | null } } | null, stages: ("bootcamp" | "intermediate")[], stage: "bootcamp" | "intermediate" | null, counts: { bootcamp: number, intermediate: number }, cohort: { key, email, fullName: string | null, stage: "bootcamp" | "intermediate", scored: number, averageScore: number | null, date: "YYYY-MM-DD", viewers: { name, at }[], viewerCount: number }[], ${PAGE_FIELDS} }`,
+        errors: [{ status: 400, error: "invalid_stage", when: "stage is neither bootcamp nor intermediate" }],
       },
       {
         method: "GET",
@@ -2607,8 +2646,8 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "assessmentsAdmin",
         token: true,
         notes:
-          "comments counts the blank comments there are marks to write, so one person can count twice. overall counts the blank overall positive and constructive feedback of the cohort (PUT /api/reporting/bootcamp/people/{key}/review) that some assessment's saved feedback on that side could fill. scores counts the people who would get a score. skipped names candidates who have not RSVP'd and have no marks and no assessment, whom it leaves out, at most 100. unscored is everyone in the class still waiting on a score, which keeps it from being released: someone in the cohort (RSVP'd to the class and not deferred, as Live Sessions lists them) without a scored assessment for every active assessment of the class taught to their track and for Participation, or anyone with a blank score there. total, and up to 100 names. A class is null when the bootcamp does not hold it, it is already released, or no bootcamp is active.",
-        returns: "{ bootcamp: StagePending | null, intermediate: StagePending | null }, where StagePending is { comments: number, overall: number, scores: number, skipped: string[], unscored: { total: number, names: string[] } }",
+          "comments counts the blank comments there are marks to write, so one person can count twice. overall counts the blank overall positive and constructive feedback of the cohort (PUT /api/reporting/bootcamp/people/{key}/review) that some assessment's saved feedback on that side could fill. scores counts the people who would get a score. skipped names candidates who have not RSVP'd and have no marks and no assessment, whom it leaves out, at most 100. unscored is everyone in the class still waiting on a score, which keeps it from being released: someone in the cohort (RSVP'd to the class and not deferred, as Live Sessions lists them) without a scored assessment for every active assessment of the class taught to their track and for Participation, or anyone with a blank score there. total, and up to 100 names. noExitExam and noFeedback, in the same shape, are everyone in that cohort without an exit exam, and without both overall positive and constructive feedback; either also keeps it from being released. A class is null when the bootcamp does not hold it, it is already released, or no bootcamp is active.",
+        returns: "{ bootcamp: StagePending | null, intermediate: StagePending | null }, where StagePending is { comments: number, overall: number, scores: number, skipped: string[], unscored: Waiting, noExitExam: Waiting, noFeedback: Waiting }, where Waiting is { total: number, names: string[] }",
       },
       {
         method: "POST",
@@ -2657,15 +2696,61 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "assessmentsAdmin",
         token: true,
         notes:
-          "From then on, managers see that class's results for the people in their org. Everyone scored in the class has attended it from then on: a BTC class moves on to Intermediate on Cohorts → Current, and an INT class leaves it. written counts the people scored in it. A class with any assessment still waiting on a score cannot be released; GET /api/reporting/bootcamp/participation names who. A release cannot be taken back; releasing a class already released changes nothing, writes nothing, and returns when it was.",
+          "From then on, managers see that class's results for the people in their org. Everyone scored in the class has attended it from then on: a BTC class moves on to Intermediate on Cohorts → Current, and an INT class leaves it. written counts the people scored in it. A class cannot be released while anyone in it is waiting on a score for an assessment, an exit exam, or overall positive and constructive feedback (PUT /api/reporting/bootcamp/people/{key}/review); GET /api/reporting/bootcamp/participation names who. A release cannot be taken back; releasing a class already released changes nothing, writes nothing, tells no one, and returns when it was, with notice null. Otherwise everyone in the management chain of anyone scored in the class (their manager up to the Organization Leader, from the HiBob sync), and everyone on the Additional Slack Contacts (GET /api/evals/slack-contacts) whoever they manage, gets a Slack direct message, \"Feedback has been released for November 2026 Bootcamp! Click here to view results for your attendees\" (Intermediate for an INT class), linking to Reporting → Live Sessions. With the test group on, its members for that class get it instead. The messages go out after the response, one at a time; notice.runId is the run, which GET /api/reporting/release-notices/{id} shows as it goes. notice.dryRun is true while Slack is in dry run (PUT /api/settings/slack-mode), when nothing is sent and the run logs what would have been. notice is null when no one was scored, or the run could not start. Nothing about the message fails the release.",
         body: { kind: "json", fields: [{ name: "stage", type: '"bootcamp" | "intermediate"', required: true }] },
-        returns: "{ ok: true, stage, bootcamp: { id, startDate }, releasedAt, written: number }",
+        returns:
+          '{ ok: true, stage, bootcamp: { id, startDate }, releasedAt, written: number, notice: { runId, dryRun: boolean } | null }',
         errors: [
           { status: 400, error: "invalid", when: "stage is missing or neither bootcamp nor intermediate" },
           { status: 409, error: "no_bootcamp", when: "no bootcamp is active" },
           { status: 409, error: "no_intermediate", when: "stage is intermediate and the active bootcamp holds no intermediate class" },
           { status: 409, error: "unscored", when: "someone in the class has an assessment still waiting on a score" },
+          { status: 409, error: "no_exit_exam", when: "everyone is scored, but someone in the cohort has no exit exam" },
+          { status: 409, error: "no_feedback", when: "everyone is scored and has an exit exam, but someone in the cohort lacks overall positive or constructive feedback" },
         ],
+      },
+      {
+        method: "POST",
+        path: "/api/reporting/release-notices/preview",
+        summary: "Logs who releasing the active bootcamp's BTC or INT scores would message in Slack, without releasing or sending anything.",
+        access: "assessmentsAdmin",
+        token: true,
+        notes:
+          "The recipients are worked out as POST /api/reporting/bootcamp/release would, from everyone scored in the class so far, and logged one at a time after the response, each with the message they would get, whether Slack is live or not and whether or not the class is released. With Slack connected, someone it has no account for is logged as not_in_slack. runId is the run, on GET /api/reporting/release-notices/{id}.",
+        body: { kind: "json", fields: [{ name: "stage", type: '"bootcamp" | "intermediate"', required: true }] },
+        returns: "{ runId }",
+        errors: [
+          { status: 400, error: "invalid", when: "stage is missing or neither bootcamp nor intermediate" },
+          { status: 409, error: "no_bootcamp", when: "no bootcamp is active" },
+          { status: 409, error: "no_intermediate", when: "stage is intermediate and the active bootcamp holds no intermediate class" },
+        ],
+      },
+      {
+        method: "GET",
+        path: "/api/reporting/release-notices",
+        summary: "Lists each release message run, a release's or a preview's, newest first, a page at a time.",
+        access: "assessmentsAdmin",
+        token: true,
+        notes:
+          "preview is true for POST /api/reporting/release-notices/preview; dryRun is true for a preview and for a release while Slack was in dry run, when nothing was sent; testGroup is true when the test group's members were messaged instead. While status is running, messaged, notInSlack and failures count those done so far, out of recipients. A run still running after ten minutes died with its server and is shown as failed.",
+        query: listQuery(RELEASE_NOTICE_LIST.sorts, "who started it, the class, the status or the error", "desc"),
+        returns: `{ runs: { id, stage: "bootcamp" | "intermediate", triggeredBy: string | null, preview: boolean, dryRun: boolean, testGroup: boolean, status: "running" | "succeeded" | "failed", startedAt, finishedAt: string | null, recipients, messaged, notInSlack, failures: number, error: string | null }[], ${PAGE_FIELDS} }`,
+      },
+      {
+        method: "GET",
+        path: "/api/reporting/release-notices/{id}",
+        summary: "One release message run, how many of its rows are of each kind, and a page of who it messaged.",
+        access: "assessmentsAdmin",
+        token: true,
+        notes:
+          "One row per recipient, added as each is done: messaged, with the message in detail as Slack mrkdwn (in a dry run, what would have been sent); not_in_slack, for an email Slack has no account for; or failed, with Slack's error in detail. fullName is the employee list's name for the email now, or null. counts is by kind, whatever the search.",
+        params: [{ name: "id", type: "string", required: true, note: "UUID" }],
+        query: [
+          { name: "kind", type: `"messages" | "problems"`, note: "only messages sent, or only failures and those not in Slack" },
+          ...listQuery(RELEASE_NOTICE_MESSAGE_LIST.sorts, "the email, the name, the action or the detail"),
+        ],
+        returns: `{ run: { id, stage: "bootcamp" | "intermediate", triggeredBy: string | null, preview: boolean, dryRun: boolean, testGroup: boolean, status: "running" | "succeeded" | "failed", startedAt, finishedAt: string | null, recipients, messaged, notInSlack, failures: number, error: string | null }, counts: { all, messages, problems: number }, messages: { id, action: "messaged" | "not_in_slack" | "failed", email, fullName: string | null, detail: string | null, at }[], ${PAGE_FIELDS} }`,
+        errors: [{ status: 404, error: "not_found", when: "id is not a UUID, or no such run" }],
       },
       {
         method: "GET",
@@ -2678,6 +2763,46 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         params: [{ name: "key", type: "string", required: true, note: "a key from the list: an employee id or a submission's" }],
         returns:
           '{ key, email, employee: { fullName, title, department, site, reportsToName, reportsToEmail, startDate, track } | null, classes: { bootcamp: ClassSummary, intermediate: ClassSummary }, records: { submissions: { id, bootcamp: { id, startDate, status }, stage, assessmentName, builtIn: "participation" | null, averageScore: number | null, positiveFeedback, constructiveFeedback, ownerName, submittedAt, updatedAt, released, scores: { criterionId, criterionName, score, comment }[] }[], reviews: { bootcampId, stage, positiveFeedback, constructiveFeedback, otherNotes, entranceExam: number | null, exitExam: number | null, updatedAt }[] } | null }, where ClassSummary is { date: string | null, score: number | null, exercises: { name, score, feedback: string | null }[], positiveFeedback, constructiveFeedback, otherNotes, examAverage: number | null }',
+        errors: [{ status: 404, error: "not_found", when: "the key names no one, or someone the caller may not see" }],
+      },
+      {
+        method: "POST",
+        path: "/api/reporting/bootcamp/people/{key}/slack",
+        summary: "Opens the private Slack channel where someone's Live Sessions card is discussed, making it the first time.",
+        access: "signedIn",
+        token: true,
+        notes:
+          "Takes no body. The channel is event-feedback-{first}-{last}, from the first and last words of their name, with -2, -3 and so on after it when another attendee's channel or another Slack channel already has the name; there is one per attendee, made private by the app's bot, which stays in it. An archived one is unarchived, and one Slack no longer has is made again. It invites everyone above them in HiBob's reporting lines, the caller and every Additional Slack Contact, and takes out anyone the app invited who no longer belongs; someone added by hand is never taken out. They themself are never invited. While Slack is in dry run (PUT /api/settings/slack-mode) it does nothing and answers dry_run. Each call then posts one message there naming the caller, with a link back to the card and, below it, the scorecard of the furthest class they have been to: its overall score, overall feedback, average exam score rounded to a whole percent, and each exercise whose score is not a 3, with its feedback. invited and removed are the emails changed by this call; skipped are those who belong but have no Slack account, or whom Slack refused. appUrl opens the channel in the Slack app, webUrl in a browser. The audit log records each call.",
+        params: [{ name: "key", type: "string", required: true, note: "a key from the list: an employee id or a submission's" }],
+        returns:
+          "{ channelId, name, created: boolean, unarchived: boolean, invited: string[], removed: string[], skipped: string[], callerIn: boolean, appUrl, webUrl }",
+        errors: [
+          { status: 404, error: "not_found", when: "the key names no one, or someone the caller may not see" },
+          { status: 409, error: "dry_run", when: "Slack is in dry run (PUT /api/settings/slack-mode)" },
+          { status: 409, error: "not_configured", when: "the Slack app is not added (Admin Settings → External Connectors)" },
+          { status: 502, error: "slack_error", when: "Slack refused, with detail naming its error, such as a missing scope" },
+        ],
+      },
+      {
+        method: "GET",
+        path: "/api/reporting/bootcamp/people/{key}/views",
+        summary: "Lists who has opened someone's Live Sessions card, newest first.",
+        access: "signedIn",
+        token: true,
+        notes: "One row per person who has opened it: name, when they last did (at), and how many times (views). At most 100; total counts them all. Empty until the caller has opened it themself.",
+        params: [{ name: "key", type: "string", required: true, note: "a key from the list: an employee id or a submission's" }],
+        returns: "{ viewers: { name, at, views: number }[], total: number }",
+        errors: [{ status: 404, error: "not_found", when: "the key names no one, or someone the caller may not see" }],
+      },
+      {
+        method: "POST",
+        path: "/api/reporting/bootcamp/people/{key}/views",
+        summary: "Records that the caller opened someone's Live Sessions card.",
+        access: "signedIn",
+        token: true,
+        notes: "Takes no body. The card calls it each time it opens. It counts the view and sets when the caller last viewed; the lists' eye names who has. The audit log records each view.",
+        params: [{ name: "key", type: "string", required: true, note: "a key from the list: an employee id or a submission's" }],
+        returns: "{ ok: true }",
         errors: [{ status: 404, error: "not_found", when: "the key names no one, or someone the caller may not see" }],
       },
       {
@@ -3043,7 +3168,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         access: "assessmentsAdmin",
         token: true,
         notes:
-          "These people are added to the Slack messages sent to each attendee's team at the end of a bootcamp, after the attendee's management chain. fullName is their name in the employee list now, and empty only if it has none. total counts every contact, whatever the search.",
+          "These people are added to the Slack messages sent to each attendee's team at the end of a bootcamp, after the attendee's management chain, and to each attendee's private channel from the Slack button on their Live Sessions card (POST /api/reporting/bootcamp/people/{key}/slack). fullName is their name in the employee list now, and empty only if it has none. total counts every contact, whatever the search.",
         query: listQuery(SLACK_CONTACT_LIST.sorts, "the name, the email or who added them"),
         returns: `{ contacts: { id, email, fullName, createdAt, addedBy: string | null }[], ${PAGE_FIELDS}, total: number }`,
       },

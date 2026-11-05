@@ -1,4 +1,8 @@
-/** The Additional Slack Contacts tab: everyone added to each team's end-of-bootcamp Slack message, a page at a time. */
+/**
+ * The Additional Slack Contacts tab: everyone added to each team's
+ * end-of-bootcamp Slack message, to each Live Sessions channel and to the
+ * release message, a page at a time.
+ */
 
 import { listSlackContacts, slackContactCount } from "@/lib/evals/slack-contacts";
 import { SLACK_CONTACT_LIST } from "@/lib/list-specs";

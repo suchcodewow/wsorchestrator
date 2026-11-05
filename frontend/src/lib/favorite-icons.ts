@@ -12,6 +12,7 @@ import { LOGISTICS_TABS } from "@/app/(app)/logistics/tabs";
 import { MY_SETTINGS_TABS } from "@/app/(app)/me/tabs";
 import { MIMIR_SETTINGS_TABS } from "@/app/(app)/coach-canary-settings/tabs";
 import { MIMIR_TABS } from "@/app/(app)/coach-canary/tabs";
+import { REPORTING_SETTINGS_TABS } from "@/app/(app)/reporting-settings/tabs";
 import { REPORTING_TABS } from "@/app/(app)/reporting/tabs";
 import { SCHEDULER_SETTINGS_TABS } from "@/app/(app)/scheduler-settings/tabs";
 import { SITE_SETTINGS_TABS } from "@/app/(app)/settings/tabs";
@@ -30,6 +31,7 @@ const TAB_ICONS = new Map<string, LucideIcon>(
     ...MY_SETTINGS_TABS,
     ...MIMIR_SETTINGS_TABS,
     ...MIMIR_TABS,
+    ...REPORTING_SETTINGS_TABS,
     ...REPORTING_TABS,
     ...SCHEDULER_SETTINGS_TABS,
     ...SITE_SETTINGS_TABS,

@@ -67,6 +67,7 @@ import {
 } from "@/lib/roles";
 import { visibleCohortSettingsTabs } from "@/app/(app)/cohort-settings/tabs";
 import { EVALS_SETTINGS_TABS } from "@/app/(app)/evals-settings/tabs";
+import { REPORTING_SETTINGS_TABS } from "@/app/(app)/reporting-settings/tabs";
 import { MIMIR_TABS as MIMIR_ARCHIVE_TABS } from "@/app/(app)/coach-canary-archive/tabs";
 import { MIMIR_TABS } from "@/app/(app)/coach-canary/tabs";
 import { MIMIR_SETTINGS_TABS } from "@/app/(app)/coach-canary-settings/tabs";
@@ -322,8 +323,15 @@ const PAGES: Record<string, PageCase> = {
   },
   "/reporting/canary-wire": { path: () => "/reporting/canary-wire", expect: gated(canSeeCanaryWire) },
   "/reporting/bootcamp": { path: () => "/reporting/bootcamp", expect: gated(canSeeBootcampRecords) },
+  "/reporting-settings": {
+    path: () => "/reporting-settings",
+    expect: (a) => (canManageBootcampRecords(a) ? { to: REPORTING_SETTINGS_TABS[0]!.href } : 404),
+  },
+  "/reporting-settings/feedback": { path: () => "/reporting-settings/feedback", expect: gated(canManageBootcampRecords) },
+  "/reporting-settings/feedback/<unknown>": { path: () => `/reporting-settings/feedback/${MISSING}`, expect: () => 404 },
+  "/reporting-settings/canary-wire": { path: () => "/reporting-settings/canary-wire", expect: gated(canManageBootcampRecords) },
   "/reporting/bootcamp?searched": {
-    path: () => "/reporting/bootcamp?status=active&q=x&sort=email&cohort.sort=stage&cohort.page=2",
+    path: () => "/reporting/bootcamp?status=active&q=x&sort=averageScore&cohort.sort=stage&cohort.stage=intermediate&cohort.page=2",
     expect: gated(canSeeBootcampRecords),
   },
   // No persona is in the employee list, so the record is in nobody's org; only Assessments sees it.
@@ -437,6 +445,7 @@ const PAGES: Record<string, PageCase> = {
   "/me/tokens": { path: () => "/me/tokens", expect: gated(canUseEvents) },
   "/me/org-secrets": { path: () => "/me/org-secrets", expect: gated(canUseEvents) },
   "/me/templates": { path: () => "/me/templates", expect: gated(canUseEvents) },
+  "/me/preferences": { path: () => "/me/preferences", expect: () => 200 },
   "/me/check-pc": { path: () => "/me/check-pc", expect: () => 200 },
   "/me/api-tokens": { path: () => "/me/api-tokens", expect: () => 200 },
   "/inbox": { path: () => "/inbox", expect: () => 200 },
@@ -558,6 +567,10 @@ const ROUTES: RouteCase[] = [
   { method: "PATCH", path: `/api/settings/repos/${MISSING}`, allowed: canManageSettings, body: () => ({}) },
   { method: "DELETE", path: `/api/settings/repos/${MISSING}`, allowed: canManageSettings },
   { method: "GET", path: "/api/settings/timed-jobs", allowed: canManageTimedJobs },
+  { method: "GET", path: "/api/settings/google-meetings-mode", allowed: canManageConnectors },
+  { method: "PUT", path: "/api/settings/google-meetings-mode", allowed: canManageConnectors, body: () => ({}) },
+  { method: "GET", path: "/api/settings/slack-mode", allowed: canManageConnectors },
+  { method: "PUT", path: "/api/settings/slack-mode", allowed: canManageConnectors, body: () => ({}) },
   { method: "PATCH", path: "/api/settings/timed-jobs/missing", allowed: canManageTimedJobs, body: () => ({ enabled: true }) },
   { method: "PATCH", path: "/api/settings/timed-jobs/missing", allowed: canManageTimedJobs, body: () => ({ schedule: null }) },
   { method: "POST", path: `/api/me/harness-tokens/${MISSING}/deploy`, allowed: canManageSettings, body: () => ({}) },
@@ -736,12 +749,20 @@ const ROUTES: RouteCase[] = [
   { method: "GET", path: "/api/reporting/bootcamp/cohort", allowed: canSeeBootcampRecords },
   { method: "GET", path: `/api/reporting/bootcamp/people/${MISSING}`, allowed: canSeeBootcampRecords },
   { method: "POST", path: "/api/reporting/bootcamp/release", allowed: canManageBootcampRecords, body: () => ({}) },
+  // Refused for its body before it starts a run, so this is safe past the gate.
+  { method: "POST", path: "/api/reporting/release-notices/preview", allowed: canManageBootcampRecords, body: () => ({}) },
+  { method: "GET", path: "/api/reporting/release-notices", allowed: canManageBootcampRecords },
+  { method: "GET", path: `/api/reporting/release-notices/${MISSING}`, allowed: canManageBootcampRecords },
   { method: "GET", path: "/api/reporting/bootcamp/participation", allowed: canManageBootcampRecords },
   { method: "POST", path: "/api/reporting/bootcamp/participation", allowed: canManageBootcampRecords, body: () => ({}) },
   { method: "POST", path: `/api/reporting/bootcamp/participation/${MISSING}`, allowed: canManageBootcampRecords },
   { method: "PATCH", path: `/api/reporting/bootcamp/submissions/${MISSING}`, allowed: canManageBootcampRecords, body: () => ({}) },
   { method: "PUT", path: `/api/reporting/bootcamp/people/${MISSING}/review`, allowed: canManageBootcampRecords, body: () => ({}) },
   { method: "POST", path: `/api/reporting/bootcamp/people/${MISSING}/review/generate`, allowed: canManageBootcampRecords, body: () => ({}) },
+  // Anyone who may see a card opens its Slack channel; a key naming no one stops before Slack.
+  { method: "POST", path: `/api/reporting/bootcamp/people/${MISSING}/slack`, allowed: canSeeBootcampRecords },
+  { method: "GET", path: `/api/reporting/bootcamp/people/${MISSING}/views`, allowed: canSeeBootcampRecords },
+  { method: "POST", path: `/api/reporting/bootcamp/people/${MISSING}/views`, allowed: canSeeBootcampRecords },
   { method: "GET", path: "/api/evals/canary-wire", allowed: canSeeCanaryWire },
   // No Mindtickle key on the e2e server: starting is refused as not_configured, and a step finds no pull.
   { method: "GET", path: "/api/evals/canary-wire/history", allowed: canSeeCanaryWire },
@@ -772,8 +793,6 @@ const ROUTES: RouteCase[] = [
   { method: "PUT", path: `/api/evals/google-meetings/${MISSING}/attendance`, allowed: canManageEvalsSettings, body: () => ({}) },
   { method: "GET", path: "/api/evals/google-meetings/facilitators", allowed: canManageEvalsSettings },
   { method: "PUT", path: "/api/evals/google-meetings/facilitators", allowed: canManageEvalsSettings, body: () => ({}) },
-  { method: "GET", path: "/api/evals/google-meetings/settings", allowed: canManageEvalsSettings },
-  { method: "PUT", path: "/api/evals/google-meetings/settings", allowed: canManageEvalsSettings, body: () => ({}) },
   // An allowed read or sync would call Google for real, were an account connected.
   { method: "GET", path: "/api/evals/google-meetings/calendar", allowed: canManageEvalsSettings, denyOnly: true },
   { method: "GET", path: "/api/evals/google-meetings/timezones?stage=both&track=both", allowed: canManageEvalsSettings },
@@ -937,6 +956,7 @@ const ROUTES: RouteCase[] = [
   // No page has this pattern, so it is a platform administrator's, and there is no tour there to remove.
   { method: "DELETE", path: "/api/tours?pattern=/wo-test-no-tour", allowed: (a) => canEditTour(a, "/wo-test-no-tour") },
   { method: "POST", path: "/api/tours/seen", allowed: true, body: () => ({}) },
+  { method: "DELETE", path: "/api/tours/seen", allowed: true },
 ];
 
 type Via = "session" | "token";

@@ -24,6 +24,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } 
 import { Textarea } from "@/components/ui/textarea";
 import { MIMIR_COACH_STYLES, MIMIR_MESSAGE_MAX, MIMIR_REP_ROLES, type MimirCoachStyle, type MimirMessageRole, type MimirRepRole } from "@/db/schema";
 import { cn } from "@/lib/utils";
+import { confirmDialog } from "@/components/ui/confirm";
 
 type Msg = { seq: number; role: MimirMessageRole; text: string; html: string | null; at: string };
 type Point = { text: string; covered: boolean };
@@ -206,7 +207,7 @@ export function ChatView({
   }
 
   async function newConversation() {
-    if (!window.confirm("Start a new conversation? This one will be deleted; your progress, mastery and videos watched stay.")) return;
+    if (!(await confirmDialog({ title: "Start a new conversation?", description: "This one will be deleted; your progress, mastery and videos watched stay.", confirmLabel: "Start over", destructive: true }))) return;
     setResetting(true);
     setError(null);
     try {

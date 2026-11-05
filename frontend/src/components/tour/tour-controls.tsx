@@ -3,14 +3,14 @@
 /**
  * The header's tour buttons: a question mark that plays the page's tour,
  * there only when the page has one and traced round by a rainbow glow when
- * it points the tour out (to someone new to the page, or in the second
+ * it points the tour out (to someone new to the page, or in the seconds
  * before a shared tour link plays), and for whoever administers the
  * page a pencil that opens the editor, which on a page with no tour starts one.
  */
 
 import { CircleHelp, Pencil } from "lucide-react";
 import { GlowTrace } from "@/components/tour/glow-trace";
-import { usePageTour } from "@/components/tour/tour-provider";
+import { TRACE_COUNT, usePageTour } from "@/components/tour/tour-provider";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
@@ -37,7 +37,7 @@ export function TourControls() {
                 onClick={page.play}
               >
                 <CircleHelp />
-                {page.beckon && <GlowTrace key={page.beckon} duration={page.beckon} blur={4} onDone={page.stopBeckoning} />}
+                {page.beckon && <GlowTrace key={page.beckon} duration={page.beckon} blur={4} count={TRACE_COUNT} onDone={page.stopBeckoning} />}
               </Button>
             </TooltipTrigger>
             <TooltipContent>Show this page&apos;s tour</TooltipContent>

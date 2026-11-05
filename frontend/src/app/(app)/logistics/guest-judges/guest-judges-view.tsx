@@ -40,6 +40,7 @@ import type { ListQuery, Page } from "@/lib/paging";
 import { TRACK_LABELS, formatClock } from "@/lib/scheduler/timeline";
 import { cn } from "@/lib/utils";
 import { formatDate, formatWhen } from "../../cohort-settings/format";
+import { confirmDialog } from "@/components/ui/confirm";
 
 const SELECT = cn(
   "h-9 w-full rounded-md border border-input bg-field px-2 text-sm text-foreground shadow-xs outline-none",
@@ -121,7 +122,7 @@ export function GuestJudgesView({
   }
 
   async function removeCohort(month: string) {
-    if (!window.confirm(`Take ${formatMonth(month)} off the list of cohorts?`)) return;
+    if (!(await confirmDialog({ title: `Take ${formatMonth(month)} off the list of cohorts?`, confirmLabel: "Remove", destructive: true }))) return;
     setBusy(month);
     setError(null);
     try {
@@ -138,7 +139,7 @@ export function GuestJudgesView({
   }
 
   async function remove(j: GuestJudgeRow) {
-    if (!j.person || !window.confirm(`Remove ${j.fullName} from ${formatMonth(j.cohort)}?`)) return;
+    if (!j.person || !(await confirmDialog({ title: `Remove ${j.fullName} from ${formatMonth(j.cohort)}?`, confirmLabel: "Remove", destructive: true }))) return;
     setBusy(j.id);
     setError(null);
     try {

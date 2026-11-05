@@ -28,26 +28,39 @@ import {
   evalsSubmissions,
   evalsSubmissionScores,
   intakeResponses,
+  releaseNoticeRuns,
 } from "@/db/schema";
 import { IN_STAGE, isCandidate } from "@/lib/evals/current-cohort";
 import { getCandidateCutoffs } from "@/lib/evals/settings";
-import { BOOTCAMP_COHORT_LIST, BOOTCAMP_RECORD_LIST } from "@/lib/list-specs";
+import { BOOTCAMP_COHORT_LIST, BOOTCAMP_RECORD_LIST, RELEASE_NOTICE_LIST, RELEASE_NOTICE_MESSAGE_LIST } from "@/lib/list-specs";
+import { listCardViewers, recordCardView } from "@/lib/reporting/card-views";
 import {
   bootcampRecordCounts,
+  classAttendees,
   classReviewSchema,
   cohortBootcamp,
   editSubmission,
   getBootcampPerson,
   listBootcampRecords,
+  cohortCounts,
   listCohort,
   readerOf,
+  releaseBlockers,
   releaseScores,
   saveClassReview,
   submissionEditSchema,
   unscoredAttendees,
   visibleStages,
+  type BootcampReader,
 } from "@/lib/reporting/bootcamp";
 import { pendingOverall, suggestOverallFeedback } from "@/lib/reporting/overall-feedback";
+import {
+  countReleaseNoticeMessages,
+  getReleaseNotice,
+  listReleaseNoticeMessages,
+  listReleaseNotices,
+  startReleaseNotice,
+} from "@/lib/reporting/release-notice";
 import { PERSONAS } from "../support/access";
 import { TEST_EMAIL_DOMAIN, TEST_PREFIX } from "../support/db";
 import { testScope, type TestUser } from "../support/seed";
@@ -92,7 +105,7 @@ async function participation(score: number) {
 
 /** Everyone the reader may see who belongs to this suite, by email, with their level. */
 async function seen(reader: ReturnType<typeof readerOf>) {
-  const page = await listBootcampRecords(reader, { ...BOOTCAMP_RECORD_LIST, sort: "email", dir: "asc", q: SCOPED, page: 1 });
+  const page = await listBootcampRecords(reader, { ...BOOTCAMP_RECORD_LIST, sort: "fullName", dir: "asc", q: SCOPED, page: 1 });
   return Object.fromEntries(page.rows.map((r) => [r.email, r.level]));
 }
 
@@ -217,6 +230,46 @@ describe("who a reader sees", () => {
 });
 
 describe("releasing a class", () => {
+  test("a preview logs the message each manager in the chain would get, and sends nothing", async () => {
+    await db
+      .update(employees)
+      .set({ managementChain: `${emailOf("lead")};${emailOf("manager")}` })
+      .where(eq(employees.id, `${SCOPED}newcomer`));
+    assert.ok((await classAttendees(bootcampId, "bootcamp")).includes(emailOf("newcomer")));
+    const bootcamp = (await cohortBootcamp())!;
+    const run = await startReleaseNotice({
+      stage: "bootcamp",
+      bootcamp: { id: bootcamp.id, startDate: bootcamp.startDate },
+      attendees: [emailOf("newcomer")],
+      actorId: admin.id,
+      preview: true,
+      reportingUrl: "https://example.test/reporting/bootcamp",
+    });
+    try {
+      assert.equal(run.dryRun, true);
+      assert.equal((await getReleaseNotice(run.runId))?.status, "running");
+      await run.send();
+
+      const done = (await getReleaseNotice(run.runId))!;
+      assert.equal(done.status, "succeeded");
+      assert.equal(done.preview, true);
+      assert.equal(done.triggeredBy, "admin");
+      const page = await listReleaseNoticeMessages(run.runId, { ...RELEASE_NOTICE_MESSAGE_LIST, q: SCOPED, page: 1 });
+      assert.deepEqual(page.rows.map((m) => [m.email, m.action]), [
+        [emailOf("lead"), "messaged"],
+        [emailOf("manager"), "messaged"],
+      ]);
+      assert.match(page.rows[0]!.detail ?? "", /^Feedback has been released for .+ Bootcamp!  <https:\/\/example\.test\/reporting\/bootcamp\?cohort\.stage=bootcamp\|Click here>/);
+      assert.equal(page.rows[0]!.fullName, "Person lead");
+      const counts = await countReleaseNoticeMessages(run.runId);
+      assert.equal(counts.all, done.messaged + done.notInSlack + done.failures);
+      assert.equal(counts.all, done.recipients);
+      assert.ok((await listReleaseNotices({ ...RELEASE_NOTICE_LIST, q: "", page: 1 })).rows.some((r) => r.id === run.runId));
+    } finally {
+      await db.delete(releaseNoticeRuns).where(eq(releaseNoticeRuns.id, run.runId));
+    }
+  });
+
   test("hides the active cohort's results from a manager entirely until released", async () => {
     const bootcamp = (await cohortBootcamp())!;
     const query = { ...BOOTCAMP_COHORT_LIST, q: SCOPED, page: 1 };
@@ -273,14 +326,50 @@ describe("releasing a class", () => {
     assert.equal((await unscoredAttendees((await cohortBootcamp())!, "bootcamp")).names.includes("Person newcomer"), false);
   });
 
+  test("waits on an exit exam and both sides of overall feedback, and names who holds it up", async () => {
+    const bootcamp = (await cohortBootcamp())!;
+    const blocked = async () => releaseBlockers(bootcamp, "bootcamp");
+    const review = { bootcampId, stage: "bootcamp" as const, attendeeEmail: emailOf("newcomer") };
+
+    // No review at all is waiting on both.
+    assert.ok((await blocked()).noExitExam.names.includes("Person newcomer"));
+    assert.ok((await blocked()).noFeedback.names.includes("Person newcomer"));
+    assert.deepEqual(await releaseScores(admin.id, "bootcamp"), { ok: false, error: "no_exit_exam" });
+
+    await db.insert(bootcampClassReviews).values({ ...review, entranceExam: 80, exitExam: 92, positiveFeedback: "Strong", constructiveFeedback: "  " });
+    assert.equal((await blocked()).noExitExam.names.includes("Person newcomer"), false);
+    assert.ok((await blocked()).noFeedback.names.includes("Person newcomer"), "blank constructive feedback still waits");
+    assert.deepEqual(await releaseScores(admin.id, "bootcamp"), { ok: false, error: "no_feedback" });
+    assert.equal((await cohortBootcamp())!.released.bootcamp, null);
+
+    await db
+      .update(bootcampClassReviews)
+      .set({ constructiveFeedback: "Slow down in discovery" })
+      .where(
+        and(
+          eq(bootcampClassReviews.bootcampId, bootcampId),
+          eq(bootcampClassReviews.stage, "bootcamp"),
+          eq(bootcampClassReviews.attendeeEmail, emailOf("newcomer")),
+        ),
+      );
+    const after = await blocked();
+    assert.equal(after.noExitExam.names.includes("Person newcomer"), false);
+    assert.equal(after.noFeedback.names.includes("Person newcomer"), false);
+  });
+
   test("shows a manager the class once released, and releasing again changes nothing", async () => {
     const first = await releaseScores(admin.id, "bootcamp");
     assert.ok(first.ok);
+    // The review was only there to let it release; the tests after this start without one.
+    await db.delete(bootcampClassReviews).where(eq(bootcampClassReviews.attendeeEmail, emailOf("newcomer")));
     assert.ok(first.written >= 1);
+    assert.equal(first.attendees.length, first.written);
+    assert.ok(first.attendees.includes(emailOf("newcomer")));
     const again = await releaseScores(admin.id, "bootcamp");
     assert.ok(again.ok);
     assert.equal(again.releasedAt.getTime(), first.releasedAt.getTime());
     assert.equal(again.written, 0);
+    assert.deepEqual(again.attendees, []);
 
     const bootcamp = (await cohortBootcamp())!;
     assert.equal(bootcamp.released.bootcamp?.byName, "admin");
@@ -518,6 +607,58 @@ describe("a class's overall review", () => {
     // 79.5% is below 80%, so the exams score 1.
     const expected = Math.round(((counted.reduce((a, b) => a + b, 0) + 1) * 10) / (counted.length + 1)) / 10;
     assert.equal(await average(), expected);
+  });
+
+  test("History shows the score the cohort does, and the cohort narrows to one class", async () => {
+    const bootcamp = (await cohortBootcamp())!;
+    const query = { ...BOOTCAMP_COHORT_LIST, q: emailOf("newcomer"), page: 1 };
+    const inCohort = (await listCohort(viewer(), bootcamp, query)).rows.find((r) => r.email === emailOf("newcomer"))!;
+    const history = await listBootcampRecords(viewer(), { ...BOOTCAMP_RECORD_LIST, q: emailOf("newcomer"), page: 1 });
+    const inHistory = history.rows.find((r) => r.email === emailOf("newcomer"))!;
+    assert.deepEqual(
+      [inHistory.level, inHistory.averageScore, inHistory.scored, inHistory.date],
+      [inCohort.stage, inCohort.averageScore, inCohort.scored, inCohort.date],
+    );
+
+    assert.deepEqual((await listCohort(viewer(), bootcamp, query, "bootcamp")).rows.map((r) => r.email), [emailOf("newcomer")]);
+    assert.deepEqual((await listCohort(viewer(), bootcamp, query, "intermediate")).rows, []);
+    const counts = await cohortCounts(viewer(), bootcamp);
+    assert.ok(counts.bootcamp >= 1);
+    // A manager sees counts only for the classes released to them.
+    assert.equal((await cohortCounts(manager(), bootcamp)).intermediate, 0);
+  });
+
+  test("records who opens a card, once per person, and names them on both lists", async () => {
+    const key = `${SCOPED}newcomer`;
+    const opener = () => readerOf({ access: PERSONAS.assessmentsViewer, email: null, id: admin.id });
+    assert.deepEqual(await recordCardView(admin.id, opener(), key), { email: emailOf("newcomer") });
+    assert.ok(await recordCardView(admin.id, opener(), key));
+    const viewers = (await listCardViewers(opener(), key))!;
+    const mine = viewers.viewers.find((v) => v.name === "admin")!;
+    assert.equal(viewers.viewers.filter((v) => v.name === "admin").length, 1, "two opens are one viewer");
+    assert.equal(mine.views, 2);
+
+    const q = emailOf("newcomer");
+    const rowsFor = async (reader: BootcampReader) => [
+      (await listCohort(reader, (await cohortBootcamp())!, { ...BOOTCAMP_COHORT_LIST, q, page: 1 })).rows[0]!,
+      (await listBootcampRecords(reader, { ...BOOTCAMP_RECORD_LIST, q, page: 1 })).rows[0]!,
+    ];
+    for (const row of await rowsFor(opener())) {
+      assert.equal(row.viewerCount, viewers.total);
+      assert.equal(row.viewers[0]?.name, "admin");
+    }
+
+    // Someone who has not opened it themself sees no one who has.
+    for (const row of await rowsFor(viewer())) {
+      assert.equal(row.viewerCount, 0);
+      assert.deepEqual(row.viewers, []);
+    }
+    assert.deepEqual(await listCardViewers(viewer(), key), { viewers: [], total: 0 });
+
+    // Someone who may not see the card records nothing.
+    const outsider = readerOf({ access: PERSONAS.nobody, email: emailOf("outsider") });
+    assert.equal(await recordCardView(admin.id, outsider, key), null);
+    assert.equal(await listCardViewers(outsider, key), null);
   });
 });
 

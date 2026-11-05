@@ -153,6 +153,12 @@ export const markSeenSchema = z.object({
   version: z.number().int().positive(),
 });
 
+/** Forgets every tour `userId` has seen, so each plays for them again; returns how many it forgot. */
+export async function resetToursSeen(userId: string): Promise<number> {
+  const gone = await db.delete(pageTourViews).where(eq(pageTourViews.userId, userId)).returning({ tourId: pageTourViews.tourId });
+  return gone.length;
+}
+
 /** Records that `userId` has seen `version` of the tour; never lowers it. False when there is no such tour. */
 export async function markTourSeen(userId: string, tourId: string, version: number): Promise<boolean> {
   const [tour] = await db

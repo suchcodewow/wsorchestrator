@@ -13,13 +13,13 @@ import { parseListQuery } from "@/lib/paging";
 import {
   bootcampRecordCounts,
   cohortBootcamp,
+  cohortCounts,
   listBootcampRecords,
   listCohort,
   readerOf,
   visibleStages,
 } from "@/lib/reporting/bootcamp";
-import { pendingParticipation } from "@/lib/evals/participation";
-import { canManageBootcampRecords } from "@/lib/roles";
+import { isReleaseStage } from "@/lib/reporting/bootcamp-values";
 import { BootcampView } from "./bootcamp-view";
 
 export const metadata: Metadata = { title: "Live Sessions" };
@@ -32,29 +32,28 @@ export default async function BootcampPage({
   const session = await auth();
   if (!session?.user) redirect(await signInPath());
   const { access } = session.user;
-  const reader = readerOf({ access, email: session.user.email ?? null });
+  const reader = readerOf({ access, email: session.user.email ?? null, id: session.user.id });
 
   const params = await searchParams;
   const query = parseListQuery(params, BOOTCAMP_RECORD_LIST);
   const cohortQuery = parseListQuery(params, BOOTCAMP_COHORT_LIST, BOOTCAMP_COHORT_PREFIX);
   // A hand-typed status that isn't one shows everyone, as a bad sort does.
   const status = isHistoryStatus(params.status) ? params.status : null;
+  const stageParam = params[`${BOOTCAMP_COHORT_PREFIX}.stage`];
+  const cohortStage = isReleaseStage(stageParam) ? stageParam : null;
 
   const bootcamp = await cohortBootcamp();
   const stages = bootcamp ? visibleStages(reader, bootcamp) : [];
-  const canRelease = canManageBootcampRecords(access);
-  const [records, counts, cohort, pending] = await Promise.all([
+  const [records, counts, cohort, stageCounts] = await Promise.all([
     listBootcampRecords(reader, query, status),
     bootcampRecordCounts(reader),
-    bootcamp && stages.length > 0 ? listCohort(reader, bootcamp, cohortQuery) : null,
-    canRelease ? pendingParticipation() : { bootcamp: null, intermediate: null },
+    bootcamp && stages.length > 0 ? listCohort(reader, bootcamp, cohortQuery, cohortStage) : null,
+    bootcamp && stages.length > 0 ? cohortCounts(reader, bootcamp) : null,
   ]);
 
   return (
     <BootcampView
       everyone={reader.all}
-      canRelease={canRelease}
-      pending={pending}
       bootcamp={
         bootcamp && {
           startDate: bootcamp.startDate,
@@ -71,7 +70,7 @@ export default async function BootcampPage({
           },
         }
       }
-      cohort={cohort && { query: cohortQuery, page: cohort }}
+      cohort={cohort && stageCounts && { query: cohortQuery, page: cohort, stages, stage: cohortStage, counts: stageCounts }}
       query={query}
       status={status}
       records={records}

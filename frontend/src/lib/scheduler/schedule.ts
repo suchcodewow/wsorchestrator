@@ -833,6 +833,7 @@ type NewChecklistItem = {
   day: number;
   period: ChecklistPeriod;
   name: string;
+  alarm: number | null;
   ownerEmail: string | null;
   ownerName: string;
   mentions: { email: string; fullName: string }[];
@@ -860,6 +861,7 @@ async function loadChecklistDay(bootcampId: string, track: ScheduleTrack, day: n
       day: c.day,
       period: c.period,
       name: c.name,
+      alarm: c.alarm,
       ownerEmail: c.ownerEmail,
       ownerName: c.ownerName,
       mentions: sql<{ email: string; fullName: string }[]>`coalesce((
@@ -946,6 +948,7 @@ async function writeSchedule(
             period: i.period,
             position: placeOf(i.period),
             name: i.name,
+            alarm: i.alarm,
             ownerEmail: i.ownerEmail,
             ownerName: i.ownerName,
             createdBy: actorId,

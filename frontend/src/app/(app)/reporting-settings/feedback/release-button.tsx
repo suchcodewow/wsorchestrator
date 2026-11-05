@@ -2,8 +2,10 @@
 
 /**
  * Releases one class of the active bootcamp to managers, after saying what
- * that means. It waits until every assessment in the class has a score, and
- * its tooltip names who is still waiting on one.
+ * that means. It waits until everyone in the class has a score on every
+ * assessment, an exit exam, and overall positive and constructive feedback,
+ * and its tooltip names who is still waiting on each. Once released, it
+ * opens the log of the Slack message to the class's managers as it goes.
  */
 
 import { useState } from "react";
@@ -19,24 +21,50 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { STAGE_LABELS } from "@/lib/evals/assessment-values";
+import type { ReleaseBlockers, Waiting } from "@/lib/reporting/bootcamp";
 import { RELEASE_LABELS, type ReleaseStage } from "@/lib/reporting/bootcamp-values";
 import { formatDate } from "../../cohort-settings/format";
 import { Hint } from "./hint";
 
 const ERRORS: Record<string, string> = {
   unscored: "Someone in this class is still waiting on a score. Reload to see who.",
+  no_exit_exam: "Someone in this class is still waiting on an exit exam. Reload to see who.",
+  no_feedback: "Someone in this class is still waiting on overall feedback. Reload to see who.",
 };
+
+/** What the tooltip heads each kind of wait with. */
+const WAITING_ON: Record<keyof ReleaseBlockers, string> = {
+  unscored: "Waiting on a score",
+  noExitExam: "Waiting on an exit exam",
+  noFeedback: "Waiting on overall feedback",
+};
+
+function WaitingList({ heading, waiting }: { heading: string; waiting: Waiting }) {
+  const more = waiting.total - waiting.names.length;
+  return (
+    <div>
+      <p className="font-medium">{heading}</p>
+      <p>
+        {waiting.names.join(", ")}
+        {more > 0 && `, and ${more.toLocaleString()} more`}
+      </p>
+    </div>
+  );
+}
 
 export function ReleaseButton({
   stage,
   startDate,
-  unscored,
+  blockers,
+  slackLive,
 }: {
   stage: ReleaseStage;
   /** The active bootcamp's first day. */
   startDate: string;
-  /** Who in the class is still waiting on a score; null when that is not known here. */
-  unscored: { total: number; names: string[] } | null;
+  /** Who in the class is still waiting on a score, an exit exam or overall feedback; null when that is not known here. */
+  blockers: ReleaseBlockers | null;
+  /** Whether Slack is live, so the message is sent rather than only logged. */
+  slackLive: boolean;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -57,8 +85,10 @@ export function ReleaseButton({
         const body = await res.json().catch(() => null);
         throw new Error(ERRORS[body?.error ?? ""] ?? `Could not release (${res.status})`);
       }
+      const body = await res.json().catch(() => null);
       setOpen(false);
-      router.refresh();
+      if (body?.notice?.runId) router.push(`/reporting-settings/feedback/${body.notice.runId}`);
+      else router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not release");
     } finally {
@@ -66,28 +96,28 @@ export function ReleaseButton({
     }
   }
 
-  const waiting = unscored?.total ?? 0;
-  const more = waiting - (unscored?.names.length ?? 0);
+  const waits = blockers
+    ? (Object.keys(WAITING_ON) as (keyof ReleaseBlockers)[]).filter((k) => blockers[k].total > 0)
+    : [];
+  const blocked = waits.length > 0;
 
   return (
     <>
       <Hint
-        disabled={waiting > 0}
+        disabled={blocked}
         content={
-          waiting > 0 ? (
-            <>
-              <p className="font-medium">Waiting on a score</p>
-              <p>
-                {unscored!.names.join(", ")}
-                {more > 0 && `, and ${more.toLocaleString()} more`}
-              </p>
-            </>
+          blocked ? (
+            <div className="space-y-2">
+              {waits.map((k) => (
+                <WaitingList key={k} heading={WAITING_ON[k]} waiting={blockers![k]} />
+              ))}
+            </div>
           ) : (
             <p>Shows managers the {label} results. It cannot be taken back.</p>
           )
         }
       >
-        <Button size="sm" onClick={() => setOpen(true)} disabled={waiting > 0} aria-label={RELEASE_LABELS[stage]}>
+        <Button size="sm" onClick={() => setOpen(true)} disabled={blocked} aria-label={RELEASE_LABELS[stage]}>
           <Send />
           Release scores
         </Button>
@@ -99,9 +129,13 @@ export function ReleaseButton({
             <DialogTitle>{RELEASE_LABELS[stage]}?</DialogTitle>
             <DialogDescription>
               Managers will see the {label} results of the bootcamp starting {formatDate(startDate)} for the people
-              in their org, here and on each person&apos;s page. Everyone scored in {label} gets{" "}
+              in their org, on Live Sessions and each person&apos;s page. Everyone scored in {label} gets{" "}
               {formatDate(startDate)} as their {label} date in bootcamp history, with their scores, which completes
-              the class. Only release once every assessment is in; a release cannot be taken back.
+              the class. Everyone in their management chains, and the Additional Slack Contacts,{" "}
+              {slackLive
+                ? "gets a Slack message linking to Live Sessions."
+                : "would get a Slack message linking to Live Sessions, but Slack is in dry run, so it is only logged."}{" "}
+              Only release once every assessment is in; a release cannot be taken back.
             </DialogDescription>
           </DialogHeader>
           {error && <p className="text-sm text-destructive">{error}</p>}

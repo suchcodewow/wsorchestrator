@@ -8,7 +8,7 @@
  * Save Changes saves every form changed and Discard drops them, once confirmed.
  */
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { ArrowLeft, Loader2, Pencil, Save, Undo2 } from "lucide-react";
@@ -27,6 +27,7 @@ import type { ClassSummary, ReleaseStage } from "@/lib/reporting/bootcamp-values
 import { formatDate } from "../../../cohort-settings/format";
 import { ClassCard, Field, TRACK_LABELS } from "../class-card";
 import { EditSessionProvider, SubmissionGroups, useEditSession } from "./assessments";
+import { SlackButton } from "./slack-button";
 
 export type ViewSubmission = Omit<PersonSubmission, "submittedAt" | "updatedAt"> & {
   submittedAt: string;
@@ -44,8 +45,19 @@ export type ViewPerson = {
   records: { submissions: ViewSubmission[]; reviews: ViewReview[] } | null;
 };
 
+/** Records, once per opening, that the reader opened this card: the eye on the list names them. */
+function useRecordView(key: string) {
+  const recorded = useRef<string | null>(null);
+  useEffect(() => {
+    if (recorded.current === key) return;
+    recorded.current = key;
+    void fetch(`/api/reporting/bootcamp/people/${encodeURIComponent(key)}/views`, { method: "POST" }).catch(() => undefined);
+  }, [key]);
+}
+
 export function PersonView({ person, canEdit, back }: { person: ViewPerson; canEdit: boolean; back: string }) {
   const { employee, records } = person;
+  useRecordView(person.key);
   const [editing, setEditing] = useState(false);
   const [discarding, setDiscarding] = useState(false);
   const session = useEditSession();
@@ -76,7 +88,10 @@ export function PersonView({ person, canEdit, back }: { person: ViewPerson; canE
         <motion.section variants={riseChild} className="space-y-3 bg-black/3 px-5 py-3 dark:bg-white/4">
           <div className="flex items-start justify-between gap-4">
             <div className="space-y-1">
-              <h2 className="text-xl font-medium tracking-tight">{employee?.fullName ?? person.email}</h2>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <h2 className="text-xl font-medium tracking-tight">{employee?.fullName ?? person.email}</h2>
+                <SlackButton personKey={person.key} />
+              </div>
               {(!employee || employee.title) && (
                 <p className="text-sm text-muted-foreground">
                   {employee ? employee.title : "Not in the employee list from the last HiBob sync."}

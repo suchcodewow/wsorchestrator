@@ -13,6 +13,27 @@ import nextTs from "eslint-config-next/typescript";
 export default defineConfig([
   ...nextVitals,
   ...nextTs,
+  {
+    // The browser's own popups ignore the theme; `confirmDialog` and
+    // `noticeDialog` in src/components/ui/confirm.tsx are the themed ones.
+    rules: {
+      "no-restricted-globals": [
+        "error",
+        ...["confirm", "alert", "prompt"].map((name) => ({
+          name,
+          message: "Use confirmDialog or noticeDialog from @/components/ui/confirm.",
+        })),
+      ],
+      "no-restricted-properties": [
+        "error",
+        ...["confirm", "alert", "prompt"].map((property) => ({
+          object: "window",
+          property,
+          message: "Use confirmDialog or noticeDialog from @/components/ui/confirm.",
+        })),
+      ],
+    },
+  },
   globalIgnores([
     // Build output. `.next/**` also covers `.next/dev/**`, which `next dev`
     // writes to as of Next 16.

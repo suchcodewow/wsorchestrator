@@ -16,6 +16,7 @@ import {
   Layers,
   LibraryBig,
   Luggage,
+  MessageSquareShare,
   MessageSquareText,
   ScrollText,
   Settings,
@@ -31,6 +32,7 @@ import {
 import {
   canAuditProjects,
   canManageBackups,
+  canManageBootcampRecords,
   canManageEvalsSettings,
   canManageMimir,
   canManageSettings,
@@ -195,11 +197,20 @@ export const NAV_SECTIONS: NavSection[] = [
       { href: "/diagnostic", hasTabs: true, label: "Diagnostic", Icon: Eye, description: "Adaptive placement tests.", visible: canTakeIris },
       {
         href: "/reporting",
+        settings: "/reporting-settings",
         hasTabs: true,
         label: "Reporting",
         Icon: ChartColumn,
         description: "Bootcamp records and the Canary Wire.",
         visible: canSeeReporting,
+      },
+      {
+        href: "/reporting-settings",
+        hasTabs: true,
+        label: "Reporting Settings",
+        Icon: MessageSquareShare,
+        description: "Releasing each class's feedback to managers, and the Canary Wire.",
+        visible: canManageBootcampRecords,
       },
       {
         href: "/evals-settings",

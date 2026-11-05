@@ -16,51 +16,63 @@
 
 :root {
   --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.129 0.042 264.695);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.129 0.042 264.695);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.129 0.042 264.695);
-  --primary: oklch(0.208 0.042 265.755);
-  --primary-foreground: oklch(0.984 0.003 247.858);
 
   /*
-   * Brand accent — a deep mint, the one warm-blooded colour in an otherwise
-   * neutral slate palette. Reserved for the things that matter: the active
+   * The light surface ramp — warm stone, not white, and text a charcoal rather
+   * than near-black. Both are for eye strain over a long session: a #FFF page
+   * is the brightest thing on most screens, and ~18:1 text on it is far past
+   * what reading needs. The page sits a step under the card so a pane
+   * separates from it by tone, without leaning on its border or shadow.
+   *
+   * The hue (85, a yellowed grey) carries a whisper of chroma so it reads as
+   * paper rather than beige. `--muted-foreground` went darker, not lighter:
+   * on an off-white page the old value fell under 4.5:1.
+   */
+  --background: oklch(0.978 0.004 85);
+  --foreground: oklch(0.255 0.012 70);
+  --card: oklch(0.993 0.002 85);
+  --card-foreground: oklch(0.255 0.012 70);
+  --popover: oklch(0.993 0.002 85);
+  --popover-foreground: oklch(0.255 0.012 70);
+  --primary: oklch(0.27 0.012 70);
+  --primary-foreground: oklch(0.985 0.003 85);
+
+  /*
+   * Brand accent — a deep mint, the one cool, saturated colour in an otherwise
+   * neutral stone palette. Reserved for the things that matter: the active
    * day, the primary action, focus, the logo mark. Spending it anywhere else
    * is what makes an accent stop reading as one.
    */
   --brand: oklch(0.58 0.107 170.5);
-  --brand-foreground: oklch(0.985 0.002 247);
+  --brand-foreground: oklch(0.985 0.003 85);
   --brand-subtle: oklch(0.958 0.028 172);
   --brand-border: oklch(0.87 0.055 171);
-  --secondary: oklch(0.968 0.007 247.896);
-  --secondary-foreground: oklch(0.208 0.042 265.755);
-  --muted: oklch(0.968 0.007 247.896);
-  --muted-foreground: oklch(0.554 0.046 257.417);
-  --accent: oklch(0.968 0.007 247.896);
-  --accent-foreground: oklch(0.208 0.042 265.755);
+  --secondary: oklch(0.952 0.006 85);
+  --secondary-foreground: oklch(0.27 0.012 70);
+  --muted: oklch(0.952 0.006 85);
+  --muted-foreground: oklch(0.5 0.02 70);
+  --accent: oklch(0.952 0.006 85);
+  --accent-foreground: oklch(0.27 0.012 70);
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.929 0.013 255.508);
-  --input: oklch(0.898 0.017 255.508);
-  --ring: oklch(0.704 0.04 256.788);
+  --border: oklch(0.91 0.008 85);
+  --input: oklch(0.875 0.01 85);
+  --ring: oklch(0.7 0.02 80);
 
   /*
    * The fill behind anything you can type into. Opaque on purpose: the page
    * carries bloom gradients and cards sit on top of them, and a transparent
    * field lets that wash straight through the one region where legibility
    * matters most. One step of separation from whatever surface it sits on —
-   * a shade under white here, a shade over the card in the dark — so a field
+   * a shade under the card here, a shade over it in the dark — so a field
    * reads as a field before you find its border.
    */
-  --field: oklch(0.976 0.005 247.9);
+  --field: oklch(0.962 0.005 85);
 
   /*
-   * A dialog's own surface. On white the dimmed backdrop already sets it
-   * apart, so it stays white; see the dark value for why it has a token.
+   * A dialog's own surface. In light mode the dimmed backdrop already sets it
+   * apart, so it is the card; see the dark value for why it has a token.
    */
-  --dialog: oklch(1 0 0);
+  --dialog: oklch(0.993 0.002 85);
 
   /*
    * Callout accents — one hue per kind of `:::` block in a lab guide, used for
@@ -68,13 +80,13 @@
    *
    * Deliberately not the brand mint: a guide can carry half a dozen of these on
    * one page, and spending the accent on them would leave nothing to mark the
-   * step you are actually on. `note` is the palette's own slate — an aside, not
+   * step you are actually on. `note` is the palette's own stone — an aside, not
    * a hazard — and the rest climb in urgency to `danger`, which reuses
    * `--destructive` rather than introducing a second red.
    *
    * Each one is dark enough to set body-weight text on the tint it produces.
    */
-  --callout-note: oklch(0.5 0.045 257.4);
+  --callout-note: oklch(0.48 0.03 70);
   --callout-tip: oklch(0.5 0.185 285);
   --callout-success: oklch(0.5 0.115 158);
   --callout-warning: oklch(0.53 0.13 66);
@@ -500,7 +512,9 @@
    * a document read as evenly set.
    */
   .lab-prose {
-    font-size: 0.9375rem;
+    /* 16px: the guides are read for an hour at a stretch, unlike the 14px
+       tables and forms around them. */
+    font-size: 1rem;
     line-height: 1.75;
     min-width: 0;
   }
@@ -539,7 +553,7 @@
 
   .lab-prose h4 {
     margin-top: 1.6em;
-    font-size: 0.9375rem;
+    font-size: 1rem;
   }
 
   /* The whole heading is the link. Restrained until hovered — a permanent

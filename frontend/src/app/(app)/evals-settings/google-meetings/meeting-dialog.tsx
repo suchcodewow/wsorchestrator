@@ -18,6 +18,7 @@ import { riseChild, staggerParent } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { formatWhen } from "../../cohort-settings/format";
 import { TimezoneMap, type TimezoneCoverage } from "./timezone-map";
+import { confirmDialog } from "@/components/ui/confirm";
 
 export type EditableMeeting = {
   id: string;
@@ -195,7 +196,7 @@ export function MeetingDialog({
     if (
       editing &&
       meetingKey(name) !== meetingKey(editing.name) &&
-      !window.confirm(`Change it to “${name}”? Everyone the sync invited to “${editing.name}” is taken off its upcoming invites, and told.`)
+      !(await confirmDialog({ title: `Change it to “${name}”?`, description: `Everyone the sync invited to “${editing.name}” is taken off its upcoming invites, and told.`, confirmLabel: "Rename" }))
     ) {
       return;
     }

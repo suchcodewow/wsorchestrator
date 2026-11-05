@@ -3,7 +3,8 @@
 /**
  * The schedule drawn to scale: a column per track-day, each session as tall
  * as it is long and placed at its start, from 8 AM. Time nothing is scheduled
- * in shows as Unscheduled; past 5 PM is tinted red. A column whose date is
+ * in shows as Unscheduled, the evening's included; past 5 PM is tinted red,
+ * though sessions belong there as much as earlier. A column whose date is
  * today has a green line across it at the current time, moving as the clock
  * does, in either view. A manager drags a card to
  * any time in any column, drags its bottom edge to change its length a
@@ -69,6 +70,8 @@ export type BoardProps = {
   corner?: ReactNode;
   /** Anything to show at the foot of a column, below the day's last hour. */
   footerAction?: (column: BoardColumn) => ReactNode;
+  /** Anything to pin over a column's hours, each placed by `top`, its pixels down from 8 AM. */
+  marks?: (column: BoardColumn, top: (minute: number) => number) => ReactNode;
 };
 
 export function Board(props: BoardProps) {
@@ -126,6 +129,7 @@ export function Board(props: BoardProps) {
             column={c}
             height={height}
             hours={hours}
+            bottom={bottom}
             scale={scale}
             now={now !== null && c.date === today ? { top: now.top, dot: i === firstToday } : null}
             {...props}
@@ -165,6 +169,7 @@ function Column({
   column,
   height,
   hours,
+  bottom,
   scale,
   now,
   ...props
@@ -172,12 +177,14 @@ function Column({
   column: BoardColumn;
   height: number;
   hours: number[];
+  /** The minute the board's last line marks; unscheduled time runs to it. */
+  bottom: number;
   scale: number;
   /** Where the line marking the time now crosses this column, when it is today; `dot` on the first such column. */
   now: { top: number; dot: boolean } | null;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: `col:${column.key}` });
-  const gaps = gapsOf(column.sessions);
+  const gaps = gapsOf(column.sessions, bottom);
 
   return (
     <div className="min-w-48 flex-1 border-r last:border-r-0">
@@ -236,6 +243,7 @@ function Column({
         {column.sessions.map((s) => (
           <DraggableSession key={s.id} session={s} start={s.start} scale={scale} {...props} />
         ))}
+        {props.marks?.(column, (minute) => (Math.min(bottom, Math.max(dayStart, minute)) - dayStart) * scale)}
         {now !== null && (
           <div
             aria-hidden

@@ -138,6 +138,20 @@ function usePendingEdit(id: string, changed: boolean, valid: boolean, save: () =
   }, [register, id, changed, valid]);
 }
 
+/**
+ * A class's assessment averages as saved, their mean, and its overall score,
+ * the exams counted as one more assessment as in the manager's view.
+ */
+function classScores(items: ViewSubmission[], review: ViewReview | null) {
+  const scored = items.flatMap((s) => (s.averageScore === null ? [] : [s.averageScore]));
+  const exams = review ? examAverage(review.entranceExam, review.exitExam) : null;
+  return {
+    scored,
+    average: averageScore(scored),
+    overall: averageScore(exams === null ? scored : [...scored, examScore(exams)]),
+  };
+}
+
 /** One card per class someone was assessed in: INT before BTC, each newest bootcamp first, as fetched. */
 export function SubmissionGroups({
   personKey,
@@ -203,10 +217,7 @@ function ClassGroup({
   collapsible: boolean;
 }) {
   const [open, setOpen] = useState(!collapsible);
-  const scored = items.flatMap((s) => (s.averageScore === null ? [] : [s.averageScore]));
-  const average = averageScore(scored);
-  const exams = review ? examAverage(review.entranceExam, review.exitExam) : null;
-  const overall = averageScore(exams === null ? scored : [...scored, examScore(exams)]);
+  const { scored, average, overall } = classScores(items, review);
   const bodyId = `class-${first.bootcamp.id}-${first.stage}`;
   const toggle = () => setOpen((was) => !was);
 
@@ -247,20 +258,20 @@ function ClassGroup({
             )}
           </div>
         </div>
-        {open ? (
-          first.released ? (
-            <Badge variant="secondary">Released to managers</Badge>
-          ) : (
-            <Badge variant="outline" className="text-muted-foreground">
-              Not released
-            </Badge>
-          )
-        ) : (
+        <div className="flex items-center gap-3">
+          {open &&
+            (first.released ? (
+              <Badge variant="secondary">Released to managers</Badge>
+            ) : (
+              <Badge variant="outline" className="text-muted-foreground">
+                Not released
+              </Badge>
+            ))}
           <span className="text-xl font-medium tabular-nums">
             {formatScore(overall)}
             {overall !== null && <span className="text-sm text-muted-foreground"> / {BOOTCAMP_SCORE.max}</span>}
           </span>
-        )}
+        </div>
       </div>
       <div id={bodyId} hidden={!open} className="divide-y">
         {editing ? (
@@ -604,15 +615,16 @@ function FeedbackBox({
 
 const percent = (n: number | null) => (n === null ? "—" : `${n}%`);
 
-/** The exams' average and where it falls on the scale, or a dash until both are in. */
+/** The exams' average, and at the right where it falls on the scale, sized as an assessment's score; dashes until both are in. */
 function ExamAverage({ entrance, exit }: { entrance: number | null; exit: number | null }) {
   const average = examAverage(entrance, exit);
   return (
-    <Field label="Exam average">
-      <span className="tabular-nums">
-        {average === null ? "—" : `${average}% · scores ${examScore(average)}`}
-      </span>
-    </Field>
+    <div className="flex items-start justify-between gap-4">
+      <Field label="Exam average">
+        <span className="tabular-nums">{percent(average)}</span>
+      </Field>
+      <span className="text-xl font-medium tabular-nums">{average === null ? "—" : examScore(average)}</span>
+    </div>
   );
 }
 

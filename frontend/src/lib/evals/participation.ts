@@ -52,7 +52,7 @@ import {
 import { getCandidateCutoffs } from "@/lib/evals/settings";
 import { reviewConfigured } from "@/lib/evals/transcript-review";
 import { taggerOf } from "@/lib/mention-store";
-import { cohortBootcamp, cohortEmails, unscoredAttendees } from "@/lib/reporting/bootcamp";
+import { cohortBootcamp, cohortEmails, releaseBlockers, type Waiting } from "@/lib/reporting/bootcamp";
 import { activeBootcamp, type ActiveBootcamp } from "@/lib/scheduler/bootcamps";
 
 const d = participationDescriptors;
@@ -503,7 +503,11 @@ export type StagePending = {
   scores: number;
   skipped: string[];
   /** Who has an assessment still waiting on a score, which holds up Release: at most 100 names, and how many in all. */
-  unscored: { total: number; names: string[] };
+  unscored: Waiting;
+  /** Who in the cohort has no exit exam, which also holds up Release. */
+  noExitExam: Waiting;
+  /** Who in the cohort lacks overall positive or constructive feedback, which also holds up Release. */
+  noFeedback: Waiting;
 };
 
 /** What each class's Generate and Release buttons face; null for a class the bootcamp does not hold, or one already released. */
@@ -514,12 +518,12 @@ export async function pendingParticipation(): Promise<Record<EvalsAssessmentStag
     if (stage === "intermediate" && !bootcamp.intermediate) return null;
     const assessment = await participationAssessment(stage);
     if (!assessment) return null;
-    const [{ plans, skipped }, unscored, overall] = await Promise.all([
+    const [{ plans, skipped }, blockers, overall] = await Promise.all([
       generationPlans(bootcamp, stage, assessment.id),
-      unscoredAttendees(bootcamp, stage),
+      releaseBlockers(bootcamp, stage),
       pendingOverall(bootcamp, stage),
     ]);
-    return { ...generationCounts(plans), overall, skipped: skipped.slice(0, 100), unscored };
+    return { ...generationCounts(plans), overall, skipped: skipped.slice(0, 100), ...blockers };
   };
   const [btc, int] = await Promise.all([one("bootcamp"), one("intermediate")]);
   return { bootcamp: btc, intermediate: int };

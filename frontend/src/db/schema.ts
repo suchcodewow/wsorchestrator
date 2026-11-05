@@ -1679,7 +1679,55 @@ export const slackChannels = pgTable("slack_channels", {
 });
 
 /**
- * The people the channel sync invited, and so the only ones it may remove:
+ * The private channel each person on Reporting → Live Sessions is discussed
+ * in, made by the card's Slack button the first time it is pressed and used
+ * by every press after (`lib/reporting/feedback-channels.ts`).
+ */
+export const feedbackChannels = pgTable(
+  "feedback_channels",
+  {
+    /** Lowercased: the attendee the channel is about. */
+    attendeeEmail: text("attendee_email").primaryKey(),
+    /** `event-feedback-{first}-{last}`, with a number after it when another attendee has the name. */
+    name: text("name").notNull(),
+    slackChannelId: text("slack_channel_id").notNull(),
+    createdBy: text("created_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [uniqueIndex("feedback_channels_name_idx").on(t.name)],
+);
+
+/**
+ * Who has opened each person's card on Reporting → Live Sessions, and when
+ * they last did: one row per viewer and person, kept current by
+ * `lib/reporting/card-views.ts`.
+ */
+export const scorecardViews = pgTable(
+  "scorecard_views",
+  {
+    /** Lowercased: whose card was opened. */
+    attendeeEmail: text("attendee_email").notNull(),
+    viewerId: text("viewer_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    views: integer("views").notNull().default(1),
+    firstViewedAt: timestamp("first_viewed_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    lastViewedAt: timestamp("last_viewed_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.attendeeEmail, t.viewerId] })],
+);
+
+/**
+ * The people the channel sync, or a Live Sessions feedback channel, invited,
+ * and so the only ones it may remove:
  * someone added by hand, or already in the channel, is never touched. A row
  * goes when the sync removes them or sees they have left.
  */
@@ -1788,6 +1836,71 @@ export const slackSyncChanges = pgTable(
     at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("slack_sync_changes_run_idx").on(t.runId, t.at)],
+);
+
+export const RELEASE_NOTICE_STATUSES = ["running", "succeeded", "failed"] as const;
+export type ReleaseNoticeStatus = (typeof RELEASE_NOTICE_STATUSES)[number];
+
+/**
+ * One sending of the Slack message a release sends to a class's managers and
+ * the Additional Slack Contacts (`lib/reporting/release-notice.ts`), or a
+ * preview of it, and how it ended. Shown on Reporting Settings → Feedback
+ * Management.
+ */
+export const releaseNoticeRuns = pgTable(
+  "release_notice_runs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    stage: text("stage").$type<"bootcamp" | "intermediate">().notNull(),
+    bootcampId: uuid("bootcamp_id").references(() => bootcamps.id, { onDelete: "set null" }),
+    /** Who pressed Release or Preview. */
+    triggeredBy: text("triggered_by").references(() => users.id, { onDelete: "set null" }),
+    /** Preview: nothing was released, and nothing sent. */
+    preview: boolean("preview").notNull().default(false),
+    /** Sent nothing, and logged what it would have: a preview, or Slack in dry run. */
+    dryRun: boolean("dry_run").notNull(),
+    /** The test group's members were messaged in place of the managers and contacts. */
+    testGroup: boolean("test_group").notNull().default(false),
+    status: text("status").$type<ReleaseNoticeStatus>().notNull().default("running"),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+    recipients: integer("recipients").notNull().default(0),
+    /** Messages sent, or in a dry run that would be. */
+    messaged: integer("messaged").notNull().default(0),
+    notInSlack: integer("not_in_slack").notNull().default(0),
+    failures: integer("failures").notNull().default(0),
+    /** Why it failed, or why it sent nothing. */
+    error: text("error"),
+  },
+  (t) => [
+    index("release_notice_runs_started_at_idx").on(t.startedAt),
+    check("release_notice_runs_stage_check", sql`${t.stage} in ('bootcamp', 'intermediate')`),
+    check("release_notice_runs_status_check", sql`${t.status} in ('running', 'succeeded', 'failed')`),
+  ],
+);
+
+export const RELEASE_NOTICE_ACTIONS = ["messaged", "not_in_slack", "failed"] as const;
+export type ReleaseNoticeAction = (typeof RELEASE_NOTICE_ACTIONS)[number];
+
+/** One recipient of a release notice run: the message sent (its text in `detail`), no Slack account, or Slack's refusal. */
+export const releaseNoticeMessages = pgTable(
+  "release_notice_messages",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    runId: uuid("run_id")
+      .notNull()
+      .references(() => releaseNoticeRuns.id, { onDelete: "cascade" }),
+    action: text("action").$type<ReleaseNoticeAction>().notNull(),
+    /** Lowercased. */
+    email: text("email").notNull(),
+    /** The message, as Slack mrkdwn; Slack's error, for a failure. */
+    detail: text("detail"),
+    at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("release_notice_messages_run_idx").on(t.runId, t.at),
+    check("release_notice_messages_action_check", sql`${t.action} in ('messaged', 'not_in_slack', 'failed')`),
+  ],
 );
 
 /** `skipped` is a run with nothing to do: no meeting picked, or no active bootcamp. */
@@ -2174,7 +2287,7 @@ export const CHECKLIST_LIMITS = { name: 200, itemsPerDay: 100 } as const;
 /** The Prep Day checklist, for before the bootcamp starts: day 0 of Bootcamp, the only track with a day 0. */
 export const CHECKLIST_PREP_DAY = { track: "btc", day: 0 } as const;
 
-/** Each track-day's checklist is in two halves: before the morning, and before the afternoon. */
+/** Each track-day's checklist is in two halves: the day, and the evening after it. */
 export const CHECKLIST_PERIODS = ["am", "pm"] as const;
 export type ChecklistPeriod = (typeof CHECKLIST_PERIODS)[number];
 
@@ -2199,6 +2312,12 @@ export const scheduleChecklistItems = pgTable(
     /** Its place in its half-day, first at 0; dragging a card on the board changes it. Ties fall back to when it was added. */
     position: integer("position").notNull().default(0),
     name: text("name").notNull(),
+    /**
+     * The time it is due, in minutes after midnight; null for none. Only a Day
+     * item of a class-day shows it on the schedule; moved to Prep Day or an
+     * Evening it keeps it, unused, until it is moved back.
+     */
+    alarm: integer("alarm"),
     /** Lowercased; null when nobody owns it. */
     ownerEmail: text("owner_email"),
     ownerName: text("owner_name").notNull().default(""),
@@ -2219,6 +2338,7 @@ export const scheduleChecklistItems = pgTable(
     check("schedule_checklist_items_track_check", sql`${t.track} in ('btc', 'int', 'btc_se', 'int_se')`),
     check("schedule_checklist_items_day_check", sql`${t.day} between 0 and 30 and (${t.day} > 0 or ${t.track} = 'btc')`),
     check("schedule_checklist_items_period_check", sql`${t.period} in ('am', 'pm')`),
+    check("schedule_checklist_items_alarm_check", sql`${t.alarm} between 0 and 1439`),
   ],
 );
 

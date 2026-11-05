@@ -31,6 +31,7 @@ import {
   evalsSubmissionScores,
   evalsSubmissions,
   intakeResponses,
+  scorecardViews,
   users,
   type BootcampStatus,
   type Employee,
@@ -58,11 +59,12 @@ import { canUseEvals, type Access } from "@/lib/roles";
 /**
  * Who is reading: `all` for an Assessments Viewer or above, who sees every
  * record; anyone else sees the org below `email`, or no one without one.
+ * `id` is their user, whose own view of a card shows them who else opened it.
  */
-export type BootcampReader = { all: boolean; email: string | null };
+export type BootcampReader = { all: boolean; email: string | null; id: string | null };
 
-export function readerOf(caller: { access: Access; email: string | null }): BootcampReader {
-  return { all: canUseEvals(caller.access), email: caller.email?.trim().toLowerCase() || null };
+export function readerOf(caller: { access: Access; email: string | null; id?: string | null }): BootcampReader {
+  return { all: canUseEvals(caller.access), email: caller.email?.trim().toLowerCase() || null, id: caller.id ?? null };
 }
 
 /**
@@ -92,13 +94,40 @@ function inReach(reader: BootcampReader, email: SQL): SQL {
 function pastRecords(reader: BootcampReader): SQL {
   const stageReleased = sql`(case a.stage when 'bootcamp' then b.btc_released_at is not null else b.int_released_at is not null end)`;
   return sql`(
-    select distinct s.attendee_email as email, a.stage, b.start_date as day
+    select distinct s.attendee_email as email, a.stage, b.start_date as day, b.id as bootcamp_id
       from ${evalsSubmissions} s
       join ${evalsAssessments} a on a.id = s.assessment_id
       join ${bootcamps} b on b.id = s.bootcamp_id
      where ${reader.all ? sql`(${stageReleased} or b.status = 'complete')` : stageReleased}
   )`;
 }
+
+/** Most viewers a list row names; `viewerCount` counts them all. */
+export const VIEWERS_SHOWN = 20;
+
+/** Whether the reader has opened `email`'s card themself; until they have, they see no one who did. */
+export const readerViewed = (reader: BootcampReader, email: SQL) =>
+  reader.id
+    ? sql`exists (select 1 from ${scorecardViews} w where w.attendee_email = ${email} and w.viewer_id = ${reader.id})`
+    : sql`false`;
+
+/**
+ * Who has opened `email`'s card, newest first, as JSON `{ name, at }[]`, at
+ * most `VIEWERS_SHOWN`; `viewerCount` is how many in all. Both are empty
+ * until the reader has opened it themself.
+ */
+const viewersOf = (reader: BootcampReader, email: SQL) => sql`(case when ${readerViewed(reader, email)} then coalesce((
+  select json_agg(json_build_object('name', v.name, 'at', v.at) order by v.at desc)
+    from (select coalesce(nullif(u.name, ''), u.email) as name, w.last_viewed_at as at
+            from ${scorecardViews} w join ${users} u on u.id = w.viewer_id
+           where w.attendee_email = ${email}
+           order by w.last_viewed_at desc
+           limit ${VIEWERS_SHOWN}) v), '[]'::json) else '[]'::json end)`;
+const viewerCountOf = (reader: BootcampReader, email: SQL) =>
+  sql`(case when ${readerViewed(reader, email)} then (select count(*)::int from ${scorecardViews} w where w.attendee_email = ${email}) else 0 end)`;
+
+/** Someone who opened a card, and when they last did. */
+export type CardViewer = { name: string; at: string };
 
 export const nameOf = (email: SQL) =>
   sql`(select nullif(n.full_name, '') from ${employees} n where n.email = ${email} order by n.active desc, n.full_name limit 1)`;
@@ -114,19 +143,46 @@ export const keyOf = (email: SQL) => sql`coalesce(
 
 const ATTENDED_INT = sql`bool_or(r.stage = 'intermediate')`;
 
-/** One row per person in reach with a past record: their level, latest class day, name, key and whether they are still here. */
+/**
+ * The scored assessments of `email` in `stage` at `bootcamp`, and their mean
+ * to one decimal place, both exams counting as one more once both are in:
+ * the same score the current cohort shows.
+ */
+function classScore(bootcamp: SQL, email: SQL, stage: SQL): { scored: SQL; average: SQL } {
+  const scoredIn = sql`from ${evalsSubmissions} s join ${evalsAssessments} a on a.id = s.assessment_id
+    where s.bootcamp_id = ${bootcamp} and s.attendee_email = ${email} and a.stage = ${stage}`;
+  const examIn = sql`(select ${EXAM_SCORE_SQL} from ${bootcampClassReviews} r
+    where r.bootcamp_id = ${bootcamp} and r.attendee_email = ${email} and r.stage = ${stage})`;
+  return {
+    scored: sql`(select count(s.average_score)::int ${scoredIn})`,
+    average: sql`(select round(avg(x.score)::numeric, 1)::float8
+      from (select s.average_score as score ${scoredIn} union all select ${examIn}) x)`,
+  };
+}
+
+/**
+ * One row per person in reach with a past record: their level, latest class
+ * day, name, key, whether they are still here, and their score in that level
+ * at the newest bootcamp they had it.
+ */
 function people(reader: BootcampReader): SQL {
+  const score = classScore(sql`g.bootcamp_id`, sql`g.email`, sql`g.level`);
   return sql`(
-    select r.email,
-           (case when ${ATTENDED_INT} then 'intermediate' else 'bootcamp' end) as level,
-           (case when ${ATTENDED_INT} then 2 else 1 end) as rank,
-           max(r.day)::text as date,
-           ${nameOf(sql`r.email`)} as full_name,
-           coalesce((select bool_or(n.active) from ${employees} n where n.email = r.email), false) as active,
-           ${keyOf(sql`r.email`)} as key
-      from ${pastRecords(reader)} r
-     where ${inReach(reader, sql`r.email`)}
-     group by r.email
+    select g.*, ${score.scored} as scored, ${score.average} as average
+      from (
+        select r.email,
+               (case when ${ATTENDED_INT} then 'intermediate' else 'bootcamp' end) as level,
+               (case when ${ATTENDED_INT} then 2 else 1 end) as rank,
+               max(r.day)::text as date,
+               -- Their furthest class's newest bootcamp: an INT, if they have one, sorts first.
+               (array_agg(r.bootcamp_id order by (r.stage = 'intermediate') desc, r.day desc))[1] as bootcamp_id,
+               ${nameOf(sql`r.email`)} as full_name,
+               coalesce((select bool_or(n.active) from ${employees} n where n.email = r.email), false) as active,
+               ${keyOf(sql`r.email`)} as key
+          from ${pastRecords(reader)} r
+         where ${inReach(reader, sql`r.email`)}
+         group by r.email
+      ) g
   )`;
 }
 
@@ -135,8 +191,8 @@ const STATUS_FILTER: Record<HistoryStatus, SQL> = { active: sql`p.active`, inact
 const RECORD_SORT_COLUMNS: Record<BootcampRecordSort, SQL> = {
   date: sql`p.date`,
   fullName: sql`lower(p.full_name)`,
-  email: sql`p.email`,
   level: sql`p.rank`,
+  averageScore: sql`p.average`,
 };
 
 export type BootcampRecordRow = {
@@ -148,6 +204,13 @@ export type BootcampRecordRow = {
   date: string;
   /** Sent by the last HiBob sync: still at Harness. */
   active: boolean;
+  /** Assessments scored in `level` at the newest bootcamp they had it. */
+  scored: number;
+  /** Their score there, as the current cohort shows it; null with none. */
+  averageScore: number | null;
+  /** Who has opened their card, newest first, at most `VIEWERS_SHOWN`; none until the reader has. */
+  viewers: CardViewer[];
+  viewerCount: number;
 };
 
 /** One page of the people the reader may see with a record, newest class first by default; the search matches the name or email. */
@@ -161,7 +224,8 @@ export async function listBootcampRecords(
   // A class shares one day, so its people fall back to name order.
   const order = orderFor(RECORD_SORT_COLUMNS[query.sort], query.dir, sql`lower(p.full_name) asc nulls last`, sql`p.email`);
   const { rows } = await db.execute<BootcampRecordRow>(sql`
-    select p.key, p.email, p.full_name as "fullName", p.level, p.date, p.active
+    select p.key, p.email, p.full_name as "fullName", p.level, p.date, p.active, p.scored, p.average as "averageScore",
+           ${viewersOf(reader, sql`p.email`)} as viewers, ${viewerCountOf(reader, sql`p.email`)} as "viewerCount"
       from ${people(reader)} p
      where ${where}
      order by ${sql.join(order, sql`, `)}
@@ -233,13 +297,19 @@ export type CohortRow = {
   scored: number;
   /** The mean of those submissions' averages, to one decimal place; null with none. */
   averageScore: number | null;
+  /** The bootcamp's start date, which is the day of both its classes. */
+  date: string;
+  /** Who has opened their card, newest first, at most `VIEWERS_SHOWN`; none until the reader has. */
+  viewers: CardViewer[];
+  viewerCount: number;
 };
 
 const COHORT_SORT_COLUMNS: Record<BootcampCohortSort, SQL> = {
   fullName: sql`lower(m.full_name)`,
-  email: sql`m.email`,
   stage: sql`m.stage`,
   averageScore: sql`m.average`,
+  // Every member shares the day, so this falls back to name order.
+  date: sql`1`,
 };
 
 /**
@@ -280,40 +350,52 @@ export async function cohortEmails(bootcamp: { id: string; startDate: string }, 
   return rows.map((r) => r.email);
 }
 
+/** The cohort in reach of the reader, one row per member, with their score: `listCohort` and `cohortCounts` read it. */
+async function cohortMembers(reader: BootcampReader, bootcamp: CohortBootcamp, stages: ReleaseStage[]): Promise<SQL> {
+  const score = classScore(sql`${bootcamp.id}::uuid`, sql`c.email`, sql`c.stage`);
+  return sql`
+    with cohort as (${await cohortSql(bootcamp, stages)})
+    select c.email, c.stage, ${nameOf(sql`c.email`)} as full_name, ${keyOf(sql`c.email`)} as key,
+           ${score.scored} as scored, ${score.average} as average
+      from cohort c
+     where ${inReach(reader, sql`c.email`)}`;
+}
+
 /**
  * One page of the active bootcamp's cohort in reach of the reader, as
- * `cohortSql` has it. Empty for a stage the reader may not see yet.
+ * `cohortSql` has it, of one class when `stage` is given. Empty for a stage
+ * the reader may not see yet.
  */
 export async function listCohort(
   reader: BootcampReader,
   bootcamp: CohortBootcamp,
   query: ListQuery<BootcampCohortSort>,
+  stage: ReleaseStage | null = null,
 ): Promise<Page<CohortRow>> {
-  const stages = visibleStages(reader, bootcamp);
+  const stages = visibleStages(reader, bootcamp).filter((s) => !stage || s === stage);
   if (stages.length === 0) return toPage([], query.page);
   const { limit, offset } = pageWindow(query.page);
-  const scoredIn = sql`from ${evalsSubmissions} s join ${evalsAssessments} a on a.id = s.assessment_id
-    where s.bootcamp_id = ${bootcamp.id} and s.attendee_email = c.email and a.stage = c.stage`;
-  // Both exams in, their average counts as one more assessment, on the scale `examScore` sets.
-  const examIn = sql`(select ${EXAM_SCORE_SQL} from ${bootcampClassReviews} r
-    where r.bootcamp_id = ${bootcamp.id} and r.attendee_email = c.email and r.stage = c.stage)`;
   const order = orderFor(COHORT_SORT_COLUMNS[query.sort], query.dir, sql`lower(m.full_name) asc nulls last`, sql`m.email`);
   const { rows } = await db.execute<CohortRow>(sql`
-    with cohort as (${await cohortSql(bootcamp, stages)}),
-    members as (
-      select c.email, c.stage, ${nameOf(sql`c.email`)} as full_name, ${keyOf(sql`c.email`)} as key,
-             (select count(s.average_score)::int ${scoredIn}) as scored,
-             (select round(avg(x.score)::numeric, 1)::float8
-                from (select s.average_score as score ${scoredIn} union all select ${examIn}) x) as average
-        from cohort c
-       where ${inReach(reader, sql`c.email`)}
-    )
-    select m.key, m.email, m.full_name as "fullName", m.stage, m.scored, m.average as "averageScore"
-      from members m
+    select m.key, m.email, m.full_name as "fullName", m.stage, m.scored, m.average as "averageScore",
+           ${bootcamp.startDate}::text as date,
+           ${viewersOf(reader, sql`m.email`)} as viewers, ${viewerCountOf(reader, sql`m.email`)} as "viewerCount"
+      from (${await cohortMembers(reader, bootcamp, stages)}) m
      where ${and(sql`true`, searchAny(query.q, [sql`m.full_name`, sql`m.email`]))}
      order by ${sql.join(order, sql`, `)}
      limit ${limit} offset ${offset}`);
   return toPage(rows, query.page);
+}
+
+/** How many of the cohort in reach of the reader are in each class they may see, whatever the search. */
+export async function cohortCounts(reader: BootcampReader, bootcamp: CohortBootcamp): Promise<Record<ReleaseStage, number>> {
+  const counts: Record<ReleaseStage, number> = { bootcamp: 0, intermediate: 0 };
+  const stages = visibleStages(reader, bootcamp);
+  if (stages.length === 0) return counts;
+  const { rows } = await db.execute<{ stage: ReleaseStage; count: number }>(sql`
+    select m.stage, count(*)::int as count from (${await cohortMembers(reader, bootcamp, stages)}) m group by m.stage`);
+  for (const r of rows) counts[r.stage] = r.count;
+  return counts;
 }
 
 /** `examScore` of the mean of `r`'s exams, or null until both are in. */
@@ -323,9 +405,57 @@ const EXAM_SCORE_SQL = sql`(case when r.entrance_exam is null or r.exit_exam is 
   when round(((r.entrance_exam + r.exit_exam) / 2)::numeric, 1) >= 80 then 2
   else 1 end)::float8`;
 
-export type ReleaseError = "no_bootcamp" | "no_intermediate" | "unscored";
+export type ReleaseError = "no_bootcamp" | "no_intermediate" | "unscored" | "no_exit_exam" | "no_feedback";
 
-export const RELEASE_STATUS_FOR: Record<ReleaseError, number> = { no_bootcamp: 409, no_intermediate: 409, unscored: 409 };
+export const RELEASE_STATUS_FOR: Record<ReleaseError, number> = {
+  no_bootcamp: 409,
+  no_intermediate: 409,
+  unscored: 409,
+  no_exit_exam: 409,
+  no_feedback: 409,
+};
+
+/** Some of the people a class is waiting on: at most 100 names, and how many in all. */
+export type Waiting = { total: number; names: string[] };
+
+/** What holds up a class's release: who is waiting on a score, an exit exam, or overall feedback. */
+export type ReleaseBlockers = { unscored: Waiting; noExitExam: Waiting; noFeedback: Waiting };
+
+/**
+ * Everyone in `stage`'s cohort at `bootcamp` whose class review, `r`, fails
+ * `complete`; someone with no review fails it too. At most 100 names, and
+ * how many in all.
+ */
+async function cohortWithoutReview(
+  bootcamp: { id: string; startDate: string },
+  stage: ReleaseStage,
+  complete: SQL,
+): Promise<Waiting> {
+  const { rows } = await db.execute<{ name: string; total: number }>(sql`
+    with cohort as (${await cohortSql(bootcamp, [stage])})
+    select coalesce(${nameOf(sql`c.email`)}, c.email) as name, count(*) over ()::int as total
+      from cohort c
+      left join ${bootcampClassReviews} r
+        on r.bootcamp_id = ${bootcamp.id} and r.stage = c.stage and r.attendee_email = c.email
+     where not coalesce(${complete}, false)
+     order by lower(coalesce(${nameOf(sql`c.email`)}, c.email))
+     limit 100`);
+  return { total: rows[0]?.total ?? 0, names: rows.map((r) => r.name) };
+}
+
+/**
+ * Everything that holds up `stage`'s release at `bootcamp`: anyone waiting
+ * on a score (`unscoredAttendees`), anyone in the cohort without an exit
+ * exam, and anyone without both overall positive and constructive feedback.
+ */
+export async function releaseBlockers(bootcamp: { id: string; startDate: string }, stage: ReleaseStage): Promise<ReleaseBlockers> {
+  const [unscored, noExitExam, noFeedback] = await Promise.all([
+    unscoredAttendees(bootcamp, stage),
+    cohortWithoutReview(bootcamp, stage, sql`r.exit_exam is not null`),
+    cohortWithoutReview(bootcamp, stage, sql`btrim(r.positive_feedback) <> '' and btrim(r.constructive_feedback) <> ''`),
+  ]);
+  return { unscored, noExitExam, noFeedback };
+}
 
 /**
  * Everyone in `stage`'s class at `bootcamp` still waiting on a score: a
@@ -364,12 +494,26 @@ export async function unscoredAttendees(
   return { total: rows[0]?.total ?? 0, names: rows.map((r) => r.name) };
 }
 
+/** Everyone scored in `stage` at the bootcamp `bootcampId`, lowercased: who a release of it reaches. */
+export async function classAttendees(
+  bootcampId: string,
+  stage: ReleaseStage,
+  executor: Pick<typeof db, "execute"> = db,
+): Promise<string[]> {
+  const { rows } = await executor.execute<{ email: string }>(sql`
+    select distinct s.attendee_email as email
+      from ${evalsSubmissions} s join ${evalsAssessments} a on a.id = s.assessment_id
+     where s.bootcamp_id = ${bootcampId} and a.stage = ${stage}`);
+  return rows.map((r) => r.email);
+}
+
 /**
  * Releases one class of the active bootcamp to managers, from now on, and
  * completes it: everyone scored in that class has attended it
  * (`lib/evals/attendance.ts`). That moves a BTC class on to Intermediate on
  * Cohorts → Current, and takes an INT class off it. A class with anyone
- * still waiting on a score (`unscoredAttendees`) cannot be released. Once released it stays
+ * still waiting on a score, an exit exam or overall feedback
+ * (`releaseBlockers`) cannot be released. Once released it stays
  * so; releasing again changes nothing, and says when it was. `written`
  * counts the people scored in it.
  */
@@ -377,7 +521,14 @@ export async function releaseScores(
   actorId: string,
   stage: ReleaseStage,
 ): Promise<
-  | { ok: true; bootcamp: { id: string; startDate: string }; releasedAt: Date; written: number }
+  | {
+      ok: true;
+      bootcamp: { id: string; startDate: string };
+      releasedAt: Date;
+      written: number;
+      /** Everyone scored in the class, lowercased, when this call released it; empty when it was already. */
+      attendees: string[];
+    }
   | { ok: false; error: ReleaseError }
 > {
   const bootcamp = await cohortBootcamp();
@@ -385,8 +536,11 @@ export async function releaseScores(
   if (stage === "intermediate" && !bootcamp.intermediate) return { ok: false, error: "no_intermediate" };
   const done = { id: bootcamp.id, startDate: bootcamp.startDate };
   const already = bootcamp.released[stage];
-  if (already) return { ok: true, bootcamp: done, releasedAt: already.at, written: 0 };
-  if ((await unscoredAttendees(bootcamp, stage)).total > 0) return { ok: false, error: "unscored" };
+  if (already) return { ok: true, bootcamp: done, releasedAt: already.at, written: 0, attendees: [] };
+  const blockers = await releaseBlockers(bootcamp, stage);
+  if (blockers.unscored.total > 0) return { ok: false, error: "unscored" };
+  if (blockers.noExitExam.total > 0) return { ok: false, error: "no_exit_exam" };
+  if (blockers.noFeedback.total > 0) return { ok: false, error: "no_feedback" };
 
   const now = new Date();
   const [atColumn, byColumn] =
@@ -401,17 +555,25 @@ export async function releaseScores(
       .returning({ at: bootcamps[atColumn] });
     // Someone else released it between our read and our write.
     if (!row) return null;
-    const { rows: scored } = await tx.execute<{ email: string }>(sql`
-      select distinct s.attendee_email as email
-        from ${evalsSubmissions} s join ${evalsAssessments} a on a.id = s.assessment_id
-       where s.bootcamp_id = ${bootcamp.id} and a.stage = ${stage}`);
-    return { releasedAt: row.at ?? now, emails: scored.map((r) => r.email) };
+    return { releasedAt: row.at ?? now, emails: await classAttendees(bootcamp.id, stage, tx) };
   });
   if (!result) {
-    return { ok: true, bootcamp: done, releasedAt: (await cohortBootcamp())?.released[stage]?.at ?? now, written: 0 };
+    return {
+      ok: true,
+      bootcamp: done,
+      releasedAt: (await cohortBootcamp())?.released[stage]?.at ?? now,
+      written: 0,
+      attendees: [],
+    };
   }
   await retrackEmployees(result.emails);
-  return { ok: true, bootcamp: done, releasedAt: result.releasedAt, written: result.emails.length };
+  return {
+    ok: true,
+    bootcamp: done,
+    releasedAt: result.releasedAt,
+    written: result.emails.length,
+    attendees: result.emails,
+  };
 }
 
 const uuidSchema = z.string().uuid();
@@ -432,6 +594,13 @@ export async function resolvePerson(key: string): Promise<string | null> {
     if (submission) return submission.email;
   }
   return null;
+}
+
+/** True when the reader may see the person `email` (lowercased), as `getBootcampPerson` decides it. */
+export async function canReach(reader: BootcampReader, email: string): Promise<boolean> {
+  if (reader.all) return true;
+  const { rows } = await db.execute<{ ok: boolean }>(sql`select ${inReach(reader, sql`${email}`)} as ok`);
+  return rows[0]?.ok ?? false;
 }
 
 export type PersonEmployee = Pick<
@@ -499,10 +668,7 @@ export type BootcampPerson = {
 export async function getBootcampPerson(reader: BootcampReader, key: string): Promise<BootcampPerson | null> {
   const email = await resolvePerson(key);
   if (!email) return null;
-  if (!reader.all) {
-    const { rows } = await db.execute<{ ok: boolean }>(sql`select ${inReach(reader, sql`${email}`)} as ok`);
-    if (!rows[0]?.ok) return null;
-  }
+  if (!(await canReach(reader, email))) return null;
 
   const s = evalsSubmissions;
   const r = bootcampClassReviews;

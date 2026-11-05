@@ -1,9 +1,9 @@
 "use client";
 
 /**
- * The Additional Slack Contacts: a field to find an employee by name, or type
- * any email, and add them; then a page of those added, searched and sorted by
- * the database.
+ * The Additional Slack Contacts: a field to find an employee by name, or
+ * type any email, and add them; then a page of those added, searched and
+ * sorted by the database.
  */
 
 import { useState } from "react";
@@ -85,7 +85,8 @@ export function SlackContactsView({
           <span className="font-medium text-foreground">
             {count.toLocaleString()} {count === 1 ? "contact" : "contacts"}
           </span>{" "}
-          added to every team&apos;s Slack message at the end of a bootcamp.
+          added to every team&apos;s Slack message at the end of a bootcamp, to each Live Sessions channel, and to the
+          message a release sends managers.
         </p>
       </motion.div>
 

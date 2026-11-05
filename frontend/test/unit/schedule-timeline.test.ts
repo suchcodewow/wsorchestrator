@@ -11,6 +11,9 @@ import assert from "node:assert/strict";
 import {
   audienceClashes,
   busyDuring,
+  checklistAlarmApplies,
+  checklistDayLabel,
+  checklistMarked,
   dayTotal,
   dropAt,
   findClashes,
@@ -76,6 +79,28 @@ describe("times", () => {
     ]);
     assert.deepEqual(gapsOf([{ start: 480, minutes: 540 }]), []);
     assert.deepEqual(gapsOf([]), [{ start: 480, minutes: 540 }]);
+  });
+
+  test("the unscheduled time runs into the evening as far as the board goes", () => {
+    assert.deepEqual(gapsOf([], 1080), [{ start: 480, minutes: 600 }]);
+    assert.deepEqual(gapsOf([{ start: 480, minutes: 540 }], 1080), [{ start: 1020, minutes: 60 }]);
+    assert.deepEqual(gapsOf([{ start: 1020, minutes: 60 }], 1140), [
+      { start: 480, minutes: 540 },
+      { start: 1080, minutes: 60 },
+    ]);
+  });
+
+  test("only a Day item of a class-day is marked on the schedule, and only while it is to do", () => {
+    const item = { day: 2, period: "am" as const, alarm: 600, done: false };
+    assert.equal(checklistMarked(item), true);
+    assert.equal(checklistMarked({ ...item, done: true }), false);
+    assert.equal(checklistMarked({ ...item, alarm: null }), false);
+    assert.equal(checklistMarked({ ...item, period: "pm" }), false);
+    assert.equal(checklistMarked({ ...item, day: 0 }), false);
+    assert.equal(checklistAlarmApplies({ day: 0, period: "am" }), false);
+    assert.equal(checklistAlarmApplies({ day: 3, period: "pm" }), false);
+    assert.equal(checklistDayLabel("btc", 2, "pm"), "Bootcamp, Day 2 · Evening");
+    assert.equal(checklistDayLabel("btc", 0, "am"), "Prep Day · Day");
   });
 
   test("a start snaps to the quarter hour, from 8 AM, and early enough to end by midnight", () => {

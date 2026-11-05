@@ -40,7 +40,7 @@ import { VideoDialog } from "./video-dialog";
 
 type Sel = { type: "slide"; id: number } | { type: "concept"; id: string } | { type: "group"; id: string } | { type: "level"; id: MapLevel };
 /** What is being pointed at, and the element the popup sits beside. */
-type Pointed = { sel: Sel; anchor: HTMLElement };
+type Pointed = { sel: Exclude<Sel, { type: "concept" }>; anchor: HTMLElement };
 const same = (a: Sel | null, b: Sel) => a !== null && a.type === b.type && a.id === b.id;
 /** A press on any of these is a click on the box, not the start of a drag across the empty map. */
 const NOT_DRAGGABLE = ".mm-slide, .mm-concept, .mm-group, .mm-level, button, a";
@@ -155,13 +155,16 @@ export function MapView({
     setFilter((now) => (now === section ? null : section));
   }
 
+  /** Event handlers for a pointable item. A concept shows no hover popup: its chat and video buttons carry their own tooltips. */
   const wire = (s: Sel) => {
     const choose = () => setLocked(same(locked, s) ? null : s);
     return {
-      onMouseEnter: (e: React.MouseEvent<HTMLElement>) => setHover({ sel: s, anchor: e.currentTarget }),
-      onMouseLeave: () => setHover(null),
-      onFocus: (e: React.FocusEvent<HTMLElement>) => setHover({ sel: s, anchor: e.currentTarget }),
-      onBlur: () => setHover(null),
+      ...(s.type !== "concept" && {
+        onMouseEnter: (e: React.MouseEvent<HTMLElement>) => setHover({ sel: s, anchor: e.currentTarget }),
+        onMouseLeave: () => setHover(null),
+        onFocus: (e: React.FocusEvent<HTMLElement>) => setHover({ sel: s, anchor: e.currentTarget }),
+        onBlur: () => setHover(null),
+      }),
       onClick: choose,
       onKeyDown: (e: KeyboardEvent) => {
         if (e.key === "Enter" || e.key === " ") {
@@ -343,7 +346,7 @@ export function MapView({
         </div>
       </div>
 
-      {hover && <Popup pointed={hover} full={full} map={map} hasImage={hasImage} stateOf={stateOf} levelName={levelName} groupName={groupName} groupBlurb={groupBlurb} />}
+      {hover && <Popup pointed={hover} full={full} map={map} hasImage={hasImage} levelName={levelName} groupName={groupName} groupBlurb={groupBlurb} />}
 
       {playing && byId.get(playing) && (
         <VideoDialog conceptId={playing} name={byId.get(playing)!.name} onClose={() => setPlaying(null)} onState={onState} />
@@ -362,7 +365,6 @@ function Popup({
   full,
   map,
   hasImage,
-  stateOf,
   levelName,
   groupName,
   groupBlurb,
@@ -372,7 +374,6 @@ function Popup({
   map: PublicMap;
   /** The slides that have a picture to show. */
   hasImage: Set<number>;
-  stateOf: (id: string) => ConceptState;
   levelName: (level: MapLevel) => string;
   groupName: (id: string) => string;
   groupBlurb: (id: string) => string;
@@ -403,29 +404,6 @@ function Popup({
         {/* eslint-disable-next-line @next/next/no-img-element -- a signed redirect to a private bucket, which next/image cannot optimize */}
         <img src={`/api/mimir/map/slides/${sel.id}`} alt={`Slide ${sel.id}: ${slide?.title ?? ""}`} className="size-full object-contain" />
       </div>
-    );
-  } else if (sel.type === "concept") {
-    const c = full.concepts.find((k) => k.id === sel.id)!;
-    const st = stateOf(c.id);
-    const needed = (c.requires ?? []).flatMap((id) => full.concepts.find((k) => k.id === id) ?? []);
-    body = (
-      <>
-        <p className={head}>
-          {c.study}. {c.name}
-        </p>
-        <p>{c.explanation}</p>
-        {needed.length > 0 && (
-          <div className="space-y-1 pt-1">
-            <p className={meta}>Understand first</p>
-            <div className="flex flex-wrap gap-1.5">{needed.map(chip)}</div>
-          </div>
-        )}
-        {(st.mastered || st.recommended) && (
-          <p className={cn("text-xs font-medium", st.mastered ? "text-emerald-700 dark:text-emerald-400" : "text-amber-700 dark:text-amber-400")}>
-            {st.mastered ? "✓ Mastered" : "★ Recommended: watch the video"}
-          </p>
-        )}
-      </>
     );
   } else if (sel.type === "group") {
     const cs = full.concepts.filter((c) => c.bucket === sel.id);

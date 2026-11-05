@@ -7,23 +7,12 @@
  * it is saved. They can come back and change their answers at any time.
  */
 
-import { useMemo, useState } from "react";
-import { motion } from "framer-motion";
-import { CheckCircle2, Eye, Loader2, Save, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { INTAKE_LIMITS, type IntakeQuestion } from "@/db/schema";
 import type { MyIntake } from "@/lib/logistics/intake";
-import { timeZoneChoices } from "@/lib/timezones";
 import {
   DIETARY_GROUPS,
   DIETARY_KEYS,
@@ -37,7 +26,11 @@ import {
   type IntakeAnswers,
 } from "@/lib/logistics/intake-values";
 import { riseChild, staggerParent } from "@/lib/motion";
+import { timeZoneChoices } from "@/lib/timezones";
 import { cn } from "@/lib/utils";
+import { motion } from "framer-motion";
+import { CheckCircle2, Eye, Loader2, Save, Send } from "lucide-react";
+import { useMemo, useState } from "react";
 
 const SELECT = cn(
   "h-9 w-full rounded-md border border-input bg-field px-2 text-sm text-foreground shadow-xs outline-none",
@@ -48,14 +41,11 @@ const SELECT = cn(
 const OTHER = "\u0000other";
 
 const ERRORS: Record<string, string> = {
-  not_in_cohort:
-    "This form is no longer yours to fill in: you are not in the current cohort.",
+  not_in_cohort: "This form is no longer yours to fill in: you are not in the current cohort.",
   no_questions: "This form no longer asks anything. Reload the page.",
-  impersonating:
-    "You are viewing the app as someone else, so their answers cannot be changed.",
+  impersonating: "You are viewing the app as someone else, so their answers cannot be changed.",
   required: "Answer every question marked with *.",
-  not_an_option:
-    "One of your answers is not one the form offers. The form may have changed: reload the page.",
+  not_an_option: "One of your answers is not one the form offers. The form may have changed: reload the page.",
   not_a_name: "Give a first name only: letters, with no spaces.",
 };
 
@@ -111,12 +101,10 @@ function startingFrom(intake: MyIntake): {
   }
   // The name question starts from the name the app already has for them.
   const nameQuestion = intake.questions.find(isNameQuestion);
-  if (nameQuestion && answers[nameQuestion.id] === undefined && intake.name)
-    answers[nameQuestion.id] = intake.name;
+  if (nameQuestion && answers[nameQuestion.id] === undefined && intake.name) answers[nameQuestion.id] = intake.name;
   // The time zone question starts from the zone the app already has for them.
   const zoneQuestion = intake.questions.find(isTimezoneQuestion);
-  if (zoneQuestion && answers[zoneQuestion.id] === undefined && intake.timezone)
-    answers[zoneQuestion.id] = intake.timezone;
+  if (zoneQuestion && answers[zoneQuestion.id] === undefined && intake.timezone) answers[zoneQuestion.id] = intake.timezone;
   return { answers, others };
 }
 
@@ -125,33 +113,15 @@ function unwrittenOther(q: IntakeQuestion, answers: IntakeAnswers): boolean {
   if (!isDietaryQuestion(q)) return false;
   const checked = answers[DIETARY_KEYS.restrictions];
   const written = answers[DIETARY_KEYS.other];
-  return (
-    Array.isArray(checked) &&
-    checked.includes(DIETARY_OTHER) &&
-    (typeof written !== "string" || written.trim() === "")
-  );
+  return Array.isArray(checked) && checked.includes(DIETARY_OTHER) && (typeof written !== "string" || written.trim() === "");
 }
 
 /** The name question's answer, when there is one and it is not a single first name. */
-function badName(
-  q: IntakeQuestion,
-  value: string | string[] | undefined,
-): boolean {
-  return (
-    isNameQuestion(q) &&
-    typeof value === "string" &&
-    value.trim() !== "" &&
-    !isFirstName(value)
-  );
+function badName(q: IntakeQuestion, value: string | string[] | undefined): boolean {
+  return isNameQuestion(q) && typeof value === "string" && value.trim() !== "" && !isFirstName(value);
 }
 
-export function IntakeFormFiller({
-  intake,
-  preview,
-}: {
-  intake: MyIntake;
-  preview: boolean;
-}) {
+export function IntakeFormFiller({ intake, preview }: { intake: MyIntake; preview: boolean }) {
   const [start] = useState(() => startingFrom(intake));
   const [answers, setAnswers] = useState<IntakeAnswers>(start.answers);
   const [others, setOthers] = useState<Record<string, string>>(start.others);
@@ -163,9 +133,7 @@ export function IntakeFormFiller({
   // Someone who has not answered yet chooses first: sign up, which shows the
   // questions, or defer. Someone who already answered has signed up.
   const stage = intake.form === "intermediate" ? "Intermediate" : "Bootcamp";
-  const [phase, setPhase] = useState<"choose" | "form" | "deferred">(
-    intake.canDefer && !intake.savedAt ? "choose" : "form",
-  );
+  const [phase, setPhase] = useState<"choose" | "form" | "deferred">(intake.canDefer && !intake.savedAt ? "choose" : "form");
   const [confirming, setConfirming] = useState(false);
   const [deferring, setDeferring] = useState(false);
   const [deferError, setDeferError] = useState<string | null>(null);
@@ -184,9 +152,7 @@ export function IntakeFormFiller({
       });
       const body = await res.json().catch(() => null);
       if (!res.ok) {
-        setDeferError(
-          ERRORS[body?.error ?? ""] ?? `Could not defer you (${res.status}).`,
-        );
+        setDeferError(ERRORS[body?.error ?? ""] ?? `Could not defer you (${res.status}).`);
         return;
       }
       setConfirming(false);
@@ -211,11 +177,7 @@ export function IntakeFormFiller({
       const a = answers[q.id];
       if (a === undefined) continue;
       const other = (others[q.id] ?? "").trim();
-      out[q.id] = Array.isArray(a)
-        ? a.map((v) => (v === OTHER ? other : v)).filter(Boolean)
-        : a === OTHER
-          ? other
-          : a;
+      out[q.id] = Array.isArray(a) ? a.map((v) => (v === OTHER ? other : v)).filter(Boolean) : a === OTHER ? other : a;
     }
     return out;
   }
@@ -226,11 +188,7 @@ export function IntakeFormFiller({
     const out = payload();
     const unanswered = intake.questions.filter((q) => {
       const a = out[q.id];
-      return (
-        q.required &&
-        (a === undefined ||
-          (Array.isArray(a) ? a.length === 0 : a.trim() === ""))
-      );
+      return q.required && (a === undefined || (Array.isArray(a) ? a.length === 0 : a.trim() === ""));
     });
     setMissing(new Set(unanswered.map((q) => q.id)));
     if (unanswered.length > 0) {
@@ -261,10 +219,7 @@ export function IntakeFormFiller({
       const body = await res.json().catch(() => null);
       if (!res.ok) {
         if (body?.questionId) setMissing(new Set([body.questionId]));
-        setError(
-          ERRORS[body?.error ?? ""] ??
-            `Could not save your answers (${res.status}).`,
-        );
+        setError(ERRORS[body?.error ?? ""] ?? `Could not save your answers (${res.status}).`);
         return;
       }
       setSavedAt(body.savedAt);
@@ -286,9 +241,7 @@ export function IntakeFormFiller({
       className="space-y-6"
     >
       <motion.div variants={riseChild}>
-        <h1 className="text-3xl font-medium tracking-tight">
-          {intake.heading}
-        </h1>
+        <h1 className="text-3xl font-medium tracking-tight">{intake.heading}</h1>
       </motion.div>
 
       {preview && (
@@ -296,21 +249,17 @@ export function IntakeFormFiller({
           variants={riseChild}
           className="flex items-center gap-2 rounded-lg border bg-card px-4 py-3 text-sm text-muted-foreground"
         >
-          <Eye className="size-4 shrink-0" />A preview of the form as the cohort
-          sees it. Nothing you enter here is saved.
+          <Eye className="size-4 shrink-0" />A preview of the form as the cohort sees it. Nothing you enter here is saved.
         </motion.p>
       )}
 
-      <Dialog
-        open={confirming}
-        onOpenChange={(open) => !deferring && setConfirming(open)}
-      >
+      <Dialog open={confirming} onOpenChange={(open) => !deferring && setConfirming(open)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Defer to the next {stage}?</DialogTitle>
             <DialogDescription>
-              You will not attend this {stage}. You will be moved to the next
-              one, and the training team will message you about it.
+              You will not attend this {stage}. You will be moved to the next one, and the training team will message you about
+              it.
             </DialogDescription>
           </DialogHeader>
           {deferError && (
@@ -319,20 +268,10 @@ export function IntakeFormFiller({
             </p>
           )}
           <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={deferring}
-              onClick={() => setConfirming(false)}
-            >
+            <Button type="button" variant="outline" disabled={deferring} onClick={() => setConfirming(false)}>
               No, keep my place
             </Button>
-            <Button
-              type="button"
-              variant="brand"
-              disabled={deferring}
-              onClick={defer}
-            >
+            <Button type="button" variant="brand" disabled={deferring} onClick={defer}>
               {deferring && <Loader2 className="animate-spin" />}
               Yes, defer me
             </Button>
@@ -340,13 +279,8 @@ export function IntakeFormFiller({
         </DialogContent>
       </Dialog>
 
-      <motion.div
-        variants={riseChild}
-        className="divide-y overflow-hidden rounded-2xl border bg-card shadow-sm"
-      >
-        {(intake.introduction ||
-          savedAt ||
-          (!savedAt && intake.carriedFrom)) && (
+      <motion.div variants={riseChild} className="divide-y overflow-hidden rounded-2xl border bg-card shadow-sm">
+        {(intake.introduction || savedAt || (!savedAt && intake.carriedFrom)) && (
           <div className="space-y-3 px-5 py-4 text-sm leading-relaxed">
             {intake.introduction && (
               <p className="whitespace-pre-line">
@@ -355,16 +289,13 @@ export function IntakeFormFiller({
             )}
             {savedAt && (
               <p className="text-muted-foreground">
-                Answered {new Date(savedAt).toLocaleString()}. Change anything
-                below and save again.
+                Answered {new Date(savedAt).toLocaleString()}. Change anything below and save again.
               </p>
             )}
             {!savedAt && intake.carriedFrom && (
               <p className="rounded-lg border border-brand-border bg-brand-subtle px-4 py-3">
-                We&apos;ve filled in your dietary needs from your Bootcamp
-                registration on{" "}
-                {new Date(intake.carriedFrom.savedAt).toLocaleDateString()}.
-                Update anything that&apos;s changed, then submit.
+                We&apos;ve filled in your dietary needs from your Bootcamp registration on{" "}
+                {new Date(intake.carriedFrom.savedAt).toLocaleDateString()}. Update anything that&apos;s changed, then submit.
               </p>
             )}
           </div>
@@ -372,18 +303,10 @@ export function IntakeFormFiller({
 
         {phase === "choose" && (
           <div className="flex flex-wrap items-center gap-3 px-5 py-4">
-            <Button
-              type="button"
-              variant="brand"
-              onClick={() => setPhase("form")}
-            >
-              Sign-Up for {stage}
+            <Button type="button" variant="brand" onClick={() => setPhase("form")}>
+              Start {stage} Intake Form
             </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setConfirming(true)}
-            >
+            <Button type="button" variant="outline" onClick={() => setConfirming(true)}>
               Defer
             </Button>
           </div>
@@ -401,24 +324,14 @@ export function IntakeFormFiller({
 
         {phase === "form" &&
           intake.questions.map((q) => (
-            <fieldset
-              key={q.id}
-              className={cn(
-                "space-y-3 px-5 py-4",
-                missing.has(q.id) && "bg-destructive/5",
-              )}
-            >
+            <fieldset key={q.id} className={cn("space-y-3 px-5 py-4", missing.has(q.id) && "bg-destructive/5")}>
               <legend className="sr-only">{q.title}</legend>
               <div className="space-y-1">
                 <p className="text-sm font-medium" aria-hidden>
                   {q.title}
                   {q.required && <span className="text-destructive"> *</span>}
                 </p>
-                {q.description && (
-                  <p className="whitespace-pre-line text-sm text-muted-foreground">
-                    {q.description}
-                  </p>
-                )}
+                {q.description && <p className="whitespace-pre-line text-sm text-muted-foreground">{q.description}</p>}
               </div>
               {isDietaryQuestion(q) ? (
                 <DietaryChecklist
@@ -449,35 +362,19 @@ export function IntakeFormFiller({
       </motion.div>
 
       {phase === "form" && error && (
-        <motion.p
-          variants={riseChild}
-          role="alert"
-          className="text-sm text-destructive"
-        >
+        <motion.p variants={riseChild} role="alert" className="text-sm text-destructive">
           {error}
         </motion.p>
       )}
 
       {phase === "form" && (
-        <motion.div
-          variants={riseChild}
-          className="flex flex-wrap items-center gap-3"
-        >
+        <motion.div variants={riseChild} className="flex flex-wrap items-center gap-3">
           <Button type="submit" variant="brand" disabled={busy || preview}>
-            {busy ? (
-              <Loader2 className="animate-spin" />
-            ) : savedAt ? (
-              <Save />
-            ) : (
-              <Send />
-            )}
+            {busy ? <Loader2 className="animate-spin" /> : savedAt ? <Save /> : <Send />}
             {savedAt ? "Save changes" : "Submit"}
           </Button>
           {justSaved && (
-            <span
-              role="status"
-              className="flex items-center gap-1.5 text-sm text-muted-foreground"
-            >
+            <span role="status" className="flex items-center gap-1.5 text-sm text-muted-foreground">
               <CheckCircle2 className="size-4 text-brand" />
               Your answers are saved.
             </span>
@@ -493,28 +390,13 @@ export function IntakeFormFiller({
  * from the zone the form opened with, which it always includes, so the zone
  * Slack gave them is never swapped for a near neighbour.
  */
-function TimeZoneSelect({
-  title,
-  value,
-  onChange,
-}: {
-  title: string;
-  value: string;
-  onChange: (value: string) => void;
-}) {
+function TimeZoneSelect({ title, value, onChange }: { title: string; value: string; onChange: (value: string) => void }) {
   const [opened] = useState(value);
   const choices = useMemo(() => timeZoneChoices(new Date(), opened), [opened]);
   // The list holds every zone and the opened one, so only a value the form never offered (a stale answer) falls back.
-  const shown = choices.some((c) => c.value === value)
-    ? value
-    : (choices.find((c) => c.value === opened)?.value ?? "");
+  const shown = choices.some((c) => c.value === value) ? value : (choices.find((c) => c.value === opened)?.value ?? "");
   return (
-    <select
-      aria-label={title}
-      value={shown}
-      onChange={(e) => onChange(e.target.value)}
-      className={SELECT}
-    >
+    <select aria-label={title} value={shown} onChange={(e) => onChange(e.target.value)} className={SELECT}>
       <option value="">Choose</option>
       {choices.map((c) => (
         <option key={c.value} value={c.value}>
@@ -546,10 +428,7 @@ function DietaryChecklist({
   };
   const checked = new Set(list(DIETARY_KEYS.restrictions));
   const critical = new Set(list(DIETARY_KEYS.critical));
-  const other =
-    typeof answers[DIETARY_KEYS.other] === "string"
-      ? (answers[DIETARY_KEYS.other] as string)
-      : "";
+  const other = typeof answers[DIETARY_KEYS.other] === "string" ? (answers[DIETARY_KEYS.other] as string) : "";
 
   const check = (item: string, on: boolean) => {
     const nextChecked = new Set(checked);
@@ -578,20 +457,14 @@ function DietaryChecklist({
   };
 
   return (
-    <div
-      role="group"
-      aria-label={title}
-      className="overflow-hidden rounded-lg border"
-    >
+    <div role="group" aria-label={title} className="overflow-hidden rounded-lg border">
       <div className="grid grid-cols-[1fr_4.5rem] items-center border-b bg-muted/50 px-4 py-2 text-xs font-medium">
         <span className="text-muted-foreground">Restriction</span>
         <span className="text-center text-destructive">Critical</span>
       </div>
       {DIETARY_GROUPS.map((group) => (
         <div key={group.label} className="divide-y">
-          <p className="border-b bg-muted/30 px-4 py-1.5 text-xs font-medium text-muted-foreground">
-            {group.label}
-          </p>
+          <p className="border-b bg-muted/30 px-4 py-1.5 text-xs font-medium text-muted-foreground">{group.label}</p>
           {group.items.map((item) => (
             <div key={item}>
               <div className="grid grid-cols-[1fr_4.5rem] items-center px-4 py-2">
@@ -619,9 +492,7 @@ function DietaryChecklist({
                     placeholder="What is it?"
                     value={other}
                     maxLength={INTAKE_LIMITS.answer}
-                    onChange={(e) =>
-                      onChange({ [DIETARY_KEYS.other]: e.target.value })
-                    }
+                    onChange={(e) => onChange({ [DIETARY_KEYS.other]: e.target.value })}
                   />
                 </div>
               )}
@@ -657,13 +528,7 @@ function Answer({
         value={(value as string) ?? ""}
         maxLength={INTAKE_LIMITS.answer}
         // A first name has no spaces, so none can be typed or pasted into it.
-        onChange={(e) =>
-          onChange(
-            isNameQuestion(q)
-              ? e.target.value.replace(/\s/g, "")
-              : e.target.value,
-          )
-        }
+        onChange={(e) => onChange(isNameQuestion(q) ? e.target.value.replace(/\s/g, "") : e.target.value)}
       />
     );
   }
@@ -680,23 +545,12 @@ function Answer({
   }
 
   if (isTimezoneQuestion(q)) {
-    return (
-      <TimeZoneSelect
-        title={q.title}
-        value={typeof value === "string" ? value : ""}
-        onChange={onChange}
-      />
-    );
+    return <TimeZoneSelect title={q.title} value={typeof value === "string" ? value : ""} onChange={onChange} />;
   }
 
   if (q.kind === "dropdown") {
     return (
-      <select
-        aria-label={q.title}
-        value={(value as string) ?? ""}
-        onChange={(e) => onChange(e.target.value)}
-        className={SELECT}
-      >
+      <select aria-label={q.title} value={(value as string) ?? ""} onChange={(e) => onChange(e.target.value)} className={SELECT}>
         <option value="">Choose</option>
         {q.options.map((o) => (
           <option key={o} value={o}>
@@ -708,9 +562,7 @@ function Answer({
   }
 
   const multiple = q.kind === "checkboxes";
-  const chosen = new Set(
-    multiple ? ((value as string[]) ?? []) : value ? [value as string] : [],
-  );
+  const chosen = new Set(multiple ? ((value as string[]) ?? []) : value ? [value as string] : []);
   const toggle = (option: string, on: boolean) => {
     if (!multiple) return onChange(option);
     const next = new Set(chosen);
@@ -718,10 +570,7 @@ function Answer({
     else next.delete(option);
     onChange([...next]);
   };
-  const choices = [
-    ...q.options.map((o) => ({ value: o, label: o })),
-    ...(q.other ? [{ value: OTHER, label: "Other:" }] : []),
-  ];
+  const choices = [...q.options.map((o) => ({ value: o, label: o })), ...(q.other ? [{ value: OTHER, label: "Other:" }] : [])];
 
   return (
     <div className="space-y-2">

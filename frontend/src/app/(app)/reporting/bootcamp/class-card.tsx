@@ -15,7 +15,7 @@ import { BOOTCAMP_SCORE } from "@/db/schema";
 import { STAGE_LABELS } from "@/lib/evals/assessment-values";
 import type { BootcampLevel, ClassSummary } from "@/lib/reporting/bootcamp-values";
 import { cn } from "@/lib/utils";
-import { formatDate, formatScore } from "../../cohort-settings/format";
+import { formatDate, formatWholeScore } from "../../cohort-settings/format";
 
 export const TRACK_LABELS = {
   sales: "Sales",
@@ -87,7 +87,7 @@ export function ClassCard({
         <div className="flex items-baseline gap-4">
           {!open && (
             <span className="text-2xl font-medium tabular-nums">
-              {formatScore(score)}
+              {formatWholeScore(score)}
               {score !== null && <span className="text-sm text-muted-foreground"> / {BOOTCAMP_SCORE.max}</span>}
             </span>
           )}
@@ -107,7 +107,7 @@ export function ClassCard({
             <div className="flex items-baseline justify-between text-lg font-medium">
               <span>Overall Score</span>
               <span className="tabular-nums">
-                {formatScore(score)}
+                {formatWholeScore(score)}
                 {score !== null && <span className="text-sm text-muted-foreground"> / {BOOTCAMP_SCORE.max}</span>}
               </span>
             </div>
@@ -118,7 +118,7 @@ export function ClassCard({
           <FeedbackPanel label="Overall Constructive Feedback" text={summary.constructiveFeedback} />
           <div className="flex items-baseline gap-2 text-sm">
             <span className="text-muted-foreground">Average exam score</span>
-            <span className="tabular-nums">{examAverage === null ? "—" : `${examAverage}%`}</span>
+            <span className="tabular-nums">{examAverage === null ? "—" : `${Math.round(examAverage)}%`}</span>
           </div>
           {summary.otherNotes && <FeedbackPanel label="Other Notes" text={summary.otherNotes} />}
 
@@ -131,7 +131,7 @@ export function ClassCard({
                     <div className={cn("space-y-1", SCORE_COLUMN)}>
                       <div className="flex items-baseline justify-between gap-4 text-sm">
                         <span className="min-w-0 wrap-break-word">{exercise.name}</span>
-                        <span className="tabular-nums">{formatScore(shown(exercise.score))}</span>
+                        <span className="tabular-nums">{formatWholeScore(shown(exercise.score))}</span>
                       </div>
                       <ScoreBar score={shown(exercise.score)} thin />
                     </div>

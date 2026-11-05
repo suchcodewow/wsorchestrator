@@ -51,7 +51,7 @@ const KINDS: { kind: SlackChangeKind | null; label: string }[] = [
 ];
 
 /** A message's text as Slack shows it: bold where it is starred, links where it links. */
-function SlackMessage({ text }: { text: string }) {
+export function SlackMessage({ text }: { text: string }) {
   return (
     <blockquote className="whitespace-pre-line border-l-2 border-brand/50 pl-3 text-foreground">
       {slackTextParts(text).map((part, i) =>

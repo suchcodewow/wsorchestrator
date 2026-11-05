@@ -312,6 +312,18 @@ background, border or shadow of its own, and never builds a modal from a
 `fixed` div; check a new dialog in dark mode, where an edge that blends in is
 the usual failure.
 
+**Ask with `confirmDialog`, never the browser's popups.** `window.confirm`,
+`alert` and `prompt` ignore the theme, and ESLint refuses them. A yes-or-no
+before an action is
+`if (!(await confirmDialog({ title, description, confirmLabel, destructive })))
+return;` from `frontend/src/components/ui/confirm.tsx`, and a message to
+acknowledge is `await noticeDialog({ title, description })`. Put the question
+in `title`, what follows from it in `description`, name the action on the
+button ("Delete", "Go live") and set `destructive` for deleting or removing.
+It opens over another dialog without closing it. A confirmation that needs
+more than text, such as a field or a list of what goes with it, is its own
+`DialogContent`, as in `frontend/src/app/(app)/users/delete-user-button.tsx`.
+
 ## Before saying you are done
 
 ```bash
