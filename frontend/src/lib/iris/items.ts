@@ -1,7 +1,7 @@
 /**
  * The Diagnostic question bank: 228 Form A questions, 38 in each open
  * subject at 12 / 14 / 12 across 101, 201 and 301, from the Keyed Questions
- * sheet of the V2 workbook (Diagnostic-All-Questions-V2.xlsx, November 5,
+ * sheet of the V2 workbook (Diagnostic-All-Questions-V2.1.xlsx, November 5,
  * 2026). The other subjects are coming and have none yet. Server-only,
  * because every entry carries its answer: a taker is sent one question at a
  * time through `toQuestion`, never the key.
@@ -1972,7 +1972,7 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     rationale: "A job posting about manual deployments points to a current release problem.",
   },
   {
-    id: "pipegen-l1-44",
+    id: "pipegen-l1-55",
     subject: "pipegen",
     form: "A",
     level: 1,
@@ -1981,7 +1981,7 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     stem: "A company had a six-hour outage on its customer app. On a call with their SRE lead, what is your top priority to learn?",
     options: [
       "Which monitoring tools and dashboards they use today",
-      "What caused the outage and what it cost them",
+      "What caused the outage and its cost",
       "When their tools budget is set each year",
       "How many engineers are on call each week",
     ],
@@ -1989,7 +1989,7 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     rationale: "All of these matter eventually. On an early call the top priority is the pain: what is hurting and why. Budget, tools, authority and timing only make sense once the pain is clear.",
   },
   {
-    id: "pipegen-l1-45",
+    id: "pipegen-l1-56",
     subject: "pipegen",
     form: "A",
     level: 1,
@@ -1999,8 +1999,8 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     options: [
       "The company was founded twenty years ago",
       "The company lists 5,000 employees online",
-      "The company posted three DevOps jobs this week",
-      "The company rebranded its website last year",
+      "The company posted DevOps jobs this week",
+      "The company rebranded its website and logo last year",
     ],
     answer: 2,
     rationale: "Fresh hiring in the area you serve is a current, specific signal.",
@@ -2074,7 +2074,7 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     rationale: "An IT-wide vendor decision sits with the CIO; architecture and procurement support it but don't own it.",
   },
   {
-    id: "pipegen-l1-50",
+    id: "pipegen-l1-57",
     subject: "pipegen",
     form: "A",
     level: 1,
@@ -2082,10 +2082,10 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     version: "3.0",
     stem: "Which of these is a real buying signal, not just company news?",
     options: [
-      "The CEO spoke at an industry conference",
+      "The CEO spoke at a large industry conference last month",
       "The company moved its headquarters",
       "The company sponsored a charity event",
-      "The VP of engineering posted about painful deployments",
+      "An engineering VP posted about painful deployments",
     ],
     answer: 3,
     rationale: "A leader publicly naming a problem you solve is a buying signal; general news is not.",
@@ -2108,7 +2108,7 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     rationale: "All of these matter eventually. On an early call the top priority is the pain: what is hurting and why. Budget, tools, authority and timing only make sense once the pain is clear.",
   },
   {
-    id: "pipegen-l1-52",
+    id: "pipegen-l1-58",
     subject: "pipegen",
     form: "A",
     level: 1,
@@ -2117,7 +2117,7 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     stem: "An earnings call says AI coding tools are now used across engineering, and leadership wants to know what it is getting for the spend. Who should you reach out to first?",
     options: [
       "The head of IT procurement, who buys the licenses",
-      "The VP of engineering, who owns AI use in delivery",
+      "The VP of engineering, who owns AI in delivery",
       "The chief data officer, who runs company analytics",
       "The head of developer relations, who runs AI community programs",
     ],
@@ -2159,7 +2159,7 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     rationale: "All of these matter eventually. On an early call the top priority is the pain: what is hurting and why. Budget, tools, authority and timing only make sense once the pain is clear.",
   },
   {
-    id: "pipegen-l2-45",
+    id: "pipegen-l2-59",
     subject: "pipegen",
     form: "A",
     level: 2,
@@ -2167,7 +2167,7 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     version: "3.0",
     stem: "Their 10-K says they're investing in cloud and moving to microservices. You get their VP of engineering on a call. What is your top priority to learn?",
     options: [
-      "What problems the move is causing for their releases",
+      "What problems the move causes for releases",
       "Which cloud provider they are moving their applications to",
       "When their budget cycle starts",
       "How many engineers are on each team",
@@ -2295,7 +2295,7 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     rationale: "All of these matter eventually. On an early call the top priority is the pain: what is hurting and why. Budget, tools, authority and timing only make sense once the pain is clear.",
   },
   {
-    id: "pipegen-l2-53",
+    id: "pipegen-l2-60",
     subject: "pipegen",
     form: "A",
     level: 2,
@@ -2303,9 +2303,9 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     version: "3.0",
     stem: "You have two signals: a VP of engineering's post about painful deployments and a press release about record revenue. Which better supports a call to engineering?",
     options: [
-      "The VP's post, since it names a problem engineering owns",
+      "The VP's post, since engineering owns that problem",
       "The revenue news, since growth means there is budget",
-      "Both equally, mentioned together on the same call",
+      "Both of them equally, mentioned together on the same call",
       "Neither, since public posts aren't real signals",
     ],
     answer: 0,
@@ -2363,7 +2363,7 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     rationale: "All of these matter eventually. On an early call the top priority is the pain: what is hurting and why. Budget, tools, authority and timing only make sense once the pain is clear.",
   },
   {
-    id: "pipegen-l2-57",
+    id: "pipegen-l2-61",
     subject: "pipegen",
     form: "A",
     level: 2,
@@ -2371,7 +2371,7 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     version: "3.0",
     stem: "You talked to a developer about slow releases. Next you have a call with their VP. What is your top priority to learn from the VP?",
     options: [
-      "How slow releases are hurting launch dates and their team",
+      "How slow releases hurt launch dates and the team",
       "Which manual steps slow down each developer on the team",
       "Which tools the developers prefer to use",
       "Who handles procurement for new tools",
@@ -2414,7 +2414,7 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     rationale: "The bottleneck is approvals, so the person who owns them is the next contact who matters.",
   },
   {
-    id: "pipegen-l3-44",
+    id: "pipegen-l3-55",
     subject: "pipegen",
     form: "A",
     level: 3,
@@ -2423,7 +2423,7 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     stem: "After a holiday outage, a retailer's VP of reliability says it wasn't tooling but risky releases. What is your top priority to learn next?",
     options: [
       "Which monitoring tools failed them during the holiday outage",
-      "What makes their releases risky and how often it hurts",
+      "What makes releases risky and what it costs",
       "Who handled customer complaints afterward",
       "Which vendors they plan to replace this year",
     ],
@@ -2482,7 +2482,7 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     rationale: "All of these matter eventually. On an early call the top priority is the pain: what is hurting and why. Budget, tools, authority and timing only make sense once the pain is clear.",
   },
   {
-    id: "pipegen-l3-48",
+    id: "pipegen-l3-56",
     subject: "pipegen",
     form: "A",
     level: 3,
@@ -2491,7 +2491,7 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     stem: "For one account you have a platform engineer job post, a CEO quote about faster launches and a two-year-old outage story. What is your top priority to learn from the VP of engineering?",
     options: [
       "What caused the outage two years ago",
-      "What is getting in the way of faster launches",
+      "What is blocking faster launches today",
       "Which of the three signals they care about most",
       "What skills the new platform engineer will need",
     ],
@@ -2516,7 +2516,7 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     rationale: "All of these matter eventually. On an early call the top priority is the pain: what is hurting and why. Budget, tools, authority and timing only make sense once the pain is clear.",
   },
   {
-    id: "pipegen-l3-50",
+    id: "pipegen-l3-57",
     subject: "pipegen",
     form: "A",
     level: 3,
@@ -2527,13 +2527,13 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
       "Which AI coding tools each team has bought",
       "How many developers use AI tools every day",
       "When the AI tool contracts come up for renewal next year",
-      "Where the lack of visibility into AI code and spend hurts most",
+      "Where missing visibility into AI code and spend hurts",
     ],
     answer: 3,
     rationale: "All of these matter eventually. On an early call the top priority is the pain: what is hurting and why. Budget, tools, authority and timing only make sense once the pain is clear.",
   },
   {
-    id: "pipegen-l3-51",
+    id: "pipegen-l3-58",
     subject: "pipegen",
     form: "A",
     level: 3,
@@ -2541,7 +2541,7 @@ export const IRIS_ITEMS: readonly IrisItem[] = [
     version: "3.0",
     stem: "A developer liked your idea of fewer manual steps. Next you have a call with their CISO. What is your top priority to learn?",
     options: [
-      "Where they lack control or proof over what gets released",
+      "Where they lack control or proof over releases",
       "Whether the developer can act as your internal sponsor there",
       "How fast their builds run today",
       "Which security vendors and tools they already use today",
