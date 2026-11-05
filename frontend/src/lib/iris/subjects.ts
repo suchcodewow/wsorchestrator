@@ -64,7 +64,7 @@ export const SUBJECTS: Record<SubjectKey, Subject> = {
     name: "Personas",
     short: "Personas",
     blurb: "The roles in a software deal: what each owns and measures, what moves them, and how to pitch at their level.",
-    comingSoon: true,
+    comingSoon: false,
   },
   harness: { name: "Harness Solution", short: "Harness", blurb: null, comingSoon: true },
   messaging: { name: "Messaging", short: "Messaging", blurb: null, comingSoon: true },
