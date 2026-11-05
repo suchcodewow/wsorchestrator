@@ -95,7 +95,7 @@ describe("before any question is approved", () => {
     assert.deepEqual(await startSitting(taker.id, "sdlc", "A", "live"), { ok: false, error: "not_ready" });
     const mine = await myIris(taker.id);
     assert.ok(mine.subjects.every((s) => s.status === (SUBJECTS[s.key].comingSoon ? "coming_soon" : "unavailable")));
-    assert.equal(mine.open, 5, "the four coming subjects are left out of the count");
+    assert.equal(mine.open, 5, "the five coming subjects are left out of the count");
     assert.deepEqual(await startSitting(taker.id, "tools", "A", "live"), { ok: false, error: "not_ready" });
   });
 

@@ -1,5 +1,5 @@
 /**
- * The nine Diagnostic subjects, the three tracks that weight them, and what a
+ * The ten Diagnostic subjects, the three tracks that weight them, and what a
  * placement routes someone to. Pure and free of any answer key, so the pages
  * share it with the server.
  */
@@ -12,6 +12,7 @@ export const SUBJECT_KEYS = [
   "aisdlc",
   "pipegen",
   "champion",
+  "personas",
   "harness",
   "messaging",
   "qualification",
@@ -58,6 +59,12 @@ export const SUBJECTS: Record<SubjectKey, Subject> = {
     short: "Champions",
     blurb: "Recognizing, developing and validating a champion who will advocate for you.",
     comingSoon: false,
+  },
+  personas: {
+    name: "Personas",
+    short: "Personas",
+    blurb: "The roles in a software deal: what each owns and measures, what moves them, and how to pitch at their level.",
+    comingSoon: true,
   },
   harness: { name: "Harness Solution", short: "Harness", blurb: null, comingSoon: true },
   messaging: { name: "Messaging", short: "Messaging", blurb: null, comingSoon: true },
