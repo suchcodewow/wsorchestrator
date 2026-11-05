@@ -41,9 +41,9 @@ const asked = (level: Level, correct: boolean, n: number, from = 0): Asked[] =>
   Array.from({ length: n }, (_, k) => ({ id: `q${level}-${from + k}`, level, subtopic: `s${k}`, correct, phase: "main" }));
 
 describe("the bank", () => {
-  test("is 190 questions, each id once, all version 3.0", () => {
-    assert.equal(IRIS_ITEMS.length, 190);
-    assert.equal(new Set(IRIS_ITEMS.map((i) => i.id)).size, 190);
+  test("is 228 questions, each id once, all version 3.0", () => {
+    assert.equal(IRIS_ITEMS.length, 228);
+    assert.equal(new Set(IRIS_ITEMS.map((i) => i.id)).size, 228);
     assert.ok(IRIS_ITEMS.every((i) => i.version === "3.0"));
   });
 
@@ -51,7 +51,7 @@ describe("the bank", () => {
     for (const s of SUBJECT_KEYS) {
       assert.equal(SUBJECTS[s].comingSoon, poolOf(s).length === 0, s);
     }
-    assert.deepEqual([...OPEN_SUBJECT_KEYS], ["sdlc", "companies", "aisdlc", "pipegen", "champion"]);
+    assert.deepEqual([...OPEN_SUBJECT_KEYS], ["sdlc", "companies", "aisdlc", "pipegen", "champion", "personas"]);
   });
 
   test("every subject with questions has 12 at 101, 14 at 201 and 12 at 301 on Form A", () => {
