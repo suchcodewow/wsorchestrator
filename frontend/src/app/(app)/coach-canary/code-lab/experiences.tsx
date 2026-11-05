@@ -8,10 +8,11 @@
  */
 
 import { useState, type ReactNode } from "react";
-import { ChevronRight, Laptop, ShieldAlert, Timer, type LucideIcon } from "lucide-react";
+import { ChevronRight, Laptop, Presentation, ShieldAlert, Timer, type LucideIcon } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { CodeLabView } from "./code-lab-view";
 import { SecurityTeamView } from "./security-team-view";
+import { SlideReviewView } from "./slide-review-view";
 
 type Experience = {
   id: string;
@@ -40,6 +41,15 @@ const EXPERIENCES: Experience[] = [
     minutes: "8–10 minutes",
     Icon: ShieldAlert,
     render: () => <SecurityTeamView />,
+  },
+  {
+    id: "slide-review",
+    name: "Review the “Our understanding” slide",
+    summary:
+      "Ten draft “Our understanding” slides, each with 10 to 15 small mistakes in spelling, grammar, fonts, alignment and more. Click each one to fix it before the customer sees it.",
+    minutes: "10–15 minutes",
+    Icon: Presentation,
+    render: () => <SlideReviewView />,
   },
 ];
 
