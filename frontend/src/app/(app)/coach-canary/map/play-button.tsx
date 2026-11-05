@@ -2,6 +2,7 @@
 
 import type { PlacedConcept } from "@/lib/mimir/map/layout";
 import { ringFraction, type ConceptState } from "@/lib/mimir/map/schema";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ProgressRing } from "./progress-ring";
 
 export function PlayButton({
@@ -24,21 +25,31 @@ export function PlayButton({
   const fraction = ringFraction(st, c.video.seconds);
   const pct = Math.round(fraction * 100);
   const what = st.completed ? "Watched. Play again" : pct > 0 ? `Resume (${pct}% watched)` : "Play video";
+  const tip = videos ? what : "Videos aren't set up on this server";
   return (
-    <button
-      type="button"
-      className="mm-play"
-      style={{ "--lc": `var(--l${c.level})` } as React.CSSProperties}
-      disabled={!videos}
-      title={videos ? what : "Videos aren't set up on this server"}
-      aria-label={`${what}: ${c.name}`}
-      onClick={(e) => {
-        e.stopPropagation();
-        onPlay(c.id);
-      }}
-    >
-      <ProgressRing fraction={fraction} completed={st.completed} size={size} />
-      {label && <span className="text-sm font-medium text-foreground">{label}</span>}
-    </button>
+    <TooltipProvider>
+      <Tooltip>
+        {/* A disabled button takes no pointer events, so the span carries the tooltip. */}
+        <TooltipTrigger asChild>
+          <span className="inline-flex">
+            <button
+              type="button"
+              className="mm-play"
+              style={{ "--lc": `var(--l${c.level})` } as React.CSSProperties}
+              disabled={!videos}
+              aria-label={`${what}: ${c.name}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                onPlay(c.id);
+              }}
+            >
+              <ProgressRing fraction={fraction} completed={st.completed} size={size} />
+              {label && <span className="text-sm font-medium text-foreground">{label}</span>}
+            </button>
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side="top">{tip}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }
