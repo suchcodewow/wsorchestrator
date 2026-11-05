@@ -12,6 +12,7 @@
  */
 
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   ARROW,
   BULLET,
@@ -156,6 +157,10 @@ function SlideRound({
   const [wrongClicks, setWrongClicks] = useState(0);
   const [floats, setFloats] = useState<Float[]>([]);
   const nextFloat = useRef(0);
+  // The piece just fixed shows what was wrong with it for a moment, then on hover.
+  const [justFixed, setJustFixed] = useState<Target | null>(null);
+  const justFixedTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => () => clearTimeout(justFixedTimer.current), []);
 
   const flawOf = (t: Target) => slide.flaws.find((fl) => fl.target === t);
   const missed = slide.flaws.filter((fl) => !fixed.has(fl.target));
@@ -164,8 +169,12 @@ function SlideRound({
   const click = (target: Target, at: { x: number; y: number }) => {
     if (reviewing || fixed.has(target)) return;
     const good = !!flawOf(target);
-    if (good) setFixed((s) => new Set(s).add(target));
-    else setWrongClicks((n) => n + 1);
+    if (good) {
+      setFixed((s) => new Set(s).add(target));
+      setJustFixed(target);
+      clearTimeout(justFixedTimer.current);
+      justFixedTimer.current = setTimeout(() => setJustFixed(null), 2500);
+    } else setWrongClicks((n) => n + 1);
     const id = nextFloat.current++;
     setFloats((fs) => [...fs, { id, ...at, good }]);
     setTimeout(() => setFloats((fs) => fs.filter((fl) => fl.id !== id)), 900);
@@ -175,11 +184,11 @@ function SlideRound({
     look: (t) => (fixed.has(t) ? {} : (flawOf(t)?.look ?? {})),
     status: (t) => (fixed.has(t) ? "fixed" : reviewing && flawOf(t) ? "missed" : "plain"),
     badge: (t) => (reviewing && !fixed.has(t) && flawOf(t) ? missed.indexOf(flawOf(t)!) + 1 : undefined),
+    flaw: flawOf,
+    justFixed,
     click,
     reviewing,
   };
-
-  const found = slide.flaws.filter((fl) => fixed.has(fl.target));
 
   return (
     <div className="space-y-4">
@@ -214,62 +223,44 @@ function SlideRound({
       </div>
 
       <Game.Provider value={game}>
-        <SlideCanvas slide={slide} floats={floats} />
+        <TooltipProvider>
+          <SlideCanvas slide={slide} floats={floats} />
+        </TooltipProvider>
       </Game.Provider>
 
-      {reviewing ? (
-        <ReviewList slide={slide} missed={missed} found={found} />
-      ) : (
-        <section className="overflow-hidden rounded-2xl border bg-card shadow-sm">
-          <p className="flex items-center gap-2 border-b bg-muted/40 px-5 py-2.5 text-sm font-medium">
-            <MousePointerClick className="size-4 text-muted-foreground" />
-            {found.length ? `Fixed so far: ${found.length}` : "Click anything on the slide that’s wrong"}
-          </p>
-          {found.length > 0 && (
-            <ul className="divide-y">
-              {found.map((fl) => (
-                <FlawRow key={fl.target} flaw={fl} found />
-              ))}
-            </ul>
-          )}
-        </section>
-      )}
+      {reviewing && <ReviewList slide={slide} missed={missed} />}
     </div>
   );
 }
 
-function FlawRow({ flaw, found, n }: { flaw: Flaw; found: boolean; n?: number }) {
+function FlawRow({ flaw, n }: { flaw: Flaw; n: number }) {
   return (
     <li className="flex items-baseline gap-3 px-5 py-2.5 text-sm">
-      {n !== undefined ? (
-        <span className="grid size-5 shrink-0 translate-y-0.5 place-items-center rounded-full bg-red-600 text-xs font-semibold text-white">
-          {n}
-        </span>
-      ) : (
-        <Check className={cn("size-4 shrink-0 translate-y-0.5", found ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground")} />
-      )}
+      <span className="grid size-5 shrink-0 translate-y-0.5 place-items-center rounded-full bg-red-600 text-xs font-semibold text-white">
+        {n}
+      </span>
       <span className="w-32 shrink-0 font-medium">{KIND_LABEL[flaw.kind]}</span>
       <span className="text-muted-foreground">{flaw.note}</span>
     </li>
   );
 }
 
-function ReviewList({ slide, missed, found }: { slide: Slide; missed: Flaw[]; found: Flaw[] }) {
+function ReviewList({ slide, missed }: { slide: Slide; missed: Flaw[] }) {
+  const found = slide.flaws.length - missed.length;
   return (
     <section className="overflow-hidden rounded-2xl border bg-card shadow-sm">
       <p className="border-b bg-muted/40 px-5 py-2.5 text-sm font-medium">
         {missed.length
-          ? `You found ${found.length} of ${slide.flaws.length}. The ${missed.length} you missed are marked on the slide (${missed.length * POINTS.missed} points).`
+          ? `You found ${found} of ${slide.flaws.length}. The ${missed.length} you missed are marked on the slide (${missed.length * POINTS.missed} points).`
           : `You found all ${slide.flaws.length}. Nothing got past you.`}
       </p>
-      <ul className="divide-y">
-        {missed.map((fl, i) => (
-          <FlawRow key={fl.target} flaw={fl} found={false} n={i + 1} />
-        ))}
-        {found.map((fl) => (
-          <FlawRow key={fl.target} flaw={fl} found />
-        ))}
-      </ul>
+      {missed.length > 0 && (
+        <ul className="divide-y">
+          {missed.map((fl, i) => (
+            <FlawRow key={fl.target} flaw={fl} n={i + 1} />
+          ))}
+        </ul>
+      )}
     </section>
   );
 }
@@ -280,6 +271,9 @@ type GameState = {
   look: (t: Target) => Look;
   status: (t: Target) => "plain" | "fixed" | "missed";
   badge: (t: Target) => number | undefined;
+  flaw: (t: Target) => Flaw | undefined;
+  /** The piece fixed a moment ago, whose tooltip opens without a hover. */
+  justFixed: Target | null;
   click: (t: Target, at: { x: number; y: number }) => void;
   reviewing: boolean;
 };
@@ -314,7 +308,7 @@ function textStyle(base: TextBase, look: Look): CSSProperties {
     fontWeight: look.weight ?? base.weight ?? 400,
     fontStyle: (look.italic ?? base.italic) ? "italic" : "normal",
     color: look.color ?? base.color ?? INK,
-    lineHeight: 1.25,
+    lineHeight: LINE_HEIGHT,
     textDecoration: look.underline ? "underline" : undefined,
     backgroundColor: look.highlight ? "#fde047" : undefined,
   };
@@ -337,7 +331,15 @@ const L = {
   box: { x: 67, y: 491, w: 1146, h: 161 },
   capsTitleY: 504,
   capY: (i: number) => 531 + i * 23,
+  /** A row's outcome line: how far below its headline, and its type size. */
+  sub: { dy: 21, size: 13.3 },
+  headerSize: 16,
 };
+
+/** Text on the slide is set at this line height, so a line's middle is half of it below its top. */
+const LINE_HEIGHT = 1.25;
+/** How far the middle of a line of `size` type sits below the line's top. */
+const middleOf = (size: number) => (size * LINE_HEIGHT) / 2;
 
 function useScale() {
   const ref = useRef<HTMLDivElement>(null);
@@ -443,6 +445,8 @@ function Piece({
   const look = game.look(target);
   const status = game.status(target);
   const badge = game.badge(target);
+  const flaw = game.flaw(target);
+  const [hovered, setHovered] = useState(false);
   const onClick = (e: MouseEvent<HTMLButtonElement>) => {
     // Where on the slide the click landed, in the slide's own pixels.
     const canvas = e.currentTarget.offsetParent as HTMLElement;
@@ -450,14 +454,14 @@ function Piece({
     const k = box.width / W;
     game.click(target, { x: (e.clientX - box.left) / k, y: (e.clientY - box.top) / k });
   };
-  return (
+  const button = (
     <button
       type="button"
       aria-label={label}
       onClick={onClick}
-      disabled={game.reviewing}
       className={cn(
-        "absolute block rounded-[3px] text-left whitespace-nowrap outline-offset-2 disabled:cursor-default",
+        "absolute block rounded-[3px] text-left whitespace-nowrap outline-offset-2",
+        game.reviewing && "cursor-default",
         !game.reviewing && status !== "fixed" && "cursor-pointer hover:outline-2 hover:outline-sky-500/40 hover:outline-dashed",
         status === "fixed" && "outline-2 outline-emerald-500/70 outline-solid",
         status === "missed" && "outline-2 outline-red-600 outline-solid",
@@ -475,6 +479,18 @@ function Piece({
         </span>
       )}
     </button>
+  );
+  if (!flaw || status === "plain") return button;
+  return (
+    <Tooltip open={hovered || game.justFixed === target} onOpenChange={setHovered}>
+      <TooltipTrigger asChild>{button}</TooltipTrigger>
+      <TooltipContent className="max-w-sm">
+        <span className={cn("font-semibold", status === "fixed" ? "text-emerald-600 dark:text-emerald-400" : "text-destructive")}>
+          {status === "fixed" ? "Fixed" : "Missed"} · {KIND_LABEL[flaw.kind]}
+        </span>{" "}
+        {flaw.note}
+      </TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -544,7 +560,7 @@ function Column({ side, rows }: { side: Side; rows: Slide["current"] }) {
       <Piece
         target={`headerIcon.${side}`}
         x={x - 35 - (headerSize - 22) / 2}
-        y={L.headerY - 3 - (headerSize - 22) / 2}
+        y={L.headerY + middleOf(L.headerSize) - headerSize / 2}
         label={`${side === "current" ? "Current" : "Future"} state icon`}
       >
         <span
@@ -554,7 +570,7 @@ function Column({ side, rows }: { side: Side; rows: Slide["current"] }) {
           <Mark kind={headerMark} size={headerSize * 0.6} />
         </span>
       </Piece>
-      <TextPiece target={`header.${side}`} x={x} y={L.headerY} base={{ font: "geist-mono", size: 16 }}>
+      <TextPiece target={`header.${side}`} x={x} y={L.headerY} base={{ font: "geist-mono", size: L.headerSize }}>
         {side === "current" ? "Current state" : "Future state"}
       </TextPiece>
       {rows.map((row, i) => {
@@ -568,14 +584,15 @@ function Column({ side, rows }: { side: Side; rows: Slide["current"] }) {
             </TextPiece>
             <Piece
               target={`${side}.${i as RowIndex}.icon`}
+              // Centred on the outcome line beside it; the 2px is the button's padding.
               x={x + 1 - (size - 13) / 2}
-              y={y + 24 - (size - 13) / 2}
+              y={y + L.sub.dy + middleOf(L.sub.size) - size / 2 - 2}
               label={`${side === "current" ? "Cross" : "Tick"} beside “${row.sub}”`}
               className="p-0.5"
             >
               <Mark kind={iconLook.icon ?? mark} size={size} />
             </Piece>
-            <TextPiece target={`${side}.${i as RowIndex}.sub`} x={x + 19} y={y + 21} base={{ font: "geist", size: 13.3, italic: true }}>
+            <TextPiece target={`${side}.${i as RowIndex}.sub`} x={x + 19} y={y + L.sub.dy} base={{ font: "geist", size: L.sub.size, italic: true }}>
               {row.sub}
             </TextPiece>
           </span>
