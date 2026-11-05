@@ -3,7 +3,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireCaller } from "@/lib/api-auth";
-import { canUseTraining } from "@/lib/roles";
+import { canSeeScheduler } from "@/lib/roles";
+import { mayReadBootcamp } from "@/lib/scheduler/judging";
 import { bootcampExists } from "@/lib/scheduler/bootcamps";
 import { checklistCounts, checklistMarks } from "@/lib/scheduler/checklist";
 
@@ -12,8 +13,11 @@ const idSchema = z.string().uuid();
 type Params = { params: Promise<{ id: string }> };
 
 export async function GET(req: Request, { params }: Params) {
-  const { error } = await requireCaller(req, canUseTraining);
+  const { error, user } = await requireCaller(req, canSeeScheduler);
   if (error) return error;
+  if (!(await mayReadBootcamp(user.access, (await params).id))) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
 
   const id = idSchema.safeParse((await params).id);
   if (!id.success || !(await bootcampExists(id.data))) {

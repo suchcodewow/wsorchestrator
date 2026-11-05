@@ -23,7 +23,8 @@ export type Access = {
   platform: boolean;
   /**
    * A guest judge on the active bootcamp. Not a role: the Scheduler grants it
-   * per bootcamp, and it lets them score assessments and nothing else.
+   * per bootcamp, and it lets them score assessments and read that bootcamp's
+   * schedule, and nothing else.
    */
   judging: boolean;
   /**
@@ -71,9 +72,9 @@ export const ASSESSMENTS_ROLE_LABELS: Record<AssessmentsRole, string> = {
 };
 
 export const ASSESSMENTS_ROLE_DESCRIPTIONS: Record<AssessmentsRole, string> = {
-  viewer: "Sees and scores assessments, eVals among them, and takes the Diagnostic placement tests.",
+  viewer: "Sees assessments, eVals among them, without scoring them, and takes the Diagnostic placement tests.",
   administrator:
-    "Also manages eVals settings and Google meetings, sees everyone's Diagnostic results and reviews its questions, and manages everyone's assessments role.",
+    "Also scores assessments, manages eVals settings, Google meetings and Coach Canary's settings, sees everyone's Diagnostic results and reviews its questions, and manages everyone's assessments role.",
 };
 
 export const NO_ASSESSMENTS_ACCESS_LABEL = "No assessments access";
@@ -142,18 +143,25 @@ export const canUseTraining = (access: Access) => trainingAtLeast(access, "viewe
 export const canManageTrainingSettings = (access: Access) =>
   trainingAtLeast(access, "administrator");
 
+/**
+ * The Scheduler: a Training Viewer or above, and the active bootcamp's guest
+ * judges, who see that one bootcamp's schedule and nothing else in it (see
+ * `mayReadBootcamp` in `lib/scheduler/judging.ts`).
+ */
+export const canSeeScheduler = (access: Access) => canUseTraining(access) || access.judging;
+
 /** Mimir's library and coach are for everyone who can sign in, whatever their roles. */
 export const canUseMimir: (access: Access) => boolean = () => true;
 
-/** Mimir Settings: the content the coach serves, and its coaching settings. */
-export const canManageMimir = (access: Access) => canManageTrainingSettings(access);
-
-// The assessments area, of which eVals is a part.
+// The assessments area, of which eVals and Coach Canary are a part.
 
 export const canUseEvals = (access: Access) => assessmentsAtLeast(access, "viewer");
 
 export const canManageEvalsSettings = (access: Access) =>
   assessmentsAtLeast(access, "administrator");
+
+/** Coach Canary Settings: the content the coach serves, and its coaching settings. It sits in Assessments, so it is theirs. */
+export const canManageMimir = (access: Access) => canManageEvalsSettings(access);
 
 /**
  * Reporting → Canary Wire names ~300 people and who is behind on training:
@@ -181,8 +189,15 @@ export const canManageBootcampRecords = (access: Access) => canManageEvalsSettin
 /** The Reporting section: anyone who can see one of its tabs, which with Bootcamp is everyone. */
 export const canSeeReporting = (access: Access) => canSeeBootcampRecords(access) || canSeeCanaryWire(access);
 
-/** Sees and submits assessments on the eVals page: anyone in eVals, and the active bootcamp's guest judges. */
-export const canScoreAssessments = (access: Access) => canUseEvals(access) || access.judging;
+/** Reads the eVals pages and every submission on them: anyone in eVals, and the active bootcamp's guest judges. */
+export const canSeeEvals = (access: Access) => canUseEvals(access) || access.judging;
+
+/**
+ * Submits scores, records and transcribes, and moves participation marks on
+ * the eVals page: an Assessments Administrator and the active bootcamp's guest
+ * judges. An Assessments Viewer reads them and changes nothing.
+ */
+export const canScoreAssessments = (access: Access) => canManageEvalsSettings(access) || access.judging;
 
 /** Searches the employee list: eVals administrators for their settings, Training administrators to add judges. */
 export const canSearchEmployees = (access: Access) =>
@@ -190,11 +205,10 @@ export const canSearchEmployees = (access: Access) =>
 
 /**
  * Mimir Studio: uploads a new slide deck for a new concept map, and makes a
- * concept's video again. It sits in Mimir Settings, which is for Training
- * Administrators, and acts on the comments only Assessments Administrators
- * moderate, so it takes both.
+ * concept's video again. It sits in Coach Canary Settings, so it is an
+ * Assessments Administrator's.
  */
-export const canRunMimirStudio = (access: Access) => canManageMimir(access) && canManageEvalsSettings(access);
+export const canRunMimirStudio = (access: Access) => canManageMimir(access);
 
 // Diagnostic, part of the assessments area.
 
@@ -276,7 +290,7 @@ export const hasNoAccess = (access: Access) =>
 export function homePath(access: Access): string {
   if (canUseEvents(access)) return "/events";
   if (canUseTraining(access)) return "/scheduler";
-  if (canScoreAssessments(access)) return "/evals";
+  if (canSeeEvals(access)) return "/evals";
   if (canSeeCanaryWire(access)) return "/reporting/canary-wire";
   return "/welcome";
 }

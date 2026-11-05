@@ -30,7 +30,7 @@ export default async function ChatPage() {
               first.
             </>
           ) : (
-            "A Training Administrator sets up the course. Check back soon."
+            "A Assessments Administrator sets up the course. Check back soon."
           )}
         </p>
       </div>

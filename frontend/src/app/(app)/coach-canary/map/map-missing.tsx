@@ -16,7 +16,7 @@ export function MapMissing({ canManage }: { canManage: boolean }) {
             .
           </>
         ) : (
-          "A Training Administrator imports it. Check back soon."
+          "A Assessments Administrator imports it. Check back soon."
         )}
       </p>
     </div>

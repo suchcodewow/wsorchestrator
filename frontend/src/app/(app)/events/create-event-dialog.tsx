@@ -3,7 +3,7 @@
 /** The form that books a workshop or a challenge. */
 
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { CLOUDS, CLOUD_LABELS, DEFAULT_TTL_DAYS, MAX_TTL_DAYS, limitsFor, type Cloud, type EventMode, type ScenarioId } from "@/db/schema";
 import { ScenarioPicker } from "@/components/scenario-picker";
@@ -169,175 +169,177 @@ export function CreateEventDialog({
             e.preventDefault();
             void createRun(false);
           }}
-          className="grid gap-5"
+          className="contents"
         >
-          <motion.div variants={riseChild} className="grid gap-1.5">
-            <label htmlFor="ws-name" className="text-sm font-medium">
-              {mode === "challenge" ? "Challenge name" : "Workshop name"}
-            </label>
-            <Input
-              id="ws-name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="platform team workshop"
-              required
-              autoFocus
-            />
-          </motion.div>
+          <DialogBody className="grid gap-5">
+            <motion.div variants={riseChild} className="grid gap-1.5">
+              <label htmlFor="ws-name" className="text-sm font-medium">
+                {mode === "challenge" ? "Challenge name" : "Workshop name"}
+              </label>
+              <Input
+                id="ws-name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="platform team workshop"
+                required
+                autoFocus
+              />
+            </motion.div>
 
-          <motion.div variants={riseChild} className="grid gap-1.5">
-            <label htmlFor="ws-users" className="text-sm font-medium">
-              How many {copy.who}s?
-            </label>
-            <Input
-              id="ws-users"
-              type="number"
-              inputMode="numeric"
-              min={1}
-              max={limits.maxUsers}
-              step={1}
-              value={userCount}
-              onChange={(e) => setUserCount(e.target.value)}
-              required
-              className="tnum"
-            />
-            <p className="text-xs leading-relaxed text-muted-foreground">
-              1–{limits.maxUsers} accounts are created in an organizational unit named after the {copy.noun}.
-            </p>
-          </motion.div>
+            <motion.div variants={riseChild} className="grid gap-1.5">
+              <label htmlFor="ws-users" className="text-sm font-medium">
+                How many {copy.who}s?
+              </label>
+              <Input
+                id="ws-users"
+                type="number"
+                inputMode="numeric"
+                min={1}
+                max={limits.maxUsers}
+                step={1}
+                value={userCount}
+                onChange={(e) => setUserCount(e.target.value)}
+                required
+                className="tnum"
+              />
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                1–{limits.maxUsers} accounts are created in an organizational unit named after the {copy.noun}.
+              </p>
+            </motion.div>
 
-          <motion.fieldset variants={riseChild} className="grid gap-2">
-            <legend className="mb-2 text-sm font-medium">
-              {singleCloud ? "Cloud" : "(Optional) Cloud(s) to provision for attendee access"}
-            </legend>
-            <div className="grid gap-2">
-              {CLOUDS.map((cloud) => {
-                const selected = clouds.includes(cloud);
-                return (
-                  <motion.button
-                    key={cloud}
-                    type="button"
-                    role={singleCloud ? "radio" : "checkbox"}
-                    aria-checked={selected}
-                    onClick={() => toggleCloud(cloud)}
-                    whileTap={{ scale: 0.99 }}
-                    transition={SPRING_SNAPPY}
+            <motion.fieldset variants={riseChild} className="grid gap-2">
+              <legend className="mb-2 text-sm font-medium">
+                {singleCloud ? "Cloud" : "(Optional) Cloud(s) to provision for attendee access"}
+              </legend>
+              <div className="grid gap-2">
+                {CLOUDS.map((cloud) => {
+                  const selected = clouds.includes(cloud);
+                  return (
+                    <motion.button
+                      key={cloud}
+                      type="button"
+                      role={singleCloud ? "radio" : "checkbox"}
+                      aria-checked={selected}
+                      onClick={() => toggleCloud(cloud)}
+                      whileTap={{ scale: 0.99 }}
+                      transition={SPRING_SNAPPY}
+                      className={cn(
+                        "flex cursor-pointer items-center gap-3 rounded-lg border p-3 text-left text-sm transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
+                        selected ? "border-brand-border bg-brand/8" : "hover:border-brand-border/60 hover:bg-accent/40",
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          "flex size-4.5 shrink-0 items-center justify-center border transition-colors",
+                          singleCloud ? "rounded-full" : "rounded-[5px]",
+                          selected ? "border-brand bg-brand text-brand-foreground" : "border-input",
+                        )}
+                      >
+                        {selected && (
+                          <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} transition={SPRING_SNAPPY}>
+                            <Check className="size-3" strokeWidth={3} />
+                          </motion.span>
+                        )}
+                      </span>
+                      <span className="font-medium">{CLOUD_LABELS[cloud]}</span>
+                    </motion.button>
+                  );
+                })}
+
+                {fallbackAllowed && (
+                  <div
+                    role="checkbox"
+                    aria-checked={noCloudSelected}
+                    aria-disabled="true"
                     className={cn(
-                      "flex cursor-pointer items-center gap-3 rounded-lg border p-3 text-left text-sm transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
-                      selected ? "border-brand-border bg-brand/8" : "hover:border-brand-border/60 hover:bg-accent/40",
+                      "flex items-center gap-3 rounded-lg border p-3 text-left text-sm opacity-60",
+                      noCloudSelected ? "border-brand-border bg-brand/8" : "border-dashed",
                     )}
                   >
                     <span
                       className={cn(
-                        "flex size-4.5 shrink-0 items-center justify-center border transition-colors",
-                        singleCloud ? "rounded-full" : "rounded-[5px]",
-                        selected ? "border-brand bg-brand text-brand-foreground" : "border-input",
+                        "flex size-4.5 shrink-0 items-center justify-center rounded-[5px] border transition-colors",
+                        noCloudSelected ? "border-brand bg-brand text-brand-foreground" : "border-input",
                       )}
                     >
-                      {selected && (
+                      {noCloudSelected && (
                         <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} transition={SPRING_SNAPPY}>
                           <Check className="size-3" strokeWidth={3} />
                         </motion.span>
                       )}
                     </span>
-                    <span className="font-medium">{CLOUD_LABELS[cloud]}</span>
-                  </motion.button>
-                );
-              })}
-
-              {fallbackAllowed && (
-                <div
-                  role="checkbox"
-                  aria-checked={noCloudSelected}
-                  aria-disabled="true"
-                  className={cn(
-                    "flex items-center gap-3 rounded-lg border p-3 text-left text-sm opacity-60",
-                    noCloudSelected ? "border-brand-border bg-brand/8" : "border-dashed",
-                  )}
-                >
-                  <span
-                    className={cn(
-                      "flex size-4.5 shrink-0 items-center justify-center rounded-[5px] border transition-colors",
-                      noCloudSelected ? "border-brand bg-brand text-brand-foreground" : "border-input",
-                    )}
-                  >
-                    {noCloudSelected && (
-                      <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} transition={SPRING_SNAPPY}>
-                        <Check className="size-3" strokeWidth={3} />
-                      </motion.span>
-                    )}
-                  </span>
-                  <span className="font-medium">Internal Google project</span>
-                </div>
+                    <span className="font-medium">Internal Google project</span>
+                  </div>
+                )}
+              </div>
+              {singleCloud ? (
+                <p className="text-xs text-muted-foreground">A challenge runs on a single cloud.</p>
+              ) : (
+                fallbackAllowed && (
+                  <p className="text-xs leading-relaxed text-muted-foreground">
+                    {noCloudSelected
+                      ? "With no cloud selected, attendees share the long-lived testing project."
+                      : "Leave all unselected to use the shared testing project instead."}
+                  </p>
+                )
               )}
-            </div>
-            {singleCloud ? (
-              <p className="text-xs text-muted-foreground">A challenge runs on a single cloud.</p>
-            ) : (
-              fallbackAllowed && (
-                <p className="text-xs leading-relaxed text-muted-foreground">
-                  {noCloudSelected
-                    ? "With no cloud selected, attendees share the long-lived testing project."
-                    : "Leave all unselected to use the shared testing project instead."}
-                </p>
-              )
-            )}
-          </motion.fieldset>
+            </motion.fieldset>
 
-          {mode === "challenge" && (
-            <motion.div variants={riseChild}>
-              <ScenarioPicker
-                clouds={clouds}
-                selected={scenarios}
-                onToggle={toggleScenario}
-                legend="(Optional) Scenarios"
-                hint="Each competitor gets their own Kubernetes cluster, built alongside their environment, with these problems already in it. You can turn them on and off once the challenge is running."
+            {mode === "challenge" && (
+              <motion.div variants={riseChild}>
+                <ScenarioPicker
+                  clouds={clouds}
+                  selected={scenarios}
+                  onToggle={toggleScenario}
+                  legend="(Optional) Scenarios"
+                  hint="Each competitor gets their own Kubernetes cluster, built alongside their environment, with these problems already in it. You can turn them on and off once the challenge is running."
+                />
+              </motion.div>
+            )}
+
+            <motion.div variants={riseChild} className="grid gap-1.5">
+              <label htmlFor="ws-days" className="text-sm font-medium">
+                How many days should it run?
+              </label>
+              <Input
+                id="ws-days"
+                type="number"
+                inputMode="numeric"
+                min={1}
+                max={MAX_TTL_DAYS}
+                step={1}
+                value={ttlDays}
+                onChange={(e) => setTtlDays(e.target.value)}
+                required
+                className="tnum"
+              />
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                Everything is torn down after this many days (1–{MAX_TTL_DAYS}), and you can add a day later.
+              </p>
+            </motion.div>
+
+            <motion.div variants={riseChild} className="grid gap-1.5 rounded-lg border border-dashed p-3">
+              <Button type="button" variant="secondary" disabled={pending !== null} onClick={() => createRun(true)}>
+                {pending === "now" ? <Loader2 className="animate-spin" /> : <Zap />}
+                {pending === "now" ? "Starting…" : "Start now"}
+              </Button>
+              <p className="text-xs text-muted-foreground">Builds the {copy.noun} immediately, ignoring the start time below.</p>
+            </motion.div>
+
+            <motion.div variants={riseChild} className="grid gap-1.5">
+              <label htmlFor="ws-start" className="text-sm font-medium">
+                Start date &amp; time
+              </label>
+              <Input
+                id="ws-start"
+                type="datetime-local"
+                className="datetime-field border-0 shadow-none pr-1"
+                value={start}
+                onChange={(e) => setStart(e.target.value)}
+                required
               />
             </motion.div>
-          )}
-
-          <motion.div variants={riseChild} className="grid gap-1.5">
-            <label htmlFor="ws-days" className="text-sm font-medium">
-              How many days should it run?
-            </label>
-            <Input
-              id="ws-days"
-              type="number"
-              inputMode="numeric"
-              min={1}
-              max={MAX_TTL_DAYS}
-              step={1}
-              value={ttlDays}
-              onChange={(e) => setTtlDays(e.target.value)}
-              required
-              className="tnum"
-            />
-            <p className="text-xs leading-relaxed text-muted-foreground">
-              Everything is torn down after this many days (1–{MAX_TTL_DAYS}), and you can add a day later.
-            </p>
-          </motion.div>
-
-          <motion.div variants={riseChild} className="grid gap-1.5 rounded-lg border border-dashed p-3">
-            <Button type="button" variant="secondary" disabled={pending !== null} onClick={() => createRun(true)}>
-              {pending === "now" ? <Loader2 className="animate-spin" /> : <Zap />}
-              {pending === "now" ? "Starting…" : "Start now"}
-            </Button>
-            <p className="text-xs text-muted-foreground">Builds the {copy.noun} immediately, ignoring the start time below.</p>
-          </motion.div>
-
-          <motion.div variants={riseChild} className="grid gap-1.5">
-            <label htmlFor="ws-start" className="text-sm font-medium">
-              Start date &amp; time
-            </label>
-            <Input
-              id="ws-start"
-              type="datetime-local"
-              className="datetime-field border-0 shadow-none pr-1"
-              value={start}
-              onChange={(e) => setStart(e.target.value)}
-              required
-            />
-          </motion.div>
+          </DialogBody>
 
           {error && (
             <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="text-sm text-destructive">

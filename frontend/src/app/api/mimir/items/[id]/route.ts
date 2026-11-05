@@ -1,4 +1,4 @@
-/** One Mimir item: reading it, for anyone signed in; replacing or removing it, for Training Administrators. */
+/** One Mimir item: reading it, for anyone signed in; replacing or removing it, for Assessments Administrators. */
 
 import { NextResponse } from "next/server";
 import { requireMimirAdministrator, requireUser } from "@/lib/api-auth";

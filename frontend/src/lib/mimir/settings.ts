@@ -1,7 +1,7 @@
 /**
  * Mimir's coaching settings: the platform facts every sales-facing prompt
  * carries, and the module names the coach must never guess at. Both are
- * content, so Training Administrators edit them in Mimir Settings → Coaching;
+ * content, so Assessments Administrators edit them in Mimir Settings → Coaching;
  * until someone does, the defaults below are used.
  */
 

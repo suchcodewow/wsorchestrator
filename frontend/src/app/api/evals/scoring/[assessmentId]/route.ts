@@ -6,10 +6,10 @@ import { requireCaller } from "@/lib/api-auth";
 import { attendeeCounts, breakoutRooms, listAttendees, scoringAssessment, scoringBootcamp } from "@/lib/evals/scoring";
 import { ASSESSMENT_ATTENDEE_LIST } from "@/lib/list-specs";
 import { parseListQuery } from "@/lib/paging";
-import { canScoreAssessments } from "@/lib/roles";
+import { canSeeEvals } from "@/lib/roles";
 
 export async function GET(req: Request, { params }: { params: Promise<{ assessmentId: string }> }) {
-  const { error, user } = await requireCaller(req, canScoreAssessments);
+  const { error, user } = await requireCaller(req, canSeeEvals);
   if (error) return error;
 
   const id = z.string().uuid().safeParse((await params).assessmentId);

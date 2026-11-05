@@ -11,7 +11,8 @@ import { notFound, redirect } from "next/navigation";
 import { z } from "zod";
 import { auth, signInPath } from "@/auth";
 import { SCHEDULE_LIMITS, SCHEDULE_TRACKS } from "@/db/schema";
-import { canUseTraining } from "@/lib/roles";
+import { canSeeScheduler } from "@/lib/roles";
+import { mayReadBootcamp } from "@/lib/scheduler/judging";
 import { loadSchedule, type SessionRow } from "@/lib/scheduler/schedule";
 import { PRINT_STRIPES } from "@/lib/scheduler/session-style";
 import { TRACK_LABELS, attendeeCount, dayDate, formatClock, trackDays } from "@/lib/scheduler/timeline";
@@ -45,11 +46,12 @@ export default async function PrintSchedulePage({
 }) {
   const session = await auth();
   if (!session?.user) redirect(await signInPath());
-  if (!canUseTraining(session.user.access)) notFound();
+  if (!canSeeScheduler(session.user.access)) notFound();
 
   const id = idSchema.safeParse((await params).id);
   const query = querySchema.safeParse(await searchParams);
   if (!id.success || !query.success) notFound();
+  if (!(await mayReadBootcamp(session.user.access, id.data))) notFound();
   const schedule = await loadSchedule(id.data);
   if (!schedule) notFound();
   const { bootcamp } = schedule;

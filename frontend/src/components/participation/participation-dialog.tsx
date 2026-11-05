@@ -261,7 +261,15 @@ function useAiComments(employeeId: string, onDone: (sheet: ParticipationSheet) =
   return { pending, error, run };
 }
 
-function SheetPanel({ employeeId, canRegenerate }: { employeeId: string; canRegenerate: boolean }) {
+function SheetPanel({
+  employeeId,
+  canRegenerate,
+  canMark,
+}: {
+  employeeId: string;
+  canRegenerate: boolean;
+  canMark: boolean;
+}) {
   const router = useRouter();
   // An administrator's marks carry through to the saved score, as they do in the Administration View.
   const { sheet, setSheet, saving, error, adjust } = useParticipationSheet(employeeId, () => router.refresh());
@@ -276,7 +284,7 @@ function SheetPanel({ employeeId, canRegenerate }: { employeeId: string; canRege
         <span className="text-muted-foreground">· {STAGE_LABELS[sheet.attendee.stage]}</span>
       </p>
 
-      <Counters sheet={sheet} disabled={saving !== null} onAdjust={sheet.locked ? undefined : adjust} />
+      <Counters sheet={sheet} disabled={saving !== null} onAdjust={sheet.locked || !canMark ? undefined : adjust} />
       {sheet.locked && <p className="text-sm text-muted-foreground">{ERRORS.released}</p>}
       {error && <ErrorLine error={error} />}
 
@@ -306,6 +314,7 @@ export function ParticipationDialog({
   people,
   initialId,
   canRegenerate = false,
+  canMark,
   loading = false,
 }: {
   open: boolean;
@@ -314,6 +323,8 @@ export function ParticipationDialog({
   initialId: string;
   /** Whether the viewer may have this person's comments written again. */
   canRegenerate?: boolean;
+  /** Whether the viewer may move the marks; an Assessments Viewer only reads them. */
+  canMark: boolean;
   /** Whether the group is still being read. */
   loading?: boolean;
 }) {
@@ -325,7 +336,9 @@ export function ParticipationDialog({
       <DialogContent className={cn("gap-2 p-4", many ? "sm:max-w-3xl" : "sm:max-w-xl")}>
         <DialogHeader>
           <DialogTitle>Participation</DialogTitle>
-          <DialogDescription className="sr-only">Raise or lower each descriptor for this attendee.</DialogDescription>
+          <DialogDescription className="sr-only">
+            {canMark ? "Raise or lower each descriptor for this attendee." : "Each descriptor's marks for this attendee."}
+          </DialogDescription>
         </DialogHeader>
         <div className={cn("gap-4", many && "grid sm:grid-cols-[12rem_minmax(0,1fr)]")}>
           {(many || loading) && (
@@ -346,7 +359,7 @@ export function ParticipationDialog({
               ))}
             </nav>
           )}
-          <SheetPanel key={picked} employeeId={picked} canRegenerate={canRegenerate} />
+          <SheetPanel key={picked} employeeId={picked} canRegenerate={canRegenerate} canMark={canMark} />
         </div>
       </DialogContent>
     </Dialog>
@@ -358,11 +371,13 @@ export function ParticipationButton({
   employeeId,
   fullName,
   canRegenerate = false,
+  canMark,
   labelled = false,
 }: {
   employeeId: string;
   fullName: string;
   canRegenerate?: boolean;
+  canMark: boolean;
   /** Icon only, with a border shown only on hover. */
   labelled?: boolean;
 }) {
@@ -398,6 +413,7 @@ export function ParticipationButton({
           people={[{ id: employeeId, fullName }]}
           initialId={employeeId}
           canRegenerate={canRegenerate}
+          canMark={canMark}
         />
       )}
     </span>
@@ -409,10 +425,12 @@ export function ParticipationGroupButton({
   assessmentId,
   employeeId,
   fullName,
+  canMark,
 }: {
   assessmentId: string;
   employeeId: string;
   fullName: string;
+  canMark: boolean;
 }) {
   const self: GroupPerson = { id: employeeId, fullName };
   const [open, setOpen] = useState(false);
@@ -447,6 +465,7 @@ export function ParticipationGroupButton({
           people={people}
           initialId={employeeId}
           loading={loading}
+          canMark={canMark}
         />
       )}
     </>

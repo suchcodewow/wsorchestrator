@@ -77,9 +77,12 @@ const POLICY: Record<string, { actual: Check; expected: Check }> = {
     actual: roles.canManageTrainingSettings,
     expected: training("administrator"),
   },
+  // The active bootcamp's guest judges see its schedule, and no other bootcamp's.
+  canSeeScheduler: { actual: roles.canSeeScheduler, expected: (a) => training("viewer")(a) || a.judging },
   // Mimir is for everyone signed in, with or without a role anywhere.
   canUseMimir: { actual: roles.canUseMimir, expected: () => true },
-  canManageMimir: { actual: roles.canManageMimir, expected: training("administrator") },
+  // Coach Canary sits in Assessments, so its settings are an Assessments Administrator's.
+  canManageMimir: { actual: roles.canManageMimir, expected: evals("administrator") },
 
   canUseEvals: { actual: roles.canUseEvals, expected: evals("viewer") },
   canManageEvalsSettings: {
@@ -91,15 +94,14 @@ const POLICY: Record<string, { actual: Check; expected: Check }> = {
   canSeeBootcampRecords: { actual: roles.canSeeBootcampRecords, expected: () => true },
   canManageBootcampRecords: { actual: roles.canManageBootcampRecords, expected: evals("administrator") },
   canSeeReporting: { actual: roles.canSeeReporting, expected: () => true },
-  canScoreAssessments: { actual: roles.canScoreAssessments, expected: (a) => evals("viewer")(a) || a.judging },
+  // An Assessments Viewer reads eVals; only an administrator or a guest judge scores in it.
+  canSeeEvals: { actual: roles.canSeeEvals, expected: (a) => evals("viewer")(a) || a.judging },
+  canScoreAssessments: { actual: roles.canScoreAssessments, expected: (a) => evals("administrator")(a) || a.judging },
   canSearchEmployees: {
     actual: roles.canSearchEmployees,
     expected: (a) => evals("administrator")(a) || training("administrator")(a),
   },
-  canRunMimirStudio: {
-    actual: roles.canRunMimirStudio,
-    expected: (a) => evals("administrator")(a) && training("administrator")(a),
-  },
+  canRunMimirStudio: { actual: roles.canRunMimirStudio, expected: evals("administrator") },
 
   // Diagnostic is part of the assessments area: a viewer takes it, an administrator runs it.
   canTakeIris: { actual: roles.canTakeIris, expected: evals("viewer") },

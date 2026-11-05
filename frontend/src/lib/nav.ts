@@ -39,8 +39,9 @@ import {
   canManageSignInDomains,
   canManageTrainingSettings,
   canManageUsers,
-  canScoreAssessments,
   canSeeReporting,
+  canSeeEvals,
+  canSeeScheduler,
   canTakeIris,
   canUseEvents,
   canUseMimir,
@@ -129,7 +130,7 @@ export const NAV_SECTIONS: NavSection[] = [
         label: "Scheduler",
         Icon: CalendarClock,
         description: "Bootcamp schedules, sessions, judges and day checklists.",
-        visible: canUseTraining,
+        visible: canSeeScheduler,
       },
       {
         href: "/scheduler-settings",
@@ -192,7 +193,7 @@ export const NAV_SECTIONS: NavSection[] = [
         label: "eVals",
         Icon: FlaskConical,
         description: "Score attendees on bootcamp and intermediate assessments.",
-        visible: canScoreAssessments,
+        visible: canSeeEvals,
       },
       { href: "/diagnostic", hasTabs: true, label: "Diagnostic", Icon: Eye, description: "Adaptive placement tests.", visible: canTakeIris },
       {

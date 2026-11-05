@@ -12,7 +12,7 @@ import {
   submissionSchema,
   SUBMISSION_STATUS_FOR,
 } from "@/lib/evals/scoring";
-import { canScoreAssessments } from "@/lib/roles";
+import { canScoreAssessments, canSeeEvals } from "@/lib/roles";
 
 type Params = { params: Promise<{ assessmentId: string; employeeId: string }> };
 
@@ -20,7 +20,7 @@ const assessmentIdSchema = z.string().uuid();
 const employeeIdSchema = z.string().min(1).max(200);
 
 export async function GET(req: Request, { params }: Params) {
-  const { error } = await requireCaller(req, canScoreAssessments);
+  const { error } = await requireCaller(req, canSeeEvals);
   if (error) return error;
 
   const { assessmentId, employeeId } = await params;

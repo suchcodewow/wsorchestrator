@@ -1,5 +1,5 @@
 /**
- * The layout for Mimir Settings, for Training Administrators.
+ * The layout for Mimir Settings, for Assessments Administrators.
  *
  * A sibling of /coach-canary rather than beneath it, so the sidebar does not light up
  * both entries at once.

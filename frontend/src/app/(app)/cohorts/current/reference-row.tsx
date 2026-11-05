@@ -67,11 +67,9 @@ const ICON = "size-4 stroke-[2.5] text-zinc-950 drop-shadow-[0_0_2px_rgb(220_38_
 
 /** The row, cell for cell with a candidate's; nothing on it can be changed, and a click anywhere plays the animation. */
 export function ReferenceRow({
-  participation,
   btcDate,
   onClick,
 }: {
-  participation: boolean;
   btcDate: boolean;
   onClick: () => void;
 }) {
@@ -90,11 +88,6 @@ export function ReferenceRow({
           {NAME}
         </button>
       </td>
-      {participation && (
-        <td className="px-5 py-1">
-          <Bird className={ICON} aria-label="Bird" />
-        </td>
-      )}
       <td className="px-5 py-1">
         <span className="flex p-0.5">
           <Bird className={ICON} aria-label="Bird" />

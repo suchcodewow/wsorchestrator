@@ -5,7 +5,7 @@ import { notFound, redirect } from "next/navigation";
 import { auth, signInPath } from "@/auth";
 import { BOOTCAMP_LIST } from "@/lib/list-specs";
 import { parseListQuery } from "@/lib/paging";
-import { canManageTrainingSettings, canUseTraining } from "@/lib/roles";
+import { canManageTrainingSettings, canSeeScheduler, canUseTraining } from "@/lib/roles";
 import { listBootcamps } from "@/lib/scheduler/bootcamps";
 import { facilityPicks } from "@/lib/scheduler/facilities";
 import { copySources } from "@/lib/scheduler/schedule";
@@ -20,14 +20,15 @@ export default async function SchedulerPage({
 }) {
   const session = await auth();
   if (!session?.user) redirect(await signInPath());
-  if (!canUseTraining(session.user.access)) notFound();
+  if (!canSeeScheduler(session.user.access)) notFound();
 
   const params = await searchParams;
   const query = parseListQuery(params, BOOTCAMP_LIST);
   const showComplete = params.complete === "1";
   const canManage = canManageTrainingSettings(session.user.access);
   const [page, facilities, sources] = await Promise.all([
-    listBootcamps(query, showComplete),
+    // A guest judge sees only the bootcamp they judge, which is the active one.
+    listBootcamps(query, showComplete, !canUseTraining(session.user.access)),
     canManage ? facilityPicks() : [],
     canManage ? copySources(null) : [],
   ]);

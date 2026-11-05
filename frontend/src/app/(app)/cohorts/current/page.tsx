@@ -6,14 +6,7 @@ import { meetingStatusesFor } from "@/lib/evals/google-meetings";
 import { CURRENT_COHORT_LIST } from "@/lib/list-specs";
 import { parseListQuery } from "@/lib/paging";
 import { getTestGroup } from "@/lib/cohorts/test-group";
-import {
-  canManageBootcampRecords,
-  canManageEvalsSettings,
-  canManageTestGroup,
-  canManageTrainingSettings,
-  canScoreAssessments,
-  canUseEvals,
-} from "@/lib/roles";
+import { canManageTestGroup, canManageTrainingSettings } from "@/lib/roles";
 import { activeBootcamp } from "@/lib/scheduler/bootcamps";
 import { intakeQuestionsByForm, latestIntakesOf } from "@/lib/logistics/intake";
 import { CurrentCohortView, type MemberMeetings } from "./current-view";
@@ -33,7 +26,6 @@ export default async function CurrentCohortPage({
     unanswered: params.rsvp === "none",
   };
   const session = await auth();
-  const canOpenRecord = session?.user ? canUseEvals(session.user.access) : false;
   const [page, summary, active, testGroup, intakeQuestions] = await Promise.all([
     listCurrentCohort(filter, query),
     currentCohortSummary(),
@@ -78,16 +70,9 @@ export default async function CurrentCohortPage({
         canSetTrack={
           session?.user ? canManageTrainingSettings(session.user.access) : false
         }
-        canOpenRecord={canOpenRecord}
         meetings={meetings}
         canMarkAttendance={
-          session?.user ? canManageEvalsSettings(session.user.access) : false
-        }
-        canMarkParticipation={
-          session?.user ? canScoreAssessments(session.user.access) : false
-        }
-        canRegenerateParticipation={
-          session?.user ? canManageBootcampRecords(session.user.access) : false
+          session?.user ? canManageTrainingSettings(session.user.access) : false
         }
         intakes={intakes}
         intakeQuestions={intakeQuestions}

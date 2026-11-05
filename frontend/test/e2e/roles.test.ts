@@ -51,11 +51,13 @@ import {
   canManageUsers,
   canPublishComponents,
   canScoreAssessments,
+  canSeeEvals,
   canSearchEmployees,
   canRefreshCanaryWire,
   canSeeBootcampRecords,
   canSeeCanaryWire,
   canSeeReporting,
+  canSeeScheduler,
   canSeeAllEvents,
   canTakeIris,
   canUseEvals,
@@ -200,11 +202,11 @@ const PAGES: Record<string, PageCase> = {
   },
   "/runs/<own event>": { path: () => "/runs/:own", expect: gated(canUseEvents) },
   "/runs/<someone else's>": { path: () => `/runs/${aliceRun}`, expect: gated(canSeeAllEvents) },
-  "/scheduler": { path: () => "/scheduler", expect: gated(canUseTraining) },
-  "/scheduler/<a bootcamp>": { path: () => `/scheduler/${bootcampId}`, expect: gated(canUseTraining) },
-  "/scheduler/active": { path: () => "/scheduler/active", expect: gated(canUseTraining) },
-  "/scheduler/<a bootcamp>/print": { path: () => `/scheduler/${bootcampId}/print?day=1`, expect: gated(canUseTraining) },
-  "/scheduler/<a bootcamp>/print?track": { path: () => `/scheduler/${bootcampId}/print?track=btc`, expect: gated(canUseTraining) },
+  "/scheduler": { path: () => "/scheduler", expect: gated(canSeeScheduler) },
+  "/scheduler/<a bootcamp>": { path: () => `/scheduler/${bootcampId}`, expect: gated(canSeeScheduler) },
+  "/scheduler/active": { path: () => "/scheduler/active", expect: gated(canSeeScheduler) },
+  "/scheduler/<a bootcamp>/print": { path: () => `/scheduler/${bootcampId}/print?day=1`, expect: gated(canSeeScheduler) },
+  "/scheduler/<a bootcamp>/print?track": { path: () => `/scheduler/${bootcampId}/print?track=btc`, expect: gated(canSeeScheduler) },
   "/scheduler/<unknown>/print": { path: () => `/scheduler/${MISSING}/print`, expect: () => 404 },
   "/scheduler/<unknown>": { path: () => `/scheduler/${MISSING}`, expect: () => 404 },
   "/scheduler/<not an id>": { path: () => "/scheduler/nonsense", expect: () => 404 },
@@ -283,14 +285,14 @@ const PAGES: Record<string, PageCase> = {
   "/cohort-settings/slack/<unknown>": { path: () => `/cohort-settings/slack/${MISSING}`, expect: () => 404 },
   "/evals": {
     path: () => "/evals",
-    expect: (a) => (canScoreAssessments(a) ? { to: EVALS_TABS[0]!.href } : 404),
+    expect: (a) => (canSeeEvals(a) ? { to: EVALS_TABS[0]!.href } : 404),
   },
-  "/evals/bootcamp": { path: () => "/evals/bootcamp", expect: gated(canScoreAssessments) },
-  "/evals/intermediate": { path: () => "/evals/intermediate", expect: gated(canScoreAssessments) },
+  "/evals/bootcamp": { path: () => "/evals/bootcamp", expect: gated(canSeeEvals) },
+  "/evals/intermediate": { path: () => "/evals/intermediate", expect: gated(canSeeEvals) },
   "/evals/<unknown stage>": { path: () => "/evals/nonsense", expect: () => 404 },
   "/evals/bootcamp/<an assessment>": {
     path: () => `/evals/bootcamp/${assessmentId}`,
-    expect: gated(canScoreAssessments),
+    expect: gated(canSeeEvals),
   },
   "/evals/intermediate/<a bootcamp assessment>": {
     path: () => `/evals/intermediate/${assessmentId}`,
@@ -628,7 +630,7 @@ const ROUTES: RouteCase[] = [
   },
   { method: "GET", path: "/api/cohorts/previous", allowed: canUseTraining },
   { method: "GET", path: "/api/cohorts/previous/2000-01-01", allowed: canUseTraining },
-  { method: "GET", path: "/api/scheduler/bootcamps", allowed: canUseTraining },
+  { method: "GET", path: "/api/scheduler/bootcamps", allowed: canSeeScheduler },
   { method: "POST", path: "/api/scheduler/bootcamps", allowed: canManageTrainingSettings, body: () => ({}) },
   { method: "PATCH", path: `/api/scheduler/bootcamps/${MISSING}`, allowed: canManageTrainingSettings, body: () => ({}) },
   { method: "GET", path: `/api/scheduler/bootcamps/${MISSING}`, allowed: canUseTraining },
@@ -737,8 +739,10 @@ const ROUTES: RouteCase[] = [
   { method: "GET", path: `/api/record/tracks/${MISSING}/camera/file`, allowed: true },
 
   // Video feedback: anyone signed in rates what they can watch; reading it back is a Training Administrator's
-  { method: "GET", path: "/api/video-feedback", allowed: canManageTrainingSettings },
-  { method: "GET", path: "/api/video-feedback/summary", allowed: canManageTrainingSettings },
+  { method: "GET", path: "/api/video-feedback", allowed: (a) => canManageMimir(a) || canManageTrainingSettings(a) },
+  { method: "GET", path: "/api/video-feedback?kind=mimir_concept", allowed: canManageMimir },
+  { method: "GET", path: "/api/video-feedback?kind=recording", allowed: canManageTrainingSettings },
+  { method: "GET", path: "/api/video-feedback/summary", allowed: canManageMimir },
   { method: "POST", path: "/api/video-feedback", allowed: true, body: () => ({}) },
   { method: "PATCH", path: `/api/video-feedback/${MISSING}`, allowed: canManageEvalsSettings, body: () => ({ status: "ignored" }) },
 
@@ -790,7 +794,7 @@ const ROUTES: RouteCase[] = [
   { method: "POST", path: "/api/evals/google-meetings", allowed: canManageEvalsSettings, body: () => ({}) },
   { method: "PATCH", path: `/api/evals/google-meetings/${MISSING}`, allowed: canManageEvalsSettings, body: () => ({}) },
   { method: "DELETE", path: `/api/evals/google-meetings/${MISSING}`, allowed: canManageEvalsSettings },
-  { method: "PUT", path: `/api/evals/google-meetings/${MISSING}/attendance`, allowed: canManageEvalsSettings, body: () => ({}) },
+  { method: "PUT", path: `/api/evals/google-meetings/${MISSING}/attendance`, allowed: canManageTrainingSettings, body: () => ({}) },
   { method: "GET", path: "/api/evals/google-meetings/facilitators", allowed: canManageEvalsSettings },
   { method: "PUT", path: "/api/evals/google-meetings/facilitators", allowed: canManageEvalsSettings, body: () => ({}) },
   // An allowed read or sync would call Google for real, were an account connected.
@@ -823,14 +827,14 @@ const ROUTES: RouteCase[] = [
   { method: "DELETE", path: `/api/evals/assessments/${MISSING}`, allowed: canManageEvalsSettings },
 
   // eVals scoring
-  { method: "GET", path: `/api/evals/participation/${MISSING}`, allowed: canScoreAssessments },
+  { method: "GET", path: `/api/evals/participation/${MISSING}`, allowed: canSeeEvals },
   { method: "POST", path: `/api/evals/participation/${MISSING}/marks`, allowed: canScoreAssessments, body: () => ({}) },
   { method: "GET", path: "/api/evals/participation/settings", allowed: canManageEvalsSettings },
   { method: "PUT", path: "/api/evals/participation/settings", allowed: canManageEvalsSettings, body: () => ({}) },
-  { method: "GET", path: `/api/evals/scoring/${MISSING}/0/group`, allowed: canScoreAssessments },
-  { method: "GET", path: "/api/evals/scoring?stage=bootcamp", allowed: canScoreAssessments },
-  { method: "GET", path: `/api/evals/scoring/${MISSING}`, allowed: canScoreAssessments },
-  { method: "GET", path: `/api/evals/scoring/${MISSING}/0`, allowed: canScoreAssessments },
+  { method: "GET", path: `/api/evals/scoring/${MISSING}/0/group`, allowed: canSeeEvals },
+  { method: "GET", path: "/api/evals/scoring?stage=bootcamp", allowed: canSeeEvals },
+  { method: "GET", path: `/api/evals/scoring/${MISSING}`, allowed: canSeeEvals },
+  { method: "GET", path: `/api/evals/scoring/${MISSING}/0`, allowed: canSeeEvals },
   { method: "PUT", path: `/api/evals/scoring/${MISSING}/0`, allowed: canScoreAssessments, body: () => ({}) },
   { method: "POST", path: `/api/evals/scoring/${MISSING}/0/transcripts`, allowed: canScoreAssessments, body: form },
   {
@@ -996,6 +1000,36 @@ for (const via of ["session", "token"] as const) describe(`API routes, by ${via}
       assert.deepEqual(wrong, []);
     });
   }
+});
+
+describe("a guest judge in the Scheduler", () => {
+  // The matrix asks about an id that names nothing, which a judge is refused
+  // like anyone without a training role; these ask about the active bootcamp,
+  // which a judge reads, and the routes behind its schedule.
+  const reads = () => [
+    `/api/scheduler/bootcamps/${bootcampId}`,
+    `/api/scheduler/bootcamps/${bootcampId}/schedule`,
+    `/api/scheduler/bootcamps/${bootcampId}/checklist`,
+    `/api/scheduler/bootcamps/${bootcampId}/checklist/btc/1`,
+    `/api/scheduler/bootcamps/${bootcampId}/surveys`,
+    `/api/scheduler/bootcamps/${bootcampId}/attendees?track=btc`,
+  ];
+
+  test("reads the active bootcamp's schedule, by session and by token", async () => {
+    const wrong: string[] = [];
+    for (const as of ["guestJudge", { bearer: tokens.guestJudge }] as const) {
+      for (const path of reads()) {
+        const { status } = await send(as, "GET", path);
+        if (status !== 200) wrong.push(`${typeof as === "string" ? "session" : "token"} GET ${path}: got ${status}`);
+      }
+    }
+    assert.deepEqual(wrong, []);
+  });
+
+  test("still changes nothing in it", async () => {
+    const { status } = await send("guestJudge", "PATCH", `/api/scheduler/bootcamps/${bootcampId}`, {});
+    assert.equal(status, 403);
+  });
 });
 
 describe("the shared OAuth callback", () => {

@@ -4,11 +4,9 @@
  * already open, so coming back to the tab finds it as it was left.
  */
 
-import { auth } from "@/auth";
 import { getSessionDetail, listPreviousSessions, previousSessionsSummary } from "@/lib/evals/previous-sessions";
 import { PREVIOUS_SESSION_LIST } from "@/lib/list-specs";
 import { parseListQuery } from "@/lib/paging";
-import { canUseEvals } from "@/lib/roles";
 import { OPEN_PARAM, parseOpen } from "./open";
 import { PreviousView } from "./previous-view";
 
@@ -19,8 +17,7 @@ export default async function PreviousCohortsPage({
 }) {
   const params = await searchParams;
   const query = parseListQuery(params, PREVIOUS_SESSION_LIST);
-  const [session, page, summary, opened] = await Promise.all([
-    auth(),
+  const [page, summary, opened] = await Promise.all([
     listPreviousSessions(query),
     previousSessionsSummary(),
     Promise.all(parseOpen(params[OPEN_PARAM]).map((date) => getSessionDetail(date, { bootcamp: 1, intermediate: 1 }))),
@@ -32,7 +29,6 @@ export default async function PreviousCohortsPage({
       total={summary.sessions}
       first={summary.first}
       opened={opened.filter((d) => d !== null)}
-      canOpenPerson={session?.user ? canUseEvals(session.user.access) : false}
     />
   );
 }

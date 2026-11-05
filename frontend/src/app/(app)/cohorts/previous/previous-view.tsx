@@ -9,7 +9,6 @@
  */
 
 import { Fragment, useEffect, useEffectEvent, useState } from "react";
-import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { ChevronRight, GraduationCap, Loader2, Users, type LucideIcon } from "lucide-react";
@@ -56,7 +55,6 @@ export function PreviousView({
   total,
   first,
   opened: preopened,
-  canOpenPerson,
 }: {
   query: ListQuery<PreviousSessionSort>;
   page: Page<PreviousSession>;
@@ -65,8 +63,6 @@ export function PreviousView({
   first: string | null;
   /** The days the URL named as open, already fetched. */
   opened: SessionDetail[];
-  /** Whether the viewer may open a person's page on Reporting → Live Sessions. */
-  canOpenPerson: boolean;
 }) {
   const [opened, setOpened] = useState<Record<string, Opened>>(() =>
     Object.fromEntries(preopened.map((detail) => [detail.date, { detail, loading: null, error: null }])),
@@ -227,7 +223,6 @@ export function PreviousView({
                                   count={s[stage]}
                                   attendees={open.detail![stage]}
                                   loading={open.loading === stage}
-                                  personHref={canOpenPerson ? (key) => `/reporting/bootcamp/${key}` : null}
                                   onMore={() => more(s.date, stage)}
                                 />
                               ))}
@@ -263,7 +258,6 @@ function AttendeeList({
   count,
   attendees,
   loading,
-  personHref,
   onMore,
 }: {
   label: string;
@@ -271,8 +265,6 @@ function AttendeeList({
   count: number;
   attendees: Page<SessionAttendee>;
   loading: boolean;
-  /** Where a person's page opens, or null when the viewer may not open one. */
-  personHref: ((key: string) => string) | null;
   onMore: () => void;
 }) {
   return (
@@ -289,18 +281,7 @@ function AttendeeList({
           {attendees.rows.map((a) => (
             <li key={a.key} className="flex items-center gap-2 px-4 py-2">
               <span className="min-w-0 flex-1">
-                <span className="block truncate font-medium">
-                  {personHref ? (
-                    <Link
-                      href={personHref(a.key)}
-                      className="underline-offset-2 outline-none hover:underline focus-visible:underline"
-                    >
-                      {a.fullName ?? a.email}
-                    </Link>
-                  ) : (
-                    (a.fullName ?? a.email)
-                  )}
-                </span>
+                <span className="block truncate font-medium">{a.fullName ?? a.email}</span>
                 {a.fullName && <span className="block truncate text-xs text-muted-foreground">{a.email}</span>}
               </span>
               {!a.active && (

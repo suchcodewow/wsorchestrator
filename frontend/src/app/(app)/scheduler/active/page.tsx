@@ -7,7 +7,7 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { auth, signInPath } from "@/auth";
-import { canUseTraining } from "@/lib/roles";
+import { canSeeScheduler } from "@/lib/roles";
 import { activeBootcamp } from "@/lib/scheduler/bootcamps";
 import { loadSchedule } from "@/lib/scheduler/schedule";
 import { BackToScheduler, SchedulePage } from "../[id]/schedule-page";
@@ -17,7 +17,7 @@ export const metadata: Metadata = { title: "Schedule" };
 export default async function ActiveSchedulePage() {
   const session = await auth();
   if (!session?.user) redirect(await signInPath());
-  if (!canUseTraining(session.user.access)) notFound();
+  if (!canSeeScheduler(session.user.access)) notFound();
 
   const active = await activeBootcamp();
   const schedule = active ? await loadSchedule(active.id) : null;

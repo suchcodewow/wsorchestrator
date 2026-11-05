@@ -538,8 +538,8 @@ up for them.
 | Role                          | Adds                                                            |
 | ----------------------------- | --------------------------------------------------------------- |
 | *(none)*                      | Nothing. What everyone starts as.                               |
-| **Assessments Viewer**        | The **eVals** page, and **Diagnostic**: takes the placement tests.    |
-| **Assessments Administrator** | Sets everyone's Assessments role on **Manage users**; **eVals settings**, including **Google Meetings**; and Diagnostic's console: everyone's results, the answer key, and approving and rejecting questions. |
+| **Assessments Viewer**        | The **eVals** page, read-only: every assessment and score, without scoring; and **Diagnostic**: takes the placement tests. |
+| **Assessments Administrator** | Scores on **eVals**; sets everyone's Assessments role on **Manage users**; **eVals settings**, including **Google Meetings**; **Coach Canary Settings**, Mimir Studio among them; and Diagnostic's console: everyone's results, the answer key, and approving and rejecting questions. |
 
 **Diagnostic** — adaptive placement tests for new GTM hires, each subject taken
 once per form, which place someone at 101, 201 or 301 so enablement can route
@@ -555,7 +555,7 @@ migration that removed them gave everyone the higher of their two roles. Its
 database tables and code still use the name `iris`.)
 
 **Mimir** — the GTM reference library and an AI coach, carried over from the
-Learning Hub prototype. Under **Training**, for everyone who can sign in,
+Learning Hub prototype. Under **Assessments**, for everyone who can sign in,
 whatever their roles: Harness's four agents and the capabilities each is made
 of (with the products sold beside them), Harness AI, architecture, the SDLC,
 personas, competitive battlecards, proof points, discovery questions and a
@@ -563,8 +563,8 @@ glossary. On
 each card the coach (Claude, server-side) explains, quizzes or roleplays, and
 says when the rep has shown real command of it; with the rep's own one-line
 takeaway that makes the card mastered. Each person's progress and
-conversations are their own, kept apart from Diagnostic. **Mimir Settings**, for
-Training Administrators, edits the content and the coaching settings.
+conversations are their own, kept apart from Diagnostic. **Coach Canary Settings**,
+for Assessments Administrators, edits the content and the coaching settings.
 
 The content is not in this repository, which is public. It lives in the
 database and arrives through **Mimir Settings → Content → Import**: run

@@ -5,15 +5,20 @@ import { requireCaller } from "@/lib/api-auth";
 import { audited } from "@/lib/audit";
 import { BOOTCAMP_LIST } from "@/lib/list-specs";
 import { parseListQuery } from "@/lib/paging";
-import { canManageTrainingSettings, canUseTraining } from "@/lib/roles";
+import { canManageTrainingSettings, canSeeScheduler, canUseTraining } from "@/lib/roles";
 import { BOOTCAMP_STATUS_FOR, bootcampInputSchema, createBootcamp, listBootcamps } from "@/lib/scheduler/bootcamps";
 
 export async function GET(req: Request) {
-  const { error } = await requireCaller(req, canUseTraining);
+  const { error, user } = await requireCaller(req, canSeeScheduler);
   if (error) return error;
 
   const params = new URL(req.url).searchParams;
-  const { rows, page, hasMore } = await listBootcamps(parseListQuery(params, BOOTCAMP_LIST), params.get("complete") !== "false");
+  // A guest judge sees only the bootcamp they judge, which is the active one.
+  const { rows, page, hasMore } = await listBootcamps(
+    parseListQuery(params, BOOTCAMP_LIST),
+    params.get("complete") !== "false",
+    !canUseTraining(user.access),
+  );
   return NextResponse.json({ bootcamps: rows, page, hasMore });
 }
 

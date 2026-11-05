@@ -1,7 +1,9 @@
 /**
  * Smiley and confused ratings on videos. `POST` is the buttons over a player:
  * one rating, where the video was, and the comment if one was written. `GET`
- * reads it all back a page at a time, for Training Administrators.
+ * reads it back a page at a time, each area its own videos': Coach Canary's
+ * concepts for an Assessments Administrator, the async recordings for a
+ * Training Administrator.
  */
 
 import { NextResponse } from "next/server";
@@ -12,16 +14,24 @@ import { VIDEO_FEEDBACK_KINDS, VIDEO_FEEDBACK_LIMITS, VIDEO_FEEDBACK_RATINGS } f
 import { VIDEO_FEEDBACK_LIST } from "@/lib/list-specs";
 import { VIDEO_LANGUAGES, VIDEO_PREFIX } from "@/lib/mimir/map/schema";
 import { parseListQuery } from "@/lib/paging";
-import { canManageTrainingSettings } from "@/lib/roles";
+import { canManageMimir, canManageTrainingSettings, type Access } from "@/lib/roles";
 import { findVideo, listVideoFeedback, recordVideoFeedback, type VideoFeedbackFilter } from "@/lib/video-feedback";
 
+/** Whether `access` reads feedback on this kind of video: each is its own area's. */
+const readsKind = (access: Access, kind: (typeof VIDEO_FEEDBACK_KINDS)[number]) =>
+  kind === "recording" ? canManageTrainingSettings(access) : canManageMimir(access);
+
 export async function GET(req: Request) {
-  const { error } = await requireCaller(req, canManageTrainingSettings);
+  const { error, user } = await requireCaller(req, (a) => VIDEO_FEEDBACK_KINDS.some((k) => readsKind(a, k)));
   if (error) return error;
 
   const params = new URL(req.url).searchParams;
+  const asked = VIDEO_FEEDBACK_KINDS.find((k) => k === params.get("kind"));
+  if (asked && !readsKind(user.access, asked)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  const readable = VIDEO_FEEDBACK_KINDS.filter((k) => readsKind(user.access, k));
   const filter: VideoFeedbackFilter = {
-    kind: VIDEO_FEEDBACK_KINDS.find((k) => k === params.get("kind")),
+    // Without a kind, everything the caller may read: one kind, or both for someone who administers both areas.
+    kind: asked ?? (readable.length === 1 ? readable[0] : undefined),
     rating: VIDEO_FEEDBACK_RATINGS.find((r) => r === params.get("rating")),
     video: params.get("video") || undefined,
   };

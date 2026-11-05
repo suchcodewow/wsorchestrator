@@ -54,7 +54,7 @@ const EXPECTED_SIDEBAR: Record<Persona, string[]> = {
   manager: [...HOME, ...EVENTS_MANAGER, ...MIMIR_ONLY, ...ACCOUNT],
   eventAdmin: [...HOME, ...EVENTS_ADMIN, ...MIMIR_ONLY, ...ACCOUNT, "[Administration]", "Manage users"],
   trainingViewer: [...HOME, "[Training]", "Scheduler", "Cohorts", "Logistics", "Async Recordings", "Survey Results", ...MIMIR_ONLY, ...ACCOUNT],
-  trainingAdmin: [...HOME, ...TRAINING_ADMIN, "[Assessments]", "Reporting", ...MIMIR_ADMIN, ...ACCOUNT, "[Administration]", "Manage users"],
+  trainingAdmin: [...HOME, ...TRAINING_ADMIN, ...MIMIR_ONLY, ...ACCOUNT, "[Administration]", "Manage users"],
   // Diagnostic is part of the assessments area: a viewer takes it, an administrator runs it.
   assessmentsViewer: [...HOME, "[Assessments]", "eVals", "Diagnostic", "Reporting", "Coach Canary", ...ACCOUNT],
   assessmentsAdmin: [
@@ -65,15 +65,16 @@ const EXPECTED_SIDEBAR: Record<Persona, string[]> = {
     "Reporting",
     "Reporting Settings",
     "eVals settings",
-    "Coach Canary",
+    ...MIMIR_ADMIN,
     ...ACCOUNT,
     "[Administration]",
     "Manage users",
   ],
-  guestJudge: [...HOME, "[Assessments]", "eVals", "Reporting", "Coach Canary", ...ACCOUNT],
+  // The Scheduler, for the active bootcamp's schedule alone; the rest of Training stays a Training Viewer's.
+  guestJudge: [...HOME, "[Training]", "Scheduler", "[Assessments]", "eVals", "Reporting", "Coach Canary", ...ACCOUNT],
   // HiBob has people reporting to them: the Canary Wire as well as Bootcamp, under the Reporting everyone has.
   peopleManager: [...HOME, "[Assessments]", "Reporting", "Coach Canary", ...ACCOUNT],
-  bothAdmins: [...HOME, ...EVENTS_ADMIN, ...TRAINING_ADMIN, "[Assessments]", "Reporting", ...MIMIR_ADMIN, ...ACCOUNT, "[Administration]", "Manage users"],
+  bothAdmins: [...HOME, ...EVENTS_ADMIN, ...TRAINING_ADMIN, ...MIMIR_ONLY, ...ACCOUNT, "[Administration]", "Manage users"],
   platform: [...HOME, 
     ...EVENTS_ADMIN,
     ...TRAINING_ADMIN,

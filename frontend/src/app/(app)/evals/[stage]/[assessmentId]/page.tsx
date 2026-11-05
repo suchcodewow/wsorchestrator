@@ -6,7 +6,7 @@ import { auth, signInPath } from "@/auth";
 import { attendeeCounts, breakoutRooms, listAttendees, scoringAssessment, scoringBootcamp } from "@/lib/evals/scoring";
 import { ASSESSMENT_ATTENDEE_LIST } from "@/lib/list-specs";
 import { parseListQuery } from "@/lib/paging";
-import { canManageBootcampRecords } from "@/lib/roles";
+import { canManageBootcampRecords, canScoreAssessments } from "@/lib/roles";
 import { AttendeesView } from "./attendees-view";
 
 export default async function AssessmentAttendeesPage({
@@ -44,6 +44,7 @@ export default async function AssessmentAttendeesPage({
       counts={counts}
       rooms={rooms}
       canRegenerate={canManageBootcampRecords(session.user.access)}
+      canMark={canScoreAssessments(session.user.access)}
     />
   );
 }

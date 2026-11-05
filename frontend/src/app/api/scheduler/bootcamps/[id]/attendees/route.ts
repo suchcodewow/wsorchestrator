@@ -4,7 +4,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { SCHEDULE_TRACKS, SESSION_AUDIENCES } from "@/db/schema";
 import { requireCaller } from "@/lib/api-auth";
-import { canUseTraining } from "@/lib/roles";
+import { canSeeScheduler } from "@/lib/roles";
+import { mayReadBootcamp } from "@/lib/scheduler/judging";
 import { classAttendees } from "@/lib/scheduler/attendees";
 import { scheduleBootcamp } from "@/lib/scheduler/schedule";
 import { stageOf } from "@/lib/scheduler/timeline";
@@ -17,8 +18,11 @@ const querySchema = z.object({
 });
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { error } = await requireCaller(req, canUseTraining);
+  const { error, user } = await requireCaller(req, canSeeScheduler);
   if (error) return error;
+  if (!(await mayReadBootcamp(user.access, (await params).id))) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
 
   const id = idSchema.safeParse((await params).id);
   const bootcamp = id.success ? await scheduleBootcamp(id.data) : null;
