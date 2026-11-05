@@ -367,6 +367,7 @@ const PAGES: Record<string, PageCase> = {
     path: () => "/coach-canary-settings",
     expect: (a) => (canManageMimir(a) ? { to: MIMIR_SETTINGS_TABS[0]!.href } : 404),
   },
+  "/coach-canary-settings/reporting": { path: () => "/coach-canary-settings/reporting?sort=slides&dir=desc", expect: gated(canManageMimir) },
   "/coach-canary-settings/map": { path: () => "/coach-canary-settings/map", expect: gated(canManageMimir) },
   "/coach-canary-settings/map-editor": { path: () => "/coach-canary-settings/map-editor", expect: gated(canManageMimir) },
   "/coach-canary-settings/content": { path: () => "/coach-canary-settings/content?kind=capability", expect: gated(canManageMimir) },
@@ -927,6 +928,10 @@ const ROUTES: RouteCase[] = [
   { method: "GET", path: "/api/mimir/progress", allowed: true },
   // Each persona's own Mimir progress, which none of them has.
   { method: "DELETE", path: "/api/mimir/progress", allowed: true },
+  { method: "GET", path: "/api/mimir/experiences", allowed: true },
+  // An empty body is not a run of any experience, so this records nothing.
+  { method: "POST", path: "/api/mimir/experiences", allowed: true, body: () => ({}) },
+  { method: "GET", path: "/api/mimir/experiences/report", allowed: canManageMimir },
   { method: "GET", path: "/api/mimir/me", allowed: true },
   { method: "PUT", path: "/api/mimir/me", allowed: true, body: () => ({}) },
   { method: "GET", path: "/api/mimir/settings", allowed: canManageMimir },

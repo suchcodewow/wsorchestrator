@@ -6,13 +6,17 @@ import {
   MIMIR_REFLECTION_MAX,
   MIMIR_SETTING_MAX,
 } from "@/db/schema";
-import { MAP_VERSION_LIST, MIMIR_ITEM_LIST, MIMIR_PROGRESS_LIST, MIMIR_STUDIO_JOB_LIST } from "@/lib/list-specs";
+import { EXPERIENCE_REPORT_LIST, MAP_VERSION_LIST, MIMIR_ITEM_LIST, MIMIR_PROGRESS_LIST, MIMIR_STUDIO_JOB_LIST } from "@/lib/list-specs";
+import { EXPERIENCE_IDS, SLIDE_SCORE_FLOOR } from "@/lib/mimir/experiences";
+import { MAX_SCORE as SECURITY_MAX } from "@/lib/mimir/security-game/scenario";
 import { MAP_SUMMARY_MAX } from "@/lib/mimir/map/schema";
 import { DECK_MAX_BYTES, VIDEO_NOTES_MAX } from "@/lib/mimir/studio/shapes";
 import { PAGE_FIELDS, listQuery } from "./paging";
 import type { EndpointGroup, Field } from "./types";
 
 const KIND_TYPE = MIMIR_KINDS.map((k) => `"${k}"`).join(" | ");
+const EXPERIENCE_TYPE = EXPERIENCE_IDS.map((k) => `"${k}"`).join(" | ");
+const EXPERIENCE_PROGRESS_SHAPE = `{ userId, experience: ${EXPERIENCE_TYPE}, part, attempts: number, bestScore: number | null, firstCompletedAt, lastCompletedAt }`;
 const ITEM_ID: Field = { name: "id", type: "string", required: true, note: "the item's id, such as agent-software-delivery, cd or jenkins" };
 const SUMMARY_SHAPE = "{ id, kind, parentId, position, title, emoji, color, summary, attrs, updatedAt }";
 const MESSAGE_SHAPE = `{ seq, role: "user" | "assistant", text, html: string | null, at }`;
@@ -268,6 +272,43 @@ export const MIMIR_GROUPS: EndpointGroup[] = [
         },
         returns: "{ ok: true, role, coachStyle }",
         errors: [{ status: 400, error: "invalid", when: "the body does not parse" }],
+      },
+      {
+        method: "GET",
+        path: "/api/mimir/experiences",
+        summary: "Returns your finished runs of the hands-on experiences: one row for each experience, and one for each slide of the slide review.",
+        access: "signedIn",
+        token: true,
+        notes: "An experience you have never finished has no row. part is the slide's id for the slide review and empty otherwise. bestScore is null for the Developer experience, which keeps only that it was finished.",
+        returns: `{ progress: ${EXPERIENCE_PROGRESS_SHAPE}[] }`,
+      },
+      {
+        method: "POST",
+        path: "/api/mimir/experiences",
+        summary: "Records one finished run of a hands-on experience: one more attempt, and the score if it is your best.",
+        access: "signedIn",
+        token: true,
+        notes: `The experiences run in the browser and send this when a run ends, so a score is what the caller reports, checked only against what the experience can score. developer takes no part and no score. security takes no part and its run's total, 0 to ${SECURITY_MAX}. slide-review takes the slide's id as part and that slide's score, from ${SLIDE_SCORE_FLOOR} up to the slide's number of mistakes. firstCompletedAt stays as it was on later runs.`,
+        body: {
+          kind: "json",
+          fields: [
+            { name: "experience", type: EXPERIENCE_TYPE, required: true },
+            { name: "part", type: "string", note: "the slide's id, for slide-review only" },
+            { name: "score", type: "integer", note: "required for security and slide-review; not sent for developer" },
+          ],
+        },
+        returns: `{ progress: ${EXPERIENCE_PROGRESS_SHAPE} }`,
+        errors: [{ status: 400, error: "invalid", when: "the experience, part or score is not one that experience can report" }],
+      },
+      {
+        method: "GET",
+        path: "/api/mimir/experiences/report",
+        summary: "Lists everyone with an account, with their concept videos watched to the end, the concepts the coach has marked them as knowing, and their hands-on experiences, a page at a time.",
+        access: "assessmentsAdmin",
+        token: true,
+        notes: "videos counts concept videos watched to the end, and mastered the concepts the coach in Chat has marked as known. developerCompletedAt is when they first finished the Developer experience, or null. securityAttempts and securityBest are their finished runs of the Enterprise Security Team and the best total of them. slidesDone is how many slides of the slide review they have finished, slidesBest the sum of their best score on each, and slides each finished slide's attempts and best score. Sorting by security sorts by securityBest, and by developer by developerCompletedAt.",
+        query: listQuery(EXPERIENCE_REPORT_LIST.sorts, "the person's name or email"),
+        returns: `{ people: { userId, name, email, videos: number, mastered: number, developerCompletedAt: string | null, securityAttempts: number, securityBest: number | null, slidesDone: number, slidesBest: number | null, slides: { slide, attempts: number, bestScore: number | null }[] }[], ${PAGE_FIELDS} }`,
       },
       {
         method: "GET",

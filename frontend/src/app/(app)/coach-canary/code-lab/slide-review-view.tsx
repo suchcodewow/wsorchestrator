@@ -40,6 +40,8 @@ import { ArrowRight, Check, MousePointerClick, RotateCcw, Timer, X } from "lucid
 import { Geist } from "next/font/google";
 import Image from "next/image";
 import { createContext, useContext, useEffect, useRef, useState, type CSSProperties, type MouseEvent, type ReactNode } from "react";
+import { SLIDE_SCORE_FLOOR } from "@/lib/mimir/experiences";
+import { recordRun } from "./record-run";
 import "./slide-review.css";
 
 /** The deck's body font. The app's own mono is already Geist Mono. */
@@ -67,6 +69,7 @@ export function SlideReviewView() {
       index={phase.index}
       earlier={earlier}
       onFinish={(result) => {
+        recordRun({ experience: "slide-review", part: SLIDES[phase.index].id, score: Math.max(SLIDE_SCORE_FLOOR, pointsFor(result)) });
         setResults((rs) => [...rs.slice(0, phase.index), result]);
         setPhase({ at: "slide", index: phase.index, reviewing: true });
       }}

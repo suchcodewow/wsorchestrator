@@ -26,6 +26,7 @@ import type { AdapterAccountType } from "next-auth/adapters";
 import type { DeployedContent } from "@/lib/harness-deploy-selection";
 import type { TourTarget } from "@/lib/tours/target";
 import type { VideoLanguage } from "@/lib/mimir/map/schema";
+import type { ExperienceId } from "@/lib/mimir/experiences";
 
 const bytea = customType<{ data: Buffer; driverData: Buffer }>({
   dataType: () => "bytea",
@@ -3243,6 +3244,37 @@ export const mimirConceptProgress = pgTable(
   },
   (t) => [primaryKey({ columns: [t.userId, t.conceptId] })],
 );
+
+/**
+ * One person's runs of a hands-on experience, or of one part of it: the slide
+ * review keeps a row per slide, keyed by the slide's id, and the others a
+ * single row with an empty part. Each finished run adds an attempt and keeps
+ * the best score; the Developer experience has no score, only whether it was
+ * finished. The experiences run in the browser, so a score is what the
+ * person's browser reported.
+ */
+export const mimirExperienceProgress = pgTable(
+  "mimir_experience_progress",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    experience: text("experience").$type<ExperienceId>().notNull(),
+    /** A slide's id in the slide review; empty for an experience kept whole. */
+    part: text("part").notNull().default(""),
+    attempts: integer("attempts").notNull().default(0),
+    /** The highest score of any attempt; null for an experience without a score. */
+    bestScore: integer("best_score"),
+    firstCompletedAt: timestamp("first_completed_at", { withTimezone: true }).notNull().defaultNow(),
+    lastCompletedAt: timestamp("last_completed_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.userId, t.experience, t.part] }),
+    check("mimir_experience_progress_experience_check", sql`${t.experience} in ('developer', 'security', 'slide-review')`),
+  ],
+);
+
+export type MimirExperienceProgress = typeof mimirExperienceProgress.$inferSelect;
 
 /**
  * One person's conversation with the map coach, the whole of it. The system

@@ -160,6 +160,10 @@ export type VideoFeedbackSort = (typeof VIDEO_FEEDBACK_LIST.sorts)[number];
 export const VIDEO_FEEDBACK_SUMMARY_LIST = spec(["video", "up", "upComments", "down", "downComments"]);
 export type VideoFeedbackSummarySort = (typeof VIDEO_FEEDBACK_SUMMARY_LIST.sorts)[number];
 
+/** Coach Canary Settings → Reporting: everyone, with their videos, mastered topics and hands-on experiences. */
+export const EXPERIENCE_REPORT_LIST = spec(["user", "videos", "mastered", "developer", "security", "slides"]);
+export type ExperienceReportSort = (typeof EXPERIENCE_REPORT_LIST.sorts)[number];
+
 /** Mimir Studio's decks and videos, the newest first. */
 export const MIMIR_STUDIO_JOB_LIST = spec(["createdAt", "kind", "label", "status"], "desc");
 export type MimirStudioJobSort = (typeof MIMIR_STUDIO_JOB_LIST.sorts)[number];
