@@ -45,6 +45,7 @@ import { formatDate } from "../../cohort-settings/format";
 import { BreakoutGroups, keptGroups } from "./breakout-groups";
 import { Comments } from "./comments";
 import { dayOf, locate, type Days } from "./days";
+import { confirmDialog, noticeDialog } from "@/components/ui/confirm";
 
 export type SessionTarget =
   /** `start` is the unscheduled time it was added in; without one it goes after the last session of the day. */
@@ -279,7 +280,11 @@ export function SessionDialog({
       await onChanged();
       if (grouped) {
         // A new session is added either way; saving again would add it twice.
-        if (!existing) window.alert(`${look.name.trim()} was added, but not its groups: ${grouped}. Open it to assign them again.`);
+        if (!existing)
+          await noticeDialog({
+            title: `${look.name.trim()} was added, but not its groups`,
+            description: `They could not be saved: ${grouped}. Open it to assign them again.`,
+          });
         else return setError(`Saved the session, but not its groups: ${grouped}.`);
       }
       onClose();
@@ -306,7 +311,7 @@ export function SessionDialog({
   }
 
   async function remove() {
-    if (!existing || !window.confirm(`Remove ${existing.name}? Its time becomes unscheduled.`)) return;
+    if (!existing || !(await confirmDialog({ title: `Remove ${existing.name}?`, description: "Its time becomes unscheduled.", confirmLabel: "Remove", destructive: true }))) return;
     setPending(true);
     setError(null);
     try {

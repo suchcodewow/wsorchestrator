@@ -21,6 +21,7 @@ import { Input } from "@/components/ui/input";
 import { LAB_WORKSHOP_LIMITS, type LabWorkshop } from "@/db/schema";
 import { cn } from "@/lib/utils";
 import { GuidePreviewDialog } from "./guide-preview-dialog";
+import { confirmDialog } from "@/components/ui/confirm";
 
 export type PickerGuide = {
   id: string;
@@ -151,9 +152,7 @@ export function WorkshopEditor({
   async function removeWorkshop() {
     if (!editing) return;
     if (
-      !window.confirm(
-        `Delete "${workshop.title}", keeping the guides in it?`,
-      )
+      !(await confirmDialog({ title: `Delete "${workshop.title}"?`, description: "The guides in it are kept.", confirmLabel: "Delete", destructive: true }))
     ) {
       return;
     }

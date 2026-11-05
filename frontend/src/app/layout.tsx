@@ -2,6 +2,7 @@
 
 import { MotionProvider } from "@/components/motion-provider";
 import { ThemeSync } from "@/components/theme-sync";
+import { ConfirmHost } from "@/components/ui/confirm";
 import { deploymentEnvironment } from "@/lib/build-info";
 import { DARK_CLASS, THEME_COOKIE, parseScheme, themeScript } from "@/lib/theme";
 import { getThemePreference } from "@/lib/user-preferences";
@@ -80,7 +81,10 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
       </head>
       <body className={`${inter.variable} ${geistMono.variable} font-sans antialiased`}>
         <ThemeSync preference={theme} />
-        <MotionProvider>{children}</MotionProvider>
+        <MotionProvider>
+          {children}
+          <ConfirmHost />
+        </MotionProvider>
       </body>
     </html>
   );

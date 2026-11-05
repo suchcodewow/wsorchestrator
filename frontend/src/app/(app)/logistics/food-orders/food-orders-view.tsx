@@ -32,6 +32,7 @@ import { riseChild, staggerParent } from "@/lib/motion";
 import type { ListQuery, Page } from "@/lib/paging";
 import { cn } from "@/lib/utils";
 import { PRINT_PATH, formatArrival, formatBytes } from "./format";
+import { confirmDialog } from "@/components/ui/confirm";
 
 const ERRORS: Record<string, string> = {
   invalid: "Say who the order is from and when it arrives.",
@@ -59,7 +60,7 @@ export function FoodOrdersView({
   const sortProps = { sort: query.sort, dir: query.dir };
 
   async function remove(o: FoodOrderRow) {
-    if (!window.confirm(`Remove the order from ${o.vendor}, and its PDF?`)) return;
+    if (!(await confirmDialog({ title: `Remove the order from ${o.vendor}?`, description: "Its PDF goes with it.", confirmLabel: "Remove", destructive: true }))) return;
     setBusy(o.id);
     setError(null);
     try {

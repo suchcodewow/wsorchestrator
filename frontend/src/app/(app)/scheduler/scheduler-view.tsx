@@ -17,6 +17,7 @@ import type { BootcampRow } from "@/lib/scheduler/bootcamps";
 import type { CopySource } from "@/lib/scheduler/schedule";
 import { formatDate } from "../cohort-settings/format";
 import { BootcampDialog, STATUS_BADGES, STATUS_LABELS } from "./bootcamp-dialog";
+import { confirmDialog } from "@/components/ui/confirm";
 
 export function SchedulerView({
   query,
@@ -61,7 +62,7 @@ export function SchedulerView({
   }
 
   async function remove(row: BootcampRow) {
-    if (!window.confirm(`Remove the bootcamp starting ${formatDate(row.startDate)}?`)) return;
+    if (!(await confirmDialog({ title: `Remove the bootcamp starting ${formatDate(row.startDate)}?`, confirmLabel: "Remove", destructive: true }))) return;
     setBusy(row.id);
     setError(null);
     try {

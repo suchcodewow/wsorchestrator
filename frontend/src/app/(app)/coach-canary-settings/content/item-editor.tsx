@@ -27,6 +27,7 @@ import {
 } from "@/lib/mimir/kinds";
 import { riseChild, staggerParent } from "@/lib/motion";
 import { cn } from "@/lib/utils";
+import { confirmDialog } from "@/components/ui/confirm";
 
 type Item = {
   id: string;
@@ -137,7 +138,7 @@ export function ItemEditor({ item, holds, kind: initialKind }: { item: Item | nu
   }
 
   async function remove() {
-    if (!item || !window.confirm(`Remove “${item.title}”? Everyone's progress on it and conversations about it go with it.`)) return;
+    if (!item || !(await confirmDialog({ title: `Remove “${item.title}”?`, description: "Everyone's progress on it and conversations about it go with it.", confirmLabel: "Remove", destructive: true }))) return;
     const result = await request("delete", `/api/mimir/items/${encodeURIComponent(item.id)}`, { method: "DELETE" });
     if (!result) return;
     router.push(`${LIST}?kind=${kind}`);

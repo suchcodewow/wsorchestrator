@@ -44,6 +44,7 @@ import type { SlackSyncSort } from "@/lib/list-specs";
 import { riseChild, staggerParent } from "@/lib/motion";
 import type { ListQuery, Page } from "@/lib/paging";
 import { formatDate, formatWhen } from "../format";
+import { confirmDialog } from "@/components/ui/confirm";
 
 export type SlackRun = {
   id: string;
@@ -167,9 +168,7 @@ export function SlackSyncView({
     if (
       !preview &&
       live &&
-      !window.confirm(
-        "Sync Slack now? It changes the cohort channels and sends the intake form reminders that are due. Preview shows what it would do without doing it.",
-      )
+      !(await confirmDialog({ title: "Sync Slack now?", description: "It changes the cohort channels and sends the intake form reminders that are due. Preview shows what it would do without doing it.", confirmLabel: "Sync" }))
     ) {
       return;
     }
@@ -200,11 +199,9 @@ export function SlackSyncView({
   async function setReminders(next: boolean) {
     if (
       next &&
-      !window.confirm(
-        live
-          ? "Turn the daily reminder on? From the next sync, everyone in the current cohort who has not answered their form gets a Slack message once a day."
-          : "Turn the daily reminder on? The sync is in dry run, so reminders are logged, not sent, until it goes live.",
-      )
+      !(await confirmDialog({ title: "Turn the daily reminder on?", description: live
+          ? "From the next sync, everyone in the current cohort who has not answered their form gets a Slack message once a day."
+          : "The sync is in dry run, so reminders are logged, not sent, until it goes live.", confirmLabel: "Turn on" }))
     ) {
       return;
     }

@@ -15,6 +15,7 @@ import { SCHEDULE_LIMITS } from "@/db/schema";
 import { mentionsIn, type MentionPick } from "@/lib/mentions";
 import type { CommentRow } from "@/lib/scheduler/comments";
 import { formatWhen } from "../../cohort-settings/format";
+import { confirmDialog } from "@/components/ui/confirm";
 
 type Loaded = { rows: CommentRow[]; page: number; hasMore: boolean };
 type CommentsPage = { comments: CommentRow[]; hasMore: boolean };
@@ -107,7 +108,7 @@ export function Comments({
   }
 
   async function remove(c: CommentRow) {
-    if (!window.confirm("Remove this comment?")) return;
+    if (!(await confirmDialog({ title: "Remove this comment?", confirmLabel: "Remove", destructive: true }))) return;
     setBusy(c.id);
     setError(null);
     try {

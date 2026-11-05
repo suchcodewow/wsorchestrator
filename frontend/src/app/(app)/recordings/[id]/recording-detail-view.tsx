@@ -20,6 +20,7 @@ import { deletesOn } from "@/lib/recording/video";
 import type { RecordingTake, RecordingTrackRow } from "@/lib/recording/recordings";
 import { formatWhen } from "../format";
 import { TakeStatus } from "../take-status";
+import { confirmDialog } from "@/components/ui/confirm";
 
 const REFRESH_MS = 5_000;
 
@@ -39,7 +40,7 @@ export function RecordingDetailView({ take, canDelete }: { take: RecordingTake; 
   }, [pending, router]);
 
   async function remove() {
-    if (!window.confirm(`Delete this recording${take.contributor ? ` by ${take.contributor}` : ""}, and every file of it?`)) return;
+    if (!(await confirmDialog({ title: `Delete this recording${take.contributor ? ` by ${take.contributor}` : ""}?`, description: "Every file of it goes too.", confirmLabel: "Delete", destructive: true }))) return;
     setDeleting(true);
     setError(null);
     try {

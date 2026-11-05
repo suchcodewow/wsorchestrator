@@ -29,6 +29,7 @@ import type { ListQuery, Page } from "@/lib/paging";
 import { repeatedRooms, sameRoomName } from "@/lib/scheduler/room-names";
 import { cn } from "@/lib/utils";
 import { formatWhen } from "../../cohort-settings/format";
+import { confirmDialog } from "@/components/ui/confirm";
 
 export type FacilityListing = {
   id: string;
@@ -61,8 +62,8 @@ export function FacilitiesView({ query, page }: { query: ListQuery<FacilitySort>
   const sortProps = { sort: query.sort, dir: query.dir };
 
   async function remove(f: FacilityListing) {
-    const held = f.bootcamps > 0 ? ` ${f.bootcamps} ${f.bootcamps === 1 ? "bootcamp is" : "bootcamps are"} held there and will lose their rooms.` : "";
-    if (!window.confirm(`Remove ${f.name} and its rooms?${held}`)) return;
+    const held = f.bootcamps > 0 ? `${f.bootcamps} ${f.bootcamps === 1 ? "bootcamp is" : "bootcamps are"} held there and will lose their rooms.` : undefined;
+    if (!(await confirmDialog({ title: `Remove ${f.name} and its rooms?`, description: held, confirmLabel: "Remove", destructive: true }))) return;
     setBusy(f.id);
     setError(null);
     try {

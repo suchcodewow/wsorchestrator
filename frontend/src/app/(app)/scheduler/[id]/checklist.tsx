@@ -74,6 +74,7 @@ import {
 import { cn } from "@/lib/utils";
 import { formatWhen } from "../../cohort-settings/format";
 import type { BoardColumn } from "./board";
+import { confirmDialog } from "@/components/ui/confirm";
 
 const ERRORS: Record<string, string> = {
   invalid: "Give the item a name.",
@@ -543,7 +544,7 @@ function ChecklistBoard({
   }
 
   async function remove(item: Item) {
-    if (!window.confirm(`Delete “${item.name}”?`)) return;
+    if (!(await confirmDialog({ title: `Delete “${item.name}”?`, confirmLabel: "Delete", destructive: true }))) return;
     const out = await send(`${base}/items/${item.id}`, { method: "DELETE" });
     if (!out) return;
     change((list) => list.filter((i) => i.id !== item.id));

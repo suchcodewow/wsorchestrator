@@ -40,6 +40,7 @@ import { cn } from "@/lib/utils";
 import { formatDate, formatWhen } from "../../cohort-settings/format";
 import { FacilitatorsSection } from "./facilitators-section";
 import { MeetingDialog, type EditableMeeting } from "./meeting-dialog";
+import { confirmDialog } from "@/components/ui/confirm";
 
 export type MeetingListing = EditableMeeting & {
   syncedAt: string | null;
@@ -192,9 +193,7 @@ export function GoogleMeetingsView({ overview, list }: { overview: Overview; lis
     if (
       !preview &&
       live &&
-      !window.confirm(
-        "Sync now? Everyone each meeting is for is added to its next occurrence before the bootcamp, where it shows up on their calendar without an email. Preview shows what it would do without doing it.",
-      )
+      !(await confirmDialog({ title: "Sync now?", description: "Everyone each meeting is for is added to its next occurrence before the bootcamp, where it shows up on their calendar without an email. Preview shows what it would do without doing it.", confirmLabel: "Sync" }))
     ) {
       return;
     }
@@ -226,9 +225,7 @@ export function GoogleMeetingsView({ overview, list }: { overview: Overview; lis
     if (next === live) return;
     if (
       next &&
-      !window.confirm(
-        "Go live? From the next sync, Google Calendar invites go to the cohort and the meeting facilitators, those it invited who no longer belong are taken off, and any meetings left from the old form are cancelled.",
-      )
+      !(await confirmDialog({ title: "Go live?", description: "From the next sync, Google Calendar invites go to the cohort and the meeting facilitators, those it invited who no longer belong are taken off, and any meetings left from the old form are cancelled.", confirmLabel: "Go live" }))
     ) {
       return;
     }

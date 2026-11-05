@@ -29,6 +29,7 @@ import { SESSION_STYLES } from "@/lib/scheduler/session-style";
 import type { SessionTypeRow } from "@/lib/scheduler/session-types";
 import { KIND_LABELS, formatLength } from "@/lib/scheduler/timeline";
 import { cn } from "@/lib/utils";
+import { confirmDialog } from "@/components/ui/confirm";
 
 const ERRORS: Record<string, string> = {
   invalid: "Give it a name, and a length in whole quarter hours.",
@@ -49,7 +50,7 @@ export function SessionTypesView({ query, page }: { query: ListQuery<SessionType
   const sortProps = { sort: query.sort, dir: query.dir };
 
   async function remove(t: SessionTypeRow) {
-    if (!window.confirm(`Remove the ${t.name} session type? Sessions started from it keep what they took from it.`)) return;
+    if (!(await confirmDialog({ title: `Remove the ${t.name} session type?`, description: "Sessions started from it keep what they took from it.", confirmLabel: "Remove", destructive: true }))) return;
     setBusy(t.id);
     setError(null);
     try {

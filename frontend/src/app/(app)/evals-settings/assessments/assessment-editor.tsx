@@ -26,6 +26,7 @@ import { AUDIENCE_LABELS, STAGE_LABELS } from "@/lib/evals/assessment-values";
 import type { AssessmentDetail } from "@/lib/evals/assessments";
 import { riseChild, staggerParent } from "@/lib/motion";
 import { cn } from "@/lib/utils";
+import { confirmDialog } from "@/components/ui/confirm";
 
 type Detail = Omit<AssessmentDetail, "createdAt" | "updatedAt"> & { createdAt: string; updatedAt: string };
 
@@ -123,7 +124,7 @@ export function AssessmentEditor({ assessment }: { assessment: Detail | null }) 
   }
 
   async function remove() {
-    if (!assessment || !window.confirm(`Remove the assessment “${assessment.name}”?`)) return;
+    if (!assessment || !(await confirmDialog({ title: `Remove the assessment “${assessment.name}”?`, confirmLabel: "Remove", destructive: true }))) return;
     const body = await request("delete", `/api/evals/assessments/${assessment.id}`, { method: "DELETE" });
     if (!body) return;
     router.push(LIST);

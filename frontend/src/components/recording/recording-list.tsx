@@ -7,6 +7,7 @@ import { Download, Loader2, Play, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { extensionFor, formatBytes, formatDuration } from "@/lib/recording/format";
 import { deleteRecording, listRecordings, readRecording, type StoredRecording } from "@/lib/recording/store";
+import { confirmDialog } from "@/components/ui/confirm";
 
 const startedLabel = (ms: number) =>
   new Date(ms).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
@@ -93,7 +94,7 @@ function RecordingRow({
     setError(null);
     try {
       if (kind === "delete") {
-        if (!confirm("Delete this recording from this computer? It cannot be recovered.")) return;
+        if (!(await confirmDialog({ title: "Delete this recording from this computer?", description: "It cannot be recovered.", confirmLabel: "Delete", destructive: true }))) return;
         await deleteRecording(r.id);
         onDeleted();
         return;

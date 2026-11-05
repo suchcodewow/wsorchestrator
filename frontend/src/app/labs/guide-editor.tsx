@@ -23,6 +23,7 @@ import { imageFromTransfer, uploadImageFile } from "@/lib/lab-image-upload";
 import { cn } from "@/lib/utils";
 import { ImagePickerDialog } from "./image-picker-dialog";
 import { GuideToolbar, type ToolInsert } from "./guide-toolbar";
+import { confirmDialog } from "@/components/ui/confirm";
 
 export function GuideEditor({
   guide,
@@ -370,15 +371,13 @@ export function GuideEditor({
 
     const where =
       usedIn.length > 0
-        ? `, and out of ${usedIn.length === 1 ? "1 workshop" : `${usedIn.length} workshops`}: ${usedIn
+        ? `It comes out of ${usedIn.length === 1 ? "1 workshop" : `${usedIn.length} workshops`}: ${usedIn
             .map((w) => w.title)
-            .join(", ")}`
-        : "";
+            .join(", ")}.`
+        : undefined;
 
     if (
-      !window.confirm(
-        `Delete "${guide.title}" for good${where}?`,
-      )
+      !(await confirmDialog({ title: `Delete "${guide.title}" for good?`, description: where, confirmLabel: "Delete", destructive: true }))
     ) {
       return;
     }

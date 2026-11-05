@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { riseChild, staggerParent } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { formatWhen } from "../../cohort-settings/format";
+import { confirmDialog } from "@/components/ui/confirm";
 
 type Person = { email: string; connectedBy: string | null; connectedAt: string };
 
@@ -107,7 +108,7 @@ export function ConnectorsView({
   const connected = [google.connection, zoom.connection, slack.installation?.readable].filter(Boolean).length;
 
   async function disconnectSlack() {
-    if (!window.confirm("Disconnect Slack? Syncs stop until the app is added again. The app stays installed in Slack itself.")) return;
+    if (!(await confirmDialog({ title: "Disconnect Slack?", description: "Syncs stop until the app is added again. The app stays installed in Slack itself.", confirmLabel: "Disconnect", destructive: true }))) return;
     setBusy(true);
     setError(null);
     try {
@@ -126,9 +127,7 @@ export function ConnectorsView({
     if (next === slack.live) return;
     if (
       next &&
-      !window.confirm(
-        "Go live? From now on the cohort Slack sync creates channels, invites and removes people and sends reminders; the daily surveys are announced; the Live Sessions Slack button opens channels; and releasing scores messages managers.",
-      )
+      !(await confirmDialog({ title: "Go live?", description: "From now on the cohort Slack sync creates channels, invites and removes people and sends reminders; the daily surveys are announced; the Live Sessions Slack button opens channels; and releasing scores messages managers.", confirmLabel: "Go live" }))
     ) {
       return;
     }

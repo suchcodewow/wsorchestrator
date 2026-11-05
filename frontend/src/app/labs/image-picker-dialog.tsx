@@ -25,6 +25,7 @@ import {
 import { LAB_IMAGE_LIMITS } from "@/db/schema";
 import { uploadImageFile, type PickerImage } from "@/lib/lab-image-upload";
 import { cn } from "@/lib/utils";
+import { confirmDialog } from "@/components/ui/confirm";
 
 export type InsertedImage = { id: string; name: string; alt: string };
 
@@ -156,9 +157,7 @@ export function ImagePickerDialog({
 
   async function remove(image: PickerImage) {
     if (
-      !window.confirm(
-        `Delete "${image.name}", leaving a broken image in any guide using it?`,
-      )
+      !(await confirmDialog({ title: `Delete "${image.name}"?`, description: "Any guide using it is left with a broken image.", confirmLabel: "Delete", destructive: true }))
     ) {
       return;
     }

@@ -20,6 +20,7 @@ import {
   type TestGroupMember,
   type TestGroupStage,
 } from "@/lib/cohorts/test-group-plan";
+import { confirmDialog } from "@/components/ui/confirm";
 
 const STAGE_LABELS: Record<TestGroupStage, string> = {
   bootcamp: "Bootcamp",
@@ -138,9 +139,7 @@ export function TestGroupPanel({
       return;
     }
     if (
-      !window.confirm(
-        "Turn the test group off? Its Slack channels are archived and its calendar invites cancelled.",
-      )
+      !(await confirmDialog({ title: "Turn the test group off?", description: "Its Slack channels are archived and its calendar invites cancelled.", confirmLabel: "Turn off", destructive: true }))
     )
       return;
     if (await save({ on: false })) setDraft(false);
