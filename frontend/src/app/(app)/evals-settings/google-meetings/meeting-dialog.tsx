@@ -11,7 +11,7 @@ import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { MEETING_STAGES, MEETING_TRACKS, type MeetingStage, type MeetingTrack } from "@/db/schema";
 import { MEETING_STAGE_LABELS, MEETING_TRACK_LABELS, meetingKey } from "@/lib/evals/meeting-plan";
 import { riseChild, staggerParent } from "@/lib/motion";
@@ -243,96 +243,98 @@ export function MeetingDialog({
             e.preventDefault();
             void save();
           }}
-          className="grid gap-5"
+          className="contents"
         >
-          <motion.div variants={riseChild} className="grid gap-1.5">
-            <label htmlFor="gm-name" className="text-sm font-medium">
-              Meeting
-            </label>
-            <div className="relative">
-              <select
-                id="gm-name"
-                value={name}
-                disabled={names === null || pending}
-                onChange={(e) => setName(e.target.value)}
-                className={SELECT}
-                required
-              >
-                <option value="" disabled>
-                  {names === null ? "Loading…" : "Pick a meeting"}
-                </option>
-                {listed && <option value={editing.name}>{editing.name} (not on the calendar now)</option>}
-                {options.map((n) => (
-                  <option key={n.name} value={n.name}>
-                    {n.name} — next {formatWhen(n.next)}
-                    {n.occurrences > 1 ? `, ${n.occurrences} in all` : ""}
+          <DialogBody className="grid gap-5">
+            <motion.div variants={riseChild} className="grid gap-1.5">
+              <label htmlFor="gm-name" className="text-sm font-medium">
+                Meeting
+              </label>
+              <div className="relative">
+                <select
+                  id="gm-name"
+                  value={name}
+                  disabled={names === null || pending}
+                  onChange={(e) => setName(e.target.value)}
+                  className={SELECT}
+                  required
+                >
+                  <option value="" disabled>
+                    {names === null ? "Loading…" : "Pick a meeting"}
                   </option>
-                ))}
-              </select>
-              {names === null && <Loader2 className="pointer-events-none absolute top-2.5 right-8 size-4 animate-spin text-muted-foreground" />}
-            </div>
-            {calendarError && <p className="text-xs text-destructive">{calendarError}</p>}
-          </motion.div>
+                  {listed && <option value={editing.name}>{editing.name} (not on the calendar now)</option>}
+                  {options.map((n) => (
+                    <option key={n.name} value={n.name}>
+                      {n.name} — next {formatWhen(n.next)}
+                      {n.occurrences > 1 ? `, ${n.occurrences} in all` : ""}
+                    </option>
+                  ))}
+                </select>
+                {names === null && <Loader2 className="pointer-events-none absolute top-2.5 right-8 size-4 animate-spin text-muted-foreground" />}
+              </div>
+              {calendarError && <p className="text-xs text-destructive">{calendarError}</p>}
+            </motion.div>
 
-          <motion.div variants={riseChild} className="grid gap-4">
-            <Choice id="gm-stage" label="Stage" values={MEETING_STAGES} labels={MEETING_STAGE_LABELS} value={stage} onChange={setStage} />
-            <Choice
-              id="gm-count"
-              label="Invite to"
-              values={COUNTS}
-              labels={{ one: "1 meeting", all: `All meetings until ${MEETING_STAGE_LABELS[stage]}` }}
-              value={count}
-              onChange={setCount}
-            />
-            <Choice id="gm-track" label="Track" values={MEETING_TRACKS} labels={MEETING_TRACK_LABELS} value={track} onChange={setTrack} />
-          </motion.div>
-
-          <motion.div variants={riseChild} className="grid gap-1.5">
-            <label htmlFor="gm-min-days" className="text-sm font-medium">
-              Minimum tenure for an attendee before scheduling
-            </label>
-            <div className="flex items-center gap-2">
-              <input
-              id="gm-min-days"
-              type="number"
-              min={0}
-              max={365}
-              step={1}
-              value={minDays}
-              disabled={pending}
-              onChange={(e) => setMinDays(Math.min(365, Math.max(0, Math.trunc(Number(e.target.value)) || 0)))}
-              className={cn(SELECT, "w-28 tabular-nums")}
-            />
-              <span className="text-sm text-muted-foreground">days</span>
-            </div>
-            <p className="text-xs text-muted-foreground">Tenure rule is ignored if it would leave someone no meeting to attend before their class.</p>
-          </motion.div>
-
-          <motion.div variants={riseChild} className="grid gap-3">
-            <label className="flex items-center gap-2 text-sm font-medium">
-              <input
-                type="checkbox"
-                checked={filterZones}
-                disabled={pending}
-                onChange={(e) => setFilterZones(e.target.checked)}
-                className="size-3.5 shrink-0 accent-brand"
+            <motion.div variants={riseChild} className="grid gap-4">
+              <Choice id="gm-stage" label="Stage" values={MEETING_STAGES} labels={MEETING_STAGE_LABELS} value={stage} onChange={setStage} />
+              <Choice
+                id="gm-count"
+                label="Invite to"
+                values={COUNTS}
+                labels={{ one: "1 meeting", all: `All meetings until ${MEETING_STAGE_LABELS[stage]}` }}
+                value={count}
+                onChange={setCount}
               />
-              Filter by timezones
-            </label>
-            {filterZones && (
-              <TimezoneMap
-                coverage={coverage}
-                meetingAt={meetingAt}
-                from={zoneFrom}
-                to={zoneTo}
+              <Choice id="gm-track" label="Track" values={MEETING_TRACKS} labels={MEETING_TRACK_LABELS} value={track} onChange={setTrack} />
+            </motion.div>
+
+            <motion.div variants={riseChild} className="grid gap-1.5">
+              <label htmlFor="gm-min-days" className="text-sm font-medium">
+                Minimum tenure for an attendee before scheduling
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                id="gm-min-days"
+                type="number"
+                min={0}
+                max={365}
+                step={1}
+                value={minDays}
                 disabled={pending}
-                onChange={(from, to) => {
-                  setZoneFrom(from);
-                  setZoneTo(to);
-                }}
+                onChange={(e) => setMinDays(Math.min(365, Math.max(0, Math.trunc(Number(e.target.value)) || 0)))}
+                className={cn(SELECT, "w-28 tabular-nums")}
               />
-            )}
-          </motion.div>
+                <span className="text-sm text-muted-foreground">days</span>
+              </div>
+              <p className="text-xs text-muted-foreground">Tenure rule is ignored if it would leave someone no meeting to attend before their class.</p>
+            </motion.div>
+
+            <motion.div variants={riseChild} className="grid gap-3">
+              <label className="flex items-center gap-2 text-sm font-medium">
+                <input
+                  type="checkbox"
+                  checked={filterZones}
+                  disabled={pending}
+                  onChange={(e) => setFilterZones(e.target.checked)}
+                  className="size-3.5 shrink-0 accent-brand"
+                />
+                Filter by timezones
+              </label>
+              {filterZones && (
+                <TimezoneMap
+                  coverage={coverage}
+                  meetingAt={meetingAt}
+                  from={zoneFrom}
+                  to={zoneTo}
+                  disabled={pending}
+                  onChange={(from, to) => {
+                    setZoneFrom(from);
+                    setZoneTo(to);
+                  }}
+                />
+              )}
+            </motion.div>
+          </DialogBody>
 
           {error && (
             <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} role="alert" className="text-sm text-destructive">

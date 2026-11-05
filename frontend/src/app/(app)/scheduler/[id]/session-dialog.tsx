@@ -15,7 +15,7 @@ import { useMemo, useState, type KeyboardEvent } from "react";
 import { AlertTriangle, ChevronDown, Crown, Loader2, Trash2 } from "lucide-react";
 import { SessionLookFields, type SessionLook } from "@/components/session-look-fields";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { SCHEDULE_LIMITS, SESSION_AUDIENCES, type ScheduleTrack, type SessionAudience } from "@/db/schema";
@@ -337,7 +337,7 @@ export function SessionDialog({
 
   return (
     <Dialog open onOpenChange={(next) => !next && close()}>
-      <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
+      <DialogContent className="max-h-[90vh] max-w-3xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             {look.emoji && <span aria-hidden>{look.emoji}</span>}
@@ -383,177 +383,179 @@ export function SessionDialog({
           </div>
         )}
 
-        {editable ? (
-          <form
-            id="session-form"
-            role="tabpanel"
-            aria-labelledby="session-tab-session"
-            hidden={shown !== "session"}
-            noValidate
-            onSubmit={(e) => {
-              e.preventDefault();
-              void save();
-            }}
-            className="grid gap-6"
-          >
-            {!existing && types.length > 0 && (
-              <div className="grid gap-1.5">
-                <span className="text-sm font-medium">Start from</span>
-                <div className="flex flex-wrap gap-1.5">
-                  {types.map((t) => (
-                    <button
-                      key={t.id}
-                      type="button"
-                      aria-pressed={typeId === t.id}
-                      onClick={() => {
-                        setTypeId(t.id);
-                        setLook(lookOf(t));
-                      }}
-                      className={cn(
-                        "inline-flex items-center gap-1.5 rounded-md border border-l-4 px-2 py-1 text-sm transition-shadow",
-                        SESSION_STYLES[t.color].card,
-                        typeId === t.id && "ring-2 ring-brand/60",
-                      )}
-                    >
-                      {t.emoji && <span aria-hidden>{t.emoji}</span>}
-                      {t.name}
-                      <span className="text-xs text-muted-foreground">{formatLength(t.minutes)}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <SessionLookFields
-              id="session"
-              value={look}
-              onChange={setLook}
-              autoFocus={!existing}
-              afterLength={
-                look.kind !== "unstructured" && (
-                  <InstructorPicker
-                    pool={pool}
-                    staff={staff}
-                    busy={busy.people}
-                    before={before.people}
-                    onToggle={toggle}
-                    onLeader={makeLeader}
-                  />
-                )
-              }
-            />
-
-            {look.kind !== "unstructured" && (
-              <section className="grid gap-1.5">
-                <span id="session-audience" className="text-sm font-medium">
-                  Who attends this session
-                </span>
-                <div role="radiogroup" aria-labelledby="session-audience" className="inline-flex w-fit rounded-lg border p-0.5">
-                  {SESSION_AUDIENCES.map((a) => (
-                    <button
-                      key={a}
-                      type="button"
-                      role="radio"
-                      aria-checked={audience === a}
-                      onClick={() => setAudience(a)}
-                      className={cn(
-                        "rounded-md px-3 py-1 text-sm transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
-                        audience === a ? "bg-brand/10 font-medium text-foreground" : "text-muted-foreground hover:text-foreground",
-                      )}
-                    >
-                      {AUDIENCE_LABELS[a]}
-                    </button>
-                  ))}
-                </div>
-                {taughtBeside.map((c, i) => (
-                  <p key={i} className="text-xs text-red-700 dark:text-red-400">
-                    {c.what.kind === "audience" && GROUP_NAMES[c.what.group]} are also in {describeClash(c)}
-                  </p>
-                ))}
-              </section>
-            )}
-
-            {look.kind === "main" && (
-              <section className="grid gap-2">
-                <h3 className="text-sm font-medium">
-                  Room
-                  {roomId && <span className="ml-2 font-normal text-muted-foreground">{roomName(roomId)}</span>}
-                </h3>
-                {!hasFacility ? (
-                  <p className="text-sm text-muted-foreground">Pick a facility for this bootcamp on the Scheduler to give sessions rooms.</p>
-                ) : rooms.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">This bootcamp&apos;s facility has no rooms yet.</p>
-                ) : (
-                  <div role="radiogroup" aria-label="Room" className="grid gap-1.5 sm:grid-cols-2">
-                    <RoomOption label="No room" detail="" on={roomId === null} onPick={() => setRoomId(null)} />
-                    {rooms.map((r) => {
-                      const theirs = busy.rooms.get(r.id) ?? [];
-                      return (
-                        <RoomOption
-                          key={r.id}
-                          label={r.name}
-                          detail={`Holds ${r.capacity}`}
-                          on={roomId === r.id}
-                          busy={theirs}
-                          disabled={theirs.length > 0 && !before.rooms.has(r.id) && roomId !== r.id}
-                          onPick={() => setRoomId(r.id)}
-                        />
-                      );
-                    })}
-                  </div>
-                )}
-              </section>
-            )}
-          </form>
-        ) : (
-          existing && (
-            <div role="tabpanel" id="session-panel-session" aria-labelledby="session-tab-session" hidden={shown !== "session"}>
-              <ReadOnly session={existing} roomName={roomName} />
-            </div>
-          )
-        )}
-
-        {existing && (
-          <div role="tabpanel" id="session-panel-comments" aria-labelledby="session-tab-comments" hidden={shown !== "comments"}>
-            <Comments
-              key={existing.id}
-              bootcampId={bootcampId}
-              sessionId={existing.id}
-              canWrite={canManage}
-              viewerId={viewerId}
-              people={instructors}
-              onChange={(delta) => {
-                setCommented(true);
-                setCommentDelta((d) => d + delta);
+        <DialogBody>
+          {editable ? (
+            <form
+              id="session-form"
+              role="tabpanel"
+              aria-labelledby="session-tab-session"
+              hidden={shown !== "session"}
+              noValidate
+              onSubmit={(e) => {
+                e.preventDefault();
+                void save();
               }}
-            />
-          </div>
-        )}
+              className="grid gap-6"
+            >
+              {!existing && types.length > 0 && (
+                <div className="grid gap-1.5">
+                  <span className="text-sm font-medium">Start from</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {types.map((t) => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        aria-pressed={typeId === t.id}
+                        onClick={() => {
+                          setTypeId(t.id);
+                          setLook(lookOf(t));
+                        }}
+                        className={cn(
+                          "inline-flex items-center gap-1.5 rounded-md border border-l-4 px-2 py-1 text-sm transition-shadow",
+                          SESSION_STYLES[t.color].card,
+                          typeId === t.id && "ring-2 ring-brand/60",
+                        )}
+                      >
+                        {t.emoji && <span aria-hidden>{t.emoji}</span>}
+                        {t.name}
+                        <span className="text-xs text-muted-foreground">{formatLength(t.minutes)}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
-        {look.kind === "breakout" && (
-          <div role="tabpanel" id="session-panel-groups" aria-labelledby="session-tab-groups" hidden={shown !== "groups"}>
-            <BreakoutGroups
-              key={existing?.id ?? "new"}
-              bootcampId={bootcampId}
-              sessionId={existing?.id ?? null}
-              track={where.track}
-              audience={audience}
-              assessments={assessments}
-              assessmentId={assessmentId}
-              onAssessment={setAssessmentId}
-              staff={staff}
-              rooms={rooms}
-              busyRooms={busy.rooms}
-              beforeRooms={before.rooms}
-              hasFacility={hasFacility}
-              roomName={roomName}
-              value={groups}
-              onChange={setGroups}
-              onRooms={setStaffRooms}
-              editable={editable}
-            />
-          </div>
-        )}
+              <SessionLookFields
+                id="session"
+                value={look}
+                onChange={setLook}
+                autoFocus={!existing}
+                afterLength={
+                  look.kind !== "unstructured" && (
+                    <InstructorPicker
+                      pool={pool}
+                      staff={staff}
+                      busy={busy.people}
+                      before={before.people}
+                      onToggle={toggle}
+                      onLeader={makeLeader}
+                    />
+                  )
+                }
+              />
+
+              {look.kind !== "unstructured" && (
+                <section className="grid gap-1.5">
+                  <span id="session-audience" className="text-sm font-medium">
+                    Who attends this session
+                  </span>
+                  <div role="radiogroup" aria-labelledby="session-audience" className="inline-flex w-fit rounded-lg border p-0.5">
+                    {SESSION_AUDIENCES.map((a) => (
+                      <button
+                        key={a}
+                        type="button"
+                        role="radio"
+                        aria-checked={audience === a}
+                        onClick={() => setAudience(a)}
+                        className={cn(
+                          "rounded-md px-3 py-1 text-sm transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
+                          audience === a ? "bg-brand/10 font-medium text-foreground" : "text-muted-foreground hover:text-foreground",
+                        )}
+                      >
+                        {AUDIENCE_LABELS[a]}
+                      </button>
+                    ))}
+                  </div>
+                  {taughtBeside.map((c, i) => (
+                    <p key={i} className="text-xs text-red-700 dark:text-red-400">
+                      {c.what.kind === "audience" && GROUP_NAMES[c.what.group]} are also in {describeClash(c)}
+                    </p>
+                  ))}
+                </section>
+              )}
+
+              {look.kind === "main" && (
+                <section className="grid gap-2">
+                  <h3 className="text-sm font-medium">
+                    Room
+                    {roomId && <span className="ml-2 font-normal text-muted-foreground">{roomName(roomId)}</span>}
+                  </h3>
+                  {!hasFacility ? (
+                    <p className="text-sm text-muted-foreground">Pick a facility for this bootcamp on the Scheduler to give sessions rooms.</p>
+                  ) : rooms.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">This bootcamp&apos;s facility has no rooms yet.</p>
+                  ) : (
+                    <div role="radiogroup" aria-label="Room" className="grid gap-1.5 sm:grid-cols-2">
+                      <RoomOption label="No room" detail="" on={roomId === null} onPick={() => setRoomId(null)} />
+                      {rooms.map((r) => {
+                        const theirs = busy.rooms.get(r.id) ?? [];
+                        return (
+                          <RoomOption
+                            key={r.id}
+                            label={r.name}
+                            detail={`Holds ${r.capacity}`}
+                            on={roomId === r.id}
+                            busy={theirs}
+                            disabled={theirs.length > 0 && !before.rooms.has(r.id) && roomId !== r.id}
+                            onPick={() => setRoomId(r.id)}
+                          />
+                        );
+                      })}
+                    </div>
+                  )}
+                </section>
+              )}
+            </form>
+          ) : (
+            existing && (
+              <div role="tabpanel" id="session-panel-session" aria-labelledby="session-tab-session" hidden={shown !== "session"}>
+                <ReadOnly session={existing} roomName={roomName} />
+              </div>
+            )
+          )}
+
+          {existing && (
+            <div role="tabpanel" id="session-panel-comments" aria-labelledby="session-tab-comments" hidden={shown !== "comments"}>
+              <Comments
+                key={existing.id}
+                bootcampId={bootcampId}
+                sessionId={existing.id}
+                canWrite={canManage}
+                viewerId={viewerId}
+                people={instructors}
+                onChange={(delta) => {
+                  setCommented(true);
+                  setCommentDelta((d) => d + delta);
+                }}
+              />
+            </div>
+          )}
+
+          {look.kind === "breakout" && (
+            <div role="tabpanel" id="session-panel-groups" aria-labelledby="session-tab-groups" hidden={shown !== "groups"}>
+              <BreakoutGroups
+                key={existing?.id ?? "new"}
+                bootcampId={bootcampId}
+                sessionId={existing?.id ?? null}
+                track={where.track}
+                audience={audience}
+                assessments={assessments}
+                assessmentId={assessmentId}
+                onAssessment={setAssessmentId}
+                staff={staff}
+                rooms={rooms}
+                busyRooms={busy.rooms}
+                beforeRooms={before.rooms}
+                hasFacility={hasFacility}
+                roomName={roomName}
+                value={groups}
+                onChange={setGroups}
+                onRooms={setStaffRooms}
+                editable={editable}
+              />
+            </div>
+          )}
+        </DialogBody>
 
         {editable && (
           <>

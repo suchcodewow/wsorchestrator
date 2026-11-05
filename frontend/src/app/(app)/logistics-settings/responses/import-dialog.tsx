@@ -10,7 +10,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { CheckCircle2, Loader2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { INTAKE_FORM_IDS, type IntakeFormId, type IntakeQuestion } from "@/db/schema";
 import { INTAKE_FORM_LABELS } from "@/lib/logistics/intake-values";
@@ -95,112 +95,114 @@ export function ImportResponsesDialog({
           <DialogTitle>Import responses</DialogTitle>
         </DialogHeader>
 
-        {summary?.imported ? (
-          <div className="space-y-2 py-2 text-sm">
-            <p className="flex items-center gap-2 font-medium">
-              <CheckCircle2 className="size-4 text-brand" />
-              Imported {summary.added.toLocaleString()} {summary.added === 1 ? "response" : "responses"} into{" "}
-              {INTAKE_FORM_LABELS[form]}
-            </p>
-            {summary.alreadyThere > 0 && (
-              <p className="text-muted-foreground">{summary.alreadyThere.toLocaleString()} were already here and left as they were.</p>
-            )}
-            <p className="text-muted-foreground">
-              {summary.inCohort.toLocaleString()} of {summary.people.toLocaleString()} people are in the current cohort, so
-              show on Dietary needs.
-            </p>
-          </div>
-        ) : (
-          <div className="grid gap-4">
-            <div className="space-y-1.5">
-              <label htmlFor="import-form" className="text-sm font-medium">
-                Into
-              </label>
-              <select
-                id="import-form"
-                value={form}
-                disabled={busy}
-                onChange={(e) => {
-                  setForm(e.target.value as IntakeFormId);
-                  setSummary(null);
-                }}
-                className={SELECT}
-              >
-                {INTAKE_FORM_IDS.map((id) => (
-                  <option key={id} value={id}>
-                    {INTAKE_FORM_LABELS[id]}: the {id === "bootcamp" ? "Bootcamp" : "Intermediate"} registration&apos;s responses
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="space-y-1.5">
-              <label htmlFor="import-file" className="text-sm font-medium">
-                Responses sheet
-              </label>
-              <Input
-                id="import-file"
-                type="file"
-                accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                onChange={(e) => {
-                  setFile(e.target.files?.[0] ?? null);
-                  setSummary(null);
-                }}
-              />
-              <p className="text-xs text-muted-foreground">
-                In the Google Form&apos;s responses sheet: File → Download → .csv or .xlsx. Columns are matched to questions
-                by their titles.
+        <DialogBody>
+          {summary?.imported ? (
+            <div className="space-y-2 py-2 text-sm">
+              <p className="flex items-center gap-2 font-medium">
+                <CheckCircle2 className="size-4 text-brand" />
+                Imported {summary.added.toLocaleString()} {summary.added === 1 ? "response" : "responses"} into{" "}
+                {INTAKE_FORM_LABELS[form]}
+              </p>
+              {summary.alreadyThere > 0 && (
+                <p className="text-muted-foreground">{summary.alreadyThere.toLocaleString()} were already here and left as they were.</p>
+              )}
+              <p className="text-muted-foreground">
+                {summary.inCohort.toLocaleString()} of {summary.people.toLocaleString()} people are in the current cohort, so
+                show on Dietary needs.
               </p>
             </div>
+          ) : (
+            <div className="grid gap-4">
+              <div className="space-y-1.5">
+                <label htmlFor="import-form" className="text-sm font-medium">
+                  Into
+                </label>
+                <select
+                  id="import-form"
+                  value={form}
+                  disabled={busy}
+                  onChange={(e) => {
+                    setForm(e.target.value as IntakeFormId);
+                    setSummary(null);
+                  }}
+                  className={SELECT}
+                >
+                  {INTAKE_FORM_IDS.map((id) => (
+                    <option key={id} value={id}>
+                      {INTAKE_FORM_LABELS[id]}: the {id === "bootcamp" ? "Bootcamp" : "Intermediate"} registration&apos;s responses
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <label htmlFor="import-file" className="text-sm font-medium">
+                  Responses sheet
+                </label>
+                <Input
+                  id="import-file"
+                  type="file"
+                  accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                  onChange={(e) => {
+                    setFile(e.target.files?.[0] ?? null);
+                    setSummary(null);
+                  }}
+                />
+                <p className="text-xs text-muted-foreground">
+                  In the Google Form&apos;s responses sheet: File → Download → .csv or .xlsx. Columns are matched to questions
+                  by their titles.
+                </p>
+              </div>
 
-            {summary && (
-              <div className="divide-y overflow-hidden rounded-xl border text-sm">
-                <div className="px-4 py-3">
-                  <span className="font-medium">{summary.added.toLocaleString()}</span> to import from{" "}
-                  {summary.people.toLocaleString()} {summary.people === 1 ? "person" : "people"}
-                  {summary.alreadyThere > 0 && <>, {summary.alreadyThere.toLocaleString()} already here</>}.{" "}
-                  <span className="text-muted-foreground">
-                    {summary.inCohort.toLocaleString()} are in the current cohort, so will show on Dietary needs.
-                  </span>
-                </div>
-                <div className="space-y-1.5 px-4 py-3">
-                  <p className="font-medium">Matched</p>
-                  {matched.length === 0 ? (
-                    <p className="text-muted-foreground">No column matched a question.</p>
-                  ) : (
-                    <ul className="space-y-1">
-                      {matched.map((c, i) => (
-                        <li key={i} className="text-muted-foreground">
-                          <span className="text-foreground">{titles.get(c.questionId!)}</span>
-                        </li>
-                      ))}
-                    </ul>
+              {summary && (
+                <div className="divide-y overflow-hidden rounded-xl border text-sm">
+                  <div className="px-4 py-3">
+                    <span className="font-medium">{summary.added.toLocaleString()}</span> to import from{" "}
+                    {summary.people.toLocaleString()} {summary.people === 1 ? "person" : "people"}
+                    {summary.alreadyThere > 0 && <>, {summary.alreadyThere.toLocaleString()} already here</>}.{" "}
+                    <span className="text-muted-foreground">
+                      {summary.inCohort.toLocaleString()} are in the current cohort, so will show on Dietary needs.
+                    </span>
+                  </div>
+                  <div className="space-y-1.5 px-4 py-3">
+                    <p className="font-medium">Matched</p>
+                    {matched.length === 0 ? (
+                      <p className="text-muted-foreground">No column matched a question.</p>
+                    ) : (
+                      <ul className="space-y-1">
+                        {matched.map((c, i) => (
+                          <li key={i} className="text-muted-foreground">
+                            <span className="text-foreground">{titles.get(c.questionId!)}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                  {(unused.length > 0 || unasked.length > 0) && (
+                    <div className="space-y-1.5 px-4 py-3 text-muted-foreground">
+                      {unused.length > 0 && (
+                        <p>
+                          <span className="font-medium text-foreground">Not imported:</span>{" "}
+                          {unused.map((c) => `“${c.header.trim()}”`).join(", ")}, as the form asks no question with that title.
+                        </p>
+                      )}
+                      {unasked.length > 0 && (
+                        <p>
+                          <span className="font-medium text-foreground">No column for:</span>{" "}
+                          {unasked.map((q) => `“${q.title}”`).join(", ")}.
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  {summary.problems.length > 0 && (
+                    <div className="px-4 py-3 text-destructive">
+                      {summary.problems.map((p) => `Row ${p.row} ${PROBLEMS[p.problem]}`).join("; ")}, so is skipped.
+                    </div>
                   )}
                 </div>
-                {(unused.length > 0 || unasked.length > 0) && (
-                  <div className="space-y-1.5 px-4 py-3 text-muted-foreground">
-                    {unused.length > 0 && (
-                      <p>
-                        <span className="font-medium text-foreground">Not imported:</span>{" "}
-                        {unused.map((c) => `“${c.header.trim()}”`).join(", ")}, as the form asks no question with that title.
-                      </p>
-                    )}
-                    {unasked.length > 0 && (
-                      <p>
-                        <span className="font-medium text-foreground">No column for:</span>{" "}
-                        {unasked.map((q) => `“${q.title}”`).join(", ")}.
-                      </p>
-                    )}
-                  </div>
-                )}
-                {summary.problems.length > 0 && (
-                  <div className="px-4 py-3 text-destructive">
-                    {summary.problems.map((p) => `Row ${p.row} ${PROBLEMS[p.problem]}`).join("; ")}, so is skipped.
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
+              )}
+            </div>
+          )}
+        </DialogBody>
 
         {error && (
           <p role="alert" className="text-sm text-destructive">

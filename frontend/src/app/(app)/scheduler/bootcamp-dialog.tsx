@@ -14,7 +14,7 @@ import { motion } from "framer-motion";
 import { Check, Loader2, X } from "lucide-react";
 import { EmployeePicker } from "@/components/employee-picker";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { BOOTCAMP_DEFAULTS, BOOTCAMP_LIMITS, BOOTCAMP_STATUSES, type BootcampStatus } from "@/db/schema";
 import { SPRING_SNAPPY, riseChild, staggerParent } from "@/lib/motion";
@@ -215,187 +215,189 @@ export function BootcampDialog({
             e.preventDefault();
             void save();
           }}
-          className="grid gap-5"
+          className="contents"
         >
-          <motion.div variants={riseChild} className="grid gap-4 sm:grid-cols-[1fr_auto]">
-            <div className="grid gap-1.5">
-              <label htmlFor="bc-start" className="text-sm font-medium">
-                Bootcamp start date
-              </label>
-              <Input
-                id="bc-start"
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                required
-                autoFocus
-              />
-            </div>
-            <div className="grid gap-1.5">
-              <label htmlFor="bc-days" className="text-sm font-medium">
-                Number of days
-              </label>
-              <Input
-                id="bc-days"
-                type="number"
-                inputMode="numeric"
-                min={BOOTCAMP_LIMITS.minDays}
-                max={BOOTCAMP_LIMITS.maxDays}
-                step={1}
-                value={btcDays}
-                onChange={(e) => setBtcDays(e.target.value)}
-                required
-                className="tnum w-28"
-              />
-            </div>
-          </motion.div>
+          <DialogBody className="grid gap-5">
+            <motion.div variants={riseChild} className="grid gap-4 sm:grid-cols-[1fr_auto]">
+              <div className="grid gap-1.5">
+                <label htmlFor="bc-start" className="text-sm font-medium">
+                  Bootcamp start date
+                </label>
+                <Input
+                  id="bc-start"
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  required
+                  autoFocus
+                />
+              </div>
+              <div className="grid gap-1.5">
+                <label htmlFor="bc-days" className="text-sm font-medium">
+                  Number of days
+                </label>
+                <Input
+                  id="bc-days"
+                  type="number"
+                  inputMode="numeric"
+                  min={BOOTCAMP_LIMITS.minDays}
+                  max={BOOTCAMP_LIMITS.maxDays}
+                  step={1}
+                  value={btcDays}
+                  onChange={(e) => setBtcDays(e.target.value)}
+                  required
+                  className="tnum w-28"
+                />
+              </div>
+            </motion.div>
 
-          <motion.div variants={riseChild} className="grid gap-4 sm:grid-cols-[1fr_auto] sm:items-end">
-            <motion.button
-              type="button"
-              role="checkbox"
-              aria-checked={includeInt}
-              onClick={() => setIncludeInt((v) => !v)}
-              whileTap={{ scale: 0.99 }}
-              transition={SPRING_SNAPPY}
-              className={cn(
-                "flex h-9 cursor-pointer items-center gap-3 rounded-lg border px-3 text-left text-sm transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
-                includeInt ? "border-brand-border bg-brand/8" : "hover:border-brand-border/60 hover:bg-accent/40",
-              )}
-            >
-              <span
+            <motion.div variants={riseChild} className="grid gap-4 sm:grid-cols-[1fr_auto] sm:items-end">
+              <motion.button
+                type="button"
+                role="checkbox"
+                aria-checked={includeInt}
+                onClick={() => setIncludeInt((v) => !v)}
+                whileTap={{ scale: 0.99 }}
+                transition={SPRING_SNAPPY}
                 className={cn(
-                  "flex size-4.5 shrink-0 items-center justify-center rounded-[5px] border transition-colors",
-                  includeInt ? "border-brand bg-brand text-brand-foreground" : "border-input",
+                  "flex h-9 cursor-pointer items-center gap-3 rounded-lg border px-3 text-left text-sm transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
+                  includeInt ? "border-brand-border bg-brand/8" : "hover:border-brand-border/60 hover:bg-accent/40",
                 )}
               >
-                {includeInt && (
-                  <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} transition={SPRING_SNAPPY}>
-                    <Check className="size-3" strokeWidth={3} />
-                  </motion.span>
-                )}
-              </span>
-              <span className="font-medium">Include Intermediate</span>
-            </motion.button>
-            <div className="grid gap-1.5">
-              <label htmlFor="int-days" className={cn("text-sm font-medium", !includeInt && "text-muted-foreground")}>
-                Number of days
-              </label>
-              <Input
-                id="int-days"
-                type="number"
-                inputMode="numeric"
-                min={BOOTCAMP_LIMITS.minDays}
-                max={BOOTCAMP_LIMITS.maxDays}
-                step={1}
-                value={intDays}
-                onChange={(e) => setIntDays(e.target.value)}
-                disabled={!includeInt}
-                required={includeInt}
-                className="tnum w-28"
-              />
-            </div>
-          </motion.div>
-
-          <motion.div variants={riseChild} className="grid gap-1.5">
-            <span id="bc-status" className="text-sm font-medium">
-              Status
-            </span>
-            <div role="radiogroup" aria-labelledby="bc-status" className="flex w-fit overflow-hidden rounded-md border">
-              {BOOTCAMP_STATUSES.map((value) => (
-                <button
-                  key={value}
-                  type="button"
-                  role="radio"
-                  aria-checked={status === value}
+                <span
                   className={cn(
-                    "px-4 py-1.5 text-sm transition-colors",
-                    status === value
-                      ? "bg-secondary text-secondary-foreground"
-                      : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+                    "flex size-4.5 shrink-0 items-center justify-center rounded-[5px] border transition-colors",
+                    includeInt ? "border-brand bg-brand text-brand-foreground" : "border-input",
                   )}
-                  onClick={() => setStatus(value)}
                 >
-                  {STATUS_LABELS[value]}
-                </button>
-              ))}
-            </div>
-          </motion.div>
-
-          <motion.div variants={riseChild} className={cn("grid gap-4", !editing && "sm:grid-cols-2")}>
-            <div className="grid gap-1.5">
-              <label htmlFor="bc-facility" className="text-sm font-medium">
-                Facility
-              </label>
-              <select id="bc-facility" value={facilityId} onChange={(e) => setFacilityId(e.target.value)} className={SELECT_CLASS}>
-                <option value="">{facilities.length === 0 ? "None set up yet" : "Not picked yet"}</option>
-                {facilities.map((f) => (
-                  <option key={f.id} value={f.id}>
-                    {f.name}
-                  </option>
-                ))}
-              </select>
-              {editing && (editing.facilityId ?? "") !== facilityId && editing.facilityId && (
-                <p className="text-xs text-amber-700 dark:text-amber-400">Saving takes every room off its sessions.</p>
-              )}
-            </div>
-            {!editing && (
+                  {includeInt && (
+                    <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} transition={SPRING_SNAPPY}>
+                      <Check className="size-3" strokeWidth={3} />
+                    </motion.span>
+                  )}
+                </span>
+                <span className="font-medium">Include Intermediate</span>
+              </motion.button>
               <div className="grid gap-1.5">
-                <label htmlFor="bc-copy" className="text-sm font-medium">
-                  Start its schedule from
+                <label htmlFor="int-days" className={cn("text-sm font-medium", !includeInt && "text-muted-foreground")}>
+                  Number of days
                 </label>
-                <select id="bc-copy" value={copyFrom} onChange={(e) => setCopyFrom(e.target.value)} className={SELECT_CLASS}>
-                  <option value="">An empty schedule</option>
-                  {sources.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {formatDate(s.startDate)} ({s.sessions} sessions)
+                <Input
+                  id="int-days"
+                  type="number"
+                  inputMode="numeric"
+                  min={BOOTCAMP_LIMITS.minDays}
+                  max={BOOTCAMP_LIMITS.maxDays}
+                  step={1}
+                  value={intDays}
+                  onChange={(e) => setIntDays(e.target.value)}
+                  disabled={!includeInt}
+                  required={includeInt}
+                  className="tnum w-28"
+                />
+              </div>
+            </motion.div>
+
+            <motion.div variants={riseChild} className="grid gap-1.5">
+              <span id="bc-status" className="text-sm font-medium">
+                Status
+              </span>
+              <div role="radiogroup" aria-labelledby="bc-status" className="flex w-fit overflow-hidden rounded-md border">
+                {BOOTCAMP_STATUSES.map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    role="radio"
+                    aria-checked={status === value}
+                    className={cn(
+                      "px-4 py-1.5 text-sm transition-colors",
+                      status === value
+                        ? "bg-secondary text-secondary-foreground"
+                        : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+                    )}
+                    onClick={() => setStatus(value)}
+                  >
+                    {STATUS_LABELS[value]}
+                  </button>
+                ))}
+              </div>
+            </motion.div>
+
+            <motion.div variants={riseChild} className={cn("grid gap-4", !editing && "sm:grid-cols-2")}>
+              <div className="grid gap-1.5">
+                <label htmlFor="bc-facility" className="text-sm font-medium">
+                  Facility
+                </label>
+                <select id="bc-facility" value={facilityId} onChange={(e) => setFacilityId(e.target.value)} className={SELECT_CLASS}>
+                  <option value="">{facilities.length === 0 ? "None set up yet" : "Not picked yet"}</option>
+                  {facilities.map((f) => (
+                    <option key={f.id} value={f.id}>
+                      {f.name}
                     </option>
                   ))}
                 </select>
+                {editing && (editing.facilityId ?? "") !== facilityId && editing.facilityId && (
+                  <p className="text-xs text-amber-700 dark:text-amber-400">Saving takes every room off its sessions.</p>
+                )}
               </div>
-            )}
-          </motion.div>
+              {!editing && (
+                <div className="grid gap-1.5">
+                  <label htmlFor="bc-copy" className="text-sm font-medium">
+                    Start its schedule from
+                  </label>
+                  <select id="bc-copy" value={copyFrom} onChange={(e) => setCopyFrom(e.target.value)} className={SELECT_CLASS}>
+                    <option value="">An empty schedule</option>
+                    {sources.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {formatDate(s.startDate)} ({s.sessions} sessions)
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </motion.div>
 
-          <motion.div variants={riseChild} className="grid gap-2">
-            <EmployeePicker
-              id="bc-judge"
-              label="Guest judges"
-              placeholder="Search employees by name"
-              busy={judges === null || judges.length >= BOOTCAMP_LIMITS.judges}
-              onAdd={addJudge}
-            />
-            {judgesError ? (
-              <p className="text-sm text-destructive">{judgesError}</p>
-            ) : judges === null ? (
-              <p className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Loader2 className="size-3.5 animate-spin" />
-                Loading judges…
-              </p>
-            ) : judges.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No guest judges.</p>
-            ) : (
-              <ul className="max-h-48 divide-y overflow-y-auto rounded-lg border">
-                {judges.map((j) => (
-                  <li key={j.email} className="flex items-center gap-3 px-3 py-1.5 text-sm">
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate font-medium">{j.fullName || j.email}</div>
-                      {j.fullName && <div className="truncate text-xs text-muted-foreground">{j.email}</div>}
-                    </div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      aria-label={`Remove ${j.fullName || j.email}`}
-                      className="size-7 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                      onClick={() => setJudges(judges.filter((other) => other.email !== j.email))}
-                    >
-                      <X className="size-3.5" />
-                    </Button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </motion.div>
+            <motion.div variants={riseChild} className="grid gap-2">
+              <EmployeePicker
+                id="bc-judge"
+                label="Guest judges"
+                placeholder="Search employees by name"
+                busy={judges === null || judges.length >= BOOTCAMP_LIMITS.judges}
+                onAdd={addJudge}
+              />
+              {judgesError ? (
+                <p className="text-sm text-destructive">{judgesError}</p>
+              ) : judges === null ? (
+                <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="size-3.5 animate-spin" />
+                  Loading judges…
+                </p>
+              ) : judges.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No guest judges.</p>
+              ) : (
+                <ul className="max-h-48 divide-y overflow-y-auto rounded-lg border">
+                  {judges.map((j) => (
+                    <li key={j.email} className="flex items-center gap-3 px-3 py-1.5 text-sm">
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate font-medium">{j.fullName || j.email}</div>
+                        {j.fullName && <div className="truncate text-xs text-muted-foreground">{j.email}</div>}
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        aria-label={`Remove ${j.fullName || j.email}`}
+                        className="size-7 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                        onClick={() => setJudges(judges.filter((other) => other.email !== j.email))}
+                      >
+                        <X className="size-3.5" />
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </motion.div>
+          </DialogBody>
 
           {error && (
             <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} role="alert" className="text-sm text-destructive">

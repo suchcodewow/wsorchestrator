@@ -6,6 +6,11 @@
  * (`--dialog`), in dark mode a brighter edge and deeper shadow, and fields
  * that fade until reached for (`quiet-fields` in globals.css) — so a call site
  * sizes and lays out its dialog but never restyles that.
+ *
+ * A dialog tall enough to scroll wraps its middle in `DialogBody`. Only that
+ * scrolls; the header, tabs and footer around it stay in view, and the dialog
+ * turns into a column that fits the screen. A `<form>` holding the body and
+ * its footer takes `contents`, so both still lay out as the dialog's own rows.
  */
 
 import * as React from "react";
@@ -52,6 +57,8 @@ function DialogContent({
             // On a near-black page a dialog needs more than a shadow to stand off it: a
             // brighter edge, and a faint highlight along the top where light would catch.
             "dark:border-white/20 dark:shadow-[0_0_0_1px_rgb(0_0_0/0.6),inset_0_1px_0_rgb(255_255_255/0.08),0_32px_96px_-16px_rgb(0_0_0/0.9)]",
+            // With a `DialogBody` the body scrolls instead of the whole dialog.
+            "has-[[data-slot=dialog-body]]:flex has-[[data-slot=dialog-body]]:flex-col has-[[data-slot=dialog-body]]:overflow-hidden",
             className,
           )}
         >
@@ -70,6 +77,21 @@ function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       className={cn("flex flex-col gap-1.5 text-center sm:text-left", className)}
+      {...props}
+    />
+  );
+}
+
+/**
+ * The part of a dialog that scrolls. It reaches out to the dialog's edges so
+ * the scrollbar sits at the side, and pads back in so a field's focus ring
+ * isn't clipped.
+ */
+function DialogBody({ className, ...props }: React.ComponentProps<"div">) {
+  return (
+    <div
+      data-slot="dialog-body"
+      className={cn("-mx-6 -my-1 min-h-0 overflow-y-auto px-6 py-1 max-sm:-mx-4 max-sm:px-4", className)}
       {...props}
     />
   );
@@ -117,6 +139,7 @@ export {
   DialogClose,
   DialogContent,
   DialogHeader,
+  DialogBody,
   DialogFooter,
   DialogTitle,
   DialogDescription,

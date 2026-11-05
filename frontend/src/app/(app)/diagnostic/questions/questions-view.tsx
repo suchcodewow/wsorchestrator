@@ -12,7 +12,7 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Check, CheckCheck, Eye, Loader2, RotateCcw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { IRIS_NOTE_MAX, type IrisReviewStatus } from "@/db/schema";
 import { ENGINE, LEVELS, type Level } from "@/lib/iris/engine";
@@ -266,7 +266,7 @@ function ReviewDialog({ row, onClose }: { row: Row | null; onClose: () => void }
 
   return (
     <Dialog open={row !== null} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+      <DialogContent className="max-h-[90vh] sm:max-w-2xl">
         {row && (
           <>
             <DialogHeader>
@@ -289,47 +289,49 @@ function ReviewDialog({ row, onClose }: { row: Row | null; onClose: () => void }
               </DialogDescription>
             </DialogHeader>
 
-            <p className="leading-relaxed font-medium">{row.stem}</p>
+            <DialogBody className="grid gap-4">
+              <p className="leading-relaxed font-medium">{row.stem}</p>
 
-            <div className="divide-y overflow-hidden rounded-lg border text-sm">
-              {row.options.map((o, i) => (
-                <div
-                  key={i}
-                  className={cn("flex items-start gap-3 px-4 py-3", i === row.answer && "bg-emerald-500/10")}
-                >
-                  <span
-                    className={cn(
-                      "flex size-5 shrink-0 items-center justify-center rounded font-mono text-xs",
-                      i === row.answer ? "bg-emerald-600 text-white" : "border text-muted-foreground",
-                    )}
+              <div className="divide-y overflow-hidden rounded-lg border text-sm">
+                {row.options.map((o, i) => (
+                  <div
+                    key={i}
+                    className={cn("flex items-start gap-3 px-4 py-3", i === row.answer && "bg-emerald-500/10")}
                   >
-                    {LETTERS[i]}
-                  </span>
-                  <span className="flex-1">{o}</span>
-                  {row.stats.responses > 0 && (
-                    <span className="shrink-0 text-xs text-muted-foreground tnum">{row.stats.picks[i]} picked</span>
-                  )}
-                </div>
-              ))}
-            </div>
+                    <span
+                      className={cn(
+                        "flex size-5 shrink-0 items-center justify-center rounded font-mono text-xs",
+                        i === row.answer ? "bg-emerald-600 text-white" : "border text-muted-foreground",
+                      )}
+                    >
+                      {LETTERS[i]}
+                    </span>
+                    <span className="flex-1">{o}</span>
+                    {row.stats.responses > 0 && (
+                      <span className="shrink-0 text-xs text-muted-foreground tnum">{row.stats.picks[i]} picked</span>
+                    )}
+                  </div>
+                ))}
+              </div>
 
-            <div className="rounded-lg bg-muted/40 px-4 py-3 text-sm">
-              <p className="text-xs font-medium text-muted-foreground">Why it is the answer</p>
-              <p className={cn("mt-1", !row.rationale && "text-muted-foreground")}>
-                {row.rationale || "No explanation yet."}
-              </p>
-            </div>
+              <div className="rounded-lg bg-muted/40 px-4 py-3 text-sm">
+                <p className="text-xs font-medium text-muted-foreground">Why it is the answer</p>
+                <p className={cn("mt-1", !row.rationale && "text-muted-foreground")}>
+                  {row.rationale || "No explanation yet."}
+                </p>
+              </div>
 
-            <label className="grid gap-1.5 text-sm">
-              <span className="text-xs font-medium text-muted-foreground">Reviewer note</span>
-              <Textarea
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                maxLength={IRIS_NOTE_MAX}
-                rows={3}
-                placeholder="Optional"
-              />
-            </label>
+              <label className="grid gap-1.5 text-sm">
+                <span className="text-xs font-medium text-muted-foreground">Reviewer note</span>
+                <Textarea
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  maxLength={IRIS_NOTE_MAX}
+                  rows={3}
+                  placeholder="Optional"
+                />
+              </label>
+            </DialogBody>
 
             {error && <p className="text-sm text-destructive">{error}</p>}
 

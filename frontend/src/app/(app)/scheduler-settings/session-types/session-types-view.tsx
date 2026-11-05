@@ -21,7 +21,7 @@ import {
 } from "@/components/data-table";
 import { SessionLookFields, type SessionLook } from "@/components/session-look-fields";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { SessionTypeSort } from "@/lib/list-specs";
 import { riseChild, staggerParent } from "@/lib/motion";
 import type { ListQuery, Page } from "@/lib/paging";
@@ -262,10 +262,12 @@ function SessionTypeDialog({ editing, onClose }: { editing: SessionTypeRow | "ne
             e.preventDefault();
             void save();
           }}
-          className="grid gap-5"
+          className="contents"
         >
-          <SessionLookFields id="type" value={look} onChange={setLook} autoFocus />
-          {existing && <p className="text-xs text-muted-foreground">Sessions already started from it keep what they have.</p>}
+          <DialogBody className="grid gap-5">
+            <SessionLookFields id="type" value={look} onChange={setLook} autoFocus />
+            {existing && <p className="text-xs text-muted-foreground">Sessions already started from it keep what they have.</p>}
+          </DialogBody>
           {error && (
             <p role="alert" className="text-sm text-destructive">
               {error}
