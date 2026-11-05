@@ -18,17 +18,20 @@ import {
   SECONDS_PER_PAGE,
   actualCount,
   isVulnerable,
+  marksFor,
   pointsFor,
   reviewFor,
   rulesInForce,
   whyVulnerable,
   type Build,
+  type Marks,
   type Round,
+  type Span,
   type RoundNumber,
 } from "@/lib/mimir/security-game/scenario";
 import { cn } from "@/lib/utils";
-import { ArrowRight, ClipboardCheck, RotateCcw, ShieldAlert, Timer } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { ArrowRight, ClipboardCheck, Eye, EyeOff, RotateCcw, ShieldAlert, Timer } from "lucide-react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import "./security-team.css";
 import { WallClock } from "./wall-clock";
 
@@ -214,13 +217,22 @@ function RuleList({ round }: { round: RoundNumber }) {
 }
 
 function RulesScreen({ round, onStart }: { round: Round; onStart: () => void }) {
+  // The sample builds are a practice round: the answer stays hidden until asked for.
+  const [revealed, setRevealed] = useState(false);
+  const vulnerable = round.examples.filter((build) => isVulnerable(build, round.number)).length;
   return (
     <div className="mx-auto max-w-4xl space-y-5">
-      <div>
-        <p className="text-sm text-muted-foreground">
-          Month {round.number} of {ROUNDS.length}
-        </p>
-        <h2 className="text-xl font-semibold">Month {round.number} vulnerability rules</h2>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="text-sm text-muted-foreground">
+            Month {round.number} of {ROUNDS.length}
+          </p>
+          <h2 className="text-xl font-semibold">Month {round.number} vulnerability rules</h2>
+        </div>
+        <Button variant="outline" onClick={() => setRevealed((r) => !r)}>
+          {revealed ? <EyeOff /> : <Eye />}
+          {revealed ? "Hide the answer" : "Reveal the answer"}
+        </Button>
       </div>
 
       <section className="overflow-hidden rounded-2xl border bg-card shadow-sm">
@@ -233,16 +245,22 @@ function RulesScreen({ round, onStart }: { round: Round; onStart: () => void }) 
       </section>
 
       <section className="space-y-2">
-        <h3 className="text-sm font-medium">Examples</h3>
+        <h3 className="text-sm font-medium">
+          {revealed
+            ? `${vulnerable} of these ${round.examples.length} builds ${vulnerable === 1 ? "is" : "are"} vulnerable`
+            : `Check the packages: which of these ${round.examples.length} builds are vulnerable?`}
+        </h3>
         <div className="grid gap-3 sm:grid-cols-3">
           {round.examples.map((build) => {
             const why = whyVulnerable(build, round.number);
             return (
               <div key={build.id} className="space-y-1.5">
-                <BuildCard build={build} />
-                <p className={cn("text-xs", why.length ? "font-medium text-destructive" : "text-muted-foreground")}>
-                  {why.length ? `Vulnerable: ${why.join("; ")}` : "Fine: it breaks none of the rules"}
-                </p>
+                <BuildCard build={build} marks={revealed ? marksFor(build, round.number) : undefined} />
+                {revealed && (
+                  <p className={cn("text-xs", why.length ? "font-medium text-destructive" : "text-muted-foreground")}>
+                    {why.length ? `Vulnerable: ${why.join("; ")}` : "Fine: it breaks none of the rules"}
+                  </p>
+                )}
               </div>
             );
           })}
@@ -271,15 +289,53 @@ const CARD_COLOR: Record<Build["color"], string> = {
   green: "bg-[#38761d]",
 };
 
-function BuildCard({ build, blocked, onClick }: { build: Build; blocked?: boolean; onClick?: () => void }) {
+/** The ring drawn around whatever breaks a rule. */
+const MARK = "rounded-full bg-yellow-300/25 ring-2 ring-yellow-300";
+
+/** `text` with each span circled. */
+function Circled({ text, spans }: { text: string; spans: Span[] }) {
+  const parts: ReactNode[] = [];
+  let at = 0;
+  for (const { start, end } of spans) {
+    if (start > at) parts.push(text.slice(at, start));
+    parts.push(
+      <span key={start} className={cn(MARK, "mx-px px-0.5")}>
+        {text.slice(start, end)}
+      </span>,
+    );
+    at = end;
+  }
+  parts.push(text.slice(at));
+  return <>{parts}</>;
+}
+
+function BuildCard({
+  build,
+  blocked,
+  marks,
+  onClick,
+}: {
+  build: Build;
+  blocked?: boolean;
+  /** What to circle, once the answer is shown. */
+  marks?: Marks;
+  onClick?: () => void;
+}) {
   const body = (
     <>
-      <span className="block text-xs font-semibold tracking-wide uppercase">App ID: {build.id}</span>
+      <span className="block text-xs font-semibold tracking-wide uppercase">
+        App ID: <Circled text={build.id} spans={marks?.digit ? [marks.digit] : []} />
+      </span>
+      {marks?.color && (
+        <span className={cn(MARK, "absolute top-2.5 right-2.5 px-2 text-[10px] font-semibold tracking-widest uppercase")}>
+          {build.color}
+        </span>
+      )}
       <span className="mt-2 block text-[10px] font-semibold tracking-widest uppercase opacity-70">Packages:</span>
       <span className="block font-mono text-sm leading-snug">
         {build.packages.map((p, i) => (
           <span key={i} className="block">
-            {p}
+            <Circled text={p} spans={marks?.packages[i] ?? []} />
           </span>
         ))}
       </span>

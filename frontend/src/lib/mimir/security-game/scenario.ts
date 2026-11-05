@@ -269,8 +269,8 @@ function firstDigit(build: Build): number {
 /** Why a build is vulnerable in a month, one line per rule it breaks. Empty when it is fine. */
 export function whyVulnerable(build: Build, round: RoundNumber): string[] {
   const why: string[] = [];
-  const withP = build.packages.find((p) => p.includes("p"));
-  if (withP) why.push(`“${withP}” has a P`);
+  const withP = build.packages.filter((p) => p.includes("p")).map((p) => `“${p}”`);
+  if (withP.length) why.push(`${withP.join(" and ")} ${withP.length === 1 ? "has" : "have"} a P`);
   if (round >= 2 && build.color === "blue" && firstDigit(build) % 2 === 0) {
     why.push(`blue build, and ${firstDigit(build)} is even`);
   }
@@ -284,6 +284,59 @@ export function whyVulnerable(build: Build, round: RoundNumber): string[] {
 }
 
 export const isVulnerable = (build: Build, round: RoundNumber) => whyVulnerable(build, round).length > 0;
+
+/** Where a match sits in a string: from `start`, up to but not including `end`. */
+export type Span = { start: number; end: number };
+
+/** Exactly what makes a build vulnerable, so it can be circled. Empty everywhere when the build is fine. */
+export type Marks = {
+  /** For each package, the letters that break a rule. */
+  packages: [Span[], Span[], Span[]];
+  /** Where the APP ID's first digit sits in `build.id`, when the blue rule catches it. */
+  digit?: Span;
+  /** True when the build's color is part of why it is caught. */
+  color: boolean;
+};
+
+/** Every place `needle` appears in `word`. */
+function spansOf(word: string, needle: string): Span[] {
+  const spans: Span[] = [];
+  for (let i = word.indexOf(needle); i !== -1; i = word.indexOf(needle, i + needle.length)) {
+    spans.push({ start: i, end: i + needle.length });
+  }
+  return spans;
+}
+
+/** The rules of `whyVulnerable`, pointing at what they matched: every P, the even first digit, every git and lab. */
+export function marksFor(build: Build, round: RoundNumber): Marks {
+  const packages: Marks["packages"] = [[], [], []];
+  let digit: Span | undefined;
+  let color = false;
+  if (build.packages.some((p) => p.includes("p"))) {
+    build.packages.forEach((p, i) => packages[i].push(...spansOf(p, "p")));
+  }
+  if (round >= 2 && build.color === "blue" && firstDigit(build) % 2 === 0) {
+    const at = build.id.indexOf("-") + 1;
+    digit = { start: at, end: at + 1 };
+    color = true;
+  }
+  if (round >= 3 && build.color === "red" && build.packages.some((p) => p.includes("git")) && build.packages.some((p) => p.includes("lab"))) {
+    build.packages.forEach((p, i) => packages[i].push(...spansOf(p, "git"), ...spansOf(p, "lab")));
+    color = true;
+  }
+  // Matches that touch, like the two P's in "apple", are circled as one.
+  const merged = packages.map((spans) =>
+    spans
+      .sort((a, b) => a.start - b.start)
+      .reduce<Span[]>((out, span) => {
+        const last = out.at(-1);
+        if (last && span.start <= last.end) last.end = Math.max(last.end, span.end);
+        else out.push({ ...span });
+        return out;
+      }, []),
+  ) as Marks["packages"];
+  return { packages: merged, ...(digit && { digit }), color };
+}
 
 /** How many vulnerable builds a month really holds. */
 export function actualCount(round: Round): number {
