@@ -8,11 +8,15 @@ import { releaseNoticeRecipients, releaseNoticeText } from "@/lib/reporting/rele
 describe("releaseNoticeText", () => {
   const url = "https://harnessevents.io/reporting/bootcamp";
 
-  test("names the month and the class, and links Click here to the reporting page", () => {
+  test("names the month and the class, and links Click here to the reporting page filtered to that class", () => {
     assert.equal(
       releaseNoticeText("bootcamp", "2026-11-17", url),
-      "Feedback has been released for November 2026 Bootcamp!  <https://harnessevents.io/reporting/bootcamp|Click here> to view results for your attendees",
+      "Feedback has been released for November 2026 Bootcamp!  <https://harnessevents.io/reporting/bootcamp?cohort.stage=bootcamp|Click here> to view results for your attendees",
     );
+  });
+
+  test("filters an INT release's link to Intermediate", () => {
+    assert.match(releaseNoticeText("intermediate", "2026-11-17", url), /<https:\/\/harnessevents\.io\/reporting\/bootcamp\?cohort\.stage=intermediate\|Click here>/);
   });
 
   test("says Intermediate for an INT release", () => {

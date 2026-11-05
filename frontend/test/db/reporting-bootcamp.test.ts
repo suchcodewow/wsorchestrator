@@ -259,7 +259,7 @@ describe("releasing a class", () => {
         [emailOf("lead"), "messaged"],
         [emailOf("manager"), "messaged"],
       ]);
-      assert.match(page.rows[0]!.detail ?? "", /^Feedback has been released for .+ Bootcamp!  <https:\/\/example\.test\/reporting\/bootcamp\|Click here>/);
+      assert.match(page.rows[0]!.detail ?? "", /^Feedback has been released for .+ Bootcamp!  <https:\/\/example\.test\/reporting\/bootcamp\?cohort\.stage=bootcamp\|Click here>/);
       assert.equal(page.rows[0]!.fullName, "Person lead");
       const counts = await countReleaseNoticeMessages(run.runId);
       assert.equal(counts.all, done.messaged + done.notInSlack + done.failures);
