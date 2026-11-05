@@ -6,6 +6,9 @@
  * written here as it should be; every flaw names one element of it and how
  * that element looks while it is wrong. Clicking the element puts it right.
  * Every customer, product claim and number is invented, and nothing is kept.
+ * The slide is seen smaller than in a presentation, so each mistake is made
+ * plain enough to spot at that size: five spaces rather than two, a shift of
+ * 20 pixels rather than 8, a font far from Geist rather than one close to it.
  */
 
 export type RowIndex = 0 | 1 | 2 | 3 | 4;
@@ -27,7 +30,7 @@ export type Target =
   | "divider"
   | "extra";
 
-export type SlideFont = "geist" | "geist-mono" | "georgia" | "arial" | "times" | "verdana" | "courier";
+export type SlideFont = "geist" | "geist-mono" | "georgia" | "arial" | "times" | "verdana" | "courier" | "comic";
 
 export type FlawKind =
   | "spelling"
@@ -152,23 +155,23 @@ export const SLIDES: Slide[] = [
       c("Deployments are verified & rolled back automatically", "MTTR"),
     ],
     flaws: [
-      f("title", "punctuation", "Three full stops instead of the ellipsis character the template uses.", { text: "Our understanding..." }),
-      f("current.0.sub", "spacing", "A double space between “is” and “blocked”.", { text: "AI coding tool investment is  blocked" }),
-      f("current.1.head", "font", "Set in Arial instead of the slide’s Geist.", { font: "arial" }),
+      f("title", "punctuation", "Two full stops where the template has an ellipsis.", { text: "Our understanding.." }),
+      f("current.0.sub", "spacing", "A run of extra spaces between “is” and “blocked”.", { text: "AI coding tool investment is     blocked" }),
+      f("current.1.head", "font", "Set in Times New Roman instead of the slide’s Geist.", { font: "times" }),
       f("current.2.sub", "spelling", "“unneccessary” should be “unnecessary”.", {
         text: "Innovation velocity slowed by unneccessary human-in-the-loop",
       }),
       f("current.3.icon", "icon", "A green tick on a current-state problem; it should be the red cross.", { icon: "check" }),
       f("future.0.head", "grammar", "“Delivery keep pace” should be “Delivery keeps pace”.", { text: "Delivery keep pace with coding" }),
       f("future.1.sub", "style", "Not italic, unlike every other outcome line.", { italic: false }),
-      f("future.3.head", "alignment", "Nudged right of the column’s left edge.", { dx: 10 }),
-      f("future.4.sub", "punctuation", "The only line on the slide that ends with a full stop.", { text: "Reduce compliance gaps." }),
+      f("future.3.head", "alignment", "Nudged right of the column’s left edge.", { dx: 20 }),
+      f("future.4.sub", "capitalization", "Title case; every other outcome line is sentence case.", { text: "Reduce Compliance Gaps" }),
       f("header.future", "capitalization", "“Future State” is title case; “Current state” is sentence case.", { text: "Future State" }),
       f("capability.2", "consistency", "A typed “->” instead of the → arrow the other lines use.", { arrow: "->" }),
       f("capability.4", "spelling", "“automaticaly” should be “automatically”.", {
         text: "Deployments are verified & rolled back automaticaly",
       }),
-      f("logo", "layout", "The Harness logo is stretched out of proportion.", { stretch: 1.3 }),
+      f("logo", "layout", "The Harness logo is stretched out of proportion.", { stretch: 1.5 }),
     ],
   },
   {
@@ -200,13 +203,13 @@ export const SLIDES: Slide[] = [
         text: "Confirming you’re priorities re: Software Delivery, Testing, Runtime Protection & Cost Management",
       }),
       f("headerIcon.current", "icon", "Both headings carry a tick; current state should have the red cross.", { icon: "check" }),
-      f("current.1.head", "size", "Larger than the other headlines.", { size: 18.5 }),
-      f("current.2.icon", "icon", "This cross is bigger than the others.", { scale: 1.6 }),
+      f("current.1.head", "size", "Larger than the other headlines.", { size: 20 }),
+      f("current.2.icon", "icon", "This cross is bigger than the others.", { scale: 2 }),
       f("current.3.sub", "color", "Blue text where every other line is black.", { color: "#2563eb" }),
       f("current.4.head", "punctuation", "“Cant” is missing its apostrophe.", { text: "Cant respond quickly to zero-days" }),
-      f("future.0.sub", "spacing", "Sits further below its headline than the other rows do.", { dy: 6 }),
+      f("future.0.sub", "spacing", "Sits further below its headline than the other rows do.", { dy: 10 }),
       f("future.2.sub", "font", "Set in Times New Roman instead of Geist.", { font: "times" }),
-      f("future.3.head", "style", "Bold, where the other headlines are medium weight.", { weight: 700 }),
+      f("future.3.head", "style", "Bold, where the other headlines are medium weight.", { weight: 800 }),
       f("future.4.head", "consistency", "“0-day” here, “zero-day” everywhere else on the slide.", {
         text: "Fast, repeatable response to any 0-day",
       }),
@@ -215,7 +218,7 @@ export const SLIDES: Slide[] = [
       }),
       f("capability.1", "spelling", "“autonomus” should be “autonomous”.", { metric: "# of autonomus steps" }),
       f("capability.3", "consistency", "A dash for a bullet where the others are dots.", { bullet: "–" }),
-      f("arrow", "alignment", "The arrow has drifted off the divider between the columns.", { dx: 22 }),
+      f("arrow", "alignment", "The arrow has drifted off the divider between the columns.", { dx: 40 }),
     ],
   },
   {
@@ -242,17 +245,17 @@ export const SLIDES: Slide[] = [
       c("Pipeline templates with central governance", "# of pipeline definitions"),
     ],
     flaws: [
-      f("title", "font", "Set in Times New Roman; the template’s title font is Georgia.", { font: "times" }),
+      f("title", "font", "Set in Arial; the template’s title font is Georgia.", { font: "arial" }),
       f("current.0.head", "spelling", "“minuets” should be “minutes”.", { text: "Builds take 45 minuets on average" }),
       f("current.1.sub", "grammar", "“Compute spend grow” should be “Compute spend grows”.", {
         text: "Compute spend grow with every new test",
       }),
       f("current.2.head", "capitalization", "Title case; every other headline is sentence case.", { text: "Flaky Tests Block Merges Daily" }),
-      f("current.4.icon", "alignment", "This cross sits lower than its line.", { dy: 5 }),
-      f("future.0.head", "alignment", "Pulled left of the column’s edge.", { dx: -8 }),
+      f("current.4.icon", "alignment", "This cross sits lower than its line.", { dy: 9 }),
+      f("future.0.head", "alignment", "Pulled left of the column’s edge.", { dx: -18 }),
       f("future.1.head", "grammar", "“effects” should be “affects”.", { text: "Only the tests a change effects run" }),
-      f("future.3.sub", "color", "Grey where the other outcome lines are black.", { color: "#8a8a86" }),
-      f("future.4.sub", "size", "Smaller than the other outcome lines.", { size: 11 }),
+      f("future.3.sub", "color", "Grey where the other outcome lines are black.", { color: "#9b9b97" }),
+      f("future.4.sub", "size", "Smaller than the other outcome lines.", { size: 10 }),
       f("capability.0", "font", "Set in Verdana instead of Geist.", { font: "verdana" }),
       f("capability.2", "consistency", "A “=>” where the other lines use the → arrow.", { arrow: "=>" }),
       f("capabilitiesBox", "consistency", "A solid edge where the template’s box is dashed.", { solid: true }),
@@ -289,7 +292,7 @@ export const SLIDES: Slide[] = [
       c("Policy as code for audit evidence", "hours spent per audit"),
     ],
     flaws: [
-      f("subtitle", "alignment", "Indented from the title’s left edge.", { dx: 14 }),
+      f("subtitle", "alignment", "Indented from the title’s left edge.", { dx: 28 }),
       f("header.current", "font", "Set in Geist; the column headings are Geist Mono.", { font: "geist" }),
       f("current.0.sub", "spelling", "“Vulnerabilites” should be “Vulnerabilities”.", {
         text: "Vulnerabilites found when they cost most to fix",
@@ -298,16 +301,16 @@ export const SLIDES: Slide[] = [
       f("current.2.sub", "punctuation", "“cant” is missing its apostrophe.", { text: "Developers ignore alerts they cant act on" }),
       f("current.3.icon", "icon", "A green tick on a current-state problem.", { icon: "check" }),
       f("future.0.head", "grammar", "“Scans runs” should be “Scans run”.", { text: "Scans runs on every pull request" }),
-      f("future.2.head", "font", "Set in Arial instead of Geist.", { font: "arial" }),
+      f("future.2.head", "font", "Set in Comic Sans instead of Geist.", { font: "comic" }),
       f("future.3.head", "consistency", "British “artefact” here, American “artifacts” below.", {
         text: "SBOM generated for every artefact",
       }),
       f("future.4.sub", "style", "Not italic, unlike the other outcome lines.", { italic: false }),
-      f("capability.1", "spacing", "This line sits lower than the even spacing of the others.", { dy: 5 }),
+      f("capability.1", "spacing", "This line sits lower than the even spacing of the others.", { dy: 9 }),
       f("capability.4", "capitalization", "“Hours” is capitalized; every other measure starts lower case.", {
         metric: "Hours spent per audit",
       }),
-      f("divider", "alignment", "The column divider is off-center, so the arrow no longer sits on it.", { dx: 20 }),
+      f("divider", "alignment", "The column divider is off-center, so the arrow no longer sits on it.", { dx: 40 }),
     ],
   },
   {
@@ -334,11 +337,11 @@ export const SLIDES: Slide[] = [
       c("Anomaly detection with alerts", "time to detect an anomaly"),
     ],
     flaws: [
-      f("title", "size", "The title is larger than the template’s.", { size: 47 }),
-      f("logo", "alignment", "The logo has moved in from the right margin and down from the title line.", { dx: -40, dy: 10 }),
-      f("header.current", "alignment", "Sits lower than the “Future state” heading beside it.", { dy: 4 }),
+      f("title", "size", "The title is larger than the template’s.", { size: 52 }),
+      f("logo", "alignment", "The logo has moved in from the right margin and down from the title line.", { dx: -40, dy: 18 }),
+      f("header.current", "alignment", "Sits lower than the “Future state” heading beside it.", { dy: 9 }),
       f("current.0.sub", "grammar", "“Finance ask” should be “Finance asks”.", { text: "Finance ask questions engineering can’t answer" }),
-      f("current.1.head", "alignment", "Indented from the column’s left edge.", { dx: 12 }),
+      f("current.1.head", "alignment", "Indented from the column’s left edge.", { dx: 22 }),
       f("current.2.sub", "spelling", "“no body” should be “nobody”.", { text: "Paying for capacity no body uses" }),
       f("current.4.head", "grammar", "The word “the” appears twice.", { text: "Anomalies found when the the invoice arrives" }),
       f("future.1.head", "grammar", "“a owner” should be “an owner”.", { text: "Every dollar allocated to a owner" }),
@@ -380,13 +383,13 @@ export const SLIDES: Slide[] = [
       f("subtitle", "spelling", "“Managment” should be “Management”.", {
         text: "Confirming your priorities re: Feature Managment & Experimentation",
       }),
-      f("current.0.head", "style", "Bold, where the other headlines are medium weight.", { weight: 700 }),
-      f("current.1.sub", "size", "Larger than the other outcome lines.", { size: 15.5 }),
-      f("current.3.icon", "alignment", "This cross sits left of the others.", { dx: -6 }),
+      f("current.0.head", "style", "Bold, where the other headlines are medium weight.", { weight: 800 }),
+      f("current.1.sub", "size", "Larger than the other outcome lines.", { size: 16.5 }),
+      f("current.3.icon", "alignment", "This cross sits left of the others.", { dx: -12 }),
       f("current.4.sub", "grammar", "“Customers finds” should be “Customers find”.", { text: "Customers finds the bugs first" }),
       f("future.2.head", "capitalization", "“Release” is capitalized mid-sentence.", { text: "Impact measured on every Release" }),
-      f("future.3.sub", "font", "Set in Arial instead of Geist.", { font: "arial" }),
-      f("future.4.sub", "spacing", "A space between “1” and “%”.", { text: "Issues caught with 1 % of users" }),
+      f("future.3.sub", "font", "Set in Courier New instead of Geist.", { font: "courier" }),
+      f("future.4.sub", "spacing", "Spaces between “1” and “%”.", { text: "Issues caught with 1   % of users" }),
       f("capability.0", "consistency", "A hollow bullet where the others are solid.", { bullet: "○" }),
       f("capability.3", "consistency", "No measure: every other capability says how it will be tracked.", { metric: "" }),
       f("arrow", "icon", "The arrow points back from the future state to the current one.", { pointLeft: true }),
@@ -422,9 +425,9 @@ export const SLIDES: Slide[] = [
       c("SLO-based release verification", "% of releases within error budget"),
     ],
     flaws: [
-      f("headerIcon.future", "icon", "This heading’s icon is bigger than the one beside it.", { scale: 1.4 }),
+      f("headerIcon.future", "icon", "This heading’s icon is bigger than the one beside it.", { scale: 1.7 }),
       f("current.0.head", "spelling", "“costumers” should be “customers”.", { text: "Outages discovered by costumers" }),
-      f("current.1.sub", "spacing", "Crowds its headline: the gap is smaller than in the other rows.", { dy: -5 }),
+      f("current.1.sub", "spacing", "Crowds its headline: the gap is smaller than in the other rows.", { dy: -7 }),
       f("current.2.sub", "punctuation", "“engineer’s” is a plural, so it takes no apostrophe.", {
         text: "The same few engineer’s are always on call",
       }),
@@ -433,12 +436,12 @@ export const SLIDES: Slide[] = [
         text: "Reliability targets are set by leadership every quarter but are never actually tracked",
       }),
       f("future.0.sub", "spelling", "“trafic” should be “traffic”.", { text: "Revenue protected during peak trafic" }),
-      f("future.1.icon", "icon", "This tick is smaller than the others.", { scale: 0.6 }),
+      f("future.1.icon", "icon", "This tick is smaller than the others.", { scale: 0.45 }),
       f("future.2.head", "capitalization", "“Ai” should be “AI”.", { text: "Runbooks automated with Ai assistance" }),
       f("future.3.sub", "capitalization", "Starts with a lower-case letter.", { text: "causes stay fixed" }),
-      f("future.4.head", "spacing", "This row sits lower than the even spacing of the others.", { dy: 6 }),
+      f("future.4.head", "spacing", "This row sits lower than the even spacing of the others.", { dy: 10 }),
       f("capabilitiesTitle", "font", "Set in Georgia; the box heading is Geist Mono, like the column headings.", { font: "georgia" }),
-      f("capability.1", "color", "So pale it is hard to read.", { color: "#c4c4c0" }),
+      f("capability.1", "color", "So pale it is hard to read.", { color: "#d4d4d0" }),
     ],
   },
   {
@@ -466,19 +469,19 @@ export const SLIDES: Slide[] = [
       c("TechDocs alongside the code", "developer satisfaction score"),
     ],
     flaws: [
-      f("title", "alignment", "Indented from the slide’s left margin.", { dx: 10 }),
-      f("subtitle", "size", "Larger than the template’s subtitle.", { size: 20.5 }),
+      f("title", "alignment", "Indented from the slide’s left margin.", { dx: 24 }),
+      f("subtitle", "size", "Larger than the template’s subtitle.", { size: 22 }),
       f("current.0.sub", "spelling", "“knowlege” should be “knowledge”.", { text: "Onboarding depends on tribal knowlege" }),
       f("current.1.head", "font", "Set in Times New Roman instead of Geist.", { font: "times" }),
       f("current.2.head", "grammar", "“it’s” means “it is”; this should be “its”.", { text: "Every team builds it’s own scaffolding" }),
       f("current.3.icon", "icon", "A green tick on a current-state problem.", { icon: "check" }),
       f("current.4.sub", "leftover", "A yellow highlight left over from an edit.", { highlight: true }),
       f("future.0.head", "grammar", "“there” should be “their”.", { text: "New engineers ship in there first week" }),
-      f("future.3.sub", "punctuation", "The comma before “not days” is missing.", { text: "Infrastructure in minutes not days" }),
-      f("future.4.head", "size", "Smaller than the other headlines.", { size: 14 }),
-      f("capability.1", "alignment", "Indented further than the other capabilities.", { dx: 8 }),
+      f("future.3.sub", "spelling", "“Infrastucture” is missing an “r”.", { text: "Infrastucture in minutes, not days" }),
+      f("future.4.head", "size", "Smaller than the other headlines.", { size: 12.5 }),
+      f("capability.1", "alignment", "Indented further than the other capabilities.", { dx: 18 }),
       f("capability.4", "style", "Italic, unlike the other capabilities.", { italic: true }),
-      f("capabilitiesBox", "alignment", "The box is shifted right, past the slide’s right margin.", { dx: 14 }),
+      f("capabilitiesBox", "alignment", "The box is shifted right, past the slide’s right margin.", { dx: 30 }),
     ],
   },
   {
@@ -512,17 +515,17 @@ export const SLIDES: Slide[] = [
         text: "Terraform ran from laptops",
       }),
       f("current.1.sub", "style", "Not italic, unlike the other outcome lines.", { italic: false }),
-      f("current.2.head", "spacing", "This row sits higher than the even spacing of the others.", { dy: -5 }),
+      f("current.2.head", "spacing", "This row sits higher than the even spacing of the others.", { dy: -9 }),
       f("current.3.sub", "color", "Red text where every other line is black.", { color: "#dc2626" }),
-      f("future.0.icon", "alignment", "This tick sits right of the others.", { dx: 7 }),
+      f("future.0.icon", "alignment", "This tick sits right of the others.", { dx: 14 }),
       f("future.1.head", "layout", "Too long for its column: it runs past the slide’s right margin.", {
         text: "Drift is detected across every single environment and then reconciled automatically by GitOps",
       }),
-      f("future.2.sub", "spacing", "A space before the comma.", { text: "Safe , concurrent changes" }),
-      f("future.4.sub", "size", "Smaller than the other outcome lines.", { size: 11.5 }),
+      f("future.2.sub", "spacing", "A space before the comma.", { text: "Safe  ,  concurrent changes" }),
+      f("future.4.sub", "size", "Smaller than the other outcome lines.", { size: 10 }),
       f("capability.2", "spelling", "“lockin” should be “locking”.", { text: "Remote state with lockin" }),
-      f("capability.3", "font", "Set in Arial instead of Geist.", { font: "arial" }),
-      f("arrow", "size", "The arrow is bigger than the template’s.", { scale: 1.5 }),
+      f("capability.3", "font", "Set in Comic Sans instead of Geist.", { font: "comic" }),
+      f("arrow", "size", "The arrow is bigger than the template’s.", { scale: 1.8 }),
       f("extra", "leftover", "A “[Customer logo]” placeholder was never filled in or removed.", {}, {
         text: "[Customer logo]",
         x: 900,
@@ -556,20 +559,20 @@ export const SLIDES: Slide[] = [
     ],
     flaws: [
       f("subtitle", "capitalization", "The product is “DevOps”, not “Devops”.", { text: "Confirming your priorities re: Database Devops" }),
-      f("logo", "layout", "The Harness logo is squashed out of proportion.", { stretch: 0.75 }),
+      f("logo", "layout", "The Harness logo is squashed out of proportion.", { stretch: 0.6 }),
       f("headerIcon.future", "icon", "Both headings carry a cross; future state should have the green tick.", { icon: "cross" }),
       f("current.0.head", "style", "Italic, unlike the other headlines.", { italic: true }),
       f("current.0.sub", "grammar", "“Releases waits” should be “Releases wait”.", { text: "Releases waits on a DBA’s calendar" }),
       f("current.2.sub", "spelling", "“down time” should be one word, “downtime”.", {
         text: "A bad migration means hours of down time",
       }),
-      f("current.4.icon", "icon", "This cross is bigger than the others.", { scale: 1.5 }),
-      f("future.0.sub", "alignment", "Indented further than the other outcome lines.", { dx: 8 }),
+      f("current.4.icon", "icon", "This cross is bigger than the others.", { scale: 2 }),
+      f("future.0.sub", "alignment", "Indented further than the other outcome lines.", { dx: 18 }),
       f("future.1.head", "capitalization", "“GIT” should be “Git”, as it is in the capabilities.", { text: "Every database change in GIT" }),
       f("future.2.head", "font", "Set in Verdana instead of Geist.", { font: "verdana" }),
       f("future.4.head", "grammar", "“it run” should be “it runs”.", { text: "Policies check SQL before it run" }),
-      f("capabilitiesTitle", "alignment", "Indented from the capabilities below it.", { dx: 10 }),
-      f("capability.1", "size", "Larger than the other capabilities.", { size: 16 }),
+      f("capabilitiesTitle", "alignment", "Indented from the capabilities below it.", { dx: 22 }),
+      f("capability.1", "size", "Larger than the other capabilities.", { size: 17.5 }),
       f("capability.3", "spelling", "“migratoins” should be “migrations”.", { metric: "# of failed migratoins" }),
     ],
   },
