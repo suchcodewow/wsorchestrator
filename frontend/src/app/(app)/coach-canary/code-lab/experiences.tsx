@@ -8,9 +8,10 @@
  */
 
 import { useState, type ReactNode } from "react";
-import { ChevronRight, Laptop, Timer, type LucideIcon } from "lucide-react";
+import { ChevronRight, Laptop, ShieldAlert, Timer, type LucideIcon } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { CodeLabView } from "./code-lab-view";
+import { SecurityTeamView } from "./security-team-view";
 
 type Experience = {
   id: string;
@@ -30,6 +31,15 @@ const EXPERIENCES: Experience[] = [
     minutes: "5–7 minutes",
     Icon: Laptop,
     render: (author) => <CodeLabView author={author} />,
+  },
+  {
+    id: "security",
+    name: "Day in the Life: Enterprise Security Team",
+    summary:
+      "Join Globalcorp’s platform team and review builds for vulnerabilities by hand, month after month, with a new rule every month and 20 seconds a page. Then face your performance review.",
+    minutes: "8–10 minutes",
+    Icon: ShieldAlert,
+    render: () => <SecurityTeamView />,
   },
 ];
 

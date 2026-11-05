@@ -1,0 +1,35 @@
+/*
+ * The Enterprise Security Team game's two bits of motion: the wall clock's
+ * shake in a page's last seconds, and the BLOCKED stamp landing on a build.
+ */
+
+@keyframes wall-clock-shake {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  25% {
+    transform: rotate(-3deg);
+  }
+  75% {
+    transform: rotate(3deg);
+  }
+}
+
+@keyframes stamp-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) rotate(-14deg) scale(1.8);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) rotate(-14deg) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [class*="wall-clock-shake"],
+  .stamp-in {
+    animation: none !important;
+  }
+}
