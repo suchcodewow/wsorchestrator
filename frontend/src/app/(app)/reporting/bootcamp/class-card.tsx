@@ -118,7 +118,7 @@ export function ClassCard({
           <FeedbackPanel label="Overall Constructive Feedback" text={summary.constructiveFeedback} />
           <div className="flex items-baseline gap-2 text-sm">
             <span className="text-muted-foreground">Average exam score</span>
-            <span className="tabular-nums">{examAverage === null ? "—" : `${examAverage}%`}</span>
+            <span className="tabular-nums">{examAverage === null ? "—" : `${Math.round(examAverage)}%`}</span>
           </div>
           {summary.otherNotes && <FeedbackPanel label="Other Notes" text={summary.otherNotes} />}
 

@@ -3,7 +3,7 @@
  * attendee, `event-feedback-{first}-{last}`, where the people who may see the
  * card talk about them. Each press finds the attendee's channel, unarchiving
  * it or making it when it has to, brings its members in line, posts a link
- * back to the card, and says how to open it.
+ * back to the card with its scorecard, and says how to open it.
  *
  * It invites everyone above the attendee in HiBob's reporting lines (whoever
  * may see the card as their manager), whoever pressed the button, and the
@@ -28,8 +28,8 @@ import {
 import { planMembership } from "@/lib/cohorts/slack-plan";
 import { slackContactEmails } from "@/lib/evals/slack-contacts";
 import { channelMembers, getSlackSyncLive, isFatal, resolveSlackUsers } from "@/lib/cohorts/slack-sync";
-import { canReach, nameOf, resolvePerson, type BootcampReader } from "@/lib/reporting/bootcamp";
-import { feedbackChannelName } from "@/lib/reporting/feedback-channel-values";
+import { canReach, getBootcampPerson, nameOf, resolvePerson, type BootcampReader } from "@/lib/reporting/bootcamp";
+import { feedbackChannelName, feedbackChannelText } from "@/lib/reporting/feedback-channel-values";
 import { SlackError, SlackOutOfTime, slackClient, slackToken, type SlackClient } from "@/lib/slack";
 import { getSlackInstallation } from "@/lib/slack-app";
 
@@ -256,9 +256,12 @@ export async function openFeedbackChannel(
 
     const who = presser?.name || presser?.email || "Someone";
     const about = attendee.fullName ?? attendee.email;
+    // The furthest class they have been to, as the caller sees it on the card.
+    const classes = (await getBootcampPerson(reader, key))?.classes;
+    const stage = classes?.intermediate.date ? "intermediate" : classes?.bootcamp.date ? "bootcamp" : null;
     await slack.call("chat.postMessage", {
       channel: channel.id,
-      text: `${who} opened this to discuss *${about}*: <${cardUrl}|their Live Sessions card>`,
+      text: feedbackChannelText(who, about, cardUrl, stage && classes ? { stage, summary: classes[stage] } : null),
       unfurl_links: "false",
     });
 
