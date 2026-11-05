@@ -65,7 +65,7 @@ describe("feedbackChannelText", () => {
         "*Overall Positive Feedback:* Strong presence.",
         "*Overall Constructive Feedback:* Slow down &amp; listen.",
         "*Average Exam Score:* 88%",
-        "*Score Breakdown:*",
+        "*Score Breakdown (scores of 3 are filtered out here):*",
         "• Discovery: 4 — Asked great questions.",
         "• Objections &lt;hard&gt;: 2 — Missed the pricing pushback.",
         "• Exams: 1",

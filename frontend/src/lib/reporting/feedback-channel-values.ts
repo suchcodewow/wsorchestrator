@@ -68,7 +68,7 @@ export function feedbackChannelText(
 
   const notable = summary.exercises.filter((e) => whole(e.score) !== 3);
   if (notable.length > 0) {
-    lines.push("*Score Breakdown:*");
+    lines.push("*Score Breakdown (scores of 3 are filtered out here):*");
     for (const e of notable) {
       const feedback = e.feedback?.trim() ? ` — ${slackEscape(e.feedback.trim())}` : "";
       lines.push(`• ${slackEscape(e.name)}: ${whole(e.score)}${feedback}`);
