@@ -70,7 +70,8 @@ const EXPECTED_SIDEBAR: Record<Persona, string[]> = {
     "[Administration]",
     "Manage users",
   ],
-  guestJudge: [...HOME, "[Assessments]", "eVals", "Reporting", "Coach Canary", ...ACCOUNT],
+  // The Scheduler, for the active bootcamp's schedule alone; the rest of Training stays a Training Viewer's.
+  guestJudge: [...HOME, "[Training]", "Scheduler", "[Assessments]", "eVals", "Reporting", "Coach Canary", ...ACCOUNT],
   // HiBob has people reporting to them: the Canary Wire as well as Bootcamp, under the Reporting everyone has.
   peopleManager: [...HOME, "[Assessments]", "Reporting", "Coach Canary", ...ACCOUNT],
   bothAdmins: [...HOME, ...EVENTS_ADMIN, ...TRAINING_ADMIN, "[Assessments]", "Reporting", ...MIMIR_ADMIN, ...ACCOUNT, "[Administration]", "Manage users"],

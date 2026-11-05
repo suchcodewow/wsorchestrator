@@ -66,7 +66,12 @@ const SORT_COLUMNS = {
  * One page of bootcamps, latest first by default. The search matches the status, the facility or who created it.
  * `includeComplete` false leaves out those that have run.
  */
-export async function listBootcamps(query: ListQuery<BootcampSort>, includeComplete = true): Promise<Page<BootcampRow>> {
+/** One page of the bootcamps; `onlyActive` narrows it to the active one, all a guest judge may see. */
+export async function listBootcamps(
+  query: ListQuery<BootcampSort>,
+  includeComplete = true,
+  onlyActive = false,
+): Promise<Page<BootcampRow>> {
   const { limit, offset } = pageWindow(query.page);
   const rows = await db
     .select({
@@ -87,6 +92,7 @@ export async function listBootcamps(query: ListQuery<BootcampSort>, includeCompl
       and(
         searchAny(query.q, [bootcamps.status, users.name, users.email, facilities.name]),
         includeComplete ? undefined : ne(bootcamps.status, "complete"),
+        onlyActive ? eq(bootcamps.status, "active") : undefined,
       ),
     )
     .orderBy(...orderFor(SORT_COLUMNS[query.sort], query.dir, sql`${bootcamps.startDate} desc`, bootcamps.id))

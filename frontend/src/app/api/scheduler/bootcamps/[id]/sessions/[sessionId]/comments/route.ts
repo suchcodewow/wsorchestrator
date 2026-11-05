@@ -6,7 +6,8 @@ import { requireCaller } from "@/lib/api-auth";
 import { audited } from "@/lib/audit";
 import { SESSION_COMMENT_LIST } from "@/lib/list-specs";
 import { parseListQuery } from "@/lib/paging";
-import { canManageTrainingSettings, canUseTraining } from "@/lib/roles";
+import { canManageTrainingSettings, canSeeScheduler } from "@/lib/roles";
+import { mayReadBootcamp } from "@/lib/scheduler/judging";
 import { addComment, commentInputSchema, listComments } from "@/lib/scheduler/comments";
 import { sessionOf } from "@/lib/scheduler/schedule";
 
@@ -24,8 +25,11 @@ async function sessionIn(params: Params["params"]): Promise<{ bootcampId: string
 }
 
 export async function GET(req: Request, { params }: Params) {
-  const { error } = await requireCaller(req, canUseTraining);
+  const { error, user } = await requireCaller(req, canSeeScheduler);
   if (error) return error;
+  if (!(await mayReadBootcamp(user.access, (await params).id))) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
 
   const found = await sessionIn(params);
   if (!found) return NextResponse.json({ error: "not_found" }, { status: 404 });

@@ -4,14 +4,18 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireCaller } from "@/lib/api-auth";
 import { audited } from "@/lib/audit";
-import { canManageTrainingSettings, canUseTraining } from "@/lib/roles";
+import { canManageTrainingSettings, canSeeScheduler } from "@/lib/roles";
+import { mayReadBootcamp } from "@/lib/scheduler/judging";
 import { BOOTCAMP_STATUS_FOR, bootcampPatchSchema, deleteBootcamp, getBootcamp, updateBootcamp } from "@/lib/scheduler/bootcamps";
 
 const idSchema = z.string().uuid();
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { error } = await requireCaller(req, canUseTraining);
+  const { error, user } = await requireCaller(req, canSeeScheduler);
   if (error) return error;
+  if (!(await mayReadBootcamp(user.access, (await params).id))) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
 
   const id = idSchema.safeParse((await params).id);
   const bootcamp = id.success ? await getBootcamp(id.data) : null;

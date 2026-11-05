@@ -56,6 +56,7 @@ import {
   canSeeBootcampRecords,
   canSeeCanaryWire,
   canSeeReporting,
+  canSeeScheduler,
   canSeeAllEvents,
   canTakeIris,
   canUseEvals,
@@ -200,11 +201,11 @@ const PAGES: Record<string, PageCase> = {
   },
   "/runs/<own event>": { path: () => "/runs/:own", expect: gated(canUseEvents) },
   "/runs/<someone else's>": { path: () => `/runs/${aliceRun}`, expect: gated(canSeeAllEvents) },
-  "/scheduler": { path: () => "/scheduler", expect: gated(canUseTraining) },
-  "/scheduler/<a bootcamp>": { path: () => `/scheduler/${bootcampId}`, expect: gated(canUseTraining) },
-  "/scheduler/active": { path: () => "/scheduler/active", expect: gated(canUseTraining) },
-  "/scheduler/<a bootcamp>/print": { path: () => `/scheduler/${bootcampId}/print?day=1`, expect: gated(canUseTraining) },
-  "/scheduler/<a bootcamp>/print?track": { path: () => `/scheduler/${bootcampId}/print?track=btc`, expect: gated(canUseTraining) },
+  "/scheduler": { path: () => "/scheduler", expect: gated(canSeeScheduler) },
+  "/scheduler/<a bootcamp>": { path: () => `/scheduler/${bootcampId}`, expect: gated(canSeeScheduler) },
+  "/scheduler/active": { path: () => "/scheduler/active", expect: gated(canSeeScheduler) },
+  "/scheduler/<a bootcamp>/print": { path: () => `/scheduler/${bootcampId}/print?day=1`, expect: gated(canSeeScheduler) },
+  "/scheduler/<a bootcamp>/print?track": { path: () => `/scheduler/${bootcampId}/print?track=btc`, expect: gated(canSeeScheduler) },
   "/scheduler/<unknown>/print": { path: () => `/scheduler/${MISSING}/print`, expect: () => 404 },
   "/scheduler/<unknown>": { path: () => `/scheduler/${MISSING}`, expect: () => 404 },
   "/scheduler/<not an id>": { path: () => "/scheduler/nonsense", expect: () => 404 },
@@ -628,7 +629,7 @@ const ROUTES: RouteCase[] = [
   },
   { method: "GET", path: "/api/cohorts/previous", allowed: canUseTraining },
   { method: "GET", path: "/api/cohorts/previous/2000-01-01", allowed: canUseTraining },
-  { method: "GET", path: "/api/scheduler/bootcamps", allowed: canUseTraining },
+  { method: "GET", path: "/api/scheduler/bootcamps", allowed: canSeeScheduler },
   { method: "POST", path: "/api/scheduler/bootcamps", allowed: canManageTrainingSettings, body: () => ({}) },
   { method: "PATCH", path: `/api/scheduler/bootcamps/${MISSING}`, allowed: canManageTrainingSettings, body: () => ({}) },
   { method: "GET", path: `/api/scheduler/bootcamps/${MISSING}`, allowed: canUseTraining },
@@ -996,6 +997,36 @@ for (const via of ["session", "token"] as const) describe(`API routes, by ${via}
       assert.deepEqual(wrong, []);
     });
   }
+});
+
+describe("a guest judge in the Scheduler", () => {
+  // The matrix asks about an id that names nothing, which a judge is refused
+  // like anyone without a training role; these ask about the active bootcamp,
+  // which a judge reads, and the routes behind its schedule.
+  const reads = () => [
+    `/api/scheduler/bootcamps/${bootcampId}`,
+    `/api/scheduler/bootcamps/${bootcampId}/schedule`,
+    `/api/scheduler/bootcamps/${bootcampId}/checklist`,
+    `/api/scheduler/bootcamps/${bootcampId}/checklist/btc/1`,
+    `/api/scheduler/bootcamps/${bootcampId}/surveys`,
+    `/api/scheduler/bootcamps/${bootcampId}/attendees?track=btc`,
+  ];
+
+  test("reads the active bootcamp's schedule, by session and by token", async () => {
+    const wrong: string[] = [];
+    for (const as of ["guestJudge", { bearer: tokens.guestJudge }] as const) {
+      for (const path of reads()) {
+        const { status } = await send(as, "GET", path);
+        if (status !== 200) wrong.push(`${typeof as === "string" ? "session" : "token"} GET ${path}: got ${status}`);
+      }
+    }
+    assert.deepEqual(wrong, []);
+  });
+
+  test("still changes nothing in it", async () => {
+    const { status } = await send("guestJudge", "PATCH", `/api/scheduler/bootcamps/${bootcampId}`, {});
+    assert.equal(status, 403);
+  });
 });
 
 describe("the shared OAuth callback", () => {

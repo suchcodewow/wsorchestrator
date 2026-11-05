@@ -23,7 +23,8 @@ export type Access = {
   platform: boolean;
   /**
    * A guest judge on the active bootcamp. Not a role: the Scheduler grants it
-   * per bootcamp, and it lets them score assessments and nothing else.
+   * per bootcamp, and it lets them score assessments and read that bootcamp's
+   * schedule, and nothing else.
    */
   judging: boolean;
   /**
@@ -141,6 +142,13 @@ export const canUseTraining = (access: Access) => trainingAtLeast(access, "viewe
 
 export const canManageTrainingSettings = (access: Access) =>
   trainingAtLeast(access, "administrator");
+
+/**
+ * The Scheduler: a Training Viewer or above, and the active bootcamp's guest
+ * judges, who see that one bootcamp's schedule and nothing else in it (see
+ * `mayReadBootcamp` in `lib/scheduler/judging.ts`).
+ */
+export const canSeeScheduler = (access: Access) => canUseTraining(access) || access.judging;
 
 /** Mimir's library and coach are for everyone who can sign in, whatever their roles. */
 export const canUseMimir: (access: Access) => boolean = () => true;

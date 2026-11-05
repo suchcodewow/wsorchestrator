@@ -41,6 +41,7 @@ import {
   canManageUsers,
   canScoreAssessments,
   canSeeReporting,
+  canSeeScheduler,
   canTakeIris,
   canUseEvents,
   canUseMimir,
@@ -129,7 +130,7 @@ export const NAV_SECTIONS: NavSection[] = [
         label: "Scheduler",
         Icon: CalendarClock,
         description: "Bootcamp schedules, sessions, judges and day checklists.",
-        visible: canUseTraining,
+        visible: canSeeScheduler,
       },
       {
         href: "/scheduler-settings",

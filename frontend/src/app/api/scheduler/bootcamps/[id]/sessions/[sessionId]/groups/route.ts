@@ -4,7 +4,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireCaller } from "@/lib/api-auth";
 import { audited } from "@/lib/audit";
-import { canManageTrainingSettings, canUseTraining } from "@/lib/roles";
+import { canManageTrainingSettings, canSeeScheduler } from "@/lib/roles";
+import { mayReadBootcamp } from "@/lib/scheduler/judging";
 import { GROUPS_STATUS_FOR, groupsInputSchema, groupsOf, saveGroups } from "@/lib/scheduler/groups";
 import { sessionOf } from "@/lib/scheduler/schedule";
 
@@ -20,8 +21,11 @@ async function ids(params: Params["params"]) {
 }
 
 export async function GET(req: Request, { params }: Params) {
-  const { error } = await requireCaller(req, canUseTraining);
+  const { error, user } = await requireCaller(req, canSeeScheduler);
   if (error) return error;
+  if (!(await mayReadBootcamp(user.access, (await params).id))) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
 
   const found = await ids(params);
   if (!found || !(await sessionOf(found.bootcampId, found.sessionId))) return NextResponse.json({ error: "not_found" }, { status: 404 });

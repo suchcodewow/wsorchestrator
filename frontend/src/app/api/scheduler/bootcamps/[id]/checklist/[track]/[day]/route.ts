@@ -4,7 +4,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireCaller } from "@/lib/api-auth";
 import { audited } from "@/lib/audit";
-import { canManageTrainingSettings, canUseTraining } from "@/lib/roles";
+import { canManageTrainingSettings, canSeeScheduler } from "@/lib/roles";
+import { mayReadBootcamp } from "@/lib/scheduler/judging";
 import { bootcampExists } from "@/lib/scheduler/bootcamps";
 import {
   CHECKLIST_STATUS_FOR,
@@ -20,8 +21,11 @@ const paramsSchema = z.object({ id: z.string().uuid(), track: checklistTrackSche
 type Params = { params: Promise<{ id: string; track: string; day: string }> };
 
 export async function GET(req: Request, { params }: Params) {
-  const { error } = await requireCaller(req, canUseTraining);
+  const { error, user } = await requireCaller(req, canSeeScheduler);
   if (error) return error;
+  if (!(await mayReadBootcamp(user.access, (await params).id))) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
 
   const parsed = paramsSchema.safeParse(await params);
   if (!parsed.success || !(await bootcampExists(parsed.data.id))) {

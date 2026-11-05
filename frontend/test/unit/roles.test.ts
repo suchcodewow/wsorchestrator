@@ -77,6 +77,8 @@ const POLICY: Record<string, { actual: Check; expected: Check }> = {
     actual: roles.canManageTrainingSettings,
     expected: training("administrator"),
   },
+  // The active bootcamp's guest judges see its schedule, and no other bootcamp's.
+  canSeeScheduler: { actual: roles.canSeeScheduler, expected: (a) => training("viewer")(a) || a.judging },
   // Mimir is for everyone signed in, with or without a role anywhere.
   canUseMimir: { actual: roles.canUseMimir, expected: () => true },
   canManageMimir: { actual: roles.canManageMimir, expected: training("administrator") },

@@ -5,7 +5,8 @@ import { z } from "zod";
 import { requireCaller } from "@/lib/api-auth";
 import { audited, noteAudit } from "@/lib/audit";
 import { appBase } from "@/lib/oauth-callback";
-import { canManageTrainingSettings, canUseTraining } from "@/lib/roles";
+import { canManageTrainingSettings, canSeeScheduler } from "@/lib/roles";
+import { mayReadBootcamp } from "@/lib/scheduler/judging";
 import { bootcampExists } from "@/lib/scheduler/bootcamps";
 import { announceDaySurveys } from "@/lib/surveys/survey-slack";
 import { ASSIGN_STATUS_FOR, assignDaySurveys, assignSurveysSchema, surveyDays } from "@/lib/surveys/surveys";
@@ -15,8 +16,11 @@ const paramsSchema = z.object({ id: z.string().uuid() });
 type Params = { params: Promise<{ id: string }> };
 
 export async function GET(req: Request, { params }: Params) {
-  const { error } = await requireCaller(req, canUseTraining);
+  const { error, user } = await requireCaller(req, canSeeScheduler);
   if (error) return error;
+  if (!(await mayReadBootcamp(user.access, (await params).id))) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
 
   const parsed = paramsSchema.safeParse(await params);
   if (!parsed.success || !(await bootcampExists(parsed.data.id))) {
