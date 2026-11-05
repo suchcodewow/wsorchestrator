@@ -567,6 +567,8 @@ const ROUTES: RouteCase[] = [
   { method: "PATCH", path: `/api/settings/repos/${MISSING}`, allowed: canManageSettings, body: () => ({}) },
   { method: "DELETE", path: `/api/settings/repos/${MISSING}`, allowed: canManageSettings },
   { method: "GET", path: "/api/settings/timed-jobs", allowed: canManageTimedJobs },
+  { method: "GET", path: "/api/settings/google-meetings-mode", allowed: canManageConnectors },
+  { method: "PUT", path: "/api/settings/google-meetings-mode", allowed: canManageConnectors, body: () => ({}) },
   { method: "GET", path: "/api/settings/slack-mode", allowed: canManageConnectors },
   { method: "PUT", path: "/api/settings/slack-mode", allowed: canManageConnectors, body: () => ({}) },
   { method: "PATCH", path: "/api/settings/timed-jobs/missing", allowed: canManageTimedJobs, body: () => ({ enabled: true }) },
@@ -791,8 +793,6 @@ const ROUTES: RouteCase[] = [
   { method: "PUT", path: `/api/evals/google-meetings/${MISSING}/attendance`, allowed: canManageEvalsSettings, body: () => ({}) },
   { method: "GET", path: "/api/evals/google-meetings/facilitators", allowed: canManageEvalsSettings },
   { method: "PUT", path: "/api/evals/google-meetings/facilitators", allowed: canManageEvalsSettings, body: () => ({}) },
-  { method: "GET", path: "/api/evals/google-meetings/settings", allowed: canManageEvalsSettings },
-  { method: "PUT", path: "/api/evals/google-meetings/settings", allowed: canManageEvalsSettings, body: () => ({}) },
   // An allowed read or sync would call Google for real, were an account connected.
   { method: "GET", path: "/api/evals/google-meetings/calendar", allowed: canManageEvalsSettings, denyOnly: true },
   { method: "GET", path: "/api/evals/google-meetings/timezones?stage=both&track=both", allowed: canManageEvalsSettings },

@@ -264,7 +264,7 @@ describe("releasing a class", () => {
       const counts = await countReleaseNoticeMessages(run.runId);
       assert.equal(counts.all, done.messaged + done.notInSlack + done.failures);
       assert.equal(counts.all, done.recipients);
-      assert.ok((await listReleaseNotices({ ...RELEASE_NOTICE_LIST, page: 1 })).rows.some((r) => r.id === run.runId));
+      assert.ok((await listReleaseNotices({ ...RELEASE_NOTICE_LIST, q: "", page: 1 })).rows.some((r) => r.id === run.runId));
     } finally {
       await db.delete(releaseNoticeRuns).where(eq(releaseNoticeRuns.id, run.runId));
     }

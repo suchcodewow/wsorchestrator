@@ -4,8 +4,9 @@
  * External Connectors: each outside account the app acts as, in one card. A
  * connect button leaves for the provider's consent screen and comes back
  * through the shared OAuth callback (lib/oauth-purposes.ts), which reports the
- * outcome in the query string. The Slack app's box also holds Slack's mode:
- * a dry run, which logs what the app would change and send there, or live.
+ * outcome in the query string. The Google and Slack boxes also hold each
+ * one's mode: a dry run, which logs what the app would change and send
+ * there, or live.
  */
 
 import { useEffect, useState } from "react";
@@ -80,14 +81,14 @@ export function ConnectorsView({
   slack,
   returned,
 }: {
-  google: { configured: boolean; connection: Person | null };
+  google: { configured: boolean; connection: Person | null; live: boolean };
   zoom: { configured: boolean; connection: Person | null };
   slack: { appConfigured: boolean; envToken: boolean; installation: SlackInstall | null; live: boolean };
   returned: Returned;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
-  const [modeBusy, setModeBusy] = useState(false);
+  const [modeBusy, setModeBusy] = useState<"google" | "slack" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const messages = [
@@ -123,28 +124,25 @@ export function ConnectorsView({
     }
   }
 
-  async function setLive(next: boolean) {
-    if (next === slack.live) return;
-    if (
-      next &&
-      !(await confirmDialog({ title: "Go live?", description: "From now on the cohort Slack sync creates channels, invites and removes people and sends reminders; the daily surveys are announced; the Live Sessions Slack button opens channels; and releasing scores messages managers.", confirmLabel: "Go live" }))
-    ) {
-      return;
-    }
-    setModeBusy(true);
+  /** Turns `which` live, or back to a dry run, after saying what live does. */
+  async function setMode(which: "google" | "slack", next: boolean) {
+    const mode = MODES[which];
+    if (next === (which === "google" ? google.live : slack.live)) return;
+    if (next && !(await confirmDialog({ title: "Go live?", description: mode.confirm, confirmLabel: "Go live" }))) return;
+    setModeBusy(which);
     setError(null);
     try {
-      const res = await fetch("/api/settings/slack-mode", {
+      const res = await fetch(mode.route, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ live: next }),
       });
-      if (!res.ok) setError(`Could not change Slack's mode (${res.status}).`);
+      if (!res.ok) setError(`Could not change ${mode.name}'s mode (${res.status}).`);
       else router.refresh();
     } catch {
       setError("Could not reach the server.");
     } finally {
-      setModeBusy(false);
+      setModeBusy(null);
     }
   }
 
@@ -185,6 +183,19 @@ export function ConnectorsView({
               : google.configured
                 ? "None yet. Sign in as an account that can make changes to events on the Revenue Enablement calendar."
                 : "Google OAuth is not set up here."
+          }
+          extra={
+            <ModeSwitch
+              name="Google Meetings"
+              live={google.live}
+              busy={modeBusy === "google"}
+              onChange={(next) => void setMode("google", next)}
+              detail={
+                google.live
+                  ? "The Google Meetings sync adds the cohort to calendar invites, takes off anyone it invited who no longer belongs, and cancels the old form's meetings and their Zoom meetings."
+                  : "The Google Meetings sync reads the calendar and Zoom and logs whom it would invite and take off, without changing any invite."
+              }
+            />
           }
           action={
             google.configured && (
@@ -243,39 +254,17 @@ export function ConnectorsView({
                 : null
           }
           extra={
-            <div className="flex flex-wrap items-center gap-3 pt-2">
-              <div role="radiogroup" aria-label="Slack mode" className="inline-flex shrink-0 items-center rounded-lg border bg-card p-0.5 shadow-xs">
-                {([
-                  [false, "Dry run"],
-                  [true, "Live"],
-                ] as const).map(([value, label]) => (
-                  <button
-                    key={label}
-                    type="button"
-                    role="radio"
-                    aria-checked={slack.live === value}
-                    disabled={modeBusy}
-                    onClick={() => void setLive(value)}
-                    className={cn(
-                      "inline-flex cursor-pointer items-center gap-1.5 rounded-md px-3 py-1.5 text-sm outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-wait",
-                      slack.live === value
-                        ? value
-                          ? "bg-brand font-medium text-brand-foreground"
-                          : "bg-accent font-medium text-foreground"
-                        : "text-muted-foreground hover:text-foreground",
-                    )}
-                  >
-                    {modeBusy && slack.live !== value && <Loader2 className="size-3.5 animate-spin" />}
-                    {label}
-                  </button>
-                ))}
-              </div>
-              <span className="text-muted-foreground">
-                {slack.live
+            <ModeSwitch
+              name="Slack"
+              live={slack.live}
+              busy={modeBusy === "slack"}
+              onChange={(next) => void setMode("slack", next)}
+              detail={
+                slack.live
                   ? "The app changes Slack and sends its messages: the cohort sync and reminders, survey announcements, Live Sessions channels and release messages."
-                  : "Nothing is changed or sent in Slack. The cohort sync and releases log what they would do; the Live Sessions Slack button does nothing."}
-              </span>
-            </div>
+                  : "Nothing is changed or sent in Slack. The cohort sync and releases log what they would do; the Live Sessions Slack button does nothing."
+              }
+            />
           }
           action={
             <>
@@ -299,6 +288,68 @@ export function ConnectorsView({
         />
       </motion.div>
     </motion.div>
+  );
+}
+
+const MODES = {
+  google: {
+    name: "Google Meetings",
+    route: "/api/settings/google-meetings-mode",
+    confirm:
+      "From the next Google Meetings sync, calendar invites go to the cohort and the meeting facilitators, those it invited who no longer belong are taken off, and any meetings left from the old form are cancelled.",
+  },
+  slack: {
+    name: "Slack",
+    route: "/api/settings/slack-mode",
+    confirm:
+      "From now on the cohort Slack sync creates channels, invites and removes people and sends reminders; the daily surveys are announced; the Live Sessions Slack button opens channels; and releasing scores messages managers.",
+  },
+} as const;
+
+/** A connector's Dry run / Live switch, with what the mode it is in does. */
+function ModeSwitch({
+  name,
+  live,
+  busy,
+  onChange,
+  detail,
+}: {
+  name: string;
+  live: boolean;
+  busy: boolean;
+  onChange: (live: boolean) => void;
+  detail: string;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-3 pt-2">
+      <div role="radiogroup" aria-label={`${name} mode`} className="inline-flex shrink-0 items-center rounded-lg border bg-card p-0.5 shadow-xs">
+        {([
+          [false, "Dry run"],
+          [true, "Live"],
+        ] as const).map(([value, label]) => (
+          <button
+            key={label}
+            type="button"
+            role="radio"
+            aria-checked={live === value}
+            disabled={busy}
+            onClick={() => onChange(value)}
+            className={cn(
+              "inline-flex cursor-pointer items-center gap-1.5 rounded-md px-3 py-1.5 text-sm outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-wait",
+              live === value
+                ? value
+                  ? "bg-brand font-medium text-brand-foreground"
+                  : "bg-accent font-medium text-foreground"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {busy && live !== value && <Loader2 className="size-3.5 animate-spin" />}
+            {label}
+          </button>
+        ))}
+      </div>
+      <span className="text-muted-foreground">{detail}</span>
+    </div>
   );
 }
 
