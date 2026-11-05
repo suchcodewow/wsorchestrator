@@ -148,7 +148,9 @@ export function SessionDialog({
   /** The breakout's groups as changed on their tab; null until they are. */
   const [groups, setGroups] = useState<GroupRow[] | null>(null);
 
-  const [was, setWas] = useState(target);
+  // Starts at null so a dialog opened on its first render, as a ?session= link
+  // opens it, fills its fields too.
+  const [was, setWas] = useState<SessionTarget | null>(null);
   if (target !== was) {
     setWas(target);
     if (target) {
