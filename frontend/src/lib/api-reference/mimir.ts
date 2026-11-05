@@ -1,4 +1,4 @@
-/** Mimir: the reference library and its coach, for everyone; its content and coaching settings, for Training Administrators. */
+/** Mimir: the reference library and its coach, for everyone; its content and coaching settings, for Assessments Administrators. */
 
 import {
   MIMIR_KINDS,
@@ -54,7 +54,7 @@ export const MIMIR_GROUPS: EndpointGroup[] = [
     id: "mimir",
     title: "Coach Canary library (archived)",
     intro:
-      "The previous Coach Canary, kept at /coach-canary-archive for Training Administrators. The GTM reference library and its AI coach: Harness's four agents and the capabilities each is made of, personas, competitors, proof points and more. Anyone signed in reads the content, is coached on it, and keeps their own progress; nobody sees anyone else's. Training Administrators edit the content and the coaching settings.",
+      "The previous Coach Canary, kept at /coach-canary-archive for Assessments Administrators. The GTM reference library and its AI coach: Harness's four agents and the capabilities each is made of, personas, competitors, proof points and more. Anyone signed in reads the content, is coached on it, and keeps their own progress; nobody sees anyone else's. Assessments Administrators edit the content and the coaching settings.",
     endpoints: [
       {
         method: "GET",
@@ -88,7 +88,7 @@ export const MIMIR_GROUPS: EndpointGroup[] = [
         method: "POST",
         path: "/api/mimir/items",
         summary: "Makes a Coach Canary item.",
-        access: "trainingAdmin",
+        access: "assessmentsAdmin",
         token: true,
         body: { kind: "json", fields: ITEM_FIELDS },
         returns: "201 { id }",
@@ -98,7 +98,7 @@ export const MIMIR_GROUPS: EndpointGroup[] = [
         method: "PUT",
         path: "/api/mimir/items/{id}",
         summary: "Replaces a Coach Canary item's fields.",
-        access: "trainingAdmin",
+        access: "assessmentsAdmin",
         token: true,
         notes:
           "Conversations already under way keep the prompt they started with; the change reaches the next conversation about it.",
@@ -115,7 +115,7 @@ export const MIMIR_GROUPS: EndpointGroup[] = [
         method: "DELETE",
         path: "/api/mimir/items/{id}",
         summary: "Removes a Coach Canary item, with everyone's progress on it and conversations about it.",
-        access: "trainingAdmin",
+        access: "assessmentsAdmin",
         token: true,
         params: [ITEM_ID],
         returns: "{ ok: true }",
@@ -128,7 +128,7 @@ export const MIMIR_GROUPS: EndpointGroup[] = [
         method: "POST",
         path: "/api/mimir/import",
         summary: "Imports Coach Canary items from a JSON file, updating those whose id exists and making the rest.",
-        access: "trainingAdmin",
+        access: "assessmentsAdmin",
         token: true,
         notes:
           "The file holds { items: [...] }, each shaped as for POST /api/mimir/items with its id, and every parent before what it holds. All of it is written or none. Items the file leaves out are left alone, and an updated item keeps everyone's progress on it. frontend/scripts/mimir-convert.ts makes such a file from the Learning Hub's data.ts.",
@@ -273,7 +273,7 @@ export const MIMIR_GROUPS: EndpointGroup[] = [
         method: "GET",
         path: "/api/mimir/settings",
         summary: "Returns the coaching settings every prompt carries.",
-        access: "trainingAdmin",
+        access: "assessmentsAdmin",
         token: true,
         notes: "Each is its default until someone saves it; updatedAt and updatedBy are null until then.",
         returns: "{ platformContext, namingGuard, updatedAt, updatedBy }",
@@ -282,7 +282,7 @@ export const MIMIR_GROUPS: EndpointGroup[] = [
         method: "PUT",
         path: "/api/mimir/settings",
         summary: "Saves the coaching settings.",
-        access: "trainingAdmin",
+        access: "assessmentsAdmin",
         token: true,
         notes: "Conversations already under way keep the prompt they started with.",
         body: {
@@ -438,7 +438,7 @@ export const MIMIR_GROUPS: EndpointGroup[] = [
     id: "mimir-map",
     title: "Coach Canary map",
     intro:
-      "The concept map, the video for each concept, and the coach that walks you through them in order. Anyone signed in reads the map, watches the videos and chats with the coach, and keeps their own progress; nobody sees anyone else's. A Training Administrator imports the map.",
+      "The concept map, the video for each concept, and the coach that walks you through them in order. Anyone signed in reads the map, watches the videos and chats with the coach, and keeps their own progress; nobody sees anyone else's. A Assessments Administrator imports the map.",
     endpoints: [
       {
         method: "GET",
@@ -447,7 +447,7 @@ export const MIMIR_GROUPS: EndpointGroup[] = [
         access: "signedIn",
         token: true,
         notes:
-          "map is null until a Training Administrator imports one. A concept's video holds only its length: where the file is kept and what the narrator says stay on the server. states has an entry for each concept you have progress on: resumeAt is where playing starts if you press play now (the beginning if you had reached the end), completed is kept once you have watched to the end, recommended is the coach asking you to watch the video before you move on, and points is your checklist for the concept as stored: the one the coach set out for you, or your ticks against the concept's own points. videos is false on a deployment with nowhere to keep them.",
+          "map is null until a Assessments Administrator imports one. A concept's video holds only its length: where the file is kept and what the narrator says stay on the server. states has an entry for each concept you have progress on: resumeAt is where playing starts if you press play now (the beginning if you had reached the end), completed is kept once you have watched to the end, recommended is the coach asking you to watch the video before you move on, and points is your checklist for the concept as stored: the one the coach set out for you, or your ticks against the concept's own points. videos is false on a deployment with nowhere to keep them.",
         returns:
           "{ map: { version, title, lead, sections, slides, levels, buckets, concepts: { id, name, slides, explanation, points?: string[], video?: { seconds } }[] } | null, importedAt: string | null, states: { [conceptId]: { videoSeconds, videoFurthest, videoDuration, completed, mastered, recommended, points: { text, covered }[] | null, resumeAt } }, videos: boolean }",
       },
@@ -455,7 +455,7 @@ export const MIMIR_GROUPS: EndpointGroup[] = [
         method: "POST",
         path: "/api/mimir/map/import",
         summary: "Imports the concept map from a JSON file, as a new version that replaces the one there.",
-        access: "trainingAdmin",
+        access: "assessmentsAdmin",
         token: true,
         notes:
           "The file is validated whole and written whole, or refused. It is the whole map, videos and all: each concept in it gets the videos the file gives it, or none. Progress is keyed by concept id, so everyone's progress on a concept the new map keeps carries over. frontend/scripts/mimir-map-convert.ts makes such a file from the course data and the videos' scripts. The content is private, so the file is never committed.",
@@ -472,7 +472,7 @@ export const MIMIR_GROUPS: EndpointGroup[] = [
         method: "GET",
         path: "/api/mimir/map/versions",
         summary: "Lists every version of the concept map, a page at a time, the newest first.",
-        access: "trainingAdmin",
+        access: "assessmentsAdmin",
         token: true,
         notes:
           "Each import, published deck, edit and restore adds a version, and the highest is the live map (live: true). source says which made it; summary is what it said it changed, and is what q searches. createdBy is null for the version made when versions began, and for an account since deleted.",
@@ -483,7 +483,7 @@ export const MIMIR_GROUPS: EndpointGroup[] = [
         method: "GET",
         path: "/api/mimir/map/versions/{version}",
         summary: "Returns one version of the concept map's structure.",
-        access: "trainingAdmin",
+        access: "assessmentsAdmin",
         token: true,
         notes: "The structure only: sections, slides, levels, groups and concepts, without videos, which are kept apart and belong to each concept whichever version is live. Send it back, changed, as the content of a new version.",
         params: [{ name: "version", type: "number", required: true, note: "the version's number" }],
@@ -494,7 +494,7 @@ export const MIMIR_GROUPS: EndpointGroup[] = [
         method: "POST",
         path: "/api/mimir/map/versions",
         summary: "Changes the live concept map, as a new version: an edit to its structure, or an earlier version put back.",
-        access: "trainingAdmin",
+        access: "assessmentsAdmin",
         token: true,
         notes:
           "base is the version the change was made from. It must still be the live one: if another version has been added since, nothing changes and the answer is 409 with the live version, so a change is never made over one you did not see. Send content and summary to edit, or restore to put an earlier version back. content is validated whole, as an import is. Any videos in it are ignored: each concept keeps the videos it has, and one taken off the map has its video again if it comes back.",

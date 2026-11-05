@@ -1,6 +1,6 @@
 /**
  * The previous Mimir, kept for reference: its reference library, glossary and
- * progress, read-only, for Training Administrators. Nothing here writes
+ * progress, read-only, for Assessments Administrators. Nothing here writes
  * anything: no coach, no visits, no start-over. The live Mimir is at /coach-canary.
  */
 

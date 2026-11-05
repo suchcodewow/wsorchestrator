@@ -99,12 +99,12 @@ export function requireEvalsAdministrator(req: Request) {
   return requireCaller(req, canManageEvalsSettings);
 }
 
-/** A Training Administrator, for Mimir Settings. */
+/** An Assessments Administrator, for Coach Canary Settings. */
 export function requireMimirAdministrator(req: Request) {
   return requireCaller(req, canManageMimir);
 }
 
-/** A Training and Assessments Administrator, for Mimir Studio. */
+/** An Assessments Administrator, for Mimir Studio. */
 export function requireMimirStudio(req: Request) {
   return requireCaller(req, canRunMimirStudio);
 }

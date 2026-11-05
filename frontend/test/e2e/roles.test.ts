@@ -51,6 +51,7 @@ import {
   canManageUsers,
   canPublishComponents,
   canScoreAssessments,
+  canSeeEvals,
   canSearchEmployees,
   canRefreshCanaryWire,
   canSeeBootcampRecords,
@@ -284,14 +285,14 @@ const PAGES: Record<string, PageCase> = {
   "/cohort-settings/slack/<unknown>": { path: () => `/cohort-settings/slack/${MISSING}`, expect: () => 404 },
   "/evals": {
     path: () => "/evals",
-    expect: (a) => (canScoreAssessments(a) ? { to: EVALS_TABS[0]!.href } : 404),
+    expect: (a) => (canSeeEvals(a) ? { to: EVALS_TABS[0]!.href } : 404),
   },
-  "/evals/bootcamp": { path: () => "/evals/bootcamp", expect: gated(canScoreAssessments) },
-  "/evals/intermediate": { path: () => "/evals/intermediate", expect: gated(canScoreAssessments) },
+  "/evals/bootcamp": { path: () => "/evals/bootcamp", expect: gated(canSeeEvals) },
+  "/evals/intermediate": { path: () => "/evals/intermediate", expect: gated(canSeeEvals) },
   "/evals/<unknown stage>": { path: () => "/evals/nonsense", expect: () => 404 },
   "/evals/bootcamp/<an assessment>": {
     path: () => `/evals/bootcamp/${assessmentId}`,
-    expect: gated(canScoreAssessments),
+    expect: gated(canSeeEvals),
   },
   "/evals/intermediate/<a bootcamp assessment>": {
     path: () => `/evals/intermediate/${assessmentId}`,
@@ -738,8 +739,10 @@ const ROUTES: RouteCase[] = [
   { method: "GET", path: `/api/record/tracks/${MISSING}/camera/file`, allowed: true },
 
   // Video feedback: anyone signed in rates what they can watch; reading it back is a Training Administrator's
-  { method: "GET", path: "/api/video-feedback", allowed: canManageTrainingSettings },
-  { method: "GET", path: "/api/video-feedback/summary", allowed: canManageTrainingSettings },
+  { method: "GET", path: "/api/video-feedback", allowed: (a) => canManageMimir(a) || canManageTrainingSettings(a) },
+  { method: "GET", path: "/api/video-feedback?kind=mimir_concept", allowed: canManageMimir },
+  { method: "GET", path: "/api/video-feedback?kind=recording", allowed: canManageTrainingSettings },
+  { method: "GET", path: "/api/video-feedback/summary", allowed: canManageMimir },
   { method: "POST", path: "/api/video-feedback", allowed: true, body: () => ({}) },
   { method: "PATCH", path: `/api/video-feedback/${MISSING}`, allowed: canManageEvalsSettings, body: () => ({ status: "ignored" }) },
 
@@ -824,14 +827,14 @@ const ROUTES: RouteCase[] = [
   { method: "DELETE", path: `/api/evals/assessments/${MISSING}`, allowed: canManageEvalsSettings },
 
   // eVals scoring
-  { method: "GET", path: `/api/evals/participation/${MISSING}`, allowed: canScoreAssessments },
+  { method: "GET", path: `/api/evals/participation/${MISSING}`, allowed: canSeeEvals },
   { method: "POST", path: `/api/evals/participation/${MISSING}/marks`, allowed: canScoreAssessments, body: () => ({}) },
   { method: "GET", path: "/api/evals/participation/settings", allowed: canManageEvalsSettings },
   { method: "PUT", path: "/api/evals/participation/settings", allowed: canManageEvalsSettings, body: () => ({}) },
-  { method: "GET", path: `/api/evals/scoring/${MISSING}/0/group`, allowed: canScoreAssessments },
-  { method: "GET", path: "/api/evals/scoring?stage=bootcamp", allowed: canScoreAssessments },
-  { method: "GET", path: `/api/evals/scoring/${MISSING}`, allowed: canScoreAssessments },
-  { method: "GET", path: `/api/evals/scoring/${MISSING}/0`, allowed: canScoreAssessments },
+  { method: "GET", path: `/api/evals/scoring/${MISSING}/0/group`, allowed: canSeeEvals },
+  { method: "GET", path: "/api/evals/scoring?stage=bootcamp", allowed: canSeeEvals },
+  { method: "GET", path: `/api/evals/scoring/${MISSING}`, allowed: canSeeEvals },
+  { method: "GET", path: `/api/evals/scoring/${MISSING}/0`, allowed: canSeeEvals },
   { method: "PUT", path: `/api/evals/scoring/${MISSING}/0`, allowed: canScoreAssessments, body: () => ({}) },
   { method: "POST", path: `/api/evals/scoring/${MISSING}/0/transcripts`, allowed: canScoreAssessments, body: form },
   {

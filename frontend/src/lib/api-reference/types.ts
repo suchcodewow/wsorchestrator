@@ -24,8 +24,10 @@ export type Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
  *   assessmentsViewer Assessments Viewer or above      (canUseEvals, canTakeIris)
  *   assessmentsAdmin Assessments Administrator         (canManageEvalsSettings, canManageIris)
  *   employeeSearch Assessments or Training Administrator (canSearchEmployees)
- *   mimirStudio  Assessments and Training Administrator (canRunMimirStudio)
- *   scorer       Assessments Viewer or above, or a guest judge on the active bootcamp (canScoreAssessments)
+ *   mimirStudio  Assessments Administrator             (canRunMimirStudio)
+ *   evalsReader  Assessments Viewer or above, or a guest judge on the active bootcamp (canSeeEvals)
+ *   scorer       Assessments Administrator, or a guest judge on the active bootcamp (canScoreAssessments)
+ *   videoFeedback Assessments Administrator for Coach Canary's videos, Training Administrator for the async recordings
  *   canaryWire   a people manager (by HiBob), or Assessments Viewer or above (canSeeCanaryWire)
  *   userAdmin    an administrator in any area          (canManageUsers)
  *   pageAdmin    the administrator of the page a tour belongs to (canEditTour)
@@ -48,7 +50,9 @@ export type AccessKey =
   | "assessmentsAdmin"
   | "employeeSearch"
   | "mimirStudio"
+  | "evalsReader"
   | "scorer"
+  | "videoFeedback"
   | "canaryWire"
   | "userAdmin"
   | "pageAdmin"
@@ -69,8 +73,10 @@ export const ACCESS_LABELS: Record<AccessKey, string> = {
   assessmentsViewer: `${ASSESSMENTS_ROLE_LABELS.viewer} or above`,
   assessmentsAdmin: ASSESSMENTS_ROLE_LABELS.administrator,
   employeeSearch: `${ASSESSMENTS_ROLE_LABELS.administrator} or ${TRAINING_ROLE_LABELS.administrator}`,
-  mimirStudio: `${ASSESSMENTS_ROLE_LABELS.administrator} and ${TRAINING_ROLE_LABELS.administrator}`,
-  scorer: `${ASSESSMENTS_ROLE_LABELS.viewer} or above, or a guest judge on the active bootcamp`,
+  mimirStudio: ASSESSMENTS_ROLE_LABELS.administrator,
+  evalsReader: `${ASSESSMENTS_ROLE_LABELS.viewer} or above, or a guest judge on the active bootcamp`,
+  scorer: `${ASSESSMENTS_ROLE_LABELS.administrator}, or a guest judge on the active bootcamp`,
+  videoFeedback: `${ASSESSMENTS_ROLE_LABELS.administrator} for Coach Canary's videos, or ${TRAINING_ROLE_LABELS.administrator} for the async recordings`,
   canaryWire: `A people manager (someone HiBob has reporting to them), or an ${ASSESSMENTS_ROLE_LABELS.viewer} or above`,
   userAdmin: "An administrator in any area",
   pageAdmin: "The administrator of the page: whoever can open the settings its sidebar entry leads to, else its area's administrator",

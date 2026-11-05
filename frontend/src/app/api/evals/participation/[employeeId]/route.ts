@@ -3,12 +3,12 @@
 import { NextResponse } from "next/server";
 import { requireCaller } from "@/lib/api-auth";
 import { PARTICIPATION_STATUS_FOR, getParticipationSheet } from "@/lib/evals/participation";
-import { canManageBootcampRecords, canScoreAssessments } from "@/lib/roles";
+import { canManageBootcampRecords, canSeeEvals } from "@/lib/roles";
 
 type Params = { params: Promise<{ employeeId: string }> };
 
 export async function GET(req: Request, { params }: Params) {
-  const { error, user } = await requireCaller(req, canScoreAssessments);
+  const { error, user } = await requireCaller(req, canSeeEvals);
   if (error) return error;
 
   const { employeeId } = await params;

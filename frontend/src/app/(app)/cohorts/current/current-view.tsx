@@ -18,7 +18,6 @@
  */
 
 import { HEADER_ROW, Pager, PlainHeader, SortHeader, TableSearch } from "@/components/data-table";
-import { ParticipationButton } from "@/components/participation/participation-dialog";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -173,11 +172,8 @@ export function CurrentCohortView({
   deferral,
   activeBootcamp,
   canSetTrack,
-  canOpenRecord,
   meetings = {},
   canMarkAttendance = false,
-  canMarkParticipation = false,
-  canRegenerateParticipation = false,
   intakes,
   intakeQuestions,
 }: {
@@ -194,16 +190,10 @@ export function CurrentCohortView({
   activeBootcamp: ActiveBootcamp | null;
   /** Whether the viewer may set anyone's track. */
   canSetTrack: boolean;
-  /** Whether the viewer is in eVals, whose Live Sessions records these are. */
-  canOpenRecord: boolean;
   /** The Current tab's meeting marks; none on the Deferred tab. */
   meetings?: MemberMeetings;
   /** Whether the viewer may say someone attended or missed a meeting, over what Zoom said. */
   canMarkAttendance?: boolean;
-  /** Whether the viewer may open the participation popup; only with a bootcamp active. */
-  canMarkParticipation?: boolean;
-  /** Whether the popup saves the score as marks move and offers AI comments. */
-  canRegenerateParticipation?: boolean;
   /** Each person on the page's latest answers to each registration form, by lowercased email. */
   intakes: Record<string, IntakeOnFile[]>;
   /** Both forms' questions as they stand now, to label those answers. */
@@ -231,8 +221,7 @@ export function CurrentCohortView({
   const columns = showBtcDate ? COLUMNS : COLUMNS.filter((c) => c.column !== "btcDate");
   // The RSVP and meeting marks are the Current tab's; the Deferred tab has none.
   const showAttendance = tab === "current";
-  const showParticipation = canMarkParticipation && activeBootcamp !== null;
-  const columnCount = columns.length + (showAttendance ? 1 : 0) + (showParticipation ? 1 : 0);
+  const columnCount = columns.length + (showAttendance ? 1 : 0);
   // Each counter counts within the other picks; the Deferred tab has only the deferred to count.
   const picked = filter.unanswered ? unanswered : counts;
   const inTracks = (cells: CurrentCohortCounts, stage: CandidateStage) =>
@@ -425,7 +414,6 @@ export function CurrentCohortView({
                     <SortHeader column={c.column} sort={query.sort} dir={query.dir}>
                       {c.label}
                     </SortHeader>
-                    {c.column === "fullName" && showParticipation && <PlainHeader>Participation</PlainHeader>}
                     {c.column === "fullName" && showAttendance && <PlainHeader>Attendance</PlainHeader>}
                   </Fragment>
                 ))}
@@ -433,7 +421,7 @@ export function CurrentCohortView({
             </thead>
             <tbody>
               {reference.shown && (
-                <ReferenceRow participation={showParticipation} btcDate={showBtcDate} onClick={reference.play} />
+                <ReferenceRow btcDate={showBtcDate} onClick={reference.play} />
               )}
               {page.rows.map((m) => {
                 const expanded = open.has(m.email);
@@ -463,18 +451,6 @@ export function CurrentCohortView({
                           {m.fullName}
                         </button>
                       </td>
-                      {showParticipation && (
-                        <td className="px-5 py-1" onClick={(ev) => ev.stopPropagation()}>
-                          {m.track !== "undecided" && (
-                            <ParticipationButton
-                              employeeId={m.id}
-                              fullName={m.fullName}
-                              canRegenerate={canRegenerateParticipation}
-                              labelled
-                            />
-                          )}
-                        </td>
-                      )}
                       {showAttendance && (
                         <td className="px-5 py-1">
                           <MeetingMarks
@@ -508,7 +484,7 @@ export function CurrentCohortView({
                     {expanded && (
                       <tr id={`person-${m.email}`} className="border-b bg-muted/30 last:border-b-0">
                         <td colSpan={columnCount} className="px-5 pt-1 pb-4 pl-10">
-                          <PersonDetails member={m} canOpenRecord={canOpenRecord} />
+                          <PersonDetails member={m} />
                           <Registrations
                             stage={m.stage}
                             intakes={intakes[m.email.toLowerCase()] ?? []}
@@ -606,7 +582,7 @@ function TrackLabel({ member }: { member: CurrentCohortMember }) {
 }
 
 /** Everything the row leaves out, from the last HiBob sync and the classes they attended. */
-function PersonDetails({ member: m, canOpenRecord }: { member: CurrentCohortMember; canOpenRecord: boolean }) {
+function PersonDetails({ member: m }: { member: CurrentCohortMember }) {
   return (
     <dl className="grid grid-cols-2 gap-x-8 gap-y-3 lg:grid-cols-4">
       <Field label="Email">{m.email}</Field>
@@ -623,21 +599,6 @@ function PersonDetails({ member: m, canOpenRecord }: { member: CurrentCohortMemb
       <Field label="In position since">{formatDate(m.activeEffectiveDate)}</Field>
       <Field label="Stage">{m.stage === "bootcamp" ? "Bootcamp" : "Intermediate"}</Field>
       <Field label="Track set by">{m.overridden ? "An administrator" : "The rules"}</Field>
-      <Field label="Live Sessions">
-        {!m.recordKey ? (
-          "None yet"
-        ) : canOpenRecord ? (
-          <Link
-            href={`/reporting/bootcamp/${m.recordKey}`}
-            onClick={(ev) => ev.stopPropagation()}
-            className="underline underline-offset-2 hover:text-foreground"
-          >
-            Open record
-          </Link>
-        ) : (
-          "On file"
-        )}
-      </Field>
     </dl>
   );
 }

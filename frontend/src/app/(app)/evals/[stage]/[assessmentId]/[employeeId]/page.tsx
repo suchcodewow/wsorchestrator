@@ -4,6 +4,7 @@ import { notFound, redirect } from "next/navigation";
 import { z } from "zod";
 import { auth, signInPath } from "@/auth";
 import { getScoringForm, scoringAssessment, scoringBootcamp } from "@/lib/evals/scoring";
+import { canScoreAssessments } from "@/lib/roles";
 import { ScoringFormView } from "./scoring-form";
 
 export default async function ScoringPage({
@@ -32,6 +33,7 @@ export default async function ScoringPage({
       }}
       bootcamp={bootcamp}
       viewerId={session.user.id}
+      canScore={canScoreAssessments(session.user.access)}
     />
   );
 }

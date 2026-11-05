@@ -1,4 +1,4 @@
-/** Mimir's content a page at a time, for anyone signed in; and making an item, for Training Administrators. */
+/** Mimir's content a page at a time, for anyone signed in; and making an item, for Assessments Administrators. */
 
 import { NextResponse } from "next/server";
 import { requireMimirAdministrator, requireUser } from "@/lib/api-auth";

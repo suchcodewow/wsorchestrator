@@ -11,7 +11,7 @@ import { auth, signInPath } from "@/auth";
 import { MY_CHECKLIST_LIST, MY_MENTION_LIST, isChecklistStatus } from "@/lib/list-specs";
 import { listMyMentions, myMentionCount } from "@/lib/mention-store";
 import { parseListQuery } from "@/lib/paging";
-import { canScoreAssessments, canUseTraining } from "@/lib/roles";
+import { canSeeEvals, canUseTraining } from "@/lib/roles";
 import { activeBootcamp } from "@/lib/scheduler/bootcamps";
 import { listMyChecklist, myOpenChecklistCount } from "@/lib/scheduler/checklist";
 import { InboxView } from "./inbox-view";
@@ -33,13 +33,13 @@ export default async function InboxPage({
   const mentionQuery = parseListQuery(params, MY_MENTION_LIST, "mentions");
   // A hand-typed status that isn't one shows what is still open, as the API does.
   const status = isChecklistStatus(params.status) ? params.status : "open";
-  const canScore = canScoreAssessments(session.user.access);
+  const canSeeScoring = canSeeEvals(session.user.access);
   const [items, open, mentions, mentionTotal, active] = await Promise.all([
     listMyChecklist(email, status, itemQuery),
     myOpenChecklistCount(email),
     listMyMentions(viewer, mentionQuery),
     myMentionCount(viewer),
-    canScore ? activeBootcamp() : null,
+    canSeeScoring ? activeBootcamp() : null,
   ]);
 
   return (

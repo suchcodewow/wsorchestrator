@@ -3,7 +3,7 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { auth, signInPath } from "@/auth";
-import { canScoreAssessments } from "@/lib/roles";
+import { canSeeEvals } from "@/lib/roles";
 import { EvalsTabs } from "./evals-tabs";
 
 export const metadata: Metadata = { title: "eVals" };
@@ -11,7 +11,7 @@ export const metadata: Metadata = { title: "eVals" };
 export default async function EvalsLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
   if (!session?.user) redirect(await signInPath());
-  if (!canScoreAssessments(session.user.access)) notFound();
+  if (!canSeeEvals(session.user.access)) notFound();
 
   return (
     <div className="space-y-8">

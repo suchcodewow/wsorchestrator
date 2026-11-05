@@ -233,9 +233,9 @@ describe("who may write a page's tour", () => {
     ["/recordings", ["trainingAdmin", "bothAdmins", "platform"]],
     ["/evals", ["assessmentsAdmin", "platform"]],
     ["/diagnostic", ["assessmentsAdmin", "platform"]],
-    // Mimir sits under Assessments, but its gear is Mimir Settings, a training administrator's.
-    ["/coach-canary", ["trainingAdmin", "bothAdmins", "platform"]],
-    ["/coach-canary-settings", ["trainingAdmin", "bothAdmins", "platform"]],
+    // Coach Canary sits under Assessments, and its gear, Coach Canary Settings, is theirs too.
+    ["/coach-canary", ["assessmentsAdmin", "platform"]],
+    ["/coach-canary-settings", ["assessmentsAdmin", "platform"]],
     ["/me", ["platform"]],
     ["/welcome", ["platform"]],
     ["/users", ["platform"]],

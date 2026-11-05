@@ -85,10 +85,13 @@ export function ScoringFormView({
   form,
   bootcamp,
   viewerId,
+  canScore,
 }: {
   form: Form;
   bootcamp: ActiveBootcamp | null;
   viewerId: string;
+  /** False for an Assessments Viewer, who reads the form and changes nothing. */
+  canScore: boolean;
 }) {
   const router = useRouter();
   const { assessment, criteria, attendee, submission } = form;
@@ -118,7 +121,7 @@ export function ScoringFormView({
     assessmentId: assessment.id,
     employeeId: attendee.id,
     initial: form.transcripts,
-    enabled: bootcamp !== null,
+    enabled: bootcamp !== null && canScore,
   });
   const recorder = useRecorder({
     ownerId: viewerId,
@@ -144,7 +147,7 @@ export function ScoringFormView({
   const whole = average === null ? null : wholeScore(average);
   const needed = complete && whole !== null ? requiredFeedback(whole) : null;
   const unscored = submission ? criteria.filter((c) => !submission.scores[c.id]).length : 0;
-  const ownedByOther = submission !== null && submission.ownerId !== viewerId;
+  const ownedByOther = canScore && submission !== null && submission.ownerId !== viewerId;
   const transcribing = Object.values(transcripts.jobs).some((j) => j.status === "working");
   const transcriptFailed = Object.values(transcripts.jobs).some((j) => j.status === "failed");
 
@@ -282,7 +285,12 @@ export function ScoringFormView({
             <BootcampNotice stage={assessment.stage} bootcamp={bootcamp} />
           </div>
           {bootcamp && (
-            <ParticipationGroupButton assessmentId={assessment.id} employeeId={attendee.id} fullName={attendee.fullName} />
+            <ParticipationGroupButton
+              assessmentId={assessment.id}
+              employeeId={attendee.id}
+              fullName={attendee.fullName}
+              canMark={canScore}
+            />
           )}
         </div>
       </motion.div>
@@ -373,102 +381,106 @@ export function ScoringFormView({
         hidden={tab !== "scoring"}
         className="divide-y overflow-hidden rounded-2xl border bg-card shadow-sm"
       >
-        <motion.section variants={riseChild} className="space-y-3 px-5 py-4">
-          <h3 className="font-medium">Recording</h3>
-          <RecordingPanel
-            recorder={recordWithLive}
-            ownerId={viewerId}
-            subject={subject}
-            version={recordingsVersion}
-            onChanged={() => setRecordingsVersion((v) => v + 1)}
-            actions={bootcamp ? askClaudeButton : undefined}
-          />
-          {reviewing && (
-            <p role="status" className="text-sm text-muted-foreground">
-              Claude is reading the transcript…
-            </p>
-          )}
-          {review && (
-            <p
-              role={review.error ? "alert" : "status"}
-              className={cn("text-sm", review.error ? "text-destructive" : "text-muted-foreground")}
-            >
-              {review.text}
-            </p>
-          )}
-        </motion.section>
+        {canScore && (
+          <motion.section variants={riseChild} className="space-y-3 px-5 py-4">
+            <h3 className="font-medium">Recording</h3>
+            <RecordingPanel
+              recorder={recordWithLive}
+              ownerId={viewerId}
+              subject={subject}
+              version={recordingsVersion}
+              onChanged={() => setRecordingsVersion((v) => v + 1)}
+              actions={bootcamp ? askClaudeButton : undefined}
+            />
+            {reviewing && (
+              <p role="status" className="text-sm text-muted-foreground">
+                Claude is reading the transcript…
+              </p>
+            )}
+            {review && (
+              <p
+                role={review.error ? "alert" : "status"}
+                className={cn("text-sm", review.error ? "text-destructive" : "text-muted-foreground")}
+              >
+                {review.text}
+              </p>
+            )}
+          </motion.section>
+        )}
 
-        {criteria.map((c, i) => {
-          const entry = entries[c.id]!;
-          return (
-            <motion.section key={c.id} variants={riseChild} className="space-y-3 px-5 py-4">
-              <div className="space-y-1">
-                <h3 className="font-medium">
-                  {i + 1}. {c.name}
-                </h3>
-                {c.description && <p className="whitespace-pre-line text-sm text-muted-foreground">{c.description}</p>}
-              </div>
-              <div role="radiogroup" aria-label={`Score for ${c.name}`} className="flex gap-2">
-                {CRITERION_SCORES.map((n) => (
-                  <button
-                    key={n}
-                    type="button"
-                    role="radio"
-                    aria-checked={entry.score === n}
-                    onClick={() => set(c.id, { score: n })}
-                    className={cn(
-                      "flex size-10 items-center justify-center rounded-md border text-sm font-medium transition-colors",
-                      entry.score === n
-                        ? "border-brand bg-brand text-brand-foreground"
-                        : "border-input bg-field hover:bg-muted/50",
-                    )}
-                  >
-                    {n}
-                  </button>
-                ))}
-              </div>
-              <MentionTextarea
-                aria-label={`Comment on ${c.name}`}
-                placeholder={form.people.length > 0 ? "Comment (optional) — type @ to tag someone" : "Comment (optional)"}
-                value={entry.comment}
-                maxLength={EVALS_ASSESSMENT_LIMITS.comment}
-                onChange={(comment) => set(c.id, { comment })}
-                people={form.people}
-                onPick={(p) => set(c.id, { picks: [...entry.picks, p] })}
-                className="min-h-16"
-              />
-            </motion.section>
-          );
-        })}
+        <fieldset disabled={!canScore} className="contents">
+          {criteria.map((c, i) => {
+            const entry = entries[c.id]!;
+            return (
+              <motion.section key={c.id} variants={riseChild} className="space-y-3 px-5 py-4">
+                <div className="space-y-1">
+                  <h3 className="font-medium">
+                    {i + 1}. {c.name}
+                  </h3>
+                  {c.description && <p className="whitespace-pre-line text-sm text-muted-foreground">{c.description}</p>}
+                </div>
+                <div role="radiogroup" aria-label={`Score for ${c.name}`} className="flex gap-2">
+                  {CRITERION_SCORES.map((n) => (
+                    <button
+                      key={n}
+                      type="button"
+                      role="radio"
+                      aria-checked={entry.score === n}
+                      onClick={() => set(c.id, { score: n })}
+                      className={cn(
+                        "flex size-10 items-center justify-center rounded-md border text-sm font-medium transition-colors",
+                        entry.score === n
+                          ? "border-brand bg-brand text-brand-foreground"
+                          : "border-input bg-field hover:bg-muted/50",
+                      )}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                </div>
+                <MentionTextarea
+                  aria-label={`Comment on ${c.name}`}
+                  placeholder={form.people.length > 0 ? "Comment (optional) — type @ to tag someone" : "Comment (optional)"}
+                  value={entry.comment}
+                  maxLength={EVALS_ASSESSMENT_LIMITS.comment}
+                  onChange={(comment) => set(c.id, { comment })}
+                  people={form.people}
+                  onPick={(p) => set(c.id, { picks: [...entry.picks, p] })}
+                  className="min-h-16"
+                />
+              </motion.section>
+            );
+          })}
 
-        <motion.section variants={riseChild} className="space-y-5 px-5 py-4">
-          <div className="flex items-baseline justify-between gap-3">
-            <h3 className="font-medium">Average score</h3>
-            <span className="text-3xl font-medium tabular-nums" aria-live="polite">
-              {whole ?? "—"}
-            </span>
-          </div>
-          {!complete && (
-            <p className="text-sm text-muted-foreground">
-              {scores.length} of {criteria.length} criteria scored
-            </p>
-          )}
+          <motion.section variants={riseChild} className="space-y-5 px-5 py-4">
+            <div className="flex items-baseline justify-between gap-3">
+              <h3 className="font-medium">Average score</h3>
+              <span className="text-3xl font-medium tabular-nums" aria-live="polite">
+                {whole ?? "—"}
+              </span>
+            </div>
+            {!complete && (
+              <p className="text-sm text-muted-foreground">
+                {scores.length} of {criteria.length} criteria scored
+              </p>
+            )}
 
-          <FeedbackBox
-            id="positive-feedback"
-            label="Positive Feedback"
-            value={positive}
-            onChange={setPositive}
-            note={needed === "positive" ? POSITIVE_REQUIRED_NOTE : null}
-          />
-          <FeedbackBox
-            id="constructive-feedback"
-            label="Constructive Feedback"
-            value={constructive}
-            onChange={setConstructive}
-            note={needed === "constructive" ? CONSTRUCTIVE_REQUIRED_NOTE : null}
-          />
-        </motion.section>
+            <FeedbackBox
+              id="positive-feedback"
+              label="Positive Feedback"
+              value={positive}
+              onChange={setPositive}
+              note={needed === "positive" ? POSITIVE_REQUIRED_NOTE : null}
+            />
+            <FeedbackBox
+              id="constructive-feedback"
+              label="Constructive Feedback"
+              value={constructive}
+              onChange={setConstructive}
+              note={needed === "constructive" ? CONSTRUCTIVE_REQUIRED_NOTE : null}
+            />
+          </motion.section>
+        </fieldset>
       </motion.div>
 
       {error && (
@@ -477,19 +489,21 @@ export function ScoringFormView({
         </motion.p>
       )}
 
-      <motion.div variants={riseChild}>
-        <div className="flex items-center gap-3">
-          <Button variant="brand" disabled={!canSubmit || busy !== null || reviewing !== null} onClick={submit}>
-            {busy ? <Loader2 className="animate-spin" /> : <Send />}
-            Submit
-          </Button>
-          {busy === "transcribing" && (
-            <span role="status" className="text-sm text-muted-foreground">
-              Transcribing the recording…
-            </span>
-          )}
-        </div>
-      </motion.div>
+      {canScore && (
+        <motion.div variants={riseChild}>
+          <div className="flex items-center gap-3">
+            <Button variant="brand" disabled={!canSubmit || busy !== null || reviewing !== null} onClick={submit}>
+              {busy ? <Loader2 className="animate-spin" /> : <Send />}
+              Submit
+            </Button>
+            {busy === "transcribing" && (
+              <span role="status" className="text-sm text-muted-foreground">
+                Transcribing the recording…
+              </span>
+            )}
+          </div>
+        </motion.div>
+      )}
     </motion.div>
   );
 }

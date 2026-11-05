@@ -1,6 +1,6 @@
 /**
  * Mimir's content: reading it a page at a time for the library and Mimir
- * Settings, and the edits and imports Training Administrators make.
+ * Settings, and the edits and imports Assessments Administrators make.
  *
  * An item's id is a stable slug, so an import updates what an earlier import
  * made rather than adding a second copy. Its kind is fixed once it exists, and

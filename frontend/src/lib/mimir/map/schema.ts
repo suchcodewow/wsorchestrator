@@ -305,7 +305,7 @@ export function publicMap(content: MapContent): PublicMap {
 
 /** What `GET /api/mimir/map` answers. */
 export type MapResponse = {
-  /** Null until a Training Administrator imports one. */
+  /** Null until a Assessments Administrator imports one. */
   map: PublicMap | null;
   importedAt: string | null;
   /** By concept id; a concept with no entry has none of it. */

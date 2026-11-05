@@ -1886,9 +1886,9 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "GET",
         path: "/api/video-feedback",
         summary: "Lists feedback on videos, a page at a time, the newest first.",
-        access: "trainingAdmin",
+        access: "videoFeedback",
         token: true,
-        notes: "user is null once the account that gave it is deleted.",
+        notes: "Each area reads its own videos' feedback: an Assessments Administrator Coach Canary's concepts (mimir_concept), a Training Administrator the async recordings (recording). Without kind it is everything the caller may read; naming a kind they may not read is 403. user is null once the account that gave it is deleted.",
         query: [
           ...listQuery(VIDEO_FEEDBACK_LIST.sorts, "the video's name, the comment, or the name or email of who gave it", "desc"),
           { name: "kind", type: `"mimir_concept" | "recording"`, note: "only feedback on that kind of video" },
@@ -1901,7 +1901,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "GET",
         path: "/api/video-feedback/summary",
         summary: "Lists each concept on the Coach Canary map, and each video no longer on it that has feedback, with its counts of smiley and confused ratings, and of each that came with a comment, a page at a time, by name.",
-        access: "trainingAdmin",
+        access: "assessmentsAdmin",
         token: true,
         notes: "Only Coach Canary concept videos are counted. A comment is a rating saved with words; the counts of ratings include them. accepted is how many comments an administrator has accepted and no regeneration has applied yet. label is the concept's name on the map, or the video's name when it was last rated for one no longer on it. inMap is whether the concept is on the map, and hasVideo whether it has a video there. translations lists the languages that video has been translated into. job is the concept's latest Coach Canary Studio video job, or null.",
         query: listQuery(VIDEO_FEEDBACK_SUMMARY_LIST.sorts, "the concept's name"),
@@ -2365,7 +2365,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "GET",
         path: "/api/evals/scoring",
         summary: "Lists one stage's active assessments, a page at a time, and the bootcamp they would be scored at.",
-        access: "scorer",
+        access: "evalsReader",
         token: true,
         notes:
           "bootcamp is the active one, or null when none is, or, for intermediate, when the active one holds no intermediate class; nothing can be scored then.",
@@ -2380,7 +2380,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "GET",
         path: "/api/evals/scoring/{assessmentId}",
         summary: "Lists the attendees one active assessment applies to, a page at a time, with their scores at the active bootcamp.",
-        access: "scorer",
+        access: "evalsReader",
         token: true,
         notes:
           "An attendee is a current candidate (see GET /api/evals/current-cohort) in the assessment's stage on the sales or engineer track, as its audience takes in. averageScore is to one decimal place, and null if they are not scored at the active bootcamp. needsRescoring is true for one scored before a criterion was added. attendees and scored count everyone it applies to, whatever the search or mine. mine counts those in the caller's own groups in the active bootcamp's breakouts whose assessmentId is this assessment, as the schedule's Breakout Assignments tab sets it. rooms are the rooms the caller is given in those same breakouts, in the order they happen; one without a room for them is left out. start is minutes after midnight.",
@@ -2399,7 +2399,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "GET",
         path: "/api/evals/scoring/{assessmentId}/{employeeId}",
         summary: "Reads one attendee's scoring form: the criteria still asked, and their submission at the active bootcamp.",
-        access: "scorer",
+        access: "evalsReader",
         token: true,
         notes:
           "submission is null until someone scores them. Its scores are keyed by criterion id; a criterion added since has none. ownerName is whoever saved it last. Send its updatedAt as revises when saving. people is whom a comment can tag: anyone who can use eVals, and the active bootcamp's guest judges; it is empty with no bootcamp. transcripts holds every recording anyone filed of this attendee on this assessment at the active bootcamp, oldest first, whether or not the submission has been saved; it is empty with no bootcamp.",
@@ -2517,7 +2517,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "GET",
         path: "/api/evals/scoring/{assessmentId}/{employeeId}/group",
         summary: "Lists everyone evaluated with this attendee in a breakout scored on this assessment.",
-        access: "scorer",
+        access: "evalsReader",
         token: true,
         notes:
           "The caller's group with them if they have one, or else the group they are in with another instructor, attendee included, by name, at most 100. Empty for someone in no group, or with no active bootcamp.",
@@ -2532,7 +2532,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         method: "GET",
         path: "/api/evals/participation/{employeeId}",
         summary: "Returns one attendee's participation marks at the active bootcamp, as the popup shows them.",
-        access: "scorer",
+        access: "evalsReader",
         token: true,
         notes:
           "descriptors is every descriptor on the list, positive first, with its shared count from 0 to 3 and adjustments, who moved it and by how much, leaving out anyone whose clicks cancelled out. runningScore is the 1 to 4 Generate would give them now, and null until they have a mark. saved is their Participation assessment, only for an Assessments Administrator: null before their first mark. locked is true once their class is released, for anyone but an Assessments Administrator, who may still move the marks.",

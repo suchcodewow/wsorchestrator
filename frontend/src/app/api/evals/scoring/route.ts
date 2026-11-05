@@ -7,10 +7,10 @@ import { isCandidateStage } from "@/lib/evals/current-cohort";
 import { scoringBootcamp } from "@/lib/evals/scoring";
 import { ASSESSMENT_LIST } from "@/lib/list-specs";
 import { parseListQuery } from "@/lib/paging";
-import { canScoreAssessments } from "@/lib/roles";
+import { canSeeEvals } from "@/lib/roles";
 
 export async function GET(req: Request) {
-  const { error } = await requireCaller(req, canScoreAssessments);
+  const { error } = await requireCaller(req, canSeeEvals);
   if (error) return error;
 
   const params = new URL(req.url).searchParams;
