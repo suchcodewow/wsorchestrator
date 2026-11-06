@@ -50,7 +50,7 @@ const EXPERIENCES: Experience[] = [
     name: "Ready to sharpen your slide critiquing skills?",
     summary:
       "The sales team has been hard at work creating “Our understanding” slides for upcoming opportunities. Help them by reviewing their slides for spelling, grammar and format.",
-    minutes: "10–15 minutes",
+    minutes: "As long as you like",
     Icon: Presentation,
     render: () => <SlideReviewView />,
     wide: true,
