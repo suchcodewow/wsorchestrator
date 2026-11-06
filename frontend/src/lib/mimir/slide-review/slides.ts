@@ -85,7 +85,7 @@ export type Look = {
   color?: string;
   dx?: number;
   dy?: number;
-  /** An icon, the logo or the arrow drawn bigger or smaller. */
+  /** An icon, the logo or the triangle drawn bigger or smaller. */
   scale?: number;
   /** The logo pulled wider (over 1) or squashed (under 1). */
   stretch?: number;
@@ -95,8 +95,8 @@ export type Look = {
   underline?: boolean;
   /** The capabilities box drawn with a solid edge instead of a dashed one. */
   solid?: boolean;
-  /** The arrow pointing from the future back to the current state. */
-  pointLeft?: boolean;
+  /** The triangle between the columns turned upside down. */
+  pointDown?: boolean;
 };
 
 /** Something left on the slide that shouldn't be there at all. */

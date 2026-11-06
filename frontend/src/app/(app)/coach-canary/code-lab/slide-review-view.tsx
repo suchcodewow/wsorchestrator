@@ -574,12 +574,12 @@ function Divider() {
 function ArrowShape() {
   const look = useGame().look("arrow");
   const k = look.scale ?? 1;
-  const w = 56 * k;
-  const h = 66 * k;
+  const w = 78 * k;
+  const h = 68 * k;
   return (
-    <Piece target="arrow" x={L.divider - w / 2} y={330 - h / 2} label="Arrow between the columns" style={{ width: w, height: h }}>
-      <svg viewBox="0 0 56 66" width={w} height={h} className="block" style={{ transform: look.pointLeft ? "scaleX(-1)" : undefined }}>
-        <path d="M1 1 L55 33 L1 65 Z" fill="#fafafa" stroke="#cfcfcf" strokeWidth={1.4} strokeLinejoin="round" />
+    <Piece target="arrow" x={L.divider - w / 2} y={325 - h / 2} label="Triangle between the columns" style={{ width: w, height: h }}>
+      <svg viewBox="0 0 78 68" width={w} height={h} className="block" style={{ transform: look.pointDown ? "scaleY(-1)" : undefined }}>
+        <path d="M39 1 L77 67 L1 67 Z" fill="#fafafa" stroke="#cfcfcf" strokeWidth={1.4} strokeLinejoin="round" />
       </svg>
     </Piece>
   );
