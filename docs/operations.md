@@ -210,6 +210,42 @@ until each is back, that language plays in English rather than out of step. If
 a translation fails, the job fails but the English video stays up, and the
 concept is offered Translate.
 
+### Google Workspace caps `harnessevents.io` at about 1,317 users
+
+Attendee accounts are unlicensed Workspace users, and Billing → Subscriptions
+only counts purchased licences, so it shows no ceiling for them. Google does
+enforce one per domain: `users.insert` is refused with HTTP 412 `limitExceeded`,
+"Domain user limit reached. Contact Support." Measured on 2026-11-06 by creating
+test users until it refused: the domain held 5 users to begin with, 1,312 were
+created, and the next was refused, so the cap is about **1,317 users in total**
+(1,317 or 1,318; `users.list` lags behind creates by several seconds, so a
+count taken during a burst reads low). It is not a round number. Google sets it
+per domain and only Support raises it.
+
+What it means for a workshop:
+
+- The limit counts every user in the domain, not just one event's. Attendee
+  accounts from live OUs (`/event-*`) all count against it, so a large event
+  has less room than 1,317 while others are running.
+- Creating accounts was never throttled: 1.5 to 3 a second, with no 429s.
+  Only the total cap stopped it.
+- **Deleted users keep counting for up to 20 days**, while Google holds them
+  for recovery. Tearing a workshop down does not free its seats at once. The
+  OU of a torn-down run also cannot be deleted while it holds those users, which
+  is the same 412 `deleteOrgUnit` waits out.
+- Nothing in the runner checks the headroom first, and this was not tested
+  against `runner/src/directory.ts`'s error handling. Treat a 412 "Domain user
+  limit reached" in a run log as this cap, not as a transient Google error.
+- To raise it, open a Google Workspace Support case for `harnessevents.io`
+  quoting that error and the planned peak.
+- Test users from the experiment were created in `/limit-test` and deleted. That
+  OU may linger empty until the 20 days pass; it is safe to delete then.
+
+If you repeat the experiment, create the test users in their own OU with a
+distinctive prefix and keep a ledger of what you made, so cleanup deletes only
+those. Wait about 20 seconds after creating an OU before the first
+`users.insert` into it, or it returns a 403.
+
 ### Google Meetings
 
 eVals Settings → Google Meetings invites the cohort to meetings that already
