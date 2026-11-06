@@ -5,6 +5,7 @@ import { z } from "zod";
 import { requireCaller } from "@/lib/api-auth";
 import { audited, noteAudit } from "@/lib/audit";
 import { isForm } from "@/lib/iris/engine";
+import { TRACKS } from "@/lib/iris/subjects";
 import {
   ADD_PARTICIPANT_STATUS,
   addParticipant,
@@ -18,6 +19,7 @@ import { parseListQuery } from "@/lib/paging";
 import { canManageIris } from "@/lib/roles";
 
 const emailSchema = z.object({ email: z.string().trim().email().max(320) });
+const addSchema = emailSchema.extend({ track: z.enum(TRACKS).nullable().optional() });
 
 export async function GET(req: Request) {
   const { error } = await requireCaller(req, canManageIris);
@@ -36,11 +38,11 @@ export async function GET(req: Request) {
 export const POST = audited(async function POST(req: Request) {
   const { error, user } = await requireCaller(req, canManageIris);
   if (error) return error;
-  const parsed = emailSchema.safeParse(await req.json().catch(() => null));
+  const parsed = addSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "invalid" }, { status: 400 });
 
-  noteAudit({ targetLabel: parsed.data.email.toLowerCase() });
-  const result = await addParticipant(user.id, parsed.data.email);
+  noteAudit({ targetLabel: parsed.data.email.toLowerCase(), detail: { track: parsed.data.track ?? null } });
+  const result = await addParticipant(user.id, parsed.data.email, parsed.data.track ?? null);
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: ADD_PARTICIPANT_STATUS[result.error] });
   return NextResponse.json({ ok: true, email: result.email, fullName: result.fullName }, { status: 201 });
 });

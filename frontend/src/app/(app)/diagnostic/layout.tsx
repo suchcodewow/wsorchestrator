@@ -1,16 +1,20 @@
-/** The layout for Diagnostic: its tests, for Participants and nobody else. Administrators set it up on Diagnostic Settings. */
+/**
+ * The layout for Diagnostic: its tests, for Participants. An Assessments
+ * Administrator who is not one opens it too, since they can open its
+ * settings, and is told no tests are assigned to them.
+ */
 
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { auth, signInPath } from "@/auth";
-import { canTakeIris } from "@/lib/roles";
+import { canSeeIris } from "@/lib/roles";
 
 export const metadata: Metadata = { title: "Diagnostic" };
 
 export default async function IrisLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
   if (!session?.user) redirect(await signInPath());
-  if (!canTakeIris(session.user.access)) notFound();
+  if (!canSeeIris(session.user.access)) notFound();
 
   return (
     <div className="space-y-8">

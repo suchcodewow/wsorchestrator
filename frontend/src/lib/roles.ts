@@ -221,6 +221,12 @@ export const canRunMimirStudio = (access: Access) => canManageMimir(access);
 /** Takes the placement tests: a Participant, and nobody else, whatever their roles. */
 export const canTakeIris = (access: Access) => access.participating;
 
+/**
+ * Opens Diagnostic: a Participant, to take the tests, and an Assessments
+ * Administrator, who can open its settings, even when they have none assigned.
+ */
+export const canSeeIris = (access: Access) => canTakeIris(access) || canManageIris(access);
+
 /** Carries on a sitting: a Participant's live ones, or an Assessments Administrator's previews. */
 export const canSitIris = (access: Access) => canTakeIris(access) || canManageIris(access);
 

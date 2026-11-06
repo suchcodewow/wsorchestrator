@@ -1,11 +1,17 @@
 "use client";
 
-/** Deletes every Diagnostic sitting one person has, after saying so, so they can take the subjects again. */
+/**
+ * Deletes every Diagnostic sitting one person has, or one subject's, after
+ * saying so, so they can take the subjects again.
+ */
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { confirmDialog, noticeDialog } from "@/components/ui/confirm";
+import type { Form } from "@/lib/iris/engine";
+import { SUBJECTS, type SubjectKey } from "@/lib/iris/subjects";
 import {
   Dialog,
   DialogContent,
@@ -66,5 +72,42 @@ export function ClearResultsButton({ userId, who, sittings }: { userId: string; 
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+/** Resets one subject, after asking, so the person can come back and take it again. */
+export function ResetTestButton({ userId, subject, form, who }: { userId: string; subject: SubjectKey; form: Form; who: string }) {
+  const router = useRouter();
+  const [pending, setPending] = useState(false);
+  const name = SUBJECTS[subject].name;
+
+  async function reset() {
+    const ok = await confirmDialog({
+      title: `Reset ${who}'s ${name} test?`,
+      description: `Their sitting and every answer in it are deleted, so they can take ${name} again from the start. Their other subjects are kept. This cannot be undone.`,
+      confirmLabel: "Reset test",
+      destructive: true,
+    });
+    if (!ok) return;
+    setPending(true);
+    try {
+      const res = await fetch(
+        `/api/diagnostic/results/${encodeURIComponent(userId)}/${subject}?form=${form}`,
+        { method: "DELETE" },
+      );
+      if (!res.ok) throw new Error(`Could not reset (${res.status})`);
+      router.refresh();
+    } catch (err) {
+      await noticeDialog({ title: "The test was not reset", description: err instanceof Error ? err.message : "Could not reset" });
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <Button variant="outline" size="sm" className="ml-auto" disabled={pending} onClick={() => void reset()}>
+      {pending ? <Loader2 className="animate-spin" /> : <RotateCcw />}
+      Reset test
+    </Button>
   );
 }

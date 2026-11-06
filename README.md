@@ -557,7 +557,14 @@ tests, whatever roles anyone holds, administrators included. A Participant is
 someone added by hand, or, while **Bootcamp Auto-Enroll** is on, a bootcamp
 candidate on the Sales or Engineer track who has RSVP'd; stopping auto-enroll
 removes those it brought in and keeps the hand-added. Participants are not the
-Training cohort: anyone at Harness can be one. (It was called Iris until
+Training cohort: anyone at Harness can be one. An administrator who is not a
+Participant still opens Diagnostic, and is told no tests are assigned to them.
+Every Participant who has not finished all the open subjects (those with enough
+approved questions) gets a daily Slack message with where they stand, from the
+`diagnostic-reminders` timed job (10:00 AM Eastern) or **Remind Now** on
+Diagnostic Settings → Slack; it is a dry run, logging what it would send, until
+an administrator puts it live there. An administrator can also reset one
+subject on a Participant's page so they can take it again. (It was called Iris until
 October 2026, with its own Iris Taker and Iris Administrator roles until the
 migration that removed them gave everyone the higher of their two roles. Its
 database tables and code still use the name `iris`.)

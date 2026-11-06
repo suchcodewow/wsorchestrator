@@ -7,13 +7,13 @@ import { motion } from "framer-motion";
 import { ArrowLeft } from "lucide-react";
 import { HEADER_ROW, PlainHeader } from "@/components/data-table";
 import type { CohortSummary, DetailAnswer, DetailSitting, PersonDetail } from "@/lib/iris/cohort";
-import { ENGINE, LEVELS, type Level } from "@/lib/iris/engine";
+import { ENGINE, LEVELS, type Form, type Level } from "@/lib/iris/engine";
 import { LEVEL_LABELS, SUBJECTS, OPEN_SUBJECT_KEYS, TRACK_LABELS, TRAINING, bandOf } from "@/lib/iris/subjects";
 import { riseChild, staggerParent } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { LevelBadge } from "@/app/(app)/diagnostic/level-badge";
 import { Radar } from "@/app/(app)/diagnostic/radar";
-import { ClearResultsButton } from "./clear-results-button";
+import { ClearResultsButton, ResetTestButton } from "./clear-results-button";
 
 type Sitting = Omit<DetailSitting, "startedAt" | "finishedAt"> & { startedAt: string; finishedAt: string | null };
 type Detail = Omit<PersonDetail, "sittings"> & { sittings: Sitting[] };
@@ -64,7 +64,7 @@ export function PersonView({ detail, summary }: { detail: Detail; summary: Cohor
 
       {detail.sittings.map((s) => (
         <motion.div key={s.subject} variants={riseChild}>
-          <SittingCard sitting={s} />
+          <SittingCard sitting={s} userId={detail.userId} form={detail.form} who={who} />
         </motion.div>
       ))}
     </motion.div>
@@ -124,7 +124,7 @@ function ShapeCard({ detail, summary }: { detail: Detail; summary: CohortSummary
   );
 }
 
-function SittingCard({ sitting }: { sitting: Sitting }) {
+function SittingCard({ sitting, userId, form, who }: { sitting: Sitting; userId: string; form: Form; who: string }) {
   return (
     <div className="divide-y overflow-hidden rounded-2xl border bg-card text-sm shadow-sm">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-4">
@@ -139,6 +139,7 @@ function SittingCard({ sitting }: { sitting: Sitting }) {
           {sitting.confidence && <> · {sitting.confidence} confidence</>}
           {sitting.finishedAt && <> · {new Date(sitting.finishedAt).toLocaleDateString()}</>}
         </span>
+        <ResetTestButton userId={userId} subject={sitting.subject} form={form} who={who} />
       </div>
 
       {sitting.answers.length > 0 && (

@@ -106,6 +106,8 @@ const POLICY: Record<string, { actual: Check; expected: Check }> = {
   // Diagnostic is part of the assessments area: an administrator runs it, and only a Participant takes it.
   canTakeIris: { actual: roles.canTakeIris, expected: (a) => a.participating },
   canSitIris: { actual: roles.canSitIris, expected: (a) => a.participating || evals("administrator")(a) },
+  // Whoever can open Diagnostic Settings opens Diagnostic too.
+  canSeeIris: { actual: roles.canSeeIris, expected: (a) => a.participating || evals("administrator")(a) },
   canManageIris: { actual: roles.canManageIris, expected: evals("administrator") },
 
   canManageBackups: { actual: roles.canManageBackups, expected: platformOnly },

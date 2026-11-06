@@ -9,7 +9,7 @@
 import "server-only";
 import { and, asc, eq, isNotNull, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { irisAttempts, irisResponses, irisTakers, users } from "@/db/schema";
+import { irisAttempts, irisParticipants, irisResponses, irisTakers, users } from "@/db/schema";
 import { IDK, type Confidence, type Form, type Level, type Phase } from "@/lib/iris/engine";
 import { participantEmails } from "@/lib/iris/participants";
 import { ITEMS_BY_ID } from "@/lib/iris/reviews";
@@ -118,9 +118,10 @@ export type PersonDetail = {
 /** One person's live sittings on `form`, finished or not, each with every answer in order. */
 export async function personDetail(userId: string, form: Form): Promise<PersonDetail | null> {
   const [who] = await db
-    .select({ name: users.name, email: users.email, track: irisTakers.track })
+    .select({ name: users.name, email: users.email, track: sql<string | null>`coalesce(${irisTakers.track}, ${irisParticipants.track})` })
     .from(users)
     .leftJoin(irisTakers, eq(irisTakers.userId, users.id))
+    .leftJoin(irisParticipants, eq(irisParticipants.email, sql`lower(${users.email})`))
     .where(eq(users.id, userId));
   if (!who) return null;
 
@@ -183,5 +184,31 @@ export async function clearResults(userId: string): Promise<{ ok: true; deleted:
   const [who] = await db.select({ email: users.email }).from(users).where(eq(users.id, userId));
   if (!who) return { ok: false, error: "not_found" };
   const gone = await db.delete(irisAttempts).where(eq(irisAttempts.userId, userId)).returning({ id: irisAttempts.id });
+  return { ok: true, deleted: gone.length, email: who.email };
+}
+
+/**
+ * Deletes `userId`'s live sitting of one subject on `form`, finished or not,
+ * with its answers, so they can take that subject again. Their other subjects
+ * are left alone. `deleted` is 0 when there was nothing to reset.
+ */
+export async function resetSitting(
+  userId: string,
+  subject: SubjectKey,
+  form: Form,
+): Promise<{ ok: true; deleted: number; email: string | null } | { ok: false; error: "not_found" }> {
+  const [who] = await db.select({ email: users.email }).from(users).where(eq(users.id, userId));
+  if (!who) return { ok: false, error: "not_found" };
+  const gone = await db
+    .delete(irisAttempts)
+    .where(
+      and(
+        eq(irisAttempts.userId, userId),
+        eq(irisAttempts.subject, subject),
+        eq(irisAttempts.form, form),
+        eq(irisAttempts.mode, "live"),
+      ),
+    )
+    .returning({ id: irisAttempts.id });
   return { ok: true, deleted: gone.length, email: who.email };
 }

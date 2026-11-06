@@ -18,6 +18,7 @@ import { scheduledStep } from "@/lib/canary-wire/pull";
 import { runSlackSync } from "@/lib/cohorts/slack-sync";
 import { STATUS_FOR, syncHibobEmployees } from "@/lib/evals/hibob";
 import { runMeetingSync, SYNC_STATUS_FOR } from "@/lib/evals/meeting-sync";
+import { REMINDER_STATUS_FOR, runDiagnosticReminders } from "@/lib/iris/reminders";
 
 export type TimedJobContext = {
   /** The app's own URL, for links a run sends out. */
@@ -69,6 +70,23 @@ export const TIMED_JOB_RUNS: Record<string, TimedJobRun> = {
     describe: (body) => {
       if (typeof body.invited !== "number" || typeof body.removed !== "number") return null;
       const summary = `${body.invited} invited, ${body.removed} removed`;
+      return body.dryRun === true ? `Dry run: ${summary}` : summary;
+    },
+  },
+
+  /** Remind Now on Diagnostic Settings → Slack, which sends once a day from the schedule and is a dry run until live. */
+  "diagnostic-reminders": {
+    async run({ appUrl, deadline }) {
+      const result = await runDiagnosticReminders("schedule", null, deadline, { appUrl });
+      if (!result.ok) {
+        return NextResponse.json({ error: result.error, detail: result.detail, runId: result.runId }, { status: REMINDER_STATUS_FOR[result.error] });
+      }
+      if (result.status === "skipped") return NextResponse.json({ skipped: result.note ?? "Nothing was due", runId: result.runId });
+      return NextResponse.json(result);
+    },
+    describe: (body) => {
+      if (typeof body.messaged !== "number") return null;
+      const summary = `${body.messaged} reminded, ${body.notInSlack} not in Slack, ${body.failed} failed`;
       return body.dryRun === true ? `Dry run: ${summary}` : summary;
     },
   },

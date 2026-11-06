@@ -9,9 +9,9 @@
  */
 
 import "server-only";
-import { and, asc, eq, isNull } from "drizzle-orm";
+import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { irisAttempts, irisResponses, irisTakers, type IrisAttempt } from "@/db/schema";
+import { irisAttempts, irisParticipants, irisResponses, irisTakers, users, type IrisAttempt } from "@/db/schema";
 import {
   ENGINE,
   IDK,
@@ -112,8 +112,22 @@ export type MyIris = {
  * `withLevels` adds the placement of each finished subject, and is for Diagnostic
  * administrators only; a taker is never told their level.
  */
+/**
+ * The track `userId` is in: the one they chose, else the one an administrator
+ * chose on adding them as a Participant, else null.
+ */
+export async function trackOf(userId: string): Promise<Track | null> {
+  const [row] = await db
+    .select({ track: sql<string | null>`coalesce(${irisTakers.track}, ${irisParticipants.track})` })
+    .from(users)
+    .leftJoin(irisTakers, eq(irisTakers.userId, users.id))
+    .leftJoin(irisParticipants, eq(irisParticipants.email, sql`lower(${users.email})`))
+    .where(eq(users.id, userId));
+  return (row?.track as Track | null | undefined) ?? null;
+}
+
 export async function myIris(userId: string, form: Form = "A", withLevels = false): Promise<MyIris> {
-  const [taker] = await db.select({ track: irisTakers.track }).from(irisTakers).where(eq(irisTakers.userId, userId));
+  const track = await trackOf(userId);
   const sittings = await db
     .select({ subject: irisAttempts.subject, finishedAt: irisAttempts.finishedAt, placement: irisAttempts.placement })
     .from(irisAttempts)
@@ -136,7 +150,7 @@ export async function myIris(userId: string, form: Form = "A", withLevels = fals
     return { key, name: SUBJECTS[key].name, blurb: SUBJECTS[key].blurb, status, ...(placement ? { placement } : {}) };
   });
   return {
-    track: (taker?.track as Track | undefined) ?? null,
+    track,
     form,
     subjects,
     completed: subjects.filter((s) => s.status === "completed").length,
@@ -166,8 +180,7 @@ export async function startSitting(
   mode: "live" | "preview",
   random: () => number = Math.random,
 ): Promise<{ ok: true; sitting: SittingView; resumed: boolean } | { ok: false; error: StartError }> {
-  const [taker] = await db.select({ track: irisTakers.track }).from(irisTakers).where(eq(irisTakers.userId, userId));
-  if (!taker && mode === "live") return { ok: false, error: "no_track" };
+  if (mode === "live" && !(await trackOf(userId))) return { ok: false, error: "no_track" };
 
   const [open] = await db
     .select()

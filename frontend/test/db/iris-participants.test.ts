@@ -30,6 +30,7 @@ import {
   removeParticipant,
   setAutoEnroll,
 } from "@/lib/iris/participants";
+import { setTrack, trackOf } from "@/lib/iris/attempts";
 import { IRIS_PARTICIPANT_LIST } from "@/lib/list-specs";
 import { PERSONAS } from "../support/access";
 import { TEST_EMAIL_DOMAIN, TEST_PREFIX } from "../support/db";
@@ -101,6 +102,23 @@ describe("Participants added by hand", () => {
     assert.deepEqual(await removeParticipant(email), { ok: true });
     assert.equal(await isParticipantNow(email), false);
     assert.deepEqual(await removeParticipant(email), { ok: false, error: "not_found" });
+  });
+
+  test("a track chosen on adding waits for someone with no account, and is set at once for someone with one", async () => {
+    const email = await candidate("tracked", null, false);
+    assert.ok((await addParticipant(admin.id, email, "SE")).ok);
+    const listedTrack = async (who: string) =>
+      (await listParticipants({ ...IRIS_PARTICIPANT_LIST, q: who, page: 1 }, "A")).rows.find((r) => r.email === who)?.track;
+    assert.equal(await listedTrack(email), "SE");
+
+    const withAccount = await scope.createUser("tracked_account", PERSONAS.nobody);
+    assert.ok((await addParticipant(admin.id, withAccount.email, "SDR")).ok);
+    assert.equal(await trackOf(withAccount.id), "SDR");
+    // Their own choice afterwards is theirs to make.
+    await setTrack(withAccount.id, "AE");
+    assert.equal(await trackOf(withAccount.id), "AE");
+    await removeParticipant(email);
+    await removeParticipant(withAccount.email);
   });
 
   test("nobody known can be added", async () => {

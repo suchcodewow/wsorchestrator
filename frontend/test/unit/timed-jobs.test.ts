@@ -86,6 +86,7 @@ describe("dispatched jobs", () => {
       "hibob-sync": [/syncHibobEmployees\("schedule", null\)/, /runSlackSync\("schedule", null, deadline, \{ scope: "all", appUrl \}\)/],
       "google-meetings-sync": [/runMeetingSync\("schedule", null, deadline\)/],
       "canary-wire-pull": [/scheduledStep\(\)/],
+      "diagnostic-reminders": [/runDiagnosticReminders\("schedule", null, deadline, \{ appUrl \}\)/],
     };
     for (const [key, expected] of Object.entries(calls)) {
       const run = runOf(key);

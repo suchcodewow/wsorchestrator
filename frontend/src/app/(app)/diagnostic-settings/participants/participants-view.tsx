@@ -19,7 +19,7 @@ import { confirmDialog } from "@/components/ui/confirm";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { CohortSummary } from "@/lib/iris/cohort";
 import type { AutoEnroll, ParticipantCounts, ParticipantRow } from "@/lib/iris/participants";
-import { LEVEL_LABELS, SUBJECTS, OPEN_SUBJECT_KEYS, bandOf } from "@/lib/iris/subjects";
+import { LEVEL_LABELS, SUBJECTS, OPEN_SUBJECT_KEYS, TRACKS, TRACK_LABELS, bandOf, type Track } from "@/lib/iris/subjects";
 import type { IrisParticipantSort } from "@/lib/list-specs";
 import { riseChild, staggerParent } from "@/lib/motion";
 import type { ListQuery, Page } from "@/lib/paging";
@@ -67,6 +67,7 @@ export function ParticipantsView({
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  const [track, setTrack] = useState<Track | null>(null);
 
   /** Sends one change; refreshes the page and returns the body when it took, null when it did not. */
   async function send(key: string, url: string, init: RequestInit) {
@@ -198,7 +199,13 @@ export function ParticipantsView({
         </Button>
       </motion.div>
 
-      <Dialog open={adding} onOpenChange={setAdding}>
+      <Dialog
+        open={adding}
+        onOpenChange={(open) => {
+          setAdding(open);
+          if (open) setTrack(null);
+        }}
+      >
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Add Participant</DialogTitle>
@@ -211,6 +218,28 @@ export function ParticipantsView({
               {error}
             </p>
           )}
+          <fieldset className="space-y-2">
+            <legend className="text-sm font-medium">Track</legend>
+            <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Track">
+              {([null, ...TRACKS] as const).map((t) => (
+                <button
+                  key={t ?? "theirs"}
+                  type="button"
+                  role="radio"
+                  aria-checked={track === t}
+                  onClick={() => setTrack(t)}
+                  className={cn(
+                    "inline-flex h-8 items-center rounded-full border px-3 text-sm transition-colors",
+                    track === t
+                      ? "border-brand-border bg-brand-subtle font-medium text-foreground"
+                      : "bg-card text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+                  )}
+                >
+                  {t ? `${t} · ${TRACK_LABELS[t]}` : "Let them choose"}
+                </button>
+              ))}
+            </div>
+          </fieldset>
           <EmployeePicker
             id="diagnostic-participant"
             label="Someone at Harness"
@@ -220,7 +249,7 @@ export function ParticipantsView({
             onAdd={async (email, fullName) => {
               const body = await send("add", "/api/diagnostic/participants", {
                 method: "POST",
-                body: JSON.stringify({ email }),
+                body: JSON.stringify({ email, track }),
               });
               if (!body) return false;
               setAdding(false);
