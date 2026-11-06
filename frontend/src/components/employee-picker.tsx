@@ -4,12 +4,13 @@
  * A field that finds an employee by name and adds them. It asks the employee
  * list one page at a time rather than shipping everyone to the browser, so the
  * caller needs `canSearchEmployees`. With `allowAnyEmail`, a whole email typed
- * by hand is accepted too, for people who are not employees. It is safe
+ * by hand is accepted too, for people who are not employees, and with
+ * `includeTestAccounts` the test accounts are listed after them. It is safe
  * inside a form: neither Enter nor Add submits it.
  */
 
 import { useEffect, useState } from "react";
-import { Loader2, Plus } from "lucide-react";
+import { FlaskConical, Loader2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAnchoredToParent } from "@/components/use-anchored";
@@ -57,6 +58,37 @@ export function useEmployeeSearch(q: string, enabled: boolean) {
   return { matches, clear: () => setMatches([]) };
 }
 
+/** A test account as a search finds it. */
+export type TestAccountMatch = { id: string; name: string | null; email: string };
+
+/**
+ * Test accounts matching `q`, every one (up to the route's few) when it is
+ * empty, while `enabled`; none on production, or for a caller the route turns away.
+ */
+export function useTestAccountSearch(q: string, enabled = true) {
+  const [matches, setMatches] = useState<TestAccountMatch[]>([]);
+
+  useEffect(() => {
+    if (!enabled) return;
+    const ctrl = new AbortController();
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/users/test-accounts?${new URLSearchParams({ q })}`, { signal: ctrl.signal });
+        const body = res.ok ? ((await res.json()) as { testAccounts?: TestAccountMatch[] }) : null;
+        setMatches(body?.testAccounts ?? []);
+      } catch {
+        // Aborted by the next keystroke, or offline: the list just stays as it was.
+      }
+    }, SEARCH_DEBOUNCE_MS);
+    return () => {
+      clearTimeout(t);
+      ctrl.abort();
+    };
+  }, [q, enabled]);
+
+  return matches;
+}
+
 /**
  * The dropdown under a picker's field, or over it when there is no room
  * below. Render it inside the `relative` box around the field. Choosing keeps
@@ -64,17 +96,24 @@ export function useEmployeeSearch(q: string, enabled: boolean) {
  */
 export function EmployeeMatches({
   matches,
+  testAccounts = [],
   onChoose,
 }: {
   matches: EmployeeCandidate[];
+  /** Listed after the employees, each marked as a test account. */
+  testAccounts?: EmployeeCandidate[];
   onChoose: (employee: EmployeeCandidate) => void;
 }) {
-  const ref = useAnchoredToParent<HTMLUListElement>(matches.length > 0);
-  if (matches.length === 0) return null;
+  const shown = [
+    ...matches.slice(0, SHOWN_MATCHES).map((e) => ({ ...e, test: false })),
+    ...testAccounts.map((e) => ({ ...e, test: true })),
+  ];
+  const ref = useAnchoredToParent<HTMLUListElement>(shown.length > 0);
+  if (shown.length === 0) return null;
 
   return (
     <ul ref={ref} className="absolute top-0 left-0 z-20 overflow-y-auto rounded-md border bg-popover shadow-md">
-      {matches.slice(0, SHOWN_MATCHES).map((e) => (
+      {shown.map(({ test, ...e }) => (
         <li key={e.email}>
           <button
             type="button"
@@ -82,7 +121,15 @@ export function EmployeeMatches({
             onClick={() => onChoose(e)}
             className="flex w-full flex-col items-start gap-0.5 px-3 py-2 text-left text-sm transition-colors hover:bg-muted/50"
           >
-            <span>{e.fullName}</span>
+            <span className="flex items-center gap-1.5">
+              {e.fullName}
+              {test && (
+                <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                  <FlaskConical className="size-3" />
+                  Test account
+                </span>
+              )}
+            </span>
             <span className="text-xs text-muted-foreground">{e.email}</span>
           </button>
         </li>
@@ -97,6 +144,7 @@ export function EmployeePicker({
   placeholder,
   busy,
   allowAnyEmail = false,
+  includeTestAccounts = false,
   onAdd,
 }: {
   id: string;
@@ -104,6 +152,8 @@ export function EmployeePicker({
   placeholder: string;
   busy: boolean;
   allowAnyEmail?: boolean;
+  /** Lists test accounts too, after the employees; outside production only. */
+  includeTestAccounts?: boolean;
   /** `fullName` is set when they were picked from the list. */
   onAdd: (email: string, fullName?: string) => Promise<boolean>;
 }) {
@@ -114,6 +164,10 @@ export function EmployeePicker({
   const q = query.trim();
   const searching = q.length > 0 && !selected;
   const { matches, clear } = useEmployeeSearch(q, searching);
+  const testAccounts = useTestAccountSearch(q, includeTestAccounts && searching).map((t) => ({
+    email: t.email,
+    fullName: t.name || t.email,
+  }));
 
   const email = selected?.email ?? (allowAnyEmail && LOOKS_LIKE_EMAIL.test(q) ? q : "");
 
@@ -161,7 +215,9 @@ export function EmployeePicker({
             }}
             placeholder={placeholder}
           />
-          {open && searching && <EmployeeMatches matches={matches} onChoose={choose} />}
+          {open && searching && (
+            <EmployeeMatches matches={matches} testAccounts={includeTestAccounts ? testAccounts : []} onChoose={choose} />
+          )}
         </div>
         <Button type="button" variant="brand" disabled={!email || busy} onClick={submit}>
           {busy ? <Loader2 className="animate-spin" /> : <Plus />}

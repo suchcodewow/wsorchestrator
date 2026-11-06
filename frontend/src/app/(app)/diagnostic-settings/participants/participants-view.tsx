@@ -19,7 +19,7 @@ import { confirmDialog } from "@/components/ui/confirm";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { CohortSummary } from "@/lib/iris/cohort";
 import type { AutoEnroll, ParticipantCounts, ParticipantRow } from "@/lib/iris/participants";
-import { LEVEL_LABELS, SUBJECTS, OPEN_SUBJECT_KEYS, TRACKS, TRACK_LABELS, bandOf, type Track } from "@/lib/iris/subjects";
+import { LEVEL_LABELS, SUBJECTS, OPEN_SUBJECT_KEYS, TRACKS, bandOf, type Track } from "@/lib/iris/subjects";
 import type { IrisParticipantSort } from "@/lib/list-specs";
 import { riseChild, staggerParent } from "@/lib/motion";
 import type { ListQuery, Page } from "@/lib/paging";
@@ -235,7 +235,7 @@ export function ParticipantsView({
                       : "bg-card text-muted-foreground hover:bg-muted/50 hover:text-foreground",
                   )}
                 >
-                  {t ? `${t} · ${TRACK_LABELS[t]}` : "Let them choose"}
+                  {t ?? "Let them choose"}
                 </button>
               ))}
             </div>
@@ -243,8 +243,9 @@ export function ParticipantsView({
           <EmployeePicker
             id="diagnostic-participant"
             label="Someone at Harness"
-            placeholder="Search employees by name, or type an account's email"
+            placeholder="Search employees and test accounts by name or email"
             allowAnyEmail
+            includeTestAccounts
             busy={busy === "add"}
             onAdd={async (email, fullName) => {
               const body = await send("add", "/api/diagnostic/participants", {

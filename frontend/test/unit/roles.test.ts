@@ -117,6 +117,10 @@ const POLICY: Record<string, { actual: Check; expected: Check }> = {
   canManageTimedJobs: { actual: roles.canManageTimedJobs, expected: platformOnly },
   canViewAuditTrail: { actual: roles.canViewAuditTrail, expected: platformOnly },
   canImpersonate: { actual: roles.canImpersonate, expected: platformOnly },
+  canSearchTestAccounts: {
+    actual: roles.canSearchTestAccounts,
+    expected: (a) => platformOnly(a) || evals("administrator")(a),
+  },
 
   "canManageRoles(event)": {
     actual: (a) => roles.canManageRoles(a, "event"),

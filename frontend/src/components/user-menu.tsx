@@ -2,7 +2,7 @@
 
 /** The account menu, everywhere one is opened. */
 
-import { Fragment, useEffect, useState, useTransition } from "react";
+import { Fragment, useState, useTransition } from "react";
 import Link from "next/link";
 import {
   ChevronDown,
@@ -19,8 +19,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { Avatar } from "@/components/avatar";
-import { useEmployeeSearch } from "@/components/employee-picker";
-import { SEARCH_DEBOUNCE_MS } from "@/components/use-debounced-search";
+import { useEmployeeSearch, useTestAccountSearch } from "@/components/employee-picker";
 import { Input } from "@/components/ui/input";
 import {
   DropdownMenu,
@@ -101,32 +100,6 @@ export async function impersonate(email: string | null): Promise<string | null> 
   }
   window.location.assign(email ? "/" : window.location.href);
   return null;
-}
-
-type TestAccountMatch = { id: string; name: string | null; email: string };
-
-/** Test accounts matching `q`, every one (up to the route's few) when it is empty; none on production. */
-function useTestAccountSearch(q: string) {
-  const [matches, setMatches] = useState<TestAccountMatch[]>([]);
-
-  useEffect(() => {
-    const ctrl = new AbortController();
-    const t = setTimeout(async () => {
-      try {
-        const res = await fetch(`/api/users/test-accounts?${new URLSearchParams({ q })}`, { signal: ctrl.signal });
-        const body = res.ok ? ((await res.json()) as { testAccounts?: TestAccountMatch[] }) : null;
-        setMatches(body?.testAccounts ?? []);
-      } catch {
-        // Aborted by the next keystroke, or offline: the list just stays as it was.
-      }
-    }, SEARCH_DEBOUNCE_MS);
-    return () => {
-      clearTimeout(t);
-      ctrl.abort();
-    };
-  }, [q]);
-
-  return matches;
 }
 
 /** Finds an employee, or a test account, to view the app as. */

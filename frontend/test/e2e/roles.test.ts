@@ -36,6 +36,7 @@ import {
   canAddUsers,
   canDeleteUsers,
   canImpersonate,
+  canSearchTestAccounts,
   canManageBackups,
   canManageBootcampRecords,
   canManageEvalsSettings,
@@ -866,7 +867,7 @@ const ROUTES: RouteCase[] = [
   { method: "DELETE", path: `/api/users/${MISSING}`, allowed: canDeleteUsers, sessionOnly: true },
   { method: "POST", path: "/api/users/invites", allowed: canManageUsers, body: () => ({}), sessionOnly: true },
   { method: "POST", path: "/api/invites/accept", allowed: true, body: () => ({}), sessionOnly: true },
-  { method: "GET", path: "/api/users/test-accounts", allowed: canImpersonate },
+  { method: "GET", path: "/api/users/test-accounts", allowed: canSearchTestAccounts },
   { method: "POST", path: "/api/users/test-accounts", allowed: canImpersonate, body: () => ({}), sessionOnly: true },
   { method: "POST", path: `/api/users/test-accounts/${MISSING}/reset`, allowed: canImpersonate, sessionOnly: true },
 

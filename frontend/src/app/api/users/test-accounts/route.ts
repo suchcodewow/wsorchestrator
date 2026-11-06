@@ -1,6 +1,6 @@
 /**
- * Test accounts (`src/lib/test-accounts.ts`): finding one to view the app as,
- * and making one. Making one creates an account, so it is session-only, as
+ * Test accounts (`src/lib/test-accounts.ts`): finding one to view the app as
+ * or to add as a Diagnostic Participant, and making one. Making one creates an account, so it is session-only, as
  * inviting is.
  */
 
@@ -10,7 +10,7 @@ import { auth } from "@/auth";
 import { TEST_ACCOUNT_LIMITS } from "@/db/schema";
 import { requireCaller } from "@/lib/api-auth";
 import { audited } from "@/lib/audit";
-import { canImpersonate } from "@/lib/roles";
+import { canImpersonate, canSearchTestAccounts } from "@/lib/roles";
 import {
   createTestAccount,
   searchTestAccounts,
@@ -33,7 +33,7 @@ const postSchema = z.object({
 });
 
 export async function GET(req: Request) {
-  const { error } = await requireCaller(req, canImpersonate);
+  const { error } = await requireCaller(req, canSearchTestAccounts);
   if (error) return error;
 
   const params = new URL(req.url).searchParams;

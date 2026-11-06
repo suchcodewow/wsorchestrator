@@ -257,6 +257,9 @@ export const canViewAuditTrail = (access: Access) => access.platform;
 /** Viewing the app as any employee sees into every area, so only a platform administrator may. */
 export const canImpersonate = (access: Access) => access.platform;
 
+/** Finds test accounts: to view the app as, or to add as a Diagnostic Participant. */
+export const canSearchTestAccounts = (access: Access) => canImpersonate(access) || canManageIris(access);
+
 /** Whether `access` may set other people's role in `area`, or the platform flag. */
 export function canManageRoles(access: Access, area: Area | "platform"): boolean {
   switch (area) {

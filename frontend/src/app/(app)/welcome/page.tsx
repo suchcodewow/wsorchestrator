@@ -13,7 +13,7 @@ import { CoachCanaryArt } from "@/components/coach-canary-art";
 import { Button } from "@/components/ui/button";
 import { mapSummary } from "@/lib/mimir/map/summary";
 import { canSeeLiveTraining, liveTraining } from "@/lib/live-training";
-import { canUseMimir, hasNoAccess } from "@/lib/roles";
+import { canUseMimir } from "@/lib/roles";
 import { upcomingBootcamps } from "@/lib/scheduler/bootcamps";
 import { LiveTrainingSteps } from "./live-training";
 import { UpcomingSessions } from "./upcoming-sessions";
@@ -95,10 +95,6 @@ export default async function WelcomePage() {
             </div>
           </div>
         </section>
-      )}
-
-      {hasNoAccess(access) && !access.judging && !access.manager && (
-        <p className="max-w-prose text-sm text-muted-foreground">Other areas open up when an administrator gives you a role.</p>
       )}
     </div>
   );
