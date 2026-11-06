@@ -249,9 +249,7 @@ function RulesScreen({ round, onStart }: { round: Round; onStart: () => void }) 
           <h3 className="text-sm font-medium">
             Check the packages: which of these {round.examples.length} builds are vulnerable?
           </h3>
-          {revealed ? (
-            <p className="text-sm font-semibold">The total here is {vulnerable}!</p>
-          ) : (
+          {!revealed && (
             <Button variant="brand" onClick={() => setRevealed(true)}>
               <Eye />
               See the answer
@@ -274,6 +272,18 @@ function RulesScreen({ round, onStart }: { round: Round; onStart: () => void }) 
           })}
         </div>
       </section>
+
+      {revealed && (
+        <div className="space-y-1">
+          <p className="text-2xl font-semibold">The total here is {vulnerable}!</p>
+          {round.number === 1 && (
+            <p className="text-sm text-muted-foreground">
+              Remember, it counts as one blocked build as soon as the first vulnerability is found. The middle option has 2
+              vulnerabilities but still counts just once.
+            </p>
+          )}
+        </div>
+      )}
 
       {revealed && (
         <Button variant="brand" onClick={onStart} className="h-auto py-2 text-left whitespace-normal">
