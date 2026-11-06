@@ -321,15 +321,19 @@ const PAGES: Record<string, PageCase> = {
     expect: (a) => (canManageIris(a) ? { to: "/diagnostic-settings/participants" } : 404),
   },
   "/diagnostic-settings/participants": { path: () => "/diagnostic-settings/participants", expect: gated(canManageIris) },
-  "/diagnostic-settings/participants?view=charts": {
-    path: () => "/diagnostic-settings/participants?view=charts&q=e2e",
+  "/diagnostic-settings/records": { path: () => "/diagnostic-settings/records", expect: gated(canManageIris) },
+  "/diagnostic-settings/records?view=charts": {
+    path: () => "/diagnostic-settings/records?view=charts&q=e2e",
     expect: gated(canManageIris),
   },
-  "/diagnostic-settings/participants/<a person>": {
-    path: () => `/diagnostic-settings/participants/${people.participant.id}`,
+  "/diagnostic-settings/records?person=<a person>": {
+    path: () => `/diagnostic-settings/records?person=${people.participant.id}`,
     expect: gated(canManageIris),
   },
-  "/diagnostic-settings/participants/<unknown>": { path: () => `/diagnostic-settings/participants/${MISSING}`, expect: () => 404 },
+  "/diagnostic-settings/records?person=<unknown>": {
+    path: () => `/diagnostic-settings/records?person=${MISSING}`,
+    expect: gated(canManageIris),
+  },
   "/diagnostic-settings/questions": { path: () => "/diagnostic-settings/questions", expect: gated(canManageIris) },
   "/diagnostic-settings/questions?subject": {
     path: () => "/diagnostic-settings/questions?subject=champion&level=3&status=draft",
@@ -602,6 +606,7 @@ const ROUTES: RouteCase[] = [
   { method: "GET", path: "/api/diagnostic/participants", allowed: canManageIris },
   { method: "POST", path: "/api/diagnostic/participants", allowed: canManageIris, body: () => ({}) },
   { method: "DELETE", path: "/api/diagnostic/participants", allowed: canManageIris, body: () => ({}) },
+  { method: "GET", path: "/api/diagnostic/records", allowed: canManageIris },
   { method: "GET", path: "/api/diagnostic/auto-enroll", allowed: canManageIris },
   { method: "PUT", path: "/api/diagnostic/auto-enroll", allowed: canManageIris, body: () => ({}) },
   { method: "GET", path: `/api/diagnostic/results/${MISSING}`, allowed: canManageIris },

@@ -2,7 +2,7 @@
 
 import { IRIS_NOTE_MAX } from "@/db/schema";
 import { SUBJECT_KEYS } from "@/lib/iris/subjects";
-import { IRIS_PARTICIPANT_LIST, IRIS_REMINDER_MESSAGE_LIST, IRIS_REMINDER_RUN_LIST } from "@/lib/list-specs";
+import { IRIS_PARTICIPANT_LIST, IRIS_RECORD_LIST, IRIS_REMINDER_MESSAGE_LIST, IRIS_REMINDER_RUN_LIST } from "@/lib/list-specs";
 import { PAGE_FIELDS, listQuery } from "./paging";
 import type { EndpointGroup, Field } from "./types";
 
@@ -149,6 +149,18 @@ export const IRIS_GROUPS: EndpointGroup[] = [
           { status: 400, error: "invalid", when: "email is missing or not an address" },
           { status: 404, error: "not_found", when: "nobody by that email was added by hand" },
         ],
+      },
+      {
+        method: "GET",
+        path: "/api/diagnostic/records",
+        summary: "Lists everyone with a sitting on one form, Participant or not, with their placements, a page at a time.",
+        access: "assessmentsAdmin",
+        token: true,
+        notes:
+          "Everyone with a live sitting on the form, finished or not, including those no longer Participants: removing a Participant keeps their results. enrolled is whether they are a Participant now, and manual whether by hand. placements, completed and composite are as in GET /api/diagnostic/participants. Previews are never counted. total is whatever the search.",
+        query: [FORM_QUERY, ...listQuery(IRIS_RECORD_LIST.sorts, "the name or email")],
+        returns: `{ people: { email, name, userId: string, enrolled: boolean, manual: boolean, addedAt: string | null, addedBy: string | null, track, placements: Record<subject, 1 | 2 | 3>, completed: number, composite: number | null, finishedAt: string | null }[], total: number, ${PAGE_FIELDS} }`,
+        errors: [FORM_ERROR],
       },
       {
         method: "GET",

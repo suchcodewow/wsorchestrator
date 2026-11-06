@@ -32,6 +32,9 @@ export type UserSort = (typeof USER_LIST.sorts)[number];
 export const IRIS_PARTICIPANT_LIST = spec(["person", "added", "track", "completed", "finishedAt"]);
 export type IrisParticipantSort = (typeof IRIS_PARTICIPANT_LIST.sorts)[number];
 
+export const IRIS_RECORD_LIST = spec(["person", "added", "track", "completed", "finishedAt"]);
+export type IrisRecordSort = (typeof IRIS_RECORD_LIST.sorts)[number];
+
 export const IRIS_REMINDER_RUN_LIST = spec(["startedAt", "status"], "desc");
 export type IrisReminderRunSort = (typeof IRIS_REMINDER_RUN_LIST.sorts)[number];
 

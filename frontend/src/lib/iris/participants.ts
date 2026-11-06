@@ -19,7 +19,7 @@ import { rsvpedForBootcamp } from "@/lib/evals/current-cohort";
 import { getCandidateCutoffs } from "@/lib/evals/settings";
 import type { Form, Level } from "@/lib/iris/engine";
 import { compositeOf, isSubjectKey, type SubjectKey, type Track } from "@/lib/iris/subjects";
-import type { IrisParticipantSort } from "@/lib/list-specs";
+import type { IrisParticipantSort, IrisRecordSort } from "@/lib/list-specs";
 import { pageWindow, toPage, type ListQuery, type Page } from "@/lib/paging";
 import { orderFor, searchAny } from "@/lib/paging-sql";
 
@@ -155,26 +155,82 @@ export async function listParticipants(query: ListQuery<IrisParticipantSort>, fo
      order by ${sql.join(order, sql`, `)}
      limit ${limit} offset ${offset}`);
 
+  return toPage(rows.map(toParticipantRow), query.page);
+}
+
+function toParticipantRow(r: RawRow): ParticipantRow {
+  const placements = placementsOf(r.placements);
+  const track = (r.track as Track | null) ?? null;
+  return {
+    email: r.email,
+    name: r.name,
+    userId: r.userId,
+    manual: r.manual,
+    addedAt: r.addedAt ? new Date(r.addedAt) : null,
+    addedBy: r.addedBy,
+    track,
+    placements,
+    completed: Number(r.completed),
+    composite: track ? compositeOf(placements, track) : null,
+    finishedAt: r.finishedAt ? new Date(r.finishedAt) : null,
+  };
+}
+
+/** A Record: someone with a sitting, and whether they are a Participant now. */
+export type RecordRow = ParticipantRow & { userId: string; enrolled: boolean };
+
+const RECORD_SORT_COLUMNS: Record<IrisRecordSort, SQL> = {
+  person: sql`lower(coalesce(nullif(u.name, ''), emp.full_name, u.email))`,
+  track: sql`coalesce(t.track, p.track)`,
+  completed: sql`coalesce(r.completed, 0)`,
+  finishedAt: sql`r.finished_at`,
+  added: sql`(case when p.manual then 0 when p.email is not null then 1 else 2 end)`,
+};
+
+/** Everyone with a live sitting on `form`, as a subquery of user ids. */
+const takersOn = (form: Form) =>
+  sql`select distinct ${irisAttempts.userId} from ${irisAttempts} where ${irisAttempts.mode} = 'live' and ${irisAttempts.form} = ${form}`;
+
+/**
+ * One page of the Records: everyone with a live sitting on `form`, finished
+ * or not, whether they are still a Participant or not, searched by name or email.
+ */
+export async function listRecords(query: ListQuery<IrisRecordSort>, form: Form): Promise<Page<RecordRow>> {
+  const { limit, offset } = pageWindow(query.page);
+  const where = sql`${searchAny(query.q, [sql`u.name`, sql`emp.full_name`, sql`u.email`]) ?? sql`true`}`;
+  const order = orderFor(RECORD_SORT_COLUMNS[query.sort], query.dir, sql`u.id`);
+  const { rows } = await db.execute<RawRow & { userId: string; enrolled: boolean }>(sql`
+    select lower(u.email) as email, coalesce(nullif(u.name, ''), emp.full_name) as name, u.id as "userId",
+           coalesce(p.manual, false) as manual, p.email is not null as enrolled, p.added_at as "addedAt",
+           (select coalesce(nullif(a.name, ''), a.email) from ${users} a where a.id = p.added_by) as "addedBy",
+           coalesce(t.track, p.track) as track, coalesce(r.completed, 0)::int as completed, r.finished_at as "finishedAt", r.placements
+      from ${users} u
+      left join (${await participantsSql()}) p on p.email = lower(u.email)
+      left join lateral (
+        select e.full_name from ${employees} e where e.email = lower(u.email) order by e.active desc limit 1
+      ) emp on true
+      left join ${irisTakers} t on t.user_id = u.id
+      left join lateral (
+        select count(*) as completed, max(${irisAttempts.finishedAt}) as finished_at,
+               json_object_agg(${irisAttempts.subject}, ${irisAttempts.placement}) as placements
+          from ${irisAttempts}
+         where ${irisAttempts.userId} = u.id and ${irisAttempts.mode} = 'live'
+           and ${irisAttempts.form} = ${form} and ${irisAttempts.finishedAt} is not null
+      ) r on true
+     where u.id in (${takersOn(form)}) and ${where}
+     order by ${sql.join(order, sql`, `)}
+     limit ${limit} offset ${offset}`);
+
   return toPage(
-    rows.map((r) => {
-      const placements = placementsOf(r.placements);
-      const track = (r.track as Track | null) ?? null;
-      return {
-        email: r.email,
-        name: r.name,
-        userId: r.userId,
-        manual: r.manual,
-        addedAt: r.addedAt ? new Date(r.addedAt) : null,
-        addedBy: r.addedBy,
-        track,
-        placements,
-        completed: Number(r.completed),
-        composite: track ? compositeOf(placements, track) : null,
-        finishedAt: r.finishedAt ? new Date(r.finishedAt) : null,
-      };
-    }),
+    rows.map((r) => ({ ...toParticipantRow(r), userId: r.userId, enrolled: r.enrolled })),
     query.page,
   );
+}
+
+/** How many people have a Record on `form`, whatever the search. */
+export async function recordCount(form: Form): Promise<number> {
+  const { rows } = await db.execute<{ total: number }>(sql`select count(*)::int as total from (${takersOn(form)}) t`);
+  return rows[0]?.total ?? 0;
 }
 
 export type ParticipantCounts = { total: number; manual: number; auto: number };

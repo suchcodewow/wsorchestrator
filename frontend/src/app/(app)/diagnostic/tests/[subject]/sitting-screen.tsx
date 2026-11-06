@@ -193,7 +193,7 @@ export function SittingScreen({
             </Button>
             {selfId && mode === "live" && (
               <Button asChild variant="outline">
-                <Link href={`/diagnostic-settings/participants/${encodeURIComponent(selfId)}`}>See the full path</Link>
+                <Link href={`/diagnostic-settings/records?person=${encodeURIComponent(selfId)}`}>See the full path</Link>
               </Button>
             )}
           </div>

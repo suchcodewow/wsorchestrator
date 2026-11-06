@@ -21,17 +21,18 @@ import assert from "node:assert/strict";
 import { eq, like } from "drizzle-orm";
 
 import { db } from "@/db";
-import { IRIS_SETTINGS_KEYS, employees, intakeResponses, irisSettings, type EmployeeTrack } from "@/db/schema";
+import { IRIS_SETTINGS_KEYS, employees, intakeResponses, irisAttempts, irisSettings, type EmployeeTrack } from "@/db/schema";
 import {
   addParticipant,
   getAutoEnroll,
   isParticipantNow,
   listParticipants,
+  listRecords,
   removeParticipant,
   setAutoEnroll,
 } from "@/lib/iris/participants";
 import { setTrack, trackOf } from "@/lib/iris/attempts";
-import { IRIS_PARTICIPANT_LIST } from "@/lib/list-specs";
+import { IRIS_PARTICIPANT_LIST, IRIS_RECORD_LIST } from "@/lib/list-specs";
 import { PERSONAS } from "../support/access";
 import { TEST_EMAIL_DOMAIN, TEST_PREFIX } from "../support/db";
 import { testScope, type TestUser } from "../support/seed";
@@ -119,6 +120,39 @@ describe("Participants added by hand", () => {
     assert.equal(await trackOf(withAccount.id), "AE");
     await removeParticipant(email);
     await removeParticipant(withAccount.email);
+  });
+
+  test("a Record outlives removal, and says whether they are still a Participant", async () => {
+    const taker = await scope.createUser("record", PERSONAS.nobody);
+    const record = async () =>
+      (await listRecords({ ...IRIS_RECORD_LIST, q: taker.email, page: 1 }, "A")).rows.find((r) => r.userId === taker.id);
+    assert.ok((await addParticipant(admin.id, taker.email, "AE")).ok);
+    assert.equal(await record(), undefined, "nobody has a Record before their first sitting");
+
+    await db.insert(irisAttempts).values({
+      userId: taker.id,
+      subject: "sdlc",
+      form: "A",
+      mode: "live",
+      level: 2,
+      finishedAt: new Date(),
+      placement: 2,
+    });
+    const before = await record();
+    assert.equal(before?.enrolled, true);
+    assert.equal(before?.manual, true);
+    assert.equal(before?.completed, 1);
+    assert.equal(before?.placements.sdlc, 2);
+
+    assert.deepEqual(await removeParticipant(taker.email), { ok: true });
+    const afterRemoval = await record();
+    assert.equal(afterRemoval?.enrolled, false);
+    assert.equal(afterRemoval?.manual, false);
+    assert.equal(afterRemoval?.placements.sdlc, 2);
+    assert.equal(
+      (await listParticipants({ ...IRIS_PARTICIPANT_LIST, q: taker.email, page: 1 }, "A")).rows.length,
+      0,
+    );
   });
 
   test("nobody known can be added", async () => {

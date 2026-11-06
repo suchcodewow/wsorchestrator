@@ -101,7 +101,7 @@ function SubjectAction({
   if (status === "completed") {
     if (!placement || !selfId) return <span className="text-muted-foreground">Done</span>;
     return (
-      <Link href={`/diagnostic-settings/participants/${encodeURIComponent(selfId)}`} className="flex items-center gap-2 hover:underline">
+      <Link href={`/diagnostic-settings/records?person=${encodeURIComponent(selfId)}`} className="flex items-center gap-2 hover:underline">
         <LevelBadge level={placement} />
         <span className="text-xs text-muted-foreground">View path</span>
       </Link>

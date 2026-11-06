@@ -214,7 +214,7 @@ export const NAV_SECTIONS: NavSection[] = [
         hasTabs: true,
         label: "Diagnostic Settings",
         Icon: ClipboardCheck,
-        description: "The Diagnostic's Participants, its questions and its Slack reminders.",
+        description: "The Diagnostic's Participants, their Records, its questions and its Slack reminders.",
         visible: canManageIris,
       },
       {
