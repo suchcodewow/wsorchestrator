@@ -57,7 +57,7 @@ export default async function ChatPage() {
           progress: chat.progress,
         }}
         concepts={conceptsInOrder(map.content).map((c) => ({ id: c.id, name: c.name, hasVideo: Boolean(c.video) }))}
-        profile={{ role: profile.role, coachStyle: profile.coachStyle }}
+        profile={profile}
         canSeePoints={canManageEvalsSettings(session.user.access)}
       />
     </div>

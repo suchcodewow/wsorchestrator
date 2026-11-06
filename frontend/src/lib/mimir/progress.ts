@@ -11,6 +11,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
 import {
+  MIMIR_COACH_PERSONALITIES,
   MIMIR_COACH_STYLES,
   MIMIR_REFLECTION_MAX,
   MIMIR_REP_ROLES,
@@ -19,6 +20,7 @@ import {
   mimirMessages,
   mimirProfiles,
   mimirProgress,
+  type MimirCoachPersonality,
   type MimirCoachStyle,
   type MimirKind,
   type MimirRepRole,
@@ -265,23 +267,25 @@ export async function practicedCapabilities(
 /* The rep's profile                                                   */
 /* ------------------------------------------------------------------ */
 
-export type MimirProfile = { role: MimirRepRole | null; coachStyle: MimirCoachStyle };
+export type MimirProfile = { role: MimirRepRole | null; coachStyle: MimirCoachStyle; coachPersonality: MimirCoachPersonality };
 
 export async function getProfile(userId: string): Promise<MimirProfile> {
   const [row] = await db
-    .select({ role: mimirProfiles.role, coachStyle: mimirProfiles.coachStyle })
+    .select({ role: mimirProfiles.role, coachStyle: mimirProfiles.coachStyle, coachPersonality: mimirProfiles.coachPersonality })
     .from(mimirProfiles)
     .where(eq(mimirProfiles.userId, userId));
-  return row ?? { role: null, coachStyle: "socratic" };
+  return row ?? { role: null, coachStyle: "socratic", coachPersonality: "canary" };
 }
 
+/** A personality left out is left as it was, so a caller that only knows the role and style keeps working. */
 export const profileSchema = z.object({
   role: z.enum(MIMIR_REP_ROLES).nullable(),
   coachStyle: z.enum(MIMIR_COACH_STYLES),
+  coachPersonality: z.enum(MIMIR_COACH_PERSONALITIES).optional(),
 });
 
-/** Saves it. Conversations already under way keep the prompt they started with. */
-export async function setProfile(userId: string, profile: MimirProfile): Promise<void> {
+/** Saves it. The map coach reads it on every turn; the item coach's conversations keep the prompt they started with. */
+export async function setProfile(userId: string, profile: z.infer<typeof profileSchema>): Promise<void> {
   await db
     .insert(mimirProfiles)
     .values({ userId, ...profile })

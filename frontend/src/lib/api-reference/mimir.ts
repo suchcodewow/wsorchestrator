@@ -254,23 +254,25 @@ export const MIMIR_GROUPS: EndpointGroup[] = [
         summary: "Returns what you have told Coach Canary's coach about yourself.",
         access: "signedIn",
         token: true,
-        returns: '{ role: "SDR" | "AE" | "SE" | null, coachStyle: "socratic" | "direct" }',
+        returns: '{ role: "SDR" | "AE" | "SE" | null, coachStyle: "socratic" | "direct", coachPersonality: "canary" | "lasso" | "taylor" }',
       },
       {
         method: "PUT",
         path: "/api/mimir/me",
-        summary: "Sets your role and how you like to be coached.",
+        summary: "Sets your role, how you like to be coached, and whose voice the coach speaks in.",
         access: "signedIn",
         token: true,
-        notes: "Kept apart from your Diagnostic track. Conversations already under way keep the prompt they started with.",
+        notes:
+          "Kept apart from your Diagnostic track. Coach Canary's chat uses it from its next reply; a conversation in the older item coach keeps the prompt it started with. Leaving coachPersonality out keeps it as it was. The personality changes only the coach's voice, not how it marks you.",
         body: {
           kind: "json",
           fields: [
             { name: "role", type: '"SDR" | "AE" | "SE" | null', required: true },
             { name: "coachStyle", type: '"socratic" | "direct"', required: true },
+            { name: "coachPersonality", type: '"canary" | "lasso" | "taylor"', required: false },
           ],
         },
-        returns: "{ ok: true, role, coachStyle }",
+        returns: "{ ok: true, role, coachStyle, coachPersonality? }",
         errors: [{ status: 400, error: "invalid", when: "the body does not parse" }],
       },
       {

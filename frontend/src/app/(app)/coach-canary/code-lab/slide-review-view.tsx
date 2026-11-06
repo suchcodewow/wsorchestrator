@@ -499,7 +499,7 @@ function ArrowShape() {
   return (
     <Piece target="arrow" x={L.divider - w / 2} y={330 - h / 2} label="Arrow between the columns" style={{ width: w, height: h }}>
       <svg viewBox="0 0 56 66" width={w} height={h} className="block" style={{ transform: look.pointLeft ? "scaleX(-1)" : undefined }}>
-        <path d="M1 1 L55 33 L1 65 Z" fill="#fff" stroke="#cfcfcf" strokeWidth={1.4} strokeLinejoin="round" />
+        <path d="M1 1 L55 33 L1 65 Z" fill="#fafafa" stroke="#cfcfcf" strokeWidth={1.4} strokeLinejoin="round" />
       </svg>
     </Piece>
   );
@@ -580,7 +580,7 @@ function CapabilitiesBox() {
   return (
     <Piece target="capabilitiesBox" x={L.box.x} y={L.box.y} label="Required capabilities box" style={{ width: w, height: h }}>
       <span
-        className="absolute inset-0 bg-white"
+        className="absolute inset-0 bg-neutral-50"
         style={{ border: look.solid ? "2px solid #8a8a86" : "1.5px dashed #dcdcd9" }}
       />
       {corner({ left: -7, top: -7 }, "border-t border-l")}

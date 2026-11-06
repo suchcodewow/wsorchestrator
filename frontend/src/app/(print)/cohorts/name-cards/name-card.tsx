@@ -39,7 +39,7 @@ export function NameCard({ name, stage }: { name: string; stage: CandidateStage 
   const text = { fontFamily: "Arial, Helvetica, sans-serif", textAnchor: "middle" } as const;
 
   return (
-    <section className="h-264 w-204 shrink-0 overflow-hidden bg-white shadow-md break-after-page last:break-after-auto print:shadow-none">
+    <section className="h-264 w-204 shrink-0 overflow-hidden bg-neutral-50 shadow-md print:bg-white break-after-page last:break-after-auto print:shadow-none">
       <svg viewBox="0 0 850 1100" width="100%" height="100%" role="img" aria-label={`${name}, ${STAGE_MARKS[stage]}`}>
         {/* Measured at full size, out of sight, so a shrunk name is not measured shrunk. */}
         <text ref={measure} x={0} y={-1000} fontSize={FONT_SIZE} style={{ ...text, textAnchor: "start" }} aria-hidden>

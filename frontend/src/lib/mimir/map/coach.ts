@@ -5,8 +5,10 @@
  *
  * It works the way `lib/mimir/chat.ts` does, and borrows its call to Claude,
  * its replay rules and its limits. A conversation is fixed when it starts (the
- * course is its system prompt) and only ever appended to. What changes is the
- * rep: so the coach is handed a progress snapshot at the start of any turn
+ * course is its system prompt) and only ever appended to, except for the rep's
+ * name, role, coaching style and the coach's personality, which are put into
+ * the prompt afresh on every turn so a change to them applies at once. What
+ * else changes is the rep's progress: so the coach is handed a progress snapshot at the start of any turn
  * after their progress has moved, and a *greeting* turn (a hidden "I just
  * opened Mimir") when they open the tab after a while or after finishing a
  * video, so it can say where they are and what comes next.
@@ -41,6 +43,7 @@ import {
   openContent,
   buildCoachSystem,
   focusNote,
+  systemFor,
   knowsChecklists,
   nextConcept,
   progressSnapshot,
@@ -151,23 +154,14 @@ export async function getCoachChat(userId: string, before?: number): Promise<Coa
   };
 }
 
-/** Starts the conversation if there is none, or if theirs predates checklists. The course is fixed into its system prompt here. */
+/** Starts the conversation if there is none, or if theirs predates checklists. The course is fixed into its system prompt here; the rep's context is left to each turn. */
 async function ensureConversation(userId: string, content: MapContent) {
   const existing = await conversationOf(userId);
   if (existing && knowsChecklists(existing.systemPrompt)) return existing;
   if (existing) await resetCoachChat(userId);
-  const [[user], profile, settings] = await Promise.all([
-    db.select({ name: users.name }).from(users).where(eq(users.id, userId)),
-    getProfile(userId),
-    getCoachingSettings(),
-  ]);
   await db
     .insert(mimirCoachConversations)
-    .values({
-      userId,
-      model: MIMIR_MODEL,
-      systemPrompt: buildCoachSystem(content, { name: user?.name ?? null, role: profile.role, coachStyle: profile.coachStyle }, settings),
-    })
+    .values({ userId, model: MIMIR_MODEL, systemPrompt: buildCoachSystem(content, await getCoachingSettings()) })
     .onConflictDoNothing();
   return conversationOf(userId);
 }
@@ -201,7 +195,12 @@ export async function beginCoachTurn(
   if (needsKey && !coachConfigured()) return { ok: false, error: "not_configured" };
   const conversation = await ensureConversation(userId, map.content);
   if (!conversation) return { ok: false, error: "upstream" };
-  const { snapshot, states, concepts } = await standing(userId, map.content);
+  const [{ snapshot, states, concepts }, [user], profile] = await Promise.all([
+    standing(userId, map.content),
+    db.select({ name: users.name }).from(users).where(eq(users.id, userId)),
+    getProfile(userId),
+  ]);
+  const systemPrompt = systemFor(conversation.systemPrompt, { name: user?.name ?? null, ...profile });
   const message = "message" in input ? input.message : null;
   const picked = "message" in input && input.focus ? concepts.find((c) => c.id === input.focus) : undefined;
   const focus = picked ? focusNote(picked, states[picked.id]) : null;
@@ -256,7 +255,7 @@ export async function beginCoachTurn(
   if (message !== null) await countMessage(userId);
   return {
     ok: true,
-    turn: { userId, systemPrompt: conversation.systemPrompt, message, ...claimed, conceptIds: conceptsInOrder(map.content).map((c) => c.id) },
+    turn: { userId, systemPrompt, message, ...claimed, conceptIds: conceptsInOrder(map.content).map((c) => c.id) },
   };
 }
 
