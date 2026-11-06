@@ -2942,10 +2942,7 @@ export const MIMIR_ITEM_LIMITS = {
 /** A titled block of Markdown on a card, shown folded. */
 export type MimirSection = { title: string; content: string };
 
-/**
- * The fields only some kinds use. Every one is optional; `lib/mimir/kinds.ts`
- * says which each kind offers for editing.
- */
+/** The fields only some kinds used in the removed library. Every one is optional. */
 export type MimirAttrs = {
   badge?: string;
   role?: string;

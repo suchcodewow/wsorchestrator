@@ -225,14 +225,6 @@ export type RepoSort = (typeof REPO_LIST.sorts)[number];
 export const ORG_SECRET_LIST = spec(["identifier", "kind", "updatedAt", "updatedBy"]);
 export type OrgSecretSort = (typeof ORG_SECRET_LIST.sorts)[number];
 
-/** Mimir's content; `position` is the order the library shows it in. */
-export const MIMIR_ITEM_LIST = spec(["position", "title", "kind", "updatedAt"]);
-export type MimirItemSort = (typeof MIMIR_ITEM_LIST.sorts)[number];
-
-/** One person's Mimir progress, most recently opened first. */
-export const MIMIR_PROGRESS_LIST = spec(["lastVisit", "title", "kind", "tier"], "desc");
-export type MimirProgressSort = (typeof MIMIR_PROGRESS_LIST.sorts)[number];
-
 /** Survey Results: each daily survey with a response, newest bootcamp first. */
 export const SURVEY_RESULT_LIST = spec(["date", "average", "responses"], "desc");
 export type SurveyResultSort = (typeof SURVEY_RESULT_LIST.sorts)[number];

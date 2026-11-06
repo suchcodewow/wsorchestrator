@@ -301,7 +301,7 @@ it flips, shifts, caps the height and follows scrolling. A suggestion list
 under a field uses `useAnchoredToParent`
 (`frontend/src/components/use-anchored.ts`), which keeps the list in the DOM so
 a dialog still counts it as inside. `frontend/src/components/employee-picker.tsx`
-is the shape to copy for a list, and `frontend/src/app/(app)/mimir/glossary-links.tsx`
+is the shape to copy for a list, and `frontend/src/app/(app)/coach-canary/map/map-view.tsx`
 for a hover popup.
 
 **A modal is a `DialogContent`, styled as it comes.** It owns how a modal

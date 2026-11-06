@@ -71,7 +71,6 @@ import {
 import { visibleCohortSettingsTabs } from "@/app/(app)/cohort-settings/tabs";
 import { EVALS_SETTINGS_TABS } from "@/app/(app)/evals-settings/tabs";
 import { REPORTING_SETTINGS_TABS } from "@/app/(app)/reporting-settings/tabs";
-import { MIMIR_TABS as MIMIR_ARCHIVE_TABS } from "@/app/(app)/coach-canary-archive/tabs";
 import { MIMIR_TABS } from "@/app/(app)/coach-canary/tabs";
 import { MIMIR_SETTINGS_TABS } from "@/app/(app)/coach-canary-settings/tabs";
 import { SCHEDULER_SETTINGS_TABS } from "@/app/(app)/scheduler-settings/tabs";
@@ -102,7 +101,6 @@ let aliceRun: string;
 let alumnusId: string;
 let assessmentId: string;
 let bootcampId: string;
-let mimirItemId: string;
 
 before(async () => {
   await scope.setUp();
@@ -112,7 +110,6 @@ before(async () => {
   aliceRun = await createRun(alice.id, "Alice's workshop");
   alumnusId = await scope.createAlumnus(alice.id, "alumnus");
   assessmentId = await scope.createAssessment(alice.id, "e2e assessment");
-  mimirItemId = await scope.createMimirItem("mimir");
   // The scoring pages need an active bootcamp.
   bootcampId = await scope.activeBootcamp(alice.id);
   for (const p of PERSONA_NAMES) {
@@ -352,18 +349,6 @@ const PAGES: Record<string, PageCase> = {
   "/coach-canary/map?play=<unknown>": { path: () => `/coach-canary/map?play=${MISSING}`, expect: () => 200 },
   "/coach-canary/videos": { path: () => "/coach-canary/videos", expect: () => 200 },
   "/coach-canary/code-lab": { path: () => "/coach-canary/code-lab", expect: () => 200 },
-  // The previous Mimir, kept to read, for Training Administrators.
-  "/coach-canary-archive": {
-    path: () => "/coach-canary-archive",
-    expect: (a) => (canManageMimir(a) ? { to: MIMIR_ARCHIVE_TABS[0]!.href } : 404),
-  },
-  "/coach-canary-archive/library": { path: () => "/coach-canary-archive/library", expect: gated(canManageMimir) },
-  "/coach-canary-archive/library?kind&cat": { path: () => "/coach-canary-archive/library?kind=competitor&cat=cd&q=e2e", expect: gated(canManageMimir) },
-  "/coach-canary-archive/library?kind=<unknown>": { path: () => "/coach-canary-archive/library?kind=nonsense", expect: () => 404 },
-  "/coach-canary-archive/library/<one>": { path: () => `/coach-canary-archive/library/${mimirItemId}`, expect: gated(canManageMimir) },
-  "/coach-canary-archive/library/<unknown>": { path: () => `/coach-canary-archive/library/${MISSING}`, expect: () => 404 },
-  "/coach-canary-archive/glossary": { path: () => "/coach-canary-archive/glossary?q=e2e", expect: gated(canManageMimir) },
-  "/coach-canary-archive/progress": { path: () => "/coach-canary-archive/progress?sort=tier", expect: gated(canManageMimir) },
   "/coach-canary-settings": {
     path: () => "/coach-canary-settings",
     expect: (a) => (canManageMimir(a) ? { to: MIMIR_SETTINGS_TABS[0]!.href } : 404),
@@ -371,10 +356,6 @@ const PAGES: Record<string, PageCase> = {
   "/coach-canary-settings/reporting": { path: () => "/coach-canary-settings/reporting?sort=slides&dir=desc", expect: gated(canManageMimir) },
   "/coach-canary-settings/map": { path: () => "/coach-canary-settings/map", expect: gated(canManageMimir) },
   "/coach-canary-settings/map-editor": { path: () => "/coach-canary-settings/map-editor", expect: gated(canManageMimir) },
-  "/coach-canary-settings/content": { path: () => "/coach-canary-settings/content?kind=capability", expect: gated(canManageMimir) },
-  "/coach-canary-settings/content/new": { path: () => "/coach-canary-settings/content/new?kind=term", expect: gated(canManageMimir) },
-  "/coach-canary-settings/content/<one>": { path: () => `/coach-canary-settings/content/${mimirItemId}`, expect: gated(canManageMimir) },
-  "/coach-canary-settings/content/<unknown>": { path: () => `/coach-canary-settings/content/${MISSING}`, expect: () => 404 },
   "/coach-canary-settings/coaching": { path: () => "/coach-canary-settings/coaching", expect: gated(canManageMimir) },
   "/coach-canary-settings/feedback": { path: () => "/coach-canary-settings/feedback", expect: gated(canManageMimir) },
   "/evals-settings": {
@@ -914,22 +895,7 @@ const ROUTES: RouteCase[] = [
   { method: "GET", path: "/api/mimir/studio/jobs", allowed: canRunMimirStudio },
   { method: "GET", path: `/api/mimir/studio/jobs/${MISSING}`, allowed: canRunMimirStudio },
 
-  // The archived Mimir library, which the archive pages still read: the library and coach are everyone's; the content and settings, Training Administrators'.
-  { method: "GET", path: "/api/mimir/items?kind=capability", allowed: true },
-  { method: "GET", path: `/api/mimir/items/${MISSING}`, allowed: true },
-  { method: "POST", path: "/api/mimir/items", allowed: canManageMimir, body: () => ({}) },
-  { method: "PUT", path: `/api/mimir/items/${MISSING}`, allowed: canManageMimir, body: () => ({}) },
-  { method: "DELETE", path: `/api/mimir/items/${MISSING}`, allowed: canManageMimir },
-  { method: "POST", path: "/api/mimir/import", allowed: canManageMimir, body: form },
-  { method: "POST", path: `/api/mimir/items/${MISSING}/visit`, allowed: true },
-  { method: "GET", path: `/api/mimir/items/${MISSING}/chat`, allowed: true },
-  { method: "POST", path: `/api/mimir/items/${MISSING}/chat`, allowed: true, body: () => ({}) },
-  // Nobody has a conversation about an item that does not exist, so this deletes nothing.
-  { method: "DELETE", path: `/api/mimir/items/${MISSING}/chat`, allowed: true },
-  { method: "PUT", path: `/api/mimir/items/${MISSING}/reflection`, allowed: true, body: () => ({}) },
-  { method: "GET", path: "/api/mimir/progress", allowed: true },
-  // Each persona's own Mimir progress, which none of them has.
-  { method: "DELETE", path: "/api/mimir/progress", allowed: true },
+  // Coach Canary's profile, experiences and settings: each person's own, and the settings Training Administrators'.
   { method: "GET", path: "/api/mimir/experiences", allowed: true },
   // An empty body is not a run of any experience, so this records nothing.
   { method: "POST", path: "/api/mimir/experiences", allowed: true, body: () => ({}) },
