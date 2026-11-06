@@ -1,6 +1,7 @@
 /**
- * Your conversation with the Mimir coach: reading it, sending it a message or
- * asking it to greet you, and starting over. A send that asks for
+ * Your conversation with the Mimir coach: reading it, sending it a message,
+ * asking it to greet you or to introduce the coach style you just picked, and
+ * starting over. A send that asks for
  * `text/event-stream` gets the coach's reply as it is written: `text` events
  * carrying each piece, `restart` if the reply begins again on the fallback
  * model, then `done` with the saved turns and your progress, or `error`. Any
@@ -23,10 +24,11 @@ export async function GET(req: Request) {
   return NextResponse.json(await getCoachChat(user.id, Number.isFinite(asked) ? asked : undefined));
 }
 
-/** Either something to say, with the concept it asks to switch to, or a request that the coach greet you. */
+/** Something to say, with the concept it asks to switch to; a request that the coach greet you; or that it introduce the style you just picked. */
 const sendSchema = z.union([
   z.object({ message: z.string().trim().min(1).max(MIMIR_MESSAGE_MAX), focus: z.string().max(200).optional() }),
   z.object({ open: z.literal(true) }),
+  z.object({ introduce: z.literal(true) }),
 ]);
 
 export const POST = audited(async function POST(req: Request) {
@@ -38,7 +40,7 @@ export const POST = audited(async function POST(req: Request) {
 
   const begun = await beginCoachTurn(user.id, parsed.data);
   if (!begun.ok) return NextResponse.json({ error: begun.error }, { status: COACH_STATUS_FOR[begun.error] });
-  noteAudit({ detail: { greeting: "open" in parsed.data, ...("focus" in parsed.data && parsed.data.focus ? { focus: parsed.data.focus } : {}) } });
+  noteAudit({ detail: { greeting: "open" in parsed.data, introduction: "introduce" in parsed.data, ...("focus" in parsed.data && parsed.data.focus ? { focus: parsed.data.focus } : {}) } });
 
   if (!(req.headers.get("accept") ?? "").includes("text/event-stream")) {
     const result = await finishCoachTurn(begun.turn);

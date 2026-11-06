@@ -31,7 +31,7 @@ import "server-only";
 
 import { and, asc, count, desc, eq, gt, lt } from "drizzle-orm";
 import { db } from "@/db";
-import { mimirCoachConversations, mimirCoachMessages, users, type MimirMessageRole } from "@/db/schema";
+import { MIMIR_COACH_NAMES, mimirCoachConversations, mimirCoachMessages, users, type MimirMessageRole } from "@/db/schema";
 import { renderMarkdown } from "@/lib/markdown";
 import { MIMIR_CONTEXT_LIMIT, MIMIR_MODEL, askClaude, coachConfigured, forReplay, tokensOf, type ChatMessage, type Complete, type CompletionRequest, type ReplyStream } from "@/lib/mimir/chat";
 import { getProfile } from "@/lib/mimir/progress";
@@ -39,7 +39,9 @@ import { getCoachingSettings } from "@/lib/mimir/settings";
 import { PAGE_SIZE } from "@/lib/paging";
 import { getMap } from "./content";
 import {
+  INTRODUCE_REQUEST,
   OPEN_REQUEST,
+  introduceContent,
   openContent,
   buildCoachSystem,
   focusNote,
@@ -176,8 +178,12 @@ export type CoachTurn = {
   conceptIds: string[];
 };
 
-/** Something to say, with the id of a concept picked on the map when the rep asked to switch to it there; or a request to be greeted. */
-export type CoachInput = { message: string; focus?: string } | { open: true };
+/**
+ * Something to say, with the id of a concept picked on the map when the rep
+ * asked to switch to it there; a request to be greeted; or a request that the
+ * coach introduce itself in the style just picked.
+ */
+export type CoachInput = { message: string; focus?: string } | { open: true } | { introduce: true };
 
 /**
  * Saves the rep's message (or the hidden "I just opened Mimir" of a
@@ -234,19 +240,30 @@ export async function beginCoachTurn(
 
     const seq = (last?.seq ?? -1) + 1;
     // The snapshot goes first whenever progress has moved since the coach last saw it, and always when greeting.
-    const fresh = message === null || conversation.stateHash !== snapshot.hash;
+    const greeting = "open" in input;
+    const fresh = greeting || conversation.stateHash !== snapshot.hash;
     let sent = message;
-    if (message === null) {
+    if (greeting) {
       const [{ n }] = await tx
         .select({ n: count() })
         .from(mimirCoachMessages)
-        .where(and(eq(mimirCoachMessages.userId, userId), eq(mimirCoachMessages.role, "user"), eq(mimirCoachMessages.shown, false)));
+        .where(
+          and(
+            eq(mimirCoachMessages.userId, userId),
+            eq(mimirCoachMessages.role, "user"),
+            eq(mimirCoachMessages.shown, false),
+            eq(mimirCoachMessages.text, OPEN_REQUEST),
+          ),
+        );
       sent = openContent(n ?? 0);
+    } else if ("introduce" in input) {
+      sent = introduceContent(MIMIR_COACH_NAMES[profile.coachPersonality]);
     }
     const content = turnContent(sent ?? OPEN_REQUEST, fresh ? snapshot : null, focus);
+    const hidden = "introduce" in input ? INTRODUCE_REQUEST : OPEN_REQUEST;
     const [row] = await tx
       .insert(mimirCoachMessages)
-      .values({ userId, seq, role: "user", shown: message !== null, content, text: message ?? OPEN_REQUEST })
+      .values({ userId, seq, role: "user", shown: message !== null, content, text: message ?? hidden })
       .returning({ createdAt: mimirCoachMessages.createdAt });
     await tx.update(mimirCoachConversations).set({ stateHash: snapshot.hash, updatedAt: new Date() }).where(eq(mimirCoachConversations.userId, userId));
     return { seq, at: row!.createdAt };

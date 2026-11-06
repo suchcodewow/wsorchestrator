@@ -408,22 +408,23 @@ export const MIMIR_GROUPS: EndpointGroup[] = [
       {
         method: "POST",
         path: "/api/mimir/coach",
-        summary: "Sends the coach a message, or asks it to greet you, and returns its reply.",
+        summary: "Sends the coach a message, or asks it to greet you or introduce your coach style, and returns its reply.",
         access: "signedIn",
         token: true,
         notes:
-          "Send { message } to say something, or { open: true } to have the coach greet you, say where you are and ask about the next concept. The coach checks what you know of each concept in turn, against a checklist of its main points: the concept's own, or one it sets out the first time it asks. It ticks each point once you have put it in your own words, in whichever message, and the ticks are kept. When every point is ticked the concept is mastered and it moves on; when you do not know the concept it links its video and marks it recommended. mastered and recommended list the concept ids it changed; covered lists, per concept, the points this reply ticked and how many of its checklist are now covered. The coach is Claude Sonnet 5.5; a request it declines is answered by Anthropic's fallback model, and when it can't be reached, by Claude Haiku 4.5. Send Accept: text/event-stream to have the reply streamed as it is written — text events with each delta, restart if it begins again on the fallback model, then done with the body below, or error with { error, status } — otherwise the whole reply comes back as JSON.",
+          "Send { message } to say something, { open: true } to have the coach greet you, say where you are and ask about the next concept, or { introduce: true } to have it introduce itself in the coach style you last set with PUT /api/mimir/me and carry on where you were. The coach checks what you know of each concept in turn, against a checklist of its main points: the concept's own, or one it sets out the first time it asks. It ticks each point once you have put it in your own words, in whichever message, and the ticks are kept. When every point is ticked the concept is mastered and it moves on; when you do not know the concept it links its video and marks it recommended. mastered and recommended list the concept ids it changed; covered lists, per concept, the points this reply ticked and how many of its checklist are now covered. The coach is Claude Sonnet 5.5; a request it declines is answered by Anthropic's fallback model, and when it can't be reached, by Claude Haiku 4.5. Send Accept: text/event-stream to have the reply streamed as it is written — text events with each delta, restart if it begins again on the fallback model, then done with the body below, or error with { error, status } — otherwise the whole reply comes back as JSON.",
         body: {
           kind: "json",
           fields: [
-            { name: "message", type: "string", note: `up to ${MIMIR_MESSAGE_MAX} characters; give this or open` },
+            { name: "message", type: "string", note: `up to ${MIMIR_MESSAGE_MAX} characters; give this, open or introduce` },
             { name: "focus", type: "string", note: "optional, with message: a concept id; the coach turns to that concept now, ahead of the course order, as the map's chat button asks it to. An id not in the course is ignored" },
             { name: "open", type: "true", note: "ask the coach to greet you instead of saying something" },
+            { name: "introduce", type: "true", note: "ask the coach to introduce itself in your coach style instead of saying something" },
           ],
         },
         returns: `{ messages: ${MESSAGE_SHAPE}[] (yours, if you said something, and the coach's), progress, mastered: string[], recommended: string[], covered: { id, points: string[], covered: number, total: number }[] }`,
         errors: [
-          { status: 400, error: "invalid", when: "neither a message nor open is given, or the message is empty or too long" },
+          { status: 400, error: "invalid", when: "none of message, open or introduce is given, or the message is empty or too long" },
           { status: 409, error: "no_map", when: "no map has been imported, so there is nothing to coach on" },
           { status: 409, error: "busy", when: "the coach is still replying to your last message" },
           { status: 409, error: "full", when: "the conversation is as long as the model can read; start a new one" },
