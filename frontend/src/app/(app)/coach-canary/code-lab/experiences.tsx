@@ -97,7 +97,8 @@ export function ExperiencesView({ author }: { author: string }) {
             aria-describedby={undefined}
             className="h-dvh max-h-dvh max-w-none grid-rows-[auto_minmax(0,1fr)] gap-0 overflow-hidden rounded-none p-0"
           >
-            <div className="border-b px-6 py-4 pr-14">
+            {/* Tall enough that the dialog's close button sits centred beside the title. */}
+            <div className="flex min-h-16 items-center border-b px-6 pr-16">
               <DialogTitle>{open.name}</DialogTitle>
             </div>
             <div className="overflow-y-auto px-6 py-6">

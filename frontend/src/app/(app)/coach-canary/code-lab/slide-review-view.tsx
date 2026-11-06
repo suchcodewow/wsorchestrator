@@ -12,6 +12,7 @@
  * scaled to fit, so a few pixels out of line look the way they would in the deck.
  */
 
+import { PillSwitch } from "@/components/pill-switch";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { generateSlide, newSeed } from "@/lib/mimir/slide-review/generate";
@@ -56,6 +57,8 @@ type Phase = { at: "intro" } | { at: "slide"; seed: number; reviewing: boolean }
 export function SlideReviewView() {
   const [phase, setPhase] = useState<Phase>({ at: "intro" });
   const [session, setSession] = useState<SessionSlide[]>([]);
+  // Fixed pieces lose their green edge once the fix has been read, unless this is on; it lasts the session.
+  const [showFixed, setShowFixed] = useState(false);
 
   const next = () => setPhase({ at: "slide", seed: newSeed(), reviewing: false });
   const startOver = () => {
@@ -75,6 +78,8 @@ export function SlideReviewView() {
       number={session.length + (reviewing ? 0 : 1)}
       earlier={session.slice(0, reviewing ? -1 : undefined).reduce((sum, r) => sum + pointsFor(r), 0)}
       reviewing={reviewing}
+      showFixed={showFixed}
+      onShowFixed={setShowFixed}
       onFinish={(slide, result) => {
         recordRun({ experience: "slide-review", seed: slide.seed, found: result.found, wrongClicks: result.wrongClicks });
         setSession((s) => [...s, { ...result, seed: slide.seed, themeName: slide.themeName, total: slide.flaws.length }]);
@@ -156,6 +161,8 @@ function SlideRound({
   number,
   earlier,
   reviewing,
+  showFixed,
+  onShowFixed,
   onFinish,
   onNext,
   onFinishForNow,
@@ -166,6 +173,9 @@ function SlideRound({
   /** The session's points before this slide. */
   earlier: number;
   reviewing: boolean;
+  /** Whether fixed pieces keep their green edge. */
+  showFixed: boolean;
+  onShowFixed: (on: boolean) => void;
   onFinish: (slide: Slide, result: SlideResult) => void;
   onNext: () => void;
   onFinishForNow: () => void;
@@ -203,6 +213,7 @@ function SlideRound({
     status: (t) => (fixed.has(t) ? "fixed" : reviewing && flawOf(t) ? "missed" : "plain"),
     flaw: flawOf,
     justFixed,
+    showFixed,
     click,
     reviewing,
   };
@@ -220,6 +231,7 @@ function SlideRound({
           <span className="text-muted-foreground">Wrong clicks:</span>{" "}
           <span className="font-medium tabular-nums">{wrongClicks}</span>
         </p>
+        <PillSwitch label="Show fixed" title="Keep a green edge on everything you have fixed" on={showFixed} onChange={onShowFixed} />
         {reviewing && (
           <p className="text-sm">
             <span className="text-muted-foreground">Missed:</span>{" "}
@@ -280,6 +292,7 @@ export function SlidePreview({ seed }: { seed: number }) {
     status: (t) => (showMistakes && flawOf(t) ? "missed" : "plain"),
     flaw: flawOf,
     justFixed: null,
+    showFixed: false,
     click: () => {},
     reviewing: true,
   };
@@ -315,6 +328,8 @@ type GameState = {
   flaw: (t: Target) => Flaw | undefined;
   /** The piece fixed a moment ago, whose tooltip opens without a hover. */
   justFixed: Target | null;
+  /** Fixed pieces keep their green edge; otherwise it shows only while the fix's tooltip does, then fades. */
+  showFixed: boolean;
   click: (t: Target, at: { x: number; y: number }) => void;
   reviewing: boolean;
 };
@@ -504,7 +519,8 @@ function Piece({
         "absolute block rounded-[3px] text-left whitespace-pre outline-offset-2",
         game.reviewing && "cursor-default",
         !game.reviewing && status !== "fixed" && "cursor-pointer hover:outline-2 hover:outline-sky-500/40 hover:outline-dashed",
-        status === "fixed" && "outline-2 outline-emerald-500/70 outline-solid",
+        status === "fixed" && "outline-2 outline-solid transition-[outline-color] duration-700",
+        status === "fixed" && (game.showFixed || game.justFixed === target ? "outline-emerald-500/70" : "outline-transparent"),
         status === "missed" && "outline-2 outline-red-600 outline-solid",
         className,
       )}
