@@ -900,6 +900,9 @@ const ROUTES: RouteCase[] = [
   // An empty body is not a run of any experience, so this records nothing.
   { method: "POST", path: "/api/mimir/experiences", allowed: true, body: () => ({}) },
   { method: "GET", path: "/api/mimir/experiences/report", allowed: canManageMimir },
+  { method: "GET", path: "/api/mimir/slide-feedback", allowed: canManageMimir },
+  // An empty body is no rating, so this saves nothing.
+  { method: "POST", path: "/api/mimir/slide-feedback", allowed: true, body: () => ({}) },
   { method: "GET", path: "/api/mimir/me", allowed: true },
   { method: "PUT", path: "/api/mimir/me", allowed: true, body: () => ({}) },
   { method: "GET", path: "/api/mimir/settings", allowed: canManageMimir },

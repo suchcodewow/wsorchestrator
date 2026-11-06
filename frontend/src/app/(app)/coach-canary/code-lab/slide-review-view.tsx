@@ -1,26 +1,27 @@
 "use client";
 
 /**
- * Review the "Our understanding" slide. Ten made-up versions of the slide a
- * team plays back to a customer, one at a time, each with 10 to 15 small things
- * wrong: spelling, grammar, fonts, sizes, alignment, icons and things left
- * behind. Clicking something wrong puts it right for a point; clicking
- * something that was already right costs one; moving on costs two for each
- * thing missed, and shows what they were. The slide is drawn at the deck's own
- * 1280 × 720 and scaled to fit, so a few pixels out of line look the way they
- * would in the deck. Nothing leaves the browser and nothing is kept.
+ * Review the "Our understanding" slide, for as long as you like. Each slide is
+ * made from a fresh seed (see `generate.ts`), with 10 to 15 small things wrong:
+ * spelling, grammar, fonts, sizes, alignment, icons and things left behind.
+ * Clicking something wrong puts it right for a point; clicking something that
+ * was already right costs one; moving on costs two for each thing missed, and
+ * shows what they were. Finish for now ends the session with its scores. Each
+ * finished slide is recorded by its seed, and a slide can be rated with the
+ * same faces as a video. The slide is drawn at the deck's own 1280 × 720 and
+ * scaled to fit, so a few pixels out of line look the way they would in the deck.
  */
 
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { generateSlide, newSeed } from "@/lib/mimir/slide-review/generate";
 import {
   ARROW,
   BULLET,
   CAPABILITIES_TITLE,
+  FLAWS_PER_SLIDE,
   KIND_LABEL,
-  MAX_SCORE,
   POINTS,
-  SLIDES,
   TITLE,
   VERDICTS,
   pointsFor,
@@ -36,47 +37,51 @@ import {
   type Target,
 } from "@/lib/mimir/slide-review/slides";
 import { cn } from "@/lib/utils";
-import { ArrowRight, Check, MousePointerClick, RotateCcw, Timer, X } from "lucide-react";
+import { ArrowRight, Check, Eye, EyeOff, Flag, MousePointerClick, RotateCcw, Timer, X } from "lucide-react";
 import { Geist } from "next/font/google";
 import Image from "next/image";
-import { createContext, useContext, useEffect, useRef, useState, type CSSProperties, type MouseEvent, type ReactNode } from "react";
-import { SLIDE_SCORE_FLOOR } from "@/lib/mimir/experiences";
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type ReactNode } from "react";
 import { recordRun } from "./record-run";
+import { SlideFeedback } from "./slide-feedback";
 import "./slide-review.css";
 
 /** The deck's body font. The app's own mono is already Geist Mono. */
 const geist = Geist({ subsets: ["latin"], display: "swap" });
 
-type Phase = { at: "intro" } | { at: "slide"; index: number; reviewing: boolean } | { at: "done" };
+/** One slide of this session, as it ended. */
+export type SessionSlide = SlideResult & { seed: number; themeName: string; total: number };
+
+type Phase = { at: "intro" } | { at: "slide"; seed: number; reviewing: boolean } | { at: "done" };
 
 export function SlideReviewView() {
   const [phase, setPhase] = useState<Phase>({ at: "intro" });
-  const [results, setResults] = useState<SlideResult[]>([]);
+  const [session, setSession] = useState<SessionSlide[]>([]);
 
-  const restart = () => {
-    setResults([]);
-    setPhase({ at: "intro" });
+  const next = () => setPhase({ at: "slide", seed: newSeed(), reviewing: false });
+  const startOver = () => {
+    setSession([]);
+    next();
   };
 
-  if (phase.at === "intro") return <Intro onStart={() => setPhase({ at: "slide", index: 0, reviewing: false })} />;
-  if (phase.at === "done") return <FinalScore results={results} onRestart={restart} />;
+  if (phase.at === "intro") return <Intro onStart={next} />;
+  if (phase.at === "done") return <SessionScore session={session} onKeepGoing={next} onStartOver={startOver} />;
 
-  const earlier = results.slice(0, phase.index).reduce((sum, r) => sum + pointsFor(r), 0);
+  const reviewing = phase.reviewing;
   return (
-    // A new slide starts with nothing fixed, so the slide is the key.
+    // A new slide starts with nothing fixed, so the seed is the key.
     <SlideRound
-      key={phase.index}
-      index={phase.index}
-      earlier={earlier}
-      onFinish={(result) => {
-        recordRun({ experience: "slide-review", part: SLIDES[phase.index].id, score: Math.max(SLIDE_SCORE_FLOOR, pointsFor(result)) });
-        setResults((rs) => [...rs.slice(0, phase.index), result]);
-        setPhase({ at: "slide", index: phase.index, reviewing: true });
+      key={phase.seed}
+      seed={phase.seed}
+      number={session.length + (reviewing ? 0 : 1)}
+      earlier={session.slice(0, reviewing ? -1 : undefined).reduce((sum, r) => sum + pointsFor(r), 0)}
+      reviewing={reviewing}
+      onFinish={(slide, result) => {
+        recordRun({ experience: "slide-review", seed: slide.seed, found: result.found, wrongClicks: result.wrongClicks });
+        setSession((s) => [...s, { ...result, seed: slide.seed, themeName: slide.themeName, total: slide.flaws.length }]);
+        setPhase({ at: "slide", seed: slide.seed, reviewing: true });
       }}
-      reviewing={phase.reviewing}
-      onNext={() =>
-        setPhase(phase.index + 1 < SLIDES.length ? { at: "slide", index: phase.index + 1, reviewing: false } : { at: "done" })
-      }
+      onNext={next}
+      onFinishForNow={() => setPhase({ at: "done" })}
     />
   );
 }
@@ -88,7 +93,7 @@ function Intro({ onStart }: { onStart: () => void }) {
     <div className="mx-auto max-w-3xl space-y-5">
       <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
         <Timer className="size-4" />
-        10–15 minutes
+        About a minute a slide, for as long as you like
       </p>
       <section className="divide-y overflow-hidden rounded-2xl border bg-card shadow-sm">
         <div className="flex gap-3 bg-brand-subtle/50 px-5 py-4 text-sm">
@@ -96,16 +101,20 @@ function Intro({ onStart }: { onStart: () => void }) {
             🔍
           </span>
           <p className="max-w-3xl">
-            <span className="font-medium">The customer meeting is in an hour.</span> Your team has drafted ten “Our
+            <span className="font-medium">The customer meeting is in an hour.</span> Your team keeps drafting “Our
             understanding” slides, and every one of them has small mistakes in it. Find them before the customer does.
           </p>
         </div>
         <div className="space-y-2 px-5 py-4 text-sm">
           <p className="font-medium">How it works</p>
           <ul className="list-disc space-y-1 pl-5 marker:text-muted-foreground">
-            <li>You see one slide at a time. Each has between 10 and 15 things wrong with it.</li>
+            <li>
+              You see one slide at a time. Each has between {FLAWS_PER_SLIDE.min} and {FLAWS_PER_SLIDE.max} things wrong with
+              it, and there’s always another slide.
+            </li>
             <li>Click anything that’s wrong and it corrects itself.</li>
             <li>When you think you’ve found everything, click Next. You’ll see what you missed before the next slide.</li>
+            <li>Stop whenever you like with Finish for now, and see how this session went.</li>
           </ul>
         </div>
         <div className="flex flex-wrap gap-x-8 gap-y-1 px-5 py-2.5 text-sm">
@@ -143,19 +152,25 @@ function Intro({ onStart }: { onStart: () => void }) {
 type Float = { id: number; x: number; y: number; good: boolean };
 
 function SlideRound({
-  index,
+  seed,
+  number,
   earlier,
   reviewing,
   onFinish,
   onNext,
+  onFinishForNow,
 }: {
-  index: number;
+  seed: number;
+  /** Which slide of this session it is, from 1. */
+  number: number;
+  /** The session's points before this slide. */
   earlier: number;
   reviewing: boolean;
-  onFinish: (result: SlideResult) => void;
+  onFinish: (slide: Slide, result: SlideResult) => void;
   onNext: () => void;
+  onFinishForNow: () => void;
 }) {
-  const slide = SLIDES[index];
+  const slide = useMemo(() => generateSlide(seed), [seed]);
   const [fixed, setFixed] = useState<Set<Target>>(new Set());
   const [wrongClicks, setWrongClicks] = useState(0);
   const [floats, setFloats] = useState<Float[]>([]);
@@ -195,9 +210,7 @@ function SlideRound({
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
-        <p className="text-sm text-muted-foreground">
-          Slide {index + 1} of {SLIDES.length}
-        </p>
+        <p className="text-sm text-muted-foreground">Slide {number}</p>
         <p className="text-sm">
           <span className="text-muted-foreground">Fixed on this slide:</span>{" "}
           <span className="font-medium tabular-nums">{fixed.size}</span>
@@ -216,21 +229,30 @@ function SlideRound({
             {missed.length > 0 && <span className="text-muted-foreground"> · hover a red outline to see why</span>}
           </p>
         )}
-        <p className="ml-auto flex items-baseline gap-2 rounded-xl border bg-card px-4 py-1.5 shadow-sm">
-          <span className="text-sm text-muted-foreground">Score</span>
-          <span className={cn("text-2xl font-bold tabular-nums", score < 0 && "text-destructive")}>{score}</span>
-        </p>
-        {reviewing ? (
-          <Button variant="brand" onClick={onNext}>
-            {index + 1 < SLIDES.length ? "Next slide" : "See my score"}
-            <ArrowRight />
-          </Button>
-        ) : (
-          <Button variant="brand" onClick={() => onFinish({ found: fixed.size, wrongClicks, missed: missed.length })}>
-            Next
-            <ArrowRight />
-          </Button>
-        )}
+        <div className="ml-auto flex flex-wrap items-center gap-3">
+          <SlideFeedback seed={slide.seed} />
+          <p className="flex items-baseline gap-2 rounded-xl border bg-card px-4 py-1.5 shadow-sm">
+            <span className="text-sm text-muted-foreground">Session score</span>
+            <span className={cn("text-2xl font-bold tabular-nums", score < 0 && "text-destructive")}>{score}</span>
+          </p>
+          {reviewing ? (
+            <>
+              <Button variant="outline" onClick={onFinishForNow}>
+                <Flag />
+                Finish for now
+              </Button>
+              <Button variant="brand" onClick={onNext}>
+                Next slide
+                <ArrowRight />
+              </Button>
+            </>
+          ) : (
+            <Button variant="brand" onClick={() => onFinish(slide, { found: fixed.size, wrongClicks, missed: missed.length })}>
+              Next
+              <ArrowRight />
+            </Button>
+          )}
+        </div>
       </div>
 
       <Game.Provider value={game}>
@@ -238,7 +260,49 @@ function SlideRound({
           <SlideCanvas slide={slide} floats={floats} />
         </TooltipProvider>
       </Game.Provider>
+    </div>
+  );
+}
 
+// ---------------------------------------------------------------- a slide rebuilt from its seed
+
+/**
+ * A slide as it was dealt, for whoever reviews feedback or a report: not
+ * playable, with each mistake outlined and explained on hover until Hide is
+ * pressed, which shows the slide as the player first saw it.
+ */
+export function SlidePreview({ seed }: { seed: number }) {
+  const slide = useMemo(() => generateSlide(seed), [seed]);
+  const [showMistakes, setShowMistakes] = useState(true);
+  const flawOf = (t: Target) => slide.flaws.find((fl) => fl.target === t);
+  const game: GameState = {
+    look: (t) => flawOf(t)?.look ?? {},
+    status: (t) => (showMistakes && flawOf(t) ? "missed" : "plain"),
+    flaw: flawOf,
+    justFixed: null,
+    click: () => {},
+    reviewing: true,
+  };
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm">
+          <span className="font-medium">{slide.themeName}</span>
+          <span className="text-muted-foreground">
+            {" "}
+            · seed {slide.seed} · {slide.flaws.length} mistakes
+          </span>
+        </p>
+        <Button variant="outline" size="sm" onClick={() => setShowMistakes((v) => !v)}>
+          {showMistakes ? <EyeOff /> : <Eye />}
+          {showMistakes ? "Hide the mistakes" : "Show the mistakes"}
+        </Button>
+      </div>
+      <Game.Provider value={game}>
+        <TooltipProvider>
+          <SlideCanvas slide={slide} floats={[]} />
+        </TooltipProvider>
+      </Game.Provider>
     </div>
   );
 }
@@ -627,27 +691,38 @@ function ExtraPiece({ extra }: { extra: Extra }) {
   );
 }
 
-// ---------------------------------------------------------------- the final score
+// ---------------------------------------------------------------- the session's score
 
-function FinalScore({ results, onRestart }: { results: SlideResult[]; onRestart: () => void }) {
-  const total = results.reduce((sum, r) => sum + pointsFor(r), 0);
-  const verdict = verdictFor(total);
-  const totals = results.reduce(
+function SessionScore({
+  session,
+  onKeepGoing,
+  onStartOver,
+}: {
+  session: SessionSlide[];
+  onKeepGoing: () => void;
+  onStartOver: () => void;
+}) {
+  const total = session.reduce((sum, r) => sum + pointsFor(r), 0);
+  const max = session.reduce((sum, r) => sum + r.total * POINTS.found, 0);
+  const verdict = verdictFor(total, max);
+  const totals = session.reduce(
     (t, r) => ({ found: t.found + r.found, wrongClicks: t.wrongClicks + r.wrongClicks, missed: t.missed + r.missed }),
     { found: 0, wrongClicks: 0, missed: 0 },
   );
   return (
     <div className="mx-auto max-w-3xl space-y-5">
       <div>
-        <p className="text-sm text-muted-foreground">All {SLIDES.length} slides reviewed</p>
-        <h2 className="text-xl font-semibold">Your final score</h2>
+        <p className="text-sm text-muted-foreground">
+          {session.length} {session.length === 1 ? "slide" : "slides"} reviewed this session
+        </p>
+        <h2 className="text-xl font-semibold">Your session score</h2>
       </div>
 
       <section className="divide-y overflow-hidden rounded-2xl border bg-card shadow-sm">
         <div className="space-y-2 bg-brand-subtle/50 px-5 py-6 text-center">
           <p className={cn("text-5xl font-bold tabular-nums", total < 0 && "text-destructive")}>
             {total}
-            <span className="text-2xl font-medium text-muted-foreground"> / {MAX_SCORE}</span>
+            <span className="text-2xl font-medium text-muted-foreground"> / {max}</span>
           </p>
           <p className="pt-2 text-lg font-semibold">{verdict.title}</p>
           <p className="mx-auto max-w-xl text-sm text-muted-foreground">{verdict.verdict}</p>
@@ -659,18 +734,18 @@ function FinalScore({ results, onRestart }: { results: SlideResult[]; onRestart:
           </span>
           <span className="flex items-center gap-1.5">
             <MousePointerClick className="size-4 text-muted-foreground" />
-            {totals.wrongClicks} wrong click{totals.wrongClicks === 1 ? "" : "s"}
+            {totals.wrongClicks} wrong {totals.wrongClicks === 1 ? "click" : "clicks"}
           </span>
           <span className="flex items-center gap-1.5">
             <X className="size-4 text-destructive" />
             {totals.missed} missed
           </span>
         </div>
-        {results.map((r, i) => (
-          <div key={i} className="flex flex-wrap items-baseline gap-x-6 gap-y-0.5 px-5 py-2.5 text-sm">
+        {session.map((r, i) => (
+          <div key={r.seed} className="flex flex-wrap items-baseline gap-x-6 gap-y-0.5 px-5 py-2.5 text-sm">
             <span className="w-16 font-medium">Slide {i + 1}</span>
             <span className="text-muted-foreground">
-              Fixed {r.found} of {r.found + r.missed}
+              {r.themeName} · fixed {r.found} of {r.total}
               {r.wrongClicks > 0 && `, ${r.wrongClicks} wrong click${r.wrongClicks === 1 ? "" : "s"}`}
             </span>
             <span className={cn("ml-auto font-medium tabular-nums", pointsFor(r) < 0 && "text-destructive")}>
@@ -689,7 +764,7 @@ function FinalScore({ results, onRestart }: { results: SlideResult[]; onRestart:
               className={cn("flex gap-4 px-5 py-2.5 text-sm", v === verdict ? "bg-brand-subtle/50 font-medium" : "text-muted-foreground")}
             >
               <span className="w-24 shrink-0 font-mono tabular-nums">
-                {Number.isFinite(v.from) ? `${Math.round(v.from * MAX_SCORE)}+` : `< ${Math.round(VERDICTS[i - 1].from * MAX_SCORE)}`}
+                {Number.isFinite(v.from) ? `${Math.round(v.from * 100)}%+` : `< ${Math.round(VERDICTS[i - 1]!.from * 100)}%`}
               </span>
               <span>{v.title}</span>
             </li>
@@ -697,10 +772,16 @@ function FinalScore({ results, onRestart }: { results: SlideResult[]; onRestart:
         </ul>
       </section>
 
-      <Button variant="ghost" onClick={onRestart}>
-        <RotateCcw />
-        Start over
-      </Button>
+      <div className="flex flex-wrap gap-3">
+        <Button variant="brand" onClick={onKeepGoing}>
+          Keep going
+          <ArrowRight />
+        </Button>
+        <Button variant="ghost" onClick={onStartOver}>
+          <RotateCcw />
+          Start a new session
+        </Button>
+      </div>
     </div>
   );
 }
