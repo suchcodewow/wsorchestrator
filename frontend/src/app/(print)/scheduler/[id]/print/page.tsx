@@ -91,7 +91,7 @@ export default async function PrintSchedulePage({
   const roomNames = new Map(schedule.rooms.map((r) => [r.id, r.name]));
 
   return (
-    <div className="min-h-screen bg-white text-neutral-900 scheme-light print:min-h-0">
+    <div className="min-h-screen bg-neutral-50 text-neutral-900 scheme-light print:min-h-0 print:bg-white">
       <style>{"@page { size: landscape; margin: 0.35in; }"}</style>
       <div className="mx-auto max-w-[10.3in] px-4 py-6 print:max-w-none print:p-0">
         <header className="mb-3 flex items-end justify-between gap-4">
@@ -179,7 +179,7 @@ function PrintedSession({
     <div className="absolute inset-x-0.5 py-px" style={{ top, height }}>
       <div
         className={cn(
-          "h-full overflow-hidden rounded-[2px] border border-l-[3px] border-neutral-400 bg-white px-1 break-inside-avoid",
+          "h-full overflow-hidden rounded-[2px] border border-l-[3px] border-neutral-400 bg-neutral-50 px-1 print:bg-white break-inside-avoid",
           PRINT_STRIPES[s.color],
         )}
       >
