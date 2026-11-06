@@ -2901,201 +2901,11 @@ export const IRIS_NOTE_MAX = 2000;
 /* Mimir                                                               */
 /* ------------------------------------------------------------------ */
 
-/**
- * What a Mimir item is. Most are cards a rep reads and is coached on: the
- * four Harness agents, and the capabilities each is made of. The rest hold
- * others (a discovery group its questions, a glossary category its terms) or
- * introduce a library tab.
- */
-export const MIMIR_KINDS = [
-  "agent",
-  "capability",
-  "ai",
-  "architecture",
-  "sdlc",
-  "persona",
-  "competitor",
-  "proof",
-  "framework",
-  "discovery",
-  "question",
-  "category",
-  "term",
-  "intro",
-] as const;
-export type MimirKind = (typeof MIMIR_KINDS)[number];
-
-export const MIMIR_SECTION_LIMIT = 30;
-export const MIMIR_ITEM_LIMITS = {
-  id: 80,
-  title: 1000,
-  emoji: 16,
-  summary: 4000,
-  body: 50_000,
-  sections: MIMIR_SECTION_LIMIT,
-  sectionTitle: 300,
-  sectionContent: 20_000,
-  attr: 4000,
-  listEntries: 30,
-} as const;
-
-/** A titled block of Markdown on a card, shown folded. */
-export type MimirSection = { title: string; content: string };
-
-/** The fields only some kinds used in the removed library. Every one is optional. */
-export type MimirAttrs = {
-  badge?: string;
-  role?: string;
-  tag?: string;
-  buyer?: string;
-  scenario?: string;
-  salesAngle?: string;
-  strength?: string;
-  advantages?: string;
-  watchOut?: string;
-  headline?: string;
-  url?: string;
-  loop?: string;
-  /** A Harness AI item's place: platform, agent or feature. */
-  group?: string;
-  why?: string;
-  followUp?: string;
-  seeAlso?: string;
-  /** The library tab an intro sits above. */
-  forKind?: string;
-  number?: number;
-  featured?: boolean;
-  cats?: string[];
-  mods?: string[];
-  /**
-   * A glossary term's forms in other text: "canary", "CI". An all-capitals
-   * form links only where it is written in capitals.
-   */
-  aliases?: string[];
-};
-
-/**
- * Mimir's reference content: every card, question and glossary term, edited
- * by Training Administrators in Mimir Settings and served to the coach. The
- * id is a stable slug so an import can update what it made before.
- */
-export const mimirItems = pgTable(
-  "mimir_items",
-  {
-    id: text("id").primaryKey(),
-    kind: text("kind").$type<MimirKind>().notNull(),
-    // Restrict: removing a group would silently take its questions or terms.
-    parentId: text("parent_id").references((): AnyPgColumn => mimirItems.id, { onDelete: "restrict" }),
-    /** Order within its kind (and parent), from 0. */
-    position: integer("position").notNull().default(0),
-    title: text("title").notNull(),
-    emoji: text("emoji").notNull().default(""),
-    /** `#rrggbb`, or empty. */
-    color: text("color").notNull().default(""),
-    summary: text("summary").notNull().default(""),
-    /** Markdown. */
-    body: text("body").notNull().default(""),
-    sections: jsonb("sections").$type<MimirSection[]>().notNull().default([]),
-    attrs: jsonb("attrs").$type<MimirAttrs>().notNull().default({}),
-    updatedBy: text("updated_by").references(() => users.id, { onDelete: "set null" }),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (t) => [
-    index("mimir_items_kind_idx").on(t.kind, t.position),
-    index("mimir_items_parent_idx").on(t.parentId, t.position),
-    check(
-      "mimir_items_kind_check",
-      sql`${t.kind} in ('agent', 'capability', 'ai', 'architecture', 'sdlc', 'persona', 'competitor', 'proof', 'framework', 'discovery', 'question', 'category', 'term', 'intro')`,
-    ),
-  ],
-);
-
-export type MimirItem = typeof mimirItems.$inferSelect;
-
-/**
- * Where one person is with one item. Viewed once they open it, practiced once
- * they send the coach a message, mastered once the coach has said they are
- * ready and they have written their one-line takeaway.
- */
-export const mimirProgress = pgTable(
-  "mimir_progress",
-  {
-    userId: text("user_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
-    itemId: text("item_id")
-      .notNull()
-      .references(() => mimirItems.id, { onDelete: "cascade" }),
-    firstVisitAt: timestamp("first_visit_at", { withTimezone: true }).notNull().defaultNow(),
-    lastVisitAt: timestamp("last_visit_at", { withTimezone: true }).notNull().defaultNow(),
-    practicedAt: timestamp("practiced_at", { withTimezone: true }),
-    masteryReadyAt: timestamp("mastery_ready_at", { withTimezone: true }),
-    reflection: text("reflection").notNull().default(""),
-  },
-  (t) => [
-    primaryKey({ columns: [t.userId, t.itemId] }),
-    index("mimir_progress_item_idx").on(t.itemId),
-  ],
-);
-
-export const MIMIR_REFLECTION_MAX = 500;
-
-/**
- * One person's coaching conversation on one item. The system prompt is fixed
- * when it starts: the coach's earlier turns are only valid against the prompt
- * they were written under, so an edit to the item reaches the next
- * conversation, not this one.
- */
-export const mimirConversations = pgTable(
-  "mimir_conversations",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    userId: text("user_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
-    itemId: text("item_id")
-      .notNull()
-      .references(() => mimirItems.id, { onDelete: "cascade" }),
-    mode: text("mode").notNull(),
-    model: text("model").notNull(),
-    systemPrompt: text("system_prompt").notNull(),
-    startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (t) => [uniqueIndex("mimir_conversations_one_idx").on(t.userId, t.itemId)],
-);
-
+/** Who said a turn in a coach conversation. */
 export const MIMIR_MESSAGE_ROLES = ["user", "assistant"] as const;
 export type MimirMessageRole = (typeof MIMIR_MESSAGE_ROLES)[number];
 
 export const MIMIR_MESSAGE_MAX = 4000;
-
-/**
- * One turn, in order. `content` is exactly what the Claude API was sent or
- * returned, kept so the conversation replays unchanged; `text` is what the
- * page shows. The kickoff that opens every conversation is not shown.
- */
-export const mimirMessages = pgTable(
-  "mimir_messages",
-  {
-    conversationId: uuid("conversation_id")
-      .notNull()
-      .references(() => mimirConversations.id, { onDelete: "cascade" }),
-    seq: integer("seq").notNull(),
-    role: text("role").$type<MimirMessageRole>().notNull(),
-    shown: boolean("shown").notNull().default(true),
-    content: jsonb("content").$type<unknown>().notNull(),
-    text: text("text").notNull(),
-    /** The API's token counts for a coach turn. */
-    usage: jsonb("usage").$type<Record<string, unknown>>(),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (t) => [
-    primaryKey({ columns: [t.conversationId, t.seq] }),
-    check("mimir_messages_role_check", sql`${t.role} in ('user', 'assistant')`),
-  ],
-);
 
 export const MIMIR_REP_ROLES = ["SDR", "AE", "SE"] as const;
 export type MimirRepRole = (typeof MIMIR_REP_ROLES)[number];
@@ -3282,9 +3092,10 @@ export type MimirExperienceProgress = typeof mimirExperienceProgress.$inferSelec
 
 /**
  * One person's conversation with the map coach, the whole of it. The system
- * prompt (the course) is fixed when it starts, for the same reason as
- * `mimir_conversations`. `stateHash` is the progress snapshot the coach was
- * last given, so it is sent again only when it changes.
+ * prompt (the course) is fixed when it starts: the coach's earlier turns are
+ * only valid against the prompt they were written under. Its rep-context slot
+ * is filled afresh on every turn. `stateHash` is the progress snapshot the
+ * coach was last given, so it is sent again only when it changes.
  */
 export const mimirCoachConversations = pgTable("mimir_coach_conversations", {
   userId: text("user_id")
@@ -3297,7 +3108,11 @@ export const mimirCoachConversations = pgTable("mimir_coach_conversations", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-/** One turn of the map coach, in order; `content` and `text` as in `mimir_messages`. */
+/**
+ * One turn of the map coach, in order. `content` is exactly what the Claude
+ * API was sent or returned, kept so the conversation replays unchanged;
+ * `text` is what the page shows. A greeting's hidden request is not shown.
+ */
 export const mimirCoachMessages = pgTable(
   "mimir_coach_messages",
   {

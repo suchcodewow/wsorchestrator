@@ -26,8 +26,9 @@ Mimir teaches the course one concept at a time. It has two tabs:
   shows **Recommended**.
 
 The previous Mimir (a reference library with a coach per card) has been
-removed, pages, routes and code. Its tables (`mimir_items`, `mimir_progress`,
-`mimir_conversations`, `mimir_messages`) are still in the database, unread.
+removed: its pages, routes and code, and then its tables (`mimir_items`,
+`mimir_progress`, `mimir_conversations`, `mimir_messages`), which
+`20261106145138_drop_mimir_library.sql` drops.
 
 ## The content is private
 
