@@ -12,6 +12,7 @@
 
 import { Button } from "@/components/ui/button";
 import {
+  BUILDS_PER_PAGE,
   MAX_SCORE,
   REVIEWS,
   ROUNDS,
@@ -30,9 +31,10 @@ import {
   type RoundNumber,
 } from "@/lib/mimir/security-game/scenario";
 import { cn } from "@/lib/utils";
-import { ArrowRight, ClipboardCheck, Eye, EyeOff, RotateCcw, ShieldAlert, Timer } from "lucide-react";
+import { ArrowRight, ClipboardCheck, Eye, RotateCcw, ShieldAlert, Timer } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import "./security-team.css";
+import { recordRun } from "./record-run";
 import { WallClock } from "./wall-clock";
 
 type Phase =
@@ -123,7 +125,11 @@ export function SecurityTeamView() {
         round={round}
         result={tally(round, flagged)}
         earlier={earlier}
-        onNext={() => setPhase(phase.round < ROUNDS.length ? { at: "rules", round: phase.round + 1 } : { at: "review" })}
+        onNext={() => {
+          if (phase.round < ROUNDS.length) return setPhase({ at: "rules", round: phase.round + 1 });
+          recordRun({ experience: "security", score: ROUNDS.reduce((sum, r) => sum + scoreOf(r), 0) });
+          setPhase({ at: "review" });
+        }}
       />
     );
   }
@@ -222,17 +228,11 @@ function RulesScreen({ round, onStart }: { round: Round; onStart: () => void }) 
   const vulnerable = round.examples.filter((build) => isVulnerable(build, round.number)).length;
   return (
     <div className="mx-auto max-w-4xl space-y-5">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="text-sm text-muted-foreground">
-            Month {round.number} of {ROUNDS.length}
-          </p>
-          <h2 className="text-xl font-semibold">Month {round.number} vulnerability rules</h2>
-        </div>
-        <Button variant="outline" onClick={() => setRevealed((r) => !r)}>
-          {revealed ? <EyeOff /> : <Eye />}
-          {revealed ? "Hide the answer" : "Reveal the answer"}
-        </Button>
+      <div>
+        <p className="text-sm text-muted-foreground">
+          Month {round.number} of {ROUNDS.length}
+        </p>
+        <h2 className="text-xl font-semibold">Month {round.number} vulnerability rules</h2>
       </div>
 
       <section className="overflow-hidden rounded-2xl border bg-card shadow-sm">
@@ -245,11 +245,19 @@ function RulesScreen({ round, onStart }: { round: Round; onStart: () => void }) 
       </section>
 
       <section className="space-y-2">
-        <h3 className="text-sm font-medium">
-          {revealed
-            ? `${vulnerable} of these ${round.examples.length} builds ${vulnerable === 1 ? "is" : "are"} vulnerable`
-            : `Check the packages: which of these ${round.examples.length} builds are vulnerable?`}
-        </h3>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h3 className="text-sm font-medium">
+            Check the packages: which of these {round.examples.length} builds are vulnerable?
+          </h3>
+          {revealed ? (
+            <p className="text-sm font-semibold">The total here is {vulnerable}!</p>
+          ) : (
+            <Button variant="brand" onClick={() => setRevealed(true)}>
+              <Eye />
+              See the answer
+            </Button>
+          )}
+        </div>
         <div className="grid gap-3 sm:grid-cols-3">
           {round.examples.map((build) => {
             const why = whyVulnerable(build, round.number);
@@ -267,15 +275,15 @@ function RulesScreen({ round, onStart }: { round: Round; onStart: () => void }) 
         </div>
       </section>
 
-      <div className="flex flex-wrap items-center gap-4">
-        <Button variant="brand" onClick={onStart}>
-          Ready? Start month {round.number}
+      {revealed && (
+        <Button variant="brand" onClick={onStart} className="h-auto py-2 text-left whitespace-normal">
+          <span>
+            The timer starts when you click here! You’ll see {round.pages.length} pages, {SECONDS_PER_PAGE} seconds per page.{" "}
+            {BUILDS_PER_PAGE} builds per page.
+          </span>
           <ArrowRight />
         </Button>
-        <p className="text-sm text-muted-foreground">
-          {round.pages.length} pages · {SECONDS_PER_PAGE} seconds a page
-        </p>
-      </div>
+      )}
     </div>
   );
 }
