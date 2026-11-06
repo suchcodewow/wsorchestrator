@@ -237,22 +237,6 @@ const GRAMMAR_SWAPS: [RegExp, string, string][] = [
   [/\ban (?=[aeiou])/, "a ", "“a” should be “an” before a vowel."],
 ];
 
-/** British spellings, by the American ones the slide is written in. */
-const BRITISH: Record<string, string> = {
-  utilization: "utilisation",
-  optimization: "optimisation",
-  normalized: "normalised",
-  prioritized: "prioritised",
-  prioritize: "prioritise",
-  artifact: "artefact",
-  artifacts: "artefacts",
-  catalog: "catalogue",
-  analyze: "analyse",
-  rightsized: "rightsised",
-  summarized: "summarised",
-  organization: "organisation",
-};
-
 /** Names and acronyms written one way, by the wrong way to write them. */
 const MISCASED: Record<string, string> = {
   AI: "Ai",
@@ -451,11 +435,6 @@ const RULES: Rule[] = [
     make: (el, rng) => {
       const t = textOf(el, rng);
       if (!t) return null;
-      const us = rng.shuffle(wordsOf(t.text)).find((w) => BRITISH[w.word.toLowerCase()]);
-      if (us) {
-        const wrong = matchCase(us.word, BRITISH[us.word.toLowerCase()]!);
-        return { look: t.set(replaceWord(t.text, us, wrong)), note: `British “${wrong}” on a slide written in American English.` };
-      }
       if (t.text.includes("zero-day")) return { look: t.set(t.text.replace("zero-day", "0-day")), note: "“0-day”, where the slide’s style is “zero-day”." };
       return null;
     },
