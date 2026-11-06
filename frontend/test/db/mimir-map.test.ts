@@ -240,6 +240,25 @@ describe("the coach", () => {
     assert.deepEqual(asked, [true, false, false, false, true]);
   });
 
+  test("picking a coach style has it introduce itself in that voice, hidden, without counting as an opening", async () => {
+    const c = coach("Coach Taylor here.");
+    await sendCoachMessage(rep.id, { open: true }, { complete: c.complete });
+    await setProfile(rep.id, { role: null, coachStyle: "socratic", coachPersonality: "taylor" });
+    const result = await sendCoachMessage(rep.id, { introduce: true }, { complete: c.complete });
+    assert.ok(result.ok);
+    assert.deepEqual(result.messages.map((m) => [m.role, m.text]), [["assistant", "Coach Taylor here."]]);
+    assert.match(lastUserContent(c.sent[1]!), /I just picked Coach Taylor as my coach\. Introduce yourself in that voice/);
+    assert.match(c.sent[1]!.system, /You are Coach Taylor/);
+    const view = await getCoachChat(rep.id);
+    assert.deepEqual(view.conversation!.messages.map((m) => m.role), ["assistant", "assistant"]);
+
+    // The next opening is the second, not the third: it does not ask for an introduction.
+    const again = coach("Hello.");
+    await sendCoachMessage(rep.id, { open: true }, { complete: again.complete });
+    assert.doesNotMatch(lastUserContent(again.sent[0]!), /Introduce yourself\.$/);
+    await setProfile(rep.id, { role: null, coachStyle: "socratic", coachPersonality: "canary" });
+  });
+
   test("the greeting is not shown as something they said", async () => {
     await sendCoachMessage(rep.id, { open: true }, { complete: coach("Hello.").complete });
     const stored = await messagesOf(rep.id);

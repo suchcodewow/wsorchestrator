@@ -234,6 +234,14 @@ export const OPEN_REQUEST = "I just opened Coach Canary.";
 export const INTRO_LINE = "Coach Canary here, your coach on the sideline for learning Harness.";
 export const INTRO_EVERY = 4;
 
+/** What an introduction turn is stored as: hidden, and not counted as an opening. */
+export const INTRODUCE_REQUEST = "I picked a new coach style.";
+
+/** The introduction asked for when the rep picks a coach style, so they hear at once what it changes. */
+export function introduceContent(coachName: string): string {
+  return `${INTRODUCE_REQUEST} I just picked ${coachName} as my coach. Introduce yourself in that voice: begin with your introduction line, then say in a sentence or two how you will coach me, then pick up where we left off with one question. Keep it short, and mark nothing.`;
+}
+
 /** The opening as sent: with a request to introduce itself when this is the first opening or the `INTRO_EVERY`th since the last intro. */
 export function openContent(priorOpenings: number): string {
   return priorOpenings % INTRO_EVERY === 0 ? `${OPEN_REQUEST} Introduce yourself.` : OPEN_REQUEST;

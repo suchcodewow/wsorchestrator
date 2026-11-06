@@ -28,7 +28,9 @@ import { CONCEPT_H, CONCEPT_W, PAD, SLIDE_H, SLIDE_W, layoutMap } from "@/lib/mi
 import {
   OPEN_REQUEST,
   REP_SLOT,
+  INTRODUCE_REQUEST,
   buildCoachSystem,
+  introduceContent,
   focusNote,
   knowsChecklists,
   nextConcept,
@@ -383,6 +385,14 @@ describe("what the map coach is told", () => {
     assert.match(taylor, /PERSONALITY: You are Coach Taylor\./);
     assert.match(taylor, /Friday Night Lights/);
     assert.doesNotMatch(taylor, /Ted Lasso/);
+  });
+
+  test("an introduction names the coach just picked, asks for its intro line, and marks nothing", () => {
+    const ask = introduceContent("Coach Lasso");
+    assert.ok(ask.startsWith(INTRODUCE_REQUEST));
+    assert.match(ask, /I just picked Coach Lasso as my coach/);
+    assert.match(ask, /begin with your introduction line/);
+    assert.match(ask, /mark nothing/);
   });
 
   test("a conversation from before the slot is told the current context at the end, the default style included", () => {

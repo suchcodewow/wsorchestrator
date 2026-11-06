@@ -126,8 +126,8 @@ export function ChatView({
     if (stick.current) scroller.current?.scrollTo({ top: scroller.current.scrollHeight });
   }, [messages.length, pending, streaming, replying]);
 
-  /** One turn: what you said, or a greeting, and the coach's reply as it is written. */
-  async function run(input: { message: string; focus?: string } | { open: true }) {
+  /** One turn: what you said, a greeting, or an introduction in a newly picked style, and the coach's reply as it is written. */
+  async function run(input: { message: string; focus?: string } | { open: true } | { introduce: true }) {
     stick.current = true;
     if ("message" in input) setPending(input.message);
     setReplying(true);
@@ -241,15 +241,24 @@ export function ChatView({
     }
   }
 
-  async function savePrefs(next: Profile) {
+  /** Saves your preferences; whether they were saved. */
+  async function savePrefs(next: Profile): Promise<boolean> {
     setPrefs(next);
     setPrefsError(null);
     try {
       const res = await fetch("/api/mimir/me", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(next) });
-      if (!res.ok) setPrefsError(res.status === 403 ? "You can't change this while viewing as someone else." : `Could not save (${res.status}).`);
+      if (res.ok) return true;
+      setPrefsError(res.status === 403 ? "You can't change this while viewing as someone else." : `Could not save (${res.status}).`);
     } catch {
       setPrefsError("Could not reach the server.");
     }
+    return false;
+  }
+
+  /** A new coach style, which introduces itself at once so you hear what it changes. */
+  async function pickStyle(coachPersonality: MimirCoachPersonality) {
+    if (busy) return;
+    if ((await savePrefs({ ...prefs, coachPersonality })) && view.configured) await run({ introduce: true });
   }
 
   const next = view.progress.next;
@@ -261,7 +270,7 @@ export function ChatView({
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <CoachCanaryAvatar className="size-7" />
-            <PersonalityMenu value={prefs.coachPersonality} onChoose={(coachPersonality) => void savePrefs({ ...prefs, coachPersonality })} />
+            <PersonalityMenu value={prefs.coachPersonality} disabled={busy} onChoose={(coachPersonality) => void pickStyle(coachPersonality)} />
           </div>
           <CoachOptions
             profile={prefs}
@@ -453,12 +462,12 @@ function Bubble({ role, html, text, live }: { role: MimirMessageRole; html: stri
 
 type Profile = { role: MimirRepRole | null; coachStyle: MimirCoachStyle; coachPersonality: MimirCoachPersonality };
 
-/** Whose voice the coach speaks in, from its next reply: the "Coach style" menu. */
-function PersonalityMenu({ value, onChoose }: { value: MimirCoachPersonality; onChoose: (p: MimirCoachPersonality) => void }) {
+/** Whose voice the coach speaks in: the "Coach style" menu. Picking one has the coach introduce itself in it. */
+function PersonalityMenu({ value, disabled, onChoose }: { value: MimirCoachPersonality; disabled: boolean; onChoose: (p: MimirCoachPersonality) => void }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button size="sm" aria-label={`Coach style: ${MIMIR_COACH_NAMES[value]}`}>
+        <Button size="sm" disabled={disabled} aria-label={`Coach style: ${MIMIR_COACH_NAMES[value]}`}>
           {MIMIR_COACH_NAMES[value]}
           <ChevronDown />
         </Button>
