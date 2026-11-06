@@ -1,10 +1,11 @@
-/** Reads everyone with an account, sets their roles, and deletes them. */
+/** Reads everyone with an account, adds employees as accounts, sets their roles, and deletes them. */
 
 import "server-only";
 
 import { count, desc, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
+  employees,
   users,
   workshopRuns,
   type AssessmentsRole,
@@ -12,7 +13,7 @@ import {
   type TrainingRole,
 } from "@/db/schema";
 import { noteAudit } from "@/lib/audit-context";
-import { canDeleteUsers, canManageRoles, type Access } from "@/lib/roles";
+import { canAddUsers, canDeleteUsers, canManageRoles, type Access } from "@/lib/roles";
 import type { UserSort } from "@/lib/list-specs";
 import { pageWindow, toPage, type ListQuery, type Page } from "@/lib/paging";
 import { orderFor, searchAny } from "@/lib/paging-sql";
@@ -73,6 +74,62 @@ export async function listSiteUsers(query: ListQuery<UserSort>): Promise<Page<Si
     rows.map((u) => ({ ...u, isBootstrapAdmin: isBootstrapAdmin(u.email) })),
     query.page,
   );
+}
+
+export type NewUserRoles = {
+  eventRole: EventRole;
+  trainingRole: TrainingRole | null;
+  assessmentsRole: AssessmentsRole | null;
+  isPlatformAdmin: boolean;
+};
+
+/**
+ * - `forbidden`    — only a platform administrator adds accounts.
+ * - `not_employee` — nobody on the employee list has the address.
+ * - `exists`       — an account already has it; set its roles on the table.
+ */
+export type AddUserError = "forbidden" | "not_employee" | "exists";
+
+/**
+ * Makes an account for an employee before they first sign in, with the roles
+ * given, so it is on the Users page now. Their first Google sign-in links to
+ * it by address (see `allowDangerousEmailAccountLinking` in src/auth.ts) and
+ * fills in their photo. It does not let them sign in from a domain that isn't
+ * allowed.
+ */
+export async function addUser(
+  actor: { access: Access },
+  email: string,
+  roles: NewUserRoles,
+): Promise<{ ok: true; user: { id: string; name: string; email: string } } | { ok: false; error: AddUserError }> {
+  if (!canAddUsers(actor.access)) return { ok: false, error: "forbidden" };
+  const address = email.trim().toLowerCase();
+  noteAudit({ targetLabel: address });
+
+  const [employee] = await db
+    .select({ fullName: employees.fullName })
+    .from(employees)
+    .where(eq(employees.email, address))
+    .limit(1);
+  if (!employee) return { ok: false, error: "not_employee" };
+
+  // Google hands Auth.js the address in whatever case it has it.
+  const [existing] = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(sql`lower(${users.email}) = ${address}`)
+    .limit(1);
+  if (existing) return { ok: false, error: "exists" };
+
+  const [row] = await db
+    .insert(users)
+    .values({ name: employee.fullName, email: address, ...roles })
+    .onConflictDoNothing({ target: users.email })
+    .returning({ id: users.id });
+  if (!row) return { ok: false, error: "exists" };
+
+  noteAudit({ target: row.id, detail: roles });
+  return { ok: true, user: { id: row.id, name: employee.fullName, email: address } };
 }
 
 export type RoleChange =

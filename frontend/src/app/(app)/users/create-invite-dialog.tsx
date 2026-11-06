@@ -247,7 +247,8 @@ export function CreateInviteDialog({ viewerAccess }: { viewerAccess: Access }) {
   );
 }
 
-function RoleChoice({
+/** One area's roles as a list of radio cards; the Add user dialog uses it too. */
+export function RoleChoice({
   legend,
   name,
   value,

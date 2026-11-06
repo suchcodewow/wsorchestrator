@@ -92,7 +92,7 @@ escalate itself:
 | Route | Why |
 | --- | --- |
 | `/api/backups/**` | Taking, restoring and importing backups |
-| `PATCH`/`DELETE /api/users/[id]`, `POST /api/users/invites`, `POST /api/invites/accept`, `POST /api/users/test-accounts`, `POST /api/users/test-accounts/[id]/reset` | Granting roles and creating accounts |
+| `POST /api/users`, `PATCH`/`DELETE /api/users/[id]`, `POST /api/users/invites`, `POST /api/invites/accept`, `POST /api/users/test-accounts`, `POST /api/users/test-accounts/[id]/reset` | Granting roles and creating accounts |
 | `POST /api/settings/domains`, `PATCH`/`DELETE /api/settings/domains/[id]` | Who can sign in at all |
 | `POST /api/settings/frame-domains`, `PATCH`/`DELETE /api/settings/frame-domains/[id]` | Which sites can put the app, signed in, inside their own page |
 | `GET /api/cohorts/slack/install`, `GET /api/evals/google-meetings/connect`, `GET /api/evals/google-meetings/zoom/connect` | Admin Settings → External Connectors: each hands the app a standing token for an outside account and ends in a browser; platform administrators only |
