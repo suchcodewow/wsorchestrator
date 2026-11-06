@@ -6,7 +6,7 @@ import { COHORT_SETTINGS_TABS } from "@/app/(app)/cohort-settings/tabs";
 import { COHORTS_TABS } from "@/app/(app)/cohorts/tabs";
 import { EVALS_SETTINGS_TABS } from "@/app/(app)/evals-settings/tabs";
 import { EVALS_TABS } from "@/app/(app)/evals/tabs";
-import { IRIS_TABS } from "@/app/(app)/diagnostic/tabs";
+import { DIAGNOSTIC_SETTINGS_TABS } from "@/app/(app)/diagnostic-settings/tabs";
 import { LOGISTICS_SETTINGS_TABS } from "@/app/(app)/logistics-settings/tabs";
 import { LOGISTICS_TABS } from "@/app/(app)/logistics/tabs";
 import { MY_SETTINGS_TABS } from "@/app/(app)/me/tabs";
@@ -25,7 +25,7 @@ const TAB_ICONS = new Map<string, LucideIcon>(
     ...COHORTS_TABS,
     ...EVALS_SETTINGS_TABS,
     ...EVALS_TABS,
-    ...IRIS_TABS,
+    ...DIAGNOSTIC_SETTINGS_TABS,
     ...LOGISTICS_SETTINGS_TABS,
     ...LOGISTICS_TABS,
     ...MY_SETTINGS_TABS,

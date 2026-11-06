@@ -138,6 +138,20 @@ export function isCandidate({ startDateOnOrAfter, activeEffectiveDateAfter }: Ca
 }
 
 /**
+ * A bootcamp candidate on the Sales or Engineer track who has RSVP'd, by
+ * saving the Bootcamp intake form: whom the Diagnostic's Bootcamp
+ * Auto-Enroll makes a Participant. A condition on `employees`.
+ */
+export function rsvpedForBootcamp(cutoffs: CandidateCutoffs): SQL {
+  return and(
+    isCandidate(cutoffs),
+    IN_STAGE.bootcamp,
+    inArray(e.track, ["sales", "engineer"]),
+    sql`exists (select 1 from ${intakeResponses} where ${intakeResponses.form} = 'bootcamp' and ${intakeResponses.email} = lower(${e.email}))`,
+  )!;
+}
+
+/**
  * One page of candidates, in one stage and on one track when the filter
  * names them; without a track, everyone not deferred. The search matches the name, email, title or track. No
  * scores: Cohorts shows who is in them, and eVals and Reporting show how they did.

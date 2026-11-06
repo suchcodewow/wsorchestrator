@@ -2897,6 +2897,32 @@ export const irisItemReviews = pgTable(
 
 export const IRIS_NOTE_MAX = 2000;
 
+/**
+ * The Diagnostic's Participants added by hand on Diagnostic Settings, by
+ * email, lowercased. Only a Participant can take the tests. The bootcamp
+ * attendees auto-enroll brings in are not stored here: they are worked out
+ * on each read while it is on (`lib/iris/participants.ts`), so stopping it
+ * removes every one of them and leaves these alone.
+ */
+export const irisParticipants = pgTable("iris_participants", {
+  email: text("email").primaryKey(),
+  addedBy: text("added_by").references(() => users.id, { onDelete: "set null" }),
+  addedAt: timestamp("added_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** Diagnostic-wide settings, one row per key; a key with no row reads as its default. */
+export const irisSettings = pgTable("iris_settings", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+  updatedBy: text("updated_by").references(() => users.id, { onDelete: "set null" }),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const IRIS_SETTINGS_KEYS = {
+  /** "true" while bootcamp attendees who have RSVP'd and are on a track are Participants. */
+  bootcampAutoEnroll: "bootcamp_auto_enroll",
+} as const;
+
 /* ------------------------------------------------------------------ */
 /* Mimir                                                               */
 /* ------------------------------------------------------------------ */

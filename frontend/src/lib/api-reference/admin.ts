@@ -321,7 +321,7 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
             {
               name: "role",
               type: `"viewer" | "administrator" | null`,
-              note: "required when area is training or assessments; null removes access. The assessments role covers Diagnostic too: a viewer takes it, an administrator runs it.",
+              note: "required when area is training or assessments; null removes access. An Assessments Administrator also runs Diagnostic; who takes it is set by its Participants, not a role.",
             },
             { name: "value", type: "boolean", note: "required when area is platform" },
           ],

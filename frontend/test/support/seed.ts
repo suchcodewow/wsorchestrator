@@ -10,6 +10,7 @@ import {
   bootcampJudges,
   bootcamps,
   employees,
+  irisParticipants,
   evalsAssessmentCriteria,
   evalsAssessments,
   evalsSubmissions,
@@ -68,6 +69,12 @@ export function testScope(name: string) {
     } else {
       await db.delete(bootcampJudges).where(eq(bootcampJudges.email, address));
       await db.delete(employees).where(eq(employees.id, `${id}_judge`));
+    }
+    // Nor is taking the Diagnostic: a Participant is added by hand, by address.
+    if (access.participating) {
+      await db.insert(irisParticipants).values({ email: address }).onConflictDoNothing();
+    } else {
+      await db.delete(irisParticipants).where(eq(irisParticipants.email, address));
     }
     // Managing people isn't stored on the user either: HiBob decides it, so a
     // manager is given one employee who reports to them.
@@ -226,7 +233,7 @@ export async function createRun(userId: string, name: string): Promise<string> {
   return row!.id;
 }
 
-/** What `id` holds now: their stored roles, whether they judge the active bootcamp, and whether anyone reports to them. */
+/** What `id` holds now: their stored roles, whether they judge the active bootcamp, whether anyone reports to them, and whether they were added as a Diagnostic Participant. */
 export async function readRoles(id: string) {
   const [row] = await db
     .select({
@@ -240,6 +247,7 @@ export async function readRoles(id: string) {
         where j.email = ${users}.email and b.status = 'active'
       )`,
       manager: sql<boolean>`exists (select 1 from ${employees} e where e.reports_to_email = lower(${users}.email))`,
+      participating: sql<boolean>`exists (select 1 from ${irisParticipants} p where p.email = lower(${users}.email))`,
     })
     .from(users)
     .where(eq(users.id, id));

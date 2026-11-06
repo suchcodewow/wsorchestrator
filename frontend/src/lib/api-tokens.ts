@@ -12,6 +12,7 @@ import {
 import type { Access } from "@/lib/roles";
 import { isJudgingNow } from "@/lib/scheduler/judging";
 import { isManagerNow } from "@/lib/evals/managers";
+import { isParticipantNow } from "@/lib/iris/participants";
 
 const TOKEN_PREFIX = "wo";
 
@@ -177,6 +178,7 @@ export async function resolveToken(
       platform: row.isPlatformAdmin,
       judging: await isJudgingNow(row.email),
       manager: await isManagerNow(row.email),
+      participating: await isParticipantNow(row.email),
     },
     email: row.email,
   };

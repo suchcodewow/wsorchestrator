@@ -233,6 +233,7 @@ describe("who may write a page's tour", () => {
     ["/recordings", ["trainingAdmin", "bothAdmins", "platform"]],
     ["/evals", ["assessmentsAdmin", "platform"]],
     ["/diagnostic", ["assessmentsAdmin", "platform"]],
+    ["/diagnostic-settings", ["assessmentsAdmin", "platform"]],
     // Coach Canary sits under Assessments, and its gear, Coach Canary Settings, is theirs too.
     ["/coach-canary", ["assessmentsAdmin", "platform"]],
     ["/coach-canary-settings", ["assessmentsAdmin", "platform"]],
