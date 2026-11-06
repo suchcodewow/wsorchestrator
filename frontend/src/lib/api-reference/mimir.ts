@@ -3,9 +3,11 @@
 import {
   MIMIR_MESSAGE_MAX,
   MIMIR_SETTING_MAX,
+  VIDEO_FEEDBACK_LIMITS,
 } from "@/db/schema";
-import { EXPERIENCE_REPORT_LIST, MAP_VERSION_LIST, MIMIR_STUDIO_JOB_LIST } from "@/lib/list-specs";
-import { EXPERIENCE_IDS, SLIDE_SCORE_FLOOR } from "@/lib/mimir/experiences";
+import { EXPERIENCE_REPORT_LIST, SLIDE_FEEDBACK_LIST, MAP_VERSION_LIST, MIMIR_STUDIO_JOB_LIST } from "@/lib/list-specs";
+import { EXPERIENCE_IDS, RECENT_SLIDES, WRONG_CLICKS_MAX } from "@/lib/mimir/experiences";
+import { SEED_MAX } from "@/lib/mimir/slide-review/generate";
 import { MAX_SCORE as SECURITY_MAX } from "@/lib/mimir/security-game/scenario";
 import { MAP_SUMMARY_MAX } from "@/lib/mimir/map/schema";
 import { DECK_MAX_BYTES, VIDEO_NOTES_MAX } from "@/lib/mimir/studio/shapes";
@@ -13,7 +15,9 @@ import { PAGE_FIELDS, listQuery } from "./paging";
 import type { EndpointGroup, Field } from "./types";
 
 const EXPERIENCE_TYPE = EXPERIENCE_IDS.map((k) => `"${k}"`).join(" | ");
-const EXPERIENCE_PROGRESS_SHAPE = `{ userId, experience: ${EXPERIENCE_TYPE}, part, attempts: number, bestScore: number | null, firstCompletedAt, lastCompletedAt }`;
+const EXPERIENCE_PROGRESS_SHAPE = `{ userId, experience: "developer" | "security", attempts: number, bestScore: number | null, firstCompletedAt, lastCompletedAt }`;
+const SLIDE_RUN_SHAPE = "{ id, userId, seed: number, theme, found: number, total: number, wrongClicks: number, score: number, createdAt }";
+const SLIDE_FEEDBACK_SHAPE = `{ id, seed: number, theme, rating: "up" | "down", comment: string | null, createdAt, user: { name, email } | null }`;
 const MESSAGE_SHAPE = `{ seq, role: "user" | "assistant", text, html: string | null, at }`;
 const JOB_ID: Field = { name: "id", type: "string", required: true, note: "the job's id" };
 const JOB_SHAPE = `{ id, kind: "deck" | "video", status: "uploading" | "queued" | "running" | "ready" | "succeeded" | "failed" | "published" | "discarded", conceptId: string | null, label, input, result: object | null, progress: string | null, error: string | null, requestedBy: string | null, createdAt, startedAt: string | null, finishedAt: string | null, updatedAt }`;
@@ -56,29 +60,31 @@ export const MIMIR_GROUPS: EndpointGroup[] = [
       {
         method: "GET",
         path: "/api/mimir/experiences",
-        summary: "Returns your finished runs of the hands-on experiences: one row for each experience, and one for each slide of the slide review.",
+        summary: "Returns your finished runs of the hands-on experiences: the Developer and Enterprise Security Team experiences, and your latest slides of the slide review.",
         access: "signedIn",
         token: true,
-        notes: "An experience you have never finished has no row. part is the slide's id for the slide review and empty otherwise. bestScore is null for the Developer experience, which keeps only that it was finished.",
-        returns: `{ progress: ${EXPERIENCE_PROGRESS_SHAPE}[] }`,
+        notes: "An experience you have never finished has no row in progress. bestScore is null for the Developer experience, which keeps only that it was finished. slides is your latest 100 slides of the slide review, newest first; a slide's seed rebuilds it exactly.",
+        returns: `{ progress: ${EXPERIENCE_PROGRESS_SHAPE}[], slides: ${SLIDE_RUN_SHAPE}[] }`,
       },
       {
         method: "POST",
         path: "/api/mimir/experiences",
-        summary: "Records one finished run of a hands-on experience: one more attempt, and the score if it is your best.",
+        summary: "Records one finished run of a hands-on experience, or one finished slide of the slide review.",
         access: "signedIn",
         token: true,
-        notes: `The experiences run in the browser and send this when a run ends, so a score is what the caller reports, checked only against what the experience can score. developer takes no part and no score. security takes no part and its run's total, 0 to ${SECURITY_MAX}. slide-review takes the slide's id as part and that slide's score, from ${SLIDE_SCORE_FLOOR} up to the slide's number of mistakes. firstCompletedAt stays as it was on later runs.`,
+        notes: `The experiences run in the browser and send this when a run ends. developer takes nothing more, and adds an attempt. security takes its run's total as score, 0 to ${SECURITY_MAX}, and keeps the best. slide-review takes the slide's seed, how many of its mistakes were found and how many wrong clicks there were; the server rebuilds the slide from the seed for its theme and its number of mistakes, and works out the score itself, so found can't be more than the slide had. Each slide-review call adds a slide, even for a seed played before.`,
         body: {
           kind: "json",
           fields: [
             { name: "experience", type: EXPERIENCE_TYPE, required: true },
-            { name: "part", type: "string", note: "the slide's id, for slide-review only" },
-            { name: "score", type: "integer", note: "required for security and slide-review; not sent for developer" },
+            { name: "score", type: "integer", note: "security only" },
+            { name: "seed", type: "integer", note: `slide-review only: 1 to ${SEED_MAX}` },
+            { name: "found", type: "integer", note: "slide-review only: 0 to the slide's number of mistakes" },
+            { name: "wrongClicks", type: "integer", note: `slide-review only: 0 to ${WRONG_CLICKS_MAX}` },
           ],
         },
-        returns: `{ progress: ${EXPERIENCE_PROGRESS_SHAPE} }`,
-        errors: [{ status: 400, error: "invalid", when: "the experience, part or score is not one that experience can report" }],
+        returns: `{ progress: ${EXPERIENCE_PROGRESS_SHAPE} } for developer and security; { slide: ${SLIDE_RUN_SHAPE} } for slide-review`,
+        errors: [{ status: 400, error: "invalid", when: "the body is not a run that experience can report" }],
       },
       {
         method: "GET",
@@ -86,9 +92,37 @@ export const MIMIR_GROUPS: EndpointGroup[] = [
         summary: "Lists everyone with an account, with their concept videos watched to the end, the concepts the coach has marked them as knowing, and their hands-on experiences, a page at a time.",
         access: "assessmentsAdmin",
         token: true,
-        notes: "videos counts concept videos watched to the end, and mastered the concepts the coach in Chat has marked as known. developerCompletedAt is when they first finished the Developer experience, or null. securityAttempts and securityBest are their finished runs of the Enterprise Security Team and the best total of them. slidesDone is how many slides of the slide review they have finished, slidesBest the sum of their best score on each, and slides each finished slide's attempts and best score. Sorting by security sorts by securityBest, and by developer by developerCompletedAt.",
+        notes: `videos counts concept videos watched to the end, and mastered the concepts the coach in Chat has marked as known. developerCompletedAt is when they first finished the Developer experience, or null. securityAttempts and securityBest are their finished runs of the Enterprise Security Team and the best total of them. slidesDone is how many slides of the slide review they have finished, slidesScore their points on all of them, and slidesFound and slidesTotal the mistakes they found out of how many there were. recentSlides is their latest ${RECENT_SLIDES} slides, newest first, each with the seed that rebuilds it. Sorting by security sorts by securityBest, by developer by developerCompletedAt, and by slides by slidesDone.`,
         query: listQuery(EXPERIENCE_REPORT_LIST.sorts, "the person's name or email"),
-        returns: `{ people: { userId, name, email, videos: number, mastered: number, developerCompletedAt: string | null, securityAttempts: number, securityBest: number | null, slidesDone: number, slidesBest: number | null, slides: { slide, attempts: number, bestScore: number | null }[] }[], ${PAGE_FIELDS} }`,
+        returns: `{ people: { userId, name, email, videos: number, mastered: number, developerCompletedAt: string | null, securityAttempts: number, securityBest: number | null, slidesDone: number, slidesScore: number, slidesFound: number, slidesTotal: number, recentSlides: { seed: number, theme, found: number, total: number, wrongClicks: number, score: number, at }[] }[], ${PAGE_FIELDS} }`,
+      },
+      {
+        method: "GET",
+        path: "/api/mimir/slide-feedback",
+        summary: "Lists the smiley and confused ratings given to slide review slides, with any comment, a page at a time, the newest first.",
+        access: "assessmentsAdmin",
+        token: true,
+        notes: "seed rebuilds the slide the rating was about, exactly as it was dealt; theme is the theme that seed makes. user is null once the account that gave it is deleted.",
+        query: listQuery(SLIDE_FEEDBACK_LIST.sorts, "the comment, or the name or email of who gave it", "desc"),
+        returns: `{ feedback: ${SLIDE_FEEDBACK_SHAPE}[], ${PAGE_FIELDS} }`,
+      },
+      {
+        method: "POST",
+        path: "/api/mimir/slide-feedback",
+        summary: "Rates a slide review slide with a smiley or confused face, with a comment if you like.",
+        access: "signedIn",
+        token: true,
+        notes: "The slide is named by its seed. Rating the same slide again adds another rating; nothing is replaced.",
+        body: {
+          kind: "json",
+          fields: [
+            { name: "seed", type: "integer", required: true, note: `1 to ${SEED_MAX}` },
+            { name: "rating", type: `"up" | "down"`, required: true, note: "up is the smiley face, down the confused one" },
+            { name: "comment", type: "string", note: `up to ${VIDEO_FEEDBACK_LIMITS.comment} characters, trimmed; blank is no comment` },
+          ],
+        },
+        returns: `{ feedback: ${SLIDE_FEEDBACK_SHAPE} }`,
+        errors: [{ status: 400, error: "invalid", when: "the seed, rating or comment is not one of those above" }],
       },
       {
         method: "GET",

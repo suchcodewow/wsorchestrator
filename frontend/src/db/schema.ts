@@ -3060,12 +3060,11 @@ export const mimirConceptProgress = pgTable(
 );
 
 /**
- * One person's runs of a hands-on experience, or of one part of it: the slide
- * review keeps a row per slide, keyed by the slide's id, and the others a
- * single row with an empty part. Each finished run adds an attempt and keeps
- * the best score; the Developer experience has no score, only whether it was
- * finished. The experiences run in the browser, so a score is what the
- * person's browser reported.
+ * One person's runs of a hands-on experience kept whole: each finished run adds
+ * an attempt and keeps the best score. The Developer experience has no score,
+ * only whether it was finished. The experiences run in the browser, so a
+ * score is what the person's browser reported. The slide review, which never
+ * ends, keeps a row per slide instead, in `mimir_slide_review_runs`.
  */
 export const mimirExperienceProgress = pgTable(
   "mimir_experience_progress",
@@ -3073,9 +3072,7 @@ export const mimirExperienceProgress = pgTable(
     userId: text("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    experience: text("experience").$type<ExperienceId>().notNull(),
-    /** A slide's id in the slide review; empty for an experience kept whole. */
-    part: text("part").notNull().default(""),
+    experience: text("experience").$type<Exclude<ExperienceId, "slide-review">>().notNull(),
     attempts: integer("attempts").notNull().default(0),
     /** The highest score of any attempt; null for an experience without a score. */
     bestScore: integer("best_score"),
@@ -3083,12 +3080,64 @@ export const mimirExperienceProgress = pgTable(
     lastCompletedAt: timestamp("last_completed_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
-    primaryKey({ columns: [t.userId, t.experience, t.part] }),
-    check("mimir_experience_progress_experience_check", sql`${t.experience} in ('developer', 'security', 'slide-review')`),
+    primaryKey({ columns: [t.userId, t.experience] }),
+    check("mimir_experience_progress_experience_check", sql`${t.experience} in ('developer', 'security')`),
   ],
 );
 
 export type MimirExperienceProgress = typeof mimirExperienceProgress.$inferSelect;
+
+/**
+ * Each slide of the slide review someone finished: the seed it was made from,
+ * which rebuilds it exactly, and how they did. The score is worked out on the
+ * server from the seed and what they found, so only `found` and
+ * `wrong_clicks` come from the browser.
+ */
+export const mimirSlideReviewRuns = pgTable(
+  "mimir_slide_review_runs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    seed: integer("seed").notNull(),
+    /** The theme the seed made, by its id in the slide review's bank. */
+    theme: text("theme").notNull(),
+    found: integer("found").notNull(),
+    /** How many mistakes the slide had. */
+    total: integer("total").notNull(),
+    wrongClicks: integer("wrong_clicks").notNull(),
+    score: integer("score").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("mimir_slide_review_runs_user_idx").on(t.userId, t.createdAt)],
+);
+
+export type MimirSlideReviewRun = typeof mimirSlideReviewRuns.$inferSelect;
+
+/**
+ * A smiley or confused rating on a slide review slide, with a comment if one
+ * was written, from the faces above the slide. The seed rebuilds the slide it
+ * was about.
+ */
+export const mimirSlideFeedback = pgTable(
+  "mimir_slide_feedback",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id").references(() => users.id, { onDelete: "set null" }),
+    seed: integer("seed").notNull(),
+    theme: text("theme").notNull(),
+    rating: text("rating").$type<VideoFeedbackRating>().notNull(),
+    comment: text("comment"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("mimir_slide_feedback_created_at_idx").on(t.createdAt),
+    check("mimir_slide_feedback_rating_check", sql`${t.rating} in ('up', 'down')`),
+  ],
+);
+
+export type MimirSlideFeedback = typeof mimirSlideFeedback.$inferSelect;
 
 /**
  * One person's conversation with the map coach, the whole of it. The system

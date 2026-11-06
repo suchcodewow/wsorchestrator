@@ -6,11 +6,10 @@
  * Canary in.
  */
 
+import { WideView } from "@/components/wide-view";
 import { EXPERIENCE_REPORT_LIST } from "@/lib/list-specs";
 import { listExperienceReport } from "@/lib/mimir/experience-progress";
 import { parseListQuery } from "@/lib/paging";
-import { SLIDES } from "@/lib/mimir/slide-review/slides";
-import { WideView } from "@/components/wide-view";
 import { ReportingView } from "./reporting-view";
 
 export default async function MimirReportingPage({
@@ -23,11 +22,7 @@ export default async function MimirReportingPage({
   // A column for each experience makes the table wider than the reading column.
   return (
     <WideView>
-      <ReportingView
-        query={query}
-        page={page}
-        slides={SLIDES.map((s) => ({ id: s.id, subtitle: s.subtitle, flaws: s.flaws.length }))}
-      />
+      <ReportingView query={query} page={page} />
     </WideView>
   );
 }

@@ -4,9 +4,12 @@
  * a run that fails to record never interrupts the experience.
  */
 
-import type { ExperienceId } from "@/lib/mimir/experiences";
+type Run =
+  | { experience: "developer" }
+  | { experience: "security"; score: number }
+  | { experience: "slide-review"; seed: number; found: number; wrongClicks: number };
 
-export function recordRun(run: { experience: ExperienceId; part?: string; score?: number }): void {
+export function recordRun(run: Run): void {
   void fetch("/api/mimir/experiences", {
     method: "POST",
     headers: { "Content-Type": "application/json" },

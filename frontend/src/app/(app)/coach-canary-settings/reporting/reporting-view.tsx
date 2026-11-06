@@ -5,8 +5,9 @@
  * to the end, concepts mastered in chat, and the three hands-on experiences.
  * The Developer experience shows when it was first finished; the Enterprise
  * Security Team its best total and how many runs; the slide review how many
- * slides are done and the sum of their best scores. A row opens to each
- * slide's attempts and best score.
+ * slides they have finished, their points and the share of mistakes they
+ * found. A row opens to their latest slides, each of which opens to the slide
+ * itself, rebuilt from its seed.
  */
 
 import { Fragment, useState } from "react";
@@ -15,12 +16,14 @@ import { ChevronRight } from "lucide-react";
 import { HEADER_ROW, LINK_ROW, Pager, SortHeader, TableSearch, useRowLink } from "@/components/data-table";
 import type { ExperienceReportSort } from "@/lib/list-specs";
 import type { ExperienceReportRow } from "@/lib/mimir/experience-progress";
+import { THEMES } from "@/lib/mimir/slide-review/bank";
 import { MAX_SCORE as SECURITY_MAX } from "@/lib/mimir/security-game/scenario";
 import { riseChild, staggerParent } from "@/lib/motion";
 import type { ListQuery, Page } from "@/lib/paging";
 import { cn } from "@/lib/utils";
+import { SeedButton, SlideSeedDialog } from "../slide-seed-dialog";
 
-export type SlideBrief = { id: string; subtitle: string; flaws: number };
+const THEME_NAMES = new Map(THEMES.map((t) => [t.id, t.name]));
 
 /** The day alone: the column is about whether it was finished, and the time would only crowd it. */
 const DAY = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
@@ -37,17 +40,14 @@ const COLUMNS: { column: ExperienceReportSort; label: string; className?: string
 export function ReportingView({
   query,
   page,
-  slides,
 }: {
   query: ListQuery<ExperienceReportSort>;
   page: Page<ExperienceReportRow>;
-  /** The slide review's slides, in order, to lay each person's slides out against. */
-  slides: SlideBrief[];
 }) {
   const rowLink = useRowLink();
   const [open, setOpen] = useState<string | null>(null);
   const sortProps = { sort: query.sort, dir: query.dir };
-  const slidesMax = slides.reduce((sum, s) => sum + s.flaws, 0);
+  const [seed, setSeed] = useState<number | null>(null);
 
   return (
     <motion.div variants={staggerParent(0.04)} initial="hidden" animate="show" className="space-y-6">
@@ -118,10 +118,10 @@ export function ReportingView({
                       <td className="px-5 py-3">
                         {r.slidesDone ? (
                           <span className="tabular-nums">
-                            {r.slidesDone} of {slides.length} slides
+                            {r.slidesDone} {r.slidesDone === 1 ? "slide" : "slides"}
                             <span className="text-muted-foreground">
                               {" "}
-                              · best {r.slidesBest ?? 0} / {slidesMax}
+                              · {r.slidesScore} pts · found {Math.round((100 * r.slidesFound) / Math.max(r.slidesTotal, 1))}%
                             </span>
                           </span>
                         ) : (
@@ -132,7 +132,7 @@ export function ReportingView({
                     {expanded && (
                       <tr className="border-b bg-muted/20 last:border-b-0">
                         <td colSpan={COLUMNS.length} className="px-5 py-3">
-                          <SlideBreakdown row={r} slides={slides} />
+                          <RecentSlides row={r} onOpen={setSeed} />
                         </td>
                       </tr>
                     )}
@@ -144,26 +144,32 @@ export function ReportingView({
         </div>
         <Pager page={page} noun="people" />
       </motion.div>
+      <SlideSeedDialog seed={seed} onClose={() => setSeed(null)} />
     </motion.div>
   );
 }
 
-/** Each slide of the slide review, finished or not, with its best score and attempts. */
-function SlideBreakdown({ row, slides }: { row: ExperienceReportRow; slides: SlideBrief[] }) {
-  const bySlide = new Map(row.slides.map((s) => [s.slide, s]));
+/** A person's latest slides of the slide review, newest first; a seed opens its slide. */
+function RecentSlides({ row, onOpen }: { row: ExperienceReportRow; onOpen: (seed: number) => void }) {
+  if (!row.recentSlides.length) return <p className="text-xs text-muted-foreground">No slides of the slide review yet.</p>;
   return (
     <div className="space-y-1.5">
-      <p className="text-xs font-medium text-muted-foreground">Slide review, slide by slide</p>
-      <ul className="grid gap-x-6 gap-y-1 sm:grid-cols-2 lg:grid-cols-5">
-        {slides.map((s, i) => {
-          const done = bySlide.get(s.id);
-          return (
-            <li key={s.id} className="flex items-baseline gap-2 text-xs" title={s.subtitle}>
-              <span className="w-14 shrink-0 font-medium">Slide {i + 1}</span>
-              {done ? <Scored best={done.bestScore} max={s.flaws} attempts={done.attempts} /> : <None />}
-            </li>
-          );
-        })}
+      <p className="text-xs font-medium text-muted-foreground">
+        Slide review: the latest {row.recentSlides.length} of {row.slidesDone}
+      </p>
+      <ul className="grid gap-x-8 gap-y-1 md:grid-cols-2">
+        {row.recentSlides.map((s) => (
+          <li key={`${s.seed}:${s.at}`} className="flex items-baseline gap-3 text-xs">
+            <span className="w-24 shrink-0 text-muted-foreground">{DAY.format(new Date(s.at))}</span>
+            <SeedButton seed={s.seed} onOpen={onOpen} />
+            <span className="min-w-0 grow truncate">{THEME_NAMES.get(s.theme) ?? s.theme}</span>
+            <span className="shrink-0 text-muted-foreground tabular-nums">
+              found {s.found} of {s.total}
+              {s.wrongClicks > 0 && ` · ${s.wrongClicks} wrong`}
+            </span>
+            <span className={cn("w-10 shrink-0 text-right font-medium tabular-nums", s.score < 0 && "text-destructive")}>{s.score}</span>
+          </li>
+        ))}
       </ul>
     </div>
   );
