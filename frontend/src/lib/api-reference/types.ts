@@ -48,6 +48,8 @@ export type AccessKey =
   | "trainingAdmin"
   | "assessmentsViewer"
   | "assessmentsAdmin"
+  | "participant"
+  | "diagnosticSitter"
   | "employeeSearch"
   | "mimirStudio"
   | "evalsReader"
@@ -72,6 +74,8 @@ export const ACCESS_LABELS: Record<AccessKey, string> = {
   trainingAdmin: TRAINING_ROLE_LABELS.administrator,
   assessmentsViewer: `${ASSESSMENTS_ROLE_LABELS.viewer} or above`,
   assessmentsAdmin: ASSESSMENTS_ROLE_LABELS.administrator,
+  participant: "A Participant in the Diagnostic, whatever their roles",
+  diagnosticSitter: `A Diagnostic Participant for a live sitting, or an ${ASSESSMENTS_ROLE_LABELS.administrator} for a preview`,
   employeeSearch: `${ASSESSMENTS_ROLE_LABELS.administrator} or ${TRAINING_ROLE_LABELS.administrator}`,
   mimirStudio: ASSESSMENTS_ROLE_LABELS.administrator,
   evalsReader: `${ASSESSMENTS_ROLE_LABELS.viewer} or above, or a guest judge on the active bootcamp`,

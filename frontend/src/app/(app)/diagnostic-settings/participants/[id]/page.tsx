@@ -1,4 +1,4 @@
-/** One person's Diagnostic sittings, question by question, with the answers they chose. Assessments Administrators only. */
+/** One Participant's Diagnostic sittings, question by question, with the answers they chose. Assessments Administrators only. */
 
 import { notFound, redirect } from "next/navigation";
 import { auth, signInPath } from "@/auth";

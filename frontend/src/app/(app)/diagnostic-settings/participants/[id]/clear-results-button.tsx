@@ -25,10 +25,10 @@ export function ClearResultsButton({ userId, who, sittings }: { userId: string; 
     setPending(true);
     setError(null);
     try {
-      const res = await fetch(`/api/diagnostic/cohort/${encodeURIComponent(userId)}`, { method: "DELETE" });
+      const res = await fetch(`/api/diagnostic/results/${encodeURIComponent(userId)}`, { method: "DELETE" });
       if (!res.ok) throw new Error(`Could not clear (${res.status})`);
       setOpen(false);
-      router.push("/diagnostic/cohort");
+      router.push("/diagnostic-settings/participants");
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not clear");

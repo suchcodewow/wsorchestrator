@@ -28,6 +28,7 @@ import {
 } from "@/lib/iris/engine";
 import { ITEMS_BY_ID, approvedCounts, isLive, poolFor } from "@/lib/iris/reviews";
 import { SUBJECTS, SUBJECT_KEYS, type SubjectKey, type Track } from "@/lib/iris/subjects";
+import { canManageIris, canTakeIris, type Access } from "@/lib/roles";
 
 /**
  * What a taker is shown of a question: its wording and options, nothing else.
@@ -223,17 +224,36 @@ export async function startSitting(
   return { ok: true, sitting: viewOf(created), resumed: false };
 }
 
-/** Whatever the taker has open on `attemptId`, for a page reload. */
-export async function openSitting(userId: string, attemptId: string): Promise<SittingView | null> {
+export type SittingMode = "live" | "preview";
+
+/**
+ * The sittings `access` may carry on: live ones for a Participant, previews
+ * for an Assessments Administrator. Someone no longer a Participant cannot
+ * go on with a live sitting they left open.
+ */
+export function sittingModes(access: Access): SittingMode[] {
+  return [...(canTakeIris(access) ? ["live" as const] : []), ...(canManageIris(access) ? ["preview" as const] : [])];
+}
+
+const EVERY_MODE: readonly SittingMode[] = ["live", "preview"];
+
+/** Whatever the taker has open on `attemptId`, for a page reload; null for a sitting not in one of `modes`. */
+export async function openSitting(
+  userId: string,
+  attemptId: string,
+  modes: readonly SittingMode[] = EVERY_MODE,
+): Promise<SittingView | null> {
   const [attempt] = await db
     .select()
     .from(irisAttempts)
     .where(and(eq(irisAttempts.id, attemptId), eq(irisAttempts.userId, userId)));
-  return attempt && !attempt.finishedAt && onBank(attempt) ? viewOf(attempt) : null;
+  return attempt && modes.includes(attempt.mode as SittingMode) && !attempt.finishedAt && onBank(attempt)
+    ? viewOf(attempt)
+    : null;
 }
 
 /**
- * - `not_found` — no such sitting of theirs.
+ * - `not_found` — no such sitting of theirs, or not one they may carry on.
  * - `finished`  — it is over.
  * - `stale`     — they answered a question number that is no longer the one on
  *                 screen, from a second tab; `sitting` is the current one.
@@ -264,6 +284,7 @@ export async function answer(
   number: number,
   choice: number,
   random: () => number = Math.random,
+  modes: readonly SittingMode[] = EVERY_MODE,
 ): Promise<AnswerResult> {
   if (!Number.isInteger(choice) || choice < IDK || choice > 3) return { ok: false, error: "invalid_choice" };
 
@@ -275,7 +296,7 @@ export async function answer(
     .select({ subject: irisAttempts.subject, form: irisAttempts.form, mode: irisAttempts.mode })
     .from(irisAttempts)
     .where(and(eq(irisAttempts.id, attemptId), eq(irisAttempts.userId, userId)));
-  if (!sitting) return { ok: false, error: "not_found" };
+  if (!sitting || !modes.includes(sitting.mode as SittingMode)) return { ok: false, error: "not_found" };
   const pool = await poolFor(sitting.subject as SubjectKey, sitting.form as Form, sitting.mode as "live" | "preview");
 
   // The lock is on this one sitting only, so two tabs cannot record two

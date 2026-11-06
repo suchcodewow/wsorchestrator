@@ -55,13 +55,13 @@ const EXPECTED_SIDEBAR: Record<Persona, string[]> = {
   eventAdmin: [...HOME, ...EVENTS_ADMIN, ...MIMIR_ONLY, ...ACCOUNT, "[Administration]", "Manage users"],
   trainingViewer: [...HOME, "[Training]", "Scheduler", "Cohorts", "Logistics", "Async Recordings", "Survey Results", ...MIMIR_ONLY, ...ACCOUNT],
   trainingAdmin: [...HOME, ...TRAINING_ADMIN, ...MIMIR_ONLY, ...ACCOUNT, "[Administration]", "Manage users"],
-  // Diagnostic is part of the assessments area: a viewer takes it, an administrator runs it.
-  assessmentsViewer: [...HOME, "[Assessments]", "eVals", "Diagnostic", "Reporting", "Coach Canary", ...ACCOUNT],
+  // Diagnostic is part of the assessments area: an administrator runs it, and only a Participant takes it.
+  assessmentsViewer: [...HOME, "[Assessments]", "eVals", "Reporting", "Coach Canary", ...ACCOUNT],
   assessmentsAdmin: [
     ...HOME,
     "[Assessments]",
     "eVals",
-    "Diagnostic",
+    "Diagnostic Settings",
     "Reporting",
     "Reporting Settings",
     "eVals settings",
@@ -72,6 +72,8 @@ const EXPECTED_SIDEBAR: Record<Persona, string[]> = {
   ],
   // The Scheduler, for the active bootcamp's schedule alone; the rest of Training stays a Training Viewer's.
   guestJudge: [...HOME, "[Training]", "Scheduler", "[Assessments]", "eVals", "Reporting", "Coach Canary", ...ACCOUNT],
+  // A Participant takes the Diagnostic's tests, and has nothing else beyond what everyone has.
+  participant: [...HOME, "[Assessments]", "Diagnostic", "Reporting", "Coach Canary", ...ACCOUNT],
   // HiBob has people reporting to them: the Canary Wire as well as Bootcamp, under the Reporting everyone has.
   peopleManager: [...HOME, "[Assessments]", "Reporting", "Coach Canary", ...ACCOUNT],
   bothAdmins: [...HOME, ...EVENTS_ADMIN, ...TRAINING_ADMIN, ...MIMIR_ONLY, ...ACCOUNT, "[Administration]", "Manage users"],
@@ -80,7 +82,7 @@ const EXPECTED_SIDEBAR: Record<Persona, string[]> = {
     ...TRAINING_ADMIN,
     "[Assessments]",
     "eVals",
-    "Diagnostic",
+    "Diagnostic Settings",
     "Reporting",
     "Reporting Settings",
     "eVals settings",

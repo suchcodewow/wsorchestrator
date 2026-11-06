@@ -11,8 +11,8 @@ import { ENGINE, LEVELS, type Level } from "@/lib/iris/engine";
 import { LEVEL_LABELS, SUBJECTS, OPEN_SUBJECT_KEYS, TRACK_LABELS, TRAINING, bandOf } from "@/lib/iris/subjects";
 import { riseChild, staggerParent } from "@/lib/motion";
 import { cn } from "@/lib/utils";
-import { LevelBadge } from "../../level-badge";
-import { Radar } from "../../radar";
+import { LevelBadge } from "@/app/(app)/diagnostic/level-badge";
+import { Radar } from "@/app/(app)/diagnostic/radar";
 import { ClearResultsButton } from "./clear-results-button";
 
 type Sitting = Omit<DetailSitting, "startedAt" | "finishedAt"> & { startedAt: string; finishedAt: string | null };
@@ -27,9 +27,9 @@ export function PersonView({ detail, summary }: { detail: Detail; summary: Cohor
   return (
     <motion.div variants={staggerParent(0.05)} initial="hidden" animate="show" className="space-y-6">
       <motion.div variants={riseChild}>
-        <Link href="/diagnostic/cohort" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
+        <Link href="/diagnostic-settings/participants" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
           <ArrowLeft className="size-4" />
-          Cohort
+          Participants
         </Link>
       </motion.div>
 

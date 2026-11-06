@@ -541,8 +541,8 @@ up for them.
 | Role                          | Adds                                                            |
 | ----------------------------- | --------------------------------------------------------------- |
 | *(none)*                      | Nothing. What everyone starts as.                               |
-| **Assessments Viewer**        | The **eVals** page, read-only: every assessment and score, without scoring; and **Diagnostic**: takes the placement tests. |
-| **Assessments Administrator** | Scores on **eVals**; sets everyone's Assessments role on **Manage users**; **eVals settings**, including **Google Meetings**; **Coach Canary Settings**, Mimir Studio among them; and Diagnostic's console: everyone's results, the answer key, and approving and rejecting questions. |
+| **Assessments Viewer**        | The **eVals** page, read-only: every assessment and score, without scoring. |
+| **Assessments Administrator** | Scores on **eVals**; sets everyone's Assessments role on **Manage users**; **eVals settings**, including **Google Meetings**; **Coach Canary Settings**, Mimir Studio among them; and **Diagnostic Settings**: its Participants and their results, Bootcamp Auto-Enroll, the answer key, and approving and rejecting questions. |
 
 **Diagnostic** — adaptive placement tests for new GTM hires, each subject taken
 once per form, which place someone at 101, 201 or 301 so enablement can route
@@ -551,8 +551,13 @@ changed the SDLC, Pipeline Generation and Champion Building have questions (the
 October 2026 bank, 38 each); Harness Solution, Messaging, Qualification and
 Tools are listed as coming soon. Each taker sees a question's options in their
 own shuffled order. Takers never see their own level. Part of
-the assessments area, with no roles of its own: an Assessments Viewer takes the
-tests and an Assessments Administrator runs them. (It was called Iris until
+the assessments area, with no roles of its own: an Assessments Administrator
+runs it on **Diagnostic Settings**, and only its **Participants** take the
+tests, whatever roles anyone holds, administrators included. A Participant is
+someone added by hand, or, while **Bootcamp Auto-Enroll** is on, a bootcamp
+candidate on the Sales or Engineer track who has RSVP'd; stopping auto-enroll
+removes those it brought in and keeps the hand-added. Participants are not the
+Training cohort: anyone at Harness can be one. (It was called Iris until
 October 2026, with its own Iris Taker and Iris Administrator roles until the
 migration that removed them gave everyone the higher of their two roles. Its
 database tables and code still use the name `iris`.)

@@ -20,7 +20,7 @@ import type { Calibration, QuestionRow } from "@/lib/iris/questions";
 import { LEVEL_LABELS, SUBJECTS, OPEN_SUBJECT_KEYS, type SubjectKey } from "@/lib/iris/subjects";
 import { riseChild, staggerParent } from "@/lib/motion";
 import { cn } from "@/lib/utils";
-import { LevelBadge } from "../level-badge";
+import { LevelBadge } from "@/app/(app)/diagnostic/level-badge";
 
 type Row = Omit<QuestionRow, "review"> & { review: Omit<QuestionRow["review"], "updatedAt"> & { updatedAt: string | null } };
 
@@ -36,7 +36,7 @@ function hrefFor(subject: SubjectKey, level: Level | null, status: IrisReviewSta
   const p = new URLSearchParams({ subject });
   if (level) p.set("level", String(level));
   if (status) p.set("status", status);
-  return `/diagnostic/questions?${p}`;
+  return `/diagnostic-settings/questions?${p}`;
 }
 
 export function QuestionsView({
@@ -108,7 +108,7 @@ export function QuestionsView({
         </div>
         <div className="flex flex-wrap gap-2">
           <Button asChild variant="outline" size="sm">
-            <Link href={`/diagnostic/tests/${subject}?mode=preview`}>
+            <Link href={`/diagnostic-settings/preview/${subject}`}>
               <Eye />
               Preview
             </Link>
