@@ -40,16 +40,16 @@ const EXPERIENCES: Experience[] = [
     id: "security",
     name: "Day in the Life: Enterprise Security Team",
     summary:
-      "Join Globalcorp’s platform team and review builds for vulnerabilities by hand, month after month, with a new rule every month and 20 seconds a page. Then face your performance review.",
+      "Join Globalcorp’s enterprise security team. Experience the real-world challenge of how so many companies try to secure software releases by hand. Comes with a free quarter-end performance review!",
     minutes: "8–10 minutes",
     Icon: ShieldAlert,
     render: () => <SecurityTeamView />,
   },
   {
     id: "slide-review",
-    name: "Review the “Our understanding” slide",
+    name: "Ready to sharpen your slide critiquing skills?",
     summary:
-      "Ten draft “Our understanding” slides, each with 10 to 15 small mistakes in spelling, grammar, fonts, alignment and more. Click each one to fix it before the customer sees it.",
+      "The sales team has been hard at work creating “Our understanding” slides for upcoming opportunities. Help them by reviewing their slides for spelling, grammar and format.",
     minutes: "10–15 minutes",
     Icon: Presentation,
     render: () => <SlideReviewView />,
