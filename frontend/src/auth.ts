@@ -69,6 +69,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     Google({
       clientId: process.env.AUTH_GOOGLE_ID,
       clientSecret: process.env.AUTH_GOOGLE_SECRET,
+      // A platform administrator can add an employee before they first sign
+      // in (`addUser` in src/lib/site-users.ts), so their account exists with
+      // no Google account linked; this links it by address. Google verifies
+      // the address, the signIn callback refuses an unverified one, and it is
+      // the only provider, so an address can't be claimed any other way.
+      allowDangerousEmailAccountLinking: true,
     }),
   ],
   pages: {

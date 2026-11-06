@@ -33,6 +33,7 @@ import {
   canAuditProjects,
   canContributeComponents,
   canCreateEvents,
+  canAddUsers,
   canDeleteUsers,
   canImpersonate,
   canManageBackups,
@@ -846,6 +847,7 @@ const ROUTES: RouteCase[] = [
 
   // Users
   { method: "GET", path: "/api/users", allowed: canManageUsers },
+  { method: "POST", path: "/api/users", allowed: canAddUsers, body: () => ({}), sessionOnly: true },
   { method: "PATCH", path: `/api/users/${MISSING}`, allowed: canManageUsers, body: () => ({}), sessionOnly: true },
   { method: "DELETE", path: `/api/users/${MISSING}`, allowed: canDeleteUsers, sessionOnly: true },
   { method: "POST", path: "/api/users/invites", allowed: canManageUsers, body: () => ({}), sessionOnly: true },
