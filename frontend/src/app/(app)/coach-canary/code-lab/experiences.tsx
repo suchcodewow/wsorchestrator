@@ -8,7 +8,7 @@
  */
 
 import { useState, type ReactNode } from "react";
-import { ChevronRight, Laptop, Presentation, ShieldAlert, Timer, type LucideIcon } from "lucide-react";
+import { ChevronRight, Infinity as InfinityIcon, Laptop, Presentation, ShieldAlert, Timer, type LucideIcon } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { CodeLabView } from "./code-lab-view";
@@ -20,6 +20,8 @@ type Experience = {
   name: string;
   summary: string;
   minutes: string;
+  /** Drawn beside `minutes`: a clock unless the experience has no end. */
+  MinutesIcon?: LucideIcon;
   Icon: LucideIcon;
   /** The experience itself, for the person signed in. */
   render: (author: string) => ReactNode;
@@ -49,8 +51,9 @@ const EXPERIENCES: Experience[] = [
     id: "slide-review",
     name: "Ready to sharpen your slide critiquing skills?",
     summary:
-      "The sales team has been hard at work creating “Our understanding” slides for upcoming opportunities. Help them by reviewing their slides for spelling, grammar and format.",
-    minutes: "As long as you like",
+      "The sales team has been hard at work creating “Our understanding” slides for upcoming opportunities. Help them by reviewing their slides for spelling, grammar and formatting.",
+    minutes: "Until you give up",
+    MinutesIcon: InfinityIcon,
     Icon: Presentation,
     render: () => <SlideReviewView />,
     wide: true,
@@ -79,7 +82,7 @@ export function ExperiencesView({ author }: { author: string }) {
               <span className="block max-w-3xl text-sm text-muted-foreground">{e.summary}</span>
             </span>
             <span className="hidden shrink-0 items-center gap-1.5 text-xs text-muted-foreground sm:flex">
-              <Timer className="size-3.5" />
+              {e.MinutesIcon ? <e.MinutesIcon className="size-3.5" /> : <Timer className="size-3.5" />}
               {e.minutes}
             </span>
             <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
