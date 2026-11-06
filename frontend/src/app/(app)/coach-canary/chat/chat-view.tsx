@@ -17,7 +17,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ChevronDown, ChevronUp, Circle, CircleCheck, Loader2, MessageSquarePlus, Play, SendHorizontal, Star, Check } from "lucide-react";
+import { ChevronDown, ChevronUp, Circle, CircleCheck, Loader2, Play, RotateCcw, SendHorizontal, Star, Check } from "lucide-react";
 import { CoachCanaryAvatar } from "@/components/coach-canary-art";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -219,15 +219,15 @@ export function ChatView({
     }
   }
 
-  async function newConversation() {
-    if (!(await confirmDialog({ title: "Start a new conversation?", description: "This one will be deleted; your progress, mastery and videos watched stay.", confirmLabel: "Start over", destructive: true }))) return;
+  async function resetMemory() {
+    if (!(await confirmDialog({ title: "Reset chat memory?", description: "The coach forgets this conversation and it is deleted; your progress, mastery and videos watched stay.", confirmLabel: "Reset", destructive: true }))) return;
     setResetting(true);
     setError(null);
     try {
       const res = await fetch("/api/mimir/coach", { method: "DELETE" });
       if (!res.ok) {
         const body = await res.json().catch(() => null);
-        setError(ERRORS[body?.error ?? ""] ?? `Could not start a new conversation (${res.status}).`);
+        setError(ERRORS[body?.error ?? ""] ?? `Could not reset chat memory (${res.status}).`);
         return;
       }
       setNotices({});
@@ -259,20 +259,19 @@ export function ChatView({
     <section className="mx-auto flex max-h-[calc(100dvh-19rem)] min-h-[32rem] max-w-3xl flex-col overflow-hidden rounded-2xl border bg-card shadow-sm">
       <header className="space-y-3 border-b px-5 py-3">
         <div className="flex items-center justify-between gap-3">
-          <h2 className="flex items-center gap-1.5 font-medium">
+          <div className="flex items-center gap-2">
             <CoachCanaryAvatar className="size-7" />
-            {MIMIR_COACH_NAMES[prefs.coachPersonality]}
-          </h2>
-          <div className="flex items-center gap-1">
+            <span className="font-medium">Coach style:</span>
             <PersonalityMenu value={prefs.coachPersonality} onChoose={(coachPersonality) => void savePrefs({ ...prefs, coachPersonality })} />
-            <CoachPreferences profile={prefs} error={prefsError} onSave={(next) => void savePrefs(next)} />
-            {view.conversation && (
-              <Button variant="ghost" size="sm" onClick={() => void newConversation()} disabled={busy}>
-                {resetting ? <Loader2 className="animate-spin" /> : <MessageSquarePlus />}
-                New conversation
-              </Button>
-            )}
           </div>
+          <CoachOptions
+            profile={prefs}
+            error={prefsError}
+            onSave={(next) => void savePrefs(next)}
+            onReset={view.conversation ? () => void resetMemory() : null}
+            resetting={resetting}
+            disabled={busy}
+          />
         </div>
         <div className="space-y-1.5">
           <div className="h-1.5 overflow-hidden rounded-full bg-muted" role="progressbar" aria-valuemin={0} aria-valuemax={view.progress.total} aria-valuenow={view.progress.mastered} aria-label="Concepts mastered">
@@ -455,12 +454,12 @@ function Bubble({ role, html, text, live }: { role: MimirMessageRole; html: stri
 
 type Profile = { role: MimirRepRole | null; coachStyle: MimirCoachStyle; coachPersonality: MimirCoachPersonality };
 
-/** Whose voice the coach speaks in, from its next reply. */
+/** Whose voice the coach speaks in, from its next reply: the "Coach style" menu. */
 function PersonalityMenu({ value, onChoose }: { value: MimirCoachPersonality; onChoose: (p: MimirCoachPersonality) => void }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="sm" aria-label={`Personality: ${MIMIR_COACH_NAMES[value]}`}>
+        <Button size="sm" aria-label={`Coach style: ${MIMIR_COACH_NAMES[value]}`}>
           {MIMIR_COACH_NAMES[value]}
           <ChevronDown />
         </Button>
@@ -478,23 +477,39 @@ function PersonalityMenu({ value, onChoose }: { value: MimirCoachPersonality; on
   );
 }
 
-/** Your role and how you like to be coached, which the coach reads on every turn. */
-function CoachPreferences({ profile, error, onSave }: { profile: Profile; error: string | null; onSave: (next: Profile) => void }) {
+/** Your role and how you like to be coached, which the coach reads on every turn, and resetting what it remembers of the chat. */
+function CoachOptions({
+  profile,
+  error,
+  onSave,
+  onReset,
+  resetting,
+  disabled,
+}: {
+  profile: Profile;
+  error: string | null;
+  onSave: (next: Profile) => void;
+  /** Null while there is no conversation to forget. */
+  onReset: (() => void) | null;
+  resetting: boolean;
+  disabled: boolean;
+}) {
+  const [open, setOpen] = useState(false);
   const { role, coachStyle: style } = profile;
   const save = (next: Pick<Profile, "role" | "coachStyle">) => onSave({ ...profile, ...next });
   const option = (on: boolean) => cn("rounded-md border px-3 py-1.5 text-sm", on ? "border-brand bg-brand-subtle font-medium text-foreground" : "text-muted-foreground hover:bg-muted");
   const labels: Record<MimirCoachStyle, string> = { socratic: "Ask me questions", direct: "Be direct" };
 
   return (
-    <Dialog>
+    <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button variant="ghost" size="sm">
-          Coach style
+          Coach Options
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-sm">
         <div className="space-y-1">
-          <DialogTitle>Coach style</DialogTitle>
+          <DialogTitle>Coach Options</DialogTitle>
           <DialogDescription>Applies from the coach&apos;s next reply.</DialogDescription>
         </div>
         <div className="space-y-1.5">
@@ -520,6 +535,22 @@ function CoachPreferences({ profile, error, onSave }: { profile: Profile; error:
             ))}
           </div>
         </div>
+        {onReset && (
+          <div className="border-t pt-4">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={disabled}
+              onClick={() => {
+                setOpen(false);
+                onReset();
+              }}
+            >
+              {resetting ? <Loader2 className="animate-spin" /> : <RotateCcw />}
+              Reset chat memory
+            </Button>
+          </div>
+        )}
         {error && (
           <p role="alert" className="text-sm text-destructive">
             {error}

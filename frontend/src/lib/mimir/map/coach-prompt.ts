@@ -68,7 +68,7 @@ export const knowsChecklists = (systemPrompt: string) => systemPrompt.includes(C
  * Where the rep's own context goes in a conversation's system prompt: their
  * name and role, their coaching style and the coach's personality. The course
  * is fixed when a conversation starts, but these are read again on every
- * turn, so a change in the Coach style dialog or the personality menu applies
+ * turn, so a change in the Coach style menu or the Coach Options dialog applies
  * from the next reply.
  */
 export const REP_SLOT = "\n\n[[REP CONTEXT]]";

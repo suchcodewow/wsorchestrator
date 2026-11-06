@@ -3146,7 +3146,7 @@ export const mimirCoachStats = pgTable("mimir_coach_stats", {
   /** Messages they typed to the coach; the coach's greetings are not counted. */
   messagesSent: integer("messages_sent").notNull().default(0),
   peakMastered: integer("peak_mastered").notNull().default(0),
-  /** Times they pressed "New conversation". */
+  /** Times they pressed "Reset chat memory" (once "New conversation"). */
   newConversations: integer("new_conversations").notNull().default(0),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
