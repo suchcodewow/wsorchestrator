@@ -13,7 +13,6 @@ import {
   evalsAssessmentCriteria,
   evalsAssessments,
   evalsSubmissions,
-  mimirItems,
   sessions,
   users,
   workshopRuns,
@@ -178,16 +177,6 @@ export function testScope(name: string) {
   /** The active bootcamp, made by `userId` if there is none. */
   const activeBootcamp = (userId: string) => activeBootcampFor(userId);
 
-  /** A Mimir capability the coach covers; its id carries the scope, so cleanup finds it. */
-  async function createMimirItem(key: string): Promise<string> {
-    const id = `${TEST_PREFIX}${scope}${key}`;
-    await db
-      .insert(mimirItems)
-      .values({ id, kind: "capability", title: `${key} capability`, body: "## What it does\nA test capability." })
-      .onConflictDoNothing();
-    return id;
-  }
-
   const clear = () => deleteTestRows((sql, params) => pool.query(sql, params), scope);
 
   return {
@@ -197,7 +186,6 @@ export function testScope(name: string) {
     createAlumnus,
     createAssessment,
     activeBootcamp,
-    createMimirItem,
     /** Refuses anything but a scratch database, then clears what a previous run left. */
     async setUp() {
       await assertScratchDatabase(process.env.DATABASE_URL);
