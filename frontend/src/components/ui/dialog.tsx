@@ -63,8 +63,9 @@ function DialogContent({
           )}
         >
           {children}
-          <DialogPrimitive.Close className="absolute right-4 top-4 rounded-md p-1 text-muted-foreground opacity-70 transition-all hover:bg-accent hover:opacity-100 focus-visible:ring-[3px] focus-visible:ring-ring/50 focus:outline-none pointer-coarse:right-1.5 pointer-coarse:top-1.5 pointer-coarse:p-3.5">
-            <X className="size-4" />
+          {/* Big enough to find at a glance: in a window that fills the screen it is the only way out. */}
+          <DialogPrimitive.Close className="absolute right-3 top-3 rounded-md p-2 text-muted-foreground transition-all hover:bg-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 focus:outline-none pointer-coarse:right-1.5 pointer-coarse:top-1.5 pointer-coarse:p-2.5">
+            <X className="size-6" />
             <span className="sr-only">Close</span>
           </DialogPrimitive.Close>
         </motion.div>
