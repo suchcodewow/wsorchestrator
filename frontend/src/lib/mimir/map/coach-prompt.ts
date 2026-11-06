@@ -19,7 +19,7 @@
  */
 
 import { createHash } from "node:crypto";
-import type { MimirCoachStyle, MimirRepRole } from "@/db/schema";
+import { MIMIR_COACH_NAMES, type MimirCoachPersonality, type MimirCoachStyle, type MimirRepRole } from "@/db/schema";
 import { POINTS_MAX, POINTS_MIN, POINT_CHARS, checklistOf, conceptsInOrder, type ConceptPoint, type MapConcept, type MapContent } from "./schema";
 
 /** Where a video opens on the map. The coach links to it by concept id. */
@@ -35,7 +35,7 @@ export type SnapshotState = {
   points?: ConceptPoint[] | null;
 };
 
-export type Rep = { name: string | null; role: MimirRepRole | null; coachStyle: MimirCoachStyle };
+export type Rep = { name: string | null; role: MimirRepRole | null; coachStyle: MimirCoachStyle; coachPersonality: MimirCoachPersonality };
 export type PromptSettings = { platformContext: string; namingGuard: string };
 
 function clock(seconds: number): string {
@@ -64,15 +64,62 @@ const MARKERS = `MARKERS (these are read by the app, not shown to the rep; the r
 const CHECKLIST_RULES = "[COVERED: concept-id 1 3]";
 export const knowsChecklists = (systemPrompt: string) => systemPrompt.includes(CHECKLIST_RULES);
 
-/** The whole system prompt for a coach conversation, fixed when it starts. */
-export function buildCoachSystem(content: MapContent, rep: Rep, settings: PromptSettings): string {
-  const concepts = conceptsInOrder(content);
-  const course = concepts.map((c) => courseBlock(c, content)).join("\n\n");
+/**
+ * Where the rep's own context goes in a conversation's system prompt: their
+ * name and role, their coaching style and the coach's personality. The course
+ * is fixed when a conversation starts, but these are read again on every
+ * turn, so a change in the Coach style dialog or the personality menu applies
+ * from the next reply.
+ */
+export const REP_SLOT = "\n\n[[REP CONTEXT]]";
+
+/** How each personality speaks. Canary is the coach as it always was, so it adds nothing. */
+const PERSONALITIES: Record<MimirCoachPersonality, { intro: string; voice: string } | null> = {
+  canary: null,
+  lasso: {
+    intro: "Coach Lasso here, and I'm just tickled you stopped by to learn some Harness with me.",
+    voice: `Speak in the spirit of Ted Lasso, the relentlessly optimistic American football coach from the TV series Ted Lasso: folksy Midwestern warmth, homespun similes and analogies (barbecue, biscuits, small-town life, sports), gentle self-deprecating humour, quick pop-culture asides, and sincere belief in the rep ("I believe in you"). Celebrate a point they got with genuine delight; when they miss one, be kind and encouraging, never sarcastic. Put things in your own words in that style; a short catchphrase now and then is fine, but do not recite lines from the show.`,
+  },
+  taylor: {
+    intro: "Coach Taylor here. Clear eyes, full hearts. Let's get to work on Harness.",
+    voice: `Speak in the spirit of Coach Eric Taylor from the TV series Friday Night Lights: a high-school football coach in small-town Texas. Plain-spoken, steady and few words; calm authority with real care underneath. Talk about effort, discipline, teamwork, earning it and doing the work, and use football and locker-room analogies (practice, film, the playbook, fourth quarter). Firm but fair when a point is missing; quiet, earned praise when they get one ("That's right." "Good."). The team's motto, "Clear eyes, full hearts, can't lose", suits a mastered concept or a big moment, not every reply. Put things in your own words in that style; do not recite lines from the show.`,
+  },
+};
+
+/** What fills `REP_SLOT`: who the rep is, how they like to be coached, and whose voice to use. */
+export function repContext(rep: Rep): string {
   const who = rep.name ? `\n\nRep context: ${rep.name}${rep.role ? ` (${rep.role})` : ""}. Tailor your coaching to their role and experience.` : "";
   const style =
     rep.coachStyle === "direct"
       ? "\n\nCOACHING STYLE: Be concise and direct. Skip lengthy Socratic sequences: give your feedback in 2 to 3 sentences, then ask at most one focused question."
       : "";
+  const p = PERSONALITIES[rep.coachPersonality];
+  const name = MIMIR_COACH_NAMES[rep.coachPersonality];
+  const personality = p
+    ? `\n\nPERSONALITY: You are ${name}. Use that name wherever these instructions say you are Coach Canary, and when introducing yourself use this line instead of the one above: "${p.intro}" ${p.voice}
+This changes only your voice. The course, the checklists, the markers, the bar for ticking a point, the coaching style and the length of your replies stay exactly as set out above. Earlier replies in this conversation may be in another coach's voice: speak as ${name} from now on, without remarking on the change unless the rep asks.`
+    : "";
+  return who + style + personality;
+}
+
+/**
+ * The system prompt a turn is sent: the conversation's own, with the rep's
+ * context as it is now in its slot. A conversation started before the slot
+ * has its old context fixed in it, so the current one goes at the end, told
+ * that it replaces anything said earlier.
+ */
+export function systemFor(systemPrompt: string, rep: Rep): string {
+  const context = repContext(rep);
+  if (systemPrompt.includes(REP_SLOT)) return systemPrompt.replace(REP_SLOT, context);
+  // The old prompt may still ask for a direct coach, so the default style has to be said out loud here.
+  const style = rep.coachStyle === "socratic" ? "\n\nCOACHING STYLE: as set out under COACHING STYLE above, not concise and direct." : "";
+  return `${systemPrompt}\n\nThe rep's context and preferences as they are now, which replace any given earlier:${context}${style}`;
+}
+
+/** The whole system prompt for a coach conversation, fixed when it starts, with `REP_SLOT` where the rep's context goes. */
+export function buildCoachSystem(content: MapContent, settings: PromptSettings): string {
+  const concepts = conceptsInOrder(content);
+  const course = concepts.map((c) => courseBlock(c, content)).join("\n\n");
   const guard = settings.namingGuard.trim() ? `\n\n${settings.namingGuard.trim()}` : "";
   const platform = settings.platformContext.trim() ? `\n\n${settings.platformContext.trim()}` : "";
 
@@ -107,7 +154,7 @@ COACHING STYLE
 - Be honest before encouraging: name a real gap before praising what was right. Do not pad with validation.
 - Keep replies to 4 to 6 sentences, then a question. Do not lecture.
 - Tone: patient, direct, peer-level, a little warm. This is a learning conversation, not a test.
-- If asked something outside the course, answer briefly if you can and steer back to the next concept.${who}${style}${platform}${guard}`;
+- If asked something outside the course, answer briefly if you can and steer back to the next concept.${REP_SLOT}${platform}${guard}`;
 }
 
 /** Where a concept's video stands, in words. */

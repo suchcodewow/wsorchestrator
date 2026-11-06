@@ -21,8 +21,19 @@ import { ChevronDown, ChevronUp, Circle, CircleCheck, Loader2, MessageSquarePlus
 import { CoachCanaryAvatar } from "@/components/coach-canary-art";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Textarea } from "@/components/ui/textarea";
-import { MIMIR_COACH_STYLES, MIMIR_MESSAGE_MAX, MIMIR_REP_ROLES, type MimirCoachStyle, type MimirMessageRole, type MimirRepRole } from "@/db/schema";
+import {
+  MIMIR_COACH_NAMES,
+  MIMIR_COACH_PERSONALITIES,
+  MIMIR_COACH_STYLES,
+  MIMIR_MESSAGE_MAX,
+  MIMIR_REP_ROLES,
+  type MimirCoachPersonality,
+  type MimirCoachStyle,
+  type MimirMessageRole,
+  type MimirRepRole,
+} from "@/db/schema";
 import { cn } from "@/lib/utils";
 import { confirmDialog } from "@/components/ui/confirm";
 
@@ -85,7 +96,7 @@ export function ChatView({
 }: {
   initial: View;
   concepts: Concept[];
-  profile: { role: MimirRepRole | null; coachStyle: MimirCoachStyle };
+  profile: Profile;
   /** Assessments Administrators alone see the next concept's points covered. */
   canSeePoints: boolean;
 }) {
@@ -98,6 +109,8 @@ export function ChatView({
   const [streaming, setStreaming] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [notices, setNotices] = useState<Record<number, Notice[]>>({});
+  const [prefs, setPrefs] = useState(profile);
+  const [prefsError, setPrefsError] = useState<string | null>(null);
   const [resetting, setResetting] = useState(false);
   const [loadingEarlier, setLoadingEarlier] = useState(false);
   const scroller = useRef<HTMLDivElement>(null);
@@ -228,6 +241,17 @@ export function ChatView({
     }
   }
 
+  async function savePrefs(next: Profile) {
+    setPrefs(next);
+    setPrefsError(null);
+    try {
+      const res = await fetch("/api/mimir/me", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(next) });
+      if (!res.ok) setPrefsError(res.status === 403 ? "You can't change this while viewing as someone else." : `Could not save (${res.status}).`);
+    } catch {
+      setPrefsError("Could not reach the server.");
+    }
+  }
+
   const next = view.progress.next;
   const pct = view.progress.total ? Math.round((view.progress.mastered / view.progress.total) * 100) : 0;
 
@@ -237,10 +261,11 @@ export function ChatView({
         <div className="flex items-center justify-between gap-3">
           <h2 className="flex items-center gap-1.5 font-medium">
             <CoachCanaryAvatar className="size-7" />
-            Coach Canary
+            {MIMIR_COACH_NAMES[prefs.coachPersonality]}
           </h2>
           <div className="flex items-center gap-1">
-            <CoachPreferences profile={profile} />
+            <PersonalityMenu value={prefs.coachPersonality} onChoose={(coachPersonality) => void savePrefs({ ...prefs, coachPersonality })} />
+            <CoachPreferences profile={prefs} error={prefsError} onSave={(next) => void savePrefs(next)} />
             {view.conversation && (
               <Button variant="ghost" size="sm" onClick={() => void newConversation()} disabled={busy}>
                 {resetting ? <Loader2 className="animate-spin" /> : <MessageSquarePlus />}
@@ -340,9 +365,9 @@ export function ChatView({
       </div>
 
       <footer className="space-y-2 border-t px-4 py-3">
-        {error && (
+        {(error ?? prefsError) && (
           <p role="alert" className="text-sm text-destructive">
-            {error}
+            {error ?? prefsError}
           </p>
         )}
         {!view.configured ? (
@@ -428,23 +453,35 @@ function Bubble({ role, html, text, live }: { role: MimirMessageRole; html: stri
   );
 }
 
-/** Your role and how you like to be coached, which the coach reads when a conversation starts. */
-function CoachPreferences({ profile }: { profile: { role: MimirRepRole | null; coachStyle: MimirCoachStyle } }) {
-  const [role, setRole] = useState(profile.role);
-  const [style, setStyle] = useState(profile.coachStyle);
-  const [error, setError] = useState<string | null>(null);
+type Profile = { role: MimirRepRole | null; coachStyle: MimirCoachStyle; coachPersonality: MimirCoachPersonality };
 
-  async function save(next: { role: MimirRepRole | null; coachStyle: MimirCoachStyle }) {
-    setRole(next.role);
-    setStyle(next.coachStyle);
-    setError(null);
-    try {
-      const res = await fetch("/api/mimir/me", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(next) });
-      if (!res.ok) setError(res.status === 403 ? "You can't change this while viewing as someone else." : `Could not save (${res.status}).`);
-    } catch {
-      setError("Could not reach the server.");
-    }
-  }
+/** Whose voice the coach speaks in, from its next reply. */
+function PersonalityMenu({ value, onChoose }: { value: MimirCoachPersonality; onChoose: (p: MimirCoachPersonality) => void }) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="sm" aria-label={`Personality: ${MIMIR_COACH_NAMES[value]}`}>
+          {MIMIR_COACH_NAMES[value]}
+          <ChevronDown />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuRadioGroup value={value} onValueChange={(p) => p !== value && onChoose(p as MimirCoachPersonality)}>
+          {MIMIR_COACH_PERSONALITIES.map((p) => (
+            <DropdownMenuRadioItem key={p} value={p}>
+              {MIMIR_COACH_NAMES[p]}
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+/** Your role and how you like to be coached, which the coach reads on every turn. */
+function CoachPreferences({ profile, error, onSave }: { profile: Profile; error: string | null; onSave: (next: Profile) => void }) {
+  const { role, coachStyle: style } = profile;
+  const save = (next: Pick<Profile, "role" | "coachStyle">) => onSave({ ...profile, ...next });
   const option = (on: boolean) => cn("rounded-md border px-3 py-1.5 text-sm", on ? "border-brand bg-brand-subtle font-medium text-foreground" : "text-muted-foreground hover:bg-muted");
   const labels: Record<MimirCoachStyle, string> = { socratic: "Ask me questions", direct: "Be direct" };
 
@@ -458,17 +495,17 @@ function CoachPreferences({ profile }: { profile: { role: MimirRepRole | null; c
       <DialogContent className="max-w-sm">
         <div className="space-y-1">
           <DialogTitle>Coach style</DialogTitle>
-          <DialogDescription>Applies from your next new conversation.</DialogDescription>
+          <DialogDescription>Applies from the coach&apos;s next reply.</DialogDescription>
         </div>
         <div className="space-y-1.5">
           <p className="text-sm font-medium">Your role</p>
           <div className="flex flex-wrap gap-1.5">
             {MIMIR_REP_ROLES.map((r) => (
-              <button key={r} type="button" aria-pressed={role === r} className={option(role === r)} onClick={() => void save({ role: r, coachStyle: style })}>
+              <button key={r} type="button" aria-pressed={role === r} className={option(role === r)} onClick={() => save({ role: r, coachStyle: style })}>
                 {r}
               </button>
             ))}
-            <button type="button" aria-pressed={role === null} className={option(role === null)} onClick={() => void save({ role: null, coachStyle: style })}>
+            <button type="button" aria-pressed={role === null} className={option(role === null)} onClick={() => save({ role: null, coachStyle: style })}>
               Not saying
             </button>
           </div>
@@ -477,7 +514,7 @@ function CoachPreferences({ profile }: { profile: { role: MimirRepRole | null; c
           <p className="text-sm font-medium">How to coach you</p>
           <div className="flex flex-wrap gap-1.5">
             {MIMIR_COACH_STYLES.map((s) => (
-              <button key={s} type="button" aria-pressed={style === s} className={option(style === s)} onClick={() => void save({ role, coachStyle: s })}>
+              <button key={s} type="button" aria-pressed={style === s} className={option(style === s)} onClick={() => save({ role, coachStyle: s })}>
                 {labels[s]}
               </button>
             ))}

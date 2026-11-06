@@ -3106,6 +3106,11 @@ export type MimirRepRole = (typeof MIMIR_REP_ROLES)[number];
 export const MIMIR_COACH_STYLES = ["socratic", "direct"] as const;
 export type MimirCoachStyle = (typeof MIMIR_COACH_STYLES)[number];
 
+/** Whose voice the coach speaks in. Only the voice: what it teaches and how it marks are the same for each. */
+export const MIMIR_COACH_PERSONALITIES = ["canary", "lasso", "taylor"] as const;
+export type MimirCoachPersonality = (typeof MIMIR_COACH_PERSONALITIES)[number];
+export const MIMIR_COACH_NAMES: Record<MimirCoachPersonality, string> = { canary: "Coach Canary", lasso: "Coach Lasso", taylor: "Coach Taylor" };
+
 /** What one person has told Mimir about themselves, for the coach. Kept apart from the Diagnostic track. */
 export const mimirProfiles = pgTable(
   "mimir_profiles",
@@ -3115,11 +3120,13 @@ export const mimirProfiles = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     role: text("role").$type<MimirRepRole>(),
     coachStyle: text("coach_style").$type<MimirCoachStyle>().notNull().default("socratic"),
+    coachPersonality: text("coach_personality").$type<MimirCoachPersonality>().notNull().default("canary"),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     check("mimir_profiles_role_check", sql`${t.role} is null or ${t.role} in ('SDR', 'AE', 'SE')`),
     check("mimir_profiles_coach_style_check", sql`${t.coachStyle} in ('socratic', 'direct')`),
+    check("mimir_profiles_coach_personality_check", sql`${t.coachPersonality} in ('canary', 'lasso', 'taylor')`),
   ],
 );
 

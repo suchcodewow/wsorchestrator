@@ -22,6 +22,7 @@ import { editMap, getMap, getMapVersion, importMap, listMapVersions, replaceMap 
 import { GREET_AFTER_MS, beginCoachTurn, getCoachChat, resetCoachChat, sendCoachMessage } from "@/lib/mimir/map/coach";
 import { getConceptState, listConceptStates, markMastered, markRecommended, saveVideoProgress } from "@/lib/mimir/map/progress";
 import { countNewConversation } from "@/lib/mimir/map/stats";
+import { setProfile } from "@/lib/mimir/progress";
 import { mapSummary } from "@/lib/mimir/map/summary";
 import { PERSONAS } from "../support/access";
 import { testScope, type TestUser } from "../support/seed";
@@ -347,6 +348,26 @@ describe("the coach", () => {
     await sendCoachMessage(rep.id, { open: true }, { complete: c.complete });
     assert.match(c.sent[2]!.system, /\[alpha\] Alpha Prime/);
     await importMap(admin.id, mapFixture());
+  });
+
+  test("a change of style or personality reaches the very next reply, in the conversation already under way", async () => {
+    const c = coach("Ok.");
+    await setProfile(rep.id, { role: null, coachStyle: "socratic", coachPersonality: "canary" });
+    await sendCoachMessage(rep.id, { open: true }, { complete: c.complete });
+    assert.doesNotMatch(c.sent[0]!.system, /PERSONALITY:|COACHING STYLE: Be concise/);
+
+    await setProfile(rep.id, { role: "SE", coachStyle: "direct", coachPersonality: "lasso" });
+    await sendCoachMessage(rep.id, { message: "Hello." }, { complete: c.complete });
+    assert.match(c.sent[1]!.system, /PERSONALITY: You are Coach Lasso\./);
+    assert.match(c.sent[1]!.system, /COACHING STYLE: Be concise/);
+    assert.match(c.sent[1]!.system, /\(SE\)/);
+
+    // Leaving the personality out of a save keeps it.
+    await setProfile(rep.id, { role: "SE", coachStyle: "socratic" });
+    await sendCoachMessage(rep.id, { message: "Again." }, { complete: c.complete });
+    assert.match(c.sent[2]!.system, /You are Coach Lasso/);
+    assert.doesNotMatch(c.sent[2]!.system, /COACHING STYLE: Be concise/);
+    await setProfile(rep.id, { role: null, coachStyle: "socratic", coachPersonality: "canary" });
   });
 
   test("the coach keeps count of what they type, their best mastery, and new conversations, across starting over", async () => {
