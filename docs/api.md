@@ -147,7 +147,7 @@ add it to the table above.
 | A bootcamp's day checklists | `GET /api/scheduler/bootcamps/[id]/checklist`, `GET /api/scheduler/bootcamps/[id]/checklist/[track]/[day]` |
 | My inbox (checklist items I own, and everywhere I'm tagged) | `GET /api/me/checklist?status=open\|done\|all`, `GET /api/me/mentions` |
 | Scheduler settings → Facilities / Session types | `GET /api/scheduler/facilities`, `GET /api/scheduler/facilities/[id]`, `GET /api/scheduler/session-types` |
-| Coach Canary → Chat, and its Coach style dialog | `GET /api/mimir/coach`, `GET /api/mimir/me` |
+| Coach Canary → Chat, and its Coach Options dialog | `GET /api/mimir/coach`, `GET /api/mimir/me` |
 | Coach Canary Settings → Coaching | `GET /api/mimir/settings` |
 | Audit Trail | `GET /api/audit` |
 | Labs | `GET /api/lab-workshops`, `GET /api/lab-workshops/[id or slug]`, `GET /api/lab-guides`, `GET /api/lab-guides/[id or slug]`, `GET /api/lab-images` |
