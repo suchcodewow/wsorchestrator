@@ -28,6 +28,6 @@ export function reminderText(fullName: string, status: ReminderStatus, link: str
   if (status.done.length) lines.push(`*Done:* ${names(status.done)}`);
   if (status.started.length) lines.push(`*Started, not finished:* ${names(status.started)}`);
   if (status.notStarted.length) lines.push(`*Not started:* ${names(status.notStarted)}`);
-  lines.push("", `Each is 10 to 17 questions, and there is no pass mark. <${link}|Take your tests>`);
+  lines.push("", `<${link}|Click to take diagnostic tests>`);
   return lines.join("\n");
 }

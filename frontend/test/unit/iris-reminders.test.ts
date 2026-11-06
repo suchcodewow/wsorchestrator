@@ -17,7 +17,7 @@ describe("a Diagnostic reminder", () => {
         "*Started, not finished:* Personas",
         "*Not started:* Companies that serve the SDLC, Pipeline Generation",
         "",
-        "Each is 10 to 17 questions, and there is no pass mark. <https://x.test/diagnostic/tests|Take your tests>",
+        "<https://x.test/diagnostic/tests|Click to take diagnostic tests>",
       ].join("\n"),
     );
   });
