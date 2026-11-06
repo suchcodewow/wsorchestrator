@@ -487,7 +487,7 @@ const RULES: Rule[] = [
   {
     kind: "size",
     slots: ["arrow"],
-    make: () => ({ look: { scale: 1.8 }, note: "The arrow is bigger than the template’s." }),
+    make: () => ({ look: { scale: 1.8 }, note: "The triangle is bigger than the template’s." }),
   },
   {
     kind: "style",
@@ -565,9 +565,9 @@ const RULES: Rule[] = [
       el.slot === "box"
         ? { look: { dx: 30 }, note: "The box is shifted right, past the slide’s right margin." }
         : el.slot === "divider"
-          ? { look: { dx: 40 }, note: "The column divider is off-center, so the arrow no longer sits on it." }
+          ? { look: { dx: 40 }, note: "The column divider is off-center, so the triangle no longer sits on it." }
           : el.slot === "arrow"
-            ? { look: { dx: 40 }, note: "The arrow has drifted off the divider between the columns." }
+            ? { look: { dx: 40 }, note: "The triangle has drifted off the divider between the columns." }
             : { look: { dx: -40, dy: 18 }, note: "The logo has moved in from the right margin and down from the title line." },
   },
   {
@@ -633,7 +633,7 @@ const RULES: Rule[] = [
   {
     kind: "icon",
     slots: ["arrow"],
-    make: () => ({ look: { pointLeft: true }, note: "The arrow points back from the future state to the current one." }),
+    make: () => ({ look: { pointDown: true }, note: "The triangle between the columns is upside down; the template’s points up." }),
   },
   {
     kind: "layout",
