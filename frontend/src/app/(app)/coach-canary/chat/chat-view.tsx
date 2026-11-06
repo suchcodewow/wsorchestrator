@@ -261,7 +261,6 @@ export function ChatView({
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <CoachCanaryAvatar className="size-7" />
-            <span className="font-medium">Coach style:</span>
             <PersonalityMenu value={prefs.coachPersonality} onChoose={(coachPersonality) => void savePrefs({ ...prefs, coachPersonality })} />
           </div>
           <CoachOptions
