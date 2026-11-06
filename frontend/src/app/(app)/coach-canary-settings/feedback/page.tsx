@@ -1,9 +1,10 @@
 /**
- * The Mimir Feedback tab: each concept on the map, its video's counts of
- * ratings, and its latest regeneration, a page at a time. Assessments
- * Administrators can also edit, accept and ignore comments, and those who may
- * run Mimir Studio can have a video made again or for the first time. Below
- * it, the ratings of slide review slides, each opening its slide.
+ * The Coach Canary Feedback tab, one kind of feedback at a time. Video
+ * Feedback: each concept on the map, its video's counts of ratings, and its
+ * latest regeneration, a page at a time; Assessments Administrators can also
+ * edit, accept and ignore comments, and those who may run Mimir Studio can
+ * have a video made again or for the first time. Slide Game Feedback: the
+ * ratings of slide review slides, each opening its slide.
  */
 
 import { auth } from "@/auth";
@@ -13,8 +14,9 @@ import { listSlideFeedback } from "@/lib/mimir/slide-feedback";
 import { withVideoJobs } from "@/lib/mimir/studio/jobs";
 import { parseListQuery } from "@/lib/paging";
 import { listVideoFeedbackSummary } from "@/lib/video-feedback";
+import { FeedbackSwitch, feedbackKindOf } from "./feedback-switch";
 import { FeedbackView } from "./feedback-view";
-import { SLIDE_FEEDBACK_PREFIX, SlideFeedbackTable } from "./slide-feedback-table";
+import { SlideFeedbackTable } from "./slide-feedback-table";
 
 export default async function MimirFeedbackPage({
   searchParams,
@@ -22,21 +24,31 @@ export default async function MimirFeedbackPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const params = await searchParams;
+  const kind = feedbackKindOf(params.view);
+
+  if (kind === "slides") {
+    const query = parseListQuery(params, SLIDE_FEEDBACK_LIST);
+    return (
+      <div className="space-y-6">
+        <FeedbackSwitch current={kind} />
+        <SlideFeedbackTable query={query} page={await listSlideFeedback(query)} />
+      </div>
+    );
+  }
+
   const query = parseListQuery(params, VIDEO_FEEDBACK_SUMMARY_LIST);
-  // The search box above belongs to the concept table, so the slide ratings ignore it.
-  const slideQuery = { ...parseListQuery(params, SLIDE_FEEDBACK_LIST, SLIDE_FEEDBACK_PREFIX), q: "" };
-  const [summary, session, slides] = await Promise.all([listVideoFeedbackSummary(query), auth(), listSlideFeedback(slideQuery)]);
+  const [summary, session] = await Promise.all([listVideoFeedbackSummary(query), auth()]);
   const page = { ...summary, rows: await withVideoJobs(summary.rows) };
   const access = session?.user?.access;
   return (
-    <div className="space-y-10">
+    <div className="space-y-6">
+      <FeedbackSwitch current={kind} />
       <FeedbackView
         query={query}
         page={page}
         canModerate={Boolean(access && canManageEvalsSettings(access))}
         canRegenerate={Boolean(access && canRunMimirStudio(access))}
       />
-      <SlideFeedbackTable query={slideQuery} page={slides} />
     </div>
   );
 }

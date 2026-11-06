@@ -1,16 +1,16 @@
 "use client";
 
 /**
- * Coach Canary Feedback's ratings of slide review slides, the newest first, a
- * page at a time: when, who, the face, any comment, and the slide's theme and
- * seed. A row opens the slide rebuilt from its seed, mistakes marked, so the
- * comment can be read against what the person saw. Its sorting and paging
- * keep their own place in the address, apart from the concept table above it.
+ * Coach Canary Feedback's Slide Game Feedback: the ratings of slide review
+ * slides, the newest first, a page at a time, searched by the comment or who
+ * gave it: when, who, the face, any comment, and the slide's theme and seed.
+ * A row opens the slide rebuilt from its seed, mistakes marked, so the
+ * comment can be read against what the person saw.
  */
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { HEADER_ROW, LINK_ROW, Pager, PlainHeader, SortHeader, useRowLink } from "@/components/data-table";
+import { HEADER_ROW, LINK_ROW, Pager, PlainHeader, SortHeader, TableSearch, useRowLink } from "@/components/data-table";
 import { RATING_LABELS, RATING_TEXT_TONES, RatingFace } from "@/components/rating-face";
 import type { SlideFeedbackSort } from "@/lib/list-specs";
 import type { SlideFeedbackRow } from "@/lib/mimir/slide-feedback";
@@ -20,9 +20,6 @@ import type { ListQuery, Page } from "@/lib/paging";
 import { cn } from "@/lib/utils";
 import { formatWhen } from "../../cohort-settings/format";
 import { SeedButton, SlideSeedDialog } from "../slide-seed-dialog";
-
-/** The address's prefix for this table's sort, direction and page. */
-export const SLIDE_FEEDBACK_PREFIX = "slide";
 
 const THEME_NAMES = new Map(THEMES.map((t) => [t.id, t.name]));
 
@@ -35,11 +32,11 @@ const COLUMNS: { column: SlideFeedbackSort; label: string }[] = [
 export function SlideFeedbackTable({ query, page }: { query: ListQuery<SlideFeedbackSort>; page: Page<SlideFeedbackRow> }) {
   const rowLink = useRowLink();
   const [seed, setSeed] = useState<number | null>(null);
-  const sortProps = { sort: query.sort, dir: query.dir, prefix: SLIDE_FEEDBACK_PREFIX };
+  const sortProps = { sort: query.sort, dir: query.dir };
 
   return (
     <motion.section variants={riseChild} initial="hidden" animate="show" className="space-y-3">
-      <h2 className="text-xl font-medium tracking-tight">Slide review feedback</h2>
+      <TableSearch value={query.q} placeholder="Search comments and people" label="Search slide feedback" />
       <div className="overflow-hidden rounded-2xl border bg-card shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full min-w-160 text-sm">
@@ -60,7 +57,7 @@ export function SlideFeedbackTable({ query, page }: { query: ListQuery<SlideFeed
               {page.rows.length === 0 && (
                 <tr>
                   <td colSpan={5} className="px-5 py-8 text-center text-muted-foreground">
-                    No one has rated a slide yet.
+                    {query.q ? "Nothing matches that search." : "No one has rated a slide yet."}
                   </td>
                 </tr>
               )}
@@ -93,7 +90,7 @@ export function SlideFeedbackTable({ query, page }: { query: ListQuery<SlideFeed
             </tbody>
           </table>
         </div>
-        <Pager page={page} noun="ratings" prefix={SLIDE_FEEDBACK_PREFIX} />
+        <Pager page={page} noun="ratings" />
       </div>
       <SlideSeedDialog seed={seed} onClose={() => setSeed(null)} />
     </motion.section>
