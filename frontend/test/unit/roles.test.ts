@@ -139,6 +139,7 @@ const POLICY: Record<string, { actual: Check; expected: Check }> = {
       evals("administrator")(a),
   },
   canDeleteUsers: { actual: roles.canDeleteUsers, expected: platformOnly },
+  canAddUsers: { actual: roles.canAddUsers, expected: platformOnly },
 };
 
 test("the combinations cover every role", () => {

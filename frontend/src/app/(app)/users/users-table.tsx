@@ -47,6 +47,7 @@ import { riseChild, staggerParent } from "@/lib/motion";
 import type { ListQuery, Page } from "@/lib/paging";
 import type { UserSort } from "@/lib/list-specs";
 import { cn } from "@/lib/utils";
+import { AddUserDialog } from "./add-user-dialog";
 import { CreateInviteDialog } from "./create-invite-dialog";
 import { DeleteUserButton } from "./delete-user-button";
 import { CreateTestAccountDialog, ResetTestAccountButton, ViewAsTestAccountButton } from "./test-account-controls";
@@ -194,6 +195,7 @@ export function UsersTable({
         <div className="flex flex-wrap gap-2">
           {managesTestAccounts && <CreateTestAccountDialog />}
           <CreateInviteDialog viewerAccess={viewerAccess} />
+          {viewerIsPlatform && <AddUserDialog />}
         </div>
       </motion.div>
 

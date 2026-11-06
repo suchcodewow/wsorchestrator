@@ -33,7 +33,7 @@ export async function notePeakMastered(userId: string, mastered: number): Promis
     });
 }
 
-/** They pressed "New conversation". */
+/** They pressed "Reset chat memory" (once "New conversation"). */
 export async function countNewConversation(userId: string): Promise<void> {
   await db
     .insert(t)

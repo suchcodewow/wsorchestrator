@@ -82,10 +82,6 @@ export async function deleteTestRows(
   await query(`delete from bootcamps where id in (${made})`, [like]);
   await query("delete from bootcamp_judges where email like $1", [`${scope}%@${TEST_EMAIL_DOMAIN}`]);
   await query("delete from iris_item_reviews where reviewer_id like $1", [like]);
-  // Mimir items carry the prefix in their id; what sits under one goes first.
-  // Progress and conversations go with the items and the users.
-  await query("delete from mimir_items where parent_id like $1", [like]);
-  await query("delete from mimir_items where id like $1", [like]);
   await query("delete from google_meetings where created_by like $1", [like]);
   await query("delete from meeting_selections where created_by like $1", [like]);
   // A run outlives its user, so it goes while the user is still there to name it.

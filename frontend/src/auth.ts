@@ -19,6 +19,7 @@ import {
   effectiveAllowedDomains,
   isEmailAllowed,
 } from "@/lib/allowed-domains";
+import { isAddressReused } from "@/lib/account-linking";
 import { recordAudit, requestIp } from "@/lib/audit";
 import { googlePhotoChosen, syncGoogleProfile } from "@/lib/google-profile";
 import { impersonationRefusal, impersonationTarget } from "@/lib/impersonation";
@@ -69,6 +70,14 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     Google({
       clientId: process.env.AUTH_GOOGLE_ID,
       clientSecret: process.env.AUTH_GOOGLE_SECRET,
+      // A platform administrator can add an employee before they first sign
+      // in (`addUser` in src/lib/site-users.ts), so their account exists with
+      // no Google account linked; this links it by address. Google verifies
+      // the address, the signIn callback refuses an unverified one, and it is
+      // the only provider, so an address can't be claimed any other way. The
+      // callback also refuses linking to an account already linked to another
+      // Google account (src/lib/account-linking.ts).
+      allowDangerousEmailAccountLinking: true,
     }),
   ],
   pages: {
@@ -105,14 +114,16 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     },
   },
   callbacks: {
-    async signIn({ user, profile }) {
+    async signIn({ user, account, profile }) {
       const email = user.email ?? profile?.email ?? null;
       const why =
         profile && profile.email_verified === false
           ? "unverified_email"
-          : (await isEmailAllowed(email))
-            ? null
-            : "domain_not_allowed";
+          : !(await isEmailAllowed(email))
+            ? "domain_not_allowed"
+            : account?.provider === "google" && (await isAddressReused(email, account.providerAccountId))
+              ? "address_reused"
+              : null;
       if (!why) return true;
 
       await recordAudit({

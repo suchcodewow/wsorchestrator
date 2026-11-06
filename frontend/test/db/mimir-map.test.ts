@@ -22,6 +22,7 @@ import { editMap, getMap, getMapVersion, importMap, listMapVersions, replaceMap 
 import { GREET_AFTER_MS, beginCoachTurn, getCoachChat, resetCoachChat, sendCoachMessage } from "@/lib/mimir/map/coach";
 import { getConceptState, listConceptStates, markMastered, markRecommended, saveVideoProgress } from "@/lib/mimir/map/progress";
 import { countNewConversation } from "@/lib/mimir/map/stats";
+import { setProfile } from "@/lib/mimir/progress";
 import { mapSummary } from "@/lib/mimir/map/summary";
 import { PERSONAS } from "../support/access";
 import { testScope, type TestUser } from "../support/seed";
@@ -239,6 +240,25 @@ describe("the coach", () => {
     assert.deepEqual(asked, [true, false, false, false, true]);
   });
 
+  test("picking a coach style has it introduce itself in that voice, hidden, without counting as an opening", async () => {
+    const c = coach("Coach Taylor here.");
+    await sendCoachMessage(rep.id, { open: true }, { complete: c.complete });
+    await setProfile(rep.id, { role: null, coachStyle: "socratic", coachPersonality: "taylor" });
+    const result = await sendCoachMessage(rep.id, { introduce: true }, { complete: c.complete });
+    assert.ok(result.ok);
+    assert.deepEqual(result.messages.map((m) => [m.role, m.text]), [["assistant", "Coach Taylor here."]]);
+    assert.match(lastUserContent(c.sent[1]!), /I just picked Coach Taylor as my coach\. Introduce yourself in that voice/);
+    assert.match(c.sent[1]!.system, /You are Coach Taylor/);
+    const view = await getCoachChat(rep.id);
+    assert.deepEqual(view.conversation!.messages.map((m) => m.role), ["assistant", "assistant"]);
+
+    // The next opening is the second, not the third: it does not ask for an introduction.
+    const again = coach("Hello.");
+    await sendCoachMessage(rep.id, { open: true }, { complete: again.complete });
+    assert.doesNotMatch(lastUserContent(again.sent[0]!), /Introduce yourself\.$/);
+    await setProfile(rep.id, { role: null, coachStyle: "socratic", coachPersonality: "canary" });
+  });
+
   test("the greeting is not shown as something they said", async () => {
     await sendCoachMessage(rep.id, { open: true }, { complete: coach("Hello.").complete });
     const stored = await messagesOf(rep.id);
@@ -347,6 +367,26 @@ describe("the coach", () => {
     await sendCoachMessage(rep.id, { open: true }, { complete: c.complete });
     assert.match(c.sent[2]!.system, /\[alpha\] Alpha Prime/);
     await importMap(admin.id, mapFixture());
+  });
+
+  test("a change of style or personality reaches the very next reply, in the conversation already under way", async () => {
+    const c = coach("Ok.");
+    await setProfile(rep.id, { role: null, coachStyle: "socratic", coachPersonality: "canary" });
+    await sendCoachMessage(rep.id, { open: true }, { complete: c.complete });
+    assert.doesNotMatch(c.sent[0]!.system, /PERSONALITY:|COACHING STYLE: Be concise/);
+
+    await setProfile(rep.id, { role: "SE", coachStyle: "direct", coachPersonality: "lasso" });
+    await sendCoachMessage(rep.id, { message: "Hello." }, { complete: c.complete });
+    assert.match(c.sent[1]!.system, /PERSONALITY: You are Coach Lasso\./);
+    assert.match(c.sent[1]!.system, /COACHING STYLE: Be concise/);
+    assert.match(c.sent[1]!.system, /\(SE\)/);
+
+    // Leaving the personality out of a save keeps it.
+    await setProfile(rep.id, { role: "SE", coachStyle: "socratic" });
+    await sendCoachMessage(rep.id, { message: "Again." }, { complete: c.complete });
+    assert.match(c.sent[2]!.system, /You are Coach Lasso/);
+    assert.doesNotMatch(c.sent[2]!.system, /COACHING STYLE: Be concise/);
+    await setProfile(rep.id, { role: null, coachStyle: "socratic", coachPersonality: "canary" });
   });
 
   test("the coach keeps count of what they type, their best mastery, and new conversations, across starting over", async () => {

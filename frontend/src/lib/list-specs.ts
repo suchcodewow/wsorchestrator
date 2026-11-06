@@ -160,6 +160,14 @@ export type VideoFeedbackSort = (typeof VIDEO_FEEDBACK_LIST.sorts)[number];
 export const VIDEO_FEEDBACK_SUMMARY_LIST = spec(["video", "up", "upComments", "down", "downComments"]);
 export type VideoFeedbackSummarySort = (typeof VIDEO_FEEDBACK_SUMMARY_LIST.sorts)[number];
 
+/** Coach Canary Settings → Reporting: everyone, with their videos, mastered topics and hands-on experiences. */
+export const EXPERIENCE_REPORT_LIST = spec(["user", "videos", "mastered", "developer", "security", "slides"]);
+export type ExperienceReportSort = (typeof EXPERIENCE_REPORT_LIST.sorts)[number];
+
+/** Coach Canary Feedback → slide review: each rating of a slide, the newest first. */
+export const SLIDE_FEEDBACK_LIST = spec(["createdAt", "theme", "user", "rating"], "desc");
+export type SlideFeedbackSort = (typeof SLIDE_FEEDBACK_LIST.sorts)[number];
+
 /** Mimir Studio's decks and videos, the newest first. */
 export const MIMIR_STUDIO_JOB_LIST = spec(["createdAt", "kind", "label", "status"], "desc");
 export type MimirStudioJobSort = (typeof MIMIR_STUDIO_JOB_LIST.sorts)[number];
@@ -220,14 +228,6 @@ export type RepoSort = (typeof REPO_LIST.sorts)[number];
 
 export const ORG_SECRET_LIST = spec(["identifier", "kind", "updatedAt", "updatedBy"]);
 export type OrgSecretSort = (typeof ORG_SECRET_LIST.sorts)[number];
-
-/** Mimir's content; `position` is the order the library shows it in. */
-export const MIMIR_ITEM_LIST = spec(["position", "title", "kind", "updatedAt"]);
-export type MimirItemSort = (typeof MIMIR_ITEM_LIST.sorts)[number];
-
-/** One person's Mimir progress, most recently opened first. */
-export const MIMIR_PROGRESS_LIST = spec(["lastVisit", "title", "kind", "tier"], "desc");
-export type MimirProgressSort = (typeof MIMIR_PROGRESS_LIST.sorts)[number];
 
 /** Survey Results: each daily survey with a response, newest bootcamp first. */
 export const SURVEY_RESULT_LIST = spec(["date", "average", "responses"], "desc");

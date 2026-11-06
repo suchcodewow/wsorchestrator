@@ -35,7 +35,7 @@ export function OrderSheet({ orders, single }: { orders: FoodOrderRow[]; single:
               return (
                 <section
                   key={o.id}
-                  className="break-inside-avoid rounded-lg border border-neutral-300 bg-white p-5 print:rounded-none print:border-x-0 print:border-b-0 print:px-0"
+                  className="break-inside-avoid rounded-lg border border-neutral-300 bg-neutral-50 p-5 print:bg-white print:rounded-none print:border-x-0 print:border-b-0 print:px-0"
                 >
                   <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
                     <h2 className="text-lg font-semibold">{o.vendor}</h2>

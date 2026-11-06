@@ -263,6 +263,9 @@ export const canManageUsers = (access: Access) =>
 
 export const canDeleteUsers = (access: Access) => access.platform;
 
+/** Adding an employee as an account, with any roles including platform administration, is a platform administrator's. */
+export const canAddUsers = (access: Access) => access.platform;
+
 /** The labels worth showing beside someone's name; an ordinary operator has none. */
 export function accessBadges(access: Access): string[] {
   if (access.platform) return [PLATFORM_ADMIN_LABEL];

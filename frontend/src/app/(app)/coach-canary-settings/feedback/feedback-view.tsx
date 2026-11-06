@@ -76,9 +76,6 @@ export function FeedbackView({
 
   return (
     <motion.div variants={staggerParent(0.04)} initial="hidden" animate="show" className="space-y-6">
-      <motion.div variants={riseChild}>
-        <h2 className="text-xl font-medium tracking-tight">Coach Canary Feedback</h2>
-      </motion.div>
 
       <motion.div variants={riseChild}>
         <TableSearch value={query.q} placeholder="Search concepts" label="Search concepts" />

@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { diffStats, lineDiff } from "@/lib/mimir/code-lab/diff";
+import { recordRun } from "./record-run";
 import {
   FILE,
   REPO,
@@ -204,6 +205,7 @@ export function CodeLabView({ author }: { author: string }) {
               },
             );
             setStage("merged");
+            recordRun({ experience: "developer" });
           }}
         />
       )}
@@ -543,7 +545,7 @@ function BrowserFrame({ code, address, className }: { code: string; address: str
           </span>
           <span className="mx-auto rounded bg-background px-3 py-0.5 font-mono text-[11px] text-muted-foreground">{address}</span>
         </div>
-        <div className="relative grow bg-white">
+        <div className="relative grow bg-neutral-50">
           {frames.map((f, k) => (
             <iframe
               key={f.id}

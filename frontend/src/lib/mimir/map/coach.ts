@@ -5,8 +5,10 @@
  *
  * It works the way `lib/mimir/chat.ts` does, and borrows its call to Claude,
  * its replay rules and its limits. A conversation is fixed when it starts (the
- * course is its system prompt) and only ever appended to. What changes is the
- * rep: so the coach is handed a progress snapshot at the start of any turn
+ * course is its system prompt) and only ever appended to, except for the rep's
+ * name, role, coaching style and the coach's personality, which are put into
+ * the prompt afresh on every turn so a change to them applies at once. What
+ * else changes is the rep's progress: so the coach is handed a progress snapshot at the start of any turn
  * after their progress has moved, and a *greeting* turn (a hidden "I just
  * opened Mimir") when they open the tab after a while or after finishing a
  * video, so it can say where they are and what comes next.
@@ -29,7 +31,7 @@ import "server-only";
 
 import { and, asc, count, desc, eq, gt, lt } from "drizzle-orm";
 import { db } from "@/db";
-import { mimirCoachConversations, mimirCoachMessages, users, type MimirMessageRole } from "@/db/schema";
+import { MIMIR_COACH_NAMES, mimirCoachConversations, mimirCoachMessages, users, type MimirMessageRole } from "@/db/schema";
 import { renderMarkdown } from "@/lib/markdown";
 import { MIMIR_CONTEXT_LIMIT, MIMIR_MODEL, askClaude, coachConfigured, forReplay, tokensOf, type ChatMessage, type Complete, type CompletionRequest, type ReplyStream } from "@/lib/mimir/chat";
 import { getProfile } from "@/lib/mimir/progress";
@@ -37,10 +39,13 @@ import { getCoachingSettings } from "@/lib/mimir/settings";
 import { PAGE_SIZE } from "@/lib/paging";
 import { getMap } from "./content";
 import {
+  INTRODUCE_REQUEST,
   OPEN_REQUEST,
+  introduceContent,
   openContent,
   buildCoachSystem,
   focusNote,
+  systemFor,
   knowsChecklists,
   nextConcept,
   progressSnapshot,
@@ -151,23 +156,14 @@ export async function getCoachChat(userId: string, before?: number): Promise<Coa
   };
 }
 
-/** Starts the conversation if there is none, or if theirs predates checklists. The course is fixed into its system prompt here. */
+/** Starts the conversation if there is none, or if theirs predates checklists. The course is fixed into its system prompt here; the rep's context is left to each turn. */
 async function ensureConversation(userId: string, content: MapContent) {
   const existing = await conversationOf(userId);
   if (existing && knowsChecklists(existing.systemPrompt)) return existing;
   if (existing) await resetCoachChat(userId);
-  const [[user], profile, settings] = await Promise.all([
-    db.select({ name: users.name }).from(users).where(eq(users.id, userId)),
-    getProfile(userId),
-    getCoachingSettings(),
-  ]);
   await db
     .insert(mimirCoachConversations)
-    .values({
-      userId,
-      model: MIMIR_MODEL,
-      systemPrompt: buildCoachSystem(content, { name: user?.name ?? null, role: profile.role, coachStyle: profile.coachStyle }, settings),
-    })
+    .values({ userId, model: MIMIR_MODEL, systemPrompt: buildCoachSystem(content, await getCoachingSettings()) })
     .onConflictDoNothing();
   return conversationOf(userId);
 }
@@ -182,8 +178,12 @@ export type CoachTurn = {
   conceptIds: string[];
 };
 
-/** Something to say, with the id of a concept picked on the map when the rep asked to switch to it there; or a request to be greeted. */
-export type CoachInput = { message: string; focus?: string } | { open: true };
+/**
+ * Something to say, with the id of a concept picked on the map when the rep
+ * asked to switch to it there; a request to be greeted; or a request that the
+ * coach introduce itself in the style just picked.
+ */
+export type CoachInput = { message: string; focus?: string } | { open: true } | { introduce: true };
 
 /**
  * Saves the rep's message (or the hidden "I just opened Mimir" of a
@@ -201,7 +201,12 @@ export async function beginCoachTurn(
   if (needsKey && !coachConfigured()) return { ok: false, error: "not_configured" };
   const conversation = await ensureConversation(userId, map.content);
   if (!conversation) return { ok: false, error: "upstream" };
-  const { snapshot, states, concepts } = await standing(userId, map.content);
+  const [{ snapshot, states, concepts }, [user], profile] = await Promise.all([
+    standing(userId, map.content),
+    db.select({ name: users.name }).from(users).where(eq(users.id, userId)),
+    getProfile(userId),
+  ]);
+  const systemPrompt = systemFor(conversation.systemPrompt, { name: user?.name ?? null, ...profile });
   const message = "message" in input ? input.message : null;
   const picked = "message" in input && input.focus ? concepts.find((c) => c.id === input.focus) : undefined;
   const focus = picked ? focusNote(picked, states[picked.id]) : null;
@@ -235,19 +240,30 @@ export async function beginCoachTurn(
 
     const seq = (last?.seq ?? -1) + 1;
     // The snapshot goes first whenever progress has moved since the coach last saw it, and always when greeting.
-    const fresh = message === null || conversation.stateHash !== snapshot.hash;
+    const greeting = "open" in input;
+    const fresh = greeting || conversation.stateHash !== snapshot.hash;
     let sent = message;
-    if (message === null) {
+    if (greeting) {
       const [{ n }] = await tx
         .select({ n: count() })
         .from(mimirCoachMessages)
-        .where(and(eq(mimirCoachMessages.userId, userId), eq(mimirCoachMessages.role, "user"), eq(mimirCoachMessages.shown, false)));
+        .where(
+          and(
+            eq(mimirCoachMessages.userId, userId),
+            eq(mimirCoachMessages.role, "user"),
+            eq(mimirCoachMessages.shown, false),
+            eq(mimirCoachMessages.text, OPEN_REQUEST),
+          ),
+        );
       sent = openContent(n ?? 0);
+    } else if ("introduce" in input) {
+      sent = introduceContent(MIMIR_COACH_NAMES[profile.coachPersonality]);
     }
     const content = turnContent(sent ?? OPEN_REQUEST, fresh ? snapshot : null, focus);
+    const hidden = "introduce" in input ? INTRODUCE_REQUEST : OPEN_REQUEST;
     const [row] = await tx
       .insert(mimirCoachMessages)
-      .values({ userId, seq, role: "user", shown: message !== null, content, text: message ?? OPEN_REQUEST })
+      .values({ userId, seq, role: "user", shown: message !== null, content, text: message ?? hidden })
       .returning({ createdAt: mimirCoachMessages.createdAt });
     await tx.update(mimirCoachConversations).set({ stateHash: snapshot.hash, updatedAt: new Date() }).where(eq(mimirCoachConversations.userId, userId));
     return { seq, at: row!.createdAt };
@@ -256,7 +272,7 @@ export async function beginCoachTurn(
   if (message !== null) await countMessage(userId);
   return {
     ok: true,
-    turn: { userId, systemPrompt: conversation.systemPrompt, message, ...claimed, conceptIds: conceptsInOrder(map.content).map((c) => c.id) },
+    turn: { userId, systemPrompt, message, ...claimed, conceptIds: conceptsInOrder(map.content).map((c) => c.id) },
   };
 }
 

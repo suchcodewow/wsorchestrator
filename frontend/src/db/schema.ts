@@ -26,6 +26,7 @@ import type { AdapterAccountType } from "next-auth/adapters";
 import type { DeployedContent } from "@/lib/harness-deploy-selection";
 import type { TourTarget } from "@/lib/tours/target";
 import type { VideoLanguage } from "@/lib/mimir/map/schema";
+import type { ExperienceId } from "@/lib/mimir/experiences";
 
 const bytea = customType<{ data: Buffer; driverData: Buffer }>({
   dataType: () => "bytea",
@@ -2900,210 +2901,22 @@ export const IRIS_NOTE_MAX = 2000;
 /* Mimir                                                               */
 /* ------------------------------------------------------------------ */
 
-/**
- * What a Mimir item is. Most are cards a rep reads and is coached on: the
- * four Harness agents, and the capabilities each is made of. The rest hold
- * others (a discovery group its questions, a glossary category its terms) or
- * introduce a library tab.
- */
-export const MIMIR_KINDS = [
-  "agent",
-  "capability",
-  "ai",
-  "architecture",
-  "sdlc",
-  "persona",
-  "competitor",
-  "proof",
-  "framework",
-  "discovery",
-  "question",
-  "category",
-  "term",
-  "intro",
-] as const;
-export type MimirKind = (typeof MIMIR_KINDS)[number];
-
-export const MIMIR_SECTION_LIMIT = 30;
-export const MIMIR_ITEM_LIMITS = {
-  id: 80,
-  title: 1000,
-  emoji: 16,
-  summary: 4000,
-  body: 50_000,
-  sections: MIMIR_SECTION_LIMIT,
-  sectionTitle: 300,
-  sectionContent: 20_000,
-  attr: 4000,
-  listEntries: 30,
-} as const;
-
-/** A titled block of Markdown on a card, shown folded. */
-export type MimirSection = { title: string; content: string };
-
-/**
- * The fields only some kinds use. Every one is optional; `lib/mimir/kinds.ts`
- * says which each kind offers for editing.
- */
-export type MimirAttrs = {
-  badge?: string;
-  role?: string;
-  tag?: string;
-  buyer?: string;
-  scenario?: string;
-  salesAngle?: string;
-  strength?: string;
-  advantages?: string;
-  watchOut?: string;
-  headline?: string;
-  url?: string;
-  loop?: string;
-  /** A Harness AI item's place: platform, agent or feature. */
-  group?: string;
-  why?: string;
-  followUp?: string;
-  seeAlso?: string;
-  /** The library tab an intro sits above. */
-  forKind?: string;
-  number?: number;
-  featured?: boolean;
-  cats?: string[];
-  mods?: string[];
-  /**
-   * A glossary term's forms in other text: "canary", "CI". An all-capitals
-   * form links only where it is written in capitals.
-   */
-  aliases?: string[];
-};
-
-/**
- * Mimir's reference content: every card, question and glossary term, edited
- * by Training Administrators in Mimir Settings and served to the coach. The
- * id is a stable slug so an import can update what it made before.
- */
-export const mimirItems = pgTable(
-  "mimir_items",
-  {
-    id: text("id").primaryKey(),
-    kind: text("kind").$type<MimirKind>().notNull(),
-    // Restrict: removing a group would silently take its questions or terms.
-    parentId: text("parent_id").references((): AnyPgColumn => mimirItems.id, { onDelete: "restrict" }),
-    /** Order within its kind (and parent), from 0. */
-    position: integer("position").notNull().default(0),
-    title: text("title").notNull(),
-    emoji: text("emoji").notNull().default(""),
-    /** `#rrggbb`, or empty. */
-    color: text("color").notNull().default(""),
-    summary: text("summary").notNull().default(""),
-    /** Markdown. */
-    body: text("body").notNull().default(""),
-    sections: jsonb("sections").$type<MimirSection[]>().notNull().default([]),
-    attrs: jsonb("attrs").$type<MimirAttrs>().notNull().default({}),
-    updatedBy: text("updated_by").references(() => users.id, { onDelete: "set null" }),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (t) => [
-    index("mimir_items_kind_idx").on(t.kind, t.position),
-    index("mimir_items_parent_idx").on(t.parentId, t.position),
-    check(
-      "mimir_items_kind_check",
-      sql`${t.kind} in ('agent', 'capability', 'ai', 'architecture', 'sdlc', 'persona', 'competitor', 'proof', 'framework', 'discovery', 'question', 'category', 'term', 'intro')`,
-    ),
-  ],
-);
-
-export type MimirItem = typeof mimirItems.$inferSelect;
-
-/**
- * Where one person is with one item. Viewed once they open it, practiced once
- * they send the coach a message, mastered once the coach has said they are
- * ready and they have written their one-line takeaway.
- */
-export const mimirProgress = pgTable(
-  "mimir_progress",
-  {
-    userId: text("user_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
-    itemId: text("item_id")
-      .notNull()
-      .references(() => mimirItems.id, { onDelete: "cascade" }),
-    firstVisitAt: timestamp("first_visit_at", { withTimezone: true }).notNull().defaultNow(),
-    lastVisitAt: timestamp("last_visit_at", { withTimezone: true }).notNull().defaultNow(),
-    practicedAt: timestamp("practiced_at", { withTimezone: true }),
-    masteryReadyAt: timestamp("mastery_ready_at", { withTimezone: true }),
-    reflection: text("reflection").notNull().default(""),
-  },
-  (t) => [
-    primaryKey({ columns: [t.userId, t.itemId] }),
-    index("mimir_progress_item_idx").on(t.itemId),
-  ],
-);
-
-export const MIMIR_REFLECTION_MAX = 500;
-
-/**
- * One person's coaching conversation on one item. The system prompt is fixed
- * when it starts: the coach's earlier turns are only valid against the prompt
- * they were written under, so an edit to the item reaches the next
- * conversation, not this one.
- */
-export const mimirConversations = pgTable(
-  "mimir_conversations",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    userId: text("user_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
-    itemId: text("item_id")
-      .notNull()
-      .references(() => mimirItems.id, { onDelete: "cascade" }),
-    mode: text("mode").notNull(),
-    model: text("model").notNull(),
-    systemPrompt: text("system_prompt").notNull(),
-    startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (t) => [uniqueIndex("mimir_conversations_one_idx").on(t.userId, t.itemId)],
-);
-
+/** Who said a turn in a coach conversation. */
 export const MIMIR_MESSAGE_ROLES = ["user", "assistant"] as const;
 export type MimirMessageRole = (typeof MIMIR_MESSAGE_ROLES)[number];
 
 export const MIMIR_MESSAGE_MAX = 4000;
-
-/**
- * One turn, in order. `content` is exactly what the Claude API was sent or
- * returned, kept so the conversation replays unchanged; `text` is what the
- * page shows. The kickoff that opens every conversation is not shown.
- */
-export const mimirMessages = pgTable(
-  "mimir_messages",
-  {
-    conversationId: uuid("conversation_id")
-      .notNull()
-      .references(() => mimirConversations.id, { onDelete: "cascade" }),
-    seq: integer("seq").notNull(),
-    role: text("role").$type<MimirMessageRole>().notNull(),
-    shown: boolean("shown").notNull().default(true),
-    content: jsonb("content").$type<unknown>().notNull(),
-    text: text("text").notNull(),
-    /** The API's token counts for a coach turn. */
-    usage: jsonb("usage").$type<Record<string, unknown>>(),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (t) => [
-    primaryKey({ columns: [t.conversationId, t.seq] }),
-    check("mimir_messages_role_check", sql`${t.role} in ('user', 'assistant')`),
-  ],
-);
 
 export const MIMIR_REP_ROLES = ["SDR", "AE", "SE"] as const;
 export type MimirRepRole = (typeof MIMIR_REP_ROLES)[number];
 
 export const MIMIR_COACH_STYLES = ["socratic", "direct"] as const;
 export type MimirCoachStyle = (typeof MIMIR_COACH_STYLES)[number];
+
+/** Whose voice the coach speaks in. Only the voice: what it teaches and how it marks are the same for each. */
+export const MIMIR_COACH_PERSONALITIES = ["canary", "lasso", "taylor"] as const;
+export type MimirCoachPersonality = (typeof MIMIR_COACH_PERSONALITIES)[number];
+export const MIMIR_COACH_NAMES: Record<MimirCoachPersonality, string> = { canary: "Coach Canary", lasso: "Coach Lasso", taylor: "Coach Taylor" };
 
 /** What one person has told Mimir about themselves, for the coach. Kept apart from the Diagnostic track. */
 export const mimirProfiles = pgTable(
@@ -3114,11 +2927,13 @@ export const mimirProfiles = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     role: text("role").$type<MimirRepRole>(),
     coachStyle: text("coach_style").$type<MimirCoachStyle>().notNull().default("socratic"),
+    coachPersonality: text("coach_personality").$type<MimirCoachPersonality>().notNull().default("canary"),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     check("mimir_profiles_role_check", sql`${t.role} is null or ${t.role} in ('SDR', 'AE', 'SE')`),
     check("mimir_profiles_coach_style_check", sql`${t.coachStyle} in ('socratic', 'direct')`),
+    check("mimir_profiles_coach_personality_check", sql`${t.coachPersonality} in ('canary', 'lasso', 'taylor')`),
   ],
 );
 
@@ -3245,10 +3060,91 @@ export const mimirConceptProgress = pgTable(
 );
 
 /**
+ * One person's runs of a hands-on experience kept whole: each finished run adds
+ * an attempt and keeps the best score. The Developer experience has no score,
+ * only whether it was finished. The experiences run in the browser, so a
+ * score is what the person's browser reported. The slide review, which never
+ * ends, keeps a row per slide instead, in `mimir_slide_review_runs`.
+ */
+export const mimirExperienceProgress = pgTable(
+  "mimir_experience_progress",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    experience: text("experience").$type<Exclude<ExperienceId, "slide-review">>().notNull(),
+    attempts: integer("attempts").notNull().default(0),
+    /** The highest score of any attempt; null for an experience without a score. */
+    bestScore: integer("best_score"),
+    firstCompletedAt: timestamp("first_completed_at", { withTimezone: true }).notNull().defaultNow(),
+    lastCompletedAt: timestamp("last_completed_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.userId, t.experience] }),
+    check("mimir_experience_progress_experience_check", sql`${t.experience} in ('developer', 'security')`),
+  ],
+);
+
+export type MimirExperienceProgress = typeof mimirExperienceProgress.$inferSelect;
+
+/**
+ * Each slide of the slide review someone finished: the seed it was made from,
+ * which rebuilds it exactly, and how they did. The score is worked out on the
+ * server from the seed and what they found, so only `found` and
+ * `wrong_clicks` come from the browser.
+ */
+export const mimirSlideReviewRuns = pgTable(
+  "mimir_slide_review_runs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    seed: integer("seed").notNull(),
+    /** The theme the seed made, by its id in the slide review's bank. */
+    theme: text("theme").notNull(),
+    found: integer("found").notNull(),
+    /** How many mistakes the slide had. */
+    total: integer("total").notNull(),
+    wrongClicks: integer("wrong_clicks").notNull(),
+    score: integer("score").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("mimir_slide_review_runs_user_idx").on(t.userId, t.createdAt)],
+);
+
+export type MimirSlideReviewRun = typeof mimirSlideReviewRuns.$inferSelect;
+
+/**
+ * A smiley or confused rating on a slide review slide, with a comment if one
+ * was written, from the faces above the slide. The seed rebuilds the slide it
+ * was about.
+ */
+export const mimirSlideFeedback = pgTable(
+  "mimir_slide_feedback",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id").references(() => users.id, { onDelete: "set null" }),
+    seed: integer("seed").notNull(),
+    theme: text("theme").notNull(),
+    rating: text("rating").$type<VideoFeedbackRating>().notNull(),
+    comment: text("comment"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("mimir_slide_feedback_created_at_idx").on(t.createdAt),
+    check("mimir_slide_feedback_rating_check", sql`${t.rating} in ('up', 'down')`),
+  ],
+);
+
+export type MimirSlideFeedback = typeof mimirSlideFeedback.$inferSelect;
+
+/**
  * One person's conversation with the map coach, the whole of it. The system
- * prompt (the course) is fixed when it starts, for the same reason as
- * `mimir_conversations`. `stateHash` is the progress snapshot the coach was
- * last given, so it is sent again only when it changes.
+ * prompt (the course) is fixed when it starts: the coach's earlier turns are
+ * only valid against the prompt they were written under. Its rep-context slot
+ * is filled afresh on every turn. `stateHash` is the progress snapshot the
+ * coach was last given, so it is sent again only when it changes.
  */
 export const mimirCoachConversations = pgTable("mimir_coach_conversations", {
   userId: text("user_id")
@@ -3261,7 +3157,11 @@ export const mimirCoachConversations = pgTable("mimir_coach_conversations", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-/** One turn of the map coach, in order; `content` and `text` as in `mimir_messages`. */
+/**
+ * One turn of the map coach, in order. `content` is exactly what the Claude
+ * API was sent or returned, kept so the conversation replays unchanged;
+ * `text` is what the page shows. A greeting's hidden request is not shown.
+ */
 export const mimirCoachMessages = pgTable(
   "mimir_coach_messages",
   {
@@ -3295,7 +3195,7 @@ export const mimirCoachStats = pgTable("mimir_coach_stats", {
   /** Messages they typed to the coach; the coach's greetings are not counted. */
   messagesSent: integer("messages_sent").notNull().default(0),
   peakMastered: integer("peak_mastered").notNull().default(0),
-  /** Times they pressed "New conversation". */
+  /** Times they pressed "Reset chat memory" (once "New conversation"). */
   newConversations: integer("new_conversations").notNull().default(0),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

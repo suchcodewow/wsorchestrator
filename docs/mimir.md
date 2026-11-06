@@ -25,9 +25,10 @@ Mimir teaches the course one concept at a time. It has two tabs:
   end. A concept the coach has marked shows a check; one it asked you to watch
   shows **Recommended**.
 
-The previous Mimir (a reference library with a coach per card) is kept, read
-only, for Assessments Administrators at `/coach-canary-archive`. It no longer coaches or
-records progress. Its tables and its API routes are untouched.
+The previous Mimir (a reference library with a coach per card) has been
+removed: its pages, routes and code, and then its tables (`mimir_items`,
+`mimir_progress`, `mimir_conversations`, `mimir_messages`), which
+`20261106145138_drop_mimir_library.sql` drops.
 
 ## The content is private
 

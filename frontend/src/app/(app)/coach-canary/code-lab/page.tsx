@@ -1,6 +1,6 @@
 /**
  * Mimir's hands-on experiences: the list of them, each opening in a window of
- * its own. The first is the Code Lab, practising a code change from branch to
+ * its own. The Code Lab practises a code change from branch to
  * merge on a made-up shop's home page. It is all pretend and all in the
  * browser, so there is nothing to fetch or keep.
  */

@@ -267,6 +267,35 @@ export const ADMIN_GROUPS: EndpointGroup[] = [
         returns: `{ users: { id, name, email, eventRole, trainingRole, assessmentsRole, isPlatformAdmin, isBootstrapAdmin, isTestAccount, eventCount }[], ${PAGE_FIELDS}, pendingAdmins: string[] }`,
       },
       {
+        method: "POST",
+        path: "/api/users",
+        summary: "Adds an employee as an account, with the roles given, before they first sign in.",
+        access: "platform",
+        token: false,
+        notes:
+          "The address must be on the employee list (GET /api/evals/employees); the account takes the employee's name. Their first Google sign-in links to it by address. It does not let them sign in from a domain that is not allowed. Change its roles afterwards with PATCH /api/users/{id}.",
+        body: {
+          kind: "json",
+          fields: [
+            { name: "email", type: "string", required: true, note: "an employee's address" },
+            {
+              name: "eventRole",
+              type: `"none" | "contributor" | "operator" | "manager" | "administrator"`,
+              note: `defaults to "none"`,
+            },
+            { name: "trainingRole", type: `"viewer" | "administrator" | null`, note: "defaults to null" },
+            { name: "assessmentsRole", type: `"viewer" | "administrator" | null`, note: "defaults to null" },
+            { name: "isPlatformAdmin", type: "boolean", note: "defaults to false" },
+          ],
+        },
+        returns: "201 { user: { id, name, email } }",
+        errors: [
+          { status: 400, error: "invalid_body", when: "email is missing, or a role is not one of those listed" },
+          { status: 404, error: "not_employee", when: "nobody on the employee list has that address" },
+          { status: 409, error: "exists", when: "an account already has that address" },
+        ],
+      },
+      {
         method: "PATCH",
         path: "/api/users/{id}",
         summary: "Sets one of a user's roles, or their platform administrator flag.",

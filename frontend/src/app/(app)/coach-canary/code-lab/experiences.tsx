@@ -8,18 +8,25 @@
  */
 
 import { useState, type ReactNode } from "react";
-import { ChevronRight, Laptop, Timer, type LucideIcon } from "lucide-react";
+import { ChevronRight, Infinity as InfinityIcon, Laptop, Presentation, ShieldAlert, Timer, type LucideIcon } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
 import { CodeLabView } from "./code-lab-view";
+import { SecurityTeamView } from "./security-team-view";
+import { SlideReviewView } from "./slide-review-view";
 
 type Experience = {
   id: string;
   name: string;
   summary: string;
   minutes: string;
+  /** Drawn beside `minutes`: a clock unless the experience has no end. */
+  MinutesIcon?: LucideIcon;
   Icon: LucideIcon;
   /** The experience itself, for the person signed in. */
   render: (author: string) => ReactNode;
+  /** Uses the window's whole width rather than the reading column, for a slide read at the largest size the screen allows. */
+  wide?: boolean;
 };
 
 const EXPERIENCES: Experience[] = [
@@ -30,6 +37,26 @@ const EXPERIENCES: Experience[] = [
     minutes: "5–7 minutes",
     Icon: Laptop,
     render: (author) => <CodeLabView author={author} />,
+  },
+  {
+    id: "security",
+    name: "Day in the Life: Enterprise Security Team",
+    summary:
+      "Join Globalcorp’s enterprise security team. Experience the real-world challenge of how so many companies try to secure software releases by hand. Comes with a free quarter-end performance review!",
+    minutes: "8–10 minutes",
+    Icon: ShieldAlert,
+    render: () => <SecurityTeamView />,
+  },
+  {
+    id: "slide-review",
+    name: "Ready to sharpen your slide critiquing skills?",
+    summary:
+      "The sales team has been hard at work creating “Our understanding” slides for upcoming opportunities. Help them by reviewing their slides for spelling, grammar and formatting.",
+    minutes: "Until you give up",
+    MinutesIcon: InfinityIcon,
+    Icon: Presentation,
+    render: () => <SlideReviewView />,
+    wide: true,
   },
 ];
 
@@ -55,7 +82,7 @@ export function ExperiencesView({ author }: { author: string }) {
               <span className="block max-w-3xl text-sm text-muted-foreground">{e.summary}</span>
             </span>
             <span className="hidden shrink-0 items-center gap-1.5 text-xs text-muted-foreground sm:flex">
-              <Timer className="size-3.5" />
+              {e.MinutesIcon ? <e.MinutesIcon className="size-3.5" /> : <Timer className="size-3.5" />}
               {e.minutes}
             </span>
             <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
@@ -70,11 +97,12 @@ export function ExperiencesView({ author }: { author: string }) {
             aria-describedby={undefined}
             className="h-dvh max-h-dvh max-w-none grid-rows-[auto_minmax(0,1fr)] gap-0 overflow-hidden rounded-none p-0"
           >
-            <div className="border-b px-6 py-4 pr-14">
+            {/* Tall enough that the dialog's close button sits centred beside the title. */}
+            <div className="flex min-h-16 items-center border-b px-6 pr-16">
               <DialogTitle>{open.name}</DialogTitle>
             </div>
             <div className="overflow-y-auto px-6 py-6">
-              <div className="mx-auto max-w-7xl">{open.render(author)}</div>
+              <div className={cn("mx-auto", !open.wide && "max-w-7xl")}>{open.render(author)}</div>
             </div>
           </DialogContent>
         </Dialog>

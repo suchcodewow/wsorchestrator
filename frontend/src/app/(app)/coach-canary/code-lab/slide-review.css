@@ -1,0 +1,25 @@
+/*
+ * The slide review's one bit of motion: the +1 or −1 that rises from a click
+ * and fades.
+ */
+
+@keyframes slide-review-float {
+  from {
+    opacity: 1;
+    transform: translate(-50%, -50%);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, -150%);
+  }
+}
+
+.slide-review-float {
+  animation: slide-review-float 0.9s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .slide-review-float {
+    animation: none;
+  }
+}

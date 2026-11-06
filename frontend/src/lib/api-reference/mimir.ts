@@ -1,273 +1,128 @@
-/** Mimir: the reference library and its coach, for everyone; its content and coaching settings, for Assessments Administrators. */
+/** Coach Canary: the coach's profile, the hands-on experiences, the coaching settings, the studio and the map. */
 
 import {
-  MIMIR_KINDS,
   MIMIR_MESSAGE_MAX,
-  MIMIR_REFLECTION_MAX,
   MIMIR_SETTING_MAX,
+  VIDEO_FEEDBACK_LIMITS,
 } from "@/db/schema";
-import { MAP_VERSION_LIST, MIMIR_ITEM_LIST, MIMIR_PROGRESS_LIST, MIMIR_STUDIO_JOB_LIST } from "@/lib/list-specs";
+import { EXPERIENCE_REPORT_LIST, SLIDE_FEEDBACK_LIST, MAP_VERSION_LIST, MIMIR_STUDIO_JOB_LIST } from "@/lib/list-specs";
+import { EXPERIENCE_IDS, RECENT_SLIDES, WRONG_CLICKS_MAX } from "@/lib/mimir/experiences";
+import { SEED_MAX } from "@/lib/mimir/slide-review/generate";
+import { MAX_SCORE as SECURITY_MAX } from "@/lib/mimir/security-game/scenario";
 import { MAP_SUMMARY_MAX } from "@/lib/mimir/map/schema";
 import { DECK_MAX_BYTES, VIDEO_NOTES_MAX } from "@/lib/mimir/studio/shapes";
 import { PAGE_FIELDS, listQuery } from "./paging";
 import type { EndpointGroup, Field } from "./types";
 
-const KIND_TYPE = MIMIR_KINDS.map((k) => `"${k}"`).join(" | ");
-const ITEM_ID: Field = { name: "id", type: "string", required: true, note: "the item's id, such as agent-software-delivery, cd or jenkins" };
-const SUMMARY_SHAPE = "{ id, kind, parentId, position, title, emoji, color, summary, attrs, updatedAt }";
+const EXPERIENCE_TYPE = EXPERIENCE_IDS.map((k) => `"${k}"`).join(" | ");
+const EXPERIENCE_PROGRESS_SHAPE = `{ userId, experience: "developer" | "security", attempts: number, bestScore: number | null, firstCompletedAt, lastCompletedAt }`;
+const SLIDE_RUN_SHAPE = "{ id, userId, seed: number, theme, found: number, total: number, wrongClicks: number, score: number, createdAt }";
+const SLIDE_FEEDBACK_SHAPE = `{ id, seed: number, theme, rating: "up" | "down", comment: string | null, createdAt, user: { name, email } | null }`;
 const MESSAGE_SHAPE = `{ seq, role: "user" | "assistant", text, html: string | null, at }`;
-const ITEM_FIELDS: Field[] = [
-  {
-    name: "id",
-    type: "string",
-    note: "Lowercase letters, digits, - and _. On a create, made from the title when left out. Ignored on a replace.",
-  },
-  { name: "kind", type: KIND_TYPE, required: true, note: "Cannot change once the item exists." },
-  {
-    name: "parentId",
-    type: "string | null",
-    note: "A question sits under a discovery group and a term under a category, always; a capability sits under the agent it belongs to, or under nothing for one of Harness's other products; nothing else has a parent.",
-  },
-  { name: "position", type: "integer", note: "Order within its kind, from 0. Default 0." },
-  { name: "title", type: "string", required: true },
-  { name: "emoji", type: "string" },
-  { name: "color", type: "string", note: "#rrggbb, or empty." },
-  { name: "summary", type: "string" },
-  { name: "body", type: "string", note: "Markdown." },
-  { name: "sections", type: "{ title, content }[]", note: "Folded Markdown blocks; at most 30." },
-  {
-    name: "attrs",
-    type: "object",
-    note: "The fields only some kinds use: badge, role, tag, buyer, scenario, salesAngle, strength, advantages, watchOut, headline, url, loop, group, why, followUp, seeAlso, forKind (strings), number, featured, and cats, mods and aliases (string lists; aliases are the forms of a glossary term that link to it). Any other key is refused.",
-  },
-];
 const JOB_ID: Field = { name: "id", type: "string", required: true, note: "the job's id" };
 const JOB_SHAPE = `{ id, kind: "deck" | "video", status: "uploading" | "queued" | "running" | "ready" | "succeeded" | "failed" | "published" | "discarded", conceptId: string | null, label, input, result: object | null, progress: string | null, error: string | null, requestedBy: string | null, createdAt, startedAt: string | null, finishedAt: string | null, updatedAt }`;
 const DIFF_SHAPE = "{ added: { id, name, level }[], removed: { id, name, hadVideo }[], changed: { id, name, was: string | null, what: string[] }[], unchanged: number, slides: { was, now } }";
-const ITEM_ERRORS = [
-  { status: 400, error: "invalid", when: "the body does not parse" },
-  { status: 400, error: "bad_parent", when: "parentId names no item, or one this kind may not sit under" },
-];
 
 export const MIMIR_GROUPS: EndpointGroup[] = [
   {
     id: "mimir",
-    title: "Coach Canary library (archived)",
+    title: "Coach Canary",
     intro:
-      "The previous Coach Canary, kept at /coach-canary-archive for Assessments Administrators. The GTM reference library and its AI coach: Harness's four agents and the capabilities each is made of, personas, competitors, proof points and more. Anyone signed in reads the content, is coached on it, and keeps their own progress; nobody sees anyone else's. Assessments Administrators edit the content and the coaching settings.",
+      "What you have told the coach about yourself, your runs of the hands-on experiences, and the coaching settings. Everyone's profile and runs are their own; nobody sees anyone else's. Assessments Administrators read the experience report and edit the coaching settings.",
     endpoints: [
-      {
-        method: "GET",
-        path: "/api/mimir/items",
-        summary: "Lists Coach Canary items, a page at a time.",
-        access: "signedIn",
-        token: true,
-        query: [
-          { name: "kind", type: KIND_TYPE, note: "One kind only." },
-          { name: "parent", type: "string", note: "Items under this item's id, or none for top-level items only." },
-          { name: "cat", type: "string", note: "Competitors carrying this category id, such as cd." },
-          { name: "featured", type: '"1"', note: "Top competitors only." },
-          ...listQuery(MIMIR_ITEM_LIST.sorts, "the title, summary or body"),
-        ],
-        returns: `{ items: ${SUMMARY_SHAPE}[], ${PAGE_FIELDS} }`,
-        errors: [{ status: 400, error: "invalid_kind", when: "kind is not one of the kinds" }],
-      },
-      {
-        method: "GET",
-        path: "/api/mimir/items/{id}",
-        summary: "Returns one item in full, with what holds it and what it holds.",
-        access: "signedIn",
-        token: true,
-        notes:
-          "children are the items under it, at most 100, in order: an agent's capabilities, or a discovery group's questions. coach is the coaching mode for a kind the coach covers, and null for the rest.",
-        params: [ITEM_ID],
-        returns: `{ item: ${SUMMARY_SHAPE} & { body, sections, createdAt }, parent: summary | null, children: summary[], coach: "agent" | "capability" | "concept" | "sdlc" | "persona" | "competitive" | "usecase" | null }`,
-        errors: [{ status: 404, error: "not_found", when: "no item has that id" }],
-      },
-      {
-        method: "POST",
-        path: "/api/mimir/items",
-        summary: "Makes a Coach Canary item.",
-        access: "assessmentsAdmin",
-        token: true,
-        body: { kind: "json", fields: ITEM_FIELDS },
-        returns: "201 { id }",
-        errors: [...ITEM_ERRORS, { status: 409, error: "taken", when: "an item already has that id" }],
-      },
-      {
-        method: "PUT",
-        path: "/api/mimir/items/{id}",
-        summary: "Replaces a Coach Canary item's fields.",
-        access: "assessmentsAdmin",
-        token: true,
-        notes:
-          "Conversations already under way keep the prompt they started with; the change reaches the next conversation about it.",
-        params: [ITEM_ID],
-        body: { kind: "json", fields: ITEM_FIELDS },
-        returns: "{ ok: true }",
-        errors: [
-          ...ITEM_ERRORS,
-          { status: 404, error: "not_found", when: "no item has that id" },
-          { status: 409, error: "kind_fixed", when: "kind differs from the item's" },
-        ],
-      },
-      {
-        method: "DELETE",
-        path: "/api/mimir/items/{id}",
-        summary: "Removes a Coach Canary item, with everyone's progress on it and conversations about it.",
-        access: "assessmentsAdmin",
-        token: true,
-        params: [ITEM_ID],
-        returns: "{ ok: true }",
-        errors: [
-          { status: 404, error: "not_found", when: "no item has that id" },
-          { status: 409, error: "has_children", when: "other items sit under it; remove them first" },
-        ],
-      },
-      {
-        method: "POST",
-        path: "/api/mimir/import",
-        summary: "Imports Coach Canary items from a JSON file, updating those whose id exists and making the rest.",
-        access: "assessmentsAdmin",
-        token: true,
-        notes:
-          "The file holds { items: [...] }, each shaped as for POST /api/mimir/items with its id, and every parent before what it holds. All of it is written or none. Items the file leaves out are left alone, and an updated item keeps everyone's progress on it. frontend/scripts/mimir-convert.ts makes such a file from the Learning Hub's data.ts.",
-        body: { kind: "multipart", fields: [{ name: "file", type: "file", required: true, note: "JSON, at most 8 MB and 2000 items" }] },
-        returns: "{ created: number, updated: number }",
-        errors: [
-          { status: 400, error: "no_file", when: "there is no file field" },
-          { status: 400, error: "not_json", when: "the file is not JSON" },
-          { status: 400, error: "invalid", when: "an item does not parse; path and message say where" },
-          { status: 400, error: "bad_parent", when: "an item's parent is neither in the database nor earlier in the file, or is the wrong kind; index and id say which" },
-          { status: 409, error: "kind_fixed", when: "an item would change the kind of one that exists" },
-          { status: 409, error: "taken", when: "two items in the file share an id" },
-          { status: 413, error: "too_large", when: "the file is over 8 MB" },
-        ],
-      },
-      {
-        method: "POST",
-        path: "/api/mimir/items/{id}/visit",
-        summary: "Notes that you opened an item, which makes it viewed in your progress.",
-        access: "signedIn",
-        token: true,
-        params: [ITEM_ID],
-        returns: "{ ok: true }",
-        errors: [{ status: 404, error: "not_found", when: "no item has that id" }],
-      },
-      {
-        method: "GET",
-        path: "/api/mimir/items/{id}/chat",
-        summary: "Returns your coaching conversation about an item, or the coach's opener before you have one.",
-        access: "signedIn",
-        token: true,
-        notes:
-          "messages holds the latest 100 turns; earlier is true when older ones come before them, which before= reads a page at a time. configured is false when the server has no Claude key: the conversation reads but the coach cannot reply. masteryReady in progress means the coach has said you are ready and is waiting on your takeaway.",
-        params: [ITEM_ID],
-        query: [{ name: "before", type: "integer", note: "The page of turns before this seq, for reading back further." }],
-        returns: `{ mode, conversation: { id, startedAt, messages: ${MESSAGE_SHAPE}[], earlier: boolean } | null, opener: { text, html } | null, progress: { tier: "none" | "viewed" | "practiced" | "mastered", firstVisitAt, lastVisitAt, masteryReady, reflection }, configured: boolean }`,
-        errors: [
-          { status: 404, error: "not_found", when: "no item has that id" },
-          { status: 409, error: "not_coachable", when: "the coach does not cover this kind of item" },
-        ],
-      },
-      {
-        method: "POST",
-        path: "/api/mimir/items/{id}/chat",
-        summary: "Sends the coach a message and returns it with the coach's reply.",
-        access: "signedIn",
-        token: true,
-        notes:
-          "The first message starts the conversation, fixing its prompt from the item, the coaching settings and your profile as they are then. The coach is Claude Sonnet 5.5; a request it declines is answered by Anthropic's fallback model, and when it can't be reached, by Claude Haiku 4.5. Send Accept: text/event-stream to have the reply streamed as it is written — text events with each delta, restart if it begins again on the fallback model, then done with the body below, or error with { error, status } — otherwise the whole reply comes back as JSON. A conversation runs as long as the model can read: about a million tokens.",
-        params: [ITEM_ID],
-        body: { kind: "json", fields: [{ name: "message", type: "string", required: true, note: `up to ${MIMIR_MESSAGE_MAX} characters` }] },
-        returns: `{ messages: [yours, the coach's] as ${MESSAGE_SHAPE}, masteryReady: boolean, tier }`,
-        errors: [
-          { status: 400, error: "invalid", when: "message is missing, empty or too long" },
-          { status: 404, error: "not_found", when: "no item has that id" },
-          { status: 409, error: "not_coachable", when: "the coach does not cover this kind of item" },
-          { status: 409, error: "busy", when: "the coach is still replying to your last message" },
-          { status: 409, error: "full", when: "the conversation is as long as the model can read; start a new one" },
-          { status: 422, error: "refused", when: "Claude declined to reply; your message was not kept" },
-          { status: 502, error: "upstream", when: "Claude could not be reached or returned nothing; your message was not kept" },
-          { status: 503, error: "not_configured", when: "the server has no Claude key" },
-        ],
-      },
-      {
-        method: "DELETE",
-        path: "/api/mimir/items/{id}/chat",
-        summary: "Throws away your conversation about an item, so the next message starts afresh.",
-        access: "signedIn",
-        token: true,
-        notes: "Your progress on it, the coach's mastery signal and your takeaway stay.",
-        params: [ITEM_ID],
-        returns: "{ ok: true, deleted: boolean }",
-      },
-      {
-        method: "PUT",
-        path: "/api/mimir/items/{id}/reflection",
-        summary: "Saves your one-line takeaway on an item, which with the coach's signal makes it mastered.",
-        access: "signedIn",
-        token: true,
-        params: [ITEM_ID],
-        body: {
-          kind: "json",
-          fields: [{ name: "reflection", type: "string", required: true, note: `up to ${MIMIR_REFLECTION_MAX} characters` }],
-        },
-        returns: '{ ok: true, tier: "mastered" }',
-        errors: [
-          { status: 400, error: "invalid", when: "reflection is missing, empty or too long" },
-          { status: 404, error: "not_found", when: "no item has that id" },
-          { status: 409, error: "not_ready", when: "the coach has not yet said you are ready" },
-        ],
-      },
-      {
-        method: "GET",
-        path: "/api/mimir/progress",
-        summary: "Returns your progress overall and on each item it is kept on, a page at a time, and where to carry on from.",
-        access: "signedIn",
-        token: true,
-        notes:
-          "Progress is kept on every kind the coach covers, and on discovery groups. exchanges counts the messages you have sent in your current conversation about the item.",
-        query: [
-          { name: "kind", type: KIND_TYPE, note: "One kind only." },
-          ...listQuery(MIMIR_PROGRESS_LIST.sorts, "the title", "desc"),
-        ],
-        returns: `{ summary: { total, viewed, practiced, mastered }, resume: { id, kind, title } | null, items: { id, kind, title, emoji, tier, exchanges, lastVisitAt, reflection }[], ${PAGE_FIELDS} }`,
-        errors: [{ status: 400, error: "invalid_kind", when: "kind is not one of the kinds" }],
-      },
-      {
-        method: "DELETE",
-        path: "/api/mimir/progress",
-        summary: "Starts Coach Canary over for you: every item back to not started, every conversation and takeaway deleted.",
-        access: "signedIn",
-        token: true,
-        notes: "Irreversible. Your role and coaching style stay.",
-        returns: "{ ok: true, items: number, conversations: number }",
-      },
       {
         method: "GET",
         path: "/api/mimir/me",
         summary: "Returns what you have told Coach Canary's coach about yourself.",
         access: "signedIn",
         token: true,
-        returns: '{ role: "SDR" | "AE" | "SE" | null, coachStyle: "socratic" | "direct" }',
+        returns: '{ role: "SDR" | "AE" | "SE" | null, coachStyle: "socratic" | "direct", coachPersonality: "canary" | "lasso" | "taylor" }',
       },
       {
         method: "PUT",
         path: "/api/mimir/me",
-        summary: "Sets your role and how you like to be coached.",
+        summary: "Sets your role, how you like to be coached, and whose voice the coach speaks in.",
         access: "signedIn",
         token: true,
-        notes: "Kept apart from your Diagnostic track. Conversations already under way keep the prompt they started with.",
+        notes:
+          "Kept apart from your Diagnostic track. Coach Canary's chat uses it from its next reply. Leaving coachPersonality out keeps it as it was. The personality changes only the coach's voice, not how it marks you.",
         body: {
           kind: "json",
           fields: [
             { name: "role", type: '"SDR" | "AE" | "SE" | null', required: true },
             { name: "coachStyle", type: '"socratic" | "direct"', required: true },
+            { name: "coachPersonality", type: '"canary" | "lasso" | "taylor"', required: false },
           ],
         },
-        returns: "{ ok: true, role, coachStyle }",
+        returns: "{ ok: true, role, coachStyle, coachPersonality? }",
         errors: [{ status: 400, error: "invalid", when: "the body does not parse" }],
+      },
+      {
+        method: "GET",
+        path: "/api/mimir/experiences",
+        summary: "Returns your finished runs of the hands-on experiences: the Developer and Enterprise Security Team experiences, and your latest slides of the slide review.",
+        access: "signedIn",
+        token: true,
+        notes: "An experience you have never finished has no row in progress. bestScore is null for the Developer experience, which keeps only that it was finished. slides is your latest 100 slides of the slide review, newest first; a slide's seed rebuilds it exactly.",
+        returns: `{ progress: ${EXPERIENCE_PROGRESS_SHAPE}[], slides: ${SLIDE_RUN_SHAPE}[] }`,
+      },
+      {
+        method: "POST",
+        path: "/api/mimir/experiences",
+        summary: "Records one finished run of a hands-on experience, or one finished slide of the slide review.",
+        access: "signedIn",
+        token: true,
+        notes: `The experiences run in the browser and send this when a run ends. developer takes nothing more, and adds an attempt. security takes its run's total as score, 0 to ${SECURITY_MAX}, and keeps the best. slide-review takes the slide's seed, how many of its mistakes were found and how many wrong clicks there were; the server rebuilds the slide from the seed for its theme and its number of mistakes, and works out the score itself, so found can't be more than the slide had. Each slide-review call adds a slide, even for a seed played before.`,
+        body: {
+          kind: "json",
+          fields: [
+            { name: "experience", type: EXPERIENCE_TYPE, required: true },
+            { name: "score", type: "integer", note: "security only" },
+            { name: "seed", type: "integer", note: `slide-review only: 1 to ${SEED_MAX}` },
+            { name: "found", type: "integer", note: "slide-review only: 0 to the slide's number of mistakes" },
+            { name: "wrongClicks", type: "integer", note: `slide-review only: 0 to ${WRONG_CLICKS_MAX}` },
+          ],
+        },
+        returns: `{ progress: ${EXPERIENCE_PROGRESS_SHAPE} } for developer and security; { slide: ${SLIDE_RUN_SHAPE} } for slide-review`,
+        errors: [{ status: 400, error: "invalid", when: "the body is not a run that experience can report" }],
+      },
+      {
+        method: "GET",
+        path: "/api/mimir/experiences/report",
+        summary: "Lists everyone with an account, with their concept videos watched to the end, the concepts the coach has marked them as knowing, and their hands-on experiences, a page at a time.",
+        access: "assessmentsAdmin",
+        token: true,
+        notes: `videos counts concept videos watched to the end, and mastered the concepts the coach in Chat has marked as known. developerCompletedAt is when they first finished the Developer experience, or null. securityAttempts and securityBest are their finished runs of the Enterprise Security Team and the best total of them. slidesDone is how many slides of the slide review they have finished, slidesScore their points on all of them, and slidesFound and slidesTotal the mistakes they found out of how many there were. recentSlides is their latest ${RECENT_SLIDES} slides, newest first, each with the seed that rebuilds it. Sorting by security sorts by securityBest, by developer by developerCompletedAt, and by slides by slidesDone.`,
+        query: listQuery(EXPERIENCE_REPORT_LIST.sorts, "the person's name or email"),
+        returns: `{ people: { userId, name, email, videos: number, mastered: number, developerCompletedAt: string | null, securityAttempts: number, securityBest: number | null, slidesDone: number, slidesScore: number, slidesFound: number, slidesTotal: number, recentSlides: { seed: number, theme, found: number, total: number, wrongClicks: number, score: number, at }[] }[], ${PAGE_FIELDS} }`,
+      },
+      {
+        method: "GET",
+        path: "/api/mimir/slide-feedback",
+        summary: "Lists the smiley and confused ratings given to slide review slides, with any comment, a page at a time, the newest first.",
+        access: "assessmentsAdmin",
+        token: true,
+        notes: "seed rebuilds the slide the rating was about, exactly as it was dealt; theme is the theme that seed makes. user is null once the account that gave it is deleted.",
+        query: listQuery(SLIDE_FEEDBACK_LIST.sorts, "the comment, or the name or email of who gave it", "desc"),
+        returns: `{ feedback: ${SLIDE_FEEDBACK_SHAPE}[], ${PAGE_FIELDS} }`,
+      },
+      {
+        method: "POST",
+        path: "/api/mimir/slide-feedback",
+        summary: "Rates a slide review slide with a smiley or confused face, with a comment if you like.",
+        access: "signedIn",
+        token: true,
+        notes: "The slide is named by its seed. Rating the same slide again adds another rating; nothing is replaced.",
+        body: {
+          kind: "json",
+          fields: [
+            { name: "seed", type: "integer", required: true, note: `1 to ${SEED_MAX}` },
+            { name: "rating", type: `"up" | "down"`, required: true, note: "up is the smiley face, down the confused one" },
+            { name: "comment", type: "string", note: `up to ${VIDEO_FEEDBACK_LIMITS.comment} characters, trimmed; blank is no comment` },
+          ],
+        },
+        returns: `{ feedback: ${SLIDE_FEEDBACK_SHAPE} }`,
+        errors: [{ status: 400, error: "invalid", when: "the seed, rating or comment is not one of those above" }],
       },
       {
         method: "GET",
@@ -587,22 +442,23 @@ export const MIMIR_GROUPS: EndpointGroup[] = [
       {
         method: "POST",
         path: "/api/mimir/coach",
-        summary: "Sends the coach a message, or asks it to greet you, and returns its reply.",
+        summary: "Sends the coach a message, or asks it to greet you or introduce your coach style, and returns its reply.",
         access: "signedIn",
         token: true,
         notes:
-          "Send { message } to say something, or { open: true } to have the coach greet you, say where you are and ask about the next concept. The coach checks what you know of each concept in turn, against a checklist of its main points: the concept's own, or one it sets out the first time it asks. It ticks each point once you have put it in your own words, in whichever message, and the ticks are kept. When every point is ticked the concept is mastered and it moves on; when you do not know the concept it links its video and marks it recommended. mastered and recommended list the concept ids it changed; covered lists, per concept, the points this reply ticked and how many of its checklist are now covered. The coach is Claude Sonnet 5.5; a request it declines is answered by Anthropic's fallback model, and when it can't be reached, by Claude Haiku 4.5. Send Accept: text/event-stream to have the reply streamed as it is written — text events with each delta, restart if it begins again on the fallback model, then done with the body below, or error with { error, status } — otherwise the whole reply comes back as JSON.",
+          "Send { message } to say something, { open: true } to have the coach greet you, say where you are and ask about the next concept, or { introduce: true } to have it introduce itself in the coach style you last set with PUT /api/mimir/me and carry on where you were. The coach checks what you know of each concept in turn, against a checklist of its main points: the concept's own, or one it sets out the first time it asks. It ticks each point once you have put it in your own words, in whichever message, and the ticks are kept. When every point is ticked the concept is mastered and it moves on; when you do not know the concept it links its video and marks it recommended. mastered and recommended list the concept ids it changed; covered lists, per concept, the points this reply ticked and how many of its checklist are now covered. The coach is Claude Sonnet 5.5; a request it declines is answered by Anthropic's fallback model, and when it can't be reached, by Claude Haiku 4.5. Send Accept: text/event-stream to have the reply streamed as it is written — text events with each delta, restart if it begins again on the fallback model, then done with the body below, or error with { error, status } — otherwise the whole reply comes back as JSON.",
         body: {
           kind: "json",
           fields: [
-            { name: "message", type: "string", note: `up to ${MIMIR_MESSAGE_MAX} characters; give this or open` },
+            { name: "message", type: "string", note: `up to ${MIMIR_MESSAGE_MAX} characters; give this, open or introduce` },
             { name: "focus", type: "string", note: "optional, with message: a concept id; the coach turns to that concept now, ahead of the course order, as the map's chat button asks it to. An id not in the course is ignored" },
             { name: "open", type: "true", note: "ask the coach to greet you instead of saying something" },
+            { name: "introduce", type: "true", note: "ask the coach to introduce itself in your coach style instead of saying something" },
           ],
         },
         returns: `{ messages: ${MESSAGE_SHAPE}[] (yours, if you said something, and the coach's), progress, mastered: string[], recommended: string[], covered: { id, points: string[], covered: number, total: number }[] }`,
         errors: [
-          { status: 400, error: "invalid", when: "neither a message nor open is given, or the message is empty or too long" },
+          { status: 400, error: "invalid", when: "none of message, open or introduce is given, or the message is empty or too long" },
           { status: 409, error: "no_map", when: "no map has been imported, so there is nothing to coach on" },
           { status: 409, error: "busy", when: "the coach is still replying to your last message" },
           { status: 409, error: "full", when: "the conversation is as long as the model can read; start a new one" },

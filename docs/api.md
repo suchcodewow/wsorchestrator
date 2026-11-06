@@ -92,7 +92,7 @@ escalate itself:
 | Route | Why |
 | --- | --- |
 | `/api/backups/**` | Taking, restoring and importing backups |
-| `PATCH`/`DELETE /api/users/[id]`, `POST /api/users/invites`, `POST /api/invites/accept`, `POST /api/users/test-accounts`, `POST /api/users/test-accounts/[id]/reset` | Granting roles and creating accounts |
+| `POST /api/users`, `PATCH`/`DELETE /api/users/[id]`, `POST /api/users/invites`, `POST /api/invites/accept`, `POST /api/users/test-accounts`, `POST /api/users/test-accounts/[id]/reset` | Granting roles and creating accounts |
 | `POST /api/settings/domains`, `PATCH`/`DELETE /api/settings/domains/[id]` | Who can sign in at all |
 | `POST /api/settings/frame-domains`, `PATCH`/`DELETE /api/settings/frame-domains/[id]` | Which sites can put the app, signed in, inside their own page |
 | `GET /api/cohorts/slack/install`, `GET /api/evals/google-meetings/connect`, `GET /api/evals/google-meetings/zoom/connect` | Admin Settings → External Connectors: each hands the app a standing token for an outside account and ends in a browser; platform administrators only |
@@ -147,10 +147,8 @@ add it to the table above.
 | A bootcamp's day checklists | `GET /api/scheduler/bootcamps/[id]/checklist`, `GET /api/scheduler/bootcamps/[id]/checklist/[track]/[day]` |
 | My inbox (checklist items I own, and everywhere I'm tagged) | `GET /api/me/checklist?status=open\|done\|all`, `GET /api/me/mentions` |
 | Scheduler settings → Facilities / Session types | `GET /api/scheduler/facilities`, `GET /api/scheduler/facilities/[id]`, `GET /api/scheduler/session-types` |
-| Mimir → Library, Glossary | `GET /api/mimir/items?kind=…[&parent=…&cat=…&featured=1]`, `GET /api/mimir/items/[id]` |
-| Mimir → an item's coach | `GET /api/mimir/items/[id]/chat` |
-| Mimir → Progress, and Continue in its header | `GET /api/mimir/progress` (its `resume`), `GET /api/mimir/me` |
-| Mimir Settings → Content / Coaching | `GET /api/mimir/items`, `GET /api/mimir/items/[id]`, `GET /api/mimir/settings` |
+| Coach Canary → Chat, and its Coach Options dialog | `GET /api/mimir/coach`, `GET /api/mimir/me` |
+| Coach Canary Settings → Coaching | `GET /api/mimir/settings` |
 | Audit Trail | `GET /api/audit` |
 | Labs | `GET /api/lab-workshops`, `GET /api/lab-workshops/[id or slug]`, `GET /api/lab-guides`, `GET /api/lab-guides/[id or slug]`, `GET /api/lab-images` |
 

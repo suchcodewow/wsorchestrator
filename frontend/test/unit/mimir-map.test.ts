@@ -27,17 +27,25 @@ import { parseSlideNumber, slideObject } from "@/lib/mimir/map/slides";
 import { CONCEPT_H, CONCEPT_W, PAD, SLIDE_H, SLIDE_W, layoutMap } from "@/lib/mimir/map/layout";
 import {
   OPEN_REQUEST,
+  REP_SLOT,
+  INTRODUCE_REQUEST,
   buildCoachSystem,
+  introduceContent,
   focusNote,
   knowsChecklists,
   nextConcept,
   progressSnapshot,
   readCoachReply,
+  systemFor,
   turnContent,
   videoStatus,
+  type Rep,
   type SnapshotState,
 } from "@/lib/mimir/map/coach-prompt";
 import { mapFixture } from "../support/mimir-map";
+
+const NO_SETTINGS = { platformContext: "", namingGuard: "" };
+const REP: Rep = { name: null, role: null, coachStyle: "socratic", coachPersonality: "canary" };
 
 const idsOf = (c: ReturnType<typeof mapFixture>) => new Set(c.concepts.map((k) => k.id));
 const state = (over: Partial<SnapshotState> = {}): SnapshotState => ({ videoFurthest: 0, videoDuration: 0, completed: false, mastered: false, recommended: false, ...over });
@@ -320,17 +328,16 @@ describe("what the map coach is told", () => {
   const content = mapFixture();
 
   test("the prompt carries the whole course, each concept's id, level and words, and each video's narration", () => {
-    const p = buildCoachSystem(content, { name: "Pat", role: "AE", coachStyle: "socratic" }, { platformContext: "", namingGuard: "" });
+    const p = buildCoachSystem(content, NO_SETTINGS);
     for (const c of content.concepts) assert.match(p, new RegExp(`\\[${c.id}\\] ${c.name}`));
     assert.match(p, /Study #1 · Level 100 · Group one/);
     assert.match(p, /Study #4 · Level 200 · Group three/);
     assert.match(p, /The narrator explains alpha with a bakery\./);
     assert.match(p, /No video for this concept yet\./);
-    assert.match(p, /Rep context: Pat \(AE\)/);
   });
 
   test("it says how to open, check, recommend and mark, and the exact link the video recommendation uses", () => {
-    const p = buildCoachSystem(content, { name: null, role: null, coachStyle: "socratic" }, { platformContext: "", namingGuard: "" });
+    const p = buildCoachSystem(content, NO_SETTINGS);
     assert.match(p, /OPENING/);
     assert.match(p, /\[MASTERED: concept-id\]/);
     assert.match(p, /\[RECOMMEND: concept-id\]/);
@@ -339,7 +346,7 @@ describe("what the map coach is told", () => {
   });
 
   test("it is told to tick points one at a time, never to ask for the lot again, and to be lenient about wording", () => {
-    const p = buildCoachSystem(content, { name: null, role: null, coachStyle: "socratic" }, { platformContext: "", namingGuard: "" });
+    const p = buildCoachSystem(content, NO_SETTINGS);
     assert.match(p, /\[POINTS: concept-id \| /);
     assert.match(p, /\[COVERED: concept-id 1 3\]/);
     assert.match(p, /THE CHECKLIST/);
@@ -349,17 +356,53 @@ describe("what the map coach is told", () => {
 
   test("a concept's own main points are in the prompt as its checklist", () => {
     const authored = mapFixture({ concepts: mapFixture().concepts.map((c) => (c.id === "beta" ? { ...c, points: ["Beta saves time", "Beta needs alpha"] } : c)) });
-    const p = buildCoachSystem(authored, { name: null, role: null, coachStyle: "socratic" }, { platformContext: "", namingGuard: "" });
+    const p = buildCoachSystem(authored, NO_SETTINGS);
     assert.match(p, /Main points \(its checklist\):\n1\. Beta saves time\n2\. Beta needs alpha/);
     assert.equal((p.match(/Main points \(its checklist\)/g) ?? []).length, 1);
   });
 
-  test("a direct coach is told to be brief, and the platform and naming guards follow", () => {
-    const direct = buildCoachSystem(content, { name: null, role: null, coachStyle: "direct" }, { platformContext: "PLATFORM-FACTS", namingGuard: "NAMING-GUARD" });
+  test("the rep's context is a slot filled on each turn, before the platform and naming guards", () => {
+    const stored = buildCoachSystem(content, { platformContext: "PLATFORM-FACTS", namingGuard: "NAMING-GUARD" });
+    assert.ok(stored.includes(REP_SLOT));
+    assert.doesNotMatch(stored, /Rep context:|COACHING STYLE: Be concise|PERSONALITY:/);
+    const direct = systemFor(stored, { ...REP, name: "Pat", role: "AE", coachStyle: "direct" });
+    assert.ok(!direct.includes(REP_SLOT));
+    assert.match(direct, /Rep context: Pat \(AE\)/);
     assert.match(direct, /COACHING STYLE: Be concise/);
-    assert.match(direct, /PLATFORM-FACTS/);
+    assert.ok(direct.indexOf("COACHING STYLE: Be concise") < direct.indexOf("PLATFORM-FACTS"));
     assert.ok(direct.trimEnd().endsWith("NAMING-GUARD"));
-    assert.doesNotMatch(buildCoachSystem(content, { name: null, role: null, coachStyle: "socratic" }, { platformContext: "", namingGuard: "" }), /COACHING STYLE: Be concise/);
+    assert.doesNotMatch(systemFor(stored, REP), /COACHING STYLE: Be concise|Rep context:|PERSONALITY:/);
+  });
+
+  test("a personality changes the coach's name, introduction and voice, and says the marking is unchanged", () => {
+    const stored = buildCoachSystem(content, NO_SETTINGS);
+    const lasso = systemFor(stored, { ...REP, coachPersonality: "lasso" });
+    assert.match(lasso, /PERSONALITY: You are Coach Lasso\./);
+    assert.match(lasso, /Ted Lasso/);
+    assert.match(lasso, /"Coach Lasso here,/);
+    assert.match(lasso, /This changes only your voice\. The course, the checklists, the markers, the bar/);
+    const taylor = systemFor(stored, { ...REP, coachPersonality: "taylor" });
+    assert.match(taylor, /PERSONALITY: You are Coach Taylor\./);
+    assert.match(taylor, /Friday Night Lights/);
+    assert.doesNotMatch(taylor, /Ted Lasso/);
+  });
+
+  test("an introduction names the coach just picked, asks for its intro line, and marks nothing", () => {
+    const ask = introduceContent("Coach Lasso");
+    assert.ok(ask.startsWith(INTRODUCE_REQUEST));
+    assert.match(ask, /I just picked Coach Lasso as my coach/);
+    assert.match(ask, /begin with your introduction line/);
+    assert.match(ask, /mark nothing/);
+  });
+
+  test("a conversation from before the slot is told the current context at the end, the default style included", () => {
+    const old = "An old prompt.\n\nCOACHING STYLE: Be concise and direct.";
+    const now = systemFor(old, { ...REP, coachPersonality: "taylor" });
+    assert.ok(now.startsWith(old));
+    assert.match(now, /replace any given earlier/);
+    assert.match(now, /not concise and direct/);
+    assert.match(now, /You are Coach Taylor/);
+    assert.doesNotMatch(systemFor(old, { ...REP, coachStyle: "direct" }), /not concise and direct/);
   });
 
   test("the next concept is the lowest-numbered one not yet mastered, wherever the rep has been", () => {

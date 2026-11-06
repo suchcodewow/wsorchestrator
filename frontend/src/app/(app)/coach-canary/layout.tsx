@@ -6,13 +6,10 @@
  */
 
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { Archive } from "lucide-react";
 import { auth, signInPath } from "@/auth";
-import { Button } from "@/components/ui/button";
 import { mapSummary } from "@/lib/mimir/map/summary";
-import { canManageMimir, canUseMimir } from "@/lib/roles";
+import { canUseMimir } from "@/lib/roles";
 import { MimirTabs } from "./mimir-tabs";
 
 export const metadata: Metadata = { title: "Coach Canary" };
@@ -35,14 +32,6 @@ export default async function MimirLayout({ children }: { children: React.ReactN
             </p>
           )}
         </div>
-        {canManageMimir(session.user.access) && (
-          <Button variant="ghost" size="sm" asChild>
-            <Link href="/coach-canary-archive">
-              <Archive />
-              Archive
-            </Link>
-          </Button>
-        )}
       </div>
       <MimirTabs />
       {children}
