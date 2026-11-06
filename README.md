@@ -140,8 +140,11 @@ is created by `make bootstrap` and is likewise git-ignored — don't hand-write 
 
 **Google Workspace, before you start you need:**
 
-1. A **Workspace domain** attendee accounts will be created in, with enough
-   licences for your largest workshop.
+1. A **Workspace domain** attendee accounts will be created in. Attendee
+   accounts are unlicensed, but Google caps the total users in a domain (about
+   1,317 for `harnessevents.io`; see
+   [operations.md](docs/operations.md#google-workspace-caps-harnesseventsio-at-about-1317-users)),
+   so check yours before your largest workshop.
 2. A **super-admin** account for the runner to impersonate — the Admin SDK
    Directory API refuses service accounts acting as themselves.
 3. **Domain-wide delegation** for `runner-sa` — but you cannot grant it yet, as
