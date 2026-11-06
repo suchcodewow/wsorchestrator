@@ -33,7 +33,7 @@ import {
   withoutLevel,
   type SittingView,
 } from "@/lib/iris/attempts";
-import { clearResults, cohortSummary, personDetail } from "@/lib/iris/cohort";
+import { clearResults, cohortSummary, personDetail, resetSitting } from "@/lib/iris/cohort";
 import { listParticipants } from "@/lib/iris/participants";
 import { IDK } from "@/lib/iris/engine";
 import { IRIS_ITEMS } from "@/lib/iris/items";
@@ -311,6 +311,24 @@ describe("what administrators read back", () => {
     const answered = rows.reduce((n, r) => n + r.stats.responses, 0);
     assert.ok(answered >= 20, `${answered} responses`);
     assert.ok(rows.every((r) => r.stats.responses === 0 || r.stats.medianMs !== null));
+  });
+
+  test("resetting one subject lets them take it again, and leaves their other subjects alone", async () => {
+    const resetter = await scope.createUser("resetter", PERSONAS.participant);
+    await setTrack(resetter.id, "AE");
+    const done = await startSitting(resetter.id, "sdlc", "A", "live");
+    assert.ok(done.ok);
+    await finish(resetter, done.sitting, right);
+    assert.deepEqual(await startSitting(resetter.id, "sdlc", "A", "live"), { ok: false, error: "already_taken" });
+    const otherForm = await startSitting(resetter.id, "sdlc", "B", "live");
+
+    const reset = await resetSitting(resetter.id, "sdlc", "A");
+    assert.deepEqual(reset, { ok: true, deleted: 1, email: resetter.email });
+    const again = await startSitting(resetter.id, "sdlc", "A", "live");
+    assert.ok(again.ok && !again.resumed);
+    if (otherForm.ok) assert.ok(await openSitting(resetter.id, otherForm.sitting.attemptId), "the other form's sitting is kept");
+    assert.deepEqual(await resetSitting(resetter.id, "companies", "A"), { ok: true, deleted: 0, email: resetter.email });
+    assert.deepEqual(await resetSitting("no-such-user", "sdlc", "A"), { ok: false, error: "not_found" });
   });
 
   test("clearing someone's results lets them sit the subject again", async () => {

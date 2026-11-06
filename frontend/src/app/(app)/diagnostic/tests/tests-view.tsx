@@ -107,7 +107,18 @@ function SubjectAction({
       </Link>
     );
   }
-  if (status === "unavailable") return <span className="text-muted-foreground">Not open yet</span>;
+  if (status === "unavailable") {
+    // An administrator can do something about it: approve the subject's questions.
+    if (selfId) {
+      return (
+        <Link href={`/diagnostic-settings/questions?subject=${subject}`} className="text-right text-muted-foreground hover:underline">
+          Not open yet
+          <span className="block text-xs">Too few approved questions</span>
+        </Link>
+      );
+    }
+    return <span className="text-muted-foreground">Not open yet</span>;
+  }
   if (status === "coming_soon") return <span className="text-muted-foreground">Coming soon</span>;
   if (status === "in_progress") {
     return (

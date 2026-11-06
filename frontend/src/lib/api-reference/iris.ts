@@ -2,7 +2,7 @@
 
 import { IRIS_NOTE_MAX } from "@/db/schema";
 import { SUBJECT_KEYS } from "@/lib/iris/subjects";
-import { IRIS_PARTICIPANT_LIST } from "@/lib/list-specs";
+import { IRIS_PARTICIPANT_LIST, IRIS_REMINDER_MESSAGE_LIST, IRIS_REMINDER_RUN_LIST } from "@/lib/list-specs";
 import { PAGE_FIELDS, listQuery } from "./paging";
 import type { EndpointGroup, Field } from "./types";
 
@@ -120,8 +120,14 @@ export const IRIS_GROUPS: EndpointGroup[] = [
         access: "assessmentsAdmin",
         token: true,
         notes:
-          "Someone on the employee list from HiBob, or with an account here such as a test account. Added by hand, they stay a Participant whether Bootcamp Auto-Enroll is on or off, until removed.",
-        body: { kind: "json", fields: [{ name: "email", type: "string", required: true }] },
+          "Someone on the employee list from HiBob, or with an account here such as a test account. Added by hand, they stay a Participant whether Bootcamp Auto-Enroll is on or off, until removed. track sets their Diagnostic track: at once if they have an account, replacing one they chose, and otherwise when they first sign in; null or left out leaves it to them.",
+        body: {
+          kind: "json",
+          fields: [
+            { name: "email", type: "string", required: true },
+            { name: "track", type: `"AE" | "SE" | "SDR" | null`, note: "Default null." },
+          ],
+        },
         returns: "201 { ok: true, email, fullName }",
         errors: [
           { status: 400, error: "invalid", when: "email is missing or not an address" },
@@ -188,6 +194,77 @@ export const IRIS_GROUPS: EndpointGroup[] = [
         params: [{ name: "id", type: "string", required: true, note: "the user's id" }],
         returns: "{ ok: true, deleted: number }",
         errors: [{ status: 404, error: "not_found", when: "no such user" }],
+      },
+      {
+        method: "DELETE",
+        path: "/api/diagnostic/results/{id}/{subject}",
+        summary: "Resets one person's live sitting of one subject, so they can take it again.",
+        access: "assessmentsAdmin",
+        token: true,
+        notes: "Finished or in progress, with every answer in it. Their other subjects are kept. Irreversible, and recorded in the audit trail. deleted is 0 when they had no sitting of it.",
+        params: [
+          { name: "id", type: "string", required: true, note: "the user's id" },
+          { name: "subject", type: SUBJECT_TYPE, required: true },
+        ],
+        query: [FORM_QUERY],
+        returns: "{ ok: true, deleted: number }",
+        errors: [
+          { status: 400, error: "invalid_subject", when: "subject is not one of the subjects" },
+          FORM_ERROR,
+          { status: 404, error: "not_found", when: "no such user" },
+        ],
+      },
+      {
+        method: "GET",
+        path: "/api/diagnostic/reminders",
+        summary: "Lists the Slack reminder runs, a page at a time, with whether they are live and who is due.",
+        access: "assessmentsAdmin",
+        token: true,
+        notes:
+          "assigned is the subjects open on form A, those with enough approved questions; due counts the Participants who have not finished every one of them. sentToday is whether the daily schedule has sent today's.",
+        query: listQuery(IRIS_REMINDER_RUN_LIST.sorts, "who ran it, the status, note or error", "desc"),
+        returns: `{ runs: { id, trigger: "schedule" | "manual", triggeredBy, triggeredByName, dryRun, status: "running" | "succeeded" | "skipped" | "failed", startedAt, finishedAt, due, messaged, notInSlack, failed, note, error }[], running: boolean, live: boolean, sentToday: boolean, configured: boolean, assigned: subject[], due: number, ${PAGE_FIELDS} }`,
+      },
+      {
+        method: "POST",
+        path: "/api/diagnostic/reminders",
+        summary: "Reminds every Participant with tests left in Slack now, or with preview logs what it would send.",
+        access: "assessmentsAdmin",
+        token: true,
+        notes:
+          "A dry run while reminders are not live, or with preview. Unlike the daily schedule, it sends even when today's have already gone out. Each person is sent a direct message with the subjects they have done, started and not started, and a link to their tests; someone with no Slack account for their address is logged as not_in_slack.",
+        body: { kind: "json", fields: [{ name: "preview", type: "boolean", note: "Default false." }] },
+        returns: "{ ok: true, runId, status: \"succeeded\" | \"skipped\", dryRun, due, messaged, notInSlack, failed, note }",
+        errors: [
+          { status: 400, error: "invalid", when: "the body has anything but preview" },
+          { status: 409, error: "already_running", when: "a run is under way" },
+          { status: 409, error: "not_configured", when: "live, and Slack is not connected" },
+          { status: 409, error: "missing_scopes", when: "live, and the Slack app cannot send direct messages" },
+          { status: 502, error: "slack_error", when: "Slack refused the run; detail says why" },
+        ],
+      },
+      {
+        method: "PUT",
+        path: "/api/diagnostic/reminders/settings",
+        summary: "Puts the Slack reminders live, or back to dry run.",
+        access: "assessmentsAdmin",
+        token: true,
+        notes: "Off by default: until it is live, every run only logs what it would send.",
+        body: { kind: "json", fields: [{ name: "live", type: "boolean", required: true }] },
+        returns: "{ live: boolean }",
+        errors: [{ status: 400, error: "invalid_body", when: "live is not a boolean" }],
+      },
+      {
+        method: "GET",
+        path: "/api/diagnostic/reminders/{id}",
+        summary: "Returns one reminder run, with a page of whom it messaged, would have, or could not.",
+        access: "assessmentsAdmin",
+        token: true,
+        notes: "detail is the message sent, or in a dry run the one that would be, in Slack's mrkdwn; or why it could not be.",
+        params: [{ name: "id", type: "string", required: true, note: "the run's id" }],
+        query: listQuery(IRIS_REMINDER_MESSAGE_LIST.sorts, "the name, email or message"),
+        returns: `{ run, messages: { id, runId, email, fullName, outcome: "messaged" | "not_in_slack" | "failed", detail, at }[], ${PAGE_FIELDS} }`,
+        errors: [{ status: 404, error: "not_found", when: "no run has that id" }],
       },
       {
         method: "GET",

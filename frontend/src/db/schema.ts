@@ -2904,11 +2904,20 @@ export const IRIS_NOTE_MAX = 2000;
  * on each read while it is on (`lib/iris/participants.ts`), so stopping it
  * removes every one of them and leaves these alone.
  */
-export const irisParticipants = pgTable("iris_participants", {
-  email: text("email").primaryKey(),
-  addedBy: text("added_by").references(() => users.id, { onDelete: "set null" }),
-  addedAt: timestamp("added_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const irisParticipants = pgTable(
+  "iris_participants",
+  {
+    email: text("email").primaryKey(),
+    /**
+     * The track an administrator chose on adding them, for someone with no
+     * account yet; a track in `iris_takers` wins. Null leaves it to them.
+     */
+    track: text("track"),
+    addedBy: text("added_by").references(() => users.id, { onDelete: "set null" }),
+    addedAt: timestamp("added_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [check("iris_participants_track_check", sql`${t.track} is null or ${t.track} in ('AE', 'SE', 'SDR')`)],
+);
 
 /** Diagnostic-wide settings, one row per key; a key with no row reads as its default. */
 export const irisSettings = pgTable("iris_settings", {
@@ -2921,7 +2930,75 @@ export const irisSettings = pgTable("iris_settings", {
 export const IRIS_SETTINGS_KEYS = {
   /** "true" while bootcamp attendees who have RSVP'd and are on a track are Participants. */
   bootcampAutoEnroll: "bootcamp_auto_enroll",
+  /** "true" while the daily reminders are sent in Slack; otherwise each run is a dry run. */
+  remindersLive: "reminders_live",
+  /** The America/New_York day the schedule last sent reminders, so it sends once a day. */
+  remindersSentOn: "reminders_sent_on",
 } as const;
+
+export const IRIS_REMINDER_TRIGGERS = ["schedule", "manual"] as const;
+export type IrisReminderTrigger = (typeof IRIS_REMINDER_TRIGGERS)[number];
+export const IRIS_REMINDER_STATUSES = ["running", "succeeded", "skipped", "failed"] as const;
+export type IrisReminderStatus = (typeof IRIS_REMINDER_STATUSES)[number];
+export const IRIS_REMINDER_OUTCOMES = ["messaged", "not_in_slack", "failed"] as const;
+export type IrisReminderOutcome = (typeof IRIS_REMINDER_OUTCOMES)[number];
+
+/**
+ * One run of the Diagnostic's Slack reminders: the daily schedule's, or
+ * Remind Now's on Diagnostic Settings → Slack. A dry run logs whom it would
+ * message, and what, without sending anything. See `lib/iris/reminders.ts`.
+ */
+export const irisReminderRuns = pgTable(
+  "iris_reminder_runs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    trigger: text("trigger").$type<IrisReminderTrigger>().notNull(),
+    triggeredBy: text("triggered_by").references(() => users.id, { onDelete: "set null" }),
+    dryRun: boolean("dry_run").notNull(),
+    status: text("status").$type<IrisReminderStatus>().notNull().default("running"),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+    /** Participants with tests left when it ran. */
+    due: integer("due").notNull().default(0),
+    messaged: integer("messaged").notNull().default(0),
+    notInSlack: integer("not_in_slack").notNull().default(0),
+    failed: integer("failed").notNull().default(0),
+    /** Why it did less than it set out to: skipped, cut short, or Slack not connected for a dry run. */
+    note: text("note"),
+    error: text("error"),
+  },
+  (t) => [
+    index("iris_reminder_runs_started_at_idx").on(t.startedAt),
+    uniqueIndex("iris_reminder_runs_one_running_idx")
+      .on(t.status)
+      .where(sql`${t.status} = 'running'`),
+    check("iris_reminder_runs_trigger_check", sql`${t.trigger} in ('schedule', 'manual')`),
+    check("iris_reminder_runs_status_check", sql`${t.status} in ('running', 'succeeded', 'skipped', 'failed')`),
+  ],
+);
+
+/** Each Participant one reminder run messaged, or would have, or could not: with the text, or why not. */
+export const irisReminderMessages = pgTable(
+  "iris_reminder_messages",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    runId: uuid("run_id")
+      .notNull()
+      .references(() => irisReminderRuns.id, { onDelete: "cascade" }),
+    email: text("email").notNull(),
+    fullName: text("full_name").notNull().default(""),
+    outcome: text("outcome").$type<IrisReminderOutcome>().notNull(),
+    /** The message sent, or that a dry run would send; or Slack's error. */
+    detail: text("detail").notNull().default(""),
+    at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("iris_reminder_messages_run_idx").on(t.runId, t.at),
+    check("iris_reminder_messages_outcome_check", sql`${t.outcome} in ('messaged', 'not_in_slack', 'failed')`),
+  ],
+);
+
+export type IrisReminderRun = typeof irisReminderRuns.$inferSelect;
 
 /* ------------------------------------------------------------------ */
 /* Mimir                                                               */

@@ -40,6 +40,7 @@ import {
   canManageBootcampRecords,
   canManageEvalsSettings,
   canManageIris,
+  canSeeIris,
   canSitIris,
   canManageLabGuides,
   canManageMimir,
@@ -303,9 +304,10 @@ const PAGES: Record<string, PageCase> = {
   },
   "/diagnostic": {
     path: () => "/diagnostic",
-    expect: (a) => (canTakeIris(a) ? { to: "/diagnostic/tests" } : 404),
+    expect: (a) => (canSeeIris(a) ? { to: "/diagnostic/tests" } : 404),
   },
-  "/diagnostic/tests": { path: () => "/diagnostic/tests", expect: gated(canTakeIris) },
+  // An administrator who is not a Participant opens it too, to be told none are assigned.
+  "/diagnostic/tests": { path: () => "/diagnostic/tests", expect: gated(canSeeIris) },
   "/diagnostic/tests/<a subject>": { path: () => "/diagnostic/tests/sdlc", expect: gated(canTakeIris) },
   // The preview moved to Diagnostic Settings; the tests themselves stay a Participant's alone.
   "/diagnostic/tests/<a subject>?mode=preview": {
@@ -332,6 +334,8 @@ const PAGES: Record<string, PageCase> = {
     path: () => "/diagnostic-settings/questions?subject=champion&level=3&status=draft",
     expect: gated(canManageIris),
   },
+  "/diagnostic-settings/slack": { path: () => "/diagnostic-settings/slack", expect: gated(canManageIris) },
+  "/diagnostic-settings/slack/<unknown run>": { path: () => `/diagnostic-settings/slack/${MISSING}`, expect: () => 404 },
   "/diagnostic-settings/preview/<a subject>": { path: () => "/diagnostic-settings/preview/sdlc", expect: gated(canManageIris) },
   "/diagnostic-settings/preview/<unknown>": { path: () => "/diagnostic-settings/preview/nonsense", expect: () => 404 },
   "/reporting": {
@@ -601,6 +605,12 @@ const ROUTES: RouteCase[] = [
   { method: "PUT", path: "/api/diagnostic/auto-enroll", allowed: canManageIris, body: () => ({}) },
   { method: "GET", path: `/api/diagnostic/results/${MISSING}`, allowed: canManageIris },
   { method: "DELETE", path: `/api/diagnostic/results/${MISSING}`, allowed: canManageIris },
+  { method: "DELETE", path: `/api/diagnostic/results/${MISSING}/sdlc`, allowed: canManageIris },
+  { method: "GET", path: "/api/diagnostic/reminders", allowed: canManageIris },
+  // A body it refuses, so the matrix never starts a run.
+  { method: "POST", path: "/api/diagnostic/reminders", allowed: canManageIris, body: () => ({ nonsense: true }) },
+  { method: "PUT", path: "/api/diagnostic/reminders/settings", allowed: canManageIris, body: () => ({}) },
+  { method: "GET", path: `/api/diagnostic/reminders/${MISSING}`, allowed: canManageIris },
   { method: "GET", path: "/api/diagnostic/questions?subject=sdlc", allowed: canManageIris },
   { method: "PUT", path: "/api/diagnostic/questions/no-such-item/review", allowed: canManageIris, body: () => ({}) },
   { method: "POST", path: "/api/diagnostic/questions/approve-drafts", allowed: canManageIris, body: () => ({}) },
@@ -1325,17 +1335,18 @@ describe("a Diagnostic sitting, over HTTP", () => {
 
   test("a Diagnostic administrator added as a Participant sees their own level, and loses the tests when removed", async () => {
     const email = { email: people.assessmentsAdmin.email };
-    assert.equal((await send("assessmentsAdmin", "GET", "/diagnostic/tests")).status, 404, "not a Participant yet");
+    const unassigned = async () => (await send("assessmentsAdmin", "GET", "/diagnostic/tests")).body.includes("No Tests currently assigned to you.");
+    assert.equal(await unassigned(), true, "not a Participant yet");
     assert.equal((await send("assessmentsAdmin", "POST", "/api/diagnostic/participants", email)).status, 201);
     try {
-      assert.equal((await send("assessmentsAdmin", "GET", "/diagnostic/tests")).status, 200);
+      assert.equal(await unassigned(), false);
       const done = await sit("assessmentsAdmin");
       assert.equal(done.placement, 1, "\"I don't know\" throughout places Beginner");
       assert.equal((await pipegen("assessmentsAdmin"))?.placement, 1);
     } finally {
       assert.equal((await send("assessmentsAdmin", "DELETE", "/api/diagnostic/participants", email)).status, 200);
     }
-    assert.equal((await send("assessmentsAdmin", "GET", "/diagnostic/tests")).status, 404);
+    assert.equal(await unassigned(), true);
   });
 });
 

@@ -77,16 +77,16 @@ export async function isParticipantNow(email: string | null | undefined): Promis
 }
 
 /**
- * Every Participant as rows of (email, manual, added_at, added_by): the
+ * Every Participant as rows of (email, manual, added_at, added_by, track): the
  * hand-added, then, while auto-enroll is on, the auto-enrolled not also
  * added by hand.
  */
 async function participantsSql(): Promise<SQL> {
-  const manual = sql`select ${irisParticipants.email} as email, true as manual, ${irisParticipants.addedAt} as added_at, ${irisParticipants.addedBy} as added_by from ${irisParticipants}`;
+  const manual = sql`select ${irisParticipants.email} as email, true as manual, ${irisParticipants.addedAt} as added_at, ${irisParticipants.addedBy} as added_by, ${irisParticipants.track} as track from ${irisParticipants}`;
   if (!(await getAutoEnroll()).on) return manual;
   return sql`${manual}
     union all
-    select distinct lower(${employees.email}), false, null::timestamptz, null::text
+    select distinct lower(${employees.email}), false, null::timestamptz, null::text, null::text
       from ${employees}
      where ${rsvpedForBootcamp(await getCandidateCutoffs())}
        and not exists (select 1 from ${irisParticipants} where ${irisParticipants.email} = lower(${employees.email}))`;
@@ -122,7 +122,7 @@ type RawRow = Omit<ParticipantRow, "placements" | "composite" | "finishedAt" | "
 
 const SORT_COLUMNS: Record<IrisParticipantSort, SQL> = {
   person: sql`lower(coalesce(nullif(u.name, ''), emp.full_name, p.email))`,
-  track: sql`t.track`,
+  track: sql`coalesce(t.track, p.track)`,
   completed: sql`coalesce(r.completed, 0)`,
   finishedAt: sql`r.finished_at`,
   added: sql`(case when p.manual then 0 else 1 end)`,
@@ -137,7 +137,7 @@ export async function listParticipants(query: ListQuery<IrisParticipantSort>, fo
     select p.email, coalesce(nullif(u.name, ''), emp.full_name) as name, u.id as "userId", p.manual,
            p.added_at as "addedAt",
            (select coalesce(nullif(a.name, ''), a.email) from ${users} a where a.id = p.added_by) as "addedBy",
-           t.track, coalesce(r.completed, 0)::int as completed, r.finished_at as "finishedAt", r.placements
+           coalesce(t.track, p.track) as track, coalesce(r.completed, 0)::int as completed, r.finished_at as "finishedAt", r.placements
       from (${await participantsSql()}) p
       left join ${users} u on lower(u.email) = p.email
       left join lateral (
@@ -205,10 +205,14 @@ export const ADD_PARTICIPANT_STATUS: Record<AddParticipantError, number> = { unk
 /**
  * Adds someone by hand, which keeps them a Participant whether auto-enroll is
  * on or not: an employee, or an account already here, such as a test account.
+ * A `track` is theirs at once if they have an account, replacing any they
+ * chose, and otherwise waits on their row for when they first sign in; null
+ * leaves it to them.
  */
 export async function addParticipant(
   actorId: string,
   email: string,
+  track: Track | null = null,
 ): Promise<{ ok: true; email: string; fullName: string } | { ok: false; error: AddParticipantError }> {
   const lower = email.trim().toLowerCase();
   const [employee] = await db
@@ -217,20 +221,24 @@ export async function addParticipant(
     .where(eq(employees.email, lower))
     .orderBy(sql`${employees.active} desc`)
     .limit(1);
-  const [account] = employee
-    ? []
-    : await db
-        .select({ name: users.name })
-        .from(users)
-        .where(sql`lower(${users.email}) = ${lower}`)
-        .limit(1);
+  const [account] = await db
+    .select({ id: users.id, name: users.name })
+    .from(users)
+    .where(sql`lower(${users.email}) = ${lower}`)
+    .limit(1);
   if (!employee && !account) return { ok: false, error: "unknown_person" };
   const [added] = await db
     .insert(irisParticipants)
-    .values({ email: lower, addedBy: actorId })
+    .values({ email: lower, addedBy: actorId, track })
     .onConflictDoNothing()
     .returning({ email: irisParticipants.email });
   if (!added) return { ok: false, error: "duplicate" };
+  if (track && account) {
+    await db
+      .insert(irisTakers)
+      .values({ userId: account.id, track, updatedAt: new Date() })
+      .onConflictDoUpdate({ target: irisTakers.userId, set: { track, updatedAt: new Date() } });
+  }
   return { ok: true, email: lower, fullName: employee?.fullName ?? account?.name ?? "" };
 }
 

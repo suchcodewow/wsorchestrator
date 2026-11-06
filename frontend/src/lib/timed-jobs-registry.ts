@@ -79,6 +79,16 @@ export const TIMED_JOBS: readonly TimedJobDef[] = [
     resource: TICK_RESOURCE,
   },
   {
+    key: "diagnostic-reminders",
+    name: "Diagnostic reminders",
+    summary: "Sends each Diagnostic Participant with tests left a Slack message with where they stand; a dry run until it is put live on Diagnostic Settings → Slack.",
+    cron: "0 10 * * *",
+    timeZone: "America/New_York",
+    schedule: "Daily at 10:00 AM Eastern",
+    via: "dispatcher",
+    resource: TICK_RESOURCE,
+  },
+  {
     key: "canary-wire-pull",
     name: "Canary Wire pull",
     summary: "Pulls completions from Mindtickle, a step at a time: a pull takes three or four runs five minutes apart, so a schedule needs a burst like the default's.",
