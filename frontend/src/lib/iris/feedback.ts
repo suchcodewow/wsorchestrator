@@ -16,6 +16,7 @@ import {
   VIDEO_FEEDBACK_RATINGS,
   irisAttempts,
   irisFeedback,
+  irisResponses,
   users,
   type VideoFeedbackRating,
 } from "@/db/schema";
@@ -42,6 +43,8 @@ export type IrisFeedbackInput = z.infer<typeof irisFeedbackSchema>;
 
 export type IrisFeedbackRow = {
   id: string;
+  /** The sitting it was given in; null once that sitting is reset. */
+  attemptId: string | null;
   subject: SubjectKey;
   mode: SittingMode;
   number: number;
@@ -54,7 +57,26 @@ export type IrisFeedbackRow = {
   closedAt: string | null;
   /** Who closed it; null while open, or once their account is deleted. */
   closedBy: { name: string | null; email: string | null } | null;
+  /** The question's options and key, and what the taker went on to answer; null for a question no longer in the bank. */
+  answers: IrisFeedbackAnswers | null;
 };
+
+export type IrisFeedbackAnswers = {
+  /** The options in the bank's order, A–D, not the shuffled order the taker saw. */
+  options: readonly string[];
+  /** The correct option, 0–3. */
+  correct: number;
+  /** What they answered, 0–3 or -1 for "I don't know"; null when they have not, or the sitting was reset. */
+  chosen: number | null;
+  /** The question has been reworded since it was rated, so the options may not be the ones they saw. */
+  reworded: boolean;
+};
+
+function answersOf(itemId: string, itemVersion: string, chosen: number | null): IrisFeedbackAnswers | null {
+  const item = ITEMS_BY_ID.get(itemId);
+  if (!item) return null;
+  return { options: item.options, correct: item.answer, chosen, reworded: item.version !== itemVersion };
+}
 
 /**
  * - `not_found` — no sitting of theirs has that id, or not one they may carry on.
@@ -99,6 +121,7 @@ export async function recordIrisFeedback(
     ok: true,
     feedback: {
       id: row!.id,
+      attemptId: row!.attemptId,
       subject: row!.subject as SubjectKey,
       mode: row!.mode as SittingMode,
       number: row!.number,
@@ -110,6 +133,7 @@ export async function recordIrisFeedback(
       user: who ?? null,
       closedAt: null,
       closedBy: null,
+      answers: answersOf(item.id, item.version, null),
     },
   };
 }
@@ -134,7 +158,9 @@ export async function listIrisFeedback(
   const where = closed ? search : sql`${search} and f.closed_at is null`;
   const order = orderFor(SORT_COLUMNS[query.sort], query.dir, sql`f.created_at desc`, sql`f.id`);
   const { rows } = await db.execute<
-    Omit<IrisFeedbackRow, "user" | "closedBy"> & {
+    Omit<IrisFeedbackRow, "user" | "closedBy" | "answers"> & {
+      itemVersion: string;
+      chosen: number | null;
       userName: string | null;
       userEmail: string | null;
       userId: string | null;
@@ -143,22 +169,25 @@ export async function listIrisFeedback(
       closerEmail: string | null;
     }
   >(sql`
-    select f.id, f.subject, f.mode, f.number, f.item_id as "itemId", f.stem, f.rating, f.comment,
+    select f.id, f.attempt_id as "attemptId", f.subject, f.mode, f.number, f.item_id as "itemId", f.stem, f.rating, f.comment,
            f.created_at as "createdAt", f.user_id as "userId", u.name as "userName", u.email as "userEmail",
-           f.closed_at as "closedAt", f.closed_by as "closerId", c.name as "closerName", c.email as "closerEmail"
+           f.closed_at as "closedAt", f.closed_by as "closerId", c.name as "closerName", c.email as "closerEmail",
+           f.item_version as "itemVersion", r.choice as "chosen"
       from ${irisFeedback} f
       left join ${users} u on u.id = f.user_id
       left join ${users} c on c.id = f.closed_by
+      left join ${irisResponses} r on r.attempt_id = f.attempt_id and r.seq = f.number and r.item_id = f.item_id
      where ${where}
      order by ${sql.join(order, sql`, `)}
      limit ${limit} offset ${offset}`);
   return toPage(
-    rows.map(({ userId, userName, userEmail, closerId, closerName, closerEmail, ...r }) => ({
+    rows.map(({ userId, userName, userEmail, closerId, closerName, closerEmail, itemVersion, chosen, ...r }) => ({
       ...r,
       createdAt: new Date(r.createdAt).toISOString(),
       user: userId ? { name: userName, email: userEmail } : null,
       closedAt: r.closedAt ? new Date(r.closedAt).toISOString() : null,
       closedBy: closerId ? { name: closerName, email: closerEmail } : null,
+      answers: answersOf(r.itemId, itemVersion, chosen),
     })),
     query.page,
   );

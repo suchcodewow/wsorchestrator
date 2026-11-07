@@ -10,7 +10,7 @@ const SUBJECT_TYPE = SUBJECT_KEYS.map((k) => `"${k}"`).join(" | ");
 const FORM_QUERY: Field = { name: "form", type: `"A" | "B"`, note: "Default A." };
 const FORM_ERROR = { status: 400, error: "invalid_form", when: "form is neither A nor B" };
 const SITTING_SHAPE = `{ attemptId, subject, form: "A" | "B", mode: "live" | "preview", number, progress, question: { stem, options: string[] } }`;
-const FEEDBACK_SHAPE = `{ id, subject: ${SUBJECT_TYPE}, mode: "live" | "preview", number, itemId, stem, rating: "up" | "down", comment: string | null, createdAt, user: { name, email } | null, closedAt: string | null, closedBy: { name, email } | null }`;
+const FEEDBACK_SHAPE = `{ id, attemptId: string | null, subject: ${SUBJECT_TYPE}, mode: "live" | "preview", number, itemId, stem, rating: "up" | "down", comment: string | null, createdAt, user: { name, email } | null, closedAt: string | null, closedBy: { name, email } | null, answers: { options: string[], correct: 0 | 1 | 2 | 3, chosen: -1 | 0 | 1 | 2 | 3 | null, reworded: boolean } | null }`;
 const SITTING_ID: Field = { name: "id", type: "string", required: true, note: "the sitting's attemptId" };
 
 export const IRIS_GROUPS: EndpointGroup[] = [
@@ -133,7 +133,7 @@ export const IRIS_GROUPS: EndpointGroup[] = [
         summary: "Lists the ratings given while taking a test, with any comment and the question they were about, a page at a time, the newest first.",
         access: "assessmentsAdmin",
         token: true,
-        notes: "number is the question's place in its sitting, from 1. itemId and stem are the question as it was when rated. Previews' ratings are included, with mode preview. Closed ratings are left out unless closed=1. user is null once the account that gave it is deleted, and closedBy likewise, or while it is open.",
+        notes: "number is the question's place in its sitting, from 1. itemId and stem are the question as it was when rated. Previews' ratings are included, with mode preview. Closed ratings are left out unless closed=1. user is null once the account that gave it is deleted, and closedBy likewise, or while it is open. answers has the question's options in the bank's order (not the taker's shuffled order), the correct one, and chosen, what the taker went on to answer: -1 for \"I don't know\", null before they answer or once the sitting is reset (attemptId is then null too). reworded is true when the question has changed since it was rated. answers is null for a question no longer in the bank.",
         query: [
           ...listQuery(IRIS_FEEDBACK_LIST.sorts, "the comment, the question, or the name or email of who gave it", "desc"),
           { name: "closed", type: `"1"`, note: "1 includes closed ratings; otherwise only open ones are listed." },
