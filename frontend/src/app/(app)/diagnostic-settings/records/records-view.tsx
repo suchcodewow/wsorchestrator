@@ -18,9 +18,9 @@ import type { IrisRecordSort } from "@/lib/list-specs";
 import { riseChild, staggerParent } from "@/lib/motion";
 import type { ListQuery, Page } from "@/lib/paging";
 import { cn } from "@/lib/utils";
-import { LevelBadge } from "@/app/(app)/diagnostic/level-badge";
 import { Radar } from "@/app/(app)/diagnostic/radar";
 import { PersonView, type Detail } from "./person-view";
+import { ScoreMenu } from "./score-menu";
 
 type Row = Omit<RecordRow, "addedAt" | "finishedAt"> & { addedAt: string | null; finishedAt: string | null };
 
@@ -160,7 +160,13 @@ export function RecordsView({
                       {OPEN_SUBJECT_KEYS.map((k) => (
                         <td key={k} className="px-3 py-3">
                           {r.placements[k] ? (
-                            <LevelBadge level={r.placements[k]} />
+                            <ScoreMenu
+                              userId={r.userId}
+                              subject={k}
+                              form="A"
+                              level={r.placements[k]}
+                              who={r.name || r.email}
+                            />
                           ) : (
                             <span className="text-muted-foreground/60">—</span>
                           )}
