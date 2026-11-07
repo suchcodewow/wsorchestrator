@@ -7,7 +7,8 @@ video's scene code (`src/videos/*`) are gitignored because they derive from
 internal GTM content.
 
 **Read [STANDARDS.md](STANDARDS.md) before making or changing a video.** It holds the
-teaching, script, visual and sound rules every video follows.
+teaching, script, visual and sound rules every video follows. Training videos,
+which show the app itself, follow [TRAINING.md](TRAINING.md) as well.
 
 ## What is not in the repo
 
