@@ -39,7 +39,6 @@ import { IDK } from "@/lib/iris/engine";
 import { IRIS_ITEMS } from "@/lib/iris/items";
 import { listQuestions } from "@/lib/iris/questions";
 import { ITEMS_BY_ID, approveDrafts, poolFor, setReviews } from "@/lib/iris/reviews";
-import { SUBJECTS } from "@/lib/iris/subjects";
 import { IRIS_PARTICIPANT_LIST } from "@/lib/list-specs";
 import { PERSONAS } from "../support/access";
 import { testScope, type TestUser } from "../support/seed";
@@ -96,8 +95,9 @@ describe("before any question is approved", () => {
     await setTrack(taker.id, "AE");
     assert.deepEqual(await startSitting(taker.id, "sdlc", "A", "live"), { ok: false, error: "not_ready" });
     const mine = await myIris(taker.id);
-    assert.ok(mine.subjects.every((s) => s.status === (SUBJECTS[s.key].comingSoon ? "coming_soon" : "unavailable")));
-    assert.equal(mine.open, 6, "the four coming subjects are left out of the count");
+    assert.ok(mine.subjects.every((s) => s.status === "unavailable"));
+    assert.equal(mine.subjects.length, 6, "the four coming subjects are not listed");
+    assert.equal(mine.open, 6);
     assert.deepEqual(await startSitting(taker.id, "tools", "A", "live"), { ok: false, error: "not_ready" });
   });
 

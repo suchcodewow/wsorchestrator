@@ -27,7 +27,7 @@ import {
   type Phase,
 } from "@/lib/iris/engine";
 import { ITEMS_BY_ID, approvedCounts, isLive, poolFor } from "@/lib/iris/reviews";
-import { SUBJECTS, SUBJECT_KEYS, type SubjectKey, type Track } from "@/lib/iris/subjects";
+import { OPEN_SUBJECT_KEYS, SUBJECTS, type SubjectKey, type Track } from "@/lib/iris/subjects";
 import { canManageIris, canTakeIris, type Access } from "@/lib/roles";
 
 /**
@@ -88,8 +88,8 @@ function viewOf(attempt: IrisAttempt): SittingView {
   };
 }
 
-/** `unavailable`: has questions, too few approved yet. `coming_soon`: has no questions yet. */
-export type SubjectStatus = "available" | "in_progress" | "completed" | "unavailable" | "coming_soon";
+/** `unavailable`: has questions, too few approved yet. A subject with no questions yet is not listed at all. */
+export type SubjectStatus = "available" | "in_progress" | "completed" | "unavailable";
 
 export type MyIris = {
   track: Track | null;
@@ -135,11 +135,9 @@ export async function myIris(userId: string, form: Form = "A", withLevels = fals
   const bySubject = new Map(sittings.map((s) => [s.subject, s]));
   const approved = await approvedCounts(form);
 
-  const subjects = SUBJECT_KEYS.map((key) => {
+  const subjects = OPEN_SUBJECT_KEYS.map((key) => {
     const sitting = bySubject.get(key);
-    const status: SubjectStatus = SUBJECTS[key].comingSoon
-      ? "coming_soon"
-      : sitting
+    const status: SubjectStatus = sitting
       ? sitting.finishedAt
         ? "completed"
         : "in_progress"
@@ -154,7 +152,7 @@ export async function myIris(userId: string, form: Form = "A", withLevels = fals
     form,
     subjects,
     completed: subjects.filter((s) => s.status === "completed").length,
-    open: subjects.filter((s) => s.status !== "coming_soon").length,
+    open: subjects.length,
   };
 }
 

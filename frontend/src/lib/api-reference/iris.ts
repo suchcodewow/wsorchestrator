@@ -26,9 +26,9 @@ export const IRIS_GROUPS: EndpointGroup[] = [
         access: "participant",
         token: true,
         notes:
-          "status is completed once you have finished a live sitting of the subject on this form, in_progress while one is open, available when it has enough approved questions to run, coming_soon when it has no questions yet, and unavailable otherwise. open counts the subjects that are not coming_soon. A finished subject carries placement (1 for 101, 2 for 201, 3 for 301) only when you are an Assessments Administrator; a taker is never told their level.",
+          "status is completed once you have finished a live sitting of the subject on this form, in_progress while one is open, available when it has enough approved questions to run, and unavailable otherwise. Subjects with no questions yet are not listed. open counts the listed subjects. A finished subject carries placement (1 for 101, 2 for 201, 3 for 301) only when you are an Assessments Administrator; a taker is never told their level.",
         query: [FORM_QUERY],
-        returns: `{ track: "AE" | "SE" | "SDR" | null, form, subjects: { key, name, blurb: string | null, status: "available" | "in_progress" | "completed" | "unavailable" | "coming_soon", placement?: 1 | 2 | 3 }[], completed: number, open: number }`,
+        returns: `{ track: "AE" | "SE" | "SDR" | null, form, subjects: { key, name, blurb: string | null, status: "available" | "in_progress" | "completed" | "unavailable", placement?: 1 | 2 | 3 }[], completed: number, open: number }`,
         errors: [FORM_ERROR],
       },
       {
